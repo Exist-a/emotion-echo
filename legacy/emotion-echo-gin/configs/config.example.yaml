@@ -1,0 +1,90 @@
+# Emotion-Echo 配置示例文件
+# 复制此文件为 config.yaml 并根据实际情况修改
+
+server:
+  port: 8080
+  mode: debug
+  read_timeout: 30
+  write_timeout: 30
+
+database:
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    password: ""
+    dbname: emotion_echo
+    sslmode: disable
+    max_open_conns: 25
+    max_idle_conns: 5
+  
+  redis:
+    host: localhost
+    port: 6379
+    password: ""
+    db: 0
+
+jwt:
+  secret: "your-secret-key-change-in-production"
+  access_token_expire: 15
+  refresh_token_expire: 168
+
+ai:
+  provider: openai  # openai | kimi | local
+  openai:
+    api_key: ""
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4"
+    timeout: 60
+    max_tokens: 500
+    temperature: 0.7
+  kimi:
+    api_key: ""
+    base_url: "https://api.moonshot.cn/v1"
+    model: "moonshot-v1-8k"
+    timeout: 60
+    max_tokens: 500
+    temperature: 0.7
+  local:
+    base_url: "http://localhost:8000"
+    timeout: 60
+  asr:
+    enabled: true
+    base_url: "http://localhost:8001"
+    model: "Qwen/Qwen3-ASR-1.7B"
+  emotion:
+    enabled: true
+    base_url: "http://localhost:8002"
+
+oauth:
+  wechat_app_id: ""
+  wechat_app_secret: ""
+  wechat_redirect_uri: "http://localhost:3000/auth/callback"
+
+storage:
+  type: local
+  local:
+    path: ./uploads
+    base_url: http://localhost:8080/uploads
+  oss:
+    endpoint: ""
+    access_key_id: ""
+    access_key_secret: ""
+    bucket: ""
+    region: ""
+
+rate_limit:
+  enabled: true
+  requests_per_second: 10
+  burst: 20
+
+log:
+  level: info
+  format: json
+  output: stdout
+
+analysis:
+  enabled: true
+  cron_schedule: "0 3 * * *"  # 每天凌晨 3 点
+  threshold_messages: 20       # 消息阈值触发
+  timeout_minutes: 30          # 会话超时时间

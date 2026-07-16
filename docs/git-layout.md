@@ -7,94 +7,99 @@
 
 ## 一、仓库拓扑
 
-本仓库是 **monorepo**，采用 **主仓 + 4 个 git submodule** 的拓扑：
+**单仓 monorepo** —— 所有代码在一个 git 仓库内，**不使用 submodule**。
 
 ```
-Emotion-Echo/  ←── 主仓（github.com/Exist-a/emotion-echo）
+Emotion-Echo/  ←── 唯一仓库（github.com/Exist-a/emotion-echo）
 │
-├── emotion-echo-shared/          # 主仓内容 ✅
-├── emotion-echo-ai-svc/          # 主仓内容 ✅
-├── emotion-echo-chat-svc/        # 主仓内容 ✅
-├── emotion-echo-analytics-svc/   # 主仓内容 ✅
-├── emotion-echo-assessment-svc/  # 主仓内容 ✅
-├── emotion-echo-user-svc/        # 主仓内容 ✅
-├── emotion-llm-service/          # 主仓内容 ✅
-├── proto/                        # 主仓内容 ✅
-├── deploy/                       # 主仓内容 ✅
-├── docs/                         # 主仓内容 ✅
-├── scripts/                      # 主仓内容 ✅
+├── emotion-echo-shared/          # Go 共享库
+├── emotion-echo-ai-svc/          # Go 微服务：AI 编排（gRPC server / Kafka consumer）
+├── emotion-echo-chat-svc/        # Go 微服务：会话/消息
+├── emotion-echo-analytics-svc/   # Go 微服务：情绪分析报表
+├── emotion-echo-assessment-svc/  # Go 微服务：心理测验/量表
+├── emotion-echo-user-svc/        # Go 微服务：用户认证
+├── emotion-llm-service/          # Python gRPC：LLM 文本情绪分析
 │
-├── Emotion-Echo-Web/             # SUBMODULE → github.com/Exist-a/Emotion-Echo-Web
-├── legacy/emotion-echo-gin/      # SUBMODULE → github.com/Exist-a/Emotion-Echo-Gin
-├── Emotion-Echo-LLM/sensevoice-small/  # SUBMODULE → 本地占位（待 P0-A 时启用）
-└── Emotion-Echo-LLM/XTTS/TTS/          # SUBMODULE → 本地占位（待 P0-A 时启用）
+├── Emotion-Echo-Web/             # 前端 Nuxt 3
+├── legacy/emotion-echo-gin/      # 遗留单体（已归档，独立运行）
+├── Emotion-Echo-LLM/
+│   ├── FER/                      # Python: 人脸情绪识别（Stage 22 容器化）
+│   ├── sensevoice-small/         # Python: 语音情绪识别
+│   └── XTTS/                     # Python: 语音合成
+│       ├── TTS/                  # Coqui XTTS 核心代码
+│       ├── Dockerfile            # Stage 22 容器化
+│       └── ...
+│
+├── proto/                        # protobuf 契约
+├── deploy/                       # 分布式基础设施编排（docker-compose / APISIX）
+├── docs/                         # 架构决策 + stage-X 文档
+└── scripts/                      # 运维/验证脚本
 ```
 
 ---
 
-## 二、主仓 vs Submodule 的判定标准
+## 二、历史说明
 
-| 判定问题 | 主仓 | Submodule |
-|---------|------|-----------|
-| 是否与后端/AI 编排紧密耦合？ | ✅ | |
-| 是否会跨 5+ 个服务共享代码？ | ✅ | |
-| 是否有自己的发布节奏、独立版本？ | | ✅ |
-| 是否已有独立的 GitHub 仓库？ | | ✅ |
-| 是否是 AI 模型服务（独立 GPU 环境）？ | | ✅ |
+| 日期 | 状态 | 说明 |
+|------|------|------|
+| 2026-07-16 上午 | monorepo + 4 个 submodule | 初次推送到 GitHub |
+| 2026-07-16 下午 | **单仓 monorepo**（当前） | 移除 4 个 submodule，作为普通目录入仓 |
 
----
+**为什么移除 submodule**：
+- 个人项目，跨仓改 PR 成本高
+- 5 个微服务共享 `emotion-echo-shared`，跨仓不便
+- 前后端同步开发，单仓更高效
+- 子仓无独立发布节奏
+- GitHub 上 `Emotion-Echo-Web` 和 `Emotion-Echo-Gin` 已删除（合并后不再需要）
 
-## 三、Submodule 列表
-
-| Submodule 路径 | 来源 | 当前状态 |
-|---------------|------|---------|
-| `Emotion-Echo-Web/` | github.com/Exist-a/Emotion-Echo-Web | 已注册为 submodule（指向 GitHub 远程） |
-| `legacy/emotion-echo-gin/` | github.com/Exist-a/Emotion-Echo-Gin | 已注册为 submodule（指向 GitHub 远程） |
-| `Emotion-Echo-LLM/sensevoice-small/` | 本地占位 | 已注册为 submodule，远程 URL 待补 |
-| `Emotion-Echo-LLM/XTTS/TTS/` | 本地占位 | 已注册为 submodule，远程 URL 待补 |
+迁移快照：`docs/flatten-snapshot-*.json`
 
 ---
 
-## 四、协作约定
+## 三、克隆 & 工作流
 
-### 4.1 克隆主仓
+### 3.1 克隆
 ```bash
 git clone https://github.com/Exist-a/emotion-echo.git
 cd emotion-echo
-git submodule update --init --recursive   # 拉取所有 submodule
 ```
 
-### 4.2 在 submodule 内工作
-```bash
-cd Emotion-Echo-Web
-# 在子仓内正常 add / commit / push
-git add . && git commit -m "..." && git push origin main
+### 3.2 改代码
+直接修改，不需要进任何子仓。
 
-# 回到主仓，**提升 submodule 引用**
-cd ..
-git add Emotion-Echo-Web
-git commit -m "chore(submodule): bump Emotion-Echo-Web to <commit-sha>"
-```
-
-### 4.3 修改远程 URL（如果 submodule 用了占位）
+### 3.3 提交
 ```bash
-git submodule set-url Emotion-Echo-LLM/sensevoice-small <real-url>
-git submodule sync
-```
-
-### 4.4 添加新的 submodule
-```bash
-git submodule add <url> <path>
-git add .gitmodules <path>
-git commit -m "chore(submodule): add <name>"
+git add -A
+git commit -m "feat(...): ..."
+git push origin main
 ```
 
 ---
 
-## 五、本文件的演进
+## 四、不该进仓的内容
 
-任何对仓库布局的修改（添加 / 移除 / 重组 submodule 或主仓内容）都必须：
+已被 `.gitignore` 自动忽略：
 
-1. 先在 `docs/git-layout.md` 提交 PR 修改
-2. 通过 review 后再执行实际操作
-3. 在 commit message 中引用本文档章节
+- **Node 依赖**：`node_modules/`、`.nuxt/`、`.output/`
+- **AI 模型权重**：`*.pth`、`*.onnx`、`*.bin` 等二进制
+- **XTTS 模型目录**：`Emotion-Echo-LLM/XTTS/AI-ModelScope/`（2GB 自动下载）
+- **运行时数据**：`.postgres/`、`*.db`、`*.sqlite`
+- **构建产物**：`dist/`、`build/`、`coverage.html`
+- **证书 / 密钥**：`*.pem`、`*.key`、`deploy/certs/`
+- **散落的 pb 文件**：`/*.pb.go`（P1-D 规范化前的临时方案）
+- **工具链二进制**：`protoc-dist/`、`protoc.zip`
+
+---
+
+## 五、演进约定
+
+任何对仓库布局的修改都必须：
+
+1. 先更新 `docs/git-layout.md`
+2. 通过 review 后再执行
+3. commit message 引用本文档章节
+
+禁止事项：
+- ❌ 重新引入 git submodule（已废弃方案）
+- ❌ 拆分多个独立 git 仓库（除非公司化运营）
+- ❌ 把 `node_modules/`、模型权重等大文件入仓

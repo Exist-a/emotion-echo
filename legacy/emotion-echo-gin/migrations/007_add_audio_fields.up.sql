@@ -1,0 +1,3 @@
+-- 添加语音消息相关字段
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_url VARCHAR(500);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_duration INTEGER DEFAULT 0;

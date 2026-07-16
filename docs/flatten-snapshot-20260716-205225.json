@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-07-16T20:52:25",
+  "branch": "main",
+  "head": "7abae10dc8afb4324d3da91cd6080b209164cd6d",
+  "head_short": "7abae10",
+  "submodules": [
+    {
+      "path": "Emotion-Echo-LLM/XTTS/TTS",
+      "sha": "dbf1a08a0d4e47fdad6172e433eeb34bc6b13b4e",
+      "desc": "v0.6.0-670-gdbf1a08a",
+      "has_inner_git": true,
+      "file_count": 789
+    },
+    {
+      "path": "Emotion-Echo-LLM/sensevoice-small",
+      "sha": "3eb3b4eeffc2f2dde6051b853983753db33e35c3",
+      "desc": "heads/main",
+      "has_inner_git": true,
+      "file_count": 32
+    },
+    {
+      "path": "Emotion-Echo-Web",
+      "sha": "f2ae1000899e431479762662fd32c2916b44b754",
+      "desc": "heads/main",
+      "has_inner_git": true,
+      "file_count": 51166
+    },
+    {
+      "path": "legacy/emotion-echo-gin",
+      "sha": "1d9967a7f7664de24efc2688c82cda98f91e577e",
+      "desc": "heads/main",
+      "has_inner_git": true,
+      "file_count": 225
+    }
+  ],
+  "note": "P0-C flattening: 4 submodule → 普通目录"
+}

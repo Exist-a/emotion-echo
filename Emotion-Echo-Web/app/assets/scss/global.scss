@@ -1,0 +1,432 @@
+// styles/global.scss - 全局样式
+
+// Element Plus 暗黑模式 CSS 变量
+@import 'element-plus/theme-chalk/dark/css-vars.css';
+
+// ==================== CSS Reset ====================
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  color: #1e293b;
+  background-color: #f3f4f6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// ==================== 暗黑模式全局变量 ====================
+html.dark {
+  color-scheme: dark;
+  
+  body {
+    color: #e5e7eb;
+    background-color: #1a1a1a;
+  }
+  
+  // 链接颜色
+  a:hover {
+    color: #60a5fa;
+  }
+  
+  // 输入框占位符
+  input::placeholder,
+  textarea::placeholder {
+    color: #6b7280;
+  }
+  
+  // 滚动条
+  ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    
+    &:hover {
+      background: #6b7280;
+    }
+  }
+}
+
+// ==================== 媒体元素 ====================
+img,
+video {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+// ==================== 列表重置 ====================
+ul,
+ol {
+  list-style: none;
+}
+
+// ==================== 链接样式 ====================
+a {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  
+  &:hover {
+    color: #3b82f6;
+  }
+}
+
+// ==================== 表单元素重置 ====================
+input,
+textarea,
+button,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  border: none;
+  outline: none;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input,
+textarea {
+  &::placeholder {
+    color: #9ca3af;
+  }
+}
+
+button {
+  cursor: pointer;
+  
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+
+// ==================== 自定义字体 ====================
+@font-face {
+  font-family: "maskTitle";
+  src: url("/fonts/LuoGuoChengMaoBiXiaoXingJianTi-2.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap; // 优化字体加载性能
+}
+
+// ==================== 滚动条美化 ====================
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+  
+  &:hover {
+    background: #9ca3af;
+  }
+}
+
+// ==================== 工具类 ====================
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-ellipsis {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// ==================== 动画 ====================
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+// ==================== 暗黑模式组件适配 ====================
+// 为不支持 :global() 的 scoped 样式提供全局覆盖
+html.dark {
+  // 报表卡片容器
+  .charts-container {
+    background-color: #1a1a1a !important;
+  }
+
+  .chart-wrapper {
+    background-color: #242424 !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .chart-title {
+    color: #e5e7eb !important;
+  }
+
+  .no-data-tip {
+    color: #9ca3af !important;
+  }
+
+  // 设置页面
+  .setting-container {
+    background-color: #1a1a1a !important;
+
+    .setting-item {
+      background-color: #242424 !important;
+
+      &:hover {
+        background-color: #2d2d2d !important;
+      }
+
+      .setting-title {
+        color: #e5e7eb !important;
+      }
+    }
+  }
+
+  // 用户页面
+  .user-container {
+    .card {
+      background-color: #1a1a1a !important;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .nickname, .age, .id {
+      color: #e5e7eb !important;
+    }
+  }
+
+  // 日报/周报/月报/年报页面
+  .daily-container,
+  .weekly-container,
+  .monthly-container,
+  .yearly-container {
+    .summary-card {
+      background-color: #1a1a1a !important;
+
+      .summary-text {
+        color: #e5e7eb !important;
+      }
+
+      .stat-label {
+        color: #9ca3af !important;
+      }
+    }
+  }
+
+  // ==================== 会话页面 ====================
+  .chat-page-container {
+    background-color: #1a1a1a !important;
+  }
+
+  .main {
+    .dialog-user {
+      .content-user {
+        background-color: #2563eb !important;
+        color: #fff !important;
+      }
+    }
+
+    .dialog-AI {
+      .content-AI {
+        background-color: #242424 !important;
+        color: #e5e7eb !important;
+      }
+    }
+
+    .content {
+      background-color: #2d2d2d !important;
+      color: #e5e7eb !important;
+    }
+  }
+
+  // 输入框容器
+  .input-wrapper {
+    background-color: #1a1a1a !important;
+  }
+
+  .sender-container {
+    background-color: #242424 !important;
+    border-color: #374151 !important;
+
+    .sender-input {
+      :deep(.el-textarea__inner) {
+        color: #e5e7eb !important;
+        &::placeholder {
+          color: #6b7280 !important;
+        }
+      }
+    }
+  }
+
+  .sender-actions {
+    .action-btn {
+      color: #9ca3af !important;
+      border-color: #374151 !important;
+      &:hover {
+        color: #60a5fa !important;
+        border-color: #60a5fa !important;
+        background-color: #1f2937 !important;
+      }
+    }
+
+    .voice-btn {
+      color: #a78bfa !important;
+      &:hover {
+        background-color: #1f2937 !important;
+      }
+    }
+
+    .vertical-divider {
+      border-color: #374151 !important;
+    }
+
+    .send-btn {
+      background-color: #2563eb !important;
+      border-color: #2563eb !important;
+      &:hover {
+        background-color: #3b82f6 !important;
+        border-color: #3b82f6 !important;
+      }
+      &:disabled {
+        background-color: #374151 !important;
+        border-color: #374151 !important;
+      }
+    }
+  }
+
+  // Loading 动画
+  .loading-dots span {
+    background-color: #6b7280 !important;
+  }
+
+  // ==================== 会话列表页面 ====================
+  .conversation-container {
+    background-color: #1a1a1a !important;
+  }
+
+  .list-container {
+    background-color: #1a1a1a !important;
+
+    .header h3 {
+      color: #e5e7eb !important;
+    }
+
+    .conversation-item {
+      background-color: #242424 !important;
+
+      &:hover {
+        background-color: #2d2d2d !important;
+      }
+
+      &.active {
+        background-color: #1f2937 !important;
+      }
+
+      .item-label {
+        color: #e5e7eb !important;
+      }
+    }
+
+    .group-title {
+      color: #9ca3af !important;
+    }
+  }
+
+  .new-conversation-btn {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+    &:hover {
+      background-color: #3b82f6 !important;
+      border-color: #3b82f6 !important;
+    }
+  }
+
+  // ==================== 滚动条 ====================
+  ::-webkit-scrollbar-thumb {
+    background: #4b5563 !important;
+    &:hover {
+      background: #6b7280 !important;
+    }
+  }
+
+  // ==================== Markdown 内容 ====================
+  .message-content {
+    p {
+      color: #e5e7eb !important;
+    }
+    code {
+      background-color: #2d2d2d !important;
+      color: #e5e7eb !important;
+    }
+    pre {
+      background-color: #1f2937 !important;
+      code {
+        background-color: transparent !important;
+      }
+    }
+    blockquote {
+      border-left-color: #374151 !important;
+      color: #9ca3af !important;
+    }
+    ul, ol {
+      li {
+        color: #e5e7eb !important;
+      }
+    }
+  }
+
+  // ==================== 用户页面图表 ====================
+  .user-data-card {
+    background-color: #1a1a1a !important;
+
+    .chart-item {
+      background: #242424 !important;
+      border: 1px solid #374151 !important;
+    }
+  }
+}
