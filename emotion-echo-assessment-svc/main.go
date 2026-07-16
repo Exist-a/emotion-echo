@@ -15,6 +15,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/zeromicro/go-zero/core/conf"
 	"gorm.io/driver/postgres"
@@ -57,12 +58,14 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(sharedmetrics.GinMetricsMiddleware("assessment-svc"))
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
 	}
 	r.Use(sharedmw.GinAuthMiddleware())
 
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 	r.GET("/api/v1/surveys", handler.ListSurveysHandler(svcCtx))
 	r.GET("/api/v1/surveys/:id", handler.GetSurveyHandler(svcCtx))
 	r.POST("/api/v1/surveys/:id/submit", handler.SubmitSurveyHandler(svcCtx))

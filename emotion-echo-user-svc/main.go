@@ -22,6 +22,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/zeromicro/go-zero/core/conf"
 	"gorm.io/driver/postgres"
@@ -74,6 +75,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(sharedmetrics.GinMetricsMiddleware("user-svc"))
 
 	// 中间件顺序：auth 必须在 trace 之后（trace 数据应包含 auth 后的 ctx）
 	if tracer != nil {
@@ -84,6 +86,7 @@ func main() {
 	// === 5. 路由注册 ===
 	// health 不需要鉴权（中间件内已跳过 /health）
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 	r.GET("/api/v1/users/me", handler.GetMeHandler(svcCtx))
 	r.PATCH("/api/v1/users/me", handler.UpdateProfileHandler(svcCtx))
 	r.GET("/api/v1/users/:id", handler.GetUserByIdHandler(svcCtx))

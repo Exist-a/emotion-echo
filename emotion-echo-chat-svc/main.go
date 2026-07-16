@@ -18,6 +18,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/zeromicro/go-zero/core/conf"
 	"gorm.io/driver/postgres"
@@ -77,6 +78,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(sharedmetrics.GinMetricsMiddleware("chat-svc"))
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
 	}
@@ -84,6 +86,7 @@ func main() {
 
 	// 6. routes
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 	r.POST("/api/v1/conversations", handler.CreateConversationHandler(svcCtx))
 	r.POST("/api/v1/conversations/:id/messages", handler.SendMessageHandler(svcCtx))
 	r.GET("/api/v1/conversations/:id/messages", handler.ListMessagesHandler(svcCtx))

@@ -37,13 +37,13 @@ import (
 	"emotion-echo-ai-svc/internal/handler"
 	"emotion-echo-ai-svc/internal/logging"
 	"emotion-echo-ai-svc/internal/logic"
-	"emotion-echo-ai-svc/internal/metrics"
 	"emotion-echo-ai-svc/internal/repository"
 	"emotion-echo-ai-svc/internal/svc"
 
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/zeromicro/go-zero/core/conf"
 	"gorm.io/driver/postgres"
@@ -60,10 +60,10 @@ func failFastIfRequired(dep string, err error, addr string) {
 		return
 	}
 	if bootstrap.ShouldFailFast() && bootstrap.IsRequired(dep) {
-		logging.Errorf(err, "[startup-strict] required dependency unavailable, refusing to start", "dep", dep, "addr", addr)
+		logging.Errorf(err, "[startup-strict] required dependency unavailable, refusing to start: dep=%s addr=%s", dep, addr)
 		logging.Fatalf("[startup-strict] exit code=1 (dep=%s)", dep)
 	}
-	logging.Errorf(err, "[startup] dependency check failed (non-strict)", "dep", dep, "addr", addr)
+	logging.Errorf(err, "[startup] dependency check failed (non-strict): dep=%s addr=%s", dep, addr)
 }
 
 // applyEnvOverrides reads OS env vars and patches c.* fields.
@@ -283,7 +283,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(metrics.GinMetricsMiddleware())
+	r.Use(sharedmetrics.GinMetricsMiddleware("ai-svc"))
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
 	}
@@ -297,7 +297,7 @@ func main() {
 	r.POST("/api/v1/multimodal/analyze", handler.MultiModalAnalyzeHandler(svcCtx))
 	r.POST("/api/v1/tts/synthesize", handler.SynthesizeSpeechHandler(svcCtx))
 	r.GET("/api/v1/ai/health", handler.AIHealthHandler(svcCtx))
-	r.GET("/metrics", gin.WrapH(metrics.PromHTTPHandler()))
+	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	logging.Printf("Starting ai-svc at %s:%d...", c.Host, c.Port)
 

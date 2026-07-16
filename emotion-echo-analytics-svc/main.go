@@ -15,6 +15,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/zeromicro/go-zero/core/conf"
 	"gorm.io/driver/postgres"
@@ -61,6 +62,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(sharedmetrics.GinMetricsMiddleware("analytics-svc"))
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
 	}
@@ -68,6 +70,7 @@ func main() {
 
 	// 5. routes
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	log.Printf("Starting analytics-svc at %s:%d...", c.Host, c.Port)
 	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {

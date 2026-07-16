@@ -3,6 +3,7 @@ package aiclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -213,13 +214,13 @@ func TestClients_Health_Basic(t *testing.T) {
 
 // ---------- ErrNotConfigured ----------
 func TestErrNotConfigured(t *testing.T) {
-	if err := NewFERClient(Config{BaseURL: ""}).AnalyzeImage(context.Background(), []byte("x"), "x"); err == nil || err != ErrNotConfigured {
+	if _, err := NewFERClient(Config{BaseURL: ""}).AnalyzeImage(context.Background(), []byte("x"), "x"); err == nil || !errors.Is(err, ErrNotConfigured) {
 		t.Errorf("FER: %v", err)
 	}
-	if err := NewSenseVoiceClient(Config{BaseURL: ""}).Analyze(context.Background(), []byte("x"), "x"); err != nil || err != ErrNotConfigured {
+	if _, err := NewSenseVoiceClient(Config{BaseURL: ""}).Analyze(context.Background(), []byte("x"), "x"); err == nil || !errors.Is(err, ErrNotConfigured) {
 		t.Errorf("SenseVoice: %v", err)
 	}
-	if _, _, err := NewXTTSClient(Config{BaseURL: ""}, "", 0).Synthesize(context.Background(), "x"); err != ErrNotConfigured {
+	if _, _, err := NewXTTSClient(Config{BaseURL: ""}, "", 0).Synthesize(context.Background(), "x"); !errors.Is(err, ErrNotConfigured) {
 		t.Errorf("XTTS: %v", err)
 	}
 }
