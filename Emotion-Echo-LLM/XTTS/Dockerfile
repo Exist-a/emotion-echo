@@ -57,13 +57,13 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 
 # vendored TTS source (server.py uses `import TTS`)
-COPY --chown=app:app TTS/ ./TTS/
+COPY --chown=app:app XTTS/TTS/ ./TTS/
 
 # application code
 COPY --chown=app:app XTTS/logging_setup.py XTTS/metrics_setup.py XTTS/server.py ./
 
 # model + sample WAV
-COPY --chown=app:app AI-ModelScope/ ./AI-ModelScope/
+COPY --chown=app:app XTTS/AI-ModelScope/ ./AI-ModelScope/
 
 RUN mkdir -p /app/cache && chown -R app:app /app/cache
 
