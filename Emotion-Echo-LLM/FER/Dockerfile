@@ -9,7 +9,10 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONUNBUFFERED=1
 
 # System deps needed for opencv-python / fer libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 国内 build 加速：deb.debian.org 国内经常 500，改用 aliyun mirror
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+ || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
+ && apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     git \
@@ -36,7 +39,9 @@ ENV TZ=${TZ} \
     LOG_LEVEL=INFO
 
 # Runtime libs only (no compilers). libopencv-*410 on Debian 13 (trixie).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+ || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
+ && apt-get update && apt-get install -y --no-install-recommends \
     libopencv-core410 \
     libopencv-imgproc410 \
     libopencv-objdetect410 \
