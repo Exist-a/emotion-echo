@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package emotion_llm.v1;
+
+option go_package = "github.com/emotion-echo/shared/pkg/emotionllm";
+
+// EmotionLLMService 是 ai-svc 调用 emotion-llm-service 的契约
+//
+// 之前是 HTTP（ai-svc.HTTPAnalyzer → POST /analyze）。
+// 升级为 gRPC 后更高效（HTTP/2 streaming + protobuf 强契约）。
+service EmotionLLMService {
+  // Analyze 单条消息情绪分析
+  rpc Analyze (AnalyzeRequest) returns (AnalyzeResponse);
+
+  // AnalyzeBatch 批量分析（server stream，Stage 16）
+  //
+  // 适用：AI 一次推多条消息，server 流式返回每条结果（首字节延迟低）
+  rpc AnalyzeBatch (AnalyzeBatchRequest) returns (stream AnalyzeResponse);
+}
+
+// AnalyzeRequest 单条消息的情绪分析请求
+message AnalyzeRequest {
+  string message_id = 1;
+  string text = 2;
+  string user_id = 3;
+}
+
+// AnalyzeResponse 单条消息的情绪分析响应
+message AnalyzeResponse {
+  string message_id = 1;
+  string primary_emotion = 2;     // happy/sad/anxious/angry/calm...
+  double sentiment_score = 3;      // -1.0 ~ 1.0
+  double confidence = 4;           // 0.0 ~ 1.0
+  string model = 5;               // "gpt-4" / "keyword-fallback"
+  string raw_response = 6;        // 原始响应（调试用）
+}
+
+// AnalyzeBatchRequest 批量情绪分析请求
+message AnalyzeBatchRequest {
+  repeated AnalyzeRequest items = 1;  // 多条消息
+  string user_id = 2;                 // 用户 ID（统一鉴权）
+}

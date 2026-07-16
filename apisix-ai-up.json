@@ -1,0 +1,1 @@
+{"id":"ai-svc","name":"ai-svc-upstream","type":"roundrobin","nodes":[{"host":"host.docker.internal","port":8891,"weight":1}]}

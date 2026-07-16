@@ -1,0 +1,22 @@
+syntax = "v1"
+
+info (
+	title:   "emotion-echo-assessment-svc API"
+	desc:    "assessment domain microservice: surveys / reports / mental-health"
+	author:  "emotion-echo team"
+	version: "0.1.1"
+)
+
+type HealthResp {
+	Status  string `json:"status"`
+	Time    int64  `json:"time"`
+	Service string `json:"service"`
+	Version string `json:"version"`
+	DbOK    bool   `json:"dbOk"`
+}
+
+service assessment-api {
+	@handler HealthHandler
+	get /health returns (HealthResp)
+}
+

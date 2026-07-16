@@ -1,0 +1,46 @@
+# =====================================================
+#  APISIX 初始路由种子配置（traditional 模式）
+#
+#  本文件是"配置文件模板"，实际通过 Admin API 推送到 etcd。
+#  推送脚本：./seed.sh
+#  手动推送示例（PowerShell）：
+#    curl -X PUT http://localhost:9180/apisix/admin/upstreams/1 \
+#      -H "X-API-KEY: edd1c9f034335f136f87ad84b625c8f1" \
+#      -H "Content-Type: application/json" \
+#      -d @{...upstream.json}
+# =====================================================
+
+# ---- Upstream：后端服务节点 ----
+# Stage 0.1: 占位指向宿主机 Gin
+upstreams:
+  - id: 1
+    name: "emotion-echo-gin"
+    type: "roundrobin"
+    nodes:
+      - host: "host.docker.internal"
+        port: 8080
+        weight: 1
+
+# ---- 路由：APISIX :9080 → Gin :8080 ----
+routes:
+  - id: 1
+    name: "gin-default"
+    uri: "/api/v1/*"
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+    upstream_id: 1
+
+# ---- 路由（健康检查用：APISIX :9080/ping → 返回 200）----
+  - id: 2
+    name: "ping"
+    uri: "/ping"
+    upstream:
+      type: roundrobin
+      nodes:
+        - host: "127.0.0.1"
+          port: 1980
+          weight: 1

@@ -1,0 +1,6 @@
+{
+  "id": "r-assessment-health",
+  "name": "assessment-health-route",
+  "uri": "/health-assessment",
+  "upstream_id": "assessment-svc"
+}

@@ -1,0 +1,22 @@
+syntax = "v1"
+
+info (
+	title:   "emotion-echo-analytics-svc API"
+	desc:    "分析域微服务：用户行为事件采集"
+	author:  "emotion-echo team"
+	version: "0.1.0"
+)
+
+type HealthResp {
+	Status  string `json:"status"`
+	Time    int64  `json:"time"`
+	Service string `json:"service"`
+	Version string `json:"version"`
+	DbOK    bool   `json:"dbOk"`
+}
+
+service analytics-api {
+	@handler HealthHandler
+	get /health returns (HealthResp)
+}
+

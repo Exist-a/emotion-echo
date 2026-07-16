@@ -1,0 +1,1 @@
+{"id":"chat-svc","name":"chat-svc-upstream","type":"roundrobin","nodes":[{"host":"host.docker.internal","port":8890,"weight":1}]}

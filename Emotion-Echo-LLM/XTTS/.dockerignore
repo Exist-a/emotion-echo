@@ -1,0 +1,20 @@
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+env/
+.git
+.gitignore
+.pytest_cache
+.coverage
+htmlcov/
+*.log
+out.log
+err.log
+*.wav
+*.mp3
+AI-ModelScope/        # downloaded at runtime, NOT shipped in image
+TTS/TTS/bin/
+.idea/
+.vscode/

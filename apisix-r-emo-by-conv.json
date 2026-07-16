@@ -1,0 +1,1 @@
+{"id":"r-emo-by-conv","uri":"/api/v1/emotion/conversation/*","methods":["GET"],"upstream_id":"ai-svc"}

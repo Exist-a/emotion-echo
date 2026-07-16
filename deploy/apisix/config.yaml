@@ -1,0 +1,22 @@
+deployment:
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+  etcd:
+    host:
+      - "http://etcd:2379"
+    prefix: /apisix
+    timeout: 30
+  admin:
+    # ★ 修复：admin_key 必填，否则 403 Forbidden
+    admin_key_required: true
+    admin_key:
+      - name: admin
+        key: "edd1c9f034335f136f87ad84b625c8f1"  # 32 字符占位 key
+        role: admin
+    allow_admin:
+      - 127.0.0.0/24
+      - 0.0.0.0/0    # 临时全开 dev 用；生产应缩窄到内网网段
+    admin_listen:
+      ip: 0.0.0.0
+      port: 9180

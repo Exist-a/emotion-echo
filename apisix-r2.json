@@ -1,0 +1,6 @@
+{
+  "id": "r-user-health",
+  "name": "user-health-route",
+  "uri": "/health-user",
+  "upstream_id": "user-svc"
+}

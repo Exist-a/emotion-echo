@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package emotion_ai.v1;
+
+option go_package = "github.com/emotion-echo/shared/pkg/emotionquery";
+
+// EmotionQueryService 是 ai-svc 暴露给其他内部服务的查询接口（Stage 19）
+//
+// 之前只能通过 HTTP 调（ai-svc Gin server :8891）
+// 现在多一个 gRPC 接口（ai-svc gRPC server :8892）
+// 两种协议同时存在，前端继续用 HTTP，内部 svc-to-svc 用 gRPC
+service EmotionQueryService {
+  // GetEmotionByMessage 根据 message_id 查情绪
+  rpc GetEmotionByMessage (GetEmotionByMessageRequest) returns (Emotion);
+  // GetEmotionByConversation 根据 conversation_id 查情绪列表
+  rpc GetEmotionByConversation (GetEmotionByConversationRequest) returns (EmotionList);
+}
+
+// Emotion 单条消息的情绪数据
+message Emotion {
+  int64  id              = 1;
+  int64  message_id      = 2;
+  int64  conversation_id = 3;
+  string primary_emotion = 4;  // happy/sad/anxious/angry/calm...
+  double sentiment_score = 5;  // -1.0 ~ 1.0
+  double confidence      = 6;
+  string model           = 7;
+  int64  created_at_ms   = 8;  // 毫秒时间戳
+}
+
+// GetEmotionByMessage 请求
+message GetEmotionByMessageRequest {
+  int64 message_id = 1;
+}
+
+// GetEmotionByConversation 请求
+message GetEmotionByConversationRequest {
+  int64 conversation_id = 1;
+  int32 limit           = 2;  // 可选，默认 50
+}
+
+// EmotionList 多条情绪
+message EmotionList {
+  repeated Emotion items = 1;
+  int32           total = 2;
+}

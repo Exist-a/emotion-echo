@@ -1,0 +1,115 @@
+# ============================================================
+# Emotion-Echo monorepo · .gitignore
+# ============================================================
+# 主仓根目录 .gitignore，覆盖根级 + 所有 Go/Node/Python 子项目
+# 子模块目录（Emotion-Echo-Web / legacy/emotion-echo-gin /
+# Emotion-Echo-LLM/sensevoice-small / Emotion-Echo-LLM/XTTS/TTS）
+# 各自保留自己的 .git，本文件对它们**不再生效**（它们是独立仓）。
+
+# ---------- 通用 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+.trae/
+.cursor/
+*.iml
+
+# ---------- Go ----------
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+coverage.txt
+coverage.html
+*.coverprofile
+
+# ---------- Node / Nuxt ----------
+node_modules/
+.nuxt/
+.output/
+.cache/
+.next/
+.parcel-cache/
+dist/
+build/
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.eggs/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+venv/
+.venv/
+env/
+ENV/
+
+# ---------- 运行时数据 / 数据库 ----------
+.postgres/
+*.db
+*.sqlite
+*.sqlite3
+pg_log.txt
+
+# ---------- 散落的 proto 生成物（P1-D 规范化前的临时方案） ----------
+/*.pb.go
+/*_grpc.pb.go
+
+# ---------- AI 模型权重（体积过大，禁止入仓） ----------
+*.pth
+*.onnx
+*.pt
+*.bin
+*.safetensors
+*.h5
+*.keras
+*.tflite
+*.engine
+*.trt
+# XTTS-v2 模型目录（约 2GB，从 ModelScope 自动下载）
+Emotion-Echo-LLM/XTTS/AI-ModelScope/
+Emotion-Echo-LLM/**/AI-ModelScope/
+
+# ---------- 工具链 / 第三方二进制 ----------
+protoc-dist/
+protoc.zip
+*.zip
+*.tar.gz
+
+# ---------- 证书 / 密钥 ----------
+*.pem
+*.key
+*.crt
+*.p12
+deploy/certs/
+.env.local
+.env.*.local
+
+# ---------- 临时 / 输出 ----------
+tmp/
+out/
+artifacts/
+*.bak
+*.orig
+
+# ---------- IDE / 工具 ----------
+*.code-workspace
+.history/
+*.tgz

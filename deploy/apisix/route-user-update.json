@@ -1,0 +1,35 @@
+{
+  "id": "r-user-update",
+  "uri": "/api/v1/users/me",
+  "methods": ["PATCH"],
+  "upstream_id": "user-svc",
+  "plugins": {
+    "jwt-auth": {
+      "key": "user_jwt",
+      "claims_to_headers": [
+        {
+          "name": "X-User-Id",
+          "claim": "user_id"
+        }
+      ]
+    },
+    "limit-count": {
+      "count": 30,
+      "time_window": 60,
+      "key": "X-User-Id",
+      "rejected_code": 429,
+      "rejected_msg": "Too Many Requests (PATCH rate limit: 30/min)"
+    },
+    "api-breaker": {
+      "break_response_code": 503,
+      "unhealthy": {
+        "http_statuses": [500, 502, 503, 504],
+        "failures": 3
+      },
+      "healthy": {
+        "http_statuses": [200, 201, 202, 204],
+        "successes": 2
+      }
+    }
+  }
+}

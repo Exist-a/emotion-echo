@@ -1,0 +1,1 @@
+{"id":"r-conv-create","uri":"/api/v1/conversations","methods":["POST"],"upstream_id":"chat-svc"}

@@ -1,0 +1,175 @@
+# =====================================================
+#  Emotion-Echo 分布式基础设施编排
+# 用途：拉起 Postgres / Redis / APISIX / SkyWalking / Kafka / etcd
+# 不再包含 Nacos（已删除，详见 docs/architecture-decisions.md 决策 2）
+#  启动：docker-compose -f deploy/docker-compose.infra.yml up -d
+#  说明：当前为 Stage 0.1 骨架版，APISIX 用 standalone 模式
+# =====================================================
+
+services:
+
+  # =====================================================
+  # 原有数据库与缓存（与原 Emotion-Echo-Gin/docker-compose 兼容）
+  # =====================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: emotion-echo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_DB: emotion_echo
+      POSTGRES_HOST_AUTH_METHOD: trust     # dev 信任模式，免密登录
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: emotion-echo-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # =====================================================
+  # SkyWalking（链路追踪 / APM）
+  # =====================================================
+  skywalking-oap:
+    image: apache/skywalking-oap-server:9.7.0
+    container_name: emotion-echo-sw-oap
+    ports:
+      - "11800:11800"    # gRPC：业务 agent 上报
+      - "12800:12800"    # HTTP：查询 API（UI 用）
+    environment:
+      SW_STORAGE: h2                          # dev 用内嵌 H2，生产换 ES
+      SW_TELEMETRY: prometheus
+      JAVA_OPTS: "-Xms256m -Xmx512m"          # 内存调小，单机能跑
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:12800/api/v1/version || exit 1"]
+      interval: 15s
+      retries: 10
+      start_period: 90s                       # OAP 启动慢，宽容一点
+    restart: unless-stopped
+
+  skywalking-ui:
+    image: apache/skywalking-ui:9.7.0
+    container_name: emotion-echo-sw-ui
+    depends_on:
+      skywalking-oap:
+        condition: service_started            # 改用 started 等 OAP 起来即可
+    environment:
+      SW_OAP_ADDRESS: "http://skywalking-oap:12800"   # 必须带 http:// scheme
+      SW_SERVER_PORT: "8080"
+    ports:
+      - "18080:8080"                         # UI 访问入口
+    restart: unless-stopped
+
+  # =====================================================
+  # APISIX（API 网关）—— Stage 0.1 用 standalone 模式
+  # =====================================================
+  apisix:
+    image: apache/apisix:3.9.0-debian
+    container_name: emotion-echo-apisix
+    depends_on:
+      - etcd                                 # APISIX 配置存储依赖
+    ports:
+      - "9080:9080"                          # 网关入口
+      - "9091:9091"                          # Control API
+      - "9180:9180"                          # Admin API
+    volumes:
+      # ★ 用我们自己的 config.yaml 覆盖默认（默认指向 127.0.0.1:2379）
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - apisix_log:/usr/local/apisix/logs
+    restart: unless-stopped
+
+  # etcd（APISIX 配置存储）
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.13
+    container_name: emotion-echo-etcd
+    command:
+      - "etcd"
+      - "--listen-client-urls=http://0.0.0.0:2379"
+      - "--advertise-client-urls=http://etcd:2379"
+      - "--listen-peer-urls=http://0.0.0.0:2380"
+      - "--initial-advertise-peer-urls=http://etcd:2380"
+      - "--initial-cluster=default=http://etcd:2380"
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # =====================================================
+  # Kafka（KRaft 模式，单节点足够开发）
+  # 使用 apache/kafka 官方镜像（比 bitnami tag 更稳定）
+  # =====================================================
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: emotion-echo-kafka
+    ports:
+      - "9092:9092"                          # 客户端连接
+    networks:
+      - app-network
+    environment:
+      # KRaft 配置（无 Zookeeper）
+      KAFKA_NODE_ID: "0"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "0@kafka:9093"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://localhost:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      # 单节点副本因子调整为 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # 固定 cluster id（KRaft 必需）
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      # JVM 调小
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+# =====================================================
+# 卷定义
+# =====================================================
+volumes:
+  postgres_data:
+  redis_data:
+  apisix_log:
+  kafka_data:
+
+# =====================================================
+# 网络定义：app-network 同时给 infra + apps 共用
+# apps compose（deploy/docker-compose.apps.yml）以 external 形式引用
+# =====================================================
+networks:
+  app-network:
+    name: emotion-echo_app-network
+    driver: bridge

@@ -1,0 +1,1 @@
+{"id":"analytics-svc","name":"analytics-svc-upstream","type":"roundrobin","nodes":[{"host":"host.docker.internal","port":8892,"weight":1}]}

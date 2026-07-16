@@ -1,0 +1,60 @@
+# ===== Build artifacts =====
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+build/
+dist/
+
+# ===== Test/coverage =====
+coverage.out
+coverage.html
+*.coverprofile
+.vscode/
+.idea/
+
+# ===== IDE / OS =====
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ===== Git =====
+.git/
+.gitignore
+.gitattributes
+
+# ===== Docker =====
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# ===== CI =====
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# ===== Secrets (NEVER COPY) =====
+.env
+.env.*
+*.pem
+*.key
+*.crt
+deploy/tls/*.key
+
+# ===== Logs =====
+*.log
+out.log
+err.log
+nohup.out
+
+# ===== Docs (runtime doesn't need) =====
+*.md
+docs/
+LICENSE
+README*

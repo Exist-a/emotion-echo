@@ -1,0 +1,52 @@
+syntax = "v1"
+
+info (
+	title:   "emotion-echo-user-svc API"
+	desc:    "用户域微服务：负责用户登录、注册、档案等"
+	author:  "emotion-echo team"
+	version: "0.1.1"
+)
+
+// ============ 类型定义 ============
+type HealthResp {
+	Status  string `json:"status"`
+	Time    int64  `json:"time"`
+	Service string `json:"service"`
+	Version string `json:"version"`
+	DbOK    bool   `json:"dbOk"`
+}
+
+type UserInfo {
+	UserId   int64  `json:"userId"`
+	Account  string `json:"account"`
+	Phone    string `json:"phone"`
+	Nickname string `json:"nickname"`
+}
+
+// 拿当前用户（从 X-User-Id header 取，先 mock 鉴权）
+type GetMeReq {}
+
+type GetMeResp {
+	User UserInfo `json:"user"`
+}
+
+// 按 ID 查用户（admin / 内部调用）
+type GetUserByIdReq {
+	Id int64 `path:"id"`
+}
+
+type GetUserByIdResp {
+	User UserInfo `json:"user"`
+}
+
+service user-api {
+	@handler HealthHandler
+	get /health returns (HealthResp)
+
+	@handler GetMeHandler
+	get /api/v1/users/me (GetMeReq) returns (GetMeResp)
+
+	@handler GetUserByIdHandler
+	get /api/v1/users/:id (GetUserByIdReq) returns (GetUserByIdResp)
+}
+

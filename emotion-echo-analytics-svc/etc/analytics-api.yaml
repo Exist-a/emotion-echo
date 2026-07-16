@@ -1,0 +1,13 @@
+Name: analytics-api
+Host: 0.0.0.0
+Port: 8892
+
+SkyWalking:
+  OAPAddr:     localhost:11800
+  ServiceName: emotion-echo-analytics-svc
+  Enabled:     true
+
+Postgres:
+  DSN:          "host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_analytics"
+  MaxOpenConns: 10
+  MaxIdleConns: 5

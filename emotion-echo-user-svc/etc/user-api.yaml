@@ -1,0 +1,13 @@
+Name: emotion-echo-user-svc
+Host: 0.0.0.0
+Port: 8888
+
+SkyWalking:
+  OAPAddr:     localhost:11800
+  ServiceName: emotion-echo-user-svc
+  Enabled:     true
+
+Postgres:
+  DSN:          "host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_user"
+  MaxOpenConns: 10
+  MaxIdleConns: 5

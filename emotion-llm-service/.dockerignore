@@ -1,0 +1,55 @@
+# ===== Build artifacts =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# ===== Logs & runtime artifacts =====
+*.log
+out.log
+err.log
+grpc_out.log
+grpc_err.log
+
+# ===== IDE / OS =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ===== Git =====
+.git/
+.gitignore
+.gitattributes
+
+# ===== Docker =====
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# ===== CI =====
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# ===== Secrets (NEVER COPY) =====
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# ===== Docs (runtime doesn't need) =====
+*.md
+LICENSE
+docs/

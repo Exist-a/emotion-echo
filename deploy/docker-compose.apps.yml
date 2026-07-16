@@ -1,0 +1,262 @@
+# =====================================================
+#  Emotion-Echo 业务应用编排（Stage 20-P0：容器内服务发现）
+#  用途：拉起 emotion-llm-service + emotion-echo-ai-svc + 可选 3 个 AI 模型服务
+#  依赖：deploy/docker-compose.infra.yml 提供的 postgres/redis/kafka/skywalking
+#
+#  启动顺序：
+#    1) docker-compose -f deploy/docker-compose.infra.yml up -d
+#    2) docker-compose -f deploy/docker-compose.apps.yml up -d
+#  或一键：
+#    docker-compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml up -d
+#
+#  启动 AI 模型服务（可选，资源紧张机器不启动）：
+#    docker-compose -f deploy/docker-compose.apps.yml --profile ai up -d
+#
+#  Stage 20-P0-1：所有外部依赖用容器 DNS 名（emotion-echo-kafka / emotion-echo-postgres / emotion-echo-sw-oap / emotion-llm-service）
+#  Stage 20-P0-4：资源限制 + 镜像 tag pinned
+#  Stage 22-A  ：FER / SenseVoice / XTTS 三个 AI 模型服务（optional profile）
+# =====================================================
+
+x-logging-env: &logging-env
+  TZ: Asia/Shanghai
+
+services:
+
+  # =====================================================
+  # emotion-llm-service: HTTP (FastAPI :8000) + gRPC (:50051) 双协议
+  # =====================================================
+  emotion-llm-service:
+    build:
+      context: ..
+      dockerfile: emotion-llm-service/Dockerfile
+    image: emotion-echo/llm-service:v0.1.0   # P0-4: pinned tag
+    container_name: emotion-echo-llm-service
+    restart: unless-stopped
+    environment:
+      <<: *logging-env
+      PYTHONUNBUFFERED: "1"
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      # gRPC auth (Stage 17)：生产必开 required + 强 key
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
+      INTERNAL_API_KEY_REQUIRED: ${INTERNAL_API_KEY_REQUIRED:-0}
+      # mTLS (Stage 18)
+      TLS_ENABLED: "1"
+      TLS_CA_CERT: /app/etc/tls/ca.crt
+      TLS_SERVER_CERT: /app/etc/tls/llm-server.crt
+      TLS_SERVER_KEY: /app/etc/tls/llm-server.key
+      TLS_REQUIRE_CLIENT_AUTH: "1"
+    ports:
+      - "8000:8000"
+      - "50051:50051"
+    volumes:
+      - ../deploy/tls/llm-server.crt:/app/etc/tls/llm-server.crt:ro
+      - ../deploy/tls/llm-server.key:/app/etc/tls/llm-server.key:ro
+      - ../deploy/tls/ca.crt:/app/etc/tls/ca.crt:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.2"
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)\""]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # =====================================================
+  # emotion-echo-ai-svc: HTTP (Gin :8891) + gRPC (:8892) 双协议
+  # =====================================================
+  emotion-echo-ai-svc:
+    build:
+      context: ..
+      dockerfile: emotion-echo-ai-svc/Dockerfile
+    image: emotion-echo/ai-svc:v0.1.0   # P0-4: pinned tag
+    container_name: emotion-echo-ai-svc
+    restart: unless-stopped
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      GIN_MODE: release
+
+      # Stage 20-P0-1: container DNS
+      POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_ai"
+      KAFKA_BROKERS:       '["emotion-echo-kafka:9092"]'
+      SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      # Stage 19: ai-svc → emotion-llm-service
+      LLM_BASE_URL:        "http://emotion-llm-service:8000"
+      LLM_GRPC_ADDR:       "emotion-llm-service:50051"
+      LLM_INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
+
+      # Stage 22-A.5: AI 模型服务（可选，未启用 ai profile 时不连）
+      FER_BASE_URL:        ${FER_BASE_URL:-http://emotion-echo-fer:8004}
+      SENSEVOICE_BASE_URL: ${SENSEVOICE_BASE_URL:-http://emotion-echo-sensevoice:8002}
+      XTTS_BASE_URL:       ${XTTS_BASE_URL:-http://emotion-echo-xtts:8003}
+
+    ports:
+      - "8891:8891"
+      - "8892:8892"
+    volumes:
+      - ../deploy/tls/ai-client.crt:/app/etc/tls/ai-client.crt:ro
+      - ../deploy/tls/ai-client.key:/app/etc/tls/ai-client.key:ro
+      - ../deploy/tls/ca.crt:/app/etc/tls/ca.crt:ro
+      - ../emotion-echo-ai-svc/etc/ai-api.yaml:/app/etc/ai-api.yaml:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.2"
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_started
+      kafka:
+        condition: service_started
+      skywalking-oap:
+        condition: service_started
+      emotion-llm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8891/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  # =====================================================
+  # Stage 22-A.1 FER（Facial Expression Recognition）情绪识别
+  #   profile: ai    （默认不启动，资源紧张机器可省 ~600MB RAM）
+  # =====================================================
+  emotion-echo-fer:
+    build:
+      context: ../Emotion-Echo-LLM
+      dockerfile: FER/Dockerfile
+    image: emotion-echo/fer:v0.1.0
+    container_name: emotion-echo-fer
+    restart: unless-stopped
+    profiles: ["ai"]
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+    ports:
+      - "8004:8004"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M       # OpenCV + fer 模型需要 ~600MB
+        reservations:
+          cpus: "0.3"
+          memory: 384M
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health', timeout=2)\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  # =====================================================
+  # Stage 22-A.2 SenseVoice（语音转写 + 情绪标签）
+  #   profile: ai    （resources ~1.5GB，funasr + torch on CPU）
+  # =====================================================
+  emotion-echo-sensevoice:
+    build:
+      context: ../../Emotion-Echo-LLM
+      dockerfile: sensevoice-small/Dockerfile
+    image: emotion-echo/sensevoice:v0.1.0
+    container_name: emotion-echo-sensevoice
+    restart: unless-stopped
+    profiles: ["ai"]
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      SENSEVOICE_DEVICE: cpu
+    ports:
+      - "8002:8002"
+    volumes:
+      # 模型首次启动会从 ModelScope 自动下载 ~200MB am.mvn + checkpoint
+      # 若要预烘焙到镜像：取消下行注释并手动 copy 模型
+      # - ../../Emotion-Echo-LLM/sensevoice-small/am.mvn:/app/am.mvn:ro
+      - sensevoice-cache:/app/cache
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1536M      # funasr + torch ~1GB + room
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=2)\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s    # 模型首次下载可能要 60-120s
+      retries: 3
+
+  # =====================================================
+  # Stage 22-A.3 XTTS（语音克隆 TTS）
+  #   profile: ai    （最重 ~3GB，Coqui-TTS 模型 + torch）
+  # =====================================================
+  emotion-echo-xtts:
+    build:
+      context: ../Emotion-Echo-LLM
+      dockerfile: XTTS/Dockerfile
+    image: emotion-echo/xtts:v0.1.0
+    container_name: emotion-echo-xtts
+    restart: unless-stopped
+    profiles: ["ai"]
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8003:8003"
+    volumes:
+      # 模型：本地已下载到 ../../Emotion-Echo-LLM/XTTS/AI-ModelScope/XTTS-v2
+      # Dockerfile COPY 已包含，但 dev 可覆盖挂载
+      - sensevoice-cache:/app/cache   # 复用 cache 卷
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"        # Coqui TTS CPU 推理吃核
+          memory: 3072M      # ~2GB 模型 + room
+        reservations:
+          cpus: "0.5"
+          memory: 1024M
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=2)\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 180s    # 模型加载慢
+      retries: 3
+
+# =====================================================
+# 网络：external，连接到 infra compose 定义的 app-network
+# =====================================================
+networks:
+  app-network:
+    external: true
+    name: emotion-echo_app-network
+
+volumes:
+  sensevoice-cache:
+    name: emotion-echo-sensevoice-cache

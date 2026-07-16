@@ -1,0 +1,8 @@
+{
+  "id": "assessment-svc",
+  "name": "assessment-svc-upstream",
+  "type": "roundrobin",
+  "nodes": [
+    {"host": "host.docker.internal", "port": 8889, "weight": 1}
+  ]
+}

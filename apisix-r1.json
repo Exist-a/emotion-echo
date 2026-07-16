@@ -1,0 +1,6 @@
+{
+  "id": "r-user-me",
+  "name": "user-me-route",
+  "uri": "/api/v1/users/me",
+  "upstream_id": "user-svc"
+}

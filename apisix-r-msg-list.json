@@ -1,0 +1,1 @@
+{"id":"r-msg-list","uri":"/api/v1/conversations/*/messages","methods":["GET"],"upstream_id":"chat-svc","plugins":{"proxy-rewrite":{"regex_uri":["^/api/v1/conversations/(.*)/messages","/api/v1/conversations/$1/messages"]}}}

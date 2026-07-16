@@ -1,0 +1,82 @@
+syntax = "v1"
+
+info (
+	title:   "emotion-echo-chat-svc API"
+	desc:    "chat domain microservice: conversations / messages / async events"
+	author:  "emotion-echo team"
+	version: "0.2.0"
+)
+
+// ============ 类型 ============
+type HealthResp {
+	Status  string `json:"status"`
+	Time    int64  `json:"time"`
+	Service string `json:"service"`
+	Version string `json:"version"`
+	DbOK    bool   `json:"dbOk"`
+	KafkaOK bool   `json:"kafkaOk"`
+}
+
+type ConversationView {
+	Id        int64  `json:"id"`
+	UserId    int64  `json:"userId"`
+	Title     string `json:"title"`
+	MsgCount  int    `json:"msgCount"`
+	Status    int    `json:"status"`
+	CreatedAt int64  `json:"createdAt"`
+	UpdatedAt int64  `json:"updatedAt"`
+}
+
+type MessageView {
+	Id             int64  `json:"id"`
+	ConversationId int64  `json:"conversationId"`
+	UserId         int64  `json:"userId"`
+	Role           string `json:"role"`
+	Content        string `json:"content"`
+	TokensUsed     int    `json:"tokensUsed"`
+	CreatedAt      int64  `json:"createdAt"`
+}
+
+// ============ 请求 ============
+type CreateConversationReq {
+	Title string `json:"title,optional"`
+}
+
+type CreateConversationResp {
+	Conversation ConversationView `json:"conversation"`
+}
+
+type SendMessageReq {
+	Id      int64  `path:"id"`
+	Role    string `json:"role,default=user"`
+	Content string `json:"content"`
+}
+
+type SendMessageResp {
+	Message MessageView `json:"message"`
+}
+
+type ListMessagesReq {
+	Id    int64 `path:"id"`
+	Limit int   `json:"limit,default=50"`
+}
+
+type ListMessagesResp {
+	Messages []MessageView `json:"messages"`
+}
+
+// ============ 路由 ============
+service chat-api {
+	@handler HealthHandler
+	get /health returns (HealthResp)
+
+	@handler CreateConversationHandler
+	post /api/v1/conversations (CreateConversationReq) returns (CreateConversationResp)
+
+	@handler SendMessageHandler
+	post /api/v1/conversations/:id/messages (SendMessageReq) returns (SendMessageResp)
+
+	@handler ListMessagesHandler
+	get /api/v1/conversations/:id/messages (ListMessagesReq) returns (ListMessagesResp)
+}
+

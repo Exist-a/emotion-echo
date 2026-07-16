@@ -1,0 +1,131 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: emotion-echo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ""
+      POSTGRES_DB: emotion_echo
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  redis:
+    image: redis:8-alpine
+    container_name: emotion-echo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  sensevoice:
+    build:
+      context: ./Emotion-Echo-LLM/sensevoice-small
+      dockerfile: Dockerfile
+    container_name: emotion-echo-sensevoice
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    volumes:
+      - sensevoice_models:/root/.cache/modelscope
+    networks:
+      - app-network
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
+
+  xtts:
+    build:
+      context: ./Emotion-Echo-LLM/XTTS
+      dockerfile: Dockerfile
+    container_name: emotion-echo-xtts
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./Emotion-Echo-LLM/XTTS/AI-ModelScope:/app/AI-ModelScope
+      - xtts_cache:/root/.cache/modelscope
+    networks:
+      - app-network
+    deploy:
+      resources:
+        reservations:
+          memory: 8G
+
+  backend:
+    build:
+      context: ./Emotion-Echo-Gin
+      dockerfile: Dockerfile
+    container_name: emotion-echo-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sensevoice:
+        condition: service_started
+      xtts:
+        condition: service_started
+    environment:
+      - EE_DATABASE_POSTGRES_HOST=postgres
+      - EE_DATABASE_POSTGRES_PORT=5432
+      - EE_DATABASE_POSTGRES_USER=postgres
+      - EE_DATABASE_POSTGRES_PASSWORD=
+      - EE_DATABASE_POSTGRES_DBNAME=emotion_echo
+      - EE_DATABASE_REDIS_HOST=redis
+      - EE_DATABASE_REDIS_PORT=6379
+      - EE_DATABASE_REDIS_PASSWORD=
+      - EE_AI_EMOTION_BASE_URL=http://sensevoice:8002
+    volumes:
+      - ./uploads:/root/uploads
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./Emotion-Echo-Web
+      dockerfile: Dockerfile
+    container_name: emotion-echo-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NUXT_PUBLIC_API_BASE=http://localhost:8080
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  sensevoice_models:
+  xtts_cache:
+
+networks:
+  app-network:
+    driver: bridge

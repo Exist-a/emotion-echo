@@ -1,0 +1,61 @@
+Name: ai-api
+Host: 0.0.0.0
+Port: 8891
+
+# Stage 20-P0-1: 容器内服务发现
+# 外部依赖的 string 地址通过 env 注入
+# list 字段（Kafka.Brokers）改用 BrokersCSV（string），main.go 启动时 split
+#
+# 容器里跑时，compose 的 environment 会注入：
+#   POSTGRES_DSN       — Postgres host 用容器名 emotion-echo-postgres
+#   KAFKA_BROKERS      — 单个 broker，如 "emotion-echo-kafka:9092"
+#   SKYWALKING_OAP_ADDR — 形如 emotion-echo-sw-oap:11800
+#   LLM_BASE_URL       — 形如 http://emotion-llm-service:8000
+#   LLM_GRPC_ADDR      — 形如 emotion-llm-service:50051
+#   LLM_INTERNAL_API_KEY — gRPC auth key
+#
+# 本地开发：env 不设 → 用默认 localhost / dev 配置
+
+SkyWalking:
+  OAPAddr:     ${SKYWALKING_OAP_ADDR:-localhost:11800}
+  ServiceName: emotion-echo-ai-svc
+  Enabled:     true
+
+Postgres:
+  DSN:          ${POSTGRES_DSN:-"host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_ai"}
+  MaxOpenConns: 10
+  MaxIdleConns: 5
+
+Kafka:
+  BrokersCSV: ${KAFKA_BROKERS:-localhost:9092}
+  GroupID:    ai-svc
+  Enabled:    true
+  Topics:     ["chat-events"]
+
+LLM:
+  BaseURL:        ${LLM_BASE_URL:-http://localhost:8000}
+  GRPCAddr:       ${LLM_GRPC_ADDR:-localhost:50051}
+  InternalAPIKey: ${LLM_INTERNAL_API_KEY:-}
+  Enabled:        true
+  Timeout:        3
+
+GRPC:
+  Enabled: true   # Stage 19: ai-svc gRPC server (:8892)
+  Port:    8892
+
+# Stage 22-A: 多模态 AI 模型服务（可选）
+# BaseURL 留空 = 不调用，由 analyzer / consumer 走降级路径（仅文本 LLM）。
+# 启用 AI profile 后，compose 文件会注入容器 DNS 名（emotion-echo-fer:8004 等）。
+FER:
+  BaseURL: ${FER_BASE_URL:-}
+  Timeout: 10
+
+SenseVoice:
+  BaseURL: ${SENSEVOICE_BASE_URL:-}
+  Timeout: 30
+
+XTTS:
+  BaseURL: ${XTTS_BASE_URL:-}
+  Timeout: 60
+  Language: zh-cn
+  Speed: 0.75

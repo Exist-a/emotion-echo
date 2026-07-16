@@ -1,0 +1,11 @@
+{
+  "id": "r-survey-get",
+  "uri": "/api/v1/surveys/*",
+  "methods": ["GET"],
+  "upstream_id": "assessment-svc",
+  "plugins": {
+    "jwt-auth": { "key": "user_jwt" },
+    "limit-count": { "count": 60, "time_window": 60, "key": "X-User-Id", "rejected_code": 429, "rejected_msg": "Too Many Requests" },
+    "api-breaker": { "break_response_code": 503, "unhealthy": {"http_statuses":[500,502,503,504],"failures":3}, "healthy":{"http_statuses":[200,201,202,204],"successes":2} }
+  }
+}

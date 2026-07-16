@@ -1,0 +1,12 @@
+[submodule "Emotion-Echo-Web"]
+	path = Emotion-Echo-Web
+	url = https://github.com/Exist-a/Emotion-Echo-Web.git
+[submodule "legacy/emotion-echo-gin"]
+	path = legacy/emotion-echo-gin
+	url = https://github.com/Exist-a/Emotion-Echo-Gin.git
+[submodule "Emotion-Echo-LLM/sensevoice-small"]
+	path = Emotion-Echo-LLM/sensevoice-small
+	url = ./Emotion-Echo-LLM/sensevoice-small
+[submodule "Emotion-Echo-LLM/XTTS/TTS"]
+	path = Emotion-Echo-LLM/XTTS/TTS
+	url = ./Emotion-Echo-LLM/XTTS/TTS

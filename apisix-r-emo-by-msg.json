@@ -1,0 +1,1 @@
+{"id":"r-emo-by-msg","uri":"/api/v1/emotion/message/*","methods":["GET"],"upstream_id":"ai-svc"}

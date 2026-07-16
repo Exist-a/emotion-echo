@@ -1,0 +1,1 @@
+{"id":"r-ai-health","uri":"/ai-health","upstream_id":"ai-svc","plugins":{"proxy-rewrite":{"regex_uri":["^/ai-health(.*)","/health$1"]}}}
