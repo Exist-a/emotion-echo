@@ -100,6 +100,9 @@ def verify(base_url: str) -> int:
     ai_ok = s == 200 and "time" in body and "fer" in body
     results.append(("ai/health", ai_ok))
     print(f"\n[{'OK' if ai_ok else 'FAIL'}] GET /api/v1/ai/health → {s}")
+
+    # Stage 25-A: 检测 AI 是否在线，决定后续断言严格度
+    ai_live = False
     if isinstance(body, dict):
         for name, entry in [("FER", body.get("fer")), ("SenseVoice", body.get("sensevoice")), ("XTTS", body.get("xtts"))]:
             if entry is None:
@@ -108,6 +111,8 @@ def verify(base_url: str) -> int:
             enabled = "on" if entry.get("enabled") else "off"
             err = entry.get("error", "none")
             print(f"   - {name:11s}: {status} (enabled={enabled}, {entry.get('latencyMs','?')}ms, err={err[:60]})")
+            if status == "up":
+                ai_live = True
 
     # ---- 2. /api/v1/multimodal/analyze (kind=text) ----
     s, body = _post_form(
@@ -120,34 +125,47 @@ def verify(base_url: str) -> int:
     if isinstance(body, dict):
         print(f"   emotion={body.get('emotion')} model={body.get('model')} confidence={body.get('confidence')}")
 
-    # ---- 3. /api/v1/multimodal/analyze (kind=audio, fake bytes) ----
-    # 因为 SenseVoice 关闭，会走 fallback → 200 + model=keyword fallback
+    # ---- 3. /api/v1/multimodal/analyze (kind=audio) ----
+    # Stage 25-A: AI 在线时应该真正 ASR + 情绪；离线时 fallback
     fake_audio = b"\x00\x00fake-audio-bytes-for-verify"
     s, body = _post_form(
         f"{base_url}/api/v1/multimodal/analyze", jwt,
         fields={"kind": "audio"}, file=("test.webm", fake_audio),
     )
-    # 没有 AI 服务时，fallback 返回 emotion=neutral + model=keyword-stub
     audio_ok = s == 200
     results.append(("multimodal/audio", audio_ok))
     print(f"\n[{'OK' if audio_ok else 'FAIL'}] POST /api/v1/multimodal/analyze (kind=audio) → {s}")
     if isinstance(body, dict):
-        print(f"   emotion={body.get('emotion')} model={body.get('model')} (SenseVoice off → fallback)")
+        model = body.get('model', '?')
+        if ai_live and model in ("sensevoice-stub-v1", "sensevoice-stub", "keyword-stub-v1", "keyword-stub"):
+            print(f"   emotion={body.get('emotion')} model={model} (SenseVoice live, fallback)")
+        elif ai_live:
+            print(f"   emotion={body.get('emotion')} model={model} (SenseVoice live, real inference)")
+        else:
+            print(f"   emotion={body.get('emotion')} model={model} (SenseVoice off → fallback)")
     else:
         print(f"   body: {body}")
 
     # ---- 4. /api/v1/tts/synthesize ----
-    # 因为 XTTS 关闭，会返 503
     s, body = _post_json(
         f"{base_url}/api/v1/tts/synthesize", jwt,
         {"text": "你好", "language": "zh-cn"},
     )
-    # 503 也算 OK（XTTS 未启用是预期行为）
-    tts_ok = s in (200, 503)
+    # 200 = 成功；503 = XTTS 未启用（降级）
     if s == 200:
         results.append(("tts/synthesize", True))
+        tts_ok = True
+    elif s == 503 and not ai_live:
+        # AI 离线时 503 是预期
+        results.append(("tts/synthesize", True))  # 视为通过
+        tts_ok = True
+    elif s == 503 and ai_live:
+        # AI 在线时应该是 200，503 是 regression
+        results.append(("tts/synthesize", False))
+        tts_ok = False
     else:
-        results.append(("tts/synthesize", False))  # 503 视为预期降级，不计入 PASS
+        results.append(("tts/synthesize", False))
+        tts_ok = False
     print(f"\n[{'OK' if tts_ok else 'FAIL'}] POST /api/v1/tts/synthesize → {s}")
     if isinstance(body, dict):
         if s == 200:
@@ -158,9 +176,8 @@ def verify(base_url: str) -> int:
     # ---- 汇总 ----
     passed = sum(1 for _, ok in results if ok)
     total = len(results)
-    print(f"\n=== Summary: {passed}/{total} Stage 23 endpoints healthy ===")
-    if s == 503:
-        print("  (TTS 503 是预期降级，未启用 XTTS 服务)")
+    mode = "AI profile LIVE" if ai_live else "AI profile OFFLINE (降级)"
+    print(f"\n=== Summary: {passed}/{total} Stage 23 endpoints healthy [{mode}] ===")
     return 0
 
 

@@ -175,7 +175,7 @@ services:
   # =====================================================
   emotion-echo-sensevoice:
     build:
-      context: ../../Emotion-Echo-LLM
+      context: ../Emotion-Echo-LLM
       dockerfile: sensevoice-small/Dockerfile
     image: emotion-echo/sensevoice:v0.1.0
     container_name: emotion-echo-sensevoice
