@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 # XTTS has a vendored TTS source tree that must be present (sys.path.insert).
 # Strategy:
 #   builder : pip-install torch / Coqui TTS / modelscope / fastapi
@@ -22,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY XTTS/requirements.txt .
 RUN pip install --prefix=/install -r requirements.txt --timeout 600 \
     && python -c "import TTS; print('TTS version:', TTS.__version__)"
 
@@ -61,7 +60,7 @@ COPY --from=builder /install /usr/local
 COPY --chown=app:app TTS/ ./TTS/
 
 # application code
-COPY --chown=app:app logging_setup.py metrics_setup.py server.py ./
+COPY --chown=app:app XTTS/logging_setup.py XTTS/metrics_setup.py XTTS/server.py ./
 
 # model + sample WAV
 COPY --chown=app:app AI-ModelScope/ ./AI-ModelScope/

@@ -8,20 +8,25 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# System deps needed for opencv-python / fer libraries
+# System deps needed for audio processing
+# - libsndfile1: soundfile
+# - ffmpeg: audio format conversion
+# - git: for funasr ModelScope download
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     git \
-    libopencv-dev \
+    libsndfile1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY FER/requirements.txt .
+COPY sensevoice-small/requirements.txt .
 
 # Install Python packages to a separate prefix so they can be copied cleanly.
+# Use Aliyun mirror for speed (国内开发友好)
 RUN pip install --prefix=/install -r requirements.txt \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    --timeout 120
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --timeout 180
 
 
 # Stage 2: runtime - lean image with non-root user + tini
@@ -33,15 +38,13 @@ ENV TZ=${TZ} \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     LOG_FORMAT=json \
-    LOG_LEVEL=INFO
+    LOG_LEVEL=INFO \
+    SENSEVOICE_DEVICE=cpu
 
-# Runtime libs only (no compilers). libopencv-*410 on Debian 13 (trixie).
+# Runtime libs only (no compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libopencv-core410 \
-    libopencv-imgproc410 \
-    libopencv-objdetect410 \
-    libopencv-dnn410 \
-    libopencv-imgcodecs410 \
+    libsndfile1 \
+    ffmpeg \
     ca-certificates \
     curl \
     tini \
@@ -59,15 +62,21 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 
 # Copy application source
-COPY --chown=app:app FER/logging_setup.py FER/metrics_setup.py FER/server.py FER/deploy.prototxt.txt ./
+COPY --chown=app:app sensevoice-small/logging_setup.py sensevoice-small/metrics_setup.py sensevoice-small/server.py ./
 
-EXPOSE 8004
+# Pre-create cache dir (funasr will download model to ~/.cache/modelscope on first run)
+RUN mkdir -p /app/cache && chown app:app /app/cache
+
+ENV HF_HOME=/app/cache \
+    MODELSCOPE_CACHE=/app/cache
+
+EXPOSE 8002
 
 USER app
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8004/health', timeout=5).read()" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=5).read()" || exit 1
 
-# tini as PID 1 handles SIGTERM properly (uvicorn will receive and graceful-shutdown)
+# tini as PID 1 handles SIGTERM properly
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8004"]
+CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8002"]
