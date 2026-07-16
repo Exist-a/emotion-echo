@@ -249,7 +249,8 @@ func main() {
 					func(ctx context.Context, evt *events.Event) error {
 						return createdHandler.Handle(ctx, evt)
 					},
-					events.EventTypeMessageCreated); err != nil {
+					events.EventTypeMessageCreated,
+					tracer); err != nil {
 					logging.Errorf(err, "[kafka] consume err")
 				}
 			}()

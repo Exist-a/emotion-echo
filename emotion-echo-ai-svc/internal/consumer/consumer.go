@@ -14,19 +14,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 
 	"emotion-echo-ai-svc/internal/events"
 	"emotion-echo-ai-svc/internal/logging"
 
 	"github.com/IBM/sarama"
+	"github.com/SkyAPM/go2sky"
 )
 
 // ConsumerGroupHandler 是 sarama.ConsumerGroupHandler 的实现
 //
 // 收到消息后：
 //  1. 解析为 Event
-//  2. 调用 Handler
+//  2. 调用 Handler（可选创建 SkyWalking span）
 //  3. 标记消费成功（返回 nil）
 type ConsumerGroupHandler struct {
 	// Ready 当 setup 完成后会关闭这个 channel
@@ -35,6 +37,9 @@ type ConsumerGroupHandler struct {
 	Handler MessageHandler
 	// TopicFilter 仅处理匹配的事件类型（如 "message.created"）
 	TopicFilter string
+	// Tracer 可选：用于创建 SkyWalking span（Stage 25-F）
+	// 为 nil 时不创建 span，保证向后兼容
+	Tracer *go2sky.Tracer
 }
 
 // MessageHandler 是单条消息的业务处理函数
@@ -55,6 +60,9 @@ func (h *ConsumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 }
 
 // ConsumeClaim 实际消费消息
+//
+// Stage 25-F：当 h.Tracer 非 nil 时，为每条消息创建 SkyWalking local span，
+// 标签包含 messaging.system / topic / partition / event.type，便于 SkyWalking UI 聚合分析。
 func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for {
 		select {
@@ -73,6 +81,18 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			if h.TopicFilter != "" && evt.Type != h.TopicFilter {
 				sess.MarkMessage(msg, "")
 				continue
+			}
+			// Stage 25-F: SkyWalking span（可选）
+			if h.Tracer != nil {
+				span, _, _ := h.Tracer.CreateLocalSpan(sess.Context(),
+					go2sky.WithOperationName("kafka-consume"))
+				if span != nil {
+					defer span.End()
+					span.Tag("messaging.system", "kafka")
+					span.Tag("messaging.kafka.topic", msg.Topic)
+					span.Tag("messaging.kafka.partition", fmt.Sprintf("%d", msg.Partition))
+					span.Tag("event.type", evt.Type)
+				}
 			}
 			// 调业务
 			if err := h.Handler(sess.Context(), &evt); err != nil {
@@ -119,12 +139,15 @@ func NewKafkaConsumer(brokers []string, groupID string) (*KafkaConsumer, error) 
 // Consume 阻塞消费 topic，直到 ctx 取消
 //
 // 真正的 sarama ConsumerGroup.Consume 内部循环处理 rebalance
-func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string) error {
+//
+// 参数 tracer 可选：传入后每条消息会创建 SkyWalking span（Stage 25-F）。
+func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string, tracer *go2sky.Tracer) error {
 	c.topics = topics
 	h := &ConsumerGroupHandler{
 		Ready:       make(chan bool),
 		Handler:     handler,
 		TopicFilter: topicFilter,
+		Tracer:      tracer,
 	}
 
 	// 阻塞循环：每次 Consume 返回时（rebalance 或错误）重试
