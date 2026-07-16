@@ -289,6 +289,15 @@ func main() {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
 	}
 	r.Use(sharedmw.GinAuthMiddleware())
+	// Stage 25-G: per-user 限流（10 req/s, burst 20）防止单用户打爆 LLM
+	rateLimiter := sharedmw.NewTokenBucket(10, 20)
+	r.Use(sharedmw.UserRateLimitMiddleware(rateLimiter, func(c *gin.Context) int64 {
+		v, ok := c.Request.Context().Value(sharedmw.CtxUserIDKey{}).(int64)
+		if !ok {
+			return 0
+		}
+		return v
+	}))
 
 	// 6. routes
 	r.GET("/health", handler.HealthHandler(svcCtx))
