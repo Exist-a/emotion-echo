@@ -99,9 +99,15 @@ pg_log.txt
 *.tflite
 *.engine
 *.trt
+*.bpe.model  # SenseVoice 多语种 BPE 模型
+*.bpe
 # XTTS-v2 模型目录（约 2GB，从 ModelScope 自动下载）
 Emotion-Echo-LLM/XTTS/AI-ModelScope/
 Emotion-Echo-LLM/**/AI-ModelScope/
+# SenseVoice 模型目录（约 200MB，从 ModelScope 自动下载）
+Emotion-Echo-LLM/sensevoice-small/am.mvn
+Emotion-Echo-LLM/sensevoice-small/model.pt
+Emotion-Echo-LLM/sensevoice-small/chn_jpn_yue_eng_ko_spectok.bpe.model
 
 # ---------- 工具链 / 第三方二进制 ----------
 protoc-dist/
