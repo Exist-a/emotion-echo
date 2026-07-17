@@ -15,8 +15,8 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     # Tell huggingface to use Aliyun mirror
     HF_ENDPOINT=https://hf-mirror.com
 
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+ || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
  && apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -27,7 +27,7 @@ COPY XTTS/requirements.txt .
 # 简化：一次 pip install 全部 requirements（不拆 --prefix 分阶段）
 # TTS 自身会拉 spacy / jieba / pypinyin（我们 requirements 已包含）
 RUN pip install --prefix=/install --timeout 600 -r requirements.txt \
-    -i https://mirrors.aliyun.com/pypi/simple/ \
+    -i https://mirrors.tuna.tsinghua.edu.cn/pypi/simple/ \
     --extra-index-url https://pypi.org/simple/
 
 
@@ -44,8 +44,8 @@ ENV TZ=${TZ} \
     MODELSCOPE_CACHE=/app/cache
 
 # Coqui-TTS runtime deps
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+ || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
  && apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     libgomp1 \

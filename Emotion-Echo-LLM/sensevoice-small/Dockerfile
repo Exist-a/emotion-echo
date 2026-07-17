@@ -12,8 +12,8 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 # - libsndfile1: soundfile
 # - ffmpeg: audio format conversion
 # - git: for funasr ModelScope download
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+ || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
  && apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -27,7 +27,7 @@ COPY sensevoice-small/requirements.txt .
 # Install Python packages to a separate prefix so they can be copied cleanly.
 # Use Aliyun mirror for speed (国内开发友好)
 RUN pip install --prefix=/install -r requirements.txt \
-    -i https://mirrors.aliyun.com/pypi/simple/ \
+    -i https://mirrors.tuna.tsinghua.edu.cn/pypi/simple/ \
     --timeout 180
 
 
@@ -44,8 +44,8 @@ ENV TZ=${TZ} \
     SENSEVOICE_DEVICE=cpu
 
 # Runtime libs only (no compilers)
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+ || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
  && apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     ffmpeg \

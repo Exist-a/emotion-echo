@@ -9,9 +9,9 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONUNBUFFERED=1
 
 # System deps needed for opencv-python / fer libraries
-# 国内 build 加速：deb.debian.org 国内经常 500，改用 aliyun mirror
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
+# 国内 build 加速：清华 TUNA 镜像（已确认有 trixie main 包，aliyun 缺）
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+ || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
  && apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -24,7 +24,7 @@ COPY FER/requirements.txt .
 # Install Python packages to a separate prefix so they can be copied cleanly.
 RUN pip install --prefix=/install -r requirements.txt \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    --timeout 120
+    --timeout 180
 
 
 # Stage 2: runtime - lean image with non-root user + tini
@@ -39,8 +39,8 @@ ENV TZ=${TZ} \
     LOG_LEVEL=INFO
 
 # Runtime libs only (no compilers). libopencv-*410 on Debian 13 (trixie).
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list \
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+ || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
  && apt-get update && apt-get install -y --no-install-recommends \
     libopencv-core410 \
     libopencv-imgproc410 \
