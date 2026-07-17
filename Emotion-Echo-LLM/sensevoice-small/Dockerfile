@@ -25,10 +25,12 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
 COPY sensevoice-small/requirements.txt .
 
 # Install Python packages to a separate prefix so they can be copied cleanly.
-# Use Aliyun mirror for speed (国内开发友好)
+# 关键：torch 等大包国内 pypi 镜像没有 Python 3.10 wheel
+# 用 --extra-index-url 让 tuna 找不到时 fallback 到 pypi.org
 RUN pip install --prefix=/install -r requirements.txt \
     -i https://mirrors.tuna.tsinghua.edu.cn/pypi/simple/ \
-    --timeout 180
+    --extra-index-url https://pypi.org/simple/ \
+    --timeout 600
 
 
 # Stage 2: runtime - lean image with non-root user + tini
