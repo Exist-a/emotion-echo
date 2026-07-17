@@ -6,12 +6,15 @@ torch>=2.0.0,<3.0.0
 torchaudio
 modelscope
 # Coqui TTS 0.22 与 transformers>=4.45 不兼容（BeamSearchScorer 已删除）
-# 锁 transformers<4.40（Coqui TTS 0.22 测试版本）
+# 锁 transformers>=4.30,<4.40（Coqui TTS 0.22 测试版本）
 TTS>=0.21.0,<1.0.0
 transformers>=4.30,<4.40
+# TTS 0.22 还需要 mutagen（数据集处理），之前没装导致 ImportError
+mutagen
 fastapi>=0.100.0
 uvicorn>=0.23.2
 pydantic>=2.0
 prometheus-client>=0.19.0
 python-json-logger>=2.0.7
 cython>=3.0.0
+
