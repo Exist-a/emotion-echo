@@ -38,7 +38,8 @@ RUN pip install --prefix=/install --timeout 600 \
         spacy jieba pypinyin \
     -i https://mirrors.aliyun.com/pypi/simple/ \
     --extra-index-url https://pypi.org/simple/ \
- && python -c "import TTS; print('TTS version:', TTS.__version__)"
+# 验证 TTS 安装成功（需要 PYTHONPATH 指向 --prefix 的 site-packages）
+ && PYTHONPATH=/install/lib/python3.10/site-packages python -c "import TTS; print('TTS version:', TTS.__version__)"
 
 
 FROM python:3.10-slim AS runtime
