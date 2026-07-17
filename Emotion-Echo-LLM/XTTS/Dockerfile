@@ -3,7 +3,7 @@
 #   builder : pip-install torch / Coqui TTS / modelscope / fastapi
 #   runtime : copy builder's site-packages + local TTS/ folder + model files
 
-FROM python:3.11-slim AS builder
+FROM python:3.10-slim AS builder
 
 WORKDIR /build
 
@@ -24,11 +24,14 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
     && rm -rf /var/lib/apt/lists/*
 
 COPY XTTS/requirements.txt .
+# 国内 pip mirror（避开 PyPI 直连超时）
 RUN pip install --prefix=/install -r requirements.txt --timeout 600 \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --extra-index-url https://pypi.org/simple/ \
     && python -c "import TTS; print('TTS version:', TTS.__version__)"
 
 
-FROM python:3.11-slim AS runtime
+FROM python:3.10-slim AS runtime
 
 ARG TZ=Asia/Shanghai
 ENV TZ=${TZ} \
