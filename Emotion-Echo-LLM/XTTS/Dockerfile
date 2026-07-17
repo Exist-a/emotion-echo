@@ -24,20 +24,9 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
     && rm -rf /var/lib/apt/lists/*
 
 COPY XTTS/requirements.txt .
-# 先单独装 numpy / cython（Coqui TTS 拉老 numpy=1.22 在 Py3.10 编译失败）
-# 再装 requirements.txt（--no-deps 避免老依赖冲突）
-# 最后装 TTS 依赖（spacy / jieba / pypinyin 用于多语种）
-# 不在 builder 验证 import TTS（runtime 阶段自然验证）
-RUN pip install --prefix=/install --timeout 600 \
-        numpy>=1.24.3 cython>=3.0.0 \
-    -i https://mirrors.aliyun.com/pypi/simple/ \
-    --extra-index-url https://pypi.org/simple/ \
- && pip install --prefix=/install --timeout 600 \
-        -r XTTS/requirements.txt --no-deps \
-    -i https://mirrors.aliyun.com/pypi/simple/ \
-    --extra-index-url https://pypi.org/simple/ \
- && pip install --prefix=/install --timeout 600 \
-        spacy jieba pypinyin \
+# 简化：一次 pip install 全部 requirements（不拆 --prefix 分阶段）
+# TTS 自身会拉 spacy / jieba / pypinyin（我们 requirements 已包含）
+RUN pip install --prefix=/install --timeout 600 -r requirements.txt \
     -i https://mirrors.aliyun.com/pypi/simple/ \
     --extra-index-url https://pypi.org/simple/
 
