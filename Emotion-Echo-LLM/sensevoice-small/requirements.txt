@@ -1,8 +1,11 @@
-torch>=1.13
+# SenseVoice minimal requirements (Stage 25-B)
+# 不锁 numpy 版本，让 funasr / modelscope 自己解析
+# SenseVoice 启动时会从 ModelScope 自动下载模型到 /app/cache
+
+torch>=1.13,<3.0.0
 torchaudio
 modelscope
-huggingface
 huggingface_hub
 funasr>=1.1.2
-numpy<=1.26.4
+# numpy 由 funasr 解析（不要自己锁版本，否则会冲突）
 gradio
