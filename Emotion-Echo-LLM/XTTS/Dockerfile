@@ -24,11 +24,21 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
     && rm -rf /var/lib/apt/lists/*
 
 COPY XTTS/requirements.txt .
-# 国内 pip mirror（避开 PyPI 直连超时）
-RUN pip install --prefix=/install -r requirements.txt --timeout 600 \
+# 先单独装 numpy / cython / torch（Coqui TTS 拉老 numpy=1.22 在 Py3.10 编译失败）
+# 再装 TTS（不锁版本，让它拉 spacy[ja] 等）
+RUN pip install --prefix=/install --timeout 600 \
+        numpy>=1.24.3 cython>=3.0.0 \
     -i https://mirrors.aliyun.com/pypi/simple/ \
     --extra-index-url https://pypi.org/simple/ \
-    && python -c "import TTS; print('TTS version:', TTS.__version__)"
+ && pip install --prefix=/install --timeout 600 \
+        -r XTTS/requirements.txt --no-deps \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --extra-index-url https://pypi.org/simple/ \
+ && pip install --prefix=/install --timeout 600 \
+        spacy jieba pypinyin \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --extra-index-url https://pypi.org/simple/ \
+ && python -c "import TTS; print('TTS version:', TTS.__version__)"
 
 
 FROM python:3.10-slim AS runtime
