@@ -1,5 +1,11 @@
 version: "3.8"
 
+# Note (2026-07-17): Emotion-Echo-Gin 单体后端已迁移到 legacy/emotion-echo-gin/，
+# 当前仓库的微服务后端为 emotion-echo-{user,chat,analytics,assessment}-svc（无 Dockerfile）。
+# 本 compose 文件中的 `backend` 服务已停止使用，仅作历史参考；
+# 实际启动请参考 deploy/docker-compose.infra.yml（基础设施）+ deploy/docker-compose.apps.yml（业务）。
+# 如需重新启用单体后端，请将 context 指向 legacy/emotion-echo-gin 并自行维护。
+
 services:
   postgres:
     image: postgres:18-alpine
@@ -73,37 +79,35 @@ services:
         reservations:
           memory: 8G
 
-  backend:
-    build:
-      context: ./Emotion-Echo-Gin
-      dockerfile: Dockerfile
-    container_name: emotion-echo-backend
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      sensevoice:
-        condition: service_started
-      xtts:
-        condition: service_started
-    environment:
-      - EE_DATABASE_POSTGRES_HOST=postgres
-      - EE_DATABASE_POSTGRES_PORT=5432
-      - EE_DATABASE_POSTGRES_USER=postgres
-      - EE_DATABASE_POSTGRES_PASSWORD=
-      - EE_DATABASE_POSTGRES_DBNAME=emotion_echo
-      - EE_DATABASE_REDIS_HOST=redis
-      - EE_DATABASE_REDIS_PORT=6379
-      - EE_DATABASE_REDIS_PASSWORD=
-      - EE_AI_EMOTION_BASE_URL=http://sensevoice:8002
-    volumes:
-      - ./uploads:/root/uploads
-    networks:
-      - app-network
+  # backend: 单体后端已弃用，保留注释作为历史参考。
+  # 启用请取消注释并将 context 改为 ./legacy/emotion-echo-gin
+  #
+  # backend:
+  #   build:
+  #     context: ./legacy/emotion-echo-gin
+  #     dockerfile: Dockerfile
+  #   container_name: emotion-echo-backend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     - EE_DATABASE_POSTGRES_HOST=postgres
+  #     - EE_DATABASE_POSTGRES_PORT=5432
+  #     - EE_DATABASE_POSTGRES_USER=postgres
+  #     - EE_DATABASE_POSTGRES_PASSWORD=
+  #     - EE_DATABASE_POSTGRES_DBNAME=emotion_echo
+  #     - EE_DATABASE_REDIS_HOST=redis
+  #     - EE_DATABASE_REDIS_PORT=6379
+  #     - EE_DATABASE_REDIS_PASSWORD=
+  #   volumes:
+  #     - ./uploads:/root/uploads
+  #   networks:
+  #     - app-network
 
   frontend:
     build:
@@ -113,10 +117,14 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    # Stage 26-P: backend (Emotion-Echo-Gin) 已退役;
+    # 前端真实后端是 4 Go svc + ai-svc + llm-service,通过 APISIX :9080 入口访问
     depends_on:
-      - backend
+      - postgres
+      - redis
+      - kafka
     environment:
-      - NUXT_PUBLIC_API_BASE=http://localhost:8080
+      - NUXT_PUBLIC_API_BASE=http://localhost:9080
     networks:
       - app-network
 
