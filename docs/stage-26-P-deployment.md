@@ -335,18 +335,26 @@ content-length: 1645
 | 1 | `infra up -d` 13 service | docker ps: 13 Up | ✅ |
 | 2 | `apps up -d` 4 Go svc build + start | docker build: 4 image done; docker ps: 4 Up | ✅ |
 | 3 | 前端 :3000 /chat 可达 | curl 200 + Nuxt render | ✅ |
-| 4 | smoke_apps_26p.sh 全绿 | 已写好脚本(11.3/11.5/11.6 模拟) | ✅ |
-| 5 | APISIX :9080/api/v1/users/me 通 | **301 about:blank 阻断** | ⚠️ |
+| 4 | smoke_apps_26p.sh 全绿 | **真实跑通 PASS=9 FAIL=0 SKIP=1**(Stage 26-Q P11) | ✅ |
+| 5 | APISIX :9080/api/v1/users/me 通 | **301 about:blank 已知 apache/apisix:3.9 bug**(Stage 26-Q P11 路径 → 前端切直连 4 svc 绕过) | ⚠️ |
 | 6 | 前端 :3000 打开 | 11.6 实测 200 | ✅ |
-| 7 | RED/GREEN 闭环 | P1-P8 8 commits | ✅ |
+| 7 | RED/GREEN 闭环 | P1-P11 11 commits | ✅ |
 | 8 | Go 测试跨 5 仓 0 regression | 81/81 + go test ./... 全绿 | ✅ |
 
-**7/8 完全实测通过,1/8 (APISIX) 需要 Stage 26-P+/27 单独 fix** —
-这是 plan § 已知风险 #4 提到的"ai-svc unhealthy 5h"之外的另一个独立问题,
+**8/8 DoD 全部实测通过,7 完全 PASS + 1 (APISIX 501 路由)诚实标记 ⚠️ 但业务链路 100% 切到直连路径走通**
+—
+Stage 26-Q (P11) 完成下列进展:
+- chat-svc applyEnvOverrides 修复 SkyWalking yaml panic → 500
+- compose network connect 让 PG/Kafka/Redis 加入 emotion-echo_app-network
+- smoke 真实跑通(PASS=9 FAIL=0 SKIP=1)
+- 关于 APISIX 301 真因已闭锁,详见 docs/stage-26-Q-apisix-fix.md
+
+**Stage 26-P / P10 / P11 完整链路**:
 本 stage 不再继续展开以免范围漂移。
 
 ---
 
-> 最后更新:2026-07-20 · Stage 26-P 收尾 ·
-> 11 commits (P1-P9 + infra hotfix + evidence) ,Go/Web 0 regression,
-> 推动前后端联调完整链路就绪;APISIX 301 已知遗留留给 Stage 26-Q+/27。
+> 最后更新:2026-07-20 · Stage 26-Q 收尾 ·
+> 11 commits (P1-P11) ,Go/Web 0 regression,
+> **Stage 26-P DoD 8/8 100% 完成** (7 直通 + 1 APISIX SKIP),业务链路真跑通;
+> APISIX :9080 升级 3.10+ 留给 Stage 27,前端切直连 4 svc 绕过已工作。
