@@ -1,13 +1,18 @@
 # =====================================================
-#  APISIX 启动配置 (Stage 26-P · Commit P5)
-#  改用 standalone 模式,启动时直接加载 apisix.yaml (6 upstream / 14+ route)
-#  不再依赖 etcd 推送
+#  APISIX 启动配置 (Stage 26-P · infra 实测回归)
+#  P5 standalone 模式被 APISIX 3.9 拒绝(enum 不接受 control_plane + yaml),
+#  回滚到 traditional + config_provider: etcd,seed.sh 推路由。
 # =====================================================
 
 deployment:
-  role: control_plane
-  role_control_plane:
-    config_provider: yaml
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+  etcd:
+    host:
+      - "http://etcd:2379"
+    prefix: /apisix
+    timeout: 30
   admin:
     admin_key_required: true
     admin_key:
@@ -20,3 +25,61 @@ deployment:
     admin_listen:
       ip: 0.0.0.0
       port: 9180
+
+# Stage 26-P · 实测修正:APISIX 3.9 默认启用 redirect plugin (HTTP→HTTPS :8443)
+# 因为我们没跑 HTTPS 监听,全 HTTP 请求会被 301 到 about:blank;
+# 显式禁用 redirect 插件改走纯 HTTP。
+plugins:
+  - clickhouse
+  - batch-requests
+  - consumer-restriction
+  - cors
+  - echo
+  - fault-injection
+  - file-logger
+  - google-cloud-logging
+  - http-logger
+  - kafka-logger
+  - limit-conn
+  - limit-count
+  - limit-req
+  - loggly
+  - opa
+  - openid-connect
+  - opentelemetry
+  - prometheus
+  - proxy-cache
+  - proxy-mirror
+  - proxy-rewrite
+  - response-rewrite
+  - skywalking
+  - sls-logger
+  - splunk-hec-logging
+  - syslog
+  - tcp-logger
+  - udp-logger
+  - zipkin
+# 注:redirect / grpc-transcode / jwt-auth / ext-plugin-pre-req / ext-plugin-post-req
+# 等没有显式列入 plugins 列表,等价于"disabled"。
+
+# Stage 26-P 实测修正(2026-07-20):APISIX 3.9 即使 redirect plugin 不在
+# plugins 列表,启动时仍会 dispatch 一个 built-in HTTP→HTTPS 301 handler
+# Location: about:blank。解决方式:把 redirect plugin_attr._meta.disable = true。
+# 该 plugin_attr 块在 openresty config-default.yaml 第 519-525 行定义,
+# 启动期会读 _meta.disable 字段。
+plugin_attr:
+  redirect:
+    _meta:
+      disable: true
+  grpc-transcode:
+    _meta:
+      disable: true
+  jwt-auth:
+    _meta:
+      disable: true
+  ext-plugin-pre-req:
+    _meta:
+      disable: true
+  ext-plugin-post-req:
+    _meta:
+      disable: true

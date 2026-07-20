@@ -166,10 +166,14 @@ volumes:
   kafka_data:
 
 # =====================================================
-# 网络定义：app-network 同时给 infra + apps 共用
-# apps compose（deploy/docker-compose.apps.yml）以 external 形式引用
+# 网络定义 (Stage 26-P 实测修正)
+# 与 apps compose 一致 — 用 external:true 引用外部网络 emotion-echo_app-network
+# (先 apps up 再 infra up 才行,因为外部网络由 apps 创建)
+# 这样 infra 的容器(apisix / postgres / redis / kafka / etcd / skywalking)
+# 才能跟 apps 的容器(user-svc/chat-svc/analytics-svc/assessment-svc)在同一网络上互相 DNS 解析。
 # =====================================================
 networks:
   app-network:
+    external: true
     name: emotion-echo_app-network
     driver: bridge
