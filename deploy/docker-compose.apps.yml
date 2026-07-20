@@ -23,6 +23,176 @@ x-logging-env: &logging-env
 services:
 
   # =====================================================
+  # Stage 26-P · 4 Go 微服务 (chat/user/analytics/assessment)
+  # 顺序: chat 优先(聊天是主入口),其他按字母
+  # =====================================================
+
+  emotion-echo-user-svc:
+    build:
+      context: ..
+      dockerfile: emotion-echo-user-svc/Dockerfile
+    image: emotion-echo/user-svc:v0.1.0
+    container_name: emotion-echo-user-svc
+    restart: unless-stopped
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      GIN_MODE: release
+      # 容器 DNS 占位化(Stage 26-P · Commit P3 yaml env 化对应)
+      POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_user"
+      SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+    ports:
+      - "8888:8888"
+    volumes:
+      - ../emotion-echo-user-svc/etc/user-api.yaml:/app/etc/user-api.yaml:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    depends_on:
+      postgres:
+        condition: service_started
+      skywalking-oap:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8888/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  emotion-echo-chat-svc:
+    build:
+      context: ..
+      dockerfile: emotion-echo-chat-svc/Dockerfile
+    image: emotion-echo/chat-svc:v0.1.0
+    container_name: emotion-echo-chat-svc
+    restart: unless-stopped
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      GIN_MODE: release
+      POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"
+      KAFKA_BROKERS:       emotion-echo-kafka:9092
+      SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+    ports:
+      - "8890:8890"
+    volumes:
+      - ../emotion-echo-chat-svc/etc/chat-api.yaml:/app/etc/chat-api.yaml:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    depends_on:
+      postgres:
+        condition: service_started
+      kafka:
+        condition: service_started
+      skywalking-oap:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8890/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # Stage 26-P · analytics-svc 端口 8893(避开 ai-svc 占用 8892)
+  emotion-echo-analytics-svc:
+    build:
+      context: ..
+      dockerfile: emotion-echo-analytics-svc/Dockerfile
+    image: emotion-echo/analytics-svc:v0.1.0
+    container_name: emotion-echo-analytics-svc
+    restart: unless-stopped
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      GIN_MODE: release
+      POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_analytics"
+      SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+    ports:
+      - "8904:8893"     # 宿主 8904 → 容器内 8893(避开 ai-svc 8892)
+    volumes:
+      - ../emotion-echo-analytics-svc/etc/analytics-api.yaml:/app/etc/analytics-api.yaml:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    depends_on:
+      postgres:
+        condition: service_started
+      skywalking-oap:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8893/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  emotion-echo-assessment-svc:
+    build:
+      context: ..
+      dockerfile: emotion-echo-assessment-svc/Dockerfile
+    image: emotion-echo/assessment-svc:v0.1.0
+    container_name: emotion-echo-assessment-svc
+    restart: unless-stopped
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      GIN_MODE: release
+      POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_assessment"
+      SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+    ports:
+      - "8889:8889"
+    volumes:
+      - ../emotion-echo-assessment-svc/etc/assessment-api.yaml:/app/etc/assessment-api.yaml:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    depends_on:
+      postgres:
+        condition: service_started
+      skywalking-oap:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8889/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # =====================================================
   # emotion-llm-service: HTTP (FastAPI :8000) + gRPC (:50051) 双协议
   # =====================================================
   emotion-llm-service:
