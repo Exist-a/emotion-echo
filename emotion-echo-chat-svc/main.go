@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -29,11 +30,29 @@ import (
 
 var configFile = flag.String("f", "etc/chat-api.yaml", "the config file")
 
+// applyEnvOverrides 让容器内的 ${POSTGRES_DSN} / ${KAFKA_BROKERS} /
+// ${SKYWALKING_OAP_ADDR} env 在 go-zero conf.MustLoad 之后覆盖 config struct,
+// 避免 go-zero 1.10 conf bug — 它不识别 "${VAR:default}" bash default 语法,
+// 原样保留字面字符串,所以需要在 main 显式兜底 (Stage 26-Q 修)。
+// 模式与 ai-svc 内部 applyEnvOverrides() 一致 (Stage 20-P0-1)。
+func applyEnvOverrides(c *config.Config) {
+	if v := os.Getenv("POSTGRES_DSN"); v != "" {
+		c.Postgres.DSN = v
+	}
+	if v := os.Getenv("KAFKA_BROKERS"); v != "" {
+		c.Kafka.BrokersCSV = v
+	}
+	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
+		c.SkyWalking.OAPAddr = v
+	}
+}
+
 func main() {
 	flag.Parse()
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	applyEnvOverrides(&c)
 
 	// 1. Postgres
 	convRepo, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)

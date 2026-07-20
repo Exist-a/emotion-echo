@@ -7,16 +7,16 @@ Port: 8890
 # list 字段 (Kafka.Brokers) 改用 BrokersCSV (string),同 ai-svc 范式
 
 SkyWalking:
-  OAPAddr:     ${SKYWALKING_OAP_ADDR:-emotion-echo-sw-oap:11800}
+  OAPAddr:     ${SKYWALKING_OAP_ADDR:emotion-echo-sw-oap:11800}
   ServiceName: emotion-echo-chat-svc
   Enabled:     true
 
 Postgres:
-  DSN:          ${POSTGRES_DSN:-"host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"}
+  DSN:          ${POSTGRES_DSN:host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat}
   MaxOpenConns: 10
   MaxIdleConns: 5
 
 Kafka:
-  BrokersCSV: ${KAFKA_BROKERS:-emotion-echo-kafka:9092}
+  BrokersCSV: ${KAFKA_BROKERS:emotion-echo-kafka:9092}
   GroupID:    chat-svc
   Enabled:    true

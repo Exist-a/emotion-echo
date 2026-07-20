@@ -1,38 +1,44 @@
 # =====================================================
-#  Emotion-Echo 分布式基础设施编排
-# 用途：拉起 Postgres / Redis / APISIX / SkyWalking / Kafka / etcd
-# 不再包含 Nacos（已删除，详见 docs/architecture-decisions.md 决策 2）
+#  Emotion-Echo 基础设施编排 (Stage 20-P0 + Stage 26-Q nginx 替代 APISIX)
 #  启动：docker-compose -f deploy/docker-compose.infra.yml up -d
-#  说明：当前为 Stage 0.1 骨架版，APISIX 用 standalone 模式
+#  注意：业务应用在 deploy/docker-compose.apps.yml
 # =====================================================
+
+x-logging-env: &logging-env
+  TZ: Asia/Shanghai
 
 services:
 
   # =====================================================
-  # 原有数据库与缓存（与原 Emotion-Echo-Gin/docker-compose 兼容）
+  # postgres:15 (trust 模式 — 仅 dev)
   # =====================================================
   postgres:
     image: postgres:15-alpine
     container_name: emotion-echo-postgres
+    restart: unless-stopped
     environment:
+      POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "postgres"
       POSTGRES_DB: emotion_echo
-      POSTGRES_HOST_AUTH_METHOD: trust     # dev 信任模式，免密登录
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./db/01-create-schemas.sql:/docker-entrypoint-initdb.d/01-create-schemas.sql:ro
+      - ./db/02-create-tables-in-schemas.sql:/docker-entrypoint-initdb.d/02-create-tables-in-schemas.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
+      timeout: 5s
       retries: 5
-    restart: unless-stopped
 
+  # =====================================================
+  # redis:7
+  # =====================================================
   redis:
     image: redis:7-alpine
     container_name: emotion-echo-redis
-    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -40,63 +46,37 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
+      timeout: 3s
       retries: 5
-    restart: unless-stopped
 
   # =====================================================
-  # SkyWalking（链路追踪 / APM）
-  # =====================================================
-  skywalking-oap:
-    image: apache/skywalking-oap-server:9.7.0
-    container_name: emotion-echo-sw-oap
-    ports:
-      - "11800:11800"    # gRPC：业务 agent 上报
-      - "12800:12800"    # HTTP：查询 API（UI 用）
-    environment:
-      SW_STORAGE: h2                          # dev 用内嵌 H2，生产换 ES
-      SW_TELEMETRY: prometheus
-      JAVA_OPTS: "-Xms256m -Xmx512m"          # 内存调小，单机能跑
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:12800/api/v1/version || exit 1"]
-      interval: 15s
-      retries: 10
-      start_period: 90s                       # OAP 启动慢，宽容一点
-    restart: unless-stopped
-
-  skywalking-ui:
-    image: apache/skywalking-ui:9.7.0
-    container_name: emotion-echo-sw-ui
-    depends_on:
-      skywalking-oap:
-        condition: service_started            # 改用 started 等 OAP 起来即可
-    environment:
-      SW_OAP_ADDRESS: "http://skywalking-oap:12800"   # 必须带 http:// scheme
-      SW_SERVER_PORT: "8080"
-    ports:
-      - "18080:8080"                         # UI 访问入口
-    restart: unless-stopped
-
-  # =====================================================
-  # APISIX（API 网关）—— Stage 0.1 用 standalone 模式
+  # Stage 26-Q · APISIX 3.9 保留(无 image 升级/Docker Hub 受限)
+  # Stage 26-P 实测:APISIX 3.9.0-debian 镜像无论配置 (关 SSL / 关
+  # redirect plugin / 挂 self-signed cert) 都会触发 nginx openresty
+  # 内部 `return 301 about:blank`,这是 apache/apisix:3.9 已知 bug。
+  #
+  # Stage 26-Q 解:前端走直连 4 Go svc (绕过 :9080), :9080 的实际路由
+  # 不再作为 dev 链路必经。Compose 仍保留 apache/apisix 容器与 admin
+  # 端口,因为 ai-svc / llm-service / external system 可能需要.
+  # 升级到 apache/apisix:3.10+ 修此 bug 留给 Stage 27。
   # =====================================================
   apisix:
     image: apache/apisix:3.9.0-debian
     container_name: emotion-echo-apisix
-    depends_on:
-      - etcd                                 # APISIX 配置存储依赖
     ports:
-      - "9080:9080"                          # 网关入口
-      - "9091:9091"                          # Control API
-      - "9180:9180"                          # Admin API
+      - "9080:9080"
+      - "9091:9091"
+      - "9180:9180"
     volumes:
-      # ★ 用我们自己的 config.yaml 覆盖默认（默认指向 127.0.0.1:2379）
       - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
-      - apisix_log:/usr/local/apisix/logs
+      - ./tls/cert:/usr/local/apisix/cert:ro
+    networks:
+      - app-network
     restart: unless-stopped
 
-  # etcd（APISIX 配置存储）
+  # etcd (APISIX 配置存储) — Stage 26-Q 已不再被 gateway 消费,
+  # 保留以兼容 ai-svc 等仍用 etcd 的 svc
+  # =====================================================
   etcd:
     image: quay.io/coreos/etcd:v3.5.13
     container_name: emotion-echo-etcd
@@ -113,48 +93,68 @@ services:
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 10s
+      timeout: 5s
       retries: 5
-    restart: unless-stopped
 
   # =====================================================
-  # Kafka（KRaft 模式，单节点足够开发）
-  # 使用 apache/kafka 官方镜像（比 bitnami tag 更稳定）
+  # kafka 3.7 (KRaft 模式, 无 Zookeeper)
   # =====================================================
   kafka:
     image: apache/kafka:3.7.0
     container_name: emotion-echo-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_PROCESS_CONFIGS_TTL: 30000
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     ports:
-      - "9092:9092"                          # 客户端连接
+      - "9092:9092"
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # =====================================================
+  # SkyWalking OAP (后端)
+  # =====================================================
+  skywalking-oap:
+    image: apache/skywalking-oap-server:9.7.0
+    container_name: emotion-echo-sw-oap
+    restart: unless-stopped
+    environment:
+      SW_STORAGE: h2
+      SW_JDBC_URL: jdbc:h2:mem:skywalking-oap-db;DB_CLOSE_DELAY=-1
+      TZ: Asia/Shanghai
+    ports:
+      - "11800:11800"
+      - "12800:12800"
     networks:
       - app-network
-    environment:
-      # KRaft 配置（无 Zookeeper）
-      KAFKA_NODE_ID: "0"
-      KAFKA_PROCESS_ROLES: "broker,controller"
-      KAFKA_CONTROLLER_QUORUM_VOTERS: "0@kafka:9093"
-      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://localhost:9092"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
-      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
-      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
-      # 单节点副本因子调整为 1
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      # 固定 cluster id（KRaft 必需）
-      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
-      # JVM 调小
-      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
-    volumes:
-      - kafka_data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
-      interval: 15s
-      retries: 10
-      start_period: 30s
+
+  # =====================================================
+  # SkyWalking UI (前端)
+  # =====================================================
+  skywalking-ui:
+    image: apache/skywalking-ui:9.7.0
+    container_name: emotion-echo-sw-ui
     restart: unless-stopped
+    depends_on:
+      - skywalking-oap
+    environment:
+      SW_OAP_ADDRESS: http://skywalking-oap:12800
+      TZ: Asia/Shanghai
+    ports:
+      - "18080:8080"
 
 # =====================================================
 # 卷定义
@@ -162,18 +162,12 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  apisix_log:
   kafka_data:
 
 # =====================================================
-# 网络定义 (Stage 26-P 实测修正)
-# 与 apps compose 一致 — 用 external:true 引用外部网络 emotion-echo_app-network
-# (先 apps up 再 infra up 才行,因为外部网络由 apps 创建)
-# 这样 infra 的容器(apisix / postgres / redis / kafka / etcd / skywalking)
-# 才能跟 apps 的容器(user-svc/chat-svc/analytics-svc/assessment-svc)在同一网络上互相 DNS 解析。
+# 网络定义 (Stage 26-Q:external, 与 apps.yml 共享 emotion-echo_app-network)
 # =====================================================
 networks:
   app-network:
     external: true
     name: emotion-echo_app-network
-    driver: bridge

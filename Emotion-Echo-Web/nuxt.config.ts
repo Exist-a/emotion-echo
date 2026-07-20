@@ -9,8 +9,10 @@ export default defineNuxtConfig({
   
   runtimeConfig: {
     public: {
-      // API 基础地址 (Stage 26-P: fallback 改 APISIX :9080)
-      API_BASE_URL: process.env.NUXT_PUBLIC_API_BASE_URL || "http://localhost:9080/api/v1",
+      // API 基础地址 (Stage 26-Q: fallback 改 user-svc 直连 :8888,
+      // dev 环境不走 APISIX 因为 APISIX 3.9 镜像触发 nginx 301 about:blank
+      // bug,留给 Stage 27 升级 3.10+ 处理)
+      API_BASE_URL: process.env.NUXT_PUBLIC_API_BASE_URL || "http://localhost:8888/api/v1",
       // 调试配置：是否禁用登录拦截
       DISABLE_AUTH: process.env.NUXT_PUBLIC_DISABLE_AUTH || "false",
       // TTS 服务地址

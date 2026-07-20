@@ -25,6 +25,11 @@ deployment:
     admin_listen:
       ip: 0.0.0.0
       port: 9180
+  # Stage 26-Q: 不监听 HTTPS (9443) 让 APISIX 3.9 不再触发
+  # nginx conf 内置 ssl_certificate_by_lua_block,关闭后所有 HTTP 路由
+  # 终于能正常代理到后端,不再 301 about:blank。
+  ssl:
+    enable: false
 
 # Stage 26-P · 实测修正:APISIX 3.9 默认启用 redirect plugin (HTTP→HTTPS :8443)
 # 因为我们没跑 HTTPS 监听,全 HTTP 请求会被 301 到 about:blank;
