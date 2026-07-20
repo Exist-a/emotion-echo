@@ -1,0 +1,26 @@
+# Emotion-Echo-Web Dockerfile.dev (Stage 26-P)
+# Dev mode: `nuxt dev` HMR on :3000
+# vs 已有的生产 Dockerfile (node .output/server/index.mjs) 互补
+
+FROM node:20-alpine
+
+ENV TZ=Asia/Shanghai \
+    LANG=C.UTF-8
+
+# 国内 npm 镜像:可靠快速
+RUN npm config set registry https://registry.npmmirror.com
+
+WORKDIR /app
+
+# package*.json 单独 COPY 利用 docker layer cache
+COPY Emotion-Echo-Web/package.json Emotion-Echo-Web/package-lock.json* ./
+
+RUN npm install
+
+# 完整源码
+COPY Emotion-Echo-Web ./
+
+EXPOSE 3000
+
+# 启动 nuxt dev 监听 0.0.0.0 让宿主可达
+CMD ["npx", "nuxt", "dev", "--host", "0.0.0.0", "--port", "3000"]
