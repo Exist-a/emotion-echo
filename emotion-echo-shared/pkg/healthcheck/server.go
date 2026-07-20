@@ -12,6 +12,8 @@
 package healthcheck
 
 import (
+	"sync"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -71,9 +73,11 @@ func fromProto(p healthpb.HealthCheckResponse_ServingStatus) ServingStatus {
 // 为什么自维护 map：grpc-go 的 health.Server 内部 statusMap 未导出，
 // 业务侧需要 GetServingStatus 做断言式判断，所以自己跟踪一份。
 type Server struct {
-	inner  *health.Server
-	status map[string]ServingStatus
-	ready  bool
+	mu       sync.Mutex // Stage 26-N: 保护 status map + shutdown flag
+	inner    *health.Server
+	status   map[string]ServingStatus
+	ready    bool
+	shutdown bool // Shutdown 后置 true；Resume 置 false
 }
 
 // NewServer 创建一个默认 SERVING 的 health server
@@ -124,18 +128,34 @@ func (s *Server) GetServingStatus(service string) ServingStatus {
 
 // Shutdown 把所有 service 标记为 NOT_SERVING
 //
-// 应在 graceful shutdown 时调用，让 client 提前停止发新请求
+// 应在 graceful shutdown 时调用，让 client 提前停止发新请求。
+//
+// Stage 26-A 暴露 bug #3/#4 修复：
+//   - 同步本地 status map（Shutdown 后 GetServingStatus 返 NOT_SERVING）
+//   - 幂等：第二次调用不 panic（之前 close-of-closed channel）
 func (s *Server) Shutdown() {
+	s.mu.Lock()
+	if s.shutdown {
+		s.mu.Unlock()
+		return
+	}
+	s.shutdown = true
 	for svc := range s.status {
+		s.status[svc] = ServingStatusNotServing
 		s.inner.SetServingStatus(svc, healthpb.HealthCheckResponse_NOT_SERVING)
 	}
+	s.mu.Unlock()
 }
 
 // Resume 把所有 service 恢复为 SERVING
 //
 // 与 Shutdown 配对：暂停后再恢复
 func (s *Server) Resume() {
+	s.mu.Lock()
+	s.shutdown = false
 	for svc := range s.status {
+		s.status[svc] = ServingStatusServing
 		s.inner.SetServingStatus(svc, healthpb.HealthCheckResponse_SERVING)
 	}
+	s.mu.Unlock()
 }

@@ -18,6 +18,10 @@ import (
 //   - 通过 db.Statement.Context 传递 ctx（GORM 自动用 ctx 注册到 statement）。
 //     这意味着业务代码应使用 db.WithContext(ctx)，trace 才会接上
 func InstrumentGORM(db *gorm.DB) {
+	// 防御：nil DB 不挂回调（以前会 panic；Stage 26-A 暴露 bug #2）
+	if db == nil {
+		return
+	}
 	tgr := Tracer()
 
 	for _, opType := range []string{"create", "query", "update", "delete", "row"} {
@@ -74,14 +78,20 @@ func makeEndCallback(tgr *go2sky.Tracer) func(*gorm.DB) {
 }
 
 // buildDBPeer 把 GORM 的 Conn 拼成 peer 串
+//
+// 边界：d == nil / d.Statement == nil 时返回兜底 "db"，
+// 避免 nil pointer 解引用 panic（见 Stage 26-A 暴露 bug #1）。
 func buildDBPeer(d *gorm.DB) string {
+	if d == nil {
+		return "db"
+	}
 	// d.Dialector 含 DB 名与连接方式，但拿不到 host:port（那是 instance 配置）
 	// 简化用 dbname 兜底
 	if d.Dialector != nil {
 		// postgres 用 "postgres@<table>" 形式（DB 名通过 getter 不易取得，用 Schema.Table）
 		dialect := strings.ToLower(path.Base(strings.ReplaceAll(d.Dialector.Name(), "*", "")))
 		schemaName := "<unknown>"
-		if d.Statement.Schema != nil {
+		if d.Statement != nil && d.Statement.Schema != nil {
 			schemaName = d.Statement.Schema.Name
 		}
 		return dialect + "@" + schemaName

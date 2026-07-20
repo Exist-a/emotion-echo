@@ -14,6 +14,10 @@ import (
 //	rdb := database.NewRedis(...)
 //	skywalking.InstrumentRedis(rdb)
 func InstrumentRedis(rdb *redis.Client) {
+	// 防御：nil client 不挂 hook（以前会 panic；Stage 26-A 暴露 bug #2）
+	if rdb == nil {
+		return
+	}
 	rdb.AddHook(&redisTracingHook{addr: rdb.Options().Addr})
 }
 

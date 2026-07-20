@@ -119,10 +119,25 @@ func (p *InMemoryEventPublisher) Publish(ctx context.Context, topic string, e *E
 func (p *InMemoryEventPublisher) Close() error { return nil }
 
 // Events 取已发布的事件（仅测试用）
+//
+// Stage 26-A 暴露 bug #7 修复：原 copy() 仅 shallow-copy slice header，
+// 外部修改 Event 字段（含 Data any）会污染内部。
+//
+// 本实现：每条 Event 拷贝一份新指针 + Data field（如是 []byte 深拷贝）。
+// 注：Data 是 any 类型，若 Data 内部是 []byte，本实现也一并深拷贝；
+// 若是 map[string]any，需要业务方按需序列化（避免 string(key)/interface{} 双池问题）。
 func (p *InMemoryEventPublisher) Events(topic string) []*Event {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := make([]*Event, len(p.events[topic]))
-	copy(out, p.events[topic])
+	src := p.events[topic]
+	out := make([]*Event, len(src))
+	for i, e := range src {
+		copy := *e // shallow-copy 整个 struct
+		// 若 Data 是 []byte，深拷贝；其它类型维持原值引用
+		if b, ok := e.Data.([]byte); ok {
+			copy.Data = append([]byte(nil), b...)
+		}
+		out[i] = &copy
+	}
 	return out
 }

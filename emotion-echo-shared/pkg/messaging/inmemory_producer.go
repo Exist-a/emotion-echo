@@ -64,10 +64,26 @@ func (p *InMemoryProducer) Close() error {
 }
 
 // Drain 排空当前 buffer（仅用于测试断言）
+//
+// Stage 26-A 暴露 bug #6 修复：原 copy() 仅 shallow-copy slice header，
+// 外部修改消息的 Value 会污染内部 buffer。
+//
+// 本实现：每条 message 拷贝一份（Value 深拷贝 bytes）。
+// 注意：Headers map 是浅拷贝，调用方不应原地修改；若需求更严可
+// 改为 json.Marshal/Unmarshal → map[string]any → 重新解析。
 func (p *InMemoryProducer) Drain() []Message {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	out := make([]Message, len(p.buffer))
-	copy(out, p.buffer)
+	for i, m := range p.buffer {
+		out[i].Topic = m.Topic
+		out[i].Key = m.Key
+		if len(m.Value) > 0 {
+			out[i].Value = append([]byte(nil), m.Value...)
+		} else {
+			out[i].Value = m.Value // 保留 nil/[]byte{} 不变
+		}
+		out[i].Headers = m.Headers
+	}
 	return out
 }
