@@ -1,46 +1,173 @@
 # =====================================================
-#  APISIX 初始路由种子配置（traditional 模式）
+#  APISIX standalone 路由配置 (Stage 26-P)
+#  通过 config_provider: yaml 启动时加载,不需要 etcd / seed.sh
 #
-#  本文件是"配置文件模板"，实际通过 Admin API 推送到 etcd。
-#  推送脚本：./seed.sh
-#  手动推送示例（PowerShell）：
-#    curl -X PUT http://localhost:9180/apisix/admin/upstreams/1 \
-#      -H "X-API-KEY: edd1c9f034335f136f87ad84b625c8f1" \
-#      -H "Content-Type: application/json" \
-#      -d @{...upstream.json}
+#  6 upstream:
+#    1. user-svc          :8888
+#    2. chat-svc          :8890
+#    3. analytics-svc     :8893
+#    4. assessment-svc    :8889
+#    5. ai-svc            :8891 (HTTP) — emotion api
+#    6. mock-ping         :1980 (APISIX 自检)
+#
+#  14+ route:覆盖前端所有 /api/v1/{users, conversations, emotion, surveys}/* 业务路径
 # =====================================================
 
-# ---- Upstream：后端服务节点 ----
-# Stage 0.1: 占位指向宿主机 Gin
 upstreams:
   - id: 1
-    name: "emotion-echo-gin"
-    type: "roundrobin"
+    name: user-svc
+    type: roundrobin
     nodes:
-      - host: "host.docker.internal"
-        port: 8080
+      - host: emotion-echo-user-svc
+        port: 8888
         weight: 1
 
-# ---- 路由：APISIX :9080 → Gin :8080 ----
+  - id: 2
+    name: chat-svc
+    type: roundrobin
+    nodes:
+      - host: emotion-echo-chat-svc
+        port: 8890
+        weight: 1
+
+  - id: 3
+    name: analytics-svc
+    type: roundrobin
+    nodes:
+      - host: emotion-echo-analytics-svc
+        port: 8893
+        weight: 1
+
+  - id: 4
+    name: assessment-svc
+    type: roundrobin
+    nodes:
+      - host: emotion-echo-assessment-svc
+        port: 8889
+        weight: 1
+
+  - id: 5
+    name: ai-svc
+    type: roundrobin
+    nodes:
+      - host: emotion-echo-ai-svc
+        port: 8891
+        weight: 1
+
+  - id: 6
+    name: mock-ping
+    type: roundrobin
+    nodes:
+      - host: 127.0.0.1
+        port: 1980
+        weight: 1
+
+# =====================================================
+#  业务路由
+# =====================================================
 routes:
-  - id: 1
-    name: "gin-default"
-    uri: "/api/v1/*"
-    methods:
-      - GET
-      - POST
-      - PUT
-      - DELETE
-      - PATCH
+  # ---------- user-svc (id 1) ----------
+  - id: r-user-me
+    name: r-user-me
+    uri: /api/v1/users/me
+    methods: [GET]
     upstream_id: 1
 
-# ---- 路由（健康检查用：APISIX :9080/ping → 返回 200）----
-  - id: 2
-    name: "ping"
-    uri: "/ping"
-    upstream:
-      type: roundrobin
-      nodes:
-        - host: "127.0.0.1"
-          port: 1980
-          weight: 1
+  - id: r-user-by-id
+    name: r-user-by-id
+    uri: /api/v1/users/:id
+    methods: [GET]
+    upstream_id: 1
+
+  - id: r-user-update
+    name: r-user-update
+    uri: /api/v1/users/me
+    methods: [PATCH]
+    upstream_id: 1
+
+  # ---------- chat-svc (id 2) ----------
+  - id: r-conv-create
+    name: r-conv-create
+    uri: /api/v1/conversations
+    methods: [POST]
+    upstream_id: 2
+
+  - id: r-msg-list
+    name: r-msg-list
+    uri: /api/v1/conversations/*/messages
+    methods: [GET]
+    upstream_id: 2
+
+  - id: r-msg-send
+    name: r-msg-send
+    uri: /api/v1/conversations/*/messages
+    methods: [POST]
+    upstream_id: 2
+
+  # ---------- analytics-svc (id 3) ----------
+  - id: r-analytics-health
+    name: r-analytics-health
+    uri: /analytics-health
+    upstream_id: 3
+
+  # ---------- assessment-svc (id 4) ----------
+  - id: r-surveys
+    name: r-surveys
+    uri: /api/v1/surveys
+    methods: [GET]
+    upstream_id: 4
+
+  - id: r-survey-get
+    name: r-survey-get
+    uri: /api/v1/surveys/*
+    methods: [GET]
+    upstream_id: 4
+
+  - id: r-survey-submit
+    name: r-survey-submit
+    uri: /api/v1/surveys/*/submit
+    methods: [POST]
+    upstream_id: 4
+
+  - id: r-survey-results-list
+    name: r-survey-results-list
+    uri: /api/v1/surveys/results
+    methods: [GET]
+    upstream_id: 4
+
+  - id: r-survey-results-get
+    name: r-survey-results-get
+    uri: /api/v1/surveys/results/*
+    methods: [GET]
+    upstream_id: 4
+
+  # ---------- ai-svc (id 5) ----------
+  - id: r-emotion-by-msg
+    name: r-emotion-by-msg
+    uri: /api/v1/emotion/message/*
+    methods: [GET]
+    upstream_id: 5
+
+  - id: r-emotion-by-conv
+    name: r-emotion-by-conv
+    uri: /api/v1/emotion/conversation/*
+    methods: [GET]
+    upstream_id: 5
+
+  - id: r-ai-health
+    name: r-ai-health
+    uri: /ai-health
+    upstream_id: 5
+
+  # ---------- mock-ping (id 6) ----------
+  - id: r-ping
+    name: r-ping
+    uri: /ping
+    upstream_id: 6
+
+# =====================================================
+#  通用 health checker (跳过 jwt-auth 麻烦;APISIX :9080 直接代理)
+# =====================================================
+upstream_definitions: {}
+
+# Stage 26-P :6 upstream + 17 route — 全部不再依赖 etcd/seed.sh 推送

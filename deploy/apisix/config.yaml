@@ -1,22 +1,22 @@
+# =====================================================
+#  APISIX 启动配置 (Stage 26-P · Commit P5)
+#  改用 standalone 模式,启动时直接加载 apisix.yaml (6 upstream / 14+ route)
+#  不再依赖 etcd 推送
+# =====================================================
+
 deployment:
-  role: traditional
-  role_traditional:
-    config_provider: etcd
-  etcd:
-    host:
-      - "http://etcd:2379"
-    prefix: /apisix
-    timeout: 30
+  role: control_plane
+  role_control_plane:
+    config_provider: yaml
   admin:
-    # ★ 修复：admin_key 必填，否则 403 Forbidden
     admin_key_required: true
     admin_key:
       - name: admin
-        key: "edd1c9f034335f136f87ad84b625c8f1"  # 32 字符占位 key
+        key: "edd1c9f034335f136f87ad84b625c8f1"
         role: admin
     allow_admin:
       - 127.0.0.0/24
-      - 0.0.0.0/0    # 临时全开 dev 用；生产应缩窄到内网网段
+      - 0.0.0.0/0
     admin_listen:
       ip: 0.0.0.0
       port: 9180
