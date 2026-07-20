@@ -15,7 +15,7 @@
         style="width: 100%; height: 100%"
       />
     </div>
-    <el-empty v-else description="暂无数据" />
+    <div class="ee-empty">暂无数据</div>
   </ClientOnly>
 </template>
 

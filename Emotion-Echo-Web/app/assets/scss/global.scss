@@ -1,9 +1,48 @@
-// styles/global.scss - 全局样式
+@font-face {
+  font-family: "maskTitle";
+  src: url("/fonts/LuoGuoChengMaoBiXiaoXingJianTi-2.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
-// Element Plus 暗黑模式 CSS 变量
-@import 'element-plus/theme-chalk/dark/css-vars.css';
+:root {
+  --ee-bg: #f7f8f7;
+  --ee-surface: #ffffff;
+  --ee-surface-muted: #eef3f0;
+  --ee-text: #202522;
+  --ee-text-muted: #68736d;
+  --ee-primary: #5f8f7b;
+  --ee-primary-hover: #4f7e6a;
+  --ee-primary-soft: #e6f0eb;
+  --ee-accent: #d98773;
+  --ee-border: #e0e8e3;
+  --ee-focus: rgba(95, 143, 123, 0.28);
+  --ee-radius-sm: 6px;
+  --ee-radius-md: 8px;
+  --ee-radius-lg: 12px;
+  --ee-shadow-soft: 0 1px 2px rgba(32, 37, 34, 0.06), 0 8px 24px rgba(32, 37, 34, 0.05);
+  --ee-transition: 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  --radius-composer: 20px;
+  --radius-composer: 20px;
+}
 
-// ==================== CSS Reset ====================
+html.dark {
+  color-scheme: dark;
+  --ee-bg: #171c1a;
+  --ee-surface: #222a26;
+  --ee-surface-muted: #2a3530;
+  --ee-text: #edf3ef;
+  --ee-text-muted: #aab8b0;
+  --ee-primary: #8ebaa8;
+  --ee-primary-hover: #a8cbbd;
+  --ee-primary-soft: #2b4036;
+  --ee-accent: #e0a091;
+  --ee-border: #39483f;
+  --ee-focus: rgba(142, 186, 168, 0.3);
+  --radius-composer: 20px;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -12,50 +51,25 @@
 }
 
 html,
-body {
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
-    "Microsoft YaHei", "Helvetica Neue", sans-serif;
+body,
+#__nuxt {
+  min-height: 100%;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 16px;
   font-weight: 400;
-  color: #1e293b;
-  background-color: #f3f4f6;
+  line-height: 1.7;
+  color: var(--ee-text);
+  background: var(--ee-bg);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: color var(--ee-transition), background-color var(--ee-transition);
 }
 
-// ==================== 暗黑模式全局变量 ====================
-html.dark {
-  color-scheme: dark;
-  
-  body {
-    color: #e5e7eb;
-    background-color: #1a1a1a;
-  }
-  
-  // 链接颜色
-  a:hover {
-    color: #60a5fa;
-  }
-  
-  // 输入框占位符
-  input::placeholder,
-  textarea::placeholder {
-    color: #6b7280;
-  }
-  
-  // 滚动条
-  ::-webkit-scrollbar-thumb {
-    background: #4b5563;
-    
-    &:hover {
-      background: #6b7280;
-    }
-  }
+body {
+  min-width: 320px;
 }
 
-// ==================== 媒体元素 ====================
 img,
 video {
   max-width: 100%;
@@ -63,69 +77,46 @@ video {
   vertical-align: middle;
 }
 
-// ==================== 列表重置 ====================
 ul,
 ol {
   list-style: none;
 }
 
-// ==================== 链接样式 ====================
 a {
-  text-decoration: none;
   color: inherit;
-  cursor: pointer;
-  
-  &:hover {
-    color: #3b82f6;
-  }
+  text-decoration: none;
+  transition: color var(--ee-transition);
 }
 
-// ==================== 表单元素重置 ====================
+a:hover {
+  color: var(--ee-primary);
+}
+
 input,
 textarea,
 button,
 select {
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
+  font: inherit;
   color: inherit;
-  border: none;
-  outline: none;
-  background: transparent;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-input,
-textarea {
-  &::placeholder {
-    color: #9ca3af;
-  }
 }
 
 button {
   cursor: pointer;
-  
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-    pointer-events: none;
-  }
 }
 
-// ==================== 自定义字体 ====================
-@font-face {
-  font-family: "maskTitle";
-  src: url("/fonts/LuoGuoChengMaoBiXiaoXingJianTi-2.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap; // 优化字体加载性能
+:focus-visible {
+  outline: 3px solid var(--ee-focus);
+  outline-offset: 2px;
 }
 
-// ==================== 滚动条美化 ====================
+::selection {
+  color: var(--ee-text);
+  background: var(--ee-primary-soft);
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -133,15 +124,14 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
-  
-  &:hover {
-    background: #9ca3af;
-  }
+  background: color-mix(in srgb, var(--ee-text-muted) 28%, transparent);
+  border-radius: 999px;
 }
 
-// ==================== 工具类 ====================
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--ee-text-muted) 48%, transparent);
+}
+
 .text-ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -150,9 +140,9 @@ button {
 
 .multi-ellipsis {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .flex-center {
@@ -161,272 +151,31 @@ button {
   justify-content: center;
 }
 
-// ==================== 动画 ====================
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+@keyframes ee-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+@keyframes ee-quiet-pulse {
+  0%, 100% { opacity: 0.38; transform: scaleX(0.82); }
+  50% { opacity: 0.9; transform: scaleX(1); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
+  animation: ee-fade-in var(--motion-base, 200ms) var(--ease-quiet, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
-.animate-slide-up {
-  animation: slideUp 0.3s ease-out;
+.quiet-pulse {
+  animation: ee-quiet-pulse 1.8s ease-in-out infinite;
 }
 
-// ==================== 暗黑模式组件适配 ====================
-// 为不支持 :global() 的 scoped 样式提供全局覆盖
-html.dark {
-  // 报表卡片容器
-  .charts-container {
-    background-color: #1a1a1a !important;
-  }
-
-  .chart-wrapper {
-    background-color: #242424 !important;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
-  }
-
-  .chart-title {
-    color: #e5e7eb !important;
-  }
-
-  .no-data-tip {
-    color: #9ca3af !important;
-  }
-
-  // 设置页面
-  .setting-container {
-    background-color: #1a1a1a !important;
-
-    .setting-item {
-      background-color: #242424 !important;
-
-      &:hover {
-        background-color: #2d2d2d !important;
-      }
-
-      .setting-title {
-        color: #e5e7eb !important;
-      }
-    }
-  }
-
-  // 用户页面
-  .user-container {
-    .card {
-      background-color: #1a1a1a !important;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3) !important;
-    }
-
-    .nickname, .age, .id {
-      color: #e5e7eb !important;
-    }
-  }
-
-  // 日报/周报/月报/年报页面
-  .daily-container,
-  .weekly-container,
-  .monthly-container,
-  .yearly-container {
-    .summary-card {
-      background-color: #1a1a1a !important;
-
-      .summary-text {
-        color: #e5e7eb !important;
-      }
-
-      .stat-label {
-        color: #9ca3af !important;
-      }
-    }
-  }
-
-  // ==================== 会话页面 ====================
-  .chat-page-container {
-    background-color: #1a1a1a !important;
-  }
-
-  .main {
-    .dialog-user {
-      .content-user {
-        background-color: #2563eb !important;
-        color: #fff !important;
-      }
-    }
-
-    .dialog-AI {
-      .content-AI {
-        background-color: #242424 !important;
-        color: #e5e7eb !important;
-      }
-    }
-
-    .content {
-      background-color: #2d2d2d !important;
-      color: #e5e7eb !important;
-    }
-  }
-
-  // 输入框容器
-  .input-wrapper {
-    background-color: #1a1a1a !important;
-  }
-
-  .sender-container {
-    background-color: #242424 !important;
-    border-color: #374151 !important;
-
-    .sender-input {
-      :deep(.el-textarea__inner) {
-        color: #e5e7eb !important;
-        &::placeholder {
-          color: #6b7280 !important;
-        }
-      }
-    }
-  }
-
-  .sender-actions {
-    .action-btn {
-      color: #9ca3af !important;
-      border-color: #374151 !important;
-      &:hover {
-        color: #60a5fa !important;
-        border-color: #60a5fa !important;
-        background-color: #1f2937 !important;
-      }
-    }
-
-    .voice-btn {
-      color: #a78bfa !important;
-      &:hover {
-        background-color: #1f2937 !important;
-      }
-    }
-
-    .vertical-divider {
-      border-color: #374151 !important;
-    }
-
-    .send-btn {
-      background-color: #2563eb !important;
-      border-color: #2563eb !important;
-      &:hover {
-        background-color: #3b82f6 !important;
-        border-color: #3b82f6 !important;
-      }
-      &:disabled {
-        background-color: #374151 !important;
-        border-color: #374151 !important;
-      }
-    }
-  }
-
-  // Loading 动画
-  .loading-dots span {
-    background-color: #6b7280 !important;
-  }
-
-  // ==================== 会话列表页面 ====================
-  .conversation-container {
-    background-color: #1a1a1a !important;
-  }
-
-  .list-container {
-    background-color: #1a1a1a !important;
-
-    .header h3 {
-      color: #e5e7eb !important;
-    }
-
-    .conversation-item {
-      background-color: #242424 !important;
-
-      &:hover {
-        background-color: #2d2d2d !important;
-      }
-
-      &.active {
-        background-color: #1f2937 !important;
-      }
-
-      .item-label {
-        color: #e5e7eb !important;
-      }
-    }
-
-    .group-title {
-      color: #9ca3af !important;
-    }
-  }
-
-  .new-conversation-btn {
-    background-color: #2563eb !important;
-    border-color: #2563eb !important;
-    &:hover {
-      background-color: #3b82f6 !important;
-      border-color: #3b82f6 !important;
-    }
-  }
-
-  // ==================== 滚动条 ====================
-  ::-webkit-scrollbar-thumb {
-    background: #4b5563 !important;
-    &:hover {
-      background: #6b7280 !important;
-    }
-  }
-
-  // ==================== Markdown 内容 ====================
-  .message-content {
-    p {
-      color: #e5e7eb !important;
-    }
-    code {
-      background-color: #2d2d2d !important;
-      color: #e5e7eb !important;
-    }
-    pre {
-      background-color: #1f2937 !important;
-      code {
-        background-color: transparent !important;
-      }
-    }
-    blockquote {
-      border-left-color: #374151 !important;
-      color: #9ca3af !important;
-    }
-    ul, ol {
-      li {
-        color: #e5e7eb !important;
-      }
-    }
-  }
-
-  // ==================== 用户页面图表 ====================
-  .user-data-card {
-    background-color: #1a1a1a !important;
-
-    .chart-item {
-      background: #242424 !important;
-      border: 1px solid #374151 !important;
-    }
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

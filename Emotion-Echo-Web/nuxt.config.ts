@@ -24,15 +24,12 @@ export default defineNuxtConfig({
     },
   },
   compatibilityDate: "2025-07-15",
-  modules: ["@element-plus/nuxt", "@pinia/nuxt", "nuxt-echarts", "@nuxtjs/device"],
+  modules: ["@pinia/nuxt", "nuxt-echarts", "@nuxtjs/device"],
   build: {
-    transpile: [],
+    transpile: ["naive-ui", "vueuc"],
   },
   devtools: { enabled: true },
   css: ["~/assets/scss/global.scss"],
-  elementPlus: {
-    defaultLocale: "zh-cn",
-  },
   components: {
     dirs: [
       {
@@ -46,6 +43,11 @@ export default defineNuxtConfig({
     "/": { redirect: { to: "/chat", statusCode: 301 } },
   },
   vite: {
+    optimizeDeps: {
+      include: process.env.NODE_ENV === 'development'
+        ? ['naive-ui', 'vueuc', 'date-fns-tz/formatInTimeZone']
+        : []
+    },
     css: {
       preprocessorOptions: {
         scss: {

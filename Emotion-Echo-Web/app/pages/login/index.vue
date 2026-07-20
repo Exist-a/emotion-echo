@@ -1,826 +1,300 @@
 <template>
-  <!-- 外层容器：根据设备切换布局逻辑 -->
-  <div
-    class="login-container"
-    :class="{ 'mobile-container': $device.isMobile }"
-  >
-    <!-- PC端mask（移动端隐藏） -->
-    <div class="mask pc-mask" ref="mask" v-if="!$device.isMobile">
-      <h2 class="mask-title">
-        <template v-for="(line, index) in splitPoem" :key="index">
-          <p class="poem-line">{{ line }}</p>
-        </template>
-      </h2>
-      <p class="mask-desc">
-        {{ isLogin ? "还没有账号？去注册" : "已经有账号了？去登陆" }}
-      </p>
-      <el-button
-        class="mask-btn"
-        :circle="true"
-        @click="switchMask"
-        :disabled="isDisable"
-      >
-        <el-icon size="30px"><Switch /></el-icon>
-      </el-button>
-    </div>
+  <div class="login-page" :class="{ 'is-mobile': $device.isMobile }">
+    <div class="login-card" :class="{ 'is-register': !isLogin }">
+      <aside class="brand-panel">
+        <span class="eyebrow">情绪回音</span>
+        <h1>想说的时候，<br />有人在听。</h1>
+        <p>一个安静记录情绪的地方，不用打分，也不会评判。</p>
+        <div class="breath-line" aria-hidden="true"><span></span></div>
+      </aside>
 
-    <!-- 移动端顶部提示区（PC端隐藏） -->
-    <div class="mobile-mask" v-if="$device.isMobile">
-      <h2 class="mobile-mask-title">
-        <template v-for="(line, index) in splitPoem" :key="index">
-          <p class="mobile-poem-line">{{ line }}</p>
-        </template>
-      </h2>
-      <p class="mobile-mask-desc">
-        {{
-          isLogin
-            ? "还没有账号？点击下方按钮注册"
-            : "已经有账号了？点击下方按钮登陆"
-        }}
-      </p>
-      <el-button
-        class="mobile-mask-btn"
-        type="primary"
-        @click="switchMobileForm"
-        size="small"
-      >
-        {{ isLogin ? "去注册" : "去登陆" }}
-      </el-button>
-    </div>
+      <section class="form-panel">
+        <header class="form-header">
+          <h2>{{ isLogin ? '登录' : '注册' }}</h2>
+        </header>
 
-    <!-- PC端注册表单（绝对定位） -->
-    <el-form
-      class="register pc-form"
-      ref="registerFormRef"
-      :model="registerInfo"
-      :rules="registerRules"
-      v-if="!$device.isMobile"
-    >
-      <h1 class="register-title">注册</h1>
-      <el-form-item label="账号" label-position="top" prop="username">
-        <el-input
-          v-model="registerInfo.username"
-          class="register-input"
-          placeholder="请输入手机号/邮箱"
-        />
-      </el-form-item>
-      <el-form-item label="密码" label-position="top" prop="password">
-        <el-input
-          v-model="registerInfo.password"
-          type="password"
-          :show-password="true"
-          class="register-input"
-          placeholder="请输入密码"
-        />
-      </el-form-item>
-      <el-form-item label="验证码" label-position="top" prop="verificationCode">
-        <el-input
-          v-model="registerInfo.verificationCode"
-          class="register-input"
-          placeholder="请输入验证码"
-        >
-          <template #append>
-            <el-button
-              @click="getVerificationCode"
-              ref="verificationCodeRef"
-              :disabled="isGetVerificationCode"
-              type="primary"
-              >{{
-                isGetVerificationCode
-                  ? lastSeconds + verificationCodeText
-                  : "获取验证码"
-              }}</el-button
-            >
-          </template>
-        </el-input>
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" class="register-btn" @click="registerHandler">
-          注册
-        </el-button>
-      </el-form-item>
-    </el-form>
-
-    <!-- PC端登录表单（绝对定位） -->
-    <el-form
-      class="login pc-form"
-      ref="loginFormRef"
-      :model="loginInfo"
-      :rules="loginRules"
-      v-if="!$device.isMobile"
-    >
-      <h1 class="login-title">登陆</h1>
-      <el-form-item label="账号" label-position="top" prop="username">
-        <el-input
-          v-model="loginInfo.username"
-          class="login-input"
-          placeholder="请输入手机号/邮箱"
-        />
-      </el-form-item>
-      <el-form-item label="密码" label-position="top" prop="password">
-        <el-input
-          v-model="loginInfo.password"
-          type="password"
-          :show-password="true"
-          class="login-input"
-          placeholder="请输入密码"
-        />
-      </el-form-item>
-      <div class="login-text">
-        <el-checkbox label="记住我" v-model="isRemember" />
-        <NuxtLink to="/login/forget/verify">忘记密码</NuxtLink>
-      </div>
-      <el-form-item>
-        <el-button type="primary" class="login-btn" @click="loginHandler">
-          登陆
-        </el-button>
-      </el-form-item>
-      <div class="other-way">
-        <img src="/assets/icons/微信.svg" alt="" @click="wechatLogin" />
-        <img src="/assets/icons/腾讯QQ.svg" alt="" @click="QQLogin" />
-      </div>
-    </el-form>
-
-    <!-- 移动端表单区（PC端隐藏） -->
-    <div class="mobile-form-wrap" v-if="$device.isMobile">
-      <!-- 移动端注册表单 -->
-      <el-form
-        class="register mobile-form"
-        ref="registerFormRef"
-        :model="registerInfo"
-        :rules="registerRules"
-        v-show="!isLogin"
-      >
-        <h1 class="register-title">注册</h1>
-        <el-form-item label="账号" label-position="top" prop="username">
-          <el-input
-            v-model="registerInfo.username"
-            class="register-input"
-            placeholder="请输入手机号/邮箱"
-          />
-        </el-form-item>
-        <el-form-item label="密码" label-position="top" prop="password">
-          <el-input
-            v-model="registerInfo.password"
-            type="password"
-            :show-password="true"
-            class="register-input"
-            placeholder="请输入密码"
-          />
-        </el-form-item>
-        <el-form-item label="验证码" label-position="top" prop="verificationCode">
-          <el-input
-            v-model="registerInfo.verificationCode"
-            class="register-input"
-            placeholder="请输入验证码"
-          >
-            <template #append>
-              <el-button
-                @click="getVerificationCode"
-                ref="verificationCodeRef"
-                :disabled="isGetVerificationCode"
-                type="primary"
-                size="small"
-                >{{
-                  isGetVerificationCode
-                    ? lastSeconds + verificationCodeText
-                    : "获取验证码"
-                }}</el-button
-              >
-            </template>
-          </el-input>
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            class="register-btn"
-            @click="registerHandler"
-          >
-            注册
-          </el-button>
-        </el-form-item>
-      </el-form>
-
-      <!-- 移动端登录表单 -->
-      <el-form
-        class="login mobile-form"
-        ref="loginFormRef"
-        :model="loginInfo"
-        :rules="loginRules"
-        v-show="isLogin"
-      >
-        <h1 class="login-title">登陆</h1>
-        <el-form-item label="账号" label-position="top" prop="username">
-          <el-input
-            v-model="loginInfo.username"
-            class="login-input"
-            placeholder="请输入手机号/邮箱"
-          />
-        </el-form-item>
-        <el-form-item label="密码" label-position="top" prop="password">
-          <el-input
-            v-model="loginInfo.password"
-            type="password"
-            :show-password="true"
-            class="login-input"
-            placeholder="请输入密码"
-          />
-        </el-form-item>
-        <div class="login-text">
-          <el-checkbox label="记住我" v-model="isRemember" size="small" />
-          <NuxtLink to="/login/forget/verify">忘记密码</NuxtLink>
+        <div class="form-tabs" role="tablist">
+          <button type="button" role="tab" class="form-tab" :class="{ active: isLogin }" :aria-selected="isLogin" @click="isLogin = true">登录</button>
+          <button type="button" role="tab" class="form-tab" :class="{ active: !isLogin }" :aria-selected="!isLogin" @click="isLogin = false">注册</button>
         </div>
-        <el-form-item>
-          <el-button type="primary" class="login-btn" @click="loginHandler">
-            登陆
-          </el-button>
-        </el-form-item>
-        <div class="other-way">
-          <img src="/assets/icons/微信.svg" alt="" @click="wechatLogin" />
-          <img src="/assets/icons/腾讯QQ.svg" alt="" @click="QQLogin" />
-        </div>
-      </el-form>
+
+        <form v-if="isLogin" class="auth-form" @submit.prevent="loginHandler">
+          <label class="auth-field">
+            <span class="input-icon" aria-hidden="true">@</span>
+            <input v-model="loginInfo.username" class="ee-input" placeholder="邮箱" autocomplete="username" />
+          </label>
+          <label class="auth-field">
+            <span class="input-icon" aria-hidden="true">●</span>
+            <input v-model="loginInfo.password" type="password" class="ee-input" placeholder="密码" autocomplete="current-password" />
+          </label>
+          <div class="form-extras">
+            <label class="ee-checkbox">
+              <input v-model="isRemember" type="checkbox" />
+              <span>记住我</span>
+            </label>
+            <NuxtLink to="/login/forget/verify" class="link">忘记密码</NuxtLink>
+          </div>
+          <button type="submit" class="ee-btn primary-btn" :disabled="isLoading">
+            {{ isLoading ? '登录中…' : '登录' }}
+          </button>
+          <div class="divider"><span>或</span></div>
+          <button type="button" class="ee-btn quick-btn" :disabled="isQuickLoading" @click="quickLogin">
+            <span class="quick-icon" aria-hidden="true">↳</span>
+            用演示账号快速体验
+          </button>
+          <p class="quick-hint">直接以已预置的 <code>demo@emotion-echo.com</code> 登录，跳过注册和验证码。</p>
+        </form>
+
+        <form v-else class="auth-form" @submit.prevent="registerHandler">
+          <label class="auth-field">
+            <span class="input-icon" aria-hidden="true">@</span>
+            <input v-model="registerInfo.username" class="ee-input" placeholder="邮箱" autocomplete="username" />
+          </label>
+          <label class="auth-field">
+            <span class="input-icon" aria-hidden="true">●</span>
+            <input v-model="registerInfo.password" type="password" class="ee-input" placeholder="密码（6-18 位字母+数字）" autocomplete="new-password" />
+          </label>
+          <div class="auth-field code-field">
+            <input v-model="registerInfo.verificationCode" class="ee-input" placeholder="验证码" maxlength="6" />
+            <button type="button" class="ee-btn code-btn" :disabled="isGetVerificationCode" @click="getVerificationCode">
+              {{ isGetVerificationCode ? `${lastSeconds}s 后重发` : '获取验证码' }}
+            </button>
+          </div>
+          <p class="code-hint">开发模式下验证码会打印在服务端终端。</p>
+          <button type="submit" class="ee-btn primary-btn" :disabled="isLoading">
+            {{ isLoading ? '注册中…' : '注册并开始' }}
+          </button>
+        </form>
+
+        <footer class="form-footer">
+          <p>登录或注册即表示你愿意把这里当作自己的安全空间。</p>
+        </footer>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ElNotification } from "element-plus";
-import { Switch } from "@element-plus/icons-vue";
-import type { loginInfo, registerInfo } from "~/types/login/loginType";
-import { sha256 } from "js-sha256";
-import { verificationCodeCountDown } from "~/composables/verificationCodeCountDown";
-const { isMobile } = useDevice();
-// 正则定义（补充缺失的正则）
+import { sha256 } from 'js-sha256'
+import { verificationCodeCountDown } from '~/composables/verificationCodeCountDown'
+import { useNotify } from '~/composables/useNotify'
 
-const originalWarn = console.warn;
-const originalLog = console.log;
-console.warn = function (...args) {
-  if (args.some((arg) => arg?.includes?.("async-validator"))) return;
-  originalWarn.apply(console, args);
-};
-console.log = function (...args) {
-  if (args.some((arg) => arg?.includes?.("async-validator"))) return;
-  originalLog.apply(console, args);
-};
+definePageMeta({ layout: 'default' })
 
-onUnmounted(() => {
-  console.warn = originalWarn;
-  console.log = originalLog;
-});
+const { isMobile } = useDevice()
+const isLogin = ref<boolean>(true)
+const isLoading = ref(false)
+const isQuickLoading = ref(false)
+const isRemember = ref<boolean>(false)
+const loginInfo = reactive<{ username: string; password: string }>({ username: '', password: '' })
+const registerInfo = reactive<{ username: string; password: string; verificationCode: string }>({ username: '', password: '', verificationCode: '' })
 
-const loginFormRef = ref();
-const registerFormRef = ref();
-const verificationCodeRef = ref();
-const loginInfo = shallowReactive<loginInfo>({
-  username: "",
-  password: "",
-});
-const registerInfo = shallowReactive<registerInfo>({
-  username: "",
-  password: "",
-  verificationCode: "",
-});
-
-const loginRules = ref({
-  username: [
-    { required: true, message: "请输入手机号/邮箱", trigger: "blur" },
-    {
-      pattern: phoneOrEmailReg,
-      message: "请输入有效的手机号或邮箱",
-      trigger: "blur",
-    },
-  ],
-  password: [
-    { required: true, message: "请输入密码", trigger: "blur" },
-    {
-      pattern: passwordReg,
-      message: "密码需为6-18位，且包含字母和数字",
-      trigger: "blur",
-    },
-  ],
-});
-
-const registerRules = ref({
-  username: [
-    { required: true, message: "请输入手机号/邮箱", trigger: "blur" },
-    {
-      pattern: phoneOrEmailReg,
-      message: "请输入有效的手机号或邮箱",
-      trigger: "blur",
-    },
-  ],
-  password: [
-    { required: true, message: "请输入密码", trigger: "blur" },
-    {
-      pattern: passwordReg,
-      message: "密码需为6-18位，且包含字母和数字",
-      trigger: "blur",
-    },
-  ],
-  verificationCode: [
-    { required: true, message: "请输入验证码", trigger: "blur" },
-    {
-      pattern: /^\d{6}$/,
-      message: "验证码为6位数字",
-      trigger: "blur",
-    },
-  ],
-});
-
-const isDisable = ref(false);
-const isRemember = ref<boolean>(false);
-
-// 页面加载时恢复记住我状态
 onMounted(() => {
-  if (import.meta.client) {
-    const stored = localStorage.getItem("remember_me");
-    if (stored !== null) {
-      isRemember.value = stored === "true";
-    }
+  if (!import.meta.client) return
+  const stored = localStorage.getItem('remember_me')
+  if (stored !== null) isRemember.value = stored === 'true'
+  if (isRemember.value && loginInfo.username === '') {
+    const remembered = localStorage.getItem('remember_username')
+    if (remembered) loginInfo.username = remembered
   }
-});
-const isLogin = ref<boolean>(true);
-const mask = ref<HTMLDivElement>();
-const welcomePoems = [
-  "有朋自远方来， 不亦乐乎?",
-  "花径不曾缘客扫， 蓬门今始为君开。",
-  "晚来天欲雪， 能饮一杯无？",
-  "开轩面场圃， 把酒话桑麻。",
-  "正是江南好风景， 落花时节又逢君。",
-];
+})
 
-const poem = useState("random-poem", () => {
-  const randomIndex = Math.floor(Math.random() * welcomePoems.length);
-  return welcomePoems[randomIndex] as string;
-});
-
-const splitPoem = computed(() => {
-  return poem.value
-    .split(" ")
-    .map((line) => line.trim())
-    .filter((line) => line);
-});
-
-// PC端mask切换逻辑
-const switchMask = () => {
-  isLogin.value = !isLogin.value;
-  if (mask.value && !isMobile) {
-    mask.value.classList.remove("mask-register", "mask-login");
-    mask.value?.classList.add(!isLogin.value ? "mask-register" : "mask-login");
-  }
-  isDisable.value = true;
-  let timer = setTimeout(() => {
-    isDisable.value = false;
-    clearTimeout(timer);
-  }, 2000);
-};
-
-// 移动端表单切换逻辑（简化，无动画）
-const switchMobileForm = () => {
-  isLogin.value = !isLogin.value;
-};
+const { startCountdown, isGetVerificationCode, lastSeconds } = verificationCodeCountDown()
+const userStore = useUserStore()
+const { success, error } = useNotify()
 
 const loginHandler = () => {
-  loginFormRef.value.validate((valid: boolean) => {
-    if (valid) {
-      // 校验通过，执行登录逻辑（trim 去除前后空格）
-      handleLogin(loginInfo.username.trim(), loginInfo.password.trim());
-    }
-  });
-};
-
-/**
- * 处理账号密码登录
- * @param username 用户名（手机号/邮箱）
- * @param password 密码（已哈希）
- */
-const userStore = useUserStore();
+  if (!loginInfo.username.trim() || !loginInfo.password.trim()) {
+    error('登录失败', '请输入邮箱和密码')
+    return
+  }
+  if (import.meta.client) {
+    localStorage.setItem('remember_me', String(isRemember.value))
+    if (isRemember.value) localStorage.setItem('remember_username', loginInfo.username.trim())
+    else localStorage.removeItem('remember_username')
+  }
+  handleLogin(loginInfo.username.trim(), loginInfo.password.trim())
+}
 
 const handleLogin = async (username: string, password: string) => {
-  // 持久化记住我状态
-  if (import.meta.client) {
-    localStorage.setItem("remember_me", String(isRemember.value));
-  }
-
-  const result = await userStore.login({
-    username: username.trim(),
-    password: sha256(password.trim()),
-    rememberMe: isRemember.value,
-  });
-
-  if (result.isOk) {
-    ElNotification({
-      title: "登录成功",
-      type: "success",
-    });
-    navigateTo("/chat/conversation");
-  } else {
-    ElNotification({
-      title: "登录失败",
-      message: result.msg,
-      type: "error",
-    });
-  }
-};
-const registerHandler = () => {
-  registerFormRef.value.validate((valid: boolean) => {
-    if (valid) {
-      // 校验通过，执行注册逻辑（trim 去除前后空格）
-      handleRegister(
-        registerInfo.username.trim(),
-        registerInfo.password.trim(),
-        registerInfo.verificationCode.trim()
-      );
+  isLoading.value = true
+  try {
+    const result = await userStore.login({ username, password: sha256(password), rememberMe: isRemember.value })
+    if (result.isOk) {
+      await userStore.fetchUserInfo().catch(() => {})
+      success('欢迎回来')
+      await navigateTo('/chat/conversation')
+    } else {
+      error('登录失败', result.msg)
     }
-  });
-};
+  } finally {
+    isLoading.value = false
+  }
+}
 
-/**
- * 处理用户注册
- * @param username 用户名（手机号/邮箱）
- * @param password 密码
- * @param verificationCode 验证码
- */
+const registerHandler = () => {
+  if (!registerInfo.username.trim() || !registerInfo.password.trim() || !registerInfo.verificationCode.trim()) {
+    error('注册失败', '请填完所有字段')
+    return
+  }
+  handleRegister(registerInfo.username.trim(), registerInfo.password.trim(), registerInfo.verificationCode.trim())
+}
+
 const handleRegister = async (username: string, password: string, verificationCode: string) => {
-  const result = await userStore.register({
-    username: username.trim(),
-    password: sha256(password.trim()),
-    verificationCode: verificationCode.trim(),
-  });
-  
-  if (result.isOk) {
-    ElNotification({
-      title: "注册成功",
-      message: "已自动登录",
-      type: "success",
-    });
-    navigateTo("/chat/conversation");
-  } else {
-    ElNotification({
-      title: "注册失败",
-      message: result.msg,
-      type: "error",
-    });
+  isLoading.value = true
+  try {
+    const result = await userStore.register({ username, password: sha256(password), verificationCode })
+    if (result.isOk) {
+      success('已为你准备好', '欢迎，开始聊吧')
+      await navigateTo('/chat/conversation')
+    } else {
+      error('注册失败', result.msg)
+    }
+  } finally {
+    isLoading.value = false
   }
-};
+}
 
-const { startCountdown, isGetVerificationCode, lastSeconds, verificationCodeText } =
-  verificationCodeCountDown();
 const getVerificationCode = async () => {
-  registerInfo.username = registerInfo.username.trim();
-  if (!phoneOrEmailReg.test(registerInfo.username)) {
-    ElNotification({
-      title: "无法获取验证码",
-      message: "请填写正确的账户",
-      type: "error",
-    });
-    return;
+  if (!/^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(registerInfo.username)) {
+    error('无法获取验证码', '请填写正确的邮箱')
+    return
   }
-  
-  const result = await userStore.sendVerificationCode({
-    username: registerInfo.username,
-    type: "register",
-  });
-  
+  const result = await userStore.sendVerificationCode({ username: registerInfo.username, type: 'register' })
   if (result.isOk) {
-    ElNotification({
-      title: "验证码已发送",
-      message: "请注意查收",
-      type: "success",
-    });
-    startCountdown();
+    success('验证码已发送', '请到服务端终端查看')
+    startCountdown()
   } else {
-    ElNotification({
-      title: "发送失败",
-      message: result.msg,
-      type: "error",
-    });
+    error('发送失败', result.msg)
   }
-};
-const wechatLogin = () => {
-  // TODO: 微信登录逻辑
-  handleOAuthLogin("wechat");
-};
-const QQLogin = () => {
-  // TODO: QQ登录逻辑
-  handleOAuthLogin("qq");
-};
+}
 
-/**
- * 处理第三方OAuth登录
- * @param provider 登录提供商 wechat | qq
- */
-const handleOAuthLogin = (provider: "wechat" | "qq") => {
-  // TODO: 
-  // 1. 跳转到OAuth授权页面 或 打开弹出窗口
-  // 2. 等待授权回调
-  // 3. 获取code后发送给后端
-  // 4. 后端返回token后登录成功
-  console.log("OAuth登录:", provider);
-};
+const quickLogin = async () => {
+  if (isQuickLoading.value) return
+  isQuickLoading.value = true
+  try {
+    const result = await userStore.login({
+      username: 'demo@emotion-echo.com',
+      password: sha256('Demo12345'),
+      rememberMe: true
+    })
+    if (result.isOk) {
+      await userStore.fetchUserInfo().catch(() => {})
+      success('已进入体验模式')
+      await navigateTo('/chat/conversation')
+    } else {
+      error('快速体验暂不可用', result.msg || '请用真实邮箱注册')
+    }
+  } finally {
+    isQuickLoading.value = false
+  }
+}
 </script>
 
 <style scoped lang="scss">
-// 原有PC端样式（保留，仅加命名空间）
-@keyframes maskAnimationRegister {
-  0% {
-    width: 50%;
-    left: 0;
-    border-radius: $radius-lg 160px 160px $radius-lg;
-  }
-  30% {
-    width: 100%;
-    left: 0;
-    border-radius: $radius-lg;
-  }
-  50% {
-    width: 100%;
-    left: 0;
-    border-radius: $radius-lg;
-  }
-  80% {
-    width: 50%;
-    left: 50%;
-    border-radius: 160px $radius-lg $radius-lg 160px;
-  }
-  100% {
-    width: 50%;
-    left: 50%;
-    border-radius: 160px $radius-lg $radius-lg 160px;
-  }
-}
-
-@keyframes maskAnimationLogin {
-  0% {
-    width: 50%;
-    left: 50%;
-    border-radius: 160px $radius-lg $radius-lg 160px;
-  }
-  30% {
-    width: 100%;
-    left: 0;
-    border-radius: $radius-lg;
-  }
-  50% {
-    width: 100%;
-    left: 0;
-    border-radius: $radius-lg;
-  }
-  80% {
-    width: 50%;
-    left: 0;
-    border-radius: $radius-lg 160px 160px $radius-lg;
-  }
-  100% {
-    width: 50%;
-    left: 0;
-    border-radius: $radius-lg 160px 160px $radius-lg;
-  }
-}
-
-.login-container {
+.login-page {
+  min-height: 100vh;
   display: flex;
-  height: 70vh;
-  width: 55vw;
-  background-color: #ffffff;
-  margin: auto;
-  transform: translateY(17vh);
-  border-radius: $radius-lg;
-  box-shadow: $box-shadow;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(20px, 4vw, 48px);
+  background: radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--ee-primary-soft) 90%, var(--ee-bg)), var(--ee-bg) 60%);
+}
+
+.login-card {
+  display: grid;
+  width: min(960px, 100%);
+  min-height: 580px;
+  grid-template-columns: 1fr 1fr;
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-xl);
+  box-shadow: 0 12px 36px rgba(32, 37, 34, 0.06);
+  overflow: hidden;
+}
+
+.brand-panel {
   position: relative;
-
-  // PC端mask样式
-  .pc-mask {
-    position: absolute;
-    top: 0;
-    left: 0;
-    border-radius: $radius-lg 160px 160px $radius-lg;
-    width: 50%;
-    z-index: 5;
-    height: 100%;
-    background-color: #0077c2;
-    padding-top: 25%;
-    padding: 20% 10px 0;
-
-    &.mask-register {
-      animation: maskAnimationRegister 2s ease-in-out forwards;
-    }
-
-    &.mask-login {
-      animation: maskAnimationLogin 2s ease-in-out forwards;
-    }
-
-    .mask-title {
-      font-family: "maskTitle";
-      font-size: 2.3em;
-      text-align: center;
-      line-height: 1.5;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .poem-line {
-      display: block;
-      width: 100%;
-    }
-
-    .mask-desc {
-      margin-top: 10px;
-      text-align: center;
-      font-size: 14px;
-      color: #313131;
-    }
-
-    .mask-btn {
-      display: block;
-      margin: 40px auto;
-      height: 60px;
-      width: 60px;
-    }
-  }
-
-  // PC端表单通用样式
-  .pc-form {
-    height: 100%;
-    padding: 5vh 30px;
-    width: 50%;
-    position: absolute;
-    overflow: hidden;
-
-    &.login {
-      left: 50%;
-    }
-
-    &.register {
-      left: 0;
-    }
-
-    .login-title,
-    .register-title {
-      text-align: center;
-      font-size: 5vh;
-      margin-bottom: 2vh;
-    }
-
-    .login-input,
-    .register-input {
-      width: 100%;
-      height: 40px;
-      margin-bottom: 1vh;
-    }
-
-    .login-text {
-      display: flex;
-      justify-content: space-between;
-      font-size: 14px;
-      color: #666666;
-      margin: 1.5vh 0;
-
-      a {
-        line-height: 32px;
-        cursor: pointer;
-      }
-    }
-
-    .login-btn,
-    .register-btn {
-      width: 100%;
-      margin-top: 1.5vh;
-      height: 2.5em;
-      border-radius: $radius-mid;
-      font-size: 18px;
-    }
-
-    .other-way {
-      display: flex;
-      justify-content: space-around;
-      margin-top: 3vh;
-      img {
-        height: 50px;
-        object-fit: contain;
-      }
-    }
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: clamp(28px, 4vw, 48px);
+  color: var(--ee-text);
+  background: linear-gradient(160deg, var(--ee-primary-soft) 0%, color-mix(in srgb, var(--ee-primary-soft) 40%, var(--ee-surface)) 100%);
 }
+.eyebrow { color: var(--ee-primary); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; }
+.brand-panel h1 { margin: 4px 0 0; font-size: clamp(26px, 3vw, 34px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.35; }
+.brand-panel p { color: var(--ee-text-muted); font-size: 14px; line-height: 1.7; max-width: 32ch; }
+.breath-line { margin-top: auto; }
+.breath-line span { display: block; width: 56px; height: 3px; background: var(--ee-primary); border-radius: 999px; animation: ee-quiet-pulse 2.4s ease-in-out infinite; }
 
-// 移动端布局样式（核心适配）
+.form-panel { display: flex; flex-direction: column; gap: 18px; padding: clamp(28px, 4vw, 48px); background: var(--ee-surface); }
+.form-header h2 { font-size: clamp(20px, 2.4vw, 26px); font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+.form-tabs { display: inline-flex; gap: 4px; padding: 4px; background: var(--ee-surface-muted); border-radius: var(--ee-radius-md); align-self: flex-start; }
+.form-tab { padding: 6px 16px; color: var(--ee-text-muted); background: transparent; border: 0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.form-tab.active { color: var(--ee-text); background: var(--ee-surface); box-shadow: 0 1px 2px rgba(32, 37, 34, 0.06); }
 
-.mobile-container {
-  width: 95% !important;
-  height: auto !important;
-  max-height: 90vh !important; // 限制最大高度，避免小屏溢出
-  position: absolute !important; // 绝对定位是translate居中的基础
-  top: 50% !important; // 容器顶部对齐屏幕垂直中点
-  left: 0 !important;
-  right: 0 !important;
-  margin: 0 auto !important; // 水平居中
-  transform: translateY(-50%) !important; // 向上偏移自身50%高度，实现垂直居中
-  padding: 10px !important;
-  flex-direction: column !important;
-  overflow-y: auto; // 小屏时内部滚动，不溢出
+.auth-form { display: grid; gap: 12px; }
+
+.auth-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-md);
+  transition: border-color var(--ee-transition), box-shadow var(--ee-transition);
 }
+.auth-field:focus-within { border-color: var(--ee-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ee-primary) 25%, transparent); }
+.auth-field .input-icon { color: var(--ee-text-muted); font-size: 14px; font-weight: 700; }
 
-// 移动端mask（顶部提示区）
-.mobile-mask {
-  width: 100%;
-  background-color: #0088dd;
-  border-radius: $radius-lg $radius-lg 0 0;
-  padding: 20px 15px;
-  text-align: center;
-
-  .mobile-mask-title {
-    font-family: "maskTitle";
-    font-size: 1.5em;
-    color: #fff;
-    margin-bottom: 10px;
-  }
-
-  .mobile-poem-line {
-    display: block;
-    margin-bottom: 5px;
-  }
-
-  .mobile-mask-desc {
-    font-size: 14px;
-    color: #f5f5f5;
-    margin-bottom: 15px;
-  }
-
-  .mobile-mask-btn {
-    border-radius: $radius-mid;
-    padding: 6px 20px;
-  }
+.ee-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 2px;
+  color: var(--ee-text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
 }
+.ee-input::placeholder { color: var(--ee-text-muted); }
 
-// 移动端表单容器
-.mobile-form-wrap {
-  width: 100%;
-  padding: 20px 15px;
-  background-color: #fff;
-  border-radius: 0 0 $radius-lg $radius-lg;
+.form-extras { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 8px; font-size: 12px; }
+.ee-checkbox { display: inline-flex; align-items: center; gap: 6px; color: var(--ee-text-muted); cursor: pointer; }
+.ee-checkbox input { accent-color: var(--ee-primary); }
+
+.link { color: var(--ee-primary); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+.ee-btn { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 18px; background: var(--ee-surface); border: 1px solid var(--ee-border); border-radius: var(--ee-radius-md); color: var(--ee-text); cursor: pointer; font-size: 13px; font-weight: 600; transition: background var(--ee-transition), color var(--ee-transition), border-color var(--ee-transition); }
+.ee-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+.ee-btn-primary { background: var(--ee-primary); color: #fff; border-color: var(--ee-primary); }
+.ee-btn-primary:hover:not(:disabled) { background: var(--ee-primary-hover); border-color: var(--ee-primary-hover); }
+.primary-btn { height: 44px; }
+
+.divider { display: flex; align-items: center; gap: 12px; margin: 6px 0; color: var(--ee-text-muted); font-size: 11px; letter-spacing: 0.16em; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--ee-border); }
+
+.quick-btn { height: 44px; color: var(--ee-primary); background: var(--ee-primary-soft); border: 1px dashed color-mix(in srgb, var(--ee-primary) 45%, transparent); border-radius: var(--ee-radius-md); font-weight: 600; }
+.quick-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--ee-primary-soft) 60%, var(--ee-primary)); }
+.quick-icon { margin-right: 6px; }
+.quick-hint, .code-hint { margin: 0; color: var(--ee-text-muted); font-size: 11px; line-height: 1.6; }
+.quick-hint code { background: var(--ee-surface-muted); padding: 1px 4px; border-radius: 3px; font-size: 10px; }
+
+.code-field { padding-right: 4px; gap: 4px; }
+.code-field .ee-input { padding: 10px 2px; }
+.code-btn { white-space: nowrap; height: 32px; padding: 0 12px; background: var(--ee-primary-soft); color: var(--ee-primary); border: 1px solid color-mix(in srgb, var(--ee-primary) 30%, transparent); border-radius: var(--ee-radius-md); font-weight: 600; }
+.code-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--ee-primary-soft) 60%, var(--ee-primary)); }
+
+.form-footer { margin-top: auto; color: var(--ee-text-muted); font-size: 11px; text-align: center; }
+
+@media (max-width: 760px) {
+  .login-card { grid-template-columns: 1fr; min-height: auto; }
+  .brand-panel { padding: 24px; gap: 8px; }
+  .brand-panel h1 { font-size: 22px; }
+  .breath-line { display: none; }
+  .form-panel { padding: 24px; gap: 14px; }
 }
-
-// 移动端表单样式
-.mobile-form {
-  width: 100% !important;
-  height: auto !important;
-  position: static !important;
-  padding: 0 !important;
-  margin: 0 !important;
-
-  .login-title,
-  .register-title {
-    font-size: 24px !important;
-    margin-bottom: 20px !important;
-    color: #333;
-  }
-
-  .login-input,
-  .register-input {
-    height: 44px !important;
-    margin-bottom: 15px !important;
-    border-radius: $radius-mid;
-    border: 1px solid #e5e7eb;
-  }
-
-  .login-text {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin: 10px 0 20px !important;
-    font-size: 13px !important;
-
-    a {
-      color: #409eff;
-      text-decoration: none;
-    }
-  }
-
-  .login-btn,
-  .register-btn {
-    width: 100%;
-    height: 44px !important;
-    font-size: 16px !important;
-    border-radius: $radius-mid !important;
-  }
-
-  .other-way {
-    display: flex;
-    justify-content: space-around;
-    margin-top: 20px !important;
-    img {
-      height: 40px !important;
-    }
-  }
-}
-
-// 兜底：小屏PC适配
-// @media (max-width: 1024px) and (min-width: 768px) {
-//   .login-container {
-//     width: 80vw !important;
-//   }
-// }
 </style>

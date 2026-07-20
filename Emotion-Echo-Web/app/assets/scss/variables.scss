@@ -1,9 +1,33 @@
-$radius-sm: 4px;
-$radius-mid: 6px;
-$radius-lg: 8px;
+// Quiet Companion design tokens
+$color-bg: #f7f8f7;
+$color-surface: #ffffff;
+$color-surface-muted: #eef3f0;
+$color-text: #202522;
+$color-text-muted: #68736d;
+$color-primary: #5f8f7b;
+$color-primary-hover: #4f7e6a;
+$color-primary-soft: #e6f0eb;
+$color-accent: #d98773;
+$color-border: #e0e8e3;
+
+$color-dark-bg: #171c1a;
+$color-dark-surface: #222a26;
+$color-dark-surface-muted: #2a3530;
+$color-dark-text: #edf3ef;
+$color-dark-text-muted: #aab8b0;
+$color-dark-border: #39483f;
+
+$radius-sm: 6px;
+$radius-mid: 8px;
+$radius-lg: 12px;
 $radius-xl: 16px;
-$radius-xxl: 32px;
+$radius-xxl: 20px;
 $radius-circle: 50%;
-$box-shadow: 2px 3px 5px rgba(0, 0, 0, 0.19);
-$bg-color: #f5f7fa;
-$font-color-light: #555;
+$box-shadow: 0 1px 2px rgba(32, 37, 34, 0.06), 0 8px 24px rgba(32, 37, 34, 0.05);
+$box-shadow-soft: 0 1px 0 rgba(32, 37, 34, 0.06);
+$bg-color: $color-bg;
+$font-color-light: $color-text-muted;
+$ease-quiet: cubic-bezier(0.22, 1, 0.36, 1);
+$motion-fast: 120ms;
+$motion-base: 200ms;
+$motion-slow: 400ms;

@@ -1,179 +1,121 @@
 <template>
-  <div class="setting-container">
-    <div class="setting-item font-size-edit">
-      <span :style="{ fontSize: userConfig.fontSize }" class="content"
-        >测试字体</span
-      >
-      <div style="align-items: center;">
-        <span class="setting-title">选择字体大小</span>
-        <el-dropdown
-          v-model="userConfig.fontSize"
-          @command="handleFontSizeChange"
-        >
-          <span class="el-dropdown-link">
-            {{ fontSizeLabel }}
-            <el-icon class="el-icon--right">
-              <arrow-down />
-            </el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="small">14px (小)</el-dropdown-item>
-              <el-dropdown-item command="medium">16px (中)</el-dropdown-item>
-              <el-dropdown-item command="large">18px (大)</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+  <section class="setting-page">
+    <header class="page-intro">
+      <span class="eyebrow">PERSONALIZE</span>
+      <h2>让这里更像你的空间</h2>
+      <p>调整阅读体验，找到最舒服的节奏。</p>
+    </header>
+
+    <div class="settings-list">
+      <div class="setting-item font-size-edit">
+        <div class="setting-copy">
+          <span class="setting-title">字体大小</span>
+          <span class="setting-description">消息文字的阅读尺寸</span>
+        </div>
+        <div class="setting-control">
+          <span class="preview" :style="{ fontSize: fontSizeValue }">Aa</span>
+          <div class="font-size-menu">
+            <button
+              v-for="opt in fontSizeOptions"
+              :key="opt.value"
+              type="button"
+              class="font-size-btn"
+              :class="{ active: userConfig.fontSize === opt.value }"
+              @click="handleFontSizeChange(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-item theme-edit">
+        <div class="setting-copy">
+          <span class="setting-title">界面主题</span>
+          <span class="setting-description">选择你喜欢的明暗方式</span>
+        </div>
+        <div class="theme-options">
+          <label v-for="opt in themeOptions" :key="opt.value" class="theme-option" :class="{ active: userConfig.theme === opt.value }">
+            <input
+              type="radio"
+              name="theme"
+              :value="opt.value"
+              :checked="userConfig.theme === opt.value"
+              @change="handleThemeChange(opt.value)"
+            />
+            <span>{{ opt.label }}</span>
+          </label>
+        </div>
       </div>
     </div>
-    <div class="setting-item theme-edit">
-      <span class="setting-title">选择主题</span>
-      <el-radio-group v-model="userConfig.theme" @change="handleThemeChange">
-        <el-radio-button label="light">
-          <el-icon><Sunny /></el-icon> 浅色
-        </el-radio-button>
-        <el-radio-button label="dark">
-          <el-icon><Moon /></el-icon> 深色
-        </el-radio-button>
-        <el-radio-button label="auto">
-          <el-icon><Monitor /></el-icon> 跟随系统
-        </el-radio-button>
-      </el-radio-group>
-    </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-import { ArrowDown, Sunny, Moon, Monitor } from "@element-plus/icons-vue";
-import type { themeType } from "~/types/userConfig/userConfigType";
-const userStore = useUserStore();
-const userConfig = ref(userStore.getUserConfig());
-const fontSizeMap: Record<string, string> = {
-  small: "14px (小)",
-  medium: "16px (中)",
-  large: "18px (大)",
-};
-const fontSizeLabel = computed(() => fontSizeMap[userConfig.value.fontSize] || userConfig.value.fontSize);
-const handleFontSizeChange = (fontSize: "small" | "medium" | "large") => {
-  userConfig.value.fontSize = fontSize;
-  userStore.setFontSize(fontSize);
-};
-const handleThemeChange = (theme: any) => {
-  const t = theme as themeType;
-  userConfig.value.theme = t;
-  userStore.setTheme(t);
-};
+import type { themeType } from '~/types/userConfig/userConfigType'
+
+const userStore = useUserStore()
+const userConfig = ref(userStore.getUserConfig())
+
+const fontSizes = { small: '14px', medium: '16px', large: '18px' } as const
+const fontLabels = { small: '小', medium: '中', large: '大' } as const
+const fontSizeOptions = [
+  { value: 'small' as const, label: '小' },
+  { value: 'medium' as const, label: '中' },
+  { value: 'large' as const, label: '大' }
+]
+const themeOptions: { value: 'light' | 'dark' | 'auto', label: string }[] = [
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+  { value: 'auto', label: '跟随系统' }
+]
+
+const fontSizeValue = computed(() => fontSizes[userConfig.value.fontSize as keyof typeof fontSizes] || '16px')
+const fontSizeLabel = computed(() => fontLabels[userConfig.value.fontSize as keyof typeof fontLabels] || '中')
+
+const handleFontSizeChange = async (size: 'small' | 'medium' | 'large') => {
+  userConfig.value.fontSize = size
+  await userStore.setFontSize(size)
+}
+
+const handleThemeChange = async (theme: string | number | boolean | undefined) => {
+  const t = (theme as themeType) || 'auto'
+  userConfig.value.theme = t
+  await userStore.setTheme(t)
+}
 </script>
 
 <style scoped lang="scss">
-.setting-container {
-  background-color: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  width: 100%;
-  box-sizing: border-box;
+.setting-page { width: min(760px, 100%); margin: 0 auto; }
+.page-intro { margin-bottom: 28px; }
+.eyebrow { color: var(--ee-primary); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; }
+.page-intro h2 { margin: 6px 0 0; font-size: clamp(22px, 2.6vw, 28px); font-weight: 600; letter-spacing: -0.02em; }
+.page-intro p { margin: 6px 0 0; color: var(--ee-text-muted); font-size: 14px; }
 
-  .setting-item {
-    display: flex;
-    align-items: center;
-    background-color: #f5f7fa;
-    border-radius: 12px;
-    padding: 10px;
-    margin-bottom: 16px;
-    transition: background-color 0.2s ease;
+.settings-list { display: grid; gap: 12px; }
+.setting-item { display: flex; align-items: center; justify-content: space-between; gap: 22px; min-height: 86px; padding: 18px 20px; background: var(--ee-surface); border: 1px solid var(--ee-border); border-radius: var(--ee-radius-lg); transition: border-color var(--ee-transition), transform var(--ee-transition); }
+.setting-item:hover { border-color: color-mix(in srgb, var(--ee-primary) 50%, var(--ee-border)); transform: translateY(-1px); }
+.setting-copy { display: grid; gap: 3px; }
+.setting-title { font-size: 15px; font-weight: 600; }
+.setting-description { color: var(--ee-text-muted); font-size: 12px; }
 
-    // 鼠标悬浮轻微变色
-    &:hover {
-      background-color: #f0f2f5;
-    }
+.setting-control { display: flex; align-items: center; gap: 14px; }
+.preview { display: grid; width: 40px; height: 40px; place-items: center; color: var(--ee-primary); background: var(--ee-primary-soft); border-radius: 10px; font-weight: 600; }
 
-    // 最后一个项去掉底部间距
-    &:last-child {
-      margin-bottom: 0;
-    }
-  }
+.font-size-menu { display: flex; gap: 4px; padding: 3px; background: var(--ee-surface-muted); border-radius: 10px; }
+.font-size-btn { min-width: 38px; height: 30px; padding: 0 12px; color: var(--ee-text-muted); background: transparent; border: 0; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 600; transition: color var(--ee-transition), background var(--ee-transition); }
+.font-size-btn:hover { color: var(--ee-text); }
+.font-size-btn.active { color: var(--ee-text); background: var(--ee-surface); box-shadow: 0 1px 2px rgba(32, 37, 34, 0.06); }
 
-  .font-size-edit {
-    justify-content: space-between;
-    flex-wrap: wrap; // 响应式换行，避免小屏幕溢出
-    gap: 16px; // 弹性布局间距，替代margin
+.theme-options { display: flex; gap: 4px; padding: 3px; background: var(--ee-surface-muted); border-radius: 10px; }
+.theme-option { display: inline-flex; align-items: center; gap: 6px; min-width: 70px; height: 30px; padding: 0 12px; color: var(--ee-text-muted); border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 600; transition: color var(--ee-transition), background var(--ee-transition); }
+.theme-option:hover { color: var(--ee-text); }
+.theme-option.active { color: var(--ee-text); background: var(--ee-surface); box-shadow: 0 1px 2px rgba(32, 37, 34, 0.06); }
+.theme-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-    .setting-title {
-      font-size: 14px;
-      color: #303133;
-      font-weight: 500; // 轻微加粗，突出标题
-      margin-right: 12px;
-      white-space: nowrap; // 防止标题换行
-    }
-
-    .content {
-      background-color: #07c160;
-      color: #fff;
-      // 统一圆角，更美观
-      border-radius: 12px;
-      display: inline-block;
-      margin: 0; // 去掉默认margin，用父级gap控制
-      padding: 10px 12px; // 优化内边距，更舒适
-      line-height: 1.6; // 优化行高，提升可读性
-      max-width: 60%; // 调整宽度，避免占比过大
-      word-wrap: break-word;
-      word-break: break-all;
-      box-sizing: border-box;
-      box-shadow: 0 2px 8px rgba(7, 193, 96, 0.2); // 轻微阴影，突出测试文本
-    }
-
-    // 下拉菜单触发区样式优化
-    .el-dropdown-link {
-      display: inline-flex;
-      align-items: center;
-      color: #409eff; // Element Plus 主色，突出可点击
-      cursor: pointer;
-      padding: 4px 8px;
-      border-radius: 4px;
-      transition: background-color 0.2s ease;
-
-      // 悬浮高亮
-      &:hover {
-        background-color: rgba(64, 158, 255, 0.1);
-      }
-
-      // 图标间距优化
-      .el-icon {
-        margin-left: 4px;
-        font-size: 12px;
-      }
-    }
-  }
-
-  .theme-edit {
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 16px;
-
-    .setting-title {
-      font-size: 14px;
-      color: #303133;
-      font-weight: 500;
-      margin-right: 12px;
-      white-space: nowrap;
-    }
-
-    .el-radio-group {
-      .el-radio-button__inner {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-      }
-    }
-  }
-}
-
-// 响应式适配：小屏幕下测试文本占比提升
-@media (max-width: 768px) {
-  .setting-container .font-size-edit .content {
-    max-width: 100%;
-    margin-bottom: 8px;
-  }
+@media (max-width: 600px) {
+  .setting-item { align-items: flex-start; flex-direction: column; }
+  .setting-control { width: 100%; justify-content: flex-end; }
+  .theme-options { flex-wrap: wrap; }
 }
 </style>

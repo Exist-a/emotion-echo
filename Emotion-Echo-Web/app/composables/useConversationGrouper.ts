@@ -3,6 +3,7 @@
  * 提取自 stores/conversation.ts 的分组逻辑
  */
 import type { ConversationItem } from '~/types/api'
+import { computed } from 'vue'
 
 export interface GroupedConversation {
   label: string

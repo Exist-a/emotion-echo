@@ -20,7 +20,7 @@
         <span class="indicator-text">{{ isActive ? '面部识别中' : '等待中' }}</span>
       </div>
       <button class="close-btn" @click.stop="handleClose">
-        <el-icon><CircleClose /></el-icon>
+        <span class="ee-icon" aria-hidden="true"></span>
       </button>
     </div>
   </div>

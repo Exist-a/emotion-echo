@@ -22,20 +22,19 @@ export function stripMarkdown(text: string, options?: StripMarkdownOptions): str
   let result = text
 
   if (opts.removeCodeBlocks) {
+    // Pairwise fenced blocks: any non-greedy ``` ... ``` (may span lines)
     result = result.replace(/```[\s\S]*?```/g, '')
-    result = result.replace(/```[\s\S]*?$/gm, '')
   }
 
   if (opts.removeInlineCode) {
-    result = result.replace(/`[^`]+`/g, '')
+    // Disallow newlines so we never consume a fenced code block's interior
+    result = result.replace(/`[^`\n]+`/g, '')
   }
 
-  if (opts.removeUrls) {
-    result = result.replace(/https?:\/\/[^\s\u4e00-\u9fa5]+/gi, '')
-    result = result.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
-  }
-
+  // Strip markdown links FIRST so the bare URL pass can't eat the parentheses back out
   if (opts.removeMarkdownSyntax) {
+    result = result.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    result = result.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     result = result.replace(/^#+\s*/gm, '')
     result = result.replace(/^\s*[-*+]\s+/gm, '')
     result = result.replace(/^\s*\d+\.\s+/gm, '')
@@ -46,8 +45,11 @@ export function stripMarkdown(text: string, options?: StripMarkdownOptions): str
     result = result.replace(/_([^_]+)_/g, '$1')
     result = result.replace(/~~([^~]+)~~/g, '$1')
     result = result.replace(/\|([^|]+)\|/g, '$1')
-    result = result.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
-    result = result.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+  }
+
+  if (opts.removeUrls) {
+    // Match http(s) URLs that aren't followed by a Chinese character.
+    result = result.replace(/https?:\/\/[^\s\u4e00-\u9fa5]+/gi, '')
   }
 
   if (opts.collapseWhitespace) {

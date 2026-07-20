@@ -1,133 +1,48 @@
 <template>
-  <div class="forget-container" :class="{ 'mobile-container': $device.isMobile }">
-    <!-- 步骤条：根据设备调整间距和尺寸 -->
-    <el-steps
-      class="forget-steps"
-      :class="{ 'mobile-steps': $device.isMobile }"
-      :active="active"
-      finish-status="success"
-      :space="$device.isMobile ? 'auto' : 300"
-      simple
-    >
-      <el-step title="确认账户" :icon="Lock" />
-      <el-step title="修改密码" :icon="Edit" />
-      <el-step title="修改成功" :icon="Check" />
-    </el-steps>
-    <main class="forget-main" :class="{ 'mobile-main': $device.isMobile }">
+  <section class="forget-page">
+    <ol class="forget-steps" aria-label="找回密码步骤">
+      <li v-for="(step, index) in steps" :key="step.label" :class="{ 'is-active': index === active, 'is-done': index < active }">
+        <span class="dot">{{ index + 1 }}</span>
+        <span class="label">{{ step.label }}</span>
+      </li>
+    </ol>
+    <main class="forget-main">
       <NuxtPage @changeActive="changeActive" />
     </main>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-import { Lock, Edit, Check } from "@element-plus/icons-vue";
-const route = useRoute();
-const router = useRouter();
+const route = useRoute()
+const router = useRouter()
 
-// 若需要在script中使用设备判断，补充useDevice（模板中直接用$device即可）
-const { isMobile } = useDevice();
+const steps = [
+  { label: '确认账户', path: '/login/forget/verify' },
+  { label: '修改密码', path: '/login/forget/modify' },
+  { label: '修改成功', path: '/login/forget/success' }
+]
 
-// 核心：定义「路由路径」与「步骤值」的映射表（根据你的实际路由路径调整）
-const routeStepMap = new Map([
-  ["/login/forget/verify", 0], // 确认账户/验证码 → 步骤0
-  ["/login/forget/modify", 1], // 修改密码 → 步骤1
-  ["/login/forget/success", 2], // 修改成功 → 步骤2
-]);
+const active = ref(Math.max(0, steps.findIndex((step) => step.path === route.path)))
 
-// 初始化 active 值：根据当前路由匹配
-const active = ref(routeStepMap.get(route.path) || 0);
+watch(() => route.path, (path) => {
+  active.value = Math.max(0, steps.findIndex((step) => step.path === path))
+}, { immediate: true })
 
-// 监听路由变化：浏览器后退/前进时，同步更新 active
-watch(
-  () => route.path, // 监听路由路径变化
-  (newPath) => {
-    active.value = routeStepMap.get(newPath) || 0;
-  },
-  { immediate: true } // 初始化时执行一次
-);
-
-// 处理子组件的“下一步”事件：跳转到对应路由
 const changeActive = () => {
-  const currentStep = active.value;
-  // 根据当前步骤，获取下一个路由
-  const nextRoute = Array.from(routeStepMap.entries()).find(
-    ([_, step]) => step === currentStep + 1
-  )?.[0];
-
-  if (nextRoute) {
-    router.push(nextRoute); // 跳转到下一个路由（路由变化会自动更新 active）
-  }
-};
+  const next = steps[active.value + 1]
+  if (next) router.push(next.path)
+}
 </script>
 
 <style scoped lang="scss">
-// 全局基础重置
-* {
-  box-sizing: border-box;
-}
-
-// 通用容器样式
-.forget-container {
-  padding: 80px 10vw;
-  min-height: 100vh; // 修正原100vw错误，改为最小高度100视口高度
-  height: 100%; // 自适应高度
-  background-color: $bg-color;
-  max-width: 100%;
-  margin: 0 auto;
-}
-
-// 通用步骤条样式
-.forget-steps {
-  max-width: 80vw;
-  margin: 0 auto 40px; // 步骤条居中，与主内容拉开间距
-}
-
-// 通用主内容样式
-.forget-main {
-  max-width: 800px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-// ------------------------ 移动端适配 ------------------------
-.mobile-container {
-  padding: 40px 5vw !important; // 减少上下/左右内边距
-  min-height: 100vh !important;
-}
-
-// 移动端步骤条
-.mobile-steps {
-  max-width: 95vw !important; // 占满屏幕宽度
-  margin: 0 auto 20px !important; // 减少底部间距
-  font-size: 14px !important; // 缩小字体
-
-  // 移动端步骤条图标大小
-  :deep(.el-step__icon) {
-    width: 24px !important;
-    height: 24px !important;
-    font-size: 14px !important;
-  }
-
-  // 移动端步骤条文字
-  :deep(.el-step__title) {
-    font-size: 13px !important;
-    margin-top: 5px !important;
-  }
-}
-
-// 移动端主内容区
-.mobile-main {
-  max-width: 95vw !important; // 占满屏幕宽度
-  padding: 0 10px !important;
-}
-
-// 兜底：小屏PC适配
-@media (max-width: 1024px) and (min-width: 768px) {
-  .forget-container {
-    padding: 60px 8vw;
-  }
-  .forget-steps {
-    max-width: 90vw;
-  }
-}
+.forget-page { width: min(720px, 100%); margin: 0 auto; padding: clamp(28px, 5vw, 56px) clamp(16px, 4vw, 24px); }
+.forget-steps { display: flex; gap: 16px; padding: 0; margin-bottom: 28px; }
+.forget-steps li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--ee-text-muted); background: var(--ee-surface); border: 1px solid var(--ee-border); border-radius: 999px; flex: 1; }
+.forget-steps li .dot { display: grid; width: 22px; height: 22px; place-items: center; background: var(--ee-surface-muted); border-radius: 50%; font-size: 12px; font-weight: 600; }
+.forget-steps li.is-active { color: var(--ee-primary); border-color: var(--ee-primary); background: var(--ee-primary-soft); }
+.forget-steps li.is-active .dot { background: var(--ee-primary); color: #fff; }
+.forget-steps li.is-done .dot { color: #fff; background: var(--ee-primary); }
+.forget-steps li .label { font-size: 13px; }
+.forget-main { background: transparent; }
+@media (max-width: 600px) { .forget-steps { flex-direction: column; } }
 </style>

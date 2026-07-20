@@ -48,7 +48,7 @@
 
         <!-- 未知图表类型 -->
         <div v-else class="chart-placeholder">
-          <el-empty description="未知图表类型" />
+          <div class="ee-empty">暂无数据</div>
         </div>
       </div>
     </div>

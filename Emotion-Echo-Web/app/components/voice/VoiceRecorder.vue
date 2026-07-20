@@ -1,6 +1,6 @@
 <template>
   <div class="voice-recorder">
-    <el-tooltip :content="isRecording ? '结束录音' : '开始录音'" placement="top">
+    <span class="ee-tooltip">
       <button
         class="record-btn"
         :class="{ recording: isRecording }"
@@ -9,7 +9,7 @@
         <span v-if="!isRecording" class="record-icon">🎤</span>
         <span v-else class="stop-icon">⏹</span>
       </button>
-    </el-tooltip>
+    </span>
 
     <div v-if="isRecording" class="recording-status">
       <span class="recording-dot"></span>
