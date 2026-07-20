@@ -30,6 +30,35 @@ describe('stripMarkdown', () => {
     expect(stripMarkdown('visit https://example.com today')).toBe('visit today')
   })
 
+  // ====== Stage 26-O RED-only 缺口用例(契约变更后回归保护) ======
+
+  it('strips markdown links BEFORE bare URLs so trailing parens are not consumed', () => {
+    // 旧顺序(URL 先于 link)会把 `](https://a.com)https://b.com` 的括号当作 URL 的一部分吞掉
+    expect(
+      stripMarkdown('see [the docs](https://example.com) and https://b.com today')
+    ).toBe('see the docs and today')
+  })
+
+  it('preserves Chinese parentheses inside image alt text', () => {
+    // removeMarkdownSyntax 阶段不能误吞 alt 中的中文括号
+    expect(stripMarkdown('![一只(很凶的)狗](https://x.com/d.png)')).toBe('一只(很凶的)狗')
+  })
+
+  it('does NOT strip Chinese characters that immediately follow a URL', () => {
+    const out = stripMarkdown('今天访问 https://example.com 看看')
+    expect(out).toContain('今天')
+    expect(out).toContain('看看')
+    expect(out).not.toContain('example.com 看看')
+  })
+
+  it('does not eat text after an unpaired fence', () => {
+    // 改动后:未闭合 ``` 不再吞到行/文末
+    expect(
+      stripMarkdown('A\n```js\ncode\nB',
+        { removeCodeBlocks: true, removeMarkdownSyntax: false, removeInlineCode: false })
+    ).toContain('B')
+  })
+
   it('strips headings, lists, and blockquotes', () => {
     expect(stripMarkdown('# Title\n- one\n- two\n> quote')).toBe('Title\none\ntwo\nquote')
   })
