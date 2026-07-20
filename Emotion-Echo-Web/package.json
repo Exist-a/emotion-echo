@@ -7,21 +7,22 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "nuxt prepare",
     "deploy": "gh-pages -d .output/public -r git@github.com:Exist-a/Emotion-Echo-Web.git -f"
   },
   "dependencies": {
-    "@element-plus/icons-vue": "^2.3.2",
-    "@element-plus/nuxt": "^1.1.4",
     "@nuxtjs/device": "4.0.0",
     "@pinia/nuxt": "^0.11.3",
     "@pixiv/three-vrm": "^3.5.2",
     "@types/three": "^0.184.0",
     "dexie": "^4.3.0",
     "echarts": "^6.0.0",
-    "element-plus": "^2.12.0",
     "js-sha256": "^0.11.1",
     "marked": "^18.0.3",
+    "naive-ui": "^2.44.1",
     "nuxt": "^4.2.1",
     "nuxt-echarts": "1.0.1",
     "pcm-player": "^0.0.18",
@@ -33,11 +34,16 @@
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^24.10.4",
+    "@vue/test-utils": "^2",
     "fast-glob": "^3.3.3",
     "gh-pages": "^6.3.0",
+    "happy-dom": "^20.10.6",
     "sass": "^1.94.2",
     "svgo": "^4.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^2",
+    "vue-tsc": "^2.1.10"
   }
 }
