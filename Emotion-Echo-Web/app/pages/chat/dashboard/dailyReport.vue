@@ -1,43 +1,33 @@
 <template>
-  <div class="daily-container">
-    <el-date-picker
-      v-model="date"
-      type="date"
-      format="YYYY年MM月DD日"
-      value-format="YYYY-MM-DD"
-      placeholder="选择一个日期"
-      size="large"
-      :disabled-date="disabledDate"
-      @change="fetchDailyReport"
-    />
-
-    <el-skeleton v-if="isLoading" :rows="5" animated style="margin-top: 20px" />
-
-    <template v-else>
-      <!-- 摘要 -->
-      <el-card v-if="reportData" class="summary-card" shadow="hover">
-        <p class="summary-text">{{ reportData.summary }}</p>
-        <div class="stats-row">
-          <div class="stat-item">
-            <span class="stat-value">{{ reportData.conversationCount }}</span>
-            <span class="stat-label">会话数</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ reportData.messageCount }}</span>
-            <span class="stat-label">消息数</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ reportData.wordCount }}</span>
-            <span class="stat-label">总字数</span>
-          </div>
+  <ReportScaffold
+    title="今日的回声"
+    description="你今天的对话被轻轻记录在这里。"
+    :loading="isLoading"
+    v-model:date="date"
+    @change="fetchDailyReport"
+  >
+    <template v-if="reportData" #summary>
+      <p class="summary-text">{{ reportData.summary }}</p>
+      <div class="stats-row">
+        <div class="stat-item">
+          <span class="stat-value">{{ reportData.conversationCount }}</span>
+          <span class="stat-label">会话数</span>
         </div>
-      </el-card>
-
-      <!-- 图表 -->
-      <chartCard v-if="chartData.length > 0" :data="chartData"></chartCard>
-      <el-empty v-else description="暂无数据" style="margin-top: 40px" />
+        <div class="stat-item">
+          <span class="stat-value">{{ reportData.messageCount }}</span>
+          <span class="stat-label">消息数</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">{{ reportData.wordCount }}</span>
+          <span class="stat-label">总字数</span>
+        </div>
+      </div>
     </template>
-  </div>
+    <template #charts>
+      <chartCard v-if="chartData.length > 0" :data="chartData" />
+      <div class="ee-empty">暂无数据</div>
+    </template>
+  </ReportScaffold>
 </template>
 
 <script setup lang="ts">
@@ -65,17 +55,7 @@ const chartData = computed<ChartItem[]>(() => {
     items.push({
       chartType: 'pie',
       title: '情绪分布',
-      data: reportData.value.emotionDistribution.map((item) => ({
-        ...item,
-        name: getEmotionLabel(item.name)
-      }))
-    })
-  }
-  if (reportData.value.intentDistribution && reportData.value.intentDistribution.length > 0) {
-    items.push({
-      chartType: 'pie',
-      title: '意图分布',
-      data: reportData.value.intentDistribution
+      data: reportData.value.emotionDistribution.map((item) => ({ ...item, name: getEmotionLabel(item.name) }))
     })
   }
   return items
@@ -88,59 +68,12 @@ const fetchDailyReport = async () => {
     const data = await get<DailyReport>('/reports/daily', { date: date.value })
     reportData.value = data
   } catch (error: any) {
-    ElNotification({
-      type: 'error',
-      message: error.message || '获取日报失败'
-    })
+    notify('加载失败', error?.message || '日报告生成失败,请稍后重试', 'error', 3000)
     reportData.value = null
   } finally {
     isLoading.value = false
   }
 }
 
-const disabledDate = (time: Date) => {
-  return time.getTime() > Date.now()
-}
-
-onMounted(() => {
-  fetchDailyReport()
-})
+onMounted(fetchDailyReport)
 </script>
-
-<style scoped>
-.daily-container {
-  padding: 20px;
-}
-.summary-card {
-  margin-top: 20px;
-  margin-bottom: 20px;
-}
-.summary-text {
-  font-size: 16px;
-  line-height: 1.6;
-  color: #303133;
-  margin-bottom: 16px;
-}
-.stats-row {
-  display: flex;
-  gap: 40px;
-  justify-content: center;
-  border-top: 1px solid #ebeef5;
-  padding-top: 16px;
-}
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.stat-value {
-  font-size: 24px;
-  font-weight: bold;
-  color: #409eff;
-}
-.stat-label {
-  font-size: 14px;
-  color: #909399;
-}
-</style>

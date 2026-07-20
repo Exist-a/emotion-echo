@@ -1,5 +1,4 @@
 import { defineStore } from "pinia";
-import { ElNotification } from "element-plus";
 import type { returnMsgType } from "~/types/commonType";
 import type { ConversationItem, CreateConversationParams } from "~/types/api";
 import { get, post, put, del } from "~/composables/useApi";
@@ -226,12 +225,9 @@ export const useConversationStore = defineStore("conversation", () => {
         return a.isTop ? -1 : 1;
       });
       
-      ElNotification({
-        type: "success",
-        message: newIsTop ? "置顶成功" : "取消置顶成功",
-      });
-      
-      return { isOk: true, msg: newIsTop ? "置顶成功" : "取消置顶成功" };
+      notify('已置顶', newIsTop ? '置顶成功' : '取消置顶成功', 'success', 3000);
+
+      return { isOk: true, msg: newIsTop ? '置顶成功' : '取消置顶成功' };
     } catch (error: any) {
       return { isOk: false, msg: error.message || "操作失败" };
     }
@@ -255,12 +251,9 @@ export const useConversationStore = defineStore("conversation", () => {
         currentConversationId.value = null;
       }
       
-      ElNotification({
-        type: "success",
-        message: "删除成功",
-      });
-      
-      return { isOk: true, msg: "删除成功" };
+      notify('已删除', '删除成功', 'success', 3000);
+
+      return { isOk: true, msg: '删除成功' };
     } catch (error: any) {
       return { isOk: false, msg: error.message || "删除失败" };
     }
