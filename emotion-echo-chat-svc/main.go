@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"emotion-echo-chat-svc/internal/config"
@@ -43,14 +44,18 @@ func main() {
 	}
 
 	// 2. Kafka publisher
+	// Kafka.BrokersCSV 是 Stage 26-P 改造后从 yaml list 改为 CSV 字符串,
+	// 因为 go-zero conf 不原生支持 ${ENV} 占位在 list 字段上展开
+	// (同 ai-svc 范式)。容器内由 KAFKA_BROKERS env 注入。
+	kafkaBrokersList := splitBrokersCSV(c.Kafka.BrokersCSV)
 	var pub events.EventPublisher = events.NewInMemoryEventPublisher()
-	if c.Kafka.Enabled && len(c.Kafka.Brokers) > 0 {
-		kp, err := events.NewKafkaEventPublisher(c.Kafka.Brokers)
+	if c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
+		kp, err := events.NewKafkaEventPublisher(kafkaBrokersList)
 		if err != nil {
 			log.Printf("[kafka] producer init failed: %v (fallback to in-memory)", err)
 		} else {
 			pub = kp
-			log.Printf("[kafka] producer connected, brokers=%v", c.Kafka.Brokers)
+			log.Printf("[kafka] producer connected, brokers=%v", kafkaBrokersList)
 			defer func() { _ = kp.Close() }()
 		}
 	}
@@ -112,4 +117,23 @@ func openPostgres(dsn string, maxOpen, maxIdle int) (repository.ConversationRepo
 		return nil, fmt.Errorf("db ping failed: %w", err)
 	}
 	return repository.NewPostgresConversationRepo(db), nil
+}
+
+// splitBrokersCSV 把 c.Kafka.BrokersCSV (`"broker1:9092,broker2:9092"`) 切分
+// 成 []string,作为 events.NewKafkaEventPublisher 的输入。
+// 与 ai-svc 内部的 kafkaBrokers() 行为一致;Stage 26-P · Commit P3 引入。
+func splitBrokersCSV(csv string) []string {
+	csv = strings.TrimSpace(csv)
+	if csv == "" {
+		return nil
+	}
+	parts := strings.Split(csv, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

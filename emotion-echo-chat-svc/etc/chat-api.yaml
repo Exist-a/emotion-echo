@@ -2,17 +2,21 @@ Name: chat-api
 Host: 0.0.0.0
 Port: 8890
 
+# Stage 26-P:容器内服务发现
+# 外部依赖的 string 地址通过 env 注入 compose environment
+# list 字段 (Kafka.Brokers) 改用 BrokersCSV (string),同 ai-svc 范式
+
 SkyWalking:
-  OAPAddr:     localhost:11800
+  OAPAddr:     ${SKYWALKING_OAP_ADDR:-emotion-echo-sw-oap:11800}
   ServiceName: emotion-echo-chat-svc
   Enabled:     true
 
 Postgres:
-  DSN:          "host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"
+  DSN:          ${POSTGRES_DSN:-"host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"}
   MaxOpenConns: 10
   MaxIdleConns: 5
 
 Kafka:
-  Brokers: ["localhost:9092"]
-  GroupID: chat-svc
-  Enabled: true
+  BrokersCSV: ${KAFKA_BROKERS:-emotion-echo-kafka:9092}
+  GroupID:    chat-svc
+  Enabled:    true

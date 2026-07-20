@@ -1,13 +1,14 @@
 Name: analytics-api
 Host: 0.0.0.0
-Port: 8892
+Port: 8893  # Stage 26-P:避开 ai-svc 占用的 8892
 
+# Stage 26-P:容器内服务发现(env 占位)
 SkyWalking:
-  OAPAddr:     localhost:11800
+  OAPAddr:     ${SKYWALKING_OAP_ADDR:-emotion-echo-sw-oap:11800}
   ServiceName: emotion-echo-analytics-svc
   Enabled:     true
 
 Postgres:
-  DSN:          "host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_analytics"
+  DSN:          ${POSTGRES_DSN:-"host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_analytics"}
   MaxOpenConns: 10
   MaxIdleConns: 5

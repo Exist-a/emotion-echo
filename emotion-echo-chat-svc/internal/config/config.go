@@ -13,10 +13,13 @@ type Postgres struct {
 	MaxIdleConns int `json:",default=5"`
 }
 
+// Kafka.BrokersCSV (string) — Stage 26-P 改造。
+// list 字段无法走 go-zero ${ENV} 占位展开,与 ai-svc 范式统一:
+// 容器内由 compose env KAFKA_BROKERS 注入,main.go 启动时 split(',')。
 type Kafka struct {
-	Brokers []string `json:",default=[\"localhost:9092\"]"`
-	GroupID string   `json:",default=chat-svc"`
-	Enabled bool     `json:",default=false"`
+	BrokersCSV string `json:",default=localhost:9092"`
+	GroupID    string `json:",default=chat-svc"`
+	Enabled    bool   `json:",default=false"`
 }
 
 type Config struct {
