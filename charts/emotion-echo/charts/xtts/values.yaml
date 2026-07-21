@@ -1,0 +1,13 @@
+image:
+  repository: emotion-echo/xtts
+  tag: v0.1.0
+  pullPolicy: IfNotPresent
+replicas: 1
+service:
+  port: 8003
+resources:
+  requests: {cpu: 500m, memory: 1024Mi}
+  limits: {cpu: 2000m, memory: 3072Mi}
+persistence:
+  enabled: true
+  size: 5Gi
