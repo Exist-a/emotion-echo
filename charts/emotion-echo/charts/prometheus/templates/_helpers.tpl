@@ -10,7 +10,7 @@ Look up a namespace by logical key (system/data/app/observability).
 Falls back to the default convention name if .Values.namespaces is missing
 or the key is missing — this lets the subchart render in isolation during
 unit tests (//go:build k8s) without requiring umbrella values to set
-.namespaces.observability explicitly.
+.namespaces.<key> explicitly.
 
 Usage: {{ include "prometheus.namespace" (dict "key" "observability" "default" "ee-observability" "Values" .Values) }}
 */}}
@@ -22,6 +22,24 @@ Usage: {{ include "prometheus.namespace" (dict "key" "observability" "default" "
 {{- else -}}
 {{- $fallback -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+Semantic shortcuts for the four Emotion-Echo namespaces. Use these in
+templates instead of the raw dict pattern. Falls back to the umbrella
+convention name so render-assert tests don't need to set .Values.namespaces.
+*/}}
+{{- define "prometheus.namespaceObservability" -}}
+{{- include "prometheus.namespace" (dict "key" "observability" "default" "ee-observability" "Values" .Values) -}}
+{{- end -}}
+{{- define "prometheus.namespaceData" -}}
+{{- include "prometheus.namespace" (dict "key" "data" "default" "ee-data" "Values" .Values) -}}
+{{- end -}}
+{{- define "prometheus.namespaceSystem" -}}
+{{- include "prometheus.namespace" (dict "key" "system" "default" "ee-system" "Values" .Values) -}}
+{{- end -}}
+{{- define "prometheus.namespaceApp" -}}
+{{- include "prometheus.namespace" (dict "key" "app" "default" "ee-app" "Values" .Values) -}}
 {{- end -}}
 
 {{/*

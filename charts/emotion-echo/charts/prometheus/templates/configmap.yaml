@@ -10,7 +10,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prometheus-config
-  namespace: {{ include "prometheus.namespace" (dict "key" "observability" "default" "ee-observability" "Values" .Values) }}
+  namespace: {{ include "prometheus.namespaceObservability" . }}
   labels:
     {{- include "prometheus.labels" . | nindent 4 }}
 data:
@@ -29,7 +29,7 @@ data:
       alertmanagers:
         - static_configs:
             - targets:
-                - alertmanager.{{ include "prometheus.namespace" (dict "key" "observability" "default" "ee-observability" "Values" .Values) }}.svc.cluster.local:9093
+                - alertmanager.{{ include "prometheus.namespaceObservability" . }}.svc.cluster.local:9093
 
     # Rule files (Stage 28-D adds 4 alert rules; mount same ConfigMap).
     rule_files:
@@ -61,14 +61,14 @@ data:
       - job_name: skywalking-oap
         static_configs:
           - targets:
-              - skywalking-oap.{{ include "prometheus.namespace" (dict "key" "data" "default" "ee-data" "Values" .Values) }}.svc.cluster.local:1234
+              - skywalking-oap.{{ include "prometheus.namespaceData" . }}.svc.cluster.local:1234
 
       # Job 3: APISIX gateway metrics (built-in prometheus plugin).
       - job_name: apisix
         metrics_path: /apisix/prometheus/metrics
         static_configs:
           - targets:
-              - apisix-gateway.{{ include "prometheus.namespace" (dict "key" "system" "default" "ee-system" "Values" .Values) }}.svc.cluster.local:9091
+              - apisix-gateway.{{ include "prometheus.namespaceSystem" . }}.svc.cluster.local:9091
 
       # Job 4: Prometheus self (so we can graph its own runtime metrics).
       - job_name: prometheus-self
