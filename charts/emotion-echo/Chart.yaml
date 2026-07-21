@@ -78,3 +78,6 @@ dependencies:
   - name: grafana
     version: "0.1.0"
     condition: grafana.enabled
+  - name: loki
+    version: "0.1.0"
+    condition: loki.enabled

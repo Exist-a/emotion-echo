@@ -1,0 +1,14 @@
+# Chart.yaml — Stage 28-C GREEN
+# Loki + Promtail subchart for Emotion-Echo observability stack.
+# - 1 Deployment (loki server, image grafana/loki)
+# - 1 Service (ClusterIP:3100)
+# - 1 ConfigMap (loki.yml)
+# - 1 PVC (loki-data)
+# - 1 DaemonSet (promtail, image grafana/promtail)
+# - 1 ConfigMap (promtail.yml)
+apiVersion: v2
+name: loki
+description: Loki log aggregation + Promtail log shipper.
+type: application
+version: 0.1.0
+appVersion: 3.2.0

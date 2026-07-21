@@ -1,0 +1,32 @@
+# values.yaml — Stage 28-C GREEN
+loki:
+  image:
+    repository: grafana/loki
+    tag: 3.2.0
+    pullPolicy: IfNotPresent
+
+promtail:
+  image:
+    repository: grafana/promtail
+    tag: 3.2.0
+    pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3100
+
+# Loki retention in days (loki.yml will translate to compactor.retention_enabled
+# + compactor.retention_delete_delay + chunk_store_config retention period).
+retention: 1d
+
+persistence:
+  enabled: true
+  size: 5Gi
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
