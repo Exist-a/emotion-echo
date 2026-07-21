@@ -1,0 +1,6 @@
+apiVersion: v2
+name: skywalking
+description: Apache SkyWalking OAP + UI for Emotion-Echo observability.
+type: application
+version: 0.1.0
+appVersion: "9.7.0"
