@@ -474,3 +474,128 @@ func TestStage28B_LintGrafanaSubchart(t *testing.T) {
 	}
 	t.Logf("helm lint output:\n%s", out)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stage 28-C · Loki + Promtail subchart
+//
+// RED gate: assert the loki subchart, when enabled, emits:
+//   - 1 Deployment loki (image grafana/loki, port 3100)
+//   - 1 Service loki (ClusterIP:3100)
+//   - 1 ConfigMap loki-config
+//   - 1 PVC loki-data (5Gi)
+//   - 1 DaemonSet promtail (1 per node, scrapes Pod logs)
+//   - 1 ConfigMap promtail-config
+//   - Promtail must reference the Loki service URL
+//
+// Note: Promtail is intentionally a DaemonSet (not Deployment) — each node
+// runs one to scrape /var/log/containers/*.log for all Pods on that node.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// lokiOnlyValues returns a minimal values YAML that disables every
+// other subchart and enables only `loki`.
+func lokiOnlyValues(t *testing.T) string {
+	t.Helper()
+	content := `loki:
+  enabled: true
+  retention: 1d
+  storage: 5Gi
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+# Disable everything else.
+postgres:           { enabled: false }
+redis:              { enabled: false }
+kafka:              { enabled: false }
+etcd:               { enabled: false }
+skywalking:         { enabled: false }
+user-svc:           { enabled: false }
+chat-svc:           { enabled: false }
+analytics-svc:      { enabled: false }
+assessment-svc:     { enabled: false }
+ai-svc:             { enabled: false }
+llm-service:        { enabled: false }
+fer:                { enabled: false }
+sensevoice:         { enabled: false }
+xtts:               { enabled: false }
+web:                { enabled: false }
+apisix-ingress:     { enabled: false }
+apisix-routes:      { enabled: false }
+prometheus:         { enabled: false }
+grafana:            { enabled: false }
+`
+	tmp, err := os.CreateTemp("", "stage28c-values-*.yaml")
+	if err != nil {
+		t.Fatalf("create temp values: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(tmp.Name()) })
+	if _, err := tmp.WriteString(content); err != nil {
+		t.Fatalf("write temp values: %v", err)
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatalf("close temp values: %v", err)
+	}
+	return tmp.Name()
+}
+
+// TestStage28C_Loki_RendersAllResources is the Stage 28-C RED gate.
+func TestStage28C_Loki_RendersAllResources(t *testing.T) {
+	rendered := helm(t, valuesDev, lokiOnlyValues(t))
+
+	// The umbrella namespace template still runs unconditionally.
+	if !hasMetadataName(rendered, "ee-observability") {
+		t.Errorf("expected namespace ee-observability to be rendered")
+	}
+
+	// Core Loki resources.
+	coreResources := []struct{ kind, name string }{
+		{"Deployment", "loki"},
+		{"Service", "loki"},
+		{"ConfigMap", "loki-config"},
+		{"PersistentVolumeClaim", "loki-data"},
+	}
+	for _, r := range coreResources {
+		if countKind(rendered, r.kind) < 1 {
+			t.Errorf("expected at least 1 %s, got 0", r.kind)
+		}
+		if !hasMetadataName(rendered, r.name) {
+			t.Errorf("expected a resource named %q (kind %s)", r.name, r.kind)
+		}
+	}
+
+	// Promtail is a DaemonSet (not Deployment) — assert kind specifically.
+	if countKind(rendered, "DaemonSet") < 1 {
+		t.Errorf("expected at least 1 DaemonSet (promtail), got 0")
+	}
+	if !hasMetadataName(rendered, "promtail") {
+		t.Errorf("expected a resource named \"promtail\" (DaemonSet)")
+	}
+	if !hasMetadataName(rendered, "promtail-config") {
+		t.Errorf("expected a ConfigMap named \"promtail-config\"")
+	}
+
+	// Promtail config must point back to the Loki service URL.
+	lokiURL := "http://loki.ee-observability.svc.cluster.local:3100"
+	if !strings.Contains(rendered, lokiURL) {
+		t.Errorf("expected promtail config to declare loki URL %q", lokiURL)
+	}
+
+	// Promtail must mount /var/log (the hostPath every node provides).
+	// We check for the substring so we don't pin a specific path mode.
+	if !strings.Contains(rendered, "/var/log") {
+		t.Errorf("expected promtail DaemonSet to mount host /var/log")
+	}
+}
+
+// TestStage28C_LintLokiSubchart ensures the loki subchart passes helm lint.
+func TestStage28C_LintLokiSubchart(t *testing.T) {
+	subchartPath, err := filepath.Abs("../../charts/emotion-echo/charts/loki")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("helm", "lint", subchartPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm lint failed: %v\n%s", err, out)
+	}
+	t.Logf("helm lint output:\n%s", out)
+}
