@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: skywalking-oap
+  namespace: ee-data
+  labels:
+    {{- include "skywalking.labels" . | nindent 4 }}
+spec:
+  serviceName: skywalking-oap-headless
+  replicas: {{ .Values.oap.replicas }}
+  selector:
+    matchLabels:
+      {{- include "skywalking.oapSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "skywalking.oapSelectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: oap
+          image: "{{ .Values.oap.image.repository }}:{{ .Values.oap.image.tag }}"
+          imagePullPolicy: {{ .Values.oap.image.pullPolicy }}
+          env:
+            - name: SW_STORAGE
+              value: h2
+            - name: SW_JDBC_URL
+              value: jdbc:h2:mem:skywalking-oap-db;DB_CLOSE_DELAY=-1
+            - name: TZ
+              value: Asia/Shanghai
+            # Stage 28-E: expose OAP self-telemetry on :1234 so Prometheus
+            # can scrape OAP-internal metrics. See
+            # docs/stage-28-observability.md for context.
+            - name: SW_TELEMETRY_PROMETHEUS_ACTIVE
+              value: "true"
+          ports:
+            - containerPort: {{ .Values.oap.service.grpcPort }}
+            - containerPort: {{ .Values.oap.service.restPort }}
+            - name: metrics
+              containerPort: 1234
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.oap.resources | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.oap.service.restPort }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: data
+              mountPath: /skywalking/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.oap.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: skywalking-oap
+  namespace: ee-data
+  labels:
+    {{- include "skywalking.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: grpc
+      port: {{ .Values.oap.service.grpcPort }}
+      targetPort: {{ .Values.oap.service.grpcPort }}
+    - name: rest
+      port: {{ .Values.oap.service.restPort }}
+      targetPort: {{ .Values.oap.service.restPort }}
+  selector:
+    {{- include "skywalking.oapSelectorLabels" . | nindent 4 }}

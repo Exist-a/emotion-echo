@@ -745,24 +745,30 @@ func TestStage28D_LintAlertmanagerSubchart(t *testing.T) {
 
 // deploymentHasPodAnnotations returns true if the rendered YAML contains a
 // Deployment named `deployName` whose pod template has both annotation keys.
-// We use a regex that requires all three (kind, name, both annotations) to
-// appear in the same contiguous block — robust against other Deployments in
-// the output that might have unrelated annotations.
+//
+// Strategy: split rendered YAML by `---` (document separator) and inspect
+// each document. A document is a match if its kind == Deployment, metadata
+// name == deployName, AND the document body contains both annotations.
 func deploymentHasPodAnnotations(rendered, deployName, scrapeVal, portVal string) bool {
-	// Locate the Deployment block by name.
-	nameIdx := strings.Index(rendered, "name: "+deployName)
-	if nameIdx < 0 {
-		return false
+	docs := strings.Split(rendered, "\n---\n")
+	for _, doc := range docs {
+		// Match "kind: Deployment" anywhere in the doc head.
+		if !strings.Contains(doc, "kind: Deployment") {
+			continue
+		}
+		// Match metadata.name == deployName (exact line).
+		nameRe := regexp.MustCompile(`(?m)^\s+name:\s*` + regexp.QuoteMeta(deployName) + `\s*$`)
+		if !nameRe.MatchString(doc) {
+			continue
+		}
+		// Match both annotations inside the same document body.
+		hasScrape := strings.Contains(doc, "prometheus.io/scrape: "+scrapeVal)
+		hasPort := strings.Contains(doc, "prometheus.io/port: "+portVal)
+		if hasScrape && hasPort {
+			return true
+		}
 	}
-	// Take a generous window after the Deployment's name: line (covers the
-	// whole resource block which is usually <4KB).
-	window := rendered[nameIdx:]
-	if len(window) > 6144 {
-		window = window[:6144]
-	}
-	hasScrape := strings.Contains(window, "prometheus.io/scrape: "+scrapeVal)
-	hasPort := strings.Contains(window, "prometheus.io/port: "+portVal)
-	return hasScrape && hasPort
+	return false
 }
 
 // TestStage28E_BusinessMetricsAnnotations asserts each of the 6 business
@@ -785,9 +791,12 @@ func TestStage28E_BusinessMetricsAnnotations(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if !deploymentHasPodAnnotations(rendered, c.deploy, `"true"`, c.port) {
+		// Helm renders `prometheus.io/port: "{{ .Values.service.port }}"`
+		// so the rendered value is quoted: prometheus.io/port: "8888".
+		quotedPort := `"` + c.port + `"`
+		if !deploymentHasPodAnnotations(rendered, c.deploy, `"true"`, quotedPort) {
 			t.Errorf("expected Deployment %q to have annotations "+
-				"prometheus.io/scrape=\"true\" + prometheus.io/port=%q",
+				"prometheus.io/scrape=\"true\" + prometheus.io/port=\"%s\"",
 				c.deploy, c.port)
 		}
 	}
@@ -802,28 +811,47 @@ func TestStage28E_BusinessMetricsAnnotations(t *testing.T) {
 func TestStage28E_SkyWalkingOAPExposesMetrics(t *testing.T) {
 	rendered := helm(t, valuesDev)
 
-	// Locate the skywalking-oap deployment.
-	nameIdx := strings.Index(rendered, "name: skywalking-oap")
-	if nameIdx < 0 {
-		t.Fatal("expected a Deployment named skywalking-oap")
+	// Find the skywalking-oap StatefulSet/Document body.
+	docs := strings.Split(rendered, "\n---\n")
+	var oapDoc string
+	for _, doc := range docs {
+		// Skywalking-oap is a StatefulSet (kind: StatefulSet), with metadata
+		// name: skywalking-oap.
+		if !strings.Contains(doc, "name: skywalking-oap") {
+			continue
+		}
+		// Skip ConfigMaps / Services that may also have name: skywalking-oap
+		// — we want the workload, which has "containers:" inside the spec.
+		if !strings.Contains(doc, "containers:") {
+			continue
+		}
+		oapDoc = doc
+		break
 	}
-	window := rendered[nameIdx:]
-	if len(window) > 6144 {
-		window = window[:6144]
+	if oapDoc == "" {
+		t.Fatal("expected a workload named skywalking-oap")
 	}
 
 	// (1) The env var must be set to "true".
-	if !strings.Contains(window, "SW_TELEMETRY_PROMETHEUS_ACTIVE") {
+	// Helm renders env entries as `name: FOO\n  value: "true"` (or valueFrom),
+	// so we can't search for a single line; instead, find the env name and
+	// then look for "true" within the next ~150 chars (the value line).
+	nameIdx := strings.Index(oapDoc, "SW_TELEMETRY_PROMETHEUS_ACTIVE")
+	if nameIdx < 0 {
 		t.Errorf("expected skywalking-oap to set env SW_TELEMETRY_PROMETHEUS_ACTIVE")
-	}
-	if !strings.Contains(window, `SW_TELEMETRY_PROMETHEUS_ACTIVE: "true"`) &&
-		!strings.Contains(window, `SW_TELEMETRY_PROMETHEUS_ACTIVE: 'true'`) {
-		t.Errorf("expected SW_TELEMETRY_PROMETHEUS_ACTIVE to be \"true\"")
+	} else {
+		after := oapDoc[nameIdx:]
+		if len(after) > 200 {
+			after = after[:200]
+		}
+		if !strings.Contains(after, `"true"`) && !strings.Contains(after, `'true'`) {
+			t.Errorf("expected SW_TELEMETRY_PROMETHEUS_ACTIVE value to be \"true\", got window: %s", after)
+		}
 	}
 
 	// (2) A containerPort named "metrics" on port 1234 must exist.
 	metricsPortRe := regexp.MustCompile(`(?m)- name:\s*metrics\s*\n\s+containerPort:\s*1234`)
-	if !metricsPortRe.MatchString(window) {
+	if !metricsPortRe.MatchString(oapDoc) {
 		t.Errorf("expected skywalking-oap containerPort named \"metrics\" on 1234")
 	}
 }
