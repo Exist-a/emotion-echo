@@ -1,0 +1,39 @@
+# =====================================================
+#  values-dev.yaml — local kind/minikube profile overrides
+#  Inherits all defaults from values.yaml; only dev-specific overrides here.
+# =====================================================
+
+imagePullPolicy: IfNotPresent
+
+# Global secrets — shared across all subcharts (DSN creds, API keys, etc).
+# In production these would come from a sealed-secret / ExternalSecret.
+global:
+  secrets:
+    postgresPassword: postgres
+    postgresUser: postgres
+    postgresDB: emotion_echo
+    internalApiKey: dev-key-change-me-please-32chars-min
+    apisixAdminKey: edd1c9f034335f136f87ad84b625c8f1
+    jwtSecret: emotion-echo-secret-2026-please-change-in-prod
+
+# AI profile off by default in dev to save memory; flip on for full smoke.
+xtts:
+  enabled: false
+
+# Replicas: 1 everywhere — kind is single-node dev.
+replicas:
+  default: 1
+
+# Stage 28: observability stack ON in dev — Prometheus/Grafana/Loki/Alertmanager.
+# See docs/stage-28-observability.md for resource footprint (~700MB RAM total).
+prometheus:
+  enabled: true
+  retention: "1d"
+grafana:
+  enabled: true
+  adminPassword: "dev-grafana-admin"
+loki:
+  enabled: true
+alertmanager:
+  enabled: true
+  webhook: "https://dev-webhook-placeholder.invalid/alert"

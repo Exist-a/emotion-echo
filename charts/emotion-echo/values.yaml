@@ -1,0 +1,118 @@
+# =====================================================
+#  Emotion-Echo umbrella chart — default values
+#  These defaults target the LOCAL kind/minikube profile.
+#  Production overrides go in values-prod.yaml (Stage 28+).
+# =====================================================
+
+# Global image tag — all subcharts read this unless overridden individually.
+image:
+  registry: ""
+  repository: ""   # e.g. emotion-echo/ai-svc
+  tag: v0.1.0
+  pullPolicy: IfNotPresent
+
+# Four namespaces for layered isolation.
+namespaces:
+  system: ee-system           # APISIX Ingress + etcd
+  data: ee-data               # postgres, redis, kafka, skywalking
+  app: ee-app                 # business svcs + web
+  observability: ee-observability  # reserved (Stage 28)
+
+# =====================================================
+#  Subchart enable flags (default ON for local kind)
+# =====================================================
+postgres:
+  enabled: true
+redis:
+  enabled: true
+kafka:
+  enabled: true
+etcd:
+  enabled: true
+skywalking:
+  enabled: true
+user-svc:
+  enabled: true
+chat-svc:
+  enabled: true
+analytics-svc:
+  enabled: true
+assessment-svc:
+  enabled: true
+ai-svc:
+  enabled: true
+llm-service:
+  enabled: true
+web:
+  enabled: true
+
+# APISIX Ingress: 16 ApisixRoute + 6 ApisixUpstream (matches docker-compose).
+apisix-routes:
+  enabled: true
+apisix-ingress:
+  enabled: true
+
+# AI profile — heavy models (XTTS ~3GB). Off by default in dev to keep
+# kind happy. Flip fer/sensevoice/xtts to true when you want full pipeline.
+fer:
+  enabled: true
+sensevoice:
+  enabled: true
+xtts:
+  enabled: false   # see Stage 27-D note — image too heavy for kind dev
+
+# APISIX Ingress routes (16 ApisixRoute + 6 ApisixUpstream).
+apisix-routes:
+  enabled: true
+
+# =====================================================
+#  Observability stack — Stage 28 (4 subcharts)
+#  Off by default; enable per environment via values-dev / values-prod.
+# =====================================================
+prometheus:
+  enabled: false
+grafana:
+  enabled: false
+loki:
+  enabled: false
+alertmanager:
+  enabled: false
+
+# =====================================================
+#  Image registry overrides (subcharts read .Values.image)
+# =====================================================
+imageTag: v0.1.0
+imagePullPolicy: IfNotPresent
+
+# =====================================================
+#  Cross-svc DNS naming — subcharts read these
+# =====================================================
+dns:
+  postgresHost: postgres
+  redisHost: redis
+  kafkaBrokers: kafka.ee-data.svc.cluster.local:9092
+  etcdHost: etcd
+  skywalkingOAP: skywalking-oap
+  llmServiceHost: llm-service
+  aiSvcHost: ai-svc
+  userSvcHost: user-svc
+  chatSvcHost: chat-svc
+  analyticsSvcHost: analytics-svc
+  assessmentSvcHost: assessment-svc
+  ferHost: fer
+  sensevoiceHost: sensevoice
+  xttsHost: xtts
+  webHost: web
+  apisixGatewayHost: apisix-gateway
+
+# =====================================================
+#  Dev credentials — DO NOT use in prod.
+#  Override via values-prod.yaml + sealed-secret in real deployment.
+# =====================================================
+secrets:
+  postgresPassword: postgres
+  postgresUser: postgres
+  postgresDB: emotion_echo
+  internalApiKey: dev-key-change-me-please-32chars-min
+  apisixAdminKey: edd1c9f034335f136f87ad84b625c8f1
+  jwtSecret: emotion-echo-secret-2026-please-change-in-prod

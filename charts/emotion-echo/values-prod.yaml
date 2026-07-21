@@ -1,0 +1,43 @@
+# =====================================================
+#  values-prod.yaml — production overlay (Stage 28-F)
+#  Reference profile for a real K8s cluster (EKS / GKE / 自建).
+#  Local dev: use values-dev.yaml instead.
+# =====================================================
+
+imagePullPolicy: Always   # 镜像必须从 registry 拉，不要用本地缓存
+
+# AI 推理模型默认开启（prod 有真 GPU/资源预算）
+xtts:
+  enabled: true
+
+# Replicas: prod 至少 2 才能滚动升级不中断
+replicas:
+  default: 2
+
+# Stage 28: observability 4 件套全部开启。
+# prod 跟 dev 唯一区别是 retention / 密码 / webhook — 这三件通过
+# ExternalSecret / SealedSecret 在 prod CI 中注入（不在 git 里）。
+prometheus:
+  enabled: true
+  retention: "15d"      # 保留 15 天
+grafana:
+  enabled: true
+  # adminPassword 由 ExternalSecret 注入；此处仅为 dev-fallback 留空
+  adminPassword: ""    # <-- 部署前必须 override
+loki:
+  enabled: true
+alertmanager:
+  enabled: true
+  # webhook 由 ExternalSecret 注入；此处占位符保证 helm template 不崩
+  webhook: "https://change-me.example.com/alert"   # <-- 部署前必须 override
+
+# prod 资源基线（subchart 默认可能偏小；这里统一提升）
+postgres:
+  persistence:
+    size: 50Gi
+redis:
+  persistence:
+    size: 10Gi
+kafka:
+  persistence:
+    size: 50Gi
