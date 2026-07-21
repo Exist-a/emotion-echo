@@ -1,0 +1,15 @@
+image:
+  repository: apache/apisix
+  tag: 3.10.0-debian
+  pullPolicy: IfNotPresent
+replicas: 1
+service:
+  gatewayPort: 9080
+  adminPort: 9180
+  controllerManagerPort: 9090
+etcd:
+  host: etcd
+  port: 2379
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 1000m, memory: 512Mi}

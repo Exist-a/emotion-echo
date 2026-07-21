@@ -1,0 +1,277 @@
+# 16 ApisixRoute CRDs - transcribed from deploy/apisix/apisix.yaml 1:1.
+# Field semantics map directly to APISIX etcd JSON schema.
+{{- $upstreamUser := "user-svc" }}
+{{- $upstreamChat := "chat-svc" }}
+{{- $upstreamAnalytics := "analytics-svc" }}
+{{- $upstreamAssessment := "assessment-svc" }}
+{{- $upstreamAi := "ai-svc" }}
+{{- $upstreamMockPing := "mock-ping" }}
+
+{{- /* Route 1: r-user-me */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-user-me
+  namespace: ee-app
+spec:
+  http:
+    - name: user-me
+      match:
+        paths: ["/api/v1/users/me"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamUser }}
+          servicePort: 8888
+
+{{- /* Route 2: r-user-by-id */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-user-by-id
+  namespace: ee-app
+spec:
+  http:
+    - name: user-by-id
+      match:
+        paths: ["/api/v1/users/:id"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamUser }}
+          servicePort: 8888
+
+{{- /* Route 3: r-user-update */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-user-update
+  namespace: ee-app
+spec:
+  http:
+    - name: user-update
+      match:
+        paths: ["/api/v1/users/me"]
+        methods: ["PATCH"]
+      backends:
+        - serviceName: {{ $upstreamUser }}
+          servicePort: 8888
+
+{{- /* Route 4: r-conv-create */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-conv-create
+  namespace: ee-app
+spec:
+  http:
+    - name: conv-create
+      match:
+        paths: ["/api/v1/conversations"]
+        methods: ["POST"]
+      backends:
+        - serviceName: {{ $upstreamChat }}
+          servicePort: 8890
+
+{{- /* Route 5: r-msg-list */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-msg-list
+  namespace: ee-app
+spec:
+  http:
+    - name: msg-list
+      match:
+        paths: ["/api/v1/conversations/*/messages"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamChat }}
+          servicePort: 8890
+
+{{- /* Route 6: r-msg-send */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-msg-send
+  namespace: ee-app
+spec:
+  http:
+    - name: msg-send
+      match:
+        paths: ["/api/v1/conversations/*/messages"]
+        methods: ["POST"]
+      backends:
+        - serviceName: {{ $upstreamChat }}
+          servicePort: 8890
+
+{{- /* Route 7: r-analytics-health */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-analytics-health
+  namespace: ee-app
+spec:
+  http:
+    - name: analytics-health
+      match:
+        paths: ["/analytics-health"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+
+{{- /* Route 8: r-surveys */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-surveys
+  namespace: ee-app
+spec:
+  http:
+    - name: surveys
+      match:
+        paths: ["/api/v1/surveys"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAssessment }}
+          servicePort: 8889
+
+{{- /* Route 9: r-survey-get */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-survey-get
+  namespace: ee-app
+spec:
+  http:
+    - name: survey-get
+      match:
+        paths: ["/api/v1/surveys/*"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAssessment }}
+          servicePort: 8889
+
+{{- /* Route 10: r-survey-submit */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-survey-submit
+  namespace: ee-app
+spec:
+  http:
+    - name: survey-submit
+      match:
+        paths: ["/api/v1/surveys/*/submit"]
+        methods: ["POST"]
+      backends:
+        - serviceName: {{ $upstreamAssessment }}
+          servicePort: 8889
+
+{{- /* Route 11: r-survey-results-list */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-survey-results-list
+  namespace: ee-app
+spec:
+  http:
+    - name: survey-results-list
+      match:
+        paths: ["/api/v1/surveys/results"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAssessment }}
+          servicePort: 8889
+
+{{- /* Route 12: r-survey-results-get */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-survey-results-get
+  namespace: ee-app
+spec:
+  http:
+    - name: survey-results-get
+      match:
+        paths: ["/api/v1/surveys/results/*"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAssessment }}
+          servicePort: 8889
+
+{{- /* Route 13: r-emotion-by-msg */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-emotion-by-msg
+  namespace: ee-app
+spec:
+  http:
+    - name: emotion-by-msg
+      match:
+        paths: ["/api/v1/emotion/message/*"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAi }}
+          servicePort: 8891
+
+{{- /* Route 14: r-emotion-by-conv */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-emotion-by-conv
+  namespace: ee-app
+spec:
+  http:
+    - name: emotion-by-conv
+      match:
+        paths: ["/api/v1/emotion/conversation/*"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAi }}
+          servicePort: 8891
+
+{{- /* Route 15: r-ai-health */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-ai-health
+  namespace: ee-app
+spec:
+  http:
+    - name: ai-health
+      match:
+        paths: ["/ai-health"]
+      backends:
+        - serviceName: {{ $upstreamAi }}
+          servicePort: 8891
+
+{{- /* Route 16: r-ping */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-ping
+  namespace: ee-app
+spec:
+  http:
+    - name: ping
+      match:
+        paths: ["/ping"]
+      backends:
+        - serviceName: {{ $upstreamMockPing }}
+          servicePort: 1980

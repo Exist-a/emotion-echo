@@ -1,0 +1,6 @@
+apiVersion: v2
+name: apisix-ingress
+description: APISIX Ingress Controller + Gateway + Dashboard for Emotion-Echo.
+type: application
+version: 0.1.0
+appVersion: "3.10.0"

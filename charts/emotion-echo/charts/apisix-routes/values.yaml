@@ -1,0 +1,21 @@
+# Upstreams map svc name -> (k8s service fqdn, port).
+# Mirrors deploy/apisix/apisix.yaml 1:1.
+upstreams:
+  - id: user-svc
+    namespace: ee-app
+    port: 8888
+  - id: chat-svc
+    namespace: ee-app
+    port: 8890
+  - id: analytics-svc
+    namespace: ee-app
+    port: 8893
+  - id: assessment-svc
+    namespace: ee-app
+    port: 8889
+  - id: ai-svc
+    namespace: ee-app
+    port: 8891
+  - id: mock-ping
+    namespace: ee-system
+    port: 1980

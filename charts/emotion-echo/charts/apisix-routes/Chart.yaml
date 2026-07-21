@@ -1,0 +1,6 @@
+apiVersion: v2
+name: apisix-routes
+description: 6 ApisixUpstream + 16 ApisixRoute for Emotion-Echo (transcribed from deploy/apisix/apisix.yaml).
+type: application
+version: 0.1.0
+appVersion: "3.10"

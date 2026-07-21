@@ -1,0 +1,23 @@
+# 6 ApisixUpstream CRDs - one per backend service.
+# Each upstream points at a K8s Service FQDN inside the cluster.
+{{- range .Values.upstreams }}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixUpstream
+metadata:
+  name: {{ .id }}
+  namespace: {{ .namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .id }}
+    app.kubernetes.io/part-of: emotion-echo
+    app.kubernetes.io/component: ingress
+spec:
+  scheme: http
+  loadbalancer:
+    type: roundrobin
+  passHost: host
+  externalNodes:
+    - type: Domain
+      name: {{ .id }}.{{ .namespace }}.svc.cluster.local
+      port: {{ .port }}
+{{- end }}
