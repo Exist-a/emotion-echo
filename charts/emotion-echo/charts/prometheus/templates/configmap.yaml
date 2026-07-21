@@ -1,0 +1,77 @@
+{{/*
+Stage 28-A GREEN: prometheus.yml with 4 scrape jobs.
+- kubernetes-pods : uses prometheus.io/scrape annotation discovery
+- skywalking-oap  : static, EE-data ns, port 1234 (OAP self-metrics)
+- apisix          : static, EE-system ns, port 9091 admin API
+                   metrics_path = /apisix/prometheus/metrics
+- prometheus-self : static, localhost:9090 (server self-metrics)
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: {{ include "prometheus.namespace" (dict "key" "observability" "default" "ee-observability" "Values" .Values) }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: {{ .Values.scrapeInterval | default "30s" }}
+      evaluation_interval: {{ .Values.evaluationInterval | default "30s" }}
+      external_labels:
+        cluster: emotion-echo-dev
+        release: {{ .Release.Name }}
+
+    # Alertmanager integration (Stage 28-D will install the pod; this block
+    # is safe even if Alertmanager is not yet running — Prometheus will just
+    # log that the target is unreachable until 28-D lands).
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager.{{ include "prometheus.namespace" (dict "key" "observability" "default" "ee-observability" "Values" .Values) }}.svc.cluster.local:9093
+
+    # Rule files (Stage 28-D adds 4 alert rules; mount same ConfigMap).
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    scrape_configs:
+      # Job 1: discover Pods by annotation (Stage 28-E adds annotations
+      # to all 6 business svc deployments).
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+
+      # Job 2: SkyWalking OAP self-metrics (port 1234 — enabled by Stage 28-E).
+      - job_name: skywalking-oap
+        static_configs:
+          - targets:
+              - skywalking-oap.{{ include "prometheus.namespace" (dict "key" "data" "default" "ee-data" "Values" .Values) }}.svc.cluster.local:1234
+
+      # Job 3: APISIX gateway metrics (built-in prometheus plugin).
+      - job_name: apisix
+        metrics_path: /apisix/prometheus/metrics
+        static_configs:
+          - targets:
+              - apisix-gateway.{{ include "prometheus.namespace" (dict "key" "system" "default" "ee-system" "Values" .Values) }}.svc.cluster.local:9091
+
+      # Job 4: Prometheus self (so we can graph its own runtime metrics).
+      - job_name: prometheus-self
+        static_configs:
+          - targets:
+              - localhost:9090

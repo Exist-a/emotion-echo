@@ -1,0 +1,10 @@
+# Chart.yaml — Stage 28-A GREEN
+# Prometheus subchart for Emotion-Echo umbrella.
+# One Deployment / Service / ConfigMap / PVC / ServiceAccount.
+# Namespace is ee-observability (pre-created by umbrella namespace template).
+apiVersion: v2
+name: prometheus
+description: Prometheus metrics server for Emotion-Echo observability stack.
+type: application
+version: 0.1.0
+appVersion: v2.54.0

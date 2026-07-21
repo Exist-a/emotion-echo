@@ -1,0 +1,77 @@
+apiVersion: v2
+name: emotion-echo
+description: |
+  Emotion-Echo umbrella chart - Emotion-AI monorepo full-stack deployment.
+
+  Subcharts included (see charts/ directory):
+    - Data layer:       postgres, redis, kafka, etcd, skywalking
+    - Business layer:   user-svc, chat-svc, analytics-svc, assessment-svc,
+                        ai-svc, llm-service
+    - AI profile:       fer, sensevoice, xtts (toggleable via values)
+    - Frontend:         web
+    - Ingress routes:   apisix-routes (16 ApisixRoute + 6 ApisixUpstream)
+    - Observability:    prometheus (Stage 28-A), grafana, loki, alertmanager
+
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+# Subchart dependencies — referenced from charts/ directory using local paths.
+# No `helm dependency update` needed: dependencies resolve at install time.
+dependencies:
+  - name: postgres
+    version: "0.1.0"
+    condition: postgres.enabled
+  - name: redis
+    version: "0.1.0"
+    condition: redis.enabled
+  - name: kafka
+    version: "0.1.0"
+    condition: kafka.enabled
+  - name: etcd
+    version: "0.1.0"
+    condition: etcd.enabled
+  - name: skywalking
+    version: "0.1.0"
+    condition: skywalking.enabled
+  - name: user-svc
+    version: "0.1.0"
+    condition: user-svc.enabled
+  - name: chat-svc
+    version: "0.1.0"
+    condition: chat-svc.enabled
+  - name: analytics-svc
+    version: "0.1.0"
+    condition: analytics-svc.enabled
+  - name: assessment-svc
+    version: "0.1.0"
+    condition: assessment-svc.enabled
+  - name: ai-svc
+    version: "0.1.0"
+    condition: ai-svc.enabled
+  - name: llm-service
+    version: "0.1.0"
+    condition: llm-service.enabled
+  - name: fer
+    version: "0.1.0"
+    condition: fer.enabled
+  - name: sensevoice
+    version: "0.1.0"
+    condition: sensevoice.enabled
+  - name: xtts
+    version: "0.1.0"
+    condition: xtts.enabled
+  - name: web
+    version: "0.1.0"
+    condition: web.enabled
+  - name: apisix-routes
+    version: "0.1.0"
+    condition: apisix-routes.enabled
+  - name: apisix-ingress
+    version: "0.1.0"
+    condition: apisix-ingress.enabled
+  # Stage 28: observability stack. Each subchart can be disabled
+  # individually via `<name>.enabled: false` in values overlay.
+  - name: prometheus
+    version: "0.1.0"
+    condition: prometheus.enabled
