@@ -716,3 +716,114 @@ func TestStage28D_LintAlertmanagerSubchart(t *testing.T) {
 	}
 	t.Logf("helm lint output:\n%s", out)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stage 28-E RED gate — business svc pod annotations + SkyWalking :1234.
+//
+// Plan: enable Prometheus to scrape metrics from the 6 Go services and the
+// SkyWalking OAP. We do this WITHOUT the prometheus-operator CRD by setting
+// two well-known pod annotations:
+//
+//   prometheus.io/scrape: "true"   # opt into scrape
+//   prometheus.io/port:   "<port>" # which container port to hit
+//
+// And for SkyWalking, we expose its built-in Prometheus telemetry endpoint on
+// containerPort 1234 (named "metrics") with the env
+// SW_TELEMETRY_PROMETHEUS_ACTIVE=true.
+//
+// What we assert (this test is the RED gate — fails today):
+//   - For each of: user-svc, chat-svc, analytics-svc, assessment-svc,
+//     ai-svc, llm-service — the rendered Deployment has BOTH annotations
+//     inside its template.metadata.annotations block.
+//   - The skywalking-oap Deployment has SW_TELEMETRY_PROMETHEUS_ACTIVE=true
+//     env AND a containerPort named "metrics" with number 1234.
+//
+// Note: we render the umbrella with values-dev.yaml (which already enables
+// all 6 business svcs and skywalking). The umbrella test is sufficient —
+// there is no need to render each subchart in isolation for annotations.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// deploymentHasPodAnnotations returns true if the rendered YAML contains a
+// Deployment named `deployName` whose pod template has both annotation keys.
+// We use a regex that requires all three (kind, name, both annotations) to
+// appear in the same contiguous block — robust against other Deployments in
+// the output that might have unrelated annotations.
+func deploymentHasPodAnnotations(rendered, deployName, scrapeVal, portVal string) bool {
+	// Locate the Deployment block by name.
+	nameIdx := strings.Index(rendered, "name: "+deployName)
+	if nameIdx < 0 {
+		return false
+	}
+	// Take a generous window after the Deployment's name: line (covers the
+	// whole resource block which is usually <4KB).
+	window := rendered[nameIdx:]
+	if len(window) > 6144 {
+		window = window[:6144]
+	}
+	hasScrape := strings.Contains(window, "prometheus.io/scrape: "+scrapeVal)
+	hasPort := strings.Contains(window, "prometheus.io/port: "+portVal)
+	return hasScrape && hasPort
+}
+
+// TestStage28E_BusinessMetricsAnnotations asserts each of the 6 business
+// service Deployments carries the prometheus.io scrape annotations.
+//
+// RED: today's deployments have no such annotations → all 6 checks fail.
+func TestStage28E_BusinessMetricsAnnotations(t *testing.T) {
+	rendered := helm(t, valuesDev)
+
+	// Map deploy-name -> expected metrics port (from each subchart's values.yaml).
+	cases := []struct {
+		deploy, port string
+	}{
+		{"user-svc", "8888"},
+		{"chat-svc", "8890"},
+		{"analytics-svc", "8893"},
+		{"assessment-svc", "8889"},
+		{"ai-svc", "8891"},
+		{"llm-service", "8000"},
+	}
+
+	for _, c := range cases {
+		if !deploymentHasPodAnnotations(rendered, c.deploy, `"true"`, c.port) {
+			t.Errorf("expected Deployment %q to have annotations "+
+				"prometheus.io/scrape=\"true\" + prometheus.io/port=%q",
+				c.deploy, c.port)
+		}
+	}
+}
+
+// TestStage28E_SkyWalkingOAPExposesMetrics asserts the skywalking-oap
+// Deployment exposes its Prometheus telemetry endpoint on containerPort 1234
+// and has the SW_TELEMETRY_PROMETHEUS_ACTIVE=true env var.
+//
+// RED: today's oap.yaml has only grpc (11800) and rest (12800) ports, and
+// no SW_TELEMETRY_PROMETHEUS_ACTIVE env → both checks fail.
+func TestStage28E_SkyWalkingOAPExposesMetrics(t *testing.T) {
+	rendered := helm(t, valuesDev)
+
+	// Locate the skywalking-oap deployment.
+	nameIdx := strings.Index(rendered, "name: skywalking-oap")
+	if nameIdx < 0 {
+		t.Fatal("expected a Deployment named skywalking-oap")
+	}
+	window := rendered[nameIdx:]
+	if len(window) > 6144 {
+		window = window[:6144]
+	}
+
+	// (1) The env var must be set to "true".
+	if !strings.Contains(window, "SW_TELEMETRY_PROMETHEUS_ACTIVE") {
+		t.Errorf("expected skywalking-oap to set env SW_TELEMETRY_PROMETHEUS_ACTIVE")
+	}
+	if !strings.Contains(window, `SW_TELEMETRY_PROMETHEUS_ACTIVE: "true"`) &&
+		!strings.Contains(window, `SW_TELEMETRY_PROMETHEUS_ACTIVE: 'true'`) {
+		t.Errorf("expected SW_TELEMETRY_PROMETHEUS_ACTIVE to be \"true\"")
+	}
+
+	// (2) A containerPort named "metrics" on port 1234 must exist.
+	metricsPortRe := regexp.MustCompile(`(?m)- name:\s*metrics\s*\n\s+containerPort:\s*1234`)
+	if !metricsPortRe.MatchString(window) {
+		t.Errorf("expected skywalking-oap containerPort named \"metrics\" on 1234")
+	}
+}
