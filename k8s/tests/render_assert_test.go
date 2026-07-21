@@ -352,3 +352,125 @@ func TestStage28A_LintPrometheusSubchart(t *testing.T) {
 	// helm lint exits 0 even with warnings; we only fail on errors.
 	t.Logf("helm lint output:\n%s", out)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stage 28-B · Grafana subchart
+//
+// RED gate: assert the grafana subchart, when enabled, emits:
+//   - 1 Deployment (grafana server, image grafana/grafana)
+//   - 1 Service (ClusterIP:3000)
+//   - ≥3 ConfigMaps (datasources provisioning + grafana.ini + dashboards
+//     ConfigMap carrying label grafana_dashboard: "1" for sidecar discovery)
+//   - 1 Secret (admin password, learning-phase placeholder)
+//
+// Datasource wiring must point to prometheus.ee-observability.svc.cluster.local:9090
+// and loki.ee-observability.svc.cluster.local:3100 (so the dashboard sidecar
+// can ship queries against both stores we land in Stage 28-A and 28-C).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// grafanaOnlyValues returns a minimal values YAML that disables every
+// other subchart and enables only `grafana`. Mirrors prometheusOnlyValues.
+func grafanaOnlyValues(t *testing.T) string {
+	t.Helper()
+	content := `grafana:
+  enabled: true
+  adminPassword: "dev-grafana-admin"
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+# Disable everything else.
+postgres:           { enabled: false }
+redis:              { enabled: false }
+kafka:              { enabled: false }
+etcd:               { enabled: false }
+skywalking:         { enabled: false }
+user-svc:           { enabled: false }
+chat-svc:           { enabled: false }
+analytics-svc:      { enabled: false }
+assessment-svc:     { enabled: false }
+ai-svc:             { enabled: false }
+llm-service:        { enabled: false }
+fer:                { enabled: false }
+sensevoice:         { enabled: false }
+xtts:               { enabled: false }
+web:                { enabled: false }
+apisix-ingress:     { enabled: false }
+apisix-routes:      { enabled: false }
+prometheus:         { enabled: false }
+`
+	tmp, err := os.CreateTemp("", "stage28b-values-*.yaml")
+	if err != nil {
+		t.Fatalf("create temp values: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(tmp.Name()) })
+	if _, err := tmp.WriteString(content); err != nil {
+		t.Fatalf("write temp values: %v", err)
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatalf("close temp values: %v", err)
+	}
+	return tmp.Name()
+}
+
+// TestStage28B_Grafana_RendersAllResources is the Stage 28-B RED gate.
+func TestStage28B_Grafana_RendersAllResources(t *testing.T) {
+	rendered := helm(t, valuesDev, grafanaOnlyValues(t))
+
+	// The umbrella namespace template still runs unconditionally.
+	if !hasMetadataName(rendered, "ee-observability") {
+		t.Errorf("expected namespace ee-observability to be rendered")
+	}
+
+	// Core resources.
+	coreResources := []struct{ kind, name string }{
+		{"Deployment", "grafana"},
+		{"Service", "grafana"},
+		{"Secret", "grafana-admin"},
+	}
+	for _, r := range coreResources {
+		if countKind(rendered, r.kind) < 1 {
+			t.Errorf("expected at least 1 %s, got 0", r.kind)
+		}
+		if !hasMetadataName(rendered, r.name) {
+			t.Errorf("expected a resource named %q (kind %s)", r.name, r.kind)
+		}
+	}
+
+	// ConfigMap count: we need at least 3 (datasources + grafana.ini + dashboards).
+	configMaps := countKind(rendered, "ConfigMap")
+	if configMaps < 3 {
+		t.Errorf("expected at least 3 ConfigMaps (datasources/ini/dashboards), got %d", configMaps)
+	}
+
+	// Datasource configmap must declare Prometheus + Loki URLs.
+	promNeedle := "http://prometheus.ee-observability.svc.cluster.local:9090"
+	if !strings.Contains(rendered, promNeedle) {
+		t.Errorf("expected datasource configmap to declare prometheus URL %q", promNeedle)
+	}
+	lokiNeedle := "http://loki.ee-observability.svc.cluster.local:3100"
+	if !strings.Contains(rendered, lokiNeedle) {
+		t.Errorf("expected datasource configmap to declare loki URL %q", lokiNeedle)
+	}
+
+	// At least one dashboard ConfigMap must carry the sidecar label.
+	// We look for the literal `grafana_dashboard: "1"` substring anywhere
+	// in the rendered output.
+	if !strings.Contains(rendered, `grafana_dashboard: "1"`) {
+		t.Errorf("expected at least one ConfigMap with label grafana_dashboard: \"1\" for sidecar discovery")
+	}
+}
+
+// TestStage28B_LintGrafanaSubchart ensures the grafana subchart passes
+// `helm lint` in isolation.
+func TestStage28B_LintGrafanaSubchart(t *testing.T) {
+	subchartPath, err := filepath.Abs("../../charts/emotion-echo/charts/grafana")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("helm", "lint", subchartPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm lint failed: %v\n%s", err, out)
+	}
+	t.Logf("helm lint output:\n%s", out)
+}
