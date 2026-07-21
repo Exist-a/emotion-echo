@@ -1,0 +1,25 @@
+# values.yaml — Stage 28-D GREEN
+image:
+  repository: prom/alertmanager
+  tag: v0.27.0
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 9093
+
+# Webhook for the receiver. dev placeholder; prod rotates via Secret overlay.
+webhook: "https://dev-webhook-placeholder.invalid/alert"
+
+# Default alert group / resolve timeouts (in Alertmanager config syntax).
+groupWait: 30s
+groupInterval: 5m
+repeatInterval: 4h
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

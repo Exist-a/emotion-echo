@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: {{ include "alertmanager.namespaceObservability" . }}
+  labels:
+    {{- include "alertmanager.labels" . | nindent 4 }}
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: {{ .Values.groupWait | default "30s" }}
+      group_interval: {{ .Values.groupInterval | default "5m" }}
+      repeat_interval: {{ .Values.repeatInterval | default "4h" }}
+      receiver: 'dev-webhook-config'
+
+    receivers:
+      - name: 'dev-webhook-config'
+        webhook_configs:
+          - url: {{ .Values.webhook | default "https://dev-webhook-placeholder.invalid/alert" }}
+            send_resolved: true
+
+    inhibit_rules:
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'cluster', 'service']

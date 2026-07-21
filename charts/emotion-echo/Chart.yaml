@@ -81,3 +81,6 @@ dependencies:
   - name: loki
     version: "0.1.0"
     condition: loki.enabled
+  - name: alertmanager
+    version: "0.1.0"
+    condition: alertmanager.enabled

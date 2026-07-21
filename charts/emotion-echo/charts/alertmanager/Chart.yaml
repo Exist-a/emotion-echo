@@ -1,0 +1,7 @@
+# Chart.yaml — Stage 28-D GREEN
+apiVersion: v2
+name: alertmanager
+description: Alertmanager for Emotion-Echo observability stack.
+type: application
+version: 0.1.0
+appVersion: v0.27.0
