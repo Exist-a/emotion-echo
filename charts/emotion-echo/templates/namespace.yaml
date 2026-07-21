@@ -1,0 +1,14 @@
+# Layered namespaces for the Emotion-Echo platform.
+# Layered isolation (system/data/app/observability) follows the
+# recommendation in docs/stage-21-k8s-strategy.md §3 and the agreed plan.
+{{- $layers := list "system" "data" "app" "observability" -}}
+{{- range $layers }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ee-{{ . }}
+  labels:
+    app.kubernetes.io/part-of: emotion-echo
+    {{- include "emotion-echo.layerLabel" . | nindent 4 }}
+{{- end }}
