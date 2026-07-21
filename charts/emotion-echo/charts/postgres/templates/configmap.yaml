@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: ee-data
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  01-create-schemas.sql: |
+    CREATE SCHEMA IF NOT EXISTS emotion_echo_user;
+    CREATE SCHEMA IF NOT EXISTS emotion_echo_chat;
+    CREATE SCHEMA IF NOT EXISTS emotion_echo_ai;
+    CREATE SCHEMA IF NOT EXISTS emotion_echo_assessment;
+    CREATE SCHEMA IF NOT EXISTS emotion_echo_analytics;
+  02-create-tables-in-schemas.sql: |
+    -- Stage 27-B minimal: tables created in subsequent stage migrations.
+    -- Each Go svc currently relies on AutoMigrate-disabled initial schema;
+    -- tables will be added by per-svc migration Jobs in Stage 27-C.
+    SELECT 'schemas-ok';

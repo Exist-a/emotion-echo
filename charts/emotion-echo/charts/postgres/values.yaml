@@ -1,0 +1,17 @@
+image:
+  repository: postgres
+  tag: 15-alpine
+  pullPolicy: IfNotPresent
+replicas: 1
+service:
+  port: 5432
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+persistence:
+  enabled: true
+  size: 10Gi

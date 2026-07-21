@@ -1,0 +1,6 @@
+apiVersion: v2
+name: redis
+description: Redis 7 cache for Emotion-Echo.
+type: application
+version: 0.1.0
+appVersion: "7-alpine"
