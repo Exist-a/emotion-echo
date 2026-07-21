@@ -1,0 +1,14 @@
+image:
+  repository: emotion-echo/web
+  tag: v0.1.0
+  pullPolicy: IfNotPresent
+replicas: 1
+service:
+  port: 3000
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 512Mi}
+config:
+  apiBaseUrl: "http://apisix-gateway.ee-system:9080/api/v1"
+  ttsBaseUrl: "http://ai-svc.ee-app:8891/api/v1"
+  llmModel: local
