@@ -599,3 +599,120 @@ func TestStage28C_LintLokiSubchart(t *testing.T) {
 	}
 	t.Logf("helm lint output:\n%s", out)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stage 28-D · Alertmanager subchart
+//
+// RED gate: assert the alertmanager subchart, when enabled, emits:
+//   - 1 Deployment alertmanager (image prom/alertmanager, port 9093)
+//   - 1 Service alertmanager (ClusterIP:9093)
+//   - 1 ConfigMap alertmanager-config (route + receivers)
+//   - 1 Secret alertmanager-webhook (placeholder webhook URL — dev phase)
+//
+// We don't assert on the actual webhook URL since it's a placeholder in
+// values.yaml — instead we assert the configmap mentions at least one
+// receiver of name "dev-webhook" so we know routing is wired.
+//
+// Rules live in the prometheus subchart (Stage 28-A) under
+// /etc/prometheus/rules/*.yml — Stage 28-F or a follow-up can extend
+// TestStage28A to assert those rules exist.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// alertmanagerOnlyValues enables only the alertmanager subchart.
+func alertmanagerOnlyValues(t *testing.T) string {
+	t.Helper()
+	content := `alertmanager:
+  enabled: true
+  webhook: "https://dev-webhook-placeholder.invalid/alert"
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 200m, memory: 256Mi }
+
+# Disable everything else.
+postgres:           { enabled: false }
+redis:              { enabled: false }
+kafka:              { enabled: false }
+etcd:               { enabled: false }
+skywalking:         { enabled: false }
+user-svc:           { enabled: false }
+chat-svc:           { enabled: false }
+analytics-svc:      { enabled: false }
+assessment-svc:     { enabled: false }
+ai-svc:             { enabled: false }
+llm-service:        { enabled: false }
+fer:                { enabled: false }
+sensevoice:         { enabled: false }
+xtts:               { enabled: false }
+web:                { enabled: false }
+apisix-ingress:     { enabled: false }
+apisix-routes:      { enabled: false }
+prometheus:         { enabled: false }
+grafana:            { enabled: false }
+loki:               { enabled: false }
+`
+	tmp, err := os.CreateTemp("", "stage28d-values-*.yaml")
+	if err != nil {
+		t.Fatalf("create temp values: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(tmp.Name()) })
+	if _, err := tmp.WriteString(content); err != nil {
+		t.Fatalf("write temp values: %v", err)
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatalf("close temp values: %v", err)
+	}
+	return tmp.Name()
+}
+
+// TestStage28D_Alertmanager_RendersAllResources is the Stage 28-D RED gate.
+func TestStage28D_Alertmanager_RendersAllResources(t *testing.T) {
+	rendered := helm(t, valuesDev, alertmanagerOnlyValues(t))
+
+	if !hasMetadataName(rendered, "ee-observability") {
+		t.Errorf("expected namespace ee-observability to be rendered")
+	}
+
+	coreResources := []struct{ kind, name string }{
+		{"Deployment", "alertmanager"},
+		{"Service", "alertmanager"},
+		{"ConfigMap", "alertmanager-config"},
+		{"Secret", "alertmanager-webhook"},
+	}
+	for _, r := range coreResources {
+		if countKind(rendered, r.kind) < 1 {
+			t.Errorf("expected at least 1 %s, got 0", r.kind)
+		}
+		if !hasMetadataName(rendered, r.name) {
+			t.Errorf("expected a resource named %q (kind %s)", r.name, r.kind)
+		}
+	}
+
+	// The alertmanager.yml configmap must define at least one receiver
+	// (the dev webhook). We check for the YAML receiver: name pattern.
+	if !strings.Contains(rendered, "receiver:") {
+		t.Errorf("expected alertmanager.yml to define at least one receiver")
+	}
+	if !strings.Contains(rendered, "webhook-config") {
+		t.Errorf("expected alertmanager.yml to reference a webhook_config receiver")
+	}
+
+	// The Secret must carry the placeholder webhook URL.
+	webhookNeedle := "dev-webhook-placeholder.invalid"
+	if !strings.Contains(rendered, webhookNeedle) {
+		t.Errorf("expected alertmanager-webhook secret to contain placeholder URL %q", webhookNeedle)
+	}
+}
+
+// TestStage28D_LintAlertmanagerSubchart ensures the alertmanager subchart
+// passes helm lint.
+func TestStage28D_LintAlertmanagerSubchart(t *testing.T) {
+	subchartPath, err := filepath.Abs("../../charts/emotion-echo/charts/alertmanager")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("helm", "lint", subchartPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm lint failed: %v\n%s", err, out)
+	}
+	t.Logf("helm lint output:\n%s", out)
+}
