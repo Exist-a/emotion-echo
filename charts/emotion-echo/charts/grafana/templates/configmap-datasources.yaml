@@ -1,0 +1,34 @@
+{{/*
+Datasource provisioning ConfigMap. Grafana reads /etc/grafana/provisioning/datasources/*.yaml
+on startup. We declare both Prometheus (Stage 28-A) and Loki (Stage 28-C)
+so Grafana is ready to query them the moment they exist.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: {{ include "grafana.namespaceObservability" . }}
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    deleteDatasources: []
+    datasources:
+    {{- if .Values.datasources.prometheus.enabled }}
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        {{- if .Values.datasources.prometheus.isDefault }}
+        isDefault: true
+        {{- end }}
+        url: {{ .Values.datasources.prometheus.url }}
+        editable: true
+    {{- end }}
+    {{- if .Values.datasources.loki.enabled }}
+      - name: Loki
+        type: loki
+        access: proxy
+        url: {{ .Values.datasources.loki.url }}
+        editable: true
+    {{- end }}

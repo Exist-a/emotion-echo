@@ -1,0 +1,12 @@
+# Chart.yaml — Stage 28-B GREEN
+# Grafana subchart for Emotion-Echo umbrella observability stack.
+# - 1 Deployment (grafana server)
+# - 1 Service (ClusterIP:3000)
+# - 3 ConfigMaps: datasources / grafana.ini / dashboards
+# - 1 Secret: admin password
+apiVersion: v2
+name: grafana
+description: Grafana dashboards for Emotion-Echo observability stack.
+type: application
+version: 0.1.0
+appVersion: 11.2.0

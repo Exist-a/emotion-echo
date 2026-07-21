@@ -1,0 +1,54 @@
+{{/*
+Dashboards ConfigMap carrying the sidecar label `grafana_dashboard: "1"`.
+The Grafana sidecar (deployed separately, not in this chart) watches for
+ConfigMaps with this label and copies their data into /etc/grafana/dashboards/.
+For Stage 28-B we ship a minimal placeholder dashboard so the discovery path
+is exercised end-to-end. Stage 28-B+1 will replace this with real dashboards.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: {{ include "grafana.namespaceObservability" . }}
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  # Minimal starter dashboard — Prometheus stats only.
+  # Schema reference: https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/
+  emotion-echo-overview.json: |
+    {
+      "title": "Emotion-Echo Overview",
+      "uid": "emotion-echo-overview",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Prometheus UP",
+          "id": 1,
+          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "up{job=\"prometheus-self\"}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "Scrape Targets",
+          "id": 2,
+          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+          "targets": [
+            {
+              "expr": "count(up == 1)",
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    }

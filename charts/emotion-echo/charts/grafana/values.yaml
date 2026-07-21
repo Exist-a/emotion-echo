@@ -1,0 +1,38 @@
+# values.yaml — Stage 28-B GREEN
+image:
+  repository: grafana/grafana
+  tag: 11.2.0
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+# Admin credentials. Stored in Secret, not in ConfigMap.
+adminUser: admin
+adminPassword: "dev-grafana-admin"          # dev placeholder; rotate in prod
+
+# Persistence — Grafana stores dashboards/datasources in its sqlite DB
+# by default. For dev we use emptyDir; for prod switch to PVC.
+persistence:
+  enabled: false   # dev: emptyDir
+  size: 1Gi
+
+# Datasource configuration — pointing at prometheus (28-A) and loki (28-C).
+# Both targets use the umbrella service FQDN pattern.
+datasources:
+  prometheus:
+    enabled: true
+    url: "http://prometheus.ee-observability.svc.cluster.local:9090"
+    isDefault: true
+  loki:
+    enabled: true
+    url: "http://loki.ee-observability.svc.cluster.local:3100"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
