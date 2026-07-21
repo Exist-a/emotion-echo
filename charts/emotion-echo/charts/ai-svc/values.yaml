@@ -1,0 +1,11 @@
+image:
+  repository: emotion-echo/ai-svc
+  tag: v0.1.0
+  pullPolicy: IfNotPresent
+replicas: 1
+service:
+  httpPort: 8891
+  grpcPort: 8892
+resources:
+  requests: {cpu: 200m, memory: 128Mi}
+  limits: {cpu: 1000m, memory: 512Mi}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: llm-service
+description: Emotion-Echo LLM service (FastAPI HTTP + gRPC). Stage 19-22.
+type: application
+version: 0.1.0
+appVersion: v0.1.0

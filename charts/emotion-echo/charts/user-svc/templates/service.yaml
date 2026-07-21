@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-svc
+  namespace: ee-app
+  labels:
+    {{- include "user-svc.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+  selector:
+    {{- include "user-svc.selectorLabels" . | nindent 4 }}

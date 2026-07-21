@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-svc-config
+  namespace: ee-app
+  labels:
+    {{- include "user-svc.labels" . | nindent 4 }}
+data:
+  user-api.yaml: |
+    Name: user-api
+    Host: 0.0.0.0
+    Port: 8888
+    Log:
+      Mode: json
+      Level: info

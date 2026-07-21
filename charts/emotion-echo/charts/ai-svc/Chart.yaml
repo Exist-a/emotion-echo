@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ai-svc
+description: Emotion-Echo AI orchestration service (HTTP + gRPC + Kafka consumer).
+type: application
+version: 0.1.0
+appVersion: v0.1.0
