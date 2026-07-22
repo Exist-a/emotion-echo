@@ -1,0 +1,29 @@
+{{- /*
+  cert-manager-webhook Service — exposes the webhook pod on port 443
+  (the standard Kubernetes convention) and forwards to the securePort
+  (10250) inside the container.
+
+  The API server dials `cert-manager-webhook.cert-manager.svc:443`
+  when processing Certificate / Issuer / ClusterIssuer objects; this
+  Service is what makes that FQDN resolvable.
+*/ -}}
+{{- if .Values.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: cert-manager-webhook
+  namespace: cert-manager
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webhook
+spec:
+  type: ClusterIP
+  ports:
+    - name: https
+      port: 443
+      targetPort: {{ .Values.webhook.securePort }}
+      protocol: TCP
+  selector:
+    {{- include "cert-manager.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: webhook
+{{- end }}

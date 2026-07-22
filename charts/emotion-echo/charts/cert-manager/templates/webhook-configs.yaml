@@ -1,0 +1,80 @@
+{{- /*
+  ValidatingWebhookConfiguration + MutatingWebhookConfiguration for
+  cert-manager CRDs.
+
+  The `clientConfig.service` points at the chart-rendered
+  cert-manager-webhook Service (port 443 → 10250). The `caBundle` is
+  intentionally empty: cert-manager's cainjector pod injects the CA
+  bundle once the controller has signed the webhook's serving cert.
+
+  If you change `clientConfig.service.name` or `service.port`, also
+  update the matching Service (service-webhook.yaml).
+*/ -}}
+{{- if .Values.enabled -}}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "cert-manager.fullname" . }}-validating
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    cert-manager.io/inject-ca-from: cert-manager-webhook/cert-manager-webhook-ca
+webhooks:
+  - name: certificates.admission.certmanager.k8s.io
+    rules:
+      - apiGroups: ["cert-manager.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["certificates"]
+        scope: "Namespaced"
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        name: cert-manager-webhook
+        namespace: cert-manager
+        path: /validate-cert-manager-io-v1-certificate
+        port: 443
+  - name: issuers.admission.certmanager.k8s.io
+    rules:
+      - apiGroups: ["cert-manager.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["issuers", "clusterissuers"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        name: cert-manager-webhook
+        namespace: cert-manager
+        path: /validate-cert-manager-io-v1-issuer
+        port: 443
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "cert-manager.fullname" . }}-mutating
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    cert-manager.io/inject-ca-from: cert-manager-webhook/cert-manager-webhook-ca
+webhooks:
+  - name: certificates.mutation.certmanager.k8s.io
+    rules:
+      - apiGroups: ["cert-manager.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["certificates"]
+        scope: "Namespaced"
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        name: cert-manager-webhook
+        namespace: cert-manager
+        path: /mutate-cert-manager-io-v1-certificate
+        port: 443
+{{- end }}

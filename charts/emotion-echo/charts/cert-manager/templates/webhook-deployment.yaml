@@ -1,0 +1,70 @@
+{{- /*
+  cert-manager webhook — Deployment.
+
+  Serves the admission webhook on $(POD_NAMESPACE):10250. The matching
+  Service `cert-manager-webhook` (service-webhook.yaml) exposes this on
+  port 443 → 10250 so API server can dial it.
+
+  The corresponding ValidatingWebhookConfiguration +
+  MutatingWebhookConfiguration are in webhook-configs.yaml; the
+  cainjector (cainjector-deployment.yaml) injects the CA bundle into
+  those configurations once the controller signs the serving cert.
+*/ -}}
+{{- if .Values.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cert-manager.fullname" . }}-webhook
+  namespace: cert-manager
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webhook
+spec:
+  replicas: {{ .Values.webhook.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cert-manager.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: webhook
+  template:
+    metadata:
+      labels:
+        {{- include "cert-manager.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: webhook
+    spec:
+      serviceAccountName: {{ include "cert-manager.fullname" . }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: webhook
+          image: {{ printf "%s%s:%s" (ternary (printf "%s/" .Values.image.registry) "" (empty .Values.image.registry)) .Values.webhook.image.repository .Values.webhook.image.tag | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- range .Values.webhook.args }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: https
+              containerPort: {{ .Values.webhook.securePort }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.webhook.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9403
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9403
+            initialDelaySeconds: 30
+            periodSeconds: 30
+{{- end }}

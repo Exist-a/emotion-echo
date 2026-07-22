@@ -1,13 +1,20 @@
+{{- /*
+  cert-manager controller — Deployment.
+
+  Reconsciles Certificate, Issuer, ClusterIssuer, and CertificateRequest
+  objects. Without this pod, no Certificate will ever reach Ready.
+
+  Image: rendered via the umbrella `emotion-echo.image` helper when
+  global.image.registry is set; otherwise the per-component
+  image.repository is used directly (the helper falls through to
+  repository:tag).
+*/ -}}
 {{- if .Values.enabled -}}
-{{- /* Render a single Deployment that represents cert-manager-controller.
-       The webhook and cainjector are sibling deployments in upstream
-       cert-manager; we collapse them into one Deployment here because
-       this is a stage-29-A scaffolding chart.  A follow-up
-       stage-29-B splits them apart if observability demand grows. */ -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "cert-manager.fullname" . }}-controller
+  namespace: cert-manager
   labels:
     {{- include "cert-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
@@ -24,15 +31,18 @@ spec:
         app.kubernetes.io/component: controller
     spec:
       serviceAccountName: {{ include "cert-manager.fullname" . }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: controller
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ printf "%s%s:%s" (ternary (printf "%s/" .Values.image.registry) "" (empty .Values.image.registry)) .Values.controller.image.repository .Values.controller.image.tag | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
-            - --v=2
-            - --cluster-resource-namespace=$(POD_NAMESPACE)
-            - --leader-election-namespace=kube-system
-            - --webhook-serving-port=10250
+            {{- range .Values.controller.args }}
+            - {{ . | quote }}
+            {{- end }}
           env:
             - name: POD_NAMESPACE
               valueFrom:
@@ -40,11 +50,4 @@ spec:
                   fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.controller.resources | nindent 12 }}
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ include "cert-manager.fullname" . }}
-  labels:
-    {{- include "cert-manager.labels" . | nindent 4 }}
 {{- end }}

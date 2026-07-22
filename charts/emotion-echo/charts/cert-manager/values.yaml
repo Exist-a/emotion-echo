@@ -1,21 +1,36 @@
-# cert-manager values — Stage 29-A
+# cert-manager subchart — default values.
 #
-# Self-managed cert-manager rendering. Defaults match the official
-# cert-manager v1.14.0 manifest bundle. Override `enabled: false`
-# to skip installation entirely (e.g. when an external cluster
-# already provides cert-manager via the upstream helm chart).
+# Stage 29-A.5: split into the three upstream workloads (controller,
+# webhook, cainjector). Webhook + cainjector were missing in the prior
+# single-Deployment scaffolding, which caused `Certificate` CRs to
+# never reach Ready because nothing injected the CA bundles.
+#
+# Image: registry + repository + tag follow the umbrella helper pattern
+# (see charts/emotion-echo/templates/_helpers.tpl#emotion-echo.image).
+# Override image.registry to switch to a CN mirror in case quay.io is
+# unreachable, e.g.:
+#
+#   cert-manager:
+#     controller:
+#       image:
+#         registry: registry.cn-hangzhou.aliyuncs.io
+#         repository: jetstack/cert-manager-controller
+#         tag: v1.14.0
 
 enabled: true
 
-# Image registry & tag shared by all three components.
+# Global image overrides — applied to every component unless overridden
+# locally. Mirrors the umbrella's image.registry pattern (Stage 28-A).
 image:
-  repository: quay.io/jetstack/cert-manager-controller
-  tag: v1.14.0
+  registry: ""
   pullPolicy: IfNotPresent
 
-# Per-component overrides (only the image / replica count for now).
+# cert-manager controller — the reconciliation brain.
 controller:
   replicas: 1
+  image:
+    repository: quay.io/jetstack/cert-manager-controller
+    tag: v1.14.0
   resources:
     requests:
       cpu: 50m
@@ -23,21 +38,68 @@ controller:
     limits:
       cpu: 200m
       memory: 256Mi
+  # Controller args follow upstream v1.14 defaults. The webhook's TLS
+  # serving port and the cainjector's metrics port are baked into the
+  # upstream binary; only the controller needs to know about
+  # --cluster-resource-namespace.
+  args:
+    - "--v=2"
+    - "--cluster-resource-namespace=$(POD_NAMESPACE)"
+    - "--leader-election-namespace=kube-system"
+    - "--webhook-serving-port=10250"
 
+# cert-manager webhook — admission webhook for cert-manager CRDs.
+# MUST run for Certificate/Issuer creation to be validated.
 webhook:
   replicas: 1
+  image:
+    repository: quay.io/jetstack/cert-manager-webhook
+    tag: v1.14.0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  # Secure serving port (must match controller's --webhook-serving-port
+  # AND the cert-manager-webhook Service targetPort).
+  securePort: 10250
+  args:
+    - "--v=2"
+    - "--cluster-resource-namespace=$(POD_NAMESPACE)"
+    - "--leader-election-namespace=kube-system"
+    - "--webhook-serving-port=10250"
+    - "--metrics-addr=0.0.0.0:9402"
+    - "--healthz-addr=0.0.0.0:9403"
 
+# cert-manager cainjector — injects CA bundles into mutating/validating
+# webhook configurations of cert-manager itself AND into annotated
+# webhooks in the cluster (e.g. APISIX ApisixTls).
 cainjector:
   replicas: 1
+  image:
+    repository: quay.io/jetstack/cert-manager-cainjector
+    tag: v1.14.0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  args:
+    - "--v=2"
+    - "--cluster-resource-namespace=$(POD_NAMESPACE)"
+    - "--leader-election-namespace=kube-system"
 
-# Self-signed ClusterIssuer for the dev overlay. Always emitted when
-# `enabled: true` because cert-manager is useless without an issuer.
-# Production overlays should set this to false and supply their own
-# Issuer / ClusterIssuer (e.g. staging ACME or Let's Encrypt).
+# Bootstrap a self-signed ClusterIssuer for dev environments.
+# In prod, set enabled=false and supply your own ClusterIssuer (e.g.
+# Let's Encrypt) via values-prod.yaml.
 selfSignedIssuer:
   enabled: true
   name: selfsigned-issuer
 
-# Default ingress class consumed by Ingress resources that opt into
-# cert-manager via the `cert-manager.io/cluster-issuer` annotation.
+# Ingress class hint (NOT consumed by cert-manager itself — kept for
+# forward-compat with cert-manager.io/v1 Certificate spec.ingressClass).
 ingressClassName: nginx

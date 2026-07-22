@@ -1,0 +1,60 @@
+{{- /*
+  ClusterRoleBindings binding the shared ServiceAccount to the three
+  ClusterRoles above.
+
+  Upstream cert-manager uses three ServiceAccounts (one per workload)
+  for separation; we use one shared SA per subchart (see
+  serviceaccount.yaml) — each binding is still scoped to the
+  appropriate ClusterRole so the RBAC blast radius per workload is
+  minimal even though the identity is shared.
+*/ -}}
+{{- if .Values.enabled -}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cert-manager.fullname" . }}-controller
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cert-manager.fullname" . }}-controller
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cert-manager.fullname" . }}
+    namespace: cert-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cert-manager.fullname" . }}-webhook
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webhook
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cert-manager.fullname" . }}-webhook
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cert-manager.fullname" . }}
+    namespace: cert-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cert-manager.fullname" . }}-cainjector
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cainjector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cert-manager.fullname" . }}-cainjector
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cert-manager.fullname" . }}
+    namespace: cert-manager
+{{- end }}

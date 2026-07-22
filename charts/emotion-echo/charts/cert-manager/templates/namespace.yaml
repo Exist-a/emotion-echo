@@ -1,0 +1,27 @@
+{{- /*
+  cert-manager owns its own namespace. The umbrella's
+  templates/namespace.yaml manages ee-* namespaces only, so the
+  cert-manager subchart must create this one itself; otherwise
+  `helm install` fails because the chart's Deployments have no
+  `metadata.namespace` (they're installed into the release
+  namespace, which is `ee-app` by default in this umbrella).
+
+  Idempotent: --server-side apply would be needed for true
+  idempotency across `helm install/upgrade`, but Helm treats
+  Namespace as a regular resource; the operator just runs `kubectl
+  apply` against this manifest, and Kubernetes' own
+  resource-version check makes a re-apply a no-op.
+*/ -}}
+{{- if .Values.enabled -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: platform
+    # Honour the upstream convention so the official cert-manager
+    # documentation (and any third-party tooling that filters by this
+    # label) finds the install.
+    certmanager.k8s.io/disable-validation: "true"
+{{- end }}

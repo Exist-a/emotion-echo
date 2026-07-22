@@ -1,0 +1,58 @@
+{{- /*
+  cert-manager cainjector — Deployment.
+
+  Watches cert-manager CRDs AND MutatingWebhookConfiguration /
+  ValidatingWebhookConfiguration objects for the
+  `cert-manager.io/inject-ca-from` annotation. When found, it copies
+  the CA bundle from the referenced Secret into
+  `webhooks[*].clientConfig.caBundle`.
+
+  In Stage 29-A.5 we do not annotate anything ourselves, but
+  cainjector is REQUIRED for cert-manager's own admission webhooks to
+  work — without it, the webhook serving cert gets signed by the
+  controller but no one injects it into the webhook configs, so the
+  API server rejects every cert-manager CR with "x509: certificate
+  signed by unknown authority".
+*/ -}}
+{{- if .Values.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cert-manager.fullname" . }}-cainjector
+  namespace: cert-manager
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cainjector
+spec:
+  replicas: {{ .Values.cainjector.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cert-manager.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cainjector
+  template:
+    metadata:
+      labels:
+        {{- include "cert-manager.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: cainjector
+    spec:
+      serviceAccountName: {{ include "cert-manager.fullname" . }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cainjector
+          image: {{ printf "%s%s:%s" (ternary (printf "%s/" .Values.image.registry) "" (empty .Values.image.registry)) .Values.cainjector.image.repository .Values.cainjector.image.tag | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- range .Values.cainjector.args }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            {{- toYaml .Values.cainjector.resources | nindent 12 }}
+{{- end }}
