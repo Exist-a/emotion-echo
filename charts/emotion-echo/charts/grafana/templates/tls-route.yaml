@@ -1,0 +1,133 @@
+{{- /*
+  grafana/templates/tls-route.yaml — Stage 29-A.5
+
+  Replaces the previous K8s Ingress (which assumed `ingressClassName:
+  nginx` even though this project uses APISIX as the only ingress
+  controller). Emits three coupled resources when
+  `global.grafanaIngressTls.enabled` is true:
+
+    1. Certificate  (cert-manager.io/v1) — instructs cert-manager to
+       mint a self-signed cert into the Secret grafana-tls in this
+       namespace.
+    2. ApisixTls     (apisix.apache.org/v2) — tells APISIX data plane
+       to terminate TLS for grafana.local using the same Secret. APISIX
+       watches this CR and reloads certificates automatically when the
+       Secret changes (no controller annotation dance required).
+    3. ApisixRoute  (apisix.apache.org/v2) — replaces the K8s Ingress.
+       Routes grafana.local/* to the grafana Service on port 3000.
+
+  Why this design (vs. K8s Ingress + cert-manager.io annotation):
+
+    * The K8s Ingress controller in this cluster is APISIX (data plane
+      apache/apisix:3.10.0-debian), not ingress-nginx. Hard-coding
+      `ingressClassName: nginx` produced an Ingress with no controller
+      — TLS handshake never worked.
+    * cert-manager annotates K8s Ingresses; APISIX is configured via
+      ApisixTls CRDs. The cert-manager controller does NOT watch
+      ApisixTls, but it DOES write the resulting certificate to a
+      Secret, which APISIX watches independently. So Certificate +
+      ApisixTls referencing the same Secret is the canonical
+      end-to-end path.
+
+  Knobs (set under `global.grafanaIngressTls` in values-dev.yaml):
+
+    enabled:        bool (default false)
+    host:           string (default grafana.local)
+    secretName:     string (default grafana-tls)
+    clusterIssuer:  string (default selfsigned-issuer)
+*/ -}}
+{{- $tlsEnabled := false -}}
+{{- $tlsHost := "grafana.local" -}}
+{{- $tlsSecret := "grafana-tls" -}}
+{{- $tlsIssuer := "selfsigned-issuer" -}}
+{{- if and (hasKey .Values "global") (hasKey .Values.global "grafanaIngressTls") -}}
+  {{- if hasKey .Values.global.grafanaIngressTls "enabled" -}}
+    {{- $tlsEnabled = .Values.global.grafanaIngressTls.enabled -}}
+  {{- end -}}
+  {{- if hasKey .Values.global.grafanaIngressTls "host" -}}
+    {{- $tlsHost = .Values.global.grafanaIngressTls.host -}}
+  {{- end -}}
+  {{- if hasKey .Values.global.grafanaIngressTls "secretName" -}}
+    {{- $tlsSecret = .Values.global.grafanaIngressTls.secretName -}}
+  {{- end -}}
+  {{- if hasKey .Values.global.grafanaIngressTls "clusterIssuer" -}}
+    {{- $tlsIssuer = .Values.global.grafanaIngressTls.clusterIssuer -}}
+  {{- end -}}
+{{- end -}}
+{{- if $tlsEnabled -}}
+{{- $ns := include "grafana.namespaceObservability" . -}}
+---
+# 1/3 — Certificate CR: cert-manager signs a self-signed cert into
+# the grafana-tls Secret. The Certificate name MUST be unique per
+# Secret to avoid collisions in this namespace.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $tlsSecret }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tls
+spec:
+  secretName: {{ $tlsSecret | quote }}
+  duration: 2160h      # 90 days; renew-before will cut this in half
+  renewBefore: 720h    # renew 30d before expiry
+  issuerRef:
+    name: {{ $tlsIssuer | quote }}
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - {{ $tlsHost | quote }}
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+---
+# 2/3 — ApisixTls: APISIX data plane terminates TLS for grafana.local
+# using the Secret the Certificate CR writes to.
+#
+# `spec.secret.name` references the same Secret grafana-tls.
+# APISIX watches ApisixTls AND its referenced Secret for changes; once
+# cert-manager rotates the cert, APISIX reloads without a restart.
+apiVersion: apisix.apache.org/v2
+kind: ApisixTls
+metadata:
+  name: {{ $tlsSecret }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tls
+spec:
+  hosts:
+    - {{ $tlsHost | quote }}
+  secret:
+    name: {{ $tlsSecret | quote }}
+    namespace: {{ $ns | quote }}
+---
+# 3/3 — ApisixRoute: replaces the old K8s Ingress. Routes
+# grafana.local/* → grafana.{{ $ns }}.svc.cluster.local:3000.
+#
+# APISIX data plane listens on :9080 (HTTP) and :9443 (HTTPS by default
+# since APISIX 3.x). Both ports are exposed by the apisix-ingress
+# subchart's Service.
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: grafana-tls
+  namespace: {{ $ns }}
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+    app.kubernetes.io/component: route
+spec:
+  http:
+    - name: grafana
+      match:
+        hosts:
+          - {{ $tlsHost | quote }}
+        paths:
+          - "/*"
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+      backends:
+        - serviceName: grafana
+          servicePort: 3000
+{{- end }}

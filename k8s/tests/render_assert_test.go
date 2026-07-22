@@ -114,14 +114,18 @@ func TestStage27A_SubChartsPresent(t *testing.T) {
 }
 
 // TestStage27A_APISIXRoutes asserts the apisix-routes subchart emits the
-// 16 ApisixRoute CRDs + 6 ApisixUpstream CRDs that match the legacy
-// docker-compose APISIX routing (see deploy/apisix/apisix.yaml).
+// 16 ApisixRoute CRDs (business routes) + the Stage 29-A.5 grafana
+// TLS route = 17 ApisixRoutes total, plus 6 ApisixUpstream CRDs that
+// match the legacy docker-compose APISIX routing (see
+// deploy/apisix/apisix.yaml).
 func TestStage27A_APISIXRoutes(t *testing.T) {
 	rendered := helm(t, valuesDev)
 
+	// 16 business routes (Stage 27) + 1 grafana TLS route (Stage 29-A.5)
+	// = 17 total.
 	routes := countKind(rendered, "ApisixRoute")
-	if routes != 16 {
-		t.Errorf("expected exactly 16 ApisixRoute CRDs, got %d", routes)
+	if routes != 17 {
+		t.Errorf("expected exactly 17 ApisixRoute CRDs (16 business + 1 grafana TLS), got %d", routes)
 	}
 
 	ups := countKind(rendered, "ApisixUpstream")
