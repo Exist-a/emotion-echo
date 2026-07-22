@@ -1,0 +1,33 @@
+# kind cluster config for Emotion-Echo local K8s deployment.
+# Reference: https://kind.sigs.k8s.io/docs/user/quick-start/
+#
+# Layout: 1 control-plane + 2 workers.
+# Port mappings:
+#   - 9080 (APISIX gateway) -> host:9080
+#   - 3000 (Web frontend)   -> host:3000
+#   - 18080 (SkyWalking UI) -> host:18080
+#
+# Storage: local-path-provisioner is the default; PVCs will be auto-bound.
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 9080
+        hostPort: 9080
+        protocol: TCP
+      - containerPort: 3000
+        hostPort: 3000
+        protocol: TCP
+      - containerPort: 18080
+        hostPort: 18080
+        protocol: TCP
+  - role: worker
+  - role: worker

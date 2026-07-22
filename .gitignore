@@ -135,3 +135,12 @@ artifacts/
 *.code-workspace
 .history/
 *.tgz
+
+# ---------- Agent / 编辑器状态 ----------
+.zcode/                                  # ZCode agent session plans (transient)
+
+# ---------- Test artifacts (Playwright / pytest reports) ----------
+playwright-report/                       # Playwright HTML reporter output
+test-results/                            # Playwright per-test artifact dir
+.pytest_cache/                           # already covered above; explicit for clarity
+__pycache__/                             # already covered above; explicit for clarity
