@@ -84,3 +84,8 @@ dependencies:
   - name: alertmanager
     version: "0.1.0"
     condition: alertmanager.enabled
+  # Stage 29-A: HTTPS via cert-manager + self-signed ClusterIssuer.
+  # Disabled by default; opt in via `cert-manager.enabled: true`.
+  - name: cert-manager
+    version: "0.1.0"
+    condition: cert-manager.enabled

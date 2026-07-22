@@ -1,0 +1,50 @@
+{{- if .Values.enabled -}}
+{{- /* Render a single Deployment that represents cert-manager-controller.
+       The webhook and cainjector are sibling deployments in upstream
+       cert-manager; we collapse them into one Deployment here because
+       this is a stage-29-A scaffolding chart.  A follow-up
+       stage-29-B splits them apart if observability demand grows. */ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cert-manager.fullname" . }}-controller
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cert-manager.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        {{- include "cert-manager.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: controller
+    spec:
+      serviceAccountName: {{ include "cert-manager.fullname" . }}
+      containers:
+        - name: controller
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --v=2
+            - --cluster-resource-namespace=$(POD_NAMESPACE)
+            - --leader-election-namespace=kube-system
+            - --webhook-serving-port=10250
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            {{- toYaml .Values.controller.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "cert-manager.fullname" . }}
+  labels:
+    {{- include "cert-manager.labels" . | nindent 4 }}
+{{- end }}

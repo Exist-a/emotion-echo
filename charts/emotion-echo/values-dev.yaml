@@ -15,6 +15,15 @@ global:
     internalApiKey: dev-key-change-me-please-32chars-min
     apisixAdminKey: edd1c9f034335f136f87ad84b625c8f1
     jwtSecret: emotion-echo-secret-2026-please-change-in-prod
+  # Stage 29-A: Grafana Ingress TLS knobs live under `global` so the
+  # grafana subchart (which has its own namespace) can read them via
+  # `{{ .Values.global.grafanaIngressTls }}`. Subchart values are
+  # otherwise isolated from umbrella-level keys.
+  grafanaIngressTls:
+    enabled: true
+    host: grafana.local
+    secretName: grafana-tls
+    clusterIssuer: selfsigned-issuer
 
 # AI profile off by default in dev to save memory; flip on for full smoke.
 xtts:
@@ -37,3 +46,13 @@ loki:
 alertmanager:
   enabled: true
   webhook: "https://dev-webhook-placeholder.invalid/alert"
+
+# Stage 29-A: cert-manager + self-signed issuer ON in dev.
+# Grafana Ingress TLS rides on this issuer. Prod overlay (29-A.x) is
+# expected to switch off the self-signed issuer and supply a Let's
+# Encrypt ClusterIssuer (Stage 29-C, deferred).
+cert-manager:
+  enabled: true
+  selfSignedIssuer:
+    enabled: true
+    name: selfsigned-issuer

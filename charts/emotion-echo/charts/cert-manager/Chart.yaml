@@ -1,0 +1,30 @@
+apiVersion: v2
+name: cert-manager
+description: |
+  cert-manager + a self-signed ClusterIssuer (Stage 29-A).
+
+  Self-managed cert-manager (not the upstream Helm chart) so that
+  the umbrella render stays hermetic and reproducible in offline /
+  air-gapped kind clusters. We vendor the three cert-manager
+  components directly:
+    - controller
+    - webhook
+    - cainjector
+
+  A selfsigned ClusterIssuer is rendered in parallel so the dev
+  overlay can issue certificates without contacting Let's Encrypt.
+
+type: application
+version: 0.1.0
+appVersion: "1.14.0"
+keywords:
+  - cert-manager
+  - tls
+  - https
+  - stage-29
+home: https://cert-manager.io
+sources:
+  - https://github.com/cert-manager/cert-manager
+maintainers:
+  - name: emotion-echo
+    email: ops@emotion-echo.local

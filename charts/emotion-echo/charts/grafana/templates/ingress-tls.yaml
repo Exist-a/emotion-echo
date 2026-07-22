@@ -1,0 +1,63 @@
+{{- /*
+  grafana/templates/ingress-tls.yaml — Stage 29-A
+
+  Emits a TLS-enabled Ingress for Grafana only when
+  `global.grafanaIngressTls.enabled` is true in the umbrella overlay.
+  The Ingress is annotated with `cert-manager.io/cluster-issuer` so
+  cert-manager auto-issues a self-signed (dev) or ACME (prod)
+  certificate into the configured secretName.
+
+  Knobs (set under `global.grafanaIngressTls` in values-dev.yaml
+  / future values-prod.yaml):
+    enabled:        bool (default false)
+    host:           string (default grafana.local)
+    secretName:     string (default grafana-tls)
+    clusterIssuer:  string (default selfsigned-issuer)
+*/ -}}
+{{- $tlsEnabled := false -}}
+{{- $tlsHost := "grafana.local" -}}
+{{- $tlsSecret := "grafana-tls" -}}
+{{- $tlsIssuer := "selfsigned-issuer" -}}
+{{- if and (hasKey .Values "global") (hasKey .Values.global "grafanaIngressTls") -}}
+  {{- if hasKey .Values.global.grafanaIngressTls "enabled" -}}
+    {{- $tlsEnabled = .Values.global.grafanaIngressTls.enabled -}}
+  {{- end -}}
+  {{- if hasKey .Values.global.grafanaIngressTls "host" -}}
+    {{- $tlsHost = .Values.global.grafanaIngressTls.host -}}
+  {{- end -}}
+  {{- if hasKey .Values.global.grafanaIngressTls "secretName" -}}
+    {{- $tlsSecret = .Values.global.grafanaIngressTls.secretName -}}
+  {{- end -}}
+  {{- if hasKey .Values.global.grafanaIngressTls "clusterIssuer" -}}
+    {{- $tlsIssuer = .Values.global.grafanaIngressTls.clusterIssuer -}}
+  {{- end -}}
+{{- end -}}
+{{- if $tlsEnabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  labels:
+    {{- include "grafana.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+  annotations:
+    cert-manager.io/cluster-issuer: {{ $tlsIssuer | quote }}
+    cert-manager.io/renew-before: 720h
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - {{ $tlsHost | quote }}
+      secretName: {{ $tlsSecret | quote }}
+  rules:
+    - host: {{ $tlsHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+{{- end }}

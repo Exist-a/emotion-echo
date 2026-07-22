@@ -1,0 +1,43 @@
+# cert-manager values — Stage 29-A
+#
+# Self-managed cert-manager rendering. Defaults match the official
+# cert-manager v1.14.0 manifest bundle. Override `enabled: false`
+# to skip installation entirely (e.g. when an external cluster
+# already provides cert-manager via the upstream helm chart).
+
+enabled: true
+
+# Image registry & tag shared by all three components.
+image:
+  repository: quay.io/jetstack/cert-manager-controller
+  tag: v1.14.0
+  pullPolicy: IfNotPresent
+
+# Per-component overrides (only the image / replica count for now).
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+webhook:
+  replicas: 1
+
+cainjector:
+  replicas: 1
+
+# Self-signed ClusterIssuer for the dev overlay. Always emitted when
+# `enabled: true` because cert-manager is useless without an issuer.
+# Production overlays should set this to false and supply their own
+# Issuer / ClusterIssuer (e.g. staging ACME or Let's Encrypt).
+selfSignedIssuer:
+  enabled: true
+  name: selfsigned-issuer
+
+# Default ingress class consumed by Ingress resources that opt into
+# cert-manager via the `cert-manager.io/cluster-issuer` annotation.
+ingressClassName: nginx

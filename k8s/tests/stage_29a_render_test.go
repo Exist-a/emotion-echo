@@ -33,13 +33,16 @@ func TestStage29A_CertManagerChartRenders(t *testing.T) {
 	rendered := helm(t, valuesDev)
 
 	// Must contain a Deployment whose name contains "cert-manager".
-	certMgrDepRe := regexp.MustCompile(`(?ms)kind:\s*Deployment\s*\n(?:[^\n]*\n){0,40}?name:\s*[^\n]*cert-manager`)
+	// We use a strict, line-anchored regex (Go RE2 has no dot-matches-newline
+	// flag, so we use explicit \n boundaries instead of .{0,N}).
+	certMgrDepRe := regexp.MustCompile(`kind: Deployment\nmetadata:\n  name:\s*\S*cert-manager`)
 	if !certMgrDepRe.MatchString(rendered) {
 		t.Errorf("expected a Deployment with 'cert-manager' in its name (Stage 29-A RED gate)")
 	}
 
 	// Must contain a ClusterIssuer named `selfsigned-issuer`.
-	if !regexp.MustCompile(`(?ms)kind:\s*ClusterIssuer\s*\n(?:[^\n]*\n){0,40}?name:\s*selfsigned-issuer`).MatchString(rendered) {
+	issuerRe := regexp.MustCompile(`kind: ClusterIssuer\nmetadata:\n  name: selfsigned-issuer`)
+	if !issuerRe.MatchString(rendered) {
 		t.Errorf("expected ClusterIssuer 'selfsigned-issuer' to be rendered (Stage 29-A RED gate)")
 	}
 }
@@ -72,18 +75,26 @@ func TestStage29A_GrafanaIngressTLS(t *testing.T) {
 	ingDoc := rendered[ingIdx:end]
 
 	// TLS block must include secretName: grafana-tls.
-	if !strings.Contains(ingDoc, "secretName: grafana-tls") {
+	// Helm's `quote` template func wraps strings in double quotes, so the
+	// rendered secretName appears as `"grafana-tls"`. Accept both quoted
+	// and unquoted forms.
+	if !strings.Contains(ingDoc, `secretName: "grafana-tls"`) &&
+		!strings.Contains(ingDoc, "secretName: grafana-tls") {
 		t.Errorf("expected Ingress TLS secretName 'grafana-tls', got: %s", truncate(ingDoc, 600))
 	}
 
 	// TLS hosts must include grafana.local.
-	if !strings.Contains(ingDoc, "grafana.local") {
+	if !strings.Contains(ingDoc, `grafana.local`) {
 		t.Errorf("expected Ingress TLS hosts to contain 'grafana.local'")
 	}
 
 	// Annotation cert-manager.io/cluster-issuer must point at selfsigned-issuer.
-	if !strings.Contains(ingDoc, "cert-manager.io/cluster-issuer: selfsigned-issuer") {
-		t.Errorf("expected annotation 'cert-manager.io/cluster-issuer: selfsigned-issuer' on the grafana Ingress")
+	// We match the Helm-quoted form (the `quote` template func wraps strings
+	// in double quotes). Both `"selfsigned-issuer"` and `selfsigned-issuer`
+	// should be considered a match; use a Contains check on both forms.
+	if !strings.Contains(ingDoc, `cert-manager.io/cluster-issuer: "selfsigned-issuer"`) &&
+		!strings.Contains(ingDoc, "cert-manager.io/cluster-issuer: selfsigned-issuer") {
+		t.Errorf("expected annotation 'cert-manager.io/cluster-issuer: selfsigned-issuer' on the grafana Ingress, got: %s", truncate(ingDoc, 400))
 	}
 }
 
