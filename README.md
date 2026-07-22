@@ -12,7 +12,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-1.x-244c5a?style=flat-square&logo=grpc&logoColor=white)](https://grpc.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Stage](https://img.shields.io/badge/Stage-25%2F25-blueviolet?style=flat-square)](docs/stage-25-roadmap.md)
+[![Stage](https://img.shields.io/badge/Stage-29--A-blueviolet?style=flat-square)](docs/stage-29-A-https-grafana.md)
 
 ---
 
@@ -39,7 +39,7 @@ Gin 单体 → 微服务拆分 → gRPC 同步通信 → Kafka 异步管线
          → 端到端冒烟测试 → 多模态分析
 ```
 
-📚 完整路线图：[`docs/distributed-roadmap.md`](docs/distributed-roadmap.md) · 25 篇 stage 演进文档
+📚 完整路线图：[`docs/distributed-roadmap.md`](docs/distributed-roadmap.md) · 30+ 篇 stage 演进文档
 
 ### 2. 严谨的 TDD 工程实践
 
@@ -95,7 +95,7 @@ emotion-echo/
 │   ├── docker-compose.infra.yml  # PG + Redis + Kafka + APISIX + etcd + SkyWalking
 │   ├── docker-compose.apps.yml   # 5 个 Go 微服务
 │   └── apisix/                   # 路由 / upstream 配置
-├── docs/                         # 架构决策 + 25 篇 stage 文档
+├── docs/                         # 架构决策 + 30+ 篇 stage 文档
 └── scripts/                      # 自检 / 验证脚本
 ```
 
@@ -167,9 +167,10 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 
 ## 状态
 
-- ✅ Stage 0~24 全部完成（微服务化 + AI 容器化 + 端到端验证）
-- 📝 Stage 25：待办事项（见 [roadmap](docs/stage-25-roadmap.md)）
-- 🚧 长期路线：K8s 化 + CI/CD + 生产化
+- ✅ Stage 0~28 全部完成（微服务化 + AI 容器化 + 端到端验证 + K8s 化 + 可观测性）
+- ✅ Stage 29-A：cert-manager + Grafana Ingress TLS（render-assert 已绿）
+- 🚧 Stage 29-A.5：live cluster smoke 进行中（见 [landing](docs/stage-29-A-https-grafana.md)）
+- 📝 长期路线：29-B/C/D/E（告警/Secrets/全部路由 TLS/Let's Encrypt）→ 30 ArgoCD → 31 ACK 迁移
 
 ---
 
