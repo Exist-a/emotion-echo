@@ -16,7 +16,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: cert-manager
+  name: {{ include "cert-manager.namespace" . }}
   labels:
     {{- include "cert-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: platform

@@ -24,7 +24,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "cert-manager.fullname" . }}
-    namespace: cert-manager
+    namespace: {{ include "cert-manager.namespace" . }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -40,7 +40,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "cert-manager.fullname" . }}
-    namespace: cert-manager
+    namespace: {{ include "cert-manager.namespace" . }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -56,5 +56,5 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "cert-manager.fullname" . }}
-    namespace: cert-manager
+    namespace: {{ include "cert-manager.namespace" . }}
 {{- end }}

@@ -31,3 +31,18 @@ app.kubernetes.io/name: {{ include "cert-manager.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: cert-manager
 {{- end -}}
+
+{{- /*
+  cert-manager.namespace — single source of truth for the
+  namespace in which every cert-manager workload runs.
+
+  Stage 29-A.5: every template references this helper instead of
+  the literal `cert-manager`. The default remains `cert-manager`;
+  setting `.Values.namespace` lets operators relocate the
+  installation (e.g. shared cluster where another team already
+  owns the cert-manager namespace and we want to install ours
+  alongside as `cert-manager-ee`).
+*/ -}}
+{{- define "cert-manager.namespace" -}}
+{{- default "cert-manager" .Values.namespace -}}
+{{- end -}}

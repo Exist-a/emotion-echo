@@ -18,7 +18,7 @@ metadata:
   name: {{ include "cert-manager.fullname" . }}-validating
   labels:
     {{- include "cert-manager.labels" . | nindent 4 }}
-    cert-manager.io/inject-ca-from: cert-manager-webhook/cert-manager-webhook-ca
+    cert-manager.io/inject-ca-from: {{ include "cert-manager.namespace" . }}/cert-manager-webhook-ca
 webhooks:
   - name: certificates.admission.certmanager.k8s.io
     rules:
@@ -32,8 +32,8 @@ webhooks:
     timeoutSeconds: 10
     clientConfig:
       service:
-        name: cert-manager-webhook
-        namespace: cert-manager
+        name: {{ include "cert-manager.fullname" . }}-webhook
+        namespace: {{ include "cert-manager.namespace" . }}
         path: /validate-cert-manager-io-v1-certificate
         port: 443
   - name: issuers.admission.certmanager.k8s.io
@@ -48,8 +48,8 @@ webhooks:
     timeoutSeconds: 10
     clientConfig:
       service:
-        name: cert-manager-webhook
-        namespace: cert-manager
+        name: {{ include "cert-manager.fullname" . }}-webhook
+        namespace: {{ include "cert-manager.namespace" . }}
         path: /validate-cert-manager-io-v1-issuer
         port: 443
 ---
@@ -59,7 +59,7 @@ metadata:
   name: {{ include "cert-manager.fullname" . }}-mutating
   labels:
     {{- include "cert-manager.labels" . | nindent 4 }}
-    cert-manager.io/inject-ca-from: cert-manager-webhook/cert-manager-webhook-ca
+    cert-manager.io/inject-ca-from: {{ include "cert-manager.namespace" . }}/cert-manager-webhook-ca
 webhooks:
   - name: certificates.mutation.certmanager.k8s.io
     rules:
@@ -73,8 +73,8 @@ webhooks:
     timeoutSeconds: 10
     clientConfig:
       service:
-        name: cert-manager-webhook
-        namespace: cert-manager
+        name: {{ include "cert-manager.fullname" . }}-webhook
+        namespace: {{ include "cert-manager.namespace" . }}
         path: /mutate-cert-manager-io-v1-certificate
         port: 443
 {{- end }}

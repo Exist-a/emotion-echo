@@ -15,7 +15,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "cert-manager.fullname" . }}-webhook
-  namespace: cert-manager
+  namespace: {{ include "cert-manager.namespace" . }}
   labels:
     {{- include "cert-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: webhook
