@@ -9,6 +9,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 
 	"emotion-echo-chat-svc/internal/model"
@@ -115,6 +116,10 @@ func (r *InMemoryConversationRepo) ListMessages(ctx context.Context, conversatio
 			out = append(out, *m)
 		}
 	}
+	// Stable order matching PostgresConversationRepo.ListMessages
+	// (id ASC). Without this, map iteration order is non-deterministic
+	// and tests asserting on message content order would flake.
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }
 
