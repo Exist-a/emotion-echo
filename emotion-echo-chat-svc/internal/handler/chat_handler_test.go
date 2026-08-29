@@ -29,6 +29,21 @@ func newTestSVC() *svc.ServiceContext {
 	return svc.NewServiceContext(cfg, repo, pub)
 }
 
+// newTestRouter returns a gin engine configured the same way as the
+// production chat-svc main.go: HandleMethodNotAllowed=true so 405 is
+// returned for method/path mismatches (gin's default is 404 for both,
+// which obscures real client bugs). All existing TestXxxHandler_*
+// tests already use gin.New() inline; only the new 405 subtests need
+// this helper. Kept private to this file.
+func newTestRouter() *gin.Engine {
+	r := gin.New()
+	r.HandleMethodNotAllowed = true
+	r.NoMethod(func(c *gin.Context) {
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
+	})
+	return r
+}
+
 // reqWithUser 把 demo user_id 注入 ctx（模拟中间件）
 // handler 内部 logic 通过 middleware.CtxUserIDKey 提取
 func reqWithUser(req *http.Request, uid int64) *http.Request {
@@ -166,4 +181,101 @@ func TestChatHandler_EmptyBody(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// Stage 26-T backlog §三 3.1 T4: extend handler coverage to 404/405/400
+// edge cases. The handler currently maps every logic error to 500 (see
+// chat_handler.go lines 23-25/48-49/71-73). The tests below pin the
+// CURRENT behavior so any future tightening is a deliberate change,
+// not a regression.
+//
+// The tests use full gin routing so HTTP method dispatch and path
+// matching are exercised end-to-end.
+
+// TestChatHandler_SendMessage_RouteNotFound_Returns404 verifies that
+// hitting an unregistered path on the chat-svc router yields a 404
+// from gin's default NoRoute handler — not a 200, not a 500.
+func TestChatHandler_SendMessage_RouteNotFound_Returns404(t *testing.T) {
+	svcCtx := newTestSVC()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/api/v1/conversations/:id/messages", SendMessageHandler(svcCtx))
+
+	// :id missing segment → no route matches → 404
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/1/nope", nil)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNotFound, rec.Code,
+		"unknown path should be 404, got %d", rec.Code)
+}
+
+// TestChatHandler_SendMessage_MethodNotAllowed_Returns405 verifies
+// that a GET against the POST-only /messages route yields 405
+// (gin's default MethodNotAllowed handler), not a 500. The handler
+// is registered for POST; a GET must NOT fall through to the handler.
+func TestChatHandler_SendMessage_MethodNotAllowed_Returns405(t *testing.T) {
+	svcCtx := newTestSVC()
+	gin.SetMode(gin.TestMode)
+	r := newTestRouter()
+	r.POST("/api/v1/conversations/:id/messages", SendMessageHandler(svcCtx))
+
+	// GET on POST-only route → 405
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations/1/messages", nil)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusMethodNotAllowed, rec.Code,
+		"GET on POST-only route should be 405, got %d", rec.Code)
+}
+
+// TestChatHandler_SendMessage_InvalidPathParam_Returns400 verifies
+// that a non-numeric :id path parameter yields a 400 (the handler
+// parses c.Param("id") and refuses anything that doesn't ParseInt).
+func TestChatHandler_SendMessage_InvalidPathParam_Returns400(t *testing.T) {
+	svcCtx := newTestSVC()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/api/v1/conversations/:id/messages", SendMessageHandler(svcCtx))
+
+	body := bytes.NewBufferString(`{"role":"user","content":"x"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/notanumber/messages", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code,
+		"non-numeric :id should be 400, got %d body=%s", rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "invalid conversation id")
+}
+
+// TestChatHandler_ListMessages_MethodNotAllowed_Returns405 verifies
+// the symmetric case: POST on the GET-only /messages route must be
+// 405, not "fall through and 400 from ShouldBindJSON".
+func TestChatHandler_ListMessages_MethodNotAllowed_Returns405(t *testing.T) {
+	svcCtx := newTestSVC()
+	gin.SetMode(gin.TestMode)
+	r := newTestRouter()
+	r.GET("/api/v1/conversations/:id/messages", ListMessagesHandler(svcCtx))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/1/messages", nil)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusMethodNotAllowed, rec.Code,
+		"POST on GET-only route should be 405, got %d", rec.Code)
+}
+
+// TestChatHandler_ListMessages_InvalidPathParam_Returns400 is the
+// GET counterpart of TestChatHandler_SendMessage_InvalidPathParam.
+func TestChatHandler_ListMessages_InvalidPathParam_Returns400(t *testing.T) {
+	svcCtx := newTestSVC()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/api/v1/conversations/:id/messages", ListMessagesHandler(svcCtx))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations/abc/messages", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code,
+		"non-numeric :id should be 400, got %d", rec.Code)
 }

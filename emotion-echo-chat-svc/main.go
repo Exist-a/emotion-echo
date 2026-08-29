@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -101,6 +102,17 @@ func main() {
 	// 5. Gin
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	// HandleMethodNotAllowed: true makes gin return 405 (instead of 404)
+	// when the path matches a route registered for a different HTTP method.
+	// Without this flag, gin collapses all unmatched methods into 404, which
+	// obscures real client bugs (e.g. accidental POST vs GET).
+	r.HandleMethodNotAllowed = true
+	r.NoMethod(func(c *gin.Context) {
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
+	})
+	r.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	})
 	r.Use(gin.Recovery())
 	r.Use(sharedmetrics.GinMetricsMiddleware("chat-svc"))
 	if tracer != nil {
