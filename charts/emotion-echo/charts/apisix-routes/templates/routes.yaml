@@ -1,11 +1,38 @@
 # 16 ApisixRoute CRDs - transcribed from deploy/apisix/apisix.yaml 1:1.
 # Field semantics map directly to APISIX etcd JSON schema.
+#
+# Stage 29-D: when .Values.tls.enabled is true, each route that belongs
+# to a TLS family gets an additional `match.hosts: [<family.hostname>]`
+# entry. This is the "dual-stack" mode — HTTP (no hosts) keeps the route
+# reachable on plain :9080 for backward compat AND HTTPS (:9443 with
+# family SNI) serves the same route. Operators can cut HTTP later in a
+# follow-up by setting tls.enabled + an additional flag (deferred).
 {{- $upstreamUser := "user-svc" }}
 {{- $upstreamChat := "chat-svc" }}
 {{- $upstreamAnalytics := "analytics-svc" }}
 {{- $upstreamAssessment := "assessment-svc" }}
 {{- $upstreamAi := "ai-svc" }}
 {{- $upstreamMockPing := "mock-ping" }}
+
+{{- /*
+  familyHostsByRoute: map[routeName] = hostname.
+  Computed once from .Values.tls.families when tls.enabled; otherwise
+  empty map -> no hosts block is emitted.
+*/ -}}
+{{- $familyHosts := dict -}}
+{{- if .Values.tls.enabled -}}
+  {{- range .Values.tls.families -}}
+    {{- $hostname := .hostname -}}
+    {{- range .routes -}}
+      {{- $_ := set $familyHosts . $hostname -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /*
+  hostsFor returns the hosts list for a given route name, or empty
+  list if the route is not in any family. Used inline in match block.
+*/ -}}
 
 {{- /* Route 1: r-user-me */ -}}
 ---
@@ -18,6 +45,10 @@ spec:
   http:
     - name: user-me
       match:
+        {{- if hasKey $familyHosts "r-user-me" }}
+        hosts:
+          - {{ index $familyHosts "r-user-me" | quote }}
+        {{- end }}
         paths: ["/api/v1/users/me"]
         methods: ["GET"]
       backends:
@@ -35,6 +66,10 @@ spec:
   http:
     - name: user-by-id
       match:
+        {{- if hasKey $familyHosts "r-user-by-id" }}
+        hosts:
+          - {{ index $familyHosts "r-user-by-id" | quote }}
+        {{- end }}
         paths: ["/api/v1/users/:id"]
         methods: ["GET"]
       backends:
@@ -52,6 +87,10 @@ spec:
   http:
     - name: user-update
       match:
+        {{- if hasKey $familyHosts "r-user-update" }}
+        hosts:
+          - {{ index $familyHosts "r-user-update" | quote }}
+        {{- end }}
         paths: ["/api/v1/users/me"]
         methods: ["PATCH"]
       backends:
@@ -69,6 +108,10 @@ spec:
   http:
     - name: conv-create
       match:
+        {{- if hasKey $familyHosts "r-conv-create" }}
+        hosts:
+          - {{ index $familyHosts "r-conv-create" | quote }}
+        {{- end }}
         paths: ["/api/v1/conversations"]
         methods: ["POST"]
       backends:
@@ -86,6 +129,10 @@ spec:
   http:
     - name: msg-list
       match:
+        {{- if hasKey $familyHosts "r-msg-list" }}
+        hosts:
+          - {{ index $familyHosts "r-msg-list" | quote }}
+        {{- end }}
         paths: ["/api/v1/conversations/*/messages"]
         methods: ["GET"]
       backends:
@@ -103,6 +150,10 @@ spec:
   http:
     - name: msg-send
       match:
+        {{- if hasKey $familyHosts "r-msg-send" }}
+        hosts:
+          - {{ index $familyHosts "r-msg-send" | quote }}
+        {{- end }}
         paths: ["/api/v1/conversations/*/messages"]
         methods: ["POST"]
       backends:
@@ -120,6 +171,10 @@ spec:
   http:
     - name: analytics-health
       match:
+        {{- if hasKey $familyHosts "r-analytics-health" }}
+        hosts:
+          - {{ index $familyHosts "r-analytics-health" | quote }}
+        {{- end }}
         paths: ["/analytics-health"]
       backends:
         - serviceName: {{ $upstreamAnalytics }}
@@ -136,6 +191,10 @@ spec:
   http:
     - name: surveys
       match:
+        {{- if hasKey $familyHosts "r-surveys" }}
+        hosts:
+          - {{ index $familyHosts "r-surveys" | quote }}
+        {{- end }}
         paths: ["/api/v1/surveys"]
         methods: ["GET"]
       backends:
@@ -153,6 +212,10 @@ spec:
   http:
     - name: survey-get
       match:
+        {{- if hasKey $familyHosts "r-survey-get" }}
+        hosts:
+          - {{ index $familyHosts "r-survey-get" | quote }}
+        {{- end }}
         paths: ["/api/v1/surveys/*"]
         methods: ["GET"]
       backends:
@@ -170,6 +233,10 @@ spec:
   http:
     - name: survey-submit
       match:
+        {{- if hasKey $familyHosts "r-survey-submit" }}
+        hosts:
+          - {{ index $familyHosts "r-survey-submit" | quote }}
+        {{- end }}
         paths: ["/api/v1/surveys/*/submit"]
         methods: ["POST"]
       backends:
@@ -187,6 +254,10 @@ spec:
   http:
     - name: survey-results-list
       match:
+        {{- if hasKey $familyHosts "r-survey-results-list" }}
+        hosts:
+          - {{ index $familyHosts "r-survey-results-list" | quote }}
+        {{- end }}
         paths: ["/api/v1/surveys/results"]
         methods: ["GET"]
       backends:
@@ -204,6 +275,10 @@ spec:
   http:
     - name: survey-results-get
       match:
+        {{- if hasKey $familyHosts "r-survey-results-get" }}
+        hosts:
+          - {{ index $familyHosts "r-survey-results-get" | quote }}
+        {{- end }}
         paths: ["/api/v1/surveys/results/*"]
         methods: ["GET"]
       backends:
@@ -221,6 +296,10 @@ spec:
   http:
     - name: emotion-by-msg
       match:
+        {{- if hasKey $familyHosts "r-emotion-by-msg" }}
+        hosts:
+          - {{ index $familyHosts "r-emotion-by-msg" | quote }}
+        {{- end }}
         paths: ["/api/v1/emotion/message/*"]
         methods: ["GET"]
       backends:
@@ -238,6 +317,10 @@ spec:
   http:
     - name: emotion-by-conv
       match:
+        {{- if hasKey $familyHosts "r-emotion-by-conv" }}
+        hosts:
+          - {{ index $familyHosts "r-emotion-by-conv" | quote }}
+        {{- end }}
         paths: ["/api/v1/emotion/conversation/*"]
         methods: ["GET"]
       backends:
@@ -255,12 +338,18 @@ spec:
   http:
     - name: ai-health
       match:
+        {{- if hasKey $familyHosts "r-ai-health" }}
+        hosts:
+          - {{ index $familyHosts "r-ai-health" | quote }}
+        {{- end }}
         paths: ["/ai-health"]
       backends:
         - serviceName: {{ $upstreamAi }}
           servicePort: 8891
 
-{{- /* Route 16: r-ping */ -}}
+{{- /* Route 16: r-ping — intentionally NOT in any TLS family.
+     Stays HTTP (no SNI termination). Operators hit /ping on plain
+     :9080 for liveness probes — TLS for a static mock is overkill. */ -}}
 ---
 apiVersion: apisix.apache.org/v2
 kind: ApisixRoute

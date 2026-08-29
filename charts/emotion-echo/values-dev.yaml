@@ -56,3 +56,20 @@ cert-manager:
   selfSignedIssuer:
     enabled: true
     name: selfsigned-issuer
+
+# Stage 29-D: per-family TLS retrofit for the 15 remaining business
+# ApisixRoutes. The 5-family grouping (user / chat / analytics /
+# assessment / ai) is defined in apisix-routes/values.yaml -> tls.families.
+# When this flag is true, apisix-routes/templates/tls-routes.yaml emits
+# 5 Certificate + 5 ApisixTls CRs AND each existing ApisixRoute in a
+# family gets `match.hosts: [<family.hostname>]` (dual-stack mode).
+#
+# Note: subcharts read their own values namespace, so this lives under
+# `apisix-routes.tls.enabled`, NOT `apisixRoutes.tls.enabled` (the
+# former would be silently ignored by the subchart template).
+#
+# mock-ping (r-ping) intentionally stays on plain HTTP — see
+# routes.yaml comment at Route 16.
+apisix-routes:
+  tls:
+    enabled: true
