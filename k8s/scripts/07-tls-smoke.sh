@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
-# 07-tls-smoke.sh — Stage 29-A.5 live TLS handshake verification.
+# 07-tls-smoke.sh — Stage 29-A.5 / 29-D live TLS handshake verification.
 #
-# Drives the same check as TestStage29A5_CertManagerLiveSmoke subtest
-# 09 (curl https://grafana.local:9443/api/health → 200) but as a
-# standalone script so operators can re-run it on any cluster
-# without invoking the full Go test suite.
+# Stage 29-A.5: drives the same check as
+# TestStage29A5_CertManagerLiveSmoke subtest 09
+# (curl https://grafana.local:9443/api/health → 200) as a standalone
+# script so operators can re-run it on any cluster.
+#
+# Stage 29-D: also drives the per-family TLS check
+# (curl https://<family>.echo.local:9443/health → 200) for the 5
+# business-route families (user / chat / analytics / assessment / ai).
+# Use the HEALTH_PATH env var to override `/api/health` (default for
+# Grafana) → `/health` (default for the 5 Go backend services).
 #
 # Flow:
 #   1. kubectl port-forward ee-apisix :9443 → host :9443 (HTTPS)
-#   2. curl --resolve grafana.local:9443:127.0.0.1 https://.../api/health
+#   2. curl --resolve <TLS_HOST>:9443:127.0.0.1 https://<TLS_HOST>:9443<HEALTH_PATH>
 #   3. teardown port-forward
 #
 # Exit 0 on 200 OK, non-zero on any failure.
 #
-# This script is the canonical manual check; the Go integration test
-# in k8s/tests/stage_29a5_smoke_test.go just shells out to it.
+# This script is the canonical manual check; the Go integration tests
+# in k8s/tests/stage_29a5_smoke_test.go and k8s/tests/stage_29d_smoke_test.go
+# both shell out to it.
 
 set -euo pipefail
 
@@ -22,8 +29,9 @@ APISIX_NAMESPACE="${APISIX_NAMESPACE:-ee-system}"
 APISIX_SERVICE="${APISIX_SERVICE:-ee-apisix}"
 TLS_HOST="${TLS_HOST:-grafana.local}"
 LOCAL_PORT="${LOCAL_PORT:-9443}"
+HEALTH_PATH="${HEALTH_PATH:-/api/health}"
 
-echo "[07-tls-smoke] starting TLS handshake check for ${TLS_HOST}:${LOCAL_PORT}"
+echo "[07-tls-smoke] starting TLS handshake check for https://${TLS_HOST}:${LOCAL_PORT}${HEALTH_PATH}"
 
 # 1. port-forward APISIX HTTPS port. APISIX 3.x data plane exposes
 #    :9443 as the TLS listener by default (configured in
@@ -62,22 +70,23 @@ if ! (echo > "/dev/tcp/127.0.0.1/${LOCAL_PORT}") 2>/dev/null; then
 fi
 
 # 2. curl TLS handshake + 200. -k accepts the self-signed cert;
-#    --resolve forces grafana.local → 127.0.0.1 so we don't need DNS.
-echo "[07-tls-smoke] curling https://${TLS_HOST}:${LOCAL_PORT}/api/health"
+#    --resolve forces <TLS_HOST> → 127.0.0.1 so we don't need DNS.
+#    HEALTH_PATH lets callers hit /health (Go svc) or /api/health (Grafana).
+echo "[07-tls-smoke] curling https://${TLS_HOST}:${LOCAL_PORT}${HEALTH_PATH}"
 HTTP_CODE=$(curl -k -s -o /tmp/ee-portforwards/07-tls-smoke.body \
   -w '%{http_code}' \
   --resolve "${TLS_HOST}:${LOCAL_PORT}:127.0.0.1" \
   --max-time 10 \
-  "https://${TLS_HOST}:${LOCAL_PORT}/api/health")
+  "https://${TLS_HOST}:${LOCAL_PORT}${HEALTH_PATH}")
 
 if [[ "$HTTP_CODE" != "200" ]]; then
-  echo "[07-tls-smoke] FAIL: expected HTTP 200, got ${HTTP_CODE}" >&2
+  echo "[07-tls-smoke] FAIL: expected HTTP 200 from ${HEALTH_PATH}, got ${HTTP_CODE}" >&2
   echo "--- response body ---" >&2
   cat /tmp/ee-portforwards/07-tls-smoke.body >&2 || true
   exit 1
 fi
 
-echo "[07-tls-smoke] PASS: HTTPS 200 OK from https://${TLS_HOST}:${LOCAL_PORT}/api/health"
+echo "[07-tls-smoke] PASS: HTTPS 200 OK from https://${TLS_HOST}:${LOCAL_PORT}${HEALTH_PATH}"
 echo "--- response body (first 200 chars) ---"
 head -c 200 /tmp/ee-portforwards/07-tls-smoke.body
 echo
