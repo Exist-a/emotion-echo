@@ -12,7 +12,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-1.x-244c5a?style=flat-square&logo=grpc&logoColor=white)](https://grpc.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Stage](https://img.shields.io/badge/Stage-29--A-blueviolet?style=flat-square)](docs/stage-29-A-https-grafana.md)
+[![Stage](https://img.shields.io/badge/Stage-29--D-blueviolet?style=flat-square)](docs/stage-29-D-tls-all-routes.md)
 
 ---
 
@@ -168,9 +168,9 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 ## 状态
 
 - ✅ Stage 0~28 全部完成（微服务化 + AI 容器化 + 端到端验证 + K8s 化 + 可观测性）
-- ✅ Stage 29-A：cert-manager + Grafana Ingress TLS（render-assert 已绿）
-- 🚧 Stage 29-A.5：live cluster smoke 进行中（见 [landing](docs/stage-29-A-https-grafana.md)）
-- 📝 长期路线：29-B/C/D/E（告警/Secrets/全部路由 TLS/Let's Encrypt）→ 30 ArgoCD → 31 ACK 迁移
+- ✅ Stage 29-A / 29-A.5：cert-manager + Grafana Ingress TLS（render + live smoke 已绿）
+- ✅ Stage 29-D：5-family TLS retrofit for the 15 business ApisixRoutes（render-assert 已绿；live smoke 待集群验证）
+- 📝 长期路线：29-E（Let's Encrypt）→ 30 Web BFF → 31 ACK 迁移
 
 ---
 
