@@ -12,7 +12,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-1.x-244c5a?style=flat-square&logo=grpc&logoColor=white)](https://grpc.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Stage](https://img.shields.io/badge/Stage-29--D-blueviolet?style=flat-square)](docs/stage-29-D-tls-all-routes.md)
+[![Stage](https://img.shields.io/badge/Stage-30--BFF-blueviolet?style=flat-square)](docs/stage-30-web-bff.md)
 
 ---
 
@@ -170,7 +170,9 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 - ✅ Stage 0~28 全部完成（微服务化 + AI 容器化 + 端到端验证 + K8s 化 + 可观测性）
 - ✅ Stage 29-A / 29-A.5：cert-manager + Grafana Ingress TLS（render + live smoke 已绿）
 - ✅ Stage 29-D：5-family TLS retrofit for the 15 business ApisixRoutes（render-assert 已绿；live smoke 待集群验证）
-- 📝 长期路线：29-E（Let's Encrypt）→ 30 Web BFF → 31 ACK 迁移
+- ✅ Stage 30-A/B/C：analytics 9 端点 + Kafka pipeline + 消费幂等/DLQ/Outbox（全绿）
+- ✅ **Stage 30 Web BFF**：`emotion-echo-web-bff`（:8894）唯一入口 — 聚合 5 下游 + SSE 编排 + 自有 mock 鉴权（`docs/stage-30-web-bff.md`）
+- 📝 长期路线：29-E（Let's Encrypt）→ 31 ACK 迁移
 
 ---
 
