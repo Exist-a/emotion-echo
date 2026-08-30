@@ -11,6 +11,7 @@ package integration_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -88,8 +89,13 @@ func TestMentalHealthRunner_Integration_HappyPath_JobDone(t *testing.T) {
 	row, ok := fetchJob(t, db, "it-task-1")
 	require.True(t, ok, "job 行应存在")
 	assert.Equal(t, "done", row.Status)
-	assert.Contains(t, string(row.Result), `"overallScore":55`, "result 应包含评估分数")
-	assert.Contains(t, string(row.Result), `"riskLevel":"moderate"`)
+
+	// jsonb 规范化输出（键排序 + 冒号后空格）→ 反序列化后比对字段
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(row.Result, &got))
+	assert.Equal(t, float64(55), got["overallScore"])
+	assert.Equal(t, "moderate", got["riskLevel"])
+	assert.Equal(t, "daily", got["type"])
 	assert.False(t, row.HasError)
 }
 
