@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -32,11 +33,24 @@ import (
 
 var configFile = flag.String("f", "etc/user-api.yaml", "the config file")
 
+// applyEnvOverrides 让容器内的 ${POSTGRES_DSN} / ${SKYWALKING_OAP_ADDR} env
+// 在 go-zero conf.MustLoad 之后覆盖 config struct（go-zero 1.10 不展开 ${VAR:-default}，
+// 原样保留字面量；与 chat-svc/ai-svc 同模式，Stage 30 容器化补充）。
+func applyEnvOverrides(c *config.Config) {
+	if v := os.Getenv("POSTGRES_DSN"); v != "" {
+		c.Postgres.DSN = v
+	}
+	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
+		c.SkyWalking.OAPAddr = v
+	}
+}
+
 func main() {
 	flag.Parse()
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c) // 继续使用 go-zero 的 conf 库读 yaml（仅 IO 工具）
+	applyEnvOverrides(&c)
 
 	// === 1. Postgres 连接 ===
 	userRepo, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)

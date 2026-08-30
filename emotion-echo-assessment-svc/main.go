@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"emotion-echo-assessment-svc/internal/config"
@@ -25,11 +26,22 @@ import (
 
 var configFile = flag.String("f", "etc/assessment-api.yaml", "the config file")
 
+// applyEnvOverrides 同 user-svc（go-zero 不展开 ${VAR:-default}，env 覆盖由 main 兜底）
+func applyEnvOverrides(c *config.Config) {
+	if v := os.Getenv("POSTGRES_DSN"); v != "" {
+		c.Postgres.DSN = v
+	}
+	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
+		c.SkyWalking.OAPAddr = v
+	}
+}
+
 func main() {
 	flag.Parse()
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	applyEnvOverrides(&c)
 
 	surveyRepo, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
 	if err != nil {
