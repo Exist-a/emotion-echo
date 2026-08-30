@@ -447,7 +447,7 @@ services:
       USER_SVC_URL:        "http://emotion-echo-user-svc:8888"
       CHAT_SVC_URL:        "http://emotion-echo-chat-svc:8890"
       ASSESSMENT_SVC_URL:  "http://emotion-echo-assessment-svc:8889"
-      ANALYTICS_SVC_URL:   "http://emotion-echo-analytics-svc:8904"
+      ANALYTICS_SVC_URL:   "http://emotion-echo-analytics-svc:8893"
       AI_SVC_HTTP_URL:     "http://emotion-echo-ai-svc:8891"
       AI_SVC_GRPC_ADDR:    "emotion-echo-ai-svc:8892"
       XTTS_BASE_URL:       "http://emotion-echo-xtts:8003"

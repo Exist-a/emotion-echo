@@ -53,7 +53,7 @@ RUN CGO_ENABLED=0 \
     go build -trimpath -ldflags="-s -w" -o /out/ai-svc .
 
 # ============ Stage 2: runtime ============
-FROM alpine:3.20
+FROM alpine:3.19
 
 # 容器内时区
 ENV TZ=Asia/Shanghai \

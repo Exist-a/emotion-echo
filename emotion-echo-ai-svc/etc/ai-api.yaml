@@ -31,9 +31,11 @@ Kafka:
   GroupID:    ai-svc
   Enabled:    true
   Topics:     ["chat-events"]
-  # Stage 30-C A2: DLQ — 毒消息在 MaxRetries+1 次后投 DLQ topic（留空 = 退化原行为）
-  DLQTopic:   ${KAFKA_DLQ_TOPIC:-chat-events-dlq}
-  MaxRetries: ${KAFKA_MAX_RETRIES:-3}
+  # Stage 30-C A2: DLQ — 毒消息在 MaxRetries+1 次后投 DLQ topic
+  # 注意：MaxRetries 是 int 字段，go-zero conf 不展开 ${VAR:-default} 占位符
+  #（会把字面量字符串赋给 int → type mismatch），必须写真实数字；env 覆盖由 main.go 处理
+  DLQTopic:   chat-events-dlq
+  MaxRetries: 3
 
 LLM:
   BaseURL:        ${LLM_BASE_URL:-http://localhost:8000}
