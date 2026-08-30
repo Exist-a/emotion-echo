@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"emotion-echo-chat-svc/internal/logic"
+	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 
@@ -70,6 +73,30 @@ func ListMessagesHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 		resp, err := logic.NewListMessagesLogic(c.Request.Context(), svcCtx).ListMessages(&req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// DeleteConversationHandler DELETE /api/v1/conversations/:id
+func DeleteConversationHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil || id <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid conversation id"})
+			return
+		}
+		resp, err := logic.NewDeleteConversationLogic(c.Request.Context(), svcCtx).
+			DeleteConversation(&types.DeleteConversationReq{Id: id})
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, repository.ErrNotFound) {
+				status = http.StatusNotFound
+			} else if strings.Contains(err.Error(), "forbidden") || strings.Contains(err.Error(), "unauthorized") {
+				status = http.StatusForbidden
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, resp)

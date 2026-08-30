@@ -126,6 +126,7 @@ func main() {
 	r.POST("/api/v1/conversations", handler.CreateConversationHandler(svcCtx))
 	r.POST("/api/v1/conversations/:id/messages", handler.SendMessageHandler(svcCtx))
 	r.GET("/api/v1/conversations/:id/messages", handler.ListMessagesHandler(svcCtx))
+	r.DELETE("/api/v1/conversations/:id", handler.DeleteConversationHandler(svcCtx))
 
 	log.Printf("Starting chat-svc at %s:%d...", c.Host, c.Port)
 	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {

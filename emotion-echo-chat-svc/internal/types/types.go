@@ -58,3 +58,14 @@ type SendMessageReq struct {
 type SendMessageResp struct {
 	Message MessageView `json:"message"`
 }
+
+// DeleteConversationReq DELETE /api/v1/conversations/:id
+type DeleteConversationReq struct {
+	Id int64 `path:"id"`
+}
+
+// DeleteConversationResp 删除成功响应
+type DeleteConversationResp struct {
+	Success bool  `json:"success"`
+	Id      int64 `json:"id"`
+}

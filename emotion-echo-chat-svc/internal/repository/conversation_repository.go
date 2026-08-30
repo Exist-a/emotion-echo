@@ -36,6 +36,8 @@ type ConversationRepo interface {
 	AppendMessage(ctx context.Context, m *model.Message) error
 	// ListMessages 列出会话的消息
 	ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error)
+	// DeleteConversation 删除会话（级联删除其消息）
+	DeleteConversation(ctx context.Context, id int64) error
 	// Ping 健康检查
 	Ping(ctx context.Context) error
 }
@@ -125,6 +127,19 @@ func (r *InMemoryConversationRepo) ListMessages(ctx context.Context, conversatio
 
 func (r *InMemoryConversationRepo) Ping(ctx context.Context) error { return nil }
 
+// DeleteConversation 删除会话 + 级联删除其消息（不存在的 id 为 no-op）
+func (r *InMemoryConversationRepo) DeleteConversation(ctx context.Context, id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.conversations, id)
+	for mid, m := range r.messages {
+		if m.ConversationID == id {
+			delete(r.messages, mid)
+		}
+	}
+	return nil
+}
+
 // =====================================================
 // PostgresConversationRepo（生产实现）
 // =====================================================
@@ -185,6 +200,16 @@ func (r *PostgresConversationRepo) ListMessages(ctx context.Context, conversatio
 		Limit(limit).
 		Find(&out).Error
 	return out, err
+}
+
+// DeleteConversation 事务删除会话 + 其消息（不存在的 id 为 no-op）
+func (r *PostgresConversationRepo) DeleteConversation(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("conversation_id = ?", id).Delete(&model.Message{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.Conversation{}, id).Error
+	})
 }
 
 func (r *PostgresConversationRepo) Ping(ctx context.Context) error {
