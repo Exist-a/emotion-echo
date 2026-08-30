@@ -221,17 +221,24 @@ func TestStage29D_AllFamiliesCertificatesRender(t *testing.T) {
 
 // TestStage29D_AllFamiliesRouteCountUnchanged guards against accidental
 // route duplication. Stage 29-D does NOT add new ApisixRoutes — it only
-// injects `match.hosts` into the 16 existing ones. Grafana TLS adds 1
-// more (existing), so the total stays at 17 (= 16 business + 1 grafana).
+// injects `match.hosts` into the existing 16 ones. Grafana TLS adds 1
+// ApisixRoute (`grafana-tls` in ee-observability, gated on
+// global.grafanaIngressTls.enabled=true). Stage 30-A adds 9 more in the
+// analytics family (r-reports-*, r-ub-*, r-mh-*) for the analytics-svc
+// business endpoints.
 //
-// RED if Stage 29-D.2 accidentally emits new ApisixRoute per family.
+// Post-30-A total = 26 (= 16 pre-29-D business + 1 grafana-tls + 9 stage-30-A).
+//
+// RED if any stage accidentally emits new ApisixRoutes beyond this count.
 func TestStage29D_AllFamiliesRouteCountUnchanged(t *testing.T) {
 	rendered := helm(t, valuesDev)
 
 	routes := countKind(rendered, "ApisixRoute")
-	if routes != 17 {
-		t.Errorf("expected exactly 17 ApisixRoute CRDs (16 business + 1 grafana TLS); "+
-			"Stage 29-D does NOT add new ApisixRoutes — got %d", routes)
+	const want = 26 // 16 pre-29-D + 1 grafana-tls + 9 stage-30-A
+	if routes != want {
+		t.Errorf("expected exactly %d ApisixRoute CRDs "+
+			"(16 pre-29-D business + 1 grafana-tls + 9 stage-30-A analytics); "+
+			"got %d", want, routes)
 	}
 }
 

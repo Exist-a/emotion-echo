@@ -50,7 +50,17 @@ tls:
       routes: [r-conv-create, r-msg-list, r-msg-send]
     - name: analytics
       hostname: analytics.echo.local
-      routes: [r-analytics-health]
+      routes:
+        - r-analytics-health
+        - r-reports-daily
+        - r-reports-trend
+        - r-ub-day-night
+        - r-ub-depth
+        - r-ub-frequency
+        - r-mh-assessment
+        - r-mh-history
+        - r-mh-trigger
+        - r-mh-trend
     - name: assessment
       hostname: assessment.echo.local
       routes:

@@ -57,8 +57,13 @@ func helm(t *testing.T, values ...string) string {
 
 // countKind returns the number of resources of `kind` in the rendered YAML.
 // Simple grep-style counter — sufficient for an umbrella-level smoke test.
+//
+// Note: helm emits CRLF on Windows; Go's `\s` does not match `\r`, so we
+// include it explicitly. Without this, the counter silently returns 0 on
+// Windows hosts (the kind line ends with `\r\n` and `\s*$` cannot match
+// the bare `\r`).
 func countKind(rendered, kind string) int {
-	re := regexp.MustCompile(`(?m)^kind:\s*` + kind + `\s*$`)
+	re := regexp.MustCompile(`(?m)^kind:\s*` + kind + `\s*\r?$`)
 	return len(re.FindAllString(rendered, -1))
 }
 
@@ -113,19 +118,27 @@ func TestStage27A_SubChartsPresent(t *testing.T) {
 	}
 }
 
-// TestStage27A_APISIXRoutes asserts the apisix-routes subchart emits the
-// 16 ApisixRoute CRDs (business routes) + the Stage 29-A.5 grafana
-// TLS route = 17 ApisixRoutes total, plus 6 ApisixUpstream CRDs that
-// match the legacy docker-compose APISIX routing (see
-// deploy/apisix/apisix.yaml).
+// TestStage27A_APISIXRoutes asserts the umbrella emits the expected
+// ApisixRoute baseline. With values-dev.yaml (Stage 29-A.5 grafana TLS
+// enabled), the breakdown is:
+//
+//   - 16 pre-Stage-30-A business routes (apisix-routes subchart)
+//   - 9  stage-30-A analytics business routes (apisix-routes subchart)
+//   - 1  grafana-tls route (grafana subchart, gated on
+//        global.grafanaIngressTls.enabled)
+//
+// = 26 ApisixRoutes total + 6 ApisixUpstream CRDs.
 func TestStage27A_APISIXRoutes(t *testing.T) {
 	rendered := helm(t, valuesDev)
 
-	// 16 business routes (Stage 27) + 1 grafana TLS route (Stage 29-A.5)
-	// = 17 total.
+	// 16 business routes (Stage 27) + 9 stage-30-A analytics + 1 grafana-tls
+	// = 26 total.
 	routes := countKind(rendered, "ApisixRoute")
-	if routes != 17 {
-		t.Errorf("expected exactly 17 ApisixRoute CRDs (16 business + 1 grafana TLS), got %d", routes)
+	const want = 26 // 16 + 9 stage-30-A + 1 grafana-tls
+	if routes != want {
+		t.Errorf("expected exactly %d ApisixRoute CRDs "+
+			"(16 business + 9 stage-30-A analytics + 1 grafana-tls), got %d",
+			want, routes)
 	}
 
 	ups := countKind(rendered, "ApisixUpstream")

@@ -180,6 +180,183 @@ spec:
         - serviceName: {{ $upstreamAnalytics }}
           servicePort: 8893
 
+{{- /* Stage 30-A: reports routes (r-reports-daily, r-reports-trend) */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-reports-daily
+  namespace: ee-app
+spec:
+  http:
+    - name: reports-daily
+      match:
+        {{- if hasKey $familyHosts "r-reports-daily" }}
+        hosts:
+          - {{ index $familyHosts "r-reports-daily" | quote }}
+        {{- end }}
+        paths: ["/api/v1/reports/daily"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-reports-trend
+  namespace: ee-app
+spec:
+  http:
+    - name: reports-trend
+      match:
+        {{- if hasKey $familyHosts "r-reports-trend" }}
+        hosts:
+          - {{ index $familyHosts "r-reports-trend" | quote }}
+        {{- end }}
+        paths: ["/api/v1/reports/trend"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+
+{{- /* Stage 30-A: user-behavior routes (r-ub-day-night, r-ub-depth, r-ub-frequency) */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-ub-day-night
+  namespace: ee-app
+spec:
+  http:
+    - name: ub-day-night
+      match:
+        {{- if hasKey $familyHosts "r-ub-day-night" }}
+        hosts:
+          - {{ index $familyHosts "r-ub-day-night" | quote }}
+        {{- end }}
+        paths: ["/api/v1/user-behavior/day-night"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-ub-depth
+  namespace: ee-app
+spec:
+  http:
+    - name: ub-depth
+      match:
+        {{- if hasKey $familyHosts "r-ub-depth" }}
+        hosts:
+          - {{ index $familyHosts "r-ub-depth" | quote }}
+        {{- end }}
+        paths: ["/api/v1/user-behavior/depth"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-ub-frequency
+  namespace: ee-app
+spec:
+  http:
+    - name: ub-frequency
+      match:
+        {{- if hasKey $familyHosts "r-ub-frequency" }}
+        hosts:
+          - {{ index $familyHosts "r-ub-frequency" | quote }}
+        {{- end }}
+        paths: ["/api/v1/user-behavior/frequency"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+
+{{- /* Stage 30-A: mental-health routes (r-mh-assessment, r-mh-history, r-mh-trigger, r-mh-trend) */ -}}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-mh-assessment
+  namespace: ee-app
+spec:
+  http:
+    - name: mh-assessment
+      match:
+        {{- if hasKey $familyHosts "r-mh-assessment" }}
+        hosts:
+          - {{ index $familyHosts "r-mh-assessment" | quote }}
+        {{- end }}
+        paths: ["/api/v1/mental-health/assessment"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-mh-history
+  namespace: ee-app
+spec:
+  http:
+    - name: mh-history
+      match:
+        {{- if hasKey $familyHosts "r-mh-history" }}
+        hosts:
+          - {{ index $familyHosts "r-mh-history" | quote }}
+        {{- end }}
+        paths: ["/api/v1/mental-health/history"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-mh-trigger
+  namespace: ee-app
+spec:
+  http:
+    - name: mh-trigger
+      match:
+        {{- if hasKey $familyHosts "r-mh-trigger" }}
+        hosts:
+          - {{ index $familyHosts "r-mh-trigger" | quote }}
+        {{- end }}
+        paths: ["/api/v1/mental-health/trigger"]
+        methods: ["POST"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: r-mh-trend
+  namespace: ee-app
+spec:
+  http:
+    - name: mh-trend
+      match:
+        {{- if hasKey $familyHosts "r-mh-trend" }}
+        hosts:
+          - {{ index $familyHosts "r-mh-trend" | quote }}
+        {{- end }}
+        paths: ["/api/v1/mental-health/trend"]
+        methods: ["GET"]
+      backends:
+        - serviceName: {{ $upstreamAnalytics }}
+          servicePort: 8893
+
 {{- /* Route 8: r-surveys */ -}}
 ---
 apiVersion: apisix.apache.org/v2

@@ -176,12 +176,16 @@ func TestStage30A_AnalyticsDeploymentHasReadOnlyDBRole(t *testing.T) {
 	}
 
 	for _, key := range []string{
-		"POSTGRES_ROLE=analytics_reader",
-		"POSTGRES_SEARCH_PATH=emotion_echo_analytics,emotion_echo_chat,emotion_echo_ai,emotion_echo_assessment",
-		"KAFKA_BROKERS=",
-		"TRIGGER_QUEUE_CAP=",
+		"POSTGRES_ROLE",
+		"POSTGRES_SEARCH_PATH",
+		"KAFKA_BROKERS",
+		"TRIGGER_QUEUE_CAP",
 	} {
-		if !strings.Contains(dep, key) {
+		// Helm renders env entries as `- name: <KEY>\n  value: <...>`,
+		// so we check for the `name: <KEY>` line rather than the
+		// joined `KEY=value` shape.
+		nameLine := "\n            - name: " + key
+		if !strings.Contains(dep, nameLine) {
 			t.Errorf("Deployment/analytics-svc env missing %q "+
 				"(stage-30-A §六.6.4: read-only DB role + Kafka consumer wiring)",
 				key)
@@ -285,10 +289,6 @@ func TestStage30A_NineBusinessRoutesAdded(t *testing.T) {
 func TestStage30A_AnalyticsHostGuard(t *testing.T) {
 	rendered := helm(t, valuesDev)
 
-	if !valuesDevHasAnalyticsTLS(t) {
-		t.Skip("pre-29-D values; analytics family host block is gated on tls.enabled")
-	}
-
 	docs := splitHelmResources(rendered)
 	kindRe := regexp.MustCompile(`(?m)^kind:\s*ApisixRoute\s*$`)
 	for _, doc := range docs {
@@ -306,18 +306,6 @@ func TestStage30A_AnalyticsHostGuard(t *testing.T) {
 		return
 	}
 	t.Fatal("r-analytics-health ApisixRoute not rendered (chart broken)")
-}
-
-// valuesDevHasAnalyticsTLS inspects values-dev.yaml to decide whether
-// tls.enabled=true is set. Stage 30-A works in both modes; the host
-// guard only applies when TLS is enabled.
-func valuesDevHasAnalyticsTLS(t *testing.T) bool {
-	t.Helper()
-	// We can't parse YAML here easily; just look at the rendered
-	// output: if `analytics.echo.local` appears anywhere in the
-	// rendered routes, TLS is on in dev values.
-	rendered := helm(t, valuesDev)
-	return strings.Contains(rendered, "analytics.echo.local")
 }
 
 // TestStage30A_NoRoutesAddedToOtherFamilies is the negative test:

@@ -29,13 +29,27 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: {{ .Values.service.port }}
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
           env:
             - name: POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
                   name: analytics-svc-secret
                   key: postgresDsn
+            - name: POSTGRES_ROLE
+              value: "analytics_reader"
+            - name: POSTGRES_SEARCH_PATH
+              value: "emotion_echo_analytics,emotion_echo_chat,emotion_echo_ai,emotion_echo_assessment"
+            - name: KAFKA_BROKERS
+              value: "kafka.ee-data:9092"
+            - name: KAFKA_TOPIC_CHAT_EVENTS
+              value: "chat-events"
+            - name: KAFKA_CONSUMER_GROUP
+              value: "analytics-svc"
+            - name: TRIGGER_QUEUE_CAP
+              value: "64"
             - name: SKYWALKING_OAP_ADDR
               value: "skywalking-oap.ee-data:11800"
             - name: LOG_FORMAT
@@ -79,8 +93,10 @@ metadata:
     {{- include "analytics-svc.labels" . | nindent 4 }}
 spec:
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: {{ .Values.service.port }}
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
   selector:
     {{- include "analytics-svc.selectorLabels" . | nindent 4 }}
 ---
