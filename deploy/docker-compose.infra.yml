@@ -31,6 +31,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
 
   # =====================================================
   # redis:7
@@ -48,6 +50,8 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      - app-network
 
   # =====================================================
   # Stage 26-Q · APISIX 3.9 保留(无 image 升级/Docker Hub 受限)
@@ -107,7 +111,8 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # Stage 30: advertised 改为容器 DNS（业务 svc 容器内消费 kafka 需要）
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://emotion-echo-kafka:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_PROCESS_CONFIGS_TTL: 30000
@@ -123,6 +128,8 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
+    networks:
+      - app-network
 
   # =====================================================
   # SkyWalking OAP (后端)
@@ -155,6 +162,8 @@ services:
       TZ: Asia/Shanghai
     ports:
       - "18080:8080"
+    networks:
+      - app-network
 
 # =====================================================
 # 卷定义

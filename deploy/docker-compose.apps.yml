@@ -474,6 +474,45 @@ services:
       start_period: 15s
       retries: 3
 
+  # =====================================================
+  # Stage 30: Emotion-Echo-Web 前端（生产模式，走 BFF 唯一入口）
+  #   NUXT_PUBLIC_API_BASE_URL → BFF :8894（聚合 5 下游）
+  # =====================================================
+  emotion-echo-web:
+    build:
+      context: ../Emotion-Echo-Web
+      dockerfile: Dockerfile
+      args:
+        # SPA 纯前端：API_BASE_URL 在浏览器执行，需宿主可达地址（BFF :8894 已映射宿主）
+        NUXT_PUBLIC_API_BASE_URL: http://localhost:8894/api/v1
+    image: emotion-echo/web:v0.1.0
+    container_name: emotion-echo-web
+    restart: unless-stopped
+    depends_on:
+      - emotion-echo-web-bff
+    environment:
+      <<: *logging-env
+      NUXT_PUBLIC_API_BASE_URL: http://localhost:8894/api/v1
+      NUXT_PUBLIC_DISABLE_AUTH: "false"
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
 # =====================================================
 # 网络：external，连接到 infra compose 定义的 app-network
 # =====================================================

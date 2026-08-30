@@ -1,6 +1,7 @@
 import { ref, onUnmounted } from "vue";
 import { stripMarkdown, extractReadableText } from "~/utils/stripMarkdown";
 import PcmPlayer from "pcm-player";
+import { useRuntimeConfig } from "#imports";
 
 export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral';
 
@@ -170,11 +171,16 @@ const playStream = async (
 
   try {
     abortController = new AbortController();
-    const response = await fetch('http://localhost:8003/tts_stream', {
+    // Stage 30: TTS 流式走 BFF 唯一入口（聚合 XTTS 直连），带 Authorization 透传
+    const base = (useRuntimeConfig().public.API_BASE_URL as string) || 'http://localhost:8894/api/v1';
+    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || '';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(`${base}/tts/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         text: readableText,
         speed: speed,
