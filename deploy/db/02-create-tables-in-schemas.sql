@@ -96,8 +96,12 @@ CREATE TABLE IF NOT EXISTS emotion_echo_chat.messages (
 CREATE INDEX IF NOT EXISTS idx_messages_conv_time ON emotion_echo_chat.messages(conversation_id, created_at);
 
 -- ===== emotion_echo_ai =====
+-- Stage 30-C A1: emotion_analysis 加 event_id 列 + UNIQUE 约束（消费幂等去重）。
+-- 完整 migration 见 emotion-echo-ai-svc/migrations/001_add_event_id_to_emotion_analysis.sql。
+-- 新环境部署时由该 migration 同步 schema；本集中式 DDL 同步更新避免漂移。
 CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
     id BIGSERIAL PRIMARY KEY,
+    event_id VARCHAR(64),
     message_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     conversation_id BIGINT NOT NULL,
@@ -109,6 +113,8 @@ CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
     raw_response JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_emotion_analysis_event_id
+    ON emotion_echo_ai.emotion_analysis(event_id);
 CREATE INDEX IF NOT EXISTS idx_emotion_user_time ON emotion_echo_ai.emotion_analysis(user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS emotion_echo_ai.voice_transcripts (

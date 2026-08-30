@@ -67,6 +67,7 @@ func pgContainerDesc(t *testing.T, ctx context.Context) (*pgcontainer.PostgresCo
 	require.NoError(t, runSQL(ctx, dsn, `
 CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
   id BIGSERIAL PRIMARY KEY,
+  event_id VARCHAR(64),
   message_id BIGINT NOT NULL UNIQUE,
   user_id BIGINT NOT NULL,
   conversation_id BIGINT NOT NULL,
@@ -74,7 +75,8 @@ CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
   sentiment_score REAL,
   confidence REAL,
   model VARCHAR(64),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_emotion_analysis_event_id UNIQUE (event_id)
 )`))
 	require.NoError(t, runSQL(ctx, dsn,
 		`CREATE INDEX IF NOT EXISTS idx_emotion_conv ON emotion_echo_ai.emotion_analysis(conversation_id)`))

@@ -9,6 +9,7 @@ import (
 	"emotion-echo-ai-svc/internal/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ErrNotFound 在资源不存在时返回
@@ -33,11 +34,16 @@ type EmotionRepo interface {
 // =====================================================
 
 // InMemoryEmotionRepo 内存实现，按 messageID 建索引加速查询
+//
+// byEventID 索引用于消费幂等去重（Stage 30-C A1）：同一 EventID 二次 Create
+// 直接返回 nil，不分配新 ID、不入 byID（与 PG ON CONFLICT DO NOTHING 语义一致）。
+// 空 EventID（gRPC 同步分析路径）不参与去重。
 type InMemoryEmotionRepo struct {
 	mu             sync.RWMutex
 	byID           map[int64]*model.EmotionAnalysis
 	byMessageID    map[int64]int64 // messageID → analysis ID
 	byConversation map[int64][]int64
+	byEventID      map[string]int64 // eventID → analysis ID（幂等键）
 	nextID         int64
 }
 
@@ -46,6 +52,7 @@ func NewInMemoryEmotionRepo() *InMemoryEmotionRepo {
 		byID:           make(map[int64]*model.EmotionAnalysis),
 		byMessageID:    make(map[int64]int64),
 		byConversation: make(map[int64][]int64),
+		byEventID:      make(map[string]int64),
 		nextID:         1,
 	}
 }
@@ -85,6 +92,16 @@ func (r *InMemoryEmotionRepo) ListByConversationID(ctx context.Context, conversa
 func (r *InMemoryEmotionRepo) Create(ctx context.Context, e *model.EmotionAnalysis) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// 幂等去重（Stage 30-C A1）：同 EventID 第二次 Create 直接返回 nil，不分配 ID。
+	// 语义与 Postgres ON CONFLICT (event_id) DO NOTHING 对齐。
+	if e.EventID != "" {
+		if existingID, ok := r.byEventID[e.EventID]; ok {
+			if existing, hit := r.byID[existingID]; hit {
+				*e = *existing
+			}
+			return nil
+		}
+	}
 	if e.ID == 0 {
 		e.ID = r.nextID
 		r.nextID++
@@ -95,6 +112,9 @@ func (r *InMemoryEmotionRepo) Create(ctx context.Context, e *model.EmotionAnalys
 	}
 	if e.ConversationID != 0 {
 		r.byConversation[e.ConversationID] = append(r.byConversation[e.ConversationID], e.ID)
+	}
+	if e.EventID != "" {
+		r.byEventID[e.EventID] = e.ID
 	}
 	return nil
 }
@@ -147,9 +167,21 @@ func (r *PostgresEmotionRepo) ListByConversationID(ctx context.Context, conversa
 	return out, nil
 }
 
+// Create 持久化一条情绪分析。
+//
+// Stage 30-C A1：event_id 上挂 UNIQUE 约束，INSERT 走 ON CONFLICT DO NOTHING
+// 实现消费幂等。at-least-once 投递下重复消息不重复落库。
+// 空 EventID（gRPC 同步路径）走非去重分支（DB UNIQUE 允许多个 NULL）。
 func (r *PostgresEmotionRepo) Create(ctx context.Context, e *model.EmotionAnalysis) error {
 	e.ID = 0
-	return r.db.WithContext(ctx).Create(e).Error
+	tx := r.db.WithContext(ctx)
+	if e.EventID != "" {
+		tx = tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "event_id"}},
+			DoNothing: true,
+		})
+	}
+	return tx.Create(e).Error
 }
 
 func (r *PostgresEmotionRepo) Ping(ctx context.Context) error {

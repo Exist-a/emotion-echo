@@ -59,7 +59,21 @@ func pgContainerForEmotion(t *testing.T, ctx context.Context) (*gorm.DB, func())
 
 	require.NoError(t, db.Exec("CREATE SCHEMA IF NOT EXISTS emotion_echo_ai").Error)
 
-	// apply 所有 ai-svc migrations（按文件名排序）
+	// 1) 建基础表（与 deploy/db/02-create-tables-in-schemas.sql 一致，无 message_id UNIQUE 漂移）
+	require.NoError(t, db.Exec(`
+CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
+    id BIGSERIAL PRIMARY KEY,
+    message_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    conversation_id BIGINT NOT NULL,
+    primary_emotion VARCHAR(32),
+    sentiment_score REAL,
+    confidence REAL,
+    model VARCHAR(64),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+)`).Error)
+
+	// 2) apply 所有 ai-svc migrations（按文件名排序）。migrations 在空表上加列与约束。
 	migDir := findEmotionMigrationsDir(t)
 	entries, err := os.ReadDir(migDir)
 	require.NoError(t, err)

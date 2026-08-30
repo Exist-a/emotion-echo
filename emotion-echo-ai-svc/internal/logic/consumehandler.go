@@ -78,6 +78,7 @@ func (h *MessageCreatedHandler) Handle(ctx context.Context, evt *events.Event) e
 
 	// 5. 写库
 	row := &model.EmotionAnalysis{
+		EventID:        evt.ID, // Stage 30-C A1: 事件 ID 透传 → 消费幂等去重键
 		MessageID:      data.MessageID,
 		UserID:         data.UserID,
 		ConversationID: data.ConversationID,
