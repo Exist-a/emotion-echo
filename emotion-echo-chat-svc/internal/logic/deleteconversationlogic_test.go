@@ -18,6 +18,8 @@ import (
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/types"
 
+	"gorm.io/gorm"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -133,3 +135,17 @@ func (f *failingDeleteRepo) DeleteConversation(ctx context.Context, id int64) er
 	return errors.New("delete failed")
 }
 func (f *failingDeleteRepo) Ping(ctx context.Context) error { return f.inner.Ping(ctx) }
+
+// Stage 30-C A3: Tx 占位（InMemory 退化路径不真用 tx，但接口要求实现）
+func (f *failingDeleteRepo) CreateConversationTx(_ *gorm.DB, ctx context.Context, c *model.Conversation) error {
+	return f.CreateConversation(ctx, c)
+}
+func (f *failingDeleteRepo) AppendMessageTx(_ *gorm.DB, ctx context.Context, m *model.Message) error {
+	return f.AppendMessage(ctx, m)
+}
+func (f *failingDeleteRepo) DeleteConversationTx(_ *gorm.DB, ctx context.Context, id int64) error {
+	return f.DeleteConversation(ctx, id)
+}
+func (f *failingDeleteRepo) IncrementMessageCountTx(_ *gorm.DB, ctx context.Context, conversationID int64) error {
+	return f.IncrementMessageCount(ctx, conversationID)
+}

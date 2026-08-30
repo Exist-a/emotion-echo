@@ -40,6 +40,12 @@ type ConversationRepo interface {
 	DeleteConversation(ctx context.Context, id int64) error
 	// Ping 健康检查
 	Ping(ctx context.Context) error
+
+	// Stage 30-C A3: 事务版本（接受可选 tx，nil = 非事务）
+	CreateConversationTx(tx *gorm.DB, ctx context.Context, c *model.Conversation) error
+	AppendMessageTx(tx *gorm.DB, ctx context.Context, m *model.Message) error
+	DeleteConversationTx(tx *gorm.DB, ctx context.Context, id int64) error
+	IncrementMessageCountTx(tx *gorm.DB, ctx context.Context, conversationID int64) error
 }
 
 // =====================================================
@@ -126,6 +132,23 @@ func (r *InMemoryConversationRepo) ListMessages(ctx context.Context, conversatio
 }
 
 func (r *InMemoryConversationRepo) Ping(ctx context.Context) error { return nil }
+
+// CreateConversationTx InMemory 实现：tx 参数忽略（InMemory 无事务概念）
+func (r *InMemoryConversationRepo) CreateConversationTx(_ *gorm.DB, ctx context.Context, c *model.Conversation) error {
+	return r.CreateConversation(ctx, c)
+}
+
+func (r *InMemoryConversationRepo) AppendMessageTx(_ *gorm.DB, ctx context.Context, m *model.Message) error {
+	return r.AppendMessage(ctx, m)
+}
+
+func (r *InMemoryConversationRepo) DeleteConversationTx(_ *gorm.DB, ctx context.Context, id int64) error {
+	return r.DeleteConversation(ctx, id)
+}
+
+func (r *InMemoryConversationRepo) IncrementMessageCountTx(_ *gorm.DB, ctx context.Context, conversationID int64) error {
+	return r.IncrementMessageCount(ctx, conversationID)
+}
 
 // DeleteConversation 删除会话 + 级联删除其消息（不存在的 id 为 no-op）
 func (r *InMemoryConversationRepo) DeleteConversation(ctx context.Context, id int64) error {
@@ -218,4 +241,46 @@ func (r *PostgresConversationRepo) Ping(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.PingContext(ctx)
+}
+
+// Stage 30-C A3: 事务版本（tx == nil 退化为 r.db；非事务路径）
+
+func (r *PostgresConversationRepo) CreateConversationTx(tx *gorm.DB, ctx context.Context, c *model.Conversation) error {
+	c.ID = 0
+	if tx == nil {
+		tx = r.db
+	}
+	return tx.WithContext(ctx).Create(c).Error
+}
+
+func (r *PostgresConversationRepo) AppendMessageTx(tx *gorm.DB, ctx context.Context, m *model.Message) error {
+	m.ID = 0
+	if tx == nil {
+		tx = r.db
+	}
+	return tx.WithContext(ctx).Create(m).Error
+}
+
+func (r *PostgresConversationRepo) IncrementMessageCountTx(tx *gorm.DB, ctx context.Context, conversationID int64) error {
+	if tx == nil {
+		tx = r.db
+	}
+	return tx.WithContext(ctx).
+		Exec(`UPDATE emotion_echo_chat.conversations
+		      SET message_count = message_count + 1,
+		          last_message_at = NOW(),
+		          updated_at = NOW()
+		      WHERE id = ?`, conversationID).Error
+}
+
+func (r *PostgresConversationRepo) DeleteConversationTx(tx *gorm.DB, ctx context.Context, id int64) error {
+	if tx == nil {
+		return r.DeleteConversation(ctx, id)
+	}
+	return tx.WithContext(ctx).Transaction(func(sub *gorm.DB) error {
+		if err := sub.Where("conversation_id = ?", id).Delete(&model.Message{}).Error; err != nil {
+			return err
+		}
+		return sub.Delete(&model.Conversation{}, id).Error
+	})
 }
