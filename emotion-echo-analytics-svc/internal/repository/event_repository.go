@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -214,17 +215,105 @@ func (r *PostgresEventRepo) Ping(ctx context.Context) error {
 	return sqlDB.PingContext(ctx)
 }
 
-// GetDayNightPattern Round 2 GREEN 占位（真 SQL 在 Round 5 migrations 后）
-func (r *PostgresEventRepo) GetDayNightPattern(_ context.Context, _ int64, _, _ time.Time) (map[int]int64, error) {
-	return nil, errors.New("PostgresEventRepo.GetDayNightPattern: Round 5 实现未落地")
+// GetDayNightPattern 按 24 小时桶聚合 [start, end]（含 end 当日）内的事件。
+//
+// 窗口语义与 InMemory 实现一致：[start::date, end::date + 1 day)。
+// 返回稀疏 map（缺失的 hour 不出现），logic 层负责补满 24 桶。
+// 时间桶按数据库会话时区取 EXTRACT(HOUR)（生产 UTC，测试容器默认 UTC）。
+func (r *PostgresEventRepo) GetDayNightPattern(ctx context.Context, userID int64, start, end time.Time) (map[int]int64, error) {
+	const q = `
+SELECT EXTRACT(HOUR FROM occurred_at)::int AS hour, COUNT(*)::bigint AS cnt
+FROM emotion_echo_analytics.user_behavior_events
+WHERE user_id = $1
+  AND occurred_at >= $2::date
+  AND occurred_at < ($3::date + INTERVAL '1 day')
+GROUP BY 1`
+
+	var rows []struct {
+		Hour int
+		Cnt  int64
+	}
+	if err := r.db.WithContext(ctx).Raw(q, userID, start, end).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[int]int64, len(rows))
+	for _, row := range rows {
+		out[row.Hour] = row.Cnt
+	}
+	return out, nil
 }
 
-// GetInteractionDepth Round 2 GREEN 占位
-func (r *PostgresEventRepo) GetInteractionDepth(_ context.Context, _ int64, _, _ time.Time) (*InteractionDepth, error) {
-	return nil, errors.New("PostgresEventRepo.GetInteractionDepth: Round 5 实现未落地")
+// GetInteractionDepth 计算 [start, end] 内用户活跃度指标。
+//
+// 语义（与 InMemory 近似一致）：
+//   - totalMessages = 窗口内事件总数
+//   - totalConversations = DISTINCT session_id 数
+//   - avgMessagesPerConv = total / convs（0 会话时 0，保留 2 位小数）
+//   - longestConversationMs = 按 session_id 分组的首末事件跨度的最大值
+func (r *PostgresEventRepo) GetInteractionDepth(ctx context.Context, userID int64, start, end time.Time) (*InteractionDepth, error) {
+	const q = `
+WITH windowed AS (
+    SELECT session_id, occurred_at
+    FROM emotion_echo_analytics.user_behavior_events
+    WHERE user_id = $1
+      AND occurred_at >= $2::date
+      AND occurred_at < ($3::date + INTERVAL '1 day')
+),
+session_agg AS (
+    SELECT session_id,
+           MIN(occurred_at) AS min_at,
+           MAX(occurred_at) AS max_at
+    FROM windowed
+    GROUP BY session_id
+)
+SELECT
+    (SELECT COUNT(*)::bigint FROM windowed)                AS total_messages,
+    (SELECT COUNT(*)::bigint FROM session_agg)             AS total_conversations,
+    COALESCE((SELECT MAX(EXTRACT(EPOCH FROM (max_at - min_at)) * 1000)
+              FROM session_agg), 0)::bigint                AS longest_ms`
+
+	var row struct {
+		TotalMessages      int64
+		TotalConversations int64
+		LongestMs          int64
+	}
+	if err := r.db.WithContext(ctx).Raw(q, userID, start, end).Scan(&row).Error; err != nil {
+		return nil, err
+	}
+
+	var avg float64
+	if row.TotalConversations > 0 {
+		avg = float64(row.TotalMessages) / float64(row.TotalConversations)
+	}
+	return &InteractionDepth{
+		TotalMessages:          row.TotalMessages,
+		TotalConversations:     row.TotalConversations,
+		AvgMessagesPerConv:     math.Round(avg*100) / 100,
+		LongestConversationMs:  row.LongestMs,
+	}, nil
 }
 
-// GetFrequencyTrend Round 2 GREEN 占位
-func (r *PostgresEventRepo) GetFrequencyTrend(_ context.Context, _ int64, _, _ time.Time) ([]DailyCount, error) {
-	return nil, errors.New("PostgresEventRepo.GetFrequencyTrend: Round 5 实现未落地")
+// GetFrequencyTrend 返回 [start, end] 内按天聚合的事件计数（daily 粒度，升序）。
+func (r *PostgresEventRepo) GetFrequencyTrend(ctx context.Context, userID int64, start, end time.Time) ([]DailyCount, error) {
+	const q = `
+SELECT occurred_at::date AS day, COUNT(*)::bigint AS cnt
+FROM emotion_echo_analytics.user_behavior_events
+WHERE user_id = $1
+  AND occurred_at >= $2::date
+  AND occurred_at < ($3::date + INTERVAL '1 day')
+GROUP BY 1
+ORDER BY 1`
+
+	var rows []struct {
+		Day time.Time
+		Cnt int64
+	}
+	if err := r.db.WithContext(ctx).Raw(q, userID, start, end).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]DailyCount, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, DailyCount{Date: row.Day.Format("2006-01-02"), Count: row.Cnt})
+	}
+	return out, nil
 }
