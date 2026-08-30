@@ -14,6 +14,7 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -58,11 +59,13 @@ func pgContainerDesc(t *testing.T, ctx context.Context) (*pgcontainer.PostgresCo
 	require.NoError(t, runSQL(ctx, dsn, `
 CREATE TABLE IF NOT EXISTS emotion_echo_analytics.user_behavior_events (
   id BIGSERIAL PRIMARY KEY,
+  event_id VARCHAR(64),
   user_id BIGINT NOT NULL,
   event_type VARCHAR(64) NOT NULL,
   target VARCHAR(255),
   session_id VARCHAR(64),
-  occurred_at TIMESTAMPTZ DEFAULT NOW()
+  occurred_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_user_behavior_events_event_id UNIQUE (event_id)
 )`))
 	require.NoError(t, runSQL(ctx, dsn, `CREATE INDEX IF NOT EXISTS idx_events_user ON emotion_echo_analytics.user_behavior_events(user_id, occurred_at DESC)`))
 
@@ -110,8 +113,10 @@ func TestAnalytics_Integration_PostgresEventRepoCRUD(t *testing.T) {
 	repo := repository.NewPostgresEventRepo(db)
 
 	// 多用户写入（验证不同 UserID 隔离）
+	// Stage 30-C A1: 每条带唯一 EventID，UNIQUE 约束不误伤正常路径
 	for i := 0; i < 5; i++ {
 		e := &model.UserBehaviorEvent{
+			EventID:   fmt.Sprintf("test-evt-%d", i),
 			UserID:    int64(100 + i),
 			EventType: "page_view",
 			Target:    "/integration-test",

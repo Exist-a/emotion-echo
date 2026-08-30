@@ -167,6 +167,7 @@ func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
 	}
 
 	be := &model.UserBehaviorEvent{
+		EventID:    ev.ID, // Stage 30-C A1: 事件 ID 作幂等键 → 重复消费去重
 		UserID:     userID,
 		EventType:  target,
 		Target:     ev.ID, // 用 Event.ID 作 target 标识

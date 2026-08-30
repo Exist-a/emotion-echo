@@ -69,9 +69,11 @@ func pgContainerForEvents(t *testing.T, ctx context.Context) (*gorm.DB, func()) 
 	// 建 emotion_echo_analytics schema
 	require.NoError(t, db.Exec("CREATE SCHEMA IF NOT EXISTS emotion_echo_analytics").Error)
 
-	// apply migration 002
-	migPath := findMigrationsFile(t, "002_create_user_behavior_events.sql")
-	require.NoError(t, applySQLFile(db, migPath))
+	// apply migration 002 (基础表) + 006 (Stage 30-C A1 event_id 列 + UNIQUE)
+	mig002 := findMigrationsFile(t, "002_create_user_behavior_events.sql")
+	require.NoError(t, applySQLFile(db, mig002))
+	mig006 := findMigrationsFile(t, "006_add_event_id_to_user_behavior_events.sql")
+	require.NoError(t, applySQLFile(db, mig006))
 
 	return db, cleanup
 }

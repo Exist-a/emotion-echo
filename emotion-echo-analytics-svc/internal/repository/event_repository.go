@@ -11,6 +11,7 @@ import (
 	"emotion-echo-analytics-svc/internal/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // EventRepo 行为事件仓储接口
@@ -57,13 +58,18 @@ type DailyCount struct {
 var ErrNotFound = errors.New("analytics: event not found")
 
 type InMemoryEventRepo struct {
-	mu     sync.RWMutex
-	data   map[int64]*model.UserBehaviorEvent
-	nextID int64
+	mu        sync.RWMutex
+	data      map[int64]*model.UserBehaviorEvent
+	byEventID map[string]int64 // Stage 30-C A1 幂等键索引
+	nextID    int64
 }
 
 func NewInMemoryEventRepo() *InMemoryEventRepo {
-	return &InMemoryEventRepo{data: make(map[int64]*model.UserBehaviorEvent), nextID: 1}
+	return &InMemoryEventRepo{
+		data:      make(map[int64]*model.UserBehaviorEvent),
+		byEventID: make(map[string]int64),
+		nextID:    1,
+	}
 }
 
 func (r *InMemoryEventRepo) GetByID(ctx context.Context, id int64) (*model.UserBehaviorEvent, error) {
@@ -75,14 +81,27 @@ func (r *InMemoryEventRepo) GetByID(ctx context.Context, id int64) (*model.UserB
 	return nil, nil
 }
 
+// Create Stage 30-C A1 幂等去重：同 EventID 第二次 Create 直接返回 nil。
+// 语义与 Postgres ON CONFLICT (event_id) DO NOTHING 对齐。
 func (r *InMemoryEventRepo) Create(ctx context.Context, e *model.UserBehaviorEvent) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if e.EventID != "" {
+		if existingID, ok := r.byEventID[e.EventID]; ok {
+			if existing, hit := r.data[existingID]; hit {
+				*e = *existing
+			}
+			return nil
+		}
+	}
 	if e.ID == 0 {
 		e.ID = r.nextID
 		r.nextID++
 	}
 	r.data[e.ID] = e
+	if e.EventID != "" {
+		r.byEventID[e.EventID] = e.ID
+	}
 	return nil
 }
 
@@ -202,9 +221,21 @@ func (r *PostgresEventRepo) GetByID(ctx context.Context, id int64) (*model.UserB
 	return &e, nil
 }
 
+// Create 持久化一条行为事件。
+//
+// Stage 30-C A1：event_id 上挂 UNIQUE 约束，INSERT 走 ON CONFLICT DO NOTHING
+// 实现消费幂等。at-least-once 投递下重复消息不重复落库。
+// 空 EventID 走非去重分支（DB UNIQUE 允许多个 NULL）。
 func (r *PostgresEventRepo) Create(ctx context.Context, e *model.UserBehaviorEvent) error {
 	e.ID = 0
-	return r.db.WithContext(ctx).Create(e).Error
+	tx := r.db.WithContext(ctx)
+	if e.EventID != "" {
+		tx = tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "event_id"}},
+			DoNothing: true,
+		})
+	}
+	return tx.Create(e).Error
 }
 
 func (r *PostgresEventRepo) Ping(ctx context.Context) error {
