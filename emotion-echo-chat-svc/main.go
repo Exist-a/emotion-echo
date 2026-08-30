@@ -4,17 +4,21 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"emotion-echo-chat-svc/internal/config"
 	"emotion-echo-chat-svc/internal/events"
 	"emotion-echo-chat-svc/internal/handler"
+	"emotion-echo-chat-svc/internal/outbox"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 
@@ -56,11 +60,20 @@ func main() {
 	applyEnvOverrides(&c)
 
 	// 1. Postgres
-	convRepo, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	convRepo, db, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
 	if err != nil {
 		log.Printf("[postgres] connect failed: %v", err)
 	} else {
 		log.Printf("[postgres] connected")
+	}
+
+	// 1.1 Stage 30-C A3: Outbox 迁移 + 表初始化（如果 DB 可达）
+	var outboxRepo repository.OutboxRepo
+	if db != nil {
+		outboxRepo = repository.NewPostgresOutboxRepo(db)
+		if err := runOutboxMigration(db); err != nil {
+			log.Printf("[outbox] migration failed: %v", err)
+		}
 	}
 
 	// 2. Kafka publisher
@@ -96,8 +109,32 @@ func main() {
 		}
 	}
 
-	// 4. ServiceContext
+	// 4. ServiceContext（Stage 30-C A3: 注入 DB + OutboxRepo）
 	svcCtx := svc.NewServiceContext(c, convRepo, pub)
+	if db != nil {
+		svcCtx.WithDB(db)
+	}
+	if outboxRepo != nil {
+		svcCtx.WithOutboxRepo(outboxRepo)
+	}
+
+	// 4.1 Stage 30-C A3: 启 Outbox relay goroutine（每 1s 扫一次）
+	if db != nil && outboxRepo != nil && c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
+		relayCtx, relayCancel := context.WithCancel(context.Background())
+		defer relayCancel()
+		relay := outbox.NewRelay(outboxRepo, pub, 1*time.Second, 100)
+		go func() {
+			log.Printf("[outbox] relay started")
+			_ = relay.Run(relayCtx)
+		}()
+		// 监听 SIGTERM/SIGINT 优雅退出
+		go func() {
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+			<-sigCh
+			relayCancel()
+		}()
+	}
 
 	// 5. Gin
 	gin.SetMode(gin.ReleaseMode)
@@ -134,21 +171,48 @@ func main() {
 	}
 }
 
-func openPostgres(dsn string, maxOpen, maxIdle int) (repository.ConversationRepo, error) {
+func openPostgres(dsn string, maxOpen, maxIdle int) (repository.ConversationRepo, *gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("db open failed: %w", err)
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetMaxIdleConns(maxIdle)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 	if err := sqlDB.Ping(); err != nil {
-		return nil, fmt.Errorf("db ping failed: %w", err)
+		return nil, nil, fmt.Errorf("db ping failed: %w", err)
 	}
-	return repository.NewPostgresConversationRepo(db), nil
+	return repository.NewPostgresConversationRepo(db), db, nil
+}
+
+// runOutboxMigration 跑 migrations/001_create_outbox_events.sql（Stage 30-C A3）
+//
+// 简单实现：用 gorm 直接 Exec 文件内容。生产应该用 migrate 工具；当前学习/开发期 OK。
+func runOutboxMigration(db *gorm.DB) error {
+	const sql = `
+CREATE SCHEMA IF NOT EXISTS emotion_echo_chat;
+
+CREATE TABLE IF NOT EXISTS emotion_echo_chat.outbox_events (
+    id          BIGSERIAL PRIMARY KEY,
+    event_id    VARCHAR(64) NOT NULL UNIQUE,
+    event_type  VARCHAR(64) NOT NULL,
+    topic       VARCHAR(64) NOT NULL,
+    payload     JSONB NOT NULL,
+    status      VARCHAR(16) NOT NULL DEFAULT 'pending',
+    attempts    INT NOT NULL DEFAULT 0,
+    last_error  TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    sent_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_pending
+    ON emotion_echo_chat.outbox_events(created_at)
+    WHERE status = 'pending';
+`
+	return db.Exec(sql).Error
 }
 
 // splitBrokersCSV 把 c.Kafka.BrokersCSV (`"broker1:9092,broker2:9092"`) 切分
