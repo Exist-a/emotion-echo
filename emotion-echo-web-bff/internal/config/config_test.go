@@ -62,3 +62,39 @@ func TestConfig_YamlParsing_AIServiceGRPCAddr(t *testing.T) {
 	assert.Equal(t, "localhost:8892", c.AIService.GRPCAddr, "默认 gRPC 地址应为 localhost:8892")
 	assert.Equal(t, "http://localhost:8891", c.AIService.HTTPAddr, "默认 HTTP 地址应为 localhost:8891")
 }
+
+// TestConfig_ApplyEnvOverrides_OverridesDefaults T1.3 REFACTOR:
+// 容器 env 注入后应覆盖 yaml 默认值（指向容器 DNS）。
+func TestConfig_ApplyEnvOverrides_OverridesDefaults(t *testing.T) {
+	c := loadTestConfig(t)
+
+	t.Setenv("USER_SVC_URL", "http://emotion-echo-user-svc:8888")
+	t.Setenv("CHAT_SVC_URL", "http://emotion-echo-chat-svc:8890")
+	t.Setenv("ASSESSMENT_SVC_URL", "http://emotion-echo-assessment-svc:8889")
+	t.Setenv("ANALYTICS_SVC_URL", "http://emotion-echo-analytics-svc:8904")
+	t.Setenv("AI_SVC_HTTP_URL", "http://emotion-echo-ai-svc:8891")
+	t.Setenv("AI_SVC_GRPC_ADDR", "emotion-echo-ai-svc:8892")
+	t.Setenv("XTTS_BASE_URL", "http://emotion-echo-xtts:8003")
+	t.Setenv("SKYWALKING_OAP_ADDR", "emotion-echo-sw-oap:11800")
+
+	ApplyEnvOverrides(&c)
+
+	assert.Equal(t, "http://emotion-echo-user-svc:8888", c.UserService.BaseURL)
+	assert.Equal(t, "http://emotion-echo-chat-svc:8890", c.ChatService.BaseURL)
+	assert.Equal(t, "http://emotion-echo-assessment-svc:8889", c.AssessmentService.BaseURL)
+	assert.Equal(t, "http://emotion-echo-analytics-svc:8904", c.AnalyticsService.BaseURL)
+	assert.Equal(t, "http://emotion-echo-ai-svc:8891", c.AIService.HTTPAddr)
+	assert.Equal(t, "emotion-echo-ai-svc:8892", c.AIService.GRPCAddr)
+	assert.Equal(t, "http://emotion-echo-xtts:8003", c.XTTS.BaseURL)
+	assert.Equal(t, "emotion-echo-sw-oap:11800", c.SkyWalking.OAPAddr)
+}
+
+// TestConfig_ApplyEnvOverrides_EmptyEnv_KeepsDefault 空 env 不应覆盖默认值
+func TestConfig_ApplyEnvOverrides_EmptyEnv_KeepsDefault(t *testing.T) {
+	c := loadTestConfig(t)
+	t.Setenv("USER_SVC_URL", "") // 空串视为未设置
+
+	ApplyEnvOverrides(&c)
+
+	assert.Equal(t, "http://localhost:8888", c.UserService.BaseURL, "空 env 不应覆盖默认值")
+}

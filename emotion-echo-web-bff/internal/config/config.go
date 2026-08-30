@@ -3,6 +3,8 @@
 // 参考 chat-svc / ai-svc 的 config 模式（go-zero conf 加载 + 容器 env 覆盖）。
 package config
 
+import "os"
+
 // SkyWalking 链路追踪配置（与 chat-svc 同构）
 type SkyWalking struct {
 	OAPAddr     string `json:",default=localhost:11800"`
@@ -46,4 +48,41 @@ type Config struct {
 	Health struct {
 		TimeoutMs int `json:",default=2000"`
 	} `json:",optional"`
+}
+
+// ApplyEnvOverrides 用容器环境变量覆盖 config 字段（Stage 22-B 范式）。
+//
+// 背景：go-zero conf 不解析 `${VAR:-default}` bash 占位符（Stage 22-B 已确认），
+// 所以容器地址由 compose environment 注入，main.go 启动时调用本函数覆盖。
+//
+// 覆盖项与 etc/web-bff.yaml 注释的 env 名一一对应：
+//   USER_SVC_URL / CHAT_SVC_URL / ASSESSMENT_SVC_URL / ANALYTICS_SVC_URL
+//   AI_SVC_HTTP_URL / AI_SVC_GRPC_ADDR / XTTS_BASE_URL / SKYWALKING_OAP_ADDR
+//
+// 仅覆盖非空 env（空串视为未设置，保持 yaml 默认值）。
+func ApplyEnvOverrides(c *Config) {
+	if v := os.Getenv("USER_SVC_URL"); v != "" {
+		c.UserService.BaseURL = v
+	}
+	if v := os.Getenv("CHAT_SVC_URL"); v != "" {
+		c.ChatService.BaseURL = v
+	}
+	if v := os.Getenv("ASSESSMENT_SVC_URL"); v != "" {
+		c.AssessmentService.BaseURL = v
+	}
+	if v := os.Getenv("ANALYTICS_SVC_URL"); v != "" {
+		c.AnalyticsService.BaseURL = v
+	}
+	if v := os.Getenv("AI_SVC_HTTP_URL"); v != "" {
+		c.AIService.HTTPAddr = v
+	}
+	if v := os.Getenv("AI_SVC_GRPC_ADDR"); v != "" {
+		c.AIService.GRPCAddr = v
+	}
+	if v := os.Getenv("XTTS_BASE_URL"); v != "" {
+		c.XTTS.BaseURL = v
+	}
+	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
+		c.SkyWalking.OAPAddr = v
+	}
 }
