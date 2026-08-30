@@ -7,6 +7,7 @@ replace github.com/emotion-echo/shared => ../emotion-echo-shared
 require (
 	github.com/emotion-echo/shared v0.0.0-00010101000000-000000000000
 	github.com/gin-gonic/gin v1.12.0
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/stretchr/testify v1.12.1
 	github.com/zeromicro/go-zero v1.10.3
 	google.golang.org/grpc v1.80.0

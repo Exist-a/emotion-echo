@@ -47,3 +47,8 @@ XTTS:
 # 聚合下游 health 的超时
 Health:
   TimeoutMs: 2000
+
+# BFF 自有 mock 鉴权（签发 JWT 供前端全链路测试）
+Auth:
+  JWTSecret: dev-bff-secret
+  TokenTTLSeconds: 86400

@@ -48,6 +48,14 @@ type Config struct {
 	Health struct {
 		TimeoutMs int `json:",default=2000"`
 	} `json:",optional"`
+
+	// Auth 是 BFF 自有的 mock 鉴权配置（签发 JWT 供前端全链路测试）
+	Auth struct {
+		// JWTSecret 签发 JWT 的 HMAC 密钥（dev 默认值；生产必须 env 覆盖）
+		JWTSecret string `json:",default=dev-bff-secret"`
+		// TokenTTLSeconds token 有效期（秒）
+		TokenTTLSeconds int `json:",default=86400"`
+	} `json:",optional"`
 }
 
 // ApplyEnvOverrides 用容器环境变量覆盖 config 字段（Stage 22-B 范式）。
@@ -84,5 +92,8 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
+	}
+	if v := os.Getenv("BFF_JWT_SECRET"); v != "" {
+		c.Auth.JWTSecret = v
 	}
 }
