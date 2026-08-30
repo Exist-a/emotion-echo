@@ -75,9 +75,15 @@ func (h *ConsumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 // Stage 25-F：当 h.Tracer 非 nil 时，为每条消息创建 SkyWalking local span，
 // 标签包含 messaging.system / topic / partition / event.type，便于 SkyWalking UI 聚合分析。
 //
-// Stage 30-C A2 (RED step — 仅声明接口字段，handleFailure 由 commit 6 GREEN 落地)
-// 当前行为保持与 Stage 30-B 一致：Handler 返 error → 不 MarkMessage。
+// Stage 30-C A2: Handler 返 error → handleFailure：重试计数 + DLQ。
 func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	if h.attempts == nil {
+		h.attempts = make(map[string]int)
+	}
+	maxRetries := h.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
 	for {
 		select {
 		case msg, ok := <-claim.Messages():
@@ -110,15 +116,67 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			}
 			// 调业务
 			if err := h.Handler(sess.Context(), &evt); err != nil {
-				logging.Errorf(err, "[consumer] handler err")
-				// 不 MarkMessage，让 sarama 在重试后再次投递
+				h.handleFailure(sess, msg, err, maxRetries)
 				continue
+			}
+			// 业务成功：清空 attempts（key 复用 = 同事件再次成功）
+			if key := attemptKey(msg); key != "" {
+				delete(h.attempts, key)
 			}
 			sess.MarkMessage(msg, "")
 		case <-sess.Context().Done():
 			return nil
 		}
 	}
+}
+
+// handleFailure 处理 Handler 失败。
+//
+// Stage 30-C A2 失败语义：
+//   - attempt < MaxRetries：递增计数，不 MarkMessage（sarama 自动重投）
+//   - attempt >= MaxRetries：调 DLQ.Publish（若 DLQ 非 nil）+ MarkMessage + 重置计数
+//   - DLQ 为 nil：退化为原行为（不 MarkMessage，保留向后兼容）
+func (h *ConsumerGroupHandler) handleFailure(
+	sess sarama.ConsumerGroupSession,
+	msg *sarama.ConsumerMessage,
+	handlerErr error,
+	maxRetries int,
+) {
+	key := attemptKey(msg)
+	h.attempts[key]++
+	attempt := h.attempts[key]
+
+	if attempt <= maxRetries {
+		logging.Errorf(handlerErr, "[consumer] handler err (will retry attempt=%d/%d key=%s)",
+			attempt, maxRetries, key)
+		return
+	}
+
+	// 已达最大重试 → DLQ + Mark
+	if h.DLQ != nil {
+		dlqEntry := DLQEntry{
+			Topic:         msg.Topic,
+			Key:           msg.Key,
+			Value:         msg.Value,
+			Attempts:      attempt,
+			LastError:     handlerErr.Error(),
+			OriginalTopic: msg.Topic,
+		}
+		if dlqErr := h.DLQ.Publish(sess.Context(), dlqEntry); dlqErr != nil {
+			logging.Errorf(dlqErr, "[consumer] DLQ publish failed (dropping msg)")
+		}
+	}
+	logging.Errorf(handlerErr, "[consumer] handler err after %d retries → DLQ key=%s", attempt, key)
+	delete(h.attempts, key)
+	sess.MarkMessage(msg, "")
+}
+
+// attemptKey 取 msg.Key，无 key 时用 partition:offset 兜底
+func attemptKey(msg *sarama.ConsumerMessage) string {
+	if len(msg.Key) > 0 {
+		return string(msg.Key)
+	}
+	return fmt.Sprintf("%d:%d", msg.Partition, msg.Offset)
 }
 
 // =====================================================
@@ -155,13 +213,16 @@ func NewKafkaConsumer(brokers []string, groupID string) (*KafkaConsumer, error) 
 // 真正的 sarama ConsumerGroup.Consume 内部循环处理 rebalance
 //
 // 参数 tracer 可选：传入后每条消息会创建 SkyWalking span（Stage 25-F）。
-func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string, tracer *go2sky.Tracer) error {
+// Stage 30-C A2: dlq 可选 — 注入后启用 DLQ 路径。nil 时退化为 Stage 30-B 原行为。
+func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string, tracer *go2sky.Tracer, dlq DLQPublisher, maxRetries int) error {
 	c.topics = topics
 	h := &ConsumerGroupHandler{
-		Ready:       make(chan bool),
-		Handler:     handler,
+		Ready:      make(chan bool),
+		Handler:    handler,
 		TopicFilter: topicFilter,
-		Tracer:      tracer,
+		Tracer:     tracer,
+		DLQ:        dlq,
+		MaxRetries: maxRetries,
 	}
 
 	// 阻塞循环：每次 Consume 返回时（rebalance 或错误）重试

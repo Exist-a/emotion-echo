@@ -31,6 +31,9 @@ Kafka:
   GroupID:    ai-svc
   Enabled:    true
   Topics:     ["chat-events"]
+  # Stage 30-C A2: DLQ — 毒消息在 MaxRetries+1 次后投 DLQ topic（留空 = 退化原行为）
+  DLQTopic:   ${KAFKA_DLQ_TOPIC:-chat-events-dlq}
+  MaxRetries: ${KAFKA_MAX_RETRIES:-3}
 
 LLM:
   BaseURL:        ${LLM_BASE_URL:-http://localhost:8000}

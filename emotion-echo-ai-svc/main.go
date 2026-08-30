@@ -242,15 +242,31 @@ func main() {
 			}
 			createdHandler := logic.NewMessageCreatedHandler(emoRepo, an)
 
+			// Stage 30-C A2: DLQ publisher（与 main producer 同 brokers，DLQ topic 独立）
+			var dlq consumer.DLQPublisher = consumer.NoopDLQPublisher{}
+			if dlqTopic := c.Kafka.DLQTopic; dlqTopic != "" && len(kafkaBrokersList) > 0 {
+				if kp, err := consumer.NewKafkaDLQPublisher(kafkaBrokersList, dlqTopic); err != nil {
+					logging.Errorf(err, "[kafka] DLQ producer init failed, fallback to noop")
+				} else {
+					dlq = kp
+					defer func() { _ = kp.Close() }()
+					logging.Printf("[kafka] DLQ publisher connected: topic=%s", dlqTopic)
+				}
+			}
+			maxRetries := c.Kafka.MaxRetries
+			if maxRetries <= 0 {
+				maxRetries = 3
+			}
+
 			go func() {
-				logging.Printf("[kafka] consumer started: brokers=%v topics=%v groupID=%s",
-					kafkaBrokersList, c.Kafka.Topics, c.Kafka.GroupID)
+				logging.Printf("[kafka] consumer started: brokers=%v topics=%v groupID=%s dlq=%v maxRetries=%d",
+					kafkaBrokersList, c.Kafka.Topics, c.Kafka.GroupID, dlq != nil, maxRetries)
 				if err := kc.Consume(context.Background(), c.Kafka.Topics,
 					func(ctx context.Context, evt *events.Event) error {
 						return createdHandler.Handle(ctx, evt)
 					},
 					events.EventTypeMessageCreated,
-					tracer); err != nil {
+					tracer, dlq, maxRetries); err != nil {
 					logging.Errorf(err, "[kafka] consume err")
 				}
 			}()

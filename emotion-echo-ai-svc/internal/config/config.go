@@ -20,7 +20,11 @@ type Kafka struct {
 	BrokersCSV string `json:",default=localhost:9092"`
 	GroupID    string `json:",default=ai-svc"`
 	Enabled    bool   `json:",default=false"`
-	Topics     []string `json:",default=[\"chat-events\"]"`
+	Topics     []string `json:",default=[\"chat-events\"]`
+	// DLQTopic Stage 30-C A2：死信队列 topic。空 = 不启用 DLQ（退化原行为）。
+	DLQTopic string `json:",optional"`
+	// MaxRetries Stage 30-C A2：失败最大重试次数。0 = 默认 3。
+	MaxRetries int `json:",optional"`
 }
 
 type LLM struct {
