@@ -1,0 +1,114 @@
+// Package handler — chat_handler.go
+//
+// Stage 30 / stage-30-web-bff.md T4.38-41: chat handler（BFF → chat-svc）
+//
+// 端点：
+//   POST   /api/v1/conversations              → {conversation}
+//   POST   /api/v1/conversations/:id/messages → {message}
+//   GET    /api/v1/conversations/:id/messages?limit= → {messages}
+//   DELETE /api/v1/conversations/:id          → {success, id}
+//
+// 注：PinConversation 下游未实现，不暴露路由（接口保留在 ChatClient）。
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+
+	"emotion-echo-web-bff/internal/downstream"
+	"emotion-echo-web-bff/internal/session"
+
+	"github.com/gin-gonic/gin"
+)
+
+// ChatHandler 处理 /api/v1/conversations/* 端点
+type ChatHandler struct {
+	chat downstream.ChatClient
+}
+
+// NewChatHandler 构造
+func NewChatHandler(chat downstream.ChatClient) *ChatHandler {
+	return &ChatHandler{chat: chat}
+}
+
+// Register 注册路由
+func (h *ChatHandler) Register(r *gin.Engine) {
+	r.POST("/api/v1/conversations", h.createConversation)
+	r.POST("/api/v1/conversations/:id/messages", h.sendMessage)
+	r.GET("/api/v1/conversations/:id/messages", h.listMessages)
+	r.DELETE("/api/v1/conversations/:id", h.deleteConversation)
+}
+
+func (h *ChatHandler) createConversation(c *gin.Context) {
+	var req downstream.CreateConversationReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid body"})
+		return
+	}
+	conv, err := h.chat.CreateConversation(session.WithRequestAuth(c), req)
+	if err != nil {
+		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"conversation": conv})
+}
+
+func (h *ChatHandler) sendMessage(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	var req downstream.SendMessageReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid body"})
+		return
+	}
+	msg, err := h.chat.SendMessage(session.WithRequestAuth(c), id, req)
+	if err != nil {
+		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": msg})
+}
+
+func (h *ChatHandler) listMessages(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	limit := 50
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	msgs, err := h.chat.ListMessages(session.WithRequestAuth(c), id, limit)
+	if err != nil {
+		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"messages": msgs})
+}
+
+func (h *ChatHandler) deleteConversation(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	if err := h.chat.DeleteConversation(session.WithRequestAuth(c), id); err != nil {
+		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "id": id})
+}
+
+// pathID 解析 path 参数 :id 为 int64；非法时写 400 并返回 false
+func pathID(c *gin.Context) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid id"})
+		return 0, false
+	}
+	return id, true
+}
