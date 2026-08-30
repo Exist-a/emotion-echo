@@ -251,8 +251,9 @@ func readError(resp *http.Response) error {
 		Error string `json:"error"`
 	}
 	_ = json.NewDecoder(resp.Body).Decode(&body)
-	if body.Error != "" {
-		return fmt.Errorf("downstream: %s %s: %s", resp.Request.Method, resp.Request.URL.Path, body.Error)
+	msg := body.Error
+	if msg == "" {
+		msg = fmt.Sprintf("unexpected status %d", resp.StatusCode)
 	}
-	return fmt.Errorf("downstream: unexpected status %d", resp.StatusCode)
+	return &APIError{StatusCode: resp.StatusCode, Msg: fmt.Sprintf("downstream: %s %s: %s", resp.Request.Method, resp.Request.URL.Path, msg)}
 }
