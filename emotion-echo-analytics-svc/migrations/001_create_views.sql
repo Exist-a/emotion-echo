@@ -12,6 +12,7 @@
 -- deploy/init.sql 已经建好所有 4 个 schema；本 migration 假定 schema 存在。
 
 -- emotion_echo_chat: 暴露 messages 给 analytics（不暴露 content，仅元数据）
+-- 注意：新微服务 messages 表时间列是 created_at（send_time 仅存在于 legacy 单体）。
 CREATE OR REPLACE VIEW emotion_echo_chat.msg_summary_v AS
 SELECT
     id,
@@ -21,7 +22,7 @@ SELECT
     content_type,
     tokens_used,
     LENGTH(content) AS content_len,
-    send_time
+    created_at AS send_time
 FROM emotion_echo_chat.messages;
 
 -- emotion_echo_ai: 暴露 emotion_analysis 给 analytics
@@ -39,6 +40,8 @@ SELECT
 FROM emotion_echo_ai.emotion_analysis;
 
 -- emotion_echo_assessment: 暴露 assessment 给 analytics
+-- 注意：mental_health_assessments 无 risk_level 列（risk_level 在 survey_results 上）；
+-- risk_level 由 analytics-svc 在 Go 侧从 overall_score 阈值推导。
 CREATE OR REPLACE VIEW emotion_echo_assessment.assessment_v AS
 SELECT
     id,
@@ -47,7 +50,6 @@ SELECT
     period_start,
     period_end,
     overall_score,
-    risk_level,
     dimensions,
     created_at
 FROM emotion_echo_assessment.mental_health_assessments;
