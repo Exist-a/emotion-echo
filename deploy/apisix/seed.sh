@@ -75,6 +75,13 @@ post upstreams 6 '{
   "nodes": [{"host": "127.0.0.1", "port": 1980, "weight": 1}]
 }'
 
+# Stage 30 / stage-30-web-bff.md: web-bff upstream（唯一 BFF 聚合层）
+post upstreams 7 '{
+  "name": "web-bff",
+  "type": "roundrobin",
+  "nodes": [{"host": "emotion-echo-web-bff", "port": 8894, "weight": 1}]
+}'
+
 # ---------- 16 ROUTE ----------
 post routes r-user-me '{
   "name": "r-user-me",
@@ -183,6 +190,29 @@ post routes r-ping '{
   "name": "r-ping",
   "uri": "/ping",
   "upstream_id": 6
+}'
+
+# ---------- Stage 30: BFF catch-all（替代 16 条 1:1 路由） ----------
+# 前端 /api/v1/* 全部 → web-bff（唯一入口）。APISIX 3.9 修好后启用此路径；
+# 本地 dev 因 3.9 301 bug 前端直连 BFF :8894（不经 APISIX）。
+post routes r-bff-catchall '{
+  "name": "r-bff-catchall",
+  "uri": "/api/v1/*",
+  "methods": ["GET", "POST", "PATCH", "PUT", "DELETE"],
+  "upstream_id": 7,
+  "plugins": {
+    "proxy-buffering": {"disable": true}
+  }
+}'
+
+post routes r-bff-stream '{
+  "name": "r-bff-stream",
+  "uri": "/api/v1/tts/stream",
+  "methods": ["POST"],
+  "upstream_id": 7,
+  "plugins": {
+    "proxy-buffering": {"disable": true}
+  }
 }'
 
 echo "=== 推送完成 ==="
