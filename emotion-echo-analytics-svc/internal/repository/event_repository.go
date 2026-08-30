@@ -85,6 +85,102 @@ func (r *InMemoryEventRepo) Create(ctx context.Context, e *model.UserBehaviorEve
 	return nil
 }
 
+// GetDayNightPattern 实现：按 EventType='message' 计算 hour 桶。
+//
+// 内存实现保留完整 Round 2 行为（无未来时区歧义），逻辑层只
+// 负责补 0 bucket。
+func (r *InMemoryEventRepo) GetDayNightPattern(_ context.Context, userID int64, start, end time.Time) (map[int]int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := map[int]int64{}
+	for _, e := range r.data {
+		if e.UserID != userID {
+			continue
+		}
+		if e.OccurredAt.Before(start) || e.OccurredAt.After(end.Add(24*time.Hour-time.Nanosecond)) {
+			continue
+		}
+		out[e.OccurredAt.Hour()]++
+	}
+	return out, nil
+}
+
+// GetInteractionDepth 实现：消息数 / 会话数 / 最长会话 ms。
+//
+// 内存实现按 SessionID 分组；最简近似（不做窗口合并）。
+func (r *InMemoryEventRepo) GetInteractionDepth(_ context.Context, userID int64, start, end time.Time) (*InteractionDepth, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var (
+		total      int64
+		convCount  = map[string]struct{}{}
+		convRanges = map[string][2]time.Time{}
+	)
+	for _, e := range r.data {
+		if e.UserID != userID {
+			continue
+		}
+		if e.OccurredAt.Before(start) || e.OccurredAt.After(end.Add(24*time.Hour-time.Nanosecond)) {
+			continue
+		}
+		total++
+		if e.SessionID != "" {
+			convCount[e.SessionID] = struct{}{}
+			rng, ok := convRanges[e.SessionID]
+			if !ok {
+				rng = [2]time.Time{e.OccurredAt, e.OccurredAt}
+			} else {
+				if e.OccurredAt.Before(rng[0]) {
+					rng[0] = e.OccurredAt
+				}
+				if e.OccurredAt.After(rng[1]) {
+					rng[1] = e.OccurredAt
+				}
+			}
+			convRanges[e.SessionID] = rng
+		}
+	}
+	convs := int64(len(convCount))
+	var avg float64
+	if convs > 0 {
+		avg = float64(total) / float64(convs)
+	}
+	var longestMs int64
+	for _, rng := range convRanges {
+		ms := rng[1].Sub(rng[0]).Milliseconds()
+		if ms > longestMs {
+			longestMs = ms
+		}
+	}
+	return &InteractionDepth{
+		TotalMessages:          total,
+		TotalConversations:     convs,
+		AvgMessagesPerConv:     avg,
+		LongestConversationMs: longestMs,
+	}, nil
+}
+
+// GetFrequencyTrend 实现：按 YYYY-MM-DD 桶聚合事件数。
+func (r *InMemoryEventRepo) GetFrequencyTrend(_ context.Context, userID int64, start, end time.Time) ([]DailyCount, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	buckets := map[string]int64{}
+	for _, e := range r.data {
+		if e.UserID != userID {
+			continue
+		}
+		if e.OccurredAt.Before(start) || e.OccurredAt.After(end.Add(24*time.Hour-time.Nanosecond)) {
+			continue
+		}
+		buckets[e.OccurredAt.Format("2006-01-02")]++
+	}
+	out := make([]DailyCount, 0, len(buckets))
+	for d, c := range buckets {
+		out = append(out, DailyCount{Date: d, Count: c})
+	}
+	return out, nil
+}
+
 func (r *InMemoryEventRepo) Ping(ctx context.Context) error { return nil }
 
 type PostgresEventRepo struct{ db *gorm.DB }
@@ -116,4 +212,19 @@ func (r *PostgresEventRepo) Ping(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.PingContext(ctx)
+}
+
+// GetDayNightPattern Round 2 GREEN 占位（真 SQL 在 Round 5 migrations 后）
+func (r *PostgresEventRepo) GetDayNightPattern(_ context.Context, _ int64, _, _ time.Time) (map[int]int64, error) {
+	return nil, errors.New("PostgresEventRepo.GetDayNightPattern: Round 5 实现未落地")
+}
+
+// GetInteractionDepth Round 2 GREEN 占位
+func (r *PostgresEventRepo) GetInteractionDepth(_ context.Context, _ int64, _, _ time.Time) (*InteractionDepth, error) {
+	return nil, errors.New("PostgresEventRepo.GetInteractionDepth: Round 5 实现未落地")
+}
+
+// GetFrequencyTrend Round 2 GREEN 占位
+func (r *PostgresEventRepo) GetFrequencyTrend(_ context.Context, _ int64, _, _ time.Time) ([]DailyCount, error) {
+	return nil, errors.New("PostgresEventRepo.GetFrequencyTrend: Round 5 实现未落地")
 }

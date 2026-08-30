@@ -9,13 +9,21 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"emotion-echo-analytics-svc/internal/config"
+	"emotion-echo-analytics-svc/internal/model"
 	"emotion-echo-analytics-svc/internal/repository"
+	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newFreqSvcCtx(repo repository.EventRepo) *svc.ServiceContext {
+	return &svc.ServiceContext{Config: config.Config{}, EventRepo: repo}
+}
 
 func TestUserBehaviorFrequencyLogic_HappyPath(t *testing.T) {
 	t.Parallel()
@@ -24,8 +32,8 @@ func TestUserBehaviorFrequencyLogic_HappyPath(t *testing.T) {
 		{Date: "2026-07-02", Count: 3},
 		{Date: "2026-07-03", Count: 8},
 	}
-	repo := &stubEventRepo{freq: want}
-	l := NewUserBehaviorFrequencyLogic(context.Background(), newDayNightSvcCtx(repo))
+	repo := &freqStubEventRepo{freq: want}
+	l := NewUserBehaviorFrequencyLogic(context.Background(), newFreqSvcCtx(repo))
 
 	resp, err := l.GetFrequencyTrend(&types.GetFrequencyTrendReq{
 		UserID: 1, StartDate: "2026-07-01", EndDate: "2026-07-30",
@@ -38,9 +46,8 @@ func TestUserBehaviorFrequencyLogic_HappyPath(t *testing.T) {
 
 func TestUserBehaviorFrequencyLogic_EmptyCountsNeverNil(t *testing.T) {
 	t.Parallel()
-	// 用户无事件 → counts 必须是空 slice（JSON [] 而非 null）
-	repo := &stubEventRepo{freq: []repository.DailyCount{}}
-	l := NewUserBehaviorFrequencyLogic(context.Background(), newDayNightSvcCtx(repo))
+	repo := &freqStubEventRepo{freq: []repository.DailyCount{}}
+	l := NewUserBehaviorFrequencyLogic(context.Background(), newFreqSvcCtx(repo))
 	resp, err := l.GetFrequencyTrend(&types.GetFrequencyTrendReq{
 		UserID: 1, StartDate: "2026-07-01", EndDate: "2026-07-30",
 	})
@@ -49,22 +56,21 @@ func TestUserBehaviorFrequencyLogic_EmptyCountsNeverNil(t *testing.T) {
 	assert.Empty(t, resp.Counts)
 }
 
-func TestUserBehaviorFrequencyLogic_WindowLimitOver90Days(t *testing.T) {
+func TestUserBehaviorFrequencyLogic_OneYearWindow_Accepted(t *testing.T) {
 	t.Parallel()
-	// 按 backlog §二 / stage-30-A §四 implementation note：30d 日计数。
-	// 暂不强制 90 天上限（与 day-night/depth 行为一致）；保留扩展点。
-	repo := &stubEventRepo{freq: []repository.DailyCount{}}
-	l := NewUserBehaviorFrequencyLogic(context.Background(), newDayNightSvcCtx(repo))
+	// backlog 没强制 90 天上限。1 年窗口应被接受。
+	repo := &freqStubEventRepo{freq: []repository.DailyCount{}}
+	l := NewUserBehaviorFrequencyLogic(context.Background(), newFreqSvcCtx(repo))
 	_, err := l.GetFrequencyTrend(&types.GetFrequencyTrendReq{
 		UserID: 1, StartDate: "2026-01-01", EndDate: "2026-12-31",
 	})
-	require.NoError(t, err, "无 90 天上限时，1 年窗口应该被接受")
+	require.NoError(t, err)
 }
 
 func TestUserBehaviorFrequencyLogic_RepoError(t *testing.T) {
 	t.Parallel()
-	repo := &stubEventRepo{freqErr: errors.New("kafka consumer lag > 1h")}
-	l := NewUserBehaviorFrequencyLogic(context.Background(), newDayNightSvcCtx(repo))
+	repo := &freqStubEventRepo{freqErr: errors.New("kafka consumer lag > 1h")}
+	l := NewUserBehaviorFrequencyLogic(context.Background(), newFreqSvcCtx(repo))
 	_, err := l.GetFrequencyTrend(&types.GetFrequencyTrendReq{
 		UserID: 1, StartDate: "2026-07-01", EndDate: "2026-07-30",
 	})
@@ -74,10 +80,37 @@ func TestUserBehaviorFrequencyLogic_RepoError(t *testing.T) {
 
 func TestUserBehaviorFrequencyLogic_InvalidUserID(t *testing.T) {
 	t.Parallel()
-	repo := &stubEventRepo{}
-	l := NewUserBehaviorFrequencyLogic(context.Background(), newDayNightSvcCtx(repo))
+	repo := &freqStubEventRepo{}
+	l := NewUserBehaviorFrequencyLogic(context.Background(), newFreqSvcCtx(repo))
 	_, err := l.GetFrequencyTrend(&types.GetFrequencyTrendReq{
 		UserID: 0, StartDate: "2026-07-01", EndDate: "2026-07-30",
 	})
 	require.Error(t, err)
 }
+
+// freqStubEventRepo 仅覆盖 frequency 测试需要的方法。
+type freqStubEventRepo struct {
+	freq    []repository.DailyCount
+	freqErr error
+}
+
+func (s *freqStubEventRepo) GetFrequencyTrend(_ context.Context, _ int64, _, _ time.Time) ([]repository.DailyCount, error) {
+	return s.freq, s.freqErr
+}
+
+// 其他 EventRepo 方法 stub
+func (s *freqStubEventRepo) GetDayNightPattern(_ context.Context, _ int64, _, _ time.Time) (map[int]int64, error) {
+	return nil, nil
+}
+
+func (s *freqStubEventRepo) GetInteractionDepth(_ context.Context, _ int64, _, _ time.Time) (*repository.InteractionDepth, error) {
+	return nil, nil
+}
+
+func (s *freqStubEventRepo) GetByID(_ context.Context, _ int64) (*model.UserBehaviorEvent, error) {
+	return nil, nil
+}
+
+func (s *freqStubEventRepo) Create(_ context.Context, _ *model.UserBehaviorEvent) error { return nil }
+
+func (s *freqStubEventRepo) Ping(_ context.Context) error { return nil }

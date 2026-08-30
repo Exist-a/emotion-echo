@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"emotion-echo-analytics-svc/internal/config"
+	"emotion-echo-analytics-svc/internal/model"
 	"emotion-echo-analytics-svc/internal/repository"
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
@@ -108,12 +109,9 @@ func TestUserBehaviorDayNightLogic_EmptyData_All24BucketsAreZero(t *testing.T) {
 	}
 }
 
-// stubEventRepo 仅覆盖 Round 2 测试需要的 EventRepo 方法。
-// 嵌入 ReportRepo 让未实现方法 panic（如果误调），同时让本类型
-// 满足 repository.EventRepo 接口。
+// stubEventRepo 满足 repository.EventRepo 接口（Round 2 测试需要
+// 全部 7 个方法；只有查询 3 个返回有意义，其他 stub 返回 nil/0）。
 type stubEventRepo struct {
-	repository.ReportRepo
-
 	dayNight    map[int]int64
 	dayNightErr error
 
@@ -124,6 +122,7 @@ type stubEventRepo struct {
 	freqErr error
 }
 
+// 查询方法
 func (s *stubEventRepo) GetDayNightPattern(_ context.Context, _ int64, _, _ time.Time) (map[int]int64, error) {
 	return s.dayNight, s.dayNightErr
 }
@@ -135,3 +134,12 @@ func (s *stubEventRepo) GetInteractionDepth(_ context.Context, _ int64, _, _ tim
 func (s *stubEventRepo) GetFrequencyTrend(_ context.Context, _ int64, _, _ time.Time) ([]repository.DailyCount, error) {
 	return s.freq, s.freqErr
 }
+
+// EventRepo 旧 API（测试不会调）
+func (s *stubEventRepo) GetByID(_ context.Context, _ int64) (*model.UserBehaviorEvent, error) {
+	return nil, nil
+}
+
+func (s *stubEventRepo) Create(_ context.Context, _ *model.UserBehaviorEvent) error { return nil }
+
+func (s *stubEventRepo) Ping(_ context.Context) error { return nil }
