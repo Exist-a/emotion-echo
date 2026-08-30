@@ -11,11 +11,12 @@ import (
 // ServiceContext analytics-svc 依赖注入容器
 //
 // Stage 30-A 扩展：除 EventRepo 外，新增 ReportRepo（跨 schema 只读聚合）。
-// 后续 Round 还会加 MentalHealthRepo / KafkaConsumer / TriggerQueue。
+// Round 3 加 MentalHealthRepo；Round 4 加 TriggerQueue + KafkaConsumer。
 type ServiceContext struct {
-	Config     config.Config
-	EventRepo  repository.EventRepo
-	ReportRepo repository.ReportRepo // Round 1 新增
+	Config           config.Config
+	EventRepo        repository.EventRepo
+	ReportRepo       repository.ReportRepo        // Round 1
+	MentalHealthRepo repository.MentalHealthRepo // Round 3
 }
 
 // NewServiceContext 用最少的依赖构造 svcCtx（向后兼容 Round 0）。
