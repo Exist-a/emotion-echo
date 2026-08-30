@@ -19,6 +19,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -196,6 +197,143 @@ func mustJSON(t *testing.T, v any) []byte {
 		t.Fatalf("marshal: %v", err)
 	}
 	return b
+}
+
+// =====================================================
+// Stage 30-C A2: DLQ + 重试计数测试（analytics-svc）
+// =====================================================
+
+// 嵌入 sarama.ConsumerGroupSession 让测试可以只覆盖 MarkMessage / Context
+type stubSession struct {
+	sarama.ConsumerGroupSession
+	marked *bool
+}
+
+func (s stubSession) MarkMessage(*sarama.ConsumerMessage, string) {
+	if s.marked != nil {
+		*s.marked = true
+	}
+}
+
+func (s stubSession) Context() context.Context {
+	return context.Background()
+}
+
+func newStubSession() (sarama.ConsumerGroupSession, *bool) {
+	marked := false
+	return stubSession{marked: &marked}, &marked
+}
+
+// TestHandleOne_DLQ_NoOpWhenSuccess handleOne 成功时直接 Mark，不进 DLQ 路径。
+func TestHandleOne_DLQ_NoOpWhenSuccess(t *testing.T) {
+	t.Parallel()
+	dlq := NewInMemoryDLQPublisher()
+	h := &chatEventHandler{
+		repo:       &captureEventRepo{},
+		topic:      "chat-events",
+		dlq:        dlq,
+		maxRetries: 3,
+		attempts:   make(map[string]int),
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic: "chat-events",
+		Key:   []byte("evt-success-1"),
+		Value: mustJSON(t, events.Event{ID: "evt-success-1", Type: events.EventTypeMessageCreated, Time: time.Now(), Data: events.MessageCreatedData{UserID: 1}}),
+	}
+	if err := h.handleOne(msg); err != nil {
+		t.Fatalf("handleOne unexpected err: %v", err)
+	}
+	if got := dlq.Captured(); len(got) != 0 {
+		t.Errorf("handleOne 成功不应投 DLQ，got %d entries", len(got))
+	}
+}
+
+// TestHandleFailure_DLQ_RetriesThenMarks Stage 30-C A2:
+// 直接测 handleFailure：第 1/2/3 次不 Mark（attempt <= MaxRetries），
+// 第 4 次投 DLQ + Mark + 清 attempts。
+func TestHandleFailure_DLQ_RetriesThenMarks(t *testing.T) {
+	t.Parallel()
+	dlq := NewInMemoryDLQPublisher()
+	h := &chatEventHandler{
+		repo:       &captureEventRepo{},
+		topic:      "chat-events",
+		dlq:        dlq,
+		maxRetries: 3,
+		attempts:   make(map[string]int),
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic: "chat-events",
+		Key:   []byte("evt-hf-1"),
+		Value: []byte(`{"type":"message.created","id":"evt-hf-1","data":{"userId":1}}`),
+	}
+
+	for i := 1; i <= 4; i++ {
+		sess, marked := newStubSession()
+		h.handleFailure(sess, msg, errors.New("forced err"))
+		if i <= 3 {
+			if *marked {
+				t.Errorf("attempt=%d <= MaxRetries=3 时不应 Mark", i)
+			}
+			if len(dlq.Captured()) != 0 {
+				t.Errorf("attempt=%d <= MaxRetries=3 时不应投 DLQ", i)
+			}
+		} else {
+			if !*marked {
+				t.Errorf("attempt=%d > MaxRetries=3 时应 Mark", i)
+			}
+			if len(dlq.Captured()) != 1 {
+				t.Errorf("attempt=%d > MaxRetries=3 时应投 DLQ，got %d entries", i, len(dlq.Captured()))
+			}
+			if h.attempts["evt-hf-1"] != 0 {
+				t.Errorf("投 DLQ 后应清 attempts，got %d", h.attempts["evt-hf-1"])
+			}
+		}
+	}
+
+	got := dlq.Captured()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 DLQ entry, got %d", len(got))
+	}
+	if got[0].LastError == "" {
+		t.Error("DLQ.LastError 应非空")
+	}
+	if got[0].Attempts != 4 {
+		t.Errorf("DLQ.Attempts 应=4，got %d", got[0].Attempts)
+	}
+	if string(got[0].Value) != string(msg.Value) {
+		t.Error("DLQ.Value 应等于原 message.Value")
+	}
+}
+
+// TestHandleFailure_NoopDLQ_RetriesAndMarks 验证 NoopDLQPublisher 也走 attempt 计数（不退化为"无限重投"）。
+func TestHandleFailure_NoopDLQ_RetriesAndMarks(t *testing.T) {
+	t.Parallel()
+	h := &chatEventHandler{
+		repo:       &captureEventRepo{},
+		topic:      "chat-events",
+		dlq:        NoopDLQPublisher{},
+		maxRetries: 1,
+		attempts:   make(map[string]int),
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic: "chat-events",
+		Key:   []byte("evt-noop-1"),
+		Value: []byte(`{"type":"message.created","id":"evt-noop-1","data":{"userId":1}}`),
+	}
+
+	sess1, marked1 := newStubSession()
+	h.handleFailure(sess1, msg, errors.New("err"))
+	if *marked1 {
+		t.Error("attempt=1 <= MaxRetries=1 不应 Mark")
+	}
+	sess2, marked2 := newStubSession()
+	h.handleFailure(sess2, msg, errors.New("err"))
+	if !*marked2 {
+		t.Error("attempt=2 > MaxRetries=1 应 Mark（避免毒消息卡死）")
+	}
 }
 
 // TestHandleOne_PropagatesEventIDForAllEventTypes Stage 30-C A1 专项断言：

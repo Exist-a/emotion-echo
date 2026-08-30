@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -36,6 +37,10 @@ type Consumer struct {
 	repo     repository.EventRepo
 	client   sarama.ConsumerGroup
 	consumer sarama.ConsumerGroupHandler
+
+	// Stage 30-C A2: DLQ 注入与重试配置
+	dlq        DLQPublisher
+	maxRetries int
 }
 
 // NewConsumer 构造（不启动；需调 Run）
@@ -51,14 +56,34 @@ func NewConsumer(brokers []string, groupID, topic string, repo repository.EventR
 	}
 
 	c := &Consumer{
-		topic:   topic,
-		groupID: groupID,
-		brokers: brokers,
-		repo:    repo,
-		client:  client,
-		consumer: &chatEventHandler{repo: repo, topic: topic},
+		topic:      topic,
+		groupID:    groupID,
+		brokers:    brokers,
+		repo:       repo,
+		client:     client,
+		consumer:   &chatEventHandler{repo: repo, topic: topic, dlq: NoopDLQPublisher{}, maxRetries: 3},
+		dlq:        NoopDLQPublisher{},
+		maxRetries: 3,
 	}
 	return c, nil
+}
+
+// WithDLQ 设置 DLQ publisher（builder 模式）
+func (c *Consumer) WithDLQ(dlq DLQPublisher) *Consumer {
+	if dlq != nil {
+		c.dlq = dlq
+		c.consumer = &chatEventHandler{repo: c.repo, topic: c.topic, dlq: dlq, maxRetries: c.maxRetries}
+	}
+	return c
+}
+
+// WithMaxRetries 设置最大重试次数
+func (c *Consumer) WithMaxRetries(n int) *Consumer {
+	if n > 0 {
+		c.maxRetries = n
+		c.consumer = &chatEventHandler{repo: c.repo, topic: c.topic, dlq: c.dlq, maxRetries: n}
+	}
+	return c
 }
 
 // Run 启动 consumer；ctx 取消时退出。
@@ -92,8 +117,11 @@ func (c *Consumer) Close() error {
 
 // chatEventHandler 处理 chat-events 消息
 type chatEventHandler struct {
-	repo  repository.EventRepo
-	topic string
+	repo       repository.EventRepo
+	topic      string
+	dlq        DLQPublisher
+	maxRetries int
+	attempts   map[string]int // msg.Key → 重试次数（消费周期内）
 }
 
 func (h *chatEventHandler) Setup(_ sarama.ConsumerGroupSession) error {
@@ -105,8 +133,16 @@ func (h *chatEventHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
 	return nil
 }
 
-// ConsumeClaim 每条 chat-event 写一条 User_beBehaviorEvent
+// ConsumeClaim 每条 chat-event 写一条 User_behaviorEvent
+//
+// Stage 30-C A2: handleOne 返 error → 走 attempt 计数 → 超 MaxRetries 投 DLQ。
+//   - attempt <= MaxRetries：返回 error 让 sarama 不 Mark（自动重投）
+//   - attempt > MaxRetries：调 DLQ.Publish + Mark + 清 attempts
+//   - DLQ=NoopDLQPublisher 时等价于"无 DLQ 兜底"，仍走 attempt 计数（避免毒消息卡死）
 func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	if h.attempts == nil {
+		h.attempts = make(map[string]int)
+	}
 	for {
 		select {
 		case msg, ok := <-claim.Messages():
@@ -114,8 +150,12 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 				return nil
 			}
 			if err := h.handleOne(msg); err != nil {
-				log.Printf("[kafka-consumer] handle %s failed: %v (offset=%d, will skip)",
-					string(msg.Key), err, msg.Offset)
+				h.handleFailure(sess, msg, err)
+				continue
+			}
+			// 业务成功：清 attempts
+			if key := string(msg.Key); key != "" {
+				delete(h.attempts, key)
 			}
 			sess.MarkMessage(msg, "")
 		case <-sess.Context().Done():
@@ -124,7 +164,47 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 	}
 }
 
-// handleOne 把一条 chat-event 写为 User_beBehaviorEvent
+// handleFailure 处理 handleOne 失败（Stage 30-C A2）
+func (h *chatEventHandler) handleFailure(sess sarama.ConsumerGroupSession, msg *sarama.ConsumerMessage, handlerErr error) {
+	key := attemptKey(msg)
+	h.attempts[key]++
+	attempt := h.attempts[key]
+
+	if attempt <= h.maxRetries {
+		log.Printf("[kafka-consumer] handle %s failed (will retry attempt=%d/%d offset=%d): %v",
+			string(msg.Key), attempt, h.maxRetries, msg.Offset, handlerErr)
+		return
+	}
+
+	// 已达最大重试 → DLQ + Mark
+	if h.dlq != nil {
+		dlqEntry := DLQEntry{
+			Topic:         msg.Topic,
+			Key:           msg.Key,
+			Value:         msg.Value,
+			Attempts:      attempt,
+			LastError:     handlerErr.Error(),
+			OriginalTopic: msg.Topic,
+		}
+		if dlqErr := h.dlq.Publish(sess.Context(), dlqEntry); dlqErr != nil {
+			log.Printf("[kafka-consumer] DLQ publish failed (dropping msg): %v", dlqErr)
+		}
+	}
+	log.Printf("[kafka-consumer] handle %s failed after %d retries → DLQ: %v",
+		string(msg.Key), attempt, handlerErr)
+	delete(h.attempts, key)
+	sess.MarkMessage(msg, "")
+}
+
+// attemptKey 取 msg.Key，无 key 时用 partition:offset 兜底
+func attemptKey(msg *sarama.ConsumerMessage) string {
+	if len(msg.Key) > 0 {
+		return string(msg.Key)
+	}
+	return fmt.Sprintf("%d:%d", msg.Partition, msg.Offset)
+}
+
+// handleOne 把一条 chat-event 写为 User_behaviorEvent
 //
 // 事件类型 → 行为类型映射：
 //   message.created        → "message"
