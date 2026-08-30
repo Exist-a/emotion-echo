@@ -18,6 +18,7 @@ import time
 import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from pcm_chunk_shape import pcm_chunk_shape
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -206,10 +207,10 @@ async def stream_audio_generator(text: str, language: str = "zh-cn",
         for chunk in streamer:
             if isinstance(chunk, torch.Tensor):
                 chunk = chunk.cpu().numpy()
-            chunk = chunk * volume
-            chunk = np.clip(chunk, -1.0, 1.0)
-            if chunk.dtype != np.int16:
-                chunk = (chunk * 32767).astype(np.int16)
+            # Volume + clip + dtype conversion extracted to pcm_chunk_shape
+            # (Stage 26-T backlog §五 5.2.24 — pure-numpy helper for
+            # unit-testability; the previous inline form was untestable).
+            chunk = pcm_chunk_shape(chunk, volume=volume)
             data = chunk.tobytes()
             yield data
             chunk_count += 1
