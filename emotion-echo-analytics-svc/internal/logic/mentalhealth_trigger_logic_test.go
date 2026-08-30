@@ -143,7 +143,7 @@ func TestMentalHealthTriggerLogic_NilQueue_InternalError(t *testing.T) {
 	})
 	_, err := l.TriggerAssessment(&types.TriggerMentalHealthReq{UserID: 1, AssessmentType: "daily"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "queue")
+	assert.Contains(t, err.Error(), "queue", "expected error to mention queue")
 }
 
 // 时间引用确保 import live
