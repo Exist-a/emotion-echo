@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"emotion-echo-analytics-svc/internal/config"
+	"emotion-echo-analytics-svc/internal/events"
 	"emotion-echo-analytics-svc/internal/handler"
+	"emotion-echo-analytics-svc/internal/kafka"
 	"emotion-echo-analytics-svc/internal/repository"
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/trigger"
@@ -114,6 +117,30 @@ func main() {
 	svcCtx.MentalHealthRepo = mhRepo
 	svcCtx.TriggerQueue = tq
 
+	// 3.5 Kafka consumer（chat-events → user_behavior_events）
+	// 依赖 evtRepo（Postgres 可达）才启动；Enabled 显式开启（opt-in）。
+	// topic 不存在 / broker 不可达 → log warn 不 crash（Consumer.Run 自带 5s 重试）。
+	appCtx, stopConsumer := context.WithCancel(context.Background())
+	defer stopConsumer()
+	if c.Kafka.Enabled && evtRepo != nil {
+		brokers := splitBrokersCSV(c.Kafka.BrokersCSV)
+		topic := events.TopicChatEvents
+		if len(c.Kafka.Topics) > 0 {
+			topic = c.Kafka.Topics[0]
+		}
+		kc, err := kafka.NewConsumer(brokers, c.Kafka.GroupID, topic, evtRepo)
+		if err != nil {
+			log.Printf("[kafka] consumer init failed: %v (behavior events disabled)", err)
+		} else {
+			go func() {
+				if err := kc.Run(appCtx); err != nil && err != context.Canceled {
+					log.Printf("[kafka] consumer exited: %v", err)
+				}
+			}()
+			log.Printf("[kafka] consumer started (topic=%s group=%s brokers=%v)", topic, c.Kafka.GroupID, brokers)
+		}
+	}
+
 	// 4. Gin
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -179,6 +206,20 @@ func openPostgres(dsn string, maxOpen, maxIdle int) (*gorm.DB, error) {
 		return nil, fmt.Errorf("db ping failed: %w", err)
 	}
 	return db, nil
+}
+
+// splitBrokersCSV 把 "broker1:9092,broker2:9092" 切分成 []string
+//
+// 与 chat-svc / ai-svc 的 kafkaBrokers 行为一致（Stage 26-P 引入）。
+func splitBrokersCSV(csv string) []string {
+	parts := strings.Split(csv, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // suppress unused import in some build configs

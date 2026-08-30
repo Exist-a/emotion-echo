@@ -125,6 +125,7 @@ services:
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_analytics"
+      KAFKA_BROKERS:       emotion-echo-kafka:9092
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
     ports:
       - "8904:8893"     # 宿主 8904 → 容器内 8893(避开 ai-svc 8892)

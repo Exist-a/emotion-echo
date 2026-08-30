@@ -22,4 +22,12 @@ func TestYaml_HasEnvPlaceholders(t *testing.T) {
 
 	require.Contains(t, body, "${SKYWALKING_OAP_ADDR:-emotion-echo-sw-oap:11800}",
 		"analytics-api.yaml must use ${SKYWALKING_OAP_ADDR:-emotion-echo-sw-oap:11800}")
+
+	// Stage 30-B: Kafka consumer 段
+	require.Contains(t, body, "${KAFKA_BROKERS:-",
+		"analytics-api.yaml must use ${KAFKA_BROKERS:-...} placeholder")
+	require.Contains(t, body, "GroupID:    analytics-svc",
+		"analytics-api.yaml must set Kafka GroupID to analytics-svc")
+	require.Contains(t, body, `Topics:     ["chat-events"]`,
+		"analytics-api.yaml must subscribe chat-events")
 }
