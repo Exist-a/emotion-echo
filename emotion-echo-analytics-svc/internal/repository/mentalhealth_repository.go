@@ -7,8 +7,7 @@
 //   - emotion_echo_ai.daily_emotion_v（趋势）
 //   - emotion_echo_analytics.mv_daily_emotion（materialized view，日报加速）
 //
-// 本文件仅声明接口；Round 3 GREEN 实现 InMemoryMentalHealthRepo +
-// Round 5 落地 PostgresMentalHealthRepo + 真 SQL。
+// 本文件声明接口 + PostgresMentalHealthRepo 真 SQL 实现。
 package repository
 
 import (
@@ -100,10 +99,10 @@ type MentalHealthRepo interface {
 // InMemoryMentalHealthRepo（Round 3 GREEN 测试替身）
 // =====================================================
 
-// InMemoryMentalHealthRepo Round 3 GREEN 用的内存版 MentalHealthRepo。
+// InMemoryMentalHealthRepo 内存版 MentalHealthRepo（测试替身）。
 //
-// 当前内存实现为占位（Round 5 migrations 落地后再用真实 SQL）；
-// tests 主要通过 stub 注入返回值验证 Logic 层的契约。
+// 生产用 PostgresMentalHealthRepo（真 SQL）；单测通过 stub 注入返回值
+// 验证 Logic 层的契约。
 type InMemoryMentalHealthRepo struct{}
 
 // NewInMemoryMentalHealthRepo 构造空 repo
@@ -133,7 +132,7 @@ func (r *InMemoryMentalHealthRepo) Ping(_ context.Context) error { return nil }
 var _ MentalHealthRepo = (*InMemoryMentalHealthRepo)(nil)
 
 // =====================================================
-// PostgresMentalHealthRepo（Round 5 落地真 SQL）
+// PostgresMentalHealthRepo（真 SQL 已落地）
 // =====================================================
 
 // PostgresMentalHealthRepo 跨 schema 只读仓储：mental-health 聚合 + 历史。

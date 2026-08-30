@@ -140,20 +140,16 @@ func (r *InMemoryReportRepo) GetTrendReport(_ context.Context, _ int64, _ string
 func (r *InMemoryReportRepo) Ping(_ context.Context) error { return nil }
 
 // =====================================================
-// PostgresReportRepo（生产实现 — Round 1 GREEN，本 commit 仅
-// 列出 SQL 契约；migration + 真连接在 Round 5 落地）
+// PostgresReportRepo（生产实现 — 真 SQL 已落地）
 // =====================================================
 
 // PostgresReportRepo 通过 search_path 解析跨 schema VIEW 做只读聚合。
 //
 // 数据源（per stage-30-A §六.6.1-3）：
 //   - emotion_echo_chat.msg_summary_v
-//   - emotion_echo_ai.daily_emotion_v / mv_daily_emotion
+//   - emotion_echo_ai.daily_emotion_v
 //   - emotion_echo_assessment.assessment_v
 //   - emotion_echo_analytics.user_behavior_events
-//
-// Round 1 GREEN：仅搭骨架（依赖 gorm.DB），真实 SQL 在 Round 5
-// migrations 落地后补齐。
 type PostgresReportRepo struct {
 	db *gorm.DB
 }
