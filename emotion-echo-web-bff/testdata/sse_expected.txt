@@ -1,0 +1,7 @@
+event: analysis
+id: evt-1
+data: {"emotion":"happy","score":0.7}
+
+event: done
+data: {"status":"ok"}
+
