@@ -10,11 +10,13 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"emotion-echo-chat-svc/internal/config"
 	"emotion-echo-chat-svc/internal/events"
 	"emotion-echo-chat-svc/internal/middleware"
+	"emotion-echo-chat-svc/internal/model"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 )
@@ -278,4 +280,54 @@ func TestChatHandler_ListMessages_InvalidPathParam_Returns400(t *testing.T) {
 	r.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusBadRequest, rec.Code,
 		"non-numeric :id should be 400, got %d", rec.Code)
+}
+
+// TestDeleteConversationHandler_DeletesAndPublishes 真实 gin + httptest：
+// DELETE /api/v1/conversations/:id → 200 success + conversation.closed 事件
+func TestDeleteConversationHandler_DeletesAndPublishes(t *testing.T) {
+	svcCtx := newTestSVC()
+	// seed 一个属于 uid=7 的会话
+	repo := svcCtx.ConversationRepo.(*repository.InMemoryConversationRepo)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		ID: 1, UserID: 7, Title: "t", Status: 1,
+	}))
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.DELETE("/api/v1/conversations/:id", DeleteConversationHandler(svcCtx))
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/conversations/1", nil)
+	req = reqWithUser(req, 7)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	var respBody map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &respBody))
+	assert.Equal(t, true, respBody["success"])
+
+	// 会话已删 + 事件已发
+	got, err := repo.GetConversationByID(context.Background(), 1)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+	pub := svcCtx.EventPublisher.(*events.InMemoryEventPublisher)
+	evts := pub.Events(events.TopicChatEvents)
+	require.Len(t, evts, 1)
+	assert.Equal(t, events.EventTypeConversationClosed, evts[0].Type)
+}
+
+// TestDeleteConversationHandler_InvalidID_400 非数字 id → 400
+func TestDeleteConversationHandler_InvalidID_400(t *testing.T) {
+	svcCtx := newTestSVC()
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.DELETE("/api/v1/conversations/:id", DeleteConversationHandler(svcCtx))
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/conversations/abc", nil)
+	req = reqWithUser(req, 7)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }

@@ -85,3 +85,34 @@ func TestConversationRepo_Ping_OK(t *testing.T) {
 	repo := NewInMemoryConversationRepo()
 	require.NoError(t, repo.Ping(context.Background()))
 }
+func TestConversationRepo_DeleteConversation_RemovesConvAndMessages(t *testing.T) {
+	t.Parallel()
+
+	repo := NewInMemoryConversationRepo()
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		ID: 1, UserID: 100, Title: "t", Status: 1,
+	}))
+	require.NoError(t, repo.AppendMessage(context.Background(), &model.Message{
+		ID: 1, ConversationID: 1, UserID: 100, Role: "user", Content: "a",
+	}))
+	require.NoError(t, repo.AppendMessage(context.Background(), &model.Message{
+		ID: 2, ConversationID: 1, UserID: 100, Role: "user", Content: "b",
+	}))
+
+	require.NoError(t, repo.DeleteConversation(context.Background(), 1))
+
+	got, err := repo.GetConversationByID(context.Background(), 1)
+	require.NoError(t, err)
+	assert.Nil(t, got, "会话应已删除")
+
+	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	require.NoError(t, err)
+	assert.Empty(t, msgs, "会话消息应级联删除")
+}
+
+func TestConversationRepo_DeleteConversation_MissingID_NoError(t *testing.T) {
+	t.Parallel()
+
+	repo := NewInMemoryConversationRepo()
+	require.NoError(t, repo.DeleteConversation(context.Background(), 999), "删除不存在的 id 应为 no-op")
+}
