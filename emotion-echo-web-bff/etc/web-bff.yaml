@@ -1,0 +1,50 @@
+# emotion-echo-web-bff 配置（Stage 30 / stage-30-web-bff.md）
+#
+# 端口约定（容器内）：
+#   user-svc        :8888  (HTTP)
+#   chat-svc        :8890  (HTTP)
+#   assessment-svc  :8889  (HTTP)
+#   analytics-svc   :8904  (HTTP；容器内 8893 避开 ai-svc 8892)
+#   ai-svc          :8891  (HTTP) / :8892 (gRPC)
+#   llm-service     :8000  (HTTP) / :50051 (gRPC)
+#
+# 本地开发：env 不设 → 用默认 localhost / dev 配置
+# 容器：compose environment 注入各 svc 容器 DNS 名
+Name: web-bff
+Host: 0.0.0.0
+Port: 8894
+
+SkyWalking:
+  OAPAddr:     ${SKYWALKING_OAP_ADDR:-localhost:11800}
+  ServiceName: emotion-echo-web-bff
+  Enabled:     false
+
+# 下游服务地址（BFF 聚合 5 个下游 + XTTS）
+UserService:
+  BaseURL: ${USER_SVC_URL:-http://localhost:8888}
+  TimeoutMs: 5000
+
+ChatService:
+  BaseURL: ${CHAT_SVC_URL:-http://localhost:8890}
+  TimeoutMs: 5000
+
+AssessmentService:
+  BaseURL: ${ASSESSMENT_SVC_URL:-http://localhost:8889}
+  TimeoutMs: 5000
+
+AnalyticsService:
+  BaseURL: ${ANALYTICS_SVC_URL:-http://localhost:8904}
+  TimeoutMs: 5000
+
+AIService:
+  HTTPAddr:  ${AI_SVC_HTTP_URL:-http://localhost:8891}
+  GRPCAddr:  ${AI_SVC_GRPC_ADDR:-localhost:8892}
+  TimeoutMs: 5000
+
+XTTS:
+  BaseURL: ${XTTS_BASE_URL:-http://localhost:8003}
+  TimeoutMs: 30000
+
+# 聚合下游 health 的超时
+Health:
+  TimeoutMs: 2000
