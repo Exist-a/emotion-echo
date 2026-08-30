@@ -19,4 +19,8 @@ type Config struct {
 	Port       int    `json:",default=8892"`
 	SkyWalking SkyWalking
 	Postgres   Postgres
+
+	// TriggerQueueCap Round 3 part 2: async trigger queue buffer size.
+	// <=0 用 trigger.DefaultQueueCap (64).
+	TriggerQueueCap int `json:",default=64"`
 }

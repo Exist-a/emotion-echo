@@ -73,7 +73,7 @@ func TestReportsDailyHandler_HappyPath_Returns200(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 	var got map[string]any
-	require.NoError(t, jsonDecode(w.Body.Bytes(), &got))
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 	assert.Contains(t, got, "report")
 }
 
