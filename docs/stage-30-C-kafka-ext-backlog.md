@@ -3,6 +3,7 @@
 > **生成时间**: 2026-08-30
 > **前置**: `docs/stage-30-B-kafka-pipeline.md` §三（扩展性分析）
 > **性质**: 决策文档 —— 把"可以做的扩展"整理成可执行的 backlog，并区分**急需 / 可以做 / 待触发 / 明确不做**
+> **落地报告**: `docs/stage-30-C-completion-report.md`（A 档 3 项已全部 ✅）
 
 ---
 
@@ -21,17 +22,17 @@
 
 ## 二、分档总表
 
-| 档 | 项 | 一句话 | 工作量 | 涉及 |
-|----|----|--------|--------|------|
-| **A 急需** | A1 消费幂等去重 | 重复消费会重复写数据，**现在是真实行为** | 小（半天~1天） | ai-svc / analytics-svc |
-| **A 急需** | A2 DLQ（死信队列） | 毒消息：analytics 静默丢 / ai-svc 无限重投卡死 | 中（1~2 天） | ai-svc / analytics-svc |
-| **A 急需** | A3 事务性 Outbox | 事件丢失（双写问题），最经典可靠性缺口 | 中偏大（2~3 天） | chat-svc |
-| **B 可以做** | B1 Consumer lag 监控 | 没有消费滞后指标 | 小（半天） | 基建（compose/k8s） |
-| **B 可以做** | B2 Schema Registry / 事件 Protobuf | 契约靠人肉镜像，易漂移 | 大（独立 session） | chat-svc + analytics-svc |
-| **C 待触发** | C1 Kafka Streams 实时聚合 | 报表从批查改流算 | 大 | analytics-svc |
-| **C 待触发** | C2 mental-health trigger 迁 Kafka | 进程内队列换分布式 | 中 | analytics-svc |
-| **C 待触发** | C3 多 topic 分类 | 单 topic 拆域 | 中 | 全链路 |
-| **明确不做** | D1 TTS 异步化 / D2 ClickHouse、ksqlDB | 违背实时需求 / v1 规模不需要 | — | — |
+| 档 | 项 | 一句话 | 工作量 | 涉及 | 状态 |
+|----|----|--------|--------|------|------|
+| **A 急需** | A1 消费幂等去重 | 重复消费会重复写数据，**现在是真实行为** | 小（半天~1天） | ai-svc / analytics-svc | ✅ 完成 |
+| **A 急需** | A2 DLQ（死信队列） | 毒消息：analytics 静默丢 / ai-svc 无限重投卡死 | 中（1~2 天） | ai-svc / analytics-svc | ✅ 完成 |
+| **A 急需** | A3 事务性 Outbox | 事件丢失（双写问题），最经典可靠性缺口 | 中偏大（2~3 天） | chat-svc | ✅ 完成 |
+| **B 可以做** | B1 Consumer lag 监控 | 没有消费滞后指标 | 小（半天） | 基建（compose/k8s） | ⏸ 待排期 |
+| **B 可以做** | B2 Schema Registry / 事件 Protobuf | 契约靠人肉镜像，易漂移 | 大（独立 session） | chat-svc + analytics-svc | ⏸ 待排期 |
+| **C 待触发** | C1 Kafka Streams 实时聚合 | 报表从批查改流算 | 大 | analytics-svc | 🔒 等触发 |
+| **C 待触发** | C2 mental-health trigger 迁 Kafka | 进程内队列换分布式 | 中 | analytics-svc | 🔒 等触发 |
+| **C 待触发** | C3 多 topic 分类 | 单 topic 拆域 | 中 | 全链路 | 🔒 等触发 |
+| **明确不做** | D1 TTS 异步化 / D2 ClickHouse、ksqlDB | 违背实时需求 / v1 规模不需要 | — | — | ❌ 明确不做 |
 
 **建议顺序：A1 → A2 → A3（每个独立 PR，TDD 节奏）→ B 档按需 → C 档等触发。**
 
@@ -143,6 +144,7 @@ ai-svc 的 `consumehandler.go` 注释写着"最终入 DLQ"——**注释与实�
 | 日期 | 变更 |
 |------|------|
 | 2026-08-30 | 初版：从 stage-30-B 扩展性分析整理为分档 backlog；A/B/C/D 四档 |
+| 2026-08-30 | A 档 3 项全部落地：13 commit 完成 A1 幂等去重 + A2 DLQ + A3 事务性 Outbox；详见 `docs/stage-30-C-completion-report.md` |
 
 ---
 
