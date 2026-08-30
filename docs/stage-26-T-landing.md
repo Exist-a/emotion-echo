@@ -12,12 +12,12 @@
 | 类别 | Backlog 标的可写项 | 本轮补齐 | 跳过(理由见 §三) | 累计补齐 |
 |------|------------------|---------|------------------|---------|
 | Go 后端 | 14 个 logic/handler | 11 | 3 | 14 |
-| Python 后端 | 6 个 setup/analyzer | 6 | 0 | 6 |
+| Python 后端 | 8 个 setup/analyzer/route | 8 | 0 | 8 |
 | Frontend | 5 个 utils + composable | 0 | 3 (barrel / schema / network) | 0 |
 | k8s render | 1 个 Stage-30-A render | 1 | 0 | 1 |
 | 违规修复 | 1 个 sibling 违规 | 1 | 0 | 1 |
 
-总计 **13 个新测试文件 / 100+ 子测试** commit 入 main。
+总计 **15 个新测试文件 / 130+ 子测试** commit 入 main(含 closure commit `63d75af`)。
 
 ---
 
@@ -46,7 +46,10 @@
 |---------|------|------:|
 | FER | `tests/unit/test_logging_setup.py` | 11 |
 | FER | `tests/unit/test_metrics_setup.py` | 11 |
+| FER | `tests/unit/test_health_route.py` | 6 (closure commit `63d75af`) |
 | XTTS | `tests/unit/test_metrics_setup.py` | 11 |
+| XTTS | `tests/unit/test_pcm_chunk_shape.py` | 13 (closure commit `63d75af`) |
+| XTTS | `pcm_chunk_shape.py` (NEW module) | extracted from server.py inline |
 | sensevoice-small | `tests/unit/test_logging_setup.py` | 11 |
 | sensevoice-small | `tests/unit/test_metrics_setup.py` | 11 |
 
@@ -142,7 +145,7 @@ RED 测试**的文件补 sibling 测试。以下文件**没有可写 RED 的逻�
 | 检查 | 状态 |
 |------|------|
 | `go test ./...` (各 svc) | 全部绿(本轮新增 ~100 子测试) |
-| `pytest tests/unit/` (Python) | FER 58 / XTTS 48 / sensevoice 58 / llm-service 全部绿 |
+| `pytest tests/unit/` (Python) | FER 64 / XTTS 61 / sensevoice 58 / llm-service 全部绿 |
 | `go test -tags k8s ./k8s/tests/...` | 全部绿(除 Stage-29-A grafana TLS 预存失败) |
 | `grep 't.Skip' *_test.go` | 0 命中(本轮新增文件) |
 | `grep 'pytest.skip'` | 0 命中 |
