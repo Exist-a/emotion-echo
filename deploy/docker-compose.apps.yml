@@ -420,6 +420,60 @@ services:
       start_period: 180s    # 模型加载慢
       retries: 3
 
+  # =====================================================
+  # Stage 30 / stage-30-web-bff.md: emotion-echo-web-bff
+  # 前后端唯一 BFF（替代 APISIX 16 条 1:1 路由）
+  # 聚合 5 下游 + XTTS + ai-svc gRPC；自有 mock 鉴权签发 JWT
+  # =====================================================
+  emotion-echo-web-bff:
+    build:
+      context: ..
+      dockerfile: emotion-echo-web-bff/Dockerfile
+    image: emotion-echo/web-bff:v0.1.0
+    container_name: emotion-echo-web-bff
+    restart: unless-stopped
+    depends_on:
+      - emotion-echo-user-svc
+      - emotion-echo-chat-svc
+      - emotion-echo-assessment-svc
+      - emotion-echo-analytics-svc
+      - emotion-echo-ai-svc
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      GIN_MODE: release
+      # 下游容器 DNS（ApplyEnvOverrides 覆盖 yaml 默认值）
+      USER_SVC_URL:        "http://emotion-echo-user-svc:8888"
+      CHAT_SVC_URL:        "http://emotion-echo-chat-svc:8890"
+      ASSESSMENT_SVC_URL:  "http://emotion-echo-assessment-svc:8889"
+      ANALYTICS_SVC_URL:   "http://emotion-echo-analytics-svc:8904"
+      AI_SVC_HTTP_URL:     "http://emotion-echo-ai-svc:8891"
+      AI_SVC_GRPC_ADDR:    "emotion-echo-ai-svc:8892"
+      XTTS_BASE_URL:       "http://emotion-echo-xtts:8003"
+      SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      BFF_JWT_SECRET:      ${BFF_JWT_SECRET:-dev-bff-secret}
+    ports:
+      - "8894:8894"
+    volumes:
+      - ../emotion-echo-web-bff/etc/web-bff.yaml:/app/etc/web-bff.yaml:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 --spider http://localhost:8894/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
 # =====================================================
 # 网络：external，连接到 infra compose 定义的 app-network
 # =====================================================
