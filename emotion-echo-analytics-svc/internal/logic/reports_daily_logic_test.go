@@ -86,9 +86,21 @@ func TestReportsDailyLogic_EmptyDate_DefaultsToToday(t *testing.T) {
 	after := time.Now()
 	require.NoError(t, err)
 
-	// capturedDate should be ~now (within the test window).
-	assert.False(t, capturedDate.Before(before.Add(-time.Second)))
-	assert.False(t, capturedDate.After(after.Add(time.Second)))
+	// capturedDate must be today's date (year/month/day match
+	// before/after). It may be midnight or any time of day — we
+	// only assert the calendar date is "today".
+	assert.Equal(t, before.Year(), capturedDate.Year(),
+		"year should match today's calendar date")
+	assert.Equal(t, before.Month(), capturedDate.Month(),
+		"month should match today's calendar date")
+	assert.Equal(t, before.Day(), capturedDate.Day(),
+		"day should match today's calendar date")
+	assert.Equal(t, after.Year(), capturedDate.Year(),
+		"year should match today's calendar date")
+	assert.Equal(t, after.Month(), capturedDate.Month(),
+		"month should match today's calendar date")
+	assert.Equal(t, after.Day(), capturedDate.Day(),
+		"day should match today's calendar date")
 }
 
 func TestReportsDailyLogic_BadDateFormat_ReturnsValidationError(t *testing.T) {
@@ -138,8 +150,8 @@ func TestReportsDailyLogic_NoData_EmptyEmotionCountsNotNil(t *testing.T) {
 // fakeReportRepo 满足 repository.ReportRepo 接口；只让 GetDailyReport
 // / GetTrendReport 可注入行为，其他方法 panic。
 type fakeReportRepo struct {
-	repository.EventRepo // embed for unmocked methods (panic if called)
-	ReportRepo            // interface satisfaction (methods below override)
+	repository.EventRepo    // embed for unmocked methods (panic if called)
+	repository.ReportRepo   // interface satisfaction (methods below override)
 
 	getDailyReport    *repository.DailyReport
 	getDailyReportErr error

@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"emotion-echo-analytics-svc/internal/repository"
 	"emotion-echo-analytics-svc/internal/types"
