@@ -54,6 +54,7 @@ func TestMessageCreatedHandler_HappyPath(t *testing.T) {
 	assert.Equal(t, int64(50), got.ConversationID)
 	assert.Equal(t, int64(1), got.UserID)
 	assert.Greater(t, got.SentimentScore, 0.0)
+	assert.Equal(t, "test-uuid", got.EventID, "Stage 30-C A1: EventID 应从 evt.ID 透传")
 }
 
 // TestMessageCreatedHandler_SadText：负面文本 → sad
@@ -86,6 +87,7 @@ func TestMessageCreatedHandler_SadText(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, "sad", got.PrimaryEmotion)
 	assert.Less(t, got.SentimentScore, 0.0)
+	assert.Equal(t, "test-uuid-2", got.EventID, "Stage 30-C A1: EventID 应从 evt.ID 透传")
 }
 
 // TestMessageCreatedHandler_NonUserRole_Skip：非 user 角色（assistant）不分析
@@ -148,4 +150,34 @@ func TestMessageCreatedHandler_BadData_ReturnsError(t *testing.T) {
 	}
 	err := h.Handle(context.Background(), evt)
 	require.Error(t, err)
+}
+
+// TestMessageCreatedHandler_PropagatesEventIDFromEvent：专项断言 evt.ID 流入 row.EventID。
+// 复用 captureEventRepo 模式（直接断言 Create 收到的对象），与 InMemory 单测互补。
+func TestMessageCreatedHandler_PropagatesEventIDFromEvent(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewInMemoryEmotionRepo()
+	a := analyzer.NewKeywordAnalyzer()
+	h := NewMessageCreatedHandler(repo, a)
+
+	body, _ := json.Marshal(events.MessageCreatedData{
+		MessageID:      999,
+		ConversationID: 9,
+		UserID:         7,
+		Role:           "user",
+		Content:        "随便说点啥",
+	})
+	evt := &events.Event{
+		ID:   "evt-prop-uuid",
+		Type: events.EventTypeMessageCreated,
+		Data: json.RawMessage(body),
+	}
+	require.NoError(t, h.Handle(context.Background(), evt))
+
+	// 通过 GetByMessageID 验证 EventID 写入（无需知道 ID 自增值）
+	got, err := repo.GetByMessageID(context.Background(), 999)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "evt-prop-uuid", got.EventID)
 }

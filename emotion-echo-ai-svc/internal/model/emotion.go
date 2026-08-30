@@ -4,8 +4,14 @@ package model
 import "time"
 
 // EmotionAnalysis 情绪分析（emotion_echo_ai.emotion_analysis 表对应）
+//
+// EventID 用于消费幂等：来自 chat-svc 发布的 Kafka 事件 ID。
+// 写入数据库时由 repo 层 ON CONFLICT (event_id) DO NOTHING 去重，
+// 保证 at-least-once 投递下同一事件不会落两行。空 EventID（来自
+// gRPC 同步分析路径）走非去重路径。
 type EmotionAnalysis struct {
 	ID             int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	EventID        string    `gorm:"column:event_id;size:64;uniqueIndex:uq_emotion_analysis_event_id"`
 	MessageID      int64     `gorm:"column:message_id;index"`
 	UserID         int64     `gorm:"column:user_id"`
 	ConversationID int64     `gorm:"column:conversation_id"`
