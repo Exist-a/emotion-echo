@@ -6,17 +6,19 @@ package svc
 import (
 	"emotion-echo-analytics-svc/internal/config"
 	"emotion-echo-analytics-svc/internal/repository"
+	"emotion-echo-analytics-svc/internal/trigger"
 )
 
 // ServiceContext analytics-svc 依赖注入容器
 //
 // Stage 30-A 扩展：除 EventRepo 外，新增 ReportRepo（跨 schema 只读聚合）。
-// Round 3 加 MentalHealthRepo；Round 4 加 TriggerQueue + KafkaConsumer。
+// Round 3 加 MentalHealthRepo + TriggerQueue；Round 4 加 KafkaConsumer。
 type ServiceContext struct {
 	Config           config.Config
 	EventRepo        repository.EventRepo
 	ReportRepo       repository.ReportRepo        // Round 1
-	MentalHealthRepo repository.MentalHealthRepo // Round 3
+	MentalHealthRepo repository.MentalHealthRepo // Round 3 part 1
+	TriggerQueue     *trigger.TriggerQueue        // Round 3 part 2
 }
 
 // NewServiceContext 用最少的依赖构造 svcCtx（向后兼容 Round 0）。
