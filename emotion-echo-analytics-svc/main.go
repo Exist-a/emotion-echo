@@ -54,7 +54,7 @@ func main() {
 	// Round 3：MentalHealthRepo（跨 schema 只读）
 	var mhRepo repository.MentalHealthRepo
 	if db != nil {
-		mhRepo = repository.NewPostgresMentalHealthRepo()
+		mhRepo = repository.NewPostgresMentalHealthRepo(db)
 	}
 
 	// Round 3 part 2：TriggerQueue（异步评估）
