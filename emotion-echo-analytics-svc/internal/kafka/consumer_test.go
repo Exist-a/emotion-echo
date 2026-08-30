@@ -101,6 +101,7 @@ func TestHandleOne_MessageCreated_WritesRow(t *testing.T) {
 	assert.Equal(t, int64(42), got.UserID)
 	assert.Equal(t, "message", got.EventType)
 	assert.Equal(t, "evt-1", got.Target)
+	assert.Equal(t, "evt-1", got.EventID, "Stage 30-C A1: EventID 应从 ev.ID 透传")
 }
 
 func TestHandleOne_ConversationCreated_WritesRow(t *testing.T) {
@@ -195,4 +196,32 @@ func mustJSON(t *testing.T, v any) []byte {
 		t.Fatalf("marshal: %v", err)
 	}
 	return b
+}
+
+// TestHandleOne_PropagatesEventIDForAllEventTypes Stage 30-C A1 专项断言：
+// 三种事件类型都应把 ev.ID 传入 row.EventID。复用现有 captureEventRepo。
+func TestHandleOne_PropagatesEventIDForAllEventTypes(t *testing.T) {
+	t.Parallel()
+	repo := &captureEventRepo{}
+	h := &chatEventHandler{repo: repo, topic: "chat-events"}
+
+	now := time.Now().UTC()
+	cases := []struct {
+		name string
+		evt  events.Event
+	}{
+		{"message.created", events.Event{ID: "evt-mc-1", Type: events.EventTypeMessageCreated, Time: now, Data: events.MessageCreatedData{UserID: 1}}},
+		{"conversation.created", events.Event{ID: "evt-cc-1", Type: events.EventTypeConversationCreated, Time: now, Data: events.ConversationCreatedData{UserID: 1}}},
+		{"conversation.closed", events.Event{ID: "evt-cx-1", Type: events.EventTypeConversationClosed, Time: now, Data: events.ConversationClosedData{UserID: 1}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo.items = nil // 清空上一轮
+			msg := &sarama.ConsumerMessage{Topic: "chat-events", Value: mustJSON(t, tc.evt)}
+			require.NoError(t, h.handleOne(msg))
+			require.Len(t, repo.items, 1)
+			assert.Equal(t, tc.evt.ID, repo.items[0].EventID,
+				"EventID 应等于 ev.ID（Stage 30-C A1 幂等键）")
+		})
+	}
 }

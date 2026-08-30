@@ -125,6 +125,79 @@ func TestAnalyticsKafka_Consumer_MessageCreated_WritesBehaviorEvent_Integration(
 	assert.Equal(t, int64(42), got.UserID)
 	assert.Equal(t, "message", got.EventType)
 	assert.Equal(t, "evt-int-1", got.Target, "target 应等于事件 ID")
+	assert.Equal(t, "evt-int-1", got.EventID, "Stage 30-C A1: EventID 应等于事件 ID（幂等键）")
 	assert.Equal(t, "chat-events", got.SessionID, "session_id 暂用 topic 名")
 	assert.True(t, got.OccurredAt.Equal(now), "OccurredAt 应等于事件时间")
+}
+
+// TestAnalyticsKafka_IdempotentOnDuplicateEventID Stage 30-C A1 端到端幂等：
+// 发 [evt-dup, evt-dup, sentinel evt-new] 三条 → 启 consumer → 等 sentinel 落库 →
+// 断言总行数 == 2（重复的 evt-dup 因 ON CONFLICT DO NOTHING 被去重）。
+//
+// sentinel 是必要的"反向证据"：单看 evt-dup 一行可能假阳性（broker 还没消费完）。
+// 等 sentinel 出现意味着所有消息都已被处理。
+func TestAnalyticsKafka_IdempotentOnDuplicateEventID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test skipped in short mode")
+	}
+	ctx := context.Background()
+
+	// 1. Kafka broker
+	kc, err := kafkacontainer.RunContainer(ctx)
+	require.NoError(t, err)
+	defer func() { _ = kc.Terminate(ctx) }()
+	brokers, err := kc.Brokers(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, brokers)
+
+	// 2. Postgres + repo（pgContainerForEvents 已 apply migration 002）
+	pgDB, cleanup := pgContainerForEvents(t, ctx)
+	defer cleanup()
+	repo := repository.NewPostgresEventRepo(pgDB)
+
+	// 3. 先发布 3 条事件，触发 topic 自动创建（同 ID 用同 key → 同 partition → 顺序处理）
+	now := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
+	publishChatEvent(t, ctx, brokers, &events.Event{
+		ID: "evt-dup-1", Type: events.EventTypeMessageCreated, Source: "chat-svc", Time: now,
+		Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 100, Role: "user", Content: "first"},
+	})
+	publishChatEvent(t, ctx, brokers, &events.Event{
+		ID: "evt-dup-1", Type: events.EventTypeMessageCreated, Source: "chat-svc", Time: now,
+		Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 100, Role: "user", Content: "first"},
+	})
+	publishChatEvent(t, ctx, brokers, &events.Event{
+		ID: "evt-sentinel-1", Type: events.EventTypeMessageCreated, Source: "chat-svc", Time: now,
+		Data: events.MessageCreatedData{MessageID: 2, ConversationID: 1, UserID: 100, Role: "user", Content: "sentinel"},
+	})
+
+	// 4. 启 consumer
+	consumer, err := kafka.NewConsumer(brokers, "it-analytics-idempotency", events.TopicChatEvents, repo)
+	require.NoError(t, err)
+	defer func() { _ = consumer.Close() }()
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() { _ = consumer.Run(runCtx) }()
+
+	// 5. 等 sentinel 落库（保证所有消息都已处理完）
+	ok := waitFor(t, 30*time.Second, func() bool {
+		// sentinel EventID 是 evt-sentinel-1；GetByID 不知道 ID，按 count 检查
+		var count int64
+		_ = pgDB.WithContext(ctx).Raw(
+			`SELECT COUNT(*) FROM emotion_echo_analytics.user_behavior_events`).Scan(&count).Error
+		return count >= 2
+	})
+	require.True(t, ok, "sentinel 应在超时内落库（count >= 2）")
+
+	// 6. 关键断言：总行数 == 2（evt-dup-1 一行 + evt-sentinel-1 一行）
+	var total int64
+	require.NoError(t, pgDB.WithContext(ctx).Raw(
+		`SELECT COUNT(*) FROM emotion_echo_analytics.user_behavior_events`).Scan(&total).Error)
+	assert.Equal(t, int64(2), total, "Stage 30-C A1: 重复 evt-dup-1 应被 ON CONFLICT DO NOTHING 去重")
+
+	// 7. 验证 evt-dup-1 确实只有一行
+	var dupCount int64
+	require.NoError(t, pgDB.WithContext(ctx).Raw(
+		`SELECT COUNT(*) FROM emotion_echo_analytics.user_behavior_events WHERE event_id = ?`,
+		"evt-dup-1").Scan(&dupCount).Error)
+	assert.Equal(t, int64(1), dupCount, "evt-dup-1 应只落一行")
 }
