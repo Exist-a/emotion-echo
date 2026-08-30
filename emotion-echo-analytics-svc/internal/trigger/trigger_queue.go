@@ -46,14 +46,15 @@ type TriggerQueue struct {
 
 // NewTriggerQueue 构造 channel + 启动 worker pool
 //
-// workers: 并发 worker 数（推荐 = GOMAXPROCS）
+// workers: 并发 worker 数（推荐 = GOMAXPROCS；<1 用 1；= 0 不启动
+//          worker — 仅用于 buffer-only 场景如 backpressure 测试）
 // cap: channel buffer（<=0 用 DefaultQueueCap）
 func NewTriggerQueue(ctx context.Context, workers, cap int, workerFn func(ctx context.Context, req Request)) *TriggerQueue {
 	if cap <= 0 {
 		cap = DefaultQueueCap
 	}
-	if workers <= 0 {
-		workers = 1
+	if workers < 0 {
+		workers = 0
 	}
 
 	q := &TriggerQueue{
@@ -62,6 +63,7 @@ func NewTriggerQueue(ctx context.Context, workers, cap int, workerFn func(ctx co
 		workerFn: workerFn,
 	}
 
+	// workers == 0 保留：测试 backpressure 用，不启动 worker 协程
 	for i := 0; i < workers; i++ {
 		q.wg.Add(1)
 		go q.workerLoop(ctx)
