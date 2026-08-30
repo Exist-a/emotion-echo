@@ -30,6 +30,11 @@ import (
 //  1. 解析为 Event
 //  2. 调用 Handler（可选创建 SkyWalking span）
 //  3. 标记消费成功（返回 nil）
+//
+// Stage 30-C A2: Handler 返 error 时不再无限重投
+//   - attempt < MaxRetries：递增计数，不 MarkMessage（sarama 自动重投）
+//   - attempt >= MaxRetries：调 DLQ.Publish + MarkMessage + 重置计数
+//   - DLQ 为 nil 时退化为原行为（不 MarkMessage，保留向后兼容）
 type ConsumerGroupHandler struct {
 	// Ready 当 setup 完成后会关闭这个 channel
 	Ready chan bool
@@ -40,6 +45,12 @@ type ConsumerGroupHandler struct {
 	// Tracer 可选：用于创建 SkyWalking span（Stage 25-F）
 	// 为 nil 时不创建 span，保证向后兼容
 	Tracer *go2sky.Tracer
+	// DLQ Stage 30-C A2：可选 DLQ publisher。nil 时不投 DLQ（退化）。
+	DLQ DLQPublisher
+	// MaxRetries Stage 30-C A2：失败最大重试次数，0 时取默认值 3。
+	MaxRetries int
+	// attempts Stage 30-C A2：msg.Key → 已重试次数（消费周期内有效）
+	attempts map[string]int
 }
 
 // MessageHandler 是单条消息的业务处理函数
@@ -63,6 +74,9 @@ func (h *ConsumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 //
 // Stage 25-F：当 h.Tracer 非 nil 时，为每条消息创建 SkyWalking local span，
 // 标签包含 messaging.system / topic / partition / event.type，便于 SkyWalking UI 聚合分析。
+//
+// Stage 30-C A2 (RED step — 仅声明接口字段，handleFailure 由 commit 6 GREEN 落地)
+// 当前行为保持与 Stage 30-B 一致：Handler 返 error → 不 MarkMessage。
 func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for {
 		select {
