@@ -13,6 +13,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -89,3 +90,65 @@ type MentalHealthRepo interface {
 
 	Ping(ctx context.Context) error
 }
+// =====================================================
+// InMemoryMentalHealthRepo（Round 3 GREEN 测试替身）
+// =====================================================
+
+// InMemoryMentalHealthRepo Round 3 GREEN 用的内存版 MentalHealthRepo。
+//
+// 当前内存实现为占位（Round 5 migrations 落地后再用真实 SQL）；
+// tests 主要通过 stub 注入返回值验证 Logic 层的契约。
+type InMemoryMentalHealthRepo struct{}
+
+// NewInMemoryMentalHealthRepo 构造空 repo
+func NewInMemoryMentalHealthRepo() *InMemoryMentalHealthRepo {
+	return &InMemoryMentalHealthRepo{}
+}
+
+// GetLatestAssessment Round 3 GREEN 占位
+func (r *InMemoryMentalHealthRepo) GetLatestAssessment(_ context.Context, _ int64, _ AssessmentType) (*MentalAssessment, error) {
+	return nil, errors.New("InMemoryMentalHealthRepo.GetLatestAssessment: 占位实现，测试应注入 stub")
+}
+
+// ListAssessmentHistory Round 3 GREEN 占位
+func (r *InMemoryMentalHealthRepo) ListAssessmentHistory(_ context.Context, _ int64, _, _ string, _ int) ([]AssessmentHistoryItem, string, error) {
+	return nil, "", errors.New("InMemoryMentalHealthRepo.ListAssessmentHistory: 占位实现，测试应注入 stub")
+}
+
+// GetTrendData Round 3 GREEN 占位
+func (r *InMemoryMentalHealthRepo) GetTrendData(_ context.Context, _ int64, _ string, _, _ time.Time) ([]TrendPoint, error) {
+	return nil, errors.New("InMemoryMentalHealthRepo.GetTrendData: 占位实现，测试应注入 stub")
+}
+
+// Ping 实现 MentalHealthRepo 接口
+func (r *InMemoryMentalHealthRepo) Ping(_ context.Context) error { return nil }
+
+// 编译期断言
+var _ MentalHealthRepo = (*InMemoryMentalHealthRepo)(nil)
+
+// =====================================================
+// PostgresMentalHealthRepo（Round 5 落地真 SQL；当前 stub）
+// =====================================================
+
+type PostgresMentalHealthRepo struct{}
+
+// NewPostgresMentalHealthRepo 构造
+func NewPostgresMentalHealthRepo() *PostgresMentalHealthRepo {
+	return &PostgresMentalHealthRepo{}
+}
+
+func (r *PostgresMentalHealthRepo) GetLatestAssessment(_ context.Context, _ int64, _ AssessmentType) (*MentalAssessment, error) {
+	return nil, errors.New("PostgresMentalHealthRepo.GetLatestAssessment: Round 5 落地")
+}
+
+func (r *PostgresMentalHealthRepo) ListAssessmentHistory(_ context.Context, _ int64, _, _ string, _ int) ([]AssessmentHistoryItem, string, error) {
+	return nil, "", errors.New("PostgresMentalHealthRepo.ListAssessmentHistory: Round 5 落地")
+}
+
+func (r *PostgresMentalHealthRepo) GetTrendData(_ context.Context, _ int64, _ string, _, _ time.Time) ([]TrendPoint, error) {
+	return nil, errors.New("PostgresMentalHealthRepo.GetTrendData: Round 5 落地")
+}
+
+func (r *PostgresMentalHealthRepo) Ping(_ context.Context) error { return nil }
+
+var _ MentalHealthRepo = (*PostgresMentalHealthRepo)(nil)
