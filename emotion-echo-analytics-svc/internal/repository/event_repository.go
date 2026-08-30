@@ -218,7 +218,8 @@ func (r *PostgresEventRepo) Ping(ctx context.Context) error {
 // GetDayNightPattern 按 24 小时桶聚合 [start, end]（含 end 当日）内的事件。
 //
 // 窗口语义与 InMemory 实现一致：[start::date, end::date + 1 day)。
-// 返回稀疏 map（缺失的 hour 不出现），logic 层负责补满 24 桶。
+// 日期边界以 YYYY-MM-DD 字符串传入 SQL（`$n::date`），避免 timestamptz→date
+// 依赖数据库会话时区。返回稀疏 map（缺失的 hour 不出现），logic 层补满 24 桶。
 // 时间桶按数据库会话时区取 EXTRACT(HOUR)（生产 UTC，测试容器默认 UTC）。
 func (r *PostgresEventRepo) GetDayNightPattern(ctx context.Context, userID int64, start, end time.Time) (map[int]int64, error) {
 	const q = `
@@ -233,7 +234,7 @@ GROUP BY 1`
 		Hour int
 		Cnt  int64
 	}
-	if err := r.db.WithContext(ctx).Raw(q, userID, start, end).Scan(&rows).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(q, userID, start.Format("2006-01-02"), end.Format("2006-01-02")).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make(map[int]int64, len(rows))
@@ -277,7 +278,7 @@ SELECT
 		TotalConversations int64
 		LongestMs          int64
 	}
-	if err := r.db.WithContext(ctx).Raw(q, userID, start, end).Scan(&row).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(q, userID, start.Format("2006-01-02"), end.Format("2006-01-02")).Scan(&row).Error; err != nil {
 		return nil, err
 	}
 
@@ -308,7 +309,7 @@ ORDER BY 1`
 		Day time.Time
 		Cnt int64
 	}
-	if err := r.db.WithContext(ctx).Raw(q, userID, start, end).Scan(&rows).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(q, userID, start.Format("2006-01-02"), end.Format("2006-01-02")).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]DailyCount, 0, len(rows))

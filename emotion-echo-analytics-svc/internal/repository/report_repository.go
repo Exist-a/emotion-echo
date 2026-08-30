@@ -17,7 +17,7 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -163,24 +163,194 @@ func NewPostgresReportRepo(db *gorm.DB) *PostgresReportRepo {
 	return &PostgresReportRepo{db: db}
 }
 
-// GetDailyReport Round 1 GREEN 占位：真实 SELECT 在 Round 5 落地
-func (r *PostgresReportRepo) GetDailyReport(_ context.Context, userID int64, date time.Time) (*DailyReport, error) {
-	// 占位 — Round 5 实现跨 schema JOIN：
-	//   SELECT emotion, COUNT(*) FROM emotion_echo_ai.daily_emotion_v
-	//   WHERE user_id = $1 AND created_at::date = $2 GROUP BY emotion
-	// 合并 msg_summary_v / assessment_v / user_behavior_events 聚合。
-	_ = userID
-	_ = date
-	return nil, errors.New("PostgresReportRepo.GetDailyReport: Round 5 实现未落地")
+// GetDailyReport 跨 schema 只读聚合：单日报告。
+//
+// 数据源（per stage-30-A §六.6.1-3）：
+//   - emotion_echo_ai.daily_emotion_v（emotion counts + avg sentiment/confidence）
+//   - emotion_echo_chat.msg_summary_v（message count）
+//   - emotion_echo_analytics.user_behavior_events（conversation count）
+//   - emotion_echo_assessment.assessment_v（assessment count）
+//
+// 日期以 YYYY-MM-DD 字符串传入（`$n::date`），避免 timestamptz→date
+// 依赖会话时区。空数据日返回全 0 + 空 map（不返 error）。
+func (r *PostgresReportRepo) GetDailyReport(ctx context.Context, userID int64, date time.Time) (*DailyReport, error) {
+	const q = `
+SELECT
+    COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_chat.msg_summary_v
+              WHERE user_id = $1 AND send_time::date = $2::date), 0) AS message_count,
+    COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_analytics.user_behavior_events
+              WHERE user_id = $1 AND event_type = 'conversation' AND occurred_at::date = $2::date), 0) AS conversation_count,
+    COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_assessment.assessment_v
+              WHERE user_id = $1 AND created_at::date = $2::date), 0) AS assessment_count,
+    COALESCE((SELECT AVG(sentiment_score)::float8 FROM emotion_echo_ai.daily_emotion_v
+              WHERE user_id = $1 AND created_at::date = $2::date), 0) AS avg_sentiment,
+    COALESCE((SELECT AVG(confidence)::float8 FROM emotion_echo_ai.daily_emotion_v
+              WHERE user_id = $1 AND created_at::date = $2::date), 0) AS avg_confidence`
+
+	var row struct {
+		MessageCount      int64
+		ConversationCount int64
+		AssessmentCount   int64
+		AvgSentiment      float64
+		AvgConfidence     float64
+	}
+	if err := r.db.WithContext(ctx).Raw(q, userID, date.Format("2006-01-02")).Scan(&row).Error; err != nil {
+		return nil, err
+	}
+
+	const qCounts = `
+SELECT primary_emotion AS emotion, COUNT(*)::bigint AS cnt
+FROM emotion_echo_ai.daily_emotion_v
+WHERE user_id = $1 AND created_at::date = $2::date
+GROUP BY 1`
+
+	var counts []struct {
+		Emotion string
+		Cnt     int64
+	}
+	if err := r.db.WithContext(ctx).Raw(qCounts, userID, date.Format("2006-01-02")).Scan(&counts).Error; err != nil {
+		return nil, err
+	}
+	emotionCounts := make(map[string]int64, len(counts))
+	for _, c := range counts {
+		emotionCounts[c.Emotion] = c.Cnt
+	}
+
+	return &DailyReport{
+		UserID:            userID,
+		Date:              date.Format("2006-01-02"),
+		EmotionCounts:     emotionCounts,
+		MessageCount:      row.MessageCount,
+		ConversationCount: row.ConversationCount,
+		AssessmentCount:   row.AssessmentCount,
+		AvgSentiment:      row.AvgSentiment,
+		AvgConfidence:     row.AvgConfidence,
+	}, nil
 }
 
-// GetTrendReport Round 1 GREEN 占位
-func (r *PostgresReportRepo) GetTrendReport(_ context.Context, userID int64, trendType string, start, end time.Time) (*TrendReport, error) {
-	_ = userID
-	_ = trendType
-	_ = start
-	_ = end
-	return nil, errors.New("PostgresReportRepo.GetTrendReport: Round 5 实现未落地")
+// trendRow SQL 原始聚合行（day 级别）
+type trendRow struct {
+	Day           time.Time
+	Emotion       string
+	Cnt           int64
+	AvgSentiment  float64
+	AvgConfidence float64
+}
+
+// GetTrendReport 跨 schema 只读聚合：区间趋势。
+//
+// type: weekly|monthly|yearly（桶大小见 TrendBucketSize：7/30/365 天）。
+// SQL 负责按桶日期 GROUP BY（DATE 域整数运算，不依赖会话时区），
+// Go 侧把稀疏桶补成 [start, end] 的连续桶（空桶 Count=0）。
+func (r *PostgresReportRepo) GetTrendReport(ctx context.Context, userID int64, trendType string, start, end time.Time) (*TrendReport, error) {
+	bucket, ok := TrendBucketSize(trendType)
+	if !ok {
+		return nil, fmt.Errorf("invalid trend type %q", trendType)
+	}
+	bucketDays := int64(bucket / (24 * time.Hour))
+
+	const q = `
+SELECT bucket_date AS day, primary_emotion AS emotion,
+       COUNT(*)::bigint AS cnt,
+       AVG(sentiment_score)::float8 AS avg_sentiment,
+       AVG(confidence)::float8 AS avg_confidence
+FROM (
+    SELECT *, ($2::date + ((created_at::date - $2::date) / $4) * $4) AS bucket_date
+    FROM emotion_echo_ai.daily_emotion_v
+    WHERE user_id = $1
+      AND created_at::date BETWEEN $2::date AND $3::date
+) t
+GROUP BY 1, 2
+ORDER BY 1`
+
+	var rows []trendRow
+	if err := r.db.WithContext(ctx).Raw(q, userID,
+		start.Format("2006-01-02"), end.Format("2006-01-02"), bucketDays,
+	).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	return &TrendReport{
+		UserID:    userID,
+		Type:      trendType,
+		StartDate: start.Format("2006-01-02"),
+		EndDate:   end.Format("2006-01-02"),
+		Points:    buildTrendPoints(rows, bucketDays, start.Format("2006-01-02"), end.Format("2006-01-02")),
+	}, nil
+}
+
+// buildTrendPoints 把 day 级稀疏聚合补成 [startLabel, endLabel] 的连续桶。
+//
+// 桶边界 = startLabel + k*bucketDays（DATE 域整数运算，与时区无关）。
+// 空桶：Count=0、主导情绪为空串、avg 为 0。有数据桶：主导情绪 = 桶内
+// count 最大的 emotion；avg = 按 count 加权平均。
+func buildTrendPoints(rows []trendRow, bucketDays int64, startLabel, endLabel string) []TrendPoint {
+	startDay := parseDayLabel(startLabel)
+	endDay := parseDayLabel(endLabel)
+
+	// 稀疏行 → 桶聚合（按桶日期）
+	type bucketAgg struct {
+		primary  string
+		maxCnt   int64
+		totalCnt int64
+		sumSent  float64
+		sumConf  float64
+	}
+	byBucket := map[int64]*bucketAgg{}
+	for _, row := range rows {
+		day := parseDayLabel(row.Day.Format("2006-01-02"))
+		if day < startDay {
+			continue // SQL 已过滤，防御性跳过
+		}
+		k := (day - startDay) / bucketDays
+		bucketDay := startDay + k*bucketDays
+		agg, ok := byBucket[bucketDay]
+		if !ok {
+			agg = &bucketAgg{}
+			byBucket[bucketDay] = agg
+		}
+		agg.totalCnt += row.Cnt
+		agg.sumSent += row.AvgSentiment * float64(row.Cnt)
+		agg.sumConf += row.AvgConfidence * float64(row.Cnt)
+		if row.Cnt > agg.maxCnt {
+			agg.maxCnt = row.Cnt
+			agg.primary = row.Emotion
+		}
+	}
+
+	points := make([]TrendPoint, 0)
+	for b := startDay; b <= endDay; b += bucketDays {
+		agg := byBucket[b]
+		if agg == nil {
+			points = append(points, TrendPoint{Date: dayLabel(b)})
+			continue
+		}
+		p := TrendPoint{
+			Date:           dayLabel(b),
+			PrimaryEmotion: agg.primary,
+			Count:          agg.totalCnt,
+		}
+		if agg.totalCnt > 0 {
+			p.AvgSentiment = agg.sumSent / float64(agg.totalCnt)
+			p.AvgConfidence = agg.sumConf / float64(agg.totalCnt)
+		}
+		points = append(points, p)
+	}
+	return points
+}
+
+// parseDayLabel 解析 YYYY-MM-DD → 距 epoch 的天数（UTC，与时区无关）
+func parseDayLabel(label string) int64 {
+	t, err := time.Parse("2006-01-02", label)
+	if err != nil {
+		return 0
+	}
+	return t.Unix() / 86400
+}
+
+// dayLabel 天数 → YYYY-MM-DD（UTC）
+func dayLabel(day int64) string {
+	return time.Unix(day*86400, 0).UTC().Format("2006-01-02")
 }
 
 // Ping 健康检查
