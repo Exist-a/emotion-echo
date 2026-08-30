@@ -51,22 +51,43 @@ func main() {
 		reportRepo = repository.NewPostgresReportRepo(db)
 	}
 
+	// v1 启动时刷新 mv_daily_emotion（migration 003；pg_cron 调度留 Stage-2）。
+	// 非致命：MV 失败不影响实时 VIEW 查询（reports 端点走 daily_emotion_v）。
+	if db != nil {
+		if err := db.Exec("REFRESH MATERIALIZED VIEW emotion_echo_analytics.mv_daily_emotion").Error; err != nil {
+			log.Printf("[postgres] refresh mv_daily_emotion failed (non-fatal): %v", err)
+		} else {
+			log.Printf("[postgres] refreshed mv_daily_emotion")
+		}
+	}
+
 	// Round 3：MentalHealthRepo（跨 schema 只读）
 	var mhRepo repository.MentalHealthRepo
 	if db != nil {
 		mhRepo = repository.NewPostgresMentalHealthRepo(db)
 	}
 
-	// Round 3 part 2：TriggerQueue（异步评估）
+	// Round 3 part 2：TriggerQueue（异步评估）— worker body 用真实 runner
 	queueCap := 64
 	if c.TriggerQueueCap > 0 {
 		queueCap = c.TriggerQueueCap
 	}
 	workers := 4
-	tq := trigger.NewTriggerQueue(context.Background(), workers, queueCap, func(_ context.Context, _ trigger.Request) {
-		// Round 4 GREEN 占位：worker body 真实逻辑在 Round 5
-		// （mental_health_service.TriggerAssessment 调用）
-		log.Printf("[trigger] worker received request (no-op in Round 4)")
+	var runner *trigger.MentalHealthRunner
+	if db != nil {
+		runner = trigger.NewMentalHealthRunner(mhRepo, trigger.NewPostgresJobStore(db))
+	}
+	tq := trigger.NewTriggerQueue(context.Background(), workers, queueCap, func(ctx context.Context, req trigger.Request) {
+		// worker body：真实 mental-health 评估执行（migration 005 任务状态机）
+		if runner == nil {
+			log.Printf("[trigger] runner not configured (no postgres), skip task %s", req.TraceID)
+			return
+		}
+		if err := runner.Run(ctx, req); err != nil {
+			log.Printf("[trigger] task %s failed (user=%d type=%s): %v", req.TraceID, req.UserID, req.AssessmentType, err)
+			return
+		}
+		log.Printf("[trigger] task %s done (user=%d type=%s)", req.TraceID, req.UserID, req.AssessmentType)
 	})
 	// 在 main 退出时优雅关闭
 	defer tq.Close(context.Background())
