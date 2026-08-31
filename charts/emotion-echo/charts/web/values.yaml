@@ -9,6 +9,7 @@ resources:
   requests: {cpu: 100m, memory: 128Mi}
   limits: {cpu: 500m, memory: 512Mi}
 config:
-  apiBaseUrl: "http://apisix-gateway.ee-system:9080/api/v1"
+  # Stage 30: 前端唯一入口改为 emotion-echo-web-bff（BFF 替代 APISIX 网关）
+  apiBaseUrl: "http://web-bff.ee-app:8894/api/v1"
   ttsBaseUrl: "http://ai-svc.ee-app:8891/api/v1"
   llmModel: local

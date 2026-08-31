@@ -53,52 +53,6 @@ services:
     networks:
       - app-network
 
-  # =====================================================
-  # Stage 26-Q · APISIX 3.9 保留(无 image 升级/Docker Hub 受限)
-  # Stage 26-P 实测:APISIX 3.9.0-debian 镜像无论配置 (关 SSL / 关
-  # redirect plugin / 挂 self-signed cert) 都会触发 nginx openresty
-  # 内部 `return 301 about:blank`,这是 apache/apisix:3.9 已知 bug。
-  #
-  # Stage 26-Q 解:前端走直连 4 Go svc (绕过 :9080), :9080 的实际路由
-  # 不再作为 dev 链路必经。Compose 仍保留 apache/apisix 容器与 admin
-  # 端口,因为 ai-svc / llm-service / external system 可能需要.
-  # 升级到 apache/apisix:3.10+ 修此 bug 留给 Stage 27。
-  # =====================================================
-  apisix:
-    image: apache/apisix:3.9.0-debian
-    container_name: emotion-echo-apisix
-    ports:
-      - "9080:9080"
-      - "9091:9091"
-      - "9180:9180"
-    volumes:
-      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
-      - ./tls/cert:/usr/local/apisix/cert:ro
-    networks:
-      - app-network
-    restart: unless-stopped
-
-  # etcd (APISIX 配置存储) — Stage 26-Q 已不再被 gateway 消费,
-  # 保留以兼容 ai-svc 等仍用 etcd 的 svc
-  # =====================================================
-  etcd:
-    image: quay.io/coreos/etcd:v3.5.13
-    container_name: emotion-echo-etcd
-    command:
-      - "etcd"
-      - "--listen-client-urls=http://0.0.0.0:2379"
-      - "--advertise-client-urls=http://etcd:2379"
-      - "--listen-peer-urls=http://0.0.0.0:2380"
-      - "--initial-advertise-peer-urls=http://etcd:2380"
-      - "--initial-cluster=default=http://etcd:2380"
-    ports:
-      - "2379:2379"
-      - "2380:2380"
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # =====================================================
   # kafka 3.7 (KRaft 模式, 无 Zookeeper)

@@ -13,7 +13,6 @@ global:
     postgresUser: postgres
     postgresDB: emotion_echo
     internalApiKey: dev-key-change-me-please-32chars-min
-    apisixAdminKey: edd1c9f034335f136f87ad84b625c8f1
     jwtSecret: emotion-echo-secret-2026-please-change-in-prod
   # Stage 29-A: Grafana Ingress TLS knobs live under `global` so the
   # grafana subchart (which has its own namespace) can read them via
@@ -57,19 +56,6 @@ cert-manager:
     enabled: true
     name: selfsigned-issuer
 
-# Stage 29-D: per-family TLS retrofit for the 15 remaining business
-# ApisixRoutes. The 5-family grouping (user / chat / analytics /
-# assessment / ai) is defined in apisix-routes/values.yaml -> tls.families.
-# When this flag is true, apisix-routes/templates/tls-routes.yaml emits
-# 5 Certificate + 5 ApisixTls CRs AND each existing ApisixRoute in a
-# family gets `match.hosts: [<family.hostname>]` (dual-stack mode).
-#
-# Note: subcharts read their own values namespace, so this lives under
-# `apisix-routes.tls.enabled`, NOT `apisixRoutes.tls.enabled` (the
-# former would be silently ignored by the subchart template).
-#
-# mock-ping (r-ping) intentionally stays on plain HTTP — see
-# routes.yaml comment at Route 16.
-apisix-routes:
-  tls:
-    enabled: true
+# Stage 30: APISIX 网关已退役。下方原 Stage 29-D per-family TLS retrofit
+# 配置已不再生效（apisix-routes 子 chart 已删除）。
+# 历史背景：docs/stage-29-D-tls-all-routes.md

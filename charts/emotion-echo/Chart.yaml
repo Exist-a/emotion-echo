@@ -4,13 +4,13 @@ description: |
   Emotion-Echo umbrella chart - Emotion-AI monorepo full-stack deployment.
 
   Subcharts included (see charts/ directory):
-    - Data layer:       postgres, redis, kafka, etcd, skywalking
+    - Data layer:       postgres, redis, kafka, skywalking
     - Business layer:   user-svc, chat-svc, analytics-svc, assessment-svc,
-                        ai-svc, llm-service
+                        ai-svc, llm-service, web-bff
     - AI profile:       fer, sensevoice, xtts (toggleable via values)
     - Frontend:         web
-    - Ingress routes:   apisix-routes (16 ApisixRoute + 6 ApisixUpstream)
     - Observability:    prometheus (Stage 28-A), grafana, loki, alertmanager
+    - Stage 30: BFF 替代了原 APISIX 网关职责，apisix-routes 子 chart 已移除
 
 type: application
 version: 0.1.0
@@ -28,9 +28,6 @@ dependencies:
   - name: kafka
     version: "0.1.0"
     condition: kafka.enabled
-  - name: etcd
-    version: "0.1.0"
-    condition: etcd.enabled
   - name: skywalking
     version: "0.1.0"
     condition: skywalking.enabled
@@ -64,12 +61,11 @@ dependencies:
   - name: web
     version: "0.1.0"
     condition: web.enabled
-  - name: apisix-routes
+  - name: web-bff
     version: "0.1.0"
-    condition: apisix-routes.enabled
-  - name: apisix-ingress
-    version: "0.1.0"
-    condition: apisix-ingress.enabled
+    condition: web-bff.enabled
+  # Stage 30: APISIX 网关已退役（BFF 替代网关职责）。apisix-routes 子 chart 移除，
+  # 历史文档保留在 docs/ 与 plans/ 中作为演进参考。
   # Stage 28: observability stack. Each subchart can be disabled
   # individually via `<name>.enabled: false` in values overlay.
   - name: prometheus

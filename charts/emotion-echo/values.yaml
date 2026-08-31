@@ -46,11 +46,8 @@ llm-service:
 web:
   enabled: true
 
-# APISIX Ingress: 16 ApisixRoute + 6 ApisixUpstream (matches docker-compose).
-apisix-routes:
-  enabled: true
-apisix-ingress:
-  enabled: true
+# Stage 30: APISIX 网关已退役（BFF 替代网关职责），apisix-routes/apisix-ingress 子 chart 已移除。
+# 历史背景见 docs/stage-29-D-tls-all-routes.md 与 docs/stage-30-web-bff.md。
 
 # AI profile — heavy models (XTTS ~3GB). Off by default in dev to keep
 # kind happy. Flip fer/sensevoice/xtts to true when you want full pipeline.
@@ -60,10 +57,6 @@ sensevoice:
   enabled: true
 xtts:
   enabled: false   # see Stage 27-D note — image too heavy for kind dev
-
-# APISIX Ingress routes (16 ApisixRoute + 6 ApisixUpstream).
-apisix-routes:
-  enabled: true
 
 # =====================================================
 #  Observability stack — Stage 28 (4 subcharts)

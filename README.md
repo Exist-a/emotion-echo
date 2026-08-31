@@ -29,14 +29,14 @@
 
 ## 技术亮点
 
-### 1. 完整的微服务化演进（Stage 0 → 25）
+### 1. 完整的微服务化演进（Stage 0 → 30）
 
-从最初的 **Gin 单体**到 **5 个 Go 微服务 + Python gRPC + APISIX 网关 + Kafka 异步管线**的完整迁移过程，每一步都有独立的文档、commit 与验证记录：
+从最初的 **Gin 单体**到 **5 个 Go 微服务 + Python gRPC + BFF 网关（替代原 APISIX）+ Kafka 异步管线 + 真实 LLM 接入（DeepSeek 兼容）**的完整迁移过程，每一步都有独立的文档、commit 与验证记录：
 
 ```
 Gin 单体 → 微服务拆分 → gRPC 同步通信 → Kafka 异步管线
          → Prometheus metrics → mTLS 安全 → AI 模型容器化
-         → 端到端冒烟测试 → 多模态分析
+         → 端到端冒烟测试 → 多模态分析 → BFF 网关（替代 APISIX）→ 真实 LLM 接入
 ```
 
 📚 完整路线图：[`docs/distributed-roadmap.md`](docs/distributed-roadmap.md) · 30+ 篇 stage 演进文档
@@ -55,8 +55,7 @@ Gin 单体 → 微服务拆分 → gRPC 同步通信 → Kafka 异步管线
 
 - **SkyWalking** 链路追踪（HTTP / gRPC / Kafka 全链路）
 - **Prometheus** metrics 采集
-- **APISIX** 网关（路由 / 鉴权 / 限流 / CORS）
-- **etcd** 配置中心
+- **BFF**（`emotion-echo-web-bff`）替代原 APISIX — 鉴权透传 + 5 下游聚合 + SSE 编排 + CORS
 - **Kafka** 异步消息队列
 - 完整 **docker-compose** 编排（`deploy/`）
 
@@ -92,9 +91,8 @@ emotion-echo/
 │   └── XTTS/                     # 语音合成（含 TTS/ 核心）
 ├── proto/                        # protobuf 契约
 ├── deploy/                       # 基础设施编排
-│   ├── docker-compose.infra.yml  # PG + Redis + Kafka + APISIX + etcd + SkyWalking
-│   ├── docker-compose.apps.yml   # 5 个 Go 微服务
-│   └── apisix/                   # 路由 / upstream 配置
+│   ├── docker-compose.infra.yml  # PG + Redis + Kafka + SkyWalking（Stage 30 移除 APISIX/etcd）
+│   └── docker-compose.apps.yml   # 5 个 Go 微服务 + BFF + 3 个 AI 模型服务
 ├── docs/                         # 架构决策 + 30+ 篇 stage 文档
 └── scripts/                      # 自检 / 验证脚本
 ```
@@ -110,7 +108,7 @@ emotion-echo/
 ### 方式一：Docker Compose（推荐）
 
 ```bash
-# 1. 启动基础设施（PG / Redis / Kafka / APISIX / SkyWalking / etcd）
+# Stage 30：APISIX 退役。infra 只剩 PG / Redis / Kafka / SkyWalking（5 容器）
 cd deploy
 docker compose -f docker-compose.infra.yml up -d
 # 等待 30~60 秒各容器健康
@@ -172,7 +170,9 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 - ✅ Stage 29-D：5-family TLS retrofit for the 15 business ApisixRoutes（render-assert 已绿；live smoke 待集群验证）
 - ✅ Stage 30-A/B/C：analytics 9 端点 + Kafka pipeline + 消费幂等/DLQ/Outbox（全绿）
 - ✅ **Stage 30 Web BFF**：`emotion-echo-web-bff`（:8894）唯一入口 — 聚合 5 下游 + SSE 编排 + 自有 mock 鉴权（`docs/stage-30-web-bff.md`）
-- 📝 长期路线：29-E（Let's Encrypt）→ 31 ACK 迁移
+- ✅ **Phase D 接 DeepSeek**：BFF ai_stream 改造为 OpenAI 兼容真实 LLM（env 注入 key，无 key 降级 mock）
+- ✅ **APISIX 退役**：Stage 30 BFF 替代网关职责后，compose + helm apisix-routes + etcd 全清；历史保留在 `docs/`（`stage-29-D-tls-all-routes.md`）
+- 📝 长期路线：31 ACK 迁移
 
 ---
 

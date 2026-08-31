@@ -453,6 +453,11 @@ services:
       XTTS_BASE_URL:       "http://emotion-echo-xtts:8003"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       BFF_JWT_SECRET:      ${BFF_JWT_SECRET:-dev-bff-secret}
+      # Phase D：真实 LLM（DeepSeek/OpenAI 兼容）。本地 dev 留空 → ai_stream 走 mock 共情回复
+      # 真实部署：写 deploy/env/.env.local（**git ignore**），不要 commit 真实 key
+      BFF_LLM_API_KEY:     ${BFF_LLM_API_KEY:-}
+      BFF_LLM_BASE_URL:    ${BFF_LLM_BASE_URL:-https://api.deepseek.com}
+      BFF_LLM_MODEL:       ${BFF_LLM_MODEL:-deepseek-chat}
     ports:
       - "8894:8894"
     volumes:

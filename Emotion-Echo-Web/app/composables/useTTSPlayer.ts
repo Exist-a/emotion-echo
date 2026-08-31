@@ -1,7 +1,6 @@
 import { ref, onUnmounted } from "vue";
 import { stripMarkdown, extractReadableText } from "~/utils/stripMarkdown";
 import PcmPlayer from "pcm-player";
-import { useRuntimeConfig } from "#imports";
 
 export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral';
 
