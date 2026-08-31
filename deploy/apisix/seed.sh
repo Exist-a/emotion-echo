@@ -223,6 +223,47 @@ EOF
 # 但 APISIX 支持 longest-prefix 优先，所以顺序无严格要求。
 put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH"]'
 
+# ---- Stage 33 PR-19b：/api/v1/auth/* 白名单（跳过 jwt-auth 插件）----
+# login/register/verification-code/refresh 端点拿不到 token，不能被 jwt-auth 拦截。
+# 用裸 plugins（仅保留 limit-count 全局限流 + cors，不挂 jwt-auth）。
+AUTH_WHITELIST_PLUGINS=$(cat <<EOF
+{
+  "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "local"},
+  "cors": {"allow_origins": ["http://localhost:3000"], "allow_methods": ["GET","POST","PUT","DELETE","OPTIONS"], "allow_credentials": true, "allow_headers": ["*"]}
+}
+EOF
+)
+put_auth_route() {
+  local id="$1" uri="$2"
+  local body
+  body=$(cat <<EOF
+{
+  "uri": "$uri",
+  "upstream_id": 6,
+  "methods": ["GET","POST","PUT","DELETE","PATCH","OPTIONS"],
+  "plugins": $AUTH_WHITELIST_PLUGINS,
+  "status": 1
+}
+EOF
+)
+  if curl -sf -X PUT \
+    -H "X-API-KEY: $ADMIN_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$body" \
+    "$ADMIN_URL/apisix/admin/routes/$id" >/dev/null; then
+    log "  auth whitelist route OK: $id (uri=$uri, no jwt-auth)"
+  else
+    die "failed to PUT auth whitelist route $id" 3
+  fi
+}
+
+# longest-prefix 优先匹配 → 在 /api/v1/* (id 100) 之前注册也 OK，但放后面便于管理
+put_auth_route 110 "/api/v1/auth/login"
+put_auth_route 111 "/api/v1/auth/register"
+put_auth_route 112 "/api/v1/auth/verification-code"
+put_auth_route 113 "/api/v1/auth/refresh"
+put_auth_route 114 "/api/v1/auth/logout"
+
 # 健康探针（直接打到下游 svc，绕开 BFF 聚合）
 put_route_health 200 "/user-health"          1
 put_route_health 201 "/chat-health"          2
@@ -241,4 +282,4 @@ else
   die "failed to PUT apisix self-health route" 3
 fi
 
-log "seed complete: 6 upstreams + 7 routes"
+log "seed complete: 6 upstreams + 12 routes (1 catch-all + 5 health + 5 auth-whitelist + 1 self-health)"

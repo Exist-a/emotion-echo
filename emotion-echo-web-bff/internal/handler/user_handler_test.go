@@ -21,7 +21,11 @@ type fakeUserClient struct {
 	me      *downstream.UserInfo
 	updated *downstream.UserInfo
 	byID    *downstream.UserInfo
+	login   *downstream.UserInfo
+	reg     *downstream.UserInfo
 	err     error
+	loginErr error
+	regErr  error
 }
 
 func (f *fakeUserClient) GetMe(_ context.Context) (*downstream.UserInfo, error) {
@@ -41,6 +45,18 @@ func (f *fakeUserClient) GetByID(_ context.Context, _ int64) (*downstream.UserIn
 		return nil, f.err
 	}
 	return f.byID, nil
+}
+func (f *fakeUserClient) Login(_ context.Context, _, _ string) (*downstream.UserInfo, error) {
+	if f.loginErr != nil {
+		return nil, f.loginErr
+	}
+	return f.login, nil
+}
+func (f *fakeUserClient) Register(_ context.Context, _, _, _ string) (*downstream.UserInfo, error) {
+	if f.regErr != nil {
+		return nil, f.regErr
+	}
+	return f.reg, nil
 }
 
 func newUserRouter(client downstream.UserClient) *gin.Engine {

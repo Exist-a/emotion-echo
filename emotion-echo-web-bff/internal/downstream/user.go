@@ -50,6 +50,13 @@ type UserClient interface {
 	UpdateMe(ctx context.Context, req UpdateProfileReq) (*UserInfo, error)
 	// GetByID 按 ID 查用户
 	GetByID(ctx context.Context, id int64) (*UserInfo, error)
+
+	// Stage 33 PR-19b: 真实登录（POST /api/v1/users/login）
+	// 不走 ctx X-User-Id（因为 login 时调用者未认证）
+	// 返回 user-svc 校验后的 UserInfo；user-svc 返 401 时回 ErrInvalidCredentials
+	Login(ctx context.Context, username, password string) (*UserInfo, error)
+	// Stage 33 PR-19b: 真实注册（POST /api/v1/users/register）
+	Register(ctx context.Context, username, password, verificationCode string) (*UserInfo, error)
 }
 
 // UserClientOptions 构造选项
@@ -106,6 +113,33 @@ func (c *userHTTPClient) GetByID(ctx context.Context, id int64) (*UserInfo, erro
 		return nil, err
 	}
 	c.applyAuth(httpReq, ctx)
+	return c.doUserRequest(httpReq)
+}
+
+// Stage 33 PR-19b: login（不走 ctx X-User-Id）
+func (c *userHTTPClient) Login(ctx context.Context, username, password string) (*UserInfo, error) {
+	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/users/login", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	// 不注入 X-User-Id（未认证）
+	return c.doUserRequest(httpReq)
+}
+
+// Stage 33 PR-19b: register（不走 ctx X-User-Id）
+func (c *userHTTPClient) Register(ctx context.Context, username, password, verificationCode string) (*UserInfo, error) {
+	body, _ := json.Marshal(map[string]string{
+		"username":         username,
+		"password":         password,
+		"verificationCode": verificationCode,
+	})
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/users/register", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
 	return c.doUserRequest(httpReq)
 }
 

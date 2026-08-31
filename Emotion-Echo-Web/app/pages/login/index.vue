@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { sha256 } from 'js-sha256'
+import { sha256 } from 'js-sha256' // 仅作 import 占位（Stage 33 PR-19b 后实际未使用）
 import { verificationCodeCountDown } from '~/composables/verificationCodeCountDown'
 import { useNotify } from '~/composables/useNotify'
 
@@ -119,7 +119,9 @@ const loginHandler = () => {
 const handleLogin = async (username: string, password: string) => {
   isLoading.value = true
   try {
-    const result = await userStore.login({ username, password: sha256(password), rememberMe: isRemember.value })
+    // Stage 33 PR-19b: 不再 sha256(password) — BFF 直传明文给 user-svc bcrypt 校验。
+    // dev compose 默认不走 TLS，仅适用于本地开发；prod 必须启用 nginx:alpine profile: tls。
+    const result = await userStore.login({ username, password, rememberMe: isRemember.value })
     if (result.isOk) {
       await userStore.fetchUserInfo().catch(() => {})
       success('欢迎回来')
@@ -143,7 +145,8 @@ const registerHandler = () => {
 const handleRegister = async (username: string, password: string, verificationCode: string) => {
   isLoading.value = true
   try {
-    const result = await userStore.register({ username, password: sha256(password), verificationCode })
+    // Stage 33 PR-19b: 不再 sha256(password) — user-svc bcrypt(明文) 入库
+    const result = await userStore.register({ username, password, verificationCode })
     if (result.isOk) {
       success('已为你准备好', '欢迎，开始聊吧')
       await navigateTo('/chat/conversation')
@@ -173,9 +176,10 @@ const quickLogin = async () => {
   if (isQuickLoading.value) return
   isQuickLoading.value = true
   try {
+    // Stage 33 PR-19b: 明文 demo 密码（仅 dev quick login）
     const result = await userStore.login({
       username: 'demo@emotion-echo.com',
-      password: sha256('Demo12345'),
+      password: 'Demo12345',
       rememberMe: true
     })
     if (result.isOk) {

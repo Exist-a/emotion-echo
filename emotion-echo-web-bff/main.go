@@ -186,8 +186,8 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config) {
 	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
-	// auth（自有 mock 签发 JWT）
-	r.POST("/api/v1/auth/:action", handler.NewAuthHandler(s.Auth))
+	// auth（Stage 33 PR-19b：真实登录，注入 UserClient）
+	r.POST("/api/v1/auth/:action", handler.NewAuthHandler(s.Auth, s.User))
 
 	// 业务 handler（各自 Register）
 	handler.NewUserHandler(s.User).Register(r)
