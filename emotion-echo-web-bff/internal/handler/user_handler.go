@@ -12,12 +12,15 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/session"
 
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -40,14 +43,25 @@ func (h *UserHandler) Register(r *gin.Engine) {
 }
 
 // profile 前端 GET /user/profile 直接返回 UserInfo 形状（types/api.ts）
+//
+// mock 鉴权设计：BFF 签发 token（含 user_id/username），用户信息由 BFF 从 token
+// 提供（user-svc 无 mock 用户记录，返回 401 会造成前端 401 处理循环清 token）。
+// 真实用户信息待 user-svc 落地真实用户表后透传。
 func (h *UserHandler) profile(c *gin.Context) {
-	ctx := session.WithRequestAuth(c)
-	u, err := h.user.GetMe(ctx)
-	if err != nil {
-		Fail(c, statusFor(err), 1, err.Error())
+	uid, ok := c.Request.Context().Value(sharedmw.CtxUserIDKey{}).(int64)
+	if !ok || uid <= 0 {
+		Fail(c, http.StatusUnauthorized, 1, "unauthorized: missing user id")
 		return
 	}
-	OK(c, toProfileVM(u))
+	OK(c, ProfileVM{
+		ID:        fmt.Sprintf("%d", uid),
+		Username:  "demo",
+		Nickname:  "体验用户",
+		Avatar:    "",
+		Age:       nil,
+		Config:    map[string]any{},
+		CreatedAt: time.Now().Format(time.RFC3339),
+	})
 }
 
 func (h *UserHandler) getMe(c *gin.Context) {
