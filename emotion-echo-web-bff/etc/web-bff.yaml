@@ -52,3 +52,11 @@ Health:
 Auth:
   JWTSecret: dev-bff-secret
   TokenTTLSeconds: 86400
+
+# BFF ai_stream 调用的真实 LLM（OpenAI 兼容，如 DeepSeek / OpenAI / Kimi / Ollama）
+# dev 留 APIKey 空 → ai_stream 走 mock 共情回复（开发友好）
+# 生产部署必填：container env BFF_LLM_API_KEY=<key>（**切勿 commit 真实 key**）
+LLM:
+  BaseURL: https://api.deepseek.com
+  Model: deepseek-chat
+  Timeout: 60

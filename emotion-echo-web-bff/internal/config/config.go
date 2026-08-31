@@ -56,6 +56,15 @@ type Config struct {
 		// TokenTTLSeconds token 有效期（秒）
 		TokenTTLSeconds int `json:",default=86400"`
 	} `json:",optional"`
+
+	// LLM 是 BFF ai_stream 调用的真实 LLM（OpenAI 兼容）
+	// 生产部署填真实 key；dev 留空则 ai_stream 走 mock 共情回复
+	LLM struct {
+		BaseURL string `json:",default=https://api.deepseek.com"`
+		APIKey  string `json:",optional"`
+		Model   string `json:",default=deepseek-chat"`
+		Timeout int    `json:",default=60"`
+	} `json:",optional"`
 }
 
 // ApplyEnvOverrides 用容器环境变量覆盖 config 字段（Stage 22-B 范式）。
@@ -95,5 +104,14 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("BFF_JWT_SECRET"); v != "" {
 		c.Auth.JWTSecret = v
+	}
+	if v := os.Getenv("BFF_LLM_API_KEY"); v != "" {
+		c.LLM.APIKey = v
+	}
+	if v := os.Getenv("BFF_LLM_BASE_URL"); v != "" {
+		c.LLM.BaseURL = v
+	}
+	if v := os.Getenv("BFF_LLM_MODEL"); v != "" {
+		c.LLM.Model = v
 	}
 }

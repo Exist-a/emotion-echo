@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	"emotion-echo-web-bff/internal/config"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,7 +24,7 @@ import (
 func TestAIStreamHandler_SSEHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandler())
+	router.POST("/api/v1/ai/stream", NewAIStreamHandler(config.Config{}))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/stream",
 		bytes.NewReader([]byte(`{"model":"m","messages":[{"role":"user","content":"我今天很开心"}]}`)))
@@ -37,7 +39,7 @@ func TestAIStreamHandler_SSEHeaders(t *testing.T) {
 func TestAIStreamHandler_OpenAIFormat_EmitsDeltas(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandler())
+	router.POST("/api/v1/ai/stream", NewAIStreamHandler(config.Config{}))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/stream",
 		bytes.NewReader([]byte(`{"model":"m","messages":[{"role":"user","content":"我今天心情很好"}]}`)))
@@ -55,7 +57,7 @@ func TestAIStreamHandler_OpenAIFormat_EmitsDeltas(t *testing.T) {
 func TestAIStreamHandler_MissingMessages_Returns400(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandler())
+	router.POST("/api/v1/ai/stream", NewAIStreamHandler(config.Config{}))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/stream", bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
@@ -68,7 +70,7 @@ func TestAIStreamHandler_MissingMessages_Returns400(t *testing.T) {
 func TestAIStreamHandler_SadReply(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandler())
+	router.POST("/api/v1/ai/stream", NewAIStreamHandler(config.Config{}))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/stream",
 		bytes.NewReader([]byte(`{"model":"m","messages":[{"role":"user","content":"我今天很难过"}]}`)))
@@ -83,7 +85,7 @@ func TestAIStreamHandler_SadReply(t *testing.T) {
 func TestAIStreamHandler_DefaultReply(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandler())
+	router.POST("/api/v1/ai/stream", NewAIStreamHandler(config.Config{}))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/stream",
 		bytes.NewReader([]byte(`{"model":"m","messages":[{"role":"user","content":"随便聊聊"}]}`)))

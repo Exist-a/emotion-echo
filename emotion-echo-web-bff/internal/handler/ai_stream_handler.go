@@ -17,22 +17,28 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"emotion-echo-web-bff/internal/config"
+	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/logging"
 
 	"github.com/gin-gonic/gin"
 )
 
 // AIStreamHandler 是 /api/v1/ai/stream 的处理逻辑
-type AIStreamHandler struct{}
+type AIStreamHandler struct {
+	cfg config.Config
+}
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
-func NewAIStreamHandler() gin.HandlerFunc {
-	h := &AIStreamHandler{}
+func NewAIStreamHandler(cfg config.Config) gin.HandlerFunc {
+	h := &AIStreamHandler{cfg: cfg}
 	return h.ServeHTTP
 }
 
@@ -101,6 +107,44 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		}
 		return nil
 	}
+
+	// Phase D：APIKey 非空时调真实 LLM（DeepSeek / OpenAI 兼容）
+	if h.cfg.LLM.APIKey != "" {
+		llmMessages := []downstream.Message{
+			{Role: "system", Content: "你是一个温柔、共情的情绪疏导陪伴者。用中文简短回应（2-3 句话），表达理解、不评判、鼓励继续说。"},
+			{Role: "user", Content: userContent},
+		}
+		llmReq := downstream.LLMChatReq{
+			Model:    h.cfg.LLM.Model,
+			Messages: llmMessages,
+		}
+		llmClient := downstream.NewLLMClient(downstream.LLMOptions{
+			BaseURL: h.cfg.LLM.BaseURL,
+			APIKey:  h.cfg.LLM.APIKey,
+			Model:   h.cfg.LLM.Model,
+			Timeout: time.Duration(h.cfg.LLM.Timeout) * time.Second,
+		})
+		ctx, cancel := context.WithCancel(c.Request.Context())
+		defer cancel()
+		err := llmClient.ChatStream(ctx, llmReq, func(content string) {
+			if writeErr := writeDelta(content); writeErr != nil {
+				logging.Errorf(writeErr, "[ai-stream] write LLM delta failed")
+				cancel()
+			}
+		})
+		if err != nil {
+			logging.Errorf(err, "[ai-stream] LLM stream failed")
+			_ = writeDelta("\n\n[抱歉，AI 服务暂时不可用]")
+		}
+		_, _ = io.WriteString(c.Writer, "data: [DONE]\n\n")
+		if flusher != nil {
+			flusher.Flush()
+		}
+		return
+	}
+
+	// Fallback：APIKey 为空 → mock 共情回复（dev 友好）
+	_ = reply
 
 	// 分块输出（按 rune 切，避免切断 UTF-8 中文；每 2 个字符一块模拟打字机）
 	runes := []rune(reply)
