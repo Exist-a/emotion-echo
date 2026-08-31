@@ -1,77 +1,131 @@
 // Package handler — ai_stream_handler.go
 //
-// Stage 30 / stage-30-web-bff.md T3.29-30: ai_stream handler（SSE 流式情绪分析）
+// Stage 30 / stage-30-web-bff.md T3.29-30 + 前端契约对齐: ai_stream handler
 //
-// 路由：POST /api/v1/ai/stream
-// 请求：{"messageId": 42}
-// 响应：SSE 事件流（event: analysis → event: done）
+// 端点：POST /api/v1/ai/stream
+// 请求（OpenAI chat.completions 兼容，前端 useAIStream.ts 发送）：
+//   {"model": "...", "messages": [{"role":"user","content":"..."}], "stream": true}
+// 响应：SSE 流（OpenAI 格式）
+//   data: {"choices":[{"delta":{"content":"..."}}]}
+//   ...
+//   data: [DONE]
 //
-// SSE headers（文档 §八风险表要求）：
-//   Content-Type: text/event-stream
-//   X-Accel-Buffering: no    ← 防止 nginx/APISIX 缓冲 SSE
-//   Cache-Control: no-cache
+// 当前为 mock 实现（无真实 LLM 对话）：按关键词给出共情回复 + 情绪标签。
+// 真实 LLM 对话流后续接 llm-service / ai-svc（保留 OpenAI 兼容格式，前端不变）。
 //
-// 数据源：EmotionQueryClient.ByMessage（ai-svc gRPC unary，见 sse/stream.go 偏差说明）。
+// SSE headers：Content-Type: text/event-stream + X-Accel-Buffering: no（防缓冲）。
 package handler
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 
-	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/logging"
-	"emotion-echo-web-bff/internal/sse"
 
 	"github.com/gin-gonic/gin"
 )
 
 // AIStreamHandler 是 /api/v1/ai/stream 的处理逻辑
-type AIStreamHandler struct {
-	query downstream.EmotionQueryClient
-}
+type AIStreamHandler struct{}
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
-func NewAIStreamHandler(query downstream.EmotionQueryClient) gin.HandlerFunc {
-	h := &AIStreamHandler{query: query}
+func NewAIStreamHandler() gin.HandlerFunc {
+	h := &AIStreamHandler{}
 	return h.ServeHTTP
 }
 
-// ServeHTTP 处理 SSE 流式情绪分析
+// aiStreamReq OpenAI 兼容请求
+type aiStreamReq struct {
+	Model    string `json:"model"`
+	Messages []struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"messages"`
+	Stream bool `json:"stream"`
+}
+
+// ServeHTTP 处理 AI 对话流式回复
 func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
-	// 1. SSE headers（必须先于任何写入）
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("X-Accel-Buffering", "no")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 
-	// 2. 解析请求
-	var req struct {
-		MessageID int64 `json:"messageId"`
-	}
-	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || req.MessageID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: messageId is required"})
+	var req aiStreamReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || len(req.Messages) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "validation: messages is required", "data": nil})
 		return
 	}
 
-	// 3. 调 ai-svc gRPC（unary）拿情绪分析
-	emotion, err := h.query.ByMessage(c.Request.Context(), req.MessageID)
-	if err != nil {
-		logging.Errorf(err, "[ai-stream] ByMessage failed messageID=%d", req.MessageID)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "upstream emotion query failed"})
-		return
+	// 提取最后一条 user 消息
+	userContent := ""
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if req.Messages[i].Role == "user" {
+			userContent = req.Messages[i].Content
+			break
+		}
 	}
 
-	// 4. 编码 SSE 事件流（analysis → done）
-	res := sse.AnalysisResult{
-		MessageID:      emotion.MessageId,
-		ConversationID: emotion.ConversationId,
-		PrimaryEmotion: emotion.PrimaryEmotion,
-		SentimentScore: emotion.SentimentScore,
-		Confidence:     emotion.Confidence,
-		Model:          emotion.Model,
+	// mock 回复（按情绪关键词给出共情话术）
+	reply := mockEmpathyReply(userContent)
+
+	// SSE 逐块输出（OpenAI 格式）
+	flusher, _ := c.Writer.(http.Flusher)
+	writeDelta := func(content string) error {
+		payload, err := json.Marshal(map[string]any{
+			"choices": []map[string]any{{
+				"delta": map[string]any{"content": content},
+			}},
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := io.WriteString(c.Writer, "data: "+string(payload)+"\n\n"); err != nil {
+			return err
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+		return nil
 	}
-	if err := sse.StreamAnalysis(c.Writer, res); err != nil {
-		logging.Errorf(err, "[ai-stream] SSE write failed")
-		return // 连接已半开，无法再写 JSON
+
+	// 分块输出（按 rune 切，避免切断 UTF-8 中文；每 2 个字符一块模拟打字机）
+	runes := []rune(reply)
+	const chunkSize = 2
+	for i := 0; i < len(runes); i += chunkSize {
+		end := i + chunkSize
+		if end > len(runes) {
+			end = len(runes)
+		}
+		if err := writeDelta(string(runes[i:end])); err != nil {
+			logging.Errorf(err, "[ai-stream] write delta failed")
+			return
+		}
+	}
+	// 结束标记
+	if _, err := io.WriteString(c.Writer, "data: [DONE]\n\n"); err != nil {
+		logging.Errorf(err, "[ai-stream] write done failed")
+	}
+	if flusher != nil {
+		flusher.Flush()
+	}
+}
+
+// mockEmpathyReply 按用户消息关键词生成共情回复（mock，真实 LLM 后续替换）
+func mockEmpathyReply(content string) string {
+	text := strings.ToLower(content)
+	switch {
+	case strings.Contains(text, "开心") || strings.Contains(text, "高兴") || strings.Contains(text, "棒") || strings.Contains(text, "好"):
+		return "看到你这么开心，我也很为你高兴！能说说今天发生了什么让你心情这么好呀？"
+	case strings.Contains(text, "难过") || strings.Contains(text, "伤心") || strings.Contains(text, "哭") || strings.Contains(text, "糟糕"):
+		return "抱抱你，难过的时候确实很难受。我在这里陪着你，愿意的话可以慢慢说给我听。"
+	case strings.Contains(text, "焦虑") || strings.Contains(text, "紧张") || strings.Contains(text, "担心"):
+		return "听起来你现在有些焦虑。先深呼吸一下，我们一起把让你担心的事理一理好吗？"
+	case strings.Contains(text, "累") || strings.Contains(text, "疲惫"):
+		return "辛苦啦，累了就休息一下。你的感受很重要，我随时在这里听你说。"
+	default:
+		return "嗯，我在认真听你说。能多和我分享一些你的感受吗？"
 	}
 }

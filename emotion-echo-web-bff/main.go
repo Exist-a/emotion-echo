@@ -187,7 +187,7 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config) {
 		handler.NewEmotionQueryHandler(s.EmotionQ).Register(r)
 	}
 	// SSE 流式
-	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandler(s.EmotionQ))
+	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandler())
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
