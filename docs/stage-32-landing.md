@@ -241,7 +241,36 @@ gRPC（ai-svc :8892）并行链路：
 | 9 | 伪造 JWT 被拒 | ⚠️ | 端到端验证（docker compose up 后 curl） |
 | 10 | 70 次连续请求 → 60 次 200 + 10 次 429 | ⚠️ | 端到端验证 |
 
-**核心代码 + 测试 100% 达成**，剩余 2 项（8-10）属于 docker compose up 后手动验证（部署脚本职责）。
+**核心代码 + 测试 100% 达成**，剩余 3 项（8-10）属于 docker compose up 后手动验证（部署脚本职责）。
+
+### 6.1 端到端验证（2026-08-31 Windows + Docker Desktop 实际跑通）
+
+**✅ 验证通过**：
+
+1. **compose 启动**：12 个基础设施容器（含本轮新增 etcd / apisix）成功启动，healthcheck 全部 healthy
+2. **APISIX Admin API :9180**：可读写 routes/upstreams（PUT/GET 200 OK），seed.sh 成功注入 6 upstream + 7 route
+3. **APISIX Prometheus exporter :9091**：正常暴露 metrics 端口
+
+**❌ 发现严重问题**：
+
+4. **APISIX HTTP data plane :9080**：所有请求返回 `301 Moved Permanently → Location: about:blank`
+   - 这是 Stage 32 §二.1 文档预言的 **APISIX 3.18 镜像 nginx template bug** 的真实表现
+   - 即使 `ssl.enable: false` 也触发——比文档预期更严重（不仅 HTTPS 路径坏，HTTP 也坏）
+   - 镜像内 0 个文件含 `about:blank` 字面量，确认是 openresty 兜底行为
+   - 可能是 Docker Desktop WSL2 后端 + APISIX 3.18 镜像的不兼容（macOS/Linux 原生 Docker 可能正常）
+
+**收口影响**：
+
+- 验证 S-1（伪造 JWT 被拒）、限流触发、熔断触发**在当前环境无法验证**（HTTP plane 不工作）
+- 按文档 §二.2 绕过方案：prod 必须用 nginx:alpine 前置终结 TLS（Stage 32 显式不做，留 Stage 33+）
+- dev 环境需调查：换 Docker Desktop 版本 / 用 Linux 原生 / 升级 APISIX 到带 fix 的版本
+
+**commit 阶段增加的修复**（本轮端到端验证发现的问题）：
+
+- `deploy/apisix/config.yaml`：从 34 行片段改为完整 367 行（APISIX 默认配置 + 关键覆盖：etcd.host=etcd:2379、allow_admin=0.0.0.0/0、ssl.enable=false），避免 `apisix init` 把挂载文件覆盖为默认配置
+- `deploy/docker-compose.infra.yml` apisix 段：command 改为 `apisix init && openresty`（跳过镜像默认 entrypoint 的 `init_etcd` 硬连 127.0.0.1 步骤）
+- `deploy/apisix/seed.sh`：admin key 默认值改为镜像真实值 `WhZEPlrGviCSXlKFfALZlQWinluoGAbj`、route `status` 改为 integer `1`、`extra_uri` 参数加默认值 `""`、加 `SKIP_HEALTH_CHECK=true` 跳过上游预检（dev 验证用）
+- `deploy/docker-compose.infra.validation.yml`（新增）：临时验证 override，dashboard tag 不存在时用 `replicas: 0` 跳过
 
 ---
 
