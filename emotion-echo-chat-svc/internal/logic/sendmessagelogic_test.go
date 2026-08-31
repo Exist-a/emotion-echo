@@ -362,8 +362,8 @@ func TestSendMessageLogic_AppendMessageError_Propagates(t *testing.T) {
 }
 
 // failingAppendRepo wraps a real ConversationRepo and forces AppendMessage
-// to return appendErr. All other methods pass through. Used to exercise
-// the "DB write fails" branch without snapshot-copying internals.
+// to return appendErr. All other methods pass through. Used to exercise the
+// "DB write fails" branch without snapshot-copying internals.
 type failingAppendRepo struct {
 	repository.ConversationRepo
 	appendErr error
@@ -375,3 +375,153 @@ func (r *failingAppendRepo) AppendMessage(ctx context.Context, m *model.Message)
 
 // Compile-time guard that failingAppendRepo satisfies the interface.
 var _ repository.ConversationRepo = (*failingAppendRepo)(nil)
+
+// =============================================================================
+// Stage 33 PR-18 · client_msg_id 幂等（I-1 P1 部分场景）
+// =============================================================================
+//
+// 设计：
+//   - 前端每次发消息生成 UUID 作为 client_msg_id
+//   - chat-svc 收到后先按 (user_id, conversation_id, client_msg_id) 查重
+//   - 命中则返回原 message（不新建、不发 event），前端拿到原 messageId
+//   - 未命中则正常落库 + 发 message.created event
+//   - 空 client_msg_id → 跳过查重（保持向后兼容）
+
+// TestSendMessageLogic_DuplicateClientMsgID_ReturnsOriginal 第二次提交同
+// client_msg_id → 返回原 messageId，repo 仅 1 条记录，仅 1 个 event。
+func TestSendMessageLogic_DuplicateClientMsgID_ReturnsOriginal(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, pub := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100, Title: "test",
+	}))
+
+	l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+	cmid := "uuid-abc-123"
+
+	resp1, err := l.SendMessage(&types.SendMessageReq{
+		Id: 1, Role: "user", Content: "hello",
+		ClientMsgID: &cmid,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp1)
+	originalID := resp1.Message.Id
+
+	// 第二次：同一 client_msg_id
+	resp2, err := l.SendMessage(&types.SendMessageReq{
+		Id: 1, Role: "user", Content: "hello",
+		ClientMsgID: &cmid,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp2)
+
+	// 必须返回原 messageId（幂等关键点）
+	assert.Equal(t, originalID, resp2.Message.Id, "duplicate client_msg_id must return original messageId")
+	assert.Equal(t, resp1.Message.Content, resp2.Message.Content)
+
+	// repo 中仅 1 条
+	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	require.NoError(t, err)
+	assert.Len(t, msgs, 1, "duplicate client_msg_id must NOT create new message")
+
+	// 仅 1 个 event（不应重复 publish）
+	evts := pub.Events(events.TopicChatEvents)
+	assert.Len(t, evts, 1, "duplicate client_msg_id must NOT publish duplicate event")
+}
+
+// TestSendMessageLogic_DifferentClientMsgID_CreatesNew 不同 uuid → 各自新建。
+func TestSendMessageLogic_DifferentClientMsgID_CreatesNew(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, pub := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100, Title: "test",
+	}))
+
+	l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+	cmid1 := "uuid-1"
+	cmid2 := "uuid-2"
+
+	resp1, err := l.SendMessage(&types.SendMessageReq{
+		Id: 1, Role: "user", Content: "first",
+		ClientMsgID: &cmid1,
+	})
+	require.NoError(t, err)
+	resp2, err := l.SendMessage(&types.SendMessageReq{
+		Id: 1, Role: "user", Content: "second",
+		ClientMsgID: &cmid2,
+	})
+	require.NoError(t, err)
+
+	assert.NotEqual(t, resp1.Message.Id, resp2.Message.Id, "different client_msg_id must create new message")
+
+	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	require.NoError(t, err)
+	assert.Len(t, msgs, 2)
+
+	evts := pub.Events(events.TopicChatEvents)
+	assert.Len(t, evts, 2)
+}
+
+// TestSendMessageLogic_EmptyClientMsgID_NoUniqueCheck 不传 client_msg_id → 正常创建，无查重。
+func TestSendMessageLogic_EmptyClientMsgID_NoUniqueCheck(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, _ := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100, Title: "test",
+	}))
+
+	l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+
+	// 两次相同 content 但不传 client_msg_id → 各自新建
+	resp1, err := l.SendMessage(&types.SendMessageReq{
+		Id: 1, Role: "user", Content: "hello",
+	})
+	require.NoError(t, err)
+	resp2, err := l.SendMessage(&types.SendMessageReq{
+		Id: 1, Role: "user", Content: "hello",
+	})
+	require.NoError(t, err)
+
+	assert.NotEqual(t, resp1.Message.Id, resp2.Message.Id)
+
+	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	require.NoError(t, err)
+	assert.Len(t, msgs, 2)
+}
+
+// TestSendMessageLogic_ClientMsgID_DifferentUser_NotShared 不同用户相同
+// client_msg_id 互不影响（user_id 限定）。
+func TestSendMessageLogic_ClientMsgID_DifferentUser_NotShared(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, _ := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100, Title: "u100-conv",
+	}))
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 200, Title: "u200-conv",
+	}))
+	// conv id: 1 = u100, 2 = u200
+
+	cmid := "shared-uuid"
+	l100 := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+	l200 := NewSendMessageLogic(ctxWithUserID(context.Background(), 200), svcCtx)
+
+	resp1, err := l100.SendMessage(&types.SendMessageReq{
+		Id: 1, Role: "user", Content: "from u100",
+		ClientMsgID: &cmid,
+	})
+	require.NoError(t, err)
+
+	// u200 用同 client_msg_id → 不应命中 u100 的 message
+	resp2, err := l200.SendMessage(&types.SendMessageReq{
+		Id: 2, Role: "user", Content: "from u200",
+		ClientMsgID: &cmid,
+	})
+	require.NoError(t, err)
+
+	assert.NotEqual(t, resp1.Message.Id, resp2.Message.Id, "different user must not collide on client_msg_id")
+}

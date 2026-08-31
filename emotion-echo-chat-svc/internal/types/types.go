@@ -50,9 +50,12 @@ type MessageView struct {
 }
 
 type SendMessageReq struct {
-	Id      int64  `path:"id"`
-	Role    string `json:"role,default=user"`
-	Content string `json:"content"`
+	Id           int64   `path:"id"`
+	Role         string  `json:"role,default=user"`
+	Content      string  `json:"content"`
+	ClientMsgID  *string `json:"client_msg_id,optional"`
+	ContentType  string  `json:"content_type,optional"`
+	EmotionTag   string  `json:"emotion_tag,optional"`
 }
 
 type SendMessageResp struct {

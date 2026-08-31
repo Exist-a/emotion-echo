@@ -27,6 +27,10 @@ type Conversation struct {
 func (Conversation) TableName() string { return "emotion_echo_chat.conversations" }
 
 // Message 消息（emotion_echo_chat.messages 表对应）
+//
+// ClientMsgID（Stage 33 PR-18）：客户端生成的幂等键，用于网络重试场景下的
+// "同一请求多次发送只落库一次"。partial UNIQUE INDEX 仅在该字段非 NULL
+// 时生效（`uq_messages_client_msg_id WHERE client_msg_id IS NOT NULL`）。
 type Message struct {
 	ID             int64     `gorm:"column:id;primaryKey;autoIncrement"`
 	ConversationID int64     `gorm:"column:conversation_id;index"`
@@ -35,6 +39,7 @@ type Message struct {
 	Content        string    `gorm:"column:content"`
 	ContentType    string    `gorm:"column:content_type;size:16;default:text"`
 	TokensUsed     int       `gorm:"column:tokens_used;default:0"`
+	ClientMsgID    *string   `gorm:"column:client_msg_id;uniqueIndex:uq_messages_client_msg_id,where:client_msg_id IS NOT NULL"`
 	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 

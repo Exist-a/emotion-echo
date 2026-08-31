@@ -36,6 +36,10 @@ type ConversationRepo interface {
 	AppendMessage(ctx context.Context, m *model.Message) error
 	// ListMessages 列出会话的消息
 	ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error)
+	// GetMessageByClientMsgID Stage 33 PR-18：按 client_msg_id 查消息（幂等查重）。
+	// userID 参与限定避免跨用户冲突；conversationID 进一步限定到指定会话。
+	// 命中返回 *Message，未命中返回 nil, nil（约定与 GetConversationByID 一致）。
+	GetMessageByClientMsgID(ctx context.Context, userID, conversationID int64, clientMsgID string) (*model.Message, error)
 	// DeleteConversation 删除会话（级联删除其消息）
 	DeleteConversation(ctx context.Context, id int64) error
 	// Ping 健康检查
@@ -131,6 +135,18 @@ func (r *InMemoryConversationRepo) ListMessages(ctx context.Context, conversatio
 	return out, nil
 }
 
+// GetMessageByClientMsgID Stage 33 PR-18：内存版按 (user_id, conversation_id, client_msg_id) 查重
+func (r *InMemoryConversationRepo) GetMessageByClientMsgID(ctx context.Context, userID, conversationID int64, clientMsgID string) (*model.Message, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, m := range r.messages {
+		if m.UserID == userID && m.ConversationID == conversationID && m.ClientMsgID != nil && *m.ClientMsgID == clientMsgID {
+			return m, nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *InMemoryConversationRepo) Ping(ctx context.Context) error { return nil }
 
 // CreateConversationTx InMemory 实现：tx 参数忽略（InMemory 无事务概念）
@@ -223,6 +239,21 @@ func (r *PostgresConversationRepo) ListMessages(ctx context.Context, conversatio
 		Limit(limit).
 		Find(&out).Error
 	return out, err
+}
+
+// GetMessageByClientMsgID Stage 33 PR-18：Postgres 版按 (user_id, conversation_id, client_msg_id) 查重
+func (r *PostgresConversationRepo) GetMessageByClientMsgID(ctx context.Context, userID, conversationID int64, clientMsgID string) (*model.Message, error) {
+	var m model.Message
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND conversation_id = ? AND client_msg_id = ?", userID, conversationID, clientMsgID).
+		First(&m).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &m, nil
 }
 
 // DeleteConversation 事务删除会话 + 其消息（不存在的 id 为 no-op）

@@ -72,7 +72,8 @@ export const useMessageStore = defineStore('message', () => {
 
   const sendMessage = async (
     content: string,
-    emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
+    emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral',
+    clientMsgId?: string
   ): Promise<returnMsgType> => {
     if (!currentSessionId.value || isSending.value) {
       return { isOk: false, msg: '无法发送消息' }
@@ -86,11 +87,26 @@ export const useMessageStore = defineStore('message', () => {
         contentType: 'text'
       }
       if (emotionTag) params.emotionTag = emotionTag
+      if (clientMsgId) params.clientMsgId = clientMsgId
 
       const message = await post<MessageWithStatus>(
         `/conversations/${currentSessionId.value}/messages`,
         params
       )
+
+      // 幂等保护：若该 clientMsgId 已有消息，update 而非 push
+      if (clientMsgId) {
+        const existingIndex = currentMessages.value.findIndex(
+          (m) => m.id === clientMsgId || (m as any).clientMsgId === clientMsgId
+        )
+        if (existingIndex >= 0) {
+          currentMessages.value[existingIndex] = {
+            ...message,
+            status: 'sent'
+          }
+          return { isOk: true, msg: '已存在', data: message }
+        }
+      }
 
       currentMessages.value.push({
         ...message,

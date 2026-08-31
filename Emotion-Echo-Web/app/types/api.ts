@@ -147,23 +147,34 @@ export interface MessageWithStatus extends MessageItem {
 
 /**
  * 发送消息请求
+ *
+ * Stage 33 PR-18: clientMsgId 是前端生成的 UUID，chat-svc 用 partial UNIQUE
+ * INDEX 拒绝重复入库（网络重试 / 浏览器刷新重发场景）。
  */
 export interface SendMessageParams {
   content: string
   contentType?: 'text' | 'audio' | 'img'
   emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
+  clientMsgId?: string
 }
 
 // ==================== AI 模块 ====================
 
 /**
  * AI 流式请求
+ *
+ * Stage 33 PR-18: messageId / clientMsgId 透传自用户消息（写库后获得的
+ * 真实 id 与客户端生成的 UUID），用于 BFF 关联上下文与幂等回查。
  */
 export interface AIStreamParams {
   conversationId?: string
   message: string
   emotion?: "happy" | "sad" | "angry" | "anxious" | "neutral"
   model?: string
+  /** Stage 33 PR-18: 落库后 chat-svc 返回的真实 message id */
+  messageId?: string
+  /** Stage 33 PR-18: 前端生成的 UUID（用于 SSE 重连时回查） */
+  clientMsgId?: string
 }
 
 /**

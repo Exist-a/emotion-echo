@@ -74,14 +74,41 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 		return nil, errors.New("forbidden: conversation does not belong to current user")
 	}
 
+	// Stage 33 PR-18：幂等查重。若 client_msg_id 已存在，直接返回原 message
+	// 而非新建（网络重试 / 浏览器刷新重发场景）。
+	if req.ClientMsgID != nil && *req.ClientMsgID != "" {
+		existing, err := l.svcCtx.ConversationRepo.GetMessageByClientMsgID(l.ctx, uid, req.Id, *req.ClientMsgID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return &types.SendMessageResp{
+				Message: types.MessageView{
+					Id:             existing.ID,
+					ConversationId: existing.ConversationID,
+					UserId:         existing.UserID,
+					Role:           existing.Role,
+					Content:        existing.Content,
+					TokensUsed:     existing.TokensUsed,
+					CreatedAt:      existing.CreatedAt.UnixMilli(),
+				},
+			}, nil
+		}
+	}
+
 	now := time.Now()
+	contentType := req.ContentType
+	if contentType == "" {
+		contentType = "text"
+	}
 	msg := &model.Message{
 		ConversationID: req.Id,
 		UserID:         uid,
 		Role:           role,
 		Content:        req.Content,
-		ContentType:    "text",
+		ContentType:    contentType,
 		TokensUsed:     0,
+		ClientMsgID:    req.ClientMsgID,
 		CreatedAt:      now,
 	}
 

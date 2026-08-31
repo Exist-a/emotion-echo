@@ -50,9 +50,15 @@ type CreateConversationReq struct {
 }
 
 // SendMessageReq 对应 chat-svc types.SendMessageReq
+//
+// Stage 33 PR-18：ClientMsgID 透传给 chat-svc 用于幂等查重（同一 uuid 多次
+// 提交仅落库一次）。ContentType / EmotionTag 同步透传以保留前端语义。
 type SendMessageReq struct {
-	Role    string `json:"role,omitempty"`
-	Content string `json:"content"`
+	Role         string  `json:"role,omitempty"`
+	Content      string  `json:"content"`
+	ClientMsgID  *string `json:"client_msg_id,omitempty"`
+	ContentType  string  `json:"content_type,omitempty"`
+	EmotionTag   string  `json:"emotion_tag,omitempty"`
 }
 
 // ChatClient BFF → chat-svc HTTP 客户端

@@ -80,22 +80,19 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
 
     updateConversation(conversationId, content)
 
-    const tempUserMessage: MessageWithStatus | null = extraParams?.skipUserMessage
-      ? null
-      : ({
-          id: `temp_user_${Date.now()}`,
-          conversationId,
-          sender: 'user',
-          content,
-          contentType: 'text',
-          emotionTag: emotion,
-          sendTime: Date.now(),
-          createdAt: Math.floor(Date.now() / 1000),
-          status: 'sent'
-        } as MessageWithStatus)
+    // Stage 33 PR-18: 写库前移到 stream 调用前。
+    // 客户端生成 client_msg_id (UUID) → 落库 → 触发 Kafka outbox →
+    // ai-svc 情绪分析 + analytics-svc 行为事件整条链路生效。
+    const clientMsgId = crypto.randomUUID()
+    let userMessageId: string = clientMsgId
 
-    if (tempUserMessage) {
-      messageStore.addMessage(tempUserMessage)
+    if (!extraParams?.skipUserMessage) {
+      const persistResult = await messageStore.sendMessage(content, emotion, clientMsgId)
+      if (!persistResult.isOk || !persistResult.data) {
+        callbacks?.onError?.(persistResult.msg || '消息保存失败')
+        return { isOk: false, msg: persistResult.msg || '消息保存失败' }
+      }
+      userMessageId = String(persistResult.data.id)
     }
 
     const tempAiMessage: MessageWithStatus = {
@@ -114,6 +111,16 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
     stopTTS()
 
     const result = await sendAIStream(
+      {
+        message: content,
+        emotion,
+        conversationId,
+        messageId: userMessageId,
+        clientMsgId,
+        shouldGenerateTitle: extraParams?.shouldGenerateTitle,
+        voiceEmotion: extraParams?.voiceEmotion
+      },
+      {
       {
         message: content,
         emotion,
