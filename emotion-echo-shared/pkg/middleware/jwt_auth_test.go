@@ -2,31 +2,14 @@ package middleware
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 )
 
-// --- helpers ---
-
-// makeBearer 构造一个形如 "Bearer <header>.<payload>.<sig>" 的 token
-// payload 中可放置 user_id 或 sub，模拟 APISIX 已签过的 JWT
-func makeBearer(t *testing.T, payload map[string]any) string {
-	t.Helper()
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("marshal payload: %v", err)
-	}
-	enc := base64.RawURLEncoding.EncodeToString(raw)
-	return "Bearer " + strings.Join([]string{"header", enc, "sig"}, ".")
-}
-
 // callMiddleware 跑中间件，记录 next 是否被调用、返回状态码与 body
-func callMiddleware(authHdr string) (status int, body string, nextCalled bool, ctxUID int64, ctxOK bool) {
+func callMiddleware(headers map[string]string) (status int, body string, nextCalled bool, ctxUID int64, ctxOK bool) {
 	var (
 		nextCalledFlag bool
 		uid            int64
@@ -34,8 +17,8 @@ func callMiddleware(authHdr string) (status int, body string, nextCalled bool, c
 	)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/whatever", nil)
-	if authHdr != "" {
-		req.Header.Set("Authorization", authHdr)
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	handler := AuthMiddleware()(func(w http.ResponseWriter, r *http.Request) {
@@ -46,93 +29,17 @@ func callMiddleware(authHdr string) (status int, body string, nextCalled bool, c
 	})
 
 	handler.ServeHTTP(rec, req)
-	body = rec.Body.String()
-	if body == "" {
-		body = ""
-	}
-	return rec.Code, body, nextCalledFlag, uid, ok
+	return rec.Code, rec.Body.String(), nextCalledFlag, uid, ok
 }
 
-// --- tests ---
+// --- Stage 32 PR-16 RED → GREEN: 切到 X-User-Id 模式 ---
 
-// TestExtractUserIDFromJWT 表驱动 6 个分支：有效 / 缺失 / 格式错 / 缺段 / 非 base64 / 非 JSON
-func TestExtractUserIDFromJWT(t *testing.T) {
-	tests := []struct {
-		name       string
-		header     string
-		wantUID    int64
-		wantErrSub string // 期望错误信息子串
-	}{
-		{
-			name:    "valid_user_id_int",
-			header:  makeBearer(t, map[string]any{"user_id": 42, "sub": "42"}),
-			wantUID: 42,
-		},
-		{
-			name:    "valid_user_id_from_sub",
-			header:  makeBearer(t, map[string]any{"sub": "7"}),
-			wantUID: 7,
-		},
-		{
-			name:       "missing_header",
-			header:     "",
-			wantErrSub: "missing Authorization header",
-		},
-		{
-			name:       "wrong_scheme",
-			header:     "Basic dXNlcjpwYXNz",
-			wantErrSub: "invalid JWT format",
-		},
-		{
-			name:       "not_three_segments",
-			header:     "Bearer header.payload",
-			wantErrSub: "invalid JWT format",
-		},
-		{
-			name:       "non_base64_payload",
-			header:     "Bearer header.!!!.sig",
-			wantErrSub: "invalid JWT format",
-		},
-		{
-			name:       "non_json_payload",
-			header:     "Bearer header." + base64.RawURLEncoding.EncodeToString([]byte("not-json")) + ".sig",
-			wantErrSub: "invalid JWT format",
-		},
-		{
-			name:       "zero_user_id_and_no_sub",
-			header:     makeBearer(t, map[string]any{"foo": "bar"}),
-			wantErrSub: "", // 当前实现 0+空 sub 会返回 0，但 middleware 层会判 uid<=0 → 401
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			gotUID, err := extractUserIDFromJWT(tt.header)
-			if tt.wantErrSub != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErrSub)
-				}
-				if !strings.Contains(err.Error(), tt.wantErrSub) {
-					t.Fatalf("expected error containing %q, got %q", tt.wantErrSub, err.Error())
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if gotUID != tt.wantUID {
-				t.Fatalf("uid mismatch: want=%d got=%d", tt.wantUID, gotUID)
-			}
-		})
-	}
-}
-
-// TestAuthMiddleware_Success 合法 JWT 把 user_id 注入 ctx
-func TestAuthMiddleware_Success(t *testing.T) {
-	status, body, nextCalled, uid, ok := callMiddleware(makeBearer(t, map[string]any{"user_id": 1001}))
+// TestAuthMiddleware_ReadsXUserIdHeader 仅带 X-User-Id → 200 + ctx uid=1001
+// 当前实现只读 Authorization → 此测试必失败（RED）
+func TestAuthMiddleware_ReadsXUserIdHeader(t *testing.T) {
+	status, body, nextCalled, uid, ok := callMiddleware(map[string]string{"X-User-Id": "1001"})
 	if status != http.StatusOK {
-		t.Fatalf("status want=200 got=%d", status)
+		t.Fatalf("status want=200 got=%d body=%s", status, body)
 	}
 	if !nextCalled {
 		t.Fatalf("expected next handler to be called")
@@ -140,33 +47,32 @@ func TestAuthMiddleware_Success(t *testing.T) {
 	if !ok || uid != 1001 {
 		t.Fatalf("expected uid=1001 in ctx, got ok=%v uid=%d", ok, uid)
 	}
-	_ = body
 }
 
-// TestAuthMiddleware_RejectInvalidJWT 6 类错授权 → 401 + 不调用 next
-func TestAuthMiddleware_RejectInvalidJWT(t *testing.T) {
+// TestAuthMiddleware_RejectsWhenXUserIdMissing 无 X-User-Id → 401
+func TestAuthMiddleware_RejectsWhenXUserIdMissing(t *testing.T) {
 	cases := []struct {
-		name   string
-		header string
+		name    string
+		headers map[string]string
 	}{
-		{"empty_header", ""},
-		{"wrong_scheme", "Basic abc"},
-		{"not_three_segments", "Bearer header.payload"},
-		{"non_base64_payload", "Bearer h.!!!.s"},
-		{"zero_user_id", makeBearer(t, map[string]any{"sub": "0"})},
+		{"no_headers", nil},
+		{"empty_x_user_id", map[string]string{"X-User-Id": ""}},
+		{"non_numeric_x_user_id", map[string]string{"X-User-Id": "abc"}},
+		{"zero_x_user_id", map[string]string{"X-User-Id": "0"}},
+		{"negative_x_user_id", map[string]string{"X-User-Id": "-1"}},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			status, body, nextCalled, _, _ := callMiddleware(tc.header)
+			status, body, nextCalled, _, _ := callMiddleware(tc.headers)
 			if status != http.StatusUnauthorized {
-				t.Fatalf("status want=401 got=%d body=%s", status, body)
+				t.Fatalf("want=401 got=%d body=%s next=%v", status, body, nextCalled)
 			}
 			if nextCalled {
-				t.Fatalf("next handler should not be called on reject")
+				t.Fatalf("next should NOT be called on reject")
 			}
-			if !strings.Contains(body, "unauthorized") {
-				t.Fatalf("body should contain unauthorized, got %s", body)
+			if !contains(body, "unauthorized") {
+				t.Fatalf("body should contain 'unauthorized', got %s", body)
 			}
 		})
 	}
@@ -179,7 +85,7 @@ func TestAuthMiddleware_SkipsHealth(t *testing.T) {
 	var ok bool
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	// 无 Authorization header
+	// 无 X-User-Id header
 
 	handler := AuthMiddleware()(func(w http.ResponseWriter, r *http.Request) {
 		nextCalled = true
@@ -194,7 +100,7 @@ func TestAuthMiddleware_SkipsHealth(t *testing.T) {
 	if !nextCalled {
 		t.Fatalf("health: next should be called")
 	}
-	// health 路径不强制要求有 user_id：ctx 拿不到是 OK 的
+	// health 路径 ctx 无 user_id 是 OK 的
 	_ = uid
 	_ = ok
 }
@@ -210,68 +116,54 @@ func TestUserIDFromContext(t *testing.T) {
 	}
 }
 
-// TestAuthMiddleware_TableAllPaths 把所有路径（=N）压一遍，统计 next 是否被调用 + status
-// 用来防御"路径白名单漏配"
+// TestAuthMiddleware_TableAllPaths 把所有路径压一遍
 func TestAuthMiddleware_TableAllPaths(t *testing.T) {
-	paths := []string{
-		"/health",       // skip
-		"/health/live",  // 必须鉴权
-		"/api/v1/x",     // 必须鉴权
-		"/",             // 必须鉴权
+	paths := []struct {
+		path     string
+		wantPass bool // true=期望 200, false=期望 401
+	}{
+		{"/health", true},         // skip
+		{"/health/live", false},   // 必须鉴权
+		{"/api/v1/x", false},      // 必须鉴权
+		{"/", false},              // 必须鉴权
+		{"/metrics", true},        // skip（与 gin 版一致）
 	}
-	bearer := makeBearer(t, map[string]any{"user_id": 1})
 	for _, p := range paths {
-		nextCalled := false
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, p, nil)
-		if p != "/health" {
-			req.Header.Set("Authorization", bearer)
+		req := httptest.NewRequest(http.MethodGet, p.path, nil)
+		// /health 与 /metrics 不带 X-User-Id；其他路径带
+		if p.wantPass {
+			// 不带 header
+		} else {
+			req.Header.Set("X-User-Id", "1")
 		}
+		nextCalled := false
 		AuthMiddleware()(func(w http.ResponseWriter, r *http.Request) {
 			nextCalled = true
 			w.WriteHeader(http.StatusOK)
 		}).ServeHTTP(rec, req)
 
-		if p == "/health" {
+		if p.wantPass {
 			if rec.Code != 200 || !nextCalled {
-				t.Fatalf("path=%s skip-auth should pass without header, got status=%d next=%v", p, rec.Code, nextCalled)
+				t.Fatalf("path=%s skip-auth should pass, got status=%d next=%v", p.path, rec.Code, nextCalled)
 			}
-			continue
-		}
-		if rec.Code != 200 || !nextCalled {
-			t.Fatalf("path=%s with valid JWT should pass, got status=%d next=%v", p, rec.Code, nextCalled)
+		} else {
+			if rec.Code != 200 || !nextCalled {
+				t.Fatalf("path=%s with X-User-Id=1 should pass, got status=%d next=%v", p.path, rec.Code, nextCalled)
+			}
 		}
 	}
 }
 
-// TestAuthMiddleware_PayloadEdgeCases payload 内 user_id 是字符串/浮点等边界
-// 当前实现：user_id 必须是非零 int64；float/string/负数会被拒（uid<=0 或 unmarshal 失败）
-// 这些是 RED → GREEN：未来可放宽，但目前先 lock 现状
-func TestAuthMiddleware_PayloadEdgeCases(t *testing.T) {
-	cases := []struct {
-		name       string
-		payload    map[string]any
-		wantStatus int
-	}{
-		// 浮点 JSON unmarshal 进 int64 失败 → 401
-		{"float_truncated", map[string]any{"user_id": 5.7}, http.StatusUnauthorized},
-		// 负数 uid<=0 → 401
-		{"negative_id", map[string]any{"user_id": -1}, http.StatusUnauthorized},
-		// 字符串 user_id unmarshal 进 int64 失败 → 401
-		{"string_user_id", map[string]any{"user_id": "11"}, http.StatusUnauthorized},
-		// sub 也是字符串"11"，但 user_id 缺，但 strconv 能转 — sub 路径会成功，
-		// uid=11 但 sub 字段被作为 fallback 解析，期望 200
-		{"sub_string_int", map[string]any{"sub": "11"}, http.StatusOK},
+// contains substring 检查（避免引入 strings import 的不必要耦合）
+func contains(s, substr string) bool {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
 	}
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			header := makeBearer(t, tc.payload)
-			status, _, nextCalled, _, _ := callMiddleware(header)
-			if status != tc.wantStatus {
-				t.Fatalf("want status=%d got=%d next=%v", tc.wantStatus, status, nextCalled)
-			}
-		})
-	}
-	_ = strconv.Itoa
+	return false
 }
+
+// 避免 unused import 警告
+var _ = strconv.Itoa
