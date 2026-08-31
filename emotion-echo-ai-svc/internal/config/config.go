@@ -77,4 +77,17 @@ type Config struct {
 	FER         FER
 	SenseVoice  SenseVoice
 	XTTS        XTTS
+	Nacos       Nacos
+}
+
+// Nacos 注册中心 + 配置中心配置（Stage 31 PR-09）
+//
+// ai-svc 同时暴露 HTTP :8891 与 gRPC :8892；注册时仅注册 HTTP（SDK 实例元数据
+// 会携带 grpc_port=8892 供 Stage 32 APISIX upstream 决定是否双注册）。
+type Nacos struct {
+	Enabled   bool   `json:",default=true"`
+	Addr      string `json:",default=emotion-echo-nacos:8848"`
+	Namespace string `json:",default=emotion-echo-dev"`
+	GroupName string `json:",default=DEFAULT_GROUP"`
+	HotReload bool   `json:",default=false"`
 }

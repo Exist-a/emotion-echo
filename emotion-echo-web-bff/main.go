@@ -13,11 +13,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"emotion-echo-web-bff/internal/auth"
@@ -75,7 +79,31 @@ func main() {
 	// 4. 路由（handler 装配）
 	registerRoutes(r, svcCtx, &c)
 
+	// Stage 31 PR-09: Nacos 注册 + 配置
+	// BFF 也注册到 Nacos；Stage 32 APISIX nacos-discovery 插件会自动发现 BFF
+	bootCtx, bootCancel := context.WithCancel(context.Background())
+	defer bootCancel()
+	nacosRuntime, err := BootNacos(bootCtx, &c, defaultBootDeps())
+	if err != nil {
+		log.Printf("[nacos] boot failed (continuing): %v", err)
+	}
+	defer func() {
+		if nacosRuntime != nil {
+			nacosRuntime.Close(context.Background(), c.Name, c.Host, c.Port)
+		}
+	}()
+
 	log.Printf("Starting web-bff at %s:%d...", c.Host, c.Port)
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		bootCancel()
+		if nacosRuntime != nil {
+			nacosRuntime.Close(context.Background(), c.Name, c.Host, c.Port)
+		}
+		os.Exit(0)
+	}()
 	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {
 		log.Fatalf("[gin] server crashed: %v", err)
 	}

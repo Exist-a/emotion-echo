@@ -100,6 +100,19 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("XTTS_BASE_URL"); v != "" {
 		c.XTTS.BaseURL = v
 	}
+	// Stage 31 PR-09: Nacos 注册中心 + 配置中心
+	if v := os.Getenv("NACOS_ENABLED"); v != "" {
+		c.Nacos.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("NACOS_ADDR"); v != "" {
+		c.Nacos.Addr = v
+	}
+	if v := os.Getenv("NACOS_NAMESPACE"); v != "" {
+		c.Nacos.Namespace = v
+	}
+	if v := os.Getenv("NACOS_HOT_RELOAD"); v != "" {
+		c.Nacos.HotReload = v == "true" || v == "1"
+	}
 }
 
 // applyDefaultFallbacks fills in safe defaults when both yaml and env are empty.
@@ -330,6 +343,15 @@ func main() {
 	// Stage 20-3: graceful shutdown context.
 	rootCtx, rootCancel := context.WithCancel(context.Background())
 	defer rootCancel()
+
+	// Stage 31 PR-09: Nacos 注册 + 配置（ai-svc 同时暴露 HTTP :8891 + gRPC :8892）
+	// 注册时仅注册 HTTP 端口（metadata.grpc_port=8892 供 Stage 32 APISIX 双注册决策）
+	nacosRuntime, err := BootNacos(rootCtx, &c, defaultBootDeps())
+	if err != nil {
+		logging.Errorf(err, "[nacos] boot failed (continuing)")
+	} else if nacosRuntime != nil && nacosRuntime.Registry != nil {
+		defer nacosRuntime.Close(rootCtx, c.Name, c.Host, c.Port)
+	}
 
 	if c.GRPC.Enabled {
 		gs := grpcserver.New(emoRepo, c.GRPC.Port)

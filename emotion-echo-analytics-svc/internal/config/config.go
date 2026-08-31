@@ -29,8 +29,18 @@ type Config struct {
 	SkyWalking SkyWalking
 	Postgres   Postgres
 	Kafka      Kafka
+	Nacos      Nacos
 
 	// TriggerQueueCap Round 3 part 2: async trigger queue buffer size.
 	// <=0 用 trigger.DefaultQueueCap (64).
 	TriggerQueueCap int `json:",default=64"`
+}
+
+// Nacos 注册中心 + 配置中心配置（Stage 31 PR-09）
+type Nacos struct {
+	Enabled   bool   `json:",default=true"`
+	Addr      string `json:",default=emotion-echo-nacos:8848"`
+	Namespace string `json:",default=emotion-echo-dev"`
+	GroupName string `json:",default=DEFAULT_GROUP"`
+	HotReload bool   `json:",default=false"`
 }

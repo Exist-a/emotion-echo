@@ -18,6 +18,16 @@ SkyWalking:
   ServiceName: emotion-echo-web-bff
   Enabled:     false
 
+# Stage 31 PR-09: Nacos 注册中心 + 配置中心
+# BFF 也注册到 Nacos（service-name=web-bff）；Stage 32 APISIX 通过
+# nacos-discovery 插件自动发现 BFF 作为 upstream。
+Nacos:
+  Enabled:   true
+  Addr:      emotion-echo-nacos:8848
+  Namespace: emotion-echo-dev
+  GroupName: DEFAULT_GROUP
+  HotReload: false
+
 # 下游服务地址（BFF 聚合 5 个下游 + XTTS）
 UserService:
   BaseURL: http://localhost:8888

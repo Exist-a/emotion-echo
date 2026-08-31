@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"emotion-echo-analytics-svc/internal/config"
@@ -32,10 +34,6 @@ import (
 
 var configFile = flag.String("f", "etc/analytics-api.yaml", "the config file")
 
-// applyEnvOverrides 让容器内的 ${POSTGRES_DSN} / ${KAFKA_BROKERS} /
-// ${SKYWALKING_OAP_ADDR} env 在 go-zero conf.MustLoad 之后覆盖 config struct,
-// 避免 go-zero 1.10 conf bug — 它不识别 "${VAR:default}" bash default 语法,
-// 原样保留字面字符串,所以需要在 main 显式兜底 (Stage 26-Q 同款,chat/ai-svc 已有)。
 func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("POSTGRES_DSN"); v != "" {
 		c.Postgres.DSN = v
@@ -45,6 +43,18 @@ func applyEnvOverrides(c *config.Config) {
 	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
+	}
+	if v := os.Getenv("NACOS_ENABLED"); v != "" {
+		c.Nacos.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("NACOS_ADDR"); v != "" {
+		c.Nacos.Addr = v
+	}
+	if v := os.Getenv("NACOS_NAMESPACE"); v != "" {
+		c.Nacos.Namespace = v
+	}
+	if v := os.Getenv("NACOS_HOT_RELOAD"); v != "" {
+		c.Nacos.HotReload = v == "true" || v == "1"
 	}
 }
 
@@ -172,7 +182,30 @@ func main() {
 	// 5. routes — Stage 30-A 9 个业务端点 + 健康 + metrics
 	registerRoutes(r, svcCtx)
 
+	// Stage 31 PR-09: Nacos 注册 + 配置
+	bootCtx, bootCancel := context.WithCancel(context.Background())
+	defer bootCancel()
+	nacosRuntime, err := BootNacos(bootCtx, &c, defaultBootDeps())
+	if err != nil {
+		log.Printf("[nacos] boot failed (continuing): %v", err)
+	}
+	defer func() {
+		if nacosRuntime != nil {
+			nacosRuntime.Close(context.Background(), c.Name, c.Host, c.Port)
+		}
+	}()
+
 	log.Printf("Starting analytics-svc at %s:%d...", c.Host, c.Port)
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		bootCancel()
+		if nacosRuntime != nil {
+			nacosRuntime.Close(context.Background(), c.Name, c.Host, c.Port)
+		}
+		os.Exit(0)
+	}()
 	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {
 		log.Fatalf("[gin] server crashed: %v", err)
 	}

@@ -19,4 +19,14 @@ type Config struct {
 	Port       int    `json:",default=8889"`
 	SkyWalking SkyWalking
 	Postgres   Postgres
+	Nacos      Nacos
+}
+
+// Nacos 注册中心 + 配置中心配置（Stage 31 PR-09）
+type Nacos struct {
+	Enabled   bool   `json:",default=true"`
+	Addr      string `json:",default=emotion-echo-nacos:8848"`
+	Namespace string `json:",default=emotion-echo-dev"`
+	GroupName string `json:",default=DEFAULT_GROUP"`
+	HotReload bool   `json:",default=false"`
 }

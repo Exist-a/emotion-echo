@@ -35,6 +35,7 @@ type Config struct {
 	Host       string `json:",default=0.0.0.0"`
 	Port       int    `json:",default=8894"`
 	SkyWalking SkyWalking
+	Nacos      Nacos
 
 	UserService       HTTPService `json:",optional"`
 	ChatService       HTTPService `json:",optional"`
@@ -65,6 +66,18 @@ type Config struct {
 		Model   string `json:",default=deepseek-chat"`
 		Timeout int    `json:",default=60"`
 	} `json:",optional"`
+}
+
+// Nacos 注册中心 + 配置中心配置（Stage 31 PR-09）
+//
+// web-bff 也注册到 Nacos（service-name=web-bff）；Stage 32 APISIX 通过
+// nacos-discovery 插件自动发现 web-bff 作为上游，无需静态 upstream 配置。
+type Nacos struct {
+	Enabled   bool   `json:",default=true"`
+	Addr      string `json:",default=emotion-echo-nacos:8848"`
+	Namespace string `json:",default=emotion-echo-dev"`
+	GroupName string `json:",default=DEFAULT_GROUP"`
+	HotReload bool   `json:",default=false"`
 }
 
 // ApplyEnvOverrides 用容器环境变量覆盖 config 字段（Stage 22-B 范式）。
@@ -113,5 +126,18 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("BFF_LLM_MODEL"); v != "" {
 		c.LLM.Model = v
+	}
+	// Stage 31 PR-09: Nacos 注册中心 + 配置中心
+	if v := os.Getenv("NACOS_ENABLED"); v != "" {
+		c.Nacos.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("NACOS_ADDR"); v != "" {
+		c.Nacos.Addr = v
+	}
+	if v := os.Getenv("NACOS_NAMESPACE"); v != "" {
+		c.Nacos.Namespace = v
+	}
+	if v := os.Getenv("NACOS_HOT_RELOAD"); v != "" {
+		c.Nacos.HotReload = v == "true" || v == "1"
 	}
 }

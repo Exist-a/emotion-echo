@@ -64,3 +64,11 @@ XTTS:
   Timeout: 60
   Language: zh-cn
   Speed: 0.75
+
+# Stage 31 PR-09: Nacos 注册中心 + 配置中心
+Nacos:
+  Enabled:   ${NACOS_ENABLED:-true}
+  Addr:      ${NACOS_ADDR:-emotion-echo-nacos:8848}
+  Namespace: ${NACOS_NAMESPACE:-emotion-echo-dev}
+  GroupName: DEFAULT_GROUP
+  HotReload: ${NACOS_HOT_RELOAD:-false}
