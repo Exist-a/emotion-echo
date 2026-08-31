@@ -102,9 +102,9 @@ services:
     networks:
       - app-network
 
-  # =====================================================
-  # SkyWalking UI (前端)
-  # =====================================================
+# =====================================================
+# SkyWalking UI (前端)
+# =====================================================
   skywalking-ui:
     image: apache/skywalking-ui:9.7.0
     container_name: emotion-echo-sw-ui
@@ -118,6 +118,37 @@ services:
       - "18080:8080"
     networks:
       - app-network
+
+  # =====================================================
+  # Nacos 2.4.3 standalone（Stage 31 PR-11）
+  # 注册中心 + 配置中心；dev 用内嵌 Derby，免外部依赖
+  # 健康检查：/nacos/actuator/health → 200
+  # 端口：8848 HTTP 控制台 + 9848/9849 gRPC（SDK 客户端）
+  # =====================================================
+  nacos:
+    image: nacos/nacos-server:v2.4.3
+    container_name: emotion-echo-nacos
+    restart: unless-stopped
+    environment:
+      <<: *logging-env
+      MODE: standalone
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      # Stage 31 PR-11: dev 用 Derby 内嵌数据源；prod 切 MySQL（Stage 34+）
+      SPRING_DATASOURCE_PLATFORM: derby
+      # 鉴权：dev standalone 默认无账号；prod 通过 nacos.core.auth.enabled=true 开启
+    ports:
+      - "8848:8848"   # HTTP console + API
+      - "9848:9848"   # gRPC client (SDK 客户端)
+      - "9849:9849"   # gRPC server (cluster 内部)
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 # =====================================================
 # 卷定义

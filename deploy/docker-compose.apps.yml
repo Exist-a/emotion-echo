@@ -36,6 +36,11 @@ services:
     restart: unless-stopped
     environment:
       <<: *logging-env
+      # Stage 31 PR-11: Nacos 注册中心 + 配置中心
+      NACOS_ENABLED:   "true"
+      NACOS_ADDR:      "emotion-echo-nacos:8848"
+      NACOS_NAMESPACE: "emotion-echo-dev"
+      NACOS_HOT_RELOAD: "false"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
@@ -61,6 +66,9 @@ services:
         condition: service_started
       skywalking-oap:
         condition: service_started
+
+      nacos:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8888/health || exit 1"]
       interval: 30s
@@ -77,6 +85,11 @@ services:
     restart: unless-stopped
     environment:
       <<: *logging-env
+      # Stage 31 PR-11: Nacos 注册中心 + 配置中心
+      NACOS_ENABLED:   "true"
+      NACOS_ADDR:      "emotion-echo-nacos:8848"
+      NACOS_NAMESPACE: "emotion-echo-dev"
+      NACOS_HOT_RELOAD: "false"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
@@ -104,6 +117,9 @@ services:
         condition: service_started
       skywalking-oap:
         condition: service_started
+
+      nacos:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8890/health || exit 1"]
       interval: 30s
@@ -121,6 +137,11 @@ services:
     restart: unless-stopped
     environment:
       <<: *logging-env
+      # Stage 31 PR-11: Nacos 注册中心 + 配置中心
+      NACOS_ENABLED:   "true"
+      NACOS_ADDR:      "emotion-echo-nacos:8848"
+      NACOS_NAMESPACE: "emotion-echo-dev"
+      NACOS_HOT_RELOAD: "false"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
@@ -146,6 +167,9 @@ services:
         condition: service_started
       skywalking-oap:
         condition: service_started
+
+      nacos:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8893/health || exit 1"]
       interval: 30s
@@ -162,6 +186,11 @@ services:
     restart: unless-stopped
     environment:
       <<: *logging-env
+      # Stage 31 PR-11: Nacos 注册中心 + 配置中心
+      NACOS_ENABLED:   "true"
+      NACOS_ADDR:      "emotion-echo-nacos:8848"
+      NACOS_NAMESPACE: "emotion-echo-dev"
+      NACOS_HOT_RELOAD: "false"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
@@ -186,6 +215,9 @@ services:
         condition: service_started
       skywalking-oap:
         condition: service_started
+
+      nacos:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8889/health || exit 1"]
       interval: 30s
@@ -203,8 +235,16 @@ services:
     image: emotion-echo/llm-service:v0.1.0   # P0-4: pinned tag
     container_name: emotion-echo-llm-service
     restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_started
     environment:
       <<: *logging-env
+      # Stage 31 PR-11: Nacos 注册中心 + 配置中心
+      NACOS_ENABLED:   "true"
+      NACOS_ADDR:      "emotion-echo-nacos:8848"
+      NACOS_NAMESPACE: "emotion-echo-dev"
+      NACOS_HOT_RELOAD: "false"
       PYTHONUNBUFFERED: "1"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
@@ -253,6 +293,11 @@ services:
     restart: unless-stopped
     environment:
       <<: *logging-env
+      # Stage 31 PR-11: Nacos 注册中心 + 配置中心
+      NACOS_ENABLED:   "true"
+      NACOS_ADDR:      "emotion-echo-nacos:8848"
+      NACOS_NAMESPACE: "emotion-echo-dev"
+      NACOS_HOT_RELOAD: "false"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
@@ -298,6 +343,9 @@ services:
         condition: service_started
       emotion-llm-service:
         condition: service_healthy
+
+      nacos:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8891/health || exit 1"]
       interval: 30s
@@ -438,8 +486,14 @@ services:
       - emotion-echo-assessment-svc
       - emotion-echo-analytics-svc
       - emotion-echo-ai-svc
+      - emotion-echo-nacos
     environment:
       <<: *logging-env
+      # Stage 31 PR-11: Nacos 注册中心 + 配置中心
+      NACOS_ENABLED:   "true"
+      NACOS_ADDR:      "emotion-echo-nacos:8848"
+      NACOS_NAMESPACE: "emotion-echo-dev"
+      NACOS_HOT_RELOAD: "false"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
