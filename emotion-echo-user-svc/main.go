@@ -125,6 +125,16 @@ func main() {
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
 	}
+
+	// === 4.5 Stage 33 PR-19a：无 auth 中间件的路由组 ===
+	// login/register 在认证前调用，必须在 GinAuthMiddleware 之前注册。
+	// （Gin 的路由组注册顺序决定中间件作用范围）
+	noAuth := r.Group("/api/v1/users")
+	{
+		noAuth.POST("/login", handler.LoginHandler(svcCtx))
+		noAuth.POST("/register", handler.RegisterHandler(svcCtx))
+	}
+
 	r.Use(sharedmw.GinAuthMiddleware())
 
 	// === 5. 路由注册 ===

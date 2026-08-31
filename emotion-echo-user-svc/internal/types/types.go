@@ -45,3 +45,39 @@ type UpdateProfileReq struct {
 
 // UpdateProfileResp 与 GetMeResp 结构完全一致（用户最新信息）
 type UpdateProfileResp = GetMeResp
+
+// LoginReq POST /api/v1/users/login
+//
+// Stage 33 PR-19a：user-svc 真实登录。前端直接传明文密码（不再 sha256），
+// user-svc 用 bcrypt.Verify 与 password_hash 比对。
+type LoginReq struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// LoginResp 登录成功响应：返回用户信息（不含密码哈希）
+type LoginResp struct {
+	User UserInfo `json:"user"`
+}
+
+// RegisterReq POST /api/v1/users/register
+//
+// Stage 33 PR-19a：user-svc 注册。username 唯一；password 明文入库前
+// 由 handler 调 password.Hash bcrypt 哈希。
+type RegisterReq struct {
+	Username         string  `json:"username"`
+	Password         string  `json:"password"`
+	VerificationCode string  `json:"verificationCode,optional"`
+	Phone            *string `json:"phone,optional"`
+	Nickname         *string `json:"nickname,optional"`
+}
+
+// RegisterResp 注册成功响应
+type RegisterResp struct {
+	User UserInfo `json:"user"`
+}
+
+// AuthErrorResp 鉴权失败响应（统一格式）
+type AuthErrorResp struct {
+	Error string `json:"error"`
+}

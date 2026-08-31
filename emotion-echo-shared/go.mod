@@ -8,6 +8,7 @@ require (
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.6.0
+	golang.org/x/crypto v0.54.0
 	golang.org/x/sys v0.47.0 // indirect
 	google.golang.org/grpc v1.80.0
 	gorm.io/gorm v1.31.1

@@ -27,6 +27,8 @@ type UserRepo interface {
 	// UpdateProfile 修改用户可编辑字段（昵称/性别/生日/头像）
 	// 传 nil 表示该字段不动，传 *string 设置/覆盖值
 	UpdateProfile(ctx context.Context, id int64, nickname *string, gender *int16, birthday *time.Time, avatarURL *string) error
+	// Stage 33 PR-19a：UsernameExists 仅用于注册时查重（不返回完整 user）
+	UsernameExists(ctx context.Context, username string) (bool, error)
 	Ping(ctx context.Context) error
 }
 
@@ -38,12 +40,13 @@ var ErrNotFound = errors.New("user not found")
 // =====================================================
 
 type InMemoryUserRepo struct {
-	mu    sync.RWMutex
-	users map[int64]*model.User
+	mu         sync.RWMutex
+	users      map[int64]*model.User
+	nextUserID int64
 }
 
 func NewInMemoryUserRepo() *InMemoryUserRepo {
-	return &InMemoryUserRepo{users: make(map[int64]*model.User)}
+	return &InMemoryUserRepo{users: make(map[int64]*model.User), nextUserID: 1}
 }
 
 func (r *InMemoryUserRepo) GetByID(ctx context.Context, id int64) (*model.User, error) {
@@ -81,6 +84,10 @@ func (r *InMemoryUserRepo) GetByPhone(ctx context.Context, phone string) (*model
 func (r *InMemoryUserRepo) Create(ctx context.Context, u *model.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if u.ID == 0 {
+		u.ID = r.nextUserID
+		r.nextUserID++
+	}
 	r.users[u.ID] = u
 	return nil
 }
@@ -106,6 +113,18 @@ func (r *InMemoryUserRepo) UpdateProfile(ctx context.Context, id int64, nickname
 	}
 	u.UpdatedAt = time.Now()
 	return nil
+}
+
+// UsernameExists Stage 33 PR-19a：内存版 username 查重
+func (r *InMemoryUserRepo) UsernameExists(ctx context.Context, username string) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, u := range r.users {
+		if u.Username == username {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (r *InMemoryUserRepo) Ping(ctx context.Context) error { return nil }
@@ -190,6 +209,16 @@ func (r *PostgresUserRepo) UpdateProfile(ctx context.Context, id int64, nickname
 		return ErrNotFound
 	}
 	return nil
+}
+
+// UsernameExists Stage 33 PR-19a：Postgres 版 username 查重（COUNT(*)）
+func (r *PostgresUserRepo) UsernameExists(ctx context.Context, username string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Table("emotion_echo_user.users").
+		Where("username = ?", username).
+		Count(&count).Error
+	return count > 0, err
 }
 
 func (r *PostgresUserRepo) Ping(ctx context.Context) error {
