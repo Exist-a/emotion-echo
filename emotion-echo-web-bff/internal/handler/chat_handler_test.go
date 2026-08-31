@@ -71,8 +71,8 @@ func TestChatHandler_CreateConversation_Success(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), `"conversation"`)
-	assert.Contains(t, w.Body.String(), `"id":5`)
+	assert.Contains(t, w.Body.String(), `"code":0`)
+	assert.Contains(t, w.Body.String(), `"id":"5"`)
 }
 
 func TestChatHandler_SendMessage_Success(t *testing.T) {
@@ -85,7 +85,7 @@ func TestChatHandler_SendMessage_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, int64(5), fc.gotConvID, "conversation id 应从 path 解析")
-	assert.Contains(t, w.Body.String(), `"message"`)
+	assert.Contains(t, w.Body.String(), `"code":0`)
 }
 
 func TestChatHandler_ListMessages_Success(t *testing.T) {
@@ -100,7 +100,7 @@ func TestChatHandler_ListMessages_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, int64(5), fc.gotConvID)
 	assert.Equal(t, 10, fc.gotLimit)
-	assert.Contains(t, w.Body.String(), `"messages"`)
+	assert.Contains(t, w.Body.String(), `"list"`)
 }
 
 func TestChatHandler_DeleteConversation_Success(t *testing.T) {

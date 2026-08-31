@@ -33,9 +33,21 @@ func NewUserHandler(user downstream.UserClient) *UserHandler {
 
 // Register 注册路由
 func (h *UserHandler) Register(r *gin.Engine) {
+	r.GET("/api/v1/user/profile", h.profile)
 	r.GET("/api/v1/users/me", h.getMe)
 	r.PATCH("/api/v1/users/me", h.updateMe)
 	r.GET("/api/v1/users/:id", h.getByID)
+}
+
+// profile 前端 GET /user/profile 直接返回 UserInfo 形状（types/api.ts）
+func (h *UserHandler) profile(c *gin.Context) {
+	ctx := session.WithRequestAuth(c)
+	u, err := h.user.GetMe(ctx)
+	if err != nil {
+		Fail(c, statusFor(err), 1, err.Error())
+		return
+	}
+	OK(c, toProfileVM(u))
 }
 
 func (h *UserHandler) getMe(c *gin.Context) {

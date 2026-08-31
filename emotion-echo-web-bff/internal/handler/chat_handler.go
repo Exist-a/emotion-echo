@@ -34,10 +34,19 @@ func NewChatHandler(chat downstream.ChatClient) *ChatHandler {
 
 // Register 注册路由
 func (h *ChatHandler) Register(r *gin.Engine) {
+	r.GET("/api/v1/conversations", h.listConversations)
 	r.POST("/api/v1/conversations", h.createConversation)
 	r.POST("/api/v1/conversations/:id/messages", h.sendMessage)
 	r.GET("/api/v1/conversations/:id/messages", h.listMessages)
 	r.DELETE("/api/v1/conversations/:id", h.deleteConversation)
+}
+
+// listConversations 会话列表（前端契约 {list, hasMore}）
+//
+// 注：chat-svc 暂无 list 端点，BFF 先返回空列表（前端首次加载不 404）。
+// 待 chat-svc 增加 GET /conversations 后透传。
+func (h *ChatHandler) listConversations(c *gin.Context) {
+	OK(c, gin.H{"list": []ConversationItemVM{}, "hasMore": false})
 }
 
 func (h *ChatHandler) createConversation(c *gin.Context) {
@@ -51,7 +60,8 @@ func (h *ChatHandler) createConversation(c *gin.Context) {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"conversation": conv})
+	// 前端期望 data 直接是 ConversationItem（非 {conversation} 包装）
+	OK(c, toConversationItemVM(conv))
 }
 
 func (h *ChatHandler) sendMessage(c *gin.Context) {
@@ -69,7 +79,7 @@ func (h *ChatHandler) sendMessage(c *gin.Context) {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"message": msg})
+	OK(c, toMessageItemVM(msg))
 }
 
 func (h *ChatHandler) listMessages(c *gin.Context) {
@@ -88,7 +98,11 @@ func (h *ChatHandler) listMessages(c *gin.Context) {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"messages": msgs})
+	items := make([]MessageItemVM, 0, len(msgs))
+	for i := range msgs {
+		items = append(items, toMessageItemVM(&msgs[i]))
+	}
+	OK(c, gin.H{"list": items})
 }
 
 func (h *ChatHandler) deleteConversation(c *gin.Context) {
