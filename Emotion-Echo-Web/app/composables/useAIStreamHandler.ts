@@ -1,9 +1,13 @@
 /**
  * AI 流式响应处理 Composable
- * 处理 SSE 流式响应，解析 Server-Sent Events
+ * 解析 OpenAI 兼容 SSE 格式：
+ *   data: {"choices":[{"delta":{"content":"..."}}]}\n\n
+ *   data: [DONE]\n\n
+ *
+ * 历史：Stage 33 之前按 data.type === 'start'|'delta'|'finish' 解析，
+ *       与 BFF 实际 OpenAI 输出格式不匹配，导致用户看到永远"streaming"。
+ *       PR-17 改为 OpenAI 兼容解析。
  */
-import type { StreamChunk } from '~/types/api'
-
 export interface AIStreamParams {
   message: string
   emotion: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
@@ -13,12 +17,9 @@ export interface AIStreamParams {
 }
 
 export interface AIStreamCallbacks {
-  onStart?: (data: { conversationId?: string; userMessageId?: string }) => void
   onDelta?: (content: string) => void
-  onFinish?: (data: { messageId: string; emotion?: string }) => void
+  onFinish?: (data: { messageId?: string; emotion?: string }) => void
   onError?: (error: string) => void
-  onTruncated?: (data: { content: string }) => void
-  onTitleUpdated?: (data: { conversationId: string; title: string }) => void
 }
 
 export interface UseAIStreamHandlerReturn {
@@ -28,6 +29,17 @@ export interface UseAIStreamHandlerReturn {
   cancelAIStream: () => void
 }
 
+const SSE_DONE_SENTINEL = '[DONE]'
+const MAX_PARSE_ERRORS = 5
+
+interface OpenAIDeltaPayload {
+  choices?: Array<{
+    delta?: {
+      content?: string
+    }
+  }>
+}
+
 export function useAIStreamHandler(): UseAIStreamHandlerReturn {
   const isStreaming = ref(false)
   const streamingContent = ref('')
@@ -35,7 +47,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
   let streamAbortController: AbortController | null = null
   let streamCancelled = ref(false)
   let parseErrorCount = 0
-  const MAX_PARSE_ERRORS = 5
+  let finished = false
 
   const cancelAIStream = () => {
     if (streamAbortController) {
@@ -58,12 +70,19 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     streamingContent.value = ''
     streamCancelled.value = false
     parseErrorCount = 0
+    finished = false
 
     const runtimeConfig = useRuntimeConfig()
     const token = import.meta.client ? localStorage.getItem('access_token') : ''
-    const streamUrl = `${runtimeConfig.public.API_BASE_URL || 'http://localhost:8080/api/v1'}/ai/stream`
+    const streamUrl = `${runtimeConfig.public.API_BASE_URL || 'http://localhost:8894/api/v1'}/ai/stream`
 
     streamAbortController = new AbortController()
+
+    const triggerFinish = (extra?: { messageId?: string; emotion?: string }) => {
+      if (finished) return
+      finished = true
+      callbacks.onFinish?.(extra ?? {})
+    }
 
     try {
       const response = await fetch(streamUrl, {
@@ -83,6 +102,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
           const errBody = await response.json()
           errMsg = errBody.message || errMsg
         } catch {
+          /* ignore non-JSON error body */
         }
         throw new Error(`请求失败: ${errMsg}`)
       }
@@ -95,10 +115,9 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
       const decoder = new TextDecoder()
       let buffer = ''
       let fullContent = ''
-      let aiMessageId: string | null = null
 
       try {
-        while (true) {
+        while (!finished) {
           const { done, value } = await reader.read()
           if (done) break
 
@@ -108,70 +127,36 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
           buffer = lines.pop() || ''
 
           for (const line of lines) {
+            if (finished) break
             const trimmed = line.trim()
             if (!trimmed) continue
 
-            if (trimmed.startsWith('data: ')) {
-              try {
-                const rawData = trimmed.slice(6).trim()
-                const data: StreamChunk = JSON.parse(rawData)
+            if (!trimmed.startsWith('data:')) continue
+            const rawData = trimmed.slice(5).trim()
+            if (!rawData) continue
 
-                switch (data.type) {
-                  case 'start':
-                    if (data.conversationId) {
-                      callbacks.onStart?.({ conversationId: data.conversationId })
-                    }
-                    if (data.userMessageId) {
-                      callbacks.onStart?.({ userMessageId: data.userMessageId })
-                    }
-                    break
+            if (rawData === SSE_DONE_SENTINEL) {
+              triggerFinish()
+              continue
+            }
 
-                  case 'delta':
-                    if (data.content) {
-                      fullContent += data.content
-                      streamingContent.value = fullContent
-                      callbacks.onDelta?.(data.content)
-                    }
-                    break
-
-                  case 'finish':
-                    if (data.messageId) {
-                      aiMessageId = data.messageId
-                    }
-                    callbacks.onFinish?.({
-                      messageId: aiMessageId || '',
-                      emotion: data.emotion
-                    })
-                    break
-
-                  case 'error':
-                    if (streamCancelled.value) {
-                      return { isOk: true, msg: '已取消' }
-                    }
-                    const errMsg = data.error || data.message || '流式响应错误'
-                    callbacks.onError?.(errMsg)
-                    return { isOk: false, msg: errMsg }
-
-                  case 'truncated':
-                    callbacks.onTruncated?.({ content: data.content || fullContent })
-                    return { isOk: true, msg: '对话已截断' }
-
-                  case 'title_updated':
-                    if (data.conversationId && data.title) {
-                      callbacks.onTitleUpdated?.({
-                        conversationId: data.conversationId,
-                        title: data.title
-                      })
-                    }
-                    break
-                }
-              } catch (e: any) {
-                parseErrorCount++
-                if (parseErrorCount >= MAX_PARSE_ERRORS) {
-                  callbacks.onError?.(`数据解析错误过多，已停止`)
-                  return { isOk: false, msg: '数据解析错误' }
-                }
+            let payload: OpenAIDeltaPayload
+            try {
+              payload = JSON.parse(rawData) as OpenAIDeltaPayload
+            } catch {
+              parseErrorCount++
+              if (parseErrorCount >= MAX_PARSE_ERRORS) {
+                callbacks.onError?.('数据解析错误过多，已停止')
+                return { isOk: false, msg: '数据解析错误' }
               }
+              continue
+            }
+
+            const deltaContent = payload?.choices?.[0]?.delta?.content
+            if (typeof deltaContent === 'string' && deltaContent.length > 0) {
+              fullContent += deltaContent
+              streamingContent.value = fullContent
+              callbacks.onDelta?.(deltaContent)
             }
           }
         }
@@ -179,13 +164,15 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
         reader.releaseLock()
       }
 
+      triggerFinish()
       return { isOk: true, msg: '对话完成' }
     } catch (error: any) {
-      if (streamCancelled.value) {
+      if (streamCancelled.value || error?.name === 'AbortError') {
         return { isOk: true, msg: '已取消' }
       }
-      callbacks.onError?.(error.message || '对话失败')
-      return { isOk: false, msg: error.message || '对话失败' }
+      const errMsg = error?.message || '对话失败'
+      callbacks.onError?.(errMsg)
+      return { isOk: false, msg: errMsg }
     } finally {
       isStreaming.value = false
       streamAbortController = null

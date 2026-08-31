@@ -122,11 +122,6 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
         voiceEmotion: extraParams?.voiceEmotion
       },
       {
-        onStart: (data) => {
-          if (data.conversationId && data.userMessageId && tempUserMessage) {
-            messageStore.updateMessage(tempUserMessage.id, { id: data.userMessageId } as any)
-          }
-        },
         onDelta: (delta) => {
           accumulatedDeltaText.value += delta
           callbacks?.onDelta?.(delta)
@@ -151,7 +146,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
           flushTTS()
 
           messageStore.updateMessage(tempAiMessage.id, {
-            id: data.messageId,
+            id: data.messageId || tempAiMessage.id,
             status: 'sent'
           })
 
@@ -160,11 +155,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
             tempAiMessage.content.slice(0, 100) || content.slice(0, 100)
           )
 
-          if (data.emotion) {
-            callbacks?.onFinish?.(data.messageId, data.emotion)
-          } else {
-            callbacks?.onFinish?.(data.messageId)
-          }
+          callbacks?.onFinish?.(data.messageId || '', data.emotion)
         },
         onError: (error) => {
           stopTTS()
@@ -173,21 +164,6 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
             content: error
           })
           callbacks?.onError?.(error)
-        },
-        onTruncated: (data) => {
-          flushTTS()
-          messageStore.updateMessage(tempAiMessage.id, {
-            status: 'truncated',
-            content: data.content
-          })
-          updateConversation(conversationId, data.content.slice(0, 100))
-        },
-        onTitleUpdated: (data) => {
-          const conv = conversationStore.conversationList.find((c) => c.id === data.conversationId)
-          if (conv) {
-            conv.title = data.title
-            conv.updatedAt = new Date().toISOString()
-          }
         }
       }
     )
