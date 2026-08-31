@@ -24,6 +24,8 @@ emotion-llm-service · 文本情绪分析微服务
   - 未来可换 jieba + SnowNLP / LLM API
 """
 import logging
+import os
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -39,11 +41,61 @@ from metrics_setup import (
     metrics_endpoint,
 )
 
+# Stage 31 PR-10: Nacos 接入（lifespan 中启动 / 关闭）
+from nacos_client import NacosConfig, NacosRuntime, wait_for_nacos
+
 # Stage 20-2: 结构化日志（默认 JSON，LOG_FORMAT=text 切换）
 setup_logging()
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Emotion LLM Service", version="0.1.0")
+
+# Stage 31 PR-10: Nacos 启动配置（容器内 NACOS_ADDR / NACOS_NAMESPACE env 覆盖）
+NACOS_ENABLED = os.getenv("NACOS_ENABLED", "true").lower() in ("1", "true", "yes")
+NACOS_ADDR = os.getenv("NACOS_ADDR", "emotion-echo-nacos:8848")
+NACOS_NAMESPACE = os.getenv("NACOS_NAMESPACE", "emotion-echo-dev")
+NACOS_GROUP = os.getenv("NACOS_GROUP", "DEFAULT_GROUP")
+NACOS_HOT_RELOAD = os.getenv("NACOS_HOT_RELOAD", "false").lower() in ("1", "true", "yes")
+SVC_NAME = os.getenv("SVC_NAME", "emotion-llm-service")
+SVC_HOST = os.getenv("SVC_HOST", "0.0.0.0")  # 注册到 Nacos 时的 IP（容器内为 0.0.0.0）
+SVC_PORT = int(os.getenv("SVC_PORT", "8000"))
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan: 启动时接入 Nacos，关闭时优雅退出。
+
+    Stage 31 PR-10: 与 Go svc 同构的 5 步流程。
+    """
+    runtime: Optional[NacosRuntime] = None
+    if NACOS_ENABLED:
+        cfg = NacosConfig(
+            server_addr=NACOS_ADDR,
+            namespace=NACOS_NAMESPACE,
+            group_name=NACOS_GROUP,
+        )
+        try:
+            await wait_for_nacos(cfg.server_addr, max_wait=60.0)
+            runtime = NacosRuntime(cfg)
+            await runtime.start(
+                svc_name=SVC_NAME,
+                host=SVC_HOST,
+                port=SVC_PORT,
+            )
+        except Exception as e:
+            logger.warning("[nacos] boot failed (continuing): %s", e)
+            runtime = None
+    else:
+        logger.info("[nacos] disabled by env")
+
+    yield
+
+    # Shutdown: 优雅退出
+    if runtime is not None:
+        await runtime.close()
+        logger.info("[nacos] runtime closed")
+
+
+app = FastAPI(title="Emotion LLM Service", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
