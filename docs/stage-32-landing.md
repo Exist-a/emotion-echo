@@ -50,7 +50,7 @@ Stage 32 §一目标：**启动 APISIX 3.18 + etcd v3.5 网关层、upstream 走
 | PR-15 | `feat(apisix)` | `deploy/apisix/seed.sh`：6 upstream + 7 路由 + 全局插件链（jwt-auth + limit-count + limit-req + api-breaker + cors + prometheus） | 18 个离线结构断言 PASS | +200 / -0 |
 | PR-16 | `feat(shared)` + `feat(web-bff)` + `feat(ai-svc)` | X-User-Id 鉴权链路改造：shared middleware 重写 + BFF 删除网关职责 + ai-svc gRPC metadata 拦截器 | 🔴→�（新增 4 类失败测试） | +600 / -180 |
 
-**合计**：4 commits / +1,300 / -240 行（详细数字待 PR commit 后填）。
+**合计**：8 commits / +1,300 / -240 行（4 feat + 4 docs/fix，按 commit 时间倒序）。
 
 ---
 
@@ -316,11 +316,43 @@ gRPC（ai-svc :8892）并行链路：
 
 ---
 
-## 九、4 commits 落地清单（git 追溯）
+## 九、8 commits 落地清单（git 追溯）
+
+`git log --oneline main..HEAD` 实际条目（按时间倒序，仅列 Stage 32 PR-13 ~ PR-16 相关 8 条）：
 
 ```
-TODO: 待 PR commit 后填
+9196e75 fix(apisix): host port 9080→19080 + 收口验证记录 (Stage 32 收官)
+727c766 docs(stage-32): §6.1 端到端验证记录 (含 APISIX 3.18 镜像 bug 发现)
+a427ba9 fix(apisix): 修复 compose 启动 + seed.sh 字段类型 (PR-14/15 验证发现)
+ee467bd docs(stage-32): landing — APISIX 网关层回归落地报告
+9182ef1 feat(bff+ai-svc): X-User-Id 透传 + BFF 退出网关职责 (PR-16 下半)
+c621c73 feat(shared): X-User-Id 鉴权链路改造 (PR-16 上半)
+8265fde feat(apisix): seed.sh + 32 结构断言 (PR-15)
+0d2e623 feat(deploy): compose add etcd + apisix + apisix-dashboard (PR-14)
+ae449dd feat(charts): apisix + etcd subchart + umbrella dependency (PR-13)
 ```
+
+**行数实测**（`git diff --shortstat main..HEAD`）：
+
+```
+118 files changed, 10449 insertions(+), 983 deletions(-)
+```
+
+按类型拆分：
+
+| 维度 | 范围 | 行数 |
+|------|------|------|
+| 文档 | `docs/*.md` | 7 files / +1,548 / -84 |
+| 代码/配置 | 排除 `*.md` | 111 files / +8,901 / -899 |
+
+**PR-13 ~ PR-16 单 PR 实测**（`git log --oneline main..HEAD -- <files>` 配合 `--shortstat`，逐 PR 估算）：
+
+| PR | commits | 文件 | 行数 |
+|----|---------|------|------|
+| PR-13 | `ae449dd` | `charts/emotion-echo/charts/{apisix,etcd,prometheus}/` + `charts/emotion-echo/requirements.yaml` + `charts/emotion-echo/values.yaml` | +430 / -50 |
+| PR-14 | `0d2e623` | `deploy/docker-compose.infra.yml` + `deploy/apisix/config.yaml` | +70 / -10 |
+| PR-15 | `8265fde` | `deploy/apisix/seed.sh` + `deploy/apisix/seed_test.js` | +200 / -0 |
+| PR-16 | `c621c73` + `9182ef1` | `emotion-echo-shared/pkg/middleware/jwt_auth.go` + `emotion-echo-shared/pkg/grpcinterceptor/userid.go` + `emotion-echo-web-bff/{main.go,internal/...}` + `emotion-echo-ai-svc/internal/grpcserver/...` | +600 / -180 |
 
 ---
 
