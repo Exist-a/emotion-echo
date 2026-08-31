@@ -34,3 +34,9 @@ persistence:
 serviceAccount:
   create: true
   name: prometheus
+
+# Stage 32 PR-13: APISIX Service 引用（prometheus scrape job 目标）。
+# 与 charts/emotion-echo/values.yaml 的 apisix.serviceName 默认值保持一致。
+# 独立 lint 子 chart 时也走这个默认值。
+apisix:
+  serviceName: apisix
