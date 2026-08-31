@@ -9,9 +9,13 @@
 //   - ServerLogging: logs every RPC call (method, peer, latency, error)
 //   - ServerRecovery: panic recovery (avoid crashing entire server)
 //
-// Future (TODO):
+// Stage 33 PR-21 收口：
+//   - ServerAuth: JWT validation — 已由 shared/pkg/middleware/jwt_auth.go + shared/pkg/grpcinterceptor/userid.go
+//     实现（Stage 32 PR-16 X-User-Id 透传），从 TODO 移除。
+//   - ServerTracing / ClientLogging / ClientTracing / ClientRetry：留待 Stage 34+。
+//
+// Roadmap (Stage 34+)：
 //   - ServerTracing: SkyWalking integration
-//   - ServerAuth: JWT validation
 //   - ClientLogging / ClientTracing
 //   - ClientRetry: auto retry transient errors
 package grpcinterceptor

@@ -117,8 +117,9 @@ func main() {
 	}
 }
 
-// authPathBypass 让 /api/v1/auth/* 路径跳过鉴权（BFF 自有 mock 登录端点）
-// 白名单路径直接 c.Next()，否则执行传入的鉴权中间件。
+// authPathBypass 让 /api/v1/auth/* 路径跳过鉴权（login/register/refresh/logout/verification-code
+// 端点拿不到 X-User-Id，必须白名单）。Stage 33 PR-19b/21：仅剩这 5 条白名单路径，
+// 其他 /api/v1/* 全部走 sharedmw.GinAuthMiddleware。
 func authPathBypass(authMW gin.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api/v1/auth/") {

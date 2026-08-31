@@ -1,19 +1,20 @@
 // Package handler — auth_handler.go
 //
-// Stage 33 PR-19b：BFF 真实登录 + 限流 + verification-code 缓存。
+// Stage 33 PR-19b/21：BFF 真实登录（user-svc bcrypt 校验）+ 限流。
 //
-// 端点（无 APISIX jwt-auth 鉴权，由 seed.sh 白名单路由负责）：
+// 端点（无 APISIX jwt-auth 鉴权，由 deploy/apisix/seed.sh 白名单路由负责）：
 //   POST /api/v1/auth/login              {username, password} → LoginData
 //   POST /api/v1/auth/register           {username, password, verificationCode} → LoginData
-//   POST /api/v1/auth/refresh            → LoginData（重新签发）
+//   POST /api/v1/auth/refresh            → LoginData（mock：解析已有 JWT 重签）
 //   POST /api/v1/auth/logout             → {"success": true}
 //   POST /api/v1/auth/verification-code  {username} → {"success": true}
 //
 // 设计要点：
-//   - login 调 user-svc Login（user-svc bcrypt 校验）
-//   - 5 次错密码 → 锁定 5 分钟（in-memory，单实例假设）
-//   - verification-code 同 username 60s 内只发一次（in-memory 缓存）
-//   - refresh 保持现有 mock 行为（解析已有 JWT 重签，PR-21 收口时再做真实刷新）
+//   - login 调 user-svc Login（user-svc bcrypt 校验真实密码，PR-19a）
+//   - 5 次错密码 → 锁定 5 分钟（in-memory 单实例假设；多实例 BFF 留 Stage 34+ Redis）
+//   - verification-code 同 username 60s 内只能发一次（in-memory 缓存；防枚举）
+//   - refresh：保持 mock（解析现有 JWT 重签）；真实 refresh token 留 Stage 34+
+//   - BFF 不再持有"独立 mock JWT"能力（PR-19b/21 收口）
 package handler
 
 import (

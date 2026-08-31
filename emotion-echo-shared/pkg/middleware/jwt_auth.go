@@ -9,7 +9,9 @@
 //          → svc 读 X-User-Id header，转 int64，注入 ctx
 //
 // 这样 svc 端不需要共享 JWT secret，符合"边界信任"原则。
-// Stage 32 PR-16: 替换 base64 解 JWT payload 模式（旧的"信任 APISIX 已验过"）。
+//
+// 决策 12（ADR-2026-09）：BFF 信任 APISIX 注入的 X-User-Id，不再持有 JWT secret 验证责任。
+// Stage 33 PR-21 收口：原"信任 APISIX 已验过" 字样移除，明确信任边界。
 package middleware
 
 import (

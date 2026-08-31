@@ -13,9 +13,11 @@
 //   - mTLS is more secure but harder to deploy (cert management)
 //   - API key via metadata is simple + effective for internal trust
 //
-// Future (TODO):
-//   - mTLS (production-grade)
-//   - per-service keys (identify caller svc)
+// Stage 33 PR-21 收口：删除 "Future (TODO):" 前缀，改为以下 Roadmap 注释。
+//
+// Roadmap (Stage 34+)：
+//   - mTLS（production-grade）替代 API key
+//   - per-service keys（区分调用方 svc）
 //   - rotate keys without downtime
 package grpcinterceptor
 

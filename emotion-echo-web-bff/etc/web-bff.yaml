@@ -58,9 +58,8 @@ XTTS:
 Health:
   TimeoutMs: 2000
 
-# Stage 32 PR-16: BFF 自有 mock 鉴权简化为仅供 login 端点签发 token。
-# JWTSecret 保留：仅用于 /api/v1/auth/login 签发 mock token。
-# 真正的下游鉴权由 APISIX jwt-auth 注入 X-User-Id header 完成，BFF 不再签发也不再透传。
+# Stage 33 PR-19b: BFF 真实登录（user-svc bcrypt 校验）+ JWTSecret 仅用于 sign JWT 给前端用。
+# JWTSecret 必须与 APISIX jwt-auth secret 同源（部署时通过 env 注入同步）。
 Auth:
   JWTSecret: dev-bff-secret
   TokenTTLSeconds: 86400

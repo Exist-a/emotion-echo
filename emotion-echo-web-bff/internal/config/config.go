@@ -50,14 +50,12 @@ type Config struct {
 		TimeoutMs int `json:",default=2000"`
 	} `json:",optional"`
 
-	// Auth 是 BFF 自有的 mock 鉴权配置（Stage 32 PR-16 简化）
+	// Auth 是 BFF 自己的 JWT 配置（Stage 33 PR-19b 真实登录）
 	//
-	// Stage 32 之前：JWTSecret 用于签发 JWT 供下游 svc（共享 secret）。
-	// Stage 32 之后：APISIX 统一签发 + 验签，BFF 不再签发也不再透传 Authorization。
-	// BFF 仅保留 mock login 端点（Stage 33 净化），JWTSecret 字段保留用于登录端点签发；
-	// 真正的下游鉴权由 APISIX 注入 X-User-Id header 完成。
+	// JWTSecret 用于 /api/v1/auth/login 端点给前端签发 JWT；
+	// 真正的下游鉴权由 APISIX jwt-auth 验签后注入 X-User-Id header 完成（决策 12）。
 	Auth struct {
-		// JWTSecret 保留：仅用于 /api/v1/auth/login 端点签发 mock token（Stage 33 净化）
+		// JWTSecret：login 端点 sign JWT 用，必须与 APISIX jwt-auth secret 同源
 		JWTSecret string `json:",default=dev-bff-secret"`
 		// TokenTTLSeconds token 有效期（秒）
 		TokenTTLSeconds int `json:",default=86400"`
