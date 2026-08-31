@@ -486,7 +486,8 @@ services:
       - emotion-echo-assessment-svc
       - emotion-echo-analytics-svc
       - emotion-echo-ai-svc
-      - emotion-echo-nacos
+      # Stage 32 PR-14: 修复 service key 引用（service key 是 `nacos`，container_name 才是 `emotion-echo-nacos`）
+      - nacos
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
@@ -506,7 +507,10 @@ services:
       AI_SVC_GRPC_ADDR:    "emotion-echo-ai-svc:8892"
       XTTS_BASE_URL:       "http://emotion-echo-xtts:8003"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
-      BFF_JWT_SECRET:      ${BFF_JWT_SECRET:-dev-bff-secret}
+      # Stage 32 PR-14: BFF_JWT_SECRET 由 APISIX jwt-auth 统一管理，BFF 不再需要
+      # Stage 32 PR-16: BFF_TRUST_APISIX=true 时 BFF 信任 APISIX 注入的 X-User-Id header，
+      # 不再做 JWT 解析。dev 默认 true；本地直连 BFF 调试时可设 false（保留兼容路径）
+      BFF_TRUST_APISIX:    ${BFF_TRUST_APISIX:-true}
       # Phase D：真实 LLM（DeepSeek/OpenAI 兼容）。本地 dev 留空 → ai_stream 走 mock 共情回复
       # 真实部署：写 deploy/env/.env.local（**git ignore**），不要 commit 真实 key
       BFF_LLM_API_KEY:     ${BFF_LLM_API_KEY:-}

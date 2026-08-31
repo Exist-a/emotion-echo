@@ -150,6 +150,72 @@ services:
       retries: 10
       start_period: 30s
 
+  # =====================================================
+  # Etcd 3.5.13（Stage 32 PR-14）
+  # APISIX config_provider 存储；单实例 emptyDir（dev），
+  # 重启即清，由 deploy/apisix/seed.sh 重建（PR-15）。
+  # =====================================================
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.13
+    container_name: emotion-echo-etcd
+    restart: unless-stopped
+    command:
+      - etcd
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=default=http://etcd:2380
+      - --data-dir=/etcd-data
+    volumes:
+      - etcd-data:/etcd-data
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - app-network
+
+  # =====================================================
+  # APISIX 3.18 网关层（Stage 32 PR-14）
+  # 独立网关层，与 web-bff 解耦（ADR 决策 11）。
+  # TLS 默认关闭（APISIX 3.9 ssl_certificate_by_lua_block bug 未修）；
+  # prod 前置 nginx:alpine 终结 TLS（profile: tls，本 PR 不实现）。
+  # 端口：9080 HTTP data plane / 9180 Admin API / 9091 Prometheus exporter。
+  # =====================================================
+  apisix:
+    image: apache/apisix:3.18.0-debian
+    container_name: emotion-echo-apisix
+    restart: unless-stopped
+    depends_on:
+      etcd:
+        condition: service_healthy
+    volumes:
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+    ports:
+      - "9080:9080"   # HTTP data plane
+      - "9180:9180"   # Admin API（dev 暴露）
+      - "9091:9091"   # Prometheus exporter
+    networks:
+      - app-network
+
+  # =====================================================
+  # APISIX Dashboard 3.18（Stage 32 PR-14）
+  # 仅 dev 暴露；prod 通过 NetworkPolicy 限制 9000 端口
+  # =====================================================
+  apisix-dashboard:
+    image: apache/apisix-dashboard:3.18.0-alpine
+    container_name: emotion-echo-apisix-dashboard
+    restart: unless-stopped
+    depends_on:
+      - apisix
+    ports:
+      - "9000:9000"   # Dashboard UI（admin/admin）
+    networks:
+      - app-network
+
 # =====================================================
 # 卷定义
 # =====================================================
@@ -157,6 +223,7 @@ volumes:
   postgres_data:
   redis_data:
   kafka_data:
+  etcd-data:
 
 # =====================================================
 # 网络定义 (Stage 26-Q:external, 与 apps.yml 共享 emotion-echo_app-network)

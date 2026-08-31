@@ -1,0 +1,34 @@
+# APISIX 3.18 standalone 配置（Stage 32 PR-14）
+# 与 charts/emotion-echo/charts/apisix/templates/configmap.yaml 同源
+# 但 etcd host 改为容器 DNS（http://etcd:2379），符合本地 compose 编排
+#
+# 启动：docker compose -f deploy/docker-compose.infra.yml up -d
+# 验证：curl http://localhost:9180/apisix/admin/routes -H "X-API-KEY: edd1c9f034335f136f87ad84b625c8f1"
+apisix:
+  node_listen: 9080
+  enable_ipv6: false
+  enable_control: true
+  control:
+    ip: "0.0.0.0"
+    port: 9092
+deployment:
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+    listen_admin: 0.0.0.0:9180
+  role_control_plane:
+    config_provider: etcd
+  role_data_plane:
+    config_provider: etcd
+etcd:
+  host:
+    - http://etcd:2379
+  prefix: /apisix
+  timeout: 30
+plugin_attr:
+  prometheus:
+    export_addr:
+      ip: 0.0.0.0
+      port: 9091
+# Stage 32 不接 Nacos discovery（upstream 用静态节点，由 PR-15 seed.sh 注入）
+# Stage 34+ 切 nacos-discovery 插件时再加 discovery_type: nacos 配置
