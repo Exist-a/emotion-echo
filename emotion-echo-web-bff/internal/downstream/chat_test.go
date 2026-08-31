@@ -18,7 +18,9 @@ func TestChatClient_CreateConversation_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/api/v1/conversations", r.URL.Path)
-		assert.Equal(t, "Bearer jwt-c", r.Header.Get("Authorization"))
+		// Stage 32 PR-16: X-User-Id 替代 Authorization Bearer JWT
+		assert.Equal(t, "1", r.Header.Get(XUserIDHeader))
+		assert.Empty(t, r.Header.Get("Authorization"))
 
 		var req CreateConversationReq
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
@@ -31,7 +33,7 @@ func TestChatClient_CreateConversation_Success(t *testing.T) {
 	defer srv.Close()
 
 	c := NewChatClient(ChatClientOptions{BaseURL: srv.URL, TimeoutMs: 1000})
-	conv, err := c.CreateConversation(WithJWT(context.Background(), "jwt-c"), CreateConversationReq{Title: "今晚咨询"})
+	conv, err := c.CreateConversation(WithUserID(context.Background(), 1), CreateConversationReq{Title: "今晚咨询"})
 	require.NoError(t, err)
 	require.NotNil(t, conv)
 	assert.Equal(t, int64(5), conv.ID)

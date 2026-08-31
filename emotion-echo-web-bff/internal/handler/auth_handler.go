@@ -22,10 +22,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"emotion-echo-web-bff/internal/auth"
-	"emotion-echo-web-bff/internal/downstream"
 
 	"github.com/gin-gonic/gin"
 )
@@ -119,10 +119,14 @@ func (h *AuthHandler) register(c *gin.Context) {
 }
 
 func (h *AuthHandler) refresh(c *gin.Context) {
-	// mock：无 token 校验，直接重新签发（user 从 Authorization 解析，失败则用固定 id）
+	// mock：直接重新签发（user 从 Authorization 解析，失败则用固定 id）
+	// Stage 32 PR-16: 不再依赖 downstream.JWTFromContext（已删），
+	// 改为直接从 Authorization header 解析（/api/v1/auth/* 是白名单，
+	// shared GinAuthMiddleware 不会注入 ctx user_id）。
 	var userID int64 = 1
-	token := downstream.JWTFromContext(c.Request.Context())
-	if token != "" {
+	authHeader := c.GetHeader("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		token := strings.TrimPrefix(authHeader, "Bearer ")
 		if uid, err := h.jwt.Parse(token); err == nil {
 			userID = uid
 		}

@@ -1,13 +1,14 @@
 // Package downstream — user.go
 //
 // Stage 30 / stage-30-web-bff.md T2.12-14: UserClient（BFF → user-svc）
+// Stage 32 PR-16: 鉴权改用 X-User-Id header。
 //
 // user-svc（Gin :8888）：
 //   GET   /api/v1/users/me     → {"user": UserInfo}
 //   PATCH /api/v1/users/me     → {"user": UserInfo}（UpdateProfileReq 全 optional 指针）
 //   GET   /api/v1/users/:id    → {"user": UserInfo}
 //
-// 鉴权：下游认 Authorization: Bearer <JWT>，client 从 ctx 读取（WithJWT）。
+// 鉴权：下游认 X-User-Id header（APISIX jwt-auth 注入）。
 package downstream
 
 import (
@@ -109,8 +110,8 @@ func (c *userHTTPClient) GetByID(ctx context.Context, id int64) (*UserInfo, erro
 }
 
 func (c *userHTTPClient) applyAuth(req *http.Request, ctx context.Context) {
-	if jwt := JWTFromContext(ctx); jwt != "" {
-		req.Header.Set("Authorization", "Bearer "+jwt)
+	if uid, ok := UserIDFromContext(ctx); ok && uid > 0 {
+		req.Header.Set(XUserIDHeader, strconv.FormatInt(uid, 10))
 	}
 }
 

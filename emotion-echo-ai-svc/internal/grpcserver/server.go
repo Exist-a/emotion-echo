@@ -1,18 +1,22 @@
 // Package grpcserver 提供 ai-svc 的 gRPC 服务（Stage 19）
 //
 // 与 HTTP server（Gin :8891）共存：
-//   - HTTP 给前端（Nuxt）
-//   - gRPC 给内部 svc-to-svc
+//   - HTTP 给前端（Nuxt）/ 健康检查
+//   - gRPC 给内部 svc-to-svc（EmotionQueryService）
 //
 // 实现 EmotionQueryService：
 //   - GetEmotionByMessage(message_id) → Emotion
 //   - GetEmotionByConversation(conversation_id) → EmotionList
+//
+// Stage 32 PR-16: 加 user ID metadata 拦截器（读 x-user-id，APISIX 注入）。
+// 健康检查走 HTTP /api/v1/health（不在 gRPC 层做）。
 package grpcserver
 
 import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 
 	"emotion-echo-ai-svc/internal/logging"
 	"emotion-echo-ai-svc/internal/model"
@@ -29,6 +33,25 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// healthServiceFullName 是 grpc.health.v1.Health 服务的 FullMethod 前缀
+//（gRPC FullMethod 形如 "/grpc.health.v1.Health/Check"，因此前缀带前导 /）
+const healthServiceFullName = "/grpc.health.v1.Health"
+
+// newServiceAwareUserIDInterceptor 包一层：根据 FullMethod service name 决定是否走 user id 校验
+func newServiceAwareUserIDInterceptor(skipServiceFullName string) grpc.UnaryServerInterceptor {
+	inner := grpcinterceptor.NewServerUserIDInterceptor()
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if info != nil && info.FullMethod != "" {
+			// FullMethod 形如 "/grpc.health.v1.Health/Check"
+			// 跳过白名单 service（health probe 不带 x-user-id）
+			if strings.HasPrefix(info.FullMethod, skipServiceFullName) {
+				return handler(ctx, req)
+			}
+		}
+		return inner(ctx, req, info, handler)
+	}
+}
+
 // Server ai-svc 的 gRPC server
 type Server struct {
 	grpcServer *grpc.Server
@@ -38,25 +61,28 @@ type Server struct {
 
 // New 创建并配置 gRPC server（未启动）
 func New(repo repository.EmotionRepo, port int) *Server {
-	// Health check（标准 grpc.health.v1，用 grpc-go 自带 health.Server）
-	healthSrv := health.NewServer()
-	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthSrv.SetServingStatus("emotion.AI", healthpb.HealthCheckResponse_SERVING)
-
 	// Interceptor 链
 	tracer := skywalking.Tracer()
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
+			// Stage 32 PR-16: user ID metadata 拦截器（APISIX 注入 x-user-id）。
+			// 业务 handler 用 grpcinterceptor.UserIDFromGRPCContext(ctx) 取 end user id。
+			// 跳过 health check 服务（k8s probe 不带 x-user-id）。
+			newServiceAwareUserIDInterceptor(healthServiceFullName),
 			grpcinterceptor.NewServerTracingInterceptor(grpcinterceptor.NewGo2SkyTracer(tracer)),
 			grpcinterceptor.ServerLoggingInterceptor(),
 			grpcinterceptor.ServerRecoveryInterceptor(),
 		),
 	}
-
 	gs := grpc.NewServer(opts...)
 
 	// 注册 service
 	emotionquery.RegisterEmotionQueryServiceServer(gs, &emotionQueryServer{repo: repo})
+
+	// 注册 health check（不带 user id 要求）
+	healthSrv := health.NewServer()
+	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthSrv.SetServingStatus("emotion.AI", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(gs, healthSrv)
 
 	return &Server{
@@ -73,7 +99,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	s.listener = lis
 	logging.Printf("[grpc] ai-svc gRPC server listening on :%d", s.port)
-	logging.Printf("[grpc] services: EmotionQueryService + grpc.health.v1")
+	logging.Printf("[grpc] services: EmotionQueryService (user id required)")
 
 	go func() {
 		<-ctx.Done()

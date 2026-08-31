@@ -50,13 +50,24 @@ type Config struct {
 		TimeoutMs int `json:",default=2000"`
 	} `json:",optional"`
 
-	// Auth 是 BFF 自有的 mock 鉴权配置（签发 JWT 供前端全链路测试）
+	// Auth 是 BFF 自有的 mock 鉴权配置（Stage 32 PR-16 简化）
+	//
+	// Stage 32 之前：JWTSecret 用于签发 JWT 供下游 svc（共享 secret）。
+	// Stage 32 之后：APISIX 统一签发 + 验签，BFF 不再签发也不再透传 Authorization。
+	// BFF 仅保留 mock login 端点（Stage 33 净化），JWTSecret 字段保留用于登录端点签发；
+	// 真正的下游鉴权由 APISIX 注入 X-User-Id header 完成。
 	Auth struct {
-		// JWTSecret 签发 JWT 的 HMAC 密钥（dev 默认值；生产必须 env 覆盖）
+		// JWTSecret 保留：仅用于 /api/v1/auth/login 端点签发 mock token（Stage 33 净化）
 		JWTSecret string `json:",default=dev-bff-secret"`
 		// TokenTTLSeconds token 有效期（秒）
 		TokenTTLSeconds int `json:",default=86400"`
 	} `json:",optional"`
+
+	// TrustAPISIX 控制 BFF 是否信任 APISIX 注入的 X-User-Id header
+	// true（默认）：直接读 X-User-Id，不再解析 Authorization（生产路径）
+	// false：本地直连 BFF 调试时回退到解析 Authorization（dev fallback）
+	// Stage 32 PR-16: 由 env BFF_TRUST_APISIX 注入
+	TrustAPISIX bool `json:",default=true"`
 
 	// LLM 是 BFF ai_stream 调用的真实 LLM（OpenAI 兼容）
 	// 生产部署填真实 key；dev 留空则 ai_stream 走 mock 共情回复
@@ -117,6 +128,11 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("BFF_JWT_SECRET"); v != "" {
 		c.Auth.JWTSecret = v
+	}
+	// Stage 32 PR-16: 移除 BFF_JWT_SECRET 不再由 BFF 用于下游鉴权透传
+	// (保留字段：仅用于 mock login 端点签发；Stage 33 净化会彻底删除)
+	if v := os.Getenv("BFF_TRUST_APISIX"); v != "" {
+		c.TrustAPISIX = v == "true" || v == "1"
 	}
 	if v := os.Getenv("BFF_LLM_API_KEY"); v != "" {
 		c.LLM.APIKey = v

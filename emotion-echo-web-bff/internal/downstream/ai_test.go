@@ -38,8 +38,9 @@ func TestAIClient_MultiModalAnalyze_Success(t *testing.T) {
 		// multipart content-type
 		assert.True(t, strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data"),
 			"Content-Type 应为 multipart/form-data")
-		// JWT 透传
-		assert.Equal(t, "Bearer test-jwt", r.Header.Get("Authorization"))
+		// Stage 32 PR-16: X-User-Id 替代 Authorization Bearer JWT
+		assert.Equal(t, "42", r.Header.Get(XUserIDHeader))
+		assert.Empty(t, r.Header.Get("Authorization"))
 		// 解析 multipart 验证字段
 		require.NoError(t, r.ParseMultipartForm(1<<20))
 		assert.Equal(t, "image", r.FormValue("kind"))
@@ -59,7 +60,8 @@ func TestAIClient_MultiModalAnalyze_Success(t *testing.T) {
 	})
 
 	c := NewAIClient(AIClientOptions{BaseURL: baseURL, TimeoutMs: 1000})
-	ctx := WithJWT(context.Background(), "test-jwt")
+	// Stage 32 PR-16: 用 WithUserID 替代 WithJWT
+	ctx := WithUserID(context.Background(), 42)
 	resp, err := c.MultiModalAnalyze(ctx, MultiModalAnalyzeReq{
 		Kind:     "image",
 		File:     strings.NewReader("fake-image-bytes"),
@@ -78,7 +80,9 @@ func TestAIClient_SynthesizeSpeech_Success(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/api/v1/tts/synthesize", r.URL.Path)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-		assert.Equal(t, "Bearer t1", r.Header.Get("Authorization"))
+		// Stage 32 PR-16: X-User-Id 替代 Authorization Bearer JWT
+		assert.Equal(t, "7", r.Header.Get(XUserIDHeader))
+		assert.Empty(t, r.Header.Get("Authorization"))
 
 		var req SynthesizeSpeechReq
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
@@ -96,7 +100,7 @@ func TestAIClient_SynthesizeSpeech_Success(t *testing.T) {
 	})
 
 	c := NewAIClient(AIClientOptions{BaseURL: baseURL, TimeoutMs: 1000})
-	resp, err := c.SynthesizeSpeech(WithJWT(context.Background(), "t1"), SynthesizeSpeechReq{Text: "你好"})
+	resp, err := c.SynthesizeSpeech(WithUserID(context.Background(), 7), SynthesizeSpeechReq{Text: "你好"})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, "base64wav", resp.Audio)

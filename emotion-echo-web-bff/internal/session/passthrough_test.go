@@ -1,6 +1,6 @@
 // Package session — passthrough_test.go
 //
-// Stage 30 / stage-30-web-bff.md T3.31: session passthrough helper 测试
+// Stage 32 PR-16: session passthrough helper 测试（X-User-Id 模式）。
 package session
 
 import (
@@ -15,46 +15,52 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWithRequestAuth_ExtractsBearer(t *testing.T) {
+func TestWithRequestAuth_ExtractsXUserID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
-	c.Request.Header.Set("Authorization", "Bearer my-jwt")
+	c.Request.Header.Set(XUserIDHeader, "1001")
 
 	ctx := WithRequestAuth(c)
-	assert.Equal(t, "my-jwt", downstream.JWTFromContext(ctx), "应提取 Bearer 后的 token")
+	uid, ok := downstream.UserIDFromContext(ctx)
+	assert.True(t, ok, "应提取 X-User-Id")
+	assert.Equal(t, int64(1001), uid, "uid 应为 1001")
 }
 
-func TestWithRequestAuth_NoAuth_KeepsCtx(t *testing.T) {
+func TestWithRequestAuth_NoHeader_KeepsCtx(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, "/health", nil)
 
 	ctx := WithRequestAuth(c)
-	assert.Equal(t, "", downstream.JWTFromContext(ctx), "无 Authorization → JWT 空")
+	_, ok := downstream.UserIDFromContext(ctx)
+	assert.False(t, ok, "无 X-User-Id → ctx 无 user_id")
 }
 
-func TestWithRequestAuth_NonBearer_PassesThrough(t *testing.T) {
+func TestWithRequestAuth_InvalidXUserID_KeepsCtx(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, "/x", nil)
-	c.Request.Header.Set("Authorization", "Token abc123")
+	c.Request.Header.Set(XUserIDHeader, "not-a-number")
 
 	ctx := WithRequestAuth(c)
-	assert.Equal(t, "Token abc123", downstream.JWTFromContext(ctx), "非 Bearer 原样传")
+	_, ok := downstream.UserIDFromContext(ctx)
+	assert.False(t, ok, "非法 X-User-Id → ctx 无 user_id（不污染）")
 }
 
-func TestAuthorizationFromContext_RoundTrip(t *testing.T) {
+func TestAuthorizationFromContext_AlwaysEmptyAfterStage32(t *testing.T) {
+	// Stage 32 PR-16: BFF 不再透传 Authorization，AuthorizationFromContext 总返回空
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, "/x", nil)
 	c.Request.Header.Set("Authorization", "Bearer my-jwt")
 
 	ctx := WithRequestAuth(c)
-	assert.Equal(t, "Bearer my-jwt", AuthorizationFromContext(ctx), "AuthorizationFromContext 应还原完整头值")
+	assert.Equal(t, "", AuthorizationFromContext(ctx),
+		"Stage 32 后 BFF 不再透传 Authorization，函数总返回空（保留签名兼容）")
 }
 
 func TestAuthorizationFromContext_Empty(t *testing.T) {
 	ctx := context.Background()
-	assert.Equal(t, "", AuthorizationFromContext(ctx), "无 JWT → 空串")
+	assert.Equal(t, "", AuthorizationFromContext(ctx))
 }

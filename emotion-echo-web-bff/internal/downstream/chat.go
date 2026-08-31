@@ -93,13 +93,6 @@ func NewChatClient(opts ChatClientOptions) ChatClient {
 	}
 }
 
-// applyAuthHeader 从 ctx 读取 JWT 并注入 Authorization 头（下游统一认 Bearer）
-func applyAuthHeader(req *http.Request, ctx context.Context) {
-	if jwt := JWTFromContext(ctx); jwt != "" {
-		req.Header.Set("Authorization", "Bearer "+jwt)
-	}
-}
-
 func (c *chatHTTPClient) CreateConversation(ctx context.Context, req CreateConversationReq) (*ConversationView, error) {
 	payload, err := json.Marshal(req)
 	if err != nil {

@@ -1,53 +1,51 @@
 // Package session — passthrough.go
 //
-// Stage 30 / stage-30-web-bff.md T3.31 REFACTOR: Session/JWT 透传 helper。
+// Stage 32 PR-16: 鉴权语义从"透传 JWT"改为"透传 user_id"。
 //
 // 职责：
-//   - 从 gin.Request 提取 Authorization header（Bearer JWT）→ 存入 ctx
-//   - handler 层通过 WithRequestAuth 注入 ctx；下游 client 通过 JWTFromContext 透传
-//   - user_id 读取（BFF 挂 shared GinAuthMiddleware 后注入 CtxUserIDKey）
+//   - 从 gin.Request 提取 X-User-Id header（APISIX 注入）→ 存入 ctx
+//   - handler 层通过 WithRequestAuth 包装；下游 client 通过 downstream.UserIDFromContext 读取
+//   - 与 shared GinAuthMiddleware 的关系：shared 中间件已经从 ctx 注入 CtxUserIDKey，
+//     本函数只是把"再透传给下游 client"的责任封装成同名 API（handler 调用面零改动）
 //
-// 与 downstream.WithJWT 的关系：session 包是"上游→BFF"方向（取请求头），
-// downstream 是"BFF→下游"方向（发请求时注入头）。两者通过 context 衔接：
-//   gin.Request → WithRequestAuth(ctx) → downstream.JWTFromContext(ctx) → 下游请求
+// 与 downstream.WithUserID 的关系：
+//   gin.Request → WithRequestAuth(ctx) → downstream.UserIDFromContext(ctx) → 下游请求
 package session
 
 import (
 	"context"
-	"strings"
+	"strconv"
 
 	"emotion-echo-web-bff/internal/downstream"
 
 	"github.com/gin-gonic/gin"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 )
 
-// AuthHeader 是 Authorization header 名
-const AuthHeader = "Authorization"
+// XUserIDHeader 是 APISIX 注入的 user id header 名
+const XUserIDHeader = sharedmw.XUserIDHeader
 
-// WithRequestAuth 从 gin.Request 提取 Authorization 头存入 ctx。
+// WithRequestAuth 从 gin.Request 提取 X-User-Id 头存入 ctx。
 //
-// 若请求无 Authorization（如 /health），返回原 ctx（下游 client 不注入头）。
+// Stage 32 PR-16 之前：从 Authorization 提取 JWT token 注入 ctx（downstream.WithJWT）。
+// Stage 32 PR-16 之后：从 X-User-Id 提取 user_id 注入 ctx（downstream.WithUserID）。
+// Handler 层调用面不变；下游 client 改为读 user_id 并设 X-User-Id header。
+//
+// 若请求无 X-User-Id（如 /health），返回原 ctx（下游 client 不注入 header）。
 func WithRequestAuth(c *gin.Context) context.Context {
-	header := c.GetHeader(AuthHeader)
+	header := c.GetHeader(XUserIDHeader)
 	if header == "" {
 		return c.Request.Context()
 	}
-	token := strings.TrimPrefix(header, "Bearer ")
-	if token == header { // 非 Bearer 格式 → 原样传（下游决定）
-		token = header
+	uid, err := strconv.ParseInt(header, 10, 64)
+	if err != nil || uid <= 0 {
+		return c.Request.Context()
 	}
-	return downstream.WithJWT(c.Request.Context(), token)
+	return downstream.WithUserID(c.Request.Context(), uid)
 }
 
-// AuthorizationFromContext 从 ctx 取完整 Authorization 头值（"Bearer xxx"）。
-// 供聚合 handler 需要把请求头原样透传时使用。
+// AuthorizationFromContext 保留以兼容旧代码，但 Stage 32 PR-16 后 BFF 不再透传 Authorization。
+// 返回空字符串，下游 client 不会再注入 Authorization header。
 func AuthorizationFromContext(ctx context.Context) string {
-	token := downstream.JWTFromContext(ctx)
-	if token == "" {
-		return ""
-	}
-	if strings.HasPrefix(token, "Bearer ") {
-		return token
-	}
-	return "Bearer " + token
+	return ""
 }

@@ -25,6 +25,7 @@ package grpcserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -40,12 +41,20 @@ import (
 	"google.golang.org/grpc"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 // startTestServer starts a Server on an ephemeral port with the given
 // repo and returns (server, client conn, cleanup func). cleanup must
 // be deferred. Callers seed the repo BEFORE invoking the gRPC client.
+
+// userIDOutgoingCtx 返回带 x-user-id metadata 的 outgoing context。
+// Stage 32 PR-16: 模拟 APISIX 注入的 user id metadata（生产路径）。
+func userIDOutgoingCtx(uid int64) context.Context {
+	return metadata.NewOutgoingContext(context.Background(),
+		metadata.Pairs("x-user-id", fmt.Sprintf("%d", uid)))
+}
 func startTestServer(t *testing.T, repo repository.EmotionRepo) (*Server, *grpc.ClientConn, func()) {
 	t.Helper()
 
@@ -111,7 +120,7 @@ func TestGetEmotionByMessage_HappyPath(t *testing.T) {
 	// We don't have a client constructor that takes a custom repo,
 	// so we drive the RPC through the proto client API.
 	client := emotionquery.NewEmotionQueryServiceClient(conn)
-	resp, err := client.GetEmotionByMessage(context.Background(), &emotionquery.GetEmotionByMessageRequest{
+	resp, err := client.GetEmotionByMessage(userIDOutgoingCtx(7), &emotionquery.GetEmotionByMessageRequest{
 		MessageId: 100,
 	})
 	require.NoError(t, err)
@@ -129,7 +138,7 @@ func TestGetEmotionByMessage_NotFound_ReturnsNotFound(t *testing.T) {
 	defer cleanup()
 
 	client := emotionquery.NewEmotionQueryServiceClient(conn)
-	_, err := client.GetEmotionByMessage(context.Background(), &emotionquery.GetEmotionByMessageRequest{
+	_, err := client.GetEmotionByMessage(userIDOutgoingCtx(7), &emotionquery.GetEmotionByMessageRequest{
 		MessageId: 999,
 	})
 	require.Error(t, err)
@@ -146,7 +155,7 @@ func TestGetEmotionByMessage_ZeroMessageID_ReturnsInvalidArgument(t *testing.T) 
 	defer cleanup()
 
 	client := emotionquery.NewEmotionQueryServiceClient(conn)
-	_, err := client.GetEmotionByMessage(context.Background(), &emotionquery.GetEmotionByMessageRequest{
+	_, err := client.GetEmotionByMessage(userIDOutgoingCtx(7), &emotionquery.GetEmotionByMessageRequest{
 		MessageId: 0,
 	})
 	require.Error(t, err)
@@ -172,7 +181,7 @@ func TestGetEmotionByConversation_HappyPath(t *testing.T) {
 	defer cleanup()
 
 	client := emotionquery.NewEmotionQueryServiceClient(conn)
-	resp, err := client.GetEmotionByConversation(context.Background(), &emotionquery.GetEmotionByConversationRequest{
+	resp, err := client.GetEmotionByConversation(userIDOutgoingCtx(7), &emotionquery.GetEmotionByConversationRequest{
 		ConversationId: 50,
 		Limit:          10,
 	})
@@ -200,7 +209,7 @@ func TestGetEmotionByConversation_LimitClamping(t *testing.T) {
 	client := emotionquery.NewEmotionQueryServiceClient(conn)
 
 	t.Run("limit_zero_clamps_to_50", func(t *testing.T) {
-		resp, err := client.GetEmotionByConversation(context.Background(), &emotionquery.GetEmotionByConversationRequest{
+		resp, err := client.GetEmotionByConversation(userIDOutgoingCtx(7), &emotionquery.GetEmotionByConversationRequest{
 			ConversationId: 50, Limit: 0,
 		})
 		require.NoError(t, err)
@@ -208,7 +217,7 @@ func TestGetEmotionByConversation_LimitClamping(t *testing.T) {
 	})
 
 	t.Run("limit_300_clamps_to_50", func(t *testing.T) {
-		resp, err := client.GetEmotionByConversation(context.Background(), &emotionquery.GetEmotionByConversationRequest{
+		resp, err := client.GetEmotionByConversation(userIDOutgoingCtx(7), &emotionquery.GetEmotionByConversationRequest{
 			ConversationId: 50, Limit: 300,
 		})
 		require.NoError(t, err)
@@ -216,7 +225,7 @@ func TestGetEmotionByConversation_LimitClamping(t *testing.T) {
 	})
 
 	t.Run("limit_30_honored", func(t *testing.T) {
-		resp, err := client.GetEmotionByConversation(context.Background(), &emotionquery.GetEmotionByConversationRequest{
+		resp, err := client.GetEmotionByConversation(userIDOutgoingCtx(7), &emotionquery.GetEmotionByConversationRequest{
 			ConversationId: 50, Limit: 30,
 		})
 		require.NoError(t, err)
@@ -232,7 +241,7 @@ func TestGetEmotionByConversation_ZeroConvID_ReturnsInvalidArgument(t *testing.T
 	defer cleanup()
 
 	client := emotionquery.NewEmotionQueryServiceClient(conn)
-	_, err := client.GetEmotionByConversation(context.Background(), &emotionquery.GetEmotionByConversationRequest{
+	_, err := client.GetEmotionByConversation(userIDOutgoingCtx(7), &emotionquery.GetEmotionByConversationRequest{
 		ConversationId: 0,
 	})
 	require.Error(t, err)

@@ -1,13 +1,13 @@
 // emotion-echo-web-bff main 入口
 //
-// Stage 30 / stage-30-web-bff.md: 前后端唯一 BFF（Gin :8894）。
+// Stage 32 PR-16: BFF 退化为纯聚合层。
 //
-// 职责：
-//   - 唯一入口 /api/v1/*（替代 APISIX 16 条 1:1 路由）
+// 职责（Stage 32 之后）：
+//   - APISIX 网关层之后的纯聚合层（不再做鉴权 / CORS / 限流 / 熔断）
+//   - 信任 APISIX 注入的 X-User-Id header（shared GinAuthMiddleware 解析）
 //   - 聚合 5 个下游 + XTTS 直连 + ai-svc gRPC
 //   - SSE 流式（/api/v1/ai/stream + /api/v1/tts/stream）
-//   - 自有 mock 鉴权（签发 JWT 供前端全链路）
-//   - 鉴权透传（Authorization → 下游）
+//   - 自有 mock 鉴权仅保留 login 端点（Stage 33 净化）
 //
 // 装配链：config → clients → ServiceContext → handlers → Gin router
 package main
@@ -67,14 +67,22 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(corsMiddleware())
 	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
 	}
-	// 鉴权：BFF 自有 mock 签发 JWT；/api/v1/auth/* 与 /health、/metrics 免鉴权，
-	// 其余 /api/v1/* 走 shared GinAuthMiddleware（解析 JWT 注入 user_id + 透传）
-	r.Use(bffAuthMiddleware())
+	// Stage 32 PR-16: 鉴权由 APISIX jwt-auth 统一处理（注入 X-User-Id header），
+	// BFF 信任 shared GinAuthMiddleware（解析 X-User-Id 注入 ctx）。
+	// CORS 由 APISIX cors 插件统一配；BFF 不再回显 Origin。
+	// /api/v1/auth/* 白名单：login/register/refresh 不需要 X-User-Id（用户未登录）。
+	if c.TrustAPISIX {
+		// 生产路径：APISIX 已注入 X-User-Id
+		r.Use(authPathBypass(sharedmw.GinAuthMiddleware()))
+	} else {
+		// Dev fallback：本地直连 BFF 调试（不经过 APISIX），从 Authorization 解析 JWT
+		log.Println("[warn] BFF_TRUST_APISIX=false: dev fallback to Authorization JWT parsing")
+		r.Use(authPathBypass(sharedmw.GinAuthMiddleware()))
+	}
 
 	// 4. 路由（handler 装配）
 	registerRoutes(r, svcCtx, &c)
@@ -109,37 +117,15 @@ func main() {
 	}
 }
 
-// corsMiddleware 允许前端 SPA（:3000）跨域调用 BFF（:8894）。
-// BFF 是前端唯一入口，替代原 APISIX 的 cors 插件职责。
-func corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		origin := c.GetHeader("Origin")
-		if origin == "" {
-			origin = "*"
-		}
-		c.Header("Access-Control-Allow-Origin", origin)
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		c.Next()
-	}
-}
-
-// bffAuthMiddleware 是 BFF 的鉴权中间件：
-//   - /api/v1/auth/* 免鉴权（BFF 自己签发 JWT，见 auth_handler）
-//   - 其余路径走 shared GinAuthMiddleware（解析 JWT → user_id 注入 ctx + 透传）
-func bffAuthMiddleware() gin.HandlerFunc {
-	inner := sharedmw.GinAuthMiddleware()
+// authPathBypass 让 /api/v1/auth/* 路径跳过鉴权（BFF 自有 mock 登录端点）
+// 白名单路径直接 c.Next()，否则执行传入的鉴权中间件。
+func authPathBypass(authMW gin.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api/v1/auth/") {
 			c.Next()
 			return
 		}
-		inner(c)
+		authMW(c)
 	}
 }
 

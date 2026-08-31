@@ -1,13 +1,15 @@
 // Package downstream — ai.go
 //
 // Stage 30 / stage-30-web-bff.md T2.6-8: AIClient（BFF → ai-svc）
+// Stage 32 PR-16: 鉴权透传改用 X-User-Id header（替换原 Authorization Bearer JWT）。
 //
 // ai-svc 双协议：
 //   HTTP :8891  — MultiModalAnalyze (multipart) / SynthesizeSpeech (JSON) / AIHealth
 //   gRPC :8892  — EmotionQueryService（T2.24 EmotionQueryClient 单独做）
 //
-// 鉴权：下游认 Authorization: Bearer <JWT>。client 从 ctx 读取 JWT（WithJWT 注入），
-// 无 JWT 时仍发请求（下游返回 401，由调用方决定错误语义）。
+// 鉴权：下游认 X-User-Id header（APISIX jwt-auth 注入，BFF 透传）。
+// client 从 ctx 读 user_id（WithUserID 注入），无 user_id 时仍发请求
+// （下游返回 401，由调用方决定错误语义）。
 package downstream
 
 import (
@@ -18,26 +20,36 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strconv"
 	"time"
 )
 
 // =====================================================
-// JWT 透传（ctx 携带 Authorization 头值）
+// User ID 透传（Stage 32 PR-16: 替换原 WithJWT/JWTFromContext）
 // =====================================================
 
-type jwtCtxKey struct{}
+type userIDCtxKey struct{}
 
-// WithJWT 把 JWT token 存入 ctx（handler 层从请求 Authorization 头取出后注入）
-func WithJWT(ctx context.Context, token string) context.Context {
-	return context.WithValue(ctx, jwtCtxKey{}, token)
+// XUserIDHeader HTTP header 名（与 shared middleware 同源）
+const XUserIDHeader = "X-User-Id"
+
+// WithUserID 把 user_id 存入 ctx（handler 层通过 shared GinAuthMiddleware 注入，
+// 或显式调用 session.WithRequestAuth 包装）。下游 client 通过 UserIDFromContext 读取。
+func WithUserID(ctx context.Context, uid int64) context.Context {
+	return context.WithValue(ctx, userIDCtxKey{}, uid)
 }
 
-// JWTFromContext 从 ctx 取 JWT；无则返回空串
-func JWTFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(jwtCtxKey{}).(string); ok {
-		return v
+// UserIDFromContext 从 ctx 取 user_id；无则返回 0, false
+func UserIDFromContext(ctx context.Context) (int64, bool) {
+	v, ok := ctx.Value(userIDCtxKey{}).(int64)
+	return v, ok
+}
+
+// applyAuthHeader 从 ctx 读 user_id 并注入 X-User-Id header（Stage 32 PR-16）
+func applyAuthHeader(req *http.Request, ctx context.Context) {
+	if uid, ok := UserIDFromContext(ctx); ok && uid > 0 {
+		req.Header.Set(XUserIDHeader, strconv.FormatInt(uid, 10))
 	}
-	return ""
 }
 
 // =====================================================
@@ -170,9 +182,7 @@ func (c *aiHTTPClient) MultiModalAnalyze(ctx context.Context, req MultiModalAnal
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
-	if jwt := JWTFromContext(ctx); jwt != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+jwt)
-	}
+	applyAuthHeader(httpReq, ctx)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
@@ -200,9 +210,7 @@ func (c *aiHTTPClient) SynthesizeSpeech(ctx context.Context, req SynthesizeSpeec
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if jwt := JWTFromContext(ctx); jwt != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+jwt)
-	}
+	applyAuthHeader(httpReq, ctx)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
@@ -225,9 +233,7 @@ func (c *aiHTTPClient) AIHealth(ctx context.Context) (*AIHealthResp, error) {
 	if err != nil {
 		return nil, err
 	}
-	if jwt := JWTFromContext(ctx); jwt != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+jwt)
-	}
+	applyAuthHeader(httpReq, ctx)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {

@@ -1,6 +1,7 @@
 // Package downstream — user_test.go
 //
 // Stage 30 / stage-30-web-bff.md T2.12-14 RED: UserClient 契约测试
+// Stage 32 PR-16: 鉴权 header 从 Authorization Bearer JWT 改为 X-User-Id
 package downstream
 
 import (
@@ -18,7 +19,9 @@ import (
 func TestUserClient_GetMe_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/v1/users/me", r.URL.Path)
-		assert.Equal(t, "Bearer jwt-1", r.Header.Get("Authorization"))
+		// Stage 32 PR-16: X-User-Id 替代 Authorization Bearer JWT
+		assert.Equal(t, "7", r.Header.Get(XUserIDHeader))
+		assert.Empty(t, r.Header.Get("Authorization"), "不再透传 Authorization")
 		_ = json.NewEncoder(w).Encode(userWrapper{User: &UserInfo{
 			UserID: 7, Account: "alice", Phone: "13800000000", Nickname: "Alice",
 		}})
@@ -26,7 +29,7 @@ func TestUserClient_GetMe_Success(t *testing.T) {
 	defer srv.Close()
 
 	c := NewUserClient(UserClientOptions{BaseURL: srv.URL, TimeoutMs: 1000})
-	u, err := c.GetMe(WithJWT(context.Background(), "jwt-1"))
+	u, err := c.GetMe(WithUserID(context.Background(), 7))
 	require.NoError(t, err)
 	require.NotNil(t, u)
 	assert.Equal(t, int64(7), u.UserID)
@@ -49,7 +52,7 @@ func TestUserClient_UpdateMe_Success(t *testing.T) {
 
 	c := NewUserClient(UserClientOptions{BaseURL: srv.URL, TimeoutMs: 1000})
 	nick := "NewNick"
-	u, err := c.UpdateMe(WithJWT(context.Background(), "jwt-1"), UpdateProfileReq{Nickname: &nick})
+	u, err := c.UpdateMe(WithUserID(context.Background(), 7), UpdateProfileReq{Nickname: &nick})
 	require.NoError(t, err)
 	assert.Equal(t, "NewNick", u.Nickname)
 }
@@ -76,7 +79,8 @@ func TestUserClient_Unauthorized_ReturnsError(t *testing.T) {
 	defer srv.Close()
 
 	c := NewUserClient(UserClientOptions{BaseURL: srv.URL, TimeoutMs: 1000})
-	_, err := c.GetMe(context.Background()) // 无 JWT
+	// 不带 user_id 的 ctx → BFF 不发 X-User-Id header（下游返回 401）
+	_, err := c.GetMe(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid or missing JWT")
 }
