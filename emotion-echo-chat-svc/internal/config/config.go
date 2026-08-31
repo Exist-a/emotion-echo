@@ -22,6 +22,15 @@ type Kafka struct {
 	Enabled    bool   `json:",default=false"`
 }
 
+// Nacos 注册中心 + 配置中心配置（Stage 31 PR-08 引入）
+type Nacos struct {
+	Enabled   bool   `json:",default=true"`
+	Addr      string `json:",default=emotion-echo-nacos:8848"`
+	Namespace string `json:",default=emotion-echo-dev"`
+	GroupName string `json:",default=DEFAULT_GROUP"`
+	HotReload bool   `json:",default=false"`
+}
+
 type Config struct {
 	Name       string `json:",default=emotion-echo-chat-svc"`
 	Host       string `json:",default=0.0.0.0"`
@@ -29,4 +38,5 @@ type Config struct {
 	SkyWalking SkyWalking
 	Postgres   Postgres
 	Kafka      Kafka
+	Nacos      Nacos
 }
