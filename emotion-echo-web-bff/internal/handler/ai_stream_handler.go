@@ -36,14 +36,19 @@ func NewAIStreamHandler() gin.HandlerFunc {
 	return h.ServeHTTP
 }
 
-// aiStreamReq OpenAI 兼容请求
+// aiStreamReq 兼容两种前端请求格式：
+//   1. OpenAI 兼容（useAIStream.ts）：{"model","messages":[{"role","content"}],"stream"}
+//   2. 发消息流程（useConversationSender）：{"message","emotion","conversationId"}
 type aiStreamReq struct {
-	Model    string `json:"model"`
-	Messages []struct {
+	Model          string `json:"model"`
+	Messages       []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"messages"`
-	Stream bool `json:"stream"`
+	Stream         bool   `json:"stream"`
+	Message        string `json:"message"`
+	Emotion        string `json:"emotion"`
+	ConversationID string `json:"conversationId"`
 }
 
 // ServeHTTP 处理 AI 对话流式回复
@@ -54,18 +59,24 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 
 	var req aiStreamReq
-	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || len(req.Messages) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "validation: messages is required", "data": nil})
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "validation: invalid body", "data": nil})
 		return
 	}
 
-	// 提取最后一条 user 消息
-	userContent := ""
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if req.Messages[i].Role == "user" {
-			userContent = req.Messages[i].Content
-			break
+	// 提取 user 消息内容（两种格式）
+	userContent := req.Message
+	if userContent == "" {
+		for i := len(req.Messages) - 1; i >= 0; i-- {
+			if req.Messages[i].Role == "user" {
+				userContent = req.Messages[i].Content
+				break
+			}
 		}
+	}
+	if userContent == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "validation: messages is required", "data": nil})
+		return
 	}
 
 	// mock 回复（按情绪关键词给出共情话术）
