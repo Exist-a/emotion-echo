@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "apisix.fullname" . }}
+  labels:
+    {{- include "apisix.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "apisix.fullname" . }}
+  template:
+    metadata:
+      labels:
+        {{- include "apisix.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "apisix.serviceAccountName" . }}
+      containers:
+        - name: apisix
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.httpPort }}
+            - name: admin
+              containerPort: {{ .Values.adminPort }}
+            - name: prometheus
+              containerPort: {{ .Values.prometheusPort }}
+            - name: control
+              containerPort: 9092
+          env:
+            - name: APISIX_ADMIN_KEY
+              value: {{ .Values.adminKey | quote }}
+            - name: APISIX_JWT_SECRET
+              value: {{ .Values.jwtSecret | quote }}
+          {{- if .Values.healthcheck.enabled }}
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthcheck.periodSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthcheck.periodSeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/apisix/conf/config.yaml
+              subPath: config.yaml
+              readOnly: true
+        {{- if .Values.dashboard.enabled }}
+        - name: apisix-dashboard
+          image: "{{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag }}"
+          imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+          ports:
+            - name: dashboard
+              containerPort: {{ .Values.dashboardPort }}
+          env:
+            - name: APISIX_LISTEN_ADDRESS
+              value: "0.0.0.0:{{ .Values.dashboardPort }}"
+          {{- if .Values.healthcheck.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: dashboard
+            initialDelaySeconds: {{ .Values.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthcheck.periodSeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.dashboardResources | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "apisix.fullname" . }}-config

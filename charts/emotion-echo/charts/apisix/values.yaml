@@ -1,0 +1,63 @@
+# APISIX gateway subchart (Stage 32 PR-13)
+# 独立网关层，与 web-bff 解耦（ADR 决策 11）
+# TLS 默认关闭（APISIX 3.9 ssl_certificate_by_lua_block bug 未修）；prod 前置 nginx:alpine 终结 TLS
+
+image:
+  repository: apache/apisix
+  tag: 3.18.0-debian
+  pullPolicy: IfNotPresent
+
+dashboard:
+  enabled: true
+  image:
+    repository: apache/apisix-dashboard
+    tag: 3.18.0-alpine
+    pullPolicy: IfNotPresent
+
+# APISIX 监听端口（HTTP data plane）
+httpPort: 9080
+# Admin API（仅 dev 暴露；prod 通过 NetworkPolicy 限制）
+adminPort: 9180
+# Prometheus exporter（built-in prometheus plugin）
+prometheusPort: 9091
+# Dashboard UI（仅 dev 暴露）
+dashboardPort: 9000
+
+# 资源限制（dev 友好）
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+dashboardResources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Admin API key（dev 默认；prod 必须改）
+adminKey: edd1c9f034335f136f87ad84b625c8f1
+
+# JWT secret（与 web-bff 共享，dev 默认；Stage 33 BFF 净化后会改 APISIX 内部生成强随机）
+jwtSecret: dev-bff-secret
+
+# 依赖的 etcd subchart 配置（configmap 渲染需要 clientPort）
+# 默认与 charts/etcd/values.yaml 对齐；umbrella 可覆盖
+etcd:
+  clientPort: 2379
+
+# 探针
+healthcheck:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+# ServiceAccount（默认不创建，用 default）
+serviceAccount:
+  create: false
+  name: ""

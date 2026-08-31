@@ -1,0 +1,11 @@
+apiVersion: v2
+name: etcd
+description: |
+  Etcd v3.5.x for APISIX config storage (Stage 32 PR-13).
+
+  Single-instance standalone mode using emptyDir persistence (dev).
+  APISIX 3.18 reads/writes routes/upstreams/plugins to this etcd cluster.
+  Prod (Stage 34+) will switch to 3-replica cluster + PVC.
+type: application
+version: 0.1.0
+appVersion: "3.5.13"

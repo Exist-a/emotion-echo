@@ -30,6 +30,14 @@ kafka:
 # Stage 30: APISIX + etcd 已退役（Stage 31 重新引入仅在 Stage 32 治理层）
 etcd:
   enabled: true
+# Stage 32 PR-13: APISIX 网关层回归（独立网关层，与 web-bff 解耦）
+apisix:
+  enabled: true
+  # serviceName 是 K8s Service 名（不带 release 前缀）。
+  # prometheus subchart scrape job 通过 .Values.apisix.serviceName 显式引用，
+  # 避免跨 chart include 在 subchart 渲染时的隐性 fallback bug。
+  # 若要改 fullnameOverride，prometheus 引用也要同步改。
+  serviceName: apisix
 skywalking:
   enabled: true
 # Stage 31 PR-12: Nacos 注册中心 + 配置中心
@@ -101,6 +109,8 @@ dns:
   sensevoiceHost: sensevoice
   xttsHost: xtts
   webHost: web
+  # Stage 32 PR-13: apisixGatewayHost 改用真实 subchart Service 名（<release>-apisix）
+  # umbrella 安装时 helm 会自动以 <release>- 拼接，留占位便于文档阅读
   apisixGatewayHost: apisix-gateway
 
 # =====================================================

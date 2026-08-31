@@ -34,6 +34,14 @@ dependencies:
   - name: nacos
     version: "0.1.0"
     condition: nacos.enabled
+  # Stage 32 PR-13: APISIX 网关层回归（独立网关，与 BFF 解耦）
+  # 依赖顺序：etcd 必须先于 apisix（apisix config_provider 指向 etcd）
+  - name: etcd
+    version: "0.1.0"
+    condition: etcd.enabled
+  - name: apisix
+    version: "0.1.0"
+    condition: apisix.enabled
   - name: user-svc
     version: "0.1.0"
     condition: user-svc.enabled
@@ -67,6 +75,8 @@ dependencies:
   - name: web-bff
     version: "0.1.0"
     condition: web-bff.enabled
+  # Stage 32 PR-13: APISIX 网关层回归（替换 Stage 30 退役的 BFF 网关职责）
+  # 独立 etcd subchart 存储路由表；apisix subchart 提供网关能力
   # Stage 30: APISIX 网关已退役（BFF 替代网关职责）。apisix-routes 子 chart 移除，
   # 历史文档保留在 docs/ 与 plans/ 中作为演进参考。
   # Stage 28: observability stack. Each subchart can be disabled

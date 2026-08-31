@@ -1,0 +1,11 @@
+apiVersion: v2
+name: apisix
+description: |
+  APISIX 3.18 API gateway for Emotion-Echo (Stage 32 PR-13).
+
+  Independent gateway layer decoupled from web-bff (replaces Stage 30 BFF-as-gateway).
+  Routes/upstreams/plugins stored in companion etcd subchart.
+  Includes apisix-dashboard sidecar for dev visibility (http://localhost:9000).
+type: application
+version: 0.1.0
+appVersion: "3.18.0"

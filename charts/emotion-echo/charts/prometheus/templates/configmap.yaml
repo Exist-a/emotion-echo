@@ -64,11 +64,15 @@ data:
               - skywalking-oap.{{ include "prometheus.namespaceData" . }}.svc.cluster.local:1234
 
       # Job 3: APISIX gateway metrics (built-in prometheus plugin).
+      # Stage 32 PR-13: 改用 apisix subchart 真实 Service FQDN。
+      # 通过 .Values.apisix.serviceName 显式注入（默认 "apisix"），
+      # 避免跨 chart include 在 subchart 渲染时的隐性 fallback bug。
+      # 如果用户在 umbrella level 设了 apisix.fullnameOverride，这里也必须对应调整。
       - job_name: apisix
         metrics_path: /apisix/prometheus/metrics
         static_configs:
           - targets:
-              - apisix-gateway.{{ include "prometheus.namespaceSystem" . }}.svc.cluster.local:9091
+              - {{ .Values.apisix.serviceName | default "apisix" }}.{{ include "prometheus.namespaceSystem" . }}.svc.cluster.local:9091
 
       # Job 4: Prometheus self (so we can graph its own runtime metrics).
       - job_name: prometheus-self

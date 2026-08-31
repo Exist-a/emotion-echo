@@ -1,0 +1,40 @@
+# Etcd standalone subchart (Stage 32 PR-13)
+# 单实例 + emptyDir（dev）；APISIX config provider 消费 /apisix prefix
+# 注意：etcd 数据无持久化意味着路由表重启即清，dev 由 deploy/apisix/seed.sh 重建（PR-15）
+
+image:
+  repository: quay.io/coreos/etcd
+  tag: v3.5.13
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+service:
+  type: ClusterIP
+  clientPort: 2379    # APISIX config_provider 连接
+  peerPort: 2380      # etcd 集群节点间通讯（单实例无需，但端口保留）
+
+# 持久化：dev 默认 emptyDir（重启即清，由 PR-15 seed.sh 重建）；prod 切 PVC（Stage 34+）
+persistence:
+  enabled: false
+  size: 1Gi
+
+# 资源限制（dev 友好）
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# 探针
+healthcheck:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+# ServiceAccount（默认不创建，用 default）
+serviceAccount:
+  create: false
+  name: ""

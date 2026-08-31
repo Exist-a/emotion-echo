@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "apisix.fullname" . }}-config
+  labels:
+    {{- include "apisix.labels" . | nindent 4 }}
+data:
+  # APISIX standalone 模式配置（Stage 32 PR-13）
+  # config_provider=etcd：路由/上游/插件持久化到 etcd subchart
+  # 部署形态：traditional（单实例）+ control + data plane 同进程
+  config.yaml: |
+    apisix:
+      node_listen: {{ .Values.httpPort }}
+      enable_ipv6: false
+      enable_control: true
+      control:
+        ip: "0.0.0.0"
+        port: 9092
+    deployment:
+      role: traditional
+      role_traditional:
+        config_provider: etcd
+        listen_admin: 0.0.0.0:{{ .Values.adminPort }}
+      role_control_plane:
+        config_provider: etcd
+      role_data_plane:
+        config_provider: etcd
+    etcd:
+      host:
+        - http://{{ include "etcd.fullname" . }}:{{ .Values.etcd.clientPort }}
+      prefix: /apisix
+      timeout: 30
+    plugin_attr:
+      prometheus:
+        export_addr:
+          ip: 0.0.0.0
+          port: {{ .Values.prometheusPort }}
+    # Stage 32 不接 Nacos discovery（upstream 用静态节点）
+    # Stage 34+ 切 nacos-discovery 插件时再加 discovery_type: nacos 配置
