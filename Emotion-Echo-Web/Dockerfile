@@ -5,7 +5,9 @@ WORKDIR /app
 
 # 复制 package.json 和 package-lock.json
 COPY package*.json ./
-RUN npm ci
+# 国内网络：用 npmmirror 镜像加速 npm ci（默认 npmjs.org 在容器内被墙/超时）
+RUN npm config set registry https://registry.npmmirror.com \
+    && npm ci
 
 # 复制源代码
 COPY . .
