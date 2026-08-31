@@ -617,6 +617,8 @@ defer pusher.Stop()
 
 ## Stage 3.2 · Nacos 配置中心（动态配置）
 
+> ⚠️ **2026-09-03 撤回原"不引入"评审判断**。演进路线详见 Stage 31/32/33 与 `docs/adr-2026-09-nacos-reintroduction.md`。
+
 ### 目标
 把限流规则推送到 Nacos，运行时热更新。
 
@@ -627,6 +629,19 @@ defer pusher.Stop()
 ### 学习收获
 - **配置即代码** vs **配置即推送** 的差异
 - 配置版本回滚（生产救火必备）
+
+---
+
+# Stage 31-33 · 分布式治理演进
+
+> **演进路线**：纠正 Stage 5/30 两次删除治理组件的错误；按"骨架先，胶水后"分三阶段引入 Nacos + APISIX + 修复 P0 + BFF 净化。
+
+| Stage | 主题 | 状态 | 文档 |
+|-------|------|------|------|
+| **31** | Nacos 注册中心 + 配置中心落地 | 🚧 进行中（PR-01 文档收口；PR-02..12 推进） | [stage-31-nacos-reintroduction.md](stage-31-nacos-reintroduction.md) |
+| **32** | APISIX 独立 API 网关层回归 | ☐ 未启动（依赖 31） | [stage-32-apisix-reintroduction.md](stage-32-apisix-reintroduction.md) |
+| **33** | P0 修复 + BFF 退化为纯聚合层 | ☐ 未启动（依赖 32） | [stage-33-p0-fix-bff-purify.md](stage-33-p0-fix-bff-purify.md) |
+| **ADR** | 决策依据（选型论证） | ✅ 已落地（决策 10/11/12/13，2026-09-03 Accepted） | [adr-2026-09-nacos-reintroduction.md](adr-2026-09-nacos-reintroduction.md) |
 
 ---
 
@@ -801,6 +816,11 @@ Phase 5 K8s 化
   [ ] 5.2 Strimzi Kafka
   [ ] 5.3 APISIX Ingress
   [ ] 5.4 Prometheus + Grafana
+
+# Stage 31/32/33 分布式治理演进（ADR 决策 10/11/12/13）
+Stage 31 Nacos 治理层          🚧 [x] PR-01 文档收口 / [ ] PR-02..12 推进
+Stage 32 APISIX 网关层         [ ] 全部（依赖 31）
+Stage 33 P0 修复 + BFF 净化    [ ] 全部（依赖 32）
 ```
 
 ---
