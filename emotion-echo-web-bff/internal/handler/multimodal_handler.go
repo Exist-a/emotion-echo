@@ -37,7 +37,7 @@ func (h *MultimodalHandler) Register(r *gin.Engine) {
 func (h *MultimodalHandler) analyze(c *gin.Context) {
 	kind := c.PostForm("kind")
 	if kind == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: kind is required (text|image|audio)"})
+		Fail(c, http.StatusBadRequest, 1, "validation: kind is required (text|image|audio)")
 		return
 	}
 
@@ -48,12 +48,12 @@ func (h *MultimodalHandler) analyze(c *gin.Context) {
 	if kind != "text" {
 		fileHeader, err := c.FormFile("file")
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "validation: file is required for kind=" + kind})
+			Fail(c, http.StatusBadRequest, 1, "validation: file is required for kind=" + kind)
 			return
 		}
 		file, err := fileHeader.Open()
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot open uploaded file"})
+			Fail(c, http.StatusBadRequest, 1, "cannot open uploaded file")
 			return
 		}
 		defer file.Close()
@@ -63,8 +63,8 @@ func (h *MultimodalHandler) analyze(c *gin.Context) {
 
 	resp, err := h.ai.MultiModalAnalyze(session.WithRequestAuth(c), req)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+	OK(c, resp)
 }

@@ -6,7 +6,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,7 +14,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // fakeUserClient 实现 downstream.UserClient
@@ -63,7 +61,7 @@ func TestUserHandler_GetMe_Success(t *testing.T) {
 	var body struct {
 		User downstream.UserInfo `json:"user"`
 	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	decodeData(t, w.Body.Bytes(), &body)
 	assert.Equal(t, int64(7), body.User.UserID)
 	assert.Equal(t, "Alice", body.User.Nickname)
 }

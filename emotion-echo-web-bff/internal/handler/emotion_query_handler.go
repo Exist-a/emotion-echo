@@ -35,21 +35,21 @@ func (h *EmotionQueryHandler) Register(r *gin.Engine) {
 func (h *EmotionQueryHandler) byMessage(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("messageId"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid message id"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid message id")
 		return
 	}
 	e, err := h.query.ByMessage(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"emotion": e})
+	OK(c, gin.H{"emotion": e})
 }
 
 func (h *EmotionQueryHandler) byConversation(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("conversationId"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid conversation id"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid conversation id")
 		return
 	}
 	limit := 50
@@ -60,8 +60,8 @@ func (h *EmotionQueryHandler) byConversation(c *gin.Context) {
 	}
 	items, total, err := h.query.ByConversation(c.Request.Context(), id, limit)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"emotions": items, "total": total})
+	OK(c, gin.H{"emotions": items, "total": total})
 }

@@ -5,7 +5,6 @@ package handler
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +36,7 @@ func TestAuthHandler_Login_ReturnsToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var data LoginData
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &data))
+	decodeData(t, w.Body.Bytes(), &data)
 	assert.NotEmpty(t, data.AccessToken, "应签发 accessToken")
 	assert.Greater(t, data.ExpiresIn, int64(0))
 	assert.NotEmpty(t, data.User.ID, "user.id 应非空")
@@ -53,7 +52,7 @@ func TestAuthHandler_Login_StableUserID(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 		var data LoginData
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &data))
+		decodeData(t, w.Body.Bytes(), &data)
 		return data
 	}
 	d1, d2 := body(), body()
@@ -80,7 +79,7 @@ func TestAuthHandler_Register_ReturnsToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var data LoginData
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &data))
+	decodeData(t, w.Body.Bytes(), &data)
 	assert.NotEmpty(t, data.AccessToken)
 }
 
@@ -116,7 +115,7 @@ func TestAuthHandler_TokenCanBeParsed(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	var data LoginData
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &data))
+	decodeData(t, w.Body.Bytes(), &data)
 	uid, err := mgr.Parse(data.AccessToken)
 	require.NoError(t, err)
 	assert.Equal(t, data.User.ID, fmt.Sprintf("%d", uid), "token 内 user_id 应等于响应 user.id")

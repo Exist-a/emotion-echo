@@ -39,27 +39,27 @@ func (h *TTSHandler) Register(r *gin.Engine) {
 func (h *TTSHandler) synthesize(c *gin.Context) {
 	var req downstream.SynthesizeSpeechReq
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || req.Text == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: text is required"})
+		Fail(c, http.StatusBadRequest, 1, "validation: text is required")
 		return
 	}
 	resp, err := h.ai.SynthesizeSpeech(session.WithRequestAuth(c), req)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+	OK(c, resp)
 }
 
 func (h *TTSHandler) stream(c *gin.Context) {
 	var req downstream.TTSStreamReq
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || req.Text == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: text is required"})
+		Fail(c, http.StatusBadRequest, 1, "validation: text is required")
 		return
 	}
 	// XTTS 直连（无鉴权）
 	stream, err := h.xtts.Stream(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
 	defer stream.Close()

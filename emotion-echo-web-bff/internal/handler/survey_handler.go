@@ -51,43 +51,43 @@ func (h *SurveyHandler) listSurveys(c *gin.Context) {
 	}
 	items, total, err := h.assessment.ListSurveys(session.WithRequestAuth(c), limit)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "total": total})
+	OK(c, gin.H{"items": items, "total": total})
 }
 
 func (h *SurveyHandler) getSurvey(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid survey id"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid survey id")
 		return
 	}
 	s, err := h.assessment.GetSurvey(session.WithRequestAuth(c), id)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, s)
+	OK(c, s)
 }
 
 func (h *SurveyHandler) submitSurvey(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid survey id"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid survey id")
 		return
 	}
 	var req downstream.SubmitSurveyReq
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || req.Answers == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: answers is required"})
+		Fail(c, http.StatusBadRequest, 1, "validation: answers is required")
 		return
 	}
 	resp, err := h.assessment.SubmitSurvey(session.WithRequestAuth(c), id, req)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, resp)
+	OK(c, resp)
 }
 
 func (h *SurveyHandler) listResults(c *gin.Context) {
@@ -99,22 +99,22 @@ func (h *SurveyHandler) listResults(c *gin.Context) {
 	}
 	items, total, err := h.assessment.ListResults(session.WithRequestAuth(c), limit)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "total": total})
+	OK(c, gin.H{"items": items, "total": total})
 }
 
 func (h *SurveyHandler) getResult(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("resultId"), 10, 64)
 	if err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid result id"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid result id")
 		return
 	}
 	r, err := h.assessment.GetResult(session.WithRequestAuth(c), id)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, r)
+	OK(c, r)
 }

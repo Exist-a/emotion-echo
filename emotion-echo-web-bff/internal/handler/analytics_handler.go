@@ -48,7 +48,7 @@ func userIDQuery(c *gin.Context) (int64, bool) {
 	v := c.Query("user_id")
 	id, err := strconv.ParseInt(v, 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: user_id is required"})
+		Fail(c, http.StatusBadRequest, 1, "validation: user_id is required")
 		return 0, false
 	}
 	return id, true
@@ -61,10 +61,10 @@ func (h *AnalyticsHandler) dailyReport(c *gin.Context) {
 	}
 	report, err := h.analytics.DailyReport(session.WithRequestAuth(c), uid, c.Query("date"))
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"report": report})
+	OK(c, gin.H{"report": report})
 }
 
 func (h *AnalyticsHandler) trendReport(c *gin.Context) {
@@ -75,10 +75,10 @@ func (h *AnalyticsHandler) trendReport(c *gin.Context) {
 	report, err := h.analytics.TrendReport(session.WithRequestAuth(c), uid,
 		c.Query("type"), c.Query("start_date"), c.Query("end_date"))
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"report": report})
+	OK(c, gin.H{"report": report})
 }
 
 func (h *AnalyticsHandler) dayNight(c *gin.Context) {
@@ -89,10 +89,10 @@ func (h *AnalyticsHandler) dayNight(c *gin.Context) {
 	pattern, err := h.analytics.DayNightPattern(session.WithRequestAuth(c), uid,
 		c.Query("start_date"), c.Query("end_date"))
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"pattern": pattern})
+	OK(c, gin.H{"pattern": pattern})
 }
 
 func (h *AnalyticsHandler) interactionDepth(c *gin.Context) {
@@ -103,10 +103,10 @@ func (h *AnalyticsHandler) interactionDepth(c *gin.Context) {
 	depth, err := h.analytics.InteractionDepth(session.WithRequestAuth(c), uid,
 		c.Query("start_date"), c.Query("end_date"))
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"depth": depth})
+	OK(c, gin.H{"depth": depth})
 }
 
 func (h *AnalyticsHandler) frequencyTrend(c *gin.Context) {
@@ -117,10 +117,10 @@ func (h *AnalyticsHandler) frequencyTrend(c *gin.Context) {
 	counts, err := h.analytics.FrequencyTrend(session.WithRequestAuth(c), uid,
 		c.Query("start_date"), c.Query("end_date"))
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"counts": counts})
+	OK(c, gin.H{"counts": counts})
 }
 
 func (h *AnalyticsHandler) mentalAssessment(c *gin.Context) {
@@ -130,8 +130,8 @@ func (h *AnalyticsHandler) mentalAssessment(c *gin.Context) {
 	}
 	assessment, err := h.analytics.MentalAssessment(session.WithRequestAuth(c), uid, c.Query("type"))
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"assessment": assessment})
+	OK(c, gin.H{"assessment": assessment})
 }

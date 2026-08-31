@@ -43,15 +43,15 @@ func (h *ChatHandler) Register(r *gin.Engine) {
 func (h *ChatHandler) createConversation(c *gin.Context) {
 	var req downstream.CreateConversationReq
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid body"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
 		return
 	}
 	conv, err := h.chat.CreateConversation(session.WithRequestAuth(c), req)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"conversation": conv})
+	OK(c, gin.H{"conversation": conv})
 }
 
 func (h *ChatHandler) sendMessage(c *gin.Context) {
@@ -61,15 +61,15 @@ func (h *ChatHandler) sendMessage(c *gin.Context) {
 	}
 	var req downstream.SendMessageReq
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid body"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
 		return
 	}
 	msg, err := h.chat.SendMessage(session.WithRequestAuth(c), id, req)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": msg})
+	OK(c, gin.H{"message": msg})
 }
 
 func (h *ChatHandler) listMessages(c *gin.Context) {
@@ -85,10 +85,10 @@ func (h *ChatHandler) listMessages(c *gin.Context) {
 	}
 	msgs, err := h.chat.ListMessages(session.WithRequestAuth(c), id, limit)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"messages": msgs})
+	OK(c, gin.H{"messages": msgs})
 }
 
 func (h *ChatHandler) deleteConversation(c *gin.Context) {
@@ -97,17 +97,17 @@ func (h *ChatHandler) deleteConversation(c *gin.Context) {
 		return
 	}
 	if err := h.chat.DeleteConversation(session.WithRequestAuth(c), id); err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "id": id})
+	OK(c, gin.H{"success": true, "id": id})
 }
 
 // pathID 解析 path 参数 :id 为 int64；非法时写 400 并返回 false
 func pathID(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid id"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid id")
 		return 0, false
 	}
 	return id, true

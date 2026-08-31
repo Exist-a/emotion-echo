@@ -71,7 +71,7 @@ func NewAuthHandler(mgr *auth.Manager) gin.HandlerFunc {
 		case "verification-code":
 			h.verificationCode(c)
 		default:
-			c.JSON(http.StatusNotFound, gin.H{"error": "auth endpoint not found"})
+			Fail(c, http.StatusNotFound, 1, "auth endpoint not found")
 		}
 	}
 }
@@ -97,11 +97,11 @@ func (h *AuthHandler) login(c *gin.Context) {
 		RememberMe bool   `json:"rememberMe"`
 	}
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || req.Username == "" || req.Password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: username and password are required"})
+		Fail(c, http.StatusBadRequest, 1, "validation: username and password are required")
 		return
 	}
 	userID := stableUserID(req.Username)
-	c.JSON(http.StatusOK, h.buildLoginData(userID, req.Username))
+	OK(c, h.buildLoginData(userID, req.Username))
 }
 
 func (h *AuthHandler) register(c *gin.Context) {
@@ -111,11 +111,11 @@ func (h *AuthHandler) register(c *gin.Context) {
 		VerificationCode string `json:"verificationCode"`
 	}
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || req.Username == "" || req.Password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: username and password are required"})
+		Fail(c, http.StatusBadRequest, 1, "validation: username and password are required")
 		return
 	}
 	userID := stableUserID(req.Username)
-	c.JSON(http.StatusOK, h.buildLoginData(userID, req.Username))
+	OK(c, h.buildLoginData(userID, req.Username))
 }
 
 func (h *AuthHandler) refresh(c *gin.Context) {
@@ -127,15 +127,15 @@ func (h *AuthHandler) refresh(c *gin.Context) {
 			userID = uid
 		}
 	}
-	c.JSON(http.StatusOK, h.buildLoginData(userID, "user"))
+	OK(c, h.buildLoginData(userID, "user"))
 }
 
 func (h *AuthHandler) logout(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	OK(c, gin.H{"success": true})
 }
 
 func (h *AuthHandler) verificationCode(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	OK(c, gin.H{"success": true})
 }
 
 func (h *AuthHandler) buildLoginData(userID int64, username string) LoginData {

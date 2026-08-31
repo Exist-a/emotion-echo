@@ -42,38 +42,38 @@ func (h *UserHandler) getMe(c *gin.Context) {
 	ctx := session.WithRequestAuth(c)
 	u, err := h.user.GetMe(ctx)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"user": u})
+	OK(c, gin.H{"user": u})
 }
 
 func (h *UserHandler) updateMe(c *gin.Context) {
 	var req downstream.UpdateProfileReq
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid body"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
 		return
 	}
 	ctx := session.WithRequestAuth(c)
 	u, err := h.user.UpdateMe(ctx, req)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"user": u})
+	OK(c, gin.H{"user": u})
 }
 
 func (h *UserHandler) getByID(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation: invalid user id"})
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid user id")
 		return
 	}
 	ctx := session.WithRequestAuth(c)
 	u, err := h.user.GetByID(ctx, id)
 	if err != nil {
-		c.JSON(statusFor(err), gin.H{"error": err.Error()})
+		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"user": u})
+	OK(c, gin.H{"user": u})
 }

@@ -25,6 +25,6 @@ func NewUploadHandler() *UploadHandler {
 // Register 注册路由
 func (h *UploadHandler) Register(r *gin.Engine) {
 	r.POST("/api/v1/uploads/:kind", func(c *gin.Context) {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "uploads not implemented (Stage 31)"})
+		Fail(c, http.StatusBadGateway, 1, "uploads not implemented (Stage 31)")
 	})
 }
