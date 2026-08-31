@@ -42,6 +42,9 @@ func (c *NacosConfig) defaults() {
 	}
 }
 
+// ApplyDefaults 导出等价于 unexported defaults()，供 configcenter 包复用。
+func ApplyDefaults(c *NacosConfig) { c.defaults() }
+
 // NacosRegistry 是 Registry 接口的 Nacos 实现。
 //
 // 设计要点：
