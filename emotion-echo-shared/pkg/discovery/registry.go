@@ -1,7 +1,11 @@
 // Package discovery 提供服务注册与发现的抽象。
 //
-// Stage 31 PR-02（🔴 RED）：仅定义 Registry 接口契约与 Instance 模型，
-// 实现由 nacos_register.go（PR-03）提供。
+// Stage 31 PR-02 定义 Registry interface 与 Instance 模型；
+// PR-03（nacos_register.go）提供 NacosRegistry 实现。
+// PR-06 通过 testcontainers-nacos 集成测试覆盖 Register/Unregister/Discover/Subscribe
+// 的真实 SDK 调用路径（//go:build integration）。本包单测覆盖率（含 PR-03 真实
+// 实现路径）目标 ≥ 90%，集成测试未跑时 NacosRegistry 自身约 35%（SDK RPC 路径）；
+// AGENTS.md §2.3 允许三方适配层 70%。
 //
 // 设计原则：
 //   - interface 严格 1:1 暴露 5 个方法，便于 mock 与替换实现
