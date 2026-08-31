@@ -1,0 +1,10 @@
+apiVersion: v2
+name: nacos
+description: |
+  Nacos 2.4.x for Emotion-Echo (Stage 31 PR-12).
+
+  Single-instance standalone mode using emptyDir persistence (dev).
+  Prod (Stage 34+) will switch to PVC + 3-replica cluster + MySQL backend.
+type: application
+version: 0.1.0
+appVersion: "2.4.3"

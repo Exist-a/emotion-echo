@@ -31,6 +31,9 @@ dependencies:
   - name: skywalking
     version: "0.1.0"
     condition: skywalking.enabled
+  - name: nacos
+    version: "0.1.0"
+    condition: nacos.enabled
   - name: user-svc
     version: "0.1.0"
     condition: user-svc.enabled

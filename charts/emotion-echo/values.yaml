@@ -27,9 +27,14 @@ redis:
   enabled: true
 kafka:
   enabled: true
+# Stage 30: APISIX + etcd 已退役（Stage 31 重新引入仅在 Stage 32 治理层）
 etcd:
   enabled: true
 skywalking:
+  enabled: true
+# Stage 31 PR-12: Nacos 注册中心 + 配置中心
+# dev 默认开启；prod 改 PVC + 3 副本集群（Stage 34+）
+nacos:
   enabled: true
 user-svc:
   enabled: true
