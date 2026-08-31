@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -29,11 +30,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// LoginData 是登录/注册/refresh 的统一响应（前端 LoginData）
+// LoginData 是登录/注册/refresh 的统一响应（前端 LoginData，types/api.ts）
 type LoginData struct {
-	AccessToken string          `json:"accessToken"`
-	ExpiresIn   int64           `json:"expiresIn"`
-	User        downstream.UserInfo `json:"user"`
+	AccessToken string       `json:"accessToken"`
+	ExpiresIn   int64        `json:"expiresIn"`
+	User        AuthUserInfo `json:"user"`
+}
+
+// AuthUserInfo 是 BFF 签发 JWT 后返回的用户信息（与前端 types/api.ts UserInfo 对齐：
+// id 是 string，含 username/avatar/config 等前端依赖字段；真实用户信息来自 user-svc
+// fetchUserInfo，此处为 mock 登录后的初始形状）。
+type AuthUserInfo struct {
+	ID        string         `json:"id"`
+	Username  string         `json:"username"`
+	Nickname  string         `json:"nickname"`
+	Avatar    string         `json:"avatar"`
+	Age       *int           `json:"age"`
+	Config    map[string]any `json:"config"`
+	CreatedAt string         `json:"createdAt"`
 }
 
 // AuthHandler 处理 /api/v1/auth/* 端点
@@ -130,11 +144,14 @@ func (h *AuthHandler) buildLoginData(userID int64, username string) LoginData {
 	return LoginData{
 		AccessToken: token,
 		ExpiresIn:   expiresIn,
-		User: downstream.UserInfo{
-			UserID:   userID,
-			Account:  username,
-			Phone:    "",
-			Nickname: username,
+		User: AuthUserInfo{
+			ID:        fmt.Sprintf("%d", userID),
+			Username:  username,
+			Nickname:  username,
+			Avatar:    "",
+			Age:       nil,
+			Config:    map[string]any{},
+			CreatedAt: time.Now().Format(time.RFC3339),
 		},
 	}
 }

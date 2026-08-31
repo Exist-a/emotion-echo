@@ -63,6 +63,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(corsMiddleware())
 	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
@@ -77,6 +78,26 @@ func main() {
 	log.Printf("Starting web-bff at %s:%d...", c.Host, c.Port)
 	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {
 		log.Fatalf("[gin] server crashed: %v", err)
+	}
+}
+
+// corsMiddleware 允许前端 SPA（:3000）跨域调用 BFF（:8894）。
+// BFF 是前端唯一入口，替代原 APISIX 的 cors 插件职责。
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		c.Header("Access-Control-Allow-Origin", origin)
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
 	}
 }
 

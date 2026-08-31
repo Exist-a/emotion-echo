@@ -6,6 +6,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,8 +40,8 @@ func TestAuthHandler_Login_ReturnsToken(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &data))
 	assert.NotEmpty(t, data.AccessToken, "应签发 accessToken")
 	assert.Greater(t, data.ExpiresIn, int64(0))
-	assert.NotZero(t, data.User.UserID, "user.userId 应非零")
-	assert.Equal(t, "alice@test.com", data.User.Account)
+	assert.NotEmpty(t, data.User.ID, "user.id 应非空")
+	assert.Equal(t, "alice@test.com", data.User.Username)
 }
 
 func TestAuthHandler_Login_StableUserID(t *testing.T) {
@@ -56,7 +57,7 @@ func TestAuthHandler_Login_StableUserID(t *testing.T) {
 		return data
 	}
 	d1, d2 := body(), body()
-	assert.Equal(t, d1.User.UserID, d2.User.UserID, "同一账号应映射到同一 user_id")
+	assert.Equal(t, d1.User.ID, d2.User.ID, "同一账号应映射到同一 user_id")
 }
 
 func TestAuthHandler_Login_EmptyCredentials_Returns400(t *testing.T) {
@@ -118,5 +119,5 @@ func TestAuthHandler_TokenCanBeParsed(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &data))
 	uid, err := mgr.Parse(data.AccessToken)
 	require.NoError(t, err)
-	assert.Equal(t, data.User.UserID, uid, "token 内 user_id 应等于响应 user.userId")
+	assert.Equal(t, data.User.ID, fmt.Sprintf("%d", uid), "token 内 user_id 应等于响应 user.id")
 }
