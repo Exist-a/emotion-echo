@@ -20,8 +20,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
       POSTGRES_DB: emotion_echo
-    ports:
-      - "5432:5432"
+    # Stage 33 PR-20: 端口收紧（dev 调试走 docker exec psql 或 kubectl port-forward）
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/01-create-schemas.sql:/docker-entrypoint-initdb.d/01-create-schemas.sql:ro
@@ -41,8 +42,9 @@ services:
     image: redis:7-alpine
     container_name: emotion-echo-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # Stage 33 PR-20: 端口收紧（项目当前未使用 Redis；O-3 P2）
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -73,8 +75,9 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
-    ports:
-      - "9092:9092"
+    # Stage 33 PR-20: 端口收紧（容器内通信即可）
+    expose:
+      - "9092"
     volumes:
       - kafka_data:/tmp/kraft-combined-logs
     healthcheck:
@@ -96,9 +99,10 @@ services:
       SW_STORAGE: h2
       SW_JDBC_URL: jdbc:h2:mem:skywalking-oap-db;DB_CLOSE_DELAY=-1
       TZ: Asia/Shanghai
-    ports:
-      - "11800:11800"
-      - "12800:12800"
+    # Stage 33 PR-20: 端口收紧（UI 通过容器内 8080 访问；GRPC 通过容器内 11800）
+    expose:
+      - "11800"
+      - "12800"
     networks:
       - app-network
 
@@ -114,8 +118,9 @@ services:
     environment:
       SW_OAP_ADDRESS: http://skywalking-oap:12800
       TZ: Asia/Shanghai
-    ports:
-      - "18080:8080"
+    # Stage 33 PR-20: 端口收紧（UI 通过 APISIX 网关或容器内访问）
+    expose:
+      - "8080"
     networks:
       - app-network
 
@@ -137,10 +142,12 @@ services:
       # Stage 31 PR-11: dev 用 Derby 内嵌数据源；prod 切 MySQL（Stage 34+）
       SPRING_DATASOURCE_PLATFORM: derby
       # 鉴权：dev standalone 默认无账号；prod 通过 nacos.core.auth.enabled=true 开启
+    # Stage 33 PR-20: 仅保留 dev console 8848；gRPC 端口改 expose
     ports:
-      - "8848:8848"   # HTTP console + API
-      - "9848:9848"   # gRPC client (SDK 客户端)
-      - "9849:9849"   # gRPC server (cluster 内部)
+      - "8848:8848"   # HTTP console + API（dev 浏览器访问）
+    expose:
+      - "9848"        # gRPC client (SDK 客户端)
+      - "9849"        # gRPC server (cluster 内部)
     networks:
       - app-network
     healthcheck:
@@ -206,9 +213,11 @@ services:
       # Stage 32 PR-14 fix: 9080 被 Windows host 上 NahimicService 占用，
       # curl localhost:9080 命中音频服务返回 301 about:blank（不是 APISIX）。
       # 改用 19080 作为 host 端口映射，容器内仍监听 9080。
+      # Stage 33 PR-20: 仅 HTTP data plane :19080 保留；Admin 9180 + prometheus 9091 改 expose
       - "19080:9080"   # HTTP data plane (host 19080 → container 9080)
-      - "9180:9180"    # Admin API（dev 暴露）
-      - "9091:9091"    # Prometheus exporter
+    expose:
+      - "9180"         # Admin API（dev 通过 docker exec / kubectl port-forward）
+      - "9091"         # Prometheus exporter
     networks:
       - app-network
 

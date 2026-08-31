@@ -47,8 +47,10 @@ services:
       # 容器 DNS 占位化(Stage 26-P · Commit P3 yaml env 化对应)
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_user"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
-    ports:
-      - "8888:8888"
+    # Stage 33 PR-20: 删除宿主端口映射（APISIX 转发即可；dev 调试走 APISIX :19080）
+    # expose: 容器内可见（其他 svc 互联）
+    expose:
+      - "8888"
     volumes:
       - ../emotion-echo-user-svc/etc/user-api.yaml:/app/etc/user-api.yaml:ro
     networks:
@@ -96,8 +98,9 @@ services:
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"
       KAFKA_BROKERS:       emotion-echo-kafka:9092
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
-    ports:
-      - "8890:8890"
+    # Stage 33 PR-20: 端口收紧
+    expose:
+      - "8890"
     volumes:
       - ../emotion-echo-chat-svc/etc/chat-api.yaml:/app/etc/chat-api.yaml:ro
     networks:
@@ -148,8 +151,9 @@ services:
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_analytics"
       KAFKA_BROKERS:       emotion-echo-kafka:9092
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
-    ports:
-      - "8904:8893"     # 宿主 8904 → 容器内 8893(避开 ai-svc 8892)
+    # Stage 33 PR-20: 端口收紧
+    expose:
+      - "8893"
     volumes:
       - ../emotion-echo-analytics-svc/etc/analytics-api.yaml:/app/etc/analytics-api.yaml:ro
     networks:
@@ -196,8 +200,9 @@ services:
       GIN_MODE: release
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_assessment"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
-    ports:
-      - "8889:8889"
+    # Stage 33 PR-20: 端口收紧
+    expose:
+      - "8889"
     volumes:
       - ../emotion-echo-assessment-svc/etc/assessment-api.yaml:/app/etc/assessment-api.yaml:ro
     networks:
@@ -257,9 +262,10 @@ services:
       TLS_SERVER_CERT: /app/etc/tls/llm-server.crt
       TLS_SERVER_KEY: /app/etc/tls/llm-server.key
       TLS_REQUIRE_CLIENT_AUTH: "1"
-    ports:
-      - "8000:8000"
-      - "50051:50051"
+    # Stage 33 PR-20: 端口收紧（ai-svc 容器内调，无外部需要）
+    expose:
+      - "8000"
+      - "50051"
     volumes:
       - ../deploy/tls/llm-server.crt:/app/etc/tls/llm-server.crt:ro
       - ../deploy/tls/llm-server.key:/app/etc/tls/llm-server.key:ro
@@ -316,9 +322,11 @@ services:
       SENSEVOICE_BASE_URL: ${SENSEVOICE_BASE_URL:-http://emotion-echo-sensevoice:8002}
       XTTS_BASE_URL:       ${XTTS_BASE_URL:-http://emotion-echo-xtts:8003}
 
+    # Stage 33 PR-20: HTTP :8891 收紧；gRPC :8892 保留（dev 调试 gRPC client）
     ports:
-      - "8891:8891"
       - "8892:8892"
+    expose:
+      - "8891"
     volumes:
       - ../deploy/tls/ai-client.crt:/app/etc/tls/ai-client.crt:ro
       - ../deploy/tls/ai-client.key:/app/etc/tls/ai-client.key:ro
@@ -369,8 +377,9 @@ services:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
-    ports:
-      - "8004:8004"
+    # Stage 33 PR-20: 端口收紧
+    expose:
+      - "8004"
     networks:
       - app-network
     deploy:
@@ -405,8 +414,9 @@ services:
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       SENSEVOICE_DEVICE: cpu
-    ports:
-      - "8002:8002"
+    # Stage 33 PR-20: 端口收紧
+    expose:
+      - "8002"
     volumes:
       # 模型首次启动会从 ModelScope 自动下载 ~200MB am.mvn + checkpoint
       # 若要预烘焙到镜像：取消下行注释并手动 copy 模型
@@ -444,9 +454,10 @@ services:
     environment:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    ports:
-      - "8003:8003"
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+    # Stage 33 PR-20: 端口收紧
+    expose:
+      - "8003"
     volumes:
       # 模型：本地已下载到 ../../Emotion-Echo-LLM/XTTS/AI-ModelScope/XTTS-v2
       # Dockerfile COPY 已包含，但 dev 可覆盖挂载
@@ -516,6 +527,7 @@ services:
       BFF_LLM_API_KEY:     ${BFF_LLM_API_KEY:-}
       BFF_LLM_BASE_URL:    ${BFF_LLM_BASE_URL:-https://api.deepseek.com}
       BFF_LLM_MODEL:       ${BFF_LLM_MODEL:-deepseek-chat}
+    # Stage 33 PR-20: BFF 端口保留（dev 调试 / Postman 直连；prod 应仅暴露 APISIX）
     ports:
       - "8894:8894"
     volumes:
