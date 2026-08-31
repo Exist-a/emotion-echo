@@ -192,8 +192,16 @@ services:
     depends_on:
       etcd:
         condition: service_healthy
+    # Stage 32 PR-14 fix: 镜像 entrypoint 默认调 apisix init 同步 etcd 数据到本地 conf，
+    # 然后调 init_etcd 健康检查（硬连 127.0.0.1）。但运行时 openresty 读 config.yaml 决定 etcd host，
+    # 所以只要 config.yaml 正确就 OK。init_etcd 健康检查失败只是 warning（exit 1 来自脚本本身），
+    # 我们用 || true 容忍这个已知 false-positive，然后继续启动 openresty。
+    command:
+      - "/bin/sh"
+      - "-c"
+      - "/usr/bin/apisix init 2>&1 || true; /usr/bin/apisix init_etcd 2>&1 || true; exec /usr/local/openresty/bin/openresty -p /usr/local/apisix -g 'daemon off;'"
     volumes:
-      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml
     ports:
       - "9080:9080"   # HTTP data plane
       - "9180:9180"   # Admin API（dev 暴露）

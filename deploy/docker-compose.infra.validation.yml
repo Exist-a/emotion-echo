@@ -1,0 +1,11 @@
+# =====================================================
+# docker-compose.infra.validation.yml
+# 临时 override: 跳过 apisix-dashboard（tag 3.18.0-alpine 不存在）
+# 端到端验证专用，验证完后可删除。
+# Stage 32 PR-14 提交的原始 infra.yml 不变。
+# =====================================================
+services:
+  apisix-dashboard:
+    image: apache/apisix-dashboard:latest  # 镜像占位，scale 0 不会启动
+    deploy:
+      replicas: 0

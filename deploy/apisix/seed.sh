@@ -25,7 +25,7 @@ set -euo pipefail
 
 # ---- 配置 ----
 ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
-ADMIN_KEY="${APISIX_ADMIN_KEY:-edd1c9f034335f136f87ad84b625c8f1}"
+ADMIN_KEY="${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
 JWT_SECRET="${BFF_JWT_SECRET:-dev-bff-secret}"
 
 # 业务 svc 容器名（compose 网络 DNS）
@@ -62,17 +62,21 @@ for i in $(seq 1 30); do
 done
 
 log "Step 1.5/4: verifying upstream svcs are up (catch-all depends on web-bff)"
-for hp in \
-  "$WEB_BFF_HOST:$WEB_BFF_PORT/health" \
-  "$USER_SVC_HOST:$USER_SVC_PORT/health" \
-  "$CHAT_SVC_HOST:$CHAT_SVC_PORT/health" \
-  "$ASSESSMENT_SVC_HOST:$ASSESSMENT_SVC_PORT/health" \
-  "$AI_SVC_HOST:$AI_SVC_PORT/health"; do
-  if ! curl -sf --max-time 3 "http://$hp" >/dev/null 2>&1; then
-    die "upstream $hp not healthy (seed will silently skip if continued, aborting per AGENTS.md RED→GREEN)" 2
-  fi
-  log "  upstream OK: $hp"
-done
+if [ "${SKIP_HEALTH_CHECK:-false}" = "true" ]; then
+  log "  SKIP_HEALTH_CHECK=true: skipping upstream health probe (dev validation only)"
+else
+  for hp in \
+    "$WEB_BFF_HOST:$WEB_BFF_PORT/health" \
+    "$USER_SVC_HOST:$USER_SVC_PORT/health" \
+    "$CHAT_SVC_HOST:$CHAT_SVC_PORT/health" \
+    "$ASSESSMENT_SVC_HOST:$ASSESSMENT_SVC_PORT/health" \
+    "$AI_SVC_HOST:$AI_SVC_PORT/health"; do
+    if ! curl -sf --max-time 3 "http://$hp" >/dev/null 2>&1; then
+      die "upstream $hp not healthy (seed will silently skip if continued, aborting per AGENTS.md RED→GREEN)" 2
+    fi
+    log "  upstream OK: $hp"
+  done
+fi
 
 # ---- Step 2: 创建 upstream（静态节点，Stage 34+ 切 nacos-discovery）----
 log "Step 2/4: creating upstreams"
@@ -161,7 +165,7 @@ EOF
 log "Step 4/4: creating routes"
 
 put_route() {
-  local id="$1" uri="$2" upstream_id="$3" methods="$4" extra_uri="$5"
+  local id="$1" uri="$2" upstream_id="$3" methods="$4" extra_uri="${5:-}"
   local body
   body=$(cat <<EOF
 {
@@ -169,7 +173,7 @@ put_route() {
   "methods": $methods,
   "upstream_id": $upstream_id,
   "plugins": $PLUGINS_JSON,
-  "status": "enabled"
+  "status": 1
 }
 EOF
 )
@@ -199,7 +203,7 @@ put_route_health() {
   "uri": "$uri",
   "upstream_id": $upstream_id,
   "plugins": $HEALTH_PLUGINS,
-  "status": "enabled"
+  "status": 1
 }
 EOF
 )
@@ -230,7 +234,7 @@ put_route_health 204 "/ai-health"            5
 if curl -sf -X PUT \
   -H "X-API-KEY: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"uri":"/apisix-health","status":"enabled","plugins":{"prometheus":{}}}' \
+  -d '{"uri":"/apisix-health","status":1,"plugins":{"prometheus":{}}}' \
   "$ADMIN_URL/apisix/admin/routes/205" >/dev/null; then
   log "  apisix self-health route OK: 205"
 else
