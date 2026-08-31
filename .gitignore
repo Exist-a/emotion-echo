@@ -144,3 +144,8 @@ playwright-report/                       # Playwright HTML reporter output
 test-results/                            # Playwright per-test artifact dir
 .pytest_cache/                           # already covered above; explicit for clarity
 __pycache__/                             # already covered above; explicit for clarity
+
+# ---------- Helm ----------
+# Chart.lock 是 helm dependency build 生成的依赖锁，与 helm version 强绑定，
+# 团队成员本地 helm 版本可能不同导致锁文件差异。按需手动提交（release pipeline 时）。
+charts/**/Chart.lock
