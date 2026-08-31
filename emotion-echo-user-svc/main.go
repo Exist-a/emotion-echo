@@ -8,11 +8,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"emotion-echo-user-svc/internal/config"
@@ -33,15 +36,28 @@ import (
 
 var configFile = flag.String("f", "etc/user-api.yaml", "the config file")
 
-// applyEnvOverrides 让容器内的 ${POSTGRES_DSN} / ${SKYWALKING_OAP_ADDR} env
-// 在 go-zero conf.MustLoad 之后覆盖 config struct（go-zero 1.10 不展开 ${VAR:-default}，
-// 原样保留字面量；与 chat-svc/ai-svc 同模式，Stage 30 容器化补充）。
+// applyEnvOverrides 让容器内的 ${POSTGRES_DSN} / ${SKYWALKING_OAP_ADDR} /
+// ${NACOS_*} env 在 go-zero conf.MustLoad 之后覆盖 config struct（go-zero 1.10
+// 不展开 ${VAR:-default}，原样保留字面量；与 chat-svc/ai-svc 同模式，Stage 30
+// 容器化补充）。
 func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("POSTGRES_DSN"); v != "" {
 		c.Postgres.DSN = v
 	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
+	}
+	if v := os.Getenv("NACOS_ENABLED"); v != "" {
+		c.Nacos.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("NACOS_ADDR"); v != "" {
+		c.Nacos.Addr = v
+	}
+	if v := os.Getenv("NACOS_NAMESPACE"); v != "" {
+		c.Nacos.Namespace = v
+	}
+	if v := os.Getenv("NACOS_HOT_RELOAD"); v != "" {
+		c.Nacos.HotReload = v == "true" || v == "1"
 	}
 }
 
@@ -85,6 +101,20 @@ func main() {
 	// === 3. ServiceContext（依赖注入容器） ===
 	svcCtx := svc.NewServiceContext(c, userRepo)
 
+	// === 3.5 Nacos 注册中心 + 配置中心（Stage 31 PR-07） ===
+	bootCtx, bootCancel := context.WithCancel(context.Background())
+	defer bootCancel()
+
+	nacosRuntime, err := BootNacos(bootCtx, &c, defaultBootDeps())
+	if err != nil {
+		log.Printf("[nacos] boot failed (continuing): %v", err)
+	}
+	defer func() {
+		if nacosRuntime != nil {
+			nacosRuntime.Close(bootCtx, c.Name, c.Host, c.Port)
+		}
+	}()
+
 	// === 4. Gin router ===
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -107,6 +137,20 @@ func main() {
 
 	// === 6. 启动 ===
 	log.Printf("Starting server at %s:%d...", c.Host, c.Port)
+
+	// 优雅退出：SIGINT/SIGTERM → Unregister + close
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		log.Printf("[signal] received, shutting down gracefully...")
+		bootCancel()
+		if nacosRuntime != nil {
+			nacosRuntime.Close(context.Background(), c.Name, c.Host, c.Port)
+		}
+		os.Exit(0)
+	}()
+
 	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {
 		log.Fatalf("[gin] server crashed: %v", err)
 	}

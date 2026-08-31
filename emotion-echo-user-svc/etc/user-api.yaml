@@ -12,3 +12,13 @@ Postgres:
   DSN:          ${POSTGRES_DSN:-"host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_user"}
   MaxOpenConns: 10
   MaxIdleConns: 5
+
+# Stage 31 PR-07: Nacos 注册中心 + 配置中心
+# dev 默认开启（依赖 compose depends_on: nacos: service_healthy）；
+# dev 关闭热重载避免日志噪音；prod 启用。
+Nacos:
+  Enabled:   ${NACOS_ENABLED:-true}
+  Addr:      ${NACOS_ADDR:-emotion-echo-nacos:8848}
+  Namespace: ${NACOS_NAMESPACE:-emotion-echo-dev}
+  GroupName: DEFAULT_GROUP
+  HotReload: ${NACOS_HOT_RELOAD:-false}
