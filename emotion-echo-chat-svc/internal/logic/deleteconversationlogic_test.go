@@ -139,6 +139,11 @@ func (f *failingDeleteRepo) DeleteConversation(ctx context.Context, id int64) er
 }
 func (f *failingDeleteRepo) Ping(ctx context.Context) error { return f.inner.Ping(ctx) }
 
+// Stage 36-A2.1：补 ListConversations 透传，让 failingDeleteRepo 仍满足 interface。
+func (f *failingDeleteRepo) ListConversations(ctx context.Context, userID int64, limit, offset int) ([]model.Conversation, error) {
+	return f.inner.ListConversations(ctx, userID, limit, offset)
+}
+
 // Stage 30-C A3: Tx 占位（InMemory 退化路径不真用 tx，但接口要求实现）
 func (f *failingDeleteRepo) CreateConversationTx(_ *gorm.DB, ctx context.Context, c *model.Conversation) error {
 	return f.CreateConversation(ctx, c)

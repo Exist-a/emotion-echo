@@ -55,6 +55,32 @@ func SendMessageHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 	}
 }
 
+// ListConversationsHandler GET /api/v1/conversations
+//
+// Stage 36-A2.1：补齐 chat-svc 缺漏的会话列表端点（G2 上半）。
+// 下游 BFF 不再需要返回空 stub。
+func ListConversationsHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		req := &types.ListConversationsReq{}
+		if limitStr := c.Query("limit"); limitStr != "" {
+			if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+				req.Limit = n
+			}
+		}
+		if offsetStr := c.Query("offset"); offsetStr != "" {
+			if n, err := strconv.Atoi(offsetStr); err == nil && n >= 0 {
+				req.Offset = n
+			}
+		}
+		resp, err := logic.NewListConversationsLogic(c.Request.Context(), svcCtx).ListConversations(req)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
 // ListMessagesHandler GET /api/v1/conversations/:id/messages
 func ListMessagesHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {

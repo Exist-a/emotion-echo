@@ -72,3 +72,15 @@ type DeleteConversationResp struct {
 	Success bool  `json:"success"`
 	Id      int64 `json:"id"`
 }
+
+// ListConversationsReq GET /api/v1/conversations（用户隔离，按 updated_at desc）
+type ListConversationsReq struct {
+	Limit  int `json:"limit,default=20"`
+	Offset int `json:"offset,default=0"`
+}
+
+// ListConversationsResp 列表响应 + hasMore（取 limit+1 探测）
+type ListConversationsResp struct {
+	List    []ConversationView `json:"list"`
+	HasMore bool               `json:"hasMore"`
+}

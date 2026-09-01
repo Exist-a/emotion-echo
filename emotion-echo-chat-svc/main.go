@@ -173,6 +173,7 @@ func main() {
 	r.GET("/health", handler.HealthHandler(svcCtx))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 	r.POST("/api/v1/conversations", handler.CreateConversationHandler(svcCtx))
+	r.GET("/api/v1/conversations", handler.ListConversationsHandler(svcCtx)) // Stage 36-A2.1 (G2 upper)
 	r.POST("/api/v1/conversations/:id/messages", handler.SendMessageHandler(svcCtx))
 	r.GET("/api/v1/conversations/:id/messages", handler.ListMessagesHandler(svcCtx))
 	r.DELETE("/api/v1/conversations/:id", handler.DeleteConversationHandler(svcCtx))

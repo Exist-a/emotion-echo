@@ -45,6 +45,10 @@ type ConversationRepo interface {
 	// Ping 健康检查
 	Ping(ctx context.Context) error
 
+	// Stage 36-A2.1：按用户列出最近会话，按 updated_at desc 排序。
+	// limit<=0 视为 20，offset<0 视为 0。
+	ListConversations(ctx context.Context, userID int64, limit, offset int) ([]model.Conversation, error)
+
 	// Stage 30-C A3: 事务版本（接受可选 tx，nil = 非事务）
 	CreateConversationTx(tx *gorm.DB, ctx context.Context, c *model.Conversation) error
 	AppendMessageTx(tx *gorm.DB, ctx context.Context, m *model.Message) error
@@ -179,6 +183,43 @@ func (r *InMemoryConversationRepo) DeleteConversation(ctx context.Context, id in
 	return nil
 }
 
+// ListConversations Stage 36-A2.1：InMemory 版按 updated_at desc 列出该 user 的会话。
+// limit<=0 → 20；offset<0 → 0。
+func (r *InMemoryConversationRepo) ListConversations(ctx context.Context, userID int64, limit, offset int) ([]model.Conversation, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]model.Conversation, 0, limit+1)
+	for _, c := range r.conversations {
+		if c.UserID != userID {
+			continue
+		}
+		out = append(out, *c)
+	}
+	// updated_at desc（updated_at 相同则 id desc 兜底，保证稳定排序）
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
+			return out[i].ID > out[j].ID
+		}
+		return out[i].UpdatedAt.After(out[j].UpdatedAt)
+	})
+	// offset 截断
+	if offset >= len(out) {
+		return []model.Conversation{}, nil
+	}
+	out = out[offset:]
+	// limit 截断
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
 // =====================================================
 // PostgresConversationRepo（生产实现）
 // =====================================================
@@ -272,6 +313,25 @@ func (r *PostgresConversationRepo) Ping(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.PingContext(ctx)
+}
+
+// ListConversations Stage 36-A2.1：Postgres 版按 user_id 过滤 + updated_at desc + id desc 兜底。
+// limit<=0 → 20；offset<0 → 0。schema 限定 emotion_echo_chat.conversations。
+func (r *PostgresConversationRepo) ListConversations(ctx context.Context, userID int64, limit, offset int) ([]model.Conversation, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var out []model.Conversation
+	err := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("updated_at DESC, id DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&out).Error
+	return out, err
 }
 
 // Stage 30-C A3: 事务版本（tx == nil 退化为 r.db；非事务路径）
