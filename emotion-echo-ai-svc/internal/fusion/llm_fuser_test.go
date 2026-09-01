@@ -175,3 +175,18 @@ func TestLLMFuser_Success_LLMReturnsMarkdownFencedJSON(t *testing.T) {
 	assert.InDelta(t, 0.2, out.SentimentScore, 0.001)
 	assert.Equal(t, "llm", out.FusionMethod)
 }
+
+// TestLLMFuser_DefaultTimeoutIs3s Stage 35 PR-4：未传 Timeout → 默认 3s。
+func TestLLMFuser_DefaultTimeoutIs3s(t *testing.T) {
+	t.Parallel()
+	f := NewLLMFuser(LLMConfig{BaseURL: "http://localhost:0", Model: "m"})
+	require.NotNil(t, f.cli)
+	assert.Equal(t, 3*time.Second, f.cli.Timeout, "default timeout should be 3s (Stage 35 PR-4)")
+}
+
+// TestLLMFuser_CustomTimeoutRespected 自定义 Timeout 应被尊重。
+func TestLLMFuser_CustomTimeoutRespected(t *testing.T) {
+	t.Parallel()
+	f := NewLLMFuser(LLMConfig{BaseURL: "http://localhost:0", Model: "m", Timeout: 7 * time.Second})
+	assert.Equal(t, 7*time.Second, f.cli.Timeout)
+}
