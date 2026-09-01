@@ -12,7 +12,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-1.x-244c5a?style=flat-square&logo=grpc&logoColor=white)](https://grpc.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Stage](https://img.shields.io/badge/Stage-30--BFF-blueviolet?style=flat-square)](docs/stage-30-web-bff.md)
+[![Stage](https://img.shields.io/badge/Stage-35--Hardening-blueviolet?style=flat-square)](docs/stage-35-landing.md)
 
 ---
 
@@ -172,7 +172,16 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 - ✅ **Stage 30 Web BFF**：`emotion-echo-web-bff`（:8894）唯一入口 — 聚合 5 下游 + SSE 编排 + 自有 mock 鉴权（`docs/stage-30-web-bff.md`）
 - ✅ **Phase D 接 DeepSeek**：BFF ai_stream 改造为 OpenAI 兼容真实 LLM（env 注入 key，无 key 降级 mock）
 - ✅ **APISIX 退役**：Stage 30 BFF 替代网关职责后，compose + helm apisix-routes + etcd 全清；历史保留在 `docs/`（`stage-29-D-tls-all-routes.md`）
-- 📝 长期路线：31 ACK 迁移
+- ✅ **Stage 31**：Nacos 注册中心 + 配置中心演进（PR-01..12）
+- ✅ **Stage 32**：APISIX 网关层回归 + JWT 真实验证 + X-User-Id 透传（PR-13..16）
+- ✅ **Stage 33**：P0 修复 + BFF 净化（PR-17..22，7 个 PR 收口）
+- ✅ **Stage 34**：多模态情绪融合（18 个 PR + merge 收口，docker smoke 验证）— 见 [stage-34-landing.md](docs/stage-34-landing.md)
+- ✅ **Stage 35**：LLM Fusion 生产加固 + 业务端到端验证（ADR-15，14 个 PR + 41 个新测试）— 见 [stage-35-landing.md](docs/stage-35-landing.md) + [stage-35-smoke-validation.md](docs/stage-35-smoke-validation.md) + [stage-35-system-feasibility.md](docs/stage-35-system-feasibility.md)
+- 🚧 **Stage 36**（进行中）：ADR-16 列出的 **8 项系统缺口**全部纳入修复日程 — 见 [stage-36-fixes-roadmap.md](docs/stage-36-fixes-roadmap.md) + [adr-2026-09-known-gaps.md](docs/adr-2026-09-known-gaps.md)
+  - 36-A：G1（yaml 占位符 4 svc）+ G3（BFF 路由）
+  - 36-B：G2（chat list）+ G4（消息自动情绪分析）
+  - 36-C：G5（真实 LLM）+ G6（FER/SenseVoice）
+  - 36-D：G7（APISIX 镜像）+ G8（Nacos 全栈）
 
 ---
 

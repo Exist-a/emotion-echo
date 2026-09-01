@@ -201,6 +201,25 @@
 | 可观测 | 4 个 Prometheus collector（LLM call / latency / fallback / worker tick） |
 | yaml 配置 | `${VAR:-default}` 占位符恢复；main.go `applyEnvOverrides` 补 `LLM_TIMEOUT` / `LLM_MODEL` / `LLM_BREAKER_*` / `WORKER_TICK_INTERVAL` |
 
+### 决策 16：Stage 35 系统缺口正式登记（8 项不再 deferred）
+
+> ✅ 2026-09-03 生效。详见 `adr-2026-09-known-gaps.md` + `stage-36-fixes-roadmap.md`。
+
+8 项已知缺口全部纳入 Stage 36 修复日程（不再 deferred 到 Stage 36+）：
+
+| # | 缺口 | 严重度 | 批次 |
+|---|------|--------|------|
+| G1 | 4 个 Go svc yaml 占位符（user/chat/analytics/assessment） | 🟡 中 | 36-A |
+| G2 | chat-svc 缺 list conversations 端点 | 🟡 中 | 36-B |
+| G3 | BFF 缺 analytics / assessment 路由聚合 | 🔴 高 | 36-A |
+| G4 | Kafka off 时消息无自动情绪分析 | 🔴 高 | 36-B |
+| G5 | 真实 LLM endpoint 未配 | 🔴 高 | 36-C |
+| G6 | FER / SenseVoice `profile: ai` 镜像未构建 | 🟡 中 | 36-C |
+| G7 | APISIX dashboard 镜像不可拉 | 🟡 中 | 36-D |
+| G8 | Nacos 配置中心未启 | 🟢 低 | 36-D |
+
+**原则**：Stage 36 之后所有缺口默认进入修复日程；唯一例外是需外部资源（API key / 付费服务）且无 dev 环境的项，标记为 **blocked-external**。
+
 ---
 
 ## 🏗 当前架构全景
