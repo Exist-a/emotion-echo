@@ -21,6 +21,9 @@ type EmotionRepo interface {
 	GetByID(ctx context.Context, id int64) (*model.EmotionAnalysis, error)
 	// GetByMessageID 按 message_id 查（一条消息最多一条分析）
 	GetByMessageID(ctx context.Context, messageID int64) (*model.EmotionAnalysis, error)
+	// GetByEventID 按 event_id 查（Stage 36-A3：UpsertNeutralEmotion 幂等键）。
+	// 空 event_id 视为不存在（与 Create 的非去重分支对齐）。
+	GetByEventID(ctx context.Context, eventID string) (*model.EmotionAnalysis, error)
 	// ListByConversationID 列出某会话的所有分析
 	ListByConversationID(ctx context.Context, conversationID int64) ([]model.EmotionAnalysis, error)
 	// Create 保存一条情绪分析结果
@@ -121,6 +124,24 @@ func (r *InMemoryEmotionRepo) Create(ctx context.Context, e *model.EmotionAnalys
 
 func (r *InMemoryEmotionRepo) Ping(ctx context.Context) error { return nil }
 
+// GetByEventID Stage 36-A3：按 event_id 查已存在的情绪分析行（用于 UpsertNeutralEmotion
+// 幂等检查）。空 event_id 返回 nil（与 Create 的非去重分支语义对齐）。
+func (r *InMemoryEmotionRepo) GetByEventID(ctx context.Context, eventID string) (*model.EmotionAnalysis, error) {
+	if eventID == "" {
+		return nil, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	id, ok := r.byEventID[eventID]
+	if !ok {
+		return nil, nil
+	}
+	if e, ok := r.byID[id]; ok {
+		return e, nil
+	}
+	return nil, nil
+}
+
 // =====================================================
 // PostgresEmotionRepo（生产实现）
 // =====================================================
@@ -190,4 +211,22 @@ func (r *PostgresEmotionRepo) Ping(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.PingContext(ctx)
+}
+
+// GetByEventID Stage 36-A3：Postgres 版按 event_id 查。event_id 上有 UNIQUE 索引
+// （migration 001 uq_emotion_analysis_event_id），查询走索引无全表扫描。
+// 空 event_id 返回 nil（与 Create 的非去重分支对齐）。
+func (r *PostgresEmotionRepo) GetByEventID(ctx context.Context, eventID string) (*model.EmotionAnalysis, error) {
+	if eventID == "" {
+		return nil, nil
+	}
+	var e model.EmotionAnalysis
+	err := r.db.WithContext(ctx).Where("event_id = ?", eventID).First(&e).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &e, nil
 }

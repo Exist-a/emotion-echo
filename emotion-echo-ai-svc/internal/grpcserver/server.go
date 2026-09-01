@@ -193,6 +193,60 @@ func (s *emotionQueryServer) GetFusedEmotion(ctx context.Context, req *emotionqu
 	return toProtoFusedEmotion(f), nil
 }
 
+// UpsertNeutralEmotion Stage 36-A3：chat-svc 在 Kafka 关闭（KAFKA_ENABLED=false /
+// dev 模式）时，发消息成功后同步调用本 RPC 写入一条中性占位情绪，让前端"情绪分析"
+// 模块在 dev 模式下也能立刻查到占位数据。
+//
+// 关键契约：
+//   - event_id 非空 → 走幂等去重（DB UNIQUE on event_id）：同 event_id 二次调用
+//     返回 was_inserted=false + 已存在行的 id（不再插入新行）。
+//   - event_id 为空 → 直接插入（无去重）。生产路径下 event_id 必填（chat-svc 用
+//     其 outbox UUID），空 event_id 仅用于诊断 / 单测。
+//   - model 字段固定为 "sync-fallback"，便于前端 / 监控区分 Kafka 异步路径。
+func (s *emotionQueryServer) UpsertNeutralEmotion(ctx context.Context, req *emotionquery.UpsertNeutralEmotionRequest) (*emotionquery.UpsertNeutralEmotionResponse, error) {
+	if req.MessageId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "message_id is required and must be > 0")
+	}
+	if req.UserId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required and must be > 0")
+	}
+	if req.ConversationId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "conversation_id is required and must be > 0")
+	}
+	if req.EventId == "" {
+		return nil, status.Error(codes.InvalidArgument, "event_id is required (chat-svc outbox UUID) for idempotency")
+	}
+
+	// 幂等检查：先按 event_id 查一次
+	if existing, err := s.repo.GetByEventID(ctx, req.EventId); err != nil {
+		return nil, status.Errorf(codes.Internal, "lookup by event_id: %v", err)
+	} else if existing != nil {
+		return &emotionquery.UpsertNeutralEmotionResponse{
+			EmotionAnalysisId: existing.ID,
+			WasInserted:       false,
+		}, nil
+	}
+
+	// 插入中性占位
+	e := &model.EmotionAnalysis{
+		MessageID:      req.MessageId,
+		UserID:         req.UserId,
+		ConversationID: req.ConversationId,
+		EventID:        req.EventId,
+		PrimaryEmotion: "neutral",
+		SentimentScore: 0,
+		Confidence:     0,
+		Model:          "sync-fallback",
+	}
+	if err := s.repo.Create(ctx, e); err != nil {
+		return nil, status.Errorf(codes.Internal, "create neutral placeholder: %v", err)
+	}
+	return &emotionquery.UpsertNeutralEmotionResponse{
+		EmotionAnalysisId: e.ID,
+		WasInserted:       true,
+	}, nil
+}
+
 func toProtoEmotion(e *model.EmotionAnalysis) *emotionquery.Emotion {
 	return &emotionquery.Emotion{
 		Id:             e.ID,
