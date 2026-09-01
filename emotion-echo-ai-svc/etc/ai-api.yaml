@@ -32,7 +32,8 @@ Port: 8891
 SkyWalking:
   OAPAddr:     ${SKYWALKING_OAP_ADDR:-localhost:11800}
   ServiceName: emotion-echo-ai-svc
-  Enabled:     ${SKYWALKING_ENABLED:-false}
+  # Enabled: 省略 → 走 Config struct tag `json:",default=false"`；env 注入由 main.go applyEnvOverrides
+  # （go-zero conf 不解析 ${VAR:-default} 字面量；yaml 显式 false 会和 env 冲突）
 
 Postgres:
   DSN:          ${POSTGRES_DSN:-"host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_ai"}
@@ -42,7 +43,7 @@ Postgres:
 Kafka:
   BrokersCSV: ${KAFKA_BROKERS:-localhost:9092}
   GroupID:    ai-svc
-  Enabled:    ${KAFKA_ENABLED:-true}
+  # Enabled: 省略 → Config default=true
   Topics:     ["chat-events"]
   DLQTopic:   chat-events-dlq
   MaxRetries: 3
@@ -78,8 +79,8 @@ XTTS:
 
 # Stage 31 PR-09: Nacos 注册中心 + 配置中心
 Nacos:
-  Enabled:   ${NACOS_ENABLED:-false}
+  # Enabled: 省略 → Config default=true
   Addr:      ${NACOS_ADDR:-emotion-echo-nacos:8848}
   Namespace: ${NACOS_NAMESPACE:-emotion-echo-dev}
   GroupName: DEFAULT_GROUP
-  HotReload: ${NACOS_HOT_RELOAD:-false}
+  # HotReload: 省略 → Config default=false

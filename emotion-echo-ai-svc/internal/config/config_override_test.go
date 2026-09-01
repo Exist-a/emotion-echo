@@ -45,6 +45,12 @@ func TestConfig_YAMLFieldMapping(t *testing.T) {
 	assert.Equal(t, "ai-svc", c.Kafka.GroupID)
 	assert.Contains(t, c.Kafka.Topics, "chat-events")
 	assert.Equal(t, "deepseek-chat", c.LLM.Model, "LLM.Model should default to deepseek-chat")
+	// Stage 35 PR-7：bool 字段（Kafka.Enabled / Nacos.Enabled / SkyWalking.Enabled / Nacos.HotReload）
+	// 在 yaml 中省略 → go-zero conf 不写 → 走 Config struct tag default
+	assert.False(t, c.Nacos.Enabled, "Nacos.Enabled default=false (yaml 省略 → struct default)")
+	assert.False(t, c.Nacos.HotReload)
+	assert.False(t, c.SkyWalking.Enabled)
+	assert.True(t, c.Kafka.Enabled, "Kafka.enabled dev 默认开启")
 }
 
 // TestEnvOverride_NacosEnabled env 注入覆盖 yaml 字面量。
@@ -103,6 +109,8 @@ func TestEnvOverride_LLMModel(t *testing.T) {
 }
 
 // testYAML 测试用 yaml 片段（与 etc/ai-api.yaml 同步关键字段）。
+// 注：Stage 35 PR-7：bool 字段（SkyWalking.Enabled / Kafka.Enabled / Nacos.Enabled / Nacos.HotReload）省略，
+// 走 Config struct tag default（避免 go-zero conf type mismatch）。
 const testYAML = `Name: ai-api
 Host: 0.0.0.0
 Port: 8891
@@ -110,7 +118,6 @@ Port: 8891
 SkyWalking:
   OAPAddr: "localhost:11800"
   ServiceName: emotion-echo-ai-svc
-  Enabled: false
 
 Postgres:
   DSN: "host=localhost"
@@ -120,7 +127,6 @@ Postgres:
 Kafka:
   BrokersCSV: "localhost:9092"
   GroupID: ai-svc
-  Enabled: true
   Topics: ["chat-events"]
   DLQTopic: chat-events-dlq
   MaxRetries: 3
@@ -152,11 +158,9 @@ XTTS:
   Speed: 0.75
 
 Nacos:
-  Enabled: false
   Addr: "emotion-echo-nacos:8848"
   Namespace: "emotion-echo-dev"
   GroupName: DEFAULT_GROUP
-  HotReload: false
 `
 
 // fmtSscan 简化版 fmt.Sscan（避免 import fmt 噪音）。

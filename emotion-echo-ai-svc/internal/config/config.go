@@ -19,7 +19,8 @@ type Kafka struct {
 	// 启动时在 main.go 解析成 []string
 	BrokersCSV string `json:",default=localhost:9092"`
 	GroupID    string `json:",default=ai-svc"`
-	Enabled    bool   `json:",default=false"`
+	// Enabled: dev 默认 true（本地启动消费者）；生产 compose 注入 KAFKA_ENABLED=false 时 main.go applyEnvOverrides 覆盖。
+	Enabled    bool   `json:",default=true"`
 	Topics     []string `json:",default=[\"chat-events\"]"`
 	// DLQTopic Stage 30-C A2：死信队列 topic。空 = 不启用 DLQ（退化原行为）。
 	DLQTopic string `json:",optional"`
@@ -86,8 +87,12 @@ type Config struct {
 //
 // ai-svc 同时暴露 HTTP :8891 与 gRPC :8892；注册时仅注册 HTTP（SDK 实例元数据
 // 会携带 grpc_port=8892 供 Stage 32 APISIX upstream 决定是否双注册）。
+//
+// Stage 35 PR-7：yaml 不写 bool 字段（go-zero conf 不解析 ${VAR:-default} 字面量），
+// Config struct tag `default=false` 提供 dev 默认值；compose 注入 NACOS_ENABLED=true 时
+// main.go applyEnvOverrides 会覆盖。
 type Nacos struct {
-	Enabled   bool   `json:",default=true"`
+	Enabled   bool   `json:",default=false"`
 	Addr      string `json:",default=emotion-echo-nacos:8848"`
 	Namespace string `json:",default=emotion-echo-dev"`
 	GroupName string `json:",default=DEFAULT_GROUP"`
