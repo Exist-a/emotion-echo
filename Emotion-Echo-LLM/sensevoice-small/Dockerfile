@@ -65,9 +65,21 @@ COPY --from=builder /install /usr/local
 # Copy application source
 COPY --chown=app:app sensevoice-small/logging_setup.py sensevoice-small/metrics_setup.py sensevoice-small/server.py ./
 
-# Pre-create cache dir (funasr will download model to ~/.cache/modelscope on first run)
-RUN mkdir -p /app/cache && chown app:app /app/cache
+# Stage 36-B5 fix: 预烘焙 SenseVoiceSmall 模型（model.pt 893MB + am.mvn 11K），
+# 避免容器首次启动从 ModelScope 下载（dev 环境 +200MB 下载 + 60-90s 启动期）。
+# model_dir = "iic/SenseVoiceSmall" → funasr 会查 MODELSCOPE_CACHE/{model_dir}/snapshots/master/model.pt
+# 镜像构建时已存在文件 → funasr 不下载，model_loaded=true 立即生效。
+COPY --chown=app:app \
+     sensevoice-small/model.pt sensevoice-small/am.mvn \
+     /app/cache/models/iic/SenseVoiceSmall/snapshots/master/
 
+# dummy files for funasr metadata probing（funasr 会 stat 这些，不需真内容）
+RUN mkdir -p /app/cache/models/iic/SenseVoiceSmall/snapshots/master/fig && \
+    touch /app/cache/models/iic/SenseVoiceSmall/snapshots/master/.gitattributes && \
+    touch /app/cache/models/iic/SenseVoiceSmall/snapshots/master/README.md && \
+    chown -R app:app /app/cache
+
+# 应用 cache env（funasr / modelscope 都会读）
 ENV HF_HOME=/app/cache \
     MODELSCOPE_CACHE=/app/cache
 
@@ -75,7 +87,8 @@ EXPOSE 8002
 
 USER app
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+# Stage 36-B5 fix: start_period 提到 60s（模型已预烘焙，只需 funasr 加载权重 ~30s）
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=5).read()" || exit 1
 
 # tini as PID 1 handles SIGTERM properly

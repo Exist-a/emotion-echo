@@ -11,24 +11,22 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
-    # Tell huggingface to use Aliyun mirror
+    # Stage 36-B5 fix: drop tuna mirror (境外网络 tuna 不可达), use pypi.org directly
     HF_ENDPOINT=https://hf-mirror.com
 
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
- && apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    git \
+RUN for i in 1 2 3; do \
+      apt-get update && \
+      apt-get install -y --no-install-recommends --fix-missing \
+        gcc g++ git && break; \
+      echo "apt-get install attempt $i failed, retrying in 10s..."; \
+      sleep 10; \
+    done \
     && rm -rf /var/lib/apt/lists/*
 
 COPY XTTS/requirements.txt .
 # 简化：一次 pip install 全部 requirements（不拆 --prefix 分阶段）
 # TTS 自身会拉 spacy / jieba / pypinyin（我们 requirements 已包含）
-RUN pip install --prefix=/install --timeout 600 -r requirements.txt \
-    -i https://mirrors.tuna.tsinghua.edu.cn/pypi/simple/ \
-    --extra-index-url https://pypi.org/simple/
+RUN pip install --prefix=/install --timeout 600 -r requirements.txt
 
 
 FROM python:3.10-slim AS runtime
@@ -44,14 +42,13 @@ ENV TZ=${TZ} \
     MODELSCOPE_CACHE=/app/cache
 
 # Coqui-TTS runtime deps
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
- && apt-get update && apt-get install -y --no-install-recommends \
-    libsndfile1 \
-    libgomp1 \
-    libespeak-ng1 \
-    ca-certificates \
-    tini \
+RUN for i in 1 2 3; do \
+      apt-get update && \
+      apt-get install -y --no-install-recommends --fix-missing \
+        libsndfile1 libgomp1 libespeak-ng1 ca-certificates tini && break; \
+      echo "apt-get install attempt $i failed, retrying in 10s..."; \
+      sleep 10; \
+    done \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
@@ -69,7 +66,7 @@ COPY --chown=app:app XTTS/TTS/ ./TTS/
 # application code
 COPY --chown=app:app XTTS/logging_setup.py XTTS/metrics_setup.py XTTS/server.py ./
 
-# model + sample WAV
+# model + sample WAV (1.8GB model.pth + 201MB dvae.pth + configs)
 COPY --chown=app:app XTTS/AI-ModelScope/ ./AI-ModelScope/
 
 RUN mkdir -p /app/cache && chown -R app:app /app/cache
