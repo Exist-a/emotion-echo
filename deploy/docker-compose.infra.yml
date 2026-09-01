@@ -215,26 +215,23 @@ services:
       # 改用 19080 作为 host 端口映射，容器内仍监听 9080。
       # Stage 33 PR-20: 仅 HTTP data plane :19080 保留；Admin 9180 + prometheus 9091 改 expose
       - "19080:9080"   # HTTP data plane (host 19080 → container 9080)
+      # Stage 36-C1: 把 Admin API 9180 暴露到宿主机，让浏览器可访问内置 Dashboard UI（/ui/）。
+      # 详见 docs/stage-32-apisix-reintroduction.md；原 apache/apisix-dashboard:3.18.0-alpine 镜像
+      # 不存在（项目 2025-07 停止独立发版），APISIX 3.x 已内置 Dashboard UI 在 :9180/ui/。
+      - "9180:9180"   # Admin API + 内置 Dashboard UI (host 9180 → container 9180)
     expose:
-      - "9180"         # Admin API（dev 通过 docker exec / kubectl port-forward）
       - "9091"         # Prometheus exporter
     networks:
       - app-network
 
-  # =====================================================
-  # APISIX Dashboard 3.18（Stage 32 PR-14）
-  # 仅 dev 暴露；prod 通过 NetworkPolicy 限制 9000 端口
-  # =====================================================
-  apisix-dashboard:
-    image: apache/apisix-dashboard:3.18.0-alpine
-    container_name: emotion-echo-apisix-dashboard
-    restart: unless-stopped
-    depends_on:
-      - apisix
-    ports:
-      - "9000:9000"   # Dashboard UI（admin/admin）
-    networks:
-      - app-network
+  # Stage 36-C1: apisix-dashboard 容器已删除。
+  # 历史（Stage 32 PR-14）：apache/apisix-dashboard:3.18.0-alpine 镜像实际不存在于 Docker Hub
+  # （项目自 2025-07 起停止独立发版，dashboard 已内嵌到主仓库）。
+  # APISIX 3.x 主镜像 apache/apisix:3.18.0-debian 已默认开启 deployment.admin.enable_admin_ui: true，
+  # UI 路径 /ui/ 在 Admin API 端口 9180 下。
+  # 访问：浏览器开 http://localhost:9180/ui/，用 deployment.admin.admin_key 配置的 key 登录。
+  # 原 deploy/docker-compose.infra.validation.yml（dashboard replicas=0 workaround）也随之删除，
+  # 详见 commit 路径（Stage 36-C1）。
 
 # =====================================================
 # 卷定义
