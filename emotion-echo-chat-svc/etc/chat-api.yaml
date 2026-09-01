@@ -22,9 +22,11 @@ Kafka:
   Enabled:    true
 
 # Stage 31 PR-08: Nacos 注册中心 + 配置中心
+# Stage 33 部署修复：同 user-svc，go-zero conf 库对 env 占位符替换后仍是 string，
+# 无法转 bool；改为硬编码 default，env 注入由 main.go applyEnvOverrides 完成。
 Nacos:
-  Enabled:   ${NACOS_ENABLED:-true}
-  Addr:      ${NACOS_ADDR:-emotion-echo-nacos:8848}
-  Namespace: ${NACOS_NAMESPACE:-emotion-echo-dev}
+  Enabled:   true
+  Addr:      emotion-echo-nacos:8848
+  Namespace: emotion-echo-dev
   GroupName: DEFAULT_GROUP
-  HotReload: ${NACOS_HOT_RELOAD:-false}
+  HotReload: false
