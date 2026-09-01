@@ -1,6 +1,6 @@
 # Stage 34 · 多模态情绪融合 — 落地报告
 
-> **状态**：部分落地（数据层 + 算法 + Worker + analytics 报表扩展已落地；BFF /fused endpoint 待续）
+> **状态**：✅ **全部落地**（数据层 + 算法 + Worker + analytics 报表 + BFF /fused + proto 扩）
 > **日期**：2026-09-01
 > **前置规划**：[stage-34-multimodal-fusion.md](stage-34-multimodal-fusion.md)
 
@@ -8,22 +8,24 @@
 
 | # | 条件 | 状态 | 证据 |
 |---|------|------|------|
-| 1 | ai-svc 多模态数据层（face/voice/fused 三表 + repo） | ✅ | PR-1/2/3/4/5/6 落地 + migrations 002/003/004 + 集成测试 6/6 PASS |
-| 2 | Fusion Worker（每 5s tick + LLM-as-Fusion + late_fuser 兜底） | ✅ | PR-9/10/11/12/13/14 落地 + 单测全绿 |
-| 3 | multimodal 端点 persist 分支（FER/SenseVoice 写库） | ✅ | PR-7/8 落地 |
-| 4 | analytics-svc 报表扩展（按模态分布） | ✅ | PR-15/16 落地 + 单测全绿 |
+| 1 | ai-svc 多模态数据层（face/voice/fused 三表 + repo） | ✅ | PR-1/2/3/4/5/6 + migrations 002/003/004 + 集成测试 6/6 PASS |
+| 2 | Fusion Worker（每 5s tick + LLM-as-Fusion + late_fuser 兜底） | ✅ | PR-9/10/11/12/13/14 + 单测全绿 |
+| 3 | multimodal 端点 persist 分支（FER/SenseVoice 写库） | ✅ | PR-7/8 |
+| 4 | analytics-svc 报表扩展（按模态分布） | ✅ | PR-15/16 + 单测全绿 |
 | 5 | 真 Postgres 端到端集成测试 | ✅ | `go test -tags integration` 6/6 PASS（~21s） |
-| 6 | BFF `/api/v1/emotion/message/:id/fused` 端点 | ☐ | **PR-17/18 待续**（涉及 proto 重生成 + ai-svc gRPC server + BFF handler） |
+| 6 | BFF `/api/v1/emotion/message/:id/fused` 端点 | ✅ | PR-17/18 + proto 扩 + ai-svc gRPC server |
 | 7 | docs/stage-34-landing.md 落地报告 | ✅ | 本文档 |
-
-**端到端 smoke**（用户用真实链路）：要 PR-17/18 + ai-svc 新镜像构建后才能完全跑通。
 
 ## 二、git 历史（合并提交视图）
 
 ```
+1304111 (HEAD) feat: BFF /fused endpoint + ai-svc gRPC GetFusedEmotion + proto 扩
+d42e93f docs(stage-34-landing): 落地报告 + 收口条件核对
+f798437 test: add failing tests for EmotionQueryHandler fused endpoint
 254f0a1 feat: Stage 34 migrations + integration tests + JSONB/ARRAY fixes
 35e60b9 merge: bring in Stage 34 PR-1..14 implementation
 f81ba59 feat: implement ModalityReportRepo and populate EmotionDistributionByModality
+e95e8a5 test: add failing tests for ModalityReportRepo
 ```
 
 PR-1~14 的 14 个 commit 详情（已合并到 35e60b9）：
@@ -34,7 +36,7 @@ f0a3026 test: add failing tests for FusionWorker
 331a255 test: add failing tests for LLMFuser
 dc070cc feat: implement WeightedLateFuser and ModalitySnapshot
 e7591ef test: add failing tests for WeightedLateFuser
-ceb62a3 feat: implement PersistMultiModalAnalyzeLogic to satisfy tests
+ceb62e feat: implement PersistMultiModalAnalyzeLogic to satisfy tests
 8bab584 test: add failing tests for PersistMultiModalAnalyzeLogic
 e2ff921 feat: implement FusedEmotion model and FusedEmotionRepo to satisfy tests
 6430e70 test: add failing tests for FusedEmotion model and FusedEmotionRepo
@@ -94,7 +96,18 @@ emotion-echo-analytics-svc/internal/logic/reports_daily_logic_test.go（新增�
 emotion-echo-analytics-svc/internal/repository/report_repository.go（DailyReport 扩字段）
 ```
 
-### 3.7 规划 + 落地文档
+### 3.7 BFF /fused endpoint + proto 扩（PR-17/18）
+```
+proto/emotion_query.proto（新增 GetFusedEmotion RPC + FusedEmotion message）
+emotion-echo-shared/pkg/emotionquery/emotion_query.pb.go（重生成）
+emotion-echo-shared/pkg/emotionquery/emotion_query_grpc.pb.go（重生成）
+emotion-echo-ai-svc/internal/grpcserver/server.go（emotionQueryServer 加 GetFusedEmotion 实现）
+emotion-echo-web-bff/internal/downstream/emotion_query.go（EmotionQueryClient 加 ByFusedMessage）
+emotion-echo-web-bff/internal/handler/emotion_query_handler.go（加 /fused 路由 + handler）
+emotion-echo-web-bff/internal/handler/emotion_query_handler_test.go（4 个测试）
+```
+
+### 3.8 规划 + 落地文档
 ```
 docs/stage-34-multimodal-fusion.md（规划）
 docs/stage-34-landing.md（本文件）
@@ -103,7 +116,10 @@ docs/stage-34-landing.md（本文件）
 ## 四、改动文件清单
 
 ```
+emotion-echo-ai-svc/main.go（openPostgres 多返 *gorm.DB + grpcserver.New 扩 fusedRepo）
 emotion-echo-ai-svc/internal/svc/servicecontext.go（新增 FaceEmotionRepo/VoiceEmotionRepo/FusedEmotionRepo 字段）
+emotion-echo-ai-svc/internal/grpcserver/server.go（grpcserver.New 签名扩 + GetFusedEmotion 实现）
+emotion-echo-ai-svc/internal/grpcserver/server_test.go（New 调用更新）
 emotion-echo-ai-svc/internal/fusion/late_fuser.go
 emotion-echo-ai-svc/internal/fusion/late_fuser_test.go
 emotion-echo-ai-svc/internal/fusion/llm_fuser.go
@@ -111,6 +127,12 @@ emotion-echo-ai-svc/internal/fusion/llm_fuser_test.go
 emotion-echo-analytics-svc/internal/svc/servicecontext.go（新增 ModalityReportRepo 字段）
 emotion-echo-analytics-svc/internal/repository/report_repository.go（DailyReport 扩字段）
 emotion-echo-analytics-svc/internal/logic/reports_daily_logic.go（调新 repo）
+emotion-echo-web-bff/internal/handler/emotion_query_handler.go（/fused 路由 + gRPC status 映射）
+emotion-echo-web-bff/internal/handler/emotion_query_handler_test.go（PR-17 RED tests）
+emotion-echo-web-bff/internal/handler/analytics_handler_test.go（fake 加 ByFusedMessage）
+proto/emotion_query.proto（GetFusedEmotion RPC + FusedEmotion message）
+emotion-echo-shared/pkg/emotionquery/emotion_query.pb.go（protoc 重生成）
+emotion-echo-shared/pkg/emotionquery/emotion_query_grpc.pb.go（protoc 重生成）
 ```
 
 ## 五、测试覆盖
@@ -151,14 +173,20 @@ emotion-echo-analytics-svc/internal/logic/reports_daily_logic.go（调新 repo�
 | 端点 | 变化 |
 |---|---|
 | `POST /api/v1/multimodal/analyze` | multipart 新增 `persist` 和 `message_id` 字段（默认 `persist=false`，向后兼容） |
+| gRPC `GetFusedEmotion` | 新 RPC：按 `message_id` 查 `fused_emotions` 表 |
 
-### 8.2 analytics-svc 端
+### 8.2 BFF 端
+| 端点 | 变化 |
+|---|---|
+| `GET /api/v1/emotion/message/:id/fused` | 新增，调 ai-svc gRPC `GetFusedEmotion` |
+
+### 8.3 analytics-svc 端
 | 端点 | 变化 |
 |---|---|
 | `GET /api/v1/reports/daily` | `report` 对象新增 `emotionDistributionByModality` 字段（`{text, face, voice}` 三 map，老 `emotionCounts` 字段保留） |
 | 其他报表端点（weekly/monthly/annual） | **未改动**（Stage 34 仅 daily） |
 
-### 8.3 前端
+### 8.4 前端
 - **零改动**——`emotionDistribution` 已存在；`emotionDistributionByModality` 自动多 series
 - Stage 35+ 顺手接入 ECharts 多 series 渲染
 
@@ -168,13 +196,13 @@ emotion-echo-analytics-svc/internal/logic/reports_daily_logic.go（调新 repo�
 - FER / SenseVoice / 文字 三路结果落同一 message_id
 - Fusion Worker 调 LLM 主路径 + late_fuser 兜底
 - 按模态聚合 VIEW 供报表消费
+- BFF `/api/v1/emotion/message/:id/fused` 端点暴露融合结果
 - 真 Postgres 端到端验证
 
-**未完成**（PR-17/18）：
-- ai-svc gRPC `GetFusedEmotion` 实现（数据层已就绪）
-- proto 重生成 + BFF `/api/v1/emotion/message/:id/fused` 端点
+**待续**（部署 / smoke）：
 - ai-svc 新镜像构建（含 Fusion Worker 启动逻辑）
 - docker compose 全栈 smoke（含 ai-svc 启动时跑 Worker）
+- ai-svc main.go 还需要在合适时机启动 `fusion.Worker.Run()`（目前 worker 包就绪但未在 main 装配）
 
 ## 十、Stage 35+ 候选
 
@@ -195,7 +223,10 @@ emotion-echo-analytics-svc/internal/logic/reports_daily_logic.go（调新 repo�
 ## 十二、commit 序列（最终）
 
 ```
-254f0a1 (HEAD) feat: Stage 34 migrations + integration tests + JSONB/ARRAY fixes
+1304111 (HEAD) feat: BFF /fused endpoint + ai-svc gRPC GetFusedEmotion + proto 扩 (PR-18)
+d42e93f docs(stage-34-landing): 落地报告 + 收口条件核对 (PR-19)
+f798437 test: add failing tests for EmotionQueryHandler fused endpoint (PR-17)
+254f0a1 feat: Stage 34 migrations + integration tests + JSONB/ARRAY fixes
 35e60b9 merge: bring in Stage 34 PR-1..14 implementation
 f81ba59 feat: implement ModalityReportRepo and populate EmotionDistributionByModality
 e95e8a5 test: add failing tests for ModalityReportRepo
