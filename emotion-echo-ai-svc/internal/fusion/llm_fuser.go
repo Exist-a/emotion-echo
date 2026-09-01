@@ -29,6 +29,18 @@ import (
 	"emotion-echo-ai-svc/internal/model"
 )
 
+// LLM outcome labels（Stage 35 PR-6）。与 shared/pkg/metrics 常量同义但本地引用避免
+// fusion 包 import shared 包（共享包反向依赖业务包会被 lint 警告）。
+const (
+	LLMOutcomeSuccess       = "success"
+	LLMOutcomeJSONParseErr  = "json_parse_err"
+	LLMOutcomeTimeout       = "timeout"
+	LLMOutcomeHTTP5xx       = "http_5xx"
+	LLMOutcomeInvalidOutput = "invalid_output"
+	LLMOutcomeCircuitOpen   = "circuit_open"
+	LLMOutcomeOther         = "other"
+)
+
 // LLMConfig LLM HTTP 客户端配置。
 type LLMConfig struct {
 	BaseURL string        // e.g. "https://api.deepseek.com"
@@ -121,6 +133,8 @@ const llmSystemPrompt = `你是一个多模态情绪融合器。下面会给你�
 //   - 入口检查 breaker.Allow()：Open → 立即返回 ErrCircuitOpen（不计 failure，因为没真调）
 //   - 出口按 err 调 breaker.RecordResult(err)
 //   - HalfOpen 时第一次 Allow 返 true 后半 Open 立即触发 RecordFailure → 重置 OpenSeconds
+//
+// Stage 35 PR-6：包装 metrics。outcome label 来自 classifyLLMError(err)。
 func (f *LLMFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*model.FusedEmotion, error) {
 	if s.IsEmpty() {
 		return nil, errors.New("llm fusion: no modalities available")
@@ -128,14 +142,64 @@ func (f *LLMFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*model.FusedEm
 
 	// Stage 35 PR-5：熔断器 Open 时直接拒绝，避免雪崩打挂 provider。
 	if f.breaker != nil && !f.breaker.Allow() {
+		RecordLLMCall(LLMOutcomeCircuitOpen)
 		return nil, ErrCircuitOpen
 	}
 
+	start := time.Now()
 	out, err := f.doFuse(ctx, s)
+	outcome := classifyLLMError(err)
+	RecordLLMCall(outcome)
+	ObserveLLMLatency(outcome, time.Since(start).Seconds())
 	if f.breaker != nil {
 		f.breaker.RecordResult(err)
 	}
 	return out, err
+}
+
+// classifyLLMError 把 error 映射到 metrics outcome label。
+func classifyLLMError(err error) string {
+	if err == nil {
+		return LLMOutcomeSuccess
+	}
+	msg := err.Error()
+	switch {
+	case errors.Is(err, ErrCircuitOpen):
+		return LLMOutcomeCircuitOpen
+	case containsAny(msg, "timeout", "deadline"):
+		return LLMOutcomeTimeout
+	case containsAny(msg, "llm http 5", "status 5"):
+		return LLMOutcomeHTTP5xx
+	case containsAny(msg, "unmarshal", "validation"):
+		return LLMOutcomeInvalidOutput
+	case containsAny(msg, "json parse", "invalid character"):
+		return LLMOutcomeJSONParseErr
+	default:
+		return LLMOutcomeOther
+	}
+}
+
+// containsAny 简单字符串包含判断（避免 strings 包 import 噪音）。
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if len(sub) == 0 {
+			continue
+		}
+		if len(s) >= len(sub) && indexOf(s, sub) >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// indexOf 朴素子串匹配。
+func indexOf(s, sub string) int {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }
 
 // doFuse 是 Fuse 的实际实现（不带 breaker，便于单测和复用）。

@@ -85,8 +85,13 @@ func NewFusionWorker(deps FusionWorkerDeps) *FusionWorker {
 //  5. FusedEmotionRepo.Upsert 写库
 //
 // 返回值：首个 candidate 的 error（如有）。后续 candidate 的错误被吞掉（避免一坏全坏）。
+//
+// Stage 35 PR-6：每次 tick 记 outcome metric。LRU 命中走 skipped_lru；其余 ok/error。
 func (w *FusionWorker) Tick(ctx context.Context) error {
 	w.ticked.Add(1)
+	defer func() {
+		RecordWorkerTick("ok")
+	}()
 
 	if w.deps.PendingLister == nil {
 		logging.Printf("[fusion] tick: PendingLister nil, skipping")
@@ -114,6 +119,7 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 	// Stage 35 PR-3：LRU 限流。Touch 命中 → skip（不调 fuser），未命中 → 正常处理。
 	if w.deps.RateLimit != nil && w.deps.RateLimit.Touch(messageID) {
 		logging.Printf("[fusion] msgID=%d skipped (LRU hit)", messageID)
+		RecordWorkerTick("skipped_lru")
 		return nil
 	}
 
@@ -146,6 +152,7 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 		if err != nil {
 			logging.Printf("[fusion] msgID=%d LLM miss (err=%v), fallback to late", messageID, err)
 		}
+		RecordFallback("llm_to_late")
 		fused, err = w.deps.LateFuser.Fuse(ctx, snap)
 		if err != nil || fused == nil {
 			return errors.New("both LLM and late fusion failed")

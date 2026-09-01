@@ -18,6 +18,7 @@
 //   service label 值建议：<svc-name> (e.g. "chat-svc", "ai-svc", "analytics-svc")
 //
 // Stage 25-E：从 ai-svc/internal/metrics 抽取为共享包，供 5 个 svc 共用。
+// Stage 35 PR-6：新增 fusion_metrics.go（4 个 fusion collector）+ RegistryGatherCounter 测试 helper。
 package metrics
 
 import (
@@ -29,6 +30,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // HTTPRequestsTotal HTTP 请求总数（按 service/method/path/status 区分）
@@ -83,4 +85,43 @@ func GinMetricsMiddleware(serviceName string) gin.HandlerFunc {
 		HTTPRequestsTotal.WithLabelValues(serviceName, method, path, status).Inc()
 		HTTPRequestDuration.WithLabelValues(serviceName, method, path).Observe(time.Since(start).Seconds())
 	}
+}
+// RegistryGatherCounter 读取 default registry 中指定 name + labels 的 Counter 当前值。
+//
+// 用于测试断言：counter.Inc() 后读出来的值应大于 Inc 之前的值。
+// 返回 0 + nil 当 metric 不存在（首次注册前）。
+func RegistryGatherCounter(name string, labels map[string]string) (float64, error) {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return 0, err
+	}
+	for _, mf := range mfs {
+		if mf.GetName() != name {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			if !labelsMatch(m.GetLabel(), labels) {
+				continue
+			}
+			if m.GetCounter() == nil {
+				continue
+			}
+			return m.GetCounter().GetValue(), nil
+		}
+	}
+	return 0, nil
+}
+
+// labelsMatch 判定 proto label list 是否包含且等于查询 labels。
+func labelsMatch(have []*dto.LabelPair, want map[string]string) bool {
+	if len(have) != len(want) {
+		return false
+	}
+	for _, lp := range have {
+		v, found := want[lp.GetName()]
+		if !found || lp.GetValue() != v {
+			return false
+		}
+	}
+	return true
 }
