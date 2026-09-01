@@ -49,14 +49,17 @@ type ReportRepo interface {
 
 // DailyReport 单日报告聚合
 type DailyReport struct {
-	UserID             int64            `json:"userId"`
-	Date               string           `json:"date"` // YYYY-MM-DD
-	EmotionCounts      map[string]int64 `json:"emotionCounts"`
-	MessageCount       int64            `json:"messageCount"`
-	ConversationCount  int64            `json:"conversationCount"`
-	AssessmentCount    int64            `json:"assessmentCount"`
-	AvgSentiment       float64          `json:"avgSentiment"`
-	AvgConfidence      float64          `json:"avgConfidence"`
+	UserID                       int64                    `json:"userId"`
+	Date                         string                   `json:"date"` // YYYY-MM-DD
+	EmotionCounts                map[string]int64         `json:"emotionCounts"`
+	MessageCount                 int64                    `json:"messageCount"`
+	ConversationCount            int64                    `json:"conversationCount"`
+	AssessmentCount              int64                    `json:"assessmentCount"`
+	AvgSentiment                 float64                  `json:"avgSentiment"`
+	AvgConfidence                float64                  `json:"avgConfidence"`
+	// Stage 34: 按模态细分（text/face/voice），前端 ECharts 可自动多 series。
+	// 老字段 EmotionCounts 保留（向后兼容 = text 模态合并）。
+	EmotionDistributionByModality *ModalityEmotionDistribution `json:"emotionDistributionByModality,omitempty"`
 }
 
 // TrendPoint 趋势上一个数据点

@@ -70,6 +70,63 @@ func TestReportsDailyLogic_HappyPath_PopulatesReport(t *testing.T) {
 	assert.InDelta(t, 0.42, resp.Report.AvgSentiment, 0.001)
 }
 
+// TestReportsDailyLogic_PopulatesEmotionDistributionByModality 验证 Stage 34 新字段。
+//
+// 期望 logic 调 ModalityReportRepo.GetDailyEmotionByModality 并把结果填进
+// DailyReport.EmotionDistributionByModality。当前实现未做 → 必须失败（RED）。
+func TestReportsDailyLogic_PopulatesEmotionDistributionByModality(t *testing.T) {
+	t.Parallel()
+
+	wantModality := &repository.ModalityEmotionDistribution{
+		Text:  map[string]int64{"happy": 3, "sad": 1},
+		Face:  map[string]int64{"neutral": 2},
+		Voice: map[string]int64{"happy": 1},
+	}
+
+	reportRepo := &fakeReportRepo{
+		getDailyReport: &repository.DailyReport{
+			UserID: 42, Date: "2026-09-01",
+			EmotionCounts: map[string]int64{"happy": 4, "sad": 1},
+		},
+	}
+	modalityRepo := &fakeModalityReportRepo{
+		getDailyEmotionByModality: wantModality,
+	}
+
+	ctx := &svc.ServiceContext{
+		Config:           config.Config{},
+		ReportRepo:       reportRepo,
+		ModalityReportRepo: modalityRepo,
+	}
+	l := NewReportsDailyLogic(context.Background(), ctx)
+	resp, err := l.GetDailyReport(&types.GetDailyReportReq{
+		UserID: 42,
+		Date:   "2026-09-01",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp.Report)
+
+	require.NotNil(t, resp.Report.EmotionDistributionByModality,
+		"EmotionDistributionByModality must be populated by logic")
+	assert.Equal(t, map[string]int64{"happy": 3, "sad": 1}, resp.Report.EmotionDistributionByModality.Text)
+	assert.Equal(t, map[string]int64{"neutral": 2}, resp.Report.EmotionDistributionByModality.Face)
+	assert.Equal(t, map[string]int64{"happy": 1}, resp.Report.EmotionDistributionByModality.Voice)
+}
+
+// fakeModalityReportRepo 满足 ModalityReportRepo 接口
+type fakeModalityReportRepo struct {
+	repository.ModalityReportRepo // embedded interface for forward-compat
+
+	getDailyEmotionByModality *repository.ModalityEmotionDistribution
+	getDailyEmotionByModalityErr error
+}
+
+func (f *fakeModalityReportRepo) GetDailyEmotionByModality(_ context.Context, _ int64, _ time.Time) (*repository.ModalityEmotionDistribution, error) {
+	return f.getDailyEmotionByModality, f.getDailyEmotionByModalityErr
+}
+
+func (f *fakeModalityReportRepo) Ping(_ context.Context) error { return nil }
+
 func TestReportsDailyLogic_EmptyDate_DefaultsToToday(t *testing.T) {
 	t.Parallel()
 	var capturedDate time.Time

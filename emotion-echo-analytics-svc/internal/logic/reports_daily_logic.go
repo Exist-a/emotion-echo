@@ -87,6 +87,18 @@ func (l *ReportsDailyLogic) GetDailyReport(req *types.GetDailyReportReq) (*types
 		report.EmotionCounts = map[string]int64{}
 	}
 
+	// Stage 34: 按模态细分（text/face/voice）— 复用同一 date 参数。
+	// ModalityReportRepo 可选（nil 时跳过，前端通过 omitempty 隐藏字段）。
+	if l.svcCtx.ModalityReportRepo != nil {
+		modality, err := l.svcCtx.ModalityReportRepo.GetDailyEmotionByModality(l.ctx, req.UserID, parsedDate)
+		if err != nil {
+			return nil, err
+		}
+		if modality != nil {
+			report.EmotionDistributionByModality = modality
+		}
+	}
+
 	return &types.GetDailyReportResp{Report: report}, nil
 }
 

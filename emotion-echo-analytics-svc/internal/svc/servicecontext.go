@@ -13,12 +13,14 @@ import (
 //
 // Stage 30-A 扩展：除 EventRepo 外，新增 ReportRepo（跨 schema 只读聚合）。
 // Round 3 加 MentalHealthRepo + TriggerQueue；Round 4 加 KafkaConsumer。
+// Stage 34 加 ModalityReportRepo（按模态维度的情绪分布）。
 type ServiceContext struct {
-	Config           config.Config
-	EventRepo        repository.EventRepo
-	ReportRepo       repository.ReportRepo        // Round 1
-	MentalHealthRepo repository.MentalHealthRepo // Round 3 part 1
-	TriggerQueue     *trigger.TriggerQueue        // Round 3 part 2
+	Config             config.Config
+	EventRepo          repository.EventRepo
+	ReportRepo         repository.ReportRepo          // Round 1
+	MentalHealthRepo   repository.MentalHealthRepo    // Round 3 part 1
+	TriggerQueue       *trigger.TriggerQueue          // Round 3 part 2
+	ModalityReportRepo repository.ModalityReportRepo // Stage 34
 }
 
 // NewServiceContext 用最少的依赖构造 svcCtx（向后兼容 Round 0）。

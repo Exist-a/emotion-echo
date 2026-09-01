@@ -3,15 +3,8 @@
 // ModalityReportRepo 提供按模态维度的情绪分布（face / voice / text），
 // 数据源是 ai-svc 的 emotion_echo_ai.daily_emotion_by_modality_v VIEW（Stage 34 migration 005）。
 //
-// 设计：
-//   - ReportRepo interface（依赖反转）
-//   - InMemoryModalityReportRepo 测试替身
-//   - PostgresModalityReportRepo 生产实现，Raw SQL 调跨 schema VIEW
-//
-// 数据形状：
-//   - 按 userID × date × emotion × modality 聚合
-//   - 返回 ModalityEmotionDistribution{Text, Face, Voice, Fused} 每个是 map[emotion]int64
-//   - 与现有 DailyReport.EmotionCounts 单模态字段**并存**（向后兼容）
+// 设计：ModalityEmotionDistribution / ModalityReportRepo 定义在 modality_report_repository.go（PR-16 GREEN），
+// 本测试文件只引用它们（RED 阶段）→ 必须失败。
 package repository
 
 import (
@@ -23,34 +16,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ModalityEmotionDistribution 单日按模态分组的情绪计数。
-//
-// Text / Face / Voice 三路分别对应 emotion_echo_ai 上的三张表（emotion_analysis /
-// face_emotion_results / voice_emotion_results）。Fused 留给未来 Stage 35+（融合结果
-// 不与单模态并列聚合，避免双计）。
-type ModalityEmotionDistribution struct {
-	Text map[string]int64
-	Face map[string]int64
-	Voice map[string]int64
-}
-
-// ModalityReportRepo 跨模态情绪分布仓储接口
-type ModalityReportRepo interface {
-	// GetDailyEmotionByModality 单日按模态聚合情绪计数
-	GetDailyEmotionByModality(ctx context.Context, userID int64, date time.Time) (*ModalityEmotionDistribution, error)
-	Ping(ctx context.Context) error
-}
-
-// TestModalityReportRepo_InMemory_EmptyRepo 当没有任何数据时，所有 map 为 nil/空。
+// TestModalityReportRepo_InMemory_EmptyRepo 当没有任何数据时，所有 map 为空（非 nil）。
 func TestModalityReportRepo_InMemory_EmptyRepo(t *testing.T) {
 	t.Parallel()
 	repo := NewInMemoryModalityReportRepo()
 	got, err := repo.GetDailyEmotionByModality(context.Background(), 7, time.Now())
 	require.NoError(t, err)
 	require.NotNil(t, got)
-	assert.Nil(t, got.Text)
-	assert.Nil(t, got.Face)
-	assert.Nil(t, got.Voice)
+	assert.Empty(t, got.Text)
+	assert.Empty(t, got.Face)
+	assert.Empty(t, got.Voice)
 }
 
 // TestModalityReportRepo_InMemory_PreloadedData 预置三路数据 → 分别正确返回。
