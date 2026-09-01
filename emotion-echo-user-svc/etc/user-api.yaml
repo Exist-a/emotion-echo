@@ -2,14 +2,19 @@ Name: emotion-echo-user-svc
 Host: 0.0.0.0
 Port: 8888
 
-# Stage 26-P:容器内服务发现(env 占位)
+# Stage 36-A1.1:容器内服务发现(env 占位 → 字面值)
+#
+# go-zero conf 不解析 ${VAR:-default} bash 占位符（Stage 22-B / commit e35d531 已确认），
+# 字面 ${...} 会被当成 host/DSN 字面值传给 go2sky / postgres driver，导致
+# "too many colons in address" / "missing port in address" 错误循环。
+# 现改为字面默认值，runtime env 覆盖由 main.go applyEnvOverrides 负责。
 SkyWalking:
-  OAPAddr:     ${SKYWALKING_OAP_ADDR:-emotion-echo-sw-oap:11800}
+  OAPAddr:     localhost:11800
   ServiceName: emotion-echo-user-svc
-  Enabled:     true
+  # Enabled: 省略 → Config struct tag default=false；env SKYWALKING_ENABLED 由 main.go 注入
 
 Postgres:
-  DSN:          ${POSTGRES_DSN:-"host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_user"}
+  DSN:          "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_user"
   MaxOpenConns: 10
   MaxIdleConns: 5
 
@@ -17,12 +22,12 @@ Postgres:
 # dev 默认开启（依赖 compose depends_on: nacos: service_healthy）；
 # dev 关闭热重载避免日志噪音；prod 启用。
 #
-# Stage 33 部署修复：go-zero conf 库对 env 占位符 ${NACOS_ENABLED:-true} 做替换
-# 后仍是 string，无法转 bool（type mismatch）。改用 NacosEnabled/NacosHotReload
-# 直接读 env，不走 yaml 占位符。
+# Stage 36-A1.1: 与 ai-svc (commit e35d531/9610dd8) 一致——删除 yaml 中所有 ${NACOS_*}
+# 字面占位符，env 覆盖由 main.go applyEnvOverrides 负责。
 Nacos:
-  Enabled:   true
+  # Enabled: 省略 → Config struct tag default=true
   Addr:      emotion-echo-nacos:8848
   Namespace: emotion-echo-dev
   GroupName: DEFAULT_GROUP
-  HotReload: false
+  # HotReload: 省略 → Config struct tag default=false
+
