@@ -170,7 +170,10 @@ func TestWorker_Tick_FusesOneMessage_NoModalityButText(t *testing.T) {
 	})
 	fusedRepo.data[100] = &model.FusedEmotion{MessageID: 100} // 触发 ListPending 返回 100
 
-	llm := &fakeFuser{err: errors.New("llm down")} // LLM 失败 → fallback
+	llm := &fakeFuser{result: &model.FusedEmotion{
+		MessageID: 100, UserID: 7, ConversationID: 50,
+		PrimaryEmotion: "sad", FusionMethod: "llm",
+	}}
 	late := &fakeFuser{result: &model.FusedEmotion{
 		MessageID: 100, UserID: 7, ConversationID: 50,
 		PrimaryEmotion: "sad", FusionMethod: "late_fusion_weighted",
@@ -180,7 +183,7 @@ func TestWorker_Tick_FusesOneMessage_NoModalityButText(t *testing.T) {
 		EmotionRepo:    textRepo,
 		FaceEmotionRepo: faceRepo,
 		VoiceEmotionRepo: voiceRepo,
-		FusedEmotionRepo: fusedRepo,
+		FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo,
 		LLMFuser: llm,
 		LateFuser: late,
 		TickInterval: 5 * time.Second,
@@ -189,16 +192,16 @@ func TestWorker_Tick_FusesOneMessage_NoModalityButText(t *testing.T) {
 	err := w.Tick(context.Background())
 	require.NoError(t, err)
 
-	// LLM 失败 → late 调用；Upsert 1 次
+	// LLM 成功 → late 不被调
 	assert.Equal(t, 1, llm.called)
-	assert.Equal(t, 1, late.called)
+	assert.Equal(t, 0, late.called, "late should not be called when LLM succeeds")
 	require.Len(t, fusedRepo.upserts, 1)
 	assert.Equal(t, int64(100), fusedRepo.upserts[0])
 
-	// 写入的 fused 行来自 late_fuser
+	// 写入的 fused 行来自 LLM
 	got, _ := fusedRepo.GetByMessageID(context.Background(), 100)
 	require.NotNil(t, got)
-	assert.Equal(t, "late_fusion_weighted", got.FusionMethod)
+	assert.Equal(t, "llm", got.FusionMethod)
 }
 
 // TestWorker_Tick_AllThreeModalities 完整三路。
@@ -232,7 +235,7 @@ func TestWorker_Tick_AllThreeModalities(t *testing.T) {
 
 	w := NewFusionWorker(FusionWorkerDeps{
 		EmotionRepo: textRepo, FaceEmotionRepo: faceRepo, VoiceEmotionRepo: voiceRepo,
-		FusedEmotionRepo: fusedRepo, LLMFuser: llm, LateFuser: late,
+		FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo, LLMFuser: llm, LateFuser: late,
 		TickInterval: 5 * time.Second,
 	})
 
@@ -261,7 +264,7 @@ func TestWorker_Tick_LLMFailure_FallsBackToLate(t *testing.T) {
 
 	w := NewFusionWorker(FusionWorkerDeps{
 		EmotionRepo: textRepo, FaceEmotionRepo: faceRepo, VoiceEmotionRepo: voiceRepo,
-		FusedEmotionRepo: fusedRepo, LLMFuser: llm, LateFuser: late,
+		FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo, LLMFuser: llm, LateFuser: late,
 		TickInterval: 5 * time.Second,
 	})
 	require.NoError(t, w.Tick(context.Background()))
@@ -284,7 +287,7 @@ func TestWorker_Tick_NoTextEmotion_SkipUpsert(t *testing.T) {
 	llm := &fakeFuser{}
 	w := NewFusionWorker(FusionWorkerDeps{
 		EmotionRepo: textRepo, FaceEmotionRepo: faceRepo, VoiceEmotionRepo: voiceRepo,
-		FusedEmotionRepo: fusedRepo, LLMFuser: llm, LateFuser: &fakeFuser{},
+		FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo, LLMFuser: llm, LateFuser: &fakeFuser{},
 		TickInterval: 5 * time.Second,
 	})
 	require.NoError(t, w.Tick(context.Background()))
@@ -298,7 +301,7 @@ func TestWorker_Run_StopsOnContextCancel(t *testing.T) {
 	fusedRepo := newFakeFusedRepo()
 	w := NewFusionWorker(FusionWorkerDeps{
 		EmotionRepo: newFakeEmotionRepo(), FaceEmotionRepo: newFakeFaceRepo(),
-		VoiceEmotionRepo: newFakeVoiceRepo(), FusedEmotionRepo: fusedRepo,
+		VoiceEmotionRepo: newFakeVoiceRepo(), FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo,
 		LLMFuser: &fakeFuser{}, LateFuser: &fakeFuser{},
 		TickInterval: 10 * time.Millisecond, // 测试用快速 tick
 	})
