@@ -16,10 +16,14 @@ type Postgres struct {
 // Kafka.BrokersCSV (string) — Stage 26-P 改造。
 // list 字段无法走 go-zero ${ENV} 占位展开,与 ai-svc 范式统一:
 // 容器内由 compose env KAFKA_BROKERS 注入,main.go 启动时 split(',')。
+//
+// Stage 36-A1.2：Kafka.Enabled 默认值改为 true——chat-svc 的 outbox relay
+//（Stage 30-C A3）依赖 Kafka，否则 message.created 事件不会发出，
+// ai-svc 永远不会消费情绪分析请求。
 type Kafka struct {
 	BrokersCSV string `json:",default=localhost:9092"`
 	GroupID    string `json:",default=chat-svc"`
-	Enabled    bool   `json:",default=false"`
+	Enabled    bool   `json:",default=true"`
 }
 
 // Nacos 注册中心 + 配置中心配置（Stage 31 PR-08 引入）

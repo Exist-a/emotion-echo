@@ -2,31 +2,37 @@ Name: chat-api
 Host: 0.0.0.0
 Port: 8890
 
-# Stage 26-P:容器内服务发现
-# 外部依赖的 string 地址通过 env 注入 compose environment
+# Stage 36-A1.2:容器内服务发现
+# 外部依赖的 string 地址通过 env 注入 compose environment (由 main.go applyEnvOverrides 完成)
 # list 字段 (Kafka.Brokers) 改用 BrokersCSV (string),同 ai-svc 范式
+#
+# 历史（Stage 26-P）使用 ${VAR:-default} 占位符，但 go-zero conf 不解析该语法（Stage 22-B
+# 已确认），字面 ${...} 会被当成 host 字面值传给 go2sky / sarama / postgres driver，
+# 导致 "too many colons in address" / "missing port in address" 错误循环。
+# 现改为字面默认值，runtime env 覆盖由 main.go applyEnvOverrides 负责。
 
 SkyWalking:
-  OAPAddr:     ${SKYWALKING_OAP_ADDR:-emotion-echo-sw-oap:11800}
+  OAPAddr:     localhost:11800
   ServiceName: emotion-echo-chat-svc
-  Enabled:     true
+  # Enabled: 省略 → Config struct tag default=false；env SKYWALKING_ENABLED 由 main.go 注入
 
 Postgres:
-  DSN:          ${POSTGRES_DSN:-"host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"}
+  DSN:          "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"
   MaxOpenConns: 10
   MaxIdleConns: 5
 
 Kafka:
-  BrokersCSV: ${KAFKA_BROKERS:-emotion-echo-kafka:9092}
+  BrokersCSV: emotion-echo-kafka:9092
   GroupID:    chat-svc
-  Enabled:    true
+  # Enabled: 省略 → Config struct tag default=true（outbox relay 依赖 Kafka）
 
 # Stage 31 PR-08: Nacos 注册中心 + 配置中心
-# Stage 33 部署修复：同 user-svc，go-zero conf 库对 env 占位符替换后仍是 string，
-# 无法转 bool；改为硬编码 default，env 注入由 main.go applyEnvOverrides 完成。
+# Stage 36-A1.2：与 user-svc / ai-svc 一致——yaml 不再含 ${NACOS_*} 占位符，
+# env 覆盖由 main.go applyEnvOverrides 完成。
 Nacos:
-  Enabled:   true
+  # Enabled: 省略 → Config struct tag default=true
   Addr:      emotion-echo-nacos:8848
   Namespace: emotion-echo-dev
   GroupName: DEFAULT_GROUP
-  HotReload: false
+  # HotReload: 省略 → Config struct tag default=false
+
