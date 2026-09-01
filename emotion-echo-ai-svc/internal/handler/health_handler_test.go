@@ -33,7 +33,7 @@ func newTestServiceContext() *svc.ServiceContext {
 		XTTS:       config.XTTS{BaseURL: ""},
 	}
 	repo := repository.NewInMemoryEmotionRepo()
-	svcCtx := svc.NewServiceContext(cfg, repo)
+	svcCtx := svc.NewServiceContext(cfg, repo, nil, nil, nil) // Stage 34: face/voice/fused repo nil（health test 不需要）
 	// 显式 nil FER / SV / XTTS client — AIHealthHandler 看到 nil 会标 "disabled"
 	_ = aiclient.Config{BaseURL: ""} // import sanity
 	svcCtx.FER = nil

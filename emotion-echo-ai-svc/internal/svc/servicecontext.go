@@ -37,10 +37,21 @@ type ServiceContext struct {
 	FusedEmotionRepo repository.FusedEmotionRepo
 }
 
-func NewServiceContext(c config.Config, repo repository.EmotionRepo) *ServiceContext {
+// NewServiceContext 构造 svcCtx（含 multimodal persist 所需的 3 个 repo）。
+//
+// Stage 34: faceRepo / voiceRepo / fusedRepo 必须传入；为 nil 时
+// multimodal 端点的 persist 分支会静默跳过（向后兼容）。
+func NewServiceContext(c config.Config, repo repository.EmotionRepo,
+	faceRepo repository.FaceEmotionRepo,
+	voiceRepo repository.VoiceEmotionRepo,
+	fusedRepo repository.FusedEmotionRepo,
+) *ServiceContext {
 	return &ServiceContext{
-		Config:      c,
-		EmotionRepo: repo,
+		Config:             c,
+		EmotionRepo:        repo,
+		FaceEmotionRepo:    faceRepo,
+		VoiceEmotionRepo:   voiceRepo,
+		FusedEmotionRepo:   fusedRepo,
 	}
 }
 

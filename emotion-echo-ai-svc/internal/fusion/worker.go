@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"emotion-echo-ai-svc/internal/logging"
 	"emotion-echo-ai-svc/internal/model"
 )
 
@@ -86,17 +87,20 @@ func (w *FusionWorker) Tick(ctx context.Context) error {
 	w.ticked.Add(1)
 
 	if w.deps.PendingLister == nil {
-		return nil // 没有 PendingLister → 不跑
+		logging.Printf("[fusion] tick: PendingLister nil, skipping")
+		return nil
 	}
 	ttl := 300 // 5 分钟 TTL
 	candidates, err := w.deps.PendingLister.ListPending(ctx, ttl)
 	if err != nil {
+		logging.Errorf(err, "[fusion] ListPending err")
 		return err
 	}
+	logging.Printf("[fusion] tick: candidates=%d (msgIDs=%v)", len(candidates), candidates)
 
 	for _, msgID := range candidates {
 		if err := w.processOne(ctx, msgID); err != nil {
-			// 单条失败不影响整体（继续下一条）
+			// 单条失败影响整体（继续下一条）
 			continue
 		}
 	}
@@ -112,6 +116,7 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 
 	// 2. text 是必备模态（用户主诉）；没有就 skip
 	if text == nil {
+		logging.Printf("[fusion] msgID=%d skipped (no text emotion)", messageID)
 		return nil
 	}
 
@@ -122,10 +127,17 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 		Voice: voiceEmotionToModality(voice),
 	}
 
-	// 4. 调 LLM（主路径）
-	fused, err := w.deps.LLMFuser.Fuse(ctx, snap)
+	// 4. 调 LLM（主路径，如果可用）
+	var fused *model.FusedEmotion
+	var err error
+	if w.deps.LLMFuser != nil {
+		fused, err = w.deps.LLMFuser.Fuse(ctx, snap)
+	}
 	if err != nil || fused == nil {
-		// fallback 到 late
+		// fallback 到 late（无论 LLM 失败还是未配置）
+		if err != nil {
+			logging.Printf("[fusion] msgID=%d LLM miss (err=%v), fallback to late", messageID, err)
+		}
 		fused, err = w.deps.LateFuser.Fuse(ctx, snap)
 		if err != nil || fused == nil {
 			return errors.New("both LLM and late fusion failed")
@@ -140,6 +152,9 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 		fused.ConversationID = text.ConversationID
 	}
 	fused.MessageID = messageID
+
+	logging.Printf("[fusion] msgID=%d fused: emotion=%s sentiment=%.2f method=%s modalities=%v",
+		messageID, fused.PrimaryEmotion, fused.SentimentScore, fused.FusionMethod, fused.AvailableModalities)
 
 	// 6. Upsert
 	return w.deps.FusedEmotionRepo.Upsert(ctx, fused)
@@ -191,12 +206,21 @@ func (w *FusionWorker) Run(ctx context.Context) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	logging.Printf("[fusion] worker Run loop entered, tick=%v", interval)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			_ = w.Tick(ctx) // 错误吞掉（已记录到 ticked counter，未来可加 metrics）
+			logging.Printf("[fusion] tick fired (counter=%d)", w.ticked.Load()+1)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logging.Printf("[fusion] PANIC recovered: %v", r)
+					}
+				}()
+				_ = w.Tick(ctx)
+			}()
 		}
 	}
 }

@@ -19,7 +19,7 @@ Port: 8891
 SkyWalking:
   OAPAddr:     ${SKYWALKING_OAP_ADDR:-localhost:11800}
   ServiceName: emotion-echo-ai-svc
-  Enabled:     true
+  Enabled:     false
 
 Postgres:
   DSN:          ${POSTGRES_DSN:-"host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_ai"}
@@ -29,11 +29,8 @@ Postgres:
 Kafka:
   BrokersCSV: ${KAFKA_BROKERS:-localhost:9092}
   GroupID:    ai-svc
-  Enabled:    true
+  Enabled:    false  # Stage 34 smoke: 临时关闭
   Topics:     ["chat-events"]
-  # Stage 30-C A2: DLQ — 毒消息在 MaxRetries+1 次后投 DLQ topic
-  # 注意：MaxRetries 是 int 字段，go-zero conf 不展开 ${VAR:-default} 占位符
-  #（会把字面量字符串赋给 int → type mismatch），必须写真实数字；env 覆盖由 main.go 处理
   DLQTopic:   chat-events-dlq
   MaxRetries: 3
 
@@ -67,8 +64,8 @@ XTTS:
 
 # Stage 31 PR-09: Nacos 注册中心 + 配置中心
 Nacos:
-  Enabled:   ${NACOS_ENABLED:-true}
+  Enabled:   false  # Stage 34 smoke: 临时关闭，绕过 go-zero conf 不展开 ${...} 的 bool 坑
   Addr:      ${NACOS_ADDR:-emotion-echo-nacos:8848}
   Namespace: ${NACOS_NAMESPACE:-emotion-echo-dev}
   GroupName: DEFAULT_GROUP
-  HotReload: ${NACOS_HOT_RELOAD:-false}
+  HotReload: false   # Stage 34 smoke: 硬编码绕过

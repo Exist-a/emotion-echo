@@ -33,6 +33,7 @@ import (
 	"emotion-echo-ai-svc/internal/config"
 	"emotion-echo-ai-svc/internal/consumer"
 	"emotion-echo-ai-svc/internal/events"
+	"emotion-echo-ai-svc/internal/fusion"
 	"emotion-echo-ai-svc/internal/grpcserver"
 	"emotion-echo-ai-svc/internal/handler"
 	"emotion-echo-ai-svc/internal/logging"
@@ -288,7 +289,16 @@ func main() {
 	}
 
 	// 4. ServiceContext
-	svcCtx := svc.NewServiceContext(c, emoRepo)
+	// Stage 34: 构造 multimodal persist 所需的 3 个 repo（共享 db 连接）
+	var faceRepo repository.FaceEmotionRepo
+	var voiceRepo repository.VoiceEmotionRepo
+	var svcFusedRepo repository.FusedEmotionRepo
+	if db != nil {
+		faceRepo = repository.NewPostgresFaceEmotionRepo(db)
+		voiceRepo = repository.NewPostgresVoiceEmotionRepo(db)
+		svcFusedRepo = repository.NewPostgresFusedEmotionRepo(db)
+	}
+	svcCtx := svc.NewServiceContext(c, emoRepo, faceRepo, voiceRepo, svcFusedRepo)
 
 	// Stage 22-A.5: build 3 AI model clients + MultiModalAnalyzer.
 	svcCtx.InitMultiModal()
@@ -365,6 +375,50 @@ func main() {
 				logging.Errorf(err, "[grpc] server failed")
 			}
 		}()
+	}
+
+	// Stage 34: 启动 Fusion Worker（多模态情绪融合后台 tick）。
+	// 依赖 LLM_BASE_URL（环境变量 BFF_LLM_BASE_URL 共用）；为空时自动 fallback 到 late_fuser。
+	// 当前设计：LLM 直接调 BFF 现有的 LLM endpoint，避免引入新 LLM 依赖。
+	if db != nil {
+		// emotionRepo 已经在最上面 openPostgres 装配过，复用
+		fusionEmotionRepo := emoRepo
+
+		// LLM fuser 复用 BFF 的 LLM_BASE_URL（DeepSeek / OpenAI 兼容）
+		// 注意：当前 BFF 已使用 BFF_LLM_BASE_URL，ai-svc 没有同等 yaml 字段，
+		// 退化为环境变量 LLM_BASE_URL；为空则 nil（Worker 走 late_fuser 兜底）
+		var llmFuser fusion.Fuser
+		if llmBase := os.Getenv("LLM_BASE_URL"); llmBase != "" {
+			llmFuser = fusion.NewLLMFuser(fusion.LLMConfig{
+				BaseURL: llmBase,
+				APIKey:  os.Getenv("LLM_API_KEY"),
+				Model:   os.Getenv("LLM_MODEL"),
+				Timeout: 10 * time.Second,
+			})
+			logging.Printf("[fusion] LLM fuser active: %s model=%s", llmBase, os.Getenv("LLM_MODEL"))
+		} else {
+			logging.Printf("[fusion] LLM fuser disabled (LLM_BASE_URL empty); late_fuser is fallback")
+		}
+
+		lateFuser := fusion.NewWeightedLateFuser(0.4, 0.3, 0.3)
+
+		worker := fusion.NewFusionWorker(fusion.FusionWorkerDeps{
+			EmotionRepo:      fusionEmotionRepo,
+			FaceEmotionRepo:  faceRepo,
+			VoiceEmotionRepo: voiceRepo,
+			FusedEmotionRepo: svcFusedRepo,
+			PendingLister:    svcFusedRepo, // Stage 34: ListPending 用 fusedRepo 自身
+			LLMFuser:         llmFuser,
+			LateFuser:        lateFuser,
+			TickInterval:     5 * time.Second,
+		})
+		go func() {
+			logging.Printf("[fusion] worker.Run() entered")
+			if err := worker.Run(rootCtx); err != nil {
+				logging.Errorf(err, "[fusion] worker stopped")
+			}
+		}()
+		logging.Printf("[fusion] FusionWorker started (tick=5s)")
 	}
 
 	httpAddr := fmt.Sprintf("%s:%d", c.Host, c.Port)

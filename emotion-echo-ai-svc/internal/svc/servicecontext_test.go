@@ -42,7 +42,7 @@ func TestNewServiceContext_FieldsWired(t *testing.T) {
 
 	cfg := config.Config{Name: "test"}
 	repo := repository.NewInMemoryEmotionRepo()
-	svcCtx := NewServiceContext(cfg, repo)
+	svcCtx := NewServiceContext(cfg, repo, nil, nil, nil)
 	require.NotNil(t, svcCtx)
 	assert.Equal(t, cfg, svcCtx.Config)
 	assert.Equal(t, repo, svcCtx.EmotionRepo)
@@ -63,7 +63,7 @@ func TestInitMultiModal_AllBaseURLsSet_ClientsAndAnalyzerNonNil(t *testing.T) {
 		FER:         config.FER{BaseURL: "http://fer:8004"},
 		SenseVoice:  config.SenseVoice{BaseURL: "http://sv:8005"},
 		XTTS:        config.XTTS{BaseURL: "http://xtts:8003", Language: "zh-cn", Speed: 0.75},
-	}, repository.NewInMemoryEmotionRepo())
+	}, repository.NewInMemoryEmotionRepo(), nil, nil, nil) // Stage 34: face/voice/fused nil
 
 	svcCtx.InitMultiModal()
 	require.NotNil(t, svcCtx.FER, "FER should be non-nil when BaseURL set")
@@ -78,7 +78,7 @@ func TestInitMultiModal_AllBaseURLsSet_ClientsAndAnalyzerNonNil(t *testing.T) {
 func TestInitMultiModal_EmptyBaseURLs_ClientsNil(t *testing.T) {
 	t.Parallel()
 
-	svcCtx := NewServiceContext(config.Config{Name: "test"}, repository.NewInMemoryEmotionRepo())
+	svcCtx := NewServiceContext(config.Config{Name: "test"}, repository.NewInMemoryEmotionRepo(), nil, nil, nil)
 	// All AIService fields are zero-valued (BaseURL="")
 	svcCtx.InitMultiModal()
 
@@ -102,7 +102,7 @@ svcCtx := NewServiceContext(config.Config{
 		FER:         config.FER{BaseURL: "http://fer:8004"},
 		SenseVoice:  config.SenseVoice{BaseURL: "http://sv:8005"},
 		XTTS:        config.XTTS{BaseURL: ""}, // disabled
-	}, repository.NewInMemoryEmotionRepo())
+	}, repository.NewInMemoryEmotionRepo(), nil, nil, nil) // Stage 34: face/voice/fused nil
 
 	svcCtx.InitMultiModal()
 
@@ -119,7 +119,7 @@ svcCtx := NewServiceContext(config.Config{
 func TestInitMultiModal_AnalyzerHasKeywordFallback(t *testing.T) {
 	t.Parallel()
 
-	svcCtx := NewServiceContext(config.Config{Name: "test"}, repository.NewInMemoryEmotionRepo())
+	svcCtx := NewServiceContext(config.Config{Name: "test"}, repository.NewInMemoryEmotionRepo(), nil, nil, nil)
 	svcCtx.InitMultiModal()
 	require.NotNil(t, svcCtx.MultiModal)
 

@@ -1,4 +1,5 @@
 // Stage 23: AI 多模态 endpoint handler
+// Stage 34: 支持 persist=true 把结果写入 face/voice 表。
 
 package handler
 
@@ -6,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"emotion-echo-ai-svc/internal/aiclient"
@@ -18,14 +20,37 @@ import (
 // MultiModalAnalyzeHandler  POST /api/v1/multimodal/analyze
 //
 // multipart/form-data:
-//   - kind:     "image" | "audio" | "text"
-//   - file:     binary (image/audio)
-//   - filename: file name (optional)
-//   - text:     text content (used when kind=text, or as auxiliary)
+//   - kind:       "image" | "audio" | "text"
+//   - file:       binary (image/audio)
+//   - filename:   file name (optional)
+//   - text:       text content (kind=text 时使用，或作为辅助)
+//   - persist:    "true"  写入 face/voice 表（Stage 34，默认 false）
+//   - upload_id:  前端 nonce（persist=true 时必填）
+//   - message_id: 关联的 chat message id（persist=true 时可选）
+//   - user_id:    用户 id（persist=true 时必填；fallback 取 X-User-Id header）
+//   - conversation_id: 会话 id（persist=true 时可选）
+//   - transcript / duration_ms: voice 附加字段
 func MultiModalAnalyzeHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		kind := c.PostForm("kind")
 		text := c.PostForm("text")
+		persist := c.PostForm("persist") == "true"
+		uploadID := c.PostForm("upload_id")
+		transcript := c.PostForm("transcript")
+		durationMs, _ := strconv.Atoi(c.PostForm("duration_ms"))
+		language := c.PostForm("language")
+
+		// message_id / user_id / conversation_id：从 form 取，缺则 fallback
+		messageID, _ := strconv.ParseInt(c.PostForm("message_id"), 10, 64)
+		userID, _ := strconv.ParseInt(c.PostForm("user_id"), 10, 64)
+		conversationID, _ := strconv.ParseInt(c.PostForm("conversation_id"), 10, 64)
+		if userID == 0 {
+			if h := c.GetHeader("X-User-Id"); h != "" {
+				if v, err := strconv.ParseInt(h, 10, 64); err == nil {
+					userID = v
+				}
+			}
+		}
 
 		var (
 			fileBytes []byte
@@ -57,6 +82,32 @@ func MultiModalAnalyzeHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 			return
 		}
 
+		// Stage 34: persist=true 时走 PersistMultiModalAnalyzeLogic（PR-7/8 实现）
+		if persist {
+			req := logic.PersistRequest{
+				Kind:           kind,
+				Bytes:          fileBytes,
+				Filename:       filename,
+				TextContent:    text,
+				UploadID:       uploadID,
+				Persist:        true,
+				MessageID:      messageID,
+				UserID:         userID,
+				ConversationID: conversationID,
+				Transcript:     transcript,
+				DurationMs:     durationMs,
+				Language:       language,
+			}
+			resp, err := logic.NewPersistMultiModalAnalyzeLogic(svcCtx).Analyze(c.Request.Context(), req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, resp)
+			return
+		}
+
+		// 兼容老调用：persist=false 走原 MultiModalAnalyzeLogic
 		resp, err := logic.NewMultiModalAnalyzeLogic(svcCtx).Analyze(c.Request.Context(), kind, fileBytes, filename, text)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
