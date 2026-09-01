@@ -11,6 +11,7 @@ option go_package = "github.com/emotion-echo/shared/pkg/emotionquery";
 // 两种协议同时存在，前端继续用 HTTP，内部 svc-to-svc 用 gRPC
 //
 // Stage 34: 新增 GetFusedEmotion（多模态融合产物查询）
+// Stage 36-A3: 新增 UpsertNeutralEmotion（chat-svc 同步 fallback 写入中性占位情绪）
 service EmotionQueryService {
   // GetEmotionByMessage 根据 message_id 查情绪
   rpc GetEmotionByMessage (GetEmotionByMessageRequest) returns (Emotion);
@@ -18,6 +19,22 @@ service EmotionQueryService {
   rpc GetEmotionByConversation (GetEmotionByConversationRequest) returns (EmotionList);
   // GetFusedEmotion 根据 message_id 查多模态融合产物（Stage 34）
   rpc GetFusedEmotion (GetFusedEmotionRequest) returns (FusedEmotion);
+  // UpsertNeutralEmotion 写入一条中性情绪占位（Stage 36-A3 / G4）
+  //
+  // 设计动机：Kafka 关闭时（KAFKA_ENABLED=false / dev 模式），chat-svc 发消息后
+  // 不会经过 Kafka → ai-svc 永远不会写入 emotion_analysis 行，导致前端"情绪分析"
+  // 功能在 dev 模式下完全无数据。本 RPC 让 chat-svc 在 send message 成功后
+  // 同步调用 ai-svc，ai-svc 写入中性占位情绪（primary_emotion="neutral",
+  // sentiment_score=0, confidence=0, model="sync-fallback"）。
+  //
+  // 幂等：使用 event_id 作为唯一键（DB UNIQUE 约束）。chat-svc 传其 outbox
+  // event UUID；重复调用返回 OK 不重复落库（on conflict do nothing）。
+  //
+  // 错误语义：
+  //   - message_id<=0 / user_id<=0 → InvalidArgument
+  //   - 写入失败 → Internal
+  //   - 成功 → 返回写入（或已存在）的 emotion_analysis 行 id
+  rpc UpsertNeutralEmotion (UpsertNeutralEmotionRequest) returns (UpsertNeutralEmotionResponse);
 }
 
 // Emotion 单条消息的情绪数据
@@ -73,4 +90,24 @@ message FusedEmotion {
 // GetFusedEmotion 请求
 message GetFusedEmotionRequest {
   int64 message_id = 1;
+}
+
+// UpsertNeutralEmotion 请求（Stage 36-A3）
+//
+// chat-svc 在 send message 成功后调用；ai-svc 写入一条中性占位
+// emotion_analysis 行（event_id 由 chat-svc 用其 outbox UUID 填入，保证幂等）。
+message UpsertNeutralEmotionRequest {
+  int64  message_id      = 1;  // 必填
+  int64  user_id         = 2;  // 必填
+  int64  conversation_id = 3;  // 必填
+  string event_id        = 4;  // 必填，chat-svc 的 outbox event UUID；空 = 不去重（不推荐）
+}
+
+// UpsertNeutralEmotion 响应
+//
+// 返回写入（或已存在）的 emotion_analysis 行 id，调用方可用于后续
+// 关联 / 展示。当前实现 id 由 ai-svc DB 自增；event_id 命中时 id 是已有行的 id。
+message UpsertNeutralEmotionResponse {
+  int64 emotion_analysis_id = 1;  // emotion_echo_ai.emotion_analysis.id
+  bool  was_inserted        = 2;  // true=新建，false=event_id 已存在跳过
 }

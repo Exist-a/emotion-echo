@@ -449,6 +449,134 @@ func (x *GetFusedEmotionRequest) GetMessageId() int64 {
 	return 0
 }
 
+// UpsertNeutralEmotion 请求（Stage 36-A3）
+//
+// chat-svc 在 send message 成功后调用；ai-svc 写入一条中性占位
+// emotion_analysis 行（event_id 由 chat-svc 用其 outbox UUID 填入，保证幂等）。
+type UpsertNeutralEmotionRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MessageId      int64                  `protobuf:"varint,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`                // 必填
+	UserId         int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                         // 必填
+	ConversationId int64                  `protobuf:"varint,3,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"` // 必填
+	EventId        string                 `protobuf:"bytes,4,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`                       // 必填，chat-svc 的 outbox event UUID；空 = 不去重（不推荐）
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *UpsertNeutralEmotionRequest) Reset() {
+	*x = UpsertNeutralEmotionRequest{}
+	mi := &file_emotion_query_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpsertNeutralEmotionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpsertNeutralEmotionRequest) ProtoMessage() {}
+
+func (x *UpsertNeutralEmotionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpsertNeutralEmotionRequest.ProtoReflect.Descriptor instead.
+func (*UpsertNeutralEmotionRequest) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UpsertNeutralEmotionRequest) GetMessageId() int64 {
+	if x != nil {
+		return x.MessageId
+	}
+	return 0
+}
+
+func (x *UpsertNeutralEmotionRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *UpsertNeutralEmotionRequest) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *UpsertNeutralEmotionRequest) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+// UpsertNeutralEmotion 响应
+//
+// 返回写入（或已存在）的 emotion_analysis 行 id，调用方可用于后续
+// 关联 / 展示。当前实现 id 由 ai-svc DB 自增；event_id 命中时 id 是已有行的 id。
+type UpsertNeutralEmotionResponse struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	EmotionAnalysisId int64                  `protobuf:"varint,1,opt,name=emotion_analysis_id,json=emotionAnalysisId,proto3" json:"emotion_analysis_id,omitempty"` // emotion_echo_ai.emotion_analysis.id
+	WasInserted       bool                   `protobuf:"varint,2,opt,name=was_inserted,json=wasInserted,proto3" json:"was_inserted,omitempty"`                     // true=新建，false=event_id 已存在跳过
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *UpsertNeutralEmotionResponse) Reset() {
+	*x = UpsertNeutralEmotionResponse{}
+	mi := &file_emotion_query_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpsertNeutralEmotionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpsertNeutralEmotionResponse) ProtoMessage() {}
+
+func (x *UpsertNeutralEmotionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpsertNeutralEmotionResponse.ProtoReflect.Descriptor instead.
+func (*UpsertNeutralEmotionResponse) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *UpsertNeutralEmotionResponse) GetEmotionAnalysisId() int64 {
+	if x != nil {
+		return x.EmotionAnalysisId
+	}
+	return 0
+}
+
+func (x *UpsertNeutralEmotionResponse) GetWasInserted() bool {
+	if x != nil {
+		return x.WasInserted
+	}
+	return false
+}
+
 var File_emotion_query_proto protoreflect.FileDescriptor
 
 const file_emotion_query_proto_rawDesc = "" +
@@ -493,11 +621,21 @@ const file_emotion_query_proto_rawDesc = "" +
 	"\rcreated_at_ms\x18\v \x01(\x03R\vcreatedAtMs\"7\n" +
 	"\x16GetFusedEmotionRequest\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x01 \x01(\x03R\tmessageId2\xae\x02\n" +
+	"message_id\x18\x01 \x01(\x03R\tmessageId\"\x99\x01\n" +
+	"\x1bUpsertNeutralEmotionRequest\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\x03R\tmessageId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12'\n" +
+	"\x0fconversation_id\x18\x03 \x01(\x03R\x0econversationId\x12\x19\n" +
+	"\bevent_id\x18\x04 \x01(\tR\aeventId\"q\n" +
+	"\x1cUpsertNeutralEmotionResponse\x12.\n" +
+	"\x13emotion_analysis_id\x18\x01 \x01(\x03R\x11emotionAnalysisId\x12!\n" +
+	"\fwas_inserted\x18\x02 \x01(\bR\vwasInserted2\x9f\x03\n" +
 	"\x13EmotionQueryService\x12X\n" +
 	"\x13GetEmotionByMessage\x12).emotion_ai.v1.GetEmotionByMessageRequest\x1a\x16.emotion_ai.v1.Emotion\x12f\n" +
 	"\x18GetEmotionByConversation\x12..emotion_ai.v1.GetEmotionByConversationRequest\x1a\x1a.emotion_ai.v1.EmotionList\x12U\n" +
-	"\x0fGetFusedEmotion\x12%.emotion_ai.v1.GetFusedEmotionRequest\x1a\x1b.emotion_ai.v1.FusedEmotionB1Z/github.com/emotion-echo/shared/pkg/emotionqueryb\x06proto3"
+	"\x0fGetFusedEmotion\x12%.emotion_ai.v1.GetFusedEmotionRequest\x1a\x1b.emotion_ai.v1.FusedEmotion\x12o\n" +
+	"\x14UpsertNeutralEmotion\x12*.emotion_ai.v1.UpsertNeutralEmotionRequest\x1a+.emotion_ai.v1.UpsertNeutralEmotionResponseB1Z/github.com/emotion-echo/shared/pkg/emotionqueryb\x06proto3"
 
 var (
 	file_emotion_query_proto_rawDescOnce sync.Once
@@ -511,7 +649,7 @@ func file_emotion_query_proto_rawDescGZIP() []byte {
 	return file_emotion_query_proto_rawDescData
 }
 
-var file_emotion_query_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_emotion_query_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_emotion_query_proto_goTypes = []any{
 	(*Emotion)(nil),                         // 0: emotion_ai.v1.Emotion
 	(*GetEmotionByMessageRequest)(nil),      // 1: emotion_ai.v1.GetEmotionByMessageRequest
@@ -519,17 +657,21 @@ var file_emotion_query_proto_goTypes = []any{
 	(*EmotionList)(nil),                     // 3: emotion_ai.v1.EmotionList
 	(*FusedEmotion)(nil),                    // 4: emotion_ai.v1.FusedEmotion
 	(*GetFusedEmotionRequest)(nil),          // 5: emotion_ai.v1.GetFusedEmotionRequest
+	(*UpsertNeutralEmotionRequest)(nil),     // 6: emotion_ai.v1.UpsertNeutralEmotionRequest
+	(*UpsertNeutralEmotionResponse)(nil),    // 7: emotion_ai.v1.UpsertNeutralEmotionResponse
 }
 var file_emotion_query_proto_depIdxs = []int32{
 	0, // 0: emotion_ai.v1.EmotionList.items:type_name -> emotion_ai.v1.Emotion
 	1, // 1: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:input_type -> emotion_ai.v1.GetEmotionByMessageRequest
 	2, // 2: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:input_type -> emotion_ai.v1.GetEmotionByConversationRequest
 	5, // 3: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:input_type -> emotion_ai.v1.GetFusedEmotionRequest
-	0, // 4: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:output_type -> emotion_ai.v1.Emotion
-	3, // 5: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:output_type -> emotion_ai.v1.EmotionList
-	4, // 6: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:output_type -> emotion_ai.v1.FusedEmotion
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
+	6, // 4: emotion_ai.v1.EmotionQueryService.UpsertNeutralEmotion:input_type -> emotion_ai.v1.UpsertNeutralEmotionRequest
+	0, // 5: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:output_type -> emotion_ai.v1.Emotion
+	3, // 6: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:output_type -> emotion_ai.v1.EmotionList
+	4, // 7: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:output_type -> emotion_ai.v1.FusedEmotion
+	7, // 8: emotion_ai.v1.EmotionQueryService.UpsertNeutralEmotion:output_type -> emotion_ai.v1.UpsertNeutralEmotionResponse
+	5, // [5:9] is the sub-list for method output_type
+	1, // [1:5] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -546,7 +688,7 @@ func file_emotion_query_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emotion_query_proto_rawDesc), len(file_emotion_query_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

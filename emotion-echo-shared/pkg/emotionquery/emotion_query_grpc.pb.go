@@ -22,6 +22,7 @@ const (
 	EmotionQueryService_GetEmotionByMessage_FullMethodName      = "/emotion_ai.v1.EmotionQueryService/GetEmotionByMessage"
 	EmotionQueryService_GetEmotionByConversation_FullMethodName = "/emotion_ai.v1.EmotionQueryService/GetEmotionByConversation"
 	EmotionQueryService_GetFusedEmotion_FullMethodName          = "/emotion_ai.v1.EmotionQueryService/GetFusedEmotion"
+	EmotionQueryService_UpsertNeutralEmotion_FullMethodName     = "/emotion_ai.v1.EmotionQueryService/UpsertNeutralEmotion"
 )
 
 // EmotionQueryServiceClient is the client API for EmotionQueryService service.
@@ -35,6 +36,7 @@ const (
 // 两种协议同时存在，前端继续用 HTTP，内部 svc-to-svc 用 gRPC
 //
 // Stage 34: 新增 GetFusedEmotion（多模态融合产物查询）
+// Stage 36-A3: 新增 UpsertNeutralEmotion（chat-svc 同步 fallback 写入中性占位情绪）
 type EmotionQueryServiceClient interface {
 	// GetEmotionByMessage 根据 message_id 查情绪
 	GetEmotionByMessage(ctx context.Context, in *GetEmotionByMessageRequest, opts ...grpc.CallOption) (*Emotion, error)
@@ -42,6 +44,22 @@ type EmotionQueryServiceClient interface {
 	GetEmotionByConversation(ctx context.Context, in *GetEmotionByConversationRequest, opts ...grpc.CallOption) (*EmotionList, error)
 	// GetFusedEmotion 根据 message_id 查多模态融合产物（Stage 34）
 	GetFusedEmotion(ctx context.Context, in *GetFusedEmotionRequest, opts ...grpc.CallOption) (*FusedEmotion, error)
+	// UpsertNeutralEmotion 写入一条中性情绪占位（Stage 36-A3 / G4）
+	//
+	// 设计动机：Kafka 关闭时（KAFKA_ENABLED=false / dev 模式），chat-svc 发消息后
+	// 不会经过 Kafka → ai-svc 永远不会写入 emotion_analysis 行，导致前端"情绪分析"
+	// 功能在 dev 模式下完全无数据。本 RPC 让 chat-svc 在 send message 成功后
+	// 同步调用 ai-svc，ai-svc 写入中性占位情绪（primary_emotion="neutral",
+	// sentiment_score=0, confidence=0, model="sync-fallback"）。
+	//
+	// 幂等：使用 event_id 作为唯一键（DB UNIQUE 约束）。chat-svc 传其 outbox
+	// event UUID；重复调用返回 OK 不重复落库（on conflict do nothing）。
+	//
+	// 错误语义：
+	//   - message_id<=0 / user_id<=0 → InvalidArgument
+	//   - 写入失败 → Internal
+	//   - 成功 → 返回写入（或已存在）的 emotion_analysis 行 id
+	UpsertNeutralEmotion(ctx context.Context, in *UpsertNeutralEmotionRequest, opts ...grpc.CallOption) (*UpsertNeutralEmotionResponse, error)
 }
 
 type emotionQueryServiceClient struct {
@@ -82,6 +100,16 @@ func (c *emotionQueryServiceClient) GetFusedEmotion(ctx context.Context, in *Get
 	return out, nil
 }
 
+func (c *emotionQueryServiceClient) UpsertNeutralEmotion(ctx context.Context, in *UpsertNeutralEmotionRequest, opts ...grpc.CallOption) (*UpsertNeutralEmotionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpsertNeutralEmotionResponse)
+	err := c.cc.Invoke(ctx, EmotionQueryService_UpsertNeutralEmotion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EmotionQueryServiceServer is the server API for EmotionQueryService service.
 // All implementations must embed UnimplementedEmotionQueryServiceServer
 // for forward compatibility.
@@ -93,6 +121,7 @@ func (c *emotionQueryServiceClient) GetFusedEmotion(ctx context.Context, in *Get
 // 两种协议同时存在，前端继续用 HTTP，内部 svc-to-svc 用 gRPC
 //
 // Stage 34: 新增 GetFusedEmotion（多模态融合产物查询）
+// Stage 36-A3: 新增 UpsertNeutralEmotion（chat-svc 同步 fallback 写入中性占位情绪）
 type EmotionQueryServiceServer interface {
 	// GetEmotionByMessage 根据 message_id 查情绪
 	GetEmotionByMessage(context.Context, *GetEmotionByMessageRequest) (*Emotion, error)
@@ -100,6 +129,22 @@ type EmotionQueryServiceServer interface {
 	GetEmotionByConversation(context.Context, *GetEmotionByConversationRequest) (*EmotionList, error)
 	// GetFusedEmotion 根据 message_id 查多模态融合产物（Stage 34）
 	GetFusedEmotion(context.Context, *GetFusedEmotionRequest) (*FusedEmotion, error)
+	// UpsertNeutralEmotion 写入一条中性情绪占位（Stage 36-A3 / G4）
+	//
+	// 设计动机：Kafka 关闭时（KAFKA_ENABLED=false / dev 模式），chat-svc 发消息后
+	// 不会经过 Kafka → ai-svc 永远不会写入 emotion_analysis 行，导致前端"情绪分析"
+	// 功能在 dev 模式下完全无数据。本 RPC 让 chat-svc 在 send message 成功后
+	// 同步调用 ai-svc，ai-svc 写入中性占位情绪（primary_emotion="neutral",
+	// sentiment_score=0, confidence=0, model="sync-fallback"）。
+	//
+	// 幂等：使用 event_id 作为唯一键（DB UNIQUE 约束）。chat-svc 传其 outbox
+	// event UUID；重复调用返回 OK 不重复落库（on conflict do nothing）。
+	//
+	// 错误语义：
+	//   - message_id<=0 / user_id<=0 → InvalidArgument
+	//   - 写入失败 → Internal
+	//   - 成功 → 返回写入（或已存在）的 emotion_analysis 行 id
+	UpsertNeutralEmotion(context.Context, *UpsertNeutralEmotionRequest) (*UpsertNeutralEmotionResponse, error)
 	mustEmbedUnimplementedEmotionQueryServiceServer()
 }
 
@@ -118,6 +163,9 @@ func (UnimplementedEmotionQueryServiceServer) GetEmotionByConversation(context.C
 }
 func (UnimplementedEmotionQueryServiceServer) GetFusedEmotion(context.Context, *GetFusedEmotionRequest) (*FusedEmotion, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetFusedEmotion not implemented")
+}
+func (UnimplementedEmotionQueryServiceServer) UpsertNeutralEmotion(context.Context, *UpsertNeutralEmotionRequest) (*UpsertNeutralEmotionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertNeutralEmotion not implemented")
 }
 func (UnimplementedEmotionQueryServiceServer) mustEmbedUnimplementedEmotionQueryServiceServer() {}
 func (UnimplementedEmotionQueryServiceServer) testEmbeddedByValue()                             {}
@@ -194,6 +242,24 @@ func _EmotionQueryService_GetFusedEmotion_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EmotionQueryService_UpsertNeutralEmotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertNeutralEmotionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EmotionQueryServiceServer).UpsertNeutralEmotion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EmotionQueryService_UpsertNeutralEmotion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EmotionQueryServiceServer).UpsertNeutralEmotion(ctx, req.(*UpsertNeutralEmotionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // EmotionQueryService_ServiceDesc is the grpc.ServiceDesc for EmotionQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -212,6 +278,10 @@ var EmotionQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetFusedEmotion",
 			Handler:    _EmotionQueryService_GetFusedEmotion_Handler,
+		},
+		{
+			MethodName: "UpsertNeutralEmotion",
+			Handler:    _EmotionQueryService_UpsertNeutralEmotion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

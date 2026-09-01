@@ -289,6 +289,88 @@ func TestAddr_ReturnsListenAddress(t *testing.T) {
 	assert.NotEqual(t, ":0", addr, "Addr must not be the sentinel :0 (Listen failed)")
 }
 
+// Stage 36-A3.1 RED：UpsertNeutralEmotion RPC 应写入一条中性占位情绪。
+//
+// 关键契约（chat-svc dev fallback 依赖）：
+//   - 写入后通过 GetEmotionByMessage 能查到，primary_emotion="neutral"
+//   - was_inserted=true 表示新插入
+//   - 同 event_id 第二次调用 → was_inserted=false（幂等去重）
+func TestUpsertNeutralEmotion_InsertsNeutralPlaceholder(t *testing.T) {
+	repo := repository.NewInMemoryEmotionRepo()
+	_, conn, cleanup := startTestServer(t, repo)
+	defer cleanup()
+
+	client := emotionquery.NewEmotionQueryServiceClient(conn)
+	resp, err := client.UpsertNeutralEmotion(userIDOutgoingCtx(7), &emotionquery.UpsertNeutralEmotionRequest{
+		MessageId:      100,
+		UserId:         7,
+		ConversationId: 50,
+		EventId:        "evt-uuid-1",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.WasInserted, "首次调用应 was_inserted=true")
+	assert.Greater(t, resp.EmotionAnalysisId, int64(0), "应返回新行的 id")
+
+	// 验证：GetEmotionByMessage 能查到，且是 neutral
+	got, err := client.GetEmotionByMessage(userIDOutgoingCtx(7), &emotionquery.GetEmotionByMessageRequest{
+		MessageId: 100,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "neutral", got.PrimaryEmotion)
+	assert.InDelta(t, 0.0, got.SentimentScore, 0.001)
+	assert.InDelta(t, 0.0, got.Confidence, 0.001)
+	assert.Equal(t, "sync-fallback", got.Model)
+}
+
+// TestUpsertNeutralEmotion_Idempotent_OnSameEventID
+// 同 event_id 第二次调用必须返回 was_inserted=false（DB UNIQUE on event_id）。
+func TestUpsertNeutralEmotion_Idempotent_OnSameEventID(t *testing.T) {
+	repo := repository.NewInMemoryEmotionRepo()
+	_, conn, cleanup := startTestServer(t, repo)
+	defer cleanup()
+
+	client := emotionquery.NewEmotionQueryServiceClient(conn)
+	req := &emotionquery.UpsertNeutralEmotionRequest{
+		MessageId: 100, UserId: 7, ConversationId: 50,
+		EventId: "evt-uuid-dup",
+	}
+	first, err := client.UpsertNeutralEmotion(userIDOutgoingCtx(7), req)
+	require.NoError(t, err)
+	assert.True(t, first.WasInserted)
+
+	second, err := client.UpsertNeutralEmotion(userIDOutgoingCtx(7), req)
+	require.NoError(t, err)
+	assert.False(t, second.WasInserted, "同 event_id 重复 → was_inserted=false（幂等去重）")
+	assert.Equal(t, first.EmotionAnalysisId, second.EmotionAnalysisId, "返回同一行 id")
+}
+
+// TestUpsertNeutralEmotion_ValidationErrors
+// message_id / user_id / conversation_id <= 0 → InvalidArgument
+func TestUpsertNeutralEmotion_ValidationErrors(t *testing.T) {
+	repo := repository.NewInMemoryEmotionRepo()
+	_, conn, cleanup := startTestServer(t, repo)
+	defer cleanup()
+
+	client := emotionquery.NewEmotionQueryServiceClient(conn)
+	for _, tc := range []struct {
+		name string
+		req  *emotionquery.UpsertNeutralEmotionRequest
+	}{
+		{"zero_message_id", &emotionquery.UpsertNeutralEmotionRequest{MessageId: 0, UserId: 7, ConversationId: 50, EventId: "x"}},
+		{"zero_user_id", &emotionquery.UpsertNeutralEmotionRequest{MessageId: 1, UserId: 0, ConversationId: 50, EventId: "x"}},
+		{"zero_conversation_id", &emotionquery.UpsertNeutralEmotionRequest{MessageId: 1, UserId: 7, ConversationId: 0, EventId: "x"}},
+		{"empty_event_id", &emotionquery.UpsertNeutralEmotionRequest{MessageId: 1, UserId: 7, ConversationId: 50, EventId: ""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := client.UpsertNeutralEmotion(userIDOutgoingCtx(7), tc.req)
+			require.Error(t, err)
+			st, _ := status.FromError(err)
+			assert.Equal(t, "InvalidArgument", st.Code().String())
+		})
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // Internal helpers used only by the test in this file
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
