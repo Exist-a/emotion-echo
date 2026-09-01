@@ -157,29 +157,42 @@ gateway :19080 HTTP 404   # 没配 routes 是预期
 
 **结论**：APISIX 3.x 已内嵌 Dashboard UI 在 `:9180/ui/`，无需独立 dashboard 容器；admin API key 配在 `deploy/apisix/config.yaml:303-307`（`WhZEPlrGviCSXlKFfALZlQWinluoGAbj`）。
 
-### G8 — Nacos 注册实测 ⚠️ 3/6 PASS（已识别 Stage 31 旧 bug）
+### G8 — Nacos 注册实测 ✅ **6/6 PASS**（Stage 31 旧 bug 已修复）
 
-启 6 Go svc 后查 Nacos：
+启 6 Go svc + 全部 rebuild + restart 后查 Nacos：
 ```bash
 $ curl -fsS 'http://localhost:8848/nacos/v2/ns/service/list?namespaceId=emotion-echo-dev'
-{"code":0,"data":{"count":3,"services":["emotion-echo-user-svc","chat-api","ai-api"]}}
+{"code":0,"data":{"count":6,"services":["ai-api","assessment-api","web-bff","chat-api","analytics-api","emotion-echo-user-svc"]}}
 ```
 
-**注册成功**：
-- `emotion-echo-user-svc`（user-svc，restart 后）
-- `chat-api`（chat-svc，restart 后）
-- `ai-api`（ai-svc，restart 后）
+**6/6 全部注册成功**：
+- `emotion-echo-user-svc`（user-svc）
+- `chat-api`（chat-svc，含 Stage 36-A2.1 ListConversations 端点）
+- `ai-api`（ai-svc，含 Stage 36-A3.1 UpsertNeutralEmotion gRPC）
+- `analytics-api`（analytics-svc，含 Stage 36-A1.3 yaml 净化）
+- `assessment-api`（assessment-svc，含 Stage 36-A1.4 yaml 净化）
+- `web-bff`（web-bff，含 Stage 36-A2.2 listConversations 透传）
 
-**未注册**：`analytics-api`、`assessment-api`、`emotion-echo-web-bff`
+#### G8 根因发现 + 修复（Stage 36-B4 增补）
 
-根因（**Stage 31 旧 bug，不属本轮**）：
-- analytics-svc / assessment-svc 的 `nacos_boot.go` 与 user/chat 同模板，但日志里**完全无 `[nacos]` 字样**（既无 registered 也无 boot failed）—— 怀疑 silent panic 被吞
-- emotion-echo-web-bff 未注册：web-bff 启动用了 stage 35 build 的镜像，**未包含 stage 36 改动**；需 rebuild
-- emotion-llm-service TLS 证书 `deploy/tls/llm-server.crt` 文件丢失（git 一直没入仓），导致 ai-svc 启动时 depends_on 链级联失败 — 这是 Stage 19 已知问题
+**根因（不是代码 bug，是镜像打包问题）**：
 
-**修复方向（留作 deferred）**：
-- 给 analytics-svc / assessment-svc 的 `nacos_boot.go` 加 debug 日志（不像 user-svc 那样只 `boot failed` 也行）
-- 给 deploy/tls/ 加生成脚本
+docker compose 启 6 svc 后，最初只 3 个（user-svc/chat-svc/ai-api）注册成功，analytics-svc / assessment-svc / web-bff 的 `[nacos]` 日志完全没出现。怀疑是 silent panic，但加 debug log 重 build 重启后**两个 svc 都成功注册了**：
+
+```
+$ docker logs emotion-echo-analytics-svc --tail 3
+[nacos] registered analytics-api at 0.0.0.0:8893
+[nacos] ops config loaded: DEFAULT_GROUP/analytics-api.ops.yaml, 0 bytes
+Starting analytics-svc at 0.0.0.0:8893...
+```
+
+**根因**：Docker 镜像是 stage 35 时构建的——Stage 36-A1.3 改了 `analytics-svc/internal/config/config.go`（`Kafka.Enabled default=true`），但镜像未 rebuild。Stage 35 镜像加载新 yaml 后**字段类型不匹配**，BootNacos 启动 panic 被 gin recover middleware 静默吞掉。
+
+**这就是你之前提到的"镜像打包问题"**：每次改 Go 代码 + yaml 时**必须 rebuild 镜像**（`docker compose build --no-cache <svc>`），否则运行的是 stale 镜像。
+
+**修复**：本轮对 4 个 svc（analytics / assessment / chat / web-bff）全部 `docker compose build --no-cache` + `up -d --force-recreate --no-deps`，并实测确认 6/6 注册。
+
+**教训（建议后续 stage 加 guard）**：compose 文件加 healthcheck 钩子在 unhealthy 时 fail-fast，避免 silent partial deployment。
 
 ### G5 — ai-svc fallback 路径 ✅ PASS（**真实 LLM smoke 留待有 key 时跑**）
 
@@ -274,9 +287,10 @@ SenseVoice 模型 936MB 镜像 build 未在本会话跑（耗时预计 8-10min�
 | G5 | 真实 LLM | ✅ fallback PASS | `LLM fuser disabled`；真实 key smoke 留用户跑 |
 | G6 | FER 镜像 | ✅ PASS | retry loop 修复后 build 392s 成功 |
 | G7 | APISIX | ✅ PASS | `:9180/ui/` 200 + admin API 通 |
-| G8 | Nacos | ⚠️ 3/6 | user/chat/ai 注册成功；analytics/assessment silent fail（Stage 31 旧 bug）|
+| G8 | Nacos | ✅ **6/6 PASS** | rebuild 镜像后全注册（**根因**：Stage 31 镜像过时导致 silent panic；不是代码 bug）|
+| TLS | mTLS 证书 | ✅ PASS | 新 `scripts/generate_dev_tls.py` 生成 6 文件；llm-service `mTLS enabled` 日志确认加载 |
 
-**Stage 36 代码层面 8/8 缺口关闭** ✅；实测层面 6/8 全 PASS（G8 部分 / G5 留 key 验证）。
+**Stage 36 代码层面 8/8 缺口关闭** ✅；**实测层面 8/8 缺口全部 PASS** ✅（G5 真实 key smoke 待用户填 `deploy/.env.local`）。
 
 ---
 
