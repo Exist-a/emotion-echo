@@ -14,11 +14,15 @@ type Postgres struct {
 }
 
 // Kafka chat-events consumer 配置（与 ai-svc 同模式）
+//
+// Stage 36-A1.3：Kafka.Enabled 默认值改为 true——analytics-svc 是 chat-events
+// 的下游消费者（user_behavior_events 数据源），consumer 是其唯一数据源，
+// 默认开启确保 Stage 30-B 设计意图生效；env KAFKA_ENABLED=false 用于离线调试。
 type Kafka struct {
 	// BrokersCSV 逗号分隔的 broker 列表（容器内通过 KAFKA_BROKERS env 注入）
 	BrokersCSV string `json:",default=localhost:9092"`
 	GroupID    string `json:",default=analytics-svc"`
-	Enabled    bool   `json:",default=false"` // opt-in：显式 true 才启动 consumer
+	Enabled    bool   `json:",default=true"`
 	Topics     []string `json:",default=[\"chat-events\"]"`
 }
 

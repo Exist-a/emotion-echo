@@ -83,8 +83,10 @@ Kafka:
 	if c.Kafka.GroupID != "analytics-svc" {
 		t.Fatalf("GroupID default mismatch, got %q", c.Kafka.GroupID)
 	}
-	if c.Kafka.Enabled {
-		t.Fatal("Enabled should default false (opt-in)")
+	// Stage 36-A1.3:analytics-svc consumer 是 user_behavior_events 唯一数据源，
+	// Kafka.Enabled 改为 default=true（opt-in 由 env KAFKA_ENABLED=false 提供）。
+	if !c.Kafka.Enabled {
+		t.Fatal("Enabled should default true (consumer is the only data source; opt-in via env KAFKA_ENABLED=false)")
 	}
 	if len(c.Kafka.Topics) != 1 || c.Kafka.Topics[0] != "chat-events" {
 		t.Fatalf("Topics mismatch, got %v", c.Kafka.Topics)
