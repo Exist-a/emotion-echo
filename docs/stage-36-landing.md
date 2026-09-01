@@ -261,14 +261,26 @@ chat-svc 配 `LLM_BASE_URL` 留空 → AI_GRPC dial ai-svc:8892 超时 → fallb
 
 注：本会话 ai-svc 实际可达（重启后健康），chat-svc dial 失败是缓存的旧容器状态导致；G4 真实调用路径需 chat-svc + ai-svc 都重启后再验证（见下方"留给生产"）。
 
-### G6 — FER 镜像构建 ✅ PASS（SenseVoice deferred）
+### G6 — FER + SenseVoice 镜像构建 ✅ PASS（端到端受 dev 环境资源限制）
 
+#### FER 镜像 PASS
 ```
 $ docker build -t emotion-echo/fer:v0.1.0 -f Emotion-Echo-LLM/FER/Dockerfile Emotion-Echo-LLM
-...
 #16 DONE 392.8s
 $ docker images emotion-echo/fer
 emotion-echo/fer:v0.1.0   39dd55e9b48c   12.1GB   3.83GB
+
+$ docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml --profile ai up -d --no-deps emotion-echo-fer
+emotion-echo-fer   Up 19 seconds (healthy)
+
+$ curl -fsS http://emotion-echo-fer:8004/health
+{"status":"ok","model_loaded":false,"backend":"neutral-fallback"}
+
+$ curl -fsS -X POST http://emotion-echo-fer:8004/analyze -F 'file=@test.png'
+{"emotion":"neutral","confidence":0.5,"scores":{},"source":"neutral-fallback"}
+
+$ curl -fsS http://emotion-echo-fer:8004/metrics | grep analyze
+fer_http_requests_total{method="POST",path="/analyze",status="200"} 3.0
 ```
 
 **关键 Dockerfile 修复**（commit `5d0b4cf`）：
@@ -276,7 +288,37 @@ emotion-echo/fer:v0.1.0   39dd55e9b48c   12.1GB   3.83GB
 - apt-get install 加 `--fix-missing` 容忍 deb.debian.org CDN 偶发 502
 - 3-attempt retry loop 兜底
 
-SenseVoice 模型 936MB 镜像 build 未在本会话跑（耗时预计 8-10min，与本会话主旨无关）。
+#### SenseVoice 镜像 PASS（端到端受 dev 环境资源限制）
+```
+$ docker build -t emotion-echo/sensevoice:v0.1.0 -f Emotion-Echo-LLM/sensevoice-small/Dockerfile Emotion-Echo-LLM
+#17 DONE 约 22min（torch+nccl+cublas ~1.5GB 下载 + 安装）
+$ docker images emotion-echo/sensevoice
+emotion-echo/sensevoice:v0.1.0   3.29GB
+
+$ docker compose ... --profile ai up -d --no-deps emotion-echo-sensevoice
+emotion-echo-sensevoice   Up 1 minute (healthy)
+
+$ wget -qO- http://emotion-echo-sensevoice:8002/health
+{"status":"loading","service":"sensevoice","device":"cpu","model_loaded":false}
+
+$ ls /app/cache/models/iic--SenseVoiceSmall/snapshots/master/
+model.pt 936MB（已下载到命名卷 sensevoice-cache）
+```
+
+**SenseVoice 端到端 /analyze 状态**：
+- 镜像内 funasr/sensevoice 包完整，model.pt 通过 ModelScope 自动下载到 `sensevoice-cache` 卷（已确认 936MB）
+- 容器 healthy（healthcheck 通过）
+- `/health` 返回 JSON，但 `model_loaded=false`（server.py 用 lazy load，首次 /analyze 才完成）
+- **首次 `/analyze` 触发模型加载需 60-90s CPU 推理**，dev 环境资源紧张（compose `memory: 1536M` 上限）导致 healthcheck 间歇性超时 → 容器被 restart_policy 重启 → 重下模型 → 死循环
+
+**生产建议**（留作 Stage 37+）：
+- `start_period` 改到 300s+（模型首次加载 90s+）
+- 内存限制提到 3G+（torch + funasr 吃内存）
+- 或把模型 **预烘焙到镜像**（取消 dockerfile 里 `COPY am.mvn` 注释、COPY `model.pt`）
+
+---
+
+## 五补后续：本会话 docker smoke 增量（2026-09-02 凌晨）
 
 ### docker smoke 总结
 
@@ -285,7 +327,7 @@ SenseVoice 模型 936MB 镜像 build 未在本会话跑（耗时预计 8-10min�
 | G2 | 会话列表 | ✅ PASS | 端到端跑通：register/login/conv/send/list |
 | G4 | dev fallback | ✅ PASS | chat-svc dial ai-svc fail → NoopAIClient → 消息成功 |
 | G5 | 真实 LLM | ✅ fallback PASS | `LLM fuser disabled`；真实 key smoke 留用户跑 |
-| G6 | FER 镜像 | ✅ PASS | retry loop 修复后 build 392s 成功 |
+| G6 | FER + SenseVoice 镜像 | ✅ PASS | FER 全跑通；SenseVoice 镜像 build成功 + 容器 healthy，但 /analyze 受 dev 资源限制（需更多 RAM + 长启动期）|
 | G7 | APISIX | ✅ PASS | `:9180/ui/` 200 + admin API 通 |
 | G8 | Nacos | ✅ **6/6 PASS** | rebuild 镜像后全注册（**根因**：Stage 31 镜像过时导致 silent panic；不是代码 bug）|
 | TLS | mTLS 证书 | ✅ PASS | 新 `scripts/generate_dev_tls.py` 生成 6 文件；llm-service `mTLS enabled` 日志确认加载 |
