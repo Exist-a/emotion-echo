@@ -183,6 +183,6 @@ func (f *LLMFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*model.FusedEm
 		ModalityContrib:     string(contribJSON),
 		Reasoning:           out.Reasoning,
 		FusionMethod:        "llm",
-		AvailableModalities: s.AvailableModalities(),
+		AvailableModalities: model.AvailableModalitiesFromSlice(s.AvailableModalities()),
 	}, nil
 }

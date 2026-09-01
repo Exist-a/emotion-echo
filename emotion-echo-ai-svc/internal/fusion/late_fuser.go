@@ -140,6 +140,6 @@ func (f *WeightedLateFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*mode
 		ModalityContrib:     string(contribJSON),
 		Reasoning:           "", // late_fusion 无 LLM 解释
 		FusionMethod:        "late_fusion_weighted",
-		AvailableModalities: modalities,
+		AvailableModalities: model.AvailableModalitiesFromSlice(modalities),
 	}, nil
 }

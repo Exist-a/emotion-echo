@@ -151,14 +151,31 @@ func NewPostgresFaceEmotionRepo(db *gorm.DB) *PostgresFaceEmotionRepo {
 
 func (r *PostgresFaceEmotionRepo) Create(ctx context.Context, f *model.FaceEmotionResult) error {
 	f.ID = 0
-	tx := r.db.WithContext(ctx)
+	// JSONB 空串归一化为 '{}'：Postgres 不接受空串作为 JSONB 字面量。
+	normalizeJSONB(f)
+
+	// 幂等去重：UploadID 已存在则 backfill *f 为已存在记录（语义对齐 InMemoryEmotionRepo）。
+	//
+	// 设计：先 SELECT 拿 ID + 早退出（无冲突），再 INSERT（异常路径 ON CONFLICT 兜底）。
+	// 用 SELECT 而不是 ON CONFLICT DO UPDATE SET id=id，是因为 PG 的
+	// "column id is ambiguous" 在 conflict target = upload_id 时无法区分。
 	if f.UploadID != "" {
-		tx = tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "upload_id"}},
-			DoNothing: true,
-		})
+		var existing model.FaceEmotionResult
+		err := r.db.WithContext(ctx).Where("upload_id = ?", f.UploadID).First(&existing).Error
+		if err == nil {
+			// 已存在：回填 ID（不写）
+			f.ID = existing.ID
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		// 不存在：继续走 INSERT 路径（理论上 OnConflict 兜底，但实际很少触发）
 	}
-	return tx.Create(f).Error
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "upload_id"}},
+		DoNothing: true,
+	}).Create(f).Error
 }
 
 func (r *PostgresFaceEmotionRepo) GetByUploadID(ctx context.Context, uploadID string) (*model.FaceEmotionResult, error) {

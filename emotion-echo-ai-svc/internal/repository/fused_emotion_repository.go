@@ -125,6 +125,8 @@ func NewPostgresFusedEmotionRepo(db *gorm.DB) *PostgresFusedEmotionRepo {
 // 注意：clause.OnConflict 的 DoUpdates 必须显式列出所有要更新的列，
 // 否则 PG 默认不更新任何列。
 func (r *PostgresFusedEmotionRepo) Upsert(ctx context.Context, f *model.FusedEmotion) error {
+	// JSONB 空串归一化为 '{}'
+	normalizeJSONB(f)
 	upsert := clause.OnConflict{
 		Columns: []clause.Column{{Name: "message_id"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{

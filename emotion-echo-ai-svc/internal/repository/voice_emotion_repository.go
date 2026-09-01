@@ -119,14 +119,24 @@ func NewPostgresVoiceEmotionRepo(db *gorm.DB) *PostgresVoiceEmotionRepo {
 
 func (r *PostgresVoiceEmotionRepo) Create(ctx context.Context, v *model.VoiceEmotionResult) error {
 	v.ID = 0
-	tx := r.db.WithContext(ctx)
+	normalizeJSONB(v)
+
+	// 幂等去重：与 FaceEmotionRepo 同模式（先 SELECT 再 INSERT）
 	if v.UploadID != "" {
-		tx = tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "upload_id"}},
-			DoNothing: true,
-		})
+		var existing model.VoiceEmotionResult
+		err := r.db.WithContext(ctx).Where("upload_id = ?", v.UploadID).First(&existing).Error
+		if err == nil {
+			v.ID = existing.ID
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
 	}
-	return tx.Create(v).Error
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "upload_id"}},
+		DoNothing: true,
+	}).Create(v).Error
 }
 
 func (r *PostgresVoiceEmotionRepo) GetByUploadID(ctx context.Context, uploadID string) (*model.VoiceEmotionResult, error) {

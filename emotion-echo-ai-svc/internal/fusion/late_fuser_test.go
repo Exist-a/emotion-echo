@@ -51,8 +51,7 @@ func TestLateFuser_TextOnly_AllWeightOnText(t *testing.T) {
 	assert.InDelta(t, -0.5, out.SentimentScore, 0.001)
 	assert.InDelta(t, 0.9, out.Confidence, 0.001)
 	assert.Equal(t, "late_fusion_weighted", out.FusionMethod)
-	require.Len(t, out.AvailableModalities, 1)
-	assert.Equal(t, "text", out.AvailableModalities[0])
+	assert.Equal(t, `["text"]`, out.AvailableModalities)
 	// text 单独时 contribution 应为 1.0
 	var textW float64
 	require.NoError(t, jsonUnmarshalFloat(out.ModalityContrib, "text", &textW))
@@ -79,7 +78,7 @@ func TestLateFuser_TextAndFace_TwoModalities(t *testing.T) {
 	// sentiment = 0.5*0.5714 + 0.0*0.4286 ≈ 0.2857
 	assert.InDelta(t, 0.2857, out.SentimentScore, 0.01)
 	assert.Equal(t, "late_fusion_weighted", out.FusionMethod)
-	require.Len(t, out.AvailableModalities, 2)
+	assert.Equal(t, `["text","face"]`, out.AvailableModalities)
 }
 
 // TestLateFuser_AllThree_HappyFromText_FaceNeutral_VoiceAngry 三路：算术看加权。
@@ -102,7 +101,7 @@ func TestLateFuser_AllThree_HappyFromText_FaceNeutral_VoiceAngry(t *testing.T) {
 	// primary 取最高得分 → "happy"（angry 负分被排除）
 	assert.Equal(t, "happy", out.PrimaryEmotion)
 	assert.Equal(t, "late_fusion_weighted", out.FusionMethod)
-	require.Len(t, out.AvailableModalities, 3)
+	assert.Equal(t, `["text","face","voice"]`, out.AvailableModalities)
 }
 
 // TestLateFuser_FaceOnly_WeightRedistributed 只有 face：contribution=1.0。

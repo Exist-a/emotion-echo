@@ -39,12 +39,12 @@ func TestFusedEmotion_Fields(t *testing.T) {
 		ConversationID:   50,
 		PrimaryEmotion:   "sad",
 		SentimentScore:   -0.42,
-		Confidence:       0.81,
-		ModalityContrib:  `{"text":0.4,"voice":0.3,"face":0.3}`,
-		Reasoning:        "用户文字与语音均表达低落情绪",
-		FusionMethod:     "llm",
-		AvailableModalities: []string{"text", "voice"},
-		CreatedAt:        now,
+		Confidence:         0.81,
+		ModalityContrib:    `{"text":0.4,"voice":0.3,"face":0.3}`,
+		Reasoning:          "用户文字与语音均表达低落情绪",
+		FusionMethod:       "llm",
+		AvailableModalities: `["text","voice"]`,
+		CreatedAt:          now,
 	}
 	if f.MessageID != 100 || f.UserID != 7 {
 		t.Fatalf("ids mismatch")
@@ -55,8 +55,8 @@ func TestFusedEmotion_Fields(t *testing.T) {
 	if f.FusionMethod != "llm" {
 		t.Fatalf("fusion_method mismatch")
 	}
-	if len(f.AvailableModalities) != 2 {
-		t.Fatalf("available_modalities mismatch")
+	if f.AvailableModalities != `["text","voice"]` {
+		t.Fatalf("available_modalities mismatch: %q", f.AvailableModalities)
 	}
 }
 

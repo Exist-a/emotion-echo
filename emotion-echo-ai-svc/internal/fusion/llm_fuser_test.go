@@ -66,7 +66,7 @@ func TestLLMFuser_Success_FromFakeServer(t *testing.T) {
 	assert.InDelta(t, -0.55, out.SentimentScore, 0.001)
 	assert.Equal(t, "文字与语音均表达低落", out.Reasoning)
 	assert.Equal(t, "llm", out.FusionMethod)
-	require.Len(t, out.AvailableModalities, 3)
+	assert.Equal(t, `["text","face","voice"]`, out.AvailableModalities)
 }
 
 // TestLLMFuser_LLMReturnsBadJSON_ReturnsError LLM 返回非 JSON → error（让 Worker 兜底）。
