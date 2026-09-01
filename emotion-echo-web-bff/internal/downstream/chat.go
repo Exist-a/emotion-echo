@@ -69,6 +69,9 @@ type ChatClient interface {
 	SendMessage(ctx context.Context, conversationID int64, req SendMessageReq) (*MessageView, error)
 	// ListMessages 列出会话消息
 	ListMessages(ctx context.Context, conversationID int64, limit int) ([]MessageView, error)
+	// ListConversations Stage 36-A2.2：列出当前用户的会话（用户隔离由 chat-svc 保证）。
+	// 返回值：list + hasMore（取 limit+1 探测）。
+	ListConversations(ctx context.Context, limit, offset int) ([]ConversationView, bool, error)
 	// DeleteConversation 删除会话
 	DeleteConversation(ctx context.Context, conversationID int64) error
 	// PinConversation 置顶会话（下游未实现；接口保留，未来 chat-svc 支持后可用）
@@ -190,6 +193,45 @@ func (c *chatHTTPClient) ListMessages(ctx context.Context, conversationID int64,
 		return nil, fmt.Errorf("downstream: decode messages resp: %w", err)
 	}
 	return wrapped.Messages, nil
+}
+
+// ListConversations Stage 36-A2.2：列出当前用户的会话，按 updated_at desc。
+//
+// chat-svc 端点返回 ListConversationsResp{list, hasMore}，下游已做 limit+1 探测，
+// BFF 这层只透传并把 list 转成下游 ConversationView 切片 + hasMore 标志。
+func (c *chatHTTPClient) ListConversations(ctx context.Context, limit, offset int) ([]ConversationView, bool, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	url := fmt.Sprintf("%s/api/v1/conversations?limit=%d&offset=%d", c.baseURL, limit, offset)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	applyAuthHeader(httpReq, ctx)
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, false, fmt.Errorf("downstream: list conversations: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, false, readError(resp)
+	}
+	var wrapped struct {
+		List    []ConversationView `json:"list"`
+		HasMore bool               `json:"hasMore"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapped); err != nil {
+		return nil, false, fmt.Errorf("downstream: decode conversations resp: %w", err)
+	}
+	if wrapped.List == nil {
+		wrapped.List = []ConversationView{}
+	}
+	return wrapped.List, wrapped.HasMore, nil
 }
 
 func (c *chatHTTPClient) DeleteConversation(ctx context.Context, conversationID int64) error {

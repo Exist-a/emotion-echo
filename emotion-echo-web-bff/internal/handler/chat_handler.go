@@ -43,10 +43,31 @@ func (h *ChatHandler) Register(r *gin.Engine) {
 
 // listConversations 会话列表（前端契约 {list, hasMore}）
 //
-// 注：chat-svc 暂无 list 端点，BFF 先返回空列表（前端首次加载不 404）。
-// 待 chat-svc 增加 GET /conversations 后透传。
+// Stage 36-A2.2：透传 chat-svc GET /api/v1/conversations（用户隔离 + 分页）。
+// 用户 ID 由 session.WithRequestAuth 注入 ctx → applyAuthHeader → X-User-Id。
 func (h *ChatHandler) listConversations(c *gin.Context) {
-	OK(c, gin.H{"list": []ConversationItemVM{}, "hasMore": false})
+	limit := 20
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	offset := 0
+	if v := c.Query("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	convs, hasMore, err := h.chat.ListConversations(session.WithRequestAuth(c), limit, offset)
+	if err != nil {
+		Fail(c, statusFor(err), 1, err.Error())
+		return
+	}
+	items := make([]ConversationItemVM, 0, len(convs))
+	for i := range convs {
+		items = append(items, toConversationItemVM(&convs[i]))
+	}
+	OK(c, gin.H{"list": items, "hasMore": hasMore})
 }
 
 func (h *ChatHandler) createConversation(c *gin.Context) {
