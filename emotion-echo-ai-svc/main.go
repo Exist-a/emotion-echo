@@ -67,6 +67,19 @@ func failFastIfRequired(dep string, err error, addr string) {
 	logging.Errorf(err, "[startup] dependency check failed (non-strict): dep=%s addr=%s", dep, addr)
 }
 
+// readEnvInt 读 env 整数值；空或非法 → 返回 fallback。
+func readEnvInt(name string, fallback int) int {
+	v := os.Getenv(name)
+	if v == "" {
+		return fallback
+	}
+	var n int
+	if _, err := fmt.Sscan(v, &n); err != nil {
+		return fallback
+	}
+	return n
+}
+
 // applyEnvOverrides reads OS env vars and patches c.* fields.
 //
 // go-zero conf does NOT parse ${VAR:-default} bash-style substitution.
@@ -398,20 +411,38 @@ func main() {
 		// LLM fuser 复用 BFF 的 LLM_BASE_URL（DeepSeek / OpenAI 兼容）
 		// 注意：当前 BFF 已使用 BFF_LLM_BASE_URL，ai-svc 没有同等 yaml 字段，
 		// 退化为环境变量 LLM_BASE_URL；为空则 nil（Worker 走 late_fuser 兜底）
-		var llmFuser fusion.Fuser
+		//
+		// Stage 35 PR-4 + PR-5 + PR-8 接线：
+		//   - Timeout 默认 3s（NewLLMFuser 内置；env LLM_TIMEOUT 可覆盖）
+		//   - SetBreaker（连续 5 失败 / 30s Open / 不重试）由 env LLM_BREAKER_* 配置
+		//   - Model 默认 deepseek-chat
+		var llmFuser *fusion.LLMFuser
 		if llmBase := os.Getenv("LLM_BASE_URL"); llmBase != "" {
 			llmFuser = fusion.NewLLMFuser(fusion.LLMConfig{
 				BaseURL: llmBase,
 				APIKey:  os.Getenv("LLM_API_KEY"),
 				Model:   os.Getenv("LLM_MODEL"),
-				Timeout: 10 * time.Second,
 			})
-			logging.Printf("[fusion] LLM fuser active: %s model=%s", llmBase, os.Getenv("LLM_MODEL"))
+			// 注入 circuit breaker（默认值；env 覆盖）
+			br := fusion.NewCircuitBreaker(fusion.BreakerConfig{
+				FailThreshold: readEnvInt("LLM_BREAKER_FAIL_THRESHOLD", 5),
+				OpenSeconds:   time.Duration(readEnvInt("LLM_BREAKER_OPEN_SECONDS", 30)) * time.Second,
+			})
+			llmFuser.SetBreaker(br)
+			logging.Printf("[fusion] LLM fuser active: %s model=%s breaker=%v", llmBase, os.Getenv("LLM_MODEL"), br.State())
 		} else {
 			logging.Printf("[fusion] LLM fuser disabled (LLM_BASE_URL empty); late_fuser is fallback")
 		}
 
 		lateFuser := fusion.NewWeightedLateFuser(0.4, 0.3, 0.3)
+
+		// Stage 35 PR-3：msgID LRU 限流（默认 cap=1024 / TTL=4min）
+		var rateLimit *fusion.MsgIDLRU
+		if cap := readEnvInt("WORKER_LRU_CAPACITY", 0); cap > 0 {
+			ttl := time.Duration(readEnvInt("WORKER_LRU_TTL_SECONDS", 240)) * time.Second
+			rateLimit = fusion.NewMsgIDLRU(cap, ttl)
+			logging.Printf("[fusion] Worker LRU rate limit enabled: cap=%d ttl=%v", cap, ttl)
+		}
 
 		worker := fusion.NewFusionWorker(fusion.FusionWorkerDeps{
 			EmotionRepo:      fusionEmotionRepo,
@@ -422,6 +453,7 @@ func main() {
 			LLMFuser:         llmFuser,
 			LateFuser:        lateFuser,
 			TickInterval:     5 * time.Second,
+			RateLimit:        rateLimit, // Stage 35 PR-3
 		})
 		go func() {
 			logging.Printf("[fusion] worker.Run() entered")

@@ -20,6 +20,7 @@ package fusion
 import (
 	"context"
 	"errors"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 
@@ -142,9 +143,14 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 	}
 
 	// 4. 调 LLM（主路径，如果可用）
+	//
+	// 防御双重 nil：
+	//   - `w.deps.LLMFuser == nil` 是 interface 完全 nil（未注入）
+	//   - `reflect.ValueOf(w.deps.LLMFuser).IsNil()` 是 type+nil value（注入了一个 nil 指针）
+	//   两者必须都检查，否则 nil pointer dereference panic。
 	var fused *model.FusedEmotion
 	var err error
-	if w.deps.LLMFuser != nil {
+	if w.deps.LLMFuser != nil && !isNilFuser(w.deps.LLMFuser) {
 		fused, err = w.deps.LLMFuser.Fuse(ctx, snap)
 	}
 	if err != nil || fused == nil {
@@ -237,11 +243,12 @@ func (w *FusionWorker) Run(ctx context.Context) error {
 		case <-ticker.C:
 			logging.Printf("[fusion] tick fired (counter=%d)", w.ticked.Load()+1)
 			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						logging.Printf("[fusion] PANIC recovered: %v", r)
-					}
-				}()
+defer func() {
+				if r := recover(); r != nil {
+					debug.PrintStack()
+					logging.Printf("[fusion] PANIC recovered: %v", r)
+				}
+			}()
 				_ = w.Tick(ctx)
 			}()
 		}
