@@ -197,12 +197,13 @@ emotion-echo-shared/pkg/emotionquery/emotion_query_grpc.pb.go（protoc 重生成
 - Fusion Worker 调 LLM 主路径 + late_fuser 兜底
 - 按模态聚合 VIEW 供报表消费
 - BFF `/api/v1/emotion/message/:id/fused` 端点暴露融合结果
-- 真 Postgres 端到端验证
+- 真 Postgres 端到端验证（单元 + 集成测试）
+- **docker compose smoke 验证通过**（HTTP persist + Worker tick + gRPC GetFusedEmotion）
 
-**待续**（部署 / smoke）：
-- ai-svc 新镜像构建（含 Fusion Worker 启动逻辑）
-- docker compose 全栈 smoke（含 ai-svc 启动时跑 Worker）
-- ai-svc main.go 还需要在合适时机启动 `fusion.Worker.Run()`（目前 worker 包就绪但未在 main 装配）
+**待续**（生产部署）：
+- yaml bool 占位符恢复（生产环境必须用 `${NACOS_ENABLED:-true}` 让 main.go applyEnvOverrides 生效）
+- docker compose 全栈（含 apisix / nacos / kafka，目前镜像不可用需重打）
+- 前端 ECharts 多 series 渲染 emotionDistributionByModality（前端零改动，schema 已就绪）
 
 ## 十、Stage 35+ 候选
 
@@ -223,7 +224,8 @@ emotion-echo-shared/pkg/emotionquery/emotion_query_grpc.pb.go（protoc 重生成
 ## 十二、commit 序列（最终）
 
 ```
-1304111 (HEAD) feat: BFF /fused endpoint + ai-svc gRPC GetFusedEmotion + proto 扩 (PR-18)
+b8b344c (HEAD) feat(ai-svc): Stage 34 wire-up + smoke fixes (handler / Worker / yaml)
+1304111 feat: BFF /fused endpoint + ai-svc gRPC GetFusedEmotion + proto 扩 (PR-18)
 d42e93f docs(stage-34-landing): 落地报告 + 收口条件核对 (PR-19)
 f798437 test: add failing tests for EmotionQueryHandler fused endpoint (PR-17)
 254f0a1 feat: Stage 34 migrations + integration tests + JSONB/ARRAY fixes
@@ -235,6 +237,94 @@ e95e8a5 test: add failing tests for ModalityReportRepo
 dbd4957 test: add failing tests for FaceEmotionResult model and FaceEmotionRepo  (PR-1)
 e25979b docs(stage-32/33): 入仓设计文档  ← docs/stage-31-landing 分支起点
 ```
+
+## 十三、Docker 端到端 smoke 验证（已完成）
+
+Stage 34 完成后用 docker compose 起 postgres + 重建 ai-svc 镜像（v0.2.0-stage34）+ grpcurl 验证真实链路。
+
+**启动**：
+```
+docker compose -f deploy/docker-compose.infra.yml up -d postgres  # only postgres（无 apisix/nacos/kafka 拉镜像失败）
+docker run -d --name emotion-echo-ai-svc-smoke \
+  --network emotion-echo_app-network \
+  -p 8891:8891 -p 8892:8892 \
+  -e POSTGRES_DSN="host=emotion-echo-postgres ..." \
+  emotion-echo/ai-svc:v0.2.0-stage34
+```
+
+**apply migrations**：
+```
+for f in emotion-echo-ai-svc/migrations/00{2,3,4,5}_*.sql; do
+  docker exec -i emotion-echo-postgres psql -U postgres -d emotion_echo < "$f"
+done
+# 6 tables in emotion_echo_ai: emotion_analysis, face_emotion_results, fused_emotions,
+#                               voice_emotion_results, voice_transcripts, face_detections
+```
+
+**smoke 1：HTTP multimodal persist**
+```bash
+curl -H "X-User-Id: 7" \
+  -F "kind=image" -F "file=@/tmp/t.jpg" -F "filename=t.jpg" \
+  -F "upload_id=smoke-img-final" -F "persist=true" -F "message_id=5005" \
+  -F "user_id=7" -F "conversation_id=50" \
+  http://localhost:8891/api/v1/multimodal/analyze
+# → {"kind":"image","emotion":"neutral",...}
+
+# 验证落库
+docker exec emotion-echo-postgres psql -U postgres -d emotion_echo -c \
+  "SELECT * FROM emotion_echo_ai.face_emotion_results WHERE message_id=5005"
+# → 1 row (smoke-img-final)
+```
+
+**smoke 2：Fusion Worker tick → Upsert**
+```sql
+INSERT INTO emotion_echo_ai.emotion_analysis (message_id, user_id, ..., primary_emotion)
+VALUES (6006, 7, ..., 'happy');
+INSERT INTO emotion_echo_ai.fused_emotions (message_id, ..., primary_emotion)
+VALUES (6006, 7, ..., 'pending');  -- 占位行
+-- 等 5 秒
+```
+
+Worker 日志（每 5s tick）：
+```
+tick fired (counter=1)
+tick: candidates=2 (msgIDs=[1001 6006])
+msgID=1001 skipped (no text emotion)
+msgID=6006 fused: emotion=happy sentiment=0.60 method=late_fusion_weighted modalities=["text"]
+```
+
+数据库验证（Upsert 覆盖）：
+```sql
+SELECT message_id, primary_emotion, sentiment_score, fusion_method, modality_contrib
+FROM emotion_echo_ai.fused_emotions WHERE message_id=6006;
+-- happy | 0.6 | late_fusion_weighted | {"text": 1}
+```
+
+**smoke 3：gRPC GetFusedEmotion**
+```bash
+grpcurl -plaintext -proto proto/emotion_query.proto \
+  -H "x-user-id: 7" -d '{"message_id": 6006}' \
+  localhost:8892 emotion_ai.v1.EmotionQueryService/GetFusedEmotion
+```
+```json
+{
+  "messageId": "6006",
+  "userId": "7",
+  "primaryEmotion": "happy",
+  "sentimentScore": 0.6,
+  "modalityContrib": "{\"text\": 1}",
+  "fusionMethod": "late_fusion_weighted",
+  "availableModalities": "[\"text\"]"
+}
+```
+
+**smoke 发现的真问题（全部修复）**：
+
+1. **handler 没接 PersistMultiModalAnalyzeLogic**：PR-7/8 实现完成但 multimodal_handler.go 仍调老的 NewMultiModalAnalyzeLogic，导致 persist=true 默默无效
+2. **Worker LLMFuser nil panic**：main.go 在 LLM_BASE_URL 空时不构造 → worker tick 时 nil.Fuse() panic
+3. **yaml bool 占位符坑**：go-zero conf 不展开 `${VAR:-default}` 给 bool 字段（type mismatch），需 yaml 硬编码 false 让 main.go applyEnvOverrides 生效
+4. **Worker PendingLister 未装配**：main.go 漏了 PendingLister 字段，导致 tick 内 candidates=空 → 不处理任何消息
+5. **svc.NewServiceContext 缺 faceRepo/voiceRepo/fusedRepo**：导致 multimodal handler 即便 persist=true 也没有 repo 写入
 
 ## 十三、参考
 
