@@ -60,7 +60,7 @@ func unwrapLLMContent(raw string) string {
 	//    用 json.Unmarshal 试一次，若能解析为 string 类型，视为双重编码
 	if len(s) > 0 && s[0] == '"' {
 		var unquoted string
-		if err := json.Unmarshal([]byte(s), &unquoted); err == nil {
+		if err := json.Unmarshal([]byte(s), &unquoted); err == nil && unquoted != s {
 			s = unquoted
 		}
 	}

@@ -162,7 +162,10 @@ func (f *LLMFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*model.FusedEm
 	content := chatResp.Choices[0].Message.Content
 
 	// 5. 解析 LLM 输出 JSON（content 本身又是 JSON 字符串）
-	//    Stage 35 PR-1：先剥 markdown 包装 + 双重 JSON 解码
+	//    Stage 35 PR-1：先剥 markdown 包装 + 双重 JSON 解码。
+	//    真实 LLM（DeepSeek/OpenAI/Llama 兼容）即使 system prompt 要求 "只输出 JSON"
+	//    仍偶发用 ```json...``` 包裹，少数情况会把 JSON 字符串再序列化一次（双重编码）。
+	//    unwrapLLMContent 同时处理这两种情况，确保下游 json.Unmarshal 拿到的是干净 JSON。
 	content = unwrapLLMContent(content)
 	var out llmFusedOutput
 	if err := json.Unmarshal([]byte(content), &out); err != nil {
