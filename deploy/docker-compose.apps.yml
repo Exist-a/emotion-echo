@@ -312,8 +312,16 @@ services:
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_ai"
       KAFKA_BROKERS:       '["emotion-echo-kafka:9092"]'
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
-      # Stage 19: ai-svc → emotion-llm-service
-      LLM_BASE_URL:        "http://emotion-llm-service:8000"
+      # Stage 19: ai-svc → emotion-llm-service 内部 FastAPI（dev / 离线）
+      # Stage 36-B1: 真实 LLM（DeepSeek / OpenAI 兼容）通过 LLM_* env 注入。
+      # ai-svc 直接读 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL / LLM_TIMEOUT
+      # （main.go:419-432）；compose .env.local 覆盖，无 key 时 LLM_BASE_URL 空
+      # → LLMFuser 禁用，FusionWorker 走 late_fuser_weighted fallback（Stage 34 默认行为）。
+      # 留 LLM_INTERNAL_* 给内部 llm-service 兼容（Stage 19 路径）。
+      LLM_BASE_URL:        ${LLM_BASE_URL:-}
+      LLM_API_KEY:         ${LLM_API_KEY:-}
+      LLM_MODEL:           ${LLM_MODEL:-deepseek-chat}
+      LLM_TIMEOUT:         ${LLM_TIMEOUT:-3}
       LLM_GRPC_ADDR:       "emotion-llm-service:50051"
       LLM_INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
 

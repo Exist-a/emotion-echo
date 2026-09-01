@@ -251,6 +251,30 @@ BFF: 真实 LLM（DeepSeek deepseek-chat）
 
 ---
 
+## Stage 36-B1 增补：ai-svc 侧 env 注入（2026-09-01）
+
+之前 stage 30-D 主要设计 BFF 的 `BFF_LLM_*` env，但 ai-svc 的 LLM 调用（FusionWorker）走另一套：
+- ai-svc main.go:419-432 直接读 `os.Getenv("LLM_BASE_URL") / "LLM_API_KEY" / "LLM_MODEL")`
+- Stage 35 PR-7 + PR-8 已加 `LLM_TIMEOUT` 与 `LLM_MODEL` 的覆盖
+
+Stage 36-B1 把 ai-svc env 注入对齐到 docker-compose：
+- `deploy/docker-compose.apps.yml` ai-svc env 块：
+  - `LLM_BASE_URL: ${LLM_BASE_URL:-}` （空 = fallback）
+  - `LLM_API_KEY: ${LLM_API_KEY:-}` （关键！之前从未注入到 ai-svc）
+  - `LLM_MODEL: ${LLM_MODEL:-deepseek-chat}`
+  - `LLM_TIMEOUT: ${LLM_TIMEOUT:-3}`
+- `deploy/env/.env.local.example` 提供 DeepSeek 默认值的模板（gitignored `*.local`）
+
+**为什么不用 `FUSION_LLM_*` 前缀**：ai-svc 历史代码（Stage 19 / Stage 35 PR-8）已用无前缀的 `LLM_*`，改名代价大；与 BFF 的 `BFF_LLM_*` 区分（两 svc 不共享 env 命名空间）。
+
+**真实冒烟**：在 `.env.local` 填入 DeepSeek key 后 `docker compose up -d ai-svc`，看 logs：
+- 有 key：`[fusion] LLM fuser active: https://api.deepseek.com model=deepseek-chat breaker=closed`
+- 没 key：`[fusion] LLM fuser disabled (LLM_BASE_URL empty); late_fuser is fallback`
+
+同时 `emotion_echo_fusion_llm_call_total{outcome="success"}` Prometheus 指标应增加。
+
+---
+
 ## 九、后续可优化（未做）
 
 | 项 | 价值 |
