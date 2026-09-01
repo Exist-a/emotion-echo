@@ -12,9 +12,9 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 # - libsndfile1: soundfile
 # - ffmpeg: audio format conversion
 # - git: for funasr ModelScope download
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
- && apt-get update && apt-get install -y --no-install-recommends \
+# Stage 36-B2 fix: removed tuna tsinghua mirror substitution — was breaking build
+# in non-CN networks (current dev environment uses pypi.org directly).
+RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     gcc \
     g++ \
     git \
@@ -25,11 +25,8 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
 COPY sensevoice-small/requirements.txt .
 
 # Install Python packages to a separate prefix so they can be copied cleanly.
-# 关键：torch 等大包国内 pypi 镜像没有 Python 3.10 wheel
-# 用 --extra-index-url 让 tuna 找不到时 fallback 到 pypi.org
+# 关键：torch 等大包国内 pypi 镜像没有 Python 3.10 wheel，已 fallback 到 pypi.org。
 RUN pip install --prefix=/install -r requirements.txt \
-    -i https://mirrors.tuna.tsinghua.edu.cn/pypi/simple/ \
-    --extra-index-url https://pypi.org/simple/ \
     --timeout 600
 
 
@@ -46,9 +43,7 @@ ENV TZ=${TZ} \
     SENSEVOICE_DEVICE=cpu
 
 # Runtime libs only (no compilers)
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
- || sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
- && apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     libsndfile1 \
     ffmpeg \
     ca-certificates \
