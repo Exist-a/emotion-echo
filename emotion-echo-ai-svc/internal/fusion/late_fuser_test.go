@@ -22,8 +22,6 @@ import (
 	"context"
 	"testing"
 
-	"emotion-echo-ai-svc/internal/model"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -77,7 +75,9 @@ func TestLateFuser_TextAndFace_TwoModalities(t *testing.T) {
 	// 两路分数加权：text=0.5*0.8=0.4, face=0.0*0.7=0.0
 	// happy 总分 = 0.4, neutral 总分 = 0.0 → primary = happy
 	assert.Equal(t, "happy", out.PrimaryEmotion)
-	assert.InDelta(t, 0.4, out.SentimentScore, 0.01) // (0.5+0.0)/2
+	// 权重归一化：text=0.4/(0.4+0.3)=0.5714, face=0.3/(0.4+0.3)=0.4286
+	// sentiment = 0.5*0.5714 + 0.0*0.4286 ≈ 0.2857
+	assert.InDelta(t, 0.2857, out.SentimentScore, 0.01)
 	assert.Equal(t, "late_fusion_weighted", out.FusionMethod)
 	require.Len(t, out.AvailableModalities, 2)
 }
