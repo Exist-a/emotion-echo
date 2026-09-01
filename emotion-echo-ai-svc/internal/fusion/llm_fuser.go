@@ -162,6 +162,8 @@ func (f *LLMFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*model.FusedEm
 	content := chatResp.Choices[0].Message.Content
 
 	// 5. 解析 LLM 输出 JSON（content 本身又是 JSON 字符串）
+	//    Stage 35 PR-1：先剥 markdown 包装 + 双重 JSON 解码
+	content = unwrapLLMContent(content)
 	var out llmFusedOutput
 	if err := json.Unmarshal([]byte(content), &out); err != nil {
 		return nil, fmt.Errorf("unmarshal llm output: %w", err)

@@ -148,3 +148,30 @@ func TestLLMFuser_OnlyOneModality_LLMStillCalled(t *testing.T) {
 	assert.True(t, called)
 	assert.Equal(t, "happy", out.PrimaryEmotion)
 }
+
+// TestLLMFuser_Success_LLMReturnsMarkdownFencedJSON Stage 35 PR-1：LLM 返回 ```json...``` 包裹也应能解析。
+func TestLLMFuser_Success_LLMReturnsMarkdownFencedJSON(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"choices": []map[string]interface{}{{
+				"message": map[string]interface{}{
+					"content": "```json\n{\"primary_emotion\":\"calm\",\"sentiment_score\":0.2,\"modality_contrib\":{\"text\":1.0},\"reasoning\":\"\"}\n```",
+				},
+			}},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	f := NewLLMFuser(LLMConfig{BaseURL: srv.URL, APIKey: "k", Model: "m", Timeout: 5 * time.Second})
+	out, err := f.Fuse(context.Background(), makeSnapshot(
+		&ModalityScore{Emotion: "calm", Confidence: 0.9},
+		nil, nil,
+	))
+	require.NoError(t, err)
+	assert.Equal(t, "calm", out.PrimaryEmotion)
+	assert.InDelta(t, 0.2, out.SentimentScore, 0.001)
+	assert.Equal(t, "llm", out.FusionMethod)
+}
