@@ -15,22 +15,28 @@ import (
 // TestYaml_HasNoBashPlaceholders RED 测试：
 // Stage 36-A1.1：user-api.yaml 不应再含 ${VAR:-default} / ${VAR} 字面占位符。
 // 残留占位符会被 go-zero conf 当成 URL/DSN 字面值，导致 go2sky / postgres driver 解析失败。
+//
+// 只检查非注释行（行首不是 #），因为注释里可能提到 ${...} 解释历史。
 func TestYaml_HasNoBashPlaceholders(t *testing.T) {
 	const relYaml = "../../etc/user-api.yaml"
 
 	raw, err := os.ReadFile(relYaml)
 	require.NoError(t, err, "read user-api.yaml")
-	body := string(raw)
 
-	require.NotContains(t, body, "${POSTGRES_DSN",
-		"user-api.yaml must not embed ${POSTGRES_DSN:-...}; rely on applyEnvOverrides")
-	require.NotContains(t, body, "${SKYWALKING_OAP_ADDR",
-		"user-api.yaml must not embed ${SKYWALKING_OAP_ADDR:-...}; rely on applyEnvOverrides")
-	require.NotContains(t, body, "${NACOS_",
-		"user-api.yaml must not embed ${NACOS_*} placeholders; rely on applyEnvOverrides")
+	var checked []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") || trimmed == "" {
+			continue
+		}
+		checked = append(checked, line)
+		require.NotContains(t, line, "${",
+			"non-comment line must not contain bash placeholder: %s", line)
+	}
+	require.NotEmpty(t, checked, "yaml must have non-comment config lines")
 
 	// DSN 仍然必须包含容器内 Postgres 地址（默认值字面）
-	require.Contains(t, body, "host=emotion-echo-postgres",
+	require.Contains(t, string(raw), "host=emotion-echo-postgres",
 		"user-api.yaml must keep container DNS as literal default for DSN")
 }
 
