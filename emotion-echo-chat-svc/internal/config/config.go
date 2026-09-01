@@ -43,4 +43,13 @@ type Config struct {
 	Postgres   Postgres
 	Kafka      Kafka
 	Nacos      Nacos
+
+	// Stage 36-A3.2: ai-svc gRPC 地址（dev fallback 同步写中性情绪用）。
+	// 空 = 不启用 dev fallback（保持 NoopAIClient），与 KAFKA_ENABLED 组合决定是否调 ai-svc。
+	AIService AIService `json:",optional"`
+}
+
+// AIService ai-svc 客户端配置（Stage 36-A3.2）
+type AIService struct {
+	GRPCAddr string `json:",default=emotion-echo-ai-svc:8892"`
 }

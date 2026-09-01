@@ -36,3 +36,9 @@ Nacos:
   GroupName: DEFAULT_GROUP
   # HotReload: 省略 → Config struct tag default=false
 
+# Stage 36-A3.2: ai-svc gRPC 客户端配置
+# dev fallback（KAFKA_ENABLED=false）时，chat-svc 用此地址 dial ai-svc 同步写中性情绪占位。
+# 容器内默认 DNS；本地调试改成 localhost:8892。
+AIService:
+  GRPCAddr: emotion-echo-ai-svc:8892
+

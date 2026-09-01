@@ -6,6 +6,7 @@ package svc
 import (
 	"emotion-echo-chat-svc/internal/config"
 	"emotion-echo-chat-svc/internal/events"
+	"emotion-echo-chat-svc/internal/grpcclient"
 	"emotion-echo-chat-svc/internal/repository"
 
 	"gorm.io/gorm"
@@ -18,6 +19,10 @@ import (
 //
 // Stage 30-C A3: 加 DB 与 OutboxRepo 字段。DB 为 nil 时 logic 走非事务路径
 // （InMemory 测试场景）；DB 非 nil 时走事务（生产 Postgres 场景）。
+//
+// Stage 36-A3.2: 加 AIClient 字段（grpcclient.AIClient 接口）。SendMessageLogic
+// 在 KAFKA_ENABLED=false 时调 AIClient.UpsertNeutralEmotion 同步写中性占位情绪。
+// 默认 NoopAIClient（生产 main.go 会替换为真 gRPC client）。
 type ServiceContext struct {
 	Config           config.Config
 	ConversationRepo repository.ConversationRepo
@@ -26,6 +31,9 @@ type ServiceContext struct {
 	// Stage 30-C A3: 事务性 Outbox
 	DB         *gorm.DB            // 生产场景注入；nil = 走非事务路径
 	OutboxRepo repository.OutboxRepo // 生产场景注入；nil = 不写 outbox（退化原行为）
+
+	// Stage 36-A3.2: ai-svc gRPC 客户端（dev fallback 写中性情绪）
+	AIClient grpcclient.AIClient
 }
 
 // NewServiceContext 构造容器
@@ -37,6 +45,7 @@ func NewServiceContext(c config.Config, repo repository.ConversationRepo, pub ev
 		Config:           c,
 		ConversationRepo: repo,
 		EventPublisher:   pub,
+		AIClient:         grpcclient.NoopAIClient{},
 	}
 }
 
@@ -49,5 +58,11 @@ func (s *ServiceContext) WithDB(db *gorm.DB) *ServiceContext {
 // WithOutboxRepo 设置 OutboxRepo
 func (s *ServiceContext) WithOutboxRepo(repo repository.OutboxRepo) *ServiceContext {
 	s.OutboxRepo = repo
+	return s
+}
+
+// WithAIClient 设置 ai-svc gRPC client（Stage 36-A3.2）
+func (s *ServiceContext) WithAIClient(ai grpcclient.AIClient) *ServiceContext {
+	s.AIClient = ai
 	return s
 }

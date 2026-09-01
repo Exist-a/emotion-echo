@@ -17,6 +17,7 @@ import (
 
 	"emotion-echo-chat-svc/internal/config"
 	"emotion-echo-chat-svc/internal/events"
+	"emotion-echo-chat-svc/internal/grpcclient"
 	"emotion-echo-chat-svc/internal/handler"
 	"emotion-echo-chat-svc/internal/outbox"
 	"emotion-echo-chat-svc/internal/repository"
@@ -121,10 +122,28 @@ func main() {
 		}
 	}
 
-	// 4. ServiceContext（Stage 30-C A3: 注入 DB + OutboxRepo）
+	// 4. ServiceContext（Stage 30-C A3: 注入 DB + OutboxRepo + Stage 36-A3.2: AIClient）
 	svcCtx := svc.NewServiceContext(c, convRepo, pub)
 	if db != nil {
 		svcCtx.WithDB(db)
+	}
+	if outboxRepo != nil {
+		svcCtx.WithOutboxRepo(outboxRepo)
+	}
+	// Stage 36-A3.2: dial ai-svc gRPC 给 dev fallback 用。dial 失败不 hard fail——
+	// dev fallback 是 best-effort，dial 失败就回退 NoopAIClient（SendMessageLogic 仍然
+	// 工作，只是不调 ai-svc）。这样 compose dev 环境没起 ai-svc 也能启动 chat-svc。
+	if c.AIService.GRPCAddr != "" {
+		ai, err := grpcclient.NewAIgRPCClient(c.AIService.GRPCAddr)
+		if err != nil {
+			log.Printf("[ai-grpc] dial %s failed: %v (fallback to noop)", c.AIService.GRPCAddr, err)
+		} else {
+			svcCtx.WithAIClient(ai)
+			log.Printf("[ai-grpc] connected, addr=%s (dev fallback enabled)", c.AIService.GRPCAddr)
+			if closer, ok := ai.(interface{ Close() error }); ok {
+				defer func() { _ = closer.Close() }()
+			}
+		}
 	}
 	if outboxRepo != nil {
 		svcCtx.WithOutboxRepo(outboxRepo)

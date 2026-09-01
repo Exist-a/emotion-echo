@@ -16,6 +16,7 @@ import (
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 
+	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -152,7 +153,7 @@ func (l *SendMessageLogic) persistWithOutbox(
 
 	// 路径 1：生产场景
 	if l.svcCtx.DB != nil && l.svcCtx.OutboxRepo != nil {
-		return l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+		if err := l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
 			if err := l.svcCtx.ConversationRepo.AppendMessageTx(tx, l.ctx, msg); err != nil {
 				return err
 			}
@@ -172,7 +173,12 @@ func (l *SendMessageLogic) persistWithOutbox(
 				Topic:     events.TopicChatEvents,
 				Payload:   payload,
 			})
-		})
+		}); err != nil {
+			return err
+		}
+		// Stage 36-A3.2：commit 后再做 dev fallback（不在事务内，避免 ai-svc 调用阻塞事务）
+		l.maybeUpsertNeutralEmotion(uid, convID, msg.ID, evt.ID)
+		return nil
 	}
 
 	// 退化路径
@@ -186,12 +192,17 @@ func (l *SendMessageLogic) persistWithOutbox(
 		d.MessageID = msg.ID
 		evt.Data = d
 		payload, _ := json.Marshal(evt)
-		return l.svcCtx.OutboxRepo.CreateInTx(nil, &repository.OutboxEvent{
+		if err := l.svcCtx.OutboxRepo.CreateInTx(nil, &repository.OutboxEvent{
 			EventID:   evt.ID,
 			EventType: evt.Type,
 			Topic:     events.TopicChatEvents,
 			Payload:   payload,
-		})
+		}); err != nil {
+			return err
+		}
+		// Stage 36-A3.2：同上，commit 后再调 ai-svc
+		l.maybeUpsertNeutralEmotion(uid, convID, msg.ID, evt.ID)
+		return nil
 	}
 
 	// 原行为（向后兼容）— 用 AppendMessage 已回填的 msg.ID
@@ -201,5 +212,37 @@ func (l *SendMessageLogic) persistWithOutbox(
 	if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
 		l.Errorf("publish message.created err: %v", err)
 	}
+
+	// Stage 36-A3.2：InMemory / 退化路径（无 Kafka 无 Outbox）也走 dev fallback，
+	// 因为本场景下消息不会经过 Kafka → ai-svc 必须同步写。
+	l.maybeUpsertNeutralEmotion(uid, convID, msg.ID, evt.ID)
 	return nil
+}
+
+// maybeUpsertNeutralEmotion Stage 36-A3.2：dev fallback 同步写中性占位情绪。
+//
+// 调用条件：
+//   - KAFKA_ENABLED=false（dev 模式 / 离线模式）：Kafka 没起来，必须同步写
+//   - KAFKA_ENABLED=true（生产模式）：Kafka 异步管道已能写入 ai-svc，不重复写
+//
+// 错误处理：best-effort，失败只 log 不阻塞消息返回（dev fallback 语义）。
+func (l *SendMessageLogic) maybeUpsertNeutralEmotion(uid, convID, messageID int64, eventID string) {
+	if l.svcCtx.Config.Kafka.Enabled {
+		// 生产模式：Kafka consumer 会负责写 emotion_analysis，不重复
+		return
+	}
+	if l.svcCtx.AIClient == nil {
+		// 不应发生（NewServiceContext 默认注入 NoopAIClient）但做防御
+		return
+	}
+	req := &emotionquery.UpsertNeutralEmotionRequest{
+		MessageId:      messageID,
+		UserId:         uid,
+		ConversationId: convID,
+		EventId:        eventID,
+	}
+	if _, err := l.svcCtx.AIClient.UpsertNeutralEmotion(l.ctx, req); err != nil {
+		l.Errorf("dev fallback UpsertNeutralEmotion failed (msgID=%d eventID=%s): %v",
+			messageID, eventID, err)
+	}
 }
