@@ -44,10 +44,14 @@ type LLMFuser struct {
 }
 
 // NewLLMFuser 构造器。
+//
+// Stage 35 PR-4：默认 Timeout 由 10s 改为 3s。
+//   - 5s tick 周期下，10s 超时意味一次慢 LLM 调用就把整个 tick 卡住
+//   - 真实 LLM（DeepSeek/OpenAI）正常 <2s，3s 既能覆盖又能在抖动时 fail-fast
 func NewLLMFuser(cfg LLMConfig) *LLMFuser {
 	timeout := cfg.Timeout
 	if timeout <= 0 {
-		timeout = 10 * time.Second
+		timeout = 3 * time.Second
 	}
 	return &LLMFuser{
 		cfg: cfg,
