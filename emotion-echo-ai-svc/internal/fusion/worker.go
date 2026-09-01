@@ -60,6 +60,8 @@ type FusionWorkerDeps struct {
 	PendingLister interface {
 		ListPending(ctx context.Context, ttlSeconds int) ([]int64, error)
 	}
+	// RateLimit 可选：Stage 35 PR-3 同 msgID 限流器。nil 表示不限流。
+	RateLimit *MsgIDLRU
 }
 
 // FusionWorker 调度器。
@@ -109,6 +111,12 @@ func (w *FusionWorker) Tick(ctx context.Context) error {
 
 // processOne 拼装 snapshot + 调 fuser + upsert。
 func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
+	// Stage 35 PR-3：LRU 限流。Touch 命中 → skip（不调 fuser），未命中 → 正常处理。
+	if w.deps.RateLimit != nil && w.deps.RateLimit.Touch(messageID) {
+		logging.Printf("[fusion] msgID=%d skipped (LRU hit)", messageID)
+		return nil
+	}
+
 	// 1. 查三路
 	text, _ := w.deps.EmotionRepo.GetByMessageID(ctx, messageID)
 	face, _ := w.deps.FaceEmotionRepo.GetLatestByMessageID(ctx, messageID)
@@ -157,7 +165,15 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 		messageID, fused.PrimaryEmotion, fused.SentimentScore, fused.FusionMethod, fused.AvailableModalities)
 
 	// 6. Upsert
-	return w.deps.FusedEmotionRepo.Upsert(ctx, fused)
+	if err := w.deps.FusedEmotionRepo.Upsert(ctx, fused); err != nil {
+		return err
+	}
+
+	// 7. Stage 35 PR-3：Upsert 成功后登记 LRU（防止下一 tick 重复融合）
+	if w.deps.RateLimit != nil {
+		w.deps.RateLimit.Add(messageID)
+	}
+	return nil
 }
 
 // emotionToModality 把 text EmotionAnalysis 转为 ModalityScore。

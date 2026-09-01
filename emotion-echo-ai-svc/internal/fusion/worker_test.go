@@ -239,9 +239,92 @@ func TestWorker_Tick_AllThreeModalities(t *testing.T) {
 		TickInterval: 5 * time.Second,
 	})
 
-	require.NoError(t, w.Tick(context.Background()))
+require.NoError(t, w.Tick(context.Background()))
 	assert.Equal(t, 1, llm.called, "should call LLM first")
 	assert.Equal(t, 0, late.called, "should NOT fall back when LLM succeeds")
+	require.Len(t, fusedRepo.upserts, 1)
+}
+
+// TestWorker_Tick_LRUHitSkipsProcessing Stage 35 PR-3：LRU 命中 → 直接 skip，不调 fuser / 不 upsert。
+func TestWorker_Tick_LRUHitSkipsProcessing(t *testing.T) {
+	t.Parallel()
+	textRepo := newFakeEmotionRepo()
+	faceRepo := newFakeFaceRepo()
+	voiceRepo := newFakeVoiceRepo()
+	fusedRepo := newFakeFusedRepo()
+
+	textRepo.put(700, &model.EmotionAnalysis{MessageID: 700, UserID: 7, ConversationID: 50, PrimaryEmotion: "happy"})
+	fusedRepo.data[700] = &model.FusedEmotion{MessageID: 700}
+
+	llm := &fakeFuser{result: &model.FusedEmotion{MessageID: 700, PrimaryEmotion: "happy", FusionMethod: "llm"}}
+	late := &fakeFuser{result: &model.FusedEmotion{MessageID: 700, PrimaryEmotion: "happy", FusionMethod: "late_fusion_weighted"}}
+
+	lru := NewMsgIDLRU(100, time.Minute)
+	lru.Add(700) // 预登记，模拟"上一 tick 已融合"
+
+	w := NewFusionWorker(FusionWorkerDeps{
+		EmotionRepo: textRepo, FaceEmotionRepo: faceRepo, VoiceEmotionRepo: voiceRepo,
+		FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo, LLMFuser: llm, LateFuser: late,
+		TickInterval: 5 * time.Second, RateLimit: lru,
+	})
+
+	require.NoError(t, w.Tick(context.Background()))
+	assert.Equal(t, 0, llm.called, "LRU hit must skip LLM")
+	assert.Equal(t, 0, late.called, "LRU hit must skip Late")
+	assert.Empty(t, fusedRepo.upserts, "LRU hit must skip Upsert")
+}
+
+// TestWorker_Tick_LRUMissProcesses Stage 35 PR-3：LRU 未命中 → 正常处理 + Upsert 后 Add。
+func TestWorker_Tick_LRUMissProcesses(t *testing.T) {
+	t.Parallel()
+	textRepo := newFakeEmotionRepo()
+	faceRepo := newFakeFaceRepo()
+	voiceRepo := newFakeVoiceRepo()
+	fusedRepo := newFakeFusedRepo()
+
+	textRepo.put(800, &model.EmotionAnalysis{MessageID: 800, UserID: 7, ConversationID: 50, PrimaryEmotion: "happy"})
+	fusedRepo.data[800] = &model.FusedEmotion{MessageID: 800}
+
+	llm := &fakeFuser{result: &model.FusedEmotion{MessageID: 800, PrimaryEmotion: "happy", FusionMethod: "llm"}}
+	late := &fakeFuser{result: &model.FusedEmotion{MessageID: 800, PrimaryEmotion: "happy", FusionMethod: "late_fusion_weighted"}}
+
+	lru := NewMsgIDLRU(100, time.Minute) // 空 LRU
+
+	w := NewFusionWorker(FusionWorkerDeps{
+		EmotionRepo: textRepo, FaceEmotionRepo: faceRepo, VoiceEmotionRepo: voiceRepo,
+		FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo, LLMFuser: llm, LateFuser: late,
+		TickInterval: 5 * time.Second, RateLimit: lru,
+	})
+
+	require.NoError(t, w.Tick(context.Background()))
+	assert.Equal(t, 1, llm.called)
+	require.Len(t, fusedRepo.upserts, 1)
+	// Upsert 完后 LRU 应该有 800
+	assert.True(t, lru.Touch(800), "msgID=800 should be in LRU after Upsert")
+}
+
+// TestWorker_Tick_LRUNilNoEffect Stage 35 PR-3：RateLimit=nil 时不限流（原行为不变）。
+func TestWorker_Tick_LRUNilNoEffect(t *testing.T) {
+	t.Parallel()
+	textRepo := newFakeEmotionRepo()
+	faceRepo := newFakeFaceRepo()
+	voiceRepo := newFakeVoiceRepo()
+	fusedRepo := newFakeFusedRepo()
+
+	textRepo.put(900, &model.EmotionAnalysis{MessageID: 900, UserID: 7, ConversationID: 50, PrimaryEmotion: "happy"})
+	fusedRepo.data[900] = &model.FusedEmotion{MessageID: 900}
+
+	llm := &fakeFuser{result: &model.FusedEmotion{MessageID: 900, PrimaryEmotion: "happy", FusionMethod: "llm"}}
+	late := &fakeFuser{result: &model.FusedEmotion{MessageID: 900, PrimaryEmotion: "happy", FusionMethod: "late_fusion_weighted"}}
+
+	w := NewFusionWorker(FusionWorkerDeps{
+		EmotionRepo: textRepo, FaceEmotionRepo: faceRepo, VoiceEmotionRepo: voiceRepo,
+		FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo, LLMFuser: llm, LateFuser: late,
+		TickInterval: 5 * time.Second, RateLimit: nil, // 不限流
+	})
+
+	require.NoError(t, w.Tick(context.Background()))
+	assert.Equal(t, 1, llm.called)
 	require.Len(t, fusedRepo.upserts, 1)
 }
 
