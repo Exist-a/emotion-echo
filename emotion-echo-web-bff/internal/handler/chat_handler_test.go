@@ -18,15 +18,19 @@ import (
 
 // fakeChatClient 实现 downstream.ChatClient
 type fakeChatClient struct {
-	conv      *downstream.ConversationView
-	msg       *downstream.MessageView
-	messages  []downstream.MessageView
-	delErr    error
-	listErr   error
-	convErr   error
-	sendErr   error
-	gotConvID int64
-	gotLimit  int
+	conv         *downstream.ConversationView
+	msg          *downstream.MessageView
+	messages     []downstream.MessageView
+	convs        []downstream.ConversationView
+	hasMore      bool
+	delErr       error
+	listErr      error
+	convErr      error
+	sendErr      error
+	gotConvID    int64
+	gotLimit     int
+	gotOffset    int
+	gotListLimit int
 }
 
 func (f *fakeChatClient) CreateConversation(_ context.Context, _ downstream.CreateConversationReq) (*downstream.ConversationView, error) {
@@ -48,6 +52,13 @@ func (f *fakeChatClient) ListMessages(_ context.Context, conversationID int64, l
 		return nil, f.listErr
 	}
 	return f.messages, nil
+}
+func (f *fakeChatClient) ListConversations(_ context.Context, limit, offset int) ([]downstream.ConversationView, bool, error) {
+	f.gotListLimit, f.gotOffset = limit, offset
+	if f.listErr != nil {
+		return nil, false, f.listErr
+	}
+	return f.convs, f.hasMore, nil
 }
 func (f *fakeChatClient) DeleteConversation(_ context.Context, conversationID int64) error {
 	f.gotConvID = conversationID
@@ -133,4 +144,41 @@ func TestChatHandler_Upstream404_Returns404(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), "conversation not found")
+}
+
+// Stage 36-A2.2 RED：listConversations 不再返回空 stub，应透传下游 chat-svc
+// 并按前端契约返回 {list, hasMore}。
+func TestChatHandler_ListConversations_PassesThroughDownstream(t *testing.T) {
+	fc := &fakeChatClient{
+		convs: []downstream.ConversationView{
+			{ID: 1, Title: "alpha", MsgCount: 3},
+			{ID: 2, Title: "beta", MsgCount: 1},
+		},
+		hasMore: true,
+	}
+	r := newChatRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations?limit=10&offset=0", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 10, fc.gotListLimit, "limit 应传给下游")
+	assert.Equal(t, 0, fc.gotOffset, "offset 应传给下游")
+	// 响应应含 list + hasMore 字段
+	assert.Contains(t, w.Body.String(), `"list"`)
+	assert.Contains(t, w.Body.String(), `"hasMore":true`)
+	assert.Contains(t, w.Body.String(), `"alpha"`)
+	assert.Contains(t, w.Body.String(), `"beta"`)
+}
+
+// TestChatHandler_ListConversations_UpstreamError_Returns500
+func TestChatHandler_ListConversations_UpstreamError_Returns500(t *testing.T) {
+	fc := &fakeChatClient{listErr: &downstream.APIError{StatusCode: http.StatusInternalServerError, Msg: "downstream down"}}
+	r := newChatRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "downstream down")
 }
