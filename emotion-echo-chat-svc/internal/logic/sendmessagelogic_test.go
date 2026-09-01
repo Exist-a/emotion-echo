@@ -35,6 +35,7 @@ import (
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 
+	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -524,4 +525,96 @@ func TestSendMessageLogic_ClientMsgID_DifferentUser_NotShared(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotEqual(t, resp1.Message.Id, resp2.Message.Id, "different user must not collide on client_msg_id")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────
+// Stage 36-A3.2 RED: chat-svc dev fallback (KAFKA_ENABLED=false) → 同步调 ai-svc
+// UpsertNeutralEmotion gRPC，让前端"情绪分析"在 dev 模式下立刻有占位数据。
+//
+// 关键契约：
+//   - KAFKA_ENABLED=false（dev 模式）+ svcCtx.AIClient != nil → 调 UpsertNeutralEmotion
+//   - KAFKA_ENABLED=true（生产模式） → 不调 ai-svc（让 Kafka 异步管道兜底）
+//   - ai-svc 调用失败 → 只 log 不阻塞消息返回（dev fallback 是 best-effort）
+//   - event_id 用 outbox event UUID（与 ai-svc 那边的 UNIQUE 约束对齐做幂等）
+// ──────────────────────────────────────────────────────────────────────────────────
+
+// fakeAIClient 模拟 ai-svc gRPC client 的 UpsertNeutralEmotion 接口。
+type fakeAIClient struct {
+	gotReq *emotionquery.UpsertNeutralEmotionRequest
+	gotN   int
+	err    error
+}
+
+func (f *fakeAIClient) UpsertNeutralEmotion(_ context.Context, req *emotionquery.UpsertNeutralEmotionRequest) (*emotionquery.UpsertNeutralEmotionResponse, error) {
+	f.gotReq = req
+	f.gotN++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &emotionquery.UpsertNeutralEmotionResponse{EmotionAnalysisId: 999, WasInserted: true}, nil
+}
+
+func TestSendMessageLogic_KafkaDisabled_CallsUpsertNeutralEmotion(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, _ := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100, Title: "dev-fallback-conv",
+	}))
+	// Kafka 关闭（dev 模式）
+	svcCtx.Config.Kafka.Enabled = false
+	ai := &fakeAIClient{}
+	svcCtx.AIClient = ai
+
+	l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+	resp, err := l.SendMessage(&types.SendMessageReq{
+		Id: 1, Role: "user", Content: "hi",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	// 断言：ai-svc 被调用 1 次
+	assert.Equal(t, 1, ai.gotN, "dev fallback 应触发 1 次 UpsertNeutralEmotion")
+	require.NotNil(t, ai.gotReq, "应收到 req")
+	assert.Equal(t, resp.Message.Id, ai.gotReq.MessageId)
+	assert.Equal(t, int64(100), ai.gotReq.UserId)
+	assert.Equal(t, int64(1), ai.gotReq.ConversationId)
+	assert.NotEmpty(t, ai.gotReq.EventId, "event_id 必须用 outbox UUID（幂等键）")
+}
+
+func TestSendMessageLogic_KafkaEnabled_DoesNotCallAI(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, _ := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100, Title: "prod-conv",
+	}))
+	// Kafka 开启（生产模式）—— 不应调 ai-svc
+	svcCtx.Config.Kafka.Enabled = true
+	ai := &fakeAIClient{}
+	svcCtx.AIClient = ai
+
+	l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+	_, err := l.SendMessage(&types.SendMessageReq{Id: 1, Role: "user", Content: "hi"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, ai.gotN, "Kafka 开启时不应调 ai-svc（让 Kafka 异步管道兜底）")
+}
+
+func TestSendMessageLogic_AIClientError_DoesNotBlock(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, _ := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100, Title: "ai-down-conv",
+	}))
+	svcCtx.Config.Kafka.Enabled = false
+	ai := &fakeAIClient{err: errors.New("ai-svc unreachable")}
+	svcCtx.AIClient = ai
+
+	l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+	resp, err := l.SendMessage(&types.SendMessageReq{Id: 1, Role: "user", Content: "hi"})
+	// 关键契约：ai-svc 失败不能阻塞消息返回
+	require.NoError(t, err, "ai-svc 失败 → 消息仍应成功")
+	require.NotNil(t, resp)
+	assert.Equal(t, 1, ai.gotN, "即使失败也应尝试过")
 }
