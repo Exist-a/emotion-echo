@@ -28,6 +28,13 @@ type ServiceContext struct {
 
 	// MultiModalAnalyzer 集成版；外面 handler 可以直接用。
 	MultiModal *analyzer.MultiModalAnalyzer
+
+	// Stage 34: 多模态结果持久化 repo（PR-7/8 接入）
+	// FaceEmotionRepo / VoiceEmotionRepo 在 multimodal 端点 persist=true 时写入。
+	// FusedEmotionRepo 由 Fusion Worker 写入（PR-13/14 接入）。
+	FaceEmotionRepo  repository.FaceEmotionRepo
+	VoiceEmotionRepo repository.VoiceEmotionRepo
+	FusedEmotionRepo repository.FusedEmotionRepo
 }
 
 func NewServiceContext(c config.Config, repo repository.EmotionRepo) *ServiceContext {
