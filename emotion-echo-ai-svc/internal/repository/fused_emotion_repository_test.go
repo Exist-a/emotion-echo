@@ -44,7 +44,7 @@ func TestFusedEmotionRepo_InMemory_Upsert_Overwrite(t *testing.T) {
 		MessageID: 100, UserID: 7, ConversationID: 50,
 		PrimaryEmotion: "happy", FusionMethod: "llm",
 	}))
-	firstID := repo.(*InMemoryFusedEmotionRepo).byMessageID[100]
+	firstID := repo.byMessageID[100]
 
 	// 二次 Upsert 覆盖（Worker 重试场景）
 	require.NoError(t, repo.Upsert(context.Background(), &model.FusedEmotion{
@@ -53,7 +53,7 @@ func TestFusedEmotionRepo_InMemory_Upsert_Overwrite(t *testing.T) {
 	}))
 
 	// ID 应保持不变（同一 message_id）
-	assert.Equal(t, firstID, repo.(*InMemoryFusedEmotionRepo).byMessageID[100])
+	assert.Equal(t, firstID, repo.byMessageID[100])
 
 	got, err := repo.GetByMessageID(context.Background(), 100)
 	require.NoError(t, err)
