@@ -33,6 +33,8 @@ type LLM struct {
 	InternalAPIKey  string `json:",default="` // empty = auth disabled
 	Enabled         bool   `json:",default=false"`
 	Timeout         int    `json:",default=3"`
+	// Model Stage 35 PR-8：模型名（DeepSeek / OpenAI / 兼容实现各异），env 注入
+	Model           string `json:",default=deepseek-chat"`
 }
 
 // GRPCServer ai-svc 暴露的 gRPC server 配置（Stage 19）

@@ -101,6 +101,17 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("XTTS_BASE_URL"); v != "" {
 		c.XTTS.BaseURL = v
 	}
+	// Stage 35 PR-8：LLM 模型名 / 超时 / 熔断器 / Worker tick
+	if v := os.Getenv("LLM_MODEL"); v != "" {
+		c.LLM.Model = v
+	}
+	if v := os.Getenv("LLM_TIMEOUT"); v != "" {
+		var n int
+		if _, err := fmt.Sscan(v, &n); err == nil && n > 0 {
+			c.LLM.Timeout = n
+		}
+	}
+	// 熔断器 / Worker tick 暂不写入 Config（需要扩展 struct），仅在 main 中通过 env 传给 fusion 构造器
 	// Stage 31 PR-09: Nacos 注册中心 + 配置中心
 	if v := os.Getenv("NACOS_ENABLED"); v != "" {
 		c.Nacos.Enabled = v == "true" || v == "1"
