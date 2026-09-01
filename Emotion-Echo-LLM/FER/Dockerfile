@@ -11,12 +11,15 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 # System deps needed for opencv-python / fer libraries
 # Stage 36-B2 fix: removed tuna tsinghua mirror substitution — was breaking build
 # in non-CN networks (current dev environment uses pypi.org directly).
-RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
-    gcc \
-    g++ \
-    git \
-    libopencv-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Retry loop tolerates deb.debian.org CDN transient 502/EOF on individual packages.
+RUN for i in 1 2 3; do \
+      apt-get update && \
+      apt-get install -y --no-install-recommends --fix-missing \
+        gcc g++ git libopencv-dev && break; \
+      echo "apt-get install attempt $i failed, retrying in 10s..."; \
+      sleep 10; \
+    done && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY FER/requirements.txt .
 
@@ -37,16 +40,23 @@ ENV TZ=${TZ} \
     LOG_LEVEL=INFO
 
 # Runtime libs only (no compilers). libopencv-*410 on Debian 13 (trixie).
-RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
-    libopencv-core410 \
-    libopencv-imgproc410 \
-    libopencv-objdetect410 \
-    libopencv-dnn410 \
-    libopencv-imgcodecs410 \
-    ca-certificates \
-    curl \
-    tini \
-    && rm -rf /var/lib/apt/lists/*
+# Stage 36-B2 fix: retry loop (deb.debian.org CDN occasionally returns 502/EOF
+# for individual packages — transient). 3 attempts should be enough.
+RUN for i in 1 2 3; do \
+      apt-get update && \
+      apt-get install -y --no-install-recommends --fix-missing \
+        libopencv-core410 \
+        libopencv-imgproc410 \
+        libopencv-objdetect410 \
+        libopencv-dnn410 \
+        libopencv-imgcodecs410 \
+        ca-certificates \
+        curl \
+        tini && break; \
+      echo "apt-get install attempt $i failed, retrying in 10s..."; \
+      sleep 10; \
+    done && \
+    rm -rf /var/lib/apt/lists/*
 
 # Symlink zoneinfo for TZ
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
