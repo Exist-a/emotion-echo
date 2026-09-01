@@ -190,3 +190,51 @@ func TestLLMFuser_CustomTimeoutRespected(t *testing.T) {
 	f := NewLLMFuser(LLMConfig{BaseURL: "http://localhost:0", Model: "m", Timeout: 7 * time.Second})
 	assert.Equal(t, 7*time.Second, f.cli.Timeout)
 }
+
+// TestLLMFuser_BreakerOpenShortCircuits Stage 35 PR-5：breaker Open 时直接 ErrCircuitOpen，不调 LLM。
+func TestLLMFuser_BreakerOpenShortCircuits(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("LLM should NOT be called when breaker is Open")
+	}))
+	defer srv.Close()
+
+	f := NewLLMFuser(LLMConfig{BaseURL: srv.URL, Model: "m"})
+	b := NewCircuitBreaker(BreakerConfig{FailThreshold: 1, OpenSeconds: time.Minute})
+	b.RecordFailure() // → Open
+	f.SetBreaker(b)
+
+	_, err := f.Fuse(context.Background(), makeSnapshot(
+		&ModalityScore{Emotion: "happy", Confidence: 0.9},
+		nil, nil,
+	))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrCircuitOpen)
+}
+
+// TestLLMFuser_BreakerRecordsSuccessFailure 成功/失败都按预期记录到 breaker。
+func TestLLMFuser_BreakerRecordsSuccessFailure(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"choices": []map[string]interface{}{{
+				"message": map[string]interface{}{
+					"content": `{"primary_emotion":"happy","sentiment_score":0.5,"modality_contrib":{"text":1.0},"reasoning":""}`,
+				},
+			}},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	f := NewLLMFuser(LLMConfig{BaseURL: srv.URL, Model: "m"})
+	b := NewCircuitBreaker(BreakerConfig{FailThreshold: 3, OpenSeconds: time.Minute})
+	f.SetBreaker(b)
+
+	_, err := f.Fuse(context.Background(), makeSnapshot(
+		&ModalityScore{Emotion: "happy", Confidence: 0.9}, nil, nil,
+	))
+	require.NoError(t, err)
+	assert.Equal(t, BreakerClosed, b.State(), "success should keep breaker closed")
+}

@@ -39,8 +39,9 @@ type LLMConfig struct {
 
 // LLMFuser 调真实 LLM 做情绪融合。
 type LLMFuser struct {
-	cfg LLMConfig
-	cli *http.Client
+	cfg     LLMConfig
+	cli     *http.Client
+	breaker *CircuitBreaker // Stage 35 PR-5：可为空（nil → 不启用熔断）
 }
 
 // NewLLMFuser 构造器。
@@ -57,6 +58,16 @@ func NewLLMFuser(cfg LLMConfig) *LLMFuser {
 		cfg: cfg,
 		cli: &http.Client{Timeout: timeout},
 	}
+}
+
+// SetBreaker 注入熔断器（可选，Stage 35 PR-5）。
+func (f *LLMFuser) SetBreaker(b *CircuitBreaker) {
+	f.breaker = b
+}
+
+// Breaker 暴露内部 breaker（供 metrics 读取状态）。
+func (f *LLMFuser) Breaker() *CircuitBreaker {
+	return f.breaker
 }
 
 // llmChatRequest OpenAI 兼容 chat completions 请求体（最小字段）。
@@ -105,11 +116,30 @@ const llmSystemPrompt = `你是一个多模态情绪融合器。下面会给你�
 只输出 JSON，不要其他文字。`
 
 // Fuse 是 Fuser 接口实现。
+//
+// Stage 35 PR-5：包装 breaker。
+//   - 入口检查 breaker.Allow()：Open → 立即返回 ErrCircuitOpen（不计 failure，因为没真调）
+//   - 出口按 err 调 breaker.RecordResult(err)
+//   - HalfOpen 时第一次 Allow 返 true 后半 Open 立即触发 RecordFailure → 重置 OpenSeconds
 func (f *LLMFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*model.FusedEmotion, error) {
 	if s.IsEmpty() {
 		return nil, errors.New("llm fusion: no modalities available")
 	}
 
+	// Stage 35 PR-5：熔断器 Open 时直接拒绝，避免雪崩打挂 provider。
+	if f.breaker != nil && !f.breaker.Allow() {
+		return nil, ErrCircuitOpen
+	}
+
+	out, err := f.doFuse(ctx, s)
+	if f.breaker != nil {
+		f.breaker.RecordResult(err)
+	}
+	return out, err
+}
+
+// doFuse 是 Fuse 的实际实现（不带 breaker，便于单测和复用）。
+func (f *LLMFuser) doFuse(ctx context.Context, s ModalitySnapshot) (*model.FusedEmotion, error) {
 	// 1. 序列化 snapshot
 	snapJSON, err := json.Marshal(map[string]interface{}{
 		"text":  s.Text,
