@@ -32,9 +32,8 @@ const (
 
 // msgIDLRUEntry LRU 节点值（存时间戳用于 TTL 判定）。
 type msgIDLRUEntry struct {
-	msgID     int64
-	addedAt   time.Time
-	listElem  *list.Element // 反向引用，便于删除
+	msgID   int64
+	addedAt time.Time
 }
 
 // MsgIDLRU 线程安全的 LRU 缓存。
@@ -97,8 +96,8 @@ func (l *MsgIDLRU) Touch(msgID int64) bool {
 	// 未命中（或已过期）→ 插入但不裁剪
 	l.misses++
 	entry := &msgIDLRUEntry{msgID: msgID, addedAt: now}
-	entry.listElem = l.order.PushFront(entry)
-	l.items[msgID] = entry.listElem
+	elem := l.order.PushFront(entry)
+	l.items[msgID] = elem
 	return false
 }
 
@@ -120,8 +119,8 @@ func (l *MsgIDLRU) Add(msgID int64) {
 	}
 
 	entry := &msgIDLRUEntry{msgID: msgID, addedAt: now}
-	entry.listElem = l.order.PushFront(entry)
-	l.items[msgID] = entry.listElem
+	elem := l.order.PushFront(entry)
+	l.items[msgID] = elem
 
 	if l.order.Len() > l.cap {
 		oldest := l.order.Back()
