@@ -171,8 +171,10 @@ func (f *LLMFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*model.FusedEm
 	if err := json.Unmarshal([]byte(content), &out); err != nil {
 		return nil, fmt.Errorf("unmarshal llm output: %w", err)
 	}
-	if out.PrimaryEmotion == "" {
-		return nil, errors.New("llm output missing primary_emotion")
+	// Stage 35 PR-2：完整 schema 校验（emotion 白名单 + sentiment 范围 + modality_contrib 总和）。
+	// 失败返回 error → Worker 走 late_fuser 兜底，避免污染下游。
+	if err := validateLLMOutput(out); err != nil {
+		return nil, fmt.Errorf("llm output validation: %w", err)
 	}
 
 	// 6. 序列化 modality_contrib 回字符串
