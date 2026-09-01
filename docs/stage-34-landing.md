@@ -201,9 +201,16 @@ emotion-echo-shared/pkg/emotionquery/emotion_query_grpc.pb.go（protoc 重生成
 - **docker compose smoke 验证通过**（HTTP persist + Worker tick + gRPC GetFusedEmotion）
 
 **待续**（生产部署）：
-- yaml bool 占位符恢复（生产环境必须用 `${NACOS_ENABLED:-true}` 让 main.go applyEnvOverrides 生效）
-- docker compose 全栈（含 apisix / nacos / kafka，目前镜像不可用需重打）
+- yaml bool 占位符恢复 `${NACOS_ENABLED:-true}`（main.go `applyEnvOverrides` 已支持）
+- docker compose 全栈（含 apisix / nacos / kafka，目前镜像需重打）
 - 前端 ECharts 多 series 渲染 emotionDistributionByModality（前端零改动，schema 已就绪）
+
+**Stage 34 已知/未知矩阵**（详见 [stage-34-ops-runbook.md §二](stage-34-ops-runbook.md#二已知--未知矩阵关键)）：
+
+| 状态 | 链路 |
+|---|---|
+| ✅ 已验证 | face/voice/fused repo CRUD、Worker 调度、gRPC GetFusedEmotion、BFF /fused、HTTP persist 分支 |
+| ⚠️ 未验证（生产前必须） | **FER 真客户端**、**SenseVoice 真客户端**、**LLM-as-Fusion 真实调用**、LLM 输出 markdown 包装容错 |
 
 ## 十、Stage 35+ 候选
 
