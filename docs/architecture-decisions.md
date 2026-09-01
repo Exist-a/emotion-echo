@@ -176,6 +176,31 @@
 | 32 · APISIX 回归 | 独立网关层 + etcd；BFF 退出鉴权/CORS/限流；3.9 SSL bug 绕开 | Stage 31（路由配置可推送到 Nacos） |
 | 33 · P0 修复 + BFF 净化 | 修 SSE 协议、恢复消息落库、真实登录、端口收紧；BFF 移除所有网关职责 | Stage 32（APISIX 接管鉴权后 BFF 才能移除） |
 
+### 决策 14：多模态融合 = **LLM-as-Fusion + LateFusion 兜底**（Stage 34）
+
+> ✅ 2026-09-01 生效。详见 `stage-34-multimodal-fusion.md`。
+
+| 维度 | 选择 |
+|------|------|
+| 主路径 | LLMFuser（DeepSeek/OpenAI 兼容协议，复用 BFF `LLM_BASE_URL`） |
+| 兜底 | WeightedLateFuser（加权平均 + 模态缺失重分配） |
+| 调度 | FusionWorker 5s tick，遍历 `fused_emotions` 中 `pending` 行 |
+| 写库 | `FusedEmotionRepo.Upsert`（`ON CONFLICT message_id DO UPDATE`） |
+
+### 决策 15：LLM Fusion 生产加固策略（Stage 35）
+
+> ✅ 2026-09-03 生效。详见 `adr-2026-09-llm-fusion-hardening.md`。
+
+| 维度 | 选择 |
+|------|------|
+| LLM 输出包装容错 | `unwrapLLMContent` 三段去包（``` ``` ``` ``` + 空白 + 双重 JSON） |
+| LLM 输出校验 | 白名单 emotion + sentiment ∈ [-1,1] + modality_contrib 总和 ≈ 1 |
+| 同 msgID 限流 | LRU(cap=1024) + TTL=4min，单实例内存 |
+| LLM 超时 | 默认 3s（可 env `LLM_TIMEOUT` 覆盖） |
+| LLM 雪崩保护 | 三态熔断器（Closed→Open→HalfOpen），连续 5 失败开 30s；**不重试** |
+| 可观测 | 4 个 Prometheus collector（LLM call / latency / fallback / worker tick） |
+| yaml 配置 | `${VAR:-default}` 占位符恢复；main.go `applyEnvOverrides` 补 `LLM_TIMEOUT` / `LLM_MODEL` / `LLM_BREAKER_*` / `WORKER_TICK_INTERVAL` |
+
 ---
 
 ## 🏗 当前架构全景
