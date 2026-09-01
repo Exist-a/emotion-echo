@@ -188,7 +188,7 @@ func main() {
 	}
 
 	// 1. Postgres
-	emoRepo, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	emoRepo, db, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
 	if err != nil {
 		logging.Errorf(err, "[postgres] connect failed")
 		if bootstrap.ShouldFailFast() && bootstrap.IsRequired("postgres") {
@@ -354,7 +354,12 @@ func main() {
 	}
 
 	if c.GRPC.Enabled {
-		gs := grpcserver.New(emoRepo, c.GRPC.Port)
+		// Stage 34: 构造 FusedEmotionRepo（共享 db 连接）
+		var fusedRepo repository.FusedEmotionRepo
+		if db != nil {
+			fusedRepo = repository.NewPostgresFusedEmotionRepo(db)
+		}
+		gs := grpcserver.New(emoRepo, fusedRepo, c.GRPC.Port)
 		go func() {
 			if err := gs.Start(rootCtx); err != nil {
 				logging.Errorf(err, "[grpc] server failed")
@@ -400,21 +405,21 @@ func main() {
 	}
 }
 
-func openPostgres(dsn string, maxOpen, maxIdle int) (repository.EmotionRepo, error) {
+func openPostgres(dsn string, maxOpen, maxIdle int) (repository.EmotionRepo, *gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetMaxIdleConns(maxIdle)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 	if err := sqlDB.Ping(); err != nil {
-		return nil, fmt.Errorf("db ping failed: %w", err)
+		return nil, nil, fmt.Errorf("db ping failed: %w", err)
 	}
-	return repository.NewPostgresEmotionRepo(db), nil
+	return repository.NewPostgresEmotionRepo(db), db, nil
 }
 
 // apiKeyStatus returns "enabled" or "disabled" for log output.

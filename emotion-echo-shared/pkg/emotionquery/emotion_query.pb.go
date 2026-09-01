@@ -273,6 +273,182 @@ func (x *EmotionList) GetTotal() int32 {
 	return 0
 }
 
+// FusedEmotion 多模态融合产物（Stage 34）
+//
+// 对应 emotion_echo_ai.fused_emotions 表。
+// primary_emotion / sentiment_score / confidence 来自融合结果；
+// modality_contrib 是 JSON 字符串（key=text/voice/face，value=贡献度）；
+// available_modalities 是 JSON 字符串数组；
+// reasoning 是 LLM 输出（走 late_fusion_weighted 时为空）。
+type FusedEmotion struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	MessageId           int64                  `protobuf:"varint,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	UserId              int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ConversationId      int64                  `protobuf:"varint,3,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	PrimaryEmotion      string                 `protobuf:"bytes,4,opt,name=primary_emotion,json=primaryEmotion,proto3" json:"primary_emotion,omitempty"`
+	SentimentScore      float64                `protobuf:"fixed64,5,opt,name=sentiment_score,json=sentimentScore,proto3" json:"sentiment_score,omitempty"`
+	Confidence          float64                `protobuf:"fixed64,6,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	ModalityContrib     string                 `protobuf:"bytes,7,opt,name=modality_contrib,json=modalityContrib,proto3" json:"modality_contrib,omitempty"`              // JSON 字符串
+	Reasoning           string                 `protobuf:"bytes,8,opt,name=reasoning,proto3" json:"reasoning,omitempty"`                                                 // 可空
+	FusionMethod        string                 `protobuf:"bytes,9,opt,name=fusion_method,json=fusionMethod,proto3" json:"fusion_method,omitempty"`                       // "llm" | "late_fusion_weighted"
+	AvailableModalities string                 `protobuf:"bytes,10,opt,name=available_modalities,json=availableModalities,proto3" json:"available_modalities,omitempty"` // JSON 字符串数组
+	CreatedAtMs         int64                  `protobuf:"varint,11,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *FusedEmotion) Reset() {
+	*x = FusedEmotion{}
+	mi := &file_emotion_query_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FusedEmotion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FusedEmotion) ProtoMessage() {}
+
+func (x *FusedEmotion) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FusedEmotion.ProtoReflect.Descriptor instead.
+func (*FusedEmotion) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *FusedEmotion) GetMessageId() int64 {
+	if x != nil {
+		return x.MessageId
+	}
+	return 0
+}
+
+func (x *FusedEmotion) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *FusedEmotion) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *FusedEmotion) GetPrimaryEmotion() string {
+	if x != nil {
+		return x.PrimaryEmotion
+	}
+	return ""
+}
+
+func (x *FusedEmotion) GetSentimentScore() float64 {
+	if x != nil {
+		return x.SentimentScore
+	}
+	return 0
+}
+
+func (x *FusedEmotion) GetConfidence() float64 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+func (x *FusedEmotion) GetModalityContrib() string {
+	if x != nil {
+		return x.ModalityContrib
+	}
+	return ""
+}
+
+func (x *FusedEmotion) GetReasoning() string {
+	if x != nil {
+		return x.Reasoning
+	}
+	return ""
+}
+
+func (x *FusedEmotion) GetFusionMethod() string {
+	if x != nil {
+		return x.FusionMethod
+	}
+	return ""
+}
+
+func (x *FusedEmotion) GetAvailableModalities() string {
+	if x != nil {
+		return x.AvailableModalities
+	}
+	return ""
+}
+
+func (x *FusedEmotion) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+// GetFusedEmotion 请求
+type GetFusedEmotionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     int64                  `protobuf:"varint,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetFusedEmotionRequest) Reset() {
+	*x = GetFusedEmotionRequest{}
+	mi := &file_emotion_query_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetFusedEmotionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetFusedEmotionRequest) ProtoMessage() {}
+
+func (x *GetFusedEmotionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetFusedEmotionRequest.ProtoReflect.Descriptor instead.
+func (*GetFusedEmotionRequest) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetFusedEmotionRequest) GetMessageId() int64 {
+	if x != nil {
+		return x.MessageId
+	}
+	return 0
+}
+
 var File_emotion_query_proto protoreflect.FileDescriptor
 
 const file_emotion_query_proto_rawDesc = "" +
@@ -298,10 +474,30 @@ const file_emotion_query_proto_rawDesc = "" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"Q\n" +
 	"\vEmotionList\x12,\n" +
 	"\x05items\x18\x01 \x03(\v2\x16.emotion_ai.v1.EmotionR\x05items\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total2\xd7\x01\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\xa6\x03\n" +
+	"\fFusedEmotion\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\x03R\tmessageId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12'\n" +
+	"\x0fconversation_id\x18\x03 \x01(\x03R\x0econversationId\x12'\n" +
+	"\x0fprimary_emotion\x18\x04 \x01(\tR\x0eprimaryEmotion\x12'\n" +
+	"\x0fsentiment_score\x18\x05 \x01(\x01R\x0esentimentScore\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x06 \x01(\x01R\n" +
+	"confidence\x12)\n" +
+	"\x10modality_contrib\x18\a \x01(\tR\x0fmodalityContrib\x12\x1c\n" +
+	"\treasoning\x18\b \x01(\tR\treasoning\x12#\n" +
+	"\rfusion_method\x18\t \x01(\tR\ffusionMethod\x121\n" +
+	"\x14available_modalities\x18\n" +
+	" \x01(\tR\x13availableModalities\x12\"\n" +
+	"\rcreated_at_ms\x18\v \x01(\x03R\vcreatedAtMs\"7\n" +
+	"\x16GetFusedEmotionRequest\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\x03R\tmessageId2\xae\x02\n" +
 	"\x13EmotionQueryService\x12X\n" +
 	"\x13GetEmotionByMessage\x12).emotion_ai.v1.GetEmotionByMessageRequest\x1a\x16.emotion_ai.v1.Emotion\x12f\n" +
-	"\x18GetEmotionByConversation\x12..emotion_ai.v1.GetEmotionByConversationRequest\x1a\x1a.emotion_ai.v1.EmotionListB1Z/github.com/emotion-echo/shared/pkg/emotionqueryb\x06proto3"
+	"\x18GetEmotionByConversation\x12..emotion_ai.v1.GetEmotionByConversationRequest\x1a\x1a.emotion_ai.v1.EmotionList\x12U\n" +
+	"\x0fGetFusedEmotion\x12%.emotion_ai.v1.GetFusedEmotionRequest\x1a\x1b.emotion_ai.v1.FusedEmotionB1Z/github.com/emotion-echo/shared/pkg/emotionqueryb\x06proto3"
 
 var (
 	file_emotion_query_proto_rawDescOnce sync.Once
@@ -315,21 +511,25 @@ func file_emotion_query_proto_rawDescGZIP() []byte {
 	return file_emotion_query_proto_rawDescData
 }
 
-var file_emotion_query_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_emotion_query_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_emotion_query_proto_goTypes = []any{
 	(*Emotion)(nil),                         // 0: emotion_ai.v1.Emotion
 	(*GetEmotionByMessageRequest)(nil),      // 1: emotion_ai.v1.GetEmotionByMessageRequest
 	(*GetEmotionByConversationRequest)(nil), // 2: emotion_ai.v1.GetEmotionByConversationRequest
 	(*EmotionList)(nil),                     // 3: emotion_ai.v1.EmotionList
+	(*FusedEmotion)(nil),                    // 4: emotion_ai.v1.FusedEmotion
+	(*GetFusedEmotionRequest)(nil),          // 5: emotion_ai.v1.GetFusedEmotionRequest
 }
 var file_emotion_query_proto_depIdxs = []int32{
 	0, // 0: emotion_ai.v1.EmotionList.items:type_name -> emotion_ai.v1.Emotion
 	1, // 1: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:input_type -> emotion_ai.v1.GetEmotionByMessageRequest
 	2, // 2: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:input_type -> emotion_ai.v1.GetEmotionByConversationRequest
-	0, // 3: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:output_type -> emotion_ai.v1.Emotion
-	3, // 4: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:output_type -> emotion_ai.v1.EmotionList
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
+	5, // 3: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:input_type -> emotion_ai.v1.GetFusedEmotionRequest
+	0, // 4: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:output_type -> emotion_ai.v1.Emotion
+	3, // 5: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:output_type -> emotion_ai.v1.EmotionList
+	4, // 6: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:output_type -> emotion_ai.v1.FusedEmotion
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -346,7 +546,7 @@ func file_emotion_query_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emotion_query_proto_rawDesc), len(file_emotion_query_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

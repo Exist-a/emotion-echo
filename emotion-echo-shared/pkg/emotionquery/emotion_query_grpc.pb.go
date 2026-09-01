@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	EmotionQueryService_GetEmotionByMessage_FullMethodName      = "/emotion_ai.v1.EmotionQueryService/GetEmotionByMessage"
 	EmotionQueryService_GetEmotionByConversation_FullMethodName = "/emotion_ai.v1.EmotionQueryService/GetEmotionByConversation"
+	EmotionQueryService_GetFusedEmotion_FullMethodName          = "/emotion_ai.v1.EmotionQueryService/GetFusedEmotion"
 )
 
 // EmotionQueryServiceClient is the client API for EmotionQueryService service.
@@ -32,11 +33,15 @@ const (
 // 之前只能通过 HTTP 调（ai-svc Gin server :8891）
 // 现在多一个 gRPC 接口（ai-svc gRPC server :8892）
 // 两种协议同时存在，前端继续用 HTTP，内部 svc-to-svc 用 gRPC
+//
+// Stage 34: 新增 GetFusedEmotion（多模态融合产物查询）
 type EmotionQueryServiceClient interface {
 	// GetEmotionByMessage 根据 message_id 查情绪
 	GetEmotionByMessage(ctx context.Context, in *GetEmotionByMessageRequest, opts ...grpc.CallOption) (*Emotion, error)
 	// GetEmotionByConversation 根据 conversation_id 查情绪列表
 	GetEmotionByConversation(ctx context.Context, in *GetEmotionByConversationRequest, opts ...grpc.CallOption) (*EmotionList, error)
+	// GetFusedEmotion 根据 message_id 查多模态融合产物（Stage 34）
+	GetFusedEmotion(ctx context.Context, in *GetFusedEmotionRequest, opts ...grpc.CallOption) (*FusedEmotion, error)
 }
 
 type emotionQueryServiceClient struct {
@@ -67,6 +72,16 @@ func (c *emotionQueryServiceClient) GetEmotionByConversation(ctx context.Context
 	return out, nil
 }
 
+func (c *emotionQueryServiceClient) GetFusedEmotion(ctx context.Context, in *GetFusedEmotionRequest, opts ...grpc.CallOption) (*FusedEmotion, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FusedEmotion)
+	err := c.cc.Invoke(ctx, EmotionQueryService_GetFusedEmotion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EmotionQueryServiceServer is the server API for EmotionQueryService service.
 // All implementations must embed UnimplementedEmotionQueryServiceServer
 // for forward compatibility.
@@ -76,11 +91,15 @@ func (c *emotionQueryServiceClient) GetEmotionByConversation(ctx context.Context
 // 之前只能通过 HTTP 调（ai-svc Gin server :8891）
 // 现在多一个 gRPC 接口（ai-svc gRPC server :8892）
 // 两种协议同时存在，前端继续用 HTTP，内部 svc-to-svc 用 gRPC
+//
+// Stage 34: 新增 GetFusedEmotion（多模态融合产物查询）
 type EmotionQueryServiceServer interface {
 	// GetEmotionByMessage 根据 message_id 查情绪
 	GetEmotionByMessage(context.Context, *GetEmotionByMessageRequest) (*Emotion, error)
 	// GetEmotionByConversation 根据 conversation_id 查情绪列表
 	GetEmotionByConversation(context.Context, *GetEmotionByConversationRequest) (*EmotionList, error)
+	// GetFusedEmotion 根据 message_id 查多模态融合产物（Stage 34）
+	GetFusedEmotion(context.Context, *GetFusedEmotionRequest) (*FusedEmotion, error)
 	mustEmbedUnimplementedEmotionQueryServiceServer()
 }
 
@@ -96,6 +115,9 @@ func (UnimplementedEmotionQueryServiceServer) GetEmotionByMessage(context.Contex
 }
 func (UnimplementedEmotionQueryServiceServer) GetEmotionByConversation(context.Context, *GetEmotionByConversationRequest) (*EmotionList, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEmotionByConversation not implemented")
+}
+func (UnimplementedEmotionQueryServiceServer) GetFusedEmotion(context.Context, *GetFusedEmotionRequest) (*FusedEmotion, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetFusedEmotion not implemented")
 }
 func (UnimplementedEmotionQueryServiceServer) mustEmbedUnimplementedEmotionQueryServiceServer() {}
 func (UnimplementedEmotionQueryServiceServer) testEmbeddedByValue()                             {}
@@ -154,6 +176,24 @@ func _EmotionQueryService_GetEmotionByConversation_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EmotionQueryService_GetFusedEmotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFusedEmotionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EmotionQueryServiceServer).GetFusedEmotion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EmotionQueryService_GetFusedEmotion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EmotionQueryServiceServer).GetFusedEmotion(ctx, req.(*GetFusedEmotionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // EmotionQueryService_ServiceDesc is the grpc.ServiceDesc for EmotionQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -168,6 +208,10 @@ var EmotionQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetEmotionByConversation",
 			Handler:    _EmotionQueryService_GetEmotionByConversation_Handler,
+		},
+		{
+			MethodName: "GetFusedEmotion",
+			Handler:    _EmotionQueryService_GetFusedEmotion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

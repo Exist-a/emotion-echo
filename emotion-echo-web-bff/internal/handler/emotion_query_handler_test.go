@@ -63,16 +63,21 @@ func TestEmotionQueryHandler_FusedByMessage_Success(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
+	t.Logf("response body: %s", w.Body.String())
+
 	var resp struct {
-		Code int                    `json:"code"`
-		Data *emotionquery.FusedEmotion `json:"data"`
+		Code int                       `json:"code"`
+		Data map[string]json.RawMessage `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.Equal(t, 0, resp.Code)
-	require.NotNil(t, resp.Data)
-	assert.Equal(t, "sad", resp.Data.PrimaryEmotion)
-	assert.Equal(t, "llm", resp.Data.FusionMethod)
-	assert.Equal(t, int64(100), resp.Data.MessageId)
+	require.Contains(t, resp.Data, "fused", "data must contain 'fused' key")
+
+	var fused emotionquery.FusedEmotion
+	require.NoError(t, json.Unmarshal(resp.Data["fused"], &fused))
+	assert.Equal(t, "sad", fused.PrimaryEmotion)
+	assert.Equal(t, "llm", fused.FusionMethod)
+	assert.Equal(t, int64(100), fused.MessageId)
 	assert.Equal(t, int32(1), client.byFusedMessageCalls, "client.ByFusedMessage must be called once")
 }
 
@@ -108,8 +113,8 @@ func TestEmotionQueryHandler_FusedByMessage_InvalidID_Returns400(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-// TestEmotionQueryHandler_FusedByMessage_ClientError_Propagates500 client 返 error → 500
-func TestEmotionQueryHandler_FusedByMessage_ClientError_Propagates500(t *testing.T) {
+// TestEmotionQueryHandler_FusedByMessage_ClientError_Propagates502 client 返 error（非 gRPC NotFound/Unimplemented）→ statusFor 默认 502
+func TestEmotionQueryHandler_FusedByMessage_ClientError_Propagates502(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	client := &fakeEmotionQueryClientV2{byFusedMessageErr: assertAnError()}
 
@@ -121,7 +126,7 @@ func TestEmotionQueryHandler_FusedByMessage_ClientError_Propagates500(t *testing
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	require.Equal(t, http.StatusInternalServerError, w.Code)
+	require.Equal(t, http.StatusBadGateway, w.Code)
 }
 
 func assertAnError() error { return errStub }

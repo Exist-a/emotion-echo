@@ -66,7 +66,7 @@ func startTestServer(t *testing.T, repo repository.EmotionRepo) (*Server, *grpc.
 	port := lis.Addr().(*net.TCPAddr).Port
 	lis.Close() // release; production will re-listen
 
-	srv := New(repo, port)
+	srv := New(repo, nil, port) // Stage 34: fusedEmotionRepo 传 nil（fused 端点 Unimplemented）
 
 	ctx, cancel := context.WithCancel(context.Background())
 	serveErr := make(chan error, 1)

@@ -111,6 +111,9 @@ type fakeEmotionQueryHandlerClient struct {
 	list    []*emotionquery.Emotion
 	total   int32
 	err     error
+	// Stage 34: fused 端点（analytics handler 不需要，但接口要满足）
+	fused    *emotionquery.FusedEmotion
+	fusedErr error
 }
 
 func (f *fakeEmotionQueryHandlerClient) ByMessage(_ context.Context, _ int64) (*emotionquery.Emotion, error) {
@@ -118,6 +121,9 @@ func (f *fakeEmotionQueryHandlerClient) ByMessage(_ context.Context, _ int64) (*
 }
 func (f *fakeEmotionQueryHandlerClient) ByConversation(_ context.Context, _ int64, _ int) ([]*emotionquery.Emotion, int32, error) {
 	return f.list, f.total, f.err
+}
+func (f *fakeEmotionQueryHandlerClient) ByFusedMessage(_ context.Context, _ int64) (*emotionquery.FusedEmotion, error) {
+	return f.fused, f.fusedErr
 }
 
 func newEmotionQueryRouter(client downstream.EmotionQueryClient) *gin.Engine {

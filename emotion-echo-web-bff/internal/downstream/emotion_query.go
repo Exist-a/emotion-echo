@@ -24,6 +24,8 @@ type EmotionQueryClient interface {
 	ByMessage(ctx context.Context, messageID int64) (*emotionquery.Emotion, error)
 	// ByConversation 查会话的情绪列表
 	ByConversation(ctx context.Context, conversationID int64, limit int) ([]*emotionquery.Emotion, int32, error)
+	// ByFusedMessage 查单条消息的多模态融合产物（Stage 34）
+	ByFusedMessage(ctx context.Context, messageID int64) (*emotionquery.FusedEmotion, error)
 }
 
 // emotionQueryClient 是 EmotionQueryClient 的 gRPC 实现
@@ -55,4 +57,18 @@ func (c *emotionQueryClient) ByConversation(ctx context.Context, conversationID 
 		return nil, 0, fmt.Errorf("downstream: emotion query by conversation: %w", err)
 	}
 	return resp.Items, resp.Total, nil
+}
+
+// ByFusedMessage 调 GetFusedEmotion RPC（Stage 34）。
+//
+// 设计：
+//   - NotFound 由 caller 处理（handler 返 404）
+//   - 其他 gRPC 错误透传（caller 返 500）
+func (c *emotionQueryClient) ByFusedMessage(ctx context.Context, messageID int64) (*emotionquery.FusedEmotion, error) {
+	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
+	resp, err := cli.GetFusedEmotion(ctx, &emotionquery.GetFusedEmotionRequest{MessageId: messageID})
+	if err != nil {
+		return nil, fmt.Errorf("downstream: emotion query fused by message: %w", err)
+	}
+	return resp, nil
 }

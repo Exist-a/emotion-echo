@@ -9,11 +9,15 @@ option go_package = "github.com/emotion-echo/shared/pkg/emotionquery";
 // 之前只能通过 HTTP 调（ai-svc Gin server :8891）
 // 现在多一个 gRPC 接口（ai-svc gRPC server :8892）
 // 两种协议同时存在，前端继续用 HTTP，内部 svc-to-svc 用 gRPC
+//
+// Stage 34: 新增 GetFusedEmotion（多模态融合产物查询）
 service EmotionQueryService {
   // GetEmotionByMessage 根据 message_id 查情绪
   rpc GetEmotionByMessage (GetEmotionByMessageRequest) returns (Emotion);
   // GetEmotionByConversation 根据 conversation_id 查情绪列表
   rpc GetEmotionByConversation (GetEmotionByConversationRequest) returns (EmotionList);
+  // GetFusedEmotion 根据 message_id 查多模态融合产物（Stage 34）
+  rpc GetFusedEmotion (GetFusedEmotionRequest) returns (FusedEmotion);
 }
 
 // Emotion 单条消息的情绪数据
@@ -43,4 +47,30 @@ message GetEmotionByConversationRequest {
 message EmotionList {
   repeated Emotion items = 1;
   int32           total = 2;
+}
+
+// FusedEmotion 多模态融合产物（Stage 34）
+//
+// 对应 emotion_echo_ai.fused_emotions 表。
+// primary_emotion / sentiment_score / confidence 来自融合结果；
+// modality_contrib 是 JSON 字符串（key=text/voice/face，value=贡献度）；
+// available_modalities 是 JSON 字符串数组；
+// reasoning 是 LLM 输出（走 late_fusion_weighted 时为空）。
+message FusedEmotion {
+  int64    message_id            = 1;
+  int64    user_id               = 2;
+  int64    conversation_id       = 3;
+  string   primary_emotion       = 4;
+  double   sentiment_score       = 5;
+  double   confidence            = 6;
+  string   modality_contrib      = 7;  // JSON 字符串
+  string   reasoning             = 8;  // 可空
+  string   fusion_method         = 9;  // "llm" | "late_fusion_weighted"
+  string   available_modalities  = 10; // JSON 字符串数组
+  int64    created_at_ms         = 11;
+}
+
+// GetFusedEmotion 请求
+message GetFusedEmotionRequest {
+  int64 message_id = 1;
 }

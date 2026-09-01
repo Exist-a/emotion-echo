@@ -7,6 +7,7 @@
 // 实现 EmotionQueryService：
 //   - GetEmotionByMessage(message_id) → Emotion
 //   - GetEmotionByConversation(conversation_id) → EmotionList
+//   - GetFusedEmotion(message_id) → FusedEmotion  (Stage 34)
 //
 // Stage 32 PR-16: 加 user ID metadata 拦截器（读 x-user-id，APISIX 注入）。
 // 健康检查走 HTTP /api/v1/health（不在 gRPC 层做）。
@@ -60,7 +61,10 @@ type Server struct {
 }
 
 // New 创建并配置 gRPC server（未启动）
-func New(repo repository.EmotionRepo, port int) *Server {
+//
+// Stage 34: 增加 fusedEmotionRepo 参数（查询 fused_emotions 表）。
+// 现有调用方需要传 nil（向后兼容，单测已用 fake repo）。
+func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRepo, port int) *Server {
 	// Interceptor 链
 	tracer := skywalking.Tracer()
 	opts := []grpc.ServerOption{
@@ -77,7 +81,10 @@ func New(repo repository.EmotionRepo, port int) *Server {
 	gs := grpc.NewServer(opts...)
 
 	// 注册 service
-	emotionquery.RegisterEmotionQueryServiceServer(gs, &emotionQueryServer{repo: repo})
+	emotionquery.RegisterEmotionQueryServiceServer(gs, &emotionQueryServer{
+		repo:              repo,
+		fusedEmotionRepo:  fusedEmotionRepo,
+	})
 
 	// 注册 health check（不带 user id 要求）
 	healthSrv := health.NewServer()
@@ -121,7 +128,8 @@ func (s *Server) Addr() string {
 // emotionQueryServer 实现 EmotionQueryService
 type emotionQueryServer struct {
 	emotionquery.UnimplementedEmotionQueryServiceServer
-	repo repository.EmotionRepo
+	repo             repository.EmotionRepo
+	fusedEmotionRepo repository.FusedEmotionRepo
 }
 
 func (s *emotionQueryServer) GetEmotionByMessage(ctx context.Context, req *emotionquery.GetEmotionByMessageRequest) (*emotionquery.Emotion, error) {
@@ -160,6 +168,31 @@ func (s *emotionQueryServer) GetEmotionByConversation(ctx context.Context, req *
 	return &emotionquery.EmotionList{Items: items, Total: int32(len(items))}, nil
 }
 
+// GetFusedEmotion 实现 Stage 34 新 RPC：按 message_id 查多模态融合产物。
+//
+// 设计：
+//   - fusedEmotionRepo == nil → Unimplemented（向后兼容现有 ai-svc 启动路径）
+//   - message_id 无效 → InvalidArgument
+//   - repo 返 nil → NotFound
+//   - repo 返 error → Internal
+//   - 成功 → 映射 model.FusedEmotion → proto.FusedEmotion
+func (s *emotionQueryServer) GetFusedEmotion(ctx context.Context, req *emotionquery.GetFusedEmotionRequest) (*emotionquery.FusedEmotion, error) {
+	if req.MessageId == 0 {
+		return nil, status.Error(codes.InvalidArgument, "message_id is required")
+	}
+	if s.fusedEmotionRepo == nil {
+		return nil, status.Error(codes.Unimplemented, "fused emotion not available on this server")
+	}
+	f, err := s.fusedEmotionRepo.GetByMessageID(ctx, req.MessageId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "query failed: %v", err)
+	}
+	if f == nil {
+		return nil, status.Error(codes.NotFound, "fused emotion not found for this message")
+	}
+	return toProtoFusedEmotion(f), nil
+}
+
 func toProtoEmotion(e *model.EmotionAnalysis) *emotionquery.Emotion {
 	return &emotionquery.Emotion{
 		Id:             e.ID,
@@ -170,5 +203,21 @@ func toProtoEmotion(e *model.EmotionAnalysis) *emotionquery.Emotion {
 		Confidence:     e.Confidence,
 		Model:          e.Model,
 		CreatedAtMs:    e.CreatedAt.UnixMilli(),
+	}
+}
+
+func toProtoFusedEmotion(f *model.FusedEmotion) *emotionquery.FusedEmotion {
+	return &emotionquery.FusedEmotion{
+		MessageId:           f.MessageID,
+		UserId:              f.UserID,
+		ConversationId:      f.ConversationID,
+		PrimaryEmotion:      f.PrimaryEmotion,
+		SentimentScore:      f.SentimentScore,
+		Confidence:          f.Confidence,
+		ModalityContrib:     f.ModalityContrib,
+		Reasoning:           f.Reasoning,
+		FusionMethod:        f.FusionMethod,
+		AvailableModalities: f.AvailableModalities,
+		CreatedAtMs:         f.CreatedAt.UnixMilli(),
 	}
 }
