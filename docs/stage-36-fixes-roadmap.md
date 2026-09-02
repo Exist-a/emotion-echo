@@ -258,3 +258,15 @@ PR-C2.3: ai-svc smoke：上传图片 → emotion 非 neutral
 - Stage 35 landing：[stage-35-landing.md](stage-35-landing.md)
 - Stage 35 plan：[stage-35-production-hardening.md](stage-35-production-hardening.md)
 - architecture-decisions：[architecture-decisions.md](architecture-decisions.md)
+
+---
+
+## 十、Post-36 增量（不属 ADR-16 8 项缺口，新发现的契约问题）
+
+盘点 `feat/bff-fused-emotion-endpoint` 分支时发现图表三层契约全错位，
+HTTP 200 但 dashboard 页面渲染塌掉。详见：[adr-2026-09-chart-contract-alignment.md](adr-2026-09-chart-contract-alignment.md)
+
+- 分支：`fix/chart-contract-alignment`（基于 `fix/stage-36-post-test-cleanup` 0b58bd5）
+- 4 commits: 90a3338 + 1590f24 + 789dd4b + 044cb58
+- 解决：4 dashboard 页面真实渲染 / BFF presentation 层 / summary rule-based / wordCount 删除 / alias 解析
+- 留给 stage-37：dev fallback user_behavior_events / 5 端点接入前端 / analytics_reader GRANT / LLM summary / 数据建模 bug
