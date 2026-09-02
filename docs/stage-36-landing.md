@@ -344,12 +344,30 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 |------|------|-----------------|------------|-----------|
 | **FER** | libopencv内置 | `5d0b4cf` retry loop + --fix-missing | ✅ 392s | ✅ 已 build（backend=neutral-fallback 路径，caffe模型缺失） |
 | **SenseVoice** | model.pt 893M + am.mvn 11K + config + tokens + fig | `256c902` 完整模型仓库 COPY 到 `iic--SenseVoiceSmall/snapshots/master/` | ✅ v0.1.2 重建 ~1min（含缓存），4.16GB | ✅ **预烘焙生效**：容器启动 log 中**不再** "Downloading 20 files from iic/SenseVoiceSmall@master" |
-| **XTTS** | model.pth 1.8G + dvae.pth 201M + config.json | `256c902` retry loop + COPY `pcm_chunk_shape.py` vendor | ✅ v0.1.0 5.3GB | ✅ 模型已 COPY（`COPY XTTS/AI-ModelScope/ ./AI-ModelScope/`）；缺 pcm_chunk_shape 导致启动失败 → v0.1.1 no-cache rebuild 中 |
+| **XTTS** | model.pth 1.8G + dvae.pth 201M + config.json | `256c902` retry loop + COPY `pcm_chunk_shape.py` vendor | ✅ v0.1.0 5.3GB | ⚠️ v0.1.0 build 成功但缺 pcm_chunk_shape 启动失败；v0.1.2 no-cache rebuild 受 dev 环境 pypi CDN 0字节响应 + docker desktop 内存限制卡住（torch 526MB 下载 30+min 没完成）|
 
-### XTTS v0.1.1 no-cache rebuild（后台）
-- 当前进度：builder 阶段 pip install torch（526MB）下载中
-- 预计还需 ~15-20min（runtime阶段 + 5.3GB model export）
-- 镜像 build 完成后 `pcm_chunk_shape` ImportError 应解决
+### XTTS v0.1.2 rebuild 受阻详情（2026-09-02 上午）
+
+**症状**：
+- `pip install` 第1次 hash 不匹配（CDN 0字节响应）→ retry触发
+- 第2次 retry 同样失败
+- 第3次 retry 成功下到 torch 526MB，但**卡在 Downloading torch-...whl** 30+ 分钟不再前进
+- 期间 docker desktop 内存多次挤爆（多个 build 并行），build 进程死掉重启
+
+**根因**：
+- 当前网络环境 pypi CDN 持续返回 0字节 / 不完整响应（sha256 e3b0c44...）
+- 即使 retry 也无法稳定拉大文件（torch 是 526MB 单一大包）
+- docker desktop 7.6GB 内存 + 22 容器并行 build，buildkit OOM 风险高
+
+**Stage 36-B5 修复已落地（commit `d50f866`）**：
+- Dockerfile 加 `pip install 3-retry + --no-cache-dir`（防止 pip 自带 cache 命中 0字节文件）
+- 加 `COPY pcm_chunk_shape.py` vendor helper（修复 ImportError）
+
+**留给生产部署**：
+- 用国内网络（中国 IP）跑 build —— pypi 镜像 + CDN 稳定
+- 或预热 layer cache：公司内部 registry 缓存 base 镜像（python:3.10-slim + deps）
+
+---
 
 ### 已知 dev 环境资源限制（持续）
 
