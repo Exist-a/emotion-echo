@@ -140,19 +140,26 @@ func TestLLMClient_ChatStream_CancelledContext(t *testing.T) {
 	srv := mockLLMServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		flusher, _ := w.(http.Flusher)
-		// 无限流
-		for i := 0; i < 10000; i++ {
+		// 有限流；通过 select-on-ctx 及时响应取消（不再用
+		// for-i + time.Sleep 死循环 100s，违反 AGENTS.md §3.3）。
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for i := 0; i < 1000; i++ {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-ticker.C:
+			}
 			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"x"}}]}` + "\n\n"))
 			if flusher != nil {
 				flusher.Flush()
 			}
-			time.Sleep(10 * time.Millisecond)
 		}
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		cancel()
 	}()
 
