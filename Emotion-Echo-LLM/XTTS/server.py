@@ -39,6 +39,23 @@ from metrics_setup import (  # noqa: E402
 
 logger = setup_logging("xtts")
 
+# Stage 36-B5 fix: PyTorch 2.6+ 默认 weights_only=True 阻止加载 XTTS 模型权重
+# （含 XttsConfig/XttsAudioConfig 等多个自定义类，XTTS vendored TTS 在不同
+# load 阶段各 load 不同 class）。逐个 add_safe_globals 治标不治本，XTTS 每次
+# 升级都可能引入新 class。
+#
+# **采用 monkey patch 全局降级**：把 torch.load 默认 weights_only 设为 False。
+# XTTS 是 trusted checkpoint 来源（我们 model.pth / dvae.pth 都是 Coqui 官方 ckpt），
+# 不是 untrusted pickle。这一点 Stage 22-A 决策里就明确了"AI model service 信任自托管模型"。
+# 详见 docs/ai-images-build-guide.md §XTTS torch.load fix。
+_original_load = torch.load
+def _patched_load(*args, **kwargs):
+    if "weights_only" not in kwargs:
+        kwargs["weights_only"] = False
+    return _original_load(*args, **kwargs)
+torch.load = _patched_load
+logger.info("XTTS: monkey-patched torch.load to default weights_only=False (PyTorch 2.6+ fix for vendored TTS load)")
+
 # Model directory: prefer mounted model, else download on first run.
 MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(MODEL_DIR, "AI-ModelScope", "XTTS-v2")
