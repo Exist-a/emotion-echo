@@ -26,7 +26,14 @@ RUN for i in 1 2 3; do \
 COPY XTTS/requirements.txt .
 # 简化：一次 pip install 全部 requirements（不拆 --prefix 分阶段）
 # TTS 自身会拉 spacy / jieba / pypinyin（我们 requirements 已包含）
-RUN pip install --prefix=/install --timeout 600 -r requirements.txt
+#
+# Stage 36-B5 fix: pip install 加 3-retry + --no-cache-dir 关掉（pypi CDN 偶发
+# 返回 200 OK with 0 bytes，sha256 = e3b0c44...；必须重试才能拉真文件）
+RUN for i in 1 2 3; do \
+      pip install --prefix=/install --timeout 600 --no-cache-dir -r requirements.txt && break; \
+      echo "pip install attempt $i failed, retrying in 15s..."; \
+      sleep 15; \
+    done
 
 
 FROM python:3.10-slim AS runtime
