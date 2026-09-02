@@ -65,19 +65,14 @@ COPY --from=builder /install /usr/local
 # Copy application source
 COPY --chown=app:app sensevoice-small/logging_setup.py sensevoice-small/metrics_setup.py sensevoice-small/server.py ./
 
-# Stage 36-B5 fix: 预烘焙 SenseVoiceSmall 模型（model.pt 893MB + am.mvn 11K），
-# 避免容器首次启动从 ModelScope 下载（dev 环境 +200MB 下载 + 60-90s 启动期）。
-# model_dir = "iic/SenseVoiceSmall" → funasr 会查 MODELSCOPE_CACHE/{model_dir}/snapshots/master/model.pt
-# 镜像构建时已存在文件 → funasr 不下载，model_loaded=true 立即生效。
-COPY --chown=app:app \
-     sensevoice-small/model.pt sensevoice-small/am.mvn \
-     /app/cache/models/iic/SenseVoiceSmall/snapshots/master/
-
-# dummy files for funasr metadata probing（funasr 会 stat 这些，不需真内容）
-RUN mkdir -p /app/cache/models/iic/SenseVoiceSmall/snapshots/master/fig && \
-    touch /app/cache/models/iic/SenseVoiceSmall/snapshots/master/.gitattributes && \
-    touch /app/cache/models/iic/SenseVoiceSmall/snapshots/master/README.md && \
-    chown -R app:app /app/cache
+# Stage 36-B5 fix: 预烘焙 SenseVoiceSmall 完整模型仓库（含 model.pt 893MB +
+# config.yaml / tokens.json / am.mvn / example/），funasr 期望路径：
+#   MODELSCOPE_CACHE/iic--SenseVoiceSmall/snapshots/master/...
+#
+# 仓里已经下载好完整 ModelScope repo（sensevoice-small/），直接 COPY + 路径重命名。
+# 容器启动后 funasr 跳过 ModelScope 下载，model_loaded=true 立即生效。
+COPY --chown=app:app sensevoice-small/ /app/cache/models/iic--SenseVoiceSmall/snapshots/master/
+RUN chown -R app:app /app/cache
 
 # 应用 cache env（funasr / modelscope 都会读）
 ENV HF_HOME=/app/cache \

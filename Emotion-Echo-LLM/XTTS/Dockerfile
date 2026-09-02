@@ -63,6 +63,9 @@ COPY --from=builder /install /usr/local
 # vendored TTS source (server.py uses `import TTS`)
 COPY --chown=app:app XTTS/TTS/ ./TTS/
 
+# Stage 36-B5 fix: vendored helper modules (server.py does `import pcm_chunk_shape`)
+COPY --chown=app:app XTTS/pcm_chunk_shape.py ./
+
 # application code
 COPY --chown=app:app XTTS/logging_setup.py XTTS/metrics_setup.py XTTS/server.py ./
 
