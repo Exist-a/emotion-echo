@@ -270,3 +270,13 @@ HTTP 200 但 dashboard 页面渲染塌掉。详见：[adr-2026-09-chart-contract
 - 4 commits: 90a3338 + 1590f24 + 789dd4b + 044cb58
 - 解决：4 dashboard 页面真实渲染 / BFF presentation 层 / summary rule-based / wordCount 删除 / alias 解析
 - 留给 stage-37：dev fallback user_behavior_events / 5 端点接入前端 / analytics_reader GRANT / LLM summary / 数据建模 bug
+
+---
+
+## 十一、ADR-18 微服务内部调用渐进式 RPC 化
+
+- 文件：[adr-2026-09-incremental-rpc-adoption.md](adr-2026-09-incremental-rpc-adoption.md)
+- 决策：新增服务一律 gRPC；老 HTTP 调用按 §B 触发条件渐进迁移
+- 例外：浏览器→BFF / BFF→外部 LLM / Nacos health check / Webhook
+- proto 基础设施已就位：`proto/` + `proto/gen.sh` + `shared/pkg/grpcinterceptor` + chat-svc grpcclient 三件套
+- 迁移候选优先级见 ADR-18 §实施细节（stage-37 起新 gRPC 服务先做；BFF→chat-svc 工作量最大排 stage-38）
