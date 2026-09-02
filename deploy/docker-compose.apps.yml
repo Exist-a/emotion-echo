@@ -444,8 +444,11 @@ services:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=2)\""]
       interval: 30s
       timeout: 5s
-      start_period: 120s    # 模型首次下载可能要 60-120s
-      retries: 3
+      # Stage 36-B5 fix: 模型已预烘焙进镜像（v0.1.2），但首次 /analyze 触发
+      # funasr 模型加载 + torch GPU warmup ~60s。start_period 提到 300s 防止
+      # docker healthcheck restart_policy 在 /analyze 处理期间误杀。
+      start_period: 300s
+      retries: 5
 
   # =====================================================
   # Stage 22-A.3 XTTS（语音克隆 TTS）
