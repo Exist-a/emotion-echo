@@ -5,6 +5,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeAnalyticsClient 实现 downstream.AnalyticsClient
@@ -70,6 +72,58 @@ func TestAnalyticsHandler_DailyReport_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, int64(42), fc.gotUID, "user_id 应从 query 透传")
 	assert.Contains(t, w.Body.String(), `"messageCount":4`)
+}
+
+// TestAnalyticsHandler_DailyReport_ReturnsFrontendShape 契约：dailyReport 响应
+// data 必须是前端 DailyReport 期望的扁平形状：
+//   { date, summary, emotionDistribution: [{name, value}], conversationCount, messageCount }
+// 而不再是 { report: { ... } }（BFF 套的单数 key 会让前端 reportData.* 全是 undefined）。
+//
+// 历史：stage-30-A 写 BFF 时 OK(c, gin.H{"report": report}) 把数据塞单数 key，
+// useApi 把整个 data.data 解出后给前端，前端再读 reportData.summary 拿到 undefined。
+// fix/chart-contract-alignment 修复期对齐。
+func TestAnalyticsHandler_DailyReport_ReturnsFrontendShape(t *testing.T) {
+	fc := &fakeAnalyticsClient{report: &downstream.DailyReport{
+		UserID:            42,
+		Date:              "2026-08-31",
+		MessageCount:      4,
+		ConversationCount: 2,
+		EmotionCounts:     map[string]int64{"happy": 3, "sad": 1},
+		AvgSentiment:      0.4,
+	}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?user_id=42&date=2026-08-31", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			Date                string `json:"date"`
+			Summary             string `json:"summary"`
+			ConversationCount   int64  `json:"conversationCount"`
+			MessageCount        int64  `json:"messageCount"`
+			EmotionDistribution []struct {
+				Name  string `json:"name"`
+				Value int64  `json:"value"`
+			} `json:"emotionDistribution"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Code, "业务码应为 0")
+	assert.NotEmpty(t, resp.Data.Summary, "summary 必须有内容（rule-based 模板生成）")
+	assert.Equal(t, "2026-08-31", resp.Data.Date)
+	assert.Equal(t, int64(2), resp.Data.ConversationCount)
+	assert.Equal(t, int64(4), resp.Data.MessageCount)
+	require.Len(t, resp.Data.EmotionDistribution, 2, "map → array 必须保留全部条目")
+	// happy 比 sad 多，应排前面（确定性）
+	assert.Equal(t, "happy", resp.Data.EmotionDistribution[0].Name)
+	assert.Equal(t, int64(3), resp.Data.EmotionDistribution[0].Value)
+	assert.Equal(t, "sad", resp.Data.EmotionDistribution[1].Name)
+	assert.Equal(t, int64(1), resp.Data.EmotionDistribution[1].Value)
 }
 
 func TestAnalyticsHandler_MissingUserID_Returns400(t *testing.T) {
