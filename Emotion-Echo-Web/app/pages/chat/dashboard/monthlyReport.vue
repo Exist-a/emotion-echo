@@ -18,10 +18,6 @@
           <span class="stat-value">{{ reportData.messageCount }}</span>
           <span class="stat-label">消息数</span>
         </div>
-        <div class="stat-item">
-          <span class="stat-value">{{ reportData.wordCount }}</span>
-          <span class="stat-label">总字数</span>
-        </div>
       </div>
     </template>
     <template #charts>
