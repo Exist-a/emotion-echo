@@ -336,6 +336,40 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 
 ---
 
+## 五补后续 ②：本地模型镜像烘焙（2026-09-02 早上）
+
+### 范围：所有 Emotion-Echo-LLM 本地模型 → 烘焙进镜像
+
+| 模型 | 大小 | Dockerfile 修复 | 镜像 build | 预烘焙状态 |
+|------|------|-----------------|------------|-----------|
+| **FER** | libopencv内置 | `5d0b4cf` retry loop + --fix-missing | ✅ 392s | ✅ 已 build（backend=neutral-fallback 路径，caffe模型缺失） |
+| **SenseVoice** | model.pt 893M + am.mvn 11K + config + tokens + fig | `256c902` 完整模型仓库 COPY 到 `iic--SenseVoiceSmall/snapshots/master/` | ✅ v0.1.2 重建 ~1min（含缓存），4.16GB | ✅ **预烘焙生效**：容器启动 log 中**不再** "Downloading 20 files from iic/SenseVoiceSmall@master" |
+| **XTTS** | model.pth 1.8G + dvae.pth 201M + config.json | `256c902` retry loop + COPY `pcm_chunk_shape.py` vendor | ✅ v0.1.0 5.3GB | ✅ 模型已 COPY（`COPY XTTS/AI-ModelScope/ ./AI-ModelScope/`）；缺 pcm_chunk_shape 导致启动失败 → v0.1.1 no-cache rebuild 中 |
+
+### XTTS v0.1.1 no-cache rebuild（后台）
+- 当前进度：builder 阶段 pip install torch（526MB）下载中
+- 预计还需 ~15-20min（runtime阶段 + 5.3GB model export）
+- 镜像 build 完成后 `pcm_chunk_shape` ImportError 应解决
+
+### 已知 dev 环境资源限制（持续）
+
+**docker healthcheck 重启陷阱**：SenseVoice 容器在 `/analyze` 处理时被 docker healthcheck（30s 间隔）触发 `restart_policy`，因为：
+- docker healthcheck 不等 `/analyze` 完成（每次 healthcheck 都是新 goroutine）
+- 容器配置 `start_period=60s` / `memory=1536M` 在 dev 环境不够（首次加载 torch + funasr 需 2-3GB peak）
+- 生产建议：start_period 提到 300s + memory 提到 3072M + 关掉 healthcheck restart_policy
+
+### 镜像大小对比
+
+| 镜像 | 修复前 | 修复后 | 增加 |
+|------|--------|--------|------|
+| emotion-echo/fer | 12.1GB | 12.1GB | 0（无需预烘焙） |
+| emotion-echo/sensevoice | 3.29GB (v0.1.0) | **4.16GB** (v0.1.2) | +870MB（预烘焙模型仓库）|
+| emotion-echo/xtts | 未build | **5.3GB** (v0.1.0) → 修复中 | +5.3GB（首次 build） |
+
+---
+
+---
+
 ## 六、不在 Stage 36 范围（继续 deferred）
 
 按 ADR-16 §D：
