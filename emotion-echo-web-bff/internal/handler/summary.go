@@ -72,11 +72,16 @@ func pickTopEmotion(counts map[string]int64) (string, int64, bool) {
 }
 
 // moodWord 按 avgSentiment 返回中文定性词
+//
+// 阈值语义：
+//   avg >= 0.3  → 积极（明确正面）
+//   avg >= 0    → 平稳（含 0，"无明显偏向"）
+//   avg <  0    → 低落
 func moodWord(avg float64) string {
 	switch {
 	case avg >= sentimentPositiveThreshold:
 		return "积极"
-	case avg > sentimentNeutralThreshold:
+	case avg >= sentimentNeutralThreshold:
 		return "平稳"
 	default:
 		return "低落"
