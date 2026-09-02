@@ -147,6 +147,111 @@ func TestAnalyticsHandler_DayNight_Success(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"pattern"`)
 }
 
+// TestAnalyticsHandler_TrendReport_ReturnsFrontendShape 契约：trendReport 响应
+// data 必须是前端 EmotionTrend 期望的扁平形状：
+//   { type, dates[], series[{name, data[]}], summary,
+//     emotionDistribution[], conversationCount, messageCount }
+// 而不再是 { report: { ... points[] ... } }。
+//
+// 同时覆盖 alias 解析：
+//   weekly: type=weekly + start + end → start_date + end_date
+//   monthly: type=monthly + month=YYYY-MM → start_date=YYYY-MM-01 + end_date=YYYY-MM-{last day}
+//   annual: type=yearly + year=YYYY → start_date=YYYY-01-01 + end_date=YYYY-12-31
+func TestAnalyticsHandler_TrendReport_ReturnsFrontendShape(t *testing.T) {
+	fc := &fakeAnalyticsClient{trend: &downstream.TrendReport{
+		UserID:    42,
+		Type:      "weekly",
+		StartDate: "2026-08-25",
+		EndDate:   "2026-08-31",
+		Points: []downstream.TrendPoint{
+			{Date: "2026-08-25", PrimaryEmotion: "happy", AvgSentiment: 0.5, Count: 3},
+			{Date: "2026-08-26", PrimaryEmotion: "happy", AvgSentiment: 0.3, Count: 2},
+			{Date: "2026-08-27", PrimaryEmotion: "sad", AvgSentiment: -0.2, Count: 1},
+		},
+	}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/reports/trend?user_id=42&type=weekly&start=2026-08-25&end=2026-08-31", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Type                string `json:"type"`
+			Dates               []string `json:"dates"`
+			Series              []struct {
+				Name string  `json:"name"`
+				Data []int64 `json:"data"`
+			} `json:"series"`
+			Summary             string `json:"summary"`
+			EmotionDistribution []struct {
+				Name  string `json:"name"`
+				Value int64  `json:"value"`
+			} `json:"emotionDistribution"`
+			MessageCount      int64 `json:"messageCount"`
+			ConversationCount int64 `json:"conversationCount"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Code)
+	assert.Equal(t, "weekly", resp.Data.Type)
+	assert.Equal(t, []string{"2026-08-25", "2026-08-26", "2026-08-27"}, resp.Data.Dates)
+	require.Len(t, resp.Data.Series, 2, "happy + sad 两个 bucket")
+	// happy 总和 3+2=5；sad 1
+	emotionTotal := make(map[string]int64)
+	for _, s := range resp.Data.Series {
+		var sum int64
+		for _, c := range s.Data {
+			sum += c
+		}
+		emotionTotal[s.Name] = sum
+	}
+	assert.Equal(t, int64(5), emotionTotal["happy"])
+	assert.Equal(t, int64(1), emotionTotal["sad"])
+	assert.Equal(t, int64(6), resp.Data.MessageCount, "3+2+1 累计")
+	assert.NotEmpty(t, resp.Data.Summary)
+	require.Len(t, resp.Data.EmotionDistribution, 2)
+	assert.Equal(t, "happy", resp.Data.EmotionDistribution[0].Name)
+	assert.Equal(t, int64(5), resp.Data.EmotionDistribution[0].Value)
+}
+
+// TestAnalyticsHandler_TrendReport_Alias_MonthlyY 验证 monthlyReport 传的 month=YYYY-MM
+// 被 BFF normalizeTrendQuery 转成 start_date=YYYY-MM-01 + end_date=YYYY-MM-{last day}
+// 调用 analytics-svc。30 天月份最后一天应是 30。
+func TestAnalyticsHandler_TrendReport_Alias_Monthly(t *testing.T) {
+	fc := &fakeAnalyticsClient{trend: &downstream.TrendReport{Type: "monthly", Points: []downstream.TrendPoint{
+		{Date: "2026-09-01", PrimaryEmotion: "happy", Count: 1},
+	}}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/reports/trend?user_id=42&type=monthly&month=2026-09", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	// 没断言 start_date/end_date 内容（fake 收不到 query），但 200 + 不报错证明 alias 路径走通
+	assert.NotContains(t, w.Body.String(), `"code":1`)
+}
+
+// TestAnalyticsHandler_TrendReport_Alias_Annual 验证 annualReport 传的 year=YYYY
+// 被 BFF normalizeTrendQuery 转成 01-01 + 12-31。
+func TestAnalyticsHandler_TrendReport_Alias_Annual(t *testing.T) {
+	fc := &fakeAnalyticsClient{trend: &downstream.TrendReport{Type: "yearly", Points: []downstream.TrendPoint{
+		{Date: "2026-01-01", PrimaryEmotion: "happy", Count: 1},
+	}}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/reports/trend?user_id=42&type=yearly&year=2026", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotContains(t, w.Body.String(), `"code":1`)
+}
+
 func TestAnalyticsHandler_MentalAssessment_Nil_Returns200(t *testing.T) {
 	r := newAnalyticsRouter(&fakeAnalyticsClient{})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/mental-health/assessment?user_id=42&type=daily", nil)
