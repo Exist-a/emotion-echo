@@ -74,7 +74,7 @@ htmlcov/
 .tox/
 venv/
 .venv/
-env/
+# env/                  # Stage 36-D: deploy/env/.env.local.example needs git; tracked explicitly below
 ENV/
 
 # ---------- 运行时数据 / 数据库 ----------
