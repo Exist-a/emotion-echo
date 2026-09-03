@@ -27,6 +27,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./db/01-create-schemas.sql:/docker-entrypoint-initdb.d/01-create-schemas.sql:ro
       - ./db/02-create-tables-in-schemas.sql:/docker-entrypoint-initdb.d/02-create-tables-in-schemas.sql:ro
+      - ./db/03-seed-default-users.sql:/docker-entrypoint-initdb.d/03-seed-default-users.sql:ro
+      - ./db/04-create-views.sql:/docker-entrypoint-initdb.d/04-create-views.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
