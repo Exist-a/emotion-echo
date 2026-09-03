@@ -5,9 +5,12 @@ WORKDIR /app
 
 # 复制 package.json 和 package-lock.json
 COPY package*.json ./
-# 国内网络：用 npmmirror 镜像加速 npm ci（默认 npmjs.org 在容器内被墙/超时）
-RUN npm config set registry https://registry.npmmirror.com \
-    && npm ci
+# Stage 36-D Bug 9: 默认 npmjs 镜像（npmmirror.com 容器内不可达,改为可配置 BuildArg）
+# npm ci 在 node 20 上对最新 npm 包 EBADENGINE 报错,加 engine-strict=false 跳过
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+RUN npm config set registry ${NPM_REGISTRY} \
+    && npm config set engine-strict false \
+    && npm install --no-audit --no-fund --prefer-offline
 
 # 复制源代码
 COPY . .
