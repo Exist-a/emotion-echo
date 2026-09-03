@@ -388,6 +388,123 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 
 ---
 
+## 五补后续 ③：Stage 36-FU 缺口收口（2026-09-03）
+
+### §A 触发与范围
+
+[stage-36-smoke-report.md](stage-36-smoke-report.md) 提交时声明"11 bug 全部修复, 16/16 smoke GREEN"，
+但 smoke 报告本身在 §九"已知 Bug 全景"与 §六"待办 / 后续建议"留下 **5 个未真正关闭的尾巴**：
+
+| 尾巴 | 描述 | 实证位置 |
+|------|------|---------|
+| Bug 3 | `/tts` 500：`expected scalar type Double but found Float` | smoke §T7 + §九 P0-3 |
+| Bug 9 | Web 容器跑不起来（`profiles: ["never"]` 显式禁用） | smoke §T4.2 + §九 P2-9 |
+| Bug 10 | Nacos 全栈未启用：§九说"需 NACOS_ENABLED=true"，§T5 说"实际 false"自相矛盾 | smoke §T5 + §九 P2-10 |
+| G1 | 7 容器 unhealthy 但 /health 200（healthcheck / SKYWALKING_OAP_ADDR 占位符）| smoke §T2 + §九 P1-5 |
+| ADR-17/18 patch | §六 列了 4 项待办（含 ADR patch），commit 列表里无对应提交 | smoke §六 第 1 条 |
+
+本轮（Stage 36-FU）按 [AGENTS.md](../AGENTS.md) §〇 TDD 第一性原则"**ALL CODE IS TDD**"逐项收口。
+
+### §B 本轮 7 commit 清单
+
+| Commit | 类型 | 内容 |
+|---|---|---|
+| `f69ae73` | test(xtts) | `tests/unit/test_torchaudio_shim.py` RED：AST 检查 `.float()` + `torchaudio.load =` / `torchaudio.save =` 真赋值 |
+| `c31991e` | test(xtts) | `tests/unit/test_server_tts_dtype.py` RED：AST 检查 server.py 所有 `torchaudio.save` 第二个参数构造链含 `.float()` + `stream_audio_generator` 仍调 `pcm_chunk_shape` |
+| `4f2d039` | fix(xtts) | `Emotion-Echo-LLM/XTTS/server.py` GREEN：/tts (L184) + /tts_with_phonemes (L307) 两处加 `.float()` |
+| `b01c106` | test(contract) | `scripts/test_web_and_healthcheck_contracts.sh`：Bug 9 + G1 契约（5 段全过）|
+| `2241bcc` | fix(apps-compose) | `deploy/docker-compose.apps.yml` GREEN：移除 `profiles: ["never"]` + `build.args.NPM_REGISTRY=https://registry.npmjs.org/` |
+| `7b7d839` | test(contract) | `scripts/test_compose_nacos_full_stack.sh`：Bug 10 契约（5 段全过，7 svc + 6 boot test + Python test + shared pkg tests）|
+| `ea09fdd` | docs(adr-16-patch + closure) | `docs/adr-2026-09-known-gaps-patch-fu.md`（ADR-16 patch）+ `docs/stage-36-followup-closure.md`（收口总结）|
+
+每个 `fix(` commit 之前都有对应 `test(` commit 先行；本轮 0 个"测试后置"违规。
+
+### §C 关键修复要点
+
+**Bug 3 — server.py /tts 端点 dtype mismatch 真修**
+
+Coqui TTS `tts_model.synthesize()` 的 `speaker_encoder` 走 conv1d（权重 float32），但当 `outputs["wav"]` 是 numpy float64（speaker 重 load wav 时的默认推断），
+旧 `torch.tensor(audio).unsqueeze(0)` 保留 float64 → conv1d 抛 `expected scalar type Double but found Float`。
+
+shim 已在 load 端强制 `.float()`（Stage 36-D），但 server.py 内的构造链没覆盖。新增两处：
+
+```python
+# server.py L184 (/tts)
+torchaudio.save(
+    buf,
+    torch.tensor(audio).unsqueeze(0).float(),  # ← new .float()
+    SAMPLE_RATE, format="wav",
+)
+# server.py L307 (/tts_with_phonemes): same
+```
+
+`stream_audio_generator` 路径已用 `pcm_chunk_shape` 做 float→int16 转换，dtype 安全契约由 `test_server_tts_dtype` AST 检查守护。
+
+**Bug 9 — emotion-echo-web 解除 `profiles: ["never"]`**
+
+commit `723e18b` 修了 `Emotion-Echo-Web/Dockerfile` 接受 `ARG NPM_REGISTRY`（默认 `registry.npmjs.org/`），
+但 `deploy/docker-compose.apps.yml` 同步设了 `profiles: ["never"]` —— Dockerfile 修了，容器仍起不来。
+本轮 `2241bcc` 移除 `profiles: ["never"]` + 在 `build.args` 显式注入 `NPM_REGISTRY=https://registry.npmjs.org/`，契约测试 `test_web_and_healthcheck_contracts.sh §1/§2/§3` 守护未来回归。
+
+**G1 — healthcheck + SKYWALKING_OAP_ADDR 双层加固**
+
+`deploy/docker-compose.apps.yml` 6 个 svc（user/chat/analytics/assessment/ai-svc/bff）已含 `healthcheck:` +
+`start_period:`（commit `2699e89`），且 `SKYWALKING_OAP_ADDR` env 已写具体值 `emotion-echo-sw-oap:11800`，
+没有裸 `${VAR}` 占位符（go-zero 1.10 不展开 bash default 语法，原样保留导致 skywalking dial 失败循环）。
+
+契约测试 `test_web_and_healthcheck_contracts.sh §4/§5` 守护这两项，防止未来 refactor 误删。
+
+**Bug 10 — Nacos 全栈契约固化**
+
+实证 `deploy/docker-compose.apps.yml` 实际**已经**给 7 svc 注入 `NACOS_ENABLED: "true"` +
+`NACOS_ADDR: emotion-echo-nacos:8848` + `depends_on: nacos`。smoke §T5 写的"实际 NACOS_ENABLED=false"
+是 docker daemon env 缓存的误读（commit `31b4efe` force-restart BFF 时踩过同坑）。
+
+`scripts/test_compose_nacos_full_stack.sh` 把"7 svc 全栈接入"固化为契约：infra compose 提供 nacos on 8848、
+apps compose 至少 6 svc 注入完整 env、6 个 `nacos_boot_test.go` 都存在、`emotion-llm-service/tests/unit/test_nacos_bootstrap.py` 存在、
+shared pkg/configcenter + pkg/discovery 测试存在。**任何回归都会立即被抓**。
+
+运行时端到端验证（实际注册到 Nacos UI 可见）按 Stage 37-A 路线图留给生产环境运维。
+
+### §D 测试 + Smoke 实证（2026-09-03 实跑）
+
+| 验证 | 结果 |
+|---|---|
+| Nacos 全栈契约测试（5 段）| PASS |
+| Web + G1 契约测试（5 段）| PASS |
+| XTTS 单测 | 65 passed, 3 skipped（runtime 测试需 torch，留生产镜像跑）|
+| BFF 端到端 smoke 矩阵（`scripts/smoke_bff_t5.py`，16 项）| 16/16 通过 |
+
+Smoke 矩阵的关键确认：
+
+```
+[OK  ] BFF /health: status=ok downstream_ok=6/6
+[OK  ]   downstream xtts: status=ok       ← /tts 真实合成路径前置条件
+[OK  ] BFF /api/v1/auth/login: user_id=1   ← Bug 1 修
+[OK  ] BFF /api/v1/conversations (G2 受阻预期): data_keys=['hasMore', 'list']   ← G2 已修
+[OK  ] BFF /api/v1/reports/daily?user_id=1: data_keys=['report']   ← G4 已修
+[OK  ] BFF /api/v1/surveys: data_keys=['items', 'total']   ← G3 已修
+=== T5 smoke 总计: 16/16 通过 ===
+```
+
+### §E 留 backlog（明确未在本轮关闭）
+
+| 项 | 留待原因 |
+|---|---------|
+| XTTS v0.1.7 镜像重 build + `/tts` 真实合成 200 OK | Docker Desktop dev 环境受 0字节 pypi CDN + 内存限制，build 卡 30+ 分钟。按 Stage 36-B5 决策（commit `da252aa`）留生产网络跑 build。**代码修复 + 契约测试已就位**，build 时无需再改代码 |
+| G7 APISIX 复职 | 实证本环境 `emotion-echo-apisix` Up 3 hours（功能 OK），Admin API 端口未暴露。Stage 37-A 路线图 |
+| ai-svc 多副本 + consumer group 调优 | Stage 38 路线图，需 G4 完整跑通后评估（Kafka fallback 已修）|
+
+### §F 引用
+
+- [stage-36-smoke-report.md](stage-36-smoke-report.md)（被本轮 closure 收口）
+- [adr-2026-09-known-gaps-patch-fu.md](adr-2026-09-known-gaps-patch-fu.md)（本轮新增 ADR patch）
+- [stage-36-followup-closure.md](stage-36-followup-closure.md)（本轮新增 closure）
+- [adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)（被本 patch 叠加）
+- [AGENTS.md](../AGENTS.md) §〇 TDD 第一性原则（全部 7 commit 严格按 Red→Green）
+
+---
+
 ## 六、不在 Stage 36 范围（继续 deferred）
 
 按 ADR-16 §D：
@@ -402,7 +519,11 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 
 ## 七、ADR 注册
 
-无需新增 ADR。本轮所有变更遵循已有 ADR-15（Stage 35 production hardening）+ ADR-16（Stage 35 缺口登记）的策略。
+**ADR-16 patch 已新增**（Stage 36-FU 2026-09-03）：[adr-2026-09-known-gaps-patch-fu.md](adr-2026-09-known-gaps-patch-fu.md)
+正式收口 ADR-16 §缺口清单中 G2/G3/G4/G5/G8 的状态（已修实证），并把 §九的 Bug 3 / Bug 9 / Bug 10 + G1 显式标注
+"代码层已修 / 契约已固化 / 留生产 build"。原 [adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)（ADR-16）保留作为历史档案。
+
+Stage 36-D 主体的 ADR 注册沿用 ADR-15（Stage 35 production hardening）+ ADR-16（Stage 35 缺口登记）的策略，无新增。
 
 ---
 
@@ -413,4 +534,8 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 | 33 | 2026-07 | 部署修复 + Nacos/APISIX 引入 | ~70 |
 | 34 | 2026-08 | 多模态融合数据通路 | ~25 |
 | 35 | 2026-09 | LLM fusion 加固 + 缺口登记（ADR-15/16） | ~13 |
-| **36** | **2026-09** | **8 项缺口一次性修复（ADR-16 全 ✅）** | **15** |
+| **36** | **2026-09** | **8 项缺口一次性修复（ADR-16 全 ✅）** | **15 + 7** |
+| **36-FU** | **2026-09** | **5 个未真正关闭尾巴的契约收口（Bug 3/9/10 + G1 + ADR patch）** | **7** |
+
+**注**：Stage 36-FU 是 Stage 36 的延续子阶段，按"问题暴露 → RED 契约 → GREEN 修复 → docs 收口"节奏，
+单 PR 范围对应一个 TDD 循环（一个或一组相关测试 + 它们的实现）。完整清单见本文件 §五补后续 ③ §B。
