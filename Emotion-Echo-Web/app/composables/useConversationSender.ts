@@ -121,14 +121,6 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
         voiceEmotion: extraParams?.voiceEmotion
       },
       {
-      {
-        message: content,
-        emotion,
-        conversationId,
-        shouldGenerateTitle: extraParams?.shouldGenerateTitle,
-        voiceEmotion: extraParams?.voiceEmotion
-      },
-      {
         onDelta: (delta) => {
           accumulatedDeltaText.value += delta
           callbacks?.onDelta?.(delta)

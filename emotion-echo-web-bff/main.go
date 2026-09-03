@@ -68,6 +68,9 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
+	// Stage 38-A: dev 模式前端发 Authorization: Bearer <token>，但 sharedmw GinAuthMiddleware
+	// 只信任 APISIX 注入的 X-User-Id header（APISIX 已配 jwt-auth 插件解析 token → 注 header）。
+	// dev 模式前端走 APISIX :19080 → BFF :8894，APISIX 负责 JWT 验签 + X-User-Id 注入。
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
 	}
@@ -129,6 +132,13 @@ func authPathBypass(authMW gin.HandlerFunc) gin.HandlerFunc {
 		authMW(c)
 	}
 }
+
+// devCorsOrigins 与 devCORSMiddleware 已回滚（Stage 38-A 改为走 APISIX 路径）。
+// 历史注释保留为参考：原 BFF dev 兼容 CORS 中间件已不再使用。
+//
+// CORS / JWT 注入 / 限流 / 熔断全由 APISIX 统一处理（见 deploy/apisix/seed.sh
+// 的 jwt-auth + cors + limit-count + api-breaker 插件链）。
+// BFF 回到"纯聚合层"原始定位。
 
 // buildServiceContext 装配全部下游 client + auth manager
 func buildServiceContext(c *config.Config) *svc.ServiceContext {

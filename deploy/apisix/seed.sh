@@ -226,10 +226,12 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH"]'
 # ---- Stage 33 PR-19b：/api/v1/auth/* 白名单（跳过 jwt-auth 插件）----
 # login/register/verification-code/refresh 端点拿不到 token，不能被 jwt-auth 拦截。
 # 用裸 plugins（仅保留 limit-count 全局限流 + cors，不挂 jwt-auth）。
+# Stage 38-A 修正：APISIX cors 插件的 allow_origins/allow_methods/allow_headers
+# 期望**字符串**（逗号分隔），不是 JSON 数组。原 heredoc 用数组导致 PUT 校验失败。
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
   "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "local"},
-  "cors": {"allow_origins": ["http://localhost:3000"], "allow_methods": ["GET","POST","PUT","DELETE","OPTIONS"], "allow_credentials": true, "allow_headers": ["*"]}
+  "cors": {"allow_origins": "http://localhost:3000", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credentials": true, "allow_headers": "*"}
 }
 EOF
 )

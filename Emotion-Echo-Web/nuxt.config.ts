@@ -46,8 +46,11 @@ export default defineNuxtConfig({
   },
   vite: {
     optimizeDeps: {
+      // Stage 38-A: FaceCamera.vue import '@element-plus/icons-vue' 会让 Vite
+      // dev mode 按需 compile 整个包 → FSL 30s。把 icons-vue 加进 include
+      // 强制预编译 + 让 CircleClose 等图标首屏可用。
       include: process.env.NODE_ENV === 'development'
-        ? ['naive-ui', 'vueuc', 'date-fns-tz/formatInTimeZone']
+        ? ['naive-ui', 'vueuc', 'date-fns-tz/formatInTimeZone', '@element-plus/icons-vue']
         : []
     },
     css: {

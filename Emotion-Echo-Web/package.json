@@ -14,6 +14,7 @@
     "deploy": "gh-pages -d .output/public -r git@github.com:Exist-a/Emotion-Echo-Web.git -f"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
     "@nuxtjs/device": "4.0.0",
     "@pinia/nuxt": "^0.11.3",
     "@pixiv/three-vrm": "^3.5.2",
