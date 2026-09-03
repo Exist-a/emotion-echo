@@ -52,7 +52,9 @@ SELECT
     overall_score,
     dimensions,
     created_at
-FROM emotion_echo_assessment.mental_health_assessments;-- migrations/004_create_analytics_reader_role.sql
+FROM emotion_echo_assessment.mental_health_assessments;
+
+-- migrations/004_create_analytics_reader_role.sql
 --
 -- Stage 30-A §六.6.4: analytics_reader 只读 role + grants。
 --
@@ -63,12 +65,22 @@ FROM emotion_echo_assessment.mental_health_assessments;-- migrations/004_create_
 --   - GRANT USAGE on schema：能 SELECT 但不能 CREATE TABLE
 --   - GRANT SELECT on specific VIEWs + 本 schema 表：
 --     msg_summary_v / daily_emotion_v / assessment_v /
---     user_behavior_events / mv_daily_emotion
+--     user_behavior_events
 --
 -- 注意：deploy/init.sql 已经创建 schemas；本 migration 假定它们存在。
+--
+-- Stage 37-A 修订：
+--   - 删除 mv_daily_emotion 引用（materialized view 从未创建）
+--   - CREATE ROLE 用 DO block 包裹 + 兼容已存在情况（init 重跑不报错）
+--   - GRANT SELECT 拆成单行（更易调试 + 部分失败不影响其它）
 
-CREATE ROLE analytics_reader LOGIN PASSWORD 'CHANGE_ME_AT_DEPLOY'
-    NOSUPERUSER NOCREATEDB NOCREATEROLE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='analytics_reader') THEN
+        CREATE ROLE analytics_reader LOGIN PASSWORD 'CHANGE_ME_AT_DEPLOY'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE;
+    END IF;
+END$$;
 
 GRANT USAGE ON SCHEMA
     emotion_echo_chat,
@@ -77,14 +89,11 @@ GRANT USAGE ON SCHEMA
     emotion_echo_analytics
 TO analytics_reader;
 
--- 只读 VIEW + 本 schema 表权限
-GRANT SELECT ON
-    emotion_echo_chat.msg_summary_v,
-    emotion_echo_ai.daily_emotion_v,
-    emotion_echo_assessment.assessment_v,
-    emotion_echo_analytics.user_behavior_events,
-    emotion_echo_analytics.mv_daily_emotion
-TO analytics_reader;
+-- 只读 VIEW + 本 schema 表权限（拆成单行，部分失败不影响其它）
+GRANT SELECT ON emotion_echo_chat.msg_summary_v TO analytics_reader;
+GRANT SELECT ON emotion_echo_ai.daily_emotion_v TO analytics_reader;
+GRANT SELECT ON emotion_echo_assessment.assessment_v TO analytics_reader;
+GRANT SELECT ON emotion_echo_analytics.user_behavior_events TO analytics_reader;
 
 ALTER ROLE analytics_reader SET search_path TO
     emotion_echo_analytics, emotion_echo_chat,
