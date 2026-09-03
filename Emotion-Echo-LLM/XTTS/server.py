@@ -177,7 +177,16 @@ async def text_to_speech(req: TTSRequest):
 
         audio = outputs["wav"]
         buf = io.BytesIO()
-        torchaudio.save(buf, torch.tensor(audio).unsqueeze(0), SAMPLE_RATE, format="wav")
+        # Stage 36-FU Bug 3 follow-up: Coqui TTS speaker_encoder may return
+        # float64 numpy audio. Force float32 here so downstream conv1d
+        # (XTTS weights are float32) doesn't raise
+        # "expected scalar type Double but found Float".
+        torchaudio.save(
+            buf,
+            torch.tensor(audio).unsqueeze(0).float(),
+            SAMPLE_RATE,
+            format="wav",
+        )
         buf.seek(0)
         audio_b64 = base64.b64encode(buf.read()).decode("utf-8")
 
@@ -294,7 +303,13 @@ async def tts_with_phonemes(req: TTSRequest):
         import numpy as np
         audio = outputs["wav"]
         buf = io.BytesIO()
-        torchaudio.save(buf, torch.tensor(audio).unsqueeze(0), SAMPLE_RATE, format="wav")
+        # Stage 36-FU Bug 3 follow-up: same dtype guard as /tts (see lines above).
+        torchaudio.save(
+            buf,
+            torch.tensor(audio).unsqueeze(0).float(),
+            SAMPLE_RATE,
+            format="wav",
+        )
         buf.seek(0)
         audio_b64 = base64.b64encode(buf.read()).decode("utf-8")
 
