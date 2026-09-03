@@ -76,6 +76,9 @@ COPY --chown=app:app XTTS/pcm_chunk_shape.py ./
 # application code
 COPY --chown=app:app XTTS/logging_setup.py XTTS/metrics_setup.py XTTS/server.py ./
 
+# Stage 36-D fix: torchaudio shim (monkey-patch torchaudio.load via soundfile + .float())
+COPY --chown=app:app XTTS/torchaudio_shim.py ./
+
 # model + sample WAV (1.8GB model.pth + 201MB dvae.pth + configs)
 COPY --chown=app:app XTTS/AI-ModelScope/ ./AI-ModelScope/
 

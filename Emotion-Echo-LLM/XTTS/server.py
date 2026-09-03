@@ -15,6 +15,8 @@ import signal
 import sys
 import time
 
+import torchaudio  # Stage 36-D: imported before torchaudio_shim so shim can monkey-patch
+import torchaudio_shim  # noqa: F401  Stage 36-D fix: monkey-patch torchaudio.load via soundfile + .float()
 import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
