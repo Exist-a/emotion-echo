@@ -311,6 +311,10 @@ services:
       # Stage 20-P0-1: container DNS
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_ai"
       KAFKA_BROKERS:       '["emotion-echo-kafka:9092"]'
+      # Stage 36-D Bug 2 (G4): ai-svc Kafka consumer env (chat-svc → ai-svc → emotion_analysis)
+      KAFKA_TOPIC:         "chat-events"
+      KAFKA_GROUP:         "ai-svc"
+      KAFKA_ENABLED:       "true"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       # Stage 19: ai-svc → emotion-llm-service 内部 FastAPI（dev / 离线）
       # Stage 36-B1: 真实 LLM（DeepSeek / OpenAI 兼容）通过 LLM_* env 注入。

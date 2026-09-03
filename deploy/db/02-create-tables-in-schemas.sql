@@ -115,7 +115,16 @@ CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_emotion_analysis_event_id
     ON emotion_echo_ai.emotion_analysis(event_id);
-CREATE INDEX IF NOT EXISTS idx_emotion_user_time ON emotion_echo_ai.emotion_analysis(user_id, created_at DESC);
+-- Stage 36-D Bug 2 fix: 上面 CREATE UNIQUE INDEX 在 event_id 列不存在时会失败（旧版 cluster 漂移），
+-- 让它单独容错，让 03/04 后续 SQL 仍能跑。ai-svc 的 migration 001 会在启动时补 event_id 列。
+DO $$ BEGIN
+    BEGIN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_emotion_user_time
+            ON emotion_echo_ai.emotion_analysis(user_id, created_at DESC)';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'idx_emotion_user_time skipped: %', SQLERRM;
+    END;
+END $$;
 
 CREATE TABLE IF NOT EXISTS emotion_echo_ai.voice_transcripts (
     id BIGSERIAL PRIMARY KEY,
