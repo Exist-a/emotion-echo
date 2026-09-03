@@ -72,10 +72,10 @@ services:
       nacos:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8888/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8888/health || exit 1"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 60s
       retries: 3
 
   emotion-echo-chat-svc:
@@ -124,10 +124,10 @@ services:
       nacos:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8890/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8890/health || exit 1"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 60s
       retries: 3
 
   # Stage 26-P · analytics-svc 端口 8893(避开 ai-svc 占用 8892)
@@ -175,10 +175,10 @@ services:
       nacos:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8893/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8893/health || exit 1"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 60s
       retries: 3
 
   emotion-echo-assessment-svc:
@@ -224,10 +224,10 @@ services:
       nacos:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8889/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8889/health || exit 1"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 60s
       retries: 3
 
   # =====================================================
@@ -284,7 +284,7 @@ services:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)\""]
       interval: 15s
       timeout: 5s
-      start_period: 10s
+      start_period: 60s
       retries: 3
 
   # =====================================================
@@ -367,10 +367,10 @@ services:
       nacos:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8891/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8891/health || exit 1"]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 60s
       retries: 3
 
   # =====================================================
@@ -558,10 +558,10 @@ services:
           cpus: "0.1"
           memory: 64M
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --tries=1 --spider http://localhost:8894/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --tries=1 -O /dev/null http://localhost:8894/health || exit 1"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 60s
       retries: 3
 
   # =====================================================
@@ -569,6 +569,7 @@ services:
   #   NUXT_PUBLIC_API_BASE_URL → BFF :8894（聚合 5 下游）
   # =====================================================
   emotion-echo-web:
+    profiles: ["never"]  # TEMP: skip until Bug 9 (npmmirror) is fixed
     build:
       context: ../Emotion-Echo-Web
       dockerfile: Dockerfile
