@@ -122,7 +122,7 @@ FastAPI 用 `TestClient` / `AsyncClient` 测路由；算法逻辑单独 unit tes
 | 分支 | `feat/<scope>-<desc>` / `fix/<scope>-<desc>` / `test/<scope>-<desc>` |
 | Commit 前缀 | `feat:` / `fix:` / `test:` / `refactor:` / `docs:` / `chore:` |
 | 单 PR 范围 | 一个 TDD 循环（一个或一组相关测试 + 它们的实现） |
-| 合并前 | `go test ./...` + `go vet ./...` + (前端) `npm run lint` 必须过 |
+| 合并前 | `go test ./...` + `go vet ./...` + (前端) `npm run lint` **+ §2.4 数据契约 smoke 全绿** |
 
 ### 2.3 覆盖率底线
 
@@ -131,6 +131,60 @@ FastAPI 用 `TestClient` / `AsyncClient` 测路由；算法逻辑单独 unit tes
 | 核心业务包（service、handler、repository） | 80% |
 | pkg 工具包 | 90% |
 | 三方适配层（database、messaging、skywalking 钩子） | 70%（因依赖真实外部组件） |
+
+### 2.4 业务数据契约验收清单（合并前必跑）
+
+> **目的**：smoke 只验"管道通不通"（HTTP 200、key 存在），**不验"数据对不对"**。
+> 本节列出的数据契约必须在 dev 模式（`docker compose -f deploy/docker-compose.apps.yml up -d`）下全绿才允许合并。
+
+**触发场景**：PR 涉及以下任一范围必须跑本清单：
+
+| 范围 | 必须跑的契约 |
+|------|------------|
+| 修改 chat-svc 事件发布链 | §契约 1（user_behavior_events 行数） + §契约 2（event_type enum 细分） |
+| 修改 analytics-svc 写入或 SQL | §契约 3（analytics_reader 视图可读） |
+| 修改 BFF 报表端点 | §契约 4（chartData 实际有数据） |
+| 修改 schema / migration / GRANT | §契约 5（schema 与写入端一致性） |
+| dev 模式相关改动 | §契约 6（KAFKA_ENABLED=false 路径不空跑） |
+
+**契约清单**：
+
+```
+§契约 1  user_behavior_events 行数 = 业务事件数
+        psql -c "SELECT COUNT(*) FROM emotion_echo_analytics.user_behavior_events"
+        断言 ≥ 最近 1 分钟 message.created + conversation.created + conversation.closed 数
+        抓 A1（dev 模式 outbox 永远 pending）类 bug
+
+§契约 2  event_type enum 细分
+        psql -c "SELECT event_type, COUNT(*) FROM ... GROUP BY 1"
+        断言出现 ≥ 2 种 event_type（不能全 'conversation'）
+        抓 A3（conversation.created/closed 都映成 'conversation'）类 bug
+
+§契约 3  analytics_reader role 能查所有 *_v 视图
+        psql -U analytics_reader -c "SELECT * FROM daily_emotion_by_modality_v LIMIT 1"
+        断言无 permission denied
+        抓 A4（GRANT 缺失）类 bug
+
+§契约 4  /api/v1/reports/daily 返回 summary 非空 + chartData.length > 0
+        curl -H "Authorization: Bearer $TOKEN" .../reports/daily?user_id=1
+        断言 response.data.summary != "" && emotionDistribution.length > 0
+        抓 G4（Kafka off 时情绪分析无数据）类 bug
+
+§契约 5  schema 与写入端一致性
+        对每个 VARCHAR(32) NOT NULL 枚举列，至少 1 个 integration test 断言写入值 ∈ enum 集合
+        抓"SQL DDL 定义正确但写入端用错值"类 bug（如 event_type / target 列）
+
+§契约 6  KAFKA_ENABLED=false 路径不空跑
+        docker compose -f deploy/docker-compose.apps.yml -f deploy/docker-compose.infra.yml \
+          up -d 启动 → 触发业务事件 → 等 30s → 断言 §契约 1+2 通过
+        抓"dev 模式走通但 prod 走通是巧合"类 bug（如 outbox publisher=nil 永远失败）
+```
+
+**smoke 脚本**：`scripts/smoke_data_layer.py`（待建），按本清单跑全绿才算合并。
+
+**为什么必须写死**：Stage 36-FU closure 报告 §三 smoke 16/16 全绿，但 dev 模式 4 dashboard `chartData.length === 0`、event_type 全 'conversation'、analytics_reader 视图读不出——**单纯 HTTP 200 smoke 永远抓不到**这些契约 bug。本节把"数据对不对"列入硬门槛，强制 PR 提交方自己先验证。
+
+
 
 ---
 
@@ -182,6 +236,8 @@ type IDGen interface { New() string }
 | 修改实现但偷偷改测试行为通过 | 失去测试价值 |
 | 写在 `_test.go` 里的 `init()` | 易引入全局状态 |
 | 在测试包里导出 API / 写生产逻辑 | 测试代码不可被打进 binary 但仍污染仓库 |
+| 跳过 §2.4 数据契约 smoke 直接合并 | smoke 16/16 全绿但 dev 模式 `chartData=[]` / `event_type='conversation'` / `permission denied` 类 bug 永远抓不到 |
+| dev 模式改动只测 `KAFKA_ENABLED=true` 路径 | outbox publisher=nil、Kafka fallback 等 dev-only 路径 bug 潜伏到下次拉数据才暴露 |
 
 ---
 
