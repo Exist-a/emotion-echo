@@ -24,7 +24,7 @@
 | Stage 22-B | env var override + JSON broker 解析（修复 go-zero conf 不支持 `${VAR:-default}` + 容器内网络隔离） | ✅ |
 
 > **📝 状态修正（2026-07-16）**：此文档最初发布时 Stage 22-A.5 标为 ⏳，**实际已在 Stage 23 同期完成**。
-> Stage 22-B 是端到端冒烟时（见 [stage-24](stage-24-endpoint-verification-and-bugfix.md)）才发现的 P0 bug —— go-zero conf 不解析 `${VAR:-default}` bash 风格 envsubst，导致容器内 SkyWalking / Postgres / Kafka / LLM 地址全是字面值，必须在 main.go 启动期手动 `os.Getenv` 覆盖。
+> Stage 22-B 是端到端冒烟时（见 [stage-24](/docs/stages/stage-24-endpoint-verification-and-bugfix.md)）才发现的 P0 bug —— go-zero conf 不解析 `${VAR:-default}` bash 风格 envsubst，导致容器内 SkyWalking / Postgres / Kafka / LLM 地址全是字面值，必须在 main.go 启动期手动 `os.Getenv` 覆盖。
 
 ---
 
@@ -335,7 +335,7 @@ BaseURL 为空时 client 自动是 `nil`（feature disabled），调用方做 ni
 
 ## 十、Stage 23+ 候选
 
-> 详见 [stage-25-roadmap.md](stage-25-roadmap.md)。
+> 详见 [stage-25-roadmap.md](/docs/stages/stage-25-roadmap.md)。
 
 - Stage 23：AI 服务对外 HTTP 网关（3 个 endpoint）— ✅ 完成
 - Stage 24：端到端验证 + 6+ bug 修复 — ✅ 完成
@@ -476,4 +476,4 @@ Stage 24 跑完 `verify_stage23_endpoints.py`：
 - ✅ Stage 23（HTTP gateway endpoint）完成
 - ✅ Stage 24（端到端验证 + bug 修复）完成
 
-下一步见 [stage-25-roadmap.md](stage-25-roadmap.md)。
+下一步见 [stage-25-roadmap.md](/docs/stages/stage-25-roadmap.md)。

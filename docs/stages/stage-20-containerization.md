@@ -8,7 +8,7 @@
 
 ## 一、本阶段总览
 
-本阶段由 8 个子任务组成，端到端验证时发现 P0-1 仅部分完成（yaml 容器内服务发现走的是 env 注入到容器环境变量，**但 ai-svc 内部 ai-api.yaml 里的 `${VAR:-default}` 不会被 go-zero 解析**），已在 Stage 22-B 修复（main.go 启动期 `os.Getenv` 覆盖）。详见 [stage-24](stage-24-endpoint-verification-and-bugfix.md)。
+本阶段由 8 个子任务组成，端到端验证时发现 P0-1 仅部分完成（yaml 容器内服务发现走的是 env 注入到容器环境变量，**但 ai-svc 内部 ai-api.yaml 里的 `${VAR:-default}` 不会被 go-zero 解析**），已在 Stage 22-B 修复（main.go 启动期 `os.Getenv` 覆盖）。详见 [stage-24](/docs/stages/stage-24-endpoint-verification-and-bugfix.md)。
 
 | 子阶段 | 内容 | 状态 |
 |--------|------|------|

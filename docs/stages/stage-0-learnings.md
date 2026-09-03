@@ -1,6 +1,6 @@
 # Stage 0 落地总结 + 个人学习路径指南
 
-> ⚠️ **架构决策请看 [architecture-decisions.md](./architecture-decisions.md)（ADR）**。
+> ⚠️ **架构决策请看 [architecture-decisions.md](/docs/architecture/decisions.md)（ADR）**。
 > 本文档保留为历史过程记录（2026-07-13 当时状态）。
 > **当前已变更**：go-zero → Gin；Nacos → 删除。
 

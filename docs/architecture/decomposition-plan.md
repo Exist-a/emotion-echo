@@ -1,12 +1,12 @@
 # Emotion-Echo 微服务拆分 · 落地规划（执行版）
 
-> ⚠️ **架构最终决策以 [architecture-decisions.md](./architecture-decisions.md)（ADR）为单一事实源**。
+> ⚠️ **架构最终决策以 [architecture-decisions.md](/docs/architecture/decisions.md)（ADR）为单一事实源**。
 > 本文档保留为**历史规划记录**，描述当时的拆分思路。
 > **当前架构变更**（2026-07-14）：
 > - go-zero → Gin（ADR 决策 1）
 > - Nacos → 删除（ADR 决策 2）
 >
-> 配套文档：[distributed-roadmap.md](./distributed-roadmap.md)（5-Phase 总体路线） + [stage-0-learnings.md](./stage-0-learnings.md)（已落地的事）。
+> 配套文档：[distributed-roadmap.md](/docs/architecture/roadmap.md)（5-Phase 总体路线） + [stage-0-learnings.md](/docs/stages/stage-0-learnings.md)（已落地的事）。
 > 本文档专注于 **"把 emotion-echo-gin 单体拆成微服务"** 这一目标，把执行路径、依赖、验证、回滚讲透。
 > 一句话：**拆 5 个微服务，但用 5 个月一步步来，任何一步出问题能立刻停下回滚**。
 

@@ -2,7 +2,7 @@
 
 > 状态：**全部 ✅ 完成** · 日期：2026-09-01 · 目标分支：`feat/bff-fused-emotion-endpoint`
 > ADR 编号：16（Stage 35 系统缺口正式记录）
-> 来源：[stage-36-fixes-roadmap.md](stage-36-fixes-roadmap.md)
+> 来源：[stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md)
 > 全部 commit：15 个（4 批次，11 PR），全部已 push 到 origin
 
 ---
@@ -392,7 +392,7 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 
 ### §A 触发与范围
 
-[stage-36-smoke-report.md](stage-36-smoke-report.md) 提交时声明"11 bug 全部修复, 16/16 smoke GREEN"，
+[stage-36-smoke-report.md](/docs/stages/stage-36-smoke-report.md) 提交时声明"11 bug 全部修复, 16/16 smoke GREEN"，
 但 smoke 报告本身在 §九"已知 Bug 全景"与 §六"待办 / 后续建议"留下 **5 个未真正关闭的尾巴**：
 
 | 尾巴 | 描述 | 实证位置 |
@@ -403,7 +403,7 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 | G1 | 7 容器 unhealthy 但 /health 200（healthcheck / SKYWALKING_OAP_ADDR 占位符）| smoke §T2 + §九 P1-5 |
 | ADR-17/18 patch | §六 列了 4 项待办（含 ADR patch），commit 列表里无对应提交 | smoke §六 第 1 条 |
 
-本轮（Stage 36-FU）按 [AGENTS.md](../AGENTS.md) §〇 TDD 第一性原则"**ALL CODE IS TDD**"逐项收口。
+本轮（Stage 36-FU）按 [AGENTS.md](/AGENTS.md) §〇 TDD 第一性原则"**ALL CODE IS TDD**"逐项收口。
 
 ### §B 本轮 7 commit 清单
 
@@ -497,11 +497,11 @@ Smoke 矩阵的关键确认：
 
 ### §F 引用
 
-- [stage-36-smoke-report.md](stage-36-smoke-report.md)（被本轮 closure 收口）
-- [adr-2026-09-known-gaps-patch-fu.md](adr-2026-09-known-gaps-patch-fu.md)（本轮新增 ADR patch）
-- [stage-36-followup-closure.md](stage-36-followup-closure.md)（本轮新增 closure）
-- [adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)（被本 patch 叠加）
-- [AGENTS.md](../AGENTS.md) §〇 TDD 第一性原则（全部 7 commit 严格按 Red→Green）
+- [stage-36-smoke-report.md](/docs/stages/stage-36-smoke-report.md)（被本轮 closure 收口）
+- [adr-2026-09-known-gaps-patch-fu.md](/docs/architecture/adr/adr-2026-09-known-gaps-patch-fu.md)（本轮新增 ADR patch）
+- [stage-36-followup-closure.md](/docs/stages/stage-36-followup-closure.md)（本轮新增 closure）
+- [adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md)（被本 patch 叠加）
+- [AGENTS.md](/AGENTS.md) §〇 TDD 第一性原则（全部 7 commit 严格按 Red→Green）
 
 ---
 
@@ -519,9 +519,9 @@ Smoke 矩阵的关键确认：
 
 ## 七、ADR 注册
 
-**ADR-16 patch 已新增**（Stage 36-FU 2026-09-03）：[adr-2026-09-known-gaps-patch-fu.md](adr-2026-09-known-gaps-patch-fu.md)
+**ADR-16 patch 已新增**（Stage 36-FU 2026-09-03）：[adr-2026-09-known-gaps-patch-fu.md](/docs/architecture/adr/adr-2026-09-known-gaps-patch-fu.md)
 正式收口 ADR-16 §缺口清单中 G2/G3/G4/G5/G8 的状态（已修实证），并把 §九的 Bug 3 / Bug 9 / Bug 10 + G1 显式标注
-"代码层已修 / 契约已固化 / 留生产 build"。原 [adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)（ADR-16）保留作为历史档案。
+"代码层已修 / 契约已固化 / 留生产 build"。原 [adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md)（ADR-16）保留作为历史档案。
 
 Stage 36-D 主体的 ADR 注册沿用 ADR-15（Stage 35 production hardening）+ ADR-16（Stage 35 缺口登记）的策略，无新增。
 

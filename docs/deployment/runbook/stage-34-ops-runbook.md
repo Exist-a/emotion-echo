@@ -2,7 +2,7 @@
 
 > **目标读者**：Stage 34 维护者 / QA / 后续开发者
 > **目的**：沉淀 docker smoke 验证经验 + 标记"已验证 / 未验证"矩阵
-> **配合文档**：[stage-34-landing.md](stage-34-landing.md) 落地报告 / [stage-34-multimodal-fusion.md](stage-34-multimodal-fusion.md) 规划
+> **配合文档**：[stage-34-landing.md](/docs/stages/stage-34-landing.md) 落地报告 / [stage-34-multimodal-fusion.md](/docs/stages/stage-34-multimodal-fusion.md) 规划
 
 ---
 

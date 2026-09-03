@@ -1,8 +1,8 @@
 # Stage 35 · LLM Fusion 生产加固 — 落地报告
 
 > 状态：**已落地（Landed）** · 日期：2026-09-01 · 分支：`feat/bff-fused-emotion-endpoint`
-> 配合：[stage-35-production-hardening.md](stage-35-production-hardening.md)（plan）
-> ADR-15：[adr-2026-09-llm-fusion-hardening.md](adr-2026-09-llm-fusion-hardening.md)
+> 配合：[stage-35-production-hardening.md](/docs/stages/stage-35-production-hardening.md)（plan）
+> ADR-15：[adr-2026-09-llm-fusion-hardening.md](/docs/architecture/adr/adr-2026-09-llm-fusion-hardening.md)
 
 ---
 
@@ -80,7 +80,7 @@
 | 2 | `go vet ./...` 全过 | ✅（无报错） |
 | 3 | docker smoke 3 场景仍通过 | ⏳（未在此 stage 重跑；Stage 34 smoke 已通过，未触碰其路径） |
 | 4 | `emotion_echo_fusion_llm_call_total{outcome="..."}` 在 `/metrics` 可见 | ✅（promauto 注册到 default registry） |
-| 5 | `stage-34-ops-runbook.md §三` 7 项全部 ✅ | ✅（见 [stage-35-ops-runbook.md](stage-35-ops-runbook.md)） |
+| 5 | `stage-34-ops-runbook.md §三` 7 项全部 ✅ | ✅（见 [stage-35-ops-runbook.md](../deployment/runbook/stage-35-ops-runbook.md)） |
 | 6 | ADR-15 在 `architecture-decisions.md` 注册 | ✅（决策 15） |
 | 7 | Branch ahead of main 累计 | `+14` commits（Stage 35）→ 总 +75 ahead of main |
 
@@ -88,7 +88,7 @@
 
 ## 五、ADR-15 决策摘要
 
-详见 [adr-2026-09-llm-fusion-hardening.md](adr-2026-09-llm-fusion-hardening.md)。
+详见 [adr-2026-09-llm-fusion-hardening.md](/docs/architecture/adr/adr-2026-09-llm-fusion-hardening.md)。
 
 7 个独立决策：
 
@@ -126,8 +126,8 @@ Stage 35 改动**严格向后兼容**：
 
 ## 八、参考资料
 
-- 规划：[stage-35-production-hardening.md](stage-35-production-hardening.md)
-- ADR：[adr-2026-09-llm-fusion-hardening.md](adr-2026-09-llm-fusion-hardening.md)
-- 来源待补：[stage-34-ops-runbook.md](stage-34-ops-runbook.md) §三
-- 决策：[architecture-decisions.md](architecture-decisions.md) 决策 15
-- 前置：[stage-34-landing.md](stage-34-landing.md)
+- 规划：[stage-35-production-hardening.md](/docs/stages/stage-35-production-hardening.md)
+- ADR：[adr-2026-09-llm-fusion-hardening.md](/docs/architecture/adr/adr-2026-09-llm-fusion-hardening.md)
+- 来源待补：[stage-34-ops-runbook.md](../deployment/runbook/stage-34-ops-runbook.md) §三
+- 决策：[architecture-decisions.md](/docs/architecture/decisions.md) 决策 15
+- 前置：[stage-34-landing.md](/docs/stages/stage-34-landing.md)

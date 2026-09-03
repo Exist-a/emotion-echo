@@ -1,13 +1,13 @@
 # Emotion-Echo 分布式改造 · 落地路线图（执行版）
 
-> ⚠️ **架构最终决策以 [architecture-decisions.md](./architecture-decisions.md)（ADR）为单一事实源**。
+> ⚠️ **架构最终决策以 [architecture-decisions.md](/docs/architecture/decisions.md)（ADR）为单一事实源**。
 > 本文档保留为**历史路线记录**，描述当时的实施步骤与决策。
 > **当前架构变更**（2026-07-14）：
 > - go-zero → Gin（ADR 决策 1）
 > - Nacos → 删除（ADR 决策 2）
 > - 跨服务调用 → gRPC（ADR 决策 4）
 >
-> 本文档基于 [distributed-architecture.md](./distributed-architecture.md) 的选型，
+> 本文档基于 [distributed-architecture.md](/docs/architecture/distributed.md) 的选型，
 > 把每个 Phase 拆成可独立交付的 Stage，每个 Stage 都有**验收标准**与**可运行证明**。
 > 一句话：**按阶段一路推，任何一个 Stage 卡住都能原地停下**，不会破坏业务。
 
@@ -638,10 +638,10 @@ defer pusher.Stop()
 
 | Stage | 主题 | 状态 | 文档 |
 |-------|------|------|------|
-| **31** | Nacos 注册中心 + 配置中心落地 | 🚧 进行中（PR-01 文档收口；PR-02..12 推进） | [stage-31-nacos-reintroduction.md](stage-31-nacos-reintroduction.md) |
-| **32** | APISIX 独立 API 网关层回归 | ☐ 未启动（依赖 31） | [stage-32-apisix-reintroduction.md](stage-32-apisix-reintroduction.md) |
-| **33** | P0 修复 + BFF 退化为纯聚合层 | ☐ 未启动（依赖 32） | [stage-33-p0-fix-bff-purify.md](stage-33-p0-fix-bff-purify.md) |
-| **ADR** | 决策依据（选型论证） | ✅ 已落地（决策 10/11/12/13，2026-09-03 Accepted） | [adr-2026-09-nacos-reintroduction.md](adr-2026-09-nacos-reintroduction.md) |
+| **31** | Nacos 注册中心 + 配置中心落地 | 🚧 进行中（PR-01 文档收口；PR-02..12 推进） | [stage-31-nacos-reintroduction.md](/docs/stages/stage-31-nacos-reintroduction.md) |
+| **32** | APISIX 独立 API 网关层回归 | ☐ 未启动（依赖 31） | [stage-32-apisix-reintroduction.md](/docs/stages/stage-32-apisix-reintroduction.md) |
+| **33** | P0 修复 + BFF 退化为纯聚合层 | ☐ 未启动（依赖 32） | [stage-33-p0-fix-bff-purify.md](/docs/stages/stage-33-p0-fix-bff-purify.md) |
+| **ADR** | 决策依据（选型论证） | ✅ 已落地（决策 10/11/12/13，2026-09-03 Accepted） | [adr-2026-09-nacos-reintroduction.md](/docs/architecture/adr/adr-2026-09-nacos-reintroduction.md) |
 
 ---
 

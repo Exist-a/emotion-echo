@@ -520,10 +520,10 @@ docker compose --profile ai down --remove-orphans
 
 ## 九、相关文档
 
-- [stage-36-landing.md](stage-36-landing.md) — Stage 36 完整 landing report（含 docker smoke 实测）
-- [stage-36-fixes-roadmap.md](stage-36-fixes-roadmap.md) — Stage 36 修复 roadmap
-- [stage-18-grpc-mtls.md](stage-18-grpc-mtls.md) — TLS 证书生成设计（mTLS dev cert）
-- [stage-25-ai-profile-build-issue.md](stage-25-ai-profile-build-issue.md) — Stage 25 build 阻塞历史
+- [stage-36-landing.md](/docs/stages/stage-36-landing.md) — Stage 36 完整 landing report（含 docker smoke 实测）
+- [stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md) — Stage 36 修复 roadmap
+- [stage-18-grpc-mtls.md](/docs/stages/stage-18-grpc-mtls.md) — TLS 证书生成设计（mTLS dev cert）
+- [stage-25-ai-profile-build-issue.md](/docs/stages/stage-25-ai-profile-build-issue.md) — Stage 25 build 阻塞历史
 - `scripts/smoke_ai_profile.sh` — AI 镜像端到端 health probe 脚本
 - `scripts/generate_dev_tls.sh` — mTLS dev cert 生成脚本
 - `emotion-echo-ai-svc/internal/fusion/` — LLM 融合器（FusionWorker 调度）

@@ -1,6 +1,6 @@
 # Emotion-Echo · 微服务架构文档（当前总览）
 
-> ⚠️ **架构最终决策请看 [architecture-decisions.md](./architecture-decisions.md)（ADR）**。
+> ⚠️ **架构最终决策请看 [architecture-decisions.md](/docs/architecture/decisions.md)（ADR）**。
 > 本文档是 ADR 之下的"实施总览"，描述当前运行状态与目标架构。
 > 最后更新：2026-09-03（同步 Stage 31/32/33 演进路线）
 >
@@ -270,4 +270,4 @@ Phase 7 gRPC 升级      ░░░░░░░░░░░░░░░░░░�
 6. **gRPC 升级**（ai-svc → emotion-llm-service）
 7. **K8s manifests**（每个 svc 一个 deployment + service）
 
-详见 [architecture-decisions.md](./architecture-decisions.md)。
+详见 [architecture-decisions.md](/docs/architecture/decisions.md)。

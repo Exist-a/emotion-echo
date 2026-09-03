@@ -4,7 +4,7 @@
 
 ## 🎯 删除目标
 
-按照 [architecture-decisions.md](./architecture-decisions.md) 决策 2：
+按照 [architecture-decisions.md](/docs/architecture/decisions.md) 决策 2：
 - ❌ Nacos 注册中心
 - ❌ Nacos 配置中心
 - ✅ 改用 APISIX + etcd（已在用）
@@ -161,7 +161,7 @@ Phase 7 gRPC 升级      ░░░░░░░░░░░░░░░░░░�
 
 ## 🎯 下一步
 
-按 [architecture-decisions.md](./architecture-decisions.md) 决策 7-8：
+按 [architecture-decisions.md](/docs/architecture/decisions.md) 决策 7-8：
 1. **APISIX jwt-auth 插件配置**（替换 svc mock X-User-Id）
 2. **APISIX limit-count 插件**（按 user_id 限流）
 3. **APISIX api-breaker 插件**（防雪崩）

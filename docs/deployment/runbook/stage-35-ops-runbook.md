@@ -2,7 +2,7 @@
 
 > **目标读者**：Stage 35 维护者 / QA / 后续开发者
 > **目的**：记录 Stage 35 落地的生产加固项 + 新增的可观测指标 + yaml 占位符
-> **配合文档**：[stage-35-landing.md](stage-35-landing.md)（落地报告）/ [stage-35-production-hardening.md](stage-35-production-hardening.md)（plan）/ [adr-2026-09-llm-fusion-hardening.md](adr-2026-09-llm-fusion-hardening.md)
+> **配合文档**：[stage-35-landing.md](/docs/stages/stage-35-landing.md)（落地报告）/ [stage-35-production-hardening.md](/docs/stages/stage-35-production-hardening.md)（plan）/ [adr-2026-09-llm-fusion-hardening.md](/docs/architecture/adr/adr-2026-09-llm-fusion-hardening.md)
 
 ---
 

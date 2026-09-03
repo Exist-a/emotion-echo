@@ -209,13 +209,13 @@ readinessProbe:
 | `multimodal/analyze` kind=audio | SenseVoice (200) | keyword + log warn (200) | YES |
 | `tts/synthesize` | XTTS base64 WAV (200) | **503 + 错误信息** | YES |
 
-详见 [stage-24-endpoint-verification-and-bugfix.md](stage-24-endpoint-verification-and-bugfix.md)。
+详见 [stage-24-endpoint-verification-and-bugfix.md](/docs/stages/stage-24-endpoint-verification-and-bugfix.md)。
 
 ---
 
 ## 八、Stage 24+ 候选
 
-> 详见 [stage-25-roadmap.md](stage-25-roadmap.md)。
+> 详见 [stage-25-roadmap.md](/docs/stages/stage-25-roadmap.md)。
 
 - Stage 24：端到端验证 + 6+ bug 修复 — 已完成
 - `POST /api/v1/tts/stream`：TTS 流式 chunk 推送给前端
@@ -231,5 +231,5 @@ readinessProbe:
 - Stage 22-A.5：aiclient 客户端 — 完成
 - Stage 23：3 个对外 HTTP endpoint — 完成
 - Stage 24：端到端验证 + bug 修复 — 完成
-- Stage 25+：见 [roadmap](stage-25-roadmap.md)
+- Stage 25+：见 [roadmap](/docs/stages/stage-25-roadmap.md)
 

@@ -1,7 +1,7 @@
 # Stage 36-FU Closure · 2026-09-03
 
-> **目的**：把 [stage-36-smoke-report.md](stage-36-smoke-report.md) §九 + §六 仍**未真正关闭**的尾巴**收口**。
-> **关联 ADR patch**：[adr-2026-09-known-gaps-patch-fu.md](adr-2026-09-known-gaps-patch-fu.md)
+> **目的**：把 [stage-36-smoke-report.md](/docs/stages/stage-36-smoke-report.md) §九 + §六 仍**未真正关闭**的尾巴**收口**。
+> **关联 ADR patch**：[adr-2026-09-known-gaps-patch-fu.md](/docs/architecture/adr/adr-2026-09-known-gaps-patch-fu.md)
 > **会话**：本轮 Stage 36-FU
 
 ---
@@ -23,7 +23,7 @@
 
 ## 一、TDD 工作流（本轮所有 commit）
 
-按 [AGENTS.md](../AGENTS.md) §〇 第一性原则 "ALL CODE IS TDD"，本轮 **每个 fix 都先写失败测试**：
+按 [AGENTS.md](/AGENTS.md) §〇 第一性原则 "ALL CODE IS TDD"，本轮 **每个 fix 都先写失败测试**：
 
 | # | Commit | RED 测试 | GREEN 实现 |
 |---|--------|---------|-----------|
@@ -95,8 +95,8 @@
 
 ## 五、引用
 
-- [stage-36-smoke-report.md](stage-36-smoke-report.md)（被本 closure 收口）
-- [adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)（被本 patch 叠加）
-- [adr-2026-09-known-gaps-patch-fu.md](adr-2026-09-known-gaps-patch-fu.md)
-- [AGENTS.md](../AGENTS.md) §〇 TDD 第一性原则
-- [stage-36-fixes-roadmap.md](stage-36-fixes-roadmap.md)（下一步 Stage 37 路线图）
+- [stage-36-smoke-report.md](/docs/stages/stage-36-smoke-report.md)（被本 closure 收口）
+- [adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md)（被本 patch 叠加）
+- [adr-2026-09-known-gaps-patch-fu.md](/docs/architecture/adr/adr-2026-09-known-gaps-patch-fu.md)
+- [AGENTS.md](/AGENTS.md) §〇 TDD 第一性原则
+- [stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md)（下一步 Stage 37 路线图）

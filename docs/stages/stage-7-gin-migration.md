@@ -4,7 +4,7 @@
 
 ## 🎯 实施目标
 
-按 [architecture-decisions.md](./architecture-decisions.md) 决策 1：
+按 [architecture-decisions.md](/docs/architecture/decisions.md) 决策 1：
 - HTTP 框架：go-zero → **Gin**
 - 业务 logic：**0 改动**
 - 测试：**0 改动**（TDD 测试一次性通过）

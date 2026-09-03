@@ -3,7 +3,7 @@
 > **状态**：已敲定
 > **日期**：2026-09-01
 > **来源**：本次讨论（单机多实例决策）
-> **关联**：[architecture-decisions.md](./architecture-decisions.md)、[distributed-architecture.md](./distributed-architecture.md)
+> **关联**：[architecture-decisions.md](/docs/architecture/decisions.md)、[distributed-architecture.md](/docs/architecture/distributed.md)
 > **最后更新**：2026-09-01
 
 ---
@@ -323,11 +323,11 @@ K8s 核心价值:多节点调度、自愈、水平扩展、滚动更新、服务
 
 ## 十一、相关文档
 
-- [architecture-decisions.md](./architecture-decisions.md) — 架构决策 SSOT
-- [distributed-architecture.md](./distributed-architecture.md) — 分布式架构补充说明
-- [microservices-architecture.md](./microservices-architecture.md) — 微服务架构说明
-- [stage-36-fixes-roadmap.md](./stage-36-fixes-roadmap.md) — 当前活跃 roadmap
-- [stage-26-P-deployment.md](./stage-26-P-deployment.md) — Docker Compose 部署交付报告
+- [architecture-decisions.md](/docs/architecture/decisions.md) — 架构决策 SSOT
+- [distributed-architecture.md](/docs/architecture/distributed.md) — 分布式架构补充说明
+- [microservices-architecture.md](/docs/architecture/microservices.md) — 微服务架构说明
+- [stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md) — 当前活跃 roadmap
+- [stage-26-P-deployment.md](/docs/stages/stage-26-P-deployment.md) — Docker Compose 部署交付报告
 
 ---
 

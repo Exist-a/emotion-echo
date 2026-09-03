@@ -1,7 +1,7 @@
 # ADR-15 · LLM Fusion 生产加固策略（2026-09-03）
 
 > **状态**：已审批 · **Stage**：35 · **分支**：`feat/bff-fused-emotion-endpoint`
-> **配合**：[stage-35-production-hardening.md](stage-35-production-hardening.md)
+> **配合**：[stage-35-production-hardening.md](/docs/stages/stage-35-production-hardening.md)
 
 ---
 
@@ -124,7 +124,7 @@ FusionWorkerTickTotal    CounterVec{outcome: ok|error|skipped_lru}
 
 ## 参照（References）
 
-- 配合文档：[stage-35-production-hardening.md](stage-35-production-hardening.md)
-- 来源待补清单：[stage-34-ops-runbook.md](stage-34-ops-runbook.md) §三
-- ADR-14（多模态融合算法）：[stage-34-multimodal-fusion.md](stage-34-multimodal-fusion.md)
-- 决策 10/11/12/13：[architecture-decisions.md](architecture-decisions.md)
+- 配合文档：[stage-35-production-hardening.md](/docs/stages/stage-35-production-hardening.md)
+- 来源待补清单：[stage-34-ops-runbook.md](../../deployment/runbook/stage-34-ops-runbook.md) §三
+- ADR-14（多模态融合算法）：[stage-34-multimodal-fusion.md](/docs/stages/stage-34-multimodal-fusion.md)
+- 决策 10/11/12/13：[architecture-decisions.md](/docs/architecture/decisions.md)

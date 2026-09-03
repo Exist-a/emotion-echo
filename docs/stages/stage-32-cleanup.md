@@ -1,8 +1,8 @@
 # Stage 31/32 收口报告 + Stage 33 交接
 
-> **配套文档**：[`stage-32-landing.md`](./stage-32-landing.md)（Stage 32 落地报告）、
-> [`stage-32-apisix-reintroduction.md`](./stage-32-apisix-reintroduction.md)（Stage 32 设计与决策）、
-> [`stage-33-p0-fix-bff-purify.md`](./stage-33-p0-fix-bff-purify.md)（下一阶段实施规划）。
+> **配套文档**：[`stage-32-landing.md`](/docs/stages/stage-32-landing.md)（Stage 32 落地报告）、
+> [`stage-32-apisix-reintroduction.md`](/docs/stages/stage-32-apisix-reintroduction.md)（Stage 32 设计与决策）、
+> [`stage-33-p0-fix-bff-purify.md`](/docs/stages/stage-33-p0-fix-bff-purify.md)（下一阶段实施规划）。
 >
 > **收口日期**：2026-09-01 · **目标基线**：`docs/stage-31-landing` 分支 HEAD
 
@@ -33,7 +33,7 @@ Stage 31（Nacos）+ Stage 32（APISIX）两阶段共 23 个 commit 落地后，
 | 2 | `186fd38` | `docs(stage-32)` | `docs/stage-32-landing.md` | §9 标题从 "4 commits" 改为 "8 commits"（4 feat + 4 docs/fix）；填实 8 条 SHA + 累计行数（118 files / +10,449 / -983）+ PR-13/14/15/16 单 PR 拆分；§10 收尾 `TODO` 标记随 §9 填实消除 |
 | 3 | *（无 commit）* | `chore` | `rel.json` | 物理删除。文件本就 untracked，无任何文档/代码引用，git 无须动作 |
 | 4 | `0e34bee` | `chore(gitignore)` | `.gitignore` | 末尾追加 `charts/**/Chart.lock` 规则；`charts/emotion-echo/Chart.lock` 从 untracked 转为 ignored |
-| 5 | *（无 commit）* | `chore(frontend)` | `Emotion-Echo-Web/scripts/` | 物理删除 `convert-el-notify.py` + `convert-el-to-native.py`。原本就是 untracked，无任何生产代码或文档引用（[`docs/STAGE-26-O-P-LANDING.md:290`](./STAGE-26-O-P-LANDING.md) 已明确"主仓不处理"，归 Emotion-Echo-Web submodule） |
+| 5 | *（无 commit）* | `chore(frontend)` | `Emotion-Echo-Web/scripts/` | 物理删除 `convert-el-notify.py` + `convert-el-to-native.py`。原本就是 untracked，无任何生产代码或文档引用（[`docs/STAGE-26-O-P-LANDING.md:290`](/docs/stages/STAGE-26-O-P-LANDING.md) 已明确"主仓不处理"，归 Emotion-Echo-Web submodule） |
 | 6 | 本文档 | `docs(stage-32-cleanup)` | `docs/stage-32-cleanup.md`（新建） | 收口报告 + Stage 33 交接 |
 
 **实际 commit 数：4 条**（项 1、2、4、6）+ 2 项**文件系统级删除**（项 3、5）。
@@ -147,7 +147,7 @@ done
 
 ### 4.3 Stage 33 完整 6 PR 顺序
 
-按 [`stage-33-p0-fix-bff-purify.md`](./stage-33-p0-fix-bff-purify.md)：
+按 [`stage-33-p0-fix-bff-purify.md`](/docs/stages/stage-33-p0-fix-bff-purify.md)：
 
 | 顺序 | 分支 | 主题 | 依赖 |
 |------|------|------|------|

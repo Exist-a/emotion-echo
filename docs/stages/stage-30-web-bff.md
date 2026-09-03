@@ -320,14 +320,14 @@ chore(hygiene): README badge 29-A.5 → 30 + status block
 
 ## 九、Refs
 
-- 仓库协作约定：[AGENTS.md §〇 第一性原则（TDD）](../AGENTS.md)
+- 仓库协作约定：[AGENTS.md §〇 第一性原则（TDD）](/AGENTS.md)
 - 上游阶段：
-  - [stage-29-A-https-grafana.md](./stage-29-A-https-grafana.md) — cert-manager + Grafana Ingress HTTPS
-  - [stage-29-A.5-tls-live-smoke.md](./stage-29-A.5-tls-live-smoke.md) — live cluster smoke
+  - [stage-29-A-https-grafana.md](/docs/stages/stage-29-A-https-grafana.md) — cert-manager + Grafana Ingress HTTPS
+  - [stage-29-A.5-tls-live-smoke.md](/docs/stages/stage-29-A.5-tls-live-smoke.md) — live cluster smoke
 - 架构参考：
-  - [distributed-architecture.md](./distributed-architecture.md) — API 网关 = APISIX，鉴权 / 限流 / 熔断 / CORS 在网关层做
-  - [microservices-architecture.md](./microservices-architecture.md) — 5 Go svc 布局
-  - [architecture-decisions.md](./architecture-decisions.md) — ADR（已确认无 BFF，本次新增属重大决议扩展）
+  - [distributed-architecture.md](/docs/architecture/distributed.md) — API 网关 = APISIX，鉴权 / 限流 / 熔断 / CORS 在网关层做
+  - [microservices-architecture.md](/docs/architecture/microservices.md) — 5 Go svc 布局
+  - [architecture-decisions.md](/docs/architecture/decisions.md) — ADR（已确认无 BFF，本次新增属重大决议扩展）
 - 现有 microcanonical 模式：`emotion-echo-chat-svc/`（handler / test / main.go / Dockerfile / etc 范式）
 - 共享库复用：
   - `github.com/emotion-echo/shared/pkg/middleware` — `GinAuthMiddleware()`

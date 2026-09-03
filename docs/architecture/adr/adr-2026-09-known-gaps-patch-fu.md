@@ -1,6 +1,6 @@
 # ADR-16 Patch · Stage 36-FU 缺口收口（2026-09-03）
 
-> **状态**：patch（叠加在 [adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md) 之上）
+> **状态**：patch（叠加在 [adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md) 之上）
 > **来源**：stage-36-smoke-report.md §九 的"已知 Bug 全景"和 §六"待办 / 后续建议"
 > **关联 commit**：本轮 (Stage 36-FU) 所有 commit
 
@@ -8,7 +8,7 @@
 
 ## 上下文
 
-[stage-36-smoke-report.md](stage-36-smoke-report.md) 提交时声明 **"11 bug 全部修复, 16/16 smoke GREEN"**，
+[stage-36-smoke-report.md](/docs/stages/stage-36-smoke-report.md) 提交时声明 **"11 bug 全部修复, 16/16 smoke GREEN"**，
 但 smoke 报告本身明确列出 **5 项仍属于"未真正关闭"或"部分关闭"** 的尾巴：
 
 1. **Bug 9（partial）**：Web Dockerfile 已修复，但 `emotion-echo-web` 容器被 `profiles: ["never"]` 显式禁用，
@@ -159,7 +159,7 @@ runtime 测试（需 torch）留 `pytest.skip()` 给生产镜像里的 pytest �
 
 ## 引用
 
-- [stage-36-smoke-report.md](stage-36-smoke-report.md) §九 + §六
-- [adr-2026-09-chart-contract-alignment.md](adr-2026-09-chart-contract-alignment.md)（ADR-17）
-- [adr-2026-09-incremental-rpc-adoption.md](adr-2026-09-incremental-rpc-adoption.md)（ADR-18）
-- [adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)（被本 patch 叠加）
+- [stage-36-smoke-report.md](/docs/stages/stage-36-smoke-report.md) §九 + §六
+- [adr-2026-09-chart-contract-alignment.md](/docs/architecture/adr/adr-2026-09-chart-contract-alignment.md)（ADR-17）
+- [adr-2026-09-incremental-rpc-adoption.md](/docs/architecture/adr/adr-2026-09-incremental-rpc-adoption.md)（ADR-18）
+- [adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md)（被本 patch 叠加）

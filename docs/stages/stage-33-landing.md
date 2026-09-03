@@ -1,8 +1,8 @@
 # Stage 33 · P0 修复 + BFF 退化为纯聚合层
 
-> **配套文档**：[`stage-32-landing.md`](./stage-32-landing.md)（Stage 32 APISIX 网关层）、
-> [`stage-33-p0-fix-bff-purify.md`](./stage-33-p0-fix-bff-purify.md)（Stage 33 规划）、
-> [`architecture-audit-2026-08-31.md`](./architecture-audit-2026-08-31.md)（4 个 P0 问题清单）。
+> **配套文档**：[`stage-32-landing.md`](/docs/stages/stage-32-landing.md)（Stage 32 APISIX 网关层）、
+> [`stage-33-p0-fix-bff-purify.md`](/docs/stages/stage-33-p0-fix-bff-purify.md)（Stage 33 规划）、
+> [`architecture-audit-2026-08-31.md`](/docs/architecture/audit-2026-08-31.md)（4 个 P0 问题清单）。
 >
 > **落地日期**：2026-09-01 · **目标基线**：`docs/stage-31-landing` 分支 HEAD
 

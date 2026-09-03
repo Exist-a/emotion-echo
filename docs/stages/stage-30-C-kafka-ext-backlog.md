@@ -135,7 +135,7 @@ ai-svc 的 `consumehandler.go` 注释写着"最终入 DLQ"——**注释与实�
 - **顺序**：A1（幂等）→ A2（DLQ）→ A3（Outbox）。A1+A3 是业内成对出现的"可靠性双件套"，A2 是消费健壮性底线。
 - **每个 A 档项**：独立 PR，严格 TDD（RED → GREEN），DoD 见上表。
 - **学习视角**：A1 练"幂等键 + 唯一约束"、A2 练"消费者状态机 + 告警"、A3 练"本地事务 + 后台 relay"——三个做完，你对 Kafka 可靠性的理解就超过多数初级工程师。
-- 更完整的业界背景见 [stage-30-B-kafka-pipeline.md](./stage-30-B-kafka-pipeline.md) §三。
+- 更完整的业界背景见 [stage-30-B-kafka-pipeline.md](/docs/stages/stage-30-B-kafka-pipeline.md) §三。
 
 ---
 

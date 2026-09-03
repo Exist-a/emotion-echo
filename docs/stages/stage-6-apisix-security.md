@@ -5,7 +5,7 @@
 
 ## 🎯 实施目标
 
-按 [architecture-decisions.md](./architecture-decisions.md) 决策 7-8：
+按 [architecture-decisions.md](/docs/architecture/decisions.md) 决策 7-8：
 - 鉴权从 svc mock → APISIX jwt-auth
 - 限流从 0 → APISIX limit-count
 - 熔断从 0 → APISIX api-breaker

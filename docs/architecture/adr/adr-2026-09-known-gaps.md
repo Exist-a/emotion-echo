@@ -1,7 +1,7 @@
 # ADR-16 · Stage 35 系统缺口正式记录（2026-09-01）
 
-> **状态**：已登记 · **类型**：已知缺口（Known Gaps）· **优先级**：见 [stage-36-fixes-roadmap.md](stage-36-fixes-roadmap.md)
-> **来源**：[stage-35-system-feasibility.md](stage-35-system-feasibility.md) 验证报告（commit `a5e8cd2`）
+> **状态**：已登记 · **类型**：已知缺口（Known Gaps）· **优先级**：见 [stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md)
+> **来源**：[stage-35-system-feasibility.md](/docs/stages/stage-35-system-feasibility.md) 验证报告（commit `a5e8cd2`）
 > **ADR 编号**：16
 
 ---
@@ -87,10 +87,10 @@ Stage 35 docker smoke + 业务端到端验证（6 个 Go svc 容器化运行、P
 
 ## 参照（References）
 
-- 来源：[stage-35-system-feasibility.md](stage-35-system-feasibility.md)
-- Stage 35 smoke：[stage-35-smoke-validation.md](stage-35-smoke-validation.md)
-- Stage 34 ops runbook（部分待补项来源）：[stage-34-ops-runbook.md](stage-34-ops-runbook.md)
-- Stage 33 deferred list：[stage-33-landing.md](stage-33-landing.md) §七
-- 修复计划：[stage-36-fixes-roadmap.md](stage-36-fixes-roadmap.md)
-- ADR-15（Stage 35 生产加固）：[adr-2026-09-llm-fusion-hardening.md](adr-2026-09-llm-fusion-hardening.md)
-- ADR-1~14：[architecture-decisions.md](architecture-decisions.md)
+- 来源：[stage-35-system-feasibility.md](/docs/stages/stage-35-system-feasibility.md)
+- Stage 35 smoke：[stage-35-smoke-validation.md](/docs/stages/stage-35-smoke-validation.md)
+- Stage 34 ops runbook（部分待补项来源）：[stage-34-ops-runbook.md](../../deployment/runbook/stage-34-ops-runbook.md)
+- Stage 33 deferred list：[stage-33-landing.md](/docs/stages/stage-33-landing.md) §七
+- 修复计划：[stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md)
+- ADR-15（Stage 35 生产加固）：[adr-2026-09-llm-fusion-hardening.md](/docs/architecture/adr/adr-2026-09-llm-fusion-hardening.md)
+- ADR-1~14：[architecture-decisions.md](/docs/architecture/decisions.md)

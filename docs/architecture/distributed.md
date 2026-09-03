@@ -1,6 +1,6 @@
 # Emotion-Echo 分布式架构 · 选型说明
 
-> ⚠️ **架构最终决策以 [architecture-decisions.md](./architecture-decisions.md)（ADR）为单一事实源**。
+> ⚠️ **架构最终决策以 [architecture-decisions.md](/docs/architecture/decisions.md)（ADR）为单一事实源**。
 > 本文档是 ADR 的补充说明，解释**为什么**做这些选型。
 > 最后更新：2026-07-14
 
@@ -147,7 +147,7 @@ user-svc assessment chat-svc ai-svc analytics llm-svc
 
 ## 6. 已敲定的决策汇总
 
-详见 [architecture-decisions.md](./architecture-decisions.md)，包括：
+详见 [architecture-decisions.md](/docs/architecture/decisions.md)，包括：
 
 | # | 决策项 | 选择 | 替代方案 |
 |---|--------|------|---------|

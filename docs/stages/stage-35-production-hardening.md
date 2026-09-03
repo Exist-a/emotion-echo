@@ -2,8 +2,8 @@
 
 > 状态：**进行中（In Progress）** · 日期：2026-09-03 · 目标分支：`feat/bff-fused-emotion-endpoint`（延续 Stage 31-34 节奏）
 > ADR 编号：15（LLM Fusion 容错 + 限流 + 可观测策略）— 见 `adr-2026-09-llm-fusion-hardening.md`
-> 配合文档：[stage-34-ops-runbook.md](stage-34-ops-runbook.md) §三（待补清单）
-> 收口后落地报告：[stage-35-landing.md](stage-35-landing.md)
+> 配合文档：[stage-34-ops-runbook.md](../deployment/runbook/stage-34-ops-runbook.md) §三（待补清单）
+> 收口后落地报告：[stage-35-landing.md](/docs/stages/stage-35-landing.md)
 
 ---
 

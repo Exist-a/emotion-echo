@@ -1,6 +1,6 @@
 # Emotion-Echo · Stage 2 异步管道完成报告
 
-> ⚠️ **架构决策请看 [architecture-decisions.md](./architecture-decisions.md)（ADR）**。
+> ⚠️ **架构决策请看 [architecture-decisions.md](/docs/architecture/decisions.md)（ADR）**。
 > 本文档保留为历史过程记录（2026-07-13 当时状态）。
 > **当前已变更**：go-zero → Gin（不影响 Kafka 管道逻辑）。
 

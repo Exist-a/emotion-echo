@@ -391,12 +391,12 @@ emotion-echo-nacos         healthy     宿主 :8848 可达
 
 ## 七、引用
 
-- ADR-16（Stage 35 系统缺口）：[adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)
-- ADR-17（chart-contract）：[adr-2026-09-chart-contract-alignment.md](adr-2026-09-chart-contract-alignment.md)
-- ADR-18（incremental-rpc-adoption）：[adr-2026-09-incremental-rpc-adoption.md](adr-2026-09-incremental-rpc-adoption.md)
-- Stage 30 BFF：[stage-30-web-bff.md](stage-30-web-bff.md)
-- Stage 31 Nacos：[stage-31-landing.md](stage-31-landing.md)
-- Stage 32 APISIX 回归：[stage-32-apisix-reintroduction.md](stage-32-apisix-reintroduction.md)
-- Stage 35：[stage-35-landing.md](stage-35-landing.md)
-- Stage 36 修复日程：[stage-36-fixes-roadmap.md](stage-36-fixes-roadmap.md)
+- ADR-16（Stage 35 系统缺口）：[adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md)
+- ADR-17（chart-contract）：[adr-2026-09-chart-contract-alignment.md](/docs/architecture/adr/adr-2026-09-chart-contract-alignment.md)
+- ADR-18（incremental-rpc-adoption）：[adr-2026-09-incremental-rpc-adoption.md](/docs/architecture/adr/adr-2026-09-incremental-rpc-adoption.md)
+- Stage 30 BFF：[stage-30-web-bff.md](/docs/stages/stage-30-web-bff.md)
+- Stage 31 Nacos：[stage-31-landing.md](/docs/stages/stage-31-landing.md)
+- Stage 32 APISIX 回归：[stage-32-apisix-reintroduction.md](/docs/stages/stage-32-apisix-reintroduction.md)
+- Stage 35：[stage-35-landing.md](/docs/stages/stage-35-landing.md)
+- Stage 36 修复日程：[stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md)
 - smoke 脚本：[scripts/smoke_bff_t5.py](../scripts/smoke_bff_t5.py)

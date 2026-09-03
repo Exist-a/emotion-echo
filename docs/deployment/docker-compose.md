@@ -93,4 +93,4 @@ docker-compose -f deploy/docker-compose.infra.yml logs <容器名>
 
 ## 6. 下一步
 
-Stage 0.1 完成 → [Stage 0.2: 验证所有控制台可访问 → Stage 0.3: Gin 接入 SkyWalking trace](../../docs/distributed-roadmap.md#stage-02--一键起齐-skywalking--apisix--kafka)
+Stage 0.1 完成 → [Stage 0.2: 验证所有控制台可访问 → Stage 0.3: Gin 接入 SkyWalking trace](/docs/architecture/roadmap.md#stage-02--一键起齐-skywalking--apisix--kafka)

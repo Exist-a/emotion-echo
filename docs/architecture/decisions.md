@@ -4,7 +4,7 @@
 > 所有 stage 文档、路线图、代码组织、配置都应与本文档一致。
 > 决策变更时，**先改本文档，再改代码**，保持文档先行。
 
-> 💡 **部署形态定位**：本项目当前采用「分布式架构 + 单机部署（单机多实例）」模式。详细差异、与多机部署的对比、以及当前部署栈的取舍见 [architecture-positioning.md](./architecture-positioning.md)。
+> 💡 **部署形态定位**：本项目当前采用「分布式架构 + 单机部署（单机多实例）」模式。详细差异、与多机部署的对比、以及当前部署栈的取舍见 [architecture-positioning.md](/docs/architecture/positioning.md)。
 > 最后更新：2026-09-03（撤回 2026-08-31 决策 10 "不引入注册中心/配置中心" 判断；新增决策 11/12/13，演进路线 Stage 31/32/33；详见 `adr-2026-09-nacos-reintroduction.md`）
 
 ---

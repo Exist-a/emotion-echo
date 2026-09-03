@@ -111,6 +111,6 @@ f5af3df fix(analytics-svc): applyEnvOverrides — env was never reaching config
 
 ## 五、相关文档
 
-- [stage-30-A-sql-landing.md](./stage-30-A-sql-landing.md) — analytics 数据层真 SQL（前置工作）
-- [stage-2-async-pipeline.md](./stage-2-async-pipeline.md) — 异步管线设计意图
-- [stage-30-A-analytics-business.md](./stage-30-A-analytics-business.md) — analytics 业务端点规划（§三.3 事件采集）
+- [stage-30-A-sql-landing.md](/docs/stages/stage-30-A-sql-landing.md) — analytics 数据层真 SQL（前置工作）
+- [stage-2-async-pipeline.md](/docs/stages/stage-2-async-pipeline.md) — 异步管线设计意图
+- [stage-30-A-analytics-business.md](/docs/stages/stage-30-A-analytics-business.md) — analytics 业务端点规划（§三.3 事件采集）

@@ -1,6 +1,6 @@
 # Emotion-Echo · Stage 4 情绪查询闭环
 
-> ⚠️ **架构决策请看 [architecture-decisions.md](./architecture-decisions.md)（ADR）**。
+> ⚠️ **架构决策请看 [architecture-decisions.md](/docs/architecture/decisions.md)（ADR）**。
 > 本文档保留为历史过程记录（2026-07-14 当时状态）。
 
 > 2026-07-14：ai-svc 提供情绪分析查询端点；前端可查询任意消息/会话的分析结果。

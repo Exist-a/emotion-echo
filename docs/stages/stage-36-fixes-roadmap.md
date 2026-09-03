@@ -1,8 +1,8 @@
 # Stage 36 · 缺口修复路线图（Fixes Roadmap）
 
 > 状态：**待审批（Pending Approval）** · 日期：2026-09-01 · 目标分支：`feat/bff-fused-emotion-endpoint`（沿用）
-> ADR-16：[adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)
-> 来源：[stage-35-system-feasibility.md](stage-35-system-feasibility.md) §五 §六
+> ADR-16：[adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md)
+> 来源：[stage-35-system-feasibility.md](/docs/stages/stage-35-system-feasibility.md) §五 §六
 
 ---
 
@@ -252,19 +252,19 @@ PR-C2.3: ai-svc smoke：上传图片 → emotion 非 neutral
 
 ## 九、参考资料
 
-- ADR-16：[adr-2026-09-known-gaps.md](adr-2026-09-known-gaps.md)
-- 来源：[stage-35-system-feasibility.md](stage-35-system-feasibility.md)
-- Stage 35 smoke：[stage-35-smoke-validation.md](stage-35-smoke-validation.md)
-- Stage 35 landing：[stage-35-landing.md](stage-35-landing.md)
-- Stage 35 plan：[stage-35-production-hardening.md](stage-35-production-hardening.md)
-- architecture-decisions：[architecture-decisions.md](architecture-decisions.md)
+- ADR-16：[adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md)
+- 来源：[stage-35-system-feasibility.md](/docs/stages/stage-35-system-feasibility.md)
+- Stage 35 smoke：[stage-35-smoke-validation.md](/docs/stages/stage-35-smoke-validation.md)
+- Stage 35 landing：[stage-35-landing.md](/docs/stages/stage-35-landing.md)
+- Stage 35 plan：[stage-35-production-hardening.md](/docs/stages/stage-35-production-hardening.md)
+- architecture-decisions：[architecture-decisions.md](/docs/architecture/decisions.md)
 
 ---
 
 ## 十、Post-36 增量（不属 ADR-16 8 项缺口，新发现的契约问题）
 
 盘点 `feat/bff-fused-emotion-endpoint` 分支时发现图表三层契约全错位，
-HTTP 200 但 dashboard 页面渲染塌掉。详见：[adr-2026-09-chart-contract-alignment.md](adr-2026-09-chart-contract-alignment.md)
+HTTP 200 但 dashboard 页面渲染塌掉。详见：[adr-2026-09-chart-contract-alignment.md](/docs/architecture/adr/adr-2026-09-chart-contract-alignment.md)
 
 - 分支：`fix/chart-contract-alignment`（基于 `fix/stage-36-post-test-cleanup` 0b58bd5）
 - 4 commits: 90a3338 + 1590f24 + 789dd4b + 044cb58
@@ -275,7 +275,7 @@ HTTP 200 但 dashboard 页面渲染塌掉。详见：[adr-2026-09-chart-contract
 
 ## 十一、ADR-18 微服务内部调用渐进式 RPC 化
 
-- 文件：[adr-2026-09-incremental-rpc-adoption.md](adr-2026-09-incremental-rpc-adoption.md)
+- 文件：[adr-2026-09-incremental-rpc-adoption.md](/docs/architecture/adr/adr-2026-09-incremental-rpc-adoption.md)
 - 决策：新增服务一律 gRPC；老 HTTP 调用按 §B 触发条件渐进迁移
 - 例外：浏览器→BFF / BFF→外部 LLM / Nacos health check / Webhook
 - proto 基础设施已就位：`proto/` + `proto/gen.sh` + `shared/pkg/grpcinterceptor` + chat-svc grpcclient 三件套

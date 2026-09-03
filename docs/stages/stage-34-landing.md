@@ -2,7 +2,7 @@
 
 > **状态**：✅ **全部落地**（数据层 + 算法 + Worker + analytics 报表 + BFF /fused + proto 扩）
 > **日期**：2026-09-01
-> **前置规划**：[stage-34-multimodal-fusion.md](stage-34-multimodal-fusion.md)
+> **前置规划**：[stage-34-multimodal-fusion.md](/docs/stages/stage-34-multimodal-fusion.md)
 
 ## 一、收口条件核对
 
@@ -205,7 +205,7 @@ emotion-echo-shared/pkg/emotionquery/emotion_query_grpc.pb.go（protoc 重生成
 - docker compose 全栈（含 apisix / nacos / kafka，目前镜像需重打）
 - 前端 ECharts 多 series 渲染 emotionDistributionByModality（前端零改动，schema 已就绪）
 
-**Stage 34 已知/未知矩阵**（详见 [stage-34-ops-runbook.md §二](stage-34-ops-runbook.md#二已知--未知矩阵关键)）：
+**Stage 34 已知/未知矩阵**（详见 [stage-34-ops-runbook.md §二](../deployment/runbook/stage-34-ops-runbook.md#二已知--未知矩阵关键)）：
 
 | 状态 | 链路 |
 |---|---|
@@ -335,6 +335,6 @@ grpcurl -plaintext -proto proto/emotion_query.proto \
 
 ## 十三、参考
 
-- 规划文档：[stage-34-multimodal-fusion.md](stage-34-multimodal-fusion.md)
+- 规划文档：[stage-34-multimodal-fusion.md](/docs/stages/stage-34-multimodal-fusion.md)
 - 业界方案：LLM-as-Fusion（2024 工业实践）+ Late Fusion 兜底
 - AGENTS.md：TDD Red-Green-Refactor + 接口注入 + 测试替身
