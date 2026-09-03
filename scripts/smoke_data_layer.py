@@ -33,7 +33,7 @@ PG_CONTAINER = "emotion-echo-postgres"
 PG_DB = "emotion_echo"
 PG_USER = "postgres"  # superuser，仅 dev；prod 走 analytics_reader
 ANALYTICS_READER_USER = "analytics_reader"
-LOGIN_BODY = {"username": "13800138000", "password": "abc123"}
+LOGIN_BODY = {"username": "echo", "password": "echo123"}
 
 results: list[tuple[str, bool, str]] = []
 

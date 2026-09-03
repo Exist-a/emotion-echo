@@ -116,7 +116,7 @@ bash scripts/healthcheck_smoke.sh
 
 # 4. 测试账号就绪
 bash scripts/check_seed_users.sh
-# 期望: GREEN: 13800138000 / abc123 ready
+# 期望: GREEN: echo / echo123 ready
 ```
 
 ---
@@ -192,8 +192,8 @@ curl http://emotion-echo-fer:8004/health
 **步骤：**
 1. 打开浏览器：<http://localhost:3000>（或 curl BFF `/health`）
 2. 登录用测试账号：
-   - 用户名：`13800138000`
-   - 密码：`abc123`
+   - 用户名：`echo`
+   - 密码：`echo123`
 3. 进入首页
 
 ### 测试 2：端到端冒烟（推荐）

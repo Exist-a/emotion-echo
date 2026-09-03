@@ -21,7 +21,7 @@
         <form v-if="isLogin" class="auth-form" @submit.prevent="loginHandler">
           <label class="auth-field">
             <span class="input-icon" aria-hidden="true">@</span>
-            <input v-model="loginInfo.username" class="ee-input" placeholder="邮箱" autocomplete="username" />
+            <input v-model="loginInfo.username" class="ee-input" placeholder="用户名" autocomplete="username" />
           </label>
           <label class="auth-field">
             <span class="input-icon" aria-hidden="true">●</span>
@@ -42,13 +42,13 @@
             <span class="quick-icon" aria-hidden="true">↳</span>
             用演示账号快速体验
           </button>
-          <p class="quick-hint">直接以已预置的 <code>demo@emotion-echo.com</code> 登录，跳过注册和验证码。</p>
+          <p class="quick-hint">直接以已预置的 <code>echo</code> 登录（密码 echo123），跳过注册和验证码。</p>
         </form>
 
         <form v-else class="auth-form" @submit.prevent="registerHandler">
           <label class="auth-field">
             <span class="input-icon" aria-hidden="true">@</span>
-            <input v-model="registerInfo.username" class="ee-input" placeholder="邮箱" autocomplete="username" />
+            <input v-model="registerInfo.username" class="ee-input" placeholder="用户名" autocomplete="username" />
           </label>
           <label class="auth-field">
             <span class="input-icon" aria-hidden="true">●</span>
@@ -176,10 +176,11 @@ const quickLogin = async () => {
   if (isQuickLoading.value) return
   isQuickLoading.value = true
   try {
-    // Stage 33 PR-19b: 明文 demo 密码（仅 dev quick login）
+    // Stage 38-A: dev quick login 账号 = echo / echo123（之前是 demo@emotion-echo.com / Demo12345，
+    //               后端从未实现 quick-login 端点，实际走标准 login 路径——本快捷键直接发 echo/echo123）
     const result = await userStore.login({
-      username: 'demo@emotion-echo.com',
-      password: 'Demo12345',
+      username: 'echo',
+      password: 'echo123',
       rememberMe: true
     })
     if (result.isOk) {

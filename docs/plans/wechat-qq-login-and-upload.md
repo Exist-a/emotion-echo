@@ -1,13 +1,19 @@
 ---
-status: planned
-superseded-by: 尚未完整实施；前端 ChatFile 组件在 backlog
+status: superseded
+superseded-by: Stage 38-A username+password 登录（路由明确放弃 OAuth 方向）
 original-path: .trae/documents/微信QQ登录和文件上传实施计划.md
 original-date: 2026-07-XX
 migrated-at: 2026-09-03
 round: 2-C
+superseded-at: 2026-09-03
+supersede-reason: |
+  Stage 38-A 用户决策：改用 username + password 登录，去掉微信/QQ OAuth 路径。
+  勘察时确认：roadmap §PR-B1 写"微信 OAuth 已完成" 与代码不符，代码上 OAuth 从未实施；
+  user-svc 早已是 username+password 登录（Stage 33 PR-19a）。
+  本计划关于 OAuth 的部分废弃；通用文件上传 / ChatFile 组件 部分仍可参考（路线图 §PR-B2）。
 ---
 
-# 微信/QQ登录 + 通用文件上传 功能实施计划
+# [SUPERSEDED] 微信/QQ登录 + 通用文件上传 功能实施计划
 
 ## 一、现状分析
 

@@ -41,10 +41,16 @@ branch: fix/stage-36-post-test-cleanup (bb7ebef)
 
 | # | 位置 | 症状 | 严重度 |
 |---|------|------|--------|
-| **B1** | `emotion-echo-user-svc/internal/handler/oauth_*.go` | QQ OAuth 完全没做，前端无 QQ 登录入口 | 🟡 中 |
+| ~~**B1**~~ | ~~`emotion-echo-user-svc/internal/handler/oauth_*.go`~~ | ~~QQ OAuth 完全没做，前端无 QQ 登录入口~~ | ~~🟡 中~~ |
 | **B2** | `Emotion-Echo-Web/app/components/chat/ChatFile.vue` + 消息 store | `handleAttachment` 未实现、`MessageItem.contentType` 只支持 `text/audio/img`、附件按钮点了没反应 | 🔴 高 |
 | **B3** | `Emotion-Echo-Web/app/pages/chat/...` AI 回复渲染 + intent_classifier | `marked` 已装但前端不会按 intent 类型用不同渲染模板 | 🟡 中 |
 | **B4** | chat-svc intent classifier | 当前只产出 `emotional_support` / `other` 2 类，6 类扩展在 backlog | 🟢 低（依赖 B3） |
+
+> **Stage 38-A 修订（2026-09-03）**：B1（OAuth 方向）被用户决策替代为 username+password 登录，
+> 详见 [stage-38-A-landing.md](../stage-38-A-landing.md)。勘察时确认：
+> roadmap 初版写"微信 OAuth 已完成"与代码不符——代码上 OAuth 从未实施过（grep `oauth_*.go` 0 文件）。
+> user-svc 实际从 Stage 33 PR-19a 起就是 username+password 登录。
+> 本路线图 §四 Stage 37-B "PR-B1 QQ OAuth" 段已废弃，迁移到 stage-38-A。
 
 ### C 类（环境/容量，非代码 bug，留 backlog）
 

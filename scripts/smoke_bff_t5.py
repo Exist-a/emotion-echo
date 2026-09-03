@@ -71,8 +71,9 @@ user_id = None
 jwt_token = None
 try:
     # BFF /api/v1/auth/login 接 {username, password}，返回 {accessToken, user: {id, username}}
+    # Stage 38-A: dev seed 账号 = echo / echo123（之前是 13800138000 / abc123）
     r = http_post("/api/v1/auth/login",
-                  {"username": "13800138000", "password": "abc123"})
+                  {"username": "echo", "password": "echo123"})
     d = json.loads(r.read())
     data, _ = unwrap(d)
     # 真实结构是 data.accessToken + data.user.id

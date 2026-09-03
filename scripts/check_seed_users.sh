@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
-# Stage 36-D Bug 1 RED/GREEN smoke: 验证默认测试账号 13800138000 / abc123 是否就绪
+# Stage 38-A: 默认测试账号 smoke 验证（echo / echo123）
+#
+# 演进：
+#   Stage 36-D：账号 = 13800138000 / abc123
+#   Stage 38-A：账号 = echo / echo123（纯 dev 演示用户名+密码）
 #
 # 用法：
 #   ./scripts/check_seed_users.sh                  # RED: 期望 exit 1
 #   ./scripts/check_seed_users.sh && echo ok       # GREEN: 期望 ok
 #
 # 检查项：
-#   1) DB 里 emotion_echo_user.users 表存在 username='13800138000' 的行
-#   2) BFF POST /api/v1/auth/login {username:'13800138000',password:'abc123'} 返回 200
+#   1) DB 里 emotion_echo_user.users 表存在 username='echo' 的行
+#   2) BFF POST /api/v1/auth/login {username:'echo',password:'echo123'} 返回 200
 set -uo pipefail
 
 CONTAINER="${PG_CONTAINER:-emotion-echo-postgres}"
 DB="${PG_DB:-emotion_echo}"
 USER="${PG_USER:-postgres}"
-EXPECTED_USERNAME="${EXPECTED_USERNAME:-13800138000}"
-EXPECTED_PASSWORD="${EXPECTED_PASSWORD:-abc123}"
+EXPECTED_USERNAME="${EXPECTED_USERNAME:-echo}"
+EXPECTED_PASSWORD="${EXPECTED_PASSWORD:-echo123}"
 BFF="${BFF:-http://localhost:8894}"
 
 FAIL=0
@@ -50,7 +54,7 @@ else
 fi
 
 if [[ "$FAIL" -eq 0 ]]; then
-    echo "GREEN: 13800138000 / abc123 ready"
+    echo "GREEN: echo / echo123 ready"
     exit 0
 else
     echo "RED: seed users not ready"
