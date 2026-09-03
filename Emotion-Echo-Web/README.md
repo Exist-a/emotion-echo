@@ -138,7 +138,7 @@ docker run -p 3000:3000 \
 
 ## 开发文档
 
-- [`docs/DESIGN.md`](docs/DESIGN.md) — 设计文档
+- [`/docs/frontend/design.md`](/docs/frontend/design.md) — 设计文档
 
 ---
 

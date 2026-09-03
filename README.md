@@ -12,7 +12,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-1.x-244c5a?style=flat-square&logo=grpc&logoColor=white)](https://grpc.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Stage](https://img.shields.io/badge/Stage-35--Hardening-blueviolet?style=flat-square)](docs/stage-35-landing.md)
+[![Stage](https://img.shields.io/badge/Stage-35--Hardening-blueviolet?style=flat-square)](/docs/stages/stage-35-landing.md)
 
 ---
 
@@ -39,7 +39,7 @@ Gin 单体 → 微服务拆分 → gRPC 同步通信 → Kafka 异步管线
          → 端到端冒烟测试 → 多模态分析 → BFF 网关（替代 APISIX）→ 真实 LLM 接入
 ```
 
-📚 完整路线图：[`docs/distributed-roadmap.md`](docs/distributed-roadmap.md) · 30+ 篇 stage 演进文档
+📚 完整路线图：[`docs/distributed-roadmap.md`](/docs/architecture/roadmap.md) · 30+ 篇 stage 演进文档
 
 ### 2. 严谨的 TDD 工程实践
 
@@ -97,7 +97,7 @@ emotion-echo/
 └── scripts/                      # 自检 / 验证脚本
 ```
 
-📐 详细布局规范：[`docs/git-layout.md`](docs/git-layout.md)
+📐 详细布局规范：[`docs/git-layout.md`](/docs/deployment/git-layout.md)
 
 ---
 
@@ -142,12 +142,15 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 |------|------|
 | [`AGENTS.md`](AGENTS.md) | **强约束**：TDD 协作约定 + 测试栈 + 可测试性设计 |
 | [`QUICKSTART.md`](QUICKSTART.md) | 完整启动 + 测试流程 |
-| [`docs/git-layout.md`](docs/git-layout.md) | 仓库布局规范 |
-| [`docs/distributed-roadmap.md`](docs/distributed-roadmap.md) | 分布式改造路线图（执行版） |
-| [`docs/distributed-architecture.md`](docs/distributed-architecture.md) | 分布式架构总览 |
-| [`docs/architecture-decisions.md`](docs/architecture-decisions.md) | 架构决策记录（ADR） |
-| [`docs/stage-0` ~ `stage-25`](docs/) | 25 篇演进文档 |
-| [`docs/stage-25-roadmap.md`](docs/stage-25-roadmap.md) | 接下来要做的事 |
+| [`docs/README.md`](/docs/stages/README.md) | **文档系统目录页**（按需找文档） |
+| [`docs/architecture/decisions.md`](docs/architecture/decisions.md) | ADR 单一事实源 |
+| [`docs/architecture/distributed.md`](docs/architecture/distributed.md) | 分布式架构总览 |
+| [`docs/architecture/roadmap.md`](docs/architecture/roadmap.md) | 分布式改造路线图（执行版） |
+| [`docs/deployment/git-layout.md`](/docs/deployment/git-layout.md) | 仓库布局规范 |
+| [`docs/stages/`](docs/stages/) | Stage 0 → 36 共 81 篇演进文档 |
+| [`docs/architecture/adr/`](docs/architecture/adr/) | 6 份编号 ADR |
+| [`docs/plans/`](docs/plans/) | 当前有效的未来排期计划 |
+| [`docs/legacy-plans/`](docs/legacy-plans/) | 历史计划归档（仅作回顾） |
 
 ---
 
@@ -156,8 +159,9 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 如果你是来学习这个项目的，推荐按以下顺序阅读：
 
 1. **[`QUICKSTART.md`](QUICKSTART.md)** — 5 分钟了解如何启动
-2. **[`docs/distributed-architecture.md`](docs/distributed-architecture.md)** — 架构总览
-3. **[`docs/stage-0-learnings.md`](docs/stage-0-learnings.md)** → **`stage-25-roadmap.md`** — 跟随演进
+2. **[`docs/architecture/distributed.md`](docs/architecture/distributed.md)** — 架构总览
+3. **[`docs/stages/`](docs/stages/)** — 跟随 Stage 0 → 36 演进
+4. **[`docs/architecture/decisions.md`](docs/architecture/decisions.md)** — 工程协作规范 + ADR 单一事实源
 4. **[`AGENTS.md`](AGENTS.md)** — 工程协作规范
 5. **看代码**：`emotion-echo-ai-svc/`（最复杂的微服务，含 gRPC + Kafka）
 
@@ -175,9 +179,9 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 - ✅ **Stage 31**：Nacos 注册中心 + 配置中心演进（PR-01..12）
 - ✅ **Stage 32**：APISIX 网关层回归 + JWT 真实验证 + X-User-Id 透传（PR-13..16）
 - ✅ **Stage 33**：P0 修复 + BFF 净化（PR-17..22，7 个 PR 收口）
-- ✅ **Stage 34**：多模态情绪融合（18 个 PR + merge 收口，docker smoke 验证）— 见 [stage-34-landing.md](docs/stage-34-landing.md)
-- ✅ **Stage 35**：LLM Fusion 生产加固 + 业务端到端验证（ADR-15，14 个 PR + 41 个新测试）— 见 [stage-35-landing.md](docs/stage-35-landing.md) + [stage-35-smoke-validation.md](docs/stage-35-smoke-validation.md) + [stage-35-system-feasibility.md](docs/stage-35-system-feasibility.md)
-- 🚧 **Stage 36**（进行中）：ADR-16 列出的 **8 项系统缺口**全部纳入修复日程 — 见 [stage-36-fixes-roadmap.md](docs/stage-36-fixes-roadmap.md) + [adr-2026-09-known-gaps.md](docs/adr-2026-09-known-gaps.md)
+- ✅ **Stage 34**：多模态情绪融合（18 个 PR + merge 收口，docker smoke 验证）— 见 [stage-34-landing.md](/docs/stages/stage-34-landing.md)
+- ✅ **Stage 35**：LLM Fusion 生产加固 + 业务端到端验证（ADR-15，14 个 PR + 41 个新测试）— 见 [stage-35-landing.md](/docs/stages/stage-35-landing.md) + [stage-35-smoke-validation.md](/docs/stages/stage-35-smoke-validation.md) + [stage-35-system-feasibility.md](/docs/stages/stage-35-system-feasibility.md)
+- 🚧 **Stage 36**（进行中）：ADR-16 列出的 **8 项系统缺口**全部纳入修复日程 — 见 [stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md) + [adr-2026-09-known-gaps.md](/docs/architecture/adr/adr-2026-09-known-gaps.md)
   - 36-A：G1（yaml 占位符 4 svc）+ G3（BFF 路由）
   - 36-B：G2（chat list）+ G4（消息自动情绪分析）
   - 36-C：G5（真实 LLM）+ G6（FER/SenseVoice）

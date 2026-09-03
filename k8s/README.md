@@ -2,8 +2,8 @@
 
 **Stage 27 入口文档**。本目录把 Stage 20-26 已经容器化的全栈通过 **Helm umbrella chart** 部署到本地 **kind** 集群，并用 **APISIX Ingress Controller 3.10+**（修复 docker-compose 时代 3.9 的 nginx 301 bug）作为统一接入层。
 
-完整策略：见 [`docs/stage-21-k8s-strategy.md`](../docs/stage-21-k8s-strategy.md)
-本批次交付：见 [`docs/stage-27-k8s-local-helm.md`](../docs/stage-27-k8s-local-helm.md)
+完整策略：见 [`docs/stage-21-k8s-strategy.md`](/docs/stages/stage-21-k8s-strategy.md)
+本批次交付：见 [`docs/stage-27-k8s-local-helm.md`](/docs/stages/stage-27-k8s-local-helm.md)
 
 ---
 

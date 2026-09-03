@@ -206,3 +206,16 @@ PR review 时若发现违反 TDD：
 
 > 最后更新：2026-07-15 by 当前协作 Agent  
 > 适用版本：本约定生效后的所有 PR
+
+---
+
+## 七、文档写入约定（2026-09-03 起生效）
+
+未来新增功能计划请写到 [`docs/plans/`](docs/plans/)（不再使用 `.trae/documents/` 目录——已于 2026-09-03 重构删除）。完整规则见 [`docs/README.md`](/docs/stages/README.md) 与 [`docs/_meta/doc-migration-map.md`](docs/_meta/doc-migration-map.md)。
+
+简要：
+
+- **新功能计划** → `docs/plans/<kebab-case>.md` + front-matter `status: planned`
+- **架构决策** → `docs/architecture/adr/adr-YYYY-MM-<topic>.md` + 在 `docs/architecture/decisions.md` 索引登记
+- **演进记录** → `docs/stages/stage-XX-<topic>.md`
+- **计划落地后** → 从 `docs/plans/` 迁入 `docs/legacy-plans/landed/` 加 front-matter
