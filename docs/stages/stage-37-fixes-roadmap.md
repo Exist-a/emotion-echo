@@ -8,7 +8,7 @@ branch: fix/stage-36-post-test-cleanup (bb7ebef)
 # Stage 37 · 业务与数据缺口修复路线图（Fixes Roadmap）
 
 > 状态：**待审批（Pending Approval）** · 日期：2026-09-03 · 目标分支：`fix/stage-36-post-test-cleanup`（沿用）
-> ADR 关联：[ADR-17 chart-contract-alignment](/docs/architecture/adr/adr-2026-09-chart-contract-alignment.md)、[ADR-18 incremental-rpc-adoption](/docs/architecture/adr/adr-2026-09-incremental-rpc-adoption.md)
+> ADR 关联：[ADR-17 chart-contract-alignment](/docs/architecture/adr/adr-2026-09-chart-contract-alignment.md)、[ADR-18 incremental-rpc-adoption](/docs/architecture/adr/adr-2026-09-incremental-rpc-adoption.md)、[ADR-19 dev-publisher-user-behavior-events](/docs/architecture/adr/adr-2026-09-dev-publisher-user-behavior-events.md)
 > 来源：盘点 ADR-17 §"stage-37 路线图" + Stage 36-FU §四 backlog + `docs/plans/` 5 个仍未落地计划
 
 ---
@@ -72,21 +72,56 @@ branch: fix/stage-36-post-test-cleanup (bb7ebef)
 
 ## 三、Stage 37-A（数据 bug，预计 2-3 天）
 
-### PR-A1：chat-svc dev fallback 写 user_behavior_events（A1）
+### PR-A1：chat-svc DevEventPublisher 同步消费事件写入 user_behavior_events（A1）
 
-**问题**：dev 模式（KAFKA_ENABLED=false）chat-svc 不写 `user_behavior_events`，analytics-svc consumer 永远收不到数据，4 个 dashboard 没数据。
+> ⚠️ **roadmap 修订（2026-09-03）**：初版写"chat-svc 加 `devFallbackRepo *EventRepo` 同步写库"——经实际代码勘察（[events/events.go](/emotion-echo-chat-svc/internal/events/events.go)、[outbox/relay.go](/emotion-echo-chat-svc/internal/outbox/relay.go)），chat-svc 并**不直接写** `user_behavior_events`，它走 outbox + Kafka + analytics-svc consumer 链路。修复方案必须匹配这套架构，否则会引入跨服务职责并破坏事件溯源设计。
 
-**修复方案**：chat-svc 加 `devFallbackRepo *EventRepo`，在 Kafka producer 不可用时同步写库。复用 Stage 36-B3 A3.2 chat-svc dev fallback 的模式。
+**架构现状（写代码前必读）**：
+
+```
+chat-svc handler
+   ↓ InsertOutbox（status=pending）
+outbox_events（PG 表）
+   ↓ OutboxRelay.FlushOnce 每 1s 扫描
+   ↓ EventPublisher.Publish
+   ├─ KAFKA_ENABLED=true  → KafkaEventPublisher（sarama）→ Kafka topic=chat-events
+   └─ KAFKA_ENABLED=false → publisher=nil，relay publishOne 永远返回 errors.New("publisher is nil")，outbox 行 status 永远 pending
+                              ↓
+                          analytics-svc Kafka Consumer
+                              ↓ Insert user_behavior_events
+                          analytics-svc consumer 单测齐全，main.go 在 Kafka.Enabled && evtRepo != nil 时启动
+```
+
+**真实问题**：`KAFKA_ENABLED=false` 时 outbox relay 启动但 publisher 为 nil，relay 每秒都失败一次（`relay.go:106-108`），outbox_events 行堆积，`user_behavior_events` 永远为空。dev 模式 docker compose 启动后 4 个 dashboard 看不到任何数据。
+
+**修复方案**：在 `emotion-echo-chat-svc/internal/events/` 加 `DevEventPublisher`，实现 `EventPublisher` 接口，**同步**把事件写 `user_behavior_events`。`main.go` 在 `Kafka.Enabled == false` 时把 `KafkaEventPublisher` 替换为 `DevEventPublisher`。
+
+**为什么这个方案不破坏单一职责**：
+- `DevEventPublisher` 仍然实现 `EventPublisher` 接口，对 outbox relay 完全透明——relay 不知道下游是 Kafka 还是 DB
+- `DevEventPublisher` 把"事件→user_behavior_events 行"的**映射**集中在一处，未来 A2（target 写 message_id）+ A3（event_type 细分）改这里就覆盖生产链路
+- 写库逻辑复用 analytics-svc consumer 同一份 SQL（迁移到 shared 包或 chat-svc 内嵌 SQL 子集），保持数据契约一致
+
+**代价（必须 ADR 化）**：
+- chat-svc 知道 `user_behavior_events` 表结构 = 跨服务职责
+- 但 `DevEventPublisher` 只在 `KAFKA_ENABLED=false` 时启用，prod 不会命中
+- 类比 `InMemoryEventPublisher` 也是测试替身跨了"测试断言"的职责——`DevEventPublisher` 是"dev 模式"的同位概念
 
 **TDD 节奏**：
 ```
-PR-A1.1: RED  dev fallback 不存在 → integration test
-         （testcontainers Postgres，发 message.created → 断言 user_behavior_events 有 1 行）
-PR-A1.2: GREEN chat-svc dev fallback 写 user_behavior_events
-PR-A1.3: REFACTOR 提取 EventWriteBackport 接口
+PR-A1.1: RED  DevEventPublisher 不存在
+         （testcontainers Postgres + chat-svc binary 启 KAFKA_ENABLED=false，
+          发 message.created → 断言 user_behavior_events 1 行 + outbox 行 status=sent）
+PR-A1.2: GREEN chat-svc events.DevEventPublisher 同步写 user_behavior_events
+         main.go 在 KAFKA_ENABLED=false 时构造 DevEventPublisher 替代 nil
+PR-A1.3: REFACTOR 抽 EventConsumerBackport 接口
+         提取 message.created/conversation.created/closed → EventRow 的映射函数
+         后续 A2/A3 修复全部改这一处
 ```
 
-**验收**：`KAFKA_ENABLED=false` 时 `user_behavior_events` 行数 = `message.created` 计数。
+**验收**：
+- `KAFKA_ENABLED=false` 启 chat-svc → 发 10 条 message → `user_behavior_events` 增 10 行
+- `outbox_events` 对应 10 行 status=sent（relay 走通）
+- `KAFKA_ENABLED=true` 路径无回归（沿用 sarama）
 
 ---
 
@@ -293,6 +328,7 @@ PR-C2.4: GREEN BFF 透传 intent_type
 
 - ADR-17：[adr-2026-09-chart-contract-alignment.md](/docs/architecture/adr/adr-2026-09-chart-contract-alignment.md) §"stage-37 路线图"
 - ADR-18：[adr-2026-09-incremental-rpc-adoption.md](/docs/architecture/adr/adr-2026-09-incremental-rpc-adoption.md) §"BFF→chat-svc 工作量最大排 stage-38"
+- ADR-19：[adr-2026-09-dev-publisher-user-behavior-events.md](/docs/architecture/adr/adr-2026-09-dev-publisher-user-behavior-events.md)（roadmap PR-A1 修订）
 - Stage 36-FU：[stage-36-followup-closure.md](/docs/stages/stage-36-followup-closure.md) §四
 - docs/plans/[file-upload-message-extension.md](/docs/plans/file-upload-message-extension.md)
 - docs/plans/[wechat-qq-login-and-upload.md](/docs/plans/wechat-qq-login-and-upload.md)
