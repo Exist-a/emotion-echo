@@ -132,6 +132,18 @@ try:
         sys.exit(2)
     print(f"[pre] msg_id={msg_id}")
 
+    # 触发 conversation.closed（DELETE）让 §2 能验 conversation_closed enum
+    try:
+        req = urllib.request.Request(
+            BFF + f"/api/v1/conversations/{conv_id}",
+            method="DELETE",
+        )
+        req.add_header("X-User-Id", str(user_id))
+        with urllib.request.urlopen(req, timeout=8) as r:
+            print(f"[pre] DELETE conv: HTTP {r.status}")
+    except Exception as e:
+        print(f"[pre] DELETE conv skipped: {e}")
+
     # 等 5s 让 outbox relay + 异步消费者有机会跑
     print("[pre] sleep 5s 等待 outbox relay + consumer...")
     time.sleep(5)
