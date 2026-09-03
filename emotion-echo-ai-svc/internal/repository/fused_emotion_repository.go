@@ -161,15 +161,28 @@ func (r *PostgresFusedEmotionRepo) GetByMessageID(ctx context.Context, messageID
 	return &f, nil
 }
 
-// ListPending 当前返回所有 fused message_id（与 InMemory 版对齐）。
+// ListPending 返回"有 emotion_analysis 但还没 fused_emotions"的 message_id 候选。
 //
-// 增强版本（PR-13/14 Worker）：WHERE created_at < NOW() - INTERVAL '5 minutes'
-// 表示"5 分钟还没收敛"的候选，配合 emotion_analysis 反查找"有 text 还没 fused"。
+// Stage 37-B 真因：原实现只 SELECT FROM fused_emotions，永远返回空（PG 启动时表是空的），
+// 导致 FusionWorker candidates=0 永远不工作 → /reports/daily 拿不到情绪数据。
+//
+// SQL 语义：
+//   SELECT ea.message_id FROM emotion_echo_ai.emotion_analysis ea
+//   LEFT JOIN emotion_echo_ai.fused_emotions fe USING (message_id)
+//   WHERE fe.message_id IS NULL
+//
+// ttlSeconds 参数当前未使用（与 InMemory 版对齐语义：列出所有未收敛候选），
+// 未来"已 fused 但 TTL 内无新 face/voice 数据则不再重试"再扩展。
 func (r *PostgresFusedEmotionRepo) ListPending(ctx context.Context, ttlSeconds int) ([]int64, error) {
 	var ids []int64
 	err := r.db.WithContext(ctx).
-		Model(&model.FusedEmotion{}).
-		Pluck("message_id", &ids).Error
+		Raw(`
+			SELECT ea.message_id
+			FROM emotion_echo_ai.emotion_analysis ea
+			LEFT JOIN emotion_echo_ai.fused_emotions fe USING (message_id)
+			WHERE fe.message_id IS NULL
+		`).
+		Scan(&ids).Error
 	if err != nil {
 		return nil, err
 	}
