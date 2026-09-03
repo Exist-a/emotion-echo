@@ -569,13 +569,21 @@ services:
   #   NUXT_PUBLIC_API_BASE_URL → BFF :8894（聚合 5 下游）
   # =====================================================
   emotion-echo-web:
-    profiles: ["never"]  # TEMP: skip until Bug 9 (npmmirror) is fixed
+    # Stage 36-FU Bug 9 closure: profiles: ["never"] removed.
+    # Emotion-Echo-Web/Dockerfile now accepts NPM_REGISTRY build arg
+    # (defaults to https://registry.npmjs.org/), so the container builds
+    # without depending on registry.npmmirror.com (which is unreachable
+    # inside Docker on Windows hosts). The previous "TEMP: skip until
+    # Bug 9 (npmmirror) is fixed" was a Band-Aid that left Bug 9 partial
+    # per stage-36-smoke-report.md §九.
     build:
       context: ../Emotion-Echo-Web
       dockerfile: Dockerfile
       args:
         # SPA 纯前端：API_BASE_URL 在浏览器执行，需宿主可达地址（BFF :8894 已映射宿主）
         NUXT_PUBLIC_API_BASE_URL: http://localhost:8894/api/v1
+        # Bug 9: default to public npmjs; override via build-arg in restricted networks
+        NPM_REGISTRY: https://registry.npmjs.org/
     image: emotion-echo/web:v0.1.0
     container_name: emotion-echo-web
     restart: unless-stopped
