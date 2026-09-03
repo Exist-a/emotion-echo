@@ -77,6 +77,12 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      # Stage 37-A: dev 单节点 Kafka 默认 offsets topic 副本 3 = coordinator 永远建不起来
+      # → analytics-svc consumer 永远拿不到 group coordinator → user_behavior_events 永远空
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
     # Stage 33 PR-20: 端口收紧（容器内通信即可）
     expose:
       - "9092"
