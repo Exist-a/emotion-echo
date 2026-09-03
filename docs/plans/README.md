@@ -15,6 +15,8 @@ status: Round 1 占位 · Round 2 首批内容迁入
 | `ai-response-structured.md` | `.trae/documents/ai-response-structured.md` | AI 回复结构化 + Markdown 渲染 |
 | `three-vrm-usage-reference.md` | `.trae/documents/three-vrm-usage-reference.md` | Three-VRM API 参考手册 |
 | `wechat-qq-login-and-upload.md` | `.trae/documents/微信QQ登录和文件上传实施计划.md` | QQ OAuth + 通用文件上传 |
+| `nacos-enablement-dev.md` | 新增 | Nacos dev 模式从"半启用"到"全链路" |
+| `observability-compose-gap.md` | 新增 | dev compose 可观测性三层补齐（metrics / logs / traces），与 k8s 路径对齐 |
 
 ## 写入规范
 

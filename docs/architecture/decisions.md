@@ -5,7 +5,9 @@
 > 决策变更时，**先改本文档，再改代码**，保持文档先行。
 
 > 💡 **部署形态定位**：本项目当前采用「分布式架构 + 单机部署（单机多实例）」模式。详细差异、与多机部署的对比、以及当前部署栈的取舍见 [architecture-positioning.md](/docs/architecture/positioning.md)。
-> 最后更新：2026-09-03（撤回 2026-08-31 决策 10 "不引入注册中心/配置中心" 判断；新增决策 11/12/13，演进路线 Stage 31/32/33；详见 `adr-2026-09-nacos-reintroduction.md`）
+> 最后更新：2026-09-04（新增决策 17 · dev 模式日志聚合后端 = Loki，详见 `adr-2026-09-loki-aggregator-dev.md`）
+
+> 2026-09-03：撤回 2026-08-31 决策 10 "不引入注册中心/配置中心" 判断；新增决策 11/12/13，演进路线 Stage 31/32/33；详见 `adr-2026-09-nacos-reintroduction.md`
 
 ---
 
@@ -221,6 +223,20 @@
 | G8 | Nacos 配置中心未启 | 🟢 低 | 36-D |
 
 **原则**：Stage 36 之后所有缺口默认进入修复日程；唯一例外是需外部资源（API key / 付费服务）且无 dev 环境的项，标记为 **blocked-external**。
+
+### 决策 17：dev 模式日志聚合后端 = **Loki（filesystem 单节点）**（2026-09-04）
+
+> ✅ 2026-09-04 生效。详见 `adr-2026-09-loki-aggregator-dev.md`。
+>
+> **范围限定**：本文仅约束 dev compose 路径的日志聚合后端。prod 长期存储（Loki S3 / minio / EFK 替换）留作 ADR-2 候选，本 ADR 不展开。
+
+| 维度 | 选择 |
+|------|------|
+| dev compose 日志后端 | **Loki 3.2.0** + Promtail（filesystem 单节点模式）|
+| 镜像 / 版本对齐 | 严格复用 [charts/emotion-echo/charts/loki/values.yaml](../../charts/emotion-echo/charts/loki/values.yaml)（镜像 `grafana/loki:3.2.0` / `grafana/promtail:3.2.0`，retention 1d）|
+| 与 k8s 路径一致性 | ✅ dev/k8s 行为一致 |
+| 候选 | ❌ EFK（资源重，dev 不必要） / ❌ 直 docker logs（无查询能力）|
+| 推动 | `plans/observability-compose-gap.md` §3.2 落地 |
 
 ---
 

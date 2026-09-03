@@ -19,7 +19,7 @@ status: Round 1 占位 · 内容在 Round 3 归位
 | `audit-2026-08-31.md` | `docs/architecture-audit-2026-08-31.md` | 架构审计 |
 | `decomposition-plan.md` | `docs/microservice-decomposition-plan.md` | 微服务拆分 |
 | `microservices.md` | `docs/microservices-architecture.md` | 微服务架构 |
-| `adr/` | `docs/adr-2026-09-*.md` | 编号 ADR（6 份） |
+| `adr/` | `docs/adr-2026-09-*.md` | 编号 ADR（7 份） |
 
 ## 暂未迁入
 
