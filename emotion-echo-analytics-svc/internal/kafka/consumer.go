@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"emotion-echo-analytics-svc/internal/events"
@@ -216,7 +217,11 @@ func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
 		return err
 	}
 
-	var target string
+	// Stage 37-A A2/A3:
+	//   - event_type: 落 DB 用细分的 ev.Type（"conversation.created" → "conversation_created"），
+	//     不再合并成 "conversation"——下游能区分 created vs closed
+	//   - target: 落 DB 用 message.id / conversation.id（语义化外键），不再是 Event.ID
+	var targetID string
 	var userID int64
 	switch ev.Type {
 	case events.EventTypeMessageCreated:
@@ -224,21 +229,21 @@ func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
 		if err := remarshal(ev.Data, &d); err != nil {
 			return err
 		}
-		target = "message"
+		targetID = strconv.FormatInt(d.MessageID, 10)
 		userID = d.UserID
 	case events.EventTypeConversationCreated:
 		var d events.ConversationCreatedData
 		if err := remarshal(ev.Data, &d); err != nil {
 			return err
 		}
-		target = "conversation"
+		targetID = strconv.FormatInt(d.ConversationID, 10)
 		userID = d.UserID
 	case events.EventTypeConversationClosed:
 		var d events.ConversationClosedData
 		if err := remarshal(ev.Data, &d); err != nil {
 			return err
 		}
-		target = "conversation"
+		targetID = strconv.FormatInt(d.ConversationID, 10)
 		userID = d.UserID
 	default:
 		// 未知事件类型 — 跳过但不报错
@@ -249,12 +254,31 @@ func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
 	be := &model.UserBehaviorEvent{
 		EventID:    ev.ID, // Stage 30-C A1: 事件 ID 作幂等键 → 重复消费去重
 		UserID:     userID,
-		EventType:  target,
-		Target:     ev.ID, // 用 Event.ID 作 target 标识
-		SessionID:  msg.Topic, // 没有 session 字段，暂用 topic
+		EventType:  normalizeEventType(ev.Type), // Stage 37-A A3: 细分 enum
+		Target:     targetID,                    // Stage 37-A A2: message.id / conv.id 而非 Event.ID
+		SessionID:  msg.Topic,                   // 没有 session 字段，暂用 topic
 		OccurredAt: ev.Time,
 	}
 	return h.repo.Create(nil, be) // 简化：ctx nil；真实应传 sess.Context()
+}
+
+// normalizeEventType 把 ev.Type 转换为 user_behavior_events.event_type 落库值：
+//   "message.created"          → "message"
+//   "conversation.created"     → "conversation_created"
+//   "conversation.closed"      → "conversation_closed"
+//
+// Stage 37-A A3 之前：把 conversation.* 都映射成 "conversation"，细分丢失。
+func normalizeEventType(t string) string {
+	switch t {
+	case events.EventTypeMessageCreated:
+		return "message"
+	case events.EventTypeConversationCreated:
+		return "conversation_created"
+	case events.EventTypeConversationClosed:
+		return "conversation_closed"
+	default:
+		return t
+	}
 }
 
 // remarshal 把 any-typed Data 字段二次反序列化为目标类型

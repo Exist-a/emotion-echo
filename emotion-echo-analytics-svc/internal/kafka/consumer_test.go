@@ -101,7 +101,9 @@ func TestHandleOne_MessageCreated_WritesRow(t *testing.T) {
 	got := repo.items[0]
 	assert.Equal(t, int64(42), got.UserID)
 	assert.Equal(t, "message", got.EventType)
-	assert.Equal(t, "evt-1", got.Target)
+	// Stage 37-A A2: target 必须是 message_id 而非 Event.ID
+	// MessageID=1,EventID=evt-1 → target=1, event_id=evt-1
+	assert.Equal(t, "1", got.Target, "Stage 37-A A2: target 必须是 message.id 而非 Event.ID")
 	assert.Equal(t, "evt-1", got.EventID, "Stage 30-C A1: EventID 应从 ev.ID 透传")
 }
 
@@ -123,7 +125,9 @@ func TestHandleOne_ConversationCreated_WritesRow(t *testing.T) {
 	require.NoError(t, h.handleOne(msg))
 	require.Len(t, repo.items, 1)
 	assert.Equal(t, int64(99), repo.items[0].UserID)
-	assert.Equal(t, "conversation", repo.items[0].EventType)
+	// Stage 37-A A3: event_type 必须细分，不再都是 "conversation"
+	assert.Equal(t, "conversation_created", repo.items[0].EventType,
+		"event_type 必须细分为 conversation_created 而非 conversation（Stage 37-A A3）")
 }
 
 func TestHandleOne_ConversationClosed_WritesRow(t *testing.T) {
@@ -144,7 +148,9 @@ func TestHandleOne_ConversationClosed_WritesRow(t *testing.T) {
 	require.NoError(t, h.handleOne(msg))
 	require.Len(t, repo.items, 1)
 	assert.Equal(t, int64(99), repo.items[0].UserID)
-	assert.Equal(t, "conversation", repo.items[0].EventType)
+	// Stage 37-A A3: conversation_closed 也必须细分
+	assert.Equal(t, "conversation_closed", repo.items[0].EventType,
+		"event_type 必须细分为 conversation_closed 而非 conversation（Stage 37-A A3）")
 }
 
 func TestHandleOne_UnknownType_SkipsNoError(t *testing.T) {
