@@ -1,441 +1,344 @@
 # Emotion-Echo 完整启动与测试流程
 
+> Stage 36-D：本文版对应**当前 Stage 30+ BFF 架构**（6 个 Go 微服务 + Python gRPC + BFF 聚合 + 前端 Nuxt + AI profile）。
+> 历史单体 Gin 已迁移至 `legacy/emotion-echo-gin/`。
+
 ## 目录
 
-1. \[项目架构预览
-2. \[快速启动（推荐）
-3. \[各服务详细启动步骤
-4. \[完整功能测试流程
-5. \[常见问题解决
+1. [项目架构预览](#1-项目架构预览)
+2. [快速启动（Docker Compose 推荐）](#2-快速启动docker-compose-推荐)
+3. [各服务详细启动步骤](#3-各服务详细启动步骤)
+4. [完整功能测试流程](#4-完整功能测试流程)
+5. [常见问题解决](#5-常见问题解决)
 
-***
+---
 
 ## 1. 项目架构预览
 
 ```
-Emotion-Echo
-├── Emotion-Echo-Web (前端 - Nuxt 3 + Element Plus)
-├── Emotion-Echo-Gin (后端 - Go + Gin + PostgreSQL + Redis)
-└── Emotion-Echo-LLM
-    ├── sensevoice-small (语音情绪识别模型)
-    ├── XTTS (语音合成模型)
-    └── FER (人脸情绪识别模型)
+Emotion-Echo/
+├── Emotion-Echo-Web/                # 前端 Nuxt 3 + Element Plus
+├── emotion-echo-user-svc/           # 用户认证 (Go + Gin :8888)
+├── emotion-echo-chat-svc/           # 会话与消息 (Go + Gin :8890)
+├── emotion-echo-analytics-svc/      # 情绪分析报表 (Go + Gin :8893)
+├── emotion-echo-assessment-svc/     # 心理量表 (Go + Gin :8889)
+├── emotion-echo-ai-svc/             # AI 编排 (Go + gRPC :8892 + HTTP :8891)
+├── emotion-llm-service/             # Python gRPC LLM 推理 (:8000 + :50051)
+├── emotion-echo-web-bff/            # 唯一 BFF 入口 (Go + Gin :8894)
+├── Emotion-Echo-LLM/                # 多模态 AI profile
+│   ├── FER/                         # 人脸情绪 (:8004, profile ai)
+│   ├── sensevoice-small/            # 语音情绪 (:8002, profile ai)
+│   └── XTTS/                        # 语音合成 (:8003, profile ai)
+├── legacy/emotion-echo-gin/         # 已归档的单体 Gin（**不再使用**）
+└── deploy/                           # docker-compose 编排
+    ├── docker-compose.infra.yml     # PG/Redis/Kafka/Nacos/SW
+    └── docker-compose.apps.yml       # 6 Go svc + BFF + emotion-llm-service + AI profile
 ```
 
-服务端口说明：
+### 服务端口说明（开发模式）
 
-- **前端**: <http://localhost:3000>
-- **后端 API**: <http://localhost:8080>
-- **SenseVoice**: <http://localhost:8002>
-- **XTTS-v2**: <http://localhost:8003>
-- **FER**: <http://localhost:8004>
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
+| 服务 | 容器内 | 宿主映射 |
+|---|---|---|
+| **前端 Web (Nuxt)** | :3000 | <http://localhost:3000> |
+| **BFF (唯一入口)** | :8894 | <http://localhost:8894> |
+| user-svc | :8888 | (容器内) |
+| chat-svc | :8890 | (容器内) |
+| analytics-svc | :8893 | (容器内) |
+| assessment-svc | :8889 | (容器内) |
+| ai-svc (HTTP/gRPC) | :8891 / :8892 | (容器内) |
+| emotion-llm-service (HTTP/gRPC) | :8000 / :50051 | (容器内) |
+| FER (AI profile) | :8004 | (容器内) |
+| SenseVoice (AI profile) | :8002 | (容器内) |
+| XTTS (AI profile) | :8003 | (容器内) |
+| PostgreSQL | :5432 | (容器内) |
+| Redis | :6379 | (容器内) |
+| Kafka | :9092 | (容器内) |
+| Nacos | :8848 | <http://localhost:8848/nacos> |
+| SkyWalking UI | :8080 | <http://localhost:8080> |
 
-***
+---
 
-## 2. 快速启动（推荐）
+## 2. 快速启动（Docker Compose 推荐）
 
 ### 前置要求
 
-- Node.js 18+
-- Go 1.21+
-- Docker Desktop 或 Docker Compose
-- Python 3.10+ (用于 AI 服务)
-- Git
+- Docker Desktop 或 Docker Engine + Compose v2
+- Go 1.21+（如需本地开发）
+- Node.js 18+（如需前端本地 dev）
+- Python 3.10+（仅 AI profile 构建时需要）
 
-### 步骤 1：克隆项目（如果还没 clone）
+### 步骤 1：克隆项目
 
 ```bash
 cd d:\源码\Emotion-Echo
 ```
 
-### 步骤 2：启动数据库服务（PostgreSQL + Redis）
-
-\*\*Windows:
+### 步骤 2：环境变量（可选，用于真实 LLM）
 
 ```bash
-cd Emotion-Echo-Gin
-docker-compose up -d
+# 默认走 mock LLM fallback；接入真实 DeepSeek：
+cp deploy/env/.env.local.example deploy/env/.env.local
+# 编辑 LLM_API_KEY=sk-... 和 BFF_LLM_API_KEY=sk-...
 ```
 
-\*\*等待数据库启动完成（约 30 秒）
-
-### 步骤 3：配置后端
+### 步骤 3：启动基础设施
 
 ```bash
-# 复制配置文件
-copy configs\config.example.yaml configs\config.yaml
-
-# 编辑 configs\config.yaml，修改以下内容：
-# - database.postgres.password （留空即可，docker-compose 配置的是无密码）
-# - ai.kimi.api_key (如果需要 AI 功能，填入你的 Kimi API Key)
+cd deploy
+docker compose -f docker-compose.infra.yml up -d
+# 等待 30~60 秒各容器健康
+docker compose -f docker-compose.infra.yml ps
+# 期望: postgres/redis/kafka/nacos/sw-oap/sw-ui 都 healthy
 ```
 
-### 步骤 4：启动后端
+### 步骤 4：启动业务应用
 
 ```bash
-# 安装依赖（首次）
-go mod download
+# 6 Go svc + emotion-llm-service + ai-svc + BFF
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d --no-build
 
-# 启动后端服务
-go run ./cmd/server/main.go
+# （可选）启动 AI profile（FER / SenseVoice / XTTS）
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml --profile ai up -d --no-build emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
 ```
 
-后端将在 <http://localhost:8080> 启动
-
-### 步骤 5：启动前端（新开终端）
+### 步骤 5：验证联通
 
 ```bash
-cd ..\Emotion-Echo-Web
+# 1. BFF 健康检查（聚合 6 下游）
+curl http://localhost:8894/health
+# 期望: {"status":"ok","downstream":{"ai":"ok",...,"xtts":"ok"}}
 
-# 安装依赖（首次）
-npm install
+# 2. 端到端冒烟（16/16 通过为 GREEN）
+python scripts/smoke_bff_t5.py
 
-# 启动前端开发服务器
-npm run dev
+# 3. 容器健康
+bash scripts/healthcheck_smoke.sh
+
+# 4. 测试账号就绪
+bash scripts/check_seed_users.sh
+# 期望: GREEN: 13800138000 / abc123 ready
 ```
 
-前端将在 <http://localhost:3000> 启动
-
-### 步骤 6：（可选）启动模型服务
-
-#### SenseVoice 语音情绪识别
-
-```bash
-cd ..\Emotion-Echo-LLM\sensevoice-small
-
-# 创建 Python 虚拟环境（首次）
-conda create -n sensevoice python=3.10 -y
-conda activate sensevoice
-
-# 安装依赖
-pip install -r requirements-server.txt
-
-# 启动服务（CPU 模式）
-python server.py
-```
-
-#### XTTS-v2 语音合成（新开终端）
-
-```bash
-cd ..\Emotion-Echo-LLM\XTTS
-
-# 创建 Python 虚拟环境（首次）
-conda create -n xtts python=3.10 -y
-conda activate xtts
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动服务
-python server.py --device cpu
-```
-
-#### FER 人脸情绪识别（新开终端）
-
-```bash
-cd ..\Emotion-Echo-LLM\FER
-
-# 创建 Python 虚拟环境（首次）
-conda create -n fer python=3.10 -y
-conda activate fer
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动服务
-python server.py
-```
-
-***
+---
 
 ## 3. 各服务详细启动步骤
 
-### A. 数据库服务
+### A. 数据库 / 基础设施（已 Stage 26-Q 升级到 PG/Redis/Kafka/SkyWalking/Nacos）
 
-**使用 Docker Compose（推荐）：**
+**使用 Docker Compose：**
 
 ```bash
-cd Emotion-Echo-Gin
-
-# 启动
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止
-docker-compose down
+cd deploy
+docker compose -f docker-compose.infra.yml up -d
+docker compose -f docker-compose.infra.yml logs -f
+docker compose -f docker-compose.infra.yml down   # 停止
+docker compose -f docker-compose.infra.yml down --volumes   # 同时删卷（**会丢数据**）
 ```
 
-\*\*验证：
+**验证：**
+- PostgreSQL：`docker exec -it emotion-echo-postgres psql -U postgres -d emotion_echo -c '\l'`
+- Redis：`docker exec -it emotion-echo-redis redis-cli ping`
+- Kafka：`MSYS_NO_PATHCONV=1 docker exec emotion-echo-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list`
+- Nacos 控制台：<http://localhost:8848/nacos>（nacos/nacos）
+
+### B. 业务微服务（6 Go svc + BFF + emotion-llm-service）
+
+**镜像已预构建，直接 up 即可**：
 
 ```bash
-# 验证 PostgreSQL
-psql -h localhost -p 5432 -U postgres -d emotion_echo -c "SELECT version();"
-
-# 验证 Redis
-redis-cli ping
+cd deploy
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d --no-build
 ```
 
-### B. 后端服务
-
-**详细启动：**
+**本地开发模式**（需要 go.mod / go.work）：
 
 ```bash
-cd Emotion-Echo-Gin
-
-# 1. 检查配置
-# 确保 configs/config.yaml 已正确配置
-
-# 2. 安装依赖
+cd emotion-echo-user-svc
 go mod download
-
-# 3. 启动
-go run ./cmd/server/main.go
+POSTGRES_DSN="host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_user" \
+    SKYWALKING_OAP_ADDR=localhost:11800 \
+    go run main.go
 ```
 
-\*\*健康检查：
+各 svc 的 `etc/<svc>-api.yaml` 是 go-zero 风格（含 listen port + 数据库 DSN 等）。
+
+### C. AI profile（FER / SenseVoice / XTTS）
+
+**预构建镜像已存在**，启动：
 
 ```bash
-curl http://localhost:8080/health
+cd deploy
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml --profile ai up -d --no-build emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
 ```
 
-\*\*测试账号：
-
-- 手机号：13800138000
-- 密码：abc123
-
-### C. 前端服务
-
-**详细启动：**
+**验证：**
 
 ```bash
-cd Emotion-Echo-Web
-
-# 1. 安装依赖
-npm install
-
-# 2. 启动开发服务器
-npm run dev
-
-# 3. 构建生产版本
-npm run build
+curl http://emotion-echo-fer:8004/health
+# {"status":"ok","model_loaded":false,"backend":"neutral-fallback"}
 ```
 
-### D. SenseVoice 情绪识别服务
+**已知限制**（参考 `docs/ai-images-build-guide.md`）：
+- FER `emotion_net.caffemodel` 未预烘焙 → 永远 neutral-fallback
+- XTTS `model.pth` PyTorch 2.6+ 兼容 → 用 `emotion-echo/xtts:v0.1.9` 已包含 torchaudio shim
+- SenseVoice pre-bake 后秒启动（funasr metadata 校验）
 
-**详细启动：**
-
-```bash
-cd Emotion-Echo-LLM\sensevoice-small
-
-# 1. 创建并激活虚拟环境
-conda create -n sensevoice python=3.10 -y
-conda activate sensevoice
-
-# 2. 安装依赖
-pip install -r requirements-server.txt
-
-# 3. CPU 模式启动（推荐测试用）
-python server.py --host 0.0.0.0 --port 8002 --device cpu
-
-# GPU 模式（需要 NVIDIA GPU）
-python server.py --host 0.0.0.0 --port 8002 --device cuda:0
-```
-
-\*\*验证服务：
-
-```bash
-# 健康检查
-curl http://localhost:8002/health
-
-# 测试情绪识别
-curl -X POST http://localhost:8002/analyze \
-  -F "file=@example/zh.mp3"
-```
-
-***
+---
 
 ## 4. 完整功能测试流程
 
 ### 测试 1：基础功能验证
 
 **步骤：**
+1. 打开浏览器：<http://localhost:3000>（或 curl BFF `/health`）
+2. 登录用测试账号：
+   - 用户名：`13800138000`
+   - 密码：`abc123`
+3. 进入首页
 
-1. 打开浏览器：<http://localhost:3000>
-2. 使用测试账号登录：
-   - 手机号：13800138000
-   - 密码：abc123
-3. 检查是否能正常进入首页
+### 测试 2：端到端冒烟（推荐）
 
-### 测试 2：文本对话功能
+```bash
+python scripts/smoke_bff_t5.py
+```
+
+期望：**16/16 通过**。覆盖 BFF `/health` 聚合 6 下游、登录、当前用户、创建/列表会话、发送消息、AI 流式回复（mock 或真实 LLM）、情绪分析报表、心理量表列表、Prometheus metrics。
+
+### 测试 3：文本对话功能
 
 **步骤：**
-
 1. 登录后点击「开始对话」
 2. 创建新会话
 3. 输入文本消息，如：「今天心情不太好」
-4. 检查 AI 回复是否正常
-
-### 测试 3：语音消息功能（需要启动 SenseVoice）
-
-**步骤：**
-
-1. 在会话页面，点击录音按钮
-2. 开始录音，说几句话
-3. 点击停止录音
-4. 检查是否能正常识别为语音消息
-5. 检查语音条是否能正常播放
-6. 检查识别文本是否正确
-7. 检查情绪识别标签是否显示
+4. 检查 AI 回复是否正常（mock fallback 给共情回复；真实 LLM 给定制回复）
 
 ### 测试 4：情绪分析报表
 
 **步骤：**
-
-1. 发送多条消息（建议 10 条以上
+1. 发送多条消息（建议 10 条以上）
 2. 进入「用户中心」→「情绪报告」
 3. 检查日报、周报、月报
-4. 检查图表是否正常显示
-5. 切换深色模式检查图表适配
+
+**前置**：需要 Kafka 异步管道或手动调用 ai-svc `/api/v1/multimodal/analyze` 写 emotion_analysis 表。
 
 ### 测试 5：心理测验
 
 **步骤：**
-
 1. 进入「心理测验」
 2. 完成一个量表
-3. 检查结果是否正常
+3. 检查结果
 
 ### 测试 6：深色模式适配
 
 **步骤：**
-
 1. 切换深色/浅色模式
 2. 检查各页面元素
 3. 特别检查图表渲染
-4. 检查会话页面背景
 
-***
+---
 
 ## 5. 常见问题解决
 
-### 问题 1：端口被占用
-
-\*\*Windows：
+### Q1: 端口被占用
 
 ```bash
-# 查看端口占用
-netstat -ano | findstr :8080
-# 或
-netstat -ano | findstr :3000
-
-# 杀死进程
-taskkill /F /PID <PID号>
+netstat -ano | findstr :8894
+taskkill /F /PID <PID>
 ```
 
-### 问题 2：数据库连接失败
+### Q2: 数据库连接失败
 
-**检查：**
-
-1. Docker 是否正常运行
-2. PostgreSQL/Redis 容器状态
-
+检查 Docker 是否正常运行 + 容器状态：
 ```bash
-docker ps
+docker ps | grep emotion-echo-postgres
+docker logs emotion-echo-postgres
 ```
 
-### 问题 3：前端无法连接后端
+### Q3: 容器 (unhealthy) 但 /health 返回 200
 
-**检查：**
+参考 `scripts/healthcheck_smoke.sh`。可能原因：
+- start_period 太短（已默认 60s）
+- wget --spider 用 HEAD 但 /health 只支持 GET（已修）
+- kafka healthcheck 短路径找不到二进制（已修）
 
-1. 后端是否正常启动（访问 <http://localhost:8080/health>
-2. 前端配置的 API 地址是否正确
+### Q4: BFF /api/v1/reports/daily 500
 
-### 问题 4：SenseVoice 模型下载慢
+参考 `docs/stage-36-smoke-report.md` §九 Bug 2。修法：
+- ai-svc KAFKA_TOPIC/GROUP/ENABLED 注入
+- emotion_echo_chat.msg_summary_v VIEW 创建
+- deploy/db/04-create-views.sql 挂载到 postgres
 
-**解决：**
+### Q5: TTS /tts 500 (RuntimeError: Double vs Float)
 
-1. 首次运行时会自动下载模型
-2. 也可以手动下载后放到本地
-3. 或者使用国内镜像源
+参考 `docs/stage-36-smoke-report.md` §九 Bug 3 + `docs/ai-images-build-guide.md` §六 6.7。已用 `emotion-echo/xtts:v0.1.9` 修复（torchaudio shim）。
 
-### 问题 5：Go 依赖安装慢
+### Q6: 真实 LLM 走 mock
 
-**配置国内代理：**
-
+参考 `docs/stage-36-smoke-report.md` §八 T8：
 ```bash
-go env -w GOPROXY=https://goproxy.cn,direct
+cp deploy/env/.env.local.example deploy/env/.env.local
+# 填 LLM_API_KEY=sk-... 和 BFF_LLM_API_KEY=sk-...
+docker compose ... up -d --force-recreate emotion-echo-web-bff emotion-echo-ai-svc
 ```
 
-### 问题 6：npm 安装慢
+### Q7: 浏览器打不开 (http://localhost:3000)
 
-**配置国内镜像：**
+Web 容器构建需要 npm 仓库可达（Dockerfile 默认 npmmirror.com 容器内可能不可达）。**workaround**：
+1. 改 Dockerfile：`registry.npmjs.org` 替代 npmmirror
+2. 或本地 dev：`cd Emotion-Echo-Web && npm install && npm run dev`
 
-```bash
-npm config set registry https://registry.npmmirror.com
-```
-
-***
+---
 
 ## 完整启动命令清单
 
 ### Windows 完整启动脚本（PowerShell）
 
-\*\*终端 1：数据库
-
+**终端 1：基础设施**
 ```powershell
-cd Emotion-Echo-Gin
-docker-compose up -d
+cd deploy
+docker compose -f docker-compose.infra.yml up -d
 ```
 
-\*\*终端 2：后端
-
+**终端 2：业务应用**
 ```powershell
-cd Emotion-Echo-Gin
-go run ./cmd/server/main.go
+cd deploy
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d --no-build
 ```
 
-\*\*终端 3：前端
-
+**终端 3：（可选）AI profile**
 ```powershell
-cd Emotion-Echo-Web
-npm run dev
+cd deploy
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml --profile ai up -d --no-build emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
 ```
 
-\*\*终端 4：SenseVoice (可选)
-
+**验证：**
 ```powershell
-cd Emotion-Echo-LLM\sensevoice-small
-conda activate sensevoice
-python server.py
+python scripts/smoke_bff_t5.py
 ```
 
-***
+---
 
 ## 开发调试
 
 ### 后端日志查看
 
 ```bash
-# 后端会在终端直接输出日志
+docker logs -f emotion-echo-web-bff
+docker logs -f emotion-echo-ai-svc
 ```
-
-### 前端调试
-
-- 浏览器 F12 打开开发者工具
-- 查看 Console 和 Network 标签
 
 ### 数据库查看工具
 
-推荐使用：
+推荐 DBeaver / pgAdmin / Redis Desktop Manager。
 
-- DBeaver (免费)
-- pgAdmin
-- Redis Desktop Manager
+### 链路追踪
 
-***
+SkyWalking UI：<http://localhost:8080>（容器内访问 http://localhost:8080）
 
-\*\*祝开发愉快！有问题查看各服务的 README 文档。
+### 配置中心
+
+Nacos 控制台：<http://localhost:8848/nacos>（默认账号 nacos/nacos）
+
+---
+
+**祝开发愉快！有问题看 `docs/stage-36-smoke-report.md` + 各 stage 文档。**
