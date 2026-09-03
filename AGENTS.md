@@ -28,6 +28,36 @@ TDD = **Red → Green → Refactor** 三个动作的严格循环：
 - ❌ 测试需要网络/磁盘/数据库才能跑（必须便于 `go test ./...` 一键跑过）
 - ❌ 测试运行超过 5 秒不分层
 
+### 📚 文档撰写前必须做的功课（AI / 人类通用）
+
+**背景**：本项目长期受 AI 写错文档之害——典型症状：
+- roadmap 写"chat-svc 加 devFallbackRepo 同步写库"，**与实际架构（outbox + Kafka + consumer）不符**
+- ADR 写"HTTP 框架 = Gin（不再用 go-zero）"，**代码却硬依赖 go-zero**
+- 决策 2（APISIX）被退役又被复职，**状态未在文档里同步**
+
+**硬规则**：写任何文档（roadmap / ADR / stage landing / plan / docs/plans/）之前，必须先做以下功课，**未做禁止动笔**：
+
+| 步骤 | 必须做什么 | 输出 |
+|------|----------|------|
+| ① 读相关代码 | 用 Read / Grep 工具读至少 3 个关键实现文件 + 1 个测试文件，列文件名 | "已读：emotion-echo-chat-svc/internal/events/events.go 等 N 个文件" |
+| ② 读相关 ADR | 用 Grep 搜现有 ADR / stage / decisions.md，看是否有相关决策已被记录 | "已查：ADR-XX §X，stage-Y §Z" |
+| ③ 跑现状 smoke（如适用） | 涉及业务契约的文档必须先跑 [scripts/smoke_data_layer.py](/scripts/smoke_data_layer.py) | smoke 输出截图 / 退出码 |
+| ④ 网上信息（如涉及外部依赖） | 涉及 Kafka / Postgres / 第三方库版本号等，必须 WebFetch / WebSearch 官方文档 | 引用 URL |
+| ⑤ 列架构假设清单 | 在文档 §A "上下文" 写"本文假设 X / Y / Z"，与现状对比 | 假设清单 |
+| ⑥ 写完后回填 | commit message 末尾列 "调研依据：文件 A、文件 B、ADR-XX §Y、smoke 输出 N 项 FAIL" | commit 末尾 |
+
+**违反此规则的典型后果**（实际发生过的）：
+- A1 修复方向定错 → 走 Kafka 配置而不是 chat-svc dev fallback
+- A4 修 GRANT 但视图根本没建 → 白修
+- ADR 决策与代码矛盾 → 误导后续 PR
+
+**AI 自检清单**（每次写文档前在内部确认）：
+1. 我读了实际代码文件吗？还是只在脑子里"以为"架构是这样？
+2. 我查了所有相关 ADR / stage 文档吗？还是只看了 roadmap 顶部？
+3. 我跑过 smoke 看现状吗？还是基于"上次跑过 16/16 绿"的旧印象？
+4. 我引用的版本号 / 配置名是从代码里 grep 出来的，还是凭记忆写的？
+5. 如果文档是修另一份文档的修订，我在 commit message 引用原文档了吗？
+
 ---
 
 ## 一、测试栈与工具
@@ -238,6 +268,7 @@ type IDGen interface { New() string }
 | 在测试包里导出 API / 写生产逻辑 | 测试代码不可被打进 binary 但仍污染仓库 |
 | 跳过 §2.4 数据契约 smoke 直接合并 | smoke 16/16 全绿但 dev 模式 `chartData=[]` / `event_type='conversation'` / `permission denied` 类 bug 永远抓不到 |
 | dev 模式改动只测 `KAFKA_ENABLED=true` 路径 | outbox publisher=nil、Kafka fallback 等 dev-only 路径 bug 潜伏到下次拉数据才暴露 |
+| 写文档前不读代码 / 不查 ADR / 不跑 smoke 直接动笔 | roadmap / ADR / plan 与实际架构不符，修代码时按错文档走（如 A1 修复方向定错、A4 修 GRANT 但视图没建） |
 
 ---
 
