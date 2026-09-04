@@ -1,20 +1,35 @@
 ---
 status: snapshot
 date: 2026-09-03
+revised: 2026-09-04
 purpose: 当前 dev 模式完整功能状态盘点（用户问"代码是否可以正常使用"的诚实回答）
+revision-note: |
+  2026-09-04 复核：本文原 6 项阻断中 3 项为误诊（阻断 2/3 是路径契约不一致而非路由缺失，
+  阻断 5 已不复现），§四 隐患 1 反向升级为已发作、隐患 2 撤回。
+  各节内已就地标注，勿直接引用未标注的原文结论。
 ---
 
-# Stage 38 系统状态盘点 · 2026-09-03
+# Stage 38 系统状态盘点 · 2026-09-03（2026-09-04 复核修订）
 
 > 用户问："当前代码是否可以做到正常使用、功能没问题、每个组件都正常？"
 >
-> **诚实回答：后端数据契约全 PASS（10/10），但实际用户路径有 6 项阻断。**
+> **原答（2026-09-03）：后端数据契约全 PASS（10/10），但实际用户路径有 6 项阻断。**
+>
+> **复核后（2026-09-04）：后端数据契约仍 10/10 PASS；实际阻断只有 2 项**——
+> 前端 dev server 未起、TTS 不可用。原 6 项里 3 项是误诊或已消失，1 项性质变了
+> （文件上传不是路由 404，是后端有意未实现的 502 占位）。
+> 同时发现一项原文低估的真问题：dev 库 13 个服务迁移**一个都没应用过**（§四）。
 
 ---
 
 ## 一、整体一句话
 
-**后端通了，前端没起；AI 服务部分未起；用户路径上 TTS 和文件上传会撞墙。**
+**原文**：后端通了，前端没起；AI 服务部分未起；用户路径上 TTS 和文件上传会撞墙。
+
+**2026-09-04 修订**：后端通且容器全 healthy，前端仍没起（唯一"产品不可用"级阻断）；
+AI 本地模型容器（fer / sensevoice / xtts）已在 Stage 39 主动删除，故 TTS 撞墙；
+文件上传后端有意未实现；多模态其实是好的，之前是路径打错。
+**环境层面另有一个更严重的问题：迁移没有自动应用机制，库随时可能是半成品状态。**
 
 ---
 
@@ -67,19 +82,62 @@ outbox_events (sent) |  69   ← chat-svc outbox relay 推送
 - 真因：Stage 36 已记录"dev 环境 pypi CDN + Docker Desktop 内存限制，build 卡 30+ 分钟"
 - 修复路径：生产网络跑 build；或换 Coqui TTS pre-built image；或 TTS fallback 到 web speech API（前端）
 
-### ❌ 阻断 2：文件上传 404
+> **2026-09-04 更新（现状已变 + 本条的 404 依据同样有误）**
+>
+> 1. **XTTS 容器已不存在**。Stage 39 §五把它连同 fer / sensevoice / sw-oap / sw-ui
+>    一起删除（依据：ai-svc 容器 env 无 `XTTS_BASE_URL`，`aiclient` 空即返回 nil）。
+>    所以现在不是"模型加载卡死"，是**下游根本没有实例**。
+> 2. **本条写的 `/api/v1/ai/tts` 返 404 不能作为 TTS 不可用的证据**——该路径
+>    从来就不存在。BFF 实际注册的是 `POST /api/v1/tts/synthesize` 与
+>    `/api/v1/tts/stream`（`tts_handler.go:35-36`）。
+> 3. 实测正确路径：`POST /api/v1/tts/synthesize` → **503**（下游 XTTS 不可达），
+>    不是 404。BFF `/health` 里 xtts 一项也如实报 `unhealthy`：
+>    `Get "http://emotion-echo-xtts:8003/health": context deadline exceeded`。
+>
+> 结论不变——**TTS 仍然不可用**，但真因是"容器已删 + 镜像构建受阻"，
+> 而非"路由缺失"。前端若在调 `/api/v1/ai/tts`，那是另一处需要一并修的路径错。
 
-- 请求：`POST /api/v1/api/v1/upload/image` (BFF 透传)
-- 响应：`{"error":"not found"}` HTTP 404
-- 影响：聊天附件按钮发请求失败
-- 待查：路由是否真在 BFF 挂了
+### ⚠️ 阻断 2：文件上传 404 → **误诊，实为路径不一致 + 后端有意未实现**
 
-### ❌ 阻断 3：FER / 视觉多模态 404
+- 原记录：请求 `POST /api/v1/api/v1/upload/image` (BFF 透传)，响应 `{"error":"not found"}` HTTP 404
+- 原记录待查项："路由是否真在 BFF 挂了"
 
-- 请求：`POST /api/v1/multimodal/face`
-- 响应：`{"error":"not found"}` HTTP 404
-- 影响：人脸情绪识别不可用
-- 待查：路由是否真在 BFF 挂了
+> **2026-09-04 查清**：路由**挂了**，只是路径名不同。
+>
+> BFF 实际注册的是 `POST /api/v1/uploads/:kind`（`upload_handler.go:27`，注意是复数
+> `uploads`），`main.go:232` 有 `handler.NewUploadHandler().Register(r)`。
+> 打正确路径实测：`POST /api/v1/uploads/image` → **502**，body
+> `{"message":"uploads not implemented (Stage 31)"}`。
+>
+> 即 502 是 **Stage 30 T4.58 有意留的占位**——`upload_handler.go` 头部注释写明
+> "upload 真支持留给 Stage 31（引入对象存储）。首期统一返回 502，前端可感知
+> '未实现' 而不是 404"。
+>
+> 所以此项要拆成两件事：
+> 1. **前端路径写错**（`upload` 单数 + 重复 `/api/v1` 前缀）——前端侧修，成本极低
+> 2. **上传后端确实没实现**——需要先做对象存储选型，非 30 分钟能收口
+
+### ⚠️ 阻断 3：FER / 视觉多模态 404 → **误诊，端点完全正常**
+
+- 原记录：请求 `POST /api/v1/multimodal/face`，响应 `{"error":"not found"}` HTTP 404
+- 原记录待查项："路由是否真在 BFF 挂了"
+
+> **2026-09-04 查清**：路由挂了且**功能是好的**，原探测打了一个不存在的路径。
+>
+> BFF 实际注册的是 `POST /api/v1/multimodal/analyze`（`multimodal_handler.go:34`），
+> **没有 `/face` 子路由**——模态由请求参数 `kind` 区分（`text|image|audio`），不是路径。
+>
+> 另一个坑：handler 用 `c.PostForm` 读参数（`multimodal_handler.go:38,46`），
+> **只吃 form-data / x-www-form-urlencoded，发 JSON 会报 "kind is required"**。
+>
+> 实测（form 编码）：
+> ```
+> $ curl -X POST .../api/v1/multimodal/analyze -F "kind=text" -F "text=..."
+> {"code":0,"data":{"kind":"text","emotion":"neutral","confidence":0,
+>                   "model":"keyword-stub-v1"},"message":"ok"}
+> ```
+>
+> 所以本项**不是阻断**，是前后端契约不一致（路径 + 编码方式）。前端侧修即可。
 
 ### ❌ 阻断 4：前端 Nuxt dev server 没起
 
@@ -117,7 +175,7 @@ outbox_events (sent) |  69   ← chat-svc outbox relay 推送
 | 2 | `daily_emotion_by_modality_v` 视图依赖 `face_emotion_results` / `voice_emotion_results`，但 PG 实际是 `face_detections` / `voice_transcripts` | ✅ 误诊已撤回，见下 |
 | 3 | docs/plans/wechat-qq-login-and-upload.md 标 superseded（Stage 38-A） | ✅ 已修 |
 | 4 | `user_oauth` 表（Stage 19/22 设计）从未使用 | 🟢 低 |
-| 5 | ADR 与代码失真累计（至少 3 处） | 🟡 中（待 ADR-20 立项） |
+| 5 | ADR 与代码失真累计（至少 3 处） | ✅ 已立项为决策 18（实测已达 6 处，见下） |
 | 6 | `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR` 等迁移文件未挂 initdb.d | 🟢 低（仅重建场景） |
 
 > **2026-09-04 更正：隐患 1 升级为已发作，隐患 2 撤回**
@@ -162,6 +220,43 @@ outbox_events (sent) |  69   ← chat-svc outbox relay 推送
 - **浏览器界面**（前端 dev server 没起）
 - 看 `docker ps` 不被"unhealthy"字样吓到（视觉假象）
 
+> **2026-09-04 更正后的清单**（原清单里 3 条依据有误，见 §三）
+>
+> 真正撞墙的只剩两条：
+> - **浏览器界面** —— 前端 dev server 仍未起，3000 端口无监听。这是唯一
+>   "产品完全不可用"级别的项。
+> - **TTS 语音回复** —— XTTS 容器已删（Stage 39 §五），`/api/v1/tts/synthesize`
+>   返 503。
+>
+> 从撞墙清单移出：
+> - **多模态情绪识别** → 移到"可用"。`/api/v1/multimodal/analyze` 实测返
+>   `code:0`，功能正常，原 404 是打错路径。
+> - **`docker ps` unhealthy** → 移到"可用"。六个业务容器现全部 `(healthy)`。
+>
+> 性质改变：
+> - **文件上传** → 不是"路由 404"，是后端有意未实现（502 占位，等对象存储）
+>   + 前端路径写错（`upload` vs `uploads`）。
+
+---
+
+## 五之二、前后端路径契约不一致清单（2026-09-04 新增）
+
+§三 的三条误诊有同一个根源：**前端/文档使用的路径与 BFF 实际注册的路径不一致**。
+BFF 对未匹配路径统一返 `{"error":"not found"}` 404（`main.go` 的 `r.NoRoute`），
+所以任何路径写错都长得像"功能没实现"。完整对照：
+
+| 前端/文档在用 | BFF 实际注册 | 打对路径后的真实结果 |
+|---|---|---|
+| `/api/v1/upload/image` | `/api/v1/uploads/:kind` | 502（有意占位，未实现） |
+| `/api/v1/multimodal/face` | `/api/v1/multimodal/analyze`（模态走 `kind` 参数） | 200 `code:0` 正常 |
+| `/api/v1/ai/tts` | `/api/v1/tts/synthesize`、`/api/v1/tts/stream` | 503（XTTS 已删） |
+
+额外注意：`/api/v1/multimodal/analyze` 用 `c.PostForm` 取参，**发 JSON 会被拒**，
+必须 form-data / x-www-form-urlencoded。
+
+建议后续：给 BFF 补一份路由清单契约测试（断言注册路径集合），
+并让前端 API 层集中定义路径常量，避免逐处硬编码再次漂移。
+
 ---
 
 ## 六、修复优先级（按"用户可见 + 易修"排）
@@ -169,13 +264,14 @@ outbox_events (sent) |  69   ← chat-svc outbox relay 推送
 | 优先级 | 项 | 工作量 | 用户影响 |
 |---|---|---|---|
 | P0 | 用户本地 `pnpm dev` 起前端 | 5 分钟 | 立刻能看 UI |
-| P0 | 修文件上传 404（路由确认） | 30 分钟 | 聊天附件能用 |
-| P0 | 修多模态 404（路由确认） | 30 分钟 | 视觉情绪识别能用 |
-| P1 | 修 Dockerfile HEALTHCHECK 命令 | 30 分钟 | `docker ps` 干净 |
-| P1 | XTTS 模型加载（生产网络 build / 换镜像 / fallback） | 半天到一天 | TTS 语音能用 |
+| P0 | ~~修文件上传 404（路由确认）~~ → 前端改路径为 `/api/v1/uploads/:kind` | 10 分钟 | 从 404 变成可感知的 502"未实现" |
+| P0 | ~~修多模态 404（路由确认）~~ → 前端改路径 `analyze` + 改 form 编码 | 30 分钟 | 多模态情绪识别能用（后端本就正常） |
+| P1 | ~~修 Dockerfile HEALTHCHECK 命令~~ | — | **已不复现**，容器全 healthy |
+| P1 | XTTS 重建（生产网络 build / 换镜像 / 前端 fallback web speech） | 半天到一天 | TTS 语音能用 |
+| P1 | 文件上传后端实现（需先做对象存储选型） | 1-2 天 | 聊天附件真正可用 |
 | P2 | quickLogin 后端端点实现或前端删除 | 1-2 小时 | 一致性 |
-| P3 | migration 004/005/006 + event_id 挂 initdb.d | 2-3 小时 | 重建环境不丢表 |
-| P3 | `daily_emotion_by_modality_v` 视图对齐 schema 名 | 半天 | 修 §3 smoke 一个 SKIP |
+| P1 | ~~migration 挂 initdb.d~~ → migrations 自动应用机制 | 2-3 小时 | **升级为 P1**：dev 库实测 13 个迁移全未应用，环境不可重建。见 [db-migration-auto-apply.md](/docs/plans/db-migration-auto-apply.md) |
+| — | ~~`daily_emotion_by_modality_v` 视图对齐 schema 名~~ | — | **误诊撤回**，应用 ai-svc 002/003 后视图正常创建 |
 
 ---
 

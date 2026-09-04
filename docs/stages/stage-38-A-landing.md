@@ -140,7 +140,7 @@ $ curl -X POST http://localhost:8894/api/v1/auth/login \
 | 2 | 前端注册表单 placeholder 改"用户名"但 `getVerificationCode` 按钮仍要 6 位验证码 | dev 模式验证码固定 6 位 + 终端打印，与 username/password 模式无冲突；prod 上线再评估 |
 | 3 | `quick-login` 后端端点从未实现（前端 quickLogin 实际走标准 login） | Stage 38+ 单独 ADR 决定删前端 quickLogin 按钮 或 实现真 quick-login |
 | 4 | 登录失败限流：BFF auth_handler.go 有 `isLocked` + `recordFailure` 但未测试 | dev 不阻塞，留 Stage 38 |
-| 5 | 跨阶段 ADR 失真清单（Stage 1-37 累计多少处 roadmap/ADR 描述与代码不符） | 单独任务，Stage 38 起 ADR-20 立项 |
+| 5 | 跨阶段 ADR 失真清单（Stage 1-37 累计多少处 roadmap/ADR 描述与代码不符） | ✅ 2026-09-04 已立项为**决策 18**（`adr-2026-09-doc-drift-registry.md`）；编号不是当时估计的 ADR-20（决策序号实际排到 17）。已登记 6 条实测失真、归纳 4 类成因并定 4 条产出约束 |
 
 ---
 

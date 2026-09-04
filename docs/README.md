@@ -39,7 +39,7 @@ docs/
 │   ├── microservices.md
 │   ├── decomposition-plan.md
 │   ├── audit-2026-08-31.md
-│   └── adr/              # 6 份编号 ADR（adr-2026-09-*.md）
+│   └── adr/              # 9 份编号 ADR（adr-2026-09-*.md）
 │
 ├── deployment/           # 部署与运维
 │   ├── README.md

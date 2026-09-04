@@ -129,7 +129,8 @@ HTTP 200 ✓ (APISIX → jwt-auth 验签 → serverless 注 X-User-Id=3 → BFF 
 1. **`seed_v2.sh` 一次性脚本**（写死正确的字段名 + 全部 route + consumer 注册），dev compose up 后自动跑——避免每次重启 dev 都要手 PUT
 2. **APISIX docker 健康检查**——`/usr/local/apisix/logs/error.log` 应该有 "schema check failed" 日志，可以监控
 3. **`allow_credential` 单数 vs `allow_credentials` 复数**——APISIX 3.18 vs 2.x 的命名差异，是 dev 模式配置最大的踩坑点
-4. **ADR-20 文档失真清单归档**——把"roadmap 描述与代码失真"累计清单正式记录
+4. ~~**ADR-20 文档失真清单归档**~~——✅ 2026-09-04 已落地为**决策 18**
+   （`adr-2026-09-doc-drift-registry.md`，编号非当时估计的 ADR-20）
 
 ---
 
