@@ -113,10 +113,26 @@ CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
     raw_response JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uq_emotion_analysis_event_id
-    ON emotion_echo_ai.emotion_analysis(event_id);
--- Stage 36-D Bug 2 fix: 上面 CREATE UNIQUE INDEX 在 event_id 列不存在时会失败（旧版 cluster 漂移），
+-- Stage 36-D Bug 2 fix: CREATE UNIQUE INDEX 在 event_id 列不存在时会失败（旧版 cluster 漂移），
 -- 让它单独容错，让 03/04 后续 SQL 仍能跑。ai-svc 的 migration 001 会在启动时补 event_id 列。
+--
+-- 2026-09-04 修正（两处）：
+--
+-- (a) 上述容错原本**包错了语句**：uq_emotion_analysis_event_id 裸写在 DO 块外，
+--     DO 块里包的却是另一条 idx_emotion_user_time——注释描述的保护对象与实际
+--     保护对象不一致，真正会失败的那条从未被保护。实测（down -v 后全新起）：
+--       02-create-tables-in-schemas.sql:117: ERROR: column "event_id" does not exist
+--     该错误中断整条 initdb 链，03-seed-default-users.sql / 04-create-views.sql
+--     全部未执行 → users 表为空 → 登录 401。
+--
+-- (b) 本文件**不再创建** uq_emotion_analysis_event_id。该唯一性由
+--     emotion-echo-ai-svc/migrations/001 以 **CONSTRAINT** 形式独占创建
+--     （GORM 的 OnConflict Columns:[event_id] 需要匹配约束）。
+--     此处若再建一个**同名索引**，会造成同名对象冲突：迁移 001 的守卫查
+--     pg_constraint 查不到索引（索引在 pg_class），放行后 ADD CONSTRAINT 报
+--       ERROR: relation "uq_emotion_analysis_event_id" already exists
+--     迁移随即整体失败。既然 db-migrate 容器已保证迁移必然先于业务服务执行，
+--     这里不需要抢先建，交给迁移单一来源即可。
 DO $$ BEGIN
     BEGIN
         EXECUTE 'CREATE INDEX IF NOT EXISTS idx_emotion_user_time

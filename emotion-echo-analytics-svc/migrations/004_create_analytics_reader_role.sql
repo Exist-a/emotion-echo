@@ -12,9 +12,21 @@
 --     user_behavior_events / mv_daily_emotion
 --
 -- 注意：deploy/init.sql 已经创建 schemas；本 migration 假定它们存在。
+--
+-- 2026-09-04 幂等化：原文直接 CREATE ROLE，角色已存在时报
+--   ERROR: role "analytics_reader" already exists
+-- 而 deploy/db/migrate.sh 每次 compose up 都会重跑全部迁移，非幂等会让 migrate
+-- 容器失败、卡住依赖它的所有服务。CREATE ROLE 不支持 IF NOT EXISTS，
+-- 故用 DO 块查 pg_roles 后条件创建。GRANT / ALTER ROLE 本身可重复执行，无需包裹。
 
-CREATE ROLE analytics_reader LOGIN PASSWORD 'CHANGE_ME_AT_DEPLOY'
-    NOSUPERUSER NOCREATEDB NOCREATEROLE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'analytics_reader') THEN
+        CREATE ROLE analytics_reader LOGIN PASSWORD 'CHANGE_ME_AT_DEPLOY'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE;
+    END IF;
+END
+$$;
 
 GRANT USAGE ON SCHEMA
     emotion_echo_chat,

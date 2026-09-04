@@ -120,6 +120,15 @@ SET search_path TO emotion_echo_ai;
 
 CREATE TABLE IF NOT EXISTS emotion_analysis (
     id BIGSERIAL PRIMARY KEY,
+    -- 2026-09-04 补 event_id：本文件与 02-create-tables-in-schemas.sql 重复定义
+    -- 同一张表，但 02 多了 event_id 列。initdb 先跑 01 建表，02 的
+    -- CREATE TABLE IF NOT EXISTS 随即空转（表已存在，列定义被忽略），
+    -- 于是 02:116 的 CREATE UNIQUE INDEX ...(event_id) 报
+    --   ERROR: column "event_id" does not exist
+    -- 而该错误会**中断整条 initdb 链**——03-seed-default-users.sql 与
+    -- 04-create-views.sql 完全不执行，全新环境没有 echo 测试账号、没有视图，
+    -- 登录直接 401。两处列定义必须保持一致。
+    event_id VARCHAR(64),
     message_id BIGINT NOT NULL,        -- 来自 chat-svc.messages
     user_id BIGINT NOT NULL,
     conversation_id BIGINT NOT NULL,

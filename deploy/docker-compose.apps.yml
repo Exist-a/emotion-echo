@@ -23,6 +23,48 @@ x-logging-env: &logging-env
 services:
 
   # =====================================================
+  # 数据库迁移（一次性 init 容器，2026-09-04 新增）
+  #
+  # 背景：13 个 */migrations/*.sql 此前没有任何自动执行机制，各文件注释只写
+  # "应用方式：docker exec ... psql < 本文件"，靠人工且无处记录跑没跑过。
+  # 实测后果：dev 库长期缺列/缺视图/缺角色——发消息 500
+  # (column "client_msg_id" does not exist)，补一个后 smoke 从"看起来 10/10"
+  # 暴露到 1/10（缺 analytics_reader 角色、缺 msg_summary_v 视图、缺 event_id 列）。
+  #
+  # 为什么不挂 initdb.d：Postgres 的 docker-entrypoint-initdb.d 只在**数据卷为空**
+  # 时执行一次。挂进去对已有环境无效，之后新增的迁移对所有已存在环境也无效。
+  # 它只能表达"初始状态"，表达不了"持续演进"。
+  #
+  # 本容器每次 up 都对齐一遍结构，跑完退出；5 个业务 svc 依赖它
+  # service_completed_successfully，保证它们启动时表结构一定就位。
+  # 全部迁移已幂等（analytics 004 的 CREATE ROLE 于本轮补了 DO $$ 守卫）。
+  # 执行顺序 chat → ai → analytics 由 migrate.sh 定义，理由见该脚本注释。
+  # =====================================================
+  emotion-echo-db-migrate:
+    image: postgres:15-alpine        # 与 infra 的 postgres 同版本，自带 psql
+    container_name: emotion-echo-db-migrate
+    restart: "no"                    # 一次性任务：跑完退出，失败不重启以免刷屏掩盖错误
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: emotion_echo
+      MIGRATIONS_ROOT: /migrations
+    volumes:
+      - ./db/migrate.sh:/migrate.sh:ro
+      # 各服务的 migrations 目录按 <svc>/migrations 结构挂进去，
+      # 与 migrate.sh 的 SERVICE_ORDER 拼路径方式一致
+      - ../emotion-echo-chat-svc/migrations:/migrations/emotion-echo-chat-svc/migrations:ro
+      - ../emotion-echo-ai-svc/migrations:/migrations/emotion-echo-ai-svc/migrations:ro
+      - ../emotion-echo-analytics-svc/migrations:/migrations/emotion-echo-analytics-svc/migrations:ro
+    entrypoint: ["sh", "/migrate.sh"]
+    networks:
+      - app-network
+
+  # =====================================================
   # Stage 26-P · 4 Go 微服务 (chat/user/analytics/assessment)
   # 顺序: chat 优先(聊天是主入口),其他按字母
   # =====================================================
@@ -66,6 +108,9 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
+      emotion-echo-db-migrate:
+        condition: service_completed_successfully
       skywalking-oap:
         condition: service_started
 
@@ -116,6 +161,9 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
+      emotion-echo-db-migrate:
+        condition: service_completed_successfully
       kafka:
         condition: service_started
       skywalking-oap:
@@ -169,6 +217,9 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
+      emotion-echo-db-migrate:
+        condition: service_completed_successfully
       skywalking-oap:
         condition: service_started
 
@@ -218,6 +269,9 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
+      emotion-echo-db-migrate:
+        condition: service_completed_successfully
       skywalking-oap:
         condition: service_started
 
@@ -357,6 +411,9 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
+      emotion-echo-db-migrate:
+        condition: service_completed_successfully
       kafka:
         condition: service_started
       skywalking-oap:

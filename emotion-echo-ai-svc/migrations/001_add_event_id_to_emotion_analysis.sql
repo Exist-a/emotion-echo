@@ -31,9 +31,18 @@ UPDATE emotion_echo_ai.emotion_analysis
 -- 3) 加 UNIQUE 约束。完整（非 partial）— GORM OnConflict Columns: [event_id] 直接匹配。
 DO $$
 BEGIN
+    -- 2026-09-04：守卫放宽到同时检查 pg_class。原守卫只查 pg_constraint，但同名
+    -- 对象也可能以**索引**形式存在（旧版 deploy/db/02 曾建同名 UNIQUE INDEX，
+    -- 索引记在 pg_class 而非 pg_constraint）。守卫查不到便放行，ADD CONSTRAINT
+    -- 随即报 relation "uq_emotion_analysis_event_id" already exists，
+    -- 令整个迁移失败、db-migrate 容器退出 1、所有业务服务被卡住启动。
+    -- 02 侧已停止创建该同名索引；此处放宽是为兼容已有该索引的老环境。
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
         WHERE conname = 'uq_emotion_analysis_event_id'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM pg_class
+        WHERE relname = 'uq_emotion_analysis_event_id'
     ) THEN
         ALTER TABLE emotion_echo_ai.emotion_analysis
             ADD CONSTRAINT uq_emotion_analysis_event_id UNIQUE (event_id);
