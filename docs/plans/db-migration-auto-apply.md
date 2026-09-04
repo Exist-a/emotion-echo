@@ -1,11 +1,14 @@
 ---
-status: planned
+status: done
 priority: high
 owner: TBD
 created: 2026-09-04
+landed: 2026-09-04 (commit 0d17e85 — db-migrate init 容器) + 2026-09-04 (Sprint 1 PR-0 — 闭环验证脚本)
 related-stages:
   - stage-38-system-status.md (§四 隐患 1，2026-09-04 升级为已发作)
   - stage-39-nacos-enablement.md
+related-decisions:
+  - adr-2026-09-doc-drift-registry.md（决策 18，§二 实例 #14/#15 + §三 类型 6）
 ---
 
 # Plan — 服务 migrations 的自动应用机制

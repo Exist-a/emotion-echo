@@ -72,12 +72,21 @@
 |---|---|---|---|---|
 | 12 | `docs/plans/todo-pile-2026-09-04.md` A1 根因链 + B4 整段 | "XTTS 容器已在 Stage 39 §五被删除" + "`aiclient/xtts.go` 空即返 nil" + "ai-svc 容器无 `XTTS_BASE_URL` env" + "Stage 39 §五把这三个本地 AI 模型容器都删了" | (1) `deploy/docker-compose.apps.yml:437/473/518` fer/sensevoice/xtts 三个服务定义**全部仍在**（含 build context、healthcheck、deploy resources）；(2) `emotion-echo-ai-svc/internal/aiclient/{fer,sensevoice,xtts}.go` 是 130/118/151 行完整实现（行 15-21 注释明说"完整模式"），**仅当 BaseURL 空时构造降级返 nil**；(3) `apps.yml:387-389` 显式注入 `XTTS_BASE_URL: ${XTTS_BASE_URL:-http://emotion-echo-xtts:8003}`。**真实根因**：ai-api.yaml:69-81 把三个 BASE_URL 显式留空是有意降级（dev 默认"仅文本情绪"），不是"删除"。**前端 `useFaceEmotion.ts:121` / `useTTSPlayer.ts:180` / `useFileUpload.ts:39-48` 入口也未砍**。 | 根因臆断（同 #1 / #7 型：看到 dev 默认行为 → 推断为"已删"，未 `ls aiclient/` 也未 `grep emotion-echo-xtts deploy/docker-compose.apps.yml`）|
 | 13 | `docs/plans/todo-pile-2026-09-04.md` A2 行号 | "`main.go:232` 有 `handler.NewUploadHandler().Register(r)`" + 前端 `useFileUpload.ts:42-46` | (1) 实际行号是 `main.go:236`；`main.go:232` 是 `handler.NewSurveyHandler(s.Assessment).Register(r)`；(2) 前端实际是 `useFileUpload.ts:39-48`；(3) handler 不论路径对错一律返 502 "Stage 31 not implemented"——修前端路径仍会撞 502，必须配合对象存储选型 | 探测方法错误（同 #6 / #8 型：行号/路径未经实测直接抄印象） |
+| 14 | Sprint 1 PR-0 实施（2026-09-04） | （未发生失真——操作合规）但暴露**新类型**：破坏性脚本未带默认护栏 | 实施 PR-0 时，作者 `bash scripts/check_empty_db_repro.sh`（未带任何 flag）直接执行；脚本首阶段 `docker compose down -v --remove-orphans` **销毁用户 dev 环境全部 15 容器 + 全部命名数据卷**（postgres / redis / kafka / nacos 等），累积数据全丢。**根因**：作者把脚本当"语法检查"误判，**未在写脚本时默认加 `--dry-run` 护栏**——脚本本身写得不安全，与用户会话边界感缺失并存。 | **新类型 6：破坏性脚本未带默认护栏**（扩展原 §三 类型 5"自报告失真"的子类：从"言辞"延伸到"动作"） |
+| 15 | Sprint 1 PR-0 脚本 `check_empty_db_repro.sh`（原始版） | 脚本未带任何参数解析；直接调用 `$COMPOSE_CMD down -v --remove-orphans` | 修正后：默认 `--dry-run`（只打印计划，不执行）+ `--execute` 显式开关才真跑破坏性操作；`--help` 看用法；未知参数 exit 2 | 类型 6 同 #14 型——破坏性脚本未带默认护栏（与 #14 同根因，本条登记脚本本身的合规修正） |
 
-附带**累积的失真速率**统计（**修正后**）：本 ADR 7 天内累积登记 **13 条失真 / 4 类成因**，
+附带**累积的失真速率**统计（**修正后**）：本 ADR 7 天内累积登记 **15 条失真 / 5 类成因**（新增类型 6），
 其中类型 1（根因臆断）5 条、类型 3（未复跑即记录）3 条、类型 4（探测方法错误）4 条、
-类型 2（陈旧结论）1 条。**根因臆断 + 探测方法错误**合计 9 条（占 69%）——这两类
+类型 2（陈旧结论）1 条、**类型 6（破坏性脚本未带默认护栏）2 条**。
+**根因臆断 + 探测方法错误**合计 9 条（占 60%）——这两类
 都属于"按合理推断/错误方法得出结论"，共同的根治办法就是**多花 5 分钟真跑一次**
 （决策 4.1 的"结论须附可复现命令 + 原始输出"是针对这两类最强的防线）。
+
+**类型 6 根治办法**（决策 §四.6 新增）：**任何会改系统状态（down / drop / delete / reset /
+purge / rm -rf / format / drop database / truncate）的脚本，必须默认 `--dry-run` 或
+显式确认 prompt；带破坏性的子命令必须放在 `--execute` 显式 flag 之后才执行**。
+理由：作者对"无害操作"的判断容易出错（参见实例 #14），把护栏放进工具本身是
+唯一可靠的防线。
 
 
 附带被低估的一项（非失真，但严重度记错）：stage-38 §四隐患 1
