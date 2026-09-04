@@ -215,14 +215,41 @@ emotion-echo-web-bff:        exit 0
 emotion-echo-shared:         exit 0
 ```
 
+> **2026-09-04 合并前复核更正（本节两处失真）**
+>
+> 合并 main 前按 AGENTS.md §2.2 重跑门禁，实测与上表不符：
+>
+> 1. **`analytics-svc/internal/trigger` 并非预存在 FAIL**。
+>    `go test -count=1 ./internal/trigger/...` → `ok 1.559s`。该用例测队列背压，
+>    与时序相关，属 flaky 或已在中途修复；不应继续作为"已知 FAIL"记账。
+>
+> 2. **`emotion-echo-web-bff: exit 0` 不成立**，实际 exit 1，4 条断言红：
+>    `TestConfig_YamlParsing_Port8894`（Name 仍断言 PR-0 之前的短名 `web-bff`）、
+>    `TestConfig_DownstreamDefaults_Valid` ×3 + `TestConfig_YamlParsing_AIServiceGRPCAddr`
+>    （§4.2 把 yaml 三个 BaseURL 改 `""` 的验证脚手架被 commit 进 e3c662d，
+>    compose 侧 3 个 env 已还原，yaml 侧漏了）。
+>    修复见 commit `07353b6`：还原 yaml 默认值 + Name 断言改绑 `discovery.ServiceWebBFF`。
+>
+> 更正后门禁：`go test` 7/7 exit 0、`go vet` 7/7 OK、`smoke_data_layer.py` 10/10 PASS。
+
 ## 七、未做（留待后续 Stage）
 
 1. **Nacos Go SDK 升级到 v2.4.x**：解决 ListenConfig long poll 不匹配；待官方发布 stable tag
 2. **APISIX 端到端跑 seed 验证**：dev 实际起 APISIX 后跑 `bash deploy/apisix/seed.sh && bash deploy/apisix/test_seed_nacos.sh`
-3. **emotion-llm-service 修 `nacos_client` 缺模块**：补 `requirements.txt`（`nacos-sdk-python` 之类）
-4. **`emotion-echo-ai-svc` / `emotion-echo-web-bff` depends_on llm-service 卡 created**：改 compose `condition: service_started` 或修 llm-service 启动问题
-5. **4 个 Go svc `unhealthy` 标**：实际 `/health` 200，dev 路径问题
+3. ~~**emotion-llm-service 修 `nacos_client` 缺模块**：补 `requirements.txt`（`nacos-sdk-python` 之类）~~
+   **✅ 2026-09-04 已修，且原诊断有误**：`requirements.txt:8` 早就有 `nacos-sdk-python>=3.1.0`，
+   `emotion-llm-service/nacos_client.py` 也一直在仓库里。真正的问题是 `Dockerfile` 两个阶段
+   都逐个文件 COPY（无 `COPY . .`），唯独漏了 `nacos_client.py`，容器启动即
+   `ModuleNotFoundError` 并无限重启。修复见 `eff0b71`（两行 COPY），
+   契约测试见 `913c4f1`（`tests/unit/test_dockerfile_contract.py`，覆盖整类遗漏而非单个文件名）。
+4. ~~**`emotion-echo-ai-svc` / `emotion-echo-web-bff` depends_on llm-service 卡 created**~~
+   **✅ 随第 3 项解除**：llm-service 转 healthy 后依赖链不再阻塞。
+5. ~~**4 个 Go svc `unhealthy` 标**：实际 `/health` 200，dev 路径问题~~
+   **✅ 已不复现**：2026-09-04 `docker ps` 显示 user / chat / analytics / assessment / ai / web-bff
+   六个业务容器全部 `(healthy)`。Stage 38 §三 阻断 5 同步关闭。
 6. **APISIX 配置 nacos-discovery 的 `host` 列表**：当前 values.yaml 默认 `emotion-echo-nacos:8848`，prod 需 cluster 化后改成多节点
+7. **`etc/*.yaml` 验证脚手架防回归**：§4.2 那种"为验证临时清空配置"的改动这次漏还原并进了
+   commit，靠 `config_test.go` 才拦下。后续同类验证应走 env 覆盖而非改 yaml。
 
 ## 八、调研依据
 

@@ -96,6 +96,10 @@ outbox_events (sent) |  69   ← chat-svc outbox relay 推送
 - 影响：`docker ps` 一片红看着像失败，但不阻塞实际功能
 - 修复：改 HEALTHCHECK 用 `curl -f http://localhost:8891/health || exit 1` 或 wget 输出文件后判断
 
+> **2026-09-04 更正：已不复现。** `docker ps` 显示 user / chat / analytics / assessment /
+> ai / web-bff 六个业务容器全部 `(healthy)`，llm-service 修好后也是 `(healthy)`。
+> 本条与 Stage 39 §七.5 同步关闭。
+
 ### 🟡 阻断 6（文档失真）：quickLogin 后端端点从未实现
 
 - 前端 `quickLogin` 函数期望后端有 `/api/v1/auth/quick-login`
@@ -109,12 +113,32 @@ outbox_events (sent) |  69   ← chat-svc outbox relay 推送
 
 | # | 项目 | 严重度 |
 |---|---|---|
-| 1 | Stage 34 migration 004/005/006 + event_id 列未挂 initdb.d | 🟡 中（重建 dev 环境会丢表/列） |
-| 2 | `daily_emotion_by_modality_v` 视图依赖 `face_emotion_results` / `voice_emotion_results`，但 PG 实际是 `face_detections` / `voice_transcripts` | 🟡 中（视图无法创建） |
+| 1 | Stage 34 migration 004/005/006 + event_id 列未挂 initdb.d | 🔴 高（已实际发作，见下） |
+| 2 | `daily_emotion_by_modality_v` 视图依赖 `face_emotion_results` / `voice_emotion_results`，但 PG 实际是 `face_detections` / `voice_transcripts` | ✅ 误诊已撤回，见下 |
 | 3 | docs/plans/wechat-qq-login-and-upload.md 标 superseded（Stage 38-A） | ✅ 已修 |
 | 4 | `user_oauth` 表（Stage 19/22 设计）从未使用 | 🟢 低 |
 | 5 | ADR 与代码失真累计（至少 3 处） | 🟡 中（待 ADR-20 立项） |
 | 6 | `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR` 等迁移文件未挂 initdb.d | 🟢 低（仅重建场景） |
+
+> **2026-09-04 更正：隐患 1 升级为已发作，隐患 2 撤回**
+>
+> **隐患 1 不是"重建 dev 才会丢"，当时的 dev 库就已经缺。** 合并 main 前跑 §2.4 smoke，
+> `POST /conversations/{id}/messages` 返 500，chat-svc 日志
+> `column "client_msg_id" of relation "messages" does not exist (SQLSTATE 42703)`。
+> 排查发现 `deploy/docker-compose.infra.yml:28-31` 只挂了 `deploy/db/01~04`，
+> 而 `emotion-echo-{ai,analytics,chat}-svc/migrations/` 下 13 个 .sql **一个都没被应用过**：
+> 缺 `messages.client_msg_id` 列、缺 `analytics_reader` 角色、缺 `msg_summary_v` 等视图、
+> 缺 `user_behavior_events.event_id` 列。补第一个迁移后 smoke 一度只剩 1/10 PASS，
+> 按依赖顺序全部应用（全部幂等，无报错）后恢复 10/10 PASS。
+>
+> 范围也比原记录大：不止 Stage 34 的 004/005/006，而是**全部 13 个服务迁移**。
+> 根因是没有任何自动应用机制，不是"某几个文件漏挂"；真正的修法（纳入 initdb.d
+> 或引入 migrate 工具）**尚未做**，留作独立待办。
+>
+> **隐患 2 是误诊，撤回。** `daily_emotion_by_modality_v` 建不出来与表名无关：
+> 它依赖的 `face_emotion_results` / `voice_emotion_results` 就在未被应用的
+> `emotion-echo-ai-svc/migrations/002`、`003` 里。按顺序应用 002/003 后再跑 005，
+> `CREATE VIEW` 直接成功。`face_detections` / `voice_transcripts` 是另一组表，与该视图无关。
 
 ---
 

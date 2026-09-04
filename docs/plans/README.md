@@ -17,6 +17,7 @@ status: Round 1 占位 · Round 2 首批内容迁入
 | `wechat-qq-login-and-upload.md` | `.trae/documents/微信QQ登录和文件上传实施计划.md` | QQ OAuth + 通用文件上传 |
 | `nacos-enablement-dev.md` | 新增 | Nacos dev 模式从"半启用"到"全链路" |
 | `observability-compose-gap.md` | 新增 | dev compose 可观测性三层补齐（metrics / logs / traces），与 k8s 路径对齐 |
+| `db-migration-auto-apply.md` | 新增（2026-09-04） | 13 个服务 migrations 无自动应用机制，dev 库实测一个都没跑过 |
 
 ## 写入规范
 
