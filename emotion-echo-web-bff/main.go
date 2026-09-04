@@ -211,6 +211,10 @@ func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.
 }
 
 // registerRoutes 注册全部 BFF 路由
+//
+// 路径契约（路由清单）：main_test.go 的 wantRoutes + wantRoutesWithEmotionQ 切片。
+// 改路由必须同步更新测试文件 + 在 PR 描述里说明（决策 18 §四.1 结论须附证据）。
+// 调试时临时增减路由也行——但合 PR 前 main_test.go 必须绿。
 func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config) {
 	// health（聚合下游探测）— 免鉴权（GinAuthMiddleware 白名单已含 /health）
 	r.GET("/health", handler.NewHealthHandler([]handler.DownstreamTarget{

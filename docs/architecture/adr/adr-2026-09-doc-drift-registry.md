@@ -75,11 +75,12 @@
 | 14 | Sprint 1 PR-0 实施（2026-09-04） | （未发生失真——操作合规）但暴露**新类型**：破坏性脚本未带默认护栏 | 实施 PR-0 时，作者 `bash scripts/check_empty_db_repro.sh`（未带任何 flag）直接执行；脚本首阶段 `docker compose down -v --remove-orphans` **销毁用户 dev 环境全部 15 容器 + 全部命名数据卷**（postgres / redis / kafka / nacos 等），累积数据全丢。**根因**：作者把脚本当"语法检查"误判，**未在写脚本时默认加 `--dry-run` 护栏**——脚本本身写得不安全，与用户会话边界感缺失并存。 | **新类型 6：破坏性脚本未带默认护栏**（扩展原 §三 类型 5"自报告失真"的子类：从"言辞"延伸到"动作"） |
 | 15 | Sprint 1 PR-0 脚本 `check_empty_db_repro.sh`（原始版） | 脚本未带任何参数解析；直接调用 `$COMPOSE_CMD down -v --remove-orphans` | 修正后：默认 `--dry-run`（只打印计划，不执行）+ `--execute` 显式开关才真跑破坏性操作；`--help` 看用法；未知参数 exit 2 | 类型 6 同 #14 型——破坏性脚本未带默认护栏（与 #14 同根因，本条登记脚本本身的合规修正） |
 | 16 | `Emotion-Echo-Web/e2e/login-flow.spec.ts:13-26` happy-path-3 原断言 | 用 `url.includes('login') || url.includes('quick') || url.includes('auth')` 模糊匹配任一关键字；后端未启动时永远 green | 注释承认"由于 dev mode 下后端 API (localhost:18080) 未启用，quickLogin 异步调用失败"，E2E 从未真正通过。**真实前端行为**（`pages/login/index.vue:175-196`）：quickLogin 直接调 `POST /api/v1/auth/login`（账号 echo/echo123），**不是**独立 `/auth/quick-login` 端点。**BFF 侧**（`auth_handler.go:95-110`）：5 个 action 仅 `login / register / refresh / logout / verification-code`，**无 quick-login**。**修正**（PR-5 commit `be8a63c`）：精确监听 `POST /api/v1/auth/login`（排除 `/quick-login` `/register`）+ 等待 `/chat/conversation` 跳转 + 注释引用本条登记 | 探测方法错误（同 #6 / #8 型：模糊匹配让无效 case 永远 pass）+ 未复跑即记录（同 #3 型：注释承认 E2E 从未通过却仍入库）。**根因更深**：原本 `quickLogin` 是为某个未实现的 dev-only 端点设计的产品入口（参考 `multimodal-emotion-backend.md:42,102` legacy 计划），**真实产品路径是走标准 `/auth/login`**——E2E 注释+断言与真实前端行为长期错位，无人发现。 |
+| 17 | Sprint 1 PR-1 `main_test.go` 首次跑测试时 | `assert.Subset(t, got, wantRoutes)` 用 `reflect.DeepEqual` 比对 `gin.RouteInfo` 全字段 | 调研时已警告此坑（plan §四 PR-1 stub 要点："Handler 字段零值为 '' + HandlerFunc 为 nil，否则 Subset 永远不等"），但**首次写测试时仍按 testify 默认行为写**——跑测试发现 got 的 `Handler="emotion-echo-web-bff/internal/handler.(*UserHandler).getMe-fm"` + `HandlerFunc=0x7ff763357b80` 是真实值，want 是零值，**27 条全不等**。修正：循环 `got[i].Handler = ""; got[i].HandlerFunc = nil` 清空非核心字段再 Subset | 探测方法错误（同 #6 / #8 型：调研阶段已知坑但实施时未严格遵守）+ 类型 5 自报告（plan 是本会话作者写的，作者自己踩了自己 plan 里的坑）。**教训**：调研发现的"易错点"必须在 plan 用 ⚠️ 醒目标记；实施时再 verify 一遍 stub 行为，不能凭"看过了"就过 |
 
-附带**累积的失真速率**统计（**修正后**）：本 ADR 7 天内累积登记 **16 条失真 / 5 类成因**（新增类型 6），
-其中类型 1（根因臆断）5 条、类型 3（未复跑即记录）4 条、类型 4（探测方法错误）5 条、
+附带**累积的失真速率**统计（**修正后**）：本 ADR 7 天内累积登记 **17 条失真 / 5 类成因**（新增类型 6），
+其中类型 1（根因臆断）5 条、类型 3（未复跑即记录）4 条、类型 4（探测方法错误）6 条、
 类型 2（陈旧结论）1 条、**类型 6（破坏性脚本未带默认护栏）2 条**。
-**根因臆断 + 探测方法错误**合计 10 条（占 63%）——这两类
+**根因臆断 + 探测方法错误**合计 11 条（占 65%）——这两类
 都属于"按合理推断/错误方法得出结论"，共同的根治办法就是**多花 5 分钟真跑一次**
 （决策 4.1 的"结论须附可复现命令 + 原始输出"是针对这两类最强的防线）。
 
