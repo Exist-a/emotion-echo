@@ -67,7 +67,7 @@ var _ sharedconfig.ConfigCenter = (*fakeConfigCenter)(nil)
 
 func newTestConfig() *config.Config {
 	return &config.Config{
-		Name: "ai-svc", Host: "127.0.0.1", Port: 8891,
+		Name: "emotion-echo-ai-svc", Host: "127.0.0.1", Port: 8891,
 		GRPC: config.GRPCServer{Enabled: true, Port: 8892},
 		Nacos: config.Nacos{Enabled: true, Addr: "fake:8848", Namespace: "emotion-echo-dev", GroupName: "DEFAULT_GROUP"},
 	}
@@ -92,12 +92,12 @@ func TestBootNacos_RegistersAiSvcAtPort8891WithGrpcMetadata(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, reg.registered, 1)
 	got := reg.registered[0]
-	assert.Equal(t, "ai-svc", got.ServiceName)
+	assert.Equal(t, "emotion-echo-ai-svc", got.ServiceName)
 	assert.Equal(t, 8891, got.Port, "HTTP port for ai-svc must be 8891")
 	// ai-svc 关键差异：metadata.grpc_port=8892 供 Stage 32 APISIX 决策
 	assert.Equal(t, "8892", got.Metadata["grpc_port"], "gRPC port must be in metadata for Stage 32")
 	require.Len(t, cc.getCalls, 1)
-	assert.Equal(t, "ai-svc.ops.yaml", cc.getCalls[0].dataId)
+	assert.Equal(t, "emotion-echo-ai-svc.ops.yaml", cc.getCalls[0].dataId)
 	rt.Cancel()
 }
 

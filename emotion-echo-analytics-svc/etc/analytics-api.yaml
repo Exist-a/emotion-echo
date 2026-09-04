@@ -1,4 +1,4 @@
-Name: analytics-api
+Name: emotion-echo-analytics-svc
 Host: 0.0.0.0
 Port: 8893  # Stage 26-P:避开 ai-svc 占用的 8892
 

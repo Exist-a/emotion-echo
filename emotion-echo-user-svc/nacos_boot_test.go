@@ -98,7 +98,7 @@ var _ sharedconfig.ConfigCenter = (*fakeConfigCenter)(nil)
 
 func newTestConfig() *config.Config {
 	return &config.Config{
-		Name: "user-svc",
+		Name: "emotion-echo-user-svc",
 		Host: "127.0.0.1",
 		Port: 8888,
 		Nacos: config.Nacos{
@@ -123,7 +123,7 @@ func TestBootNacos_DisabledReturnsEmptyRuntime(t *testing.T) {
 func TestBootNacos_RegistersAndLoadsOpsConfig(t *testing.T) {
 	reg := &fakeRegistry{}
 	cc := newFakeCC()
-	cc.configs["user-svc.ops.yaml@DEFAULT_GROUP"] = "feature_flags:\n  x: true"
+	cc.configs["emotion-echo-user-svc.ops.yaml@DEFAULT_GROUP"] = "feature_flags:\n  x: true"
 
 	deps := bootDeps{
 		waitForNacos: func(context.Context, string, time.Duration) error { return nil },
@@ -143,7 +143,7 @@ func TestBootNacos_RegistersAndLoadsOpsConfig(t *testing.T) {
 	// Assert: Register 调用一次，参数正确
 	require.Len(t, reg.registered, 1)
 	got := reg.registered[0]
-	assert.Equal(t, "user-svc", got.ServiceName)
+	assert.Equal(t, "emotion-echo-user-svc", got.ServiceName)
 	assert.Equal(t, "127.0.0.1", got.Host)
 	assert.Equal(t, 8888, got.Port)
 	assert.Equal(t, "emotion-echo-dev", got.Metadata["stage"])
@@ -153,7 +153,7 @@ func TestBootNacos_RegistersAndLoadsOpsConfig(t *testing.T) {
 
 	// Assert: GetConfig 被调用一次，dataId=svc.ops.yaml
 	require.Len(t, cc.getCalls, 1)
-	assert.Equal(t, "user-svc.ops.yaml", cc.getCalls[0].dataId)
+	assert.Equal(t, "emotion-echo-user-svc.ops.yaml", cc.getCalls[0].dataId)
 	assert.Equal(t, "DEFAULT_GROUP", cc.getCalls[0].group)
 
 	// Assert: HotReload=false 时 ListenConfig 不被调用
@@ -184,11 +184,11 @@ func TestBootNacos_HotReloadRegistersListener(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, cc.listenCalls, 1)
-	assert.Equal(t, "user-svc.ops.yaml", cc.listenCalls[0].dataId)
+	assert.Equal(t, "emotion-echo-user-svc.ops.yaml", cc.listenCalls[0].dataId)
 	require.NotNil(t, cc.listenCalls[0].handler)
 
 	// 模拟推送
-	require.NoError(t, cc.listenCalls[0].handler("user-svc.ops.yaml", "DEFAULT_GROUP", "v2"))
+	require.NoError(t, cc.listenCalls[0].handler("emotion-echo-user-svc.ops.yaml", "DEFAULT_GROUP", "v2"))
 	// fake 不记录 handler 调用次数，仅验证不 panic
 
 	rt.Cancel()

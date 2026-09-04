@@ -31,7 +31,7 @@ type AIService struct {
 // go-zero conf 加载时 `${VAR:-default}` 占位符不展开（Stage 22-B 已确认），
 // 容器内地址由 main.go applyEnvOverrides 覆盖（T1.3 REFACTOR 拆分）。
 type Config struct {
-	Name       string `json:",default=web-bff"`
+	Name       string `json:",default=emotion-echo-web-bff"`
 	Host       string `json:",default=0.0.0.0"`
 	Port       int    `json:",default=8894"`
 	SkyWalking SkyWalking

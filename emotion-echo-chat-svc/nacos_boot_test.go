@@ -89,7 +89,7 @@ var _ sharedconfig.ConfigCenter = (*fakeConfigCenter)(nil)
 
 func newTestConfig() *config.Config {
 	return &config.Config{
-		Name: "chat-svc",
+		Name: "emotion-echo-chat-svc",
 		Host: "127.0.0.1",
 		Port: 8890,
 		Nacos: config.Nacos{
@@ -131,14 +131,14 @@ func TestBootNacos_RegistersChatSvcAtPort8890(t *testing.T) {
 	// chat-svc 关键差异：service-name + port
 	require.Len(t, reg.registered, 1)
 	got := reg.registered[0]
-	assert.Equal(t, "chat-svc", got.ServiceName)
+	assert.Equal(t, "emotion-echo-chat-svc", got.ServiceName)
 	assert.Equal(t, 8890, got.Port)
 	assert.Equal(t, "emotion-echo-dev", got.Metadata["stage"])
 	assert.Equal(t, 1, reg.heartbeatsStarted)
 
 	// GetConfig dataId 是 chat-svc.ops.yaml（不是 user-svc.ops.yaml）
 	require.Len(t, cc.getCalls, 1)
-	assert.Equal(t, "chat-svc.ops.yaml", cc.getCalls[0].dataId)
+	assert.Equal(t, "emotion-echo-chat-svc.ops.yaml", cc.getCalls[0].dataId)
 
 	rt.Cancel()
 }
@@ -177,9 +177,9 @@ func TestBootNacos_HotReloadRegistersListener(t *testing.T) {
 	rt, err := BootNacos(context.Background(), cfg, newDeps(reg, cc))
 	require.NoError(t, err)
 	require.Len(t, cc.listenCalls, 1)
-	assert.Equal(t, "chat-svc.ops.yaml", cc.listenCalls[0].dataId)
+	assert.Equal(t, "emotion-echo-chat-svc.ops.yaml", cc.listenCalls[0].dataId)
 	require.NotNil(t, cc.listenCalls[0].handler)
 	// 验证回调不 panic
-	require.NoError(t, cc.listenCalls[0].handler("chat-svc.ops.yaml", "DEFAULT_GROUP", "v2"))
+	require.NoError(t, cc.listenCalls[0].handler("emotion-echo-chat-svc.ops.yaml", "DEFAULT_GROUP", "v2"))
 	rt.Cancel()
 }

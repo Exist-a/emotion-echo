@@ -75,7 +75,7 @@ var _ sharedconfig.ConfigCenter = (*fakeConfigCenter)(nil)
 
 func newTestConfig() *config.Config {
 	return &config.Config{
-		Name: "analytics-svc", Host: "127.0.0.1", Port: 8893,
+		Name: "emotion-echo-analytics-svc", Host: "127.0.0.1", Port: 8893,
 		Nacos: config.Nacos{Enabled: true, Addr: "fake:8848", Namespace: "emotion-echo-dev", GroupName: "DEFAULT_GROUP"},
 	}
 }
@@ -99,10 +99,10 @@ func TestBootNacos_RegistersAnalyticsSvcAtPort8893(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, reg.registered, 1)
 	got := reg.registered[0]
-	assert.Equal(t, "analytics-svc", got.ServiceName)
+	assert.Equal(t, "emotion-echo-analytics-svc", got.ServiceName)
 	assert.Equal(t, 8893, got.Port)
 	require.Len(t, cc.getCalls, 1)
-	assert.Equal(t, "analytics-svc.ops.yaml", cc.getCalls[0].dataId)
+	assert.Equal(t, "emotion-echo-analytics-svc.ops.yaml", cc.getCalls[0].dataId)
 	rt.Cancel()
 }
 

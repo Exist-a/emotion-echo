@@ -82,7 +82,7 @@ var _ sharedconfig.ConfigCenter = (*fakeConfigCenter)(nil)
 
 func newTestConfig() *config.Config {
 	return &config.Config{
-		Name: "assessment-svc", Host: "127.0.0.1", Port: 8889,
+		Name: "emotion-echo-assessment-svc", Host: "127.0.0.1", Port: 8889,
 		Nacos: config.Nacos{Enabled: true, Addr: "fake:8848", Namespace: "emotion-echo-dev", GroupName: "DEFAULT_GROUP"},
 	}
 }
@@ -114,10 +114,10 @@ func TestBootNacos_RegistersAssessmentSvcAtPort8889(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, reg.registered, 1)
 	got := reg.registered[0]
-	assert.Equal(t, "assessment-svc", got.ServiceName)
+	assert.Equal(t, "emotion-echo-assessment-svc", got.ServiceName)
 	assert.Equal(t, 8889, got.Port)
 	require.Len(t, cc.getCalls, 1)
-	assert.Equal(t, "assessment-svc.ops.yaml", cc.getCalls[0].dataId)
+	assert.Equal(t, "emotion-echo-assessment-svc.ops.yaml", cc.getCalls[0].dataId)
 	rt.Cancel()
 }
 
@@ -135,6 +135,6 @@ func TestBootNacos_HotReloadRegistersListener(t *testing.T) {
 	rt, err := BootNacos(context.Background(), cfg, newDeps(reg, cc))
 	require.NoError(t, err)
 	require.Len(t, cc.listenCalls, 1)
-	require.NoError(t, cc.listenCalls[0].handler("assessment-svc.ops.yaml", "DEFAULT_GROUP", "v2"))
+	require.NoError(t, cc.listenCalls[0].handler("emotion-echo-assessment-svc.ops.yaml", "DEFAULT_GROUP", "v2"))
 	rt.Cancel()
 }
