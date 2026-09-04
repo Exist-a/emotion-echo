@@ -62,16 +62,37 @@ for i in $(seq 1 30); do
 done
 
 log "Step 1.5/4: verifying upstream svcs are up (catch-all depends on web-bff)"
+# 2026-09-04 修正：原实现从**宿主机**直接 curl 容器 DNS 名（emotion-echo-user-svc:8888），
+# 宿主机解析不了 compose 网络内的服务名，于是 5 个探测必然全失败、seed 在此中止——
+# 这就是 PR-3 之后"seed 从没端到端跑过"的直接原因。
+# 且除 web-bff 外的 svc 自 Stage 33 PR-20 起就不再对宿主暴露 HTTP 端口，
+# 所以换成 localhost:<port> 也不成立。正确做法是**在 compose 网络内**探测。
+#
+# DOCKER_NETWORK 留空则退化为宿主机直连（兼容非 compose 部署）。
+DOCKER_NETWORK="${DOCKER_NETWORK:-emotion-echo_app-network}"
+PROBE_IMAGE="${PROBE_IMAGE:-curlimages/curl:latest}"
+
+probe() {
+  local url="$1"
+  if [ -n "$DOCKER_NETWORK" ] && command -v docker >/dev/null 2>&1; then
+    docker run --rm --network "$DOCKER_NETWORK" "$PROBE_IMAGE" \
+      -sf --max-time 3 "$url" >/dev/null 2>&1
+  else
+    curl -sf --max-time 3 "$url" >/dev/null 2>&1
+  fi
+}
+
 if [ "${SKIP_HEALTH_CHECK:-false}" = "true" ]; then
   log "  SKIP_HEALTH_CHECK=true: skipping upstream health probe (dev validation only)"
 else
+  log "  probing from inside docker network '$DOCKER_NETWORK'"
   for hp in \
     "$WEB_BFF_HOST:$WEB_BFF_PORT/health" \
     "$USER_SVC_HOST:$USER_SVC_PORT/health" \
     "$CHAT_SVC_HOST:$CHAT_SVC_PORT/health" \
     "$ASSESSMENT_SVC_HOST:$ASSESSMENT_SVC_PORT/health" \
     "$AI_SVC_HOST:$AI_SVC_PORT/health"; do
-    if ! curl -sf --max-time 3 "http://$hp" >/dev/null 2>&1; then
+    if ! probe "http://$hp"; then
       die "upstream $hp not healthy (seed will silently skip if continued, aborting per AGENTS.md RED→GREEN)" 2
     fi
     log "  upstream OK: $hp"
@@ -106,7 +127,13 @@ EOF
 }
 
 # PR-3: Nacos discovery upstream（注册到 Nacos 的 svc 走这条路径）
-# 不再写死 host:port；APISIX nacos-discovery 插件自动从 Nacos 拉实例。
+# 不再写死 host:port；APISIX nacos discovery 自动从 Nacos 拉实例。
+#
+# 2026-09-04 修正：namespace_id / group_name 必须嵌在 discovery_args 内。
+# 原先写成 upstream 顶层字段，APISIX 直接拒绝：
+#   {"error_msg":"invalid configuration: additional properties forbidden, found namespace_id"}
+# 依据 https://apisix.apache.org/docs/apisix/discovery/nacos/ ——二者是 per-service
+# 参数（属 discovery_args）；Nacos 连接信息才在 config.yaml 顶层 discovery.nacos 段。
 put_nacos_upstream() {
   local id="$1" name="$2" service_name="$3"
   local body
@@ -116,8 +143,10 @@ put_nacos_upstream() {
   "type": "roundrobin",
   "discovery_type": "nacos",
   "service_name": "$service_name",
-  "namespace_id": "$NACOS_NAMESPACE",
-  "group_name": "$NACOS_GROUP"
+  "discovery_args": {
+    "namespace_id": "$NACOS_NAMESPACE",
+    "group_name": "$NACOS_GROUP"
+  }
 }
 EOF
 )
@@ -128,7 +157,15 @@ EOF
     "$ADMIN_URL/apisix/admin/upstreams/$id" >/dev/null; then
     log "  nacos upstream OK: $name (svc=$service_name)"
   else
-    die "failed to PUT nacos upstream $name" 3
+    # 打印 APISIX 的真实拒绝原因，而不是只报"失败"——原版把 schema 报错吞了，
+    # 导致 PR-3 从没人知道具体错在哪个字段。
+    local err
+    err=$(curl -s -X PUT \
+      -H "X-API-KEY: $ADMIN_KEY" \
+      -H "Content-Type: application/json" \
+      -d "$body" \
+      "$ADMIN_URL/apisix/admin/upstreams/$id" 2>&1 | head -c 300)
+    die "failed to PUT nacos upstream $name: $err" 3
   fi
 }
 
@@ -145,21 +182,62 @@ put_nacos_upstream 4  analytics-svc  "emotion-echo-analytics-svc"
 put_nacos_upstream 5  ai-svc         "emotion-echo-ai-svc"
 put_nacos_upstream 6  web-bff        "emotion-echo-web-bff"
 
+# ---- Step 2.5: jwt-auth consumer ----
+# 2026-09-04 新增：原 seed.sh **完全没有创建 consumer**，导致所有挂 jwt-auth 的
+# 路由必然 401——jwt-auth 是靠 JWT 里的 key claim 去匹配 consumer，
+# 再用该 consumer 的 secret 验签。没有 consumer 就没有 secret 来源。
+#
+# 依据 https://apisix.apache.org/docs/apisix/plugins/jwt-auth/ ：
+#   key / secret / algorithm 属 **consumer**（凭据侧）
+#   route 侧的 jwt-auth 只放传输层参数（header/query/cookie 等），不放 secret
+#
+# JWT_KEY 必须与 BFF 签发的 token 里的 key claim 一致
+# （BFF auth_handler 签的是 key="user"，见 internal/auth）。
+JWT_KEY="${BFF_JWT_KEY:-user}"
+
+log "Step 2.5/4: creating jwt-auth consumer (key=$JWT_KEY)"
+CONSUMER_BODY=$(cat <<EOF
+{
+  "username": "emotion_echo_bff",
+  "desc": "BFF 签发的 JWT 由本 consumer 的 secret 验签",
+  "plugins": {
+    "jwt-auth": {
+      "key": "$JWT_KEY",
+      "secret": "$JWT_SECRET",
+      "algorithm": "HS256"
+    }
+  }
+}
+EOF
+)
+if curl -sf -X PUT \
+  -H "X-API-KEY: $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$CONSUMER_BODY" \
+  "$ADMIN_URL/apisix/admin/consumers/emotion_echo_bff" >/dev/null; then
+  log "  consumer OK: emotion_echo_bff (jwt key=$JWT_KEY)"
+else
+  err=$(curl -s -X PUT \
+    -H "X-API-KEY: $ADMIN_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$CONSUMER_BODY" \
+    "$ADMIN_URL/apisix/admin/consumers/emotion_echo_bff" 2>&1 | head -c 300)
+  die "failed to PUT jwt-auth consumer: $err" 3
+fi
+
 # ---- Step 3: 全局插件链（每个 route 共享）----
 log "Step 3/4: defining shared plugins"
 
 # jwt-auth 真正验签（替换 shared jwt_auth.go 的"信任 APISIX"模型）
+#   2026-09-04：route 侧只留 {}——key/secret/algorithm 属 consumer（Step 2.5），
+#   放在 route 上不会生效。见 https://apisix.apache.org/docs/apisix/plugins/jwt-auth/
 # limit-count / limit-req 限流（双层：按 IP 计数 + 全局突发）
 # api-breaker 下游 5xx > 50% 熔断 30s
 # cors 统一 CORS（替代 BFF corsMiddleware）
 # prometheus 默认配置（OAP 上报 metrics）
 PLUGINS_JSON=$(cat <<EOF
 {
-  "jwt-auth": {
-    "key": "user",
-    "secret": "$JWT_SECRET",
-    "algorithm": "HS256"
-  },
+  "jwt-auth": {},
   "limit-count": {
     "count": 60,
     "time_window": 60,
@@ -193,18 +271,72 @@ PLUGINS_JSON=$(cat <<EOF
 EOF
 )
 
+# 2026-09-04 新增：把已验签 JWT 的 sub claim 注入 X-User-Id header。
+#
+# Stage 32 §3.3 方案 A 的链路是
+#   APISIX jwt-auth 验签 → **APISIX 注入 X-User-Id** → BFF/下游信任该 header
+# 但 seed.sh 从来只在 cors 里把 X-User-Id 列进 allow/expose 名单，
+# **从没真正注入过**。结果：jwt-auth 通过后 BFF 仍返
+#   {"error":"unauthorized: missing or invalid X-User-Id"}
+# 即该鉴权链路的后半截一直是断的。
+#
+# 实现方式的取舍（都实测过）：
+#   ✗ proxy-rewrite + "$jwt_payload_sub" —— APISIX **没有**这个 nginx 变量，
+#     结果 header 被设成空串，比不注入更糟（把客户端传的值也覆盖掉了）
+#   ✗ X-Consumer-Username —— APISIX 验签后确实会自动加，但值是 consumer 名
+#     （emotion_echo_bff），不是数字 user_id，shared middleware 的
+#     parseXUserID 只接受纯数字，必然 401
+#   ✓ jwt-auth.store_in_ctx=true 把 payload 放进 ctx.jwt_auth_payload，
+#     再用 serverless-post-function 读 sub 写 header
+#
+# 用 post-function 而非 pre-function：config.yaml 里 serverless-pre-function
+# 排在 jwt-auth **之前**（第 29 行 vs 第 49 行），那时还没验签、拿不到 payload；
+# serverless-post-function 在第 122 行，位于 jwt-auth 之后。
+#
+# 覆盖式赋值：无条件覆盖客户端自带的 X-User-Id，避免外部伪造身份。
+CATCHALL_PLUGINS_JSON=$(python - "$PLUGINS_JSON" <<'PYEOF'
+import json, sys
+
+plugins = json.loads(sys.argv[1])
+
+# jwt-auth 需要显式开 store_in_ctx，否则 ctx.jwt_auth_payload 为空
+plugins["jwt-auth"] = {"store_in_ctx": True}
+
+lua = (
+    "return function(conf, ctx) "
+    "local p = ctx.jwt_auth_payload; "
+    "local uid = p and (p.sub or p.user_id); "
+    "if uid ~= nil then "
+    "core = require('apisix.core'); "
+    "core.request.set_header(ctx, 'X-User-Id', tostring(uid)); "
+    "else "
+    "core = require('apisix.core'); "
+    "core.request.set_header(ctx, 'X-User-Id', ''); "
+    "end "
+    "end"
+)
+plugins["serverless-post-function"] = {
+    "phase": "rewrite",
+    "functions": [lua],
+}
+print(json.dumps(plugins))
+PYEOF
+)
+
 # ---- Step 4: 创建 route（catch-all 主入口 + 5 健康探针）----
 log "Step 4/4: creating routes"
 
 put_route() {
   local id="$1" uri="$2" upstream_id="$3" methods="$4" extra_uri="${5:-}"
   local body
+  # 用 CATCHALL_PLUGINS_JSON（= PLUGINS_JSON + proxy-rewrite 注入 X-User-Id）；
+  # 仅 catch-all 走鉴权链路，故 X-User-Id 注入只需挂这里。
   body=$(cat <<EOF
 {
   "uri": "$uri$extra_uri",
   "methods": $methods,
   "upstream_id": $upstream_id,
-  "plugins": $PLUGINS_JSON,
+  "plugins": $CATCHALL_PLUGINS_JSON,
   "status": 1
 }
 EOF
@@ -216,7 +348,12 @@ EOF
     "$ADMIN_URL/apisix/admin/routes/$id" >/dev/null; then
     log "  route OK: $id → upstream $upstream_id (uri=$uri)"
   else
-    die "failed to PUT route $id" 3
+    err=$(curl -s -X PUT \
+      -H "X-API-KEY: $ADMIN_KEY" \
+      -H "Content-Type: application/json" \
+      -d "$body" \
+      "$ADMIN_URL/apisix/admin/routes/$id" 2>&1 | head -c 300)
+    die "failed to PUT route $id: $err" 3
   fi
 }
 

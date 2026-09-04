@@ -144,6 +144,7 @@ playwright-report/                       # Playwright HTML reporter output
 test-results/                            # Playwright per-test artifact dir
 .pytest_cache/                           # already covered above; explicit for clarity
 __pycache__/                             # already covered above; explicit for clarity
+deploy/apisix/.tmp-seedtest/             # test_seed_nacos.sh 临时响应体（Git Bash /tmp 跨 curl.exe/python.exe 不通用）
 
 # ---------- Helm ----------
 # Chart.lock 是 helm dependency build 生成的依赖锁，与 helm version 强绑定，

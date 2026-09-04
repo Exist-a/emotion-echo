@@ -185,6 +185,27 @@ etcd:
   startup_retry: 2
   tls:
     verify: true
+# 2026-09-04: Nacos 服务发现的**连接层**配置。
+#
+# Stage 39 PR-3 把 6 个 upstream 切成 discovery_type=nacos，但**从没加过这一段**，
+# 也从没在真实 APISIX 上跑过 seed。缺了它，即使 upstream 形状合法，
+# APISIX 也不知道去哪台 Nacos 拉实例，路由必然 503。
+#
+# 字段划分依据 https://apisix.apache.org/docs/apisix/discovery/nacos/ ：
+#   顶层 discovery.nacos  → 连接信息（host / prefix / fetch_interval / timeout）
+#   upstream.discovery_args → per-service 参数（namespace_id / group_name）
+# 注意本段是**顶层 discovery**，不是 plugin_attr 的子键。
+discovery:
+  nacos:
+    host:
+      - "http://emotion-echo-nacos:8848"
+    prefix: "/nacos/v1/"
+    fetch_interval: 30
+    weight: 100
+    timeout:
+      connect: 2000
+      send: 2000
+      read: 5000
 nginx_config:
   http_admin_configuration_snippet: ''
   http_end_configuration_snippet: ''

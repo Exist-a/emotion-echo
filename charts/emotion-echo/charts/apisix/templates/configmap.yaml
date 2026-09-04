@@ -35,11 +35,20 @@ data:
         export_addr:
           ip: 0.0.0.0
           port: {{ .Values.prometheusPort }}
-      # PR-3: nacos-discovery 插件全局配置（dev 与 prod 共享）
-      nacos-discovery:
+    # 2026-09-04 修正 PR-3：原写成 plugin_attr.nacos-discovery，两处都不对——
+    #   1. Nacos 发现的配置段是**顶层 discovery.nacos**，不是 plugin_attr 子键
+    #   2. 字段名是 prefix/fetch_interval/timeout；namespace 不属这里
+    #      （namespace_id / group_name 是 per-service 参数，在 upstream.discovery_args）
+    # 依据 https://apisix.apache.org/docs/apisix/discovery/nacos/ ，
+    # 并与 deploy/apisix/config.yaml 的 dev 配置保持同构。
+    discovery:
+      nacos:
         host:
-          - "http://{{ .Values.nacos.host }}:{{ .Values.nacos.port }}"
-        namespace: "{{ .Values.nacos.namespace }}"
-        group_name: "{{ .Values.nacos.group }}"
-        username: "{{ .Values.nacos.username | default "" }}"
-        password: "{{ .Values.nacos.password | default "" }}"
+          - "http://{{ if .Values.nacos.username }}{{ .Values.nacos.username }}:{{ .Values.nacos.password }}@{{ end }}{{ .Values.nacos.host }}:{{ .Values.nacos.port }}"
+        prefix: "/nacos/v1/"
+        fetch_interval: {{ .Values.nacos.fetchInterval | default 30 }}
+        weight: {{ .Values.nacos.weight | default 100 }}
+        timeout:
+          connect: 2000
+          send: 2000
+          read: 5000
