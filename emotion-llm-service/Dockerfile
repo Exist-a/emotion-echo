@@ -34,6 +34,7 @@ COPY emotion-llm-service/main.py          ./main.py
 COPY emotion-llm-service/grpc_server.py   ./grpc_server.py
 COPY emotion-llm-service/logging_setup.py ./logging_setup.py
 COPY emotion-llm-service/metrics_setup.py ./metrics_setup.py
+COPY emotion-llm-service/nacos_client.py  ./nacos_client.py
 COPY emotion-llm-service/entrypoint.sh    ./entrypoint.sh
 
 # ============ Stage 2: runtime ============
@@ -60,11 +61,12 @@ WORKDIR /app
 
 # 从 builder 复制已安装的 Python 包（保留 prefix=/install 结构）
 COPY --from=builder /install /usr/local
-# 复制业务代码（关键：logging_setup.py + metrics_setup.py 都必须在，import 才能成功）
+# 复制业务代码（关键：logging_setup.py / metrics_setup.py / nacos_client.py 都必须在，import 才能成功）
 COPY --from=builder /build/main.py                 ./main.py
 COPY --from=builder /build/grpc_server.py          ./grpc_server.py
 COPY --from=builder /build/logging_setup.py        ./logging_setup.py
 COPY --from=builder /build/metrics_setup.py        ./metrics_setup.py
+COPY --from=builder /build/nacos_client.py         ./nacos_client.py
 COPY --from=builder /build/emotion_llm_pb2.py      ./emotion_llm_pb2.py
 COPY --from=builder /build/emotion_llm_pb2_grpc.py ./emotion_llm_pb2_grpc.py
 # 复制 entrypoint
