@@ -35,5 +35,11 @@ data:
         export_addr:
           ip: 0.0.0.0
           port: {{ .Values.prometheusPort }}
-    # Stage 32 不接 Nacos discovery（upstream 用静态节点）
-    # Stage 34+ 切 nacos-discovery 插件时再加 discovery_type: nacos 配置
+      # PR-3: nacos-discovery 插件全局配置（dev 与 prod 共享）
+      nacos-discovery:
+        host:
+          - "http://{{ .Values.nacos.host }}:{{ .Values.nacos.port }}"
+        namespace: "{{ .Values.nacos.namespace }}"
+        group_name: "{{ .Values.nacos.group }}"
+        username: "{{ .Values.nacos.username | default "" }}"
+        password: "{{ .Values.nacos.password | default "" }}"

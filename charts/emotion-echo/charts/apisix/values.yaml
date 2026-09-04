@@ -51,6 +51,16 @@ jwtSecret: dev-bff-secret
 etcd:
   clientPort: 2379
 
+# PR-3: nacos-discovery 插件目标（与 charts/nacos subchart 对齐）
+# dev 默认 emotion-echo-nacos:8848；prod 由 umbrella values 覆盖
+nacos:
+  host: emotion-echo-nacos
+  port: 8848
+  namespace: emotion-echo-dev
+  group: DEFAULT_GROUP
+  username: ""
+  password: ""
+
 # 探针
 healthcheck:
   enabled: true

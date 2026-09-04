@@ -105,13 +105,45 @@ EOF
   fi
 }
 
-# ID 分配：与原根目录 apisix-*-up.json 残存文件兼容
-put_upstream 1  user-svc       "$USER_SVC_HOST"       "$USER_SVC_PORT"
-put_upstream 2  chat-svc       "$CHAT_SVC_HOST"       "$CHAT_SVC_PORT"
-put_upstream 3  assessment-svc "$ASSESSMENT_SVC_HOST" "$ASSESSMENT_SVC_PORT"
-put_upstream 4  analytics-svc  "$ANALYTICS_SVC_HOST"  "$ANALYTICS_SVC_PORT"
-put_upstream 5  ai-svc         "$AI_SVC_HOST"         "$AI_SVC_PORT"
-put_upstream 6  web-bff        "$WEB_BFF_HOST"        "$WEB_BFF_PORT"
+# PR-3: Nacos discovery upstream（注册到 Nacos 的 svc 走这条路径）
+# 不再写死 host:port；APISIX nacos-discovery 插件自动从 Nacos 拉实例。
+put_nacos_upstream() {
+  local id="$1" name="$2" service_name="$3"
+  local body
+  body=$(cat <<EOF
+{
+  "name": "$name",
+  "type": "roundrobin",
+  "discovery_type": "nacos",
+  "service_name": "$service_name",
+  "namespace_id": "$NACOS_NAMESPACE",
+  "group_name": "$NACOS_GROUP"
+}
+EOF
+)
+  if curl -sf -X PUT \
+    -H "X-API-KEY: $ADMIN_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$body" \
+    "$ADMIN_URL/apisix/admin/upstreams/$id" >/dev/null; then
+    log "  nacos upstream OK: $name (svc=$service_name)"
+  else
+    die "failed to PUT nacos upstream $name" 3
+  fi
+}
+
+# Nacos 配置（与业务 svc env 对齐）
+NACOS_NAMESPACE="${NACOS_NAMESPACE:-emotion-echo-dev}"
+NACOS_GROUP="${NACOS_GROUP:-DEFAULT_GROUP}"
+
+# PR-3: 全部 6 个 upstream 切 nacos-discovery（与 BootNacos 注册的 serviceName 一致）
+# 之前的静态 put_upstream 调用由本块替换；保留 put_upstream 函数作 Nacos 不可达时的兜底。
+put_nacos_upstream 1  user-svc       "emotion-echo-user-svc"
+put_nacos_upstream 2  chat-svc       "emotion-echo-chat-svc"
+put_nacos_upstream 3  assessment-svc "emotion-echo-assessment-svc"
+put_nacos_upstream 4  analytics-svc  "emotion-echo-analytics-svc"
+put_nacos_upstream 5  ai-svc         "emotion-echo-ai-svc"
+put_nacos_upstream 6  web-bff        "emotion-echo-web-bff"
 
 # ---- Step 3: 全局插件链（每个 route 共享）----
 log "Step 3/4: defining shared plugins"
