@@ -34,7 +34,7 @@ UserService:
   TimeoutMs: 5000
 
 ChatService:
-  BaseURL: ""  # PR-2: 走 Nacos Resolver 解析
+  BaseURL: http://localhost:8890
   TimeoutMs: 5000
 
 AssessmentService:
@@ -42,11 +42,11 @@ AssessmentService:
   TimeoutMs: 5000
 
 AnalyticsService:
-  BaseURL: ""  # PR-2: 走 Nacos Resolver 解析
+  BaseURL: http://localhost:8904
   TimeoutMs: 5000
 
 AIService:
-  HTTPAddr:  ""  # PR-2: 走 Nacos Resolver 解析
+  HTTPAddr:  http://localhost:8891
   GRPCAddr:  localhost:8892
   TimeoutMs: 5000
 

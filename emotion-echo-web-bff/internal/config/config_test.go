@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/conf"
+
+	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 )
 
 // loadTestConfig 从 etc/web-bff.yaml 加载（测试用）
@@ -29,7 +31,7 @@ func TestConfig_YamlParsing_Port8894(t *testing.T) {
 	c := loadTestConfig(t)
 	assert.Equal(t, 8894, c.Port, "BFF 端口应 8894")
 	assert.Equal(t, "0.0.0.0", c.Host)
-	assert.Equal(t, "web-bff", c.Name)
+	assert.Equal(t, shareddiscovery.ServiceWebBFF, c.Name)
 }
 
 // TestConfig_DownstreamDefaults_Valid 断言 5 个下游默认地址非空且端口合法
