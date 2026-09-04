@@ -3,6 +3,9 @@
 // web-bff 也注册到 Nacos（service-name=web-bff）；Stage 32 APISIX 通过
 // nacos-discovery 插件自动发现 BFF 作为上游，无需静态 upstream 配置。
 // 与其他 svc 同构（PR-07/08 模板），仅 service-name=web-bff / port=8894。
+//
+// PR-4: HotReload=true 时 web-bff.ops.yaml 解析为 OpsConfig，热更新同步到
+// HotReloadLimiter；limiter 由 main.go 通过 bootDeps.opsLimiter 注入。
 package main
 
 import (
@@ -16,6 +19,8 @@ import (
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 
 	"emotion-echo-web-bff/internal/config"
+	"emotion-echo-web-bff/internal/handler"
+	"gopkg.in/yaml.v3"
 )
 
 type NacosRuntime struct {
@@ -40,6 +45,9 @@ type bootDeps struct {
 	registryFactory func(ctx context.Context, addr, namespace, group string) (shareddiscovery.Registry, error)
 	configFactory   func(ctx context.Context, addr, namespace, group string) (sharedconfig.ConfigCenter, error)
 	waitForNacos    func(ctx context.Context, addr string, maxWait time.Duration) error
+	// opsLimiter 可选；为 nil 时 web-bff.ops.yaml 仅 log 不应用。
+	// main.go 注入真实 limiter，单测注入 fake 或 nil。
+	opsLimiter *handler.HotReloadLimiter
 }
 
 func defaultBootDeps() bootDeps {
@@ -86,14 +94,27 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 		return nil, fmt.Errorf("[nacos] NewNacosConfig: %w", err)
 	}
 	dataId := cfg.Name + ".ops.yaml"
+	applyOps := func(content string) {
+		var ops handler.OpsConfig
+		if err := yaml.Unmarshal([]byte(content), &ops); err != nil {
+			log.Printf("[nacos] ops yaml unmarshal failed (continuing): %v", err)
+			return
+		}
+		if deps.opsLimiter != nil {
+			deps.opsLimiter.Update(ops)
+			log.Printf("[nacos] ops applied: limit_count=%d burst=%d", ops.LimitCount, ops.Burst)
+		}
+	}
 	if opsYaml, err := cc.GetConfig(ctx, dataId, group); err != nil {
 		log.Printf("[nacos] GetConfig(%s/%s) failed (continuing): %v", group, dataId, err)
 	} else {
 		log.Printf("[nacos] ops config loaded: %s/%s, %d bytes", group, dataId, len(opsYaml))
+		applyOps(opsYaml)
 	}
 	if cfg.Nacos.HotReload {
 		if err := cc.ListenConfig(ctx, dataId, group, func(d, g, content string) error {
 			log.Printf("[nacos] [hot-reload] %s/%s changed, %d bytes", g, d, len(content))
+			applyOps(content)
 			return nil
 		}); err != nil {
 			log.Printf("[nacos] ListenConfig failed (continuing): %v", err)
