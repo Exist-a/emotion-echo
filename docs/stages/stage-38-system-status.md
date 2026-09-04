@@ -270,12 +270,45 @@ BFF 对未匹配路径统一返 `{"error":"not found"}` 404（`main.go` 的 `r.N
 | P1 | XTTS 重建（生产网络 build / 换镜像 / 前端 fallback web speech） | 半天到一天 | TTS 语音能用 |
 | P1 | 文件上传后端实现（需先做对象存储选型） | 1-2 天 | 聊天附件真正可用 |
 | P2 | quickLogin 后端端点实现或前端删除 | 1-2 小时 | 一致性 |
-| P1 | ~~migration 挂 initdb.d~~ → migrations 自动应用机制 | 2-3 小时 | **升级为 P1**：dev 库实测 13 个迁移全未应用，环境不可重建。见 [db-migration-auto-apply.md](/docs/plans/db-migration-auto-apply.md) |
+| P1 | ~~migration 挂 initdb.d~~ → migrations 自动应用机制 | 2-3 小时 | **升级为 P1**：dev 库实测 13 个迁移全未应用，环境不可重建。✅ **2026-09-04 已落地**（commit 0d17e85）—— 加 `emotion-echo-db-migrate` init 容器，5 个业务 svc 依赖其 service_completed_successfully，14 条迁移契约全绿；**但**修这个 bug 的过程中发现 initdb 链本身有 3 处静默断点（详见 §八），不是单纯加个容器就完事。 |
 | — | ~~`daily_emotion_by_modality_v` 视图对齐 schema 名~~ | — | **误诊撤回**，应用 ai-svc 002/003 后视图正常创建 |
 
 ---
 
-## 七、引用
+## 八、2026-09-04 实测：initdb 链本身有三处静默断点
+
+修迁移容器的过程中，**`down -v` 全新起**才暴露出 initdb 链是脆的——任何一条 DDL
+报错都会**静默掐断后续所有脚本**。三个具体断点：
+
+1. **`emotion_analysis` 表被两个文件重复定义且列不一致**。
+   `01-create-schemas.sql:121` 建表时**没有** `event_id`，`02:117` 的
+   `CREATE UNIQUE INDEX (event_id)` 因此报 "column does not exist"，中断整条
+   initdb 链 → 03 种子用户和 04 视图都不执行 → 全新环境无 echo 测试账号 → 登录 401。
+   修复：01 补 `event_id` 列，两边列定义保持一致。
+
+2. **Stage 36-D "Bug 2 已修"实际包错语句**。`02:118-119` 注释白纸黑字说"上面
+   CREATE UNIQUE INDEX 单独容错"，但实际 `DO` 块里包的是再下一条索引——真正会
+   失败的那条**从未被保护**。这条"已修"从写下的那天起（2026 早期）就没生效过，
+   但 Stage 36-D 报告把它标为已修，之后无人 `down -v` 验证。属于决策 18 §三
+   "未复跑即记录"。修复：把 02 里那条同名索引删掉，让 `ai-svc/migrations/001`
+   独占以 `CONSTRAINT` 形式创建（与 GORM OnConflict 匹配），并把两处注释对齐。
+
+3. **`emotion-echo-ai-svc/migrations/001` 守卫只看 `pg_constraint`，不看 `pg_class`**。
+   同名对象可能以索引形式存在（旧版 02 历史上建过同名 UNIQUE INDEX）。
+   守卫放行后 ADD CONSTRAINT 报 `relation "...", already exists`，迁移失败。
+   修复：守卫放宽到同时检查 `pg_class`（即使 ② 已修，仍为兼容已存在该索引的环境）。
+
+**教训**：迁移不能只靠"代码看起来对"。**空库场景必须真跑一次**——而 initdb.d 的
+"数据卷为空才执行"特性恰恰让这种验证被忽略。任何会修改 schema 的迁移/视图/角色
+变更，都应该有一次空库验证 + 一条契约测试断言"重新建库后 smoke 仍 10/10"。
+
+本节记录的全部修复已并入 `0d17e85` 提交。`db-migration-auto-apply.md` plan 已
+落地，但**反向结论**同样重要：**plan 落地的真正验收不是"加个 init 容器"，而是
+"down -v 后 smoke 10/10"**。
+
+---
+
+## 九、引用
 
 - Smoke 脚本：[scripts/smoke_data_layer.py](/scripts/smoke_data_layer.py) · [scripts/smoke_bff_t5.py](/scripts/smoke_bff_t5.py)
 - Stage 38-A landing：[docs/stages/stage-38-A-landing.md](/docs/stages/stage-38-A-landing.md)

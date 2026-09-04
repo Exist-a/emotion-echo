@@ -306,4 +306,26 @@ QUICKSTART.md (启动流程)
 > 本次 Stage 完成时间：2026-09-04
 > 预计 PR 数：1（合并 commit，含 6 个子 PR）
 > 收口条件：smoke §契约 7 PASS（6/6 svc 在 Nacos 注册表中 healthy=true ephemeral=false）
+
+---
+
+## 九、2026-09-04 后续闭环（不在本 Stage 原始 PR 范围）
+
+合并 main 后实测发现 §七.2"APISIX 端到端跑 seed 验证"这条**从未真正执行**，
+seed.sh 里藏了 5 处断点。修复与变更记录在以下 commit：
+
+- `cf1c798` fix(apisix): dev 网关链路 5 处断点 — 前端经 APISIX 从全 404 到全通
+- `ba2fa21` fix(web): 前端 API base 兜底从死值 :8888 改回 APISIX :19080
+- `4ff4c13` feat(apisix): seed 改为 compose init 容器 + 容器化前端改走网关 + 全仓 LF 强制
+- `0d17e85` feat(deploy): db-migrate init 容器 — down -v 全新环境不再依赖手工 psql
+
+**原文与现实的失真**已全部就地更新（见 §六复核更正 + §七未做项 + 本节）。
+新增失真实例登记到决策 18（`adr-2026-09-doc-drift-registry.md` §二）。
+本 Stage 收口后的"未做项"在 `docs/plans/todo-pile-2026-09-04.md` 持续追踪。
+
+**Stage 39 本质上不是"已落地"，而是"半落地"**：6 个 PR 代码进了 main，
+但**只有当 2026-09-04 这套 follow-up 也合上之后，dev 端到端才真正可用**。
+对其他 stage 的教训：单测 + smoke 全绿不等于"功能在 dev 端到端可用"，
+**端到端必须真跑一次完整路径**（浏览器 → 网关 → 业务 → DB）。
+
 > 残留风险：Nacos Go SDK v2.3.5 ListenConfig 偶发不回调 → 后续 stage 升级 SDK 或降级 Server 解决
