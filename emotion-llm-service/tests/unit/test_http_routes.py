@@ -25,6 +25,7 @@ sys.path.insert(0, str(SERVICE_DIR))
 
 from fastapi.testclient import TestClient
 
+import main
 from main import app
 
 
@@ -33,8 +34,16 @@ from main import app
 # =====================================================
 
 @pytest.fixture
-def client():
-    """FastAPI TestClient (with context-managed lifespan)."""
+def client(monkeypatch):
+    """FastAPI TestClient (with context-managed lifespan).
+
+    Stage 31 PR-10 给 app 挂了 lifespan，NACOS_ENABLED 默认 true，进入
+    lifespan 就会 wait_for_nacos("emotion-echo-nacos:8848", max_wait=60)。
+    该主机名只在 compose 网络里解析得到，跑单测时每个用例白等 60s。
+    lifespan 在调用时才读模块级 NACOS_ENABLED，故这里关掉它，
+    让本文件回到 docstring 承诺的"不启外部服务"。
+    """
+    monkeypatch.setattr(main, "NACOS_ENABLED", False)
     with TestClient(app) as c:
         yield c
 
