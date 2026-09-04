@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"emotion-echo-web-bff/internal/auth"
+	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/handler"
@@ -36,6 +37,7 @@ import (
 	"github.com/gin-gonic/gin"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
+	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	"github.com/zeromicro/go-zero/core/conf"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -51,8 +53,29 @@ func main() {
 	conf.MustLoad(*configFile, &c)
 	config.ApplyEnvOverrides(&c)
 
-	// 1. 下游 client 装配
-	svcCtx := buildServiceContext(&c)
+	// PR-2: Nacos 启动在 buildServiceContext 之前——这样 Resolver 可以用 nacosRuntime.Registry。
+	bootCtx, bootCancel := context.WithCancel(context.Background())
+	defer bootCancel()
+	// PR-4: HotReloadLimiter 由 main 持有，注入 bootDeps；web-bff.ops.yaml 解析后 Update 进来。
+	opsLimiter := handler.NewHotReloadLimiter(60, 100)
+	nacosDeps := defaultBootDeps()
+	nacosDeps.opsLimiter = opsLimiter
+	nacosRuntime, err := BootNacos(bootCtx, &c, nacosDeps)
+	if err != nil {
+		log.Printf("[nacos] boot failed (continuing): %v", err)
+	}
+	defer func() {
+		if nacosRuntime != nil {
+			nacosRuntime.Close(context.Background(), c.Name, c.Host, c.Port)
+		}
+	}()
+
+	// 1. 下游 client 装配（PR-2: Resolver 由 nacosRuntime.Registry 派生）
+	var resolver bffdiscovery.Resolver
+	if nacosRuntime != nil && nacosRuntime.Registry != nil {
+		resolver = bffdiscovery.NewNacosResolver(nacosRuntime.Registry, c.Nacos.Namespace)
+	}
+	svcCtx := buildServiceContext(&c, resolver)
 
 	// 2. SkyWalking（可选）
 	var tracer *go2sky.Tracer
@@ -89,20 +112,6 @@ func main() {
 
 	// 4. 路由（handler 装配）
 	registerRoutes(r, svcCtx, &c)
-
-	// Stage 31 PR-09: Nacos 注册 + 配置
-	// BFF 也注册到 Nacos；Stage 32 APISIX nacos-discovery 插件会自动发现 BFF
-	bootCtx, bootCancel := context.WithCancel(context.Background())
-	defer bootCancel()
-	nacosRuntime, err := BootNacos(bootCtx, &c, defaultBootDeps())
-	if err != nil {
-		log.Printf("[nacos] boot failed (continuing): %v", err)
-	}
-	defer func() {
-		if nacosRuntime != nil {
-			nacosRuntime.Close(context.Background(), c.Name, c.Host, c.Port)
-		}
-	}()
 
 	log.Printf("Starting web-bff at %s:%d...", c.Host, c.Port)
 	go func() {
@@ -141,7 +150,10 @@ func authPathBypass(authMW gin.HandlerFunc) gin.HandlerFunc {
 // BFF 回到"纯聚合层"原始定位。
 
 // buildServiceContext 装配全部下游 client + auth manager
-func buildServiceContext(c *config.Config) *svc.ServiceContext {
+//
+// PR-2：三个目标 client（ai / chat / analytics）支持 Resolver 兜底。
+// 当 env 注入 BaseURL 为空时，从 Nacos Discover 拉实例。
+func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.ServiceContext {
 	svcCtx := svc.NewServiceContext(*c)
 
 	// auth manager（自有 JWT 签发）
@@ -151,28 +163,42 @@ func buildServiceContext(c *config.Config) *svc.ServiceContext {
 	}
 	svcCtx.SetAuth(mgr)
 
-	// HTTP clients（5 个下游 + XTTS）
+	// HTTP clients（5 个下游 + XTTS）。
+	// 三个高优（ai/chat/analytics）走 Resolver 兜底；其他保持 env-only。
 	svcCtx.SetUser(downstream.NewUserClient(downstream.UserClientOptions{
 		BaseURL: c.UserService.BaseURL, TimeoutMs: c.UserService.TimeoutMs,
 	}))
 	svcCtx.SetChat(downstream.NewChatClient(downstream.ChatClientOptions{
 		BaseURL: c.ChatService.BaseURL, TimeoutMs: c.ChatService.TimeoutMs,
+		Resolver: resolver,
 	}))
 	svcCtx.SetAssessment(downstream.NewAssessmentClient(downstream.AssessmentClientOptions{
 		BaseURL: c.AssessmentService.BaseURL, TimeoutMs: c.AssessmentService.TimeoutMs,
 	}))
 	svcCtx.SetAnalytics(downstream.NewAnalyticsClient(downstream.AnalyticsClientOptions{
 		BaseURL: c.AnalyticsService.BaseURL, TimeoutMs: c.AnalyticsService.TimeoutMs,
+		Resolver: resolver,
 	}))
 	svcCtx.SetAI(downstream.NewAIClient(downstream.AIClientOptions{
 		BaseURL: c.AIService.HTTPAddr, TimeoutMs: c.AIService.TimeoutMs,
+		Resolver: resolver,
 	}))
 	svcCtx.SetXTTS(downstream.NewXTTSClient(downstream.XTTSClientOptions{
 		BaseURL: c.XTTS.BaseURL, TimeoutMs: c.XTTS.TimeoutMs,
 	}))
 
-	// ai-svc gRPC（EmotionQueryService）
-	conn, err := grpc.NewClient(c.AIService.GRPCAddr,
+	// ai-svc gRPC（EmotionQueryService）— 走 Resolver 拉 gRPC 端口
+	grpcHost, grpcPort := "", 0
+	if resolver != nil {
+		if h, p, rerr := resolver.Resolve(context.Background(), shareddiscovery.ServiceAI); rerr == nil {
+			grpcHost, grpcPort = h, p
+		}
+	}
+	grpcAddr := c.AIService.GRPCAddr
+	if grpcHost != "" {
+		grpcAddr = fmt.Sprintf("%s:%d", grpcHost, grpcPort)
+	}
+	conn, err := grpc.NewClient(grpcAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {

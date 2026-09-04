@@ -22,6 +22,9 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	bffdiscovery "emotion-echo-web-bff/internal/discovery"
+	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 )
 
 // =====================================================
@@ -132,24 +135,52 @@ type AIClient interface {
 type AIClientOptions struct {
 	BaseURL   string
 	TimeoutMs int
+	// Resolver PR-2: 当 BaseURL 为空时，通过 Resolver.Resolve("emotion-echo-ai-svc") 拉实例。
+	// 仍向后兼容：BaseURL 非空时 Resolver 被忽略。
+	Resolver bffdiscovery.Resolver
+	// ServiceName 用于 Resolver，默认 "emotion-echo-ai-svc"。
+	ServiceName string
 }
 
 // aiHTTPClient 是 AIClient 的 HTTP 实现
 type aiHTTPClient struct {
-	baseURL string
-	http    *http.Client
+	baseURL    string
+	http       *http.Client
+	resolver   bffdiscovery.Resolver
+	svcName    string
+	resolveCtx context.Context
 }
 
-// NewAIClient 构造 AIClient（HTTP 实现）
+// NewAIClient 构造 AIClient（HTTP 实现）。
+//
+// BaseURL 解析优先级：opts.BaseURL（env 注入）> opts.Resolver.Resolve(ServiceName)。
+// 两者都缺 → 返回 nil（调用方需 nil-check，与其他下游一致）。
 func NewAIClient(opts AIClientOptions) AIClient {
 	timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	return &aiHTTPClient{
-		baseURL: opts.BaseURL,
-		http:    &http.Client{Timeout: timeout},
+	svcName := opts.ServiceName
+	if svcName == "" {
+		svcName = shareddiscovery.ServiceAI
 	}
+	client := &aiHTTPClient{
+		baseURL:    opts.BaseURL,
+		http:       &http.Client{Timeout: timeout},
+		resolver:   opts.Resolver,
+		svcName:    svcName,
+		resolveCtx: context.Background(),
+	}
+	if opts.BaseURL == "" && opts.Resolver != nil {
+		host, port, err := opts.Resolver.Resolve(client.resolveCtx, svcName)
+		if err == nil {
+			client.baseURL = fmt.Sprintf("http://%s:%d", host, port)
+		}
+	}
+	if client.baseURL == "" {
+		return nil
+	}
+	return client
 }
 
 func (c *aiHTTPClient) MultiModalAnalyze(ctx context.Context, req MultiModalAnalyzeReq) (*MultiModalAnalyzeResp, error) {

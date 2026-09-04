@@ -21,6 +21,9 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	bffdiscovery "emotion-echo-web-bff/internal/discovery"
+	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 )
 
 // DailyReport 对应 analytics-svc repository.DailyReport
@@ -107,6 +110,10 @@ type AnalyticsClient interface {
 type AnalyticsClientOptions struct {
 	BaseURL   string
 	TimeoutMs int
+	// Resolver PR-2: 当 BaseURL 为空时，通过 Resolver.Resolve 拉 analytics-svc 实例。
+	Resolver bffdiscovery.Resolver
+	// ServiceName 用于 Resolver，默认 "emotion-echo-analytics-svc"。
+	ServiceName string
 }
 
 // analyticsHTTPClient 是 AnalyticsClient 的 HTTP 实现
@@ -115,16 +122,33 @@ type analyticsHTTPClient struct {
 	http    *http.Client
 }
 
-// NewAnalyticsClient 构造 AnalyticsClient
+// NewAnalyticsClient 构造 AnalyticsClient。
+//
+// BaseURL 解析优先级：opts.BaseURL > opts.Resolver.Resolve(ServiceName)。
+// 两者都缺 → 返回 nil。
 func NewAnalyticsClient(opts AnalyticsClientOptions) AnalyticsClient {
 	timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	return &analyticsHTTPClient{
+	svcName := opts.ServiceName
+	if svcName == "" {
+		svcName = shareddiscovery.ServiceAnalytics
+	}
+	client := &analyticsHTTPClient{
 		baseURL: opts.BaseURL,
 		http:    &http.Client{Timeout: timeout},
 	}
+	if opts.BaseURL == "" && opts.Resolver != nil {
+		host, port, err := opts.Resolver.Resolve(context.Background(), svcName)
+		if err == nil {
+			client.baseURL = fmt.Sprintf("http://%s:%d", host, port)
+		}
+	}
+	if client.baseURL == "" {
+		return nil
+	}
+	return client
 }
 
 func (c *analyticsHTTPClient) DailyReport(ctx context.Context, userID int64, date string) (*DailyReport, error) {
