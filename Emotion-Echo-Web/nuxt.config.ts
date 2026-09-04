@@ -9,10 +9,14 @@ export default defineNuxtConfig({
   
   runtimeConfig: {
     public: {
-      // API 基础地址 (Stage 26-Q: fallback 改 user-svc 直连 :8888,
-      // dev 环境不走 APISIX 因为 APISIX 3.9 镜像触发 nginx 301 about:blank
-      // bug,留给 Stage 27 升级 3.10+ 处理)
-      API_BASE_URL: process.env.NUXT_PUBLIC_API_BASE_URL || "http://localhost:8888/api/v1",
+      // API 基础地址 = APISIX 网关（决策 11/12：网关是唯一业务入口，
+      // 鉴权/限流/熔断/CORS 只在该层做；前端不直连 BFF 或业务 svc）。
+      //
+      // 2026-09-04 修正：兜底值原为 user-svc 直连 :8888，那是 Stage 26-Q 为绕开
+      // APISIX 3.9 的 nginx 301 bug 留的临时方案（注明"留给 Stage 27 升 3.10+ 处理"）。
+      // 现镜像已是 3.18.0（决策 11 指定版本），301 不复现；且 Stage 33 PR-20 收紧
+      // 端口后 user-svc 不再对宿主暴露，:8888 实测 HTTP 000，该兜底等于没有兜底。
+      API_BASE_URL: process.env.NUXT_PUBLIC_API_BASE_URL || "http://localhost:19080/api/v1",
       // 调试配置：是否禁用登录拦截
       DISABLE_AUTH: process.env.NUXT_PUBLIC_DISABLE_AUTH || "false",
       // TTS 服务地址
