@@ -17,6 +17,17 @@ import (
 	nacosvo "github.com/nacos-group/nacos-sdk-go/v2/vo"
 )
 
+// defaultRegisterEphemeral 控制 Register() 的 Ephemeral 字段默认值。
+//
+// PR-1 修复：dev 模式下 SDK v2.4.3 + Nacos 2.4.3 server 在 Derby 启动慢场景下
+// BeatRequest 不可靠，ephemeral 实例会被 server 在 ~30s 内踢出，导致
+// instance/list 返回 hosts: []。改为 false（持久实例）后，注册即落 Derby，
+// 不依赖心跳——dev compose 重启周期远小于 Derby 数据保留周期，可接受。
+//
+// prod 集群场景调用方应通过 NacosConfig.Ephemeral 字段显式覆盖为 true
+// （多副本扩缩容需要 ephemeral 自动摘除）。
+var defaultRegisterEphemeral = false
+
 // NacosConfig 描述如何连接 Nacos。
 //
 // ServerAddr 形如 "nacos:8848" 或 "127.0.0.1:8848"，支持多个用逗号分隔；
@@ -31,6 +42,9 @@ type NacosConfig struct {
 	Password string
 	// TimeoutMs 单次 RPC 超时，默认 5000ms。
 	TimeoutMs uint64
+	// Ephemeral 覆盖 Register() 时使用的 Ephemeral 字段。
+	// 0 值时使用包级默认（PR-1: false 持久实例）；prod 集群显式设为 true 让 Nacos 自动摘除。
+	Ephemeral bool
 }
 
 func (c *NacosConfig) defaults() {
@@ -128,8 +142,15 @@ func (r *NacosRegistry) Register(ctx context.Context, ins Instance) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	ephemeral := defaultRegisterEphemeral || r.cfg.Ephemeral
+	// PR-1 修复：Host 为 0.0.0.0（yaml 默认）会让 Nacos 把实例判 unhealthy；
+	// fallback 到本机非 loopback IPv4，Nacos 才能正确 health check。
+	host := ins.Host
+	if host == "" || host == "0.0.0.0" {
+		host = resolveRegisterIP()
+	}
 	ok, err := r.client.RegisterInstance(nacosvo.RegisterInstanceParam{
-		Ip:          ins.Host,
+		Ip:          host,
 		Port:        uint64(ins.Port),
 		Weight:      1.0,
 		Enable:      true,
@@ -138,7 +159,7 @@ func (r *NacosRegistry) Register(ctx context.Context, ins Instance) error {
 		ClusterName: "DEFAULT",
 		ServiceName: ins.ServiceName,
 		GroupName:   r.cfg.GroupName,
-		Ephemeral:   true,
+		Ephemeral:   ephemeral,
 	})
 	if err != nil {
 		return fmt.Errorf("discovery: register %s/%s:%d: %w", ins.ServiceName, ins.Host, ins.Port, err)
@@ -153,13 +174,14 @@ func (r *NacosRegistry) Unregister(ctx context.Context, ins Instance) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	ephemeral := defaultRegisterEphemeral || r.cfg.Ephemeral
 	_, err := r.client.DeregisterInstance(nacosvo.DeregisterInstanceParam{
 		Ip:          ins.Host,
 		Port:        uint64(ins.Port),
 		Cluster:     "DEFAULT",
 		ServiceName: ins.ServiceName,
 		GroupName:   r.cfg.GroupName,
-		Ephemeral:   true,
+		Ephemeral:   ephemeral,
 	})
 	if err != nil {
 		return fmt.Errorf("discovery: deregister %s/%s:%d: %w", ins.ServiceName, ins.Host, ins.Port, err)
@@ -320,3 +342,26 @@ func WaitForNacos(ctx context.Context, serverAddr string, maxWait time.Duration)
 
 // 编译期断言：NacosRegistry 必须实现 Registry interface。
 var _ Registry = (*NacosRegistry)(nil)
+
+// resolveRegisterIP 返回本机非 loopback IPv4。Host=0.0.0.0（yaml 默认）会
+// 让 Nacos 把实例判 unhealthy，因此 Register 时用本机 IP。
+//
+// 实现：net.Dial UDP 到 8.8.8.8 取本机 outbound IP（不真发包）——
+// 容器内通用，不依赖具体网卡名。
+func resolveRegisterIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		// fallback：第一个非 loopback interface IP
+		if addrs, _ := net.InterfaceAddrs(); len(addrs) > 0 {
+			for _, a := range addrs {
+				if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
+					return ipnet.IP.String()
+				}
+			}
+		}
+		return "127.0.0.1"
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
+}
