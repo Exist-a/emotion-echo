@@ -1,0 +1,49 @@
+# Emotion-Echo · Git 属性
+#
+# 2026-09-04 新增。根因：仓库此前没有 .gitattributes，Windows 上 core.autocrlf
+# 会把 checkout 的文本文件转成 CRLF。宿主机 bash 能容忍，但**任何进 Linux
+# 容器执行的脚本都会炸**——BusyBox/dash 把行尾的 \r 当成参数的一部分：
+#
+#   /seed/seed.sh: set: line 24: illegal option -o pipefail
+#   /seed/seed.sh: line 23: : not found
+#
+# 这是 deploy/apisix/seed.sh 作为 compose init 容器运行时的实际报错。
+# 扫描发现仓库内 20+ 个 .sh 全是 CRLF，只是此前都只在宿主机跑才没暴露。
+
+# 默认：由 git 判断是否文本，文本入库一律 LF
+*                text=auto eol=lf
+
+# ---------- 必须 LF（进容器执行 / 被 Linux 工具读取）----------
+*.sh            text eol=lf
+*.bash          text eol=lf
+Dockerfile      text eol=lf
+Dockerfile.*    text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.sql           text eol=lf
+entrypoint.sh   text eol=lf
+
+# ---------- 必须 CRLF（Windows 专用）----------
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# ---------- 二进制：禁止任何行尾转换与 diff ----------
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.pdf           binary
+*.zip           binary
+*.gz            binary
+*.tar           binary
+*.pt            binary
+*.pth           binary
+*.onnx          binary
+*.bin           binary
+*.wav           binary
+*.mp3           binary
+*.ttf           binary
+*.woff          binary
+*.woff2         binary

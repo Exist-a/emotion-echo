@@ -21,12 +21,19 @@
 #   2 - 上游 svc 不可达（任一 health check 失败）
 #   3 - route/upstream PUT 失败
 
-set -euo pipefail
+# 2026-09-04：用 `set -eu` 而非 `set -euo pipefail`。
+# 本脚本既在宿主 bash 跑，也由 compose 的 apisix-seed 容器（curlimages/curl，
+# BusyBox ash）以 sh 执行，而 ash 不支持 `-o pipefail`。
+# 脚本内仅有的 3 处管道都是 `... 2>&1 | head -c 300` 的错误信息截断，
+# 退出码不参与判断，去掉 pipefail 不影响错误检测。
+set -eu
 
 # ---- 配置 ----
 ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
 ADMIN_KEY="${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
 JWT_SECRET="${BFF_JWT_SECRET:-dev-bff-secret}"
+# 前端来源（cors allow_origins）。dev 是 Nuxt dev server；prod 由 env 覆盖。
+CORS_ALLOW_ORIGINS="${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
 
 # 业务 svc 容器名（compose 网络 DNS）
 USER_SVC_HOST="${USER_SVC_HOST:-emotion-echo-user-svc}"
@@ -259,7 +266,7 @@ PLUGINS_JSON=$(cat <<EOF
     "open_time": 30
   },
   "cors": {
-    "allow_origins": "http://localhost:3000",
+    "allow_origins": "$CORS_ALLOW_ORIGINS",
     "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
     "allow_headers": "Content-Type,Authorization,X-User-Id",
     "expose_headers": "X-User-Id",
@@ -294,33 +301,50 @@ EOF
 # serverless-post-function 在第 122 行，位于 jwt-auth 之后。
 #
 # 覆盖式赋值：无条件覆盖客户端自带的 X-User-Id，避免外部伪造身份。
-CATCHALL_PLUGINS_JSON=$(python - "$PLUGINS_JSON" <<'PYEOF'
-import json, sys
-
-plugins = json.loads(sys.argv[1])
-
-# jwt-auth 需要显式开 store_in_ctx，否则 ctx.jwt_auth_payload 为空
-plugins["jwt-auth"] = {"store_in_ctx": True}
-
-lua = (
-    "return function(conf, ctx) "
-    "local p = ctx.jwt_auth_payload; "
-    "local uid = p and (p.sub or p.user_id); "
-    "if uid ~= nil then "
-    "core = require('apisix.core'); "
-    "core.request.set_header(ctx, 'X-User-Id', tostring(uid)); "
-    "else "
-    "core = require('apisix.core'); "
-    "core.request.set_header(ctx, 'X-User-Id', ''); "
-    "end "
-    "end"
-)
-plugins["serverless-post-function"] = {
+#
+# 写成字面量而非用 python 改 PLUGINS_JSON：seed 要能在最小 seed 容器里跑
+# （bash + curl 即可），不引入 python 依赖。与 PLUGINS_JSON 的重复部分有限，
+# 换来的是零额外运行时依赖。
+CATCHALL_PLUGINS_JSON=$(cat <<EOF
+{
+  "jwt-auth": { "store_in_ctx": true },
+  "serverless-post-function": {
     "phase": "rewrite",
-    "functions": [lua],
+    "functions": [
+      "return function(conf, ctx) local core = require('apisix.core'); local p = ctx.jwt_auth_payload; local uid = p and (p.sub or p.user_id); core.request.set_header(ctx, 'X-User-Id', uid ~= nil and tostring(uid) or '') end"
+    ]
+  },
+  "limit-count": {
+    "count": 60,
+    "time_window": 60,
+    "key": "remote_addr",
+    "policy": "local",
+    "rejected_code": 429
+  },
+  "limit-req": {
+    "rate": 1000,
+    "burst": 100,
+    "key": "remote_addr",
+    "policy": "local",
+    "rejected_code": 503
+  },
+  "api-breaker": {
+    "break_response_code": 503,
+    "min_requests": 20,
+    "error_threshold_ratio": 0.5,
+    "open_time": 30
+  },
+  "cors": {
+    "allow_origins": "$CORS_ALLOW_ORIGINS",
+    "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
+    "allow_headers": "Content-Type,Authorization,X-User-Id",
+    "expose_headers": "X-User-Id",
+    "allow_credentials": true,
+    "max_age": 600
+  },
+  "prometheus": {}
 }
-print(json.dumps(plugins))
-PYEOF
+EOF
 )
 
 # ---- Step 4: 创建 route（catch-all 主入口 + 5 健康探针）----
@@ -400,7 +424,7 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH"]'
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
   "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "local"},
-  "cors": {"allow_origins": "http://localhost:3000", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credentials": true, "allow_headers": "*"}
+  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credentials": true, "allow_headers": "*"}
 }
 EOF
 )

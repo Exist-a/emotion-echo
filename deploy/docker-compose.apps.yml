@@ -565,8 +565,63 @@ services:
       retries: 3
 
   # =====================================================
-  # Stage 30: Emotion-Echo-Web 前端（生产模式，走 BFF 唯一入口）
-  #   NUXT_PUBLIC_API_BASE_URL → BFF :8894（聚合 5 下游）
+  # APISIX 路由 seed（一次性 init 容器，2026-09-04 新增）
+  #
+  # 背景：APISIX 的 upstream / route / consumer 全靠 deploy/apisix/seed.sh 注入
+  # Admin API，而该脚本此前**只能人工执行**。实测后果：compose up 之后 APISIX
+  # 里 routes 数 = 0，前端（走网关）每个请求都 404 —— 且从表象看很像"前端路径
+  # 写错"，极难定位。
+  #
+  # 本容器让 seed 随 compose up 自动跑：
+  #   - 依赖 6 个业务 svc healthy（seed 内部还会再探一次 /health）
+  #   - restart: "no" —— 一次性任务，跑完退出；失败不重启，避免刷屏掩盖错误
+  #   - seed.sh 全幂等（PUT 同 id），重复 up 不会产生重复路由
+  #
+  # 镜像用 curlimages/curl（含 curl，体积小）；seed.sh 已去掉 python 依赖，
+  # 只需 sh + curl。DOCKER_NETWORK="" 让脚本跳过"起探测容器"分支，
+  # 直接用容器内 curl 探下游（容器本就在 app-network 内，DNS 可解）。
+  # =====================================================
+  emotion-echo-apisix-seed:
+    image: curlimages/curl:latest
+    container_name: emotion-echo-apisix-seed
+    restart: "no"
+    depends_on:
+      emotion-echo-user-svc:
+        condition: service_healthy
+      emotion-echo-chat-svc:
+        condition: service_healthy
+      emotion-echo-assessment-svc:
+        condition: service_healthy
+      emotion-echo-analytics-svc:
+        condition: service_healthy
+      emotion-echo-ai-svc:
+        condition: service_healthy
+      emotion-echo-web-bff:
+        condition: service_healthy
+    environment:
+      # 容器内走服务名 + 容器端口（宿主机的 19080/9180 映射在这里不适用）
+      APISIX_ADMIN_URL: "http://apisix:9180"
+      APISIX_ADMIN_KEY: "${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
+      BFF_JWT_SECRET: "${BFF_JWT_SECRET:-dev-bff-secret}"
+      NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
+      NACOS_GROUP: "${NACOS_GROUP:-DEFAULT_GROUP}"
+      # 浏览器侧来源：容器化前端仍从宿主机 :3000 访问
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+      # 置空 = 不起 docker 探测容器（本容器已在网络内，且无 docker socket）
+      DOCKER_NETWORK: ""
+    volumes:
+      - ./apisix/seed.sh:/seed/seed.sh:ro
+    entrypoint: ["sh", "/seed/seed.sh"]
+    networks:
+      - app-network
+
+  # =====================================================
+  # Stage 30: Emotion-Echo-Web 前端
+  #   2026-09-04：API base 由 BFF :8894 改为 APISIX :19080。
+  #   决策 11/12 规定网关是唯一业务入口，鉴权/限流/熔断/CORS 只在 APISIX 做；
+  #   原先直连 BFF 会整体绕过鉴权层（BFF 自身不验签，只信任 X-User-Id）。
+  #   :19080 是 APISIX 的宿主映射端口——SPA 在浏览器执行，必须用宿主可达地址。
+  #   依赖 apisix-seed 跑完，否则网关无路由、前端全 404。
   # =====================================================
   emotion-echo-web:
     # Stage 36-FU Bug 9 closure: profiles: ["never"] removed.
@@ -580,18 +635,22 @@ services:
       context: ../Emotion-Echo-Web
       dockerfile: Dockerfile
       args:
-        # SPA 纯前端：API_BASE_URL 在浏览器执行，需宿主可达地址（BFF :8894 已映射宿主）
-        NUXT_PUBLIC_API_BASE_URL: http://localhost:8894/api/v1
+        # SPA 纯前端：API_BASE_URL 在浏览器执行，需宿主可达地址。
+        # APISIX 宿主映射为 19080→9080（9080 在 Windows 上被 NahimicService 占用，
+        # 见 docker-compose.infra.yml:222 注释）。
+        NUXT_PUBLIC_API_BASE_URL: http://localhost:19080/api/v1
         # Bug 9: default to public npmjs; override via build-arg in restricted networks
         NPM_REGISTRY: https://registry.npmjs.org/
     image: emotion-echo/web:v0.1.0
     container_name: emotion-echo-web
     restart: unless-stopped
     depends_on:
-      - emotion-echo-web-bff
+      # 网关必须先有路由，否则前端全 404
+      emotion-echo-apisix-seed:
+        condition: service_completed_successfully
     environment:
       <<: *logging-env
-      NUXT_PUBLIC_API_BASE_URL: http://localhost:8894/api/v1
+      NUXT_PUBLIC_API_BASE_URL: http://localhost:19080/api/v1
       NUXT_PUBLIC_DISABLE_AUTH: "false"
     ports:
       - "3000:3000"
