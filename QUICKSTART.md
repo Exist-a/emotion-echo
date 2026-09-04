@@ -65,6 +65,26 @@ Emotion-Echo/
 
 ---
 
+> ⚠️ **5 秒必读 · 前端是独立进程**
+>
+> 下面 "快速启动" 步骤里的 `docker compose up -d` **只起后端 7 业务 + 8 infra 容器**。
+> **前端 Nuxt 在另一个终端**手动起，否则浏览器打开 `localhost:3000` 是空壳。
+>
+> ```bash
+> # 终端 2：起前端
+> cd Emotion-Echo-Web
+> pnpm install     # 首次需要
+> pnpm dev
+> ```
+>
+> 然后浏览器打开 <http://localhost:3000>，登录用 `echo / echo123`。
+>
+> **为什么**：前端 Dockerfile 含 npm 镜像源配置（默认 npmmirror），Docker Desktop
+> 环境下经常拉取失败；本地 `pnpm dev` 跳过容器构建，迭代更快。prod 部署走
+> `emotion-echo-web` 容器 + APISIX（cf1c798）。
+
+---
+
 ## 2. 快速启动（Docker Compose 推荐）
 
 ### 前置要求
@@ -323,6 +343,14 @@ docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d --no
 cd deploy
 docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml --profile ai up -d --no-build emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
 ```
+
+**终端 4：前端**（独立进程，浏览器才能渲染）
+```powershell
+cd Emotion-Echo-Web
+pnpm install
+pnpm dev
+```
+然后浏览器打开 <http://localhost:3000>。
 
 **验证：**
 ```powershell
