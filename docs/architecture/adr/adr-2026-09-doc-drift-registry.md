@@ -74,11 +74,12 @@
 | 13 | `docs/plans/todo-pile-2026-09-04.md` A2 行号 | "`main.go:232` 有 `handler.NewUploadHandler().Register(r)`" + 前端 `useFileUpload.ts:42-46` | (1) 实际行号是 `main.go:236`；`main.go:232` 是 `handler.NewSurveyHandler(s.Assessment).Register(r)`；(2) 前端实际是 `useFileUpload.ts:39-48`；(3) handler 不论路径对错一律返 502 "Stage 31 not implemented"——修前端路径仍会撞 502，必须配合对象存储选型 | 探测方法错误（同 #6 / #8 型：行号/路径未经实测直接抄印象） |
 | 14 | Sprint 1 PR-0 实施（2026-09-04） | （未发生失真——操作合规）但暴露**新类型**：破坏性脚本未带默认护栏 | 实施 PR-0 时，作者 `bash scripts/check_empty_db_repro.sh`（未带任何 flag）直接执行；脚本首阶段 `docker compose down -v --remove-orphans` **销毁用户 dev 环境全部 15 容器 + 全部命名数据卷**（postgres / redis / kafka / nacos 等），累积数据全丢。**根因**：作者把脚本当"语法检查"误判，**未在写脚本时默认加 `--dry-run` 护栏**——脚本本身写得不安全，与用户会话边界感缺失并存。 | **新类型 6：破坏性脚本未带默认护栏**（扩展原 §三 类型 5"自报告失真"的子类：从"言辞"延伸到"动作"） |
 | 15 | Sprint 1 PR-0 脚本 `check_empty_db_repro.sh`（原始版） | 脚本未带任何参数解析；直接调用 `$COMPOSE_CMD down -v --remove-orphans` | 修正后：默认 `--dry-run`（只打印计划，不执行）+ `--execute` 显式开关才真跑破坏性操作；`--help` 看用法；未知参数 exit 2 | 类型 6 同 #14 型——破坏性脚本未带默认护栏（与 #14 同根因，本条登记脚本本身的合规修正） |
+| 16 | `Emotion-Echo-Web/e2e/login-flow.spec.ts:13-26` happy-path-3 原断言 | 用 `url.includes('login') || url.includes('quick') || url.includes('auth')` 模糊匹配任一关键字；后端未启动时永远 green | 注释承认"由于 dev mode 下后端 API (localhost:18080) 未启用，quickLogin 异步调用失败"，E2E 从未真正通过。**真实前端行为**（`pages/login/index.vue:175-196`）：quickLogin 直接调 `POST /api/v1/auth/login`（账号 echo/echo123），**不是**独立 `/auth/quick-login` 端点。**BFF 侧**（`auth_handler.go:95-110`）：5 个 action 仅 `login / register / refresh / logout / verification-code`，**无 quick-login**。**修正**（PR-5 commit `be8a63c`）：精确监听 `POST /api/v1/auth/login`（排除 `/quick-login` `/register`）+ 等待 `/chat/conversation` 跳转 + 注释引用本条登记 | 探测方法错误（同 #6 / #8 型：模糊匹配让无效 case 永远 pass）+ 未复跑即记录（同 #3 型：注释承认 E2E 从未通过却仍入库）。**根因更深**：原本 `quickLogin` 是为某个未实现的 dev-only 端点设计的产品入口（参考 `multimodal-emotion-backend.md:42,102` legacy 计划），**真实产品路径是走标准 `/auth/login`**——E2E 注释+断言与真实前端行为长期错位，无人发现。 |
 
-附带**累积的失真速率**统计（**修正后**）：本 ADR 7 天内累积登记 **15 条失真 / 5 类成因**（新增类型 6），
-其中类型 1（根因臆断）5 条、类型 3（未复跑即记录）3 条、类型 4（探测方法错误）4 条、
+附带**累积的失真速率**统计（**修正后**）：本 ADR 7 天内累积登记 **16 条失真 / 5 类成因**（新增类型 6），
+其中类型 1（根因臆断）5 条、类型 3（未复跑即记录）4 条、类型 4（探测方法错误）5 条、
 类型 2（陈旧结论）1 条、**类型 6（破坏性脚本未带默认护栏）2 条**。
-**根因臆断 + 探测方法错误**合计 9 条（占 60%）——这两类
+**根因臆断 + 探测方法错误**合计 10 条（占 63%）——这两类
 都属于"按合理推断/错误方法得出结论"，共同的根治办法就是**多花 5 分钟真跑一次**
 （决策 4.1 的"结论须附可复现命令 + 原始输出"是针对这两类最强的防线）。
 
