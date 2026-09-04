@@ -26,6 +26,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/zeromicro/go-zero/core/conf"
@@ -107,6 +108,10 @@ func main() {
 
 	nacosRuntime, err := BootNacos(bootCtx, &c, defaultBootDeps())
 	if err != nil {
+		// PR-5: hard error（WaitForNacos / Register 失败）→ fail-fast，dev 不再"假活着"。
+		if shareddiscovery.IsHardBootError(err.Error()) {
+			log.Fatalf("[nacos] boot failed (fatal): %v", err)
+		}
 		log.Printf("[nacos] boot failed (continuing): %v", err)
 	}
 	defer func() {

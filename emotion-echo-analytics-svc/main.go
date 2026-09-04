@@ -24,6 +24,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/zeromicro/go-zero/core/conf"
@@ -187,6 +188,9 @@ func main() {
 	defer bootCancel()
 	nacosRuntime, err := BootNacos(bootCtx, &c, defaultBootDeps())
 	if err != nil {
+		if shareddiscovery.IsHardBootError(err.Error()) {
+			log.Fatalf("[nacos] boot failed (fatal): %v", err)
+		}
 		log.Printf("[nacos] boot failed (continuing): %v", err)
 	}
 	defer func() {

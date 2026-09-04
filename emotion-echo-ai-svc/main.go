@@ -44,6 +44,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/zeromicro/go-zero/core/conf"
@@ -382,6 +383,9 @@ func main() {
 	// 注册时仅注册 HTTP 端口（metadata.grpc_port=8892 供 Stage 32 APISIX 双注册决策）
 	nacosRuntime, err := BootNacos(rootCtx, &c, defaultBootDeps())
 	if err != nil {
+		if shareddiscovery.IsHardBootError(err.Error()) {
+			logging.Fatalf("[nacos] boot failed (fatal): %v", err)
+		}
 		logging.Errorf(err, "[nacos] boot failed (continuing)")
 	} else if nacosRuntime != nil && nacosRuntime.Registry != nil {
 		defer nacosRuntime.Close(rootCtx, c.Name, c.Host, c.Port)
