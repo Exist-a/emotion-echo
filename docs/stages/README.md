@@ -25,3 +25,5 @@ Round 3 完成后此索引将自动生成（按 stage 编号）。
 | Stage 20~25 | 容器化 + AI 接入 | ~15 |
 | Stage 26~30 | BFF + Kafka + LLM | ~25 |
 | Stage 31~36 | Nacos + APISIX + 多模态 + 生产加固 | ~30 |
+| Stage 37~39 | data layer 4A bug 修复 + dev APISIX + Nacos 真启用 | 8 |
+| **Stage 40** | **todo-pile 自查 + 全面文档失真修复（决策 18 治理）** | **1** |

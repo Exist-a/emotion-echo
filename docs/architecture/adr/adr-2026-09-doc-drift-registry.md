@@ -56,6 +56,29 @@
 都属于"按合理推断/错误方法得出结论"，共同的根治办法就是**多花 5 分钟真跑一次**
 （决策 4.1 的"结论须附可复现命令 + 原始输出"是针对这两类最强的防线）。
 
+#### 2026-09-04 增补（本轮 2 天内发现 4 条）
+
+| # | 出处 | 文档写的 | 实测事实 | 类型 |
+|---|---|---|---|---|
+| 7 | 我自己向用户汇报时的措辞 | "BFF 暴露 8894 与决策 12 不符" | `docker-compose.apps.yml:545` 注释已明写 "Stage 33 PR-20: BFF 端口保留（dev 调试 / Postman 直连；prod 应仅暴露 APISIX）"——是**有意保留的 dev 例外**，且 `scripts/` 下三个 smoke 脚本依赖它 | 根因臆断（与 #1 #5 同型：看到表象就推断成疏漏，未查是否有意） |
+| 8 | stage-38 §三阻断 1 | "XTTS 模型加载卡死 + `/api/v1/ai/tts` 返 404" | 容器已在 Stage 39 §五被删除（下游无实例）；且 `/api/v1/ai/tts` 路径**从来就不存在**（真实路径 `/api/v1/tts/synthesize` 实测返 503）。**TTS 仍不可用的结论对**，但依据 404 是错的——把"路由缺失"和"下游无实例"混为一谈 | 探测方法错误（同 #6 型：探测路径本身就错） |
+| 9 | stage-36-D 报告 + `02:118-119` 注释 | "Bug 2 已修：上面 CREATE UNIQUE INDEX 单独容错" | DO 块里实际包的**是再下一条索引**，真正会失败的那条从未被保护。**这条"已修"从写下的那天起（2026 早期）就没生效过**，但报告把它标为已修、之后无人复跑 `down -v` 验证 | 未复跑即记录（同 #3 型；"修完"未在干净环境验证） |
+| 10 | deploy/db/02-create-tables-in-schemas.sql 第 116-117 行 | （代码自身注释缺失） | `CREATE UNIQUE INDEX IF NOT EXISTS uq_emotion_analysis_event_id` 写完后，紧跟的 `DO` 块包的是**不同的索引**——保护对象与描述错位两年。这条**不在任何 stage 文档里**，但属于决策 4.3 防范的"结论与代码实际行为不一致"——文档（行内注释）也算文档 | 探测方法错误（同 #6 型：注释承诺的保护范围与实际不符，但**写代码的人自己**就是探测者） |
+| 11 | Emotion-Echo-Web/.env.example 与 nuxt.config.ts | "兜底 :8888 直连 user-svc 绕开 APISIX 3.9 的 301 bug" | 镜像实为 3.18.0，301 不复现；且 user-svc 自 Stage 33 PR-20 不再对宿主暴露，**兜底值指向死端口**：实测 `localhost:8888/health` HTTP 000 | 根因臆断（同 #1 型：把"端口不可达"误判为"APISIX bug"，错误的根因导致长期绕行网关） |
+
+#### 2026-09-04 再增补（todo-pile-2026-09-04.md 自查发现 2 条）
+
+| # | 出处 | 文档写的 | 实测事实 | 类型 |
+|---|---|---|---|---|
+| 12 | `docs/plans/todo-pile-2026-09-04.md` A1 根因链 + B4 整段 | "XTTS 容器已在 Stage 39 §五被删除" + "`aiclient/xtts.go` 空即返 nil" + "ai-svc 容器无 `XTTS_BASE_URL` env" + "Stage 39 §五把这三个本地 AI 模型容器都删了" | (1) `deploy/docker-compose.apps.yml:437/473/518` fer/sensevoice/xtts 三个服务定义**全部仍在**（含 build context、healthcheck、deploy resources）；(2) `emotion-echo-ai-svc/internal/aiclient/{fer,sensevoice,xtts}.go` 是 130/118/151 行完整实现（行 15-21 注释明说"完整模式"），**仅当 BaseURL 空时构造降级返 nil**；(3) `apps.yml:387-389` 显式注入 `XTTS_BASE_URL: ${XTTS_BASE_URL:-http://emotion-echo-xtts:8003}`。**真实根因**：ai-api.yaml:69-81 把三个 BASE_URL 显式留空是有意降级（dev 默认"仅文本情绪"），不是"删除"。**前端 `useFaceEmotion.ts:121` / `useTTSPlayer.ts:180` / `useFileUpload.ts:39-48` 入口也未砍**。 | 根因臆断（同 #1 / #7 型：看到 dev 默认行为 → 推断为"已删"，未 `ls aiclient/` 也未 `grep emotion-echo-xtts deploy/docker-compose.apps.yml`）|
+| 13 | `docs/plans/todo-pile-2026-09-04.md` A2 行号 | "`main.go:232` 有 `handler.NewUploadHandler().Register(r)`" + 前端 `useFileUpload.ts:42-46` | (1) 实际行号是 `main.go:236`；`main.go:232` 是 `handler.NewSurveyHandler(s.Assessment).Register(r)`；(2) 前端实际是 `useFileUpload.ts:39-48`；(3) handler 不论路径对错一律返 502 "Stage 31 not implemented"——修前端路径仍会撞 502，必须配合对象存储选型 | 探测方法错误（同 #6 / #8 型：行号/路径未经实测直接抄印象） |
+
+附带**累积的失真速率**统计（**修正后**）：本 ADR 7 天内累积登记 **13 条失真 / 4 类成因**，
+其中类型 1（根因臆断）5 条、类型 3（未复跑即记录）3 条、类型 4（探测方法错误）4 条、
+类型 2（陈旧结论）1 条。**根因臆断 + 探测方法错误**合计 9 条（占 69%）——这两类
+都属于"按合理推断/错误方法得出结论"，共同的根治办法就是**多花 5 分钟真跑一次**
+（决策 4.1 的"结论须附可复现命令 + 原始输出"是针对这两类最强的防线）。
+
 
 附带被低估的一项（非失真，但严重度记错）：stage-38 §四隐患 1
 "migration 未挂 initdb.d（🟡 重建 dev 会丢表）"，实际是**当时的库就已经缺**，

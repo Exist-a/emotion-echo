@@ -127,10 +127,16 @@
 ### 决策 9：服务入口 = **web-bff**（APISIX 已退役）
 
 > ✅ 2026-08-31 生效（Stage 30 落地，commit `e9abac5`）。
+> 🔧 **2026-09-04 关系说明补正**：本决策的"统一入口 = web-bff"措辞是 Stage 30 当时表述；
+> Stage 32 决策 11 已引入 APISIX 网关层，**APISIX 才是 prod 视角下的唯一业务入口**，
+> BFF 转为 APISIX 的 upstream。**本决策与决策 11/12 同时成立**——
+> 决策 9 描述的是 BFF 在系统内的角色（聚合 5 下游 + SSE 编排），决策 11/12 描述的是
+> 对外暴露路径（APISIX :19080 / dev BFF :8894 仅是 dev 调试例外）。
+> 详见决策 12 末尾的"关系说明"段。
 
 | 维度 | 选择 |
 |------|------|
-| 统一入口 | **web-bff** :8894（`/api/v1/*` 聚合 5 下游 + SSE 流式编排 + CORS） |
+| 统一入口（系统内） | **web-bff** :8894（`/api/v1/*` 聚合 5 下游 + SSE 流式编排 + CORS） |
 | 鉴权 | BFF 透传校验（当前 JWT **不验签**，审计 P0 问题 S-1，修复见审计 §八 R-3） |
 | 网关演进 | 需要边缘层时：路 1 = BFF 内限流/熔断；路 2 = 重引 APISIX 3.10+（`stage-30-apisix-retirement.md` §五） |
 
@@ -162,13 +168,31 @@
 ### 决策 12：BFF = **纯聚合层**（不再兼任网关）
 
 > ✅ 2026-09-03 生效。澄清 BFF 与网关的边界。
+> 🔧 **2026-09-04 关系说明补正**（决策 18 §4.4 / 登记实例 #12）：本决策与决策 9、
+> 决策 11 在"BFF 是否唯一入口"上**字面表述不一致但语义互补**——本文收口如下：
+>
+> | 视角 | "唯一入口"指什么 | 落在哪 | 依据 |
+> |---|---|---|---|
+> | **业务入口**（外部用户视角） | APISIX `:19080` | `deploy/docker-compose.apps.yml` + Helm | 决策 11 |
+> | **系统入口**（内部服务视角，BFF 与下游 5 svc 之间） | web-bff `:8894` | BFF `main.go` + APISIX upstream | 决策 9 |
+> | **dev 调试**（特殊例外） | web-bff `:8894` 直连 | `apps.yml:602-604` 注释明文"prod 应仅暴露 APISIX" | 决策 12 dev 例外段 |
+>
+> **对外正确说法**：APISIX 是**唯一业务入口**；BFF 是 APISIX 的 upstream + 系统内聚合层。
+> **dev 例外**：BFF :8894 监听宿主（`apps.yml:602-604` 注释）以便 Postman / 调试直连，
+> dev 模式下 `BFF_TRUST_APISIX=true`（默认）信任任何 `X-User-Id` header，
+> **仅本机 dev 环境可接受**，prod 部署必须用 prod override compose 关闭 8894 端口映射。
+>
+> 与决策 9 的关系：决策 9 写于 2026-08-31，是 Stage 30 当时"BFF 取代 APISIX 网关职责"的描述；
+> 决策 11/12 在 2026-09-03 撤回并细化（决策 11 引入 APISIX 网关层，决策 12 把 BFF 收回纯聚合）。
+> 因此"web-bff 是统一入口"是 Stage 30 视角，**当前视角** = "web-bff 是聚合层，APISIX 是网关层"。
+> 决策 9 末尾的关系说明段同步加此注脚。
 
 | 维度 | 选择 |
 |------|------|
 | BFF 职责（**仅做**） | 多服务聚合、字段裁剪、SSE 流式编排、多端适配（PC/移动）、业务上下文（会话级） |
 | BFF 不再做 | JWT 验签、CORS、限流、熔断、TLS 终结、全局路由表（迁至 APISIX） |
-| BFF 入口 | 容器内 `web-bff:8894`，仅 APISIX 内部访问；宿主机不再直接映射（收敛入口） |
-| BFF 内部鉴权 | 不做（信任 APISIX 已验签 + 注入 X-User-Id），通过 shared 中间件透传 |
+| BFF 入口 | 容器内 `web-bff:8894`，仅 APISIX 内部访问；宿主机**dev 例外**保留映射（`apps.yml:602-604`） |
+| BFF 内部鉴权 | 不做（信任 APISIX 已验签 + 注入 X-User-Id），通过 shared 中间件透传；`BFF_TRUST_APISIX=false` 走 JWT 兜底（apps.yml:594-596） |
 
 ### 决策 13：演进路线 = **串行 3 阶段**（骨架先，胶水后）
 
@@ -271,8 +295,15 @@
                                 │
                                 ▼ HTTP (dev) / HTTPS (prod)
                     ┌─────────────────────────┐
-                    │  web-bff :8894           │  ← 唯一前端入口（Stage 30 替代 APISIX；Stage 33 净化为纯聚合）
-                    │  /api/v1/* 聚合 + SSE    │     鉴权透传 / CORS / 流式编排
+                    │  APISIX :19080           │  ← 唯一业务入口（决策 11）
+                    │  路由 / 鉴权 / 限流      │     （dev 默认 HTTP；prod TLS 由前置 nginx 终结）
+                    └────────────┬────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  web-bff :8894           │  ← 聚合层（决策 9 / 12；APISIX upstream）
+                    │  /api/v1/* 聚合 + SSE    │     鉴权透传（信 APISIX 注入 X-User-Id）/ 流式编排
+                    │  (dev :8894 监听宿主 — 仅调试例外) │
                     └────────────┬────────────┘
                                  │ 静态寻址：compose 容器 DNS / K8s Service FQDN
                                  │ (Stage 31 演进：svc 主动注册到 Nacos，APISIX 通过 nacos-discovery 插件拉实例)
@@ -297,11 +328,11 @@
    echo_user     echo_assess   echo_chat  echo_ai        echo_analyt
 
    ┌────────────────────────────────────────────────────────────┐
-   │  治理层（Stage 31 落地后）                                      │
+   │  治理层（Stage 31/32 落地后）                                    │
    │  ✅ Nacos 2.4.x 注册中心（8848/9848/9849）+ 配置中心（运营参数）      │
    │     namespace: emotion-echo-dev / emotion-echo-prod               │
    │     group: DEFAULT_GROUP；dataId: {svc}.ops.yaml                  │
-   │  ☐ APISIX 3.18 网关层（Stage 32，依赖 31）                            │
+   │  ✅ APISIX 3.18 网关层（Stage 32 已落地；cf1c798 后 dev 端到端经 APISIX）│
    └────────────────────────────────────────────────────────────┘
    ┌────────────────────────────────────────────────────────────┐
    │  基础设施层                                                  │
@@ -316,7 +347,8 @@
 
 | svc | 端口 | 框架 | DB schema | 业务职责 | 状态 |
 |-----|------|------|-----------|---------|------|
-| **web-bff** | 8894 | Gin | — | 唯一前端入口：聚合 5 下游 + SSE + CORS | ✅ Stage 30 完成 |
+| **APISIX** | 19080 (HTTP) / 7943 (etcd) | OpenResty | — | **唯一业务入口**（决策 11/12）：路由 + jwt-auth + 限流 + CORS | ✅ Stage 32 |
+| **web-bff** | 8894 | Gin | — | 聚合层（决策 9/12）：APISIX upstream，聚合 5 下游 + SSE 编排；dev 监听宿主 :8894（仅调试例外，apps.yml:602-604） | ✅ Stage 30 完成 |
 | **user-svc** | 8888 | Gin | emotion_echo_user | 用户/Auth/上传 | ✅ Stage 1 完成 |
 | **assessment-svc** | 8889 | Gin | emotion_echo_assessment | 量表/评估/报告 | ✅ Stage 1 完成 |
 | **chat-svc** | 8890 | Gin | emotion_echo_chat | 会话/消息 + outbox | ✅ Stage 1 完成 |
@@ -324,7 +356,7 @@
 | **analytics-svc** | 8893 | Gin | emotion_echo_analytics | 行为事件/报表 | ✅ Stage 1 完成 |
 | **emotion-llm-service** | 8000 / gRPC 50051 | FastAPI | — | 文本情绪分析（当前为关键词器） | ✅ Stage 3 完成 |
 | **Emotion-Echo-Web** | 3000 | Nuxt 3 | — | 前端 SPA | ✅ |
-| **FER / sensevoice / XTTS** | 8004/8002/8003 | FastAPI | — | 人脸/语音识别、语音合成（可选） | ✅ |
+| **FER / sensevoice / XTTS** | 8004/8002/8003 | FastAPI | — | 人脸/语音识别、语音合成；`--profile ai` 启用；dev 默认 `ai-api.yaml` BASE_URL 留空（仅文本情绪降级，cf. `apps.yml:387-389`） | ✅ |
 
 ---
 

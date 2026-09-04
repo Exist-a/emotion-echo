@@ -24,7 +24,7 @@ Emotion-Echo/
 ├── emotion-echo-assessment-svc/     # 心理量表 (Go + Gin :8889)
 ├── emotion-echo-ai-svc/             # AI 编排 (Go + gRPC :8892 + HTTP :8891)
 ├── emotion-llm-service/             # Python gRPC LLM 推理 (:8000 + :50051)
-├── emotion-echo-web-bff/            # 唯一 BFF 入口 (Go + Gin :8894)
+├── emotion-echo-web-bff/            # BFF 聚合层 (Go + Gin :8894，APISIX upstream)
 ├── Emotion-Echo-LLM/                # 多模态 AI profile
 │   ├── FER/                         # 人脸情绪 (:8004, profile ai)
 │   ├── sensevoice-small/            # 语音情绪 (:8002, profile ai)
@@ -40,7 +40,8 @@ Emotion-Echo/
 | 服务 | 容器内 | 宿主映射 |
 |---|---|---|
 | **前端 Web (Nuxt)** | :3000 | <http://localhost:3000> |
-| **BFF (唯一入口)** | :8894 | <http://localhost:8894> |
+| **BFF (APISIX 后端，dev 调试可直连；prod 仅 APISIX 访问)** | :8894 | <http://localhost:8894> |
+| **APISIX（唯一业务入口，决策 11/12）** | :19080 | <http://localhost:19080> |
 | user-svc | :8888 | (容器内) |
 | chat-svc | :8890 | (容器内) |
 | analytics-svc | :8893 | (容器内) |
@@ -55,6 +56,12 @@ Emotion-Echo/
 | Kafka | :9092 | (容器内) |
 | Nacos | :8848 | <http://localhost:8848/nacos> |
 | SkyWalking UI | :8080 | <http://localhost:8080> |
+
+> 🔧 **2026-09-04 措辞就地更正**（决策 18 §4.4）：原"**BFF (唯一入口)** :8894"
+> 与决策 11（APISIX = 网关层）/ 决策 12（BFF 宿主机不再直接映射）字面冲突。
+> 现改为"BFF (APISIX 后端，dev 调试可直连)"，并补 APISIX 一行（:19080，
+> cf1c798 后前端经 APISIX 是默认路径）。两者的关系以 `decisions.md` 决策 12
+> 的关系说明为准。
 
 ---
 

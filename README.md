@@ -173,9 +173,14 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 - ✅ Stage 29-A / 29-A.5：cert-manager + Grafana Ingress TLS（render + live smoke 已绿）
 - ✅ Stage 29-D：5-family TLS retrofit for the 15 business ApisixRoutes（render-assert 已绿；live smoke 待集群验证）
 - ✅ Stage 30-A/B/C：analytics 9 端点 + Kafka pipeline + 消费幂等/DLQ/Outbox（全绿）
-- ✅ **Stage 30 Web BFF**：`emotion-echo-web-bff`（:8894）唯一入口 — 聚合 5 下游 + SSE 编排 + 自有 mock 鉴权（`docs/stage-30-web-bff.md`）
+- ✅ **Stage 30 Web BFF**：`emotion-echo-web-bff`（:8894）BFF 聚合层 — 聚合 5 下游 + SSE 编排 + 自有 mock 鉴权（`docs/stage-30-web-bff.md`）。
+  > 🔧 **2026-09-04 措辞就地更正**（决策 18 §4.4）：原"唯一入口"与决策 11（APISIX = 网关层）/
+  > 决策 12（BFF 宿主机不再直接映射）字面冲突。准确说法：BFF 是 APISIX 的 upstream，
+  > **APISIX 才是唯一业务入口**；BFF 端口 8894 仅在 dev 调试保留（cf. `apps.yml:602-604` 注释）。
 - ✅ **Phase D 接 DeepSeek**：BFF ai_stream 改造为 OpenAI 兼容真实 LLM（env 注入 key，无 key 降级 mock）
 - ✅ **APISIX 退役**：Stage 30 BFF 替代网关职责后，compose + helm apisix-routes + etcd 全清；历史保留在 `docs/`（`stage-29-D-tls-all-routes.md`）
+  > 🔧 **2026-09-04 措辞就地更正**（决策 18 §4.4）：此条是 Stage 30 的**演进记录**（APISIX 在 Stage 30 暂时退场）；Stage 32 已重新引入 APISIX 网关层（决策 11），
+  > cf1c798 后 dev compose 也已恢复。当前实际状态：**APISIX 是 dev / prod 唯一业务入口**（决策 11/12）。
 - ✅ **Stage 31**：Nacos 注册中心 + 配置中心演进（PR-01..12）
 - ✅ **Stage 32**：APISIX 网关层回归 + JWT 真实验证 + X-User-Id 透传（PR-13..16）
 - ✅ **Stage 33**：P0 修复 + BFF 净化（PR-17..22，7 个 PR 收口）
