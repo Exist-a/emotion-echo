@@ -5,7 +5,7 @@
 > 决策变更时，**先改本文档，再改代码**，保持文档先行。
 
 > 💡 **部署形态定位**：本项目当前采用「分布式架构 + 单机部署（单机多实例）」模式。详细差异、与多机部署的对比、以及当前部署栈的取舍见 [architecture-positioning.md](/docs/architecture/positioning.md)。
-> 最后更新：2026-09-04（新增决策 18 · 文档失真治理，详见 `adr-2026-09-doc-drift-registry.md`；决策 17 · dev 模式日志聚合后端 = Loki，详见 `adr-2026-09-loki-aggregator-dev.md`）
+> 最后更新：2026-09-05（新增决策 19 · 仓库顶层命名规范与废弃件处置，详见 `adr-2026-09-repo-top-level-naming.md`；决策 18 · 文档失真治理，详见 `adr-2026-09-doc-drift-registry.md`；决策 17 · dev 模式日志聚合后端 = Loki，详见 `adr-2026-09-loki-aggregator-dev.md`）
 
 > 2026-09-03：撤回 2026-08-31 决策 10 "不引入注册中心/配置中心" 判断；新增决策 11/12/13，演进路线 Stage 31/32/33；详见 `adr-2026-09-nacos-reintroduction.md`
 
@@ -286,6 +286,24 @@
 **已归纳的失真类型**：根因臆断 / 陈旧结论 / 未复跑即记录 / 探测方法错误——
 共同点是**都能被"当场跑一次"证伪**，成本极低但没人跑。
 
+### 决策 19：仓库顶层命名规范与废弃部署件处置（2026-09-05）
+
+> ✅ 2026-09-05 生效。详见 `adr-2026-09-repo-top-level-naming.md`。
+
+| 维度 | 选择 |
+|------|------|
+| 顶层目录命名 | **一律小写 kebab-case**；PascalCase 仅作 prose 展示名（展示名见 git-layout §六） |
+| 前端目录 | `Emotion-Echo-Web` → **`emotion-echo-web`**（与 compose 容器名/服务键一致） |
+| AI 模型推理仓 | `Emotion-Echo-LLM` → **`emotion-echo-models`**（内容为 FER/ASR/TTS，名不符实；与文本 LLM 服务 `emotion-llm-service` 区分） |
+| BFF 目录 | `emotion-echo-web-bff` 保持不改（目录 = 服务键 = Nacos 注册名 = 网关上游，自洽；仅文档语义澄清"非前端"） |
+| 曾用名 | `Emotion-Echo-Web` / `Emotion-Echo-LLM` / `emotion-echo-front` / `emotion-echo-llm-service`（容器名）均退役，仅历史文档保留 |
+| 根目录 20 个残留 json | **已 git rm**（apisix-*.json / msg1-2 / query.json，内容被 deploy/apisix/seed.sh 取代） |
+| 废弃部署件 | 根 `docker-compose.yml` → **`legacy/dev-root-compose/`**（归档）；`Chart.lock` 为可再生物且已忽略 → 直接清理 |
+
+**理由**：目录命名大小写混用 + `Emotion-Echo-LLM` 语义名不符实（实为 FER/ASR/TTS），加上根目录 20 个无引用残留 json，造成组件辨识、文档引用与 clone 视图长期混乱（详见 `adr-2026-09-repo-top-level-naming.md` §上下文）。
+
+**落地**：2026-09-05 一次性提交（git rm 残留 / git mv 改名 + 全仓引用同步 / .gitignore 修复 / 废弃件归档），commit 前缀 `chore(repo)` + `docs(deploy)`。
+
 ---
 
 ## 🏗 当前架构全景
@@ -531,6 +549,7 @@ Stage 33 P0 修复+BFF净化 ░░░░░░░░░░░░░░░░░
 | 2026-09-03 | API 网关 | BFF 兼任 → **独立 APISIX 网关层**（决策 11，Stage 32） | 纠正 Stage 30 "BFF 取代 APISIX" 的错误归一；网关职责回归独立层 |
 | 2026-09-03 | BFF 定位 | 网关 + 聚合 → **纯聚合层**（决策 12，Stage 33） | 鉴权/CORS/限流/熔断迁出 BFF，BFF 仅做面向前端的业务编排 |
 | 2026-09-03 | 演进路线 | 无明确分阶段 → **Stage 31/32/33 串行**（决策 13） | 骨架先胶水后；每 Stage 含 TDD + 收口文档 + 独立 PR |
+| 2026-09-05 | 顶层目录命名 | 大小写混用 + `Emotion-Echo-LLM` 名不符实 → **统一小写 kebab**（`emotion-echo-web` / `emotion-echo-models`） | 消除前端/BFF/LLM 辨识混乱、对齐容器与文档（决策 19） |
 
 ---
 
