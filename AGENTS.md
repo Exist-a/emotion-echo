@@ -96,7 +96,7 @@ mock_xxx_test.go  ← 仅 mock 文件时使用，平时 inline 即可
 | 表驱动切片名 | `tests` / `cases` | `tests := []struct{...}{}` |
 | Fixture 包 | `testdata/` | 静态文件 / golden data |
 
-### 1.2 Vue / Nuxt（emotion-echo-front）
+### 1.2 Vue / Nuxt（emotion-echo-web）
 
 **统一使用 Vitest + Vue Test Utils + Pinia Testing**。  
 测试位于组件同目录 `__tests__/` 或同名 `.spec.ts`。

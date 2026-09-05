@@ -195,5 +195,5 @@ Stage 38 §四隐患 5 提到的"ADR-20"即本决策（当时编号为随手估�
   `stage-39-nacos-enablement.md`、`AGENTS.md` §0.2 / §2.2 / §2.4
 - **跑过的验证**：`scripts/smoke_data_layer.py`（1/10 → 10/10 PASS）、
   7 模块 `go test -count=1` + `go vet`、`pytest emotion-llm-service/tests/unit`（105 passed）、
-  `docker ps`、`docker logs emotion-echo-llm-service`、
+  `docker ps`、`docker logs emotion-llm-service`、
   对 `/api/v1/{uploads/:kind, multimodal/analyze, tts/synthesize}` 的逐条 curl 探测

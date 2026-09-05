@@ -394,7 +394,7 @@ Emotion-Echo/
 ├── emotion-echo-analytics-svc/
 ├── emotion-llm-service/                     ← Python FastAPI
 ├── legacy/emotion-echo-gin/                 ← 旧单体（Gin，业务参考 + handler 来源）
-└── emotion-echo-front/                      ← Nuxt 前端
+└── emotion-echo-web/                      ← Nuxt 前端
 ```
 
 ---

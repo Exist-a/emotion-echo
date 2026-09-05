@@ -434,7 +434,7 @@ Emotion-Echo/
 ├── emotion-echo-ai-svc/          ← Go-zero
 ├── emotion-echo-assessment-svc/  ← Go-zero
 ├── emotion-echo-analytics-svc/   ← Go-zero
-├── emotion-echo-front/           ← 不变
+├── emotion-echo-web/           ← 不变
 ├── emotion-echo-ai/              ← 不变（Python AI 服务，注意命名冲突）
 ├── emotion-echo-shared/         ← 🆕 共享代码（proto、pkg）
 │   ├── proto/

@@ -292,7 +292,7 @@ services:
       context: ..
       dockerfile: emotion-llm-service/Dockerfile
     image: emotion-echo/llm-service:v0.1.0   # P0-4: pinned tag
-    container_name: emotion-echo-llm-service
+    container_name: emotion-llm-service
     restart: unless-stopped
     depends_on:
       nacos:
