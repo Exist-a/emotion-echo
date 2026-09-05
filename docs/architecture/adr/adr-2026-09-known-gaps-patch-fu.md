@@ -39,6 +39,8 @@
   默认 `https://registry.npmjs.org/`，与 `Emotion-Echo-Web/Dockerfile` 的 `ARG NPM_REGISTRY` 一致
 - `Emotion-Echo-Web/Dockerfile` 已经接受 `ARG NPM_REGISTRY` (commit 723e18b 修复)，
   根目录 `docker-compose.yml` 的 `frontend` 服务随之可重建
+  （注：该根 compose 已于 2026-09-05 归档至 `legacy/dev-root-compose/`，仅历史参考，
+  §3 契约测试已改指归档路径）
 
 契约测试：`scripts/test_web_and_healthcheck_contracts.sh`
 - §1: 断言 `emotion-echo-web` 不在 `profiles: ["never"]`

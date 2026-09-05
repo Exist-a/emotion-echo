@@ -1,5 +1,11 @@
 version: "3.8"
 
+# ⚠️ 归档说明（2026-09-05）：本文件已从仓库根目录移入 legacy/dev-root-compose/，
+# 属历史参考，不再维护。现行本地启动请使用：
+#   deploy/docker-compose.infra.yml（基础设施）+ deploy/docker-compose.apps.yml（业务）
+# 本文件内部路径保留归档时的旧目录名（Emotion-Echo-Web / Emotion-Echo-LLM），
+# 与当前 emotion-echo-web / emotion-echo-models 命名不一致，切勿据此构建。
+#
 # Note (2026-07-17): Emotion-Echo-Gin 单体后端已迁移到 legacy/emotion-echo-gin/，
 # 当前仓库的微服务后端为 emotion-echo-{user,chat,analytics,assessment}-svc（无 Dockerfile）。
 # 本 compose 文件中的 `backend` 服务已停止使用，仅作历史参考；

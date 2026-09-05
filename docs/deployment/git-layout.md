@@ -131,4 +131,4 @@ git push origin main
 
 **废弃部署件归档约定**：
 - 根 `docker-compose.yml` 2026-09-05 起归档于 `legacy/dev-root-compose/`，现行本地栈以 `deploy/docker-compose.infra.yml` + `docker-compose.apps.yml` 为准。
-- `charts/emotion-echo/Chart.lock` 属可再生物，历史副本存 `legacy/helm-chart-locks/`。
+- `charts/emotion-echo/Chart.lock` 属可再生物且已被 `.gitignore`（`charts/**/Chart.lock`）忽略；2026-09-05 因漂移（引用已删子图）直接清理，有需要时 `helm dependency update` 重建。

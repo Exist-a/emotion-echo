@@ -4,14 +4,14 @@
 # Stage 36-FU Bug 9 + G1 follow-up:
 #   Bug 9 (partial): commit 723e18b 修了 Emotion-Echo-Web/Dockerfile,
 #     但 deploy/docker-compose.apps.yml 把 emotion-echo-web 设成
-#     `profiles: ["never"]` 显式禁用, 根目录 docker-compose.yml 的
+#     `profiles: ["never"]` 显式禁用, legacy/dev-root-compose（原根目录 docker-compose.yml） 的
 #     frontend 服务仍指向 Emotion-Echo-Web/Dockerfile (旧 / 没 ARG)
 #   G1 healthcheck: ${SKYWALKING_OAP_ADDR:-...} 占位符没默认值, 4 svc
 #     启动时报 "unhealthy" 但 /health 200 (依赖硬编码缺失)
 #
 # RED→GREEN:
 #   - assert emotion-echo-web service 不在 profiles: ["never"]
-#   - assert 根目录 docker-compose.yml frontend service Dockerfile 接受
+#   - assert legacy/dev-root-compose（原根目录 docker-compose.yml） frontend service Dockerfile 接受
 #     NPM_REGISTRY build arg
 #   - assert 每个 go svc 的 healthcheck 用了 `${SKYWALKING_OAP_ADDR:-...}`
 #     默认值 fallback (而不是裸 ${SKYWALKING_OAP_ADDR})
@@ -20,7 +20,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ROOT_COMPOSE="$REPO_ROOT/docker-compose.yml"
+ROOT_COMPOSE="$REPO_ROOT/legacy/dev-root-compose/docker-compose.yml"
 APPS_COMPOSE="$REPO_ROOT/deploy/docker-compose.apps.yml"
 WEB_DOCKERFILE="$REPO_ROOT/Emotion-Echo-Web/Dockerfile"
 
