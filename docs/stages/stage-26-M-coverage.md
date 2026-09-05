@@ -10,7 +10,7 @@
 
 1. 把 Stage 26-K 的 //go:build integration 模板推广到剩余 3 个 Go 服务：
    `analytics-svc / assessment-svc / user-svc`
-2. 在 `Emotion-Echo-Web` 起 Playwright 配置（pnpm add -D @playwright/test + playwright.config.ts）
+2. 在 `emotion-echo-web` 起 Playwright 配置（pnpm add -D @playwright/test + playwright.config.ts）
 3. 写第一个 happy-path E2E spec —— `e2e/login-flow.spec.ts`
 4. 对齐"全部测试"中"服务广度"—— 6 个 Go 服务都覆盖 + E2E 链路启动
 
@@ -30,13 +30,13 @@
 
 | 项 | 路径 / 命令 | 结果 |
 |----|------------|------|
-| 依赖 | `Emotion-Echo-Web/package.json` 新增 `@playwright/test` | ✅ |
-| 配置 | `Emotion-Echo-Web/playwright.config.ts` | ✅ |
+| 依赖 | `emotion-echo-web/package.json` 新增 `@playwright/test` | ✅ |
+| 配置 | `emotion-echo-web/playwright.config.ts` | ✅ |
 | 浏览器 | `chromium_headless_shell-1228` 装入 `%LocalAppData%\ms-playwright` | ✅ |
-| spec | `Emotion-Echo-Web/e2e/login-flow.spec.ts`（2 个 test）| ✅ **2/2** （10.9s）|
+| spec | `emotion-echo-web/e2e/login-flow.spec.ts`（2 个 test）| ✅ **2/2** （10.9s）|
 
 ```bash
-$ cd Emotion-Echo-Web
+$ cd emotion-echo-web
 $ BASE_URL=http://localhost:3000 npx playwright test --reporter=list e2e/login-flow.spec.ts
 ok 1 login flow › happy-path-3: 点击"用演示账号快速体验"按钮触发 API 调用 (6.1s)
 ok 2 login flow › happy-path-2: 页面元素完整性（不点击，仅验证渲染） (3.2s)
@@ -103,7 +103,7 @@ func pgContainerDesc(t *testing.T, ctx context.Context) (*pgcontainer.PostgresCo
 | **单元测试**（Stage A-J） | 7 仓（shared + chat/analytics/assessment/user/ai/llm-emotion）| ~280 测试函数 / ~280 用例 | ✅ 全绿 |
 | **集成测试**（Stage K + M） | 6 仓（chat/ai/analytics/assessment/user + shared health）| 9 个 //go:build integration test（testcontainers postgres）| ✅ 全绿 |
 | **冒烟测试**（Stage L） | 5 shell（emotion-llm/FER/SenseVoice/chat-svc/ai-svc）| 24/24 子测 | ✅ 全绿 + commit `9ecec34` |
-| **E2E 测试**（Stage M） | Emotion-Echo-Web Nuxt | login-flow.spec.ts 2/2 test | ✅ 全绿 |
+| **E2E 测试**（Stage M） | emotion-echo-web Nuxt | login-flow.spec.ts 2/2 test | ✅ 全绿 |
 
 总计 4 类测试都达成，**与目标"单测 + 集成 + 冒烟等"对齐**。
 
@@ -125,7 +125,7 @@ done
 ### 6.2 Playwright E2E
 
 ```bash
-cd Emotion-Echo-Web
+cd emotion-echo-web
 # 前置：后端服务（chat-svc + emotion-llm-service 等）已启动；API 在 :18080
 BASE_URL=http://localhost:3000 npx playwright test
 ```
@@ -145,7 +145,7 @@ for s in scripts/smoke_*.sh; do bash "$s" || exit 1; done
 
 - [ ] Stage 26-A 期间记录的 5 个真实实现 bug（buildDBPeer nil / InstrumentGORM-Redis nil / HealthCheckServer.Shutdown / InMemoryProducer.Drain 浅拷贝 / chat InMemoryEventPublisher.Events 浅拷贝）—— 总工作量 ~25 分钟，未来某批统一修
 - [ ] analytics/assessment/user-svc 的 handler/integration_test.go（gin/gRPC handler 端到端）—— 当前仅覆盖 repo + HealthLogic
-- [ ] Emotion-Echo-LLM/FER / SenseVoice 的 `tests/integration/` 套件（httpx + testcontainers）—— 当前只有单元 pytest
+- [ ] emotion-echo-models/FER / SenseVoice 的 `tests/integration/` 套件（httpx + testcontainers）—— 当前只有单元 pytest
 - [ ] chat-svc Dockerfile（当前依赖本地 `go run`；可入 `docker-compose.apps.yml`）
 - [ ] Playwright 扩 spec：chat-and-emotion 流程（发消息 → 触发 ai-svc → 看情绪标签）—— 需完整后端
 

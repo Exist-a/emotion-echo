@@ -11,7 +11,7 @@ round: 2-A
 
 > 日期：2026-07-15
 > 状态：待评审
-> 范围：`Emotion-Echo-Web/` 整体重构
+> 范围：`emotion-echo-web/` 整体重构
 > 核心目标：替换 Element Plus 为现代化组件库，统一设计语言，重构路由与视觉风格，但 **保留全部已有功能**
 
 ---
@@ -20,7 +20,7 @@ round: 2-A
 
 ### 1.1 项目现状
 
-`Emotion-Echo-Web` 是基于 **Vue 3 + Nuxt 4** 的前端工程，目前使用 **Element Plus**（@element-plus/nuxt）作为 UI 库。已实现功能：
+`emotion-echo-web` 是基于 **Vue 3 + Nuxt 4** 的前端工程，目前使用 **Element Plus**（@element-plus/nuxt）作为 UI 库。已实现功能：
 
 | 模块 | 功能 | 状态 |
 |------|------|------|

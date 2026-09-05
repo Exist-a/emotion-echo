@@ -36,17 +36,17 @@ round: 2-A
 ## 修改文件清单
 
 ### 1. 修复静音按钮
-**文件**: `Emotion-Echo-Web/app/components/digital-human/DigitalHuman.vue`
+**文件**: `emotion-echo-web/app/components/digital-human/DigitalHuman.vue`
 - 将静音按钮改为触发自定义事件，而不是直接修改store
 - 父组件负责处理静音逻辑
 
 ### 2. 发送消息时中断TTS
-**文件**: `Emotion-Echo-Web/app/pages/chat/conversation/[id].vue`
+**文件**: `emotion-echo-web/app/pages/chat/conversation/[id].vue`
 - 在 `handleSubmit` 中调用 `stop()` 停止当前TTS播放
 - 清除累积的文本和定时器
 
 ### 3. 降低语速
-**文件**: `Emotion-Echo-LLM/XTTS/server.py`
+**文件**: `emotion-echo-models/XTTS/server.py`
 - 将默认 `speed` 从 0.9 改为 0.75（更慢的语速）
 
 ## 实现步骤

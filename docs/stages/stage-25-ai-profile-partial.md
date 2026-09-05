@@ -13,7 +13,7 @@
 - 输出末尾标注当前模式
 
 ### 2. deploy/docker-compose.apps.yml 路径修复
-- SenseVoice `build.context`: `../../Emotion-Echo-LLM` → `../Emotion-Echo-LLM`
+- SenseVoice `build.context`: `../../emotion-echo-models` → `../emotion-echo-models`
 - 与 FER / XTTS 一致（deploy/ 是 Emotion-Echo 的子目录）
 
 ---
@@ -22,7 +22,7 @@
 
 ### 阻塞 1：SenseVoice 缺 Dockerfile + server.py
 
-`Emotion-Echo-LLM/sensevoice-small/` 目录**只有**：
+`emotion-echo-models/sensevoice-small/` 目录**只有**：
 - `demo.py`：CLI 脚本（funasr AutoModel 跑本地文件）
 - `requirements.txt`、`model.pt (936MB)`
 - ❌ **没有** Dockerfile
@@ -69,7 +69,7 @@ failed to fetch anonymous token: connectex
 ## 四、Stage 25-B 后续 PR 计划
 
 ### PR 1：写 SenseVoice server.py
-- 在 `Emotion-Echo-LLM/sensevoice-small/server.py` 实现 FastAPI HTTP server
+- 在 `emotion-echo-models/sensevoice-small/server.py` 实现 FastAPI HTTP server
 - POST `/analyze` 接收 multipart audio → 调 funasr → 返回 `{"emotion": "happy", "text": "...", "confidence": 0.9}`
 - POST `/health` 健康检查
 

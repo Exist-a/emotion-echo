@@ -31,22 +31,22 @@ round: 2-A
 
 ### 后端修改
 
-**文件**: `Emotion-Echo-LLM/XTTS/server.py`
+**文件**: `emotion-echo-models/XTTS/server.py`
 - 在`TTSRequest`模型中添加`speed`参数
 - 在`synthesize`调用中传入`speed`参数
 - 在流式推理中也支持`speed`参数
 
 ### 前端修改
 
-**文件**: `Emotion-Echo-Web/app/composables/useTTSPlayer.ts`
+**文件**: `emotion-echo-web/app/composables/useTTSPlayer.ts`
 - 修改流式播放逻辑，在第一个chunk开始播放时触发口型动画
 - 传递`speed`参数到后端
 
-**文件**: `Emotion-Echo-Web/app/components/digital-human/DigitalHuman.vue`
+**文件**: `emotion-echo-web/app/components/digital-human/DigitalHuman.vue`
 - 增加表情持续时间参数
 - 修改`setEmotion`方法的动画时长
 
-**文件**: `Emotion-Echo-Web/app/composables/useDigitalHumanTTS.ts`
+**文件**: `emotion-echo-web/app/composables/useDigitalHumanTTS.ts`
 - 支持传递语速参数
 
 ## 实现步骤

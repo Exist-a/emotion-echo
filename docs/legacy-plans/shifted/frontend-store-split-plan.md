@@ -7,7 +7,7 @@ migrated-at: 2026-09-03
 round: 2-A
 ---
 
-# Emotion-Echo-Web 前端项目拆分规划
+# emotion-echo-web 前端项目拆分规划
 
 ## 一、问题分析
 

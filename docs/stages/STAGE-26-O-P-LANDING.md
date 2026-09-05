@@ -90,7 +90,7 @@ c7d7b33   fix    26-Q  消除 APISIX :9080 路由阻断 + smoke 9/9 真跑通
 db76c3c   feat   26-P  APISIX standalone 模式 + 6 upstream / 16 route
 beba4c5   feat   26-P  docker-compose.apps.yml 加 4 Go svc + analytics 8893
 b284251   feat   26-P  4 svc yaml 容器 env 占位 + chat BrokersCSV 重构
-641a7be   feat   26-P  4 Go svc Dockerfile + Emotion-Echo-Web Dockerfile.dev
+641a7be   feat   26-P  4 Go svc Dockerfile + emotion-echo-web Dockerfile.dev
 a7ebe91   test   26-P  4 svc 仓 go.mod shared replace 合同
 f57e789   docs   26-O  前端设计系统重构 TDD 收尾报告
 6ebc90d   style  26-O  Element Plus → native + Naive UI 全栈迁移
@@ -106,7 +106,7 @@ f57e789   docs   26-O  前端设计系统重构 TDD 收尾报告
 64 files changed, +4613 / -4537
 
 按目录分组:
-  Emotion-Echo-Web/                     ~30 files   设计系统 + 前端 dev path + nuxt.config
+  emotion-echo-web/                     ~30 files   设计系统 + 前端 dev path + nuxt.config
   emotion-echo-{chat,user,analytics,assessment}-svc/  ~18 files  Dockerfile + etc/yaml + tests + main.go
   deploy/                                4 files   apisix (yaml / config / seed.sh) + docker-compose
   docker-compose.yml                     1 file    根 compose depends_on 清理
@@ -120,13 +120,13 @@ f57e789   docs   26-O  前端设计系统重构 TDD 收尾报告
   - **Stage 26-P 容器化与链路** (25):
       4 × Dockerfile + 4 × etc/yaml + 4 × yaml_env_test.go + 4 × go_mod_replace_test.go
       + chat-svc config.go / config_test.go / main.go / main_internal_test.go
-      + nuxt.config.ts / Emotion-Echo-Web/.env.example / Dockerfile.dev
+      + nuxt.config.ts / emotion-echo-web/.env.example / Dockerfile.dev
       + deploy/apisix/{apisix,config,seed}/* + deploy/docker-compose.{apps,infra}.yml
       + root docker-compose.yml + scripts/smoke_apps_26p.sh
   - **Stage 26-Q 业务链路修复** (6):
       emotion-echo-chat-svc/main.go (applyEnvOverrides)
       emotion-echo-chat-svc/etc/chat-api.yaml (yamlsyntax)
-      Emotion-Echo-Web/{.env.example,nuxt.config.ts} (直连 fallback)
+      emotion-echo-web/{.env.example,nuxt.config.ts} (直连 fallback)
       deploy/apisix/config.yaml (ssl enable=false 注释尝试)
       deploy/docker-compose.infra.yml (apisix_log 卷移除)
 
@@ -270,11 +270,11 @@ git status --short:
  M legacy/emotion-echo-gin/config.yaml   ← Stage 25 路径调整残留
 
 ?? .zcode/
-?? Emotion-Echo-LLM/FER/tests/
-?? Emotion-Echo-LLM/sensevoice-small/image/
-?? Emotion-Echo-Web/playwright-report/
-?? Emotion-Echo-Web/scripts/   ← Stage 26-O 自动转换脚本(convert-el-*.py)
-?? Emotion-Echo-Web/test-results/
+?? emotion-echo-models/FER/tests/
+?? emotion-echo-models/sensevoice-small/image/
+?? emotion-echo-web/playwright-report/
+?? emotion-echo-web/scripts/   ← Stage 26-O 自动转换脚本(convert-el-*.py)
+?? emotion-echo-web/test-results/
 ?? docs/stage-26-K-integration.md
 ?? docs/stage-26-test-coverage.md
 ?? docs/xtts-cloud-api-decision.md
@@ -287,7 +287,7 @@ git status --short:
 **接手建议**:
 1. `emotion-echo-ai-svc/{go.mod,go.sum}` 与 `emotion-echo-chat-svc/{go.mod,go.sum}` 是 Stage 25 提交 `ai-svc` 老依赖修订后未跑 `go mod tidy` 的累积,**下一阶段 `git add` + commit 即可**(非本次范围)
 2. `legacy/emotion-echo-gin/config.yaml` 是史前路径调整,1 行 commit 就清掉(非本次范围)
-3. `Emotion-Echo-Web/{playwright-report,scripts,test-results}` 是 Emotion-Echo-Web submodule 内未被 submodule 本仓 gitignore 排除的部分,正常 submodule add 时会同步,**主仓不处理**
+3. `emotion-echo-web/{playwright-report,scripts,test-results}` 是 emotion-echo-web submodule 内未被 submodule 本仓 gitignore 排除的部分,正常 submodule add 时会同步,**主仓不处理**
 4. `docs/stage-26-{K,test-coverage}.md` 与 `docs/xtts-cloud-api-decision.md` 是历史 stage 报告残落到工作区的副本(主仓 docs/ 同期有正式版本),**看一眼是否能 rm 即可**(非本次范围)
 5. `?? emotion-echo-ai-svc/integration_test/...` 是 Stage 26-K / 26-M 写了但未 `git add` 的测试,需 `git add` + commit(非本次范围)
 
@@ -307,8 +307,8 @@ git status --short:
 ### 9.2 Stage 26-Q 修过的 manifest 文件
 
 ```
-Emotion-Echo-Web/.env.example          (frontend 直连 backend fallback)
-Emotion-Echo-Web/nuxt.config.ts        (API_BASE_URL fallback 改 8888)
+emotion-echo-web/.env.example          (frontend 直连 backend fallback)
+emotion-echo-web/nuxt.config.ts        (API_BASE_URL fallback 改 8888)
 emotion-echo-chat-svc/main.go           (新增 applyEnvOverrides 函数)
 emotion-echo-chat-svc/etc/chat-api.yaml (yaml ${VAR:default} 语法统一)
 deploy/apisix/config.yaml              (ssl.enable=false 已知尝试)
@@ -421,7 +421,7 @@ ddc96cd test(web): commit existing green Vitest suite             ← ★ 26-O b
 - **Stage 26-P 报告(含 § 11 实测证据 + § 11.7 DoD 8/8 表)**:`docs/stage-26-P-deployment.md`
 - **Stage 26-Q 报告**:`docs/stage-26-Q-apisix-fix.md`
 - **Smoke 脚本**:`scripts/smoke_apps_26p.sh`
-- **Dockerfile 模板**:各仓 `Dockerfile` (chat/user/analytics/assessment) + `Emotion-Echo-Web/Dockerfile.dev`
+- **Dockerfile 模板**:各仓 `Dockerfile` (chat/user/analytics/assessment) + `emotion-echo-web/Dockerfile.dev`
 
 ---
 

@@ -149,7 +149,7 @@ Phase 5 K8s          ░░░░░░░░░░░░░░░░░░░�
 
 ## 🚀 下一步候选
 
-- **A**：接 `Emotion-Echo-LLM` 替换 keyword analyzer（接真实 LLM）
+- **A**：接 `emotion-echo-models` 替换 keyword analyzer（接真实 LLM）
 - **B**：DLQ + 重试（sarama 出错入 dead letter topic）
 - **C**：analytics-svc 也接 consumer（订阅 chat-events 做行为分析）
 - **D**：chat-svc 加 close conversation 端点 + event

@@ -64,8 +64,8 @@ emotion-echo-ai-svc     Up 1+ min   (health: starting)  port 8891
 cd "D:/源码/Emotion-Echo"
 docker buildx build \
   -t emotion-echo/xtts:v0.1.0 \
-  -f Emotion-Echo-LLM/XTTS/Dockerfile \
-  Emotion-Echo-LLM \
+  -f emotion-echo-models/XTTS/Dockerfile \
+  emotion-echo-models \
   --shm-size=2g \
   --load
 ```

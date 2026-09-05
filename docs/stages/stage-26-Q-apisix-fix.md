@@ -27,8 +27,8 @@
 
 | # | 文件 | 改动 |
 |---|---|---|
-| 1 | `Emotion-Echo-Web/.env.example` | `NUXT_PUBLIC_API_BASE_URL :9080 → :8888 (user-svc 直连)` |
-| 2 | `Emotion-Echo-Web/nuxt.config.ts:13` | fallback `:9080 → :8888` 注释"APISIX 3.9 bug 待 3.10+ 修" |
+| 1 | `emotion-echo-web/.env.example` | `NUXT_PUBLIC_API_BASE_URL :9080 → :8888 (user-svc 直连)` |
+| 2 | `emotion-echo-web/nuxt.config.ts:13` | fallback `:9080 → :8888` 注释"APISIX 3.9 bug 待 3.10+ 修" |
 | 3 | `emotion-echo-chat-svc/main.go` | 新增 `applyEnvOverrides` 函数 + import `os`,与 ai-svc 模式一致(go-zero conf 1.10 不识别 `${VAR:default}` bash 语法,显式 fallback) |
 | 4 | `emotion-echo-chat-svc/etc/chat-api.yaml` | `${VAR:-default}` → `${VAR:default}`(统一,且显式说明供 main 兜底) |
 | 5 | `deploy/docker-compose.infra.yml` | `apisix_log` named volume 删除(etc/ype 仅当 apisix 容器引用才创建) |

@@ -205,7 +205,7 @@ io.WriteString(c.Writer, "data: "+string(payload)+"\n\n")
 ```js
 // /tmp/pw_full.mjs
 import { createRequire } from 'node:module';
-const require = createRequire('D:/源码/Emotion-Echo/Emotion-Echo-Web/');
+const require = createRequire('D:/源码/Emotion-Echo/emotion-echo-web/');
 const { chromium } = require('playwright');
 const browser = await chromium.launch();
 const page = await browser.newPage();

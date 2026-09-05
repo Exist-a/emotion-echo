@@ -471,7 +471,7 @@ EOF
 ```
 浏览器 (localhost:3000)
   ↓ HTTP
-Emotion-Echo-Web (Nuxt, :3000)
+emotion-echo-web (Nuxt, :3000)
   ↓ /api/v1/* 反代
 web-bff (Gin, :8894)
   ↓ HTTP 聚合（env 注入 URL）

@@ -47,7 +47,7 @@ Emotion-Echo/  ←── 唯一仓库（github.com/Exist-a/emotion-echo）
 |------|------|------|
 | 2026-07-16 上午 | monorepo + 4 个 submodule | 初次推送到 GitHub |
 | 2026-07-16 下午 | **单仓 monorepo** | 移除 4 个 submodule，作为普通目录入仓 |
-| 2026-09-05 | **顶层命名收敛 + 清理归档**（当前） | 目录统一小写 kebab：`Emotion-Echo-Web`→`emotion-echo-web`、`Emotion-Echo-LLM`→`emotion-echo-models`；删除根目录 20 个遗留 json；根 docker-compose.yml 与 Chart.lock 归档 legacy/（详见 §六） |
+| 2026-09-05 | **顶层命名收敛 + 清理归档**（当前） | 目录统一小写 kebab：`Emotion-Echo-Web`→`emotion-echo-web`、`Emotion-Echo-LLM`→`emotion-echo-models`；删除根目录 20 个遗留 json；根 docker-compose.yml 归档 `legacy/dev-root-compose/`、Chart.lock 直接清理（详见 §六） |
 
 **为什么移除 submodule**：
 - 个人项目，跨仓改 PR 成本高

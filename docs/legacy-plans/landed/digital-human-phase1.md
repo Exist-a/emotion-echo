@@ -127,7 +127,7 @@ note: 三份(spec/checklist/tasks)合并为一份
 
 ### 目录结构
 ```
-Emotion-Echo-Web/
+emotion-echo-web/
 └── app/
     ├── assets/
     │   └── 3d-models/

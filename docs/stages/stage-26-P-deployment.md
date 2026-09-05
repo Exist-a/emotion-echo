@@ -19,7 +19,7 @@
 | # | Commit | 类型 | 说明 |
 |---|---|---|---|
 | **P1** | `a7ebe91` | test | 4 svc go.mod shared replace 合同静态测试(RED 真因已合规,GREEN 不改实现)|
-| **P2** | (P2) | feat | 4 svc Dockerfile + Emotion-Echo-Web/Dockerfile.dev 多阶段 Go 构建 |
+| **P2** | (P2) | feat | 4 svc Dockerfile + emotion-echo-web/Dockerfile.dev 多阶段 Go 构建 |
 | **P3** | (P3) | feat | 4 svc etc/yaml env 占位 + chat BrokersCSV 重构 + splitBrokersCSV 单测 |
 | **P4** | `beba4c5` | feat | deploy/docker-compose.apps.yml 加 4 svc + analytics port 8893 |
 | **P5** | `db76c3c` | feat | APISIX standalone 模式 + 6 upstream + 16 route |
@@ -48,8 +48,8 @@ docker compose -f deploy/docker-compose.apps.yml up -d
 #   docker compose -f deploy/docker-compose.apps.yml --profile ai up -d
 
 # 3. 前端
-docker compose -f Emotion-Echo-Web/docker-compose.dev.yml up -d
-#   生产构建走 Emotion-Echo-Web/Dockerfile (已存在的 node .output/server/index.mjs)
+docker compose -f emotion-echo-web/docker-compose.dev.yml up -d
+#   生产构建走 emotion-echo-web/Dockerfile (已存在的 node .output/server/index.mjs)
 
 # 4. 验证
 bash scripts/smoke_apps_26p.sh
@@ -121,7 +121,7 @@ python -c "import yaml; d=yaml.safe_load(open('deploy/apisix/apisix.yaml',encodi
 | **analytics-svc**| **8893** | **8904** | **避开 ai-svc 8892** |
 | assessment-svc   | 8889  | 8889  |  |
 | FER/SenseVoice/XTTS | 各 8002-8004 | 同 | `--profile ai` 才起 |
-| Emotion-Echo-Web | 3000  | 3000  |  |
+| emotion-echo-web | 3000  | 3000  |  |
 
 ---
 
@@ -163,7 +163,7 @@ python -c "import yaml; d=yaml.safe_load(open('deploy/apisix/apisix.yaml',encodi
 |---|---|
 | 1. `infra up -d` 仍能起 | ✅ (已有用户跑过 5h) |
 | 2. `apps up -d` + 新 4 svc = 12+ 容器 | ✅ (本 stage 验证 13 service 解析)|
-| 3. 前端 compose dev | ✅ (新增 `Emotion-Echo-Web/Dockerfile.dev`) |
+| 3. 前端 compose dev | ✅ (新增 `emotion-echo-web/Dockerfile.dev`) |
 | 4. smoke_apps_26p.sh 全绿 | ✅ 脚本可用,**实测依赖于 PG schema 是否存在** |
 | 5. APISIX :9080 通 | ✅ Standalone yaml 加载 |
 | 6. 前端 :3000 打开 | ✅ Dockerfile/Dockerfile.dev + .env :9080 默认可达 |
@@ -229,7 +229,7 @@ emotion-echo-etcd            Up (healthy)              :2379 / :2380
 emotion-echo-sw-oap          Up (health: starting)     :11800 / :12800
 emotion-echo-sw-ui           Up                         :18080
 emotion-echo-apisix          Up                         :9080 / :9091 / :9180
-emotion-echo-llm-service     Up 6 hours (healthy)      :8000 / :50051
+emotion-llm-service     Up 6 hours (healthy)      :8000 / :50051
 emotion-echo-ai-svc          Up 6 hours (unhealthy)    :8891 / :8892
 emotion-echo-chat-svc        Up (build + start)         :8890
 emotion-echo-user-svc        Up (build + start)         :8888

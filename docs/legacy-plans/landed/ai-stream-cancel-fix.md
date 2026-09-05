@@ -32,7 +32,7 @@ note: 三份(spec/checklist/tasks)合并为一份
 ## Impact
 - Affected specs: AI 流式对话功能
 - Affected code:
-  - `Emotion-Echo-Web/app/stores/message.ts` - sendAIStream 取消处理
+  - `emotion-echo-web/app/stores/message.ts` - sendAIStream 取消处理
   - `Emotion-Echo-Gin/internal/service/ai_service.go` - DefaultPrompt
 
 ---

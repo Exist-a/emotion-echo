@@ -171,7 +171,7 @@ const lipShapeMap: Record<string, 'aa' | 'ee' | 'ih' | 'oh' | 'ou'> = {
 |------|------|
 | `internal/service/ai_service.go` | 修改 finish 事件返回格式 |
 
-### 前端 (Emotion-Echo-Web)
+### 前端 (emotion-echo-web)
 | 文件 | 变更 |
 |------|------|
 | `app/utils/stripMarkdown.ts` | 新增 - Markdown 过滤工具 |

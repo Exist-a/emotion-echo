@@ -12,7 +12,7 @@
 但 smoke 报告本身明确列出 **5 项仍属于"未真正关闭"或"部分关闭"** 的尾巴：
 
 1. **Bug 9（partial）**：Web Dockerfile 已修复，但 `emotion-echo-web` 容器被 `profiles: ["never"]` 显式禁用，
-   根目录 `docker-compose.yml` 的 `frontend` 服务仍指向已过时的 Dockerfile（无 ARG），
+   根目录 `docker-compose.yml`（2026-09-05 已归档至 `legacy/dev-root-compose/`）的 `frontend` 服务仍指向已过时的 Dockerfile（无 ARG），
    浏览器侧完全打不开。
 2. **Bug 10（Nacos 全栈启用）**：报告 §T5 写 "实际 NACOS_ENABLED=false"，
    但 §九 又写 "Bug 10 NACOS_ENABLED=true + 各 svc 配置中心 bootstrap" ——

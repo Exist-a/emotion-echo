@@ -112,8 +112,8 @@
 
 | 包 | `pytest tests/unit/` |
 |---|---|
-| Emotion-Echo-LLM/FER | ✅ 64 passed |
-| Emotion-Echo-LLM/sensevoice-small | ✅ 58 passed |
+| emotion-echo-models/FER | ✅ 64 passed |
+| emotion-echo-models/sensevoice-small | ✅ 58 passed |
 
 ---
 
@@ -265,7 +265,7 @@ chat-svc 配 `LLM_BASE_URL` 留空 → AI_GRPC dial ai-svc:8892 超时 → fallb
 
 #### FER 镜像 PASS
 ```
-$ docker build -t emotion-echo/fer:v0.1.0 -f Emotion-Echo-LLM/FER/Dockerfile Emotion-Echo-LLM
+$ docker build -t emotion-echo/fer:v0.1.0 -f emotion-echo-models/FER/Dockerfile emotion-echo-models
 #16 DONE 392.8s
 $ docker images emotion-echo/fer
 emotion-echo/fer:v0.1.0   39dd55e9b48c   12.1GB   3.83GB
@@ -290,7 +290,7 @@ fer_http_requests_total{method="POST",path="/analyze",status="200"} 3.0
 
 #### SenseVoice 镜像 PASS（端到端受 dev 环境资源限制）
 ```
-$ docker build -t emotion-echo/sensevoice:v0.1.0 -f Emotion-Echo-LLM/sensevoice-small/Dockerfile Emotion-Echo-LLM
+$ docker build -t emotion-echo/sensevoice:v0.1.0 -f emotion-echo-models/sensevoice-small/Dockerfile emotion-echo-models
 #17 DONE 约 22min（torch+nccl+cublas ~1.5GB 下载 + 安装）
 $ docker images emotion-echo/sensevoice
 emotion-echo/sensevoice:v0.1.0   3.29GB
@@ -338,7 +338,7 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 
 ## 五补后续 ②：本地模型镜像烘焙（2026-09-02 早上）
 
-### 范围：所有 Emotion-Echo-LLM 本地模型 → 烘焙进镜像
+### 范围：所有 emotion-echo-models 本地模型 → 烘焙进镜像
 
 | 模型 | 大小 | Dockerfile 修复 | 镜像 build | 预烘焙状态 |
 |------|------|-----------------|------------|-----------|
@@ -411,7 +411,7 @@ model.pt 936MB（已下载到命名卷 sensevoice-cache）
 |---|---|---|
 | `f69ae73` | test(xtts) | `tests/unit/test_torchaudio_shim.py` RED：AST 检查 `.float()` + `torchaudio.load =` / `torchaudio.save =` 真赋值 |
 | `c31991e` | test(xtts) | `tests/unit/test_server_tts_dtype.py` RED：AST 检查 server.py 所有 `torchaudio.save` 第二个参数构造链含 `.float()` + `stream_audio_generator` 仍调 `pcm_chunk_shape` |
-| `4f2d039` | fix(xtts) | `Emotion-Echo-LLM/XTTS/server.py` GREEN：/tts (L184) + /tts_with_phonemes (L307) 两处加 `.float()` |
+| `4f2d039` | fix(xtts) | `emotion-echo-models/XTTS/server.py` GREEN：/tts (L184) + /tts_with_phonemes (L307) 两处加 `.float()` |
 | `b01c106` | test(contract) | `scripts/test_web_and_healthcheck_contracts.sh`：Bug 9 + G1 契约（5 段全过）|
 | `2241bcc` | fix(apps-compose) | `deploy/docker-compose.apps.yml` GREEN：移除 `profiles: ["never"]` + `build.args.NPM_REGISTRY=https://registry.npmjs.org/` |
 | `7b7d839` | test(contract) | `scripts/test_compose_nacos_full_stack.sh`：Bug 10 契约（5 段全过，7 svc + 6 boot test + Python test + shared pkg tests）|
@@ -442,7 +442,7 @@ torchaudio.save(
 
 **Bug 9 — emotion-echo-web 解除 `profiles: ["never"]`**
 
-commit `723e18b` 修了 `Emotion-Echo-Web/Dockerfile` 接受 `ARG NPM_REGISTRY`（默认 `registry.npmjs.org/`），
+commit `723e18b` 修了 `emotion-echo-web/Dockerfile` 接受 `ARG NPM_REGISTRY`（默认 `registry.npmjs.org/`），
 但 `deploy/docker-compose.apps.yml` 同步设了 `profiles: ["never"]` —— Dockerfile 修了，容器仍起不来。
 本轮 `2241bcc` 移除 `profiles: ["never"]` + 在 `build.args` 显式注入 `NPM_REGISTRY=https://registry.npmjs.org/`，契约测试 `test_web_and_healthcheck_contracts.sh §1/§2/§3` 守护未来回归。
 

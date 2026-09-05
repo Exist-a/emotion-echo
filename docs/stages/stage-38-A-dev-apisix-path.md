@@ -56,10 +56,10 @@ branch: fix/stage-36-post-test-cleanup (HEAD = ff9b3b9)
 
 | 文件 | 改动 |
 |---|---|
-| `Emotion-Echo-Web/.env` | `NUXT_PUBLIC_API_BASE_URL=http://localhost:19080/api/v1`（走 APISIX）|
-| `Emotion-Echo-Web/nuxt.config.ts` | `vite.optimizeDeps.include` 加 `@element-plus/icons-vue`（修 FSL 30s）|
-| `Emotion-Echo-Web/package.json` + `pnpm-lock.yaml` | 加 `@element-plus/icons-vue ^2.3.2` 依赖 |
-| `Emotion-Echo-Web/app/composables/useConversationSender.ts` | 删 `sendAIStream` 调用时多余的 `{`（修 chat 发送 JS 报错）|
+| `emotion-echo-web/.env` | `NUXT_PUBLIC_API_BASE_URL=http://localhost:19080/api/v1`（走 APISIX）|
+| `emotion-echo-web/nuxt.config.ts` | `vite.optimizeDeps.include` 加 `@element-plus/icons-vue`（修 FSL 30s）|
+| `emotion-echo-web/package.json` + `pnpm-lock.yaml` | 加 `@element-plus/icons-vue ^2.3.2` 依赖 |
+| `emotion-echo-web/app/composables/useConversationSender.ts` | 删 `sendAIStream` 调用时多余的 `{`（修 chat 发送 JS 报错）|
 
 ### 3.3 APISIX 容器配置（手 PUT 不持久化）
 

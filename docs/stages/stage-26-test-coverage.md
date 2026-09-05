@@ -49,9 +49,9 @@
 | | `internal/types/types_test.go` | EmotionView / HealthResp / Req JSON tag |
 | **emotion-llm-service (Python)** | | |
 | | `tests/unit/test_analyze_pure.py` | 19 pytest 用例（情绪分类、置信度、极性） |
-| **Emotion-Echo-LLM/FER (Python)** | | |
+| **emotion-echo-models/FER (Python)** | | |
 | | `tests/unit/test_emotion_mapping.py` | 25 pytest 用例（7→5 情绪映射） |
-| **Emotion-Echo-Web (Nuxt)** | | |
+| **emotion-echo-web (Nuxt)** | | |
 | | `app/utils/vhToPx.test.ts` | 5 用例 (vh→px 转换 + SSR 安全) |
 | | `app/utils/safe.test.ts` | 7 用例 (safeGet 嵌套安全访问) |
 
@@ -59,7 +59,7 @@
 
 - `emotion-echo-shared/pkg/.../` 已有 10 个 `_test.go`
 - `emotion-echo-ai-svc/internal/{aiclient,analyzer,bootstrap,consumer,logging,logic,repository}/` 9 个 `_test.go`
-- `Emotion-Echo-Web` 已有 5 个 `.test.ts`
+- `emotion-echo-web` 已有 5 个 `.test.ts`
 - `emotion-echo-{chat,analytics,assessment,user}-svc/internal/{logic,repository,scoring}/` 共 12 个 `_test.go`
 
 ---
@@ -139,14 +139,14 @@ $ cd emotion-llm-service && python -m pytest tests/unit/ -v
 ```
 
 ```bash
-$ cd Emotion-Echo-LLM/FER && python -m pytest tests/unit/ -v
+$ cd emotion-echo-models/FER && python -m pytest tests/unit/ -v
 ============================= 25 passed in 0.08s ==============================
 ```
 
 ### 2.3 前端 Vitest
 
 ```bash
-$ cd Emotion-Echo-Web && npx vitest run
+$ cd emotion-echo-web && npx vitest run
 Test Files  7 passed (7)
      Tests  48 passed (48)
 ```
@@ -176,8 +176,8 @@ Test Files  7 passed (7)
 | `emotion-echo-ai-svc/internal/handler/*` 与 `grpcserver/*` | 高度依赖 go-zero rest.Middleware / grpc.Server 注册 | 走 `//go:build integration` + testcontainers 或 docker-compose 启动依赖后跑 HTTP/gRPC 调用 |
 | `emotion-echo-{chat,analytics,assessment,user}-svc/internal/handler/*` | 同上，需构造 `svc.ServiceContext` | 同上 |
 | `emotion-llm-service/grpc_server.py` 中 `LoggingInterceptor` | 需启动真实 gRPC server | 同上 |
-| `Emotion-Echo-LLM/FER/server.py` 与 `sensevoice-small/demo.py` | 需加载 OpenCV/fer/funasr 数百 MB 模型 | **集成测试套**：`scripts/smoke_ai_profile.sh` 起容器跑 `/health` 探活 |
-| `Emotion-Echo-Web` 27 个 .vue 组件 | vue-test-utils 已装但 0 组件级测试 | 优先级 P1：从 `ChatBubble.vue`、`BaseChart.vue`、`VoiceRecorder.vue` 三个核心组件起 |
+| `emotion-echo-models/FER/server.py` 与 `sensevoice-small/demo.py` | 需加载 OpenCV/fer/funasr 数百 MB 模型 | **集成测试套**：`scripts/smoke_ai_profile.sh` 起容器跑 `/health` 探活 |
+| `emotion-echo-web` 27 个 .vue 组件 | vue-test-utils 已装但 0 组件级测试 | 优先级 P1：从 `ChatBubble.vue`、`BaseChart.vue`、`VoiceRecorder.vue` 三个核心组件起 |
 
 ### 4.1 集成测试目录模板（**推荐落地**）
 
@@ -196,12 +196,12 @@ emotion-llm-service/tests/integration/
 ```
 
 ```
-Emotion-Echo-LLM/FER/tests/integration/
+emotion-echo-models/FER/tests/integration/
 └── test_health_endpoint.py
 ```
 
 ```
-Emotion-Echo-LLM/sensevoice-small/tests/integration/
+emotion-echo-models/sensevoice-small/tests/integration/
 └── test_inference.py
 ```
 
@@ -225,12 +225,12 @@ Emotion-Echo-LLM/sensevoice-small/tests/integration/
 
 ## 五、Playwright E2E（未做 — **P1 backlog**）
 
-Nuxt 4 已有 `playwright` 集成潜力，依赖在 `Emotion-Echo-Web/package.json` 未列。落地步骤：
+Nuxt 4 已有 `playwright` 集成潜力，依赖在 `emotion-echo-web/package.json` 未列。落地步骤：
 
 1. `pnpm add -D @playwright/test`
-2. `Emotion-Echo-Web/playwright.config.ts` 注册
-3. `Emotion-Echo-Web/e2e/login-flow.spec.ts`
-4. `Emotion-Echo-Web/e2e/chat-and-emotion.spec.ts`（核心：发消息 → 触发 ai-svc → 看情绪标签）
+2. `emotion-echo-web/playwright.config.ts` 注册
+3. `emotion-echo-web/e2e/login-flow.spec.ts`
+4. `emotion-echo-web/e2e/chat-and-emotion.spec.ts`（核心：发消息 → 触发 ai-svc → 看情绪标签）
 5. CI 上跑 `pnpm playwright test`
 
 预计工作量 4-6 小时。

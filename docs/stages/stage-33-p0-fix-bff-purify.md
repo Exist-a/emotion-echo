@@ -23,7 +23,7 @@
 ### 2.1 问题
 
 - BFF 输出 OpenAI 兼容格式：`data: {"choices":[{"delta":{"content":...}}]}` + `data: [DONE]`（`emotion-echo-web-bff/internal/handler/ai_stream_handler.go:95-102,139`）
-- 前端按 `data.type === 'start'|'delta'|'finish'` 解析（`Emotion-Echo-Web/app/composables/useAIStreamHandler.ts:119-167`）
+- 前端按 `data.type === 'start'|'delta'|'finish'` 解析（`emotion-echo-web/app/composables/useAIStreamHandler.ts:119-167`）
 - 协议互不认识 → delta 被静默丢弃、`[DONE]` 触发解析错误、`onFinish` 永不触发 → 用户看到永远"streaming"的空气泡
 
 ### 2.2 修复决策
@@ -37,9 +37,9 @@
 
 | 文件 | 改动 |
 |------|------|
-| `Emotion-Echo-Web/app/composables/useAIStreamHandler.ts` | 替换 `switch (data.type)` 为 OpenAI 格式解析：`choices?.[0]?.delta?.content`；`[DONE]` 触发 `onFinish` |
-| `Emotion-Echo-Web/app/composables/useAIStreamHandler.test.ts` | **新建**（TDD）：mock fetch 返回 OpenAI 格式 SSE，断言 `onDelta/onFinish` 被正确调用 |
-| `Emotion-Echo-Web/app/composables/useConversationSender.ts` | `onStart` 回调适配（移除 `data.conversationId` / `data.userMessageId` 字段——OpenAI 格式没有，由 R-2 在 stream 前返回） |
+| `emotion-echo-web/app/composables/useAIStreamHandler.ts` | 替换 `switch (data.type)` 为 OpenAI 格式解析：`choices?.[0]?.delta?.content`；`[DONE]` 触发 `onFinish` |
+| `emotion-echo-web/app/composables/useAIStreamHandler.test.ts` | **新建**（TDD）：mock fetch 返回 OpenAI 格式 SSE，断言 `onDelta/onFinish` 被正确调用 |
+| `emotion-echo-web/app/composables/useConversationSender.ts` | `onStart` 回调适配（移除 `data.conversationId` / `data.userMessageId` 字段——OpenAI 格式没有，由 R-2 在 stream 前返回） |
 
 ### 2.4 验证
 
@@ -77,8 +77,8 @@
 
 | 文件 | 改动 |
 |------|------|
-| `Emotion-Echo-Web/app/composables/useConversationSender.ts` | `sendToExistingConversation` 流程改为：先 `await messageStore.sendMessage(...)`（落库）→ 再 `sendAIStream(...)`；`tempUserMessage.id` 用 `client_msg_id` |
-| `Emotion-Echo-Web/app/stores/message.ts` | `sendMessage` 流程确保调用（当前未被调用） |
+| `emotion-echo-web/app/composables/useConversationSender.ts` | `sendToExistingConversation` 流程改为：先 `await messageStore.sendMessage(...)`（落库）→ 再 `sendAIStream(...)`；`tempUserMessage.id` 用 `client_msg_id` |
+| `emotion-echo-web/app/stores/message.ts` | `sendMessage` 流程确保调用（当前未被调用） |
 | `emotion-echo-web-bff/internal/handler/ai_stream_handler.go` | 接收 `messageId` 参数，SSE `start` 事件（兼容）携带 `userMessageId` |
 | `emotion-echo-chat-svc/internal/logic/sendmessagelogic` | 增加 `client_msg_id` 字段处理 + 唯一约束（`ON CONFLICT DO NOTHING`） |
 | `emotion-echo-chat-svc/migrations/002_add_client_msg_id.sql` | **新建**：`ALTER TABLE messages ADD COLUMN client_msg_id UUID UNIQUE` |

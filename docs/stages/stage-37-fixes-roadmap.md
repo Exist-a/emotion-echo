@@ -42,8 +42,8 @@ branch: fix/stage-36-post-test-cleanup (bb7ebef)
 | # | 位置 | 症状 | 严重度 |
 |---|------|------|--------|
 | ~~**B1**~~ | ~~`emotion-echo-user-svc/internal/handler/oauth_*.go`~~ | ~~QQ OAuth 完全没做，前端无 QQ 登录入口~~ | ~~🟡 中~~ |
-| **B2** | `Emotion-Echo-Web/app/components/chat/ChatFile.vue` + 消息 store | `handleAttachment` 未实现、`MessageItem.contentType` 只支持 `text/audio/img`、附件按钮点了没反应 | 🔴 高 |
-| **B3** | `Emotion-Echo-Web/app/pages/chat/...` AI 回复渲染 + intent_classifier | `marked` 已装但前端不会按 intent 类型用不同渲染模板 | 🟡 中 |
+| **B2** | `emotion-echo-web/app/components/chat/ChatFile.vue` + 消息 store | `handleAttachment` 未实现、`MessageItem.contentType` 只支持 `text/audio/img`、附件按钮点了没反应 | 🔴 高 |
+| **B3** | `emotion-echo-web/app/pages/chat/...` AI 回复渲染 + intent_classifier | `marked` 已装但前端不会按 intent 类型用不同渲染模板 | 🟡 中 |
 | **B4** | chat-svc intent classifier | 当前只产出 `emotional_support` / `other` 2 类，6 类扩展在 backlog | 🟢 低（依赖 B3） |
 
 > **Stage 38-A 修订（2026-09-03）**：B1（OAuth 方向）被用户决策替代为 username+password 登录，
@@ -226,7 +226,7 @@ PR-B1.3: REFACTOR 抽 OAuthProvider 接口统一微信/QQ
 - 消息 store `sendMessage` 只支持纯文本
 
 **修复方案**：
-- `Emotion-Echo-Web/app/types/api.ts` 扩 `ContentType` 加 `'file' | 'video'`
+- `emotion-echo-web/app/types/api.ts` 扩 `ContentType` 加 `'file' | 'video'`
 - `ChatFile.vue` 实现 `handleAttachment` + 进度条 + 错误处理
 - 消息 store 扩 `sendFile` action
 - 上传复用现有 `/upload/file` 端点（已存在，Stage 19+）

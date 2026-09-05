@@ -76,7 +76,7 @@ round: 2-A
 ## 影响范围
 
 ### 需要修改的文件
-1. `Emotion-Echo-Web/app/stores/message.ts` - 前端消息发送逻辑
+1. `emotion-echo-web/app/stores/message.ts` - 前端消息发送逻辑
 2. `Emotion-Echo-Gin/internal/service/ai_service.go` - 后端消息保存逻辑
 3. `Emotion-Echo-Gin/internal/pkg/memory/memory.go` - Memory 模块（已修复）
 

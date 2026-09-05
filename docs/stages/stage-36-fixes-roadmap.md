@@ -164,8 +164,8 @@ PR-C1.3: 验证 markdown 容错 + schema 校验生效
 **问题**：`profile: ai` 镜像未构建，image / audio 多模态不可用。
 
 **前置条件**：
-- `Emotion-Echo-LLM/FER/` + `Emotion-Echo-LLM/sensevoice-small/` Python 模型
-- Dockerfile（应在 Emotion-Echo-LLM 下）
+- `emotion-echo-models/FER/` + `emotion-echo-models/sensevoice-small/` Python 模型
+- Dockerfile（应在 emotion-echo-models 下）
 
 **修复方案**：
 1. 构建 `emotion-echo/fer:v0.1.0` + `emotion-echo/sensevoice:v0.1.0` 镜像

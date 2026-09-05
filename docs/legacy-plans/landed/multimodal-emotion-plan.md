@@ -523,7 +523,7 @@ POST /api/chat/stream
 
 **目录结构**：
 ```
-Emotion-Echo-LLM/
+emotion-echo-models/
 ├── sensevoice-small/     # 现有：语音识别服务 (:8002)
 ├── fer/                  # 新增：FER 情绪识别服务 (:8003)
 │   ├── server.py         # FastAPI 服务

@@ -232,7 +232,7 @@ curl -X POST -H "Content-Type: application/json" \
 **A**：`emotion_net.caffemodel`（~170MB）不在 git 里。需要单独挂载或运行 `python -c "from fer import FER; FER().detect_emotions(...)" ` 触发下载，复制到容器内。
 
 ### Q6：docker compose build context 报错 `Cannot find dockerfile`
-**A**：`docker-compose.apps.yml` 在 `deploy/` 下，AI 服务的 build context 是 `../Emotion-Echo-LLM`（不是 `../../`）。
+**A**：`docker-compose.apps.yml` 在 `deploy/` 下，AI 服务的 build context 是 `../emotion-echo-models`（不是 `../../`）。
 
 ### Q7：2C2G 机器能跑吗
 **A**：跑 `llm-service + ai-svc` 行（约 1GB）。**3 个 AI 服务需要 ~5.5GB，建议 8GB+**。小的先砍掉 `xtts`（最重），再砍 `sensevoice`。
@@ -305,24 +305,24 @@ BaseURL 为空时 client 自动是 `nil`（feature disabled），调用方做 ni
 
 | 文件 | 作用 |
 |------|------|
-| Emotion-Echo-LLM/FER/server.py | 升级（JSON 日志 + /metrics + graceful）|
-| Emotion-Echo-LLM/FER/logging_setup.py | 新 |
-| Emotion-Echo-LLM/FER/metrics_setup.py | 新 |
-| Emotion-Echo-LLM/FER/Dockerfile | multi-stage + tini + non-root |
-| Emotion-Echo-LLM/FER/requirements.txt | 加 prometheus-client + python-json-logger |
-| Emotion-Echo-LLM/FER/.dockerignore | 新 |
-| Emotion-Echo-LLM/sensevoice-small/server.py | 同 FER |
-| Emotion-Echo-LLM/sensevoice-small/logging_setup.py | 同上 |
-| Emotion-Echo-LLM/sensevoice-small/metrics_setup.py | 同上 |
-| Emotion-Echo-LLM/sensevoice-small/Dockerfile | 同上（含 funasr cache 卷）|
-| Emotion-Echo-LLM/sensevoice-small/requirements.txt | 加新依赖 |
-| Emotion-Echo-LLM/sensevoice-small/.dockerignore | 同上 |
-| Emotion-Echo-LLM/XTTS/server.py | 同上 |
-| Emotion-Echo-LLM/XTTS/logging_setup.py | 同上 |
-| Emotion-Echo-LLM/XTTS/metrics_setup.py | 同上 |
-| Emotion-Echo-LLM/XTTS/Dockerfile | multi-stage + tini + non-root + 复制 vendored TTS/ |
-| Emotion-Echo-LLM/XTTS/requirements.txt | 加新依赖 |
-| Emotion-Echo-LLM/XTTS/.dockerignore | 同上（不 COPY 模型）|
+| emotion-echo-models/FER/server.py | 升级（JSON 日志 + /metrics + graceful）|
+| emotion-echo-models/FER/logging_setup.py | 新 |
+| emotion-echo-models/FER/metrics_setup.py | 新 |
+| emotion-echo-models/FER/Dockerfile | multi-stage + tini + non-root |
+| emotion-echo-models/FER/requirements.txt | 加 prometheus-client + python-json-logger |
+| emotion-echo-models/FER/.dockerignore | 新 |
+| emotion-echo-models/sensevoice-small/server.py | 同 FER |
+| emotion-echo-models/sensevoice-small/logging_setup.py | 同上 |
+| emotion-echo-models/sensevoice-small/metrics_setup.py | 同上 |
+| emotion-echo-models/sensevoice-small/Dockerfile | 同上（含 funasr cache 卷）|
+| emotion-echo-models/sensevoice-small/requirements.txt | 加新依赖 |
+| emotion-echo-models/sensevoice-small/.dockerignore | 同上 |
+| emotion-echo-models/XTTS/server.py | 同上 |
+| emotion-echo-models/XTTS/logging_setup.py | 同上 |
+| emotion-echo-models/XTTS/metrics_setup.py | 同上 |
+| emotion-echo-models/XTTS/Dockerfile | multi-stage + tini + non-root + 复制 vendored TTS/ |
+| emotion-echo-models/XTTS/requirements.txt | 加新依赖 |
+| emotion-echo-models/XTTS/.dockerignore | 同上（不 COPY 模型）|
 | deploy/docker-compose.apps.yml | 加 3 个 service + `profiles: ["ai"]` |
 | scripts/verify_ai.py | 端到端冒烟测试 |
 | emotion-echo-ai-svc/internal/aiclient/*.go | 3 个 AI 客户端 + 11 tests（Stage 22-A.5）|

@@ -52,7 +52,7 @@ docs/
 │
 ├── frontend/             # 前端文档
 │   ├── README.md
-│   └── design.md         # Emotion-Echo-Web 设计
+│   └── design.md         # emotion-echo-web 设计
 │
 ├── ai-models/            # AI 模型服务（FER / SenseVoice / XTTS）
 │   ├── README.md

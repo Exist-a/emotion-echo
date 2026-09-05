@@ -10,7 +10,7 @@ round: 2-A
 # Element Plus 全面替换为原生 —— 落地文档
 
 > 2026-07-17 · 状态：已落地
-> 范围：`Emotion-Echo-Web/` 前端全部页面、组件、Store
+> 范围：`emotion-echo-web/` 前端全部页面、组件、Store
 
 ## 一、背景与决策
 

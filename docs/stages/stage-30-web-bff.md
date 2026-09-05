@@ -31,7 +31,7 @@
 | 6 | 前端入口 | **唯一入口**：APISIX catch-all `/api/v1/*` → BFF，替换现行 16 条 1:1 路由；前端 URL 不变 |
 | 7 | 流式协议 | **REST + SSE**；`/api/v1/ai/stream`、`/api/v1/tts/stream` 两端点 |
 | 8 | 部署环境 | **K8s 优先 + docker-compose 本地联调**，同步两套 manifest + 两套 smoke |
-| 9 | 范围 | 仅服务 Emotion-Echo-Web（Nuxt 3 SPA），不含多端 |
+| 9 | 范围 | 仅服务 emotion-echo-web（Nuxt 3 SPA），不含多端 |
 | 10 | 测试约定 | 80%+ 覆盖；测试栈 testify/require；`go test ./...` ≤ 5s；集成测试 `//go:build integration` |
 
 ---
@@ -163,8 +163,8 @@ refactor(web-bff): <Client> shape-validate / error normalize
 | `charts/emotion-echo/charts/apisix-routes/templates/routes.yaml` | 删 16 条 1:1 路由，增 2 条 catch-all |
 | `deploy/docker-compose.apps.yml` | 增 `emotion-echo-web-bff` service block |
 | `deploy/apisix/seed.sh` | 增 `upstreams 7` 与 2 条 `routes` |
-| `Emotion-Echo-Web/app/composables/useTTSPlayer.ts` | 第 173 行改为 BFF baseUrl + `/api/v1/tts/stream`，补 `Authorization` 头 |
-| `Emotion-Echo-Web/nuxt.config.ts` | `API_BASE_URL` 注释更新（**不删除 `ttsBaseUrl`**） |
+| `emotion-echo-web/app/composables/useTTSPlayer.ts` | 第 173 行改为 BFF baseUrl + `/api/v1/tts/stream`，补 `Authorization` 头 |
+| `emotion-echo-web/nuxt.config.ts` | `API_BASE_URL` 注释更新（**不删除 `ttsBaseUrl`**） |
 | `README.md` | badge `29-A.5` → `30`；status block 增加 BFF 行 |
 
 ### 预期删除
@@ -296,7 +296,7 @@ chore(hygiene): README badge 29-A.5 → 30 + status block
 | 项 | 原因 | 后续阶段 |
 |---|------|---------|
 | `/api/v1/uploads/{image,video,file}` 真支持 | 尚无明确下游，引入对象存储会大幅扩大 BFF 范围 | Stage 31 与对象存储一起 |
-| 多端 / 第三方 BFF | 范围限定只服务 Emotion-Echo-Web Nuxt SPA | Stage 32+ |
+| 多端 / 第三方 BFF | 范围限定只服务 emotion-echo-web Nuxt SPA | Stage 32+ |
 | WebSocket 端点 | 范围限定 REST + SSE | Stage 33（如有新需求） |
 | emotion-llm-service BFF 直连 | 仍走 ai-svc 间接调用以避免 BFF 多一个 LLM 客户端 | Stage 31 视情况 |
 | 跨域 / 全局限流策略 | APISIX 已有，不在 BFF 内做 | 已现成 |
@@ -311,7 +311,7 @@ chore(hygiene): README badge 29-A.5 → 30 + status block
 | **APISIX catch-all 误伤基础设施路径** | 路由到 BFF 后未实现返 404，影响 K8s probe | K8s liveness/readiness 直接走各 svc 原端口，**不经 APISIX**；BFF 未实现路径返 `404 + structured error` | 改 APISIX routes.yaml，恢复对应 1:1 路由 |
 | **SSE 被 nginx / APISIX 中间代理缓冲** | 客户端只收到一个大 chunk | BFF 设 `X-Accel-Buffering: no` + `Cache-Control: no-cache`；APISIX route 配置 `proxy-buffering: off` | 临时在 BFF 加 `time.Sleep(50ms)` flush marker |
 | **gRPC TLS 未就绪时拨号失败** | ai-svc :8892 握手失败 | `AIService.TLS.Enabled` 默认 `false`；测试覆盖此路径；K8s secret 切换为 `true` | 关闭 `AIService.TLS`，降回 mTLS=false |
-| **前端改动诱发回归** | Playwright E2E 失败 | 跑 `Emotion-Echo-Web/e2e/` 全量；首期 catch-all 不改前端路径（仅 `useTTSPlayer.ts:173`） | 暂撤回 `useTTSPlayer.ts` 单点改动 |
+| **前端改动诱发回归** | Playwright E2E 失败 | 跑 `emotion-echo-web/e2e/` 全量；首期 catch-all 不改前端路径（仅 `useTTSPlayer.ts:173`） | 暂撤回 `useTTSPlayer.ts` 单点改动 |
 | **BFF 单点** | OOM / crash 影响全前端 | K8s `replicas: 1→2`；APISIX catch-all `weight` 多副本分流；`resources.limits.memory=256Mi` | 临时 `kubectl scale deploy/web-bff --replicas=0` 让前端 503 |
 | **JWT 透传漏过 user_id 注入下游** | 下游无法识别调用者 | `session/passthrough_test.go` 强制断言下游 gRPC metadata 含 `user_id`；handler 层 acceptance test 验 ctx | `kubectl rollout undo deploy/web-bff` 回退到上一 commit |
 | **集成测试不稳定** | CI 抖动 | 仅 `-tags integration` 跑；本地 compose up 后才执行；不在 `go test ./...` 中 | 加 `-short` flag 跳过 |

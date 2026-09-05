@@ -84,9 +84,9 @@ PR-19b 在 BFF 内实现：
 ### 4.1 PR-17（SSE 协议）
 
 ```
-Emotion-Echo-Web/app/composables/useAIStreamHandler.ts          | 重写 OpenAI 兼容 SSE 解析
-Emotion-Echo-Web/app/composables/useAIStreamHandler.test.ts     | 新增 8 个测试
-Emotion-Echo-Web/app/composables/useConversationSender.ts       | 适配新回调（删 onStart/onTruncated）
+emotion-echo-web/app/composables/useAIStreamHandler.ts          | 重写 OpenAI 兼容 SSE 解析
+emotion-echo-web/app/composables/useAIStreamHandler.test.ts     | 新增 8 个测试
+emotion-echo-web/app/composables/useConversationSender.ts       | 适配新回调（删 onStart/onTruncated）
 ```
 
 ### 4.2 PR-18（写库前移）
@@ -100,9 +100,9 @@ emotion-echo-chat-svc/internal/logic/sendmessagelogic.go        | 幂等查重 +
 emotion-echo-chat-svc/internal/logic/sendmessagelogic_test.go   | +3 测试（Duplicate/Different/Empty/DifferentUser）
 emotion-echo-chat-svc/internal/logic/deleteconversationlogic_test.go | failingDeleteRepo 适配新接口
 emotion-echo-web-bff/internal/downstream/chat.go                 | SendMessageReq.ClientMsgID 透传
-Emotion-Echo-Web/app/types/api.ts                               | SendMessageParams + AIStreamParams 加 clientMsgId
-Emotion-Echo-Web/app/stores/message.ts                          | sendMessage 接收 clientMsgId 参数
-Emotion-Echo-Web/app/composables/useConversationSender.ts       | 流程改造：先落库再 stream
+emotion-echo-web/app/types/api.ts                               | SendMessageParams + AIStreamParams 加 clientMsgId
+emotion-echo-web/app/stores/message.ts                          | sendMessage 接收 clientMsgId 参数
+emotion-echo-web/app/composables/useConversationSender.ts       | 流程改造：先落库再 stream
 ```
 
 ### 4.3 PR-19a（user-svc login）
@@ -127,7 +127,7 @@ emotion-echo-web-bff/internal/handler/auth_handler.go           | 完全重写�
 emotion-echo-web-bff/internal/handler/auth_handler_test.go      | 重写（13 个测试）
 emotion-echo-web-bff/internal/handler/user_handler_test.go       | fakeUserClient 适配新接口
 emotion-echo-web-bff/main.go                                     | NewAuthHandler 注入 UserClient
-Emotion-Echo-Web/app/pages/login/index.vue                       | 3 处去 sha256
+emotion-echo-web/app/pages/login/index.vue                       | 3 处去 sha256
 deploy/apisix/seed.sh                                            | +5 条 auth 白名单路由（无 jwt-auth）
 ```
 
@@ -181,7 +181,7 @@ scripts/smoke_stage33.sh                                         | 新建（9 �
 | emotion-echo-analytics-svc | ✅ 全绿 |
 | emotion-echo-ai-svc | ✅ 全绿 |
 | emotion-echo-web-bff | ✅ 9 包全绿 |
-| Emotion-Echo-Web（前端） | ✅ 20 文件 / 232 测试全绿 |
+| emotion-echo-web（前端） | ✅ 20 文件 / 232 测试全绿 |
 
 ### 5.3 端到端冒烟
 

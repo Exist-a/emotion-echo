@@ -17,7 +17,7 @@ round: 2-A
 
 ## 实现方案
 
-### 一、前端修改 ([id].vue](file:///d:\源码\Emotion-Echo\Emotion-Echo-Web\app\pages\chat\conversation\[id].vue))
+### 一、前端修改 ([id].vue](file:///d:\源码\Emotion-Echo\emotion-echo-web\app\pages\chat\conversation\[id].vue))
 
 #### 1. 添加状态变量
 - 新增 `isStreaming` 状态追踪AI回复状态
@@ -37,7 +37,7 @@ round: 2-A
 #### 3. 禁用输入框
 - 流式状态时输入框禁用，防止输入新内容
 
-### 二、前端 Store 修改 ([message.ts](file:///d:\源码\Emotion-Echo\Emotion-Echo-Web\app\stores\message.ts))
+### 二、前端 Store 修改 ([message.ts](file:///d:\源码\Emotion-Echo\emotion-echo-web\app\stores\message.ts))
 
 #### 1. 已有功能确认
 - `cancelAIStream()` 已实现，可中断 SSE 请求

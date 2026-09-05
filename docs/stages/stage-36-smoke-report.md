@@ -84,7 +84,7 @@ emotion-echo-web-bff   镜像 v0.1.0  ✅ Up 23s  → 宿主 :8894 暴露
 **workaround（任选一）**：
 
 1. **改 Dockerfile** 把 npmmirror 改成默认 `https://registry.npmjs.org/`，重 build
-2. **本地开发模式** 在 `Emotion-Echo-Web/` 跑 `npm install && npm run dev`，浏览器访问 `localhost:3000`
+2. **本地开发模式** 在 `emotion-echo-web/` 跑 `npm install && npm run dev`，浏览器访问 `localhost:3000`
 3. **本次会话不动 Web** —— T5 已经能通过 BFF 端到端验证 5 个 Go svc + ai-svc
 
 ### T7（追加）修 xtts 启动 + 启动 FER（AI profile 容器化进展）
@@ -117,7 +117,7 @@ fer /health:  {"status":"ok","model_loaded":false,"backend":"neutral-fallback"}
 
 ### T8（追加）修 G5 真实 LLM 接入
 
-**问题**：DeepSeek API key 之前在 `Emotion-Echo-Web/.env` 配置（**前端的 `.env` 不应持 key** —— 浏览器 F12 可见，会被滥用刷爆 API 额度）。架构上 key 应放**后端 BFF 的 env**。
+**问题**：DeepSeek API key 之前在 `emotion-echo-web/.env` 配置（**前端的 `.env` 不应持 key** —— 浏览器 F12 可见，会被滥用刷爆 API 额度）。架构上 key 应放**后端 BFF 的 env**。
 
 **修复路径**：
 

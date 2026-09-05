@@ -144,7 +144,7 @@ outbox_events (sent) |  69   ← chat-svc outbox relay 推送
 - 容器 `emotion-echo-web` 不在 docker ps
 - 本机端口 3000 无进程监听
 - 影响：**完全无法在浏览器打开登录页**——BFF 通不等于产品可用
-- 启动命令：用户机器执行 `cd Emotion-Echo-Web && pnpm install && pnpm dev`
+- 启动命令：用户机器执行 `cd emotion-echo-web && pnpm install && pnpm dev`
 
 ### 🟡 阻断 5（视觉假象）：Dockerfile HEALTHCHECK 命令有 bug
 

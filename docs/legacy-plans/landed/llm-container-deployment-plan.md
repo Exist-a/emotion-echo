@@ -70,7 +70,7 @@ round: 2-A
 
 | 序号 | 文件路径 | 修改内容 | 说明 |
 |------|---------|---------|------|
-| 1 | `Emotion-Echo-LLM/FER/Dockerfile` | 新建 | 创建 FER 的 Dockerfile |
+| 1 | `emotion-echo-models/FER/Dockerfile` | 新建 | 创建 FER 的 Dockerfile |
 | 2 | `Emotion-Echo-Gin/docker-compose.yml` | 修改 | 添加三个 LLM 服务 |
 | 3 | `Emotion-Echo-Gin/config.yaml` | 修改 | 更新服务地址为容器名 |
 
@@ -78,7 +78,7 @@ round: 2-A
 
 #### 步骤 1：创建 FER Dockerfile
 
-创建 `Emotion-Echo-LLM/FER/Dockerfile`：
+创建 `emotion-echo-models/FER/Dockerfile`：
 
 ```dockerfile
 FROM python:3.10-slim
@@ -122,7 +122,7 @@ services:
   # ... 现有 postgres 和 redis 服务 ...
   
   sensevoice:
-    build: ./Emotion-Echo-LLM/sensevoice-small
+    build: ./emotion-echo-models/sensevoice-small
     container_name: emotion-echo-sensevoice
     restart: unless-stopped
     ports:
@@ -139,7 +139,7 @@ services:
       - redis
 
   xtts:
-    build: ./Emotion-Echo-LLM/XTTS
+    build: ./emotion-echo-models/XTTS
     container_name: emotion-echo-xtts
     restart: unless-stopped
     ports:
@@ -161,7 +161,7 @@ services:
       retries: 3
 
   fer:
-    build: ./Emotion-Echo-LLM/FER
+    build: ./emotion-echo-models/FER
     container_name: emotion-echo-fer
     restart: unless-stopped
     ports:

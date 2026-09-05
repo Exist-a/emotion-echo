@@ -93,7 +93,7 @@
 | 消息→情绪分析（异步）| ⚠️ | 需 Kafka + ai-svc consumer |
 | 情绪查询（HTTP / gRPC）| ✅ | ai-svc |
 | 多模态融合查询 | ✅ | ai-svc gRPC /fused |
-| 前端可视化 | ⏳ | Emotion-Echo-Web 0 改动（Stage 35 不动前端）|
+| 前端可视化 | ⏳ | emotion-echo-web 0 改动（Stage 35 不动前端）|
 | 情绪分析报表 | ⚠️ | analytics-svc 未启；BFF 缺路由 |
 | 心理量表 | ⚠️ | assessment-svc 未启；BFF 缺路由 |
 | 多模态（人脸/语音）| ❌ | `profile: ai` 镜像未构建 |

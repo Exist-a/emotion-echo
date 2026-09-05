@@ -14,10 +14,10 @@
 ### 新增 SenseVoice 模块
 | 文件 | 行数 | 作用 |
 |------|------|------|
-| `Emotion-Echo-LLM/sensevoice-small/server.py` | 200 | FastAPI HTTP server（POST /analyze） |
-| `Emotion-Echo-LLM/sensevoice-small/Dockerfile` | 60 | 多阶段 build |
-| `Emotion-Echo-LLM/sensevoice-small/logging_setup.py` | 40 | 复用 FER |
-| `Emotion-Echo-LLM/sensevoice-small/metrics_setup.py` | 75 | 复用 FER |
+| `emotion-echo-models/sensevoice-small/server.py` | 200 | FastAPI HTTP server（POST /analyze） |
+| `emotion-echo-models/sensevoice-small/Dockerfile` | 60 | 多阶段 build |
+| `emotion-echo-models/sensevoice-small/logging_setup.py` | 40 | 复用 FER |
+| `emotion-echo-models/sensevoice-small/metrics_setup.py` | 75 | 复用 FER |
 
 ### Dockerfile 修复
 | Dockerfile | 修复点 |
@@ -93,7 +93,7 @@ docker buildx build --network=host ...
 
 ```bash
 # 1. 在 sensevoice-small 目录装依赖（用清华源）
-cd D:\源码\Emotion-Echo\Emotion-Echo-LLM\sensevoice-small
+cd D:\源码\Emotion-Echo\emotion-echo-models\sensevoice-small
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 2. 启动 server（CPU 模式，加载 funasr 模型约 60s）
@@ -104,7 +104,7 @@ curl http://localhost:8002/health
 # → {"status":"ok","model_loaded":true,...}
 
 curl -X POST http://localhost:8002/analyze \
-  -F "file=@Emotion-Echo-LLM/sensevoice-small/example/zh.mp3"
+  -F "file=@emotion-echo-models/sensevoice-small/example/zh.mp3"
 # → {"text":"你好世界","emotion":"happy","confidence":0.9,...}
 ```
 

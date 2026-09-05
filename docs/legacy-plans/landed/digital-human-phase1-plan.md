@@ -212,7 +212,7 @@ DigitalHuman (组件)
 
 #### 1. 前端启动
 ```bash
-cd Emotion-Echo-Web
+cd emotion-echo-web
 npm install
 npm run dev
 ```
@@ -226,14 +226,14 @@ go run cmd/server/main.go
 
 #### 3. 情绪识别服务（SenseVoice）
 ```bash
-# 假设在 Emotion-Echo-LLM 目录下，根据实际部署位置调整
+# 假设在 emotion-echo-models 目录下，根据实际部署位置调整
 # 请参考项目中的相关部署文档
 ```
 
 #### 4. XTTS 语音合成服务
 ```bash
 # 进入 XTTS 目录
-cd Emotion-Echo-LLM/XTTS
+cd emotion-echo-models/XTTS
 
 # 激活 Python 3.11 虚拟环境（假设虚拟环境名为 coqui-tts）
 conda activate coqui-tts
@@ -247,11 +247,11 @@ conda activate coqui-tts
 - **Python 版本**：必须使用 Python 3.11（3.12 不兼容）
 - **PyTorch 版本**：建议使用 PyTorch 2.5.1（2.6.0 可能有问题）
 - **依赖包**：需要安装 transformers==4.40.2、hangul_romanize、num2words、spacy、mutagen、pandas 等
-- **模型位置**：`Emotion-Echo-LLM/XTTS/AI-ModelScope/XTTS-v2/`
+- **模型位置**：`emotion-echo-models/XTTS/AI-ModelScope/XTTS-v2/`
 
 ### 7.4 前端集成
 
-- **VRM 模型位置**：放在 `Emotion-Echo-Web/public/3d-models/` 目录下
+- **VRM 模型位置**：放在 `emotion-echo-web/public/3d-models/` 目录下
 - **默认模型路径**：`/3d-models/digital-human.vrm`
 - **数字人组件**：`app/components/digital-human/DigitalHuman.vue`
 

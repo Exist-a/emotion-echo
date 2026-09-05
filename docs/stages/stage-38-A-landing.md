@@ -52,7 +52,7 @@ $ find emotion-echo-user-svc/internal -name "*oauth*"
 | `seed` | chore | `scripts/check_seed_users.sh` | 默认 EXPECTED_USERNAME/PASSWORD 改 echo/echo123，输出文案改 |
 | `smoke` | test | `scripts/smoke_data_layer.py` + `scripts/smoke_bff_t5.py` | LOGIN_BODY 改 echo/echo123 |
 | `docs` | docs | `QUICKSTART.md` | 测试账号文案改 |
-| `front` | feat | `Emotion-Echo-Web/app/pages/login/index.vue` | placeholder "邮箱"→"用户名"，quickLogin demo@emotion-echo.com/Demo12345 → echo/echo123，注册表单 placeholder 一致 |
+| `front` | feat | `emotion-echo-web/app/pages/login/index.vue` | placeholder "邮箱"→"用户名"，quickLogin demo@emotion-echo.com/Demo12345 → echo/echo123，注册表单 placeholder 一致 |
 | `plan` | docs | `docs/plans/wechat-qq-login-and-upload.md` | status: planned → superseded，加 superseded-reason 说明 |
 | `roadmap` | docs | `docs/stages/stage-37-fixes-roadmap.md` | §B1 加删除线，加 Stage 38-A 修订说明 |
 
@@ -123,9 +123,9 @@ $ curl -X POST http://localhost:8894/api/v1/auth/login \
 
 ## 五、隐藏发现（前端 quickLogin 调了一个不存在的接口）
 
-[Emotion-Echo-Web/app/pages/login/index.vue:181](/Emotion-Echo-Web/app/pages/login/index.vue) `quickLogin` 函数调用 `userStore.login({ username: 'demo@emotion-echo.com', password: 'Demo12345' })` ——**`demo@emotion-echo.com` 这个用户从未存在过**，seed 表里没有。
+[emotion-echo-web/app/pages/login/index.vue:181](/emotion-echo-web/app/pages/login/index.vue) `quickLogin` 函数调用 `userStore.login({ username: 'demo@emotion-echo.com', password: 'Demo12345' })` ——**`demo@emotion-echo.com` 这个用户从未存在过**，seed 表里没有。
 
-[Emotion-Echo-Web/e2e/login-flow.spec.ts](/Emotion-Echo-Web/e2e/login-flow.spec.ts) 注释里写 "由于 dev mode 下后端 API (localhost:18080) 未启用，quickLogin 异步调用失败"——**E2E 测试本来就预期失败**，从未真正验证 quick login 路径。
+[emotion-echo-web/e2e/login-flow.spec.ts](/emotion-echo-web/e2e/login-flow.spec.ts) 注释里写 "由于 dev mode 下后端 API (localhost:18080) 未启用，quickLogin 异步调用失败"——**E2E 测试本来就预期失败**，从未真正验证 quick login 路径。
 
 本轮修复：quickLogin 直接发 echo/echo123（标准 login 路径，不依赖任何后端 quick-login 端点）。
 **真正的 quick-login 端点从来没实现过**，e2e 测试也从来没真正通过。这是另一个隐藏的 roadmap 失真点，不在本轮修复范围（文档失真待 Stage 38 单独 ADR 化）。

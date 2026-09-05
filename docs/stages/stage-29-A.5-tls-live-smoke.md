@@ -38,7 +38,7 @@
 | P0.1 | `chore(hygiene): push local Stage 26-29 to origin/main (28 commits)` | HYGIENE | `git push origin main` 一次性追上 28 个 commit；无新代码 |
 | P0.2 | `chore(hygiene): refresh README stage badge 25/25 → 29-A` | HYGIENE | README 徽章刷新 |
 | P0.3 | `chore(hygiene): track Stage 27/29 infra + commit Python gRPC tests` | HYGIENE | `git add k8s/{README.md,kind-config.yaml,scripts/,tests/go.mod} emotion-llm-service/tests/`；不动 submodule / 产物 |
-| P0.4 | `chore(gitignore): exclude agent state + test artifacts` | HYGIENE | `.gitignore` 加 `.zcode/`、`Emotion-Echo-Web/playwright-report/`、`Emotion-Echo-Web/test-results/` |
+| P0.4 | `chore(gitignore): exclude agent state + test artifacts` | HYGIENE | `.gitignore` 加 `.zcode/`、`emotion-echo-web/playwright-report/`、`emotion-echo-web/test-results/` |
 | P1.1 | `test(stage-29-A.5): red — cert-manager live cluster smoke (9 gates)` | 🔴 RED | 新 `k8s/tests/stage_29a5_smoke_test.go`（`//go:build integration` + testify）；9 个子测试覆盖 ns 存在、3 Deployments Available、ClusterIssuer Ready、CertificateRequest Ready、APISIX Available、`curl https://grafana.local:9443/api/health` 200 |
 | P2.1 | `fix(cert-manager): split single Deployment into controller+cainjector+webhook + namespace + RBAC + webhook configs` | 🟢 GREEN | 修 B1 + B2；`values.yaml` 拆 `controller.image/webhook.image/cainjector.image`；3 Deployment；3 ClusterRole + 3 ClusterRoleBinding；cert-manager ns 模板；`service-webhook.yaml` `cert-manager-webhook:443→10250`；`webhook-configs.yaml` Validating + Mutating 配置 |
 | P2.2 | `fix(cert-manager): support image.registry override via ternary helper` | 🟢 GREEN | 修 B4；3 个 Deployment 都改 `{{ printf "%s%s:%s" (ternary ...) ... }}` |

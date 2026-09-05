@@ -41,7 +41,7 @@
 
 1. ❌ **禁止 snapshot-copy 常量字典**：
    - 现状违反：`emotion-llm-service/tests/unit/test_analyze_pure.py`（拷贝 `EMOTION_KEYWORDS` / `SENTIMENT_WORDS` 快照）
-   - 现状违反：`Emotion-Echo-LLM/FER/tests/unit/test_emotion_mapping.py`（拷贝 `EMOTION_MAPPING` 快照）
+   - 现状违反：`emotion-echo-models/FER/tests/unit/test_emotion_mapping.py`（拷贝 `EMOTION_MAPPING` 快照）
    - 重构要求：从被测模块 import；如被测模块未导出常量，则先在源文件中导出，再让测试 import
 2. ❌ **禁止 `t.Skip` 跳过无法写出的测试**：
    - 现状扫描：grep `t.Skip` / `pytest.skip` 在测试文件中必须为 0 命中（除非 `hasKindCluster` / `hasDocker` 这类环境守卫）
@@ -115,7 +115,7 @@ feat(analytics-svc): health_handler trivial adjustment
 
 ## 四、Python 后端部分（第 2 轮 session）
 
-### 4.1 `Emotion-Echo-LLM/FER`
+### 4.1 `emotion-echo-models/FER`
 
 | 文件 | LOC | 缺口 | 测试场景（最小集） |
 |------|-----|------|-------------------|
@@ -132,7 +132,7 @@ test(FER): red — /analyze route happy + empty file
 feat(FER): analyze route validates empty file early
 ```
 
-### 4.2 `Emotion-Echo-LLM/sensevoice-small`
+### 4.2 `emotion-echo-models/sensevoice-small`
 
 | 文件 | LOC | 缺口 | 测试场景（最小集） |
 |------|-----|------|-------------------|
@@ -148,7 +148,7 @@ test(sensevoice): red — /health schema + logging JSON formatter
 feat(sensevoice): logging_setup supports JSON
 ```
 
-### 4.3 `Emotion-Echo-LLM/XTTS`
+### 4.3 `emotion-echo-models/XTTS`
 
 | 文件 | LOC | 缺口 | 测试场景（最小集） |
 |------|-----|------|-------------------|
@@ -304,7 +304,7 @@ docs(stage-26-T): test backlog — multi-session TDD plan for 38 priority files
 - `emotion-echo-ai-svc/internal/analyzer/analyzer_test.go` — **金标准**：表驱动 + 子测试 + stubAnalyzer
 - `emotion-echo-shared/pkg/grpcinterceptor/*_test.go` — **金标准**：sibling test + 边界 + error path
 - `emotion-llm-service/tests/unit/test_analyze_pure.py`（待重构）— 当前 snapshot-copy 反例
-- `Emotion-Echo-LLM/FER/tests/unit/test_emotion_mapping.py`（待重构）— 当前 snapshot-copy 反例
+- `emotion-echo-models/FER/tests/unit/test_emotion_mapping.py`（待重构）— 当前 snapshot-copy 反例
 
 ---
 

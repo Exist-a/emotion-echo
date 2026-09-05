@@ -39,11 +39,11 @@
 
 ```
 1. test(xtts): add RED contract test for torchaudio shim .float() guard
-   files: Emotion-Echo-LLM/XTTS/tests/unit/test_torchaudio_shim.py
+   files: emotion-echo-models/XTTS/tests/unit/test_torchaudio_shim.py
 2. fix(xtts): add .float() to /tts and /tts_with_phonemes tensor chain
-   files: Emotion-Echo-LLM/XTTS/server.py
+   files: emotion-echo-models/XTTS/server.py
 3. test(xtts): add AST contract for server.py torchaudio.save dtype
-   files: Emotion-Echo-LLM/XTTS/tests/unit/test_server_tts_dtype.py
+   files: emotion-echo-models/XTTS/tests/unit/test_server_tts_dtype.py
 4. fix(apps-compose): remove emotion-echo-web profiles: never + propagate NPM_REGISTRY
    files: deploy/docker-compose.apps.yml
 6. test(contract): web + healthcheck compose contracts (Bug 9 + G1)

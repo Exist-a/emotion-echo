@@ -18,7 +18,7 @@ Stage 31（Nacos）+ Stage 32（APISIX）两阶段共 23 个 commit 落地后，
 | 文档 TODO | `docs/stage-32-landing.md` §9 "4 commits / +1,300 / -240 行（详细数字待 PR commit 后填）" | 文档残留，PR 已 commit 但数字未填 |
 | 文档 TODO | `docs/stage-32-landing.md` §10 `TODO: 待 PR commit 后填` | 跟随 §9 消除 |
 | untracked | `rel.json`（53KB APISIX Dashboard releases dump） | 调研临时物，无引用 |
-| untracked | `Emotion-Echo-Web/scripts/convert-el-*.py`（2 个 Element→原生转换脚本） | 0 引用，0 README |
+| untracked | `emotion-echo-web/scripts/convert-el-*.py`（2 个 Element→原生转换脚本） | 0 引用，0 README |
 | untracked | `charts/emotion-echo/Chart.lock` | Helm 自动生成，应忽略 |
 
 若不收口就直接进 Stage 33，这些杂物会持续干扰 `git status` 视觉与 PR diff 整洁度。
@@ -33,14 +33,14 @@ Stage 31（Nacos）+ Stage 32（APISIX）两阶段共 23 个 commit 落地后，
 | 2 | `186fd38` | `docs(stage-32)` | `docs/stage-32-landing.md` | §9 标题从 "4 commits" 改为 "8 commits"（4 feat + 4 docs/fix）；填实 8 条 SHA + 累计行数（118 files / +10,449 / -983）+ PR-13/14/15/16 单 PR 拆分；§10 收尾 `TODO` 标记随 §9 填实消除 |
 | 3 | *（无 commit）* | `chore` | `rel.json` | 物理删除。文件本就 untracked，无任何文档/代码引用，git 无须动作 |
 | 4 | `0e34bee` | `chore(gitignore)` | `.gitignore` | 末尾追加 `charts/**/Chart.lock` 规则；`charts/emotion-echo/Chart.lock` 从 untracked 转为 ignored |
-| 5 | *（无 commit）* | `chore(frontend)` | `Emotion-Echo-Web/scripts/` | 物理删除 `convert-el-notify.py` + `convert-el-to-native.py`。原本就是 untracked，无任何生产代码或文档引用（[`docs/STAGE-26-O-P-LANDING.md:290`](/docs/stages/STAGE-26-O-P-LANDING.md) 已明确"主仓不处理"，归 Emotion-Echo-Web submodule） |
+| 5 | *（无 commit）* | `chore(frontend)` | `emotion-echo-web/scripts/` | 物理删除 `convert-el-notify.py` + `convert-el-to-native.py`。原本就是 untracked，无任何生产代码或文档引用（[`docs/STAGE-26-O-P-LANDING.md:290`](/docs/stages/STAGE-26-O-P-LANDING.md) 已明确"主仓不处理"，归 emotion-echo-web submodule） |
 | 6 | 本文档 | `docs(stage-32-cleanup)` | `docs/stage-32-cleanup.md`（新建） | 收口报告 + Stage 33 交接 |
 
 **实际 commit 数：4 条**（项 1、2、4、6）+ 2 项**文件系统级删除**（项 3、5）。
 
 ### 2.1 为什么 6 项只生成 4 个 commit
 
-untracked 文件（`rel.json`、`Emotion-Echo-Web/scripts/`）的删除**不需要 git 记录**：
+untracked 文件（`rel.json`、`emotion-echo-web/scripts/`）的删除**不需要 git 记录**：
 - `rel.json` 从未被 `git add`，从未进入 staging 区
 - `scripts/` 同上
 - 删除后它们直接消失，`git status` 不再列出
@@ -59,10 +59,10 @@ untracked 文件（`rel.json`、`Emotion-Echo-Web/scripts/`）的删除**不需�
 
 ```
 ?? .zcode/                                                              ← ZCode agent session（已 gitignore）
-?? Emotion-Echo-LLM/sensevoice-small/image/sensevoice2.png               ← Emotion-Echo-LLM submodule 内（主仓不处理）
-?? Emotion-Echo-LLM/sensevoice-small/image/webui.png                     ← Emotion-Echo-LLM submodule 内（主仓不处理）
-?? Emotion-Echo-Web/playwright-report/                                  ← Emotion-Echo-Web submodule 内（主仓不处理）
-?? Emotion-Echo-Web/test-results/                                       ← Emotion-Echo-Web submodule 内（主仓不处理）
+?? emotion-echo-models/sensevoice-small/image/sensevoice2.png               ← emotion-echo-models submodule 内（主仓不处理）
+?? emotion-echo-models/sensevoice-small/image/webui.png                     ← emotion-echo-models submodule 内（主仓不处理）
+?? emotion-echo-web/playwright-report/                                  ← emotion-echo-web submodule 内（主仓不处理）
+?? emotion-echo-web/test-results/                                       ← emotion-echo-web submodule 内（主仓不处理）
 ?? docs/architecture-audit-2026-08-31.md                                ← Stage 32 设计期间产生的 4 份文档，待用户决定是否入仓
 ?? docs/stage-32-apisix-reintroduction.md
 ?? docs/stage-33-p0-fix-bff-purify.md
@@ -88,8 +88,8 @@ Stage 32 PR-13 ~ PR-16 8 条 commit + 收口 4 条 commit = **总计 12 条 comm
 | 路径 | 期望状态 | 实际状态 |
 |------|----------|----------|
 | `charts/emotion-echo/Chart.lock` | ignored | ✅ `!!`（已生效） |
-| `Emotion-Echo-Web/playwright-report/` | ignored | ✅ submodule 自身 .gitignore 处理 |
-| `Emotion-Echo-Web/test-results/` | ignored | ✅ submodule 自身 .gitignore 处理 |
+| `emotion-echo-web/playwright-report/` | ignored | ✅ submodule 自身 .gitignore 处理 |
+| `emotion-echo-web/test-results/` | ignored | ✅ submodule 自身 .gitignore 处理 |
 | `.zcode/` | ignored | ✅ 第 140 行 |
 
 ### 3.4 Go 测试回归
@@ -132,7 +132,7 @@ done
 
 ```
 1. 写失败测试（🔴 RED）
-   Emotion-Echo-Web/app/composables/useAIStreamHandler.test.ts
+   emotion-echo-web/app/composables/useAIStreamHandler.test.ts
    描述：mock fetch 返回 OpenAI 兼容 SSE 流，
    断言 onDelta 在每次 delta 触发 + onFinish 在 [DONE] 触发。
    必须先看到测试红。
@@ -183,7 +183,7 @@ git checkout -b feat/stage-33-pr17-sse-protocol
 | main 落后 origin 133 commits | 不在本次范围 | 历史债，main 自分支管理混乱后从未推送，需独立 PR 决策处理 |
 | 11 个 feat/test/* 分支未合 main | 不在本次范围 | Stage 31 PR-02 ~ PR-12 的独立分支，属于"治理能力分批落地"的设计选择 |
 | 3 份 docs/*.md 仍 untracked | 待用户决策 | `architecture-audit-2026-08-31.md`、`stage-32-apisix-reintroduction.md`、`stage-33-p0-fix-bff-purify.md` 是 Stage 32/33 设计期文档，是否入仓需独立判断 |
-| Emotion-Echo-LLM/sensevoice-small/image/*.png | submodule 内 | 2 张模型预览图，主仓不处理 |
+| emotion-echo-models/sensevoice-small/image/*.png | submodule 内 | 2 张模型预览图，主仓不处理 |
 
 ---
 

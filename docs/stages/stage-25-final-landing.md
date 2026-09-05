@@ -72,11 +72,11 @@ emotion-echo-monorepo  (github.com/Exist-a/emotion-echo)
 ├── emotion-echo-assessment-svc/ # 量表
 ├── emotion-echo-user-svc/       # 用户
 ├── emotion-llm-service/         # Python gRPC：文本情绪
-├── Emotion-Echo-LLM/
+├── emotion-echo-models/
 │   ├── FER/                     # 人脸情绪（已镜像）
 │   ├── sensevoice-small/        # 语音情绪（已镜像）
 │   └── XTTS/                    # 语音合成（放弃本地，接 API）
-├── Emotion-Echo-Web/            # Nuxt 3 前端
+├── emotion-echo-web/            # Nuxt 3 前端
 ├── proto/                       # gRPC 契约
 ├── deploy/                      # docker-compose 编排
 ├── docs/                        # 架构 + stage 文档
