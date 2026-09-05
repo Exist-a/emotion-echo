@@ -13,7 +13,7 @@ import (
 
 // FERClient 面部表情识别客户端（Stage 22-A.1）。
 //
-// backend: Emotion-Echo-LLM/FER -> FastAPI :8004/analyze
+// backend: emotion-echo-models/FER -> FastAPI :8004/analyze
 //
 // 用法：
 //   client := aiclient.NewFERClient(cfg.FER)

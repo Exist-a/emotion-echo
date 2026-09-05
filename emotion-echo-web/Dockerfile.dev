@@ -1,7 +1,7 @@
-# Emotion-Echo-Web Dockerfile.dev (Stage 26-P)
+# emotion-echo-web Dockerfile.dev (Stage 26-P)
 # Dev mode: `nuxt dev` HMR on :3000
-# Build context: Emotion-Echo-Web/ (本目录下)
-#   docker build -f Emotion-Echo-Web/Dockerfile.dev Emotion-Echo-Web
+# Build context: emotion-echo-web/ (本目录下)
+#   docker build -f emotion-echo-web/Dockerfile.dev emotion-echo-web
 
 FROM node:20-alpine
 
@@ -17,7 +17,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 
-# 完整源码 (build context 是 Emotion-Echo-Web/ 目录)
+# 完整源码 (build context 是 emotion-echo-web/ 目录)
 COPY . ./
 
 EXPOSE 3000

@@ -118,7 +118,7 @@
 ### 1.4 项目目录结构
 
 ```
-Emotion-Echo-Web/
+emotion-echo-web/
 ├── app/
 │   ├── pages/                    # 页面
 │   │   ├── chat/

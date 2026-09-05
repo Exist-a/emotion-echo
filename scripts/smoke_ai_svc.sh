@@ -131,7 +131,7 @@ if [ "$SKIP_ANALYZE" != "1" ]; then
   rm -f "$IMG"
 
   # case 3: audio — SenseVoice live；可能推理较慢，用 longer timeout
-  AUDIO="Emotion-Echo-LLM/sensevoice-small/example/zh.mp3"
+  AUDIO="emotion-echo-models/sensevoice-small/example/zh.mp3"
   if [ -f "$AUDIO" ]; then
     args=()
     args+=(-F "kind=audio")
@@ -166,7 +166,7 @@ if [ "$SKIP_ANALYZE" != "1" ]; then
         ;;
     esac
   else
-    yellow "  ! skip kind=audio (no sample audio at Emotion-Echo-LLM/sensevoice-small/example/zh.mp3)"
+    yellow "  ! skip kind=audio (no sample audio at emotion-echo-models/sensevoice-small/example/zh.mp3)"
   fi
 
   # case 4: invalid kind → 4xx

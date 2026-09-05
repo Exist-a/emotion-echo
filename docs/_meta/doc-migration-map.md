@@ -92,7 +92,7 @@ status: 待确认（Round 0 收口，下一步进入 Round 1 骨架搭建）
 | `docs/microservice-decomposition-plan.md` | `docs/architecture/decomposition-plan.md` | 微服务拆分 |
 | `docs/microservices-architecture.md` | `docs/architecture/microservices.md` | 微服务架构 |
 | `docs/architecture-audit-2026-08-31.md` | `docs/architecture/audit-2026-08-31.md` | 架构审计 |
-| `Emotion-Echo-Web/docs/DESIGN.md` | `docs/frontend/design.md` | 前端设计 |
+| `emotion-echo-web/docs/DESIGN.md` | `docs/frontend/design.md` | 前端设计 |
 | `docs/learn/`（13 份） | **原位保留** | 学习教程 |
 
 ---

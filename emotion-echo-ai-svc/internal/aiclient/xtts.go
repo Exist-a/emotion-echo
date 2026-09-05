@@ -14,7 +14,7 @@ import (
 
 // XTTSClient 语音克隆 TTS 客户端（Stage 22-A.3）。
 //
-// backend: Emotion-Echo-LLM/XTTS -> FastAPI :8003/tts  (完整)  /tts_stream  (流式)
+// backend: emotion-echo-models/XTTS -> FastAPI :8003/tts  (完整)  /tts_stream  (流式)
 //
 // 完整模式：返回 base64 WAV，适合 < 100 字的合成
 // 流式模式：返回 raw bytes，适合长文本

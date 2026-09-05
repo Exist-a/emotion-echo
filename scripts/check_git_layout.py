@@ -5,7 +5,7 @@ check_git_layout.py · Emotion-Echo 单仓 monorepo 布局自检脚本
 校验项目：
   1. 根目录存在 .git/（主仓已 init）
   2. 根目录存在 .gitignore 且包含必要条目
-  3. 根目录存在 docs/git-layout.md
+  3. 根目录存在 docs/deployment/git-layout.md
   4. 根目录**不存在** .gitmodules（单仓不允许 submodule）
   5. 4 个关键目录都存在（前端 / legacy / 2 个 AI 模型）
   6. 根目录存在 docs/ 目录
@@ -26,10 +26,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # 4 个必须存在的关键目录（从原 submodule 转为普通目录）
 KEY_DIRS = [
-    "Emotion-Echo-Web",
+    "emotion-echo-web",
     "legacy/emotion-echo-gin",
-    "Emotion-Echo-LLM/sensevoice-small",
-    "Emotion-Echo-LLM/XTTS/TTS",
+    "emotion-echo-models/sensevoice-small",
+    "emotion-echo-models/XTTS/TTS",
 ]
 
 
@@ -72,10 +72,10 @@ def main() -> int:
     else:
         all_ok = False
 
-    # 3. docs/git-layout.md 存在
+    # 3. docs/deployment/git-layout.md 存在
     print("\n[3/7] 布局规范文档")
-    layout_doc = ROOT / "docs" / "git-layout.md"
-    all_ok &= check("docs/git-layout.md 存在", layout_doc.is_file())
+    layout_doc = ROOT / "docs" / "deployment" / "git-layout.md"
+    all_ok &= check("docs/deployment/git-layout.md 存在", layout_doc.is_file())
 
     # 4. .gitmodules **不应存在**
     print("\n[4/7] 单仓约束：.gitmodules 不应存在")

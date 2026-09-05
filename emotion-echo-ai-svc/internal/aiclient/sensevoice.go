@@ -13,7 +13,7 @@ import (
 
 // SenseVoiceClient 语音 ASR + 情绪识别客户端（Stage 22-A.2）。
 //
-// backend: Emotion-Echo-LLM/sensevoice-small -> FastAPI :8002/analyze
+// backend: emotion-echo-models/sensevoice-small -> FastAPI :8002/analyze
 type SenseVoiceClient struct {
 	baseURL string
 	hc      *http.Client

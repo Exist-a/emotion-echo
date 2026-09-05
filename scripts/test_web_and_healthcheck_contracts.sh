@@ -2,10 +2,10 @@
 # test_web_and_healthcheck_contracts.sh · Bug 9 + G1 契约测试
 #
 # Stage 36-FU Bug 9 + G1 follow-up:
-#   Bug 9 (partial): commit 723e18b 修了 Emotion-Echo-Web/Dockerfile,
+#   Bug 9 (partial): commit 723e18b 修了 emotion-echo-web/Dockerfile,
 #     但 deploy/docker-compose.apps.yml 把 emotion-echo-web 设成
 #     `profiles: ["never"]` 显式禁用, legacy/dev-root-compose（原根目录 docker-compose.yml） 的
-#     frontend 服务仍指向 Emotion-Echo-Web/Dockerfile (旧 / 没 ARG)
+#     frontend 服务仍指向 emotion-echo-web/Dockerfile (旧 / 没 ARG)
 #   G1 healthcheck: ${SKYWALKING_OAP_ADDR:-...} 占位符没默认值, 4 svc
 #     启动时报 "unhealthy" 但 /health 200 (依赖硬编码缺失)
 #
@@ -22,7 +22,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT_COMPOSE="$REPO_ROOT/legacy/dev-root-compose/docker-compose.yml"
 APPS_COMPOSE="$REPO_ROOT/deploy/docker-compose.apps.yml"
-WEB_DOCKERFILE="$REPO_ROOT/Emotion-Echo-Web/Dockerfile"
+WEB_DOCKERFILE="$REPO_ROOT/emotion-echo-web/Dockerfile"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 pass() { echo "  ok: $*"; }
@@ -65,7 +65,7 @@ PY
 # Bug 9b: web Dockerfile must accept NPM_REGISTRY ARG
 # ---------------------------------------------------------------
 echo ""
-echo "§2 Emotion-Echo-Web/Dockerfile must accept NPM_REGISTRY build arg"
+echo "§2 emotion-echo-web/Dockerfile must accept NPM_REGISTRY build arg"
 
 python - "$WEB_DOCKERFILE" <<'PY' || exit 1
 import re, sys, pathlib
@@ -124,7 +124,7 @@ else:
     uses_dockerfile = "dockerfile: Dockerfile" in block or "dockerfile:" in block
     if uses_dockerfile:
         if "ARG NPM_REGISTRY" not in web_text:
-            print("FAIL: frontend service in root compose uses Emotion-Echo-Web/Dockerfile "
+            print("FAIL: frontend service in root compose uses emotion-echo-web/Dockerfile "
                   "but the Dockerfile is missing `ARG NPM_REGISTRY`")
             sys.exit(1)
         print("  ok: root compose frontend uses Dockerfile with NPM_REGISTRY ARG")

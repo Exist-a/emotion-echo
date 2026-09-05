@@ -355,7 +355,7 @@
 | **ai-svc** | 8891 / gRPC 8892 | Gin | emotion_echo_ai | 情绪分析编排 | ✅ Stage 1 完成 |
 | **analytics-svc** | 8893 | Gin | emotion_echo_analytics | 行为事件/报表 | ✅ Stage 1 完成 |
 | **emotion-llm-service** | 8000 / gRPC 50051 | FastAPI | — | 文本情绪分析（当前为关键词器） | ✅ Stage 3 完成 |
-| **Emotion-Echo-Web** | 3000 | Nuxt 3 | — | 前端 SPA | ✅ |
+| **emotion-echo-web** | 3000 | Nuxt 3 | — | 前端 SPA | ✅ |
 | **FER / sensevoice / XTTS** | 8004/8002/8003 | FastAPI | — | 人脸/语音识别、语音合成；`--profile ai` 启用；dev 默认 `ai-api.yaml` BASE_URL 留空（仅文本情绪降级，cf. `apps.yml:387-389`） | ✅ |
 
 ---

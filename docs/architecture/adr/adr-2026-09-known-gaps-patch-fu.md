@@ -36,15 +36,15 @@
 
 - `deploy/docker-compose.apps.yml` 移除 `emotion-echo-web` 的 `profiles: ["never"]`
 - `deploy/docker-compose.apps.yml` 给 `emotion-echo-web` 的 `build.args` 加上 `NPM_REGISTRY`，
-  默认 `https://registry.npmjs.org/`，与 `Emotion-Echo-Web/Dockerfile` 的 `ARG NPM_REGISTRY` 一致
-- `Emotion-Echo-Web/Dockerfile` 已经接受 `ARG NPM_REGISTRY` (commit 723e18b 修复)，
+  默认 `https://registry.npmjs.org/`，与 `emotion-echo-web/Dockerfile` 的 `ARG NPM_REGISTRY` 一致
+- `emotion-echo-web/Dockerfile` 已经接受 `ARG NPM_REGISTRY` (commit 723e18b 修复)，
   根目录 `docker-compose.yml` 的 `frontend` 服务随之可重建
   （注：该根 compose 已于 2026-09-05 归档至 `legacy/dev-root-compose/`，仅历史参考，
   §3 契约测试已改指归档路径）
 
 契约测试：`scripts/test_web_and_healthcheck_contracts.sh`
 - §1: 断言 `emotion-echo-web` 不在 `profiles: ["never"]`
-- §2: 断言 `Emotion-Echo-Web/Dockerfile` 接受 `ARG NPM_REGISTRY`
+- §2: 断言 `emotion-echo-web/Dockerfile` 接受 `ARG NPM_REGISTRY`
 - §3: 断言根目录 compose 的 frontend 服务使用的 Dockerfile 含 `ARG NPM_REGISTRY`
 
 **注意**：本地 dev 环境构建/启动 Web 容器需要 `docker build`，按 Stage 36-B5 决策

@@ -17,7 +17,7 @@
 
 ```
 Emotion-Echo/
-├── Emotion-Echo-Web/                # 前端 Nuxt 3 + Element Plus
+├── emotion-echo-web/                # 前端 Nuxt 3 + Element Plus
 ├── emotion-echo-user-svc/           # 用户认证 (Go + Gin :8888)
 ├── emotion-echo-chat-svc/           # 会话与消息 (Go + Gin :8890)
 ├── emotion-echo-analytics-svc/      # 情绪分析报表 (Go + Gin :8893)
@@ -25,7 +25,7 @@ Emotion-Echo/
 ├── emotion-echo-ai-svc/             # AI 编排 (Go + gRPC :8892 + HTTP :8891)
 ├── emotion-llm-service/             # Python gRPC LLM 推理 (:8000 + :50051)
 ├── emotion-echo-web-bff/            # BFF 聚合层 (Go + Gin :8894，APISIX upstream)
-├── Emotion-Echo-LLM/                # 多模态 AI profile
+├── emotion-echo-models/                # 多模态 AI profile
 │   ├── FER/                         # 人脸情绪 (:8004, profile ai)
 │   ├── sensevoice-small/            # 语音情绪 (:8002, profile ai)
 │   └── XTTS/                        # 语音合成 (:8003, profile ai)
@@ -72,7 +72,7 @@ Emotion-Echo/
 >
 > ```bash
 > # 终端 2：起前端
-> cd Emotion-Echo-Web
+> cd emotion-echo-web
 > pnpm install     # 首次需要
 > pnpm dev
 > ```
@@ -318,7 +318,7 @@ docker compose ... up -d --force-recreate emotion-echo-web-bff emotion-echo-ai-s
 
 Web 容器构建需要 npm 仓库可达（Dockerfile 默认 npmmirror.com 容器内可能不可达）。**workaround**：
 1. 改 Dockerfile：`registry.npmjs.org` 替代 npmmirror
-2. 或本地 dev：`cd Emotion-Echo-Web && npm install && npm run dev`
+2. 或本地 dev：`cd emotion-echo-web && npm install && npm run dev`
 
 ---
 
@@ -346,7 +346,7 @@ docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml --profile 
 
 **终端 4：前端**（独立进程，浏览器才能渲染）
 ```powershell
-cd Emotion-Echo-Web
+cd emotion-echo-web
 pnpm install
 pnpm dev
 ```

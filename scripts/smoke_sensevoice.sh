@@ -18,7 +18,7 @@ BASE_URL="${BASE_URL:-http://localhost:8002}"
 HTTP_TIMEOUT="${HTTP_TIMEOUT:-10}"
 TIMEOUT_FLAG="--max-time $HTTP_TIMEOUT"
 SKIP_INFERENCE="${SKIP_INFERENCE:-0}"
-SAMPLE_AUDIO="${SAMPLE_AUDIO:-Emotion-Echo-LLM/sensevoice-small/example/zh.mp3}"
+SAMPLE_AUDIO="${SAMPLE_AUDIO:-emotion-echo-models/sensevoice-small/example/zh.mp3}"
 
 PASS=0
 FAIL=0

@@ -2,7 +2,7 @@
 //
 // Stage 30 / stage-30-web-bff.md T2.9-11: XTTSClient（BFF → XTTS 直连）
 //
-// XTTS（Emotion-Echo-LLM/XTTS，FastAPI :8003）：
+// XTTS（emotion-echo-models/XTTS，FastAPI :8003）：
 //   POST /tts_stream → 流式 raw WAV/PCM 字节（media_type audio/wav）
 //   GET  /health      → {"status","model_loaded","model_type"}
 //

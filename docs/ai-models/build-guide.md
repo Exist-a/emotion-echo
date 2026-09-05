@@ -23,7 +23,7 @@
 
 ## 二、背景与目标
 
-Stage 36 之前，三个 AI 镜像（FER / SenseVoice / XTTS）零散分布在 `Emotion-Echo-LLM/` 子仓里，**没有统一构建入口、也没有 Dockerfile fix 的累计记录**。每次 rebuild 都要踩同样的坑：
+Stage 36 之前，三个 AI 镜像（FER / SenseVoice / XTTS）零散分布在 `emotion-echo-models/` 子仓里，**没有统一构建入口、也没有 Dockerfile fix 的累计记录**。每次 rebuild 都要踩同样的坑：
 
 - ❌ tuna.tsinghua 镜像替换在境外网络不可达
 - ❌ deb.debian.org CDN 偶发 502/EOF
@@ -39,9 +39,9 @@ Stage 36 把这 8 项坑全部修复并固化到 Dockerfile + 加 `scripts/smoke
 
 | 镜像 | 源码 | 预烘焙模型 | 大小 (disk) | 启动后端点 | Compose profile |
 |------|------|-----------|------------|------------|----------------|
-| `emotion-echo/fer` | `Emotion-Echo-LLM/FER/` | libopencv 4.10 内置（caffemodel 缺失走 neutral-fallback） | 12.1GB | `:8004` HTTP/JSON | `profile: ai` |
-| `emotion-echo/sensevoice` | `Emotion-Echo-LLM/sensevoice-small/` | **已预烘焙**：`model.pt` 893MB + `am.mvn` 11K + `config.yaml` + `tokens.json` + `fig/` + `example/` | 11.6GB（4.16GB content） | `:8002` HTTP/JSON | `profile: ai` |
-| `emotion-echo/xtts` | `Emotion-Echo-LLM/XTTS/` | **已预烘焙**：`model.pth` 1.8GB + `dvae.pth` 201MB + `config.json` + `samples/zh-cn-sample.wav` | 14.2GB（5.3GB content） | `:8003` HTTP/JSON | `profile: ai` |
+| `emotion-echo/fer` | `emotion-echo-models/FER/` | libopencv 4.10 内置（caffemodel 缺失走 neutral-fallback） | 12.1GB | `:8004` HTTP/JSON | `profile: ai` |
+| `emotion-echo/sensevoice` | `emotion-echo-models/sensevoice-small/` | **已预烘焙**：`model.pt` 893MB + `am.mvn` 11K + `config.yaml` + `tokens.json` + `fig/` + `example/` | 11.6GB（4.16GB content） | `:8002` HTTP/JSON | `profile: ai` |
+| `emotion-echo/xtts` | `emotion-echo-models/XTTS/` | **已预烘焙**：`model.pth` 1.8GB + `dvae.pth` 201MB + `config.json` + `samples/zh-cn-sample.wav` | 14.2GB（5.3GB content） | `:8003` HTTP/JSON | `profile: ai` |
 | `emotion-echo/llm-service` | `emotion-llm-service/`（主仓根） | 无本地模型（FastAPI + gRPC 双协议） | 262MB | `:8000` HTTP + `:50051` gRPC | 默认 |
 
 ---
@@ -69,13 +69,13 @@ docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.
 
 ```bash
 # FER
-docker build -t emotion-echo/fer:v0.1.0 -f Emotion-Echo-LLM/FER/Dockerfile Emotion-Echo-LLM
+docker build -t emotion-echo/fer:v0.1.0 -f emotion-echo-models/FER/Dockerfile emotion-echo-models
 
 # SenseVoice（含预烘焙模型）
-docker build -t emotion-echo/sensevoice:v0.1.2 -f Emotion-Echo-LLM/sensevoice-small/Dockerfile Emotion-Echo-LLM
+docker build -t emotion-echo/sensevoice:v0.1.2 -f emotion-echo-models/sensevoice-small/Dockerfile emotion-echo-models
 
 # XTTS（含预烘焙 + monkey-patch torch.load）
-docker build -t emotion-echo/xtts:v0.1.4 -f Emotion-Echo-LLM/XTTS/Dockerfile Emotion-Echo-LLM
+docker build -t emotion-echo/xtts:v0.1.4 -f emotion-echo-models/XTTS/Dockerfile emotion-echo-models
 ```
 
 ### 4.4 验证
@@ -99,7 +99,7 @@ curl -fsS http://localhost:8004/health
 
 **镜像定位**：人脸情绪识别（face emotion recognition），OpenCV DNN + fer Python 包。
 
-**Dockerfile 路径**：`Emotion-Echo-LLM/FER/Dockerfile`
+**Dockerfile 路径**：`emotion-echo-models/FER/Dockerfile`
 
 **build 实战时间线**：
 
@@ -154,7 +154,7 @@ fer_http_requests_total{method="POST",path="/analyze",status="200"} 3.0
 
 **镜像定位**：阿里达摩院开源语音识别（语音转文字 + 情绪识别），funasr + SenseVoiceSmall。
 
-**Dockerfile 路径**：`Emotion-Echo-LLM/sensevoice-small/Dockerfile`
+**Dockerfile 路径**：`emotion-echo-models/sensevoice-small/Dockerfile`
 
 **build 实战时间线**：
 
@@ -224,7 +224,7 @@ INFO Uvicorn running on http://0.0.0.0:8002
 
 **镜像定位**：Coqui 开源 TTS 语音克隆（text-to-speech），XTTS-v2 模型。
 
-**Dockerfile 路径**：`Emotion-Echo-LLM/XTTS/Dockerfile`
+**Dockerfile 路径**：`emotion-echo-models/XTTS/Dockerfile`
 
 **build 实战时间线**（最坎坷的镜像）：
 
@@ -282,7 +282,7 @@ torch.load = _patched_load
 **端到端验证**（v0.1.4 build 成功 + 容器 healthy，**模型加载仍需修**）：
 
 ```bash
-$ docker build -t emotion-echo/xtts:v0.1.4 -f Emotion-Echo-LLM/XTTS/Dockerfile Emotion-Echo-LLM
+$ docker build -t emotion-echo/xtts:v0.1.4 -f emotion-echo-models/XTTS/Dockerfile emotion-echo-models
 #20 DONE 99.7s   ← 全 layer cache 命中后秒完
 
 $ docker compose --profile ai up -d --no-deps emotion-echo-xtts

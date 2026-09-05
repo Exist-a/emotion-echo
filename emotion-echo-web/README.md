@@ -1,4 +1,4 @@
-# Emotion-Echo-Web
+# emotion-echo-web
 
 > 情绪倾诉与心理健康助手前端应用
 
@@ -44,7 +44,7 @@
 
 ```bash
 git clone <repo-url>
-cd Emotion-Echo-Web
+cd emotion-echo-web
 npm install
 ```
 

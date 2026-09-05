@@ -436,7 +436,7 @@ services:
   # =====================================================
   emotion-echo-fer:
     build:
-      context: ../Emotion-Echo-LLM
+      context: ../emotion-echo-models
       dockerfile: FER/Dockerfile
     image: emotion-echo/fer:v0.1.0
     container_name: emotion-echo-fer
@@ -472,7 +472,7 @@ services:
   # =====================================================
   emotion-echo-sensevoice:
     build:
-      context: ../Emotion-Echo-LLM
+      context: ../emotion-echo-models
       dockerfile: sensevoice-small/Dockerfile
     image: emotion-echo/sensevoice:v0.1.0
     container_name: emotion-echo-sensevoice
@@ -489,7 +489,7 @@ services:
     volumes:
       # 模型首次启动会从 ModelScope 自动下载 ~200MB am.mvn + checkpoint
       # 若要预烘焙到镜像：取消下行注释并手动 copy 模型
-      # - ../../Emotion-Echo-LLM/sensevoice-small/am.mvn:/app/am.mvn:ro
+      # - ../../emotion-echo-models/sensevoice-small/am.mvn:/app/am.mvn:ro
       - sensevoice-cache:/app/cache
     networks:
       - app-network
@@ -517,7 +517,7 @@ services:
   # =====================================================
   emotion-echo-xtts:
     build:
-      context: ../Emotion-Echo-LLM
+      context: ../emotion-echo-models
       dockerfile: XTTS/Dockerfile
     image: emotion-echo/xtts:v0.1.0
     container_name: emotion-echo-xtts
@@ -531,7 +531,7 @@ services:
     expose:
       - "8003"
     volumes:
-      # 模型：本地已下载到 ../../Emotion-Echo-LLM/XTTS/AI-ModelScope/XTTS-v2
+      # 模型：本地已下载到 ../../emotion-echo-models/XTTS/AI-ModelScope/XTTS-v2
       # Dockerfile COPY 已包含，但 dev 可覆盖挂载
       - sensevoice-cache:/app/cache   # 复用 cache 卷
     networks:
@@ -673,7 +673,7 @@ services:
       - app-network
 
   # =====================================================
-  # Stage 30: Emotion-Echo-Web 前端
+  # Stage 30: emotion-echo-web 前端
   #   2026-09-04：API base 由 BFF :8894 改为 APISIX :19080。
   #   决策 11/12 规定网关是唯一业务入口，鉴权/限流/熔断/CORS 只在 APISIX 做；
   #   原先直连 BFF 会整体绕过鉴权层（BFF 自身不验签，只信任 X-User-Id）。
@@ -682,14 +682,14 @@ services:
   # =====================================================
   emotion-echo-web:
     # Stage 36-FU Bug 9 closure: profiles: ["never"] removed.
-    # Emotion-Echo-Web/Dockerfile now accepts NPM_REGISTRY build arg
+    # emotion-echo-web/Dockerfile now accepts NPM_REGISTRY build arg
     # (defaults to https://registry.npmjs.org/), so the container builds
     # without depending on registry.npmmirror.com (which is unreachable
     # inside Docker on Windows hosts). The previous "TEMP: skip until
     # Bug 9 (npmmirror) is fixed" was a Band-Aid that left Bug 9 partial
     # per stage-36-smoke-report.md §九.
     build:
-      context: ../Emotion-Echo-Web
+      context: ../emotion-echo-web
       dockerfile: Dockerfile
       args:
         # SPA 纯前端：API_BASE_URL 在浏览器执行，需宿主可达地址。

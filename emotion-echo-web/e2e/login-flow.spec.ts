@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test'
 test.describe('login flow', () => {
   test('happy-path-3: 点击"用演示账号快速体验"按钮触发标准 /auth/login 调用', async ({ page }) => {
     // Sprint 1 PR-5 (2026-09-04, 决策 18 登记实例 #16):
-    //   - 前端 quickLogin() (Emotion-Echo-Web/app/pages/login/index.vue:175-196) 实际走标准
+    //   - 前端 quickLogin() (emotion-echo-web/app/pages/login/index.vue:175-196) 实际走标准
     //     POST /api/v1/auth/login（账号 echo/echo123），**不是**独立 /auth/quick-login 端点
     //   - BFF auth_handler.go 仅注册 5 个 action：login / register / refresh / logout / verification-code
     //   - todo-pile-2026-09-04.md C6：quick-login 端点从未实现，quickLogin 注释承认走标准登录路径

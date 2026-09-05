@@ -83,9 +83,9 @@ emotion-echo/
 ├── emotion-echo-assessment-svc/  # 心理测验/量表
 ├── emotion-echo-user-svc/        # 用户认证
 ├── emotion-llm-service/          # Python gRPC：LLM 文本情绪
-├── Emotion-Echo-Web/             # Nuxt 3 前端
+├── emotion-echo-web/             # Nuxt 3 前端
 ├── legacy/emotion-echo-gin/      # 遗留单体（已归档）
-├── Emotion-Echo-LLM/
+├── emotion-echo-models/
 │   ├── FER/                      # 人脸情绪（Stage 22 容器化）
 │   ├── sensevoice-small/         # 语音情绪
 │   └── XTTS/                     # 语音合成（含 TTS/ 核心）

@@ -589,7 +589,7 @@ defer pusher.Stop()
 
 ### 涉及文件
 - `user-svc/internal/handler/sse.go`
-- `Emotion-Echo-Web/app/composables/useSSE.ts`
+- `emotion-echo-web/app/composables/useSSE.ts`
 
 ### 具体动作
 1. user-svc 暴露 SSE endpoint：`GET /report/progress/:task_id`

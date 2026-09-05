@@ -19,6 +19,6 @@ status: Round 1 占位 · Round 3 迁入
 
 | 服务 | 容器端口 | 路径 |
 |------|---------|------|
-| SenseVoice | :8002 | `Emotion-Echo-LLM/sensevoice-small/` |
-| XTTS | :8003 | `Emotion-Echo-LLM/XTTS/` |
-| FER | :8004 | `Emotion-Echo-LLM/FER/` |
+| SenseVoice | :8002 | `emotion-echo-models/sensevoice-small/` |
+| XTTS | :8003 | `emotion-echo-models/XTTS/` |
+| FER | :8004 | `emotion-echo-models/FER/` |

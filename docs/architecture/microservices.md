@@ -100,7 +100,7 @@
 | **ai-svc** | 8891 / gRPC 8892 | Gin | emotion_echo_ai | 情绪分析编排 | ✅ |
 | **analytics-svc** | 8893 | Gin | emotion_echo_analytics | 行为事件/报表 | ⚠️ DLQ 待接通 |
 | **emotion-llm-service** | 8000 / gRPC 50051 | FastAPI | — | 文本情绪分析（关键词器） | ✅ |
-| **Emotion-Echo-Web** | 3000 | Nuxt 3 | — | 前端 SPA | ⚠️ SSE 解析待 R-1 修复 |
+| **emotion-echo-web** | 3000 | Nuxt 3 | — | 前端 SPA | ⚠️ SSE 解析待 R-1 修复 |
 | **APISIX** | 9080 / 9180 | OpenResty | etcd | API 网关层 | ☐ Stage 32 启动 |
 | **Nacos** | 8848 / 9848/9849 | Java | derby | 注册+配置 | 🚧 Stage 31 启动（PR-01 文档收口；PR-02..12 推进） |
 

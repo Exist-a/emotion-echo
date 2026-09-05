@@ -7,7 +7,7 @@
 
 ## 上下文（Context）
 
-前端 Emotion-Echo-Web 的 4 个 dashboard 页面（`app/pages/chat/dashboard/{daily,weekly,monthly,annual}Report.vue`）调 BFF 的两个报表端点：
+前端 emotion-echo-web 的 4 个 dashboard 页面（`app/pages/chat/dashboard/{daily,weekly,monthly,annual}Report.vue`）调 BFF 的两个报表端点：
 
 - `GET /api/v1/reports/daily?user_id=&date=`
 - `GET /api/v1/reports/trend?user_id=&type=&...&...`
@@ -93,7 +93,7 @@ BFF / analytics-svc 期望 `start_date=` + `end_date=`。
 | `analytics_handler.go` | dailyReport / trendReport 改 OK(c, toFrontendXxx(r))；trendReport 加 `normalizeTrendQuery` alias |
 | `analytics_handler_test.go` | 新增 4 个 contract test（daily 形状 + trend 形状 + 2 个 alias） |
 
-### 前端改动（`Emotion-Echo-Web/`）
+### 前端改动（`emotion-echo-web/`）
 
 - `app/types/api.ts`：`DailyReport` 删 `wordCount`；`EmotionTrend` 删 `wordCount` + `type` literal union 补 `'yearly'`
 - `app/pages/chat/dashboard/{daily,weekly,monthly,annual}Report.vue`：删"总字数" stat-item
