@@ -95,9 +95,9 @@ emotion-echo-ai-svc/
 │   └── logic/consumehandler.go             ← 5 PASS 测试
 
 deploy/apisix/
-├── apisix-r-conv-create.json               ← POST /api/v1/conversations
-├── apisix-r-msg-send.json                  ← POST /api/v1/conversations/*/messages
-└── apisix-r-msg-list.json                  ← GET /api/v1/conversations/*/messages
+└── seed.sh                                ← 自动 seed 全部路由（含 conv-create/msg-send/msg-list）
+                                             （注：原手工 apisix-r-*.json 已于 2026-09-05 删除，
+                                               由 seed.sh 的 catch-all→web-bff 方案取代）
 
 deploy/db/02-create-tables-in-schemas.sql   ← 需要 ALTER 加 title 列（首次跑缺）
 ```

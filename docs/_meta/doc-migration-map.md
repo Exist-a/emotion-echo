@@ -68,7 +68,7 @@ status: 待确认（Round 0 收口，下一步进入 Round 1 骨架搭建）
 | `AGENTS.md` | 🟠 仍有效 | **保留根目录**，Round 4 末尾追加一行："未来新增功能计划写到 `docs/plans/`" | 强约束协作约定，不动主体 |
 | `LICENSE` | ❌ **缺失** | Round 4 创建占位 `MIT` LICENSE（README 写 "MIT" 但文件不存在） | 仓库 README 标注 MIT，但仓库无该文件 → 建议补 |
 | `docker-compose.yml`（根目录，3692B） | ⚠️ 需检查 | Round 3 验证是否被 `deploy/` 取代；若是则归档到 `docs/deployment/legacy-yml/` | 顶层文件但内容像迁移期产物 |
-| `err.log` / `out.log` / `msg1.json` / `msg2.json` / `pg_log.txt` / `apisix-*.json`（根散落） | ⚫ **运维残留** | Round 4 列入 `.gitignore` 候选 + 报告"应清理"清单，**不主动删**（按"不删除任何文件"原则） | 与文档重构无关，仅记录 |
+| `apisix-*.json` / `msg1.json` / `msg2.json` / `query.json`（根散落，曾跟踪 20 个） | ⚫ ~~运维残留~~ | **2026-09-05 已清理**：20 个文件 `git rm`（初始提交带入的手工 curl 载荷，已被 `deploy/apisix/seed.sh` 取代） | `err.log` / `out.log` / `pg_log.txt` / `protoc*` 为本地未跟踪噪音，见 `.gitignore`；`msg1/2.json`、`query.json` 另在 `tmp/` 留副本 |
 
 ---
 

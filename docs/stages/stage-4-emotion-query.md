@@ -75,8 +75,8 @@ emotion-echo-ai-svc/
 
 emotion-echo-ai-svc/etc/ai-api.yaml       ← 已含 Postgres/Kafka/LLM 配置
 
-apisix-r-emo-by-msg.json                 ← GET /api/v1/emotion/message/*
-apisix-r-emo-by-conv.json                ← GET /api/v1/emotion/conversation/*
+（原 apisix-r-emo-by-msg / apisix-r-emo-by-conv 手工路由 json 已于
+  2026-09-05 删除，GET /api/v1/emotion/* 现由 deploy/apisix/seed.sh 自动注入）
 ```
 
 ## 🎓 白盒审计要点
