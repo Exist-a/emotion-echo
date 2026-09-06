@@ -257,6 +257,9 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config) {
 	handler.NewUploadHandler().Register(r)
 	// Sprint 1 PR-4c-1: voice upload (multipart → ai-svc multimodal kind=audio)
 	handler.NewVoiceHandler(s.AI).Register(r)
+	// Sprint 1 PR-4c-2: user avatar upload (multipart → MinIO → user-svc UpdateMe)
+	// 总是注册：handler 内部 nil 检查；缺 Storage 时 503
+	handler.NewAvatarHandler(s.User, s.Storage).Register(r)
 	if s.EmotionQ != nil {
 		handler.NewEmotionQueryHandler(s.EmotionQ).Register(r)
 	}

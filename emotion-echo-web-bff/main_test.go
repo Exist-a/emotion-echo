@@ -87,6 +87,9 @@ var wantRoutes = gin.RoutesInfo{
 
 	// ----- voice_handler.go (Sprint 1 PR-4c-1, 1 条) -----
 	{Method: "POST", Path: "/api/v1/voice/upload"},
+
+	// ----- avatar_handler.go (Sprint 1 PR-4c-2, 1 条) -----
+	{Method: "POST", Path: "/api/v1/user/avatar"},
 }
 
 // wantRoutesWithEmotionQ 是当 svc.EmotionQ != nil 时额外注册的 3 条。
@@ -172,6 +175,7 @@ var knownPathPrefixes = []string{
 	"/api/v1/tts/",
 	"/api/v1/uploads/:kind",
 	"/api/v1/voice/",   // Sprint 1 PR-4c-1: voice upload
+	"/api/v1/user/avatar", // Sprint 1 PR-4c-2: avatar upload
 	"/api/v1/emotion/", // 仅当 EmotionQ != nil 时
 }
 
