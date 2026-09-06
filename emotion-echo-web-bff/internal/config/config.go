@@ -75,6 +75,18 @@ type Config struct {
 		Model   string `json:",default=deepseek-chat"`
 		Timeout int    `json:",default=60"`
 	} `json:",optional"`
+
+	// Sprint 1 PR-4b: MinIO 对象存储
+	// 容器内默认连 emotion-echo-minio:9000 + avatars bucket；
+	// PublicBaseURL 是返给前端的公网 URL（dev: localhost:9000；prod: CDN）
+	MinIO struct {
+		Endpoint       string `json:",default=emotion-echo-minio:9000"`
+		AccessKey      string `json:",default=minioadmin"`
+		SecretKey      string `json:",default=minioadmin"`
+		Bucket         string `json:",default=avatars"`
+		UseSSL         bool   `json:",default=false"`
+		PublicBaseURL  string `json:",default=http://localhost:9000"`
+	} `json:",optional"`
 }
 
 // Nacos 注册中心 + 配置中心配置（Stage 31 PR-09）
@@ -153,5 +165,21 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("NACOS_HOT_RELOAD"); v != "" {
 		c.Nacos.HotReload = v == "true" || v == "1"
+	}
+	// Sprint 1 PR-4b: MinIO 配置覆盖
+	if v := os.Getenv("MINIO_ENDPOINT"); v != "" {
+		c.MinIO.Endpoint = v
+	}
+	if v := os.Getenv("MINIO_ACCESS_KEY"); v != "" {
+		c.MinIO.AccessKey = v
+	}
+	if v := os.Getenv("MINIO_SECRET_KEY"); v != "" {
+		c.MinIO.SecretKey = v
+	}
+	if v := os.Getenv("MINIO_BUCKET"); v != "" {
+		c.MinIO.Bucket = v
+	}
+	if v := os.Getenv("MINIO_PUBLIC_BASE_URL"); v != "" {
+		c.MinIO.PublicBaseURL = v
 	}
 }

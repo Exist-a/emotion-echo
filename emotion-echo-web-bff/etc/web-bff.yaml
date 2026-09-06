@@ -76,3 +76,14 @@ LLM:
   BaseURL: https://api.deepseek.com
   Model: deepseek-chat
   Timeout: 60
+
+# Sprint 1 PR-4b: MinIO 对象存储（PR-4c avatar_handler 写这里）
+# dev 默认连 compose 内的 emotion-echo-minio:9000；
+# prod 必须用 env 覆盖 Endpoint + AccessKey + SecretKey + PublicBaseURL
+MinIO:
+  Endpoint: emotion-echo-minio:9000
+  AccessKey: minioadmin
+  SecretKey: minioadmin
+  Bucket: avatars
+  UseSSL: false
+  PublicBaseURL: http://localhost:9000

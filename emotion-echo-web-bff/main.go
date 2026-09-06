@@ -30,6 +30,7 @@ import (
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/handler"
 	"emotion-echo-web-bff/internal/logging"
+	"emotion-echo-web-bff/internal/storage"
 	"emotion-echo-web-bff/internal/svc"
 
 	"github.com/SkyAPM/go2sky"
@@ -205,6 +206,22 @@ func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.
 		log.Printf("[grpc] ai-svc dial failed: %v (emotion query disabled)", err)
 	} else {
 		svcCtx.SetEmotionQ(downstream.NewEmotionQueryClient(conn))
+	}
+
+	// Sprint 1 PR-4b: MinIO 对象存储装配
+	storageCli, storageErr := storage.NewMinIOClient(storage.MinIOConfig{
+		Endpoint:       c.MinIO.Endpoint,
+		AccessKey:      c.MinIO.AccessKey,
+		SecretKey:      c.MinIO.SecretKey,
+		Bucket:         c.MinIO.Bucket,
+		UseSSL:         c.MinIO.UseSSL,
+		PublicBaseURL:  c.MinIO.PublicBaseURL,
+	})
+	if storageErr != nil {
+		log.Printf("[minio] client init failed: %v (storage disabled, avatar upload will 500)", storageErr)
+	} else {
+		svcCtx.Storage = storageCli
+		log.Printf("[minio] connected to %s bucket=%s", c.MinIO.Endpoint, c.MinIO.Bucket)
 	}
 
 	return svcCtx

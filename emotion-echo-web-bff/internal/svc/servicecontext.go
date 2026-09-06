@@ -9,6 +9,7 @@ import (
 	"emotion-echo-web-bff/internal/auth"
 	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/downstream"
+	"emotion-echo-web-bff/internal/storage"
 )
 
 // ServiceContext 是 BFF 的依赖注入容器
@@ -26,6 +27,9 @@ type ServiceContext struct {
 
 	// 自有鉴权（签发 JWT）
 	Auth *auth.Manager
+
+	// Sprint 1 PR-4b: 对象存储（avatar_handler / 后续上传都用）
+	Storage storage.StorageClient
 }
 
 // NewServiceContext 构造容器（所有依赖必须已构造好）
