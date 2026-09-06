@@ -39,6 +39,19 @@ type GetUserByIdResp {
 	User UserInfo `json:"user"`
 }
 
+// Sprint 1 PR-4c-3: 重置密码（forget-pwd 流程）
+// BFF 校验 verification-code 后调此端点；明文密码由 user-svc bcrypt 后入库。
+// 必须在 noAuth 组注册（调用者未登录）。
+type ResetPasswordReq {
+	Username          string `json:"username"`
+	VerificationCode  string `json:"verificationCode"`
+	NewPassword       string `json:"newPassword"`
+}
+
+type ResetPasswordResp {
+	User UserInfo `json:"user"`
+}
+
 service user-api {
 	@handler HealthHandler
 	get /health returns (HealthResp)
@@ -48,5 +61,8 @@ service user-api {
 
 	@handler GetUserByIdHandler
 	get /api/v1/users/:id (GetUserByIdReq) returns (GetUserByIdResp)
+
+	@handler ResetPasswordHandler
+	post /api/v1/users/reset-password (ResetPasswordReq) returns (ResetPasswordResp)
 }
 

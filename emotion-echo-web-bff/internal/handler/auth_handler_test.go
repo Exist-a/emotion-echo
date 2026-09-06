@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -251,3 +252,59 @@ func mustParseInt(t *testing.T, s string) int64 {
 var _ = errors.New
 var _ = context.Background
 var _ = time.Second
+
+// =============================================================================
+// Sprint 1 PR-4c-3: resetPassword handler tests
+// =============================================================================
+
+// fakeAuth 暴露 verification-code 内部缓存给测试用
+// (生产代码里 BFF 内部 state 用 sync.Mutex 保护；测试直接构造 entry)
+type fakeVerificationEntry struct {
+	code      string
+	expiresAt time.Time
+}
+
+func TestAuthHandler_ResetPassword_InvalidVerificationCode_Returns401(t *testing.T) {
+	router := newAuthRouter(t, &fakeUserClient{err: nil})
+	body := `{"username":"alice","verificationCode":"WRONG","newPassword":"new-password-789"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAuthHandler_ResetPassword_EmptyFields_Returns400(t *testing.T) {
+	router := newAuthRouter(t, &fakeUserClient{})
+	for _, body := range []string{
+		`{"username":"","verificationCode":"1","newPassword":"x"}`,
+		`{"username":"u","verificationCode":"","newPassword":"x"}`,
+		`{"username":"u","verificationCode":"1","newPassword":""}`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code, "body=%s", body)
+	}
+}
+
+func TestAuthHandler_ResetPassword_ShortPassword_Returns400(t *testing.T) {
+	router := newAuthRouter(t, &fakeUserClient{})
+	body := `{"username":"alice","verificationCode":"1","newPassword":"abc"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestAuthHandler_ResetPassword_InvalidBody_Returns400(t *testing.T) {
+	router := newAuthRouter(t, &fakeUserClient{})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", strings.NewReader("{not json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}

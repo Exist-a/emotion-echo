@@ -77,6 +77,18 @@ type RegisterResp struct {
 	User UserInfo `json:"user"`
 }
 
+// Sprint 1 PR-4c-3: 重置密码请求（BFF 调）
+type ResetPasswordReq struct {
+	Username         string `json:"username"`
+	VerificationCode string `json:"verificationCode"`
+	NewPassword      string `json:"newPassword"`
+}
+
+// ResetPasswordResp 重置密码成功响应
+type ResetPasswordResp struct {
+	User UserInfo `json:"user"`
+}
+
 // AuthErrorResp 鉴权失败响应（统一格式）
 type AuthErrorResp struct {
 	Error string `json:"error"`

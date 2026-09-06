@@ -71,3 +71,32 @@ func RegisterHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 		c.JSON(http.StatusCreated, resp)
 	}
 }
+
+// Sprint 1 PR-4c-3: ResetPasswordHandler POST /api/v1/users/reset-password
+// BFF 校验 verification-code 后调此端点（必须在 noAuth group 注册，因为调用者未登录）
+func ResetPasswordHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req types.ResetPasswordReq
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, types.AuthErrorResp{Error: "validation: invalid body"})
+			return
+		}
+
+		l := logic.NewAuthLogic(c.Request.Context(), svcCtx)
+		resp, err := l.ResetPassword(&req)
+		if err != nil {
+			status := http.StatusInternalServerError
+			switch {
+			case errors.Is(err, logic.ErrValidation):
+				status = http.StatusBadRequest
+			case errors.Is(err, logic.ErrInvalidCredentials), errors.Is(err, logic.ErrInvalidVerifyCode):
+				// 合并返 401 防用户名枚举
+				status = http.StatusUnauthorized
+			}
+			c.JSON(status, types.AuthErrorResp{Error: err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, resp)
+	}
+}

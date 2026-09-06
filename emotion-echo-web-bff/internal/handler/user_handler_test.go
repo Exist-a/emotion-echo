@@ -59,6 +59,14 @@ func (f *fakeUserClient) Register(_ context.Context, _, _, _ string) (*downstrea
 	return f.reg, nil
 }
 
+// Sprint 1 PR-4c-3: fake ResetPassword（仅用于 auth_handler_test 编译）
+func (f *fakeUserClient) ResetPassword(_ context.Context, _ downstream.ResetPasswordReq) (*downstream.UserInfo, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.me, nil
+}
+
 func newUserRouter(client downstream.UserClient) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

@@ -42,8 +42,20 @@ type userWrapper struct {
 	User *UserInfo `json:"user"`
 }
 
+// ResetPasswordReq Sprint 1 PR-4c-3: forget-pwd 流程
+// (与 user-svc types.ResetPasswordReq 字段对齐)
+type ResetPasswordReq struct {
+	Username         string `json:"username"`
+	VerificationCode string `json:"verificationCode"`
+	NewPassword      string `json:"newPassword"`
+}
+
 // UserClient BFF → user-svc HTTP 客户端
 type UserClient interface {
+	// ResetPassword 重置密码（forget-pwd 流程；Sprint 1 PR-4c-3）
+	//   - 假设 BFF 已校验 verification-code（in-memory 缓存）
+	//   - user-svc 信任 verificationCode 非空 + bcrypt(NewPassword) 后入库
+	ResetPassword(ctx context.Context, req ResetPasswordReq) (*UserInfo, error)
 	// GetMe 获取当前用户（JWT 识别调用者）
 	GetMe(ctx context.Context) (*UserInfo, error)
 	// UpdateMe 更新当前用户资料
@@ -136,6 +148,17 @@ func (c *userHTTPClient) Register(ctx context.Context, username, password, verif
 		"verificationCode": verificationCode,
 	})
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/users/register", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	return c.doUserRequest(httpReq)
+}
+
+// Sprint 1 PR-4c-3: ResetPassword HTTP 实现
+func (c *userHTTPClient) ResetPassword(ctx context.Context, req ResetPasswordReq) (*UserInfo, error) {
+	body, _ := json.Marshal(req)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/users/reset-password", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

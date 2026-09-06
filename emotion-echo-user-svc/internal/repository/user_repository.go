@@ -29,6 +29,8 @@ type UserRepo interface {
 	UpdateProfile(ctx context.Context, id int64, nickname *string, gender *int16, birthday *time.Time, avatarURL *string) error
 	// Stage 33 PR-19a：UsernameExists 仅用于注册时查重（不返回完整 user）
 	UsernameExists(ctx context.Context, username string) (bool, error)
+	// Sprint 1 PR-4c-3: UpdatePassword 重置密码（hash 已是 bcrypt 结果）
+	UpdatePassword(ctx context.Context, id int64, newPasswordHash string) error
 	Ping(ctx context.Context) error
 }
 
@@ -111,6 +113,19 @@ func (r *InMemoryUserRepo) UpdateProfile(ctx context.Context, id int64, nickname
 	if avatarURL != nil {
 		u.AvatarURL = avatarURL
 	}
+	u.UpdatedAt = time.Now()
+	return nil
+}
+
+// Sprint 1 PR-4c-3: 内存版重置密码（newPasswordHash 已是 bcrypt 结果）
+func (r *InMemoryUserRepo) UpdatePassword(ctx context.Context, id int64, newPasswordHash string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	u, ok := r.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	u.PasswordHash = &newPasswordHash
 	u.UpdatedAt = time.Now()
 	return nil
 }
@@ -202,6 +217,21 @@ func (r *PostgresUserRepo) UpdateProfile(ctx context.Context, id int64, nickname
 		Table("emotion_echo_user.users").
 		Where("id = ?", id).
 		Updates(updates)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Sprint 1 PR-4c-3: Postgres 版重置密码
+func (r *PostgresUserRepo) UpdatePassword(ctx context.Context, id int64, newPasswordHash string) error {
+	res := r.db.WithContext(ctx).
+		Table("emotion_echo_user.users").
+		Where("id = ?", id).
+		Update("password_hash", newPasswordHash)
 	if res.Error != nil {
 		return res.Error
 	}

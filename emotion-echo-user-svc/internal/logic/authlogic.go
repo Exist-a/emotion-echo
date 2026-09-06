@@ -46,6 +46,9 @@ var ErrUsernameTaken = errors.New("username already taken")
 // ErrValidation 入参校验失败
 var ErrValidation = errors.New("validation failed")
 
+// Sprint 1 PR-4c-3: 验证码错误（BFF 校验失败时返回）
+var ErrInvalidVerifyCode = errors.New("invalid or expired verification code")
+
 // Login 用 username + password 校验并返回 UserInfo
 //
 // 错误语义：
@@ -138,3 +141,37 @@ func toUserInfo(u *model.User) types.UserInfo {
 
 // Compile-time guard that AuthLogic does not need repository.ErrNotFound directly.
 var _ = repository.ErrNotFound
+
+// Sprint 1 PR-4c-3: 重置密码（forget-pwd 流程；由 BFF 验证 code 后调此方法）
+//
+// 流程：
+//   1. 校验 username + newPassword 长度（与 Register 一致 ≥ 6 字节）
+//   2. 校验 verificationCode（与 Register 共用同一字段；调用方 BFF 已校验过）
+//   3. password.Hash(newPassword) bcrypt
+//   4. repo.UpdatePassword(id, hash) 写库
+//   5. 返 UserInfo
+func (l *AuthLogic) ResetPassword(req *types.ResetPasswordReq) (*types.ResetPasswordResp, error) {
+	if req.Username == "" || req.NewPassword == "" {
+		return nil, ErrValidation
+	}
+	if len(req.NewPassword) < 6 {
+		return nil, ErrValidation
+	}
+	// verificationCode 验证（user-svc 不与 BFF 共享 in-memory 缓存；
+	// 这里信任 BFF 校验过；BFF 校验失败时不会调到这里）
+	if req.VerificationCode == "" {
+		return nil, ErrInvalidVerifyCode
+	}
+	u, err := l.svcCtx.UserRepo.GetByUsername(l.ctx, req.Username)
+	if err != nil || u == nil {
+		return nil, ErrInvalidCredentials // 合并返回防用户名枚举
+	}
+	hashed, err := password.Hash(req.NewPassword)
+	if err != nil {
+		return nil, err
+	}
+	if err := l.svcCtx.UserRepo.UpdatePassword(l.ctx, u.ID, hashed); err != nil {
+		return nil, err
+	}
+	return &types.ResetPasswordResp{User: toUserInfo(u)}, nil
+}

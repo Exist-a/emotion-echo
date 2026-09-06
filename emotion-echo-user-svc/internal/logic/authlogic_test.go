@@ -208,3 +208,100 @@ func TestAuthLogic_Register_WithPhoneAndNickname_PersistsOptionalFields(t *testi
 	require.NotNil(t, stored.Phone)
 	assert.Equal(t, phone, *stored.Phone)
 }
+
+// =============================================================================
+// Sprint 1 PR-4c-3: ResetPassword tests
+// =============================================================================
+
+func TestAuthLogic_ResetPassword_Success(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	l := newTestAuthLogic(repo)
+
+	// 先注册一个用户
+	_, err := l.Register(&types.RegisterReq{Username: "alice", Password: "old-password"})
+	require.NoError(t, err)
+
+	// reset password
+	resp, err := l.ResetPassword(&types.ResetPasswordReq{
+		Username:         "alice",
+		VerificationCode: "123456",
+		NewPassword:      "new-password-789",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "alice", resp.User.Account)
+
+	// 验证新密码可用 Login 登录
+	login, err := l.Login(&types.LoginReq{Username: "alice", Password: "new-password-789"})
+	require.NoError(t, err, "新密码应可登录")
+	assert.Equal(t, "alice", login.User.Account)
+}
+
+func TestAuthLogic_ResetPassword_OldPasswordNoLongerValid(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	l := newTestAuthLogic(repo)
+
+	_, err := l.Register(&types.RegisterReq{Username: "bob", Password: "old-password"})
+	require.NoError(t, err)
+
+	_, err = l.ResetPassword(&types.ResetPasswordReq{
+		Username:         "bob",
+		VerificationCode: "123456",
+		NewPassword:      "new-password-789",
+	})
+	require.NoError(t, err)
+
+	// 旧密码应不可登录
+	_, err = l.Login(&types.LoginReq{Username: "bob", Password: "old-password"})
+	assert.ErrorIs(t, err, ErrInvalidCredentials, "旧密码应失效")
+}
+
+func TestAuthLogic_ResetPassword_EmptyFields_ReturnsValidation(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	l := newTestAuthLogic(repo)
+
+	_, err := l.ResetPassword(&types.ResetPasswordReq{Username: "", NewPassword: "x", VerificationCode: "1"})
+	assert.ErrorIs(t, err, ErrValidation)
+
+	_, err = l.ResetPassword(&types.ResetPasswordReq{Username: "u", NewPassword: "", VerificationCode: "1"})
+	assert.ErrorIs(t, err, ErrValidation)
+}
+
+func TestAuthLogic_ResetPassword_ShortPassword_ReturnsValidation(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	l := newTestAuthLogic(repo)
+
+	_, err := l.ResetPassword(&types.ResetPasswordReq{Username: "u", NewPassword: "abc", VerificationCode: "1"})
+	assert.ErrorIs(t, err, ErrValidation, "< 6 字节密码应返 ErrValidation")
+}
+
+func TestAuthLogic_ResetPassword_EmptyVerifyCode_ReturnsInvalidVerifyCode(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	l := newTestAuthLogic(repo)
+	_, err := l.Register(&types.RegisterReq{Username: "carol", Password: "old-password"})
+	require.NoError(t, err)
+
+	_, err = l.ResetPassword(&types.ResetPasswordReq{
+		Username:         "carol",
+		VerificationCode: "",
+		NewPassword:      "new-password",
+	})
+	assert.ErrorIs(t, err, ErrInvalidVerifyCode)
+}
+
+func TestAuthLogic_ResetPassword_UserNotFound_ReturnsInvalidCredentials(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	l := newTestAuthLogic(repo)
+
+	_, err := l.ResetPassword(&types.ResetPasswordReq{
+		Username:         "nonexistent",
+		VerificationCode: "1",
+		NewPassword:      "new-password-789",
+	})
+	assert.ErrorIs(t, err, ErrInvalidCredentials, "不存在的用户名应合并返 ErrInvalidCredentials 防枚举")
+}

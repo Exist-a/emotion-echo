@@ -60,6 +60,11 @@ func (f *fakeAvatarUserClient) Register(ctx context.Context, username, password,
 	return nil, nil
 }
 
+// Sprint 1 PR-4c-3: fake ResetPassword
+func (f *fakeAvatarUserClient) ResetPassword(ctx context.Context, req downstream.ResetPasswordReq) (*downstream.UserInfo, error) {
+	return nil, nil
+}
+
 // fakeStorage 模拟 StorageClient
 type fakeStorage struct {
 	putURL string

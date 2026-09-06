@@ -104,6 +104,8 @@ func NewAuthHandler(mgr *auth.Manager, userClient downstream.UserClient) gin.Han
 			h.logout(c)
 		case "verification-code":
 			h.verificationCode(c)
+		case "reset-password":
+			h.resetPassword(c)
 		default:
 			Fail(c, http.StatusNotFound, 1, "auth endpoint not found")
 		}
@@ -337,4 +339,52 @@ func generateCode() string {
 		now /= 10
 	}
 	return string(b)
+}
+
+// Sprint 1 PR-4c-3: resetPassword 处理 POST /api/v1/auth/reset-password
+// 流程：
+//   1. 解析 body {username, verificationCode, newPassword}
+//   2. 校验 verificationCode（in-memory 缓存 verifyVerificationCode）
+//   3. 调 user-svc /api/v1/users/reset-password（user-svc bcrypt 写库）
+//   4. 成功返 {code:0}（PR-4d 修前端后 modify.vue 会调此）
+func (h *AuthHandler) resetPassword(c *gin.Context) {
+	var req struct {
+		Username         string `json:"username"`
+		VerificationCode string `json:"verificationCode"`
+		NewPassword      string `json:"newPassword"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
+		return
+	}
+	if req.Username == "" || req.VerificationCode == "" || req.NewPassword == "" {
+		Fail(c, http.StatusBadRequest, 1, "validation: username, verificationCode, newPassword are required")
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		Fail(c, http.StatusBadRequest, 1, "validation: newPassword must be >= 6 chars")
+		return
+	}
+	// 校验 BFF 内部 verification-code 缓存
+	if !h.verifyVerificationCode(req.Username, req.VerificationCode) {
+		Fail(c, http.StatusUnauthorized, 1, "invalid or expired verification code")
+		return
+	}
+	// 调 user-svc
+	_, err := h.user.ResetPassword(c.Request.Context(), downstream.ResetPasswordReq{
+		Username:         req.Username,
+		VerificationCode: req.VerificationCode,
+		NewPassword:      req.NewPassword,
+	})
+	if err != nil {
+		// user-svc 合并返 ErrInvalidCredentials（防用户名枚举）
+		// 这里直接 500（user-svc 连接错）或 401（业务错）
+		if isConnectionErr(err) {
+			Fail(c, http.StatusServiceUnavailable, 1, "user-svc unavailable")
+			return
+		}
+		Fail(c, http.StatusInternalServerError, 1, "reset password: "+err.Error())
+		return
+	}
+	OK(c, gin.H{"success": true})
 }
