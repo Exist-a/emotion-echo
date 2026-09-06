@@ -255,6 +255,8 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config) {
 	handler.NewMultimodalHandler(s.AI).Register(r)
 	handler.NewTTSHandler(s.AI, s.XTTS).Register(r)
 	handler.NewUploadHandler().Register(r)
+	// Sprint 1 PR-4c-1: voice upload (multipart → ai-svc multimodal kind=audio)
+	handler.NewVoiceHandler(s.AI).Register(r)
 	if s.EmotionQ != nil {
 		handler.NewEmotionQueryHandler(s.EmotionQ).Register(r)
 	}
