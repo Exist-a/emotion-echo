@@ -143,6 +143,15 @@ bash scripts/healthcheck_smoke.sh
 
 # 4. 测试账号就绪
 bash scripts/check_seed_users.sh
+
+# 5. 三方路由契约（APISIX ↔ BFF ↔ 前端 — 离线静态比对，无 docker 依赖）
+bash scripts/test_route_contract.sh
+# 期望: fail_count=0 warn_count>0 (BFF 注册但前端未调的死代码警告)
+
+# 6. 全新环境闭环验证（⚠️ 破坏性：会销毁数据卷）
+#    默认 --dry-run（仅打印计划）；真跑需显式 --execute
+bash scripts/check_empty_db_repro.sh              # 打印计划，不执行
+bash scripts/check_empty_db_repro.sh --execute    # 真跑（含 down -v）
 # 期望: GREEN: echo / echo123 ready
 
 # 5. 全新环境闭环验证（⚠️ 破坏性：会销毁数据卷）

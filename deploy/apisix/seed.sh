@@ -28,6 +28,26 @@
 # 退出码不参与判断，去掉 pipefail 不影响错误检测。
 set -eu
 
+# ---- Sprint 1 PR-3: services.env 单点真理 ----
+# 优先级：用户传入 env > $(dirname "$0")/services.env > $(dirname "$0")/services.env.example
+# services.env (git ignore) 用于 prod 覆盖；services.env.example 是 dev 默认。
+_load_services() {
+  local env_file
+  env_file="$(dirname "$0")/services.env"
+  if [ -f "$env_file" ]; then
+    # shellcheck disable=SC1090
+    . "$env_file"
+    log "loaded services.env (prod override)"
+  fi
+  env_file="$(dirname "$0")/services.env.example"
+  if [ -f "$env_file" ]; then
+    # shellcheck disable=SC1090
+    . "$env_file"
+    log "loaded services.env.example (dev defaults)"
+  fi
+}
+_load_services
+
 # ---- 配置 ----
 ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
 ADMIN_KEY="${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
@@ -35,7 +55,8 @@ JWT_SECRET="${BFF_JWT_SECRET:-dev-bff-secret}"
 # 前端来源（cors allow_origins）。dev 是 Nuxt dev server；prod 由 env 覆盖。
 CORS_ALLOW_ORIGINS="${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
 
-# 业务 svc 容器名（compose 网络 DNS）
+# 业务 svc 容器名（compose 网络 DNS）。默认值由 services.env.example 提供，
+# 此处仅保留 ${VAR:-default} 兜底（脚本被独立调用时仍能跑）。
 USER_SVC_HOST="${USER_SVC_HOST:-emotion-echo-user-svc}"
 CHAT_SVC_HOST="${CHAT_SVC_HOST:-emotion-echo-chat-svc}"
 ASSESSMENT_SVC_HOST="${ASSESSMENT_SVC_HOST:-emotion-echo-assessment-svc}"
