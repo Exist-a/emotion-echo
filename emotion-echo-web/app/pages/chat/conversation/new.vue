@@ -53,6 +53,7 @@ import { useUserStore } from '~/stores/user'
 import { useMessageStore } from '~/stores/message'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { post } from '~/composables/useApi'
+import { API_ROUTES } from '../../lib/apiRoutes'
 import { notify } from '~/composables/useNotify'
 
 const userStore = useUserStore()
@@ -80,7 +81,7 @@ const handleSubmit = async () => {
   const value = message.value.trim()
   if (!value) return
   message.value = ''
-  const newConv = await post<{ id: string }>('/conversations', { title: value.slice(0, 30) })
+  const newConv = await post<{ id: string }>(API_ROUTES.createConversation.path, { title: value.slice(0, 30) })
   navigateTo({ name: 'chat-conversation-detail', params: { id: newConv.id } })
 }
 

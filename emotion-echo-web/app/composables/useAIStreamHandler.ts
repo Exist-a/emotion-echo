@@ -8,6 +8,7 @@
  *       与 BFF 实际 OpenAI 输出格式不匹配，导致用户看到永远"streaming"。
  *       PR-17 改为 OpenAI 兼容解析。
  */
+import { API_ROUTES } from '../lib/apiRoutes'
 export interface AIStreamParams {
   message: string
   emotion: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
@@ -74,7 +75,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
 
     const runtimeConfig = useRuntimeConfig()
     const token = import.meta.client ? localStorage.getItem('access_token') : ''
-    const streamUrl = `${runtimeConfig.public.API_BASE_URL || 'http://localhost:8894/api/v1'}/ai/stream`
+    const streamUrl = `${runtimeConfig.public.API_BASE_URL || 'http://localhost:8894/api/v1'}${API_ROUTES.aiStream.path}`
 
     streamAbortController = new AbortController()
 

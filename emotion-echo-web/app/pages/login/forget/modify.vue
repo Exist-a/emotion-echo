@@ -20,6 +20,7 @@
 <script setup lang="ts">
 import { useForgetPwdState } from '~/composables/forgetPwdState'
 import { post } from '~/composables/useApi'
+import { API_ROUTES } from '../../lib/apiRoutes'
 import { sha256 } from 'js-sha256'
 
 definePageMeta({ middleware: 'forget-pwd' })
@@ -54,7 +55,7 @@ const gotoSuccess = async () => {
     return
   }
   try {
-    await post('/auth/reset-password', { username: userAccount.value, verificationCode: verificationCode.value, newPassword: sha256(formInfo.value.newPassword) })
+    await post(API_ROUTES.authResetPassword.path, { username: userAccount.value, verificationCode: verificationCode.value, newPassword: sha256(formInfo.value.newPassword) })
     notify('密码已更新', '请用新密码登录', 'success', 3000)
     updateStep(2)
     emits('changeActive')

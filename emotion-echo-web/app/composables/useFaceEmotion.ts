@@ -6,6 +6,7 @@ import { ref, onUnmounted } from 'vue'
 import type { FaceEmotionResult } from '~/types/api'
 import { useApi } from './useApi'
 import { useUserStore } from '~/stores/user'
+import { API_ROUTES } from '../lib/apiRoutes'
 
 export interface UseFaceEmotionOptions {
   captureInterval?: number // 捕获间隔（毫秒），默认2000ms
@@ -118,7 +119,7 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
         : options.sessionId
       
       // 发送到后端分析
-      const result = await post<FaceEmotionResult>('/face/emotion', {
+      const result = await post<FaceEmotionResult>(API_ROUTES.knownOrphans.faceEmotionOrphan.path, {
         imageBase64: imageBase64.split(',')[1], // 去掉 data:image/jpeg;base64, 前缀
         sessionId,
         userId

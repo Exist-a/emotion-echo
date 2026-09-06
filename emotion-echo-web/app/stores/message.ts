@@ -1,6 +1,7 @@
 import type { MessageWithStatus, SendMessageParams } from '~/types/api'
 import type { returnMsgType } from '~/types/commonType'
 import { get, post } from '~/composables/useApi'
+import { API_ROUTES } from '../lib/apiRoutes'
 import { useConversationStore } from './conversation'
 
 export type MessageStatus = 'sending' | 'sent' | 'failed' | 'streaming' | 'truncated'
@@ -50,7 +51,7 @@ export const useMessageStore = defineStore('message', () => {
         list: MessageWithStatus[]
         cursor: number
         hasMore: boolean
-      }>(`/conversations/${currentSessionId.value}/messages`, params)
+      }>(API_ROUTES.messagesByConv.path.replace(':id', currentSessionId.value || ''), params)
 
       if (data.list.length > 0) {
         const existingIds = new Set(currentMessages.value.map((m) => m.id))
@@ -90,7 +91,7 @@ export const useMessageStore = defineStore('message', () => {
       if (clientMsgId) params.clientMsgId = clientMsgId
 
       const message = await post<MessageWithStatus>(
-        `/conversations/${currentSessionId.value}/messages`,
+        API_ROUTES.sendMessage.path.replace(':id', currentSessionId.value || ''),
         params
       )
 

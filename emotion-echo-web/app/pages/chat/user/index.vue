@@ -61,6 +61,7 @@ import barChart from "~/components/charts/barChart.vue";
 import type { ChartItem } from "~/types/charts/common";
 import { ref, onMounted } from "vue";
 import { get, post } from "~/composables/useApi";
+import { API_ROUTES } from "../../lib/apiRoutes";
 import { useNotify } from "~/composables/useNotify";
 
 const { success: notifySuccess, error: notifyError } = useNotify();
@@ -116,7 +117,7 @@ const handleUploadAvatar = async (file: File) => {
   try {
     const formData = new FormData();
     formData.append("avatar", file);
-    const res = await post<{ avatar: string }>("/user/avatar", formData);
+    const res = await post<{ avatar: string }>(API_ROUTES.userAvatar.path, formData);
     // 更新本地头像显示
     form.value.avatarPath = res.avatar;
     // 同步更新 store
@@ -171,9 +172,9 @@ const fetchBehaviorData = async () => {
   isLoadingBehavior.value = true;
   try {
     const [dayNight, depth, frequency] = await Promise.all([
-      get("/user-behavior/day-night"),
-      get("/user-behavior/depth"),
-      get("/user-behavior/frequency"),
+      get(API_ROUTES.userBehaviorDayNight.path),
+      get(API_ROUTES.userBehaviorDepth.path),
+      get(API_ROUTES.userBehaviorFrequency.path),
     ]);
     behaviorData.value.dayNight = dayNight;
     behaviorData.value.depth = depth;

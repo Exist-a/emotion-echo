@@ -1,6 +1,7 @@
 import { ref, onUnmounted } from "vue";
 import { stripMarkdown, extractReadableText } from "~/utils/stripMarkdown";
 import PcmPlayer from "pcm-player";
+import { API_ROUTES } from "../lib/apiRoutes";
 
 export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral';
 
@@ -177,7 +178,7 @@ const playStream = async (
       'Content-Type': 'application/json',
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const response = await fetch(`${base}/tts/stream`, {
+    const response = await fetch(`${base}${API_ROUTES.ttsStream.path}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({

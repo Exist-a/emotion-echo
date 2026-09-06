@@ -3,6 +3,7 @@
  * 管理 MediaRecorder 生命周期和状态
  */
 import { post } from '~/composables/useApi'
+import { API_ROUTES } from '../lib/apiRoutes'
 import { useMessageStore } from '~/stores/message'
 import { useConversationStore } from '~/stores/conversation'
 
@@ -142,7 +143,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       formData.append('conversationId', currentConversationId)
       formData.append('file', blob, 'recording.webm')
 
-      const result = await post('/voice/upload', formData)
+      const result = await post(API_ROUTES.voiceUpload.path, formData)
 
       if (result) {
         const { messageId, transcript, emotion, audioUrl } = result as any

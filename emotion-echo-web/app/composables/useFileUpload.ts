@@ -1,5 +1,6 @@
 import type { UploadResult, FileType, UploadProgress, FileUploadConfig } from '~/types/api'
 import { post } from '~/composables/useApi'
+import { API_ROUTES } from '../lib/apiRoutes'
 
 /**
  * 文件上传配置
@@ -37,13 +38,14 @@ const getFileType = (filename: string): FileType => {
  * 获取文件上传端点
  */
 const getUploadEndpoint = (type: FileType): string => {
+  // Sprint 1 PR-2: 改为 API_ROUTES knownOrphans 引用（PR-4 落地后应从 orphan 转正到主路径）
   switch (type) {
     case 'image':
-      return '/upload/image'
+      return API_ROUTES.knownOrphans.uploadImageOrphan.path
     case 'video':
-      return '/upload/video'
+      return API_ROUTES.knownOrphans.uploadVideoOrphan.path
     default:
-      return '/upload/file'
+      return API_ROUTES.knownOrphans.uploadFileOrphan.path
   }
 }
 

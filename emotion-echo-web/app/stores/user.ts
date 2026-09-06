@@ -8,6 +8,7 @@ import type {
   SendVerificationCodeParams
 } from '~/types/api'
 import { get, post, put } from '~/composables/useApi'
+import { API_ROUTES } from '../lib/apiRoutes'
 
 export const useUserStore = defineStore('user', () => {
   // ==================== State ====================
@@ -186,7 +187,7 @@ export const useUserStore = defineStore('user', () => {
     params: SendVerificationCodeParams
   ): Promise<returnMsgType> => {
     try {
-      await post('/auth/verification-code', params)
+      await post(API_ROUTES.authVerificationCode.path, params)
       return { isOk: true, msg: '验证码已发送' }
     } catch (error: any) {
       return { isOk: false, msg: error.message || '发送失败' }
@@ -199,7 +200,7 @@ export const useUserStore = defineStore('user', () => {
   const register = async (params: RegisterParams): Promise<returnMsgType> => {
     try {
       isLoading.value = true
-      const data = await post<LoginData>('/auth/register', params)
+      const data = await post<LoginData>(API_ROUTES.authRegister.path, params)
 
       // 保存 Token（注册默认不记住）
       setAccessToken(data.accessToken, data.expiresIn, false)
@@ -227,7 +228,7 @@ export const useUserStore = defineStore('user', () => {
   const login = async (params: LoginParams): Promise<returnMsgType> => {
     try {
       isLoading.value = true
-      const data = await post<LoginData>('/auth/login', params)
+      const data = await post<LoginData>(API_ROUTES.authLogin.path, params)
 
       // 根据 rememberMe 差异化存储
       const rememberMe = params.rememberMe ?? false
@@ -263,7 +264,7 @@ export const useUserStore = defineStore('user', () => {
 
     fetchUserInfoPromise = (async () => {
       try {
-        const data = await get<UserInfo>('/user/profile')
+        const data = await get<UserInfo>(API_ROUTES.userProfile.path)
         userInfo.value = data
         return { isOk: true, msg: '获取成功' }
       } catch (error: any) {
@@ -281,7 +282,7 @@ export const useUserStore = defineStore('user', () => {
    */
   const updateProfile = async (params: UpdateProfileParams): Promise<returnMsgType> => {
     try {
-      await put('/user/profile', params)
+      await put(API_ROUTES.userUpdateProfile.path, params)
       // 更新本地数据
       if (userInfo.value) {
         userInfo.value = { ...userInfo.value, ...params }
@@ -311,7 +312,7 @@ export const useUserStore = defineStore('user', () => {
    */
   const logout = async (): Promise<returnMsgType> => {
     try {
-      await post('/auth/logout')
+      await post(API_ROUTES.authLogout.path)
       clearToken()
       userInfo.value = null
       return { isOk: true, msg: '登出成功' }

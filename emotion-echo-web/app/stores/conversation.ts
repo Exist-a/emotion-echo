@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import type { returnMsgType } from "~/types/commonType";
 import type { ConversationItem, CreateConversationParams } from "~/types/api";
 import { get, post, put, del } from "~/composables/useApi";
+import { API_ROUTES } from "../lib/apiRoutes";
 
 export const useConversationStore = defineStore("conversation", () => {
   // ==================== State ====================
@@ -109,7 +110,7 @@ export const useConversationStore = defineStore("conversation", () => {
         }
         
         const data = await get<{ list: ConversationItem[]; hasMore: boolean }>(
-          "/conversations",
+          API_ROUTES.conversations.path,
           params
         );
         
@@ -168,7 +169,7 @@ export const useConversationStore = defineStore("conversation", () => {
       const params: CreateConversationParams = {};
       if (title) params.title = title;
       
-      const data = await post<ConversationItem>("/conversations", params);
+      const data = await post<ConversationItem>(API_ROUTES.createConversation.path, params);
       
       // 添加到列表头部
       conversationList.value.unshift(data);
@@ -184,7 +185,7 @@ export const useConversationStore = defineStore("conversation", () => {
    */
   const updateConversationTitle = async (id: string, title: string): Promise<returnMsgType> => {
     try {
-      await put(`/conversations/${id}`, { title });
+      await put(API_ROUTES.conversationById.path.replace(':id', id), { title });
       
       // 更新本地数据
       const conversation = conversationList.value.find(c => c.id === id);
@@ -211,7 +212,7 @@ export const useConversationStore = defineStore("conversation", () => {
       
       const newIsTop = isTop !== undefined ? isTop : !conversation.isTop;
       
-      await post(`/conversations/${id}/pin`, { isTop: newIsTop });
+      await post(API_ROUTES.pinConversation.path.replace(':id', id), { isTop: newIsTop });
       
       // 更新本地数据
       conversation.isTop = newIsTop;
@@ -238,7 +239,7 @@ export const useConversationStore = defineStore("conversation", () => {
    */
   const deleteConversation = async (id: string): Promise<returnMsgType> => {
     try {
-      await del(`/conversations/${id}`);
+      await del(API_ROUTES.deleteConversation.path.replace(':id', id));
       
       // 从列表中移除
       const index = conversationList.value.findIndex(c => c.id === id);

@@ -58,6 +58,7 @@
 <script setup lang="ts">
 import type { SurveyItem, SurveyResult } from '~/types/api'
 import { get } from '~/composables/useApi'
+import { API_ROUTES } from '../lib/apiRoutes'
 import { useNotify } from '~/composables/useNotify'
 
 definePageMeta({ layout: 'default' })
@@ -76,7 +77,7 @@ const tableData = ref<TableRow[]>([])
 const fetchSurveys = async () => {
   isLoading.value = true
   try {
-    const data = await get<{ list: SurveyItem[] }>('/surveys')
+    const data = await get<{ list: SurveyItem[] }>(API_ROUTES.surveys.path)
     tableData.value = data.list.map((item) => ({
       ...item,
       statusText: item.status === 'completed' ? '已完成' : '未开始'
@@ -100,6 +101,8 @@ const checkRes = async (data: TableRow) => {
   dialogVisible.value = true
   currentResult.value = null
   try {
+    // TODO(BFF 路由错位): 前端 /surveys/result/:id vs BFF /surveys/results/:resultId (survey_handler.go:40)
+    // 当前前端走单数 result，BFF 注册复数 results —— 此处前端路径错，等 PR-4 同步修
     const result = await get<SurveyResult>(`/surveys/result/${data.resultId}`)
     currentResult.value = result
   } catch (err: any) {

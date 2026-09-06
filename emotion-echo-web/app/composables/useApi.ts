@@ -3,6 +3,7 @@ import type { ApiResponse } from "~/types/api";
 import { ApiError } from "~/types/api";
 import { useUserStore } from "~/stores/user";
 import { navigateTo } from "#app";
+import { API_ROUTES } from "../lib/apiRoutes";
 
 export function useApi() {
   return {
@@ -112,7 +113,7 @@ async function refreshToken(): Promise<string | null> {
         body.jti = jti;
       }
 
-      const res = await fetch(`${getBaseUrl()}/auth/refresh`, {
+      const res = await fetch(`${getBaseUrl()}${API_ROUTES.authRefresh.path}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

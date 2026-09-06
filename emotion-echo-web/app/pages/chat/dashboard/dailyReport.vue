@@ -31,6 +31,7 @@ import ChartCard from '~/components/report/chartsCard.vue'
 import type { ChartItem } from '~/types/charts/common'
 import type { DailyReport } from '~/types/api'
 import { get } from '~/composables/useApi'
+import { API_ROUTES } from '../../lib/apiRoutes'
 import { getEmotionLabel } from '~/utils'
 
 const date = ref(formatDate(new Date()))
@@ -61,7 +62,7 @@ const fetchDailyReport = async () => {
   if (!date.value) return
   isLoading.value = true
   try {
-    const data = await get<DailyReport>('/reports/daily', { date: date.value })
+    const data = await get<DailyReport>(API_ROUTES.reportsDaily.path, { date: date.value })
     reportData.value = data
   } catch (error: any) {
     notify('加载失败', error?.message || '日报告生成失败,请稍后重试', 'error', 3000)
