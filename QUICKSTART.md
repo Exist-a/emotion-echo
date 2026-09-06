@@ -148,6 +148,10 @@ bash scripts/check_seed_users.sh
 bash scripts/test_route_contract.sh
 # 期望: fail_count=0 warn_count>0 (BFF 注册但前端未调的死代码警告)
 
+# 5b. MinIO 对象存储健康（Sprint 1 PR-4a）
+bash scripts/check_minio_health.sh
+# 期望: 4 契约全 PASS（容器 running + liveness + console + avatars bucket）
+
 # 6. 全新环境闭环验证（⚠️ 破坏性：会销毁数据卷）
 #    默认 --dry-run（仅打印计划）；真跑需显式 --execute
 bash scripts/check_empty_db_repro.sh              # 打印计划，不执行

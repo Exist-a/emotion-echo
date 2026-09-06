@@ -167,7 +167,58 @@ services:
       start_period: 30s
 
   # =====================================================
-  # Etcd 3.5.13（Stage 32 PR-14）
+  # MinIO 对象存储（Sprint 1 PR-4a）
+  # 兼容 S3 API；BFF avatar_handler / 后续文件上传都走这里。
+  # dev 默认账号 minioadmin/minioadmin（与官方镜像一致）；
+  # prod 必须用 K8s Secret + PVC（helm chart 后续）。
+  # 端口：9000 S3 API / 9001 Web 控制台。
+  # =====================================================
+  emotion-echo-minio:
+    image: quay.io/minio/minio:latest
+    container_name: emotion-echo-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+    expose:
+      - "9000"
+    ports:
+      - "9000:9000"   # dev 暴露给宿主机，BFF 通过 容器名:9000 访问
+      - "9001:9001"   # dev 控制台 http://localhost:9001
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # MinIO bucket 初始化（Sprint 1 PR-4a）
+  # init 容器：用 mc 客户端连 emotion-echo-minio，建 avatars bucket
+  # （PR-4c BFF avatar_handler 会写这里）；跑完 exit 0 不再启动。
+  # =====================================================
+  emotion-echo-minio-init:
+    image: quay.io/minio/mc:latest
+    container_name: emotion-echo-minio-init
+    depends_on:
+      emotion-echo-minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set dev http://emotion-echo-minio:9000 minioadmin minioadmin &&
+      (mc ls dev/avatars >/dev/null 2>&1 || mc mb dev/avatars) &&
+      mc anonymous set download dev/avatars &&
+      echo 'MinIO avatars bucket ready'
+      "
+    networks:
+      - app-network
+    restart: "no"
+
+# Etcd 3.5.13（Stage 32 PR-14）
   # APISIX config_provider 存储；单实例 emptyDir（dev），
   # 重启即清，由 deploy/apisix/seed.sh 重建（PR-15）。
   # =====================================================
@@ -250,6 +301,7 @@ volumes:
   redis_data:
   kafka_data:
   etcd-data:
+  minio-data:
 
 # =====================================================
 # 网络定义 (Stage 26-Q:external, 与 apps.yml 共享 emotion-echo_app-network)
