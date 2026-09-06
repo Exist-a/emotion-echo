@@ -200,13 +200,12 @@ log "=== contract 2: 前端 API_ROUTES ⊆ BFF 注册集 (除 knownOrphans) ==="
 
 # knownOrphans 关键词（标记为前缀不检查）
 # Sprint 1 PR-3 阶段包含：前端有但 BFF 未实现的孤儿；PR-4 落地后应从 orphan 转正
+# Sprint 1 PR-4 落地后：/user/avatar (PR-4c-2) 与 /voice/upload (PR-4c-1) 已转正
 KNOWN_ORPHAN_PREFIXES=(
-  "/upload/image"
-  "/upload/video"
-  "/upload/file"
-  "/face/emotion"
-  "/user/avatar"   # PR-4: BFF avatar_handler + MinIO + user-svc avatar_url
-  "/voice/upload"  # PR-4: BFF voice_handler + ai-svc multimodal kind=audio
+  "/upload/image"   # A2 旧单数路径，PR-4 待用 BFF /uploads/:kind 替换
+  "/upload/video"   # 同上
+  "/upload/file"    # 同上
+  "/face/emotion"   # 死代码；Camera 抓拍走 /multimodal/analyze
 )
 
 is_known_orphan() {

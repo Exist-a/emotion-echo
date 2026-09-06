@@ -21,7 +21,6 @@
 import { useForgetPwdState } from '~/composables/forgetPwdState'
 import { post } from '~/composables/useApi'
 import { API_ROUTES } from '../../lib/apiRoutes'
-import { sha256 } from 'js-sha256'
 
 definePageMeta({ middleware: 'forget-pwd' })
 const emits = defineEmits(['changeActive'])
@@ -55,7 +54,9 @@ const gotoSuccess = async () => {
     return
   }
   try {
-    await post(API_ROUTES.authResetPassword.path, { username: userAccount.value, verificationCode: verificationCode.value, newPassword: sha256(formInfo.value.newPassword) })
+    // Sprint 1 PR-4d: 改明文 (Stage 33 净化后 user-svc bcrypt 入库，不再做链式哈希)
+    // emotion-echo-shared/pkg/password.go 注释明示"不做 bcrypt(sha256) 等价于 bcrypt 明文但削弱 bcrypt"
+    await post(API_ROUTES.authResetPassword.path, { username: userAccount.value, verificationCode: verificationCode.value, newPassword: formInfo.value.newPassword })
     notify('密码已更新', '请用新密码登录', 'success', 3000)
     updateStep(2)
     emits('changeActive')
