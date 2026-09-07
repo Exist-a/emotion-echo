@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -36,7 +37,7 @@ import (
 	"emotion-echo-ai-svc/internal/fusion"
 	"emotion-echo-ai-svc/internal/grpcserver"
 	"emotion-echo-ai-svc/internal/handler"
-	"emotion-echo-ai-svc/internal/logging"
+	logging "emotion-echo-ai-svc/internal/logging" // Stage 41 PR-5: re-export shared/pkg/logging,实际定义在 _re_export.go
 	"emotion-echo-ai-svc/internal/logic"
 	"emotion-echo-ai-svc/internal/repository"
 	"emotion-echo-ai-svc/internal/svc"
@@ -44,10 +45,10 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
-	"github.com/zeromicro/go-zero/core/conf"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -62,10 +63,10 @@ func failFastIfRequired(dep string, err error, addr string) {
 		return
 	}
 	if bootstrap.ShouldFailFast() && bootstrap.IsRequired(dep) {
-		logging.Errorf(err, "[startup-strict] required dependency unavailable, refusing to start: dep=%s addr=%s", dep, addr)
+		slog.Error("startup-strict required dependency unavailable, refusing to start", "err", err, "dep", dep, "addr", addr)
 		logging.Fatalf("[startup-strict] exit code=1 (dep=%s)", dep)
 	}
-	logging.Errorf(err, "[startup] dependency check failed (non-strict): dep=%s addr=%s", dep, addr)
+	slog.Error("startup dependency check failed (non-strict)", "err", err, "dep", dep, "addr", addr)
 }
 
 // readEnvInt 读 env 整数值；空或非法 → 返回 fallback。
@@ -172,7 +173,7 @@ func main() {
 		bootstrap.ShouldFailFast(), os.Getenv("STARTUP_STRICT_DEPS"))
 
 	var c config.Config
-	conf.MustLoad(*configFile, &c)
+	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
 
 	// Stage 22-B: env override + default fallbacks (see doc comments above).
 	applyEnvOverrides(&c)
@@ -216,7 +217,7 @@ func main() {
 	// 1. Postgres
 	emoRepo, db, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
 	if err != nil {
-		logging.Errorf(err, "[postgres] connect failed")
+		slog.Error("postgres connect failed", "err", err)
 		if bootstrap.ShouldFailFast() && bootstrap.IsRequired("postgres") {
 			logging.Fatalf("[postgres] strict mode + required dep, refusing to start")
 		}
@@ -238,7 +239,7 @@ func main() {
 				logging.Printf("[skywalking] tracer initialized")
 			}
 		} else {
-			logging.Errorf(err, "[skywalking] reporter init failed (will not trace)")
+			slog.Error("skywalking reporter init failed (will not trace)", "err", err)
 			if bootstrap.ShouldFailFast() && bootstrap.IsRequired("skywalking") {
 				logging.Fatalf("[skywalking] strict mode + required dep, refusing to start")
 			}
@@ -249,7 +250,7 @@ func main() {
 	if c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
 		kc, err := consumer.NewKafkaConsumer(kafkaBrokersList, c.Kafka.GroupID)
 		if err != nil {
-			logging.Errorf(err, "[kafka] consumer init failed")
+			slog.Error("kafka consumer init failed", "err", err)
 			if bootstrap.ShouldFailFast() && bootstrap.IsRequired("kafka") {
 				logging.Fatalf("[kafka] strict mode + required dep, refusing to start")
 			}
@@ -262,7 +263,7 @@ func main() {
 				}
 				grpcAn, err := analyzer.NewGRPCAnalyzer(grpcAddr)
 				if err != nil {
-					logging.Errorf(err, "[llm] gRPC dial failed, fallback to HTTP")
+					slog.Error("llm gRPC dial failed, fallback to HTTP", "err", err)
 					an = analyzer.NewChainedAnalyzer(
 						analyzer.NewHTTPAnalyzer(c.LLM.BaseURL),
 						analyzer.NewKeywordAnalyzer(),
@@ -285,7 +286,7 @@ func main() {
 			var dlq consumer.DLQPublisher = consumer.NoopDLQPublisher{}
 			if dlqTopic := c.Kafka.DLQTopic; dlqTopic != "" && len(kafkaBrokersList) > 0 {
 				if kp, err := consumer.NewKafkaDLQPublisher(kafkaBrokersList, dlqTopic); err != nil {
-					logging.Errorf(err, "[kafka] DLQ producer init failed, fallback to noop")
+					slog.Error("kafka DLQ producer init failed, fallback to noop", "err", err)
 				} else {
 					dlq = kp
 					defer func() { _ = kp.Close() }()
@@ -306,7 +307,7 @@ func main() {
 					},
 					events.EventTypeMessageCreated,
 					tracer, dlq, maxRetries); err != nil {
-					logging.Errorf(err, "[kafka] consume err")
+					slog.Error("kafka consume err", "err", err)
 				}
 			}()
 			defer func() { _ = kc.Close() }()
@@ -386,7 +387,7 @@ func main() {
 		if shareddiscovery.IsHardBootError(err.Error()) {
 			logging.Fatalf("[nacos] boot failed (fatal): %v", err)
 		}
-		logging.Errorf(err, "[nacos] boot failed (continuing)")
+		slog.Error("nacos boot failed (continuing)", "err", err)
 	} else if nacosRuntime != nil && nacosRuntime.Registry != nil {
 		defer nacosRuntime.Close(rootCtx, c.Name, c.Host, c.Port)
 	}
@@ -400,7 +401,7 @@ func main() {
 		gs := grpcserver.New(emoRepo, fusedRepo, c.GRPC.Port)
 		go func() {
 			if err := gs.Start(rootCtx); err != nil {
-				logging.Errorf(err, "[grpc] server failed")
+				slog.Error("grpc server failed", "err", err)
 			}
 		}()
 	}
@@ -462,7 +463,7 @@ func main() {
 		go func() {
 			logging.Printf("[fusion] worker.Run() entered")
 			if err := worker.Run(rootCtx); err != nil {
-				logging.Errorf(err, "[fusion] worker stopped")
+				slog.Error("fusion worker stopped", "err", err)
 			}
 		}()
 		logging.Printf("[fusion] FusionWorker started (tick=5s)")
@@ -498,7 +499,7 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			logging.Errorf(err, "[shutdown] http Shutdown error")
+			slog.Error("shutdown http Shutdown error", "err", err)
 		} else {
 			logging.Printf("[shutdown] http server stopped gracefully")
 		}

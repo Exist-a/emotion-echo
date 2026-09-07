@@ -10,19 +10,18 @@ import (
 	"emotion-echo-ai-svc/internal/svc"
 	"emotion-echo-ai-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // GetEmotionByMessageLogic 处理 GET /api/v1/emotion/message/:messageId
 type GetEmotionByMessageLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewGetEmotionByMessageLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetEmotionByMessageLogic {
 	return &GetEmotionByMessageLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

@@ -20,6 +20,7 @@ package fusion
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
@@ -101,7 +102,7 @@ func (w *FusionWorker) Tick(ctx context.Context) error {
 	ttl := 300 // 5 分钟 TTL
 	candidates, err := w.deps.PendingLister.ListPending(ctx, ttl)
 	if err != nil {
-		logging.Errorf(err, "[fusion] ListPending err")
+		slog.ErrorContext(ctx, "fusion ListPending failed", "err", err)
 		return err
 	}
 	logging.Printf("[fusion] tick: candidates=%d (msgIDs=%v)", len(candidates), candidates)

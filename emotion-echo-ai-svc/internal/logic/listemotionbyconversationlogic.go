@@ -9,19 +9,18 @@ import (
 	"emotion-echo-ai-svc/internal/svc"
 	"emotion-echo-ai-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // ListEmotionByConversationLogic 处理 GET /api/v1/emotion/conversation/:conversationId
 type ListEmotionByConversationLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewListEmotionByConversationLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListEmotionByConversationLogic {
 	return &ListEmotionByConversationLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

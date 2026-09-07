@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"time"
 
-	"emotion-echo-ai-svc/internal/logging"
+	"log/slog"
 )
 
 // HTTPAnalyzer 通过 HTTP 调用 LLM 服务
@@ -119,7 +119,7 @@ func (c *ChainedAnalyzer) Analyze(ctx context.Context, text string) (*EmotionRes
 	if r, err := c.primary.Analyze(ctx, text); err == nil && r != nil {
 		return r, nil
 	} else {
-		logging.Errorf(err, "[analyzer] primary failed, fallback to secondary")
+		slog.ErrorContext(ctx, "analyzer primary failed, fallback to secondary", "err", err)
 	}
 	if c.secondary == nil {
 		return nil, fmt.Errorf("primary failed and no fallback")

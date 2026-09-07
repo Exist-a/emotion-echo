@@ -11,13 +11,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"emotion-echo-ai-svc/internal/analyzer"
 	"emotion-echo-ai-svc/internal/events"
 	"emotion-echo-ai-svc/internal/model"
 	"emotion-echo-ai-svc/internal/repository"
-
-	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // MessageCreatedHandler 处理 message.created 事件
@@ -27,7 +26,6 @@ import (
 //   - event type 不匹配 → 跳过（无 error）
 //   - data 解析失败 → 返回 error（sarama 会重试，最终入 DLQ）
 type MessageCreatedHandler struct {
-	logx.Logger
 	repo     repository.EmotionRepo
 	analyzer analyzer.Analyzer
 }
@@ -35,7 +33,7 @@ type MessageCreatedHandler struct {
 // NewMessageCreatedHandler 构造 handler
 func NewMessageCreatedHandler(repo repository.EmotionRepo, a analyzer.Analyzer) *MessageCreatedHandler {
 	return &MessageCreatedHandler{
-		Logger:   logx.WithContext(context.Background()),
+
 		repo:     repo,
 		analyzer: a,
 	}
@@ -47,7 +45,7 @@ func NewMessageCreatedHandler(repo repository.EmotionRepo, a analyzer.Analyzer) 
 func (h *MessageCreatedHandler) Handle(ctx context.Context, evt *events.Event) error {
 	// 1. 类型过滤
 	if evt.Type != events.EventTypeMessageCreated {
-		h.Debugf("skip event type=%s", evt.Type)
+		slog.DebugContext(ctx, "consumehandler skip event", "type", evt.Type)
 		return nil
 	}
 
@@ -63,7 +61,7 @@ func (h *MessageCreatedHandler) Handle(ctx context.Context, evt *events.Event) e
 
 	// 3. 只分析 user 消息
 	if data.Role != "user" {
-		h.Debugf("skip non-user role=%s messageID=%d", data.Role, data.MessageID)
+		slog.DebugContext(ctx, "consumehandler skip non-user role", "role", data.Role, "message_id", data.MessageID)
 		return nil
 	}
 
@@ -91,7 +89,9 @@ func (h *MessageCreatedHandler) Handle(ctx context.Context, evt *events.Event) e
 		return fmt.Errorf("create emotion_analysis: %w", err)
 	}
 
-	h.Infof("analyzed messageID=%d emotion=%s score=%.2f",
-		data.MessageID, result.PrimaryEmotion, result.SentimentScore)
+	slog.InfoContext(ctx, "consumehandler analyzed",
+		"message_id", data.MessageID,
+		"emotion", result.PrimaryEmotion,
+		"score", result.SentimentScore)
 	return nil
 }

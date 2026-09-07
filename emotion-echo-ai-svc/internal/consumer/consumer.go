@@ -15,10 +15,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"emotion-echo-ai-svc/internal/events"
-	"emotion-echo-ai-svc/internal/logging"
 
 	"github.com/IBM/sarama"
 	"github.com/SkyAPM/go2sky"
@@ -93,7 +93,7 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			// 解析事件
 			var evt events.Event
 			if err := json.Unmarshal(msg.Value, &evt); err != nil {
-				logging.Errorf(err, "[consumer] unmarshal err (skip)")
+				slog.ErrorContext(sess.Context(), "consumer unmarshal failed (skipping)", "err", err)
 				sess.MarkMessage(msg, "")
 				continue
 			}
@@ -147,8 +147,8 @@ func (h *ConsumerGroupHandler) handleFailure(
 	attempt := h.attempts[key]
 
 	if attempt <= maxRetries {
-		logging.Errorf(handlerErr, "[consumer] handler err (will retry attempt=%d/%d key=%s)",
-			attempt, maxRetries, key)
+		slog.Error("consumer handler err (will retry)",
+			"attempt", attempt, "max_retries", maxRetries, "key", key, "err", handlerErr)
 		return
 	}
 
@@ -163,10 +163,11 @@ func (h *ConsumerGroupHandler) handleFailure(
 			OriginalTopic: msg.Topic,
 		}
 		if dlqErr := h.DLQ.Publish(sess.Context(), dlqEntry); dlqErr != nil {
-			logging.Errorf(dlqErr, "[consumer] DLQ publish failed (dropping msg)")
+			slog.ErrorContext(sess.Context(), "consumer DLQ publish failed (dropping msg)", "err", dlqErr)
 		}
 	}
-	logging.Errorf(handlerErr, "[consumer] handler err after %d retries → DLQ key=%s", attempt, key)
+	slog.ErrorContext(sess.Context(), "consumer handler err after retries → DLQ",
+		"attempt", attempt, "key", key, "err", handlerErr)
 	delete(h.attempts, key)
 	sess.MarkMessage(msg, "")
 }
@@ -231,7 +232,7 @@ func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler Me
 			if errors.Is(err, sarama.ErrClosedConsumerGroup) {
 				return nil
 			}
-			logging.Errorf(err, "[consumer] consume err")
+			slog.ErrorContext(ctx, "consumer consume failed", "err", err)
 			return err
 		}
 		if ctx.Err() != nil {
