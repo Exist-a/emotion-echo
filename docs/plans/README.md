@@ -22,7 +22,7 @@ status: Round 1 占位 · Round 2 首批内容迁入
 | `kafka-reliability-gaps.md` | 新增（2026-09-07） | Kafka 管线 6 项健壮性缺口汇总：dev 模式空跑（ADR-19 未落地）/ ai-svc consumer 缺外层重试 / DLQ 默认 Noop / 无 lag 监控 / 无 Schema Registry / relay 无重试上限 |
 | `grpc-inter-service-migration.md` | 新增（2026-09-07） | 后端微服务间调用 HTTP→gRPC 改造：已落地 3 条（chat→ai / ai→llm / BFF→ai），BFF→user/chat/assessment/analytics 仍 HTTP；分 Phase 推进，chat-svc 先行 |
 | `observability-testing-gap.md` | 新增（2026-09-07） | 可观测性链路测试完善：metrics 契约 / trace 透传+e2e / 日志结构化 / 回归守护；与 observability-compose-gap.md（基础设施层）互补，本计划聚焦测试层 |
-| `gozero-removal.md` | 新增（2026-09-07） | go-zero 完全移除收尾（决策 1）：conf→shared/pkg/config（yaml.v3+SetDefaults，145 default/25 optional）、logx→slog 下沉 shared（30 logic 样板/7 处 Errorf）、rest.Middleware 类型清零、goctl 遗留归档；分 10 个 TDD PR，关闭审计 E-2/E-3 |
+| ~~`gozero-removal.md`~~ | 已 landed 2026-09-07 | go-zero 完全移除收尾（决策 1）：conf→shared/pkg/config + logx→slog 下沉 shared + rest.Middleware 类型清零 + goctl 归档；10 个 TDD PR 全部 merged。详见 `legacy-plans/landed/gozero-removal.md` 与 `stages/stage-41-gozero-removal.md` |
 
 ## 写入规范
 

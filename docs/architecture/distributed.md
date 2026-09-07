@@ -182,12 +182,12 @@ Phase 8 业务完整化      ⏳ 14 个 handler 全部迁移
 
 | 旧组件 | 替代 | 状态 |
 |--------|------|------|
-| go-zero 框架 | Gin | ✅ 已迁移（残留：conf/logx/rest 三零件，Stage 41 收尾） |
-| goctl 代码生成器 | 手写 handler | 待废弃（已不再使用，代码头未清理；Stage 41 PR-8 统一清理） |
+| go-zero 框架 | Gin | ✅ 已迁移（Stage 41 收尾完成，conf/logx/rest 三零件全移除） |
+| goctl 代码生成器 | 手写 handler | ✅ 已废弃（Stage 41 PR-8：22+ 个 goctl 文件头清理 + 6 份 .api 归档至 `legacy/goctl-apis/`） |
 | go-zero zrpc | gRPC + proto | ✅ 未启用 zrpc（直接用 grpc-go 原生；表状态"待升级"为历史失真） |
 | go-zero breaker/limit | APISIX 插件 | ✅ 已配置（决策 8） |
-| go-zero conf.MustLoad | yaml.Unmarshal | 🚧 [Stage 41 PR-0~7](../stages/stage-41-gozero-removal.md) |
-| go-zero logx | log/slog | 🚧 [Stage 41 PR-1~7](../stages/stage-41-gozero-removal.md) |
+| go-zero conf.MustLoad | yaml.Unmarshal | ✅ 已迁移（Stage 41 PR-0~7：7 个 svc 全部改用 `shared/pkg/config.MustLoad`） |
+| go-zero logx | log/slog | ✅ 已迁移（Stage 41 PR-1~7：30 个 logic 文件去 logx，统一改用 `log/slog`） |
 | Nacos 注册中心 | APISIX + etcd | 待删除（决策 10 已撤回"不引入"，Nacos 改用为演进路径；本行已失真，Stage 41 不修） |
 | Nacos 配置中心 | yaml + K8s ConfigMap | 不引入 |
 | 自写 discovery 包 | 无（svc 不主动注册）| 待删除 |

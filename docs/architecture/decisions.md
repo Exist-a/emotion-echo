@@ -26,9 +26,19 @@
 
 ### 决策 1：HTTP 框架 = **Gin**（不再用 go-zero）
 
-> ⚠️ **2026-08-31 审计标注：部分失效**。代码仍硬依赖 go-zero：各 svc 用 `go-zero/core/conf` 读配置、`core/logx` 打日志，shared `jwt_auth.go` 引 `go-zero/rest`（审计 E-2）。"不用 go-zero"仅指弃用 goctl 脚手架；go-zero 本体仍是实际依赖，ADR 说法需与代码一致。
+> ✅ **2026-09-07 Stage 41 落地完成**（10 个 TDD PR 全部 merged，详见 [Stage 41 收口](../stages/stage-41-gozero-removal.md)）。
+> 7 个 Go 模块（shared / user / chat / analytics / assessment / ai / web-bff）的 go-zero 完全移除：
+> - `go-zero/core/conf` → `shared/pkg/config`（yaml.v3 + SetDefaults + 大小写归一）
+> - `go-zero/core/logx` → `log/slog`（shared/pkg/logging 下沉，BFF/ai-svc 旧 internal/logging 改为 re-export）
+> - `go-zero/rest.Middleware` → 自定义 `type Middleware = func(http.HandlerFunc) http.HandlerFunc`
+> - `.api` 文件归档至 `legacy/goctl-apis/`
+> - 22+ 个 goctl 文件头注释清理
 >
-> 📌 **2026-09-07 状态**：登记 [Stage 41 `docs/stages/stage-41-gozero-removal.md`](../stages/stage-41-gozero-removal.md) 为本决策收尾实施 stage（计划文档 [docs/plans/gozero-removal.md](../plans/gozero-removal.md) 2026-09-07 已 committed）。Stage 41 完成后本标注行移除，决策 1 转为"全量生效"。
+> 验证（PR-8 落地后实测）：
+> - `grep -rn "zeromicro" --include="*.go" --include="go.mod" .`（排除 legacy）= **0 命中**
+> - 7 个 `go.mod` 全部 `zeromicro` 零引用
+>
+> 历史标注（2026-08-31 审计 E-2 触发）：决策 1 一度标"部分失效"（conf/logx/rest 残留）；Stage 41 完成后本标注行已移除。
 
 | 维度 | 选择 |
 |------|------|

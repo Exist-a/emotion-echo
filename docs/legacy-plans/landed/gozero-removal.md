@@ -1,28 +1,23 @@
-***
+---
 
-status: planned
-
+status: landed
+superseded-by: stage-41-gozero-removal.md
+landed-at: 2026-09-07
 priority: medium
-
 owner: TBD
-
 created: 2026-09-07
 
 related-adrs:
+  - docs/architecture/decisions.md（决策 1：HTTP 框架 = Gin，不再用 go-zero）
 
+related-docs:
+  - docs/architecture/audit-2026-08-31.md（E-2 ADR 与代码矛盾 / E-3 go-zero 三版本并存）
+  - docs/architecture/distributed.md（迁移表：conf→yaml.Unmarshal、logx→log/slog 标 "待迁移"）
+  - docs/stages/stage-41-gozero-removal.md（实施 stage）
 
+---
 
-* docs/architecture/decisions.md（决策 1：HTTP 框架 = Gin，不再用 go-zero）
-
-  related-docs:
-
-* docs/architecture/audit-2026-08-31.md（E-2 ADR 与代码矛盾 / E-3 go-zero 三版本并存）
-
-* docs/architecture/distributed.md（迁移表：conf→yaml.Unmarshal、logx→log/slog 标 "待迁移"）
-
-
-
-***
+# Plan — go-zero 完全移除（conf /logx/rest 三零件清零）✅ Landed 2026-09-07
 
 # Plan — go-zero 完全移除（conf /logx/rest 三零件清零）
 
