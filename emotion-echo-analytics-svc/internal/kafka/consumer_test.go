@@ -100,11 +100,11 @@ func TestHandleOne_MessageCreated_WritesRow(t *testing.T) {
 	require.Len(t, repo.items, 1)
 	got := repo.items[0]
 	assert.Equal(t, int64(42), got.UserID)
-	// ADR-19 Sprint A 收口（PR-A1.3 v2）: event_type 落库值仍用 normalize 后（不带点）
-	// 保留 Stage 37-A A3 拆分语义;后续数据迁移 PR 决定是否统一为带点。
-	assert.Equal(t, "message", got.EventType)
-	// ADR-19 Sprint A 收口: target 格式统一 chat-svc 风格（msg:N）
-	// 之前是纯数字 "1",与 chat-svc DevEventPublisher 不一致 → PR-A1.3 v2 消灭两份映射。
+	// ADR-19 Sprint A 全收口（PR-A1.4）: event_type 落库用 ev.Type 原值(带点),
+	// 与 chat-svc DevEventPublisher 路径完全一致 → 真正消灭两份映射。
+	assert.Equal(t, "message.created", got.EventType,
+		"Sprint A 全收口: event_type 必须用 ev.Type 原值(带点),不再 normalize")
+	// ADR-19 Sprint A 收口: target 格式统一 chat-svc 风格(msg:N)
 	assert.Equal(t, "msg:1", got.Target, "Sprint A: target must be 'msg:N' (chat-svc style), not '1'")
 	assert.Equal(t, "conv:2", got.SessionID, "Sprint A: session_id must be 'conv:N' (chat-svc style), not topic name")
 	assert.Equal(t, "evt-1", got.EventID, "Stage 30-C A1: EventID 应从 ev.ID 透传")
@@ -128,9 +128,9 @@ func TestHandleOne_ConversationCreated_WritesRow(t *testing.T) {
 	require.NoError(t, h.handleOne(msg))
 	require.Len(t, repo.items, 1)
 	assert.Equal(t, int64(99), repo.items[0].UserID)
-	// Stage 37-A A3: event_type 必须细分，不再都是 "conversation"
-	assert.Equal(t, "conversation_created", repo.items[0].EventType,
-		"event_type 必须细分为 conversation_created 而非 conversation（Stage 37-A A3）")
+	// ADR-19 Sprint A 全收口: event_type 原值
+	assert.Equal(t, "conversation.created", repo.items[0].EventType,
+		"Sprint A: event_type must be ev.Type 原值 'conversation.created'")
 	// ADR-19 Sprint A: target / session_id 统一 chat-svc 风格
 	assert.Equal(t, "conv:5", repo.items[0].Target)
 	assert.Equal(t, "conv:5", repo.items[0].SessionID)
@@ -154,50 +154,50 @@ func TestHandleOne_ConversationClosed_WritesRow(t *testing.T) {
 	require.NoError(t, h.handleOne(msg))
 	require.Len(t, repo.items, 1)
 	assert.Equal(t, int64(99), repo.items[0].UserID)
-	// Stage 37-A A3: conversation_closed 也必须细分
-	assert.Equal(t, "conversation_closed", repo.items[0].EventType,
-		"event_type 必须细分为 conversation_closed 而非 conversation（Stage 37-A A3）")
+	// ADR-19 Sprint A 全收口
+	assert.Equal(t, "conversation.closed", repo.items[0].EventType,
+		"Sprint A: event_type must be ev.Type 原值 'conversation.closed'")
 	// ADR-19 Sprint A: target / session_id 统一 chat-svc 风格
 	assert.Equal(t, "conv:5", repo.items[0].Target)
 	assert.Equal(t, "conv:5", repo.items[0].SessionID)
 }
 
-// TestHandleOne_TableDriven_TargetFormatUnified 表驱动覆盖 3 事件类型 × 2 格式
+// TestHandleOne_TableDriven_TargetFormatUnified 表驱动覆盖 3 事件类型
 //
-// Sprint A 收口要求: 不管 eventType 是 chat-svc 原值（带点）还是
-// normalize 后（不带点）,target / session_id 落库格式必须一致。
-// 这个表驱动测试钉死 PR-A1.3 v2 的"消灭两份映射"承诺。
+// Sprint A 全收口 (PR-A1.4): event_type / target / session_id 三字段
+// 全部统一 chat-svc 风格 (带点 + msg:N / conv:N + conv:N)。
+// 这个表驱动测试钉死 PR-A1.3 v2 + PR-A1.4 的"消灭两份映射"承诺。
 func TestHandleOne_TableDriven_TargetFormatUnified(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name           string
-		eventType      string
-		data           events.MessageCreatedData // 也用于 conv.*,只取 ConversationID+UserID
-		wantEventType  string // normalize 后落库值
-		wantTarget     string
-		wantSessionID  string
+		name          string
+		eventType     string
+		data          events.MessageCreatedData // conv.* 路径只取 ConversationID+UserID
+		wantEventType string // PR-A1.4: ev.Type 原值(带点)
+		wantTarget    string
+		wantSessionID string
 	}{
 		{
-			name:          "message.created-chat-svc-style",
+			name:          "message.created",
 			eventType:     events.EventTypeMessageCreated,
 			data:          events.MessageCreatedData{MessageID: 100, ConversationID: 42, UserID: 7},
-			wantEventType: "message",
+			wantEventType: "message.created",
 			wantTarget:    "msg:100",
 			wantSessionID: "conv:42",
 		},
 		{
-			name:          "conversation.created-chat-svc-style",
+			name:          "conversation.created",
 			eventType:     events.EventTypeConversationCreated,
-			data:          events.MessageCreatedData{ConversationID: 42, UserID: 7}, // conv 路径不用 MessageID
-			wantEventType: "conversation_created",
+			data:          events.MessageCreatedData{ConversationID: 42, UserID: 7},
+			wantEventType: "conversation.created",
 			wantTarget:    "conv:42",
 			wantSessionID: "conv:42",
 		},
 		{
-			name:          "conversation.closed-chat-svc-style",
+			name:          "conversation.closed",
 			eventType:     events.EventTypeConversationClosed,
 			data:          events.MessageCreatedData{ConversationID: 42, UserID: 7},
-			wantEventType: "conversation_closed",
+			wantEventType: "conversation.closed",
 			wantTarget:    "conv:42",
 			wantSessionID: "conv:42",
 		},
@@ -209,7 +209,6 @@ func TestHandleOne_TableDriven_TargetFormatUnified(t *testing.T) {
 			repo := &captureEventRepo{}
 			h := &chatEventHandler{repo: repo, topic: "chat-events"}
 
-			// 构造对应 Data 类型
 			var ev events.Event
 			ev.ID = "evt-table-" + tc.name
 			ev.Type = tc.eventType
@@ -238,12 +237,11 @@ func TestHandleOne_TableDriven_TargetFormatUnified(t *testing.T) {
 			require.Len(t, repo.items, 1)
 			got := repo.items[0]
 			assert.Equal(t, tc.wantEventType, got.EventType,
-				"eventType落库值(%s) ≠ 期望(%s) — 注意:normalize 后值与原值并存,见 PR-A1.3 v2 commit message",
-				got.EventType, tc.wantEventType)
+				"PR-A1.4: event_type 落库值必须等于 ev.Type 原值(带点)")
 			assert.Equal(t, tc.wantTarget, got.Target,
-				"target 格式必须统一 chat-svc 风格 (msg:N / conv:N),不管 eventType 是带点还是 normalize 后")
+				"target 格式统一 chat-svc 风格 (msg:N / conv:N)")
 			assert.Equal(t, tc.wantSessionID, got.SessionID,
-				"session_id 格式必须统一 chat-svc 风格 (conv:N),不管 eventType 是带点还是 normalize 后")
+				"session_id 格式统一 chat-svc 风格 (conv:N)")
 		})
 	}
 }
