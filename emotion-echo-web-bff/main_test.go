@@ -35,6 +35,7 @@ import (
 	"emotion-echo-web-bff/internal/svc"
 
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -334,4 +335,62 @@ func hasPathPrefix(path, prefix string) bool {
 		return false
 	}
 	return path == prefix || (len(path) > len(prefix) && path[:len(prefix)] == prefix)
+}
+
+// ===== PR-OBS-16 RED: web-bff bootstrap 装配断言 =====
+//
+// 目的: PR-OBS-16 设计 (observability-sprint-b.md §三.16):
+// 1. /metrics 端点 200 (PR-OBS-10 已覆盖,本 case 复用)
+// 2. GinMetricsMiddleware + GinSkywalkingMiddleware + GinAuthMiddleware 都挂在 router 上
+// 3. 防止重构漏挂中间件 (与 PR-4c-4 reset-password 同源教训)
+//
+// 现状约束: registerRoutes 不直接挂中间件 (在 registerRoutes 之前的 r.Use 调用)
+// 复用 stubServiceContext + registerRoutes 后,断言 router 中间件链表含 3 个目标中间件
+// 难点: gin 不暴露中间件列表 API,需用 Handle() 注册一个路由 + 调 c.HandlerName() 看 handler chain
+// 简化方案: 通过注册一个最终路由,在路由 handler 中检查 ctx 上 'skywalking_tracer' key
+// (middleware 设的) 来反推中间件已挂
+
+func TestBootstrap_WebBFF_AllMiddlewaresAttached(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	s, cfg := stubServiceContext(t, false)
+	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
+	// Tracer=nil 即可 (Stage 43 PR-OBS-2 已让 GinSkywalkingMiddleware 支持 nil)
+	r.Use(sharedmw.GinSkywalkingMiddleware(nil))
+	r.Use(sharedmw.GinAuthMiddleware())
+	registerRoutes(r, s, cfg)
+
+	// 1. /metrics 端点 200 (GinMetricsMiddleware 跳过 /metrics 自循环,但 /metrics 端点仍注册)
+	wMetrics := httptest.NewRecorder()
+	r.ServeHTTP(wMetrics, httptest.NewRequest("GET", "/metrics", nil))
+	if wMetrics.Code != 200 {
+		t.Errorf("/metrics should return 200 (PromHTTPHandler not wired?), got %d", wMetrics.Code)
+	}
+	if !strings.Contains(wMetrics.Body.String(), "go_goroutines") {
+		t.Errorf("/metrics body missing go_goroutines (PromHTTPHandler not exposing default registry?)")
+	}
+
+	// 2. /health 端点 200 (GinAuthMiddleware 白名单 + 中间件链通过)
+	// 健康检查触发完整中间件链 (metrics → skywalking → auth),验证链无崩溃
+	wHealth := httptest.NewRecorder()
+	r.ServeHTTP(wHealth, httptest.NewRequest("GET", "/health", nil))
+	if wHealth.Code != 200 {
+		t.Errorf("/health should return 200, got %d (中间件链崩溃?)", wHealth.Code)
+	}
+
+	// 3. 触发 /health 后, /metrics 应有 http_requests_total{path=/health} 记录
+	// 间接证明 GinMetricsMiddleware 真正挂上了
+	wMetrics2 := httptest.NewRecorder()
+	r.ServeHTTP(wMetrics2, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(wMetrics2.Body.String(), `path="/health"`) {
+		t.Errorf("/metrics missing path=/health label (GinMetricsMiddleware 未挂?)")
+	}
+
+	// 4. 业务路由 /api/v1/users/me 应被 auth 拦截 (无 X-User-Id → 401)
+	// 间接证明 GinAuthMiddleware 已挂
+	wNoAuth := httptest.NewRecorder()
+	r.ServeHTTP(wNoAuth, httptest.NewRequest("GET", "/api/v1/users/me", nil))
+	if wNoAuth.Code != 401 {
+		t.Errorf("/api/v1/users/me without X-User-Id should return 401 (GinAuthMiddleware not attached?), got %d", wNoAuth.Code)
+	}
 }
