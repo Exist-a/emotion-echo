@@ -1,0 +1,56 @@
+# PR-OBS-4: dev compose Prometheus scrape config
+#
+# 镜像版本: prom/prometheus:v2.51.2 (与 charts/emotion-echo/charts/prometheus/Chart.yaml 同步)
+# 启动方式: COMPOSE_PROFILES=obs docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml up -d
+#
+# scrape 策略:
+#   - 6 业务 svc (user/chat/assessment/analytics/ai-svc/web-bff) 通过 :8888-:8904 的 /metrics 端点
+#   - APISIX 通过 :9091 /apisix/prometheus/metrics
+#   - SkyWalking OAP 通过 :1234 (需 OAP 启用 SW_TELEMETRY=true,见 docker-compose.infra.yml sw-oap env)
+#   - prometheus 自监控 :9090
+#
+# 注意: 静态 target 而非 kubernetes-pods SD,因 dev compose 无 Pod API。
+#       容器 DNS 用 compose 网络服务名 (emotion-echo-user-svc 等),与 k8s 路径 scrape job 等价。
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: "emotion-echo-dev"
+
+scrape_configs:
+  # === 6 业务 svc /metrics 端点 ===
+  - job_name: "emotion-echo-services"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "emotion-echo-user-svc:8888"
+          - "emotion-echo-chat-svc:8890"
+          - "emotion-echo-assessment-svc:8889"
+          - "emotion-echo-analytics-svc:8904"
+          - "emotion-echo-ai-svc:8891"
+          - "emotion-echo-web-bff:8894"
+        labels:
+          monitor: "emotion-echo-dev"
+
+  # === APISIX prometheus plugin ===
+  - job_name: "apisix"
+    metrics_path: "/apisix/prometheus/metrics"
+    static_configs:
+      - targets: ["emotion-echo-apisix:9091"]
+        labels:
+          component: "apisix"
+
+  # === SkyWalking OAP self-metrics ===
+  - job_name: "skywalking-oap"
+    static_configs:
+      - targets: ["emotion-echo-sw-oap:1234"]
+        labels:
+          component: "skywalking"
+
+  # === prometheus 自监控 ===
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          component: "prometheus"
