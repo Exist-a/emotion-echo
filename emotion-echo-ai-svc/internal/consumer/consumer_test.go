@@ -3,6 +3,8 @@ package consumer
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -354,5 +356,141 @@ func TestConsumeClaim_HandlerSuccessClearsAttempts(t *testing.T) {
 	}
 	if len(dlq.Captured()) != 0 {
 		t.Errorf("expected 0 DLQ entries (evt-fail attempts < MaxRetries), got %d", len(dlq.Captured()))
+	}
+}
+
+// ===== PR-OBS-14 RED: 3 case — Kafka consumer trace 边界 =====
+//
+// 目的: PR-OBS-14 设计 (observability-sprint-b.md §三.14):
+// 1. Kafka 消费消息 → 创建 SkyWalking span + tag messaging.system/topic/partition/event.type
+// 2. 跨层 trace_id 透传 (与 PR-OBS-12/13 类似)
+//
+// 现状约束: ConsumerGroupHandler.Tracer 字段是 *go2sky.Tracer (具体类型,见 consumer.go:46-47),
+// span, _, _ := h.Tracer.CreateLocalSpan(...) (consumer.go:108) 返回的是 go2sky.Span (具体类型),
+// 无法直接 mock。完整 'span tag 断言' 需要:
+//   1) 抽 TracerInterface (含 CreateLocalSpan(ctx, name) (SpanInterface, ctx, error))
+//   2) 抽 SpanInterface (含 Tag(key, value string))
+//   3) ConsumerGroupHandler 改用接口
+//   4) mockSpan + mockTracer 实现接口 + 记录 tag 调用
+// 上述是较大改造,留作 follow-up PR (与 PR-OBS-12 TracerInterface + PR-OBS-13 Span.Tag 同源)
+//
+// 本 PR 落地 3 边界 case (覆盖补全型,代码已满足):
+// - nil Tracer 不 panic (已有,本 PR 加固断言)
+// - consumer.go:108-115 span tag 字面量值验证 (从源码 grep 提取,固化防漂移)
+// - handler 收到 ctx 不为 nil (Trace 链入 ctx 不丢失)
+
+// TestConsumeClaim_TraceTagLiterals 验证源码中 span tag 字面量未漂移
+//
+// 目的: 防止后续重构误改 tag key 名 (SkyWalking UI 聚合查询会断)
+// 做法: 直接读源码 grep,断言 4 个关键 tag key 存在
+func TestConsumeClaim_TraceTagLiterals(t *testing.T) {
+	srcBytes, err := os.ReadFile("consumer.go")
+	if err != nil {
+		t.Skipf("cannot read consumer.go (cwd: %s): %v", os.Getenv("PWD"), err)
+	}
+	src := string(srcBytes)
+
+	mustContain := []string{
+		`span.Tag("messaging.system"`,
+		`span.Tag("messaging.kafka.topic"`,
+		`span.Tag("messaging.kafka.partition"`,
+		`span.Tag("event.type"`,
+		`h.Tracer.CreateLocalSpan(sess.Context()`,
+		`defer span.End()`,
+	}
+	for _, m := range mustContain {
+		if !strings.Contains(src, m) {
+			t.Errorf("consumer.go missing critical trace tag/operation %q (SkyWalking UI 聚合查询依赖)", m)
+		}
+	}
+}
+
+// TestConsumeClaim_HandlerReceivesContext 验证 handler 收到非 nil ctx
+//
+// 目的: Trace 链入 ctx 必须传递,handler 才能用 ctx 跨服务调用传递 trace_id
+// 现状: consumer.go:108 span, _, _ 返回 ctx (第 2 个返回值) → handler(ctx, evt)
+//       即使 Tracer 为 nil,ctx 也需传递
+func TestConsumeClaim_HandlerReceivesContext(t *testing.T) {
+	handlerCalled := make(chan struct{}, 1)
+	gotCtx := make(chan context.Context, 1)
+	h := &ConsumerGroupHandler{
+		Ready: make(chan bool),
+		Handler: func(ctx context.Context, e *events.Event) error {
+			gotCtx <- ctx
+			handlerCalled <- struct{}{}
+			return nil
+		},
+		Tracer: nil, // 验证即使无 tracer,ctx 也传递
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 0,
+		Value:     []byte(`{"type":"message.created","id":"evt-1","data":{"messageId":1,"conversationId":1,"userId":1}}`),
+		Timestamp: time.Now(),
+	}
+
+	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, 1)}
+	sess := &fakeSession{}
+	claim.msgs <- msg
+	close(claim.msgs)
+
+	go func() { _ = h.ConsumeClaim(sess, claim) }()
+
+	select {
+	case <-handlerCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler not called within 2s")
+	}
+
+	select {
+	case ctx := <-gotCtx:
+		if ctx == nil {
+			t.Fatal("handler received nil ctx — Trace 链传递失败")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("ctx channel timeout")
+	}
+}
+
+// TestConsumeClaim_NilTracerDoesNotCallCreateLocalSpan 验证 nil tracer 不触发 span
+//
+// 目的: 验证 consumer.go:106-107 if h.Tracer != nil 守卫正确
+// 现状: Tracer=nil 应直接跳过 span 创建 (CreateLocalSpan 不调用)
+// 此 case 与 TestConsumeClaim_NilTracer_DoesNotPanic (已有) 互为补充:
+// 已有 case 断言 '不 panic',本 case 断言 '不调用 CreateLocalSpan' (语义层)
+func TestConsumeClaim_NilTracerDoesNotCallCreateLocalSpan(t *testing.T) {
+	// 当前 Tracer 字段是 *go2sky.Tracer,nil 直接通过 == nil 检查
+	// 完整 '验证不调用' 需要 mock,但 nil 字段无法注入 mock tracer
+	// 本 case 仅断言 Tracer 字段为 nil 时 handler 仍能跑通 (即不 panic 也跳过 span)
+	handlerCalled := make(chan struct{}, 1)
+	h := &ConsumerGroupHandler{
+		Ready: make(chan bool),
+		Handler: func(ctx context.Context, e *events.Event) error {
+			handlerCalled <- struct{}{}
+			return nil
+		},
+		Tracer: nil,
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 0,
+		Value:     []byte(`{"type":"message.created","id":"evt-1","data":{"messageId":1,"conversationId":1,"userId":1}}`),
+		Timestamp: time.Now(),
+	}
+
+	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, 1)}
+	sess := &fakeSession{}
+	claim.msgs <- msg
+	close(claim.msgs)
+
+	go func() { _ = h.ConsumeClaim(sess, claim) }()
+
+	select {
+	case <-handlerCalled:
+		// handler 跑通,说明 nil Tracer 守卫正确(跳过 span 创建)
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler not called within 2s (nil Tracer may have blocked execution)")
 	}
 }
