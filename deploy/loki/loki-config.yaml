@@ -1,0 +1,46 @@
+# PR-OBS-5: dev compose Loki config (filesystem store)
+#
+# 镜像: grafana/loki:2.9.4 (与 charts/emotion-echo/charts/loki/values 同步)
+# 启动方式: COMPOSE_PROFILES=obs docker compose ... up -d
+#
+# dev 单节点 filesystem store + 24h retention,生产部署走 S3/minio (ADR-2 候选)
+# 与 charts/emotion-echo/charts/loki/values.yaml 严格对齐 schema 字段名
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+  replication_factor: 1
+  path_prefix: /loki/chunks
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+  filesystem:
+    directory: /loki/chunks
+
+limits_config:
+  retention_period: 24h  # dev 24h,生产根据 S3 容量调整
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 24
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true

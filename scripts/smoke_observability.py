@@ -193,20 +193,36 @@ def main() -> int:
     # 路径: /tmp/apisix-access.log 在 APISIX 容器内,
     # 挂到 ./tmp/apisix-access.log 在 host
     # 注意: 容器内文件需通过 docker exec 检查
+    # 容器状态检查先于文件检查 — apisix Restarting 时 docker exec 会失败
     try:
         import subprocess
-        result = subprocess.run(
-            ["docker", "exec", "emotion-echo-apisix", "test", "-s", "/tmp/apisix-access.log"],
+        # 先查容器状态
+        inspect = subprocess.run(
+            ["docker", "inspect", "emotion-echo-apisix", "--format", "{{.State.Status}}"],
             capture_output=True,
             text=True,
             timeout=5,
         )
-        # test -s: 文件存在且 size > 0
-        check(
-            "apisix /tmp/apisix-access.log exists and non-empty",
-            result.returncode == 0,
-            f"exit={result.returncode}, stderr={result.stderr[:100]}",
-        )
+        container_status = inspect.stdout.strip()
+        if container_status != "running":
+            check(
+                "apisix /tmp/apisix-access.log exists and non-empty",
+                False,
+                f"container status={container_status!r} (需 running 才能 docker exec;Nacos 注册 500 阻塞常见)",
+            )
+        else:
+            result = subprocess.run(
+                ["docker", "exec", "emotion-echo-apisix", "test", "-s", "/tmp/apisix-access.log"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            # test -s: 文件存在且 size > 0
+            check(
+                "apisix /tmp/apisix-access.log exists and non-empty",
+                result.returncode == 0,
+                f"exit={result.returncode}, stderr={result.stderr[:100]}",
+            )
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         check(
             "apisix /tmp/apisix-access.log check runs",

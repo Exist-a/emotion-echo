@@ -269,6 +269,9 @@ services:
       - "/usr/bin/apisix init 2>&1 || true; /usr/bin/apisix init_etcd 2>&1 || true; exec /usr/local/openresty/bin/openresty -p /usr/local/apisix -g 'daemon off;'"
     volumes:
       - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml
+      # PR-OBS-5: APISIX file-logger (PR-OBS-1 89b0117) 落盘 /tmp/apisix-access.log
+      # 挂到 host ./tmp/apisix-access.log 由 promtail 采集送 Loki
+      - ./tmp/apisix-access.log:/tmp/apisix-access.log
     ports:
       # Stage 32 PR-14 fix: 9080 被 Windows host 上 NahimicService 占用，
       # curl localhost:9080 命中音频服务返回 301 about:blank（不是 APISIX）。
@@ -338,6 +341,34 @@ services:
     depends_on:
       - prometheus
 
+  # ===== PR-OBS-5: Loki + Promtail (logs layer) =====
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: emotion-echo-loki
+    profiles: ["obs"]
+    command: -config.file=/etc/loki/loki-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - app-network
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: emotion-echo-promtail
+    profiles: ["obs"]
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      # PR-OBS-1 file-logger 落盘 /tmp/apisix-access.log → promtail 静态采集
+      - ./tmp/apisix-access.log:/var/log/apisix-access.log:ro
+      - ./loki/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+    networks:
+      - app-network
+    depends_on:
+      - loki
+
 # =====================================================
 # 卷定义
 # =====================================================
@@ -350,6 +381,8 @@ volumes:
   # PR-OBS-4: observability 持久化卷
   prometheus_data:
   grafana_data:
+  # PR-OBS-5: loki 持久化卷
+  loki_data:
 
 # =====================================================
 # 网络定义 (Stage 26-Q:external, 与 apps.yml 共享 emotion-echo_app-network)
