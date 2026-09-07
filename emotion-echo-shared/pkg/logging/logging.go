@@ -1,4 +1,4 @@
-// Package logging 提供 emotion-echo 各 Go svc 的统一结构化日志（Stage 41 PR-1）。
+// Package logging 提供 emotion-echo 各 Go svc 的统一结构化日志（Stage 41 PR-1 + PR-OBS-15）。
 //
 // 来源：web-bff/internal/logging + ai-svc/internal/logging 是 clone 关系
 // （原文件头注释明写"clone 自 ai-svc"），本包把它们下沉到 shared，
@@ -12,7 +12,8 @@
 //   - 模块前缀自动剥离："[postgres] connected" → module="postgres", msg="connected"。
 //
 // 输出格式：JSON to stdout（决策 6 审计要求）
-//   {"time":"...","level":"INFO","msg":"...","module":"..."}
+//   {"time":"...","level":"INFO","msg":"...","module":"...","svc":"...","trace_id":"...","action":"..."}
+//   后 3 字段（svc/trace_id/action）通过 SetGlobalSvc/WithTraceID/WithAction 注入
 //
 // 环境变量：
 //   LOG_FORMAT = json (default) | text
@@ -20,12 +21,63 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
 )
+
+// ===== PR-OBS-15: 决策 6 必填字段 helper =====
+
+// globalSvc 是 SetGlobalSvc 设置的全局 svc 名,所有日志自动带 svc 字段。
+// 业务 svc 启动时 main() 里调一次 SetGlobalSvc("chat-svc") 即可。
+var globalSvc string
+
+// ctxKeyTraceID/ctxKeyAction 用 context.Value 透传 trace_id 和 action 到 slog。
+type ctxKeyTraceID struct{}
+type ctxKeyAction struct{}
+
+// SetGlobalSvc 设置全局 svc 名,后续所有 slog 日志自动注入 svc 字段。
+//
+// 典型用法（各 svc main() 启动时调一次）：
+//
+//	logging.Init()
+//	logging.SetGlobalSvc("chat-svc")
+func SetGlobalSvc(svc string) {
+	globalSvc = svc
+}
+
+// WithTraceID 返回带 trace_id 的 ctx,用于 slog.InfoContext(ctx, ...) 自动注入。
+//
+// 用法（gin handler / gRPC interceptor）：
+//
+//	ctx = logging.WithTraceID(ctx, traceID)
+//	logging.InfofContext(ctx, "...")
+func WithTraceID(ctx context.Context, traceID string) context.Context {
+	return context.WithValue(ctx, ctxKeyTraceID{}, traceID)
+}
+
+// WithAction 返回带 action 的 ctx,用于 slog.InfoContext 自动注入。
+func WithAction(ctx context.Context, action string) context.Context {
+	return context.WithValue(ctx, ctxKeyAction{}, action)
+}
+
+// TraceIDFromCtx / ActionFromCtx 提取 ctx 里的值（外部可选调用,主要给 handler 用）。
+func TraceIDFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(ctxKeyTraceID{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+func ActionFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(ctxKeyAction{}).(string); ok {
+		return v
+	}
+	return ""
+}
 
 // Init 初始化全局 slog JSON handler，输出到 stdout。
 func Init() {
@@ -47,14 +99,51 @@ func InitTo(w io.Writer) {
 		Level: parseLevel(logLevel),
 	}
 
-	var handler slog.Handler
+	var inner slog.Handler
 	if logFormat == "text" {
-		handler = slog.NewTextHandler(w, opts)
+		inner = slog.NewTextHandler(w, opts)
 	} else {
-		handler = slog.NewJSONHandler(w, opts)
+		inner = slog.NewJSONHandler(w, opts)
 	}
 
+	// PR-OBS-15: wrap inner handler 自动注入 svc + 从 ctx 抽 trace_id/action
+	handler := &enrichHandler{next: inner}
 	slog.SetDefault(slog.New(handler))
+}
+
+// enrichHandler 在 inner handler 基础上自动注入 svc (全局) + trace_id/action (ctx)
+//
+// 性能: O(1) per record,仅 1 次 map 拷贝 + 3 个 attr 检查
+type enrichHandler struct {
+	next slog.Handler
+}
+
+// Enabled / Handle / WithAttrs / WithGroup 委托给 inner handler
+func (h *enrichHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
+	return h.next.Enabled(ctx, lvl)
+}
+
+func (h *enrichHandler) Handle(ctx context.Context, r slog.Record) error {
+	// 复制 attrs (避免修改 inner record)
+	cloned := r.Clone()
+	if globalSvc != "" {
+		cloned.AddAttrs(slog.String("svc", globalSvc))
+	}
+	if v := TraceIDFromCtx(ctx); v != "" {
+		cloned.AddAttrs(slog.String("trace_id", v))
+	}
+	if v := ActionFromCtx(ctx); v != "" {
+		cloned.AddAttrs(slog.String("action", v))
+	}
+	return h.next.Handle(ctx, cloned)
+}
+
+func (h *enrichHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &enrichHandler{next: h.next.WithAttrs(attrs)}
+}
+
+func (h *enrichHandler) WithGroup(name string) slog.Handler {
+	return &enrichHandler{next: h.next.WithGroup(name)}
 }
 
 // parseLevel 把字符串映射到 slog.Level，未识别值走 INFO。
