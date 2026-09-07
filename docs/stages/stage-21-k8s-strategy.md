@@ -1,5 +1,9 @@
 # Stage 21 · Kubernetes 化策略（针对阿里云 ACK + ACR）
 
+> ⚠️ **状态：历史策略 / 学习路径参考（2026-09-07 收口）**
+> 本项目部署形态以 [positioning.md](/docs/architecture/positioning.md) 与 [decisions.md 决策 3](/docs/architecture/decisions.md) 为准：**「分布式架构 + 单机部署（单机多实例）」**，当前**不启用 K8s 作为生产部署形态**。
+> 本文档的阿里云 ACK 选型与实施方案**未启用**，保留为未来业务规模增长到多机 / K8s 时的学习路径参考；仓库内 Helm chart（`charts/emotion-echo`）与 kind 工具链（`k8s/`）属决策 3 的「备好不部署」学习资产。
+
 **日期**：2026-07-15
 **目标**：把 Stage 20 容器化的两个核心服务（emotion-llm-service + emotion-echo-ai-svc）+ 基础设施（postgres/redis/kafka/skywalking）部署到阿里云 ACK。
 **目标读者**：项目维护者（学习 K8s 中）+ 后续接手部署的人。

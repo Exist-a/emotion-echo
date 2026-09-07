@@ -327,6 +327,7 @@ K8s 核心价值:多节点调度、自愈、水平扩展、滚动更新、服务
 - [distributed-architecture.md](/docs/architecture/distributed.md) — 分布式架构补充说明
 - [microservices-architecture.md](/docs/architecture/microservices.md) — 微服务架构说明
 - [stage-36-fixes-roadmap.md](/docs/stages/stage-36-fixes-roadmap.md) — 当前活跃 roadmap
+- [stage-21-k8s-strategy.md](/docs/stages/stage-21-k8s-strategy.md) — ⚠️ 历史策略（2026-09-07 标记）：ACK 上线方案未启用，仅作未来多机/K8s 迁移学习参考
 - [stage-26-P-deployment.md](/docs/stages/stage-26-P-deployment.md) — Docker Compose 部署交付报告
 
 ---

@@ -33,7 +33,7 @@ go-zero 服务（向 Nacos 注册，被 APISIX 发现）
 Kafka（异步 worker 才有意义）
    │
    ▼
-K8s（最终部署形态）
+K8s（学习资产，当前不部署——决策 3）
 ```
 
 ### 0.2 各 Phase 拆解
@@ -45,7 +45,7 @@ K8s（最终部署形态）
 | Phase 2 | Kafka 异步化 | 4 | 端到端语音链路跑通 |
 | Phase 3 | 限流/熔断/配置中心 | 3 | 韧性 + 动态配置 |
 | Phase 4 | 业务域拆分 | 3 | 旧 Gin 工程清零 |
-| Phase 5 | K8s 化 | 4 | `helm install` 一键部署 |
+| Phase 5 | K8s 化 | 4 | `helm install` 一键部署（2026-09-07 收口：本地验证完成，生产不启用 K8s，见决策 3）|
 
 ### 0.3 全程学习路径
 
@@ -811,11 +811,11 @@ Phase 4 业务拆分
   [ ] 4.2 ai-svc
   [ ] 4.3 report/survey/notification
 
-Phase 5 K8s 化
-  [ ] 5.1 Helm Chart
-  [ ] 5.2 Strimzi Kafka
-  [ ] 5.3 APISIX Ingress
-  [ ] 5.4 Prometheus + Grafana
+Phase 5 K8s 化（2026-09-07 收口：本地学习完成，生产不启用 K8s——决策 3）
+  [x] 5.1 Helm Chart（charts/emotion-echo 24 subchart，本地渲染/冒烟验证）
+  [ ] 5.2 Strimzi Kafka（未做）
+  [x] 5.3 APISIX Ingress（本地 kind 验证，Stage 27）
+  [x] 5.4 Prometheus + Grafana（observability 已入 chart，Stage 28）
 
 # Stage 31/32/33 分布式治理演进（ADR 决策 10/11/12/13）
 Stage 31 Nacos 治理层          🚧 [x] PR-01 文档收口 / [ ] PR-02..12 推进
