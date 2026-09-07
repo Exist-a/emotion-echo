@@ -161,6 +161,17 @@ func main() {
 		if err != nil {
 			log.Printf("[kafka] consumer init failed: %v (behavior events disabled)", err)
 		} else {
+			// ADR-19 PR-A3.2: 根据 KAFKA_DLQ_TOPIC env 自动注入 Kafka DLQ
+			// 替代默认 NoopDLQPublisher{}。DLQ 不可达时 log + 退化为 Noop(向后兼容)
+			if dlqTopic := c.Kafka.DLQTopic; dlqTopic != "" {
+				if dlqPub, dlqErr := kafka.NewKafkaDLQPublisher(brokers, dlqTopic); dlqErr != nil {
+					log.Printf("[kafka] DLQ producer init failed (fallback to Noop): %v", dlqErr)
+				} else {
+					kc.WithDLQ(dlqPub)
+					defer func() { _ = dlqPub.Close() }()
+					log.Printf("[kafka] DLQ enabled: topic=%s", dlqTopic)
+				}
+			}
 			go func() {
 				if err := kc.Run(appCtx); err != nil && err != context.Canceled {
 					log.Printf("[kafka] consumer exited: %v", err)
