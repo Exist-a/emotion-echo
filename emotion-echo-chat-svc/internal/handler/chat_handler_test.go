@@ -15,7 +15,7 @@ import (
 
 	"emotion-echo-chat-svc/internal/config"
 	"emotion-echo-chat-svc/internal/events"
-	"emotion-echo-chat-svc/internal/middleware"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/model"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
@@ -47,9 +47,9 @@ func newTestRouter() *gin.Engine {
 }
 
 // reqWithUser 把 demo user_id 注入 ctx（模拟中间件）
-// handler 内部 logic 通过 middleware.CtxUserIDKey 提取
+// handler 内部 logic 通过 sharedmw.CtxUserIDKey 提取
 func reqWithUser(req *http.Request, uid int64) *http.Request {
-	ctx := context.WithValue(req.Context(), middleware.CtxUserIDKey{}, uid)
+	ctx := context.WithValue(req.Context(), sharedmw.CtxUserIDKey{}, uid)
 	return req.WithContext(ctx)
 }
 

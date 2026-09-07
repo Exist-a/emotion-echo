@@ -7,25 +7,24 @@ import (
 	"context"
 	"errors"
 
-	"emotion-echo-chat-svc/internal/middleware"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // ListMessagesLogic 处理 GET /api/v1/conversations/:id/messages
 //
 // 仅返回当前用户所属会话的消息
 type ListMessagesLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewListMessagesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListMessagesLogic {
 	return &ListMessagesLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
@@ -33,7 +32,7 @@ func NewListMessagesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *List
 
 // ListMessages 列出会话下的消息
 func (l *ListMessagesLogic) ListMessages(req *types.ListMessagesReq) (resp *types.ListMessagesResp, err error) {
-	uid, ok := l.ctx.Value(middleware.CtxUserIDKey{}).(int64)
+	uid, ok := l.ctx.Value(sharedmw.CtxUserIDKey{}).(int64)
 	if !ok || uid <= 0 {
 		return nil, errors.New("unauthorized: missing user id")
 	}

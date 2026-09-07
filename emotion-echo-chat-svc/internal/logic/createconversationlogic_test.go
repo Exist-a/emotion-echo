@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"emotion-echo-chat-svc/internal/events"
-	"emotion-echo-chat-svc/internal/middleware"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
@@ -18,7 +18,7 @@ import (
 // files in this package. Defined here (the older sibling) so existing
 // imports keep working; sendmessagelogic_test.go reuses them.
 func ctxWithUserID(ctx context.Context, uid int64) context.Context {
-	return context.WithValue(ctx, middleware.CtxUserIDKey{}, uid)
+	return context.WithValue(ctx, sharedmw.CtxUserIDKey{}, uid)
 }
 
 // 测试公用：构造一个完整测试上下文

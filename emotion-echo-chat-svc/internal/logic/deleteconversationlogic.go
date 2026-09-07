@@ -17,22 +17,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
 	"emotion-echo-chat-svc/internal/events"
-	"emotion-echo-chat-svc/internal/middleware"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 
 	"github.com/google/uuid"
-	"github.com/zeromicro/go-zero/core/logx"
+	
 	"gorm.io/gorm"
 )
 
 // DeleteConversationLogic 处理删除会话
 type DeleteConversationLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -40,7 +40,7 @@ type DeleteConversationLogic struct {
 // NewDeleteConversationLogic 构造
 func NewDeleteConversationLogic(ctx context.Context, svcCtx *svc.ServiceContext) *DeleteConversationLogic {
 	return &DeleteConversationLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
@@ -48,7 +48,7 @@ func NewDeleteConversationLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 
 // DeleteConversation 删除指定会话
 func (l *DeleteConversationLogic) DeleteConversation(req *types.DeleteConversationReq) (resp *types.DeleteConversationResp, err error) {
-	uid, ok := l.ctx.Value(middleware.CtxUserIDKey{}).(int64)
+	uid, ok := l.ctx.Value(sharedmw.CtxUserIDKey{}).(int64)
 	if !ok || uid <= 0 {
 		return nil, errors.New("unauthorized: missing user id")
 	}
@@ -66,7 +66,7 @@ func (l *DeleteConversationLogic) DeleteConversation(req *types.DeleteConversati
 
 	now := time.Now()
 	if err := l.persistWithOutbox(uid, req.Id, now); err != nil {
-		l.Errorf("DeleteConversation persist err: %v", err)
+		slog.ErrorContext(l.ctx, "DeleteConversation persist failed", "err", err)
 		return nil, err
 	}
 
@@ -123,7 +123,7 @@ func (l *DeleteConversationLogic) persistWithOutbox(uid, convID int64, now time.
 	}
 
 	if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
-		l.Errorf("publish conversation.closed err: %v", err)
+		slog.ErrorContext(l.ctx, "publish conversation.closed failed", "err", err)
 	}
 	return nil
 }

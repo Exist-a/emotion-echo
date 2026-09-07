@@ -7,10 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
 	"emotion-echo-chat-svc/internal/events"
-	"emotion-echo-chat-svc/internal/middleware"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/model"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
@@ -18,7 +19,7 @@ import (
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/google/uuid"
-	"github.com/zeromicro/go-zero/core/logx"
+	
 	"gorm.io/gorm"
 )
 
@@ -31,14 +32,13 @@ import (
 //  4. 落 message + 增 message_count + 写 outbox 行（同事务，原子）
 //  5. commit；relay goroutine 异步发事件
 type SendMessageLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewSendMessageLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SendMessageLogic {
 	return &SendMessageLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
@@ -49,7 +49,7 @@ var allowedRoles = map[string]bool{"user": true, "assistant": true, "system": tr
 
 // SendMessage 追加一条消息到指定会话
 func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.SendMessageResp, err error) {
-	uid, ok := l.ctx.Value(middleware.CtxUserIDKey{}).(int64)
+	uid, ok := l.ctx.Value(sharedmw.CtxUserIDKey{}).(int64)
 	if !ok || uid <= 0 {
 		return nil, errors.New("unauthorized: missing user id")
 	}
@@ -114,7 +114,7 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 	}
 
 	if err := l.persistWithOutbox(uid, req.Id, role, req.Content, msg, now); err != nil {
-		l.Errorf("SendMessage persist err: %v", err)
+		slog.ErrorContext(l.ctx, "SendMessage persist failed", "err", err)
 		return nil, err
 	}
 
@@ -210,7 +210,7 @@ func (l *SendMessageLogic) persistWithOutbox(
 	d.MessageID = msg.ID
 	evt.Data = d
 	if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
-		l.Errorf("publish message.created err: %v", err)
+		slog.ErrorContext(l.ctx, "publish message.created failed", "err", err)
 	}
 
 	// Stage 36-A3.2：InMemory / 退化路径（无 Kafka 无 Outbox）也走 dev fallback，
@@ -242,7 +242,7 @@ func (l *SendMessageLogic) maybeUpsertNeutralEmotion(uid, convID, messageID int6
 		EventId:        eventID,
 	}
 	if _, err := l.svcCtx.AIClient.UpsertNeutralEmotion(l.ctx, req); err != nil {
-		l.Errorf("dev fallback UpsertNeutralEmotion failed (msgID=%d eventID=%s): %v",
-			messageID, eventID, err)
+		slog.ErrorContext(l.ctx, "dev fallback UpsertNeutralEmotion failed",
+			"msg_id", messageID, "event_id", eventID, "err", err)
 	}
 }

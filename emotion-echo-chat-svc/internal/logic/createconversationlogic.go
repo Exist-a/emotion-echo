@@ -9,15 +9,17 @@ import (
 	"errors"
 	"time"
 
+	"log/slog"
+
 	"emotion-echo-chat-svc/internal/events"
-	"emotion-echo-chat-svc/internal/middleware"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/model"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 
 	"github.com/google/uuid"
-	"github.com/zeromicro/go-zero/core/logx"
+	
 	"gorm.io/gorm"
 )
 
@@ -30,14 +32,13 @@ import (
 //  4. commit
 //  5. 由 relay goroutine 异步发送事件（commit 后立即可见）
 type CreateConversationLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewCreateConversationLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CreateConversationLogic {
 	return &CreateConversationLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
@@ -46,7 +47,7 @@ func NewCreateConversationLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 // CreateConversation 新建一个会话
 func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversationReq) (resp *types.CreateConversationResp, err error) {
 	// 1. 鉴权（由 AuthMiddleware 注入 user_id）
-	uid, ok := l.ctx.Value(middleware.CtxUserIDKey{}).(int64)
+	uid, ok := l.ctx.Value(sharedmw.CtxUserIDKey{}).(int64)
 	if !ok || uid <= 0 {
 		return nil, errors.New("unauthorized: missing user id")
 	}
@@ -63,7 +64,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 
 	// 3. Stage 30-C A3: 事务化持久化 + outbox
 	if err := l.persistWithOutbox(uid, conv, now); err != nil {
-		l.Errorf("CreateConversation persist err: %v", err)
+		slog.ErrorContext(l.ctx, "CreateConversation persist failed", "err", err)
 		return nil, err
 	}
 
@@ -144,7 +145,7 @@ func (l *CreateConversationLogic) persistWithOutbox(uid int64, conv *model.Conve
 
 	// 路径 3：原行为 — 直接 EventPublisher.Publish（best-effort，失败仅 log）
 	if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
-		l.Errorf("publish conversation.created err: %v", err)
+		slog.ErrorContext(l.ctx, "publish conversation.created failed", "err", err)
 	}
 	return nil
 }
