@@ -207,10 +207,14 @@ func attemptKey(msg *sarama.ConsumerMessage) string {
 
 // handleOne 把一条 chat-event 写为 User_behaviorEvent
 //
-// 事件类型 → 行为类型映射：
+// 事件类型 → 行为类型映射（per normalizeEventType）：
 //   message.created        → "message"
 //   conversation.created  → "conversation_created"
 //   conversation.closed    → "conversation_closed"
+//
+// ADR-19 PR-A1.3 REFACTOR: 暂不动此函数 — chat-svc DevEventPublisher 与本 consumer
+// 在 target/session_id 格式上不一致（前者 "msg:N"/"conv:N",后者纯数字/topic 名），
+// 统一需要数据迁移脚本 + 下游消费端同步改。后续 sprint 起 ADR-20 单独处理。
 func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
 	var ev events.Event
 	if err := json.Unmarshal(msg.Value, &ev); err != nil {

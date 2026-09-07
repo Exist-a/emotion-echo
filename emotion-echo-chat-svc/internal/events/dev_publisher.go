@@ -29,9 +29,10 @@ package events
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	"strings"
-	"time"
+
+	"github.com/emotion-echo/shared/pkg/eventrow"
 )
 
 // dbExecutor 是 DevEventPublisher 需要的最小 DB 接口
@@ -79,6 +80,9 @@ func (p *DevEventPublisher) Close() error {
 // event_id 取自 Event.ID（与 Kafka 路径一致 — Stage 30-C A1 幂等去重契约）。
 // event_type 细分（message.created / conversation.created / conversation.closed），
 // 不再合并成 "conversation"（Stage 37-A A3 修复）。
+//
+// PR-A1.3 REFACTOR：把 mapEventToUserBehaviorRow 抽到 shared/pkg/eventrow，
+// 与 analytics-svc consumer 共用（消灭两份 schema 漂移）。
 func (p *DevEventPublisher) Publish(ctx context.Context, topic string, e *Event) error {
 	if e == nil {
 		return fmt.Errorf("dev_publisher: event is nil")
@@ -87,7 +91,7 @@ func (p *DevEventPublisher) Publish(ctx context.Context, topic string, e *Event)
 		return fmt.Errorf("dev_publisher: event.ID is empty (type=%s)", e.Type)
 	}
 
-	row, err := mapEventToUserBehaviorRow(e)
+	row, err := buildUserBehaviorRow(e)
 	if err != nil {
 		return err
 	}
@@ -113,75 +117,52 @@ ON CONFLICT (event_id) DO NOTHING`
 	return nil
 }
 
-// userBehaviorRow 是 user_behavior_events 一行的内部表示
+// buildUserBehaviorRow 把 chat-svc Event 转换为 shared eventrow.UserBehaviorRow
 //
-// 字段顺序 = SQL INSERT 参数顺序；不要随便调（调了要同步调单测的 joinArgs
-// 断言语义，虽然单测用 Contains 不绑顺序，但保持稳定便于 reviewer 阅读）。
-type userBehaviorRow struct {
-	EventID    string
-	UserID     int64
-	EventType  string
-	Target     string
-	SessionID  string
-	OccurredAt time.Time
-}
-
-// mapEventToUserBehaviorRow 把 Event 映射到 user_behavior_events 行
+// 这是 chat-svc 侧的薄包装：把 events.Data 反序列化成目标 DTO 字段值，
+// 再调 eventrow.MapEventToUserBehaviorRow 完成映射。
 //
-// 设计要点（per ADR-19 §D）：
-//   - 3 种事件类型显式分支，未知类型返 error（不允许静默丢）
-//   - target 字段填 message.id（message.created）或 conversation.id（其他两）
-//   - session_id 填 conversation.id（让"同一会话的事件"聚合到一起）
-//   - occurred_at 取 Event.Time（事件产生时间，非落库时间）
-//
-// PR-A1.3 会把这函数抽到 shared/pkg/eventrow.MapEventToUserBehaviorRow，
-// 与 analytics-svc consumer 共用（消灭两份映射）。
-func mapEventToUserBehaviorRow(e *Event) (userBehaviorRow, error) {
-	switch d := e.Data.(type) {
-	case MessageCreatedData:
-		if d.MessageID == 0 {
-			return userBehaviorRow{}, fmt.Errorf("dev_publisher: message.created event missing MessageID")
-		}
-		if d.ConversationID == 0 {
-			return userBehaviorRow{}, fmt.Errorf("dev_publisher: message.created event missing ConversationID")
-		}
-		return userBehaviorRow{
-			EventID:    e.ID,
-			UserID:     d.UserID,
-			EventType:  EventTypeMessageCreated,
-			Target:     fmt.Sprintf("msg:%d", d.MessageID),
-			SessionID:  fmt.Sprintf("conv:%d", d.ConversationID),
-			OccurredAt: e.Time.UTC(),
-		}, nil
-	case ConversationCreatedData:
-		if d.ConversationID == 0 {
-			return userBehaviorRow{}, fmt.Errorf("dev_publisher: conversation.created event missing ConversationID")
-		}
-		return userBehaviorRow{
-			EventID:    e.ID,
-			UserID:     d.UserID,
-			EventType:  EventTypeConversationCreated,
-			Target:     fmt.Sprintf("conv:%d", d.ConversationID),
-			SessionID:  fmt.Sprintf("conv:%d", d.ConversationID),
-			OccurredAt: e.Time.UTC(),
-		}, nil
-	case ConversationClosedData:
-		if d.ConversationID == 0 {
-			return userBehaviorRow{}, fmt.Errorf("dev_publisher: conversation.closed event missing ConversationID")
-		}
-		return userBehaviorRow{
-			EventID:    e.ID,
-			UserID:     d.UserID,
-			EventType:  EventTypeConversationClosed,
-			Target:     fmt.Sprintf("conv:%d", d.ConversationID),
-			SessionID:  fmt.Sprintf("conv:%d", d.ConversationID),
-			OccurredAt: e.Time.UTC(),
-		}, nil
-	default:
-		return userBehaviorRow{}, fmt.Errorf("dev_publisher: unknown event data type %T (event_type=%s)",
-			d, e.Type)
+// chat-svc 当前落库 event_type 用 ev.Type 原值（带点），与 analytics-svc
+// consumer 用的 normalizeEventType 后值（不带点）不同 — 详见 eventrow 包注释。
+// PR-A1.3 不改落库值（避免引入未知回归），等数据迁移 PR 决定统一形态。
+func buildUserBehaviorRow(e *Event) (eventrow.UserBehaviorRow, error) {
+	shape, err := extractDataShape(e)
+	if err != nil {
+		return eventrow.UserBehaviorRow{}, err
 	}
+	return eventrow.MapEventToUserBehaviorRow(e.ID, e.Type, shape, e.Time)
 }
 
-// 防 unused import 警告（strings 留给后续 PR-A1.3 refactor 时拼接 SQL 用）
-var _ = strings.HasPrefix
+// extractDataShape 把 e.Data (any) 反序列化到 eventrow.DataShape
+//
+// e.Data 在 JSON 序列化时已经是 MessageCreatedData / ConversationCreatedData /
+// ConversationClosedData 结构之一。先 marshal 再 unmarshal 到 eventrow.DataShape
+// 与 analytics-svc consumer 的 remarshal 模式一致（consumer.go:285）。
+func extractDataShape(e *Event) (eventrow.DataShape, error) {
+	b, err := json.Marshal(e.Data)
+	if err != nil {
+		return eventrow.DataShape{}, fmt.Errorf("dev_publisher: marshal data: %w", err)
+	}
+	// 第一次 unmarshal 到 dynamic map 用于按字段名匹配
+	var dyn map[string]any
+	if err := json.Unmarshal(b, &dyn); err != nil {
+		return eventrow.DataShape{}, fmt.Errorf("dev_publisher: unmarshal data to dyn: %w", err)
+	}
+	shape := eventrow.DataShape{}
+	if v, ok := dyn["messageId"]; ok {
+		if f, ok := v.(float64); ok {
+			shape.MessageID = int64(f)
+		}
+	}
+	if v, ok := dyn["conversationId"]; ok {
+		if f, ok := v.(float64); ok {
+			shape.ConversationID = int64(f)
+		}
+	}
+	if v, ok := dyn["userId"]; ok {
+		if f, ok := v.(float64); ok {
+			shape.UserID = int64(f)
+		}
+	}
+	return shape, nil
+}
