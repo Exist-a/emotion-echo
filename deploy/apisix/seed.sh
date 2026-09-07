@@ -263,6 +263,10 @@ log "Step 3/4: defining shared plugins"
 # api-breaker 下游 5xx > 50% 熔断 30s
 # cors 统一 CORS（替代 BFF corsMiddleware）
 # prometheus 默认配置（OAP 上报 metrics）
+# skywalking-logger PR-OBS-1 修 2: 每个请求把 APISIX access 信息上报 OAP,
+#   与 config.yaml endpoint_addr=http://emotion-echo-sw-oap:12800 配套
+# file-logger PR-OBS-1 修 2: 落盘到 /tmp/apisix-access.log(由 PR-OBS-5 volume mount),
+#   由 promtail 采集送 Loki
 PLUGINS_JSON=$(cat <<EOF
 {
   "jwt-auth": {},
@@ -293,6 +297,15 @@ PLUGINS_JSON=$(cat <<EOF
     "expose_headers": "X-User-Id",
     "allow_credentials": true,
     "max_age": 600
+  },
+  "skywalking-logger": {
+    "endpoint_addr": "http://emotion-echo-sw-oap:12800",
+    "service_name": "APISIX",
+    "report_interval": 3
+  },
+  "file-logger": {
+    "path": "/tmp/apisix-access.log",
+    "log_format": "{\"client_ip\":\"$remote_addr\",\"user\":\"$remote_user\",\"timestamp\":\"$time_iso8601\",\"method\":\"$request_method\",\"url\":\"$request_uri\",\"status\":$status,\"bytes_sent\":$bytes_sent,\"bytes_received\":$bytes_received,\"resp_time\":$request_time,\"upstream\":\"$upstream_addr\",\"upstream_time\":$upstream_response_time}"
   },
   "prometheus": {}
 }
@@ -362,6 +375,15 @@ CATCHALL_PLUGINS_JSON=$(cat <<EOF
     "expose_headers": "X-User-Id",
     "allow_credentials": true,
     "max_age": 600
+  },
+  "skywalking-logger": {
+    "endpoint_addr": "http://emotion-echo-sw-oap:12800",
+    "service_name": "APISIX",
+    "report_interval": 3
+  },
+  "file-logger": {
+    "path": "/tmp/apisix-access.log",
+    "log_format": "{\"client_ip\":\"$remote_addr\",\"user\":\"$remote_user\",\"timestamp\":\"$time_iso8601\",\"method\":\"$request_method\",\"url\":\"$request_uri\",\"status\":$status,\"bytes_sent\":$bytes_sent,\"bytes_received\":$bytes_received,\"resp_time\":$request_time,\"upstream\":\"$upstream_addr\",\"upstream_time\":$upstream_response_time}"
   },
   "prometheus": {}
 }
