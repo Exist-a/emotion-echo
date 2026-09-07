@@ -105,6 +105,16 @@ func main() {
 			log.Printf("[kafka] producer connected, brokers=%v", kafkaBrokersList)
 			defer func() { _ = kp.Close() }()
 		}
+	} else if db != nil {
+		// ADR-19 PR-A1.2: KAFKA_ENABLED=false 时启用 DevEventPublisher
+		// 同步写 user_behavior_events（dev-only，prod 不会命中此分支）。
+		// db 为 nil 时仍 fallback 到 InMemoryEventPublisher（向后兼容）。
+		if sqlDB, derr := db.DB(); derr == nil {
+			pub = events.NewDevEventPublisher(sqlDB)
+			log.Printf("[events] using DevEventPublisher (KAFKA_ENABLED=false, dev-only path)")
+		} else {
+			log.Printf("[events] dev publisher init failed (gorm.DB() returned err=%v, fallback to in-memory)", derr)
+		}
 	}
 
 	// 3. SkyWalking

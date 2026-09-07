@@ -26,6 +26,7 @@ package integration_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -38,6 +39,15 @@ import (
 
 	"emotion-echo-chat-svc/internal/events"
 )
+
+// sqlDBFrom 抽取 *sql.DB from *gorm.DB（DevEventPublisher 接受 dbExecutor 接口，
+// 即 *sql.DB；gorm.DB 不直接实现该接口）。
+func sqlDBFrom(t *testing.T, db *gorm.DB) (sqlDB *sql.DB) {
+	t.Helper()
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	return sqlDB
+}
 
 // TestDevEventPublisher_EndToEnd_InsertsUserBehaviorRows RED 端到端
 //
@@ -71,7 +81,7 @@ CREATE TABLE IF NOT EXISTS emotion_echo_analytics.user_behavior_events (
 )`))
 
 	// 3. 构造 DevEventPublisher
-	pub := events.NewDevEventPublisher(db)
+	pub := events.NewDevEventPublisher(sqlDBFrom(t, db))
 	defer func() { _ = pub.Close() }()
 
 	// 4. 发 3 种事件
@@ -170,7 +180,7 @@ CREATE TABLE IF NOT EXISTS emotion_echo_analytics.user_behavior_events (
   occurred_at TIMESTAMPTZ NOT NULL
 )`))
 
-	pub := events.NewDevEventPublisher(db)
+	pub := events.NewDevEventPublisher(sqlDBFrom(t, db))
 	defer func() { _ = pub.Close() }()
 
 	evt := &events.Event{
