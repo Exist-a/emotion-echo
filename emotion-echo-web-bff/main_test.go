@@ -25,11 +25,16 @@
 package main
 
 import (
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"emotion-echo-web-bff/internal/auth"
 	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/svc"
+
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -151,6 +156,120 @@ func TestRegisterRoutes_MainContract(t *testing.T) {
 	for _, er := range wantRoutesWithEmotionQ {
 		assert.NotContains(t, got, er, "EmotionQ=nil 时不应注册 emotion_query 路由")
 	}
+}
+
+// ===== PR-OBS-10: web-bff /metrics 端点契约测试 =====
+//
+// 目的：防止重构时漏挂 metrics 中间件 (PR-4c-4 reset-password 同源教训)
+// 复用 stubServiceContext + registerRoutes 启动完整 router,
+// 然后 httptest 拉 /metrics 端点,断言：
+//   1. /metrics 返回 200 + Content-Type text/plain;version=0.0.4
+//   2. /metrics body 含 emotion_echo_http_requests_total + emotion_echo_http_request_duration_seconds
+//   3. /metrics 含 svc 短名 label: service="web-bff"
+//   4. 触发 1 次 /health 后 http_requests_total 增 1 (label 正确)
+//
+// 注：与 TestRegisterRoutes_MainContract 共享 stubServiceContext,
+// 避免重复构造 ServiceContext (含 Nacos boot + DB 连接等副作用)。
+func TestMetricsEndpoint_WebBFF(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	s, cfg := stubServiceContext(t, false)
+	// 复用 main.go 真实启动路径中的中间件装配（含 metrics）
+	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
+	// 不手动注册 /metrics 与 /health — registerRoutes 已注册
+	// (main.go:252 r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler())))
+	registerRoutes(r, s, cfg)
+
+	// 触发 1 次 registerRoutes 已注册的路由 (auth/login),让 counter 出现
+	// 用 POST /api/v1/auth/login (registerRoutes 注册的 catch-all auth 路由)
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader("{}")))
+
+	// 断言 1: /metrics 返回 200
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("/metrics returns 200, got %d", w.Code)
+	}
+
+	// 断言 2: Content-Type 是 Prometheus text format
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/plain") || !strings.Contains(ct, "version=0.0.4") {
+		t.Errorf("/metrics Content-Type should be Prometheus text format, got %q", ct)
+	}
+
+	// 断言 3: 关键 series 名齐全
+	body := w.Body.String()
+	mustContain := []string{
+		"emotion_echo_http_requests_total",
+		"emotion_echo_http_request_duration_seconds",
+	}
+	for _, m := range mustContain {
+		if !strings.Contains(body, m) {
+			t.Errorf("/metrics missing critical series %q", m)
+		}
+	}
+
+	// 断言 4: svc 短名 label (web-bff) 存在
+	if !strings.Contains(body, `service="web-bff"`) {
+		t.Errorf("/metrics missing service label 'web-bff'")
+	}
+
+	// 断言 5: 触发后 counter 增 1
+	// 注意: metrics.go:88 GinMetricsMiddleware 用 c.FullPath() 拿路由模板 (避免高基数)
+	// 实际 path 是 /api/v1/auth/login, 但 label 是路由模板 /api/v1/auth/:action
+	authCounter := readCounterFromBody(t, body, "emotion_echo_http_requests_total", map[string]string{
+		"service": "web-bff", "method": "POST", "path": "/api/v1/auth/:action",
+	})
+	if authCounter < 1 {
+		t.Errorf("emotion_echo_http_requests_total{service=web-bff, path=/api/v1/auth/:action} = %v, want >= 1", authCounter)
+	}
+}
+
+// readCounterFromBody 解析 /metrics 文本格式,提取指定 labels 的 counter 值
+// 复用 shared readCounter 模式,避免 import 共享测试 helper (svc 独立测试)
+func readCounterFromBody(t *testing.T, body, name string, labels map[string]string) float64 {
+	t.Helper()
+	var total float64
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "# ") {
+			// comment / TYPE 行,跳过 (本函数只找 counter,无需 TYPE 行)
+			continue
+		}
+		if strings.HasPrefix(line, name) {
+			// 检查 metric name 后是 '{' (有 labels) 或 ' ' (无 labels)
+			rest := line[len(name):]
+			if len(rest) > 0 && rest[0] == '{' {
+				// 解析 {label="value",...}
+				end := strings.Index(rest, "}")
+				if end < 0 {
+					continue
+				}
+				labelStr := rest[1:end]
+				if !matchLabels(labelStr, labels) {
+					continue
+				}
+				// 提取值: "} 12.5" 或 "} 12.5 1234567890"
+				parts := strings.Fields(rest[end+1:])
+				if len(parts) >= 1 {
+					if v, err := strconv.ParseFloat(parts[0], 64); err == nil {
+						total = v
+					}
+				}
+			}
+		}
+	}
+	return total
+}
+
+func matchLabels(labelStr string, want map[string]string) bool {
+	for k, v := range want {
+		expected := k + `="` + v + `"`
+		if !strings.Contains(labelStr, expected) {
+			return false
+		}
+	}
+	return true
 }
 
 // TestRegisterRoutes_RouteSubset 独立断言：每个注册的 path 都属于某个"已知前缀"集合。
