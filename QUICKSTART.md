@@ -156,12 +156,6 @@ bash scripts/check_minio_health.sh
 #    默认 --dry-run（仅打印计划）；真跑需显式 --execute
 bash scripts/check_empty_db_repro.sh              # 打印计划，不执行
 bash scripts/check_empty_db_repro.sh --execute    # 真跑（含 down -v）
-# 期望: GREEN: echo / echo123 ready
-
-# 5. 全新环境闭环验证（⚠️ 破坏性：会销毁数据卷）
-#    默认 --dry-run（仅打印计划）；真跑需显式 --execute
-bash scripts/check_empty_db_repro.sh              # 打印计划，不执行
-bash scripts/check_empty_db_repro.sh --execute    # 真跑（含 down -v）
 # 期望: contract_rc=0 smoke_rc=0；总耗时 2-4 分钟
 ```
 
