@@ -24,6 +24,7 @@ function isExecutable(filePath) {
 
 const SCRIPT_DIR = __dirname;
 const SEED_SH = path.join(SCRIPT_DIR, 'seed.sh');
+const CONFIG_YAML = path.join(SCRIPT_DIR, 'config.yaml');
 
 function fail(msg) {
   console.error('  ✗ ' + msg);
@@ -39,6 +40,13 @@ if (!fs.existsSync(SEED_SH)) {
 }
 pass('seed.sh exists');
 
+// PR-OBS-1 RED: APISIX skywalking endpoint 必须走容器 DNS + 正确端口 + 挂上 logger 插件
+if (!fs.existsSync(CONFIG_YAML)) {
+  console.error('config.yaml not found at ' + CONFIG_YAML);
+  process.exit(1);
+}
+pass('config.yaml exists');
+
 // bash -n syntax check
 try {
   execSync(`bash -n "${SEED_SH}"`, { stdio: 'pipe' });
@@ -48,6 +56,7 @@ try {
 }
 
 const src = fs.readFileSync(SEED_SH, 'utf8');
+const cfg = fs.readFileSync(CONFIG_YAML, 'utf8');
 const checks = [
   ['seed.sh executable', isExecutable(SEED_SH)],
   ['set -euo pipefail', src.includes('set -euo pipefail')],
@@ -89,6 +98,18 @@ const checks = [
   ['api-breaker error_threshold_ratio = 0.5',
     src.includes('"error_threshold_ratio": 0.5')],
   ['api-breaker open_time = 30s', src.includes('"open_time": 30')],
+
+  // === PR-OBS-1 RED assertions: APISIX skywalking endpoint + logger plugins ===
+  // 依据 docs/plans/observability-sprint-b.md §2.3 + Stage 35 §78 dial fail 现象
+  // 修 1: skywalking endpoint 必须走容器 DNS(非 127.0.0.1)+ HTTP receiver 端口 12800
+  ['PR-OBS-1 skywalking.endpoint_addr 容器 DNS (非 127.0.0.1)',
+    /endpoint_addr:\s*http:\/\/emotion-echo-sw-oap/.test(cfg)],
+  ['PR-OBS-1 skywalking.endpoint_addr 端口 = 12800 (HTTP/Log receiver)',
+    /endpoint_addr:\s*http:\/\/emotion-echo-sw-oap:12800/.test(cfg)],
+  ['PR-OBS-1 catch-all 主入口路由 plugins 含 skywalking-logger',
+    src.includes('"skywalking-logger"')],
+  ['PR-OBS-1 catch-all 主入口路由 plugins 含 file-logger',
+    src.includes('"file-logger"')],
 ];
 
 let passCount = 0, failCount = 0;
