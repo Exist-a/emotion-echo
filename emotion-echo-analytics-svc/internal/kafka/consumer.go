@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 	"time"
 
 	"emotion-echo-analytics-svc/internal/events"
@@ -28,6 +27,7 @@ import (
 	"emotion-echo-analytics-svc/internal/repository"
 
 	"github.com/IBM/sarama"
+	"github.com/emotion-echo/shared/pkg/eventrow"
 )
 
 // Consumer 订阅 chat-events topic 并写 User_beBehaviorEvent
@@ -212,58 +212,86 @@ func attemptKey(msg *sarama.ConsumerMessage) string {
 //   conversation.created  → "conversation_created"
 //   conversation.closed    → "conversation_closed"
 //
-// ADR-19 PR-A1.3 REFACTOR: 暂不动此函数 — chat-svc DevEventPublisher 与本 consumer
-// 在 target/session_id 格式上不一致（前者 "msg:N"/"conv:N",后者纯数字/topic 名），
-// 统一需要数据迁移脚本 + 下游消费端同步改。后续 sprint 起 ADR-20 单独处理。
+// ADR-19 PR-A1.3 v2 (Sprint A 收口): 改用 shared/pkg/eventrow.MapEventToUserBehaviorRow,
+// 与 chat-svc DevEventPublisher 共用 mapper,统一 target/session_id 格式:
+//
+//   target:    message.created → "msg:N"  /  conversation.* → "conv:N"
+//   session_id: 全 → "conv:N"
+//
+// 之前的差异 (target=纯数字, session_id=topic 名) 已废弃:
+//   - 历史数据(若存在)是按旧 contract 写入的,迁移脚本见
+//     emotion-echo-analytics-svc/migrations/002_create_user_behavior_events.sql
+//   - 新写入统一 chat-svc 风格(语义化更强,避免 message_id 与 conversation_id 冲突)
+//
+// event_type 落库值差异 (本路径 normalizeEventType 后无点 vs chat-svc 原值带点)
+// 留作后续数据迁移 PR(超出本任务范围)。
 func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
 	var ev events.Event
 	if err := json.Unmarshal(msg.Value, &ev); err != nil {
 		return err
 	}
 
-	// Stage 37-A A2/A3:
-	//   - event_type: 落 DB 用细分的 ev.Type（"conversation.created" → "conversation_created"），
-	//     不再合并成 "conversation"——下游能区分 created vs closed
-	//   - target: 落 DB 用 message.id / conversation.id（语义化外键），不再是 Event.ID
-	var targetID string
-	var userID int64
-	switch ev.Type {
-	case events.EventTypeMessageCreated:
-		var d events.MessageCreatedData
-		if err := remarshal(ev.Data, &d); err != nil {
-			return err
+	shape, err := extractDataShape(ev.Data)
+	if err != nil {
+		return err
+	}
+
+	// eventType 传 normalizeEventType 后值(不带点,沿用历史),target/session_id
+	// 由共享 mapper 算(chat-svc 风格 msg:N/conv:N)。
+	row, err := eventrow.MapEventToUserBehaviorRow(
+		ev.ID, normalizeEventType(ev.Type), shape, ev.Time,
+	)
+	if err != nil {
+		if errors.Is(err, eventrow.ErrUnknownEventType) {
+			// 未知事件类型 — 跳过但不报错(保留旧逻辑)
+			log.Printf("[kafka-consumer] unknown event type %q, skip", ev.Type)
+			return nil
 		}
-		targetID = strconv.FormatInt(d.MessageID, 10)
-		userID = d.UserID
-	case events.EventTypeConversationCreated:
-		var d events.ConversationCreatedData
-		if err := remarshal(ev.Data, &d); err != nil {
-			return err
-		}
-		targetID = strconv.FormatInt(d.ConversationID, 10)
-		userID = d.UserID
-	case events.EventTypeConversationClosed:
-		var d events.ConversationClosedData
-		if err := remarshal(ev.Data, &d); err != nil {
-			return err
-		}
-		targetID = strconv.FormatInt(d.ConversationID, 10)
-		userID = d.UserID
-	default:
-		// 未知事件类型 — 跳过但不报错
-		log.Printf("[kafka-consumer] unknown event type %q, skip", ev.Type)
-		return nil
+		return err
 	}
 
 	be := &model.UserBehaviorEvent{
-		EventID:    ev.ID, // Stage 30-C A1: 事件 ID 作幂等键 → 重复消费去重
-		UserID:     userID,
-		EventType:  normalizeEventType(ev.Type), // Stage 37-A A3: 细分 enum
-		Target:     targetID,                    // Stage 37-A A2: message.id / conv.id 而非 Event.ID
-		SessionID:  msg.Topic,                   // 没有 session 字段，暂用 topic
-		OccurredAt: ev.Time,
+		EventID:    row.EventID, // Stage 30-C A1: 幂等键
+		UserID:     row.UserID,
+		EventType:  row.EventType,
+		Target:     row.Target,
+		SessionID:  row.SessionID,
+		OccurredAt: row.OccurredAt,
 	}
 	return h.repo.Create(nil, be) // 简化：ctx nil；真实应传 sess.Context()
+}
+
+// extractDataShape 从 events.Data (any) 抽取 eventrow.DataShape 字段
+//
+// 与 chat-svc dev_publisher.go extractDataShape 同构(都从 JSON tag 抽取
+// messageId/conversationId/userId)。shared/eventrow 不反向 import events 包,
+// 所以两端各自实现这个适配层。
+func extractDataShape(data any) (eventrow.DataShape, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return eventrow.DataShape{}, fmt.Errorf("kafka-consumer: marshal data: %w", err)
+	}
+	var dyn map[string]any
+	if err := json.Unmarshal(b, &dyn); err != nil {
+		return eventrow.DataShape{}, fmt.Errorf("kafka-consumer: unmarshal data to dyn: %w", err)
+	}
+	shape := eventrow.DataShape{}
+	if v, ok := dyn["messageId"]; ok {
+		if f, ok := v.(float64); ok {
+			shape.MessageID = int64(f)
+		}
+	}
+	if v, ok := dyn["conversationId"]; ok {
+		if f, ok := v.(float64); ok {
+			shape.ConversationID = int64(f)
+		}
+	}
+	if v, ok := dyn["userId"]; ok {
+		if f, ok := v.(float64); ok {
+			shape.UserID = int64(f)
+		}
+	}
+	return shape, nil
 }
 
 // normalizeEventType 把 ev.Type 转换为 user_behavior_events.event_type 落库值：

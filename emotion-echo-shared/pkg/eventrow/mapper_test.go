@@ -98,9 +98,14 @@ func TestMapEventToUserBehaviorRow_MessageCreated_MissingMessageID(t *testing.T)
 }
 
 // TestMapEventToUserBehaviorRow_UnknownEventType 边界
+//
+// Sprint A 收口（PR-A1.3 v2）后,classifyEventType 用前缀匹配:
+//   - "message" / "message.*"      → message 类(只要 MessageID>0 就 OK)
+//   - "conversation*"              → conversation 类
+//   - 其他                         → ErrUnknownEventType
 func TestMapEventToUserBehaviorRow_UnknownEventType(t *testing.T) {
 	t.Parallel()
-	cases := []string{"foo.bar", "", "message.deleted", "session.ended"}
+	cases := []string{"foo.bar", "", "session.ended", "unknown.event"}
 	for _, et := range cases {
 		et := et
 		t.Run(et, func(t *testing.T) {
@@ -109,6 +114,113 @@ func TestMapEventToUserBehaviorRow_UnknownEventType(t *testing.T) {
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, ErrUnknownEventType),
 				"unknown event type must return ErrUnknownEventType (got %v)", err)
+		})
+	}
+}
+
+// TestMapEventToUserBehaviorRow_ClassifyBothNamingStyles 验证 PR-A1.3 v2 收口
+//
+// 两套命名风格（chat-svc 带点 vs analytics-svc normalize 后）都能正确分类:
+func TestMapEventToUserBehaviorRow_ClassifyBothNamingStyles(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		eventType string
+		wantClass eventClass
+	}{
+		// message 类
+		{"message", eventClassMessage},
+		{"message.created", eventClassMessage},
+		// conversation 类(analytics-svc normalize 后)
+		{"conversation_created", eventClassConversation},
+		{"conversation_closed", eventClassConversation},
+		// conversation 类(chat-svc 原值)
+		{"conversation.created", eventClassConversation},
+		{"conversation.closed", eventClassConversation},
+		// unknown
+		{"", eventClassUnknown},
+		{"foo", eventClassUnknown},
+		{"unknown.event", eventClassUnknown},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.eventType, func(t *testing.T) {
+			t.Parallel()
+			got := classifyEventType(tc.eventType)
+			assert.Equal(t, tc.wantClass, got, "classify(%q) mismatch", tc.eventType)
+		})
+	}
+}
+
+// TestMapEventToUserBehaviorRow_BothNamingStyles_ProducesSameTargetFormat
+//
+// 关键收口验证: 不管 eventType 是带点 ("message.created") 还是 normalize 后
+// ("message"),target / session_id 落库格式必须一致 (msg:N / conv:N)。
+// 这是 ADR-19 Sprint A 收口的真正要求: "消灭两份映射"。
+func TestMapEventToUserBehaviorRow_BothNamingStyles_ProducesSameTargetFormat(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		eventType    string
+		data         DataShape
+		wantTarget   string
+		wantSession  string
+		wantUserID   int64
+	}{
+		{
+			eventType:   "message.created", // chat-svc 原值
+			data:        DataShape{MessageID: 100, ConversationID: 42, UserID: 7},
+			wantTarget:  "msg:100",
+			wantSession: "conv:42",
+			wantUserID:  7,
+		},
+		{
+			eventType:   "message", // analytics-svc normalize 后
+			data:        DataShape{MessageID: 100, ConversationID: 42, UserID: 7},
+			wantTarget:  "msg:100",
+			wantSession: "conv:42",
+			wantUserID:  7,
+		},
+		{
+			eventType:   "conversation.created",
+			data:        DataShape{ConversationID: 42, UserID: 7},
+			wantTarget:  "conv:42",
+			wantSession: "conv:42",
+			wantUserID:  7,
+		},
+		{
+			eventType:   "conversation_created", // normalize 后
+			data:        DataShape{ConversationID: 42, UserID: 7},
+			wantTarget:  "conv:42",
+			wantSession: "conv:42",
+			wantUserID:  7,
+		},
+		{
+			eventType:   "conversation.closed",
+			data:        DataShape{ConversationID: 42, UserID: 7},
+			wantTarget:  "conv:42",
+			wantSession: "conv:42",
+			wantUserID:  7,
+		},
+		{
+			eventType:   "conversation_closed",
+			data:        DataShape{ConversationID: 42, UserID: 7},
+			wantTarget:  "conv:42",
+			wantSession: "conv:42",
+			wantUserID:  7,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.eventType, func(t *testing.T) {
+			t.Parallel()
+			row, err := MapEventToUserBehaviorRow("evt-1", tc.eventType, tc.data, fixedOccurred)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantTarget, row.Target,
+				"target format must be identical across naming styles (eventType=%s)", tc.eventType)
+			assert.Equal(t, tc.wantSession, row.SessionID,
+				"session_id format must be identical across naming styles (eventType=%s)", tc.eventType)
+			assert.Equal(t, tc.wantUserID, row.UserID)
+			// eventType 字符串原样透传(由调用方决定落库 enum)
+			assert.Equal(t, tc.eventType, row.EventType)
 		})
 	}
 }

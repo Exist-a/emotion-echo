@@ -100,10 +100,13 @@ func TestHandleOne_MessageCreated_WritesRow(t *testing.T) {
 	require.Len(t, repo.items, 1)
 	got := repo.items[0]
 	assert.Equal(t, int64(42), got.UserID)
+	// ADR-19 Sprint A 收口（PR-A1.3 v2）: event_type 落库值仍用 normalize 后（不带点）
+	// 保留 Stage 37-A A3 拆分语义;后续数据迁移 PR 决定是否统一为带点。
 	assert.Equal(t, "message", got.EventType)
-	// Stage 37-A A2: target 必须是 message_id 而非 Event.ID
-	// MessageID=1,EventID=evt-1 → target=1, event_id=evt-1
-	assert.Equal(t, "1", got.Target, "Stage 37-A A2: target 必须是 message.id 而非 Event.ID")
+	// ADR-19 Sprint A 收口: target 格式统一 chat-svc 风格（msg:N）
+	// 之前是纯数字 "1",与 chat-svc DevEventPublisher 不一致 → PR-A1.3 v2 消灭两份映射。
+	assert.Equal(t, "msg:1", got.Target, "Sprint A: target must be 'msg:N' (chat-svc style), not '1'")
+	assert.Equal(t, "conv:2", got.SessionID, "Sprint A: session_id must be 'conv:N' (chat-svc style), not topic name")
 	assert.Equal(t, "evt-1", got.EventID, "Stage 30-C A1: EventID 应从 ev.ID 透传")
 }
 
@@ -128,6 +131,9 @@ func TestHandleOne_ConversationCreated_WritesRow(t *testing.T) {
 	// Stage 37-A A3: event_type 必须细分，不再都是 "conversation"
 	assert.Equal(t, "conversation_created", repo.items[0].EventType,
 		"event_type 必须细分为 conversation_created 而非 conversation（Stage 37-A A3）")
+	// ADR-19 Sprint A: target / session_id 统一 chat-svc 风格
+	assert.Equal(t, "conv:5", repo.items[0].Target)
+	assert.Equal(t, "conv:5", repo.items[0].SessionID)
 }
 
 func TestHandleOne_ConversationClosed_WritesRow(t *testing.T) {
@@ -151,6 +157,95 @@ func TestHandleOne_ConversationClosed_WritesRow(t *testing.T) {
 	// Stage 37-A A3: conversation_closed 也必须细分
 	assert.Equal(t, "conversation_closed", repo.items[0].EventType,
 		"event_type 必须细分为 conversation_closed 而非 conversation（Stage 37-A A3）")
+	// ADR-19 Sprint A: target / session_id 统一 chat-svc 风格
+	assert.Equal(t, "conv:5", repo.items[0].Target)
+	assert.Equal(t, "conv:5", repo.items[0].SessionID)
+}
+
+// TestHandleOne_TableDriven_TargetFormatUnified 表驱动覆盖 3 事件类型 × 2 格式
+//
+// Sprint A 收口要求: 不管 eventType 是 chat-svc 原值（带点）还是
+// normalize 后（不带点）,target / session_id 落库格式必须一致。
+// 这个表驱动测试钉死 PR-A1.3 v2 的"消灭两份映射"承诺。
+func TestHandleOne_TableDriven_TargetFormatUnified(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name           string
+		eventType      string
+		data           events.MessageCreatedData // 也用于 conv.*,只取 ConversationID+UserID
+		wantEventType  string // normalize 后落库值
+		wantTarget     string
+		wantSessionID  string
+	}{
+		{
+			name:          "message.created-chat-svc-style",
+			eventType:     events.EventTypeMessageCreated,
+			data:          events.MessageCreatedData{MessageID: 100, ConversationID: 42, UserID: 7},
+			wantEventType: "message",
+			wantTarget:    "msg:100",
+			wantSessionID: "conv:42",
+		},
+		{
+			name:          "conversation.created-chat-svc-style",
+			eventType:     events.EventTypeConversationCreated,
+			data:          events.MessageCreatedData{ConversationID: 42, UserID: 7}, // conv 路径不用 MessageID
+			wantEventType: "conversation_created",
+			wantTarget:    "conv:42",
+			wantSessionID: "conv:42",
+		},
+		{
+			name:          "conversation.closed-chat-svc-style",
+			eventType:     events.EventTypeConversationClosed,
+			data:          events.MessageCreatedData{ConversationID: 42, UserID: 7},
+			wantEventType: "conversation_closed",
+			wantTarget:    "conv:42",
+			wantSessionID: "conv:42",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := &captureEventRepo{}
+			h := &chatEventHandler{repo: repo, topic: "chat-events"}
+
+			// 构造对应 Data 类型
+			var ev events.Event
+			ev.ID = "evt-table-" + tc.name
+			ev.Type = tc.eventType
+			ev.Time = time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
+			switch tc.eventType {
+			case events.EventTypeMessageCreated:
+				ev.Data = tc.data
+			case events.EventTypeConversationCreated:
+				ev.Data = events.ConversationCreatedData{
+					ConversationID: tc.data.ConversationID,
+					UserID:         tc.data.UserID,
+					Title:          "test",
+				}
+			case events.EventTypeConversationClosed:
+				ev.Data = events.ConversationClosedData{
+					ConversationID: tc.data.ConversationID,
+					UserID:         tc.data.UserID,
+				}
+			}
+
+			require.NoError(t, h.handleOne(&sarama.ConsumerMessage{
+				Topic: "chat-events",
+				Value: mustJSON(t, ev),
+			}))
+
+			require.Len(t, repo.items, 1)
+			got := repo.items[0]
+			assert.Equal(t, tc.wantEventType, got.EventType,
+				"eventType落库值(%s) ≠ 期望(%s) — 注意:normalize 后值与原值并存,见 PR-A1.3 v2 commit message",
+				got.EventType, tc.wantEventType)
+			assert.Equal(t, tc.wantTarget, got.Target,
+				"target 格式必须统一 chat-svc 风格 (msg:N / conv:N),不管 eventType 是带点还是 normalize 后")
+			assert.Equal(t, tc.wantSessionID, got.SessionID,
+				"session_id 格式必须统一 chat-svc 风格 (conv:N),不管 eventType 是带点还是 normalize 后")
+		})
+	}
 }
 
 func TestHandleOne_UnknownType_SkipsNoError(t *testing.T) {
@@ -245,7 +340,8 @@ func TestHandleOne_DLQ_NoOpWhenSuccess(t *testing.T) {
 	msg := &sarama.ConsumerMessage{
 		Topic: "chat-events",
 		Key:   []byte("evt-success-1"),
-		Value: mustJSON(t, events.Event{ID: "evt-success-1", Type: events.EventTypeMessageCreated, Time: time.Now(), Data: events.MessageCreatedData{UserID: 1}}),
+		Value: mustJSON(t, events.Event{ID: "evt-success-1", Type: events.EventTypeMessageCreated, Time: time.Now(),
+			Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 1}}),
 	}
 	if err := h.handleOne(msg); err != nil {
 		t.Fatalf("handleOne unexpected err: %v", err)
@@ -354,9 +450,9 @@ func TestHandleOne_PropagatesEventIDForAllEventTypes(t *testing.T) {
 		name string
 		evt  events.Event
 	}{
-		{"message.created", events.Event{ID: "evt-mc-1", Type: events.EventTypeMessageCreated, Time: now, Data: events.MessageCreatedData{UserID: 1}}},
-		{"conversation.created", events.Event{ID: "evt-cc-1", Type: events.EventTypeConversationCreated, Time: now, Data: events.ConversationCreatedData{UserID: 1}}},
-		{"conversation.closed", events.Event{ID: "evt-cx-1", Type: events.EventTypeConversationClosed, Time: now, Data: events.ConversationClosedData{UserID: 1}}},
+		{"message.created", events.Event{ID: "evt-mc-1", Type: events.EventTypeMessageCreated, Time: now, Data: events.MessageCreatedData{MessageID: 100, ConversationID: 42, UserID: 1}}},
+		{"conversation.created", events.Event{ID: "evt-cc-1", Type: events.EventTypeConversationCreated, Time: now, Data: events.ConversationCreatedData{ConversationID: 42, UserID: 1}}},
+		{"conversation.closed", events.Event{ID: "evt-cx-1", Type: events.EventTypeConversationClosed, Time: now, Data: events.ConversationClosedData{ConversationID: 42, UserID: 1}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

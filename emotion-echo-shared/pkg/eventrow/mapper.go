@@ -22,6 +22,7 @@ package eventrow
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,9 @@ import (
 // 这里重复定义是因为 shared 不能 import chat-svc（避免反向依赖）。
 // 任何 EventType 字符串变更必须同时改这两处；PR-A1.3 仅做"映射函数复用"，
 // 不强制两路径 EventType 字符串统一（见包注释）。
+//
+// Sprint A 收口（PR-A1.3 v2）: 这些常量保留供外部 reference，
+// 实际 mapper 用 classifyEventType 基于前缀匹配,允许两种命名风格混用。
 const (
 	EventTypeMessageCreated         = "message.created"
 	EventTypeConversationCreated    = "conversation.created"
@@ -72,20 +76,33 @@ type DataShape struct {
 //
 // 返回:
 //   - 成功 → UserBehaviorRow, nil
-//   - 未知 eventType → zero UserBehaviorRow, ErrUnknownEventType
-//   - 缺关键字段（ConversationID==0 对所有类型;MessageID==0 对 message.created）→
-//     error with details
+//   - 未知 eventType（不属于 message/conversation 两大类）→ zero, ErrUnknownEventType
+//   - 缺关键字段（ConversationID==0 对所有类型;message 类要求 MessageID>0）→ error
 //
-// 已知限制（PR-A1.3 范围内保留）:
-//   - target 字段对 message.created 用 "msg:N",对 conversation.* 用 "conv:N"
-//     analytics-svc 旧逻辑用纯数字字符串。PR-A1.3 暂保留 chat-svc 风格,
-//     后续数据迁移 PR 决定统一形态。
-//   - session_id 用 "conv:N" 前缀格式,与 chat-svc DevEventPublisher 对齐;
-//     analytics-svc 旧逻辑用 topic 名（无前缀）。同样待后续 PR 统一。
+// eventType 分类（基于前缀匹配,兼容两种命名风格）:
+//   - "message" / "message.created"        → message 类 → target="msg:N"
+//   - "conversation_created" / "conversation.created" /
+//     "conversation_closed"  / "conversation.closed"
+//     → conversation 类 → target="conv:N"
+//   - 其他 → ErrUnknownEventType
+//
+// eventType 字段值原样透传到 row.EventType（调用方决定落库 enum 字面值）。
+//
+// Sprint A 收口（PR-A1.3 v2）:
+//   - target / session_id 格式统一 chat-svc 风格(msg:N/conv:N)
+//   - session_id 全用 conv:N(同一会话聚合语义清晰)
 func MapEventToUserBehaviorRow(eventID, eventType string, data DataShape, occurredAt time.Time) (UserBehaviorRow, error) {
 	if eventID == "" {
 		return UserBehaviorRow{}, errors.New("eventrow: eventID is empty")
 	}
+
+	// 先分类,unknown eventType 优先返 ErrUnknownEventType
+	// (避免错误信息混乱:unknown + missing field 同时报)
+	class := classifyEventType(eventType)
+	if class == eventClassUnknown {
+		return UserBehaviorRow{}, fmt.Errorf("%w: eventType=%q", ErrUnknownEventType, eventType)
+	}
+
 	if data.ConversationID == 0 {
 		return UserBehaviorRow{}, fmt.Errorf("eventrow: ConversationID is 0 (eventType=%s, eventID=%s)",
 			eventType, eventID)
@@ -94,10 +111,11 @@ func MapEventToUserBehaviorRow(eventID, eventType string, data DataShape, occurr
 	occurredUTC := occurredAt.UTC()
 	sessionID := fmt.Sprintf("conv:%d", data.ConversationID)
 
-	switch eventType {
-	case EventTypeMessageCreated:
+	switch class {
+	case eventClassMessage:
 		if data.MessageID == 0 {
-			return UserBehaviorRow{}, fmt.Errorf("eventrow: message.created event missing MessageID (eventID=%s)", eventID)
+			return UserBehaviorRow{}, fmt.Errorf("eventrow: message event missing MessageID (eventID=%s, eventType=%s)",
+				eventID, eventType)
 		}
 		return UserBehaviorRow{
 			EventID:    eventID,
@@ -107,7 +125,7 @@ func MapEventToUserBehaviorRow(eventID, eventType string, data DataShape, occurr
 			SessionID:  sessionID,
 			OccurredAt: occurredUTC,
 		}, nil
-	case EventTypeConversationCreated:
+	case eventClassConversation:
 		return UserBehaviorRow{
 			EventID:    eventID,
 			UserID:     data.UserID,
@@ -116,17 +134,40 @@ func MapEventToUserBehaviorRow(eventID, eventType string, data DataShape, occurr
 			SessionID:  sessionID,
 			OccurredAt: occurredUTC,
 		}, nil
-	case EventTypeConversationClosed:
-		return UserBehaviorRow{
-			EventID:    eventID,
-			UserID:     data.UserID,
-			EventType:  eventType,
-			Target:     sessionID,
-			SessionID:  sessionID,
-			OccurredAt: occurredUTC,
-		}, nil
 	default:
 		return UserBehaviorRow{}, fmt.Errorf("%w: eventType=%q", ErrUnknownEventType, eventType)
+	}
+}
+
+// eventClass 内部枚举,用于按 message/conversation 大类决定 target 格式
+type eventClass int
+
+const (
+	eventClassUnknown eventClass = iota
+	eventClassMessage
+	eventClassConversation
+)
+
+// classifyEventType 把 eventType 字符串分类
+//
+// 兼容两种命名风格:
+//   - chat-svc 原值:        "message.created" / "conversation.created" / "conversation.closed"
+//   - analytics-svc normalize: "message" / "conversation_created" / "conversation_closed"
+//   - 历史 Stage 30-C A3 之前: "conversation" (已被 Stage 37-A 拆掉,这里 reject)
+//
+// 匹配规则:前缀 "message" 或 "conversation" (含 . / _ 边界)。
+func classifyEventType(eventType string) eventClass {
+	switch {
+	case eventType == "":
+		return eventClassUnknown
+	case eventType == "message" || strings.HasPrefix(eventType, "message."):
+		return eventClassMessage
+	case eventType == "message_created",
+		eventType == "conversation.created" || strings.HasPrefix(eventType, "conversation."),
+		eventType == "conversation_created", eventType == "conversation_closed":
+		return eventClassConversation
+	default:
+		return eventClassUnknown
 	}
 }
 
