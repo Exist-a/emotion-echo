@@ -1,0 +1,23 @@
+# PR-OBS-6: Grafana dashboards provisioning (sidecar pattern)
+#
+# 镜像: grafana/grafana:10.4.2 (与 PR-OBS-4 datasource 同镜像)
+# 启动时 Grafana 自动扫描 /etc/grafana/dashboards/ 目录加载所有 *.json
+#
+# 与 datasource provisioning 路径分离:
+#   /etc/grafana/provisioning/datasources/   ← datasource 配置
+#   /etc/grafana/dashboards/                ← 看板 JSON 文件
+# 这是 Grafana 官方推荐布局 (https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards)
+
+apiVersion: 1
+
+providers:
+  - name: Emotion-Echo Dashboards
+    orgId: 1
+    folder: Emotion-Echo
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

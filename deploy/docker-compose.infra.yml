@@ -335,6 +335,8 @@ services:
       - "3000:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # PR-OBS-6: dashboards JSON sidecar mount (与 provisioning 路径分离)
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     networks:
       - app-network
