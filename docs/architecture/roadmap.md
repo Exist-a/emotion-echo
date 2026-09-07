@@ -821,6 +821,9 @@ Phase 5 K8s 化（2026-09-07 收口：本地学习完成，生产不启用 K8s�
 Stage 31 Nacos 治理层          🚧 [x] PR-01 文档收口 / [ ] PR-02..12 推进
 Stage 32 APISIX 网关层         [ ] 全部（依赖 31）
 Stage 33 P0 修复 + BFF 净化    [ ] 全部（依赖 32）
+
+# Stage 41 · go-zero 完全移除收尾（ADR 决策 1 收尾 + 关闭审计 E-2/E-3）
+Stage 41 go-zero 移除           [ ] PR-0~9 共 10 个 TDD PR（[plan](../plans/gozero-removal.md) / [stage](../stages/stage-41-gozero-removal.md)）；独立演进路线，与 31/32/33 不冲突
 ```
 
 ---

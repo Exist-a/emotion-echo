@@ -27,6 +27,8 @@
 ### 决策 1：HTTP 框架 = **Gin**（不再用 go-zero）
 
 > ⚠️ **2026-08-31 审计标注：部分失效**。代码仍硬依赖 go-zero：各 svc 用 `go-zero/core/conf` 读配置、`core/logx` 打日志，shared `jwt_auth.go` 引 `go-zero/rest`（审计 E-2）。"不用 go-zero"仅指弃用 goctl 脚手架；go-zero 本体仍是实际依赖，ADR 说法需与代码一致。
+>
+> 📌 **2026-09-07 状态**：登记 [Stage 41 `docs/stages/stage-41-gozero-removal.md`](../stages/stage-41-gozero-removal.md) 为本决策收尾实施 stage（计划文档 [docs/plans/gozero-removal.md](../plans/gozero-removal.md) 2026-09-07 已 committed）。Stage 41 完成后本标注行移除，决策 1 转为"全量生效"。
 
 | 维度 | 选择 |
 |------|------|
