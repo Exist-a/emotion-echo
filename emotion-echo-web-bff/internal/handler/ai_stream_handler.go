@@ -20,13 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/downstream"
-	"emotion-echo-web-bff/internal/logging"
 
 	"github.com/gin-gonic/gin"
 )
@@ -128,12 +128,12 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		defer cancel()
 		err := llmClient.ChatStream(ctx, llmReq, func(content string) {
 			if writeErr := writeDelta(content); writeErr != nil {
-				logging.Errorf(writeErr, "[ai-stream] write LLM delta failed")
+				slog.ErrorContext(c.Request.Context(), "ai-stream write LLM delta failed", "err", writeErr)
 				cancel()
 			}
 		})
 		if err != nil {
-			logging.Errorf(err, "[ai-stream] LLM stream failed")
+			slog.ErrorContext(c.Request.Context(), "ai-stream LLM stream failed", "err", err)
 			_ = writeDelta("\n\n[抱歉，AI 服务暂时不可用]")
 		}
 		_, _ = io.WriteString(c.Writer, "data: [DONE]\n\n")
@@ -155,13 +155,13 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			end = len(runes)
 		}
 		if err := writeDelta(string(runes[i:end])); err != nil {
-			logging.Errorf(err, "[ai-stream] write delta failed")
+			slog.ErrorContext(c.Request.Context(), "ai-stream write delta failed", "err", err)
 			return
 		}
 	}
 	// 结束标记
 	if _, err := io.WriteString(c.Writer, "data: [DONE]\n\n"); err != nil {
-		logging.Errorf(err, "[ai-stream] write done failed")
+		slog.ErrorContext(c.Request.Context(), "ai-stream write done failed", "err", err)
 	}
 	if flusher != nil {
 		flusher.Flush()

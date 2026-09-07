@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/conf"
+	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 )
@@ -21,8 +21,8 @@ import (
 func loadTestConfig(t *testing.T) Config {
 	t.Helper()
 	var c Config
-	err := conf.Load(filepath.Join("..", "..", "etc", "web-bff.yaml"), &c)
-	require.NoError(t, err, "web-bff.yaml 应可被 go-zero conf 加载")
+	err := sharedconfig.Load(filepath.Join("..", "..", "etc", "web-bff.yaml"), &c, func() { SetDefaults(&c) })
+	require.NoError(t, err, "web-bff.yaml 应可被 shared config 加载")
 	return c
 }
 

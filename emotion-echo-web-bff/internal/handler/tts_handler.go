@@ -10,10 +10,10 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"emotion-echo-web-bff/internal/downstream"
-	"emotion-echo-web-bff/internal/logging"
 	"emotion-echo-web-bff/internal/session"
 
 	"github.com/gin-gonic/gin"
@@ -68,6 +68,6 @@ func (h *TTSHandler) stream(c *gin.Context) {
 	c.Header("X-Accel-Buffering", "no")
 	c.Status(http.StatusOK)
 	if _, err := io.Copy(c.Writer, stream); err != nil {
-		logging.Errorf(err, "[tts-stream] copy failed")
+		slog.ErrorContext(c.Request.Context(), "tts-stream copy failed", "err", err)
 	}
 }

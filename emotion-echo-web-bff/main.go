@@ -36,10 +36,10 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
-	"github.com/zeromicro/go-zero/core/conf"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -51,7 +51,7 @@ func main() {
 	logging.Init()
 
 	var c config.Config
-	conf.MustLoad(*configFile, &c)
+	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
 	config.ApplyEnvOverrides(&c)
 
 	// PR-2: Nacos 启动在 buildServiceContext 之前——这样 Resolver 可以用 nacosRuntime.Registry。
