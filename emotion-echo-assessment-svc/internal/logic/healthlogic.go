@@ -10,7 +10,7 @@ import (
 	"emotion-echo-assessment-svc/internal/svc"
 	"emotion-echo-assessment-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 var (
@@ -19,14 +19,13 @@ var (
 )
 
 type HealthLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewHealthLogic(ctx context.Context, svcCtx *svc.ServiceContext) *HealthLogic {
 	return &HealthLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

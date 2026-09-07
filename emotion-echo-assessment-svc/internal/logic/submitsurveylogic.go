@@ -13,18 +13,17 @@ import (
 	"emotion-echo-assessment-svc/internal/svc"
 	"emotion-echo-assessment-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 type SubmitSurveyLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewSubmitSurveyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SubmitSurveyLogic {
 	return &SubmitSurveyLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

@@ -11,18 +11,17 @@ import (
 	"emotion-echo-assessment-svc/internal/svc"
 	"emotion-echo-assessment-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 type GetSurveyResultLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewGetSurveyResultLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetSurveyResultLogic {
 	return &GetSurveyResultLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
