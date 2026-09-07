@@ -590,6 +590,10 @@ services:
       AI_SVC_GRPC_ADDR:    "emotion-echo-ai-svc:8892"
       XTTS_BASE_URL:       "http://emotion-echo-xtts:8003"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      # Sprint 1 PR-4c-4: dev 模式回显 verification-code，便于 e2e 走通 forget-pwd。
+      # commit msg 928bed2 承诺"前端 console 显示"但前端从未实现，这里补 BFF 侧。
+      # prod 部署必须删掉这行（保持默认关闭）。
+      BFF_DEV_RETURN_CODE: ${BFF_DEV_RETURN_CODE:-1}
       # Stage 32 PR-14: BFF_JWT_SECRET 由 APISIX jwt-auth 统一管理，BFF 不再需要
       # Stage 32 PR-16: BFF_TRUST_APISIX=true 时 BFF 信任 APISIX 注入的 X-User-Id header，
       # 不再做 JWT 解析。dev 默认 true；本地直连 BFF 调试时可设 false（保留兼容路径）

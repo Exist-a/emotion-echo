@@ -308,3 +308,38 @@ func TestAuthHandler_ResetPassword_InvalidBody_Returns400(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+// =============================================================================
+// Sprint 1 PR-4c-4: verification-code dev 回显（修 bug #3）
+//
+// 之前 verification-code 端点只把验证码存到 BFF 内部缓存，外部拿不到明文。
+// commit msg（928bed2 "未做"小节）承诺"前端 console 显示"——但前端代码
+// 根本没实现 console 输出，dev 模式 e2e 跑不通。
+//
+// RED 期望：verification-code 响应 data.success=true 时同时带回 devCode（仅 dev 模式）。
+// GREEN 实现：handler 用 os.Getenv("BFF_DEV_RETURN_CODE") 控制开/关。
+// =============================================================================
+
+func TestAuthHandler_VerificationCode_DevMode_ReturnsDevCode(t *testing.T) {
+	t.Setenv("BFF_DEV_RETURN_CODE", "1")
+	router := newAuthRouter(t, &fakeUserClient{})
+
+	w := postJSON(router, "/api/v1/auth/verification-code", `{"username":"e2e_dev_user"}`)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, `"success":true`)
+	assert.Regexp(t, `"devCode":"[0-9]{6}"`, body, "dev mode must echo the 6-digit code for e2e")
+}
+
+func TestAuthHandler_VerificationCode_ProdMode_NoDevCode(t *testing.T) {
+	t.Setenv("BFF_DEV_RETURN_CODE", "")
+	router := newAuthRouter(t, &fakeUserClient{})
+
+	w := postJSON(router, "/api/v1/auth/verification-code", `{"username":"e2e_prod_user"}`)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, `"success":true`)
+	assert.NotContains(t, body, "devCode", "prod mode must not echo the code")
+}

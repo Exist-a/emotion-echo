@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -225,12 +226,19 @@ func (h *AuthHandler) verificationCode(c *gin.Context) {
 	}
 
 	// 生成 6 位数字验证码，缓存 60s
+	var code string
 	if req.Username != "" {
-		h.storeVerificationCode(req.Username)
+		code = h.storeVerificationCode(req.Username)
 	}
 
-	// 真发验证码的通道留空（dev mock；prod 接 SMS/Email provider）
-	OK(c, gin.H{"success": true})
+	// 真发验证码的通道留空（dev mock；prod 接 SMS/Email provider）。
+	// Sprint 1 PR-4c-4（bug #3 修复）：dev 模式由 BFF_DEV_RETURN_CODE 控制
+	// 是否在响应里回显验证码。prod 永远不回显（避免验证码泄漏到客户端日志/网络层）。
+	resp := gin.H{"success": true}
+	if code != "" && isDevReturnCodeEnabled() {
+		resp["devCode"] = code
+	}
+	OK(c, resp)
 }
 
 func (h *AuthHandler) buildLoginData(userID int64, username, nickname string) LoginData {
@@ -303,14 +311,27 @@ func (h *AuthHandler) canSendVerificationCode(username string) bool {
 	return time.Since(entry.lastSentAt) >= verificationMinGap
 }
 
-func (h *AuthHandler) storeVerificationCode(username string) {
+func (h *AuthHandler) storeVerificationCode(username string) string {
 	h.verificationMu.Lock()
 	defer h.verificationMu.Unlock()
+	code := generateCode()
 	h.verificationCodes[username] = &verificationEntry{
-		code:       generateCode(),
+		code:       code,
 		expiresAt:  time.Now().Add(verificationTTL),
 		lastSentAt: time.Now(),
 	}
+	return code
+}
+
+// isDevReturnCodeEnabled 由 BFF_DEV_RETURN_CODE 环境变量控制：仅 dev=true 时
+// 才在 verification-code 响应里回显 devCode。prod 永远返 false。
+//
+// Sprint 1 PR-4c-4（bug #3 修复）：commit msg 928bed2 "未做"小节承诺
+// "前端 console 显示验证码"——但前端代码从未实现，dev 模式 e2e 卡死。
+// 本开关允许 dev compose 启用、前端拿到验证码，让 e2e 跑通。
+func isDevReturnCodeEnabled() bool {
+	v := os.Getenv("BFF_DEV_RETURN_CODE")
+	return v == "1" || v == "true"
 }
 
 func (h *AuthHandler) verifyVerificationCode(username, code string) bool {

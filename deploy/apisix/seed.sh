@@ -479,6 +479,8 @@ put_auth_route 111 "/api/v1/auth/register"
 put_auth_route 112 "/api/v1/auth/verification-code"
 put_auth_route 113 "/api/v1/auth/refresh"
 put_auth_route 114 "/api/v1/auth/logout"
+# Sprint 1 PR-4c-4: reset-password 同样无登录态可调用，纳入白名单（fix bug #2）
+put_auth_route 115 "/api/v1/auth/reset-password"
 
 # 健康探针（直接打到下游 svc，绕开 BFF 聚合）
 put_route_health 200 "/user-health"          1
