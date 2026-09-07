@@ -52,6 +52,28 @@ var HTTPRequestDuration = promauto.NewHistogramVec(
 	[]string{"service", "method", "path"},
 )
 
+// SkyWalkingInitFailedTotal SkyWalking tracer 初始化失败计数（PR-OBS-2）
+//
+// 动机：5 svc (chat/assessment/analytics/web-bff/ai-svc) 之前 tracer init 静默吞错,
+// 导致 skywalking OAP 不可达时无人能感知。counter 让 smoke 脚本 / Prometheus
+// alertmanager 能抓到 init 失败事件。
+//
+// 用法：在 shared/bootstrap.BootstrapSkyWalkingTracer 失败时调用
+//   metrics.IncSkyWalkingInitFailed(svcName)
+var SkyWalkingInitFailedTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "emotion_echo_skywalking_init_failed_total",
+		Help: "Total SkyWalking tracer init failures, labeled by service.",
+	},
+	[]string{"service"},
+)
+
+// IncSkyWalkingInitFailed 递增 SkyWalkingInitFailedTotal 计数
+// service 建议用 svc 短名（如 "user-svc" / "chat-svc" / "ai-svc"），与 GinMetricsMiddleware 一致
+func IncSkyWalkingInitFailed(service string) {
+	SkyWalkingInitFailedTotal.WithLabelValues(service).Inc()
+}
+
 // PromHTTPHandler 返回 promhttp 的 http.Handler（用于 gin.WrapH 注册 /metrics）
 func PromHTTPHandler() http.Handler {
 	return promhttp.Handler()
