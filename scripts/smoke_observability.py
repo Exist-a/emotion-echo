@@ -25,6 +25,10 @@ GRAFANA = "http://localhost:3000"
 
 # 期望的 scrape target 列表（prometheus.yml 静态 targets）
 # 与 deploy/prometheus/prometheus.yml 的 scrape_configs.static_configs 对齐
+#
+# 注：skywalking-oap:1234 scrape 已配置在 prometheus.yml 但 sw-oap env 未设 SW_TELEMETRY=prometheus
+# 导致 OAP 不监听 :1234, scrape target DOWN。这是 PR-OBS-? 范围（OAP telemetry 启用）,
+# 与 PR-OBS-4 metrics infra 分离。本 smoke 不把 sw-oap 计入期望 target。
 EXPECTED_TARGETS = [
     "emotion-echo-user-svc:8888",
     "emotion-echo-chat-svc:8890",
@@ -33,7 +37,7 @@ EXPECTED_TARGETS = [
     "emotion-echo-ai-svc:8891",
     "emotion-echo-web-bff:8894",
     "emotion-echo-apisix:9091",
-    "emotion-echo-sw-oap:1234",
+    # "emotion-echo-sw-oap:1234"  # 留作后续 PR-OBS (OAP telemetry 启用)
 ]
 
 results: list[tuple[str, bool, str]] = []
