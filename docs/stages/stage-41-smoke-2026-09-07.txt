@@ -1,0 +1,30 @@
+[pre] DELETE conv: HTTP 200
+[pre] sleep 5s 等待 outbox relay + consumer...
+
+--- §契约 1: user_behavior_events 行数 ---
+[OK  ] §1 行数 ≥ 1（dev 模式应有数据）: actual=9 (期望 ≥ 1，0 = analytics-svc consumer 未消费)
+[SKIP] §1 诊断 outbox→events 比: outbox_sent=9 events=9 (正常)
+
+--- §契约 2: event_type enum 细分 ---
+[OK  ] §2 event_type enum 细分: distinct_types=3 types=['conversation_closed', 'conversation_created', 'message'] (期望 ≥ 2 种，含 message + conversation_created/closed)
+
+--- §契约 3: analytics_reader 视图可读 ---
+[OK  ] §3 analytics_reader 读 msg_summary_v: OK
+[OK  ] §3 analytics_reader 读 daily_emotion_v: OK
+[OK  ] §3 analytics_reader 读 assessment_v: OK
+[OK  ] §3 analytics_reader 读 user_behavior_events: OK
+
+--- §契约 4: /reports/daily 数据真有 ---
+[OK  ] §4 /reports/daily 数据真有: summary='2026-09-07，你共有 0 段对话，0 条消息。主要情绪是 平静（2 次），整体心境 平稳。今天继续和 Echo 聊聊吧。' emotionDistribution.len=1 (期望 summary 非空 + len>0)
+
+--- §契约 5: schema 一致性 (待 integration test) ---
+[SKIP] §5 schema 一致性: 需 integration test 覆盖（PR-A1.1 / A2.1 / A3.1 的 RED 测试自动覆盖）
+
+--- §契约 6: dev 模式消费链路可达性 ---
+[SKIP] §6 dev 模式消费链路: §1 已 PASS，无需进一步诊断
+
+======================================================================
+汇总: 10/10 PASS, 0 FAIL
+======================================================================
+
+[OK] 全 PASS — Stage 37-A 数据契约全部满足
