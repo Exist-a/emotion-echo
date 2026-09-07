@@ -54,17 +54,13 @@ func TestTriggerQueue_Submit_HappyPath(t *testing.T) {
 // TestTriggerQueue_Submit_QueueFull_Backpressure 验证 cap=1 塞第 2 个返 ErrQueueFull
 func TestTriggerQueue_Submit_QueueFull_Backpressure(t *testing.T) {
 	t.Parallel()
-	// worker 阻塞在 workerFn 内（不消费 channel）
-	block := make(chan struct{})
-	q := NewTriggerQueue(context.Background(), 1, 1, func(_ context.Context, _ Request) {
-		<-block
-	})
-	defer func() {
-		close(block)
-		q.Close(context.Background())
-	}()
+	// workers=0 不启动 worker — channel buffer 永远只接受 1 个 req,
+	// 第 2 次 Submit 必触发 ErrQueueFull（无需依赖并行调度时序）。
+	// 这是 NewTriggerQueue 文档明确支持的 buffer-only 用法。
+	q := NewTriggerQueue(context.Background(), 0, 1, func(_ context.Context, _ Request) {})
+	defer q.Close(context.Background())
 
-	// 第 1 个 Request 进入 cap=1 channel（成功），worker 立刻占用
+	// 第 1 个 Request 进入 cap=1 channel（成功）
 	require.NoError(t, q.Submit(Request{UserID: 1}))
 	// 第 2 个 Request 应触发 backpressure
 	err := q.Submit(Request{UserID: 2})
