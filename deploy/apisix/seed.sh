@@ -256,6 +256,25 @@ fi
 # ---- Step 3: 全局插件链（每个 route 共享）----
 log "Step 3/4: defining shared plugins"
 
+# PR-OBS-1 REFACTOR: skywalking-logger + file-logger 在 PLUGINS_JSON 与
+# CATCHALL_PLUGINS_JSON 完全相同,抽出 OBSERVABILITY_PLUGINS_JSON 共享变量。
+# 保持 bash-only(不引入 python/jq),与原 seed 设计一致。
+
+# skywalking-logger: 每个请求把 APISIX access 信息上报 OAP
+#   与 config.yaml endpoint_addr=http://emotion-echo-sw-oap:12800 配套
+# file-logger: 落盘到 /tmp/apisix-access.log(由 PR-OBS-5 volume mount),
+#   由 promtail 采集送 Loki
+OBSERVABILITY_PLUGINS_JSON='
+  "skywalking-logger": {
+    "endpoint_addr": "http://emotion-echo-sw-oap:12800",
+    "service_name": "APISIX",
+    "report_interval": 3
+  },
+  "file-logger": {
+    "path": "/tmp/apisix-access.log",
+    "log_format": "{\"client_ip\":\"$remote_addr\",\"user\":\"$remote_user\",\"timestamp\":\"$time_iso8601\",\"method\":\"$request_method\",\"url\":\"$request_uri\",\"status\":$status,\"bytes_sent\":$bytes_sent,\"bytes_received\":$bytes_received,\"resp_time\":$request_time,\"upstream\":\"$upstream_addr\",\"upstream_time\":$upstream_response_time}"
+  }'
+
 # jwt-auth 真正验签（替换 shared jwt_auth.go 的"信任 APISIX"模型）
 #   2026-09-04：route 侧只留 {}——key/secret/algorithm 属 consumer（Step 2.5），
 #   放在 route 上不会生效。见 https://apisix.apache.org/docs/apisix/plugins/jwt-auth/
@@ -263,10 +282,7 @@ log "Step 3/4: defining shared plugins"
 # api-breaker 下游 5xx > 50% 熔断 30s
 # cors 统一 CORS（替代 BFF corsMiddleware）
 # prometheus 默认配置（OAP 上报 metrics）
-# skywalking-logger PR-OBS-1 修 2: 每个请求把 APISIX access 信息上报 OAP,
-#   与 config.yaml endpoint_addr=http://emotion-echo-sw-oap:12800 配套
-# file-logger PR-OBS-1 修 2: 落盘到 /tmp/apisix-access.log(由 PR-OBS-5 volume mount),
-#   由 promtail 采集送 Loki
+# skywalking-logger + file-logger 引用 OBSERVABILITY_PLUGINS_JSON (PR-OBS-1 REFACTOR)
 PLUGINS_JSON=$(cat <<EOF
 {
   "jwt-auth": {},
@@ -298,15 +314,7 @@ PLUGINS_JSON=$(cat <<EOF
     "allow_credentials": true,
     "max_age": 600
   },
-  "skywalking-logger": {
-    "endpoint_addr": "http://emotion-echo-sw-oap:12800",
-    "service_name": "APISIX",
-    "report_interval": 3
-  },
-  "file-logger": {
-    "path": "/tmp/apisix-access.log",
-    "log_format": "{\"client_ip\":\"$remote_addr\",\"user\":\"$remote_user\",\"timestamp\":\"$time_iso8601\",\"method\":\"$request_method\",\"url\":\"$request_uri\",\"status\":$status,\"bytes_sent\":$bytes_sent,\"bytes_received\":$bytes_received,\"resp_time\":$request_time,\"upstream\":\"$upstream_addr\",\"upstream_time\":$upstream_response_time}"
-  },
+${OBSERVABILITY_PLUGINS_JSON},
   "prometheus": {}
 }
 EOF
@@ -376,15 +384,7 @@ CATCHALL_PLUGINS_JSON=$(cat <<EOF
     "allow_credentials": true,
     "max_age": 600
   },
-  "skywalking-logger": {
-    "endpoint_addr": "http://emotion-echo-sw-oap:12800",
-    "service_name": "APISIX",
-    "report_interval": 3
-  },
-  "file-logger": {
-    "path": "/tmp/apisix-access.log",
-    "log_format": "{\"client_ip\":\"$remote_addr\",\"user\":\"$remote_user\",\"timestamp\":\"$time_iso8601\",\"method\":\"$request_method\",\"url\":\"$request_uri\",\"status\":$status,\"bytes_sent\":$bytes_sent,\"bytes_received\":$bytes_received,\"resp_time\":$request_time,\"upstream\":\"$upstream_addr\",\"upstream_time\":$upstream_response_time}"
-  },
+${OBSERVABILITY_PLUGINS_JSON},
   "prometheus": {}
 }
 EOF
