@@ -1,18 +1,21 @@
-// Package config 提供 user-svc 的配置结构（去掉 go-zero 依赖版本）
+// Package config 提供 user-svc 的配置结构（Stage 41 PR-3）
+//
+// 改造点：去掉所有 json:",default=X" tag（go-zero conf 才需要）；
+// 改为 SetDefaults 函数，在 main.go 加载 yaml 之前调用（shared/pkg/config 契约）。
 package config
 
 // SkyWalking 链路追踪配置
 type SkyWalking struct {
-	OAPAddr     string `json:",default=localhost:11800"`
+	OAPAddr     string
 	ServiceName string
-	Enabled     bool `json:",default=false"`
+	Enabled     bool
 }
 
 // Postgres 数据库连接配置
 type Postgres struct {
 	DSN          string
-	MaxOpenConns int `json:",default=10"`
-	MaxIdleConns int `json:",default=5"`
+	MaxOpenConns int
+	MaxIdleConns int
 }
 
 // Nacos 注册中心 + 配置中心配置（Stage 31 PR-07 引入）
@@ -20,19 +23,52 @@ type Postgres struct {
 // Enabled=false 时 user-svc 不注册到 Nacos（dev 单机调试可用）；
 // dev / prod 默认 true。
 type Nacos struct {
-	Enabled   bool   `json:",default=true"`             // 是否启用 Nacos
-	Addr      string `json:",default=emotion-echo-nacos:8848"` // Nacos server 地址（容器内默认 DNS）
-	Namespace string `json:",default=emotion-echo-dev"`        // Nacos namespace（dev/prod 隔离）
-	GroupName string `json:",default=DEFAULT_GROUP"`           // Nacos group
-	HotReload bool   `json:",default=false"`                   // 是否启用 ListenConfig 热重载（prod 启用，dev 默认关闭避免日志噪音）
+	Enabled   bool
+	Addr      string
+	Namespace string
+	GroupName string
+	HotReload bool
 }
 
-// Config 是 user-svc 的总配置（手写，不再依赖 go-zero rest.RestConf）
+// Config 是 user-svc 的总配置
 type Config struct {
-	Name       string `json:",default=emotion-echo-user-svc"` // 服务名，用于 Nacos 注册 + tracer
-	Host       string `json:",default=0.0.0.0"`
-	Port       int    `json:",default=8888"`
+	Name       string
+	Host       string
+	Port       int
 	SkyWalking SkyWalking
 	Postgres   Postgres
 	Nacos      Nacos
+}
+
+// SetDefaults 填零值字段的默认值（shared/pkg/config.MustLoad 契约）。
+//
+// 调用顺序：SetDefaults → yaml.Unmarshal（yaml 显式值覆盖默认；R3 反向已钉死）。
+func SetDefaults(c *Config) {
+	if c.Name == "" {
+		c.Name = "emotion-echo-user-svc"
+	}
+	if c.Host == "" {
+		c.Host = "0.0.0.0"
+	}
+	if c.Port == 0 {
+		c.Port = 8888
+	}
+	if c.SkyWalking.OAPAddr == "" {
+		c.SkyWalking.OAPAddr = "localhost:11800"
+	}
+	if c.Postgres.MaxOpenConns == 0 {
+		c.Postgres.MaxOpenConns = 10
+	}
+	if c.Postgres.MaxIdleConns == 0 {
+		c.Postgres.MaxIdleConns = 5
+	}
+	if c.Nacos.Addr == "" {
+		c.Nacos.Addr = "emotion-echo-nacos:8848"
+	}
+	if c.Nacos.Namespace == "" {
+		c.Nacos.Namespace = "emotion-echo-dev"
+	}
+	if c.Nacos.GroupName == "" {
+		c.Nacos.GroupName = "DEFAULT_GROUP"
+	}
 }

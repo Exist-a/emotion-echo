@@ -19,19 +19,18 @@ import (
 	"emotion-echo-user-svc/internal/types"
 
 	"github.com/emotion-echo/shared/pkg/password"
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // AuthLogic 同时承载 Login / Register 流程；它们共享 ctx 与 svcCtx。
 type AuthLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewAuthLogic(ctx context.Context, svcCtx *svc.ServiceContext) *AuthLogic {
 	return &AuthLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

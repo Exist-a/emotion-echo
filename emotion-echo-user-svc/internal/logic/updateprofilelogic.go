@@ -13,7 +13,7 @@ import (
 	"emotion-echo-user-svc/internal/svc"
 	"emotion-echo-user-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // UpdateProfileLogic 处理 PATCH /api/v1/users/me
@@ -24,14 +24,13 @@ import (
 //  3. 调 UserRepo.UpdateProfile 局部更新
 //  4. 返回最新的用户信息
 type UpdateProfileLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
 func NewUpdateProfileLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UpdateProfileLogic {
 	return &UpdateProfileLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
