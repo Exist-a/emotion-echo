@@ -20,12 +20,11 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // ReportsTrendLogic 处理 GET /api/v1/reports/trend
 type ReportsTrendLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -33,7 +32,7 @@ type ReportsTrendLogic struct {
 // NewReportsTrendLogic 构造 trend report logic
 func NewReportsTrendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ReportsTrendLogic {
 	return &ReportsTrendLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
@@ -88,4 +87,3 @@ func (l *ReportsTrendLogic) GetTrendReport(req *types.GetTrendReportReq) (*types
 	return &types.GetTrendReportResp{Report: report}, nil
 }
 
-var _ = logx.WithContext

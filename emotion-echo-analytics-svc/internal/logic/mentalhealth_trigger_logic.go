@@ -22,12 +22,11 @@ import (
 	"emotion-echo-analytics-svc/internal/trigger"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // MentalHealthTriggerLogic 处理异步触发评估
 type MentalHealthTriggerLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -35,7 +34,7 @@ type MentalHealthTriggerLogic struct {
 // NewMentalHealthTriggerLogic 构造
 func NewMentalHealthTriggerLogic(ctx context.Context, svcCtx *svc.ServiceContext) *MentalHealthTriggerLogic {
 	return &MentalHealthTriggerLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

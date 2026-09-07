@@ -16,12 +16,11 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // UserBehaviorDayNightLogic 处理昼夜模式聚合
 type UserBehaviorDayNightLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -29,7 +28,7 @@ type UserBehaviorDayNightLogic struct {
 // NewUserBehaviorDayNightLogic 构造
 func NewUserBehaviorDayNightLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UserBehaviorDayNightLogic {
 	return &UserBehaviorDayNightLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

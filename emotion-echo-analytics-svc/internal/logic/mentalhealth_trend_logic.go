@@ -14,7 +14,7 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // trendTypeWhitelist mentalhealth trend 的合法 type
@@ -25,7 +25,6 @@ var trendTypeWhitelist = map[string]bool{
 
 // MentalHealthTrendLogic 处理心境趋势
 type MentalHealthTrendLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -33,7 +32,7 @@ type MentalHealthTrendLogic struct {
 // NewMentalHealthTrendLogic 构造
 func NewMentalHealthTrendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *MentalHealthTrendLogic {
 	return &MentalHealthTrendLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

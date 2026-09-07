@@ -12,7 +12,7 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // historyDefaultLimit 默认 page size
@@ -23,7 +23,6 @@ const historyMaxLimit = 100
 
 // MentalHealthHistoryLogic 处理评估历史分页查询
 type MentalHealthHistoryLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -31,7 +30,7 @@ type MentalHealthHistoryLogic struct {
 // NewMentalHealthHistoryLogic 构造
 func NewMentalHealthHistoryLogic(ctx context.Context, svcCtx *svc.ServiceContext) *MentalHealthHistoryLogic {
 	return &MentalHealthHistoryLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

@@ -12,12 +12,11 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // UserBehaviorDepthLogic 处理交互深度指标
 type UserBehaviorDepthLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -25,7 +24,7 @@ type UserBehaviorDepthLogic struct {
 // NewUserBehaviorDepthLogic 构造
 func NewUserBehaviorDepthLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UserBehaviorDepthLogic {
 	return &UserBehaviorDepthLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

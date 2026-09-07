@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/conf"
+	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 )
 
 // TestConfig_DefaultValues 表驱动：Config 各字段零值
@@ -50,12 +50,10 @@ func TestPostgres_Struct(t *testing.T) {
 	}
 }
 
-// TestKafka_DefaultsViaYamlLoad 表驱动：Kafka 配置默认值（与 ai-svc 同模式）。
+// TestKafka_DefaultsViaYamlLoad 表驱动：Kafka 配置默认值（Stage 41 PR-6）。
 //
-// go-zero conf 的 `json:",default=..."` 只在 yaml 加载时生效，零值 struct
-// 不应用 default tag → 用 conf.MustLoad 验证。注意：go-zero 的 slice
-// default tag 会保留字面引号（`["chat-events"]`），故 Topics/BrokersCSV
-// 在 yaml 显式给出；GroupID / Enabled 依赖 default tag。
+// Stage 41 改用 shared/pkg/config 后语义保持:yaml 显式给值 + SetDefaults 填零值。
+// 不再依赖 go-zero conf 的 default tag。
 func TestKafka_DefaultsViaYamlLoad(t *testing.T) {
 	dir := t.TempDir()
 	yamlPath := filepath.Join(dir, "kafka-test.yaml")
@@ -71,11 +69,12 @@ Postgres:
 Kafka:
   BrokersCSV: "kafka1:9092,kafka2:9092"
   Topics: ["chat-events"]
+  Enabled: true
 `
 	require.NoError(t, os.WriteFile(yamlPath, []byte(body), 0o644))
 
 	var c Config
-	conf.MustLoad(yamlPath, &c)
+	sharedconfig.MustLoad(yamlPath, &c, func() { SetDefaults(&c) })
 
 	if c.Kafka.BrokersCSV != "kafka1:9092,kafka2:9092" {
 		t.Fatalf("BrokersCSV mismatch, got %q", c.Kafka.BrokersCSV)
@@ -83,10 +82,9 @@ Kafka:
 	if c.Kafka.GroupID != "analytics-svc" {
 		t.Fatalf("GroupID default mismatch, got %q", c.Kafka.GroupID)
 	}
-	// Stage 36-A1.3:analytics-svc consumer 是 user_behavior_events 唯一数据源，
-	// Kafka.Enabled 改为 default=true（opt-in 由 env KAFKA_ENABLED=false 提供）。
+	// Stage 41 PR-6:yaml 显式给 Enabled: true(R3 反向测试已钉死 SetDefaults 不覆盖 bool)
 	if !c.Kafka.Enabled {
-		t.Fatal("Enabled should default true (consumer is the only data source; opt-in via env KAFKA_ENABLED=false)")
+		t.Fatal("Enabled should be true (yaml 显式给值)")
 	}
 	if len(c.Kafka.Topics) != 1 || c.Kafka.Topics[0] != "chat-events" {
 		t.Fatalf("Topics mismatch, got %v", c.Kafka.Topics)

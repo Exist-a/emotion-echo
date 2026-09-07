@@ -21,12 +21,11 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // ReportsDailyLogic 处理 GET /api/v1/reports/daily
 type ReportsDailyLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -34,7 +33,7 @@ type ReportsDailyLogic struct {
 // NewReportsDailyLogic 构造 daily report logic
 func NewReportsDailyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ReportsDailyLogic {
 	return &ReportsDailyLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

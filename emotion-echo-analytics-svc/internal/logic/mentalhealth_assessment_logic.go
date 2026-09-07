@@ -12,12 +12,11 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // MentalHealthAssessmentLogic 处理最新评估查询
 type MentalHealthAssessmentLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -25,7 +24,7 @@ type MentalHealthAssessmentLogic struct {
 // NewMentalHealthAssessmentLogic 构造
 func NewMentalHealthAssessmentLogic(ctx context.Context, svcCtx *svc.ServiceContext) *MentalHealthAssessmentLogic {
 	return &MentalHealthAssessmentLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}

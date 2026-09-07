@@ -16,12 +16,11 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	
 )
 
 // UserBehaviorFrequencyLogic 处理频率趋势
 type UserBehaviorFrequencyLogic struct {
-	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
@@ -29,7 +28,7 @@ type UserBehaviorFrequencyLogic struct {
 // NewUserBehaviorFrequencyLogic 构造
 func NewUserBehaviorFrequencyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UserBehaviorFrequencyLogic {
 	return &UserBehaviorFrequencyLogic{
-		Logger: logx.WithContext(ctx),
+
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
