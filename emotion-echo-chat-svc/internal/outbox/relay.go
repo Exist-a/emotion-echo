@@ -31,10 +31,13 @@ import (
 
 // Relay 周期性发送 outbox pending 行
 type Relay struct {
-	repo      repository.OutboxRepo
-	publisher events.EventPublisher
-	interval  time.Duration
-	batchSize int
+	repo        repository.OutboxRepo
+	publisher   events.EventPublisher
+	interval    time.Duration
+	batchSize   int
+	// MaxAttempts ADR-19 PR-A6.1: 失败最大重试次数，超出则 status=dead。
+	// 默认 100；0 视作关闭 dead 状态机（保留原行为,向后兼容）。
+	MaxAttempts int
 }
 
 // NewRelay 构造
@@ -46,10 +49,11 @@ func NewRelay(repo repository.OutboxRepo, publisher events.EventPublisher, inter
 		batchSize = 100
 	}
 	return &Relay{
-		repo:      repo,
-		publisher: publisher,
-		interval:  interval,
-		batchSize: batchSize,
+		repo:        repo,
+		publisher:   publisher,
+		interval:    interval,
+		batchSize:   batchSize,
+		MaxAttempts: 100,
 	}
 }
 
@@ -84,10 +88,22 @@ func (r *Relay) FlushOnce(ctx context.Context) error {
 	}
 	for _, e := range entries {
 		if err := r.publishOne(ctx, e); err != nil {
+			// ADR-19 PR-A6.1: 失败先 MarkFailed（attempts+1），
+			// 再判断 attempts 是否超阈值 → MarkDead 把行置为 dead 状态
+			// 不再被 ListPending 扫描,避免永久无限重试毒消息。
 			if mfErr := r.repo.MarkFailed(ctx, e.ID, err.Error()); mfErr != nil {
 				log.Printf("[outbox-relay] MarkFailed err id=%d: %v", e.ID, mfErr)
 			}
-			log.Printf("[outbox-relay] publish failed id=%d attempts=%d: %v", e.ID, e.Attempts+1, err)
+			newAttempts := e.Attempts + 1
+			log.Printf("[outbox-relay] publish failed id=%d attempts=%d: %v", e.ID, newAttempts, err)
+			if r.MaxAttempts > 0 && newAttempts >= r.MaxAttempts {
+				if mdErr := r.repo.MarkDead(ctx, e.ID, err.Error()); mdErr != nil {
+					log.Printf("[outbox-relay] MarkDead err id=%d: %v", e.ID, mdErr)
+				} else {
+					log.Printf("[outbox-relay] row marked dead id=%d attempts=%d max=%d (will NOT retry)",
+						e.ID, newAttempts, r.MaxAttempts)
+				}
+			}
 			continue
 		}
 		if err := r.repo.MarkSent(ctx, e.ID); err != nil {
