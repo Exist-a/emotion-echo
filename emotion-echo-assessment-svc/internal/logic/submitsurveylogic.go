@@ -1,4 +1,3 @@
-// Code scaffolded by goctl. Safe to edit.
 
 package logic
 
