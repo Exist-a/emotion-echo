@@ -1,7 +1,7 @@
-// Package bootstrap 提供 ai-svc 启动期的依赖检查（Stage 20-P0-3）
+// Package bootstrap 提供 Emotion-Echo 各微服务启动期的依赖检查（Stage 20-P0-3 → PR-OBS-2 上提 shared）
 //
 // 用法：
-//   import "emotion-echo-ai-svc/internal/bootstrap"
+//   import "github.com/emotion-echo/shared/pkg/bootstrap"
 //   if err := bootstrap.CheckTCP(ctx, addr, 5*time.Second); err != nil {
 //       if bootstrap.ShouldFailFast() && bootstrap.IsRequired("postgres") {
 //           return err  // 启动失败 → 容器退出 → orchestrator 重启

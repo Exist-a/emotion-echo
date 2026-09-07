@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"emotion-echo-ai-svc/internal/analyzer"
-	"emotion-echo-ai-svc/internal/bootstrap"
 	"emotion-echo-ai-svc/internal/config"
 	"emotion-echo-ai-svc/internal/consumer"
 	"emotion-echo-ai-svc/internal/events"
@@ -49,6 +48,8 @@ import (
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
+
+	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -62,7 +63,7 @@ func failFastIfRequired(dep string, err error, addr string) {
 	if err == nil {
 		return
 	}
-	if bootstrap.ShouldFailFast() && bootstrap.IsRequired(dep) {
+	if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired(dep) {
 		slog.Error("startup-strict required dependency unavailable, refusing to start", "err", err, "dep", dep, "addr", addr)
 		logging.Fatalf("[startup-strict] exit code=1 (dep=%s)", dep)
 	}
@@ -170,7 +171,7 @@ func main() {
 	// Stage 20-4: structured slog JSON to stdout.
 	logging.Init()
 	logging.Printf("[startup] ai-svc starting (strict=%v deps=%s)",
-		bootstrap.ShouldFailFast(), os.Getenv("STARTUP_STRICT_DEPS"))
+		sharedbootstrap.ShouldFailFast(), os.Getenv("STARTUP_STRICT_DEPS"))
 
 	var c config.Config
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
@@ -208,7 +209,7 @@ func main() {
 		checks["llm"] = c.LLM.GRPCAddr
 	}
 	if len(checks) > 0 {
-		results := bootstrap.CheckMultiple(depCtx, checks, 3*time.Second)
+		results := sharedbootstrap.CheckMultiple(depCtx, checks, 3*time.Second)
 		for name, err := range results {
 			failFastIfRequired(name, err, checks[name])
 		}
@@ -218,7 +219,7 @@ func main() {
 	emoRepo, db, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
 	if err != nil {
 		slog.Error("postgres connect failed", "err", err)
-		if bootstrap.ShouldFailFast() && bootstrap.IsRequired("postgres") {
+		if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("postgres") {
 			logging.Fatalf("[postgres] strict mode + required dep, refusing to start")
 		}
 	} else {
@@ -240,7 +241,7 @@ func main() {
 			}
 		} else {
 			slog.Error("skywalking reporter init failed (will not trace)", "err", err)
-			if bootstrap.ShouldFailFast() && bootstrap.IsRequired("skywalking") {
+			if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("skywalking") {
 				logging.Fatalf("[skywalking] strict mode + required dep, refusing to start")
 			}
 		}
@@ -251,7 +252,7 @@ func main() {
 		kc, err := consumer.NewKafkaConsumer(kafkaBrokersList, c.Kafka.GroupID)
 		if err != nil {
 			slog.Error("kafka consumer init failed", "err", err)
-			if bootstrap.ShouldFailFast() && bootstrap.IsRequired("kafka") {
+			if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("kafka") {
 				logging.Fatalf("[kafka] strict mode + required dep, refusing to start")
 			}
 		} else {
