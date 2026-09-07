@@ -12,18 +12,22 @@
 //
 // 决策 12（ADR-2026-09）：BFF 信任 APISIX 注入的 X-User-Id，不再持有 JWT secret 验证责任。
 // Stage 33 PR-21 收口：原"信任 APISIX 已验过" 字样移除，明确信任边界。
+//
+// Stage 41 PR-1：本文件去除 go-zero/rest 依赖，自定义 Middleware 类型；
+// 原 RestMiddleware 别名已删除（chat-svc/internal/middleware/auth.go 是死代码，
+// PR-1 同步删除该适配层）。
 package middleware
 
 import (
 	"context"
 	"net/http"
 	"strconv"
-
-	"github.com/zeromicro/go-zero/rest"
 )
 
-// RestMiddleware 是 go-zero REST 框架的中间件类型别名
-type RestMiddleware = rest.Middleware
+// Middleware 是 HTTP 中间件类型，等价 go-zero rest.Middleware 的契约。
+//
+// 替代方案：直接用 `func(http.HandlerFunc) http.HandlerFunc`，无需任何外部依赖。
+type Middleware = func(http.HandlerFunc) http.HandlerFunc
 
 // CtxUserIDKey 是 context 中 user id 的 key
 type CtxUserIDKey struct{}
@@ -32,7 +36,7 @@ type CtxUserIDKey struct{}
 const XUserIDHeader = "X-User-Id"
 
 // AuthMiddleware 信任 APISIX 已验证的 JWT，从 X-User-Id header 读取 user_id
-func AuthMiddleware() rest.Middleware {
+func AuthMiddleware() Middleware {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			// 跳过白名单端点（monitoring / metrics 不需要鉴权）
