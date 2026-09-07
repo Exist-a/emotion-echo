@@ -15,6 +15,7 @@ PR-OBS-4 范围: prometheus + grafana 基础设施层 (compose + scrape config +
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -177,6 +178,57 @@ def main() -> int:
             )
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             check("grafana dashboard JSON parseable", False, f"{type(e).__name__}: {e}")
+
+    # ===== PR-OBS-8: observability compose runbook 文档 断言 =====
+
+    # 断言 12: docs/deployment/runbook/observability-compose.md 存在 + 含 5 节标题
+    runbook_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "..",
+        "docs",
+        "deployment",
+        "runbook",
+        "observability-compose.md",
+    )
+    runbook_path = os.path.normpath(runbook_path)
+    expected_sections = [
+        "启动后第一件事",
+        "看 targets",
+        "看 logs",
+        "看 trace",
+        "故障排查",
+    ]
+    if not os.path.exists(runbook_path):
+        check(
+            "runbook observability-compose.md exists + 5 sections",
+            False,
+            f"file missing: {runbook_path}",
+        )
+    else:
+        try:
+            with open(runbook_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            missing_sections = [
+                s for s in expected_sections if s not in content
+            ]
+            if missing_sections:
+                check(
+                    "runbook observability-compose.md contains all 5 sections",
+                    False,
+                    f"missing={missing_sections}, file_len={len(content)}",
+                )
+            else:
+                check(
+                    "runbook observability-compose.md exists + 5 sections",
+                    True,
+                    f"file_len={len(content)}, sections={expected_sections}",
+                )
+        except OSError as e:
+            check(
+                "runbook observability-compose.md exists + 5 sections",
+                False,
+                f"{type(e).__name__}: {e}",
+            )
 
     # ===== PR-OBS-7: Kafka consumer lag 监控 (接 Kafka Sprint A §1.4) =====
 
