@@ -14,8 +14,15 @@
 //   - http.status_code = c.Writer.Status() (c.Next 后读取)
 //   - user_id = c.GetHeader("X-User-Id") (APISIX 注入,AuthMiddleware 之前可读)
 //
+// PR-OBS-15: 中间件现在用 logging.WithTraceID 包 c.Request.Context(),
+// 让 handler 内 slog.InfoContext(ctx, ...) 自动带 trace_id 字段。
+// trace_id 来源优先级:
+//   1. X-Trace-Id header (APISIX 路径,可显式注入)
+//   2. skywalking span 上下文(若未来 span 内携带 trace id)
+//   3. 跳过(无 trace_id,handler 日志无此字段)
+//
 // 中间件顺序(各 svc main.go 约定): Recovery → Metrics → Skywalking → Auth。
-// Skywalking 在 Auth 之前跑,但 X-User-Id header 已由 APISIX jwt-auth 注入到
+// Skywalking 在 Auth 之前跑,但 X-User-Id / X-Trace-Id header 已由 APISIX jwt-auth 注入到
 // Request,无需等 ctx.Value(CtxUserIDKey{})。
 package middleware
 
@@ -24,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	"github.com/emotion-echo/shared/pkg/logging"
 	"github.com/gin-gonic/gin"
 )
 
@@ -50,6 +58,12 @@ func GinSkywalkingMiddleware(tracer grpcinterceptor.Tracer) gin.HandlerFunc {
 		}
 		// 把 tracer 挂到 gin context,下游可以读到
 		c.Set("skywalking_tracer", tracer)
+
+		// PR-OBS-15: 把 trace_id (来自 X-Trace-Id header) 注入 Request ctx,
+		// 让 handler 内 slog.InfoContext(ctx, ...) 自动带 trace_id 字段(Loki 可查)
+		if tid := c.GetHeader("X-Trace-Id"); tid != "" {
+			c.Request = c.Request.WithContext(logging.WithTraceID(c.Request.Context(), tid))
+		}
 
 		// 业务路径: 创建 EntrySpan + 打前置 tag
 		var span grpcinterceptor.Span

@@ -8,10 +8,14 @@ import "github.com/emotion-echo/shared/pkg/logging"
 
 // Re-export shared/pkg/logging 全部公开 API
 var (
-	Init   = logging.Init
-	InitTo = logging.InitTo
-	Printf = logging.Printf
-	Infof  = logging.Infof
-	Warnf  = logging.Warnf
-	Fatalf = logging.Fatalf
+	Init         = logging.Init
+	InitTo       = logging.InitTo
+	Printf       = logging.Printf
+	Infof        = logging.Infof
+	Warnf        = logging.Warnf
+	Fatalf       = logging.Fatalf
+	// PR-OBS-15: 决策 6 必填字段 helper(PR-OBS-15 GREEN commit 已落地 shared 包)
+	SetGlobalSvc = logging.SetGlobalSvc
+	WithTraceID  = logging.WithTraceID
+	WithAction   = logging.WithAction
 )

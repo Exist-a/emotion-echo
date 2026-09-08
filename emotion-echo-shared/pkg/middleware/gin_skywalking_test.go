@@ -1,11 +1,17 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
 
 	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/gin-gonic/gin"
@@ -532,5 +538,50 @@ func TestGinSkywalkingMiddleware_AttachesSpanOnContext(t *testing.T) {
 	}
 	if !gotSame {
 		t.Errorf("expected ctx span to be *stubSpan (instance from StartEntry), got %T", gotSpan)
+	}
+}
+
+// ===== PR-OBS-15 GREEN: middleware 调 logging.WithTraceID 注入 ctx =====
+//
+// 目的: stage-44 §四 C 落地——gin middleware 应把 X-Trace-Id header 注入 Request
+// ctx,handler 内 slog.InfoContext(ctx, ...) 自动带 trace_id 字段(Loki 可查)。
+//
+// 测试方法: middleware 后 handler 用 stdlib slog 输出到 buf,断言 JSON 含 trace_id。
+// (Init + SetGlobalSvc 在本测试用 logging.InitTo(&buf) + logging.SetGlobalSvc("test"))
+func TestGinSkywalkingMiddleware_InjectsTraceIDIntoRequestContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var buf bytes.Buffer
+	sharedlogging.InitTo(&buf)
+	sharedlogging.SetGlobalSvc("test-svc")
+	// 测试结束恢复 globalSvc 为空(避免污染其他 case)
+	defer sharedlogging.SetGlobalSvc("")
+
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.GET("/api/v1/foo", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		// handler 内应能拿到 trace_id-injected ctx
+		slog.InfoContext(c.Request.Context(), "handler ran", "user_id", "42")
+		c.Status(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/foo", nil)
+	req.Header.Set("X-Trace-Id", "trace-xyz-789")
+	r.ServeHTTP(rec, req)
+
+	// 解析 buf 最后一行 JSON(前序 InitTo 不会产生内容,只有 handler slog.InfoContext)
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) < 1 {
+		t.Fatalf("expected ≥1 log line, got %q", buf.String())
+	}
+	last := lines[len(lines)-1]
+	var m map[string]any
+	if err := json.Unmarshal([]byte(last), &m); err != nil {
+		t.Fatalf("parse log line %q: %v", last, err)
+	}
+	if got := m["trace_id"]; got != "trace-xyz-789" {
+		t.Errorf("trace_id field = %v, want trace-xyz-789", got)
+	}
+	if got := m["svc"]; got != "test-svc" {
+		t.Errorf("svc field = %v, want test-svc", got)
 	}
 }

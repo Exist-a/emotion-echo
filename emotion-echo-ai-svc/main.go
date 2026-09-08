@@ -170,6 +170,8 @@ func main() {
 
 	// Stage 20-4: structured slog JSON to stdout.
 	logging.Init()
+	// PR-OBS-15: SetGlobalSvc 让所有 slog 日志自动带 svc="ai-svc" 字段(决策 6 必填)
+	logging.SetGlobalSvc("ai-svc")
 	logging.Printf("[startup] ai-svc starting (strict=%v deps=%s)",
 		sharedbootstrap.ShouldFailFast(), os.Getenv("STARTUP_STRICT_DEPS"))
 

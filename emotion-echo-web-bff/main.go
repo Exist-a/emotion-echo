@@ -50,6 +50,8 @@ var configFile = flag.String("f", "etc/web-bff.yaml", "the config file")
 func main() {
 	flag.Parse()
 	logging.Init()
+	// PR-OBS-15: SetGlobalSvc 让所有 slog 日志自动带 svc="web-bff" 字段(决策 6 必填)
+	logging.SetGlobalSvc("web-bff")
 
 	var c config.Config
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
