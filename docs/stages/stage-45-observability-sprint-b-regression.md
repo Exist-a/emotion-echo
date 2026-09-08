@@ -130,9 +130,11 @@ func (t *Go2SkyTracer) CreateLocalSpan(ctx, op) (context.Context, Span, error) {
 
 | 项 | 估 | 依赖 |
 |---|---|---|
-| PR-OBS-18 GinSkywalkingMiddleware 创建 EntrySpan + http.method/url/status_code/user_id tag | 半天 | 无（接口已就位）|
-| PR-OBS-19 ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor | 1-1.5 天 | PR-OBS-18 同源（业务层 tag） |
-| 业务 handler 主动打业务相关 tag（如 ai-svc fusion kind、chat-svc message length）| backlog | 取决于 PR-OBS-18/19 落地 |
+| ~~PR-OBS-18 GinSkywalkingMiddleware 创建 EntrySpan + http.method/url/status_code/user_id tag~~ | ~~半天~~ ✅ Stage 46 | — |
+| PR-OBS-19 ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor | 1-1.5 天 | 接口已就位（Stage 45）|
+| PR-OBS-19 顺带：span.SetSpanLayer(agentv3.SpanLayer_HTTP/GRPC) + SetComponent | 半天 | 需扩 Span 接口 |
+| PR-OBS-23 handler err 透传到 span.EndSpan(err) | 半天 | c.Next wrap 拿 c.Errors() |
+| 业务 handler 主动打业务相关 tag（如 ai-svc fusion kind、chat-svc message length）| backlog | 取决于 PR-OBS-19 落地 |
 
 ## 五、与 Stage 44 §四 B 的对账
 

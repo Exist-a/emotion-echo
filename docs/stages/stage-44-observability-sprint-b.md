@@ -191,8 +191,13 @@ fix/seed-test-nacos-discovery-naming
 - ✅ 步骤 3（部分）：GinSkywalkingMiddleware / ConsumerGroupHandler 改用接口（行为零变化）
 - ✅ 步骤 4（部分）：ai-svc Kafka consumer 4 个 messaging.* tag 精确断言（mockSpan.tagCalls）
 
-剩余（PR-OBS-18/19）：
-- ⏳ GinSkywalkingMiddleware 创建真实 EntrySpan + http.method/url/status_code/user_id tag
+**🟢 PR-OBS-18（2026-09-08）进一步收口**：
+
+[Stage 46](/docs/stages/stage-46-observability-gin-entry-span.md) 已落地：
+
+- ✅ 步骤 3（完整）：GinSkywalkingMiddleware 创建 EntrySpan + 4 个 http.* / user_id tag 精确断言
+
+剩余（PR-OBS-19）：
 - ⏳ ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor
 
 ### ❌ C. PR-OBS-15 6 svc 接入 logging helper
