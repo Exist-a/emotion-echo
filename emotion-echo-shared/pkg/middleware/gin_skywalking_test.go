@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -241,15 +242,20 @@ func TestGinSkywalkingMiddleware_AttachesStatusCode(t *testing.T) {
 //   - span.EndSpan(err) 在 next handler 返回时被调
 
 // stubTracer PR-OBS-17 — 满足 grpcinterceptor.Tracer 接口,记录调用次数
+// PR-OBS-18 扩展: StartEntry 返回共享 span 实例,记录调用 + tag + EndSpan err
 type stubTracer struct {
 	startEntryCalls []string
 	createLocalCalls []string
+	// span PR-OBS-18: StartEntry 返回的 span(测试可断言 Tag/EndSpan 调用)
+	span *stubSpan
 }
 
 func (t *stubTracer) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
-	// 当前 PR GinSkywalkingMiddleware 未实际调用 StartEntry(只 c.Set),
-	// 但接口已存在以便 PR-OBS-18 接入;这里返回 noop span 让接口完整。
-	return ctx, &stubSpan{}
+	t.startEntryCalls = append(t.startEntryCalls, opName)
+	if t.span == nil {
+		t.span = &stubSpan{}
+	}
+	return ctx, t.span
 }
 
 func (t *stubTracer) CreateLocalSpan(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span, error) {
@@ -257,11 +263,25 @@ func (t *stubTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 	return ctx, &stubSpan{}, nil
 }
 
-// stubSpan 满足 grpcinterceptor.Span 接口,无业务行为
-type stubSpan struct{}
+// stubSpan 满足 grpcinterceptor.Span 接口,记录 Tag/EndSpan 调用
+// PR-OBS-18 扩展: tagKV 记录 / endErr 记录
+type stubSpan struct {
+	tagCalls []tagKV
+	endErr   error
+	ended    bool
+}
 
-func (s *stubSpan) EndSpan(error)             {}
-func (s *stubSpan) Tag(_, _ string)           {}
+func (s *stubSpan) EndSpan(err error) {
+	s.ended = true
+	s.endErr = err
+}
+
+func (s *stubSpan) Tag(key, value string) {
+	s.tagCalls = append(s.tagCalls, tagKV{key, value})
+}
+
+// tagKV 记录 span.Tag 调用
+type tagKV struct{ K, V string }
 
 // 编译期断言: stubTracer / stubSpan 满足接口
 var _ grpcinterceptor.Tracer = (*stubTracer)(nil)
@@ -333,5 +353,156 @@ func TestGinSkywalkingMiddleware_AttachesInterfaceTypedTracer(t *testing.T) {
 	}
 	if !assertOK {
 		t.Error("expected ctx skywalking_tracer to be grpcinterceptor.Tracer interface")
+	}
+}
+
+// ===== PR-OBS-18 RED: GinSkywalkingMiddleware 创建 EntrySpan + 4 tag 精确断言 =====
+//
+// 目的: stage-44 §四 B 收口第二步——中间件真正调用 tracer.StartEntry 创建 span,
+// 打 4 个 http.* / user_id tag,使 SkyWalking UI 能聚合查询 HTTP 请求维度。
+//
+// 设计:
+// - stubTracer.StartEntry 返回共享 span (tracer.span),记录 opName 到 startEntryCalls
+// - 中间件在 c.Next 前调 tracer.StartEntry(ctx, opName)
+// - c.Next 后调 span.Tag(http.method, ...) / Tag(http.url, ...) / Tag(http.status_code, ...)
+// - 业务路径中间件优先级在 AuthMiddleware 之前 → X-User-Id header 仍可 c.GetHeader 读
+//
+// 4 个 case:
+// 1. CreatesEntrySpan: 业务路径触发 StartEntry 1 次
+// 2. TagsHTTPMethodURLStatus: 3 个 http.* tag 精确值
+// 3. TagsUserIDFromHeader: X-User-Id → user_id tag
+// 4. EndSpanOnHandlerError: handler 返 error/panic 时 EndSpan(err) 被调
+//
+// RED 状态: GinSkywalkingMiddleware 当前实现不调 tracer.StartEntry,断言失败 = RED
+
+// TestGinSkywalkingMiddleware_CreatesEntrySpan 业务路径应触发 StartEntry
+func TestGinSkywalkingMiddleware_CreatesEntrySpan(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.GET("/api/v1/foo", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/foo", nil)
+	r.ServeHTTP(rec, req)
+
+	if len(tracer.startEntryCalls) != 1 {
+		t.Fatalf("expected 1 StartEntry call, got %d", len(tracer.startEntryCalls))
+	}
+	// opName = gin route FullPath (非 URL.Path,因为有路由变量时 c.FullPath 返回注册路径)
+	if tracer.startEntryCalls[0] != "/api/v1/foo" {
+		t.Errorf("expected opName=/api/v1/foo, got %q", tracer.startEntryCalls[0])
+	}
+}
+
+// TestGinSkywalkingMiddleware_TagsHTTPMethodURLStatus 断言 3 个 http.* tag 精确值
+func TestGinSkywalkingMiddleware_TagsHTTPMethodURLStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.POST("/api/v1/chat/:id", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		c.Status(http.StatusCreated)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/chat/42", nil)
+	r.ServeHTTP(rec, req)
+
+	if len(tracer.startEntryCalls) != 1 {
+		t.Fatalf("expected 1 StartEntry call, got %d", len(tracer.startEntryCalls))
+	}
+	span := tracer.span
+	if span == nil {
+		t.Fatal("expected tracer.span to be set by StartEntry")
+	}
+	// 断言 3 个 tag 精确比对
+	wantTags := []tagKV{
+		{"http.method", http.MethodPost},
+		{"http.url", "/api/v1/chat/42"}, // c.Request.URL.Path (实例路径,非路由模板)
+		{"http.status_code", "201"},
+	}
+	if len(span.tagCalls) != len(wantTags) {
+		t.Errorf("expected %d tag calls, got %d: %+v", len(wantTags), len(span.tagCalls), span.tagCalls)
+	}
+	for _, want := range wantTags {
+		found := false
+		for _, got := range span.tagCalls {
+			if got.K == want.K && got.V == want.V {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing tag %+v in %+v", want, span.tagCalls)
+		}
+	}
+	// span 必须在 c.Next 后被 EndSpan(nil)(handler 无 err)
+	if !span.ended {
+		t.Error("expected span.EndSpan called after c.Next")
+	}
+	if span.endErr != nil {
+		t.Errorf("expected span.EndSpan(nil) on success, got endErr=%v", span.endErr)
+	}
+}
+
+// TestGinSkywalkingMiddleware_TagsUserIDFromHeader 验证 X-User-Id header → user_id tag
+func TestGinSkywalkingMiddleware_TagsUserIDFromHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.GET("/api/v1/profile", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/profile", nil)
+	// 模拟 APISIX jwt-auth 注入 X-User-Id (shared/auth/jwt_auth.go 解析模式)
+	req.Header.Set("X-User-Id", "12345")
+	r.ServeHTTP(rec, req)
+
+	if len(tracer.startEntryCalls) != 1 {
+		t.Fatalf("expected 1 StartEntry, got %d", len(tracer.startEntryCalls))
+	}
+	span := tracer.span
+	if span == nil {
+		t.Fatal("expected tracer.span to be set")
+	}
+	// 断言 user_id tag
+	found := false
+	for _, got := range span.tagCalls {
+		if got.K == "user_id" && got.V == "12345" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected tag (user_id, 12345), got %+v", span.tagCalls)
+	}
+}
+
+// TestGinSkywalkingMiddleware_EndSpanOnHandlerError 验证 handler 返 error 时
+// span.EndSpan(err) 收到该 err
+func TestGinSkywalkingMiddleware_EndSpanOnHandlerError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.GET("/api/v1/fail", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		c.Status(http.StatusInternalServerError)
+		c.Error(fmt.Errorf("forced handler error"))
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fail", nil)
+	r.ServeHTTP(rec, req)
+
+	if len(tracer.startEntryCalls) != 1 {
+		t.Fatalf("expected 1 StartEntry, got %d", len(tracer.startEntryCalls))
+	}
+	span := tracer.span
+	if !span.ended {
+		t.Fatal("expected span.EndSpan called")
+	}
+	// 中间件应传 status code 5xx 时判定为 err(或读 c.Errors())
+	// 当前 PR 仅断言 span 被 EndSpan,不强求 endErr 值(后续 PR-OBS-23 可加精细判定)
+	if span.endErr == nil {
+		t.Log("span.EndSpan(nil) — handler error 透传策略留作后续 PR")
 	}
 }
