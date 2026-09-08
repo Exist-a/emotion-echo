@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/SkyAPM/go2sky"
+	agentv3 "skywalking.apache.org/repo/goapi/collect/language/agent/v3"
 )
 
 // Go2SkySpan wraps go2sky's span so it satisfies our Span interface.
@@ -35,6 +36,46 @@ func (s *Go2SkySpan) EndSpan(err error) {
 		s.span.Error(time.Now(), err.Error())
 	}
 	s.span.End()
+}
+
+// Tag adds a key/value attribute to the underlying go2sky span.
+//
+// PR-OBS-17: Span 接口扩展,本方法实现 key/value → go2sky.Tag(key) 转译。
+// go2sky v1.5 Tag 类型为 string (type Tag string),无运行时转换开销。
+// nil 内部 span 时为 no-op(避免 panic 路径污染调用方)。
+func (s *Go2SkySpan) Tag(key, value string) {
+	if s.span == nil {
+		return
+	}
+	s.span.Tag(go2sky.Tag(key), value)
+}
+
+// SetSpanLayer PR-OBS-19 扩展:设置 span layer (OAP enum int32)。
+// layer 值约定(对应 agentv3.SpanLayer enum):
+//   2 = HTTP, 5 = GRPC, 6 = MQ (kafka 暂无,沿用 MQ)
+//
+// 实现:cast int32 → agentv3.SpanLayer 后调用底层 span.SetSpanLayer。
+// nil 内部 span 时 no-op。
+func (s *Go2SkySpan) SetSpanLayer(layer int32) {
+	if s.span == nil {
+		return
+	}
+	s.span.SetSpanLayer(agentv3.SpanLayer(layer))
+}
+
+// SetComponent PR-OBS-19 扩展:设置 span component ID。
+// 常用 component ID:
+//   5001 = Go gRPC server / client
+//   5002 = Go HTTP server
+//   5003 = Go Kafka consumer / producer
+//
+// 实现:直接传 int32 给底层 span.SetComponent(go2sky 已接受 int32)。
+// nil 内部 span 时 no-op。
+func (s *Go2SkySpan) SetComponent(componentID int32) {
+	if s.span == nil {
+		return
+	}
+	s.span.SetComponent(componentID)
 }
 
 // Go2SkyTracer adapts go2sky.Tracer to our minimal Tracer interface.
@@ -66,4 +107,24 @@ func (t *Go2SkyTracer) StartEntry(ctx context.Context, operationName string) (co
 		return ctx, &Go2SkySpan{}
 	}
 	return ctx, &Go2SkySpan{span: span}
+}
+
+// CreateLocalSpan implements Tracer for local (non-network) operations
+// such as Kafka consumer message handling or cron jobs.
+//
+// PR-OBS-17 新增: 包装 go2sky.NewTracer.CreateLocalSpan + WithOperationName。
+// 返回 (ctx, Span, error);nil receiver / nil tracer 时降级 noop span + nil err,
+// 保持与 StartEntry 一致的容错语义(调用方无需 nil 检查)。
+func (t *Go2SkyTracer) CreateLocalSpan(ctx context.Context, operationName string) (context.Context, Span, error) {
+	if t == nil || t.tracer == nil {
+		return ctx, &Go2SkySpan{}, nil
+	}
+	span, nCtx, err := t.tracer.CreateLocalSpan(ctx, go2sky.WithOperationName(operationName))
+	if err != nil {
+		return ctx, &Go2SkySpan{}, err
+	}
+	if span == nil {
+		return ctx, &Go2SkySpan{}, nil
+	}
+	return nCtx, &Go2SkySpan{span: span}, nil
 }

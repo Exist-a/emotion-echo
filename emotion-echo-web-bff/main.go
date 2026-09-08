@@ -38,6 +38,7 @@ import (
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
+	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	"google.golang.org/grpc"
@@ -49,6 +50,8 @@ var configFile = flag.String("f", "etc/web-bff.yaml", "the config file")
 func main() {
 	flag.Parse()
 	logging.Init()
+	// PR-OBS-15: SetGlobalSvc 让所有 slog 日志自动带 svc="web-bff" 字段(决策 6 必填)
+	logging.SetGlobalSvc("web-bff")
 
 	var c config.Config
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
@@ -103,7 +106,7 @@ func main() {
 	// 只信任 APISIX 注入的 X-User-Id header（APISIX 已配 jwt-auth 插件解析 token → 注 header）。
 	// dev 模式前端走 APISIX :19080 → BFF :8894，APISIX 负责 JWT 验签 + X-User-Id 注入。
 	if tracer != nil {
-		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
+		r.Use(sharedmw.GinSkywalkingMiddleware(sharedgrpc.NewGo2SkyTracer(tracer)))
 	}
 	// Stage 32 PR-16: 鉴权由 APISIX jwt-auth 统一处理（注入 X-User-Id header），
 	// BFF 信任 shared GinAuthMiddleware（解析 X-User-Id 注入 ctx）。

@@ -209,6 +209,9 @@ func ApplyEnvOverrides(c *Config) {
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
 	}
+	if v := os.Getenv("SKYWALKING_ENABLED"); v != "" {
+		c.SkyWalking.Enabled = v == "true" || v == "1"
+	}
 	if v := os.Getenv("BFF_JWT_SECRET"); v != "" {
 		c.Auth.JWTSecret = v
 	}

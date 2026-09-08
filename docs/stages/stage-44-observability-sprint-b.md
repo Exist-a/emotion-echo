@@ -183,12 +183,56 @@ fix/seed-test-nacos-discovery-naming
   4. mockSpan + mockTracer 实现 + 完整 span tag 断言（user_id/rpc.method/messaging.*）
 - 估 1-2 天，独立 PR
 
+**🟡 PR-OBS-17（2026-09-08）部分收口**：
+
+[Stage 45](/docs/stages/stage-45-observability-sprint-b-regression.md) 已落地：
+
+- ✅ 步骤 1+2：`Tracer.CreateLocalSpan` + `Span.Tag` 接口扩展 + Go2Sky adapter
+- ✅ 步骤 3（部分）：GinSkywalkingMiddleware / ConsumerGroupHandler 改用接口（行为零变化）
+- ✅ 步骤 4（部分）：ai-svc Kafka consumer 4 个 messaging.* tag 精确断言（mockSpan.tagCalls）
+
+**🟢 PR-OBS-18（2026-09-08）进一步收口**：
+
+[Stage 46](/docs/stages/stage-46-observability-gin-entry-span.md) 已落地：
+
+- ✅ 步骤 3（完整）：GinSkywalkingMiddleware 创建 EntrySpan + 4 个 http.* / user_id tag 精确断言
+
+**🟢 PR-OBS-23（2026-09-08）handler err 透传**：
+
+[Stage 48](/docs/stages/stage-48-handler-err-propagate.md) 已落地：
+
+- ✅ span.EndSpan 从总是 nil 改为 buildSpanError(c) 三段判定（c.Errors / status>=500 / nil）
+- ✅ OAP UI 可直接过滤 5xx + error 维度
+- ✅ 不改 handler 现状（c.JSON(500, ...) 通过 status 兜底）
+
+**🟢 PR-OBS-19（2026-09-08）gRPC interceptor rpc.* tag + layer/component**：
+
+[Stage 49](/docs/stages/stage-49-grpc-tracing-rpc-tags.md) 已落地：
+
+- ✅ Span 接口扩 `SetSpanLayer(int32)` + `SetComponent(int32)`
+- ✅ ServerTracingInterceptor 打 5 项：SetSpanLayer(GRPC=5) + SetComponent(5001) + rpc.system + rpc.method + user_id (from x-user-id metadata)
+- ✅ ClientTracingInterceptor 打 4 项（对称，不含 user_id）
+- ✅ 5 svc 仅 ai-svc 有 gRPC server（stage-46 §四 B 描述与代码现实偏差，本 stage-49 已纠正）
+
+**🎉 Stage 44 §四 B 6/6 步全部收口**：业务功能层面观测链路 100% 完成。
+
 ### ❌ C. PR-OBS-15 6 svc 接入 logging helper
 
 - 现状：shared/pkg/logging 已有 SetGlobalSvc + WithTraceID/WithAction + enrichHandler，测试 5 case 全 PASS
 - 但 **6 svc main.go 未调 SetGlobalSvc**，gin/gRPC middleware 未调 WithTraceID/WithAction
 - 落地后 Loki 日志查询可按 svc/trace_id/action 过滤
 - 估半天，独立 PR
+
+**🟢 PR-OBS-15（2026-09-08）已落地**：
+
+[Stage 47](/docs/stages/stage-47-logging-helper-apply.md) 已落地：
+
+- ✅ 6 svc main.go 全部调 `logging.Init()` + `logging.SetGlobalSvc("<name>")`（含 ai/web-bff re-export 补全）
+- ✅ GinSkywalkingMiddleware 调 `logging.WithTraceID` 注入 Request ctx（X-Trace-Id header 路径）
+- ✅ 接入层契约测试 `TestMain_FilesInvokeInitAndSetGlobalSvc`（RED → GREEN）
+- ✅ middleware 端到端测试 `TestGinSkywalkingMiddleware_InjectsTraceIDIntoRequestContext`
+
+Loki 日志现在可按 `svc="<name>"` + `trace_id="<id>"` 过滤（决策 6 字段闭环）。
 
 ### ❌ D. sw-oap telemetry 未启用
 

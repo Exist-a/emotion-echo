@@ -8,6 +8,8 @@
 // 设计：
 //   - Consumer 接口 → KafkaConsumer (生产) / InMemoryConsumer (测试)
 //   - Handler 函数签名简单：ctx + event → 处理结果
+//   - Tracer 字段为 grpcinterceptor.Tracer 接口(PR-OBS-17):
+//     生产传 grpcinterceptor.NewGo2SkyTracer(t),测试传 mock。
 package consumer
 
 import (
@@ -22,7 +24,7 @@ import (
 	"emotion-echo-ai-svc/internal/events"
 
 	"github.com/IBM/sarama"
-	"github.com/SkyAPM/go2sky"
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 )
 
 // ConsumerGroupHandler 是 sarama.ConsumerGroupHandler 的实现
@@ -45,7 +47,10 @@ type ConsumerGroupHandler struct {
 	TopicFilter string
 	// Tracer 可选：用于创建 SkyWalking span（Stage 25-F）
 	// 为 nil 时不创建 span，保证向后兼容
-	Tracer *go2sky.Tracer
+	//
+	// PR-OBS-17: 类型从 *go2sky.Tracer 改为 grpcinterceptor.Tracer 接口,
+	// 生产赋值需用 grpcinterceptor.NewGo2SkyTracer(t) 包一层。
+	Tracer grpcinterceptor.Tracer
 	// DLQ Stage 30-C A2：可选 DLQ publisher。nil 时不投 DLQ（退化）。
 	DLQ DLQPublisher
 	// MaxRetries Stage 30-C A2：失败最大重试次数，0 时取默认值 3。
@@ -105,10 +110,12 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			}
 			// Stage 25-F: SkyWalking span（可选）
 			if h.Tracer != nil {
-				span, _, _ := h.Tracer.CreateLocalSpan(sess.Context(),
-					go2sky.WithOperationName("kafka-consume"))
+				_, span, err := h.Tracer.CreateLocalSpan(sess.Context(), "kafka-consume")
+				if err != nil {
+					slog.WarnContext(sess.Context(), "create local span failed (continuing without trace)", "err", err)
+				}
 				if span != nil {
-					defer span.End()
+					defer span.EndSpan(nil)
 					span.Tag("messaging.system", "kafka")
 					span.Tag("messaging.kafka.topic", msg.Topic)
 					span.Tag("messaging.kafka.partition", fmt.Sprintf("%d", msg.Partition))
@@ -217,6 +224,9 @@ func NewKafkaConsumer(brokers []string, groupID string) (*KafkaConsumer, error) 
 // 参数 tracer 可选：传入后每条消息会创建 SkyWalking span（Stage 25-F）。
 // Stage 30-C A2: dlq 可选 — 注入后启用 DLQ 路径。nil 时退化为 Stage 30-B 原行为。
 //
+// PR-OBS-17: tracer 参数类型从 *go2sky.Tracer 改为 grpcinterceptor.Tracer 接口,
+// 调用方需用 grpcinterceptor.NewGo2SkyTracer(t) 包一层。
+//
 // ADR-19 PR-A2.1: 外层 5s 重试对齐 analytics-svc Consumer.Run
 //
 // 历史 bug：session 级故障（consumer group 被关闭、broker 长期不可达超过 sarama
@@ -227,7 +237,7 @@ func NewKafkaConsumer(brokers []string, groupID string) (*KafkaConsumer, error) 
 // 与 analytics-svc 的差异:本服务单 topic 消费 + sarama.ConsumerGroupHandler
 // 路径,内部行为对齐即可;Sleep 时长与 analytics-svc 保持一致,便于未来提取到
 // shared pkg 重试 helper。
-func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string, tracer *go2sky.Tracer, dlq DLQPublisher, maxRetries int) error {
+func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string, tracer grpcinterceptor.Tracer, dlq DLQPublisher, maxRetries int) error {
 	c.topics = topics
 	h := &ConsumerGroupHandler{
 		Ready:      make(chan bool),

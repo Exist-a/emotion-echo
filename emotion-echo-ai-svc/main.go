@@ -45,6 +45,7 @@ import (
 	"github.com/gin-gonic/gin"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 
@@ -97,6 +98,9 @@ func applyEnvOverrides(c *config.Config) {
 	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
+	}
+	if v := os.Getenv("SKYWALKING_ENABLED"); v != "" {
+		c.SkyWalking.Enabled = v == "true" || v == "1"
 	}
 	if v := os.Getenv("LLM_BASE_URL"); v != "" {
 		c.LLM.BaseURL = v
@@ -169,6 +173,8 @@ func main() {
 
 	// Stage 20-4: structured slog JSON to stdout.
 	logging.Init()
+	// PR-OBS-15: SetGlobalSvc 让所有 slog 日志自动带 svc="ai-svc" 字段(决策 6 必填)
+	logging.SetGlobalSvc("ai-svc")
 	logging.Printf("[startup] ai-svc starting (strict=%v deps=%s)",
 		sharedbootstrap.ShouldFailFast(), os.Getenv("STARTUP_STRICT_DEPS"))
 
@@ -306,7 +312,7 @@ func main() {
 						return createdHandler.Handle(ctx, evt)
 					},
 					events.EventTypeMessageCreated,
-					tracer, dlq, maxRetries); err != nil {
+					sharedgrpc.NewGo2SkyTracer(tracer), dlq, maxRetries); err != nil {
 					slog.Error("kafka consume err", "err", err)
 				}
 			}()
@@ -351,7 +357,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(sharedmetrics.GinMetricsMiddleware("ai-svc"))
 	if tracer != nil {
-		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
+		r.Use(sharedmw.GinSkywalkingMiddleware(sharedgrpc.NewGo2SkyTracer(tracer)))
 	}
 	r.Use(sharedmw.GinAuthMiddleware())
 	// Stage 25-G: per-user 限流（10 req/s, burst 20）防止单用户打爆 LLM

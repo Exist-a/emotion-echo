@@ -28,8 +28,10 @@ import (
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
+	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -48,6 +50,9 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
 	}
+	if v := os.Getenv("SKYWALKING_ENABLED"); v != "" {
+		c.SkyWalking.Enabled = v == "true" || v == "1"
+	}
 	if v := os.Getenv("NACOS_ENABLED"); v != "" {
 		c.Nacos.Enabled = v == "true" || v == "1"
 	}
@@ -64,6 +69,10 @@ func applyEnvOverrides(c *config.Config) {
 
 func main() {
 	flag.Parse()
+
+	// PR-OBS-15: structured slog JSON to stdout + svc 字段(决策 6 必填)
+	sharedlogging.Init()
+	sharedlogging.SetGlobalSvc("user-svc")
 
 	var c config.Config
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
@@ -128,7 +137,7 @@ func main() {
 
 	// 中间件顺序：auth 必须在 trace 之后（trace 数据应包含 auth 后的 ctx）
 	if tracer != nil {
-		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
+		r.Use(sharedmw.GinSkywalkingMiddleware(sharedgrpc.NewGo2SkyTracer(tracer)))
 	}
 
 	// === 4.5 Stage 33 PR-19a：无 auth 中间件的路由组 ===

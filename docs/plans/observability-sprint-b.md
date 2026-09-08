@@ -623,3 +623,73 @@ main
 - [Loki 单机模式](https://grafana.com/docs/loki/latest/operations/storage/filesystem/)
 - [AGENTS.md §〇](/AGENTS.md)（本 plan 的 TDD 与调研约定）
 - [Stage 43 Kafka 收口 §四](/docs/stages/stage-43-kafka-reliability-sprint-a.md)（本 plan 的 §1.4 来源）
+
+---
+
+## 附录 A · Stage 44 §四 B 部分收口（PR-OBS-17）
+
+Stage 44 §四 B 标注的"PR-OBS-12/13/14 完整 span tag 断言"由 PR-OBS-17 部分落地：
+
+- **已落地**：Tracer/Span 接口扩展（Tag + CreateLocalSpan）+ Go2Sky adapter + 3 处签名变更走接口 + 6 svc main.go 包装 + ai-svc Kafka consumer 4 个 messaging.* tag 精确断言（mock-based）
+- **未落地（PR-OBS-18+）**：GinSkywalkingMiddleware 创建真实 EntrySpan + http.method/url/status_code/user_id tag；ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor
+
+详细归档：[Stage 45](/docs/stages/stage-45-observability-sprint-b-regression.md)
+
+---
+
+## 附录 B · Stage 46 PR-OBS-18 HTTP 链 EntrySpan 落地
+
+Stage 44 §四 B 步骤 3 完整收口：GinSkywalkingMiddleware 创建 EntrySpan +
+4 个 http.* / user_id tag 精确断言（mock-based）。
+
+- **已落地**：http.method / http.url / http.status_code / user_id 4 tag，span 挂 gin ctx (`skywalking_span`)
+- **未落地（PR-OBS-19）**：ServerTracingInterceptor 打 rpc.method/rpc.system + 5 svc gRPC server 接入 shared interceptor
+
+详细归档：[Stage 46](/docs/stages/stage-46-observability-gin-entry-span.md)
+
+---
+
+## 附录 C · Stage 47 PR-OBS-15 6 svc logging helper 接入落地
+
+Stage 44 §四 C 落地：6 svc main.go 全调 `logging.Init()` + `SetGlobalSvc("<name>")`，
+GinSkywalkingMiddleware 调 `logging.WithTraceID` 注入 Request ctx。Loki 日志
+可按 svc + trace_id 过滤（决策 6 字段闭环）。
+
+详细归档：[Stage 47](/docs/stages/stage-47-logging-helper-apply.md)
+
+---
+
+## 附录 D · Stage 48 PR-OBS-23 handler err 透传落地
+
+Stage 46 §二.2.3 落地：GinSkywalkingMiddleware EndSpan 从总是 nil 改为
+buildSpanError(c) 三段判定（c.Errors / status>=500 / nil）。OAP UI 可直接
+过滤 5xx + error 维度；不改 handler 现状（c.JSON(500, ...) 通过 status 兜底）。
+
+详细归档：[Stage 48](/docs/stages/stage-48-handler-err-propagate.md)
+
+---
+
+## 附录 E · Stage 49 PR-OBS-19 gRPC rpc.* tag + layer/component 收口
+
+Stage 44 §四 B 步骤 6 收口（业务功能最后一步）：
+- ServerTracingInterceptor 打 5 项（layer=GRPC + component=Go gRPC + rpc.system/method/user_id）
+- ClientTracingInterceptor 打 4 项（对称）
+- Span 接口扩 SetSpanLayer + SetComponent
+- ai-svc 是唯一 gRPC server，无需改 svc main.go
+
+stage-46 §四 描述"5 svc gRPC server 接入"与代码现实不符（仅 ai-svc 有 gRPC server，
+其余 5 svc 是 gin HTTP，go-zero 已 Stage 41 移除）。本 stage-49 已纠正。
+
+详细归档：[Stage 49](/docs/stages/stage-49-grpc-tracing-rpc-tags.md)
+
+---
+
+## 附录 F · Stage 50 端到端验证归档
+
+本轮 5 stage（Stage 45-49，14 commit）的端到端验证归档：
+- 单元测试层 100% PASS（grpcinterceptor 41 + middleware 24 + logging 10 + ai-svc consumer 14 = 89 case）
+- Stage 47 logging helper 本机直接 run 验证：JSON 输出 svc/trace_id/action/msg/msg_id/time/level 7 字段
+- dev compose `smoke_observability.py`：10/12 PASS（2 项 Nacos/warmup 与本轮无关）
+- ⚠️ 6 svc 镜像 Stage 47/48/49 改动滞后：待 stage-44 §四 §A "16 分支 merge main" + `build_dev_images.sh` 重建后生效
+
+详细归档：[Stage 50](/docs/stages/stage-50-e2e-validation.md)
