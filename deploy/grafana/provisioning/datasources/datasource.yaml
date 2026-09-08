@@ -18,3 +18,12 @@ datasources:
     jsonData:
       timeInterval: 15s
       httpMethod: POST
+
+  # PR-OBS-5: Loki datasource (logs layer)
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
