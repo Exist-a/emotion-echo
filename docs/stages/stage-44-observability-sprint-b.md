@@ -197,8 +197,24 @@ fix/seed-test-nacos-discovery-naming
 
 - ✅ 步骤 3（完整）：GinSkywalkingMiddleware 创建 EntrySpan + 4 个 http.* / user_id tag 精确断言
 
-剩余（PR-OBS-19）：
-- ⏳ ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor
+**🟢 PR-OBS-23（2026-09-08）handler err 透传**：
+
+[Stage 48](/docs/stages/stage-48-handler-err-propagate.md) 已落地：
+
+- ✅ span.EndSpan 从总是 nil 改为 buildSpanError(c) 三段判定（c.Errors / status>=500 / nil）
+- ✅ OAP UI 可直接过滤 5xx + error 维度
+- ✅ 不改 handler 现状（c.JSON(500, ...) 通过 status 兜底）
+
+**🟢 PR-OBS-19（2026-09-08）gRPC interceptor rpc.* tag + layer/component**：
+
+[Stage 49](/docs/stages/stage-49-grpc-tracing-rpc-tags.md) 已落地：
+
+- ✅ Span 接口扩 `SetSpanLayer(int32)` + `SetComponent(int32)`
+- ✅ ServerTracingInterceptor 打 5 项：SetSpanLayer(GRPC=5) + SetComponent(5001) + rpc.system + rpc.method + user_id (from x-user-id metadata)
+- ✅ ClientTracingInterceptor 打 4 项（对称，不含 user_id）
+- ✅ 5 svc 仅 ai-svc 有 gRPC server（stage-46 §四 B 描述与代码现实偏差，本 stage-49 已纠正）
+
+**🎉 Stage 44 §四 B 6/6 步全部收口**：业务功能层面观测链路 100% 完成。
 
 ### ❌ C. PR-OBS-15 6 svc 接入 logging helper
 
