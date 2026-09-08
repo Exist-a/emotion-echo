@@ -34,12 +34,12 @@ import (
 	"emotion-echo-web-bff/internal/svc"
 
 	"github.com/SkyAPM/go2sky"
-	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -78,12 +78,19 @@ func main() {
 	}
 	svcCtx := buildServiceContext(&c, resolver)
 
-	// 2. SkyWalking（可选）
+	// 2. SkyWalking（可选, PR-OBS-2: 用 shared BootstrapSkyWalkingTracer 统一 7 svc 行为）
 	var tracer *go2sky.Tracer
 	if c.SkyWalking.Enabled {
-		rep, err := reporter.NewGRPCReporter(c.SkyWalking.OAPAddr)
-		if err == nil {
-			tracer, _ = go2sky.NewTracer(c.SkyWalking.ServiceName, go2sky.WithReporter(rep))
+		t, err := sharedbootstrap.BootstrapSkyWalkingTracer(context.Background(), c.SkyWalking.ServiceName, c.SkyWalking.OAPAddr, 2*time.Second)
+		if err != nil {
+			sharedmetrics.IncSkyWalkingInitFailed(c.SkyWalking.ServiceName)
+			if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("skywalking") {
+				log.Fatalf("[skywalking] strict mode + required dep, refusing to start: %v", err)
+			}
+			log.Printf("[skywalking] tracer init failed (warn mode, continue): %v", err)
+		} else {
+			tracer = t
+			log.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
 		}
 	}
 

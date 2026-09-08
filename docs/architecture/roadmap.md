@@ -823,7 +823,25 @@ Stage 32 APISIX 网关层         [ ] 全部（依赖 31）
 Stage 33 P0 修复 + BFF 净化    [ ] 全部（依赖 32）
 
 # Stage 41 · go-zero 完全移除收尾（ADR 决策 1 收尾 + 关闭审计 E-2/E-3）
-Stage 41 go-zero 移除           [ ] PR-0~9 共 10 个 TDD PR（[plan](../plans/gozero-removal.md) / [stage](../stages/stage-41-gozero-removal.md)）；独立演进路线，与 31/32/33 不冲突
+Stage 41 go-zero 移除           ✅ DONE — 10 个 TDD PR 全部 merged,见 [stage-41-gozero-removal.md](../stages/stage-41-gozero-removal.md) + [smoke 10/10 PASS](../stages/stage-41-smoke-2026-09-07.txt)
+
+# Stage 42 · 容器时区修复 (TZ=Asia/Shanghai 形同虚设 side fix)
+Stage 42 container tz fix       ✅ DONE — 6 Dockerfile 删 `apk del tzdata`,见 [stage-42-container-tz-fix.md](../stages/stage-42-container-tz-fix.md)
+
+# Stage 43 · Kafka 健壮性 Sprint A 全收口 (ADR-19 / kafka-reliability-gaps.md)
+Stage 43 Kafka Sprint A         ✅ DONE — 10 commit on `feat/chat-dev-event-publisher-a1-1-red`,
+                                  7/7 服务绿,见 [stage-43-kafka-reliability-sprint-a.md](../stages/stage-43-kafka-reliability-sprint-a.md)。
+                                  Sprint B (1.4 lag 监控 + 1.5 Protobuf 迁移) 在新分支独立推进。
+                                  Sprint B §1.4 lag 监控已并入下方 Stage 44 observability-sprint-b.md。
+
+# Stage 44 · 观测链路 Sprint B（dev compose 三层补齐 + 测试护栏 + Kafka lag 收口）
+Stage 44 observability-sprint-b   ⏳ PLANNED — 合并 observability-compose-gap.md +
+                                  observability-testing-gap.md + Kafka Sprint A §1.4 三件事
+                                  为可执行 Sprint B,16 个 PR-OBS-X,见
+                                  [observability-sprint-b.md](../plans/observability-sprint-b.md)。
+                                  估 30-35 commit / 12-15 天。
+                                  启动条件:建 `feat/observability-sprint-b` 分支,按 4 批顺序推进
+                                  (基础 → infra → 测试 → 收口)。
 ```
 
 ---

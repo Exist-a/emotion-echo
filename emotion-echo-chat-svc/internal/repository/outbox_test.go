@@ -86,6 +86,34 @@ func TestInMemoryOutboxRepo_MarkFailed_IncrementsAttempts(t *testing.T) {
 	assert.Equal(t, OutboxStatusPending, pending[0].Status, "MarkFailed 不应改 status")
 }
 
+// TestInMemoryOutboxRepo_MarkDead_RemovesFromListPending ADR-19 PR-A6.1
+//
+// MarkDead 后 status=dead,ListPending 不再返回（与 pending/sent/failed 同机制）。
+func TestInMemoryOutboxRepo_MarkDead_RemovesFromListPending(t *testing.T) {
+	t.Parallel()
+	repo := NewInMemoryOutboxRepo()
+	require.NoError(t, repo.CreateInTx(nil, &OutboxEvent{
+		EventID: "evt-dead-1",
+		Topic:   "chat-events",
+		Payload: []byte(`{}`),
+	}))
+	pending, _ := repo.ListPending(context.Background(), 10)
+	require.Len(t, pending, 1)
+	deadID := pending[0].ID
+
+	require.NoError(t, repo.MarkDead(context.Background(), deadID, "max retries exceeded"))
+
+	pending, _ = repo.ListPending(context.Background(), 10)
+	assert.Empty(t, pending, "dead 行不应被 ListPending 返回")
+
+	// 通过 Get 还能查到（保留供人工排查/回放）
+	got, err := repo.Get(deadID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, OutboxStatusDead, got.Status)
+	assert.Equal(t, "max retries exceeded", got.LastError)
+}
+
 // TestInMemoryOutboxRepo_Limit_LimitsResults 写 5 条 → ListPending(2) → 应返 2 条
 func TestInMemoryOutboxRepo_Limit_LimitsResults(t *testing.T) {
 	t.Parallel()

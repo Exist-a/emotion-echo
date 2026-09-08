@@ -16,12 +16,13 @@ status: Round 1 占位 · Round 2 首批内容迁入
 | `three-vrm-usage-reference.md` | `.trae/documents/three-vrm-usage-reference.md` | Three-VRM API 参考手册 |
 | `wechat-qq-login-and-upload.md` | `.trae/documents/微信QQ登录和文件上传实施计划.md` | QQ OAuth + 通用文件上传 |
 | `nacos-enablement-dev.md` | 新增 | Nacos dev 模式从"半启用"到"全链路" |
-| `observability-compose-gap.md` | 新增 | dev compose 可观测性三层补齐（metrics / logs / traces），与 k8s 路径对齐 |
+| `observability-compose-gap.md` | 新增（2026-09-04） → 已被取代 | dev compose 可观测性三层补齐。**PR 拆分已被 `observability-sprint-b.md` PR-OBS-1~8 取代**，原文件 §一/§二现状作为参考保留 |
 | `db-migration-auto-apply.md` | 新增（2026-09-04） | 13 个服务 migrations 无自动应用机制，dev 库实测一个都没跑过。**本轮已落地**（提交 0d17e85），文件作为方案设计保留 |
 | `todo-pile-2026-09-04.md` | 新增（2026-09-04） | 本轮修复过程中实测暴露的未关闭项汇总：TTS 不可用 / 上传未实现 / 多模态不可用 / 文档失真登记 / dev-prod 端口策略 |
-| `kafka-reliability-gaps.md` | 新增（2026-09-07） | Kafka 管线 6 项健壮性缺口汇总：dev 模式空跑（ADR-19 未落地）/ ai-svc consumer 缺外层重试 / DLQ 默认 Noop / 无 lag 监控 / 无 Schema Registry / relay 无重试上限 |
+| `kafka-reliability-gaps.md` | 新增（2026-09-07） → Sprint A 已落地 | Kafka 管线 6 项健壮性缺口汇总。**Sprint A 已 100% 收口**（10 commit on `feat/chat-dev-event-publisher-a1-1-red`,7/7 服务绿），见 [stages/stage-43-kafka-reliability-sprint-a.md](../stages/stage-43-kafka-reliability-sprint-a.md）。Sprint B §1.4 lag 监控已并入 `observability-sprint-b.md` PR-OBS-7；§1.5 Protobuf 迁移独立 Sprint C 排期 |
 | `grpc-inter-service-migration.md` | 新增（2026-09-07） | 后端微服务间调用 HTTP→gRPC 改造：已落地 3 条（chat→ai / ai→llm / BFF→ai），BFF→user/chat/assessment/analytics 仍 HTTP；分 Phase 推进，chat-svc 先行 |
-| `observability-testing-gap.md` | 新增（2026-09-07） | 可观测性链路测试完善：metrics 契约 / trace 透传+e2e / 日志结构化 / 回归守护；与 observability-compose-gap.md（基础设施层）互补，本计划聚焦测试层 |
+| `observability-testing-gap.md` | 新增（2026-09-07） → 已被取代 | 可观测性链路测试完善。**PR 拆分已被 `observability-sprint-b.md` PR-OBS-9~16 取代** |
+| `observability-sprint-b.md` | 新增（2026-09-08） | **观测链路 Sprint B 执行源**：合并 `observability-compose-gap` + `observability-testing-gap` + Kafka Sprint A §1.4 lag 监控，16 个 PR-OBS-X，候选 stage 44 |
 | ~~`gozero-removal.md`~~ | 已 landed 2026-09-07 | go-zero 完全移除收尾（决策 1）：conf→shared/pkg/config + logx→slog 下沉 shared + rest.Middleware 类型清零 + goctl 归档；10 个 TDD PR 全部 merged。详见 `legacy-plans/landed/gozero-removal.md` 与 `stages/stage-41-gozero-removal.md` |
 
 ## 写入规范
