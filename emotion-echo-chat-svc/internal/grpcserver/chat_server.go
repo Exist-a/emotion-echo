@@ -121,12 +121,25 @@ func (s *chatServer) PinConversation(ctx context.Context, req *emotionchat.PinCo
 	return nil, status.Error(codes.Unimplemented, "PinConversation: PR-GRPC-3 阶段补完")
 }
 
-// StreamMessages gRPC server stream（PR-GRPC-5 阶段补完流式逻辑）
+// StreamMessages gRPC server stream（PR-GRPC-5 阶段架构判断：暂不实现）
+//
+// 架构判断（2026-09-09）：
+//   chat-svc 当前没有"订阅消息流"业务语义——SendMessage 是同步 RPC，
+//   写库 + outbox 即返回。前端聊天走 POST /api/v1/ai/stream（直连 LLM），
+//   不经 chat-svc 中转。
+//
+// 因此 StreamMessages 是 proto 预留接口（proto/chat.proto §StreamMessagesRequest），
+// 当前业务无触发场景。保留 chat.go grpc interface 定义供未来扩展（多客户端
+// 实时协作、消息撤回广播等场景），实现留待业务明确时再补。
+//
+// 当前行为：返 Unimplemented。client 端 chatGRPCClient.StreamMessages
+// 收到 codes.Unimplemented 时 fallback 到现有路径（暂无 fallback，因为
+// BFF 没有用 StreamMessages 的调用点）。
 func (s *chatServer) StreamMessages(req *emotionchat.StreamMessagesRequest, stream emotionchat.ChatService_StreamMessagesServer) error {
 	if s.svcCtx == nil {
 		return status.Error(codes.Unavailable, "chat-svc service context not initialized")
 	}
-	return status.Error(codes.Unimplemented, "StreamMessages: PR-GRPC-5 阶段补完流式逻辑")
+	return status.Error(codes.Unimplemented, "StreamMessages: chat-svc 当前无流式订阅业务；留待未来多客户端实时协作场景")
 }
 
 // Suppress unused warning for errors

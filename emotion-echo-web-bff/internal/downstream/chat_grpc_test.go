@@ -215,6 +215,36 @@ func TestChatGRPCClient_NilConn_ReturnsNilClient(t *testing.T) {
 	assert.Nil(t, client, "nil conn 应返 nil client（与 HTTP 客户端对称）")
 }
 
+// ============ StreamMessages（PR-GRPC-5 架构判断）============
+//
+// 验证：chat-svc StreamMessages 返 Unimplemented 时，客户端 channel
+// 立即关闭 + io.EOF 错误（不 panic、不 hang、不泄露 goroutine）。
+func TestChatGRPCClient_StreamMessages_ReceivesUnimplementedAsEOF(t *testing.T) {
+	// mockChatServer.StreamMessages 不实现（用 UnimplementedChatServiceServer 默认返 Unimplemented）
+	mock := &mockChatServer{
+		convResp: nil, // 其他方法不被调
+	}
+	conn, cleanup := startMockBufConn(t, mock)
+	defer cleanup()
+
+	client := NewChatGRPCClient(conn).(*chatGRPCClient)
+	require.NotNil(t, client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := client.StreamMessages(ctx, 1, 0)
+	require.NoError(t, err, "StreamMessages dial 应返 nil err（Unimplemented 在 Recv 才报）")
+	require.NotNil(t, ch)
+
+	// 收 channel 应得到 0 个 event + 立即 close（Unimplemented → io.EOF → goroutine 退出）
+	count := 0
+	for range ch {
+		count++
+	}
+	assert.Equal(t, 0, count, "Unimplemented 时不应收到任何 event")
+}
+
 // ============ 类型断言 ============
 
 func TestChatGRPCClient_ImplementsChatClient(t *testing.T) {

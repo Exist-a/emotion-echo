@@ -126,7 +126,7 @@ func (c *chatGRPCClient) DeleteConversation(ctx context.Context, conversationID 
 	return nil
 }
 
-// PinConversation 占位（chat-svc HTTP 端点也未实现；PR-GRPC-5 阶段再补）
+// PinConversation 占位（chat-svc HTTP 端点也未实现；保留接口）
 func (c *chatGRPCClient) PinConversation(ctx context.Context, conversationID int64) error {
 	cli := emotionchat.NewChatServiceClient(c.conn)
 	_, err := cli.PinConversation(withUserID(ctx), &emotionchat.PinConversationRequest{
@@ -136,6 +136,48 @@ func (c *chatGRPCClient) PinConversation(ctx context.Context, conversationID int
 		return fmt.Errorf("downstream: chat pin conversation: %w", err)
 	}
 	return nil
+}
+
+// StreamMessages gRPC server stream 客户端（PR-GRPC-5 阶段：架构判断）
+//
+// 架构判断（2026-09-09）：
+//   chat-svc 当前没有"订阅消息流"业务语义——前端聊天走 POST /api/v1/ai/stream
+//   （BFF 直连 LLM），不经 chat-svc 中转。因此 StreamMessages 是预留接口，
+//   chat-svc 端 chatServer.StreamMessages 返 Unimplemented。
+//
+// 当前实现：直接调 gRPC StreamMessages RPC，把 server stream 包装为
+// ChatEvent 通道返回。client 端收到 Unimplemented 时，channel 立即关闭 +
+// io.EOF 错误（gRPC 标准行为）。
+//
+// 触发场景：未来多客户端实时协作（多人共编会话）/ 消息撤回广播等。
+func (c *chatGRPCClient) StreamMessages(ctx context.Context, conversationID int64, fromMessageID int64) (<-chan *emotionchat.ChatEvent, error) {
+	cli := emotionchat.NewChatServiceClient(c.conn)
+	stream, err := cli.StreamMessages(withUserID(ctx), &emotionchat.StreamMessagesRequest{
+		ConversationId:  conversationID,
+		UserId:         uidFromCtx(ctx),
+		FromMessageId:  fromMessageID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("downstream: chat stream messages: %w", err)
+	}
+
+	out := make(chan *emotionchat.ChatEvent, 16)
+	go func() {
+		defer close(out)
+		for {
+			evt, err := stream.Recv()
+			if err != nil {
+				// io.EOF 或 Unimplemented 时正常退出
+				return
+			}
+			select {
+			case out <- evt:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out, nil
 }
 
 // ============ proto → types 转换 ============
