@@ -1,6 +1,6 @@
 # Stage 58 · 2026-09-09 Q3 后续落地（总览）
 
-> **状态**：🟢 8 个工作面 22 个 commit 全部 landed
+> **状态**：🟢 **8 个工作面 24 个 commit 全部 landed**（含 PR-GRPC-5/6 后续补丁）
 > **关联**：[`docs/plans/todo-pile-2026-09-04.md`](../plans/todo-pile-2026-09-04.md) §A1/A2/D + [ADR-20](../architecture/adr/adr-2026-09-env-profile-strategy.md) + [grpc-inter-service-migration.md §二](../plans/grpc-inter-service-migration.md)
 
 本批覆盖 8 个工作面，按落地顺序：
@@ -130,18 +130,36 @@
 
 ## §六 未完成项（独立 sprint / 待用户拍板）
 
-### PR-GRPC-5（BFF SSE 走 gRPC stream）
+### ~~PR-GRPC-5（BFF SSE 走 gRPC stream）~~ ✅ 已完成（commit `4918d70`）
 
-**当前状态**：`ChatGRPCClient.StreamMessages` 占位（chatGRPCClient 未实现 + BFF SSE 链路未切）。
-**下一步**：补 `func (c *chatGRPCClient) StreamMessages(...)` + 把 BFF SSE handler 的 chat-svc HTTP stream 源切到 gRPC server stream（chat-svc 侧补流式逻辑）。
+**架构判断**（2026-09-09）：
+- chat-svc 当前无"订阅消息流"业务语义（SendMessage 同步即返）
+- 前端聊天走 `/api/v1/ai/stream`（直连 LLM），不经 chat-svc 中转
+- `StreamMessages` 是 proto 预留接口，留待未来多客户端实时协作场景
 
-### PR-GRPC-6（smoke §契约 9 + OAP rpc tag）
+**改动**：
+- chat-svc `chatServer.StreamMessages` 注释扩展，明写架构判断（行为不变，仍 Unimplemented）
+- BFF `chatGRPCClient.StreamMessages` 实现：调 gRPC RPC + 把 stream.Recv 包装为 `<-chan *emotionchat.ChatEvent`
+- 新增 `TestChatGRPCClient_StreamMessages_ReceivesUnimplementedAsEOF`：验证 Unimplemented 时客户端 graceful 行为（0 event + 立即 close）
 
-**当前状态**：脚本未写。
-**下一步**：
-- dev compose up + BFF ChatClient 走 gRPC 路径验证 `/api/v1/conversations` + `/api/v1/messages` 仍 200
-- SkyWalking OAP 上看到 `rpc.*` tag + `chat-svc` OAP layer（Stage 49 已支持）
-- 写 `scripts/smoke_bff_chat_grpc.sh`
+**注**：StreamMessages 不在 `ChatClient` interface 内（HTTP 客户端不实现），调用方需 type assert `(*chatGRPCClient)` 后调用。
+
+### ~~PR-GRPC-6（smoke §契约 9 + OAP rpc tag）~~ ✅ 已完成（commit `961ff52`）
+
+**新增**：`scripts/smoke_bff_chat_grpc.sh`（145 行）+ `scripts/test_smoke_chat_grpc.sh`（15/15 PASS）
+
+**§契约 9 共 9 项**：
+1. 前置：emotion-echo-web-bff / chat-svc / apisix / postgres running
+2. chat-svc :8892 gRPC 端口 listening（docker exec ss/netstat）
+3. grpc.health.v1.Health/Check SERVING
+4. POST /api/v1/conversations → 200（gRPC CreateConversation）
+5. POST /api/v1/conversations/:id/messages → 200（gRPC SendMessage）
+6. GET /api/v1/conversations/:id/messages → 200（gRPC ListMessages）
+7. GET /api/v1/conversations → 200（gRPC ListConversations）
+8. 缺 X-User-Id → 401/403（gRPC metadata x-user-id 拦截器生效）
+9. SkyWalking OAP GraphQL 查 chat-svc 服务名是否含 rpc.* tag（best-effort）
+
+feature flag 默认 `CHAT_TRANSPORT=grpc`（PR-GRPC-4 落地）。
 
 ### 决策 20（ADR-20）用户拍板
 
@@ -161,9 +179,11 @@
 
 ---
 
-## §七 本批 commit 总览（22 个）
+## §七 本批 commit 总览（24 个）
 
 ```
+961ff52 feat(scripts): PR-GRPC-6 smoke §契约 9 BFF→chat-svc gRPC 端到端验证
+4918d70 feat(gRPC): PR-GRPC-5 StreamMessages 架构判断 + 客户端 channel 包装
 830913f feat(bff): PR-GRPC-4 BFF → chat-svc gRPC client + feature flag CHAT_TRANSPORT
 0b10cd9 feat(chat-svc): PR-GRPC-3 main.go 双轨启动 HTTP :8890 + gRPC :8892
 11f6944 feat(chat-svc): PR-GRPC-2 gRPC server 骨架 + 拦截器链 + TDD 测试
@@ -187,7 +207,7 @@ ac0299e feat(deploy): PR-ENV-1 抽 compose.dev.yml — ADR-20 C 方案落地第�
 ea5dd44 chore(repo): CHORE-0 定期 Docker 清理脚本（释放 1.32GB + 24 容器 + 1 网络）
 ```
 
-加上 1 个 earlier-stage 已存在的 revert（`5109868`）——合计 22 个 commit。
+加上 1 个 earlier-stage 已存在的 revert（`5109868`）——合计 24 个 commit（PR-GRPC-5/6 已补全到本批）。
 
 ---
 
@@ -220,10 +240,12 @@ ea5dd44 chore(repo): CHORE-0 定期 Docker 清理脚本（释放 1.32GB + 24 容
 
 ## §十 后续 sprint 建议（独立 session）
 
-1. **本批 2 个未完 PR**：PR-GRPC-5（BFF SSE → gRPC stream）+ PR-GRPC-6（smoke §契约 9）
+1. ✅ ~~本批 2 个未完 PR~~：PR-GRPC-5 + PR-GRPC-6 已补全（commit `4918d70` `961ff52`）
 2. **决策 20 用户拍板**：ADR-20 §5.1 最终取舍（虽已倾向 C）
 3. **ADR-001 重审**：本地 vs 云端 vs 双轨，写 v2 决策
 4. **todo-pile §D 收口**：D1（已做）/ D2（30+ 旧分支已删）/ D3（user_oauth 表）/ D4（BFF 登录限流测试）/ D5（chat-svc 表依赖清单 ADR）/ D6（Helm 对齐）
+5. **PR-TTS-1 blocked-external** 方案 A/B/C 等用户拍板
+6. **proto chat.proto 业务触发**：未来多客户端实时协作场景出现时，补 StreamMessages RPC 实现
 
 ---
 
