@@ -56,7 +56,10 @@ ENV TZ=Asia/Shanghai \
 # wget: 健康检查备用
 RUN apk add --no-cache tini ca-certificates tzdata wget \
     && cp /usr/share/zoneinfo/${TZ} /etc/localtime \
-    && echo "${TZ}" > /etc/timezone \
+    && echo "${TZ}" > /etc/timezone
+# Stage-52 修复: 上一行末尾 `\` 会让 docker 把 RUN addgroup 当作同一 shell 的延续,
+# 拼成 `... > /etc/timezone RUN addgroup ...` → `adduser: unknown group app`。
+# 删除末尾 `\` 让两个 RUN 命令独立。
 # 非 root 用户（UID 65532 = distroless nonroot 惯例）
 RUN addgroup -S -g 65532 app \
     && adduser  -S -u 65532 -G app -h /app -s /sbin/nologin app

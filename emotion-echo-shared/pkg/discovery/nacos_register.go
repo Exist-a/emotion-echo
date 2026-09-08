@@ -19,14 +19,26 @@ import (
 
 // defaultRegisterEphemeral 控制 Register() 的 Ephemeral 字段默认值。
 //
-// PR-1 修复：dev 模式下 SDK v2.4.3 + Nacos 2.4.3 server 在 Derby 启动慢场景下
-// BeatRequest 不可靠，ephemeral 实例会被 server 在 ~30s 内踢出，导致
-// instance/list 返回 hosts: []。改为 false（持久实例）后，注册即落 Derby，
-// 不依赖心跳——dev compose 重启周期远小于 Derby 数据保留周期，可接受。
+// Stage-52 修复（revert PR-1 错改）：dev 默认 ephemeral=true（SDK 原生行为）。
 //
-// prod 集群场景调用方应通过 NacosConfig.Ephemeral 字段显式覆盖为 true
-// （多副本扩缩容需要 ephemeral 自动摘除）。
-var defaultRegisterEphemeral = false
+// 历史错误：
+//   - PR-1 (2026-09-08 之前) 把默认值改为 false（persistent），假设 ephemeral 实例
+//     30s 内被 Derby 启动慢场景踢出。
+//   - 实测 (2026-09-08): Nacos 2.4.3 standalone Derby 环境下，service 一旦被标为 persistent
+//     （无论怎么来的——curl、SDK 旧版、甚至 admin API），后续 SDK 注册 ephemeral instance
+//     时一律返 400/500 "can't register ephemeral instance, service is persistent"。
+//   - 5 个 dev svc (chat/user/ai/analytics/assessment) 因 0.0.0.0 + ephemeral SDK 调用 +
+//     已被 persistent 创建的 serviceName → Register 重试 3 次 fatal → 容器 Restarting。
+//
+// 当前正确行为：
+//   - SDK 首次注册时 service 不存在 → 自动以 ephemeral=true 创 service + 注册 instance
+//   - 心跳由 SDK 内部 BeatRequest 维护（BeatInterval 5s），Dev/Prod 一致
+//   - 多副本扩缩容需要 Nacos 自动摘除 → 走 ephemeral（默认即满足）
+//   - 极少数"audit 留痕要求持久实例"场景 → NacosConfig.Ephemeral=false 显式覆盖
+//
+// 注意：当前 dev Nacos 里残留 6 个 persistent serviceName，需用 Nacos API 删掉后
+// SDK 重启才会按 ephemeral 重建（见 scripts/clean_dev_nacos_persistent.sh / Stage-52 §五）。
+var defaultRegisterEphemeral = true
 
 // NacosConfig 描述如何连接 Nacos。
 //

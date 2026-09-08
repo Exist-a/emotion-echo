@@ -212,25 +212,49 @@ for sql_name, short_name in views_to_test:
 
 
 # ====== §契约 4：dashboard 数据真有 ======
-print("\n--- §契约 4: /reports/daily 数据真有 ---")
-try:
-    reports = unwrap(http_get(f"/api/v1/reports/daily?user_id={user_id}",
-                              {"X-User-Id": str(user_id)}))
-    # ADR-17 修复后 data 形状：{summary, emotionDistribution: [{name, value}], ...}
-    # 修复前是 {report: {summary, ...}}
-    if "report" in reports and isinstance(reports["report"], dict):
-        reports = reports["report"]
-    summary = reports.get("summary", "") or ""
-    emo_dist = reports.get("emotionDistribution", [])
-    ok = bool(summary.strip()) and len(emo_dist) > 0
-    check("§4 /reports/daily 数据真有",
-          ok,
-          f"summary={summary!r} emotionDistribution.len={len(emo_dist)} (期望 summary 非空 + len>0)")
-except urllib.error.HTTPError as e:
-    body = e.read().decode(errors="replace")
-    check("§4 /reports/daily", False, f"HTTP {e.code}: {body[:120]}")
-except Exception as e:
-    check("§4 /reports/daily", False, str(e))
+#
+# Stage-53 修复（2026-09-08）：
+#   旧策略：固定查"今天"——若 dev 库今天没人发消息/触发 AI 分析，§4 必 fail。
+#   新策略：先查最近 7 天内有数据的日期，再以该日期调 /reports/daily。
+#   业务语义保留（dashboard 真有数据），但不被"今天是否有数据"卡死。
+#   触发真实 LLM 在 smoke 里属于违反 AGENTS.md §三"测试可重现 + 不调外部"
+#   （LLM 模型 / 凭据 / 网络抖动都让 smoke 不稳定）。
+print("\n--- §契约 4: /reports/daily 数据真有 (最近 7 天窗) ---")
+recent_date = None
+rc, out, err = docker_psql(
+    "SELECT MAX(created_at)::date FROM emotion_echo_ai.emotion_analysis WHERE created_at > NOW() - INTERVAL '7 days'"
+)
+if rc == 0:
+    line = [l for l in out.splitlines() if l.strip() and "|" not in l or l.count("|") >= 1]
+    for ln in line:
+        parts = [p.strip() for p in ln.split("|") if p.strip()]
+        if parts and len(parts[0]) == 10 and parts[0][4] == "-" and parts[0][7] == "-":
+            recent_date = parts[0]
+            break
+
+if not recent_date:
+    check("§4 最近 7 天内有 emotion_analysis 数据", False,
+          "MAX(created_at) 空 → dev 库 7 天内无人触发 AI 分析，跳过 §4 dashboard 断言（待业务链路补 LLM trigger 后再跑）")
+else:
+    check("§4 最近 7 天内有 emotion_analysis 数据", True, f"最近数据日={recent_date}")
+    try:
+        reports = unwrap(http_get(
+            f"/api/v1/reports/daily?user_id={user_id}&date={recent_date}",
+            {"X-User-Id": str(user_id)}))
+        # ADR-17 修复后 data 形状：{summary, emotionDistribution: [{name, value}], ...}
+        if "report" in reports and isinstance(reports["report"], dict):
+            reports = reports["report"]
+        summary = reports.get("summary", "") or ""
+        emo_dist = reports.get("emotionDistribution", [])
+        ok = bool(summary.strip()) and len(emo_dist) > 0
+        check("§4 /reports/daily 数据真有",
+              ok,
+              f"date={recent_date} summary={summary!r} emotionDistribution.len={len(emo_dist)} (期望 summary 非空 + len>0)")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        check("§4 /reports/daily", False, f"HTTP {e.code}: {body[:120]}")
+    except Exception as e:
+        check("§4 /reports/daily", False, str(e))
 
 
 # ====== §契约 5：schema 与写入端一致性 ======
