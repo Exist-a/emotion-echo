@@ -1,0 +1,30 @@
+# PR-OBS-5: dev compose Promtail config (docker.sock 采集)
+#
+# 镜像: grafana/promtail:2.9.4 (与 Loki 同版本)
+# 启动方式: COMPOSE_PROFILES=obs (随 loki 一同启动)
+#
+# 采集源:
+#   - APISIX file-logger 落盘: /tmp/apisix-access.log (PR-OBS-1 落 file-logger 插件)
+#     通过 docker-compose volume mount 暴露到 host ./tmp/apisix-access.log
+#     promtail 用 static path 采集 (而非 docker sd, 因 file 已挂到 host)
+#   - 业务 svc docker container stdout (未来扩展,本 PR-OBS-5 仅 apisix)
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # APISIX access.log 静态路径采集
+  - job_name: apisix
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: apisix
+          __path__: /var/log/apisix-access.log

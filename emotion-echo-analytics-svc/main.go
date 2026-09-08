@@ -22,8 +22,8 @@ import (
 	"emotion-echo-analytics-svc/internal/trigger"
 
 	"github.com/SkyAPM/go2sky"
-	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
@@ -124,19 +124,23 @@ func main() {
 	// 在 main 退出时优雅关闭
 	defer tq.Close(context.Background())
 
-	// 2. SkyWalking tracer
+	// 2. SkyWalking tracer (PR-OBS-2: 用 shared BootstrapSkyWalkingTracer 统一 7 svc 行为)
 	var tracer *go2sky.Tracer
 	if c.SkyWalking.Enabled {
-		rep, err := reporter.NewGRPCReporter(c.SkyWalking.OAPAddr)
-		if err == nil {
-			svcName := c.SkyWalking.ServiceName
-			if svcName == "" {
-				svcName = c.Name
+		svcName := c.SkyWalking.ServiceName
+		if svcName == "" {
+			svcName = c.Name
+		}
+		t, err := sharedbootstrap.BootstrapSkyWalkingTracer(context.Background(), svcName, c.SkyWalking.OAPAddr, 2*time.Second)
+		if err != nil {
+			sharedmetrics.IncSkyWalkingInitFailed(svcName)
+			if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("skywalking") {
+				log.Fatalf("[skywalking] strict mode + required dep, refusing to start: %v", err)
 			}
-			tracer, _ = go2sky.NewTracer(svcName, go2sky.WithReporter(rep))
-			if tracer != nil {
-				log.Printf("[skywalking] tracer initialized")
-			}
+			log.Printf("[skywalking] tracer init failed (warn mode, continue): %v", err)
+		} else {
+			tracer = t
+			log.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
 		}
 	}
 
@@ -161,6 +165,17 @@ func main() {
 		if err != nil {
 			log.Printf("[kafka] consumer init failed: %v (behavior events disabled)", err)
 		} else {
+			// ADR-19 PR-A3.2: 根据 KAFKA_DLQ_TOPIC env 自动注入 Kafka DLQ
+			// 替代默认 NoopDLQPublisher{}。DLQ 不可达时 log + 退化为 Noop(向后兼容)
+			if dlqTopic := c.Kafka.DLQTopic; dlqTopic != "" {
+				if dlqPub, dlqErr := kafka.NewKafkaDLQPublisher(brokers, dlqTopic); dlqErr != nil {
+					log.Printf("[kafka] DLQ producer init failed (fallback to Noop): %v", dlqErr)
+				} else {
+					kc.WithDLQ(dlqPub)
+					defer func() { _ = dlqPub.Close() }()
+					log.Printf("[kafka] DLQ enabled: topic=%s", dlqTopic)
+				}
+			}
 			go func() {
 				if err := kc.Run(appCtx); err != nil && err != context.Canceled {
 					log.Printf("[kafka] consumer exited: %v", err)

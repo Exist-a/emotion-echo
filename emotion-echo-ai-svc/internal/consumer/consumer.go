@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"emotion-echo-ai-svc/internal/events"
 
@@ -215,6 +216,17 @@ func NewKafkaConsumer(brokers []string, groupID string) (*KafkaConsumer, error) 
 //
 // 参数 tracer 可选：传入后每条消息会创建 SkyWalking span（Stage 25-F）。
 // Stage 30-C A2: dlq 可选 — 注入后启用 DLQ 路径。nil 时退化为 Stage 30-B 原行为。
+//
+// ADR-19 PR-A2.1: 外层 5s 重试对齐 analytics-svc Consumer.Run
+//
+// 历史 bug：session 级故障（consumer group 被关闭、broker 长期不可达超过 sarama
+// 内部重试）时 Consume 返 err,本函数直接 return → 调用方 goroutine 死掉,只能
+// 重启进程。修复:对齐 analytics-svc internal/kafka/consumer.go:94 Run 的模式
+// —— 出错 log + sleep 5s + continue(除非 ctx 取消或 sarama.ErrClosedConsumerGroup)
+//
+// 与 analytics-svc 的差异:本服务单 topic 消费 + sarama.ConsumerGroupHandler
+// 路径,内部行为对齐即可;Sleep 时长与 analytics-svc 保持一致,便于未来提取到
+// shared pkg 重试 helper。
 func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string, tracer *go2sky.Tracer, dlq DLQPublisher, maxRetries int) error {
 	c.topics = topics
 	h := &ConsumerGroupHandler{
@@ -232,8 +244,15 @@ func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler Me
 			if errors.Is(err, sarama.ErrClosedConsumerGroup) {
 				return nil
 			}
-			slog.ErrorContext(ctx, "consumer consume failed", "err", err)
-			return err
+			// ADR-19 PR-A2.1: session 级故障不直接 return,5s 后重试
+			slog.ErrorContext(ctx, "consumer consume failed (will retry in 5s)",
+				"err", err, "topics", topics)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(5 * time.Second):
+			}
+			continue
 		}
 		if ctx.Err() != nil {
 			return nil

@@ -823,13 +823,68 @@ Stage 32 APISIX 网关层         [ ] 全部（依赖 31）
 Stage 33 P0 修复 + BFF 净化    [ ] 全部（依赖 32）
 
 # Stage 41 · go-zero 完全移除收尾（ADR 决策 1 收尾 + 关闭审计 E-2/E-3）
-Stage 41 go-zero 移除           [ ] PR-0~9 共 10 个 TDD PR（[plan](../plans/gozero-removal.md) / [stage](../stages/stage-41-gozero-removal.md)）；独立演进路线，与 31/32/33 不冲突
+Stage 41 go-zero 移除           ✅ DONE — 10 个 TDD PR 全部 merged,见 [stage-41-gozero-removal.md](../stages/stage-41-gozero-removal.md) + [smoke 10/10 PASS](../stages/stage-41-smoke-2026-09-07.txt)
+
+# Stage 42 · 容器时区修复 (TZ=Asia/Shanghai 形同虚设 side fix)
+Stage 42 container tz fix       ✅ DONE — 6 Dockerfile 删 `apk del tzdata`,见 [stage-42-container-tz-fix.md](../stages/stage-42-container-tz-fix.md)
+
+# Stage 43 · Kafka 健壮性 Sprint A 全收口 (ADR-19 / kafka-reliability-gaps.md)
+Stage 43 Kafka Sprint A         ✅ DONE — 10 commit on `feat/chat-dev-event-publisher-a1-1-red`,
+                                  7/7 服务绿,见 [stage-43-kafka-reliability-sprint-a.md](../stages/stage-43-kafka-reliability-sprint-a.md)。
+                                  Sprint B (1.4 lag 监控 + 1.5 Protobuf 迁移) 在新分支独立推进。
+                                  Sprint B §1.4 lag 监控已并入下方 Stage 44 observability-sprint-b.md。
+
+# Stage 44 · 观测链路 Sprint B（dev compose 三层补齐 + 测试护栏 + Kafka lag 收口）
+Stage 44 observability-sprint-b   ⏳ PLANNED — 合并 observability-compose-gap.md +
+                                  observability-testing-gap.md + Kafka Sprint A §1.4 三件事
+                                  为可执行 Sprint B,16 个 PR-OBS-X,见
+                                  [observability-sprint-b.md](../plans/observability-sprint-b.md)。
+                                  估 30-35 commit / 12-15 天。
+                                  启动条件:建 `feat/observability-sprint-b` 分支,按 4 批顺序推进
+                                  (基础 → infra → 测试 → 收口)。
+```
+
+# Stage 45-50 · 观测链路 Sprint B 业务功能 6/6 步全收口 + 端到端验证
+Stage 45 PR-OBS-17 收口           ✅ DONE — TracerInterface + Span.Tag + ai-svc 4 tag 断言,
+   observability-sprint-b-        见 [stage-45-observability-sprint-b-regression.md](../stages/stage-45-observability-sprint-b-regression.md)
+   regression
+Stage 46 PR-OBS-18 Gin EntrySpan   ✅ DONE — GinSkywalkingMiddleware 创建 EntrySpan + 4 tag,
+                                  见 [stage-46-observability-gin-entry-span.md](../stages/stage-46-observability-gin-entry-span.md)
+Stage 47 PR-OBS-15 logging 接入    ✅ DONE — 6 svc main.go 调 Init/SetGlobalSvc + middleware WithTraceID,
+                                  见 [stage-47-logging-helper-apply.md](../stages/stage-47-logging-helper-apply.md)
+Stage 48 PR-OBS-23 handler err     ✅ DONE — EndSpan 从总是 nil 改为 buildSpanError 三段判定,
+                                  见 [stage-48-handler-err-propagate.md](../stages/stage-48-handler-err-propagate.md)
+Stage 49 PR-OBS-19 gRPC rpc.* tag  ✅ DONE — Server/ClientTracingInterceptor 打 5/4 项,
+                                  见 [stage-49-grpc-tracing-rpc-tags.md](../stages/stage-49-grpc-tracing-rpc-tags.md)
+Stage 50 e2e validation           ✅ DONE — 端到端验证归档 + 6 项问题清单,
+                                  见 [stage-50-e2e-validation.md](../stages/stage-50-e2e-validation.md)
+
+# Stage 51 · 路线 Z 第 1 批合并归档（parked 等 dev Nacos 修复）
+Stage 51 batch-1-infra-merged    ⏸ PARKED — feat/observability-batch-1-infra 领先 main 42 commit
+                                  (PR-OBS-1/2/3/4/5/6/7/8 + O-1 sw-oap telemetry)
+                                  单测 100% 绿, merge 无冲突。
+                                  ⛔ smoke_data_layer.py 未跑通 (dev 5 svc Nacos ephemeral 500 Restarting,
+                                  阻塞根因: stage-44 §四 E + docs/plans/nacos-enablement-dev.md §二,
+                                  与本批无关,是 stage-44 记录的独立 Sprint)。
+                                  解锁路径: 修 Nacos → 干净环境 smoke 10/10 → rebuild 5 svc 镜像
+                                  → 端到端冒烟 → 合 main → 推路线 Z 第 2/3 批。
+                                  详见 [stage-51-batch-1-infra-merged.md](../stages/stage-51-batch-1-infra-merged.md)。
 ```
 
 ---
 
-# 下一步行动
+# 下一步行动（2026-09-08 更新）
 
-按 `Phase 0 / Stage 0.1` 开始：建 `deploy/` 目录、写最简 docker-compose，跑通 Hello World 即成功。
+**主推路线**：
+1. 🔴 **修 dev Nacos ephemeral 500 阻塞**（docs/plans/nacos-enablement-dev.md §二）—— 解锁批 1 合 main 闸门
+2. 批 1 合并 main（stage-51 续推）
+3. 路线 Z 第 2 批：测试护栏 OBS-9/10/11/12/13/14/15/16
+4. 路线 Z 第 3 批：业务 tag OBS-17/18/19/23
+5. Stage 47/48/49 镜像重建（stage-50 §九.1 收口）
 
-随时告诉我哪个 Stage 已经完成，或卡在哪个地方 —— 我会带你逐个 Stage 推进。
+**备选 backlog**：
+- T-4 QUICKSTART.md BFF 端口表述 + 决策 9/12 收口（30 分钟）
+- T-5 Stage 36 dashboard 空根因回查（半天）
+- T-3 BFF 路由三方契约收口（1.5-2 天）
+
+随时告诉我哪个方向推、卡在哪 —— 我会带你逐项推进。

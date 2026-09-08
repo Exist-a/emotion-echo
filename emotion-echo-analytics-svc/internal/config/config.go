@@ -22,6 +22,9 @@ type Kafka struct {
 	GroupID    string
 	Enabled    bool
 	Topics     []string
+	// DLQTopic ADR-19 PR-A3.2: 非空时 main.go 用 NewKafkaDLQPublisher 注入,
+	// 替代默认 NoopDLQPublisher{}。空字符串保持 Noop（向后兼容）。
+	DLQTopic string
 }
 
 type Config struct {

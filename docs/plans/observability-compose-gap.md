@@ -1,9 +1,11 @@
 ---
 status: planned
+superseded-by: docs/plans/observability-sprint-b.md（PR 拆分被 PR-OBS-1~8 取代；本文档 §一/§二现状保留作为参考）
 priority: high
 owner: TBD
-target-stage: Stage 39（候选）
+target-stage: Stage 44（候选）
 created: 2026-09-04
+superseded-at: 2026-09-08
 depends-on:
   - docs/plans/nacos-enablement-dev.md
   - docs/stages/STAGE-28-LANDING.md

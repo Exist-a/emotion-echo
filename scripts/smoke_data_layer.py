@@ -264,30 +264,72 @@ skip("§5 schema 一致性",
 
 
 # ====== §契约 6：KAFKA_ENABLED=false 路径不空跑 ======
-print("\n--- §契约 6: dev 模式消费链路可达性 ---")
-# 综合诊断：若 §1 FAIL，则必须给出 actionable 修复方向
-# 优先级：logs 中的 coordinator 错误 > outbox_sent > events
-if total >= 1:
-    skip("§6 dev 模式消费链路", f"§1 已 PASS，无需进一步诊断")
-else:
-    log_proc = subprocess.run(
-        ["docker", "logs", "--tail", "500", "emotion-echo-analytics-svc"],
+# ADR-19 PR-A1.2 落地后,chat-svc 在 KAFKA_ENABLED=false 时启用 DevEventPublisher
+# 同步写 user_behavior_events(无需 Kafka)。§契约 6 改为真正跑这条路径,
+# 不再依赖 §1 PASS 时 skip。
+#
+# 决策依据(env 优先级):
+#   - KAFKA_ENABLED=false → 必须 user_behavior_events 有行(DevEventPublisher 路径)
+#   - KAFKA_ENABLED=true 或未设置 → 必须 §1 + §2 PASS(Kafka 消费者路径)
+print("\n--- §契约 6: KAFKA_ENABLED=false 路径不空跑 (ADR-19) ---")
+import os  # noqa: E402  # 推迟到此处避免顶部 import 顺位歧义
+
+# 读 chat-svc 容器环境变量(若容器在跑)
+kafka_enabled_env = "true"  # 默认假设 Kafka 路径
+try:
+    env_proc = subprocess.run(
+        ["docker", "inspect", "--format",
+         "{{range .Config.Env}}{{println .}}{{end}}", "emotion-echo-chat-svc"],
         capture_output=True, text=True, timeout=10,
     )
-    # Go logger 把日志打到 stderr；docker logs 默认合并但 subprocess 不会
-    log_out = log_proc.stdout + log_proc.stderr
-    coordinator_err_count = log_out.count("coordinator is not available")
-    consumer_started = "[kafka-consumer]" in log_out
+    if env_proc.returncode == 0:
+        for line in env_proc.stdout.splitlines():
+            if line.startswith("KAFKA_ENABLED="):
+                kafka_enabled_env = line.split("=", 1)[1].strip().lower()
+except Exception:
+    pass  # docker 不在/容器未跑 → 跳过
 
-    if coordinator_err_count >= 1:
-        check("§6 dev 模式 Kafka consumer group 可用", False,
-              f"FAIL: analytics-svc 日志含 {coordinator_err_count} 次 'coordinator is not available'（last 500 lines）。真因：Kafka dev 集群 consumer group coordinator 不可用，analytics-svc 永远消费不到 chat-events topic。修复方向：(1) Kafka broker 端 `auto.create.topics.enable=true` + `offsets.topic.replication.factor=1`（dev 单节点 Kafka）；(2) 或 chat-svc 起 dev publisher 同步写 user_behavior_events（绕开 Kafka）。")
-    elif not consumer_started:
-        check("§6 dev 模式 Kafka consumer 已启动", False,
-              "FAIL: analytics-svc 日志未发现 [kafka-consumer] 标记——Kafka consumer goroutine 没起来。修复方向：检查 analytics-svc main.go Kafka.Enabled 启动条件。")
+if kafka_enabled_env == "false":
+    # KAFKA_ENABLED=false → 验证 DevEventPublisher 路径
+    # 应有 user_behavior_events 行（chat-svc 同步写,绕开 Kafka）
+    rc, out, err = docker_psql(
+        "SELECT COUNT(*) FROM emotion_echo_analytics.user_behavior_events "
+        "WHERE event_id LIKE 'smoke-%'"
+    )
+    row_count = 0
+    if rc == 0:
+        try:
+            row_count = int(out.strip().splitlines()[0])
+        except (ValueError, IndexError):
+            row_count = 0
+    if row_count >= 1:
+        check("§6 KAFKA_ENABLED=false DevEventPublisher 写入",
+              True, f"OK: smoke 触发的事件已写入 user_behavior_events ({row_count} 行)")
     else:
-        check("§6 dev 模式 Kafka consumer 链路", False,
-              f"FAIL: consumer 启动了但 events=0，原因待排查。日志摘录：{log_out[-200:].strip()[:300]}")
+        check("§6 KAFKA_ENABLED=false DevEventPublisher 写入", False,
+              "FAIL: KAFKA_ENABLED=false 但 user_behavior_events 0 行。DevEventPublisher 未生效。")
+else:
+    # KAFKA_ENABLED=true 或未设置 → 旧 §1 路径
+    if total >= 1:
+        skip("§6 dev 模式消费链路", f"§1 已 PASS,KAFKA_ENABLED={kafka_enabled_env} 走 Kafka 路径")
+    else:
+        log_proc = subprocess.run(
+            ["docker", "logs", "--tail", "500", "emotion-echo-analytics-svc"],
+            capture_output=True, text=True, timeout=10,
+        )
+        log_out = log_proc.stdout + log_proc.stderr
+        coordinator_err_count = log_out.count("coordinator is not available")
+        consumer_started = "[kafka-consumer]" in log_out
+
+        if coordinator_err_count >= 1:
+            check("§6 dev 模式 Kafka consumer group 可用", False,
+                  f"FAIL: analytics-svc 日志含 {coordinator_err_count} 次 'coordinator is not available'")
+        elif not consumer_started:
+            check("§6 dev 模式 Kafka consumer 已启动", False,
+                  "FAIL: analytics-svc 日志未发现 [kafka-consumer]")
+        else:
+            check("§6 dev 模式 Kafka consumer 链路", False,
+                  f"FAIL: consumer 启动了但 events=0。日志摘录：{log_out[-200:].strip()[:300]}")
 
 
 # ====== 汇总 ======

@@ -168,7 +168,11 @@ plugin_attr:
   skywalking:
     service_instance_name: APISIX Instance Name
     report_interval: 3
-    endpoint_addr: http://127.0.0.1:12800
+    # PR-OBS-1 修 1: APISIX skywalking-logger 插件用 HTTP 上报(OAP HTTP/Log receiver),
+    # 必须走容器 DNS(非 127.0.0.1 — 容器内回环永远到不了 OAP),
+    # 端口 = 12800 (与 go2sky gRPC receiver 11800 区分,后者给业务 svc 用)。
+    # 依据 docs/plans/observability-sprint-b.md §2.3 修 1 + Stage 35 feasibility.md:78。
+    endpoint_addr: http://emotion-echo-sw-oap:12800
     service_name: APISIX
   inspect:
     hooks_file: /usr/local/apisix/plugin_inspect_hooks.lua

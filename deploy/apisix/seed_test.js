@@ -24,6 +24,7 @@ function isExecutable(filePath) {
 
 const SCRIPT_DIR = __dirname;
 const SEED_SH = path.join(SCRIPT_DIR, 'seed.sh');
+const CONFIG_YAML = path.join(SCRIPT_DIR, 'config.yaml');
 
 function fail(msg) {
   console.error('  ✗ ' + msg);
@@ -39,6 +40,13 @@ if (!fs.existsSync(SEED_SH)) {
 }
 pass('seed.sh exists');
 
+// PR-OBS-1 RED: APISIX skywalking endpoint 必须走容器 DNS + 正确端口 + 挂上 logger 插件
+if (!fs.existsSync(CONFIG_YAML)) {
+  console.error('config.yaml not found at ' + CONFIG_YAML);
+  process.exit(1);
+}
+pass('config.yaml exists');
+
 // bash -n syntax check
 try {
   execSync(`bash -n "${SEED_SH}"`, { stdio: 'pipe' });
@@ -48,21 +56,28 @@ try {
 }
 
 const src = fs.readFileSync(SEED_SH, 'utf8');
+const cfg = fs.readFileSync(CONFIG_YAML, 'utf8');
 const checks = [
   ['seed.sh executable', isExecutable(SEED_SH)],
   ['set -euo pipefail', src.includes('set -euo pipefail')],
-  ['ADMIN_KEY default matches values.yaml',
-    src.includes('APISIX_ADMIN_KEY:-edd1c9f034335f136f87ad84b625c8f1')],
+  ['ADMIN_KEY default matches seed.sh (Stage 39 后的实际值)',
+    src.includes('APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj')],
   ['JWT secret from BFF_JWT_SECRET (Stage 32 过渡)',
     src.includes('BFF_JWT_SECRET:-dev-bff-secret')],
   ['catch-all route /api/v1/* → web-bff (upstream 6)',
     src.includes('put_route 100 "/api/v1/*" 6')],
-  ['upstream id 1 user-svc', src.includes('put_upstream 1  user-svc')],
-  ['upstream id 2 chat-svc', src.includes('put_upstream 2  chat-svc')],
-  ['upstream id 3 assessment-svc', src.includes('put_upstream 3  assessment-svc')],
-  ['upstream id 4 analytics-svc', src.includes('put_upstream 4  analytics-svc')],
-  ['upstream id 5 ai-svc', src.includes('put_upstream 5  ai-svc')],
-  ['upstream id 6 web-bff', src.includes('put_upstream 6  web-bff')],
+  ['upstream id 1 user-svc (Nacos discovery, Stage 39 后)',
+    src.includes('put_nacos_upstream 1  user-svc')],
+  ['upstream id 2 chat-svc (Nacos discovery, Stage 39 后)',
+    src.includes('put_nacos_upstream 2  chat-svc')],
+  ['upstream id 3 assessment-svc (Nacos discovery, Stage 39 后)',
+    src.includes('put_nacos_upstream 3  assessment-svc')],
+  ['upstream id 4 analytics-svc (Nacos discovery, Stage 39 后)',
+    src.includes('put_nacos_upstream 4  analytics-svc')],
+  ['upstream id 5 ai-svc (Nacos discovery, Stage 39 后)',
+    src.includes('put_nacos_upstream 5  ai-svc')],
+  ['upstream id 6 web-bff (Nacos discovery, Stage 39 后)',
+    src.includes('put_nacos_upstream 6  web-bff')],
   ['jwt-auth plugin (审计 S-1 修复点)', src.includes('"jwt-auth"')],
   ['limit-count plugin', src.includes('"limit-count"')],
   ['limit-req plugin', src.includes('"limit-req"')],
@@ -89,6 +104,18 @@ const checks = [
   ['api-breaker error_threshold_ratio = 0.5',
     src.includes('"error_threshold_ratio": 0.5')],
   ['api-breaker open_time = 30s', src.includes('"open_time": 30')],
+
+  // === PR-OBS-1 RED assertions: APISIX skywalking endpoint + logger plugins ===
+  // 依据 docs/plans/observability-sprint-b.md §2.3 + Stage 35 §78 dial fail 现象
+  // 修 1: skywalking endpoint 必须走容器 DNS(非 127.0.0.1)+ HTTP receiver 端口 12800
+  ['PR-OBS-1 skywalking.endpoint_addr 容器 DNS (非 127.0.0.1)',
+    /endpoint_addr:\s*http:\/\/emotion-echo-sw-oap/.test(cfg)],
+  ['PR-OBS-1 skywalking.endpoint_addr 端口 = 12800 (HTTP/Log receiver)',
+    /endpoint_addr:\s*http:\/\/emotion-echo-sw-oap:12800/.test(cfg)],
+  ['PR-OBS-1 catch-all 主入口路由 plugins 含 skywalking-logger',
+    src.includes('"skywalking-logger"')],
+  ['PR-OBS-1 catch-all 主入口路由 plugins 含 file-logger',
+    src.includes('"file-logger"')],
 ];
 
 let passCount = 0, failCount = 0;

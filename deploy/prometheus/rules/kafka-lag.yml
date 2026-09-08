@@ -1,0 +1,25 @@
+# PR-OBS-7: Kafka consumer lag alert rule
+#
+# 告警阈值: kafka_consumergroup_lag > 10000 (积压超过 10000 条) 持续 5 分钟
+# 覆盖 consumer group: ai-svc + analytics-svc (业务消费)
+# 注意: DLQ (chat-events-dlq) 不告警 — 毒消息进 DLQ 是预期行为,人工回放
+#
+# 触发场景: consumer 进程挂掉 / broker 网络分区 / 消息生产速率超过消费速率
+# 处置: 查 ai-svc / analytics-svc 日志 + Kafka broker 状态
+
+groups:
+  - name: kafka-consumer-lag
+    interval: 30s
+    rules:
+      - alert: KafkaConsumerGroupLagHigh
+        expr: kafka_consumergroup_lag{consumergroup=~"ai-svc|analytics-svc"} > 10000
+        for: 5m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Kafka consumer group {{ $labels.consumergroup }} lag high"
+          description: |
+            Consumer group {{ $labels.consumergroup }} lag = {{ $value }} on partition {{ $labels.partition }}
+            (topic={{ $labels.topic }}, threshold=10000, duration=5m)
+            检查 consumer 进程状态 + Kafka broker 健康。

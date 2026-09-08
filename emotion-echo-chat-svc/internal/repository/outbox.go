@@ -32,6 +32,9 @@ const (
 	OutboxStatusPending = "pending"
 	OutboxStatusSent    = "sent"
 	OutboxStatusFailed  = "failed"
+	// OutboxStatusDead ADR-19 PR-A6.1: 超过 MaxAttempts 的行,不再被 ListPending
+	// 扫描,保留供人工排查/回放。dead 行不进 relay 队列。
+	OutboxStatusDead = "dead"
 )
 
 // OutboxEvent 是 outbox_events 表对应 model
@@ -65,6 +68,10 @@ type OutboxRepo interface {
 
 	// MarkFailed 增加 attempts + 记录错误（status 保留 'pending'，等下次重试）
 	MarkFailed(ctx context.Context, id int64, errMsg string) error
+
+	// MarkDead ADR-19 PR-A6.1: 把状态置为 'dead'（attempts 超阈值后由 relay 调用）
+	// dead 行不再被 ListPending 扫描，保留供人工排查/回放。
+	MarkDead(ctx context.Context, id int64, errMsg string) error
 }
 
 // =====================================================
@@ -155,6 +162,18 @@ func (r *InMemoryOutboxRepo) MarkFailed(_ context.Context, id int64, errMsg stri
 	return nil
 }
 
+func (r *InMemoryOutboxRepo) MarkDead(_ context.Context, id int64, errMsg string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.events[id]
+	if !ok {
+		return errors.New("outbox: id not found")
+	}
+	e.Status = OutboxStatusDead
+	e.LastError = errMsg
+	return nil
+}
+
 // Get 直接根据 ID 查（测试断言用）
 func (r *InMemoryOutboxRepo) Get(id int64) (*OutboxEvent, error) {
 	r.mu.RLock()
@@ -215,4 +234,14 @@ func (r *PostgresOutboxRepo) MarkFailed(ctx context.Context, id int64, errMsg st
 		Exec(`UPDATE emotion_echo_chat.outbox_events
 		      SET attempts = attempts + 1, last_error = ?
 		      WHERE id = ?`, errMsg, id).Error
+}
+
+func (r *PostgresOutboxRepo) MarkDead(ctx context.Context, id int64, errMsg string) error {
+	return r.db.WithContext(ctx).
+		Model(&OutboxEvent{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status":     OutboxStatusDead,
+			"last_error": errMsg,
+		}).Error
 }

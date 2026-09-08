@@ -24,8 +24,8 @@ import (
 	"emotion-echo-chat-svc/internal/svc"
 
 	"github.com/SkyAPM/go2sky"
-	"github.com/SkyAPM/go2sky/reporter"
 	"github.com/gin-gonic/gin"
+	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
@@ -105,21 +105,35 @@ func main() {
 			log.Printf("[kafka] producer connected, brokers=%v", kafkaBrokersList)
 			defer func() { _ = kp.Close() }()
 		}
+	} else if db != nil {
+		// ADR-19 PR-A1.2: KAFKA_ENABLED=false 时启用 DevEventPublisher
+		// 同步写 user_behavior_events（dev-only，prod 不会命中此分支）。
+		// db 为 nil 时仍 fallback 到 InMemoryEventPublisher（向后兼容）。
+		if sqlDB, derr := db.DB(); derr == nil {
+			pub = events.NewDevEventPublisher(sqlDB)
+			log.Printf("[events] using DevEventPublisher (KAFKA_ENABLED=false, dev-only path)")
+		} else {
+			log.Printf("[events] dev publisher init failed (gorm.DB() returned err=%v, fallback to in-memory)", derr)
+		}
 	}
 
-	// 3. SkyWalking
+	// 3. SkyWalking (PR-OBS-2: 用 shared BootstrapSkyWalkingTracer 统一 7 svc 行为)
 	var tracer *go2sky.Tracer
 	if c.SkyWalking.Enabled {
-		rep, err := reporter.NewGRPCReporter(c.SkyWalking.OAPAddr)
-		if err == nil {
-			svcName := c.SkyWalking.ServiceName
-			if svcName == "" {
-				svcName = c.Name
+		svcName := c.SkyWalking.ServiceName
+		if svcName == "" {
+			svcName = c.Name
+		}
+		t, err := sharedbootstrap.BootstrapSkyWalkingTracer(context.Background(), svcName, c.SkyWalking.OAPAddr, 2*time.Second)
+		if err != nil {
+			sharedmetrics.IncSkyWalkingInitFailed(svcName)
+			if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("skywalking") {
+				log.Fatalf("[skywalking] strict mode + required dep, refusing to start: %v", err)
 			}
-			tracer, _ = go2sky.NewTracer(svcName, go2sky.WithReporter(rep))
-			if tracer != nil {
-				log.Printf("[skywalking] tracer initialized")
-			}
+			log.Printf("[skywalking] tracer init failed (warn mode, continue): %v", err)
+		} else {
+			tracer = t
+			log.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
 		}
 	}
 

@@ -1,0 +1,29 @@
+# PR-OBS-4: Grafana datasource auto-provisioning
+#
+# 镜像: grafana/grafana:10.4.2 (与 charts/emotion-echo/charts/grafana/Chart.yaml 同步)
+# 启动时 Grafana 自动加载本文件注册 prometheus datasource,无需手动配置。
+#
+# Grafana provisioning 文件必须在容器内 /etc/grafana/provisioning/datasources/ 路径,
+# docker-compose.infra.yml 的 grafana 服务会把 ./deploy/grafana/provisioning 挂到该路径。
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST
+
+  # PR-OBS-5: Loki datasource (logs layer)
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000

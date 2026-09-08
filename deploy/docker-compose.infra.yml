@@ -107,6 +107,14 @@ services:
     environment:
       SW_STORAGE: h2
       SW_JDBC_URL: jdbc:h2:mem:skywalking-oap-db;DB_CLOSE_DELAY=-1
+      # O-1 + Stage-54 启用 sw-oap self-metrics telemetry,OAP 监听 :1234
+      # OAP 9.7 启动 telemetry receiver 需 SW_TELEMETRY=prometheus
+      # 同时 SW_TELEMETRY_PROMETHEUS_HOST 显式 0.0.0.0 (default=0.0.0.0 但 standalone
+      # 启动可能不绑 0.0.0.0,这里显式保险)
+      # prometheus scrape job "skywalking-oap" 在 deploy/prometheus/prometheus.yml 第 44-51 行
+      SW_TELEMETRY: prometheus
+      SW_TELEMETRY_PROMETHEUS_HOST: 0.0.0.0
+      SW_TELEMETRY_PROMETHEUS_PORT: "1234"
       TZ: Asia/Shanghai
     # Stage 33 PR-20: 端口收紧（UI 通过容器内 8080 访问；GRPC 通过容器内 11800）
     expose:
@@ -269,6 +277,9 @@ services:
       - "/usr/bin/apisix init 2>&1 || true; /usr/bin/apisix init_etcd 2>&1 || true; exec /usr/local/openresty/bin/openresty -p /usr/local/apisix -g 'daemon off;'"
     volumes:
       - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml
+      # PR-OBS-5: APISIX file-logger (PR-OBS-1 89b0117) 落盘 /tmp/apisix-access.log
+      # 挂到 host ./tmp/apisix-access.log 由 promtail 采集送 Loki
+      - ./tmp/apisix-access.log:/tmp/apisix-access.log
     ports:
       # Stage 32 PR-14 fix: 9080 被 Windows host 上 NahimicService 占用，
       # curl localhost:9080 命中音频服务返回 301 about:blank（不是 APISIX）。
@@ -293,6 +304,101 @@ services:
   # 原 deploy/docker-compose.infra.validation.yml（dashboard replicas=0 workaround）也随之删除，
   # 详见 commit 路径（Stage 36-C1）。
 
+  # ===== PR-OBS-4: Prometheus + Grafana (observability infra) =====
+  # 启动: COMPOSE_PROFILES=obs docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d
+  # 与 ai profile 同模式 (Stage 22-A),默认不起,observability 单独立 profile
+  # (dev 资源紧张机器可省 ~500MB RAM)
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: emotion-echo-prometheus
+    profiles: ["obs"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # PR-OBS-7: alert rules 目录挂载 (Prometheus 自动加载 *.yml)
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    networks:
+      - app-network
+    depends_on:
+      - apisix
+
+  # ===== PR-OBS-7: Kafka exporter (consumer lag 监控) =====
+  # 镜像: danielqsj/kafka-exporter:latest
+  # 暴露 :9308 metrics,自动发现 consumer group
+  # 启动: 随 obs profile 一同启动 (与 prometheus scrape 配套)
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: emotion-echo-kafka-exporter
+    profiles: ["obs"]
+    command:
+      - "--kafka.server=emotion-echo-kafka:9092"
+      - "--web.listen-address=:9308"
+    ports:
+      - "9308:9308"
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: emotion-echo-grafana
+    profiles: ["obs"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"  # dev mode 默认匿名可读,prod 必须改 false
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # PR-OBS-6: dashboards JSON sidecar mount (与 provisioning 路径分离)
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+
+  # ===== PR-OBS-5: Loki + Promtail (logs layer) =====
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: emotion-echo-loki
+    profiles: ["obs"]
+    command: -config.file=/etc/loki/loki-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - app-network
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: emotion-echo-promtail
+    profiles: ["obs"]
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      # PR-OBS-1 file-logger 落盘 /tmp/apisix-access.log → promtail 静态采集
+      - ./tmp/apisix-access.log:/var/log/apisix-access.log:ro
+      - ./loki/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+    networks:
+      - app-network
+    depends_on:
+      - loki
+
 # =====================================================
 # 卷定义
 # =====================================================
@@ -302,6 +408,11 @@ volumes:
   kafka_data:
   etcd-data:
   minio-data:
+  # PR-OBS-4: observability 持久化卷
+  prometheus_data:
+  grafana_data:
+  # PR-OBS-5: loki 持久化卷
+  loki_data:
 
 # =====================================================
 # 网络定义 (Stage 26-Q:external, 与 apps.yml 共享 emotion-echo_app-network)
