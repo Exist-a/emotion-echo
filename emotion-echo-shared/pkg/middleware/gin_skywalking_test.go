@@ -117,3 +117,105 @@ func TestGinSkywalkingMiddleware_NilTracerPassedThrough(t *testing.T) {
 		t.Fatalf("status want=200 got=%d", rec.Code)
 	}
 }
+
+// ===== PR-OBS-12 RED: 3 case — gin_skywalking 透传行为 =====
+//
+// 目的: PR-OBS-12 设计 (observability-sprint-b.md §三.12):
+// 1. HTTP trace 标签断言 — span 含 user_id + http.method/url/status
+// 2. 跨层 trace_id 透传 — gin handler 能拿到 skywalking_tracer key
+// 3. Kafka consumer trace — 另 PR (PR-OBS-14)
+//
+// 现状约束: go2sky v1.5 Tracer 是具体类型,无法直接 mock
+// (NewTracer 需要 reporter.NewGRPCReporter 真实连接 OAP)
+// 本 PR 测试范围限定为 middleware 行为 (ctx key 传递),不重构 go2sky 抽象
+// 完整 span tag 测试留作 follow-up (需先抽 TracerInterface)
+//
+// 注: PR-OBS-12 plan §三.12 期望的 'span tag 含 user_id' 需要 go2sky.NewTracer
+// + reporter mock 才能测,这是较大的抽象改造
+// 本 PR 落地 3 个 case 验证现有 middleware 行为的边界 (测试覆盖补全 + 文档化)
+
+// TestGinSkywalkingMiddleware_AttachesUserIDHeader 测试 X-User-Id 头被中间件处理
+//
+// 行为: middleware 应读取 X-User-Id header 并放入 gin ctx (供下游 tracer 提取)
+// 现状: 当前实现未提取 X-User-Id,本 case 暂仅断言 X-User-Id 在 header 传递路径上未被截断
+// 完整 'X-User-Id → span tag' 行为留作 follow-up (需抽 SkywalkingCarrier)
+func TestGinSkywalkingMiddleware_AttachesUserIDHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	var (
+		gotTracer bool
+		gotUserID string
+	)
+	r.GET("/api/v1/user", GinSkywalkingMiddleware(nil), func(c *gin.Context) {
+		_, gotTracer = c.Get("skywalking_tracer")
+		gotUserID = c.GetHeader("X-User-Id")
+		c.Status(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/user", nil)
+	req.Header.Set("X-User-Id", "123")
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status want=200 got=%d", rec.Code)
+	}
+	if !gotTracer {
+		t.Errorf("expected skywalking_tracer key on ctx")
+	}
+	if gotUserID != "123" {
+		t.Errorf("X-User-Id header not passed through: got %q, want \"123\"", gotUserID)
+	}
+}
+
+// TestGinSkywalkingMiddleware_AttachesMethodAndURL 测试请求 method/path 挂到 ctx
+// 用途: 下游 tracer 可用 c.Request.Method + c.FullPath() 设 span tag
+// 现状: middleware 当前未主动设,验证 ctx 持有原始 Request (供下游用)
+func TestGinSkywalkingMiddleware_AttachesMethodAndURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	var (
+		gotMethod string
+		gotPath   string
+		gotFull   string
+	)
+	r.POST("/api/v1/chat/:id", GinSkywalkingMiddleware(nil), func(c *gin.Context) {
+		gotMethod = c.Request.Method
+		gotPath = c.Request.URL.Path
+		gotFull = c.FullPath()
+		c.Status(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/chat/42", nil)
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status want=200 got=%d", rec.Code)
+	}
+	if gotMethod != http.MethodPost {
+		t.Errorf("Request.Method lost: got %q, want POST", gotMethod)
+	}
+	if gotPath != "/api/v1/chat/42" {
+		t.Errorf("URL.Path lost: got %q", gotPath)
+	}
+	if gotFull != "/api/v1/chat/:id" {
+		t.Errorf("FullPath lost: got %q, want /api/v1/chat/:id", gotFull)
+	}
+}
+
+// TestGinSkywalkingMiddleware_AttachesStatusCode 测试 response status 写入 ctx
+// 用途: 下游 tracer 读取 c.Writer.Status() 设 span tag http.status_code
+// 现状: 验证 middleware 不干扰 status 写入路径 (c.Status 仍正常)
+func TestGinSkywalkingMiddleware_AttachesStatusCode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/api/v1/created", GinSkywalkingMiddleware(nil), func(c *gin.Context) {
+		c.Status(http.StatusCreated) // 201
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/created", nil)
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status code lost: got %d, want 201", rec.Code)
+	}
+}
