@@ -17,10 +17,13 @@ import (
 type tagKV struct{ K, V string }
 
 // mockSpan PR-OBS-17 扩展：加 Tag 方法 + tagCalls 记录
+// PR-OBS-19 新增: SetSpanLayer/SetComponent + layerCalls/componentCalls 记录
 type mockSpan struct {
-	endErr   error
-	ended    bool
-	tagCalls []tagKV
+	endErr         error
+	ended          bool
+	tagCalls       []tagKV
+	layerCalls     []int32 // PR-OBS-19
+	componentCalls []int32 // PR-OBS-19
 }
 
 func (s *mockSpan) EndSpan(err error) {
@@ -30,6 +33,16 @@ func (s *mockSpan) EndSpan(err error) {
 
 func (s *mockSpan) Tag(key, value string) {
 	s.tagCalls = append(s.tagCalls, tagKV{key, value})
+}
+
+// SetSpanLayer PR-OBS-19 mock 实现
+func (s *mockSpan) SetSpanLayer(layer int32) {
+	s.layerCalls = append(s.layerCalls, layer)
+}
+
+// SetComponent PR-OBS-19 mock 实现
+func (s *mockSpan) SetComponent(componentID int32) {
+	s.componentCalls = append(s.componentCalls, componentID)
 }
 
 // mockTracer PR-OBS-17 扩展：加 CreateLocalSpan 方法
@@ -298,6 +311,140 @@ func TestServerTracing_MockSpanIsObservableForTagCalls(t *testing.T) {
 	}
 	if !span.ended {
 		t.Errorf("interop should have called EndSpan on the same span")
+	}
+}
+
+// ===== PR-OBS-19 RED: ServerTracingInterceptor 打 rpc.* + user_id tag =====
+//
+// 目的: stage-44 §四 B 步骤 6 (最后一步) + stage-46 §二.2.3:
+//   - gRPC ServerTracingInterceptor 调 span.Tag(rpc.method) / span.Tag(rpc.system)
+//     / span.Tag(user_id) 让 OAP UI 按 RPC 维度聚合
+//   - span.SetSpanLayer(5) (GRPC) + span.SetComponent(5001) (Go gRPC)
+//     让 OAP UI 按 layer/component 过滤
+//
+// 设计:
+//   - mockSpan 升级加 layerCalls/componentCalls 字段
+//   - ServerTracingInterceptor 在 tracer.StartEntry 后立即调 5 个方法:
+//     span.SetSpanLayer(5), span.SetComponent(5001),
+//     span.Tag("rpc.system", "grpc"), span.Tag("rpc.method", info.FullMethod),
+//     span.Tag("user_id", metadata x-user-id)
+//   - mockInterceptor 端到端验证
+//
+// 4 个 case:
+//   1. TagsRPCMethodAndSystem: span.tagCalls 含 rpc.method/rpc.system
+//   2. TagsUserIDFromGRPCMetadata: x-user-id metadata → user_id tag
+//   3. SetsSpanLayerAndComponent: spanLayerCalls[0]=5 (GRPC), componentCalls[0]=5001
+//   4. NoTagsOnNilTracer: 向后兼容(nil tracer 不打 tag)
+//
+// 当前 ServerTracingInterceptor 只调 tracer.StartEntry → RED 状态
+
+// TestServerTracing_TagsRPCMethodAndSystem 验证 gRPC interceptor 打 rpc.method/system
+func TestServerTracing_TagsRPCMethodAndSystem(t *testing.T) {
+	t.Parallel()
+	span := &mockSpan{}
+	tracer := &mockTracer{spanToReturn: span, ctxToReturn: context.Background()}
+	interceptor := NewServerTracingInterceptor(tracer)
+	h := &fakeHandler{}
+
+	_, err := interceptor(context.Background(), nil,
+		&grpc.UnaryServerInfo{FullMethod: "/emotion_query.v1.EmotionQueryService/GetEmotionByMessage"},
+		h.handle)
+	if err != nil {
+		t.Fatalf("interceptor err: %v", err)
+	}
+
+	wantTags := []tagKV{
+		{"rpc.system", "grpc"},
+		{"rpc.method", "/emotion_query.v1.EmotionQueryService/GetEmotionByMessage"},
+	}
+	for _, want := range wantTags {
+		found := false
+		for _, got := range span.tagCalls {
+			if got.K == want.K && got.V == want.V {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing tag %+v in %+v", want, span.tagCalls)
+		}
+	}
+}
+
+// TestServerTracing_TagsUserIDFromGRPCMetadata 验证 x-user-id metadata → user_id tag
+func TestServerTracing_TagsUserIDFromGRPCMetadata(t *testing.T) {
+	t.Parallel()
+	span := &mockSpan{}
+	tracer := &mockTracer{spanToReturn: span} // nil ctxToReturn → 用入参 ctx (含 metadata)
+	interceptor := NewServerTracingInterceptor(tracer)
+
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, nil
+	}
+
+	md := metadata.MD{}
+	md.Set("x-user-id", "67890")
+	ctxWithMD := metadata.NewIncomingContext(context.Background(), md)
+
+	_, err := interceptor(ctxWithMD, nil,
+		&grpc.UnaryServerInfo{FullMethod: "/svc/Method"},
+		handler)
+	if err != nil {
+		t.Fatalf("interceptor err: %v", err)
+	}
+
+	found := false
+	for _, got := range span.tagCalls {
+		if got.K == "user_id" && got.V == "67890" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected tag (user_id, 67890), got %+v", span.tagCalls)
+	}
+}
+
+// TestServerTracing_SetsSpanLayerAndComponent 验证 SetSpanLayer(GRPC=5) + SetComponent(5001)
+func TestServerTracing_SetsSpanLayerAndComponent(t *testing.T) {
+	t.Parallel()
+	span := &mockSpan{}
+	tracer := &mockTracer{spanToReturn: span, ctxToReturn: context.Background()}
+	interceptor := NewServerTracingInterceptor(tracer)
+	h := &fakeHandler{}
+
+	_, err := interceptor(context.Background(), nil,
+		&grpc.UnaryServerInfo{FullMethod: "/svc/Method"},
+		h.handle)
+	if err != nil {
+		t.Fatalf("interceptor err: %v", err)
+	}
+
+	// OAP SpanLayer enum: HTTP=2, GRPC=5, MQ=6 (kafka 沿用 MQ)
+	if len(span.layerCalls) != 1 || span.layerCalls[0] != 5 {
+		t.Errorf("expected layerCalls=[5 (GRPC)], got %v", span.layerCalls)
+	}
+	// Go gRPC component = 5001
+	if len(span.componentCalls) != 1 || span.componentCalls[0] != 5001 {
+		t.Errorf("expected componentCalls=[5001 (Go gRPC)], got %v", span.componentCalls)
+	}
+}
+
+// TestServerTracing_NoTagsOnNilTracer 向后兼容: nil tracer 时不打 tag (回归护栏)
+func TestServerTracing_NoTagsOnNilTracer(t *testing.T) {
+	t.Parallel()
+	// nil tracer 路径走"原样返回 handler"分支,无 span 创建
+	interceptor := NewServerTracingInterceptor(nil)
+	h := &fakeHandler{}
+
+	_, err := interceptor(context.Background(), nil,
+		&grpc.UnaryServerInfo{FullMethod: "/svc/Method"},
+		h.handle)
+	if err != nil {
+		t.Fatalf("interceptor err: %v", err)
+	}
+	if h.called != 1 {
+		t.Errorf("expected handler called 1, got %d", h.called)
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/SkyAPM/go2sky"
+	agentv3 "skywalking.apache.org/repo/goapi/collect/language/agent/v3"
 )
 
 // Go2SkySpan wraps go2sky's span so it satisfies our Span interface.
@@ -47,6 +48,34 @@ func (s *Go2SkySpan) Tag(key, value string) {
 		return
 	}
 	s.span.Tag(go2sky.Tag(key), value)
+}
+
+// SetSpanLayer PR-OBS-19 扩展:设置 span layer (OAP enum int32)。
+// layer 值约定(对应 agentv3.SpanLayer enum):
+//   2 = HTTP, 5 = GRPC, 6 = MQ (kafka 暂无,沿用 MQ)
+//
+// 实现:cast int32 → agentv3.SpanLayer 后调用底层 span.SetSpanLayer。
+// nil 内部 span 时 no-op。
+func (s *Go2SkySpan) SetSpanLayer(layer int32) {
+	if s.span == nil {
+		return
+	}
+	s.span.SetSpanLayer(agentv3.SpanLayer(layer))
+}
+
+// SetComponent PR-OBS-19 扩展:设置 span component ID。
+// 常用 component ID:
+//   5001 = Go gRPC server / client
+//   5002 = Go HTTP server
+//   5003 = Go Kafka consumer / producer
+//
+// 实现:直接传 int32 给底层 span.SetComponent(go2sky 已接受 int32)。
+// nil 内部 span 时 no-op。
+func (s *Go2SkySpan) SetComponent(componentID int32) {
+	if s.span == nil {
+		return
+	}
+	s.span.SetComponent(componentID)
 }
 
 // Go2SkyTracer adapts go2sky.Tracer to our minimal Tracer interface.

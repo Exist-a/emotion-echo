@@ -271,10 +271,13 @@ func (t *stubTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 
 // stubSpan 满足 grpcinterceptor.Span 接口,记录 Tag/EndSpan 调用
 // PR-OBS-18 扩展: tagKV 记录 / endErr 记录
+// PR-OBS-19 扩展: layerCalls/componentCalls 记录 (Span 接口扩 SetSpanLayer/SetComponent)
 type stubSpan struct {
-	tagCalls []tagKV
-	endErr   error
-	ended    bool
+	tagCalls       []tagKV
+	endErr         error
+	ended          bool
+	layerCalls     []int32 // PR-OBS-19
+	componentCalls []int32 // PR-OBS-19
 }
 
 func (s *stubSpan) EndSpan(err error) {
@@ -284,6 +287,14 @@ func (s *stubSpan) EndSpan(err error) {
 
 func (s *stubSpan) Tag(key, value string) {
 	s.tagCalls = append(s.tagCalls, tagKV{key, value})
+}
+
+func (s *stubSpan) SetSpanLayer(layer int32) {
+	s.layerCalls = append(s.layerCalls, layer)
+}
+
+func (s *stubSpan) SetComponent(componentID int32) {
+	s.componentCalls = append(s.componentCalls, componentID)
 }
 
 // tagKV 记录 span.Tag 调用
