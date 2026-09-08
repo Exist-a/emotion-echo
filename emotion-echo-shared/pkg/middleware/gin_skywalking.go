@@ -21,12 +21,19 @@
 //   2. skywalking span 上下文(若未来 span 内携带 trace id)
 //   3. 跳过(无 trace_id,handler 日志无此字段)
 //
+// PR-OBS-23: handler err 透传判定(buildSpanError),优先级:
+//   1. c.Errors() 非空 → EndSpan(c.Errors.Last().Err)  (handler 显式 c.Error)
+//   2. status >= 500 → EndSpan(http <code>) 兜底 (handler 现状 c.JSON(500, ...) 不调 c.Error)
+//   3. 其他 → EndSpan(nil) (4xx 业务正常 + 200 成功)
+// 让 OAP UI 能直接过滤"5xx + error"维度。
+//
 // 中间件顺序(各 svc main.go 约定): Recovery → Metrics → Skywalking → Auth。
 // Skywalking 在 Auth 之前跑,但 X-User-Id / X-Trace-Id header 已由 APISIX jwt-auth 注入到
 // Request,无需等 ctx.Value(CtxUserIDKey{})。
 package middleware
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -88,7 +95,34 @@ func GinSkywalkingMiddleware(tracer grpcinterceptor.Tracer) gin.HandlerFunc {
 		// 同步顺序而非 defer,确保 4 tag 全部写入后才 EndSpan
 		if span != nil {
 			span.Tag("http.status_code", strconv.Itoa(c.Writer.Status()))
-			span.EndSpan(nil)
+			span.EndSpan(buildSpanError(c))
 		}
 	}
+}
+
+// buildSpanError PR-OBS-23 决定 span.EndSpan(err) 应传什么 err:
+//
+// 1. handler 调 c.Error(err) → EndSpan(err) (handler 显式声明 soft error 时
+//    即使 status 200 也视为 err,符合业务"部分成功 + 警告"语义)
+// 2. handler 未 c.Error + status >= 500 → EndSpan(http 500) 兜底
+//    (chat/user/assessment/analytics/ai/web-bff 现状都是 c.JSON(500, ...) 不用 c.Error)
+// 3. 其他 → nil (4xx 业务正常如 401/403/404,或 200 成功)
+//
+// 返回 error 或 nil。span.EndSpan 收到 err 时,go2sky adapter 会调
+// span.Error(time.Now(), err.Error()) 让 OAP UI error 列可见。
+func buildSpanError(c *gin.Context) error {
+	// 1. 优先 handler 显式 c.Error(err)
+	if lastErr := c.Errors.Last(); lastErr != nil {
+		// gin.Error.Unwrap() 返回底层 error;若底层为 nil (handler 误用) 兜底 gin.Error 自身
+		if unwrapped := lastErr.Unwrap(); unwrapped != nil {
+			return unwrapped
+		}
+		return lastErr
+	}
+	// 2. 兜底 status >= 500
+	if status := c.Writer.Status(); status >= 500 {
+		return fmt.Errorf("http %d", status)
+	}
+	// 3. 4xx / 200 + 无 c.Error → 不视为 err
+	return nil
 }
