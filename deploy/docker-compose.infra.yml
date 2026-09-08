@@ -293,6 +293,51 @@ services:
   # 原 deploy/docker-compose.infra.validation.yml（dashboard replicas=0 workaround）也随之删除，
   # 详见 commit 路径（Stage 36-C1）。
 
+  # ===== PR-OBS-4: Prometheus + Grafana (observability infra) =====
+  # 启动: COMPOSE_PROFILES=obs docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d
+  # 与 ai profile 同模式 (Stage 22-A),默认不起,observability 单独立 profile
+  # (dev 资源紧张机器可省 ~500MB RAM)
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: emotion-echo-prometheus
+    profiles: ["obs"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - app-network
+    depends_on:
+      - apisix
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: emotion-echo-grafana
+    profiles: ["obs"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"  # dev mode 默认匿名可读,prod 必须改 false
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+
 # =====================================================
 # 卷定义
 # =====================================================
@@ -302,6 +347,9 @@ volumes:
   kafka_data:
   etcd-data:
   minio-data:
+  # PR-OBS-4: observability 持久化卷
+  prometheus_data:
+  grafana_data:
 
 # =====================================================
 # 网络定义 (Stage 26-Q:external, 与 apps.yml 共享 emotion-echo_app-network)
