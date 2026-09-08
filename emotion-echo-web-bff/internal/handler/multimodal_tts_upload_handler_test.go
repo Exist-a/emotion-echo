@@ -172,7 +172,10 @@ func TestTTSHandler_Stream_EmptyText_Returns400(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
-func TestUploadHandler_Returns502(t *testing.T) {
+// Stage 58 PR-UP-1: 旧 502 占位契约已废弃，通用上传现在真实实现。
+// 行为优先级：1. kind 白名单 → 2. X-User-Id → 3. Storage nil → 4. multipart → 5. mime → 6. size
+// 当 kind=image 但请求 body=nil 时，第一个校验步骤是 X-User-Id（缺 → 401）。
+func TestUploadHandler_NoAuth_Returns401(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	(&UploadHandler{}).Register(r)
@@ -181,6 +184,6 @@ func TestUploadHandler_Returns502(t *testing.T) {
 	resp := httptest.NewRecorder()
 	r.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusBadGateway, resp.Code)
-	assert.Contains(t, resp.Body.String(), "not implemented")
+	assert.Equal(t, http.StatusUnauthorized, resp.Code,
+		"无 X-User-Id 应返 401（Stage 30 旧 502 'not implemented' 契约已废弃）")
 }
