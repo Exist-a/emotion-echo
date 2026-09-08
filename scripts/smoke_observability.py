@@ -51,10 +51,14 @@ def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"[{sym}] {name}: {detail}")
 
 
-def http_get(url: str, timeout: float = 5.0) -> tuple[int, str]:
+def http_get(url: str, timeout: float = 5.0, headers: dict | None = None) -> tuple[int, str]:
     """GET URL, return (status, body). body = "" on network error."""
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
+        req = urllib.request.Request(url)
+        if headers:
+            for k, v in headers.items():
+                req.add_header(k, v)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.status, resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", errors="replace") if e.fp else ""
@@ -140,6 +144,38 @@ def main() -> int:
             )
         except (json.JSONDecodeError, TypeError) as e:
             check("grafana datasources JSON parseable", False, f"{type(e).__name__}: {e}")
+
+    # ===== PR-OBS-6: Grafana dashboard provisioning 断言 =====
+
+    # 断言 7: emotion-echo-overview 看板 API 返回 200 (用 admin/admin basic auth)
+    # grafana dashboard API 需要 Viewer 以上权限,匿名访问 (PR-OBS-4 GF_AUTH_ANONYMOUS_ENABLED=true)
+    # 仅对 /api/health 等公开端点开放,dashboard 查询需 login。
+    import base64
+    grafana_auth = base64.b64encode(b"admin:admin").decode("ascii")
+    status, body = http_get(
+        f"{GRAFANA}/api/dashboards/uid/emotion-echo-overview",
+        headers={"Authorization": f"Basic {grafana_auth}"},
+    )
+    if status == 0:
+        check("grafana dashboard 'emotion-echo-overview' API reachable", False, body)
+    elif status != 200:
+        check(
+            "grafana dashboard 'emotion-echo-overview' returns 200",
+            False,
+            f"HTTP {status}: {body[:100]}",
+        )
+    else:
+        try:
+            data = json.loads(body)
+            title = data.get("dashboard", {}).get("title", "?")
+            panels = data.get("dashboard", {}).get("panels", [])
+            check(
+                "grafana dashboard 'emotion-echo-overview' provisioned",
+                len(panels) >= 4,
+                f"title={title!r}, panels={len(panels)}",
+            )
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            check("grafana dashboard JSON parseable", False, f"{type(e).__name__}: {e}")
 
     # ===== PR-OBS-5: Loki + Promtail 断言 =====
 
