@@ -1,0 +1,187 @@
+// proto/chat.proto
+//
+// Stage 58 PR-GRPC-1: chat-svc 暴露给 BFF 的 gRPC 接口（gRPC 渐进迁移 Phase 1）
+//
+// 背景（docs/plans/grpc-inter-service-migration.md）：
+//   chat-svc 是 BFF 最频繁调用的下游（聊天消息 + 流）。
+//   chat-svc→ai-svc 已有 gRPC 基础（emotion_query.proto），proto 风格延续。
+//   SSE 聊天流可走 gRPC server stream（chat-svc → BFF → 浏览器 SSE）。
+//
+// 设计原则：
+//   - 服务名 ChatService（BFF 视角：chat-svc 是它依赖的下游）
+//   - rpc 方法与 HTTP 端点 1:1 对齐（CreateConversation / SendMessage / ListMessages
+//     / ListConversations / DeleteConversation / PinConversation）
+//   - 流式：StreamMessages 走 server stream
+//   - message 字段命名遵循 emotion_query.proto 已确立的 snake_case（field 名）
+//
+// 与 emotion_query.proto 区别：
+//   - package 不同：emotion_chat.v1（chat-svc）vs emotion_ai.v1（ai-svc）
+//   - go_package 不同：emotionchat vs emotionquery
+//
+// 关联文档：
+//   - docs/plans/grpc-inter-service-migration.md §二（决策 A 阶段选择 chat-svc）
+//   - emotion-echo-web-bff/internal/downstream/chat.go（HTTP 客户端，作为 gRPC 客户端的 fallback）
+//   - emotion-echo-chat-svc/internal/handler/*.go（HTTP handler，将由 gRPC server 实现共享）
+
+syntax = "proto3";
+
+package emotion_chat.v1;
+
+option go_package = "github.com/emotion-echo/shared/pkg/emotionchat";
+
+// ChatService chat-svc 暴露给 BFF 的接口
+//
+// chat-svc 同时跑 HTTP (:8890) + gRPC (:8892)。前端继续走 HTTP（APISIX 网关），
+// 内部 BFF 走 gRPC（plan §二 决策 A 选择 chat-svc 作为 Phase 1 迁移目标）。
+service ChatService {
+  // CreateConversation 新建会话
+  rpc CreateConversation (CreateConversationRequest) returns (Conversation);
+
+  // SendMessage 发送消息
+  rpc SendMessage (SendMessageRequest) returns (Message);
+
+  // ListMessages 列出会话消息（limit/offset 分页）
+  rpc ListMessages (ListMessagesRequest) returns (ListMessagesResponse);
+
+  // ListConversations 列出当前用户的会话（按 updated_at desc，limit+1 探测 hasMore）
+  rpc ListConversations (ListConversationsRequest) returns (ListConversationsResponse);
+
+  // DeleteConversation 删除会话
+  rpc DeleteConversation (DeleteConversationRequest) returns (DeleteConversationResponse);
+
+  // PinConversation 置顶会话（chat-svc 尚未实现 HTTP；接口保留，未来支持后可用）
+  rpc PinConversation (PinConversationRequest) returns (PinConversationResponse);
+
+  // StreamMessages 流式接收消息（gRPC server stream）——替代 SSE 聊天流
+  //
+  // 设计动机：BFF 当前用 SSE（HTTP）转给浏览器，链路长且需要 APISIX 兼容 SSE。
+  // 改 gRPC server stream 后 BFF 在内存中再转 SSE 给浏览器，但 chat-svc → BFF
+  // 段是结构化流（无 SSE 兼容问题）。
+  //
+  // 鉴权：user_id 通过 metadata "x-user-id" 传（与 emotion_query.proto 一致）
+  rpc StreamMessages (StreamMessagesRequest) returns (stream ChatEvent);
+}
+
+// ============== Messages ==============
+
+// CreateConversationRequest 新建会话请求
+message CreateConversationRequest {
+  string title = 1;             // 会话标题（可选）
+  int64 user_id = 2;            // 创建者 user_id（gRPC metadata 也可传，这里冗余便于 stream）
+}
+
+// Conversation 会话视图
+message Conversation {
+  int64 id = 1;
+  int64 user_id = 2;
+  string title = 3;
+  int32 msg_count = 4;
+  int32 status = 5;             // 0=open 1=closed
+  int64 created_at = 6;         // unix seconds
+  int64 updated_at = 7;
+}
+
+// SendMessageRequest 发送消息请求
+message SendMessageRequest {
+  int64 conversation_id = 1;
+  int64 user_id = 2;
+  string role = 3;              // "user" / "assistant" / "system"
+  string content = 4;
+  string client_msg_id = 5;     // 幂等 key（UUID；重复发送仅落库一次）
+  string content_type = 6;      // "text" / "markdown" / ...
+  string emotion_tag = 7;       // 客户端预标注情绪（可选）
+}
+
+// Message 消息视图
+message Message {
+  int64 id = 1;
+  int64 conversation_id = 2;
+  int64 user_id = 3;
+  string role = 4;
+  string content = 5;
+  int32 tokens_used = 6;
+  int64 created_at = 7;
+}
+
+// ListMessagesRequest 列消息请求
+message ListMessagesRequest {
+  int64 conversation_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+// ListMessagesResponse 列消息响应
+message ListMessagesResponse {
+  repeated Message messages = 1;
+}
+
+// ListConversationsRequest 列会话请求
+message ListConversationsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+// ListConversationsResponse 列会话响应
+message ListConversationsResponse {
+  repeated Conversation list = 1;
+  bool has_more = 2;
+}
+
+// DeleteConversationRequest 删除会话请求
+message DeleteConversationRequest {
+  int64 conversation_id = 1;
+}
+
+// DeleteConversationResponse 删除会话响应
+message DeleteConversationResponse {
+  bool success = 1;
+  int64 id = 2;
+}
+
+// PinConversationRequest 置顶会话请求
+message PinConversationRequest {
+  int64 conversation_id = 1;
+}
+
+// PinConversationResponse 置顶会话响应
+message PinConversationResponse {
+  bool success = 1;
+  int64 id = 2;
+}
+
+// StreamMessagesRequest 流式消息请求
+message StreamMessagesRequest {
+  int64 conversation_id = 1;
+  int64 user_id = 2;
+  // 起始 cursor（last seen message_id）；首次订阅填 0 → 服务端从最新开始
+  int64 from_message_id = 3;
+}
+
+// ChatEvent 流式事件（chat-svc → BFF 单向推送）
+//
+// 设计：union 风格用 oneof 承载多种事件类型（new message / status change / heartbeat）。
+// BFF 收到后映射为 SSE event 类型（message / status / ping）。
+message ChatEvent {
+  oneof event {
+    NewMessageEvent new_message = 1;
+    StatusChangeEvent status_change = 2;
+    HeartbeatEvent heartbeat = 3;
+  }
+}
+
+// NewMessageEvent 新消息事件
+message NewMessageEvent {
+  Message message = 1;
+}
+
+// StatusChangeEvent 会话状态变更事件
+message StatusChangeEvent {
+  int64 conversation_id = 1;
+  int32 new_status = 2;         // 0=open 1=closed
+  int64 timestamp = 3;
+}
+
+// HeartbeatEvent 心跳（防止 NAT/代理超时断开）
+message HeartbeatEvent {
+  int64 timestamp = 1;
+}

@@ -6,6 +6,7 @@
 # 输出位置：
 #   - Go pb:        emotion-echo-shared/pkg/emotionllm/
 #   - Go pb:        emotion-echo-shared/pkg/emotionquery/
+#   - Go pb:        emotion-echo-shared/pkg/emotionchat/   (Stage 58 PR-GRPC-1)
 #   - Python pb:    emotion-llm-service/
 #
 # 用法：
@@ -72,6 +73,7 @@ gen_go() {
     case "$proto_name" in
         emotion_llm.proto)  pkg_name="emotionllm" ;;
         emotion_query.proto) pkg_name="emotionquery" ;;
+        chat.proto)         pkg_name="emotionchat" ;;
         *)
             log_warn "未知 proto: $proto_name，跳过 Go 生成"
             return
