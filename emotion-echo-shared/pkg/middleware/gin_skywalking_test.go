@@ -1,10 +1,12 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/gin-gonic/gin"
 )
 
@@ -217,5 +219,119 @@ func TestGinSkywalkingMiddleware_AttachesStatusCode(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status code lost: got %d, want 201", rec.Code)
+	}
+}
+
+// ===== PR-OBS-17 GREEN: GinSkywalkingMiddleware mock tracer 边界 =====
+//
+// 目的: stage-44 §四 B 收口——tracer 形参改为 grpcinterceptor.Tracer 接口后,
+// 验证中间件把传入的 mock tracer 实例挂到 gin ctx (而不是 nil 或新建)。
+//
+// 设计:
+// - stubTracer 满足 grpcinterceptor.Tracer 接口的最小实现
+// - 业务 handler 从 ctx 读 skywalking_tracer,断言类型 + 同一指针
+//
+// 与已有 case 区别: 已有 case 都用 nil tracer (验证 middleware 不 panic),
+// 本 case 用 mock 验证"传入实例 = ctx 挂的实例"指针相等性 (语义层)。
+//
+// PR-OBS-18 扩展: 中间件将在这里调用 stubTracer.StartEntry(ctx, "/api/v1/...")
+// 创建 EntrySpan 并打 http.method/url/status_code/user_id tag。届时:
+//   - StartEntry 调用次数 == 1
+//   - span.Tag(\"http.method\", \"GET\") / Tag(\"http.url\", \"/api/v1/...\") 等断言
+//   - span.EndSpan(err) 在 next handler 返回时被调
+
+// stubTracer PR-OBS-17 — 满足 grpcinterceptor.Tracer 接口,记录调用次数
+type stubTracer struct {
+	startEntryCalls []string
+	createLocalCalls []string
+}
+
+func (t *stubTracer) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
+	// 当前 PR GinSkywalkingMiddleware 未实际调用 StartEntry(只 c.Set),
+	// 但接口已存在以便 PR-OBS-18 接入;这里返回 noop span 让接口完整。
+	return ctx, &stubSpan{}
+}
+
+func (t *stubTracer) CreateLocalSpan(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span, error) {
+	t.createLocalCalls = append(t.createLocalCalls, opName)
+	return ctx, &stubSpan{}, nil
+}
+
+// stubSpan 满足 grpcinterceptor.Span 接口,无业务行为
+type stubSpan struct{}
+
+func (s *stubSpan) EndSpan(error)             {}
+func (s *stubSpan) Tag(_, _ string)           {}
+
+// 编译期断言: stubTracer / stubSpan 满足接口
+var _ grpcinterceptor.Tracer = (*stubTracer)(nil)
+var _ grpcinterceptor.Span = (*stubSpan)(nil)
+
+// TestGinSkywalkingMiddleware_AttachesNonNilTracerInstance 业务路径应把
+// 传入的 tracer 实例原样挂到 gin ctx (指针相等性)
+func TestGinSkywalkingMiddleware_AttachesNonNilTracerInstance(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	var (
+		gotRaw   interface{}
+		gotType  string
+		isSame   bool
+	)
+	r := gin.New()
+	r.GET("/api/v1/foo", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		gotRaw, _ = c.Get("skywalking_tracer")
+		if gotRaw != nil {
+			gotType = "<non-nil>"
+			isSame = gotRaw == tracer
+		}
+		c.Status(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/foo", nil)
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status want=200 got=%d", rec.Code)
+	}
+	if gotRaw == nil {
+		t.Fatal("skywalking_tracer key on ctx is nil (middleware should attach tracer)")
+	}
+	if gotType != "<non-nil>" {
+		t.Errorf("expected non-nil tracer, got %v", gotRaw)
+	}
+	if !isSame {
+		t.Errorf("expected ctx tracer to be same instance as passed in (pointer equality)")
+	}
+}
+
+// TestGinSkywalkingMiddleware_AttachesInterfaceTypedTracer 验证 ctx 挂的
+// 是 grpcinterceptor.Tracer 接口(而非 *go2sky.Tracer 具体类型)。
+// 这是 PR-OBS-17 接口切换的契约 —— 下游读 ctx.Get(\"skywalking_tracer\") 时
+// 可安全类型断言为 grpcinterceptor.Tracer。
+func TestGinSkywalkingMiddleware_AttachesInterfaceTypedTracer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	var (
+		assertOK bool
+	)
+	r := gin.New()
+	r.GET("/api/v1/typed", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		raw, exists := c.Get("skywalking_tracer")
+		if !exists {
+			t.Fatal("skywalking_tracer key missing")
+		}
+		// 类型断言为 grpcinterceptor.Tracer 接口
+		_, assertOK = raw.(grpcinterceptor.Tracer)
+		c.Status(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/typed", nil)
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status want=200 got=%d", rec.Code)
+	}
+	if !assertOK {
+		t.Error("expected ctx skywalking_tracer to be grpcinterceptor.Tracer interface")
 	}
 }
