@@ -13,6 +13,7 @@ package fusion
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
@@ -52,6 +53,53 @@ func TestFusionMetrics_RecordWorkerTick(t *testing.T) {
 	after := readFusionCounter(t, "emotion_echo_fusion_worker_tick_total",
 		map[string]string{"outcome": sharedmetrics.WorkerTickOK})
 	assert.Greater(t, after, before)
+}
+
+// ===== PR-OBS-11 RED: 2 case — fusion 整体调用 metrics =====
+//
+// 目的: PR-OBS-11 设计 (observability-sprint-b.md §三.11):
+// 1. 触发 fusion → emotion_fusion_calls_total{modality, result} 增 1
+// 2. emotion_fusion_duration_seconds histogram series 存在 (registry 已注册)
+//
+// 注: 与 Stage 35 已落 metric 区分:
+//   - 现有 emotion_fusion_llm_call_total: LLM 调用计数 (specific stage)
+//   - 新 emotion_fusion_calls_total: fusion 整体调用计数 (跨多模态入口)
+//
+// TDD: RED 阶段引用未实现的 RecordFusionCall + ObserveFusionDuration,
+// 应编译失败 (undefined symbol)。
+
+func TestFusionMetrics_RecordFusionCall(t *testing.T) {
+	t.Parallel()
+	const modality = "text"
+	const result = "success"
+	before := readFusionCounter(t, "emotion_fusion_calls_total",
+		map[string]string{"modality": modality, "result": result})
+	RecordFusionCall(modality, result)
+	after := readFusionCounter(t, "emotion_fusion_calls_total",
+		map[string]string{"modality": modality, "result": result})
+	assert.Greater(t, after, before,
+		"emotion_fusion_calls_total{modality=%s,result=%s} should increase", modality, result)
+}
+
+func TestFusionMetrics_DurationSecondsHistogramRegistered(t *testing.T) {
+	// 触发一次 fusion 让 histogram 出现至少一个 sample
+	ObserveFusionDuration("text", 0.123)
+
+	// 检查 registry 里有 emotion_fusion_duration_seconds series
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	found := false
+	for _, mf := range mfs {
+		if mf.GetName() == "emotion_fusion_duration_seconds" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("emotion_fusion_duration_seconds histogram should be registered to default registry")
+	}
 }
 
 // readFusionCounter 辅助函数：从 prometheus default registry 读指定 metric + labels 的当前值。

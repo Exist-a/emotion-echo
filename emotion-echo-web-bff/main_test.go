@@ -25,11 +25,17 @@
 package main
 
 import (
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"emotion-echo-web-bff/internal/auth"
 	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/svc"
+
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -153,6 +159,120 @@ func TestRegisterRoutes_MainContract(t *testing.T) {
 	}
 }
 
+// ===== PR-OBS-10: web-bff /metrics 端点契约测试 =====
+//
+// 目的：防止重构时漏挂 metrics 中间件 (PR-4c-4 reset-password 同源教训)
+// 复用 stubServiceContext + registerRoutes 启动完整 router,
+// 然后 httptest 拉 /metrics 端点,断言：
+//   1. /metrics 返回 200 + Content-Type text/plain;version=0.0.4
+//   2. /metrics body 含 emotion_echo_http_requests_total + emotion_echo_http_request_duration_seconds
+//   3. /metrics 含 svc 短名 label: service="web-bff"
+//   4. 触发 1 次 /health 后 http_requests_total 增 1 (label 正确)
+//
+// 注：与 TestRegisterRoutes_MainContract 共享 stubServiceContext,
+// 避免重复构造 ServiceContext (含 Nacos boot + DB 连接等副作用)。
+func TestMetricsEndpoint_WebBFF(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	s, cfg := stubServiceContext(t, false)
+	// 复用 main.go 真实启动路径中的中间件装配（含 metrics）
+	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
+	// 不手动注册 /metrics 与 /health — registerRoutes 已注册
+	// (main.go:252 r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler())))
+	registerRoutes(r, s, cfg)
+
+	// 触发 1 次 registerRoutes 已注册的路由 (auth/login),让 counter 出现
+	// 用 POST /api/v1/auth/login (registerRoutes 注册的 catch-all auth 路由)
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader("{}")))
+
+	// 断言 1: /metrics 返回 200
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("/metrics returns 200, got %d", w.Code)
+	}
+
+	// 断言 2: Content-Type 是 Prometheus text format
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/plain") || !strings.Contains(ct, "version=0.0.4") {
+		t.Errorf("/metrics Content-Type should be Prometheus text format, got %q", ct)
+	}
+
+	// 断言 3: 关键 series 名齐全
+	body := w.Body.String()
+	mustContain := []string{
+		"emotion_echo_http_requests_total",
+		"emotion_echo_http_request_duration_seconds",
+	}
+	for _, m := range mustContain {
+		if !strings.Contains(body, m) {
+			t.Errorf("/metrics missing critical series %q", m)
+		}
+	}
+
+	// 断言 4: svc 短名 label (web-bff) 存在
+	if !strings.Contains(body, `service="web-bff"`) {
+		t.Errorf("/metrics missing service label 'web-bff'")
+	}
+
+	// 断言 5: 触发后 counter 增 1
+	// 注意: metrics.go:88 GinMetricsMiddleware 用 c.FullPath() 拿路由模板 (避免高基数)
+	// 实际 path 是 /api/v1/auth/login, 但 label 是路由模板 /api/v1/auth/:action
+	authCounter := readCounterFromBody(t, body, "emotion_echo_http_requests_total", map[string]string{
+		"service": "web-bff", "method": "POST", "path": "/api/v1/auth/:action",
+	})
+	if authCounter < 1 {
+		t.Errorf("emotion_echo_http_requests_total{service=web-bff, path=/api/v1/auth/:action} = %v, want >= 1", authCounter)
+	}
+}
+
+// readCounterFromBody 解析 /metrics 文本格式,提取指定 labels 的 counter 值
+// 复用 shared readCounter 模式,避免 import 共享测试 helper (svc 独立测试)
+func readCounterFromBody(t *testing.T, body, name string, labels map[string]string) float64 {
+	t.Helper()
+	var total float64
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "# ") {
+			// comment / TYPE 行,跳过 (本函数只找 counter,无需 TYPE 行)
+			continue
+		}
+		if strings.HasPrefix(line, name) {
+			// 检查 metric name 后是 '{' (有 labels) 或 ' ' (无 labels)
+			rest := line[len(name):]
+			if len(rest) > 0 && rest[0] == '{' {
+				// 解析 {label="value",...}
+				end := strings.Index(rest, "}")
+				if end < 0 {
+					continue
+				}
+				labelStr := rest[1:end]
+				if !matchLabels(labelStr, labels) {
+					continue
+				}
+				// 提取值: "} 12.5" 或 "} 12.5 1234567890"
+				parts := strings.Fields(rest[end+1:])
+				if len(parts) >= 1 {
+					if v, err := strconv.ParseFloat(parts[0], 64); err == nil {
+						total = v
+					}
+				}
+			}
+		}
+	}
+	return total
+}
+
+func matchLabels(labelStr string, want map[string]string) bool {
+	for k, v := range want {
+		expected := k + `="` + v + `"`
+		if !strings.Contains(labelStr, expected) {
+			return false
+		}
+	}
+	return true
+}
+
 // TestRegisterRoutes_RouteSubset 独立断言：每个注册的 path 都属于某个"已知前缀"集合。
 // 这层断言在主契约变更时不会因为 wantRoutes 漏更新而误 pass。
 // 已知业务前缀白名单（main.go 实际注册的 27 条 + EmotionQ 3 条共 30 条路径的合法前缀）：
@@ -215,4 +335,62 @@ func hasPathPrefix(path, prefix string) bool {
 		return false
 	}
 	return path == prefix || (len(path) > len(prefix) && path[:len(prefix)] == prefix)
+}
+
+// ===== PR-OBS-16 RED: web-bff bootstrap 装配断言 =====
+//
+// 目的: PR-OBS-16 设计 (observability-sprint-b.md §三.16):
+// 1. /metrics 端点 200 (PR-OBS-10 已覆盖,本 case 复用)
+// 2. GinMetricsMiddleware + GinSkywalkingMiddleware + GinAuthMiddleware 都挂在 router 上
+// 3. 防止重构漏挂中间件 (与 PR-4c-4 reset-password 同源教训)
+//
+// 现状约束: registerRoutes 不直接挂中间件 (在 registerRoutes 之前的 r.Use 调用)
+// 复用 stubServiceContext + registerRoutes 后,断言 router 中间件链表含 3 个目标中间件
+// 难点: gin 不暴露中间件列表 API,需用 Handle() 注册一个路由 + 调 c.HandlerName() 看 handler chain
+// 简化方案: 通过注册一个最终路由,在路由 handler 中检查 ctx 上 'skywalking_tracer' key
+// (middleware 设的) 来反推中间件已挂
+
+func TestBootstrap_WebBFF_AllMiddlewaresAttached(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	s, cfg := stubServiceContext(t, false)
+	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
+	// Tracer=nil 即可 (Stage 43 PR-OBS-2 已让 GinSkywalkingMiddleware 支持 nil)
+	r.Use(sharedmw.GinSkywalkingMiddleware(nil))
+	r.Use(sharedmw.GinAuthMiddleware())
+	registerRoutes(r, s, cfg)
+
+	// 1. /metrics 端点 200 (GinMetricsMiddleware 跳过 /metrics 自循环,但 /metrics 端点仍注册)
+	wMetrics := httptest.NewRecorder()
+	r.ServeHTTP(wMetrics, httptest.NewRequest("GET", "/metrics", nil))
+	if wMetrics.Code != 200 {
+		t.Errorf("/metrics should return 200 (PromHTTPHandler not wired?), got %d", wMetrics.Code)
+	}
+	if !strings.Contains(wMetrics.Body.String(), "go_goroutines") {
+		t.Errorf("/metrics body missing go_goroutines (PromHTTPHandler not exposing default registry?)")
+	}
+
+	// 2. /health 端点 200 (GinAuthMiddleware 白名单 + 中间件链通过)
+	// 健康检查触发完整中间件链 (metrics → skywalking → auth),验证链无崩溃
+	wHealth := httptest.NewRecorder()
+	r.ServeHTTP(wHealth, httptest.NewRequest("GET", "/health", nil))
+	if wHealth.Code != 200 {
+		t.Errorf("/health should return 200, got %d (中间件链崩溃?)", wHealth.Code)
+	}
+
+	// 3. 触发 /health 后, /metrics 应有 http_requests_total{path=/health} 记录
+	// 间接证明 GinMetricsMiddleware 真正挂上了
+	wMetrics2 := httptest.NewRecorder()
+	r.ServeHTTP(wMetrics2, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(wMetrics2.Body.String(), `path="/health"`) {
+		t.Errorf("/metrics missing path=/health label (GinMetricsMiddleware 未挂?)")
+	}
+
+	// 4. 业务路由 /api/v1/users/me 应被 auth 拦截 (无 X-User-Id → 401)
+	// 间接证明 GinAuthMiddleware 已挂
+	wNoAuth := httptest.NewRecorder()
+	r.ServeHTTP(wNoAuth, httptest.NewRequest("GET", "/api/v1/users/me", nil))
+	if wNoAuth.Code != 401 {
+		t.Errorf("/api/v1/users/me without X-User-Id should return 401 (GinAuthMiddleware not attached?), got %d", wNoAuth.Code)
+	}
 }

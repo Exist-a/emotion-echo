@@ -17,6 +17,7 @@ package logging
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -101,6 +102,91 @@ func TestInitTo_Fields(t *testing.T) {
 	assert.Equal(t, "INFO", m["level"])
 	assert.Equal(t, "hello-fields", m["msg"])
 	assert.NotEmpty(t, m["time"], "JSON 输出应含 time 字段")
+}
+
+// ===== PR-OBS-15 RED: 5 case — 决策 6 必填 JSON 字段断言 =====
+//
+// 目的: PR-OBS-15 设计 (observability-sprint-b.md §三.15):
+// 1. ts 字段存在且 ISO8601 (现有 slog 自动加,直接 GREEN)
+// 2. level 字段存在 (现有 slog 自动加,直接 GREEN)
+// 3. svc 字段存在且等于 svcName (RED — 需加 helper)
+// 4. trace_id 字段存在 (RED — 需加 helper, 从 ctx 透传)
+// 5. action 字段存在 (RED — 需加 helper)
+//
+// 现状: shared/pkg/logging 当前输出 {time, level, msg, module} 4 字段
+//      缺 svc/trace_id/action (决策 6 审计要求必填)
+// GREEN 阶段需在 logging.go 加 WithSvc/WithTraceID/WithAction context helpers
+// 或扩展 API,让业务 svc 在 main 启动时 SetGlobalSvc 后所有 log 自动带 svc 字段
+
+// TestLogFields_TimestampField 测试 ts 字段存在且 ISO8601 格式
+// 现状: slog JSON handler 自动加 "time" 字段 (ISO8601),应直接 GREEN
+func TestLogFields_TimestampField(t *testing.T) {
+	var buf bytes.Buffer
+	InitTo(&buf)
+	slog.Info("ts-test")
+
+	m := parseLogLine(t, buf.String())
+	tsRaw, ok := m["time"].(string)
+	if !ok {
+		t.Fatal("JSON 输出缺 time 字段 (slog JSON handler 应自动加)")
+	}
+	// ISO8601 含 'T' 分隔日期时间
+	if !strings.Contains(tsRaw, "T") {
+		t.Errorf("time 字段不是 ISO8601 格式: %q", tsRaw)
+	}
+}
+
+// TestLogFields_LevelField 测试 level 字段存在
+func TestLogFields_LevelField(t *testing.T) {
+	var buf bytes.Buffer
+	InitTo(&buf)
+	slog.Warn("level-test")
+
+	m := parseLogLine(t, buf.String())
+	if got := m["level"]; got != "WARN" {
+		t.Errorf("level 字段 = %v, want WARN", got)
+	}
+}
+
+// TestLogFields_ServiceField 测试 svc 字段存在且匹配 svcName (RED — 待实现)
+func TestLogFields_ServiceField(t *testing.T) {
+	var buf bytes.Buffer
+	InitTo(&buf)
+	SetGlobalSvc("chat-svc")            // GREEN 阶段需实现
+	slog.Info("svc-test")
+
+	m := parseLogLine(t, buf.String())
+	if got := m["svc"]; got != "chat-svc" {
+		t.Errorf("svc 字段 = %v, want chat-svc (决策 6 审计必填)", got)
+	}
+}
+
+// TestLogFields_TraceIDField 测试 trace_id 字段从 ctx 透传 (RED — 待实现)
+func TestLogFields_TraceIDField(t *testing.T) {
+	var buf bytes.Buffer
+	InitTo(&buf)
+	SetGlobalSvc("chat-svc")
+	ctx := WithTraceID(context.Background(), "trace-abc-123") // GREEN 阶段需实现
+	slog.InfoContext(ctx, "trace-test")
+
+	m := parseLogLine(t, buf.String())
+	if got := m["trace_id"]; got != "trace-abc-123" {
+		t.Errorf("trace_id 字段 = %v, want trace-abc-123", got)
+	}
+}
+
+// TestLogFields_ActionField 测试 action 字段从 ctx 透传 (RED — 待实现)
+func TestLogFields_ActionField(t *testing.T) {
+	var buf bytes.Buffer
+	InitTo(&buf)
+	SetGlobalSvc("chat-svc")
+	ctx := WithAction(context.Background(), "user.login") // GREEN 阶段需实现
+	slog.InfoContext(ctx, "action-test")
+
+	m := parseLogLine(t, buf.String())
+	if got := m["action"]; got != "user.login" {
+		t.Errorf("action 字段 = %v, want user.login", got)
+	}
 }
 
 // TestPrintf_WithModulePrefix 验证 Printf 拆 [module] 前缀到 module 字段。
