@@ -24,6 +24,7 @@ import urllib.request
 PROMETHEUS = "http://localhost:9090"
 GRAFANA = "http://localhost:3000"
 LOKI = "http://localhost:3100"
+KAFKA_EXPORTER = "http://localhost:9308"
 
 # 期望的 scrape target 列表（prometheus.yml 静态 targets）
 # 与 deploy/prometheus/prometheus.yml 的 scrape_configs.static_configs 对齐
@@ -176,6 +177,96 @@ def main() -> int:
             )
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             check("grafana dashboard JSON parseable", False, f"{type(e).__name__}: {e}")
+
+    # ===== PR-OBS-7: Kafka consumer lag 监控 (接 Kafka Sprint A §1.4) =====
+
+    # 断言 8: kafka-exporter :9308/metrics 含 kafka_consumergroup_lag series
+    status, body = http_get(f"{KAFKA_EXPORTER}/metrics")
+    if status == 0:
+        check("kafka-exporter :9308/metrics reachable", False, body)
+    elif status != 200:
+        check("kafka-exporter :9308/metrics returns 200", False, f"HTTP {status}: {body[:100]}")
+    else:
+        has_lag = "kafka_consumergroup_lag" in body
+        check(
+            "kafka-exporter exposes kafka_consumergroup_lag series",
+            has_lag,
+            f"body_len={len(body)}, has_lag={has_lag}",
+        )
+
+    # 断言 9: prometheus scrape target 'kafka-exporter' UP
+    # 与 PR-OBS-4 scrape targets 共享 prometheus /api/v1/targets
+    status, body = http_get(f"{PROMETHEUS}/api/v1/targets?state=active")
+    if status == 200:
+        try:
+            data = json.loads(body)
+            active = data.get("data", {}).get("activeTargets", [])
+            up_jobs = {
+                t["labels"].get("job", "")
+                for t in active
+                if t.get("health") == "up"
+            }
+            check(
+                "prometheus scrape target 'kafka-exporter' UP",
+                "kafka-exporter" in up_jobs,
+                f"up_jobs={sorted(up_jobs)}",
+            )
+        except (json.JSONDecodeError, KeyError, TypeError):
+            pass  # 上面断言 1 已检过 JSON parse,跳过
+
+    # 断言 10: grafana dashboard 'kafka-consumer-lag' provisioned
+    status, body = http_get(
+        f"{GRAFANA}/api/dashboards/uid/kafka-consumer-lag",
+        headers={"Authorization": f"Basic {grafana_auth}"},
+    )
+    if status == 0:
+        check("grafana dashboard 'kafka-consumer-lag' API reachable", False, body)
+    elif status != 200:
+        check(
+            "grafana dashboard 'kafka-consumer-lag' returns 200",
+            False,
+            f"HTTP {status}: {body[:100]}",
+        )
+    else:
+        try:
+            data = json.loads(body)
+            panels = data.get("dashboard", {}).get("panels", [])
+            check(
+                "grafana dashboard 'kafka-consumer-lag' provisioned (>=3 panels)",
+                len(panels) >= 3,
+                f"title={data.get('dashboard', {}).get('title', '?')!r}, panels={len(panels)}",
+            )
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            check("grafana kafka-consumer-lag JSON parseable", False, f"{type(e).__name__}: {e}")
+
+    # 断言 11: prometheus alert rule 文件 KafkaConsumerGroupLagHigh 存在
+    # prometheus rules path 是 container 内路径,我们用 API 查询 rule_files + alerting rules
+    status, body = http_get(f"{PROMETHEUS}/api/v1/rules")
+    if status == 0:
+        check("prometheus /api/v1/rules reachable", False, body)
+    elif status != 200:
+        check("prometheus /api/v1/rules returns 200", False, f"HTTP {status}: {body[:100]}")
+    else:
+        try:
+            data = json.loads(body)
+            rule_groups = data.get("data", {}).get("groups", [])
+            # 查找 alert 名 KafkaConsumerGroupLagHigh
+            found_alert = False
+            for group in rule_groups:
+                for rule in group.get("rules", []):
+                    if (
+                        rule.get("type") == "alerting"
+                        and rule.get("name") == "KafkaConsumerGroupLagHigh"
+                    ):
+                        found_alert = True
+                        break
+            check(
+                "prometheus alert rule 'KafkaConsumerGroupLagHigh' loaded",
+                found_alert,
+                f"groups={len(rule_groups)}, total_rules={sum(len(g.get('rules', [])) for g in rule_groups)}",
+            )
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            check("prometheus rules JSON parseable", False, f"{type(e).__name__}: {e}")
 
     # ===== PR-OBS-5: Loki + Promtail 断言 =====
 

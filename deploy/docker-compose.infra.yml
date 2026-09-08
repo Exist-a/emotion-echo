@@ -315,11 +315,31 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # PR-OBS-7: alert rules 目录挂载 (Prometheus 自动加载 *.yml)
+      - ./prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     networks:
       - app-network
     depends_on:
       - apisix
+
+  # ===== PR-OBS-7: Kafka exporter (consumer lag 监控) =====
+  # 镜像: danielqsj/kafka-exporter:latest
+  # 暴露 :9308 metrics,自动发现 consumer group
+  # 启动: 随 obs profile 一同启动 (与 prometheus scrape 配套)
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: emotion-echo-kafka-exporter
+    profiles: ["obs"]
+    command:
+      - "--kafka.server=emotion-echo-kafka:9092"
+      - "--web.listen-address=:9308"
+    ports:
+      - "9308:9308"
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
 
   grafana:
     image: grafana/grafana:10.4.2
