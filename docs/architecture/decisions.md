@@ -320,6 +320,24 @@
 
 ---
 
+### 决策 20：环境配置分层策略（dev 本地 vs prod 远端）= **🟡 Proposed / 待决策**（2026-09-08）
+
+> 🟡 2026-09-08 立项，**待用户最终拍板**。详见 `adr-2026-09-env-profile-strategy.md`。
+>
+> **缘起**：Stage 57 批 3 收口时修 `SKYWALKING_ENABLED` 默认 false 的真 bug，触发"本项目到底要不要 dev/prod 分层"的内部讨论。**默认推荐方案**：候选 C（compose override 文件分层）+ apps.yml 用 `${VAR:-default}` 形式保持中性。
+>
+> **4 个候选**：
+> - A. 保持现状不分层（散落 dev 假设）——❌ 否决
+> - B. 单一 compose + env 驱动 ——🟡 部分接受（作为 C 的实施细节）
+> - C. override 文件分层（compose.dev.yml + compose.prod.yml + apps.yml 中性）——✅ **倾向**
+> - D. 启动脚本分流 ——❌ 否决（候选 C 的变体，丢失 compose 原生可读性）
+>
+> **关键差异清单**（13 项）：BFF 直连端口 / BFF_DEV_RETURN_CODE / SKYWALKING_ENABLED / KAFKA_ENABLED / AI profile / 日志级别 / JWT secret / Nacos 命名空间 / STARTUP_STRICT_DEPS / 数据持久化卷 / 资源限制 / TLS。
+>
+> **待决策问题**：候选 C 实施时机（立即落地 vs 等真要远端部署时做）+ `compose.prod.yml` 是建空壳还是写完整 + `BFF_DEV_RETURN_CODE` 默认值在 compose 文件里如何分布。
+
+---
+
 ## 🏗 当前架构全景
 
 ```
