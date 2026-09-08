@@ -834,14 +834,15 @@ Stage 43 Kafka Sprint A         ✅ DONE — 10 commit on `feat/chat-dev-event-p
                                   Sprint B (1.4 lag 监控 + 1.5 Protobuf 迁移) 在新分支独立推进。
                                   Sprint B §1.4 lag 监控已并入下方 Stage 44 observability-sprint-b.md。
 
-# Stage 44 · 观测链路 Sprint B（dev compose 三层补齐 + 测试护栏 + Kafka lag 收口）
-Stage 44 observability-sprint-b   ⏳ PLANNED — 合并 observability-compose-gap.md +
-                                  observability-testing-gap.md + Kafka Sprint A §1.4 三件事
-                                  为可执行 Sprint B,16 个 PR-OBS-X,见
-                                  [observability-sprint-b.md](../plans/observability-sprint-b.md)。
-                                  估 30-35 commit / 12-15 天。
-                                  启动条件:建 `feat/observability-sprint-b` 分支,按 4 批顺序推进
-                                  (基础 → infra → 测试 → 收口)。
+# Stage 44 · 观测链路 Sprint B 全收口（dev compose 三层补齐 + 测试护栏 + Kafka lag 收口）
+Stage 44 observability-sprint-b   ✅ DONE — 16 个 PR-OBS-X + 1 fix = 34 commit
+                                  全落地（2026-09-08），见
+                                  [stage-44-observability-sprint-b.md](../stages/stage-44-observability-sprint-b.md)。
+                                  基础设施层（PR-OBS-1~8）+ 测试护栏层（PR-OBS-9~16）100%。
+                                  ⚠️ 未做项:16 分支未 merge main / TracerInterface 抽象
+                                  (PR-OBS-12/13/14 完整 span tag) / 6 svc logging 接入 /
+                                  sw-oap telemetry / dev 环境 Nacos Restarting 阻塞实跑,
+                                  详见 stage-44 §四。
 ```
 
 ---
