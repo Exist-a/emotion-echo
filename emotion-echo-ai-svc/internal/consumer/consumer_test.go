@@ -539,6 +539,12 @@ func (s *mockSpan) Tag(key, value string) {
 	s.tagCalls = append(s.tagCalls, tagKV{key, value})
 }
 
+// SetComponent PR-OBS-19 扩展:mock 与接口对齐,OAP 实际不需要 mock 验证值
+func (s *mockSpan) SetComponent(componentID int32) {}
+
+// SetSpanLayer PR-OBS-19 扩展:mock 与接口对齐
+func (s *mockSpan) SetSpanLayer(layer int32) {}
+
 // 编译期断言: mockSpan 满足 grpcinterceptor.Span
 var _ grpcinterceptor.Span = (*mockSpan)(nil)
 
