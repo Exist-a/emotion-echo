@@ -50,6 +50,9 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+# Playwright E2E 测试运行时产物（不会被 git 跟踪，但显式 ignore 防止误提交）
+playwright-report/
+test-results/
 
 # ---------- 资源/模型文件（二进制，体积大，运行时按需下载） ----------
 *.vrm
