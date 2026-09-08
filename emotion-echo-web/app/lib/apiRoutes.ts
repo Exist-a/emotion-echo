@@ -66,17 +66,19 @@ export const API_ROUTES = {
   // PR-4 落地：BFF voice_handler + ai-svc multimodal kind=audio
   voiceUpload:            { method: 'POST', path: '/voice/upload' } as ApiRoute,
 
+  // ============ Uploads（Stage 58 PR-UP-1/2：通用上传）============
+  // BFF: POST /api/v1/uploads/:kind（kind ∈ image|video|file）
+  // Sprint 1 PR-2 时本路径是 orphan（前端 /upload/* 单数 + BFF /uploads/* 复数错位），
+  // Stage 58 PR-UP-1 BFF 真实现 + PR-UP-2 前端转正
+  uploadImage:            { method: 'POST', path: '/uploads/image' } as ApiRoute,
+  uploadVideo:            { method: 'POST', path: '/uploads/video' } as ApiRoute,
+  uploadFile:             { method: 'POST', path: '/uploads/file' } as ApiRoute,
+
   // ============ knownOrphans ============
   // 前端已调用但 BFF 端未注册（或 BFF 路径错位）。PR-4 落地后这些孤儿应转入主路径或加 handler。
   // 路径写在这里是为了让契约测试不误报，不构成对实现的承诺。
   knownOrphans: {
-    // BFF 是 POST /api/v1/uploads/:kind，前端 useFileUpload.ts 写单数 + 缺 /api/v1 前缀
-    uploadImageOrphan:  { method: 'POST', path: '/upload/image' } as ApiRoute,
-    uploadVideoOrphan:  { method: 'POST', path: '/upload/video' } as ApiRoute,
-    uploadFileOrphan:   { method: 'POST', path: '/upload/file' } as ApiRoute,
     // useFaceEmotion.ts 调 /face/emotion — 是死代码，Camera 抓拍走 /multimodal/analyze
     faceEmotionOrphan:  { method: 'POST', path: '/face/emotion' } as ApiRoute,
-    // /voice/upload 见主路径 voiceUpload —— PR-4 落地后从 orphan 转正（当前 BFF 缺）
-    // 不在这里重复登记，避免 (method, path) 重复
   },
 } as const

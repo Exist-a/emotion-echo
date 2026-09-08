@@ -38,14 +38,14 @@ const getFileType = (filename: string): FileType => {
  * 获取文件上传端点
  */
 const getUploadEndpoint = (type: FileType): string => {
-  // Sprint 1 PR-2: 改为 API_ROUTES knownOrphans 引用（PR-4 落地后应从 orphan 转正到主路径）
+  // Stage 58 PR-UP-2: 转正到主路径（原 knownOrphans 单数 /upload/* 改为 BFF 复数 /uploads/*）
   switch (type) {
     case 'image':
-      return API_ROUTES.knownOrphans.uploadImageOrphan.path
+      return API_ROUTES.uploadImage.path
     case 'video':
-      return API_ROUTES.knownOrphans.uploadVideoOrphan.path
+      return API_ROUTES.uploadVideo.path
     default:
-      return API_ROUTES.knownOrphans.uploadFileOrphan.path
+      return API_ROUTES.uploadFile.path
   }
 }
 
