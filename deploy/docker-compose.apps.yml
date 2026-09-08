@@ -451,7 +451,7 @@ services:
     image: emotion-echo/fer:v0.1.0
     container_name: emotion-echo-fer
     restart: unless-stopped
-    profiles: ["ai"]
+    # profiles: ["ai"]  # Stage 36-D Bug 6: 默认起（不藏在 profile 后）
     environment:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
@@ -487,7 +487,7 @@ services:
     image: emotion-echo/sensevoice:v0.1.0
     container_name: emotion-echo-sensevoice
     restart: unless-stopped
-    profiles: ["ai"]
+    # profiles: ["ai"]  # Stage 36-D Bug 6: 默认起（不藏在 profile 后）
     environment:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
@@ -520,6 +520,228 @@ services:
       # docker healthcheck restart_policy 在 /analyze 处理期间误杀。
       start_period: 300s
       retries: 5
+
+  # =====================================================
+  # Stage 22-A.3 XTTS（语音克隆 TTS）
+  #   profile: ai    （最重 ~3GB，Coqui-TTS 模型 + torch）
+  # =====================================================
+  emotion-echo-xtts:
+    build:
+      context: ../emotion-echo-models
+      dockerfile: XTTS/Dockerfile
+    image: emotion-echo/xtts:v0.1.0
+    container_name: emotion-echo-xtts
+    restart: unless-stopped
+    # profiles: ["ai"]  # Stage 36-D Bug 6: 默认起（不藏在 profile 后）
+    environment:
+      <<: *logging-env
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+    # Stage 33 PR-20: 端口收紧
+    expose:
+      - "8003"
+    volumes:
+      # 模型：本地已下载到 ../../emotion-echo-models/XTTS/AI-ModelScope/XTTS-v2
+      # Dockerfile COPY 已包含，但 dev 可覆盖挂载
+      - sensevoice-cache:/app/cache   # 复用 cache 卷
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"        # Coqui TTS CPU 推理吃核
+          memory: 3072M      # ~2GB 模型 + room
+        reservations:
+          cpus: "0.5"
+          memory: 1024M
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=2)\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 180s    # 模型加载慢
+      retries: 3
+
+  # =====================================================
+  # Stage 30 / stage-30-web-bff.md: emotion-echo-web-bff
+  # 前后端唯一 BFF（替代 APISIX 16 条 1:1 路由）
+  # 聚合 5 下游 + XTTS + ai-svc gRPC；自有 mock 鉴权签发 JWT
+  # =====================================================
+  emotion-echo-web-bff:
+    build:
+      context: ..
+      dockerfile: emotion-echo-web-bff/Dockerfile
+    image: emotion-echo/web-bff:v0.1.0
+    container_name: emotion-echo-web-bff
+    restart: unless-stopped
+    depends_on:
+      - emotion-echo-user-svc
+      - emotion-echo-chat-svc
+      - emotion-echo-assessment-svc
+      - emotion-echo-analytics-svc
+      - emotion-echo-ai-svc
+      # Stage 32 PR-14: 修复 service key 引用（service key 是 `nacos`，container_name 才是 `emotion-echo-nacos`）
+      - nacos
+    environment:
+      <<: *logging-env
+      # Stage 31 PR-11: Nacos 注册中心 + 配置中心
+      NACOS_ENABLED:   "true"
+      NACOS_ADDR:      "emotion-echo-nacos:8848"
+      NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
+      NACOS_HOT_RELOAD: "false"
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      GIN_MODE: release
+      # 下游容器 DNS（ApplyEnvOverrides 覆盖 yaml 默认值）
+      USER_SVC_URL:        "http://emotion-echo-user-svc:8888"
+      CHAT_SVC_URL:        "http://emotion-echo-chat-svc:8890"
+      ASSESSMENT_SVC_URL:  "http://emotion-echo-assessment-svc:8889"
+      ANALYTICS_SVC_URL:   "http://emotion-echo-analytics-svc:8893"
+      AI_SVC_HTTP_URL:     "http://emotion-echo-ai-svc:8891"
+      AI_SVC_GRPC_ADDR:    "emotion-echo-ai-svc:8892"
+      XTTS_BASE_URL:       "http://emotion-echo-xtts:8003"
+      SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"
+      # Sprint 1 PR-4c-4: dev 模式回显 verification-code，便于 e2e 走通 forget-pwd。
+      # commit msg 928bed2 承诺"前端 console 显示"但前端从未实现，这里补 BFF 侧。
+      # prod 部署必须删掉这行（保持默认关闭）。
+      BFF_DEV_RETURN_CODE: ${BFF_DEV_RETURN_CODE:-1}
+      # Stage 32 PR-14: BFF_JWT_SECRET 由 APISIX jwt-auth 统一管理，BFF 不再需要
+      # Stage 32 PR-16: BFF_TRUST_APISIX=true 时 BFF 信任 APISIX 注入的 X-User-Id header，
+      # 不再做 JWT 解析。dev 默认 true；本地直连 BFF 调试时可设 false（保留兼容路径）
+      BFF_TRUST_APISIX:    ${BFF_TRUST_APISIX:-true}
+      # Phase D：真实 LLM（DeepSeek/OpenAI 兼容）。本地 dev 留空 → ai_stream 走 mock 共情回复
+      # 真实部署：写 deploy/env/.env.local（**git ignore**），不要 commit 真实 key
+      BFF_LLM_API_KEY:     ${BFF_LLM_API_KEY:-}
+      BFF_LLM_BASE_URL:    ${BFF_LLM_BASE_URL:-https://api.deepseek.com}
+      BFF_LLM_MODEL:       ${BFF_LLM_MODEL:-deepseek-chat}
+    # Stage 33 PR-20: BFF 端口保留（dev 调试 / Postman 直连；prod 应仅暴露 APISIX）
+    ports:
+      - "8894:8894"
+    volumes:
+      - ../emotion-echo-web-bff/etc/web-bff.yaml:/app/etc/web-bff.yaml:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 -O /dev/null http://localhost:8894/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  # =====================================================
+  # APISIX 路由 seed（一次性 init 容器，2026-09-04 新增）
+  #
+  # 背景：APISIX 的 upstream / route / consumer 全靠 deploy/apisix/seed.sh 注入
+  # Admin API，而该脚本此前**只能人工执行**。实测后果：compose up 之后 APISIX
+  # 里 routes 数 = 0，前端（走网关）每个请求都 404 —— 且从表象看很像"前端路径
+  # 写错"，极难定位。
+  #
+  # 本容器让 seed 随 compose up 自动跑：
+  #   - 依赖 6 个业务 svc healthy（seed 内部还会再探一次 /health）
+  #   - restart: "no" —— 一次性任务，跑完退出；失败不重启，避免刷屏掩盖错误
+  #   - seed.sh 全幂等（PUT 同 id），重复 up 不会产生重复路由
+  #
+  # 镜像用 curlimages/curl（含 curl，体积小）；seed.sh 已去掉 python 依赖，
+  # 只需 sh + curl。DOCKER_NETWORK="" 让脚本跳过"起探测容器"分支，
+  # 直接用容器内 curl 探下游（容器本就在 app-network 内，DNS 可解）。
+  # =====================================================
+  emotion-echo-apisix-seed:
+    image: curlimages/curl:latest
+    container_name: emotion-echo-apisix-seed
+    restart: "no"
+    depends_on:
+      emotion-echo-user-svc:
+        condition: service_healthy
+      emotion-echo-chat-svc:
+        condition: service_healthy
+      emotion-echo-assessment-svc:
+        condition: service_healthy
+      emotion-echo-analytics-svc:
+        condition: service_healthy
+      emotion-echo-ai-svc:
+        condition: service_healthy
+      emotion-echo-web-bff:
+        condition: service_healthy
+    environment:
+      # 容器内走服务名 + 容器端口（宿主机的 19080/9180 映射在这里不适用）
+      APISIX_ADMIN_URL: "http://apisix:9180"
+      APISIX_ADMIN_KEY: "${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
+      BFF_JWT_SECRET: "${BFF_JWT_SECRET:-dev-bff-secret}"
+      NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
+      NACOS_GROUP: "${NACOS_GROUP:-DEFAULT_GROUP}"
+      # 浏览器侧来源：容器化前端仍从宿主机 :3000 访问
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+      # 置空 = 不起 docker 探测容器（本容器已在网络内，且无 docker socket）
+      DOCKER_NETWORK: ""
+    volumes:
+      - ./apisix/seed.sh:/seed/seed.sh:ro
+    entrypoint: ["sh", "/seed/seed.sh"]
+    networks:
+      - app-network
+
+  # =====================================================
+  # Stage 30: emotion-echo-web 前端
+  #   2026-09-04：API base 由 BFF :8894 改为 APISIX :19080。
+  #   决策 11/12 规定网关是唯一业务入口，鉴权/限流/熔断/CORS 只在 APISIX 做；
+  #   原先直连 BFF 会整体绕过鉴权层（BFF 自身不验签，只信任 X-User-Id）。
+  #   :19080 是 APISIX 的宿主映射端口——SPA 在浏览器执行，必须用宿主可达地址。
+  #   依赖 apisix-seed 跑完，否则网关无路由、前端全 404。
+  # =====================================================
+  emotion-echo-web:
+    # Stage 36-FU Bug 9 closure: profiles: ["never"] removed.
+    # emotion-echo-web/Dockerfile now accepts NPM_REGISTRY build arg
+    # (defaults to https://registry.npmjs.org/), so the container builds
+    # without depending on registry.npmmirror.com (which is unreachable
+    # inside Docker on Windows hosts). The previous "TEMP: skip until
+    # Bug 9 (npmmirror) is fixed" was a Band-Aid that left Bug 9 partial
+    # per stage-36-smoke-report.md §九.
+    build:
+      context: ../emotion-echo-web
+      dockerfile: Dockerfile
+      args:
+        # SPA 纯前端：API_BASE_URL 在浏览器执行，需宿主可达地址。
+        # APISIX 宿主映射为 19080→9080（9080 在 Windows 上被 NahimicService 占用，
+        # 见 docker-compose.infra.yml:222 注释）。
+        NUXT_PUBLIC_API_BASE_URL: "${NUXT_PUBLIC_API_BASE_URL:-http://localhost:19080/api/v1}"
+        # Bug 9: default to public npmjs; override via build-arg in restricted networks
+        NPM_REGISTRY: https://registry.npmjs.org/
+    image: emotion-echo/web:v0.1.0
+    container_name: emotion-echo-web
+    restart: unless-stopped
+    depends_on:
+      # 网关必须先有路由，否则前端全 404
+      emotion-echo-apisix-seed:
+        condition: service_completed_successfully
+    environment:
+      <<: *logging-env
+      NUXT_PUBLIC_API_BASE_URL: "${NUXT_PUBLIC_API_BASE_URL:-http://localhost:19080/api/v1}"
+      NUXT_PUBLIC_DISABLE_AUTH: "false"
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
 # =====================================================
 # 网络：external，连接到 infra compose 定义的 app-network
