@@ -907,7 +907,7 @@ Stage 49 grpc-tracing-rpc-tags     ✅ DONE — PR-OBS-19 2 commit（2026-09-08�
                                      sw-oap telemetry + 阻塞型 Nacos + backlog。
 ```
 
-# Stage 50 · 观测链路 Sprint B 端到端落地验证
+# Stage 50 · 观测链路 Sprint B 端到端落地验证 + 问题发现
 Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
                                      见 [stage-50-e2e-validation.md](../stages/stage-50-e2e-validation.md)。
                                      验证本轮 5 stage (Stage 45-49) 端到端:
@@ -920,6 +920,8 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
                                      ⚠️ 5 svc 镜像重建滞后(stage-44 §四 §A 阻塞),
                                      Stage 47/48/49 main.go 改动需 16 分支 merge main
                                      + build_dev_images.sh 重建后生效。
+                                     问题清单 (6 项) §九:镜像滞后/Nacos/promtail/
+                                     Loki warmup/smoke 覆盖缺 ×2。
 ```
 
 ---

@@ -30,10 +30,11 @@ related-commits:
   - ce240dc feat(shared): GREEN PR-OBS-19 ServerTracingInterceptor 打 rpc.* + SetSpanLayer/Component
 ---
 
-# Stage 50 · 观测链路 Sprint B 端到端落地验证
+# Stage 50 · 观测链路 Sprint B 端到端落地验证 + 问题发现
 
-> **本文档归档本轮 5 个 stage（Stage 45-49）的端到端验证结果**。
-> 14 个 commit 落地业务功能 6/6 步收口，端到端测试结果诚实标注。
+> **本文档归档本轮 5 个 stage（Stage 45-49）的端到端验证结果 + 端到端测试
+> 过程发现的问题清单**。14 个 commit 落地业务功能 6/6 步收口，端到端测试结果
+> 诚实标注；6 项新发现的问题按严重程度排序，给后续接力者明确解锁路径。
 
 ## 一、端到端测试总览
 
@@ -362,6 +363,81 @@ func (s *Go2SkySpan) SetComponent(id int32) {
 | G. Kafka Sprint A §3 历史 SQL | ⏳ 运维窗口 | DBA 排期 |
 | H. Sprint B 范围外 backlog | ⏳ 多 PR | gRPC 化 / TTS / 文件上传 |
 
+## 九、端到端验证发现的问题（接力者必读）
+
+本节列出本轮端到端测试**新发现**的问题（与 stage-44 §四 未做项区分），
+按"严重程度 + 解锁路径"排序。
+
+### 🔴 问题 1：5 svc 镜像滞后于代码改动（阻塞本轮验证完整性）
+
+- **现状**：
+  - 本轮 14 commit 全部在分支上（`feat/observability-OBS-{15,17,18,19,23}-*`），**未 merge main**
+  - `emotion-echo/{chat,user,assessment,analytics,ai,web-bff}:v0.1.0` 镜像是 stage-44 收口时（2026-09-08 早）构建的
+  - 实际 docker logs 显示 ai-svc 日志只有 `time/level/msg/module` 4 字段，**缺 `svc`/`trace_id`/`action`**
+- **影响**：Stage 47 logging 接入在生产路径**未生效**（仅单元测试 + 本机 go run 验证）
+- **解锁路径**：
+  1. 16 OBS 分支 merge main（PR-OBS-1 ~ PR-OBS-19 共 19 分支）
+  2. `bash scripts/build_dev_images.sh` 重建 6 svc 镜像
+  3. `docker compose -f deploy/docker-compose.apps.yml up -d --force-recreate`
+- **参考**：stage-44 §四 §A "16 分支 merge main" + 本文档 §五
+
+### 🟡 问题 2：5 svc 因 Nacos ephemeral 注册 500 持续 Restarting
+
+- **现状**：
+  - `emotion-echo-{chat,user,assessment,analytics,ai}-svc` 全部 `Restarting (1) X seconds ago`
+  - 错误：`[nacos] Register: discovery: register <svc>/0.0.0.0:PORT: retry 3 times request failed!: request return error code 500`
+  - 影响：prometheus scrape targets 仅 3/7 UP（apisix/web-bff/kafka-exporter）+ OAP UI 无 trace 上报
+- **影响**：
+  - smoke_observability.py 1 项 FAIL（`prometheus scrape targets >= 6 UP`）
+  - 本轮 Stage 46/49 HTTP/gRPC trace 端到端实跑无法触发（svc 不响应 /metrics）
+- **解锁路径**：修复 Nacos ephemeral 注册逻辑（参见 [docs/plans/nacos-enablement-dev.md](/docs/plans/nacos-enablement-dev.md)）
+- **参考**：stage-44 §四 §E "PR-OBS-4/5 干净环境实跑（Nacos 阻塞）"
+
+### 🟡 问题 3：promtail volume mount 配置错误（stage-44 §四 §E 预存）
+
+- **现状**：
+  - `deploy/docker-compose.infra.yml` promtail 段：`./tmp/apisix-access.log:/var/log/apisix-access.log:ro`
+  - 实际效果：host 的 `./tmp/apisix-access.log` **作为目录**挂到 container `/var/log/apisix-access.log`
+  - promtail config：`__path__: /var/log/apisix-access.log`（文件路径）
+  - 结果：promtail 持续报错 `failed to tail file: file is a directory`
+- **影响**：Loki 收不到 apisix access.log（其他 log 流仍可通过 docker sd 或 stdout 采集，但本配置未启用）
+- **解锁路径**：
+  - 选项 A：把 host 文件路径改为文件名（如 `./tmp/apisix-access.log/file:/var/log/apisix-access.log/file:ro`）—— 不优雅
+  - 选项 B：promtail config 改用 `__path__: /var/log/apisix-access.log/**/*`（含通配符匹配目录内容）—— 需要 promtail 实际有内容
+  - 选项 C：改用 docker sd（`/var/lib/docker/containers`）自动采集 container stdout —— 需要重建 promtail config
+- **推荐**：选项 C（与 deploy/loki/promtail-config.yaml 注释"未来扩展 container stdout"一致）
+- **参考**：stage-44 §四 §E + [deploy/loki/promtail-config.yaml](/deploy/loki/promtail-config.yaml)
+
+### 🟡 问题 4：Loki Ingester warmup 窗口
+
+- **现状**：
+  - smoke 启动后立刻跑：loki `/ready` 返 503 `Ingester not ready: waiting for 15s after being ready`
+  - 等 30s 后再查：返 200 ✅
+- **影响**：smoke_observability.py 1 项 FAIL（loki ready）
+- **解锁路径**：smoke 启动后 `sleep 30` 再跑（不是 bug，是 startup 时序）
+- **建议**：在 `scripts/smoke_observability.py` 开头加 `time.sleep(30)` 或 `wait_for_ready()` helper
+
+### 🟢 问题 5：smoke_observability.py 未验证 svc 日志 svc/trace_id 字段
+
+- **现状**：
+  - 当前 smoke 12 项断言覆盖：prometheus/grafana/loki/kafka-exporter/APISIX/runbook
+  - **不覆盖**：6 svc 容器日志 JSON 是否含 `svc`/`trace_id`/`action`（决策 6 必填字段）
+- **影响**：Stage 47 logging 接入没有运行时端到端护栏（仅靠单元测试 + 本机 go run）
+- **解锁路径**：
+  - 加 case：起一个 svc 触发 handler，调 Loki 查询 `{svc="<name>"}` 验证 streams > 0
+  - 或加 case：调 OTel/Loki `/loki/api/v1/query` 验证 svc 字段过滤
+- **建议 PR**：本 stage-50 后续可加（独立 PR，约 30 行 Python）
+
+### 🟢 问题 6：smoke_observability.py 未验证 OAP UI 收到 rpc.* tag
+
+- **现状**：
+  - 当前 smoke 不验证 sw-oap `getAllServices` / `queryTrace` 返回的 span tag
+  - Stage 49 gRPC rpc.* tag 仅单元测试覆盖
+- **解锁路径**：
+  - 修复问题 2（Nacos）后，触发一个真实 gRPC 调用，调 sw-oap GraphQL `queryTrace(traceIds)` 断言 tag
+  - 加 case：`POST /graphql { queryTrace(traceId: "...") { spans { tags { key value } } } }` 期望含 `rpc.system` / `rpc.method`
+- **建议 PR**：与问题 5 一并（30-50 行 Python）
+
 ## 九、本轮 5 stage 端到端总结
 
 ```
@@ -381,3 +457,23 @@ Stage 49  (PR-OBS-19 gRPC rpc.* tag)   ✅ 41/41 单元测试 PASS (Server/Clien
 ```
 
 **结论**：本轮 5 stage 在代码 + 单元测试层**100% 落地且可验证**。docker 端到端 2 个 FAIL 均为预存问题（Nacos + Loki warmup），与本轮 5 stage 无关。**当 16 OBS 分支 merge main + `build_dev_images.sh` 重建镜像后，本轮所有改动自动生效，无需任何额外 PR**。
+
+## 十、问题清单索引（§九 摘要）
+
+| # | 严重度 | 问题 | 解锁路径 | 估时 |
+|---|---|---|---|---|
+| 1 | 🔴 阻塞 | 5 svc 镜像滞后于代码改动 | 16 OBS 分支 merge main + `build_dev_images.sh` | 多 PR（机械合并 + 重建 ~30 分钟）|
+| 2 | 🟡 阻塞 | Nacos ephemeral 注册 500 → 5 svc Restarting | [nacos-enablement-dev.md](/docs/plans/nacos-enablement-dev.md) 修复 | 多 PR（独立 Sprint）|
+| 3 | 🟡 配置错 | promtail volume mount 把文件当目录 | promtail config 改 docker sd 采集 stdout | 1-2 小时 |
+| 4 | 🟡 时序 | Loki Ingester 15s warmup | smoke 加 `sleep 30` 或 `wait_for_ready()` | 5 分钟 |
+| 5 | 🟢 覆盖缺 | smoke 不验 svc 日志 svc/trace_id/action 字段 | 加 Loki query case | 30 分钟 |
+| 6 | 🟢 覆盖缺 | smoke 不验 OAP UI 收到 rpc.* tag | 加 sw-oap GraphQL queryTrace case | 30-50 分钟 |
+
+**问题 1 + 2 是项目级阻塞**（不在单次长任务可解决范围）。**问题 3 + 4 是基础设施配置**，可快速修复。**问题 5 + 6 是测试覆盖补全**，可增强端到端护栏。
+
+**给后续接力者的最短路径**：
+1. 修问题 4（5 分钟）→ smoke 立即 11/12 PASS
+2. 修问题 3（1-2 小时）→ smoke 12/12 PASS + Loki 真正能查 svc 日志
+3. 修问题 1（多 PR）→ 镜像重建，本轮改动生效，OAP UI 收到 rpc.* tag
+4. 修问题 2（独立 Sprint）→ 端到端实跑完整解锁
+5. 补问题 5 + 6（1 小时）→ smoke 增加 Stage 47/49 护栏

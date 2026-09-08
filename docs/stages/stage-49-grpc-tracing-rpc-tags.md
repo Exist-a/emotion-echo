@@ -172,14 +172,24 @@ stage-46 §四 原话：
 | 业务层 handler 主动打业务 tag | backlog | 取决于各 handler 拿到 span 的便捷性 |
 | gRPC stream interceptor（Stage 19 没覆盖）| backlog | 业务路径未用 stream RPC |
 
-## 六、Stage 50 端到端验证（落地）
+## 六、Stage 50 端到端验证 + 问题发现（落地）
 
-[Stage 50](/docs/stages/stage-50-e2e-validation.md) 已完成本轮 5 stage 的端到端验证：
+[Stage 50](/docs/stages/stage-50-e2e-validation.md) 已完成本轮 5 stage 的端到端验证 + 6 项问题发现：
 
+**验证**：
 - 单元测试层：grpcinterceptor 41/41 + middleware 24/24 + logging 10/10 + ai-svc consumer 14/14 全 PASS
 - Stage 47 logging helper 本机直接 run 验证：JSON 输出含 svc / trace_id / action / msg / msg_id 6 字段
 - dev compose smoke_observability.py：10/12 PASS（2 项 Nacos/warmup 阻塞与本轮无关）
-- ⚠️ 5 svc 镜像滞后：Stage 47/48/49 main.go 改动需 `build_dev_images.sh` 重建（待 stage-44 §四 §A 16 分支 merge main 后）
+
+**问题清单**（按严重程度排序）：
+1. 🔴 5 svc 镜像滞后于代码改动（阻塞本轮验证完整性，需 16 OBS 分支 merge main + 重建镜像）
+2. 🟡 5 svc 因 Nacos ephemeral 注册 500 持续 Restarting（预存问题，与本轮无关）
+3. 🟡 promtail volume mount 配置错误（预存问题，与本轮无关）
+4. 🟡 Loki Ingester warmup 时序（smoke 加 sleep 即可）
+5. 🟢 smoke 未覆盖 svc 日志 svc/trace_id/action 字段断言
+6. 🟢 smoke 未覆盖 OAP UI 收到 rpc.* tag 断言
+
+**解锁最短路径**：修问题 4 → 3 → 1 → 2，过程中补问题 5/6 作为护栏。
 
 ## 六、与 Stage 44 §四 的对账
 
