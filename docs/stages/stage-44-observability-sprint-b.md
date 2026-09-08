@@ -197,6 +197,14 @@ fix/seed-test-nacos-discovery-naming
 
 - ✅ 步骤 3（完整）：GinSkywalkingMiddleware 创建 EntrySpan + 4 个 http.* / user_id tag 精确断言
 
+**🟢 PR-OBS-23（2026-09-08）handler err 透传**：
+
+[Stage 48](/docs/stages/stage-48-handler-err-propagate.md) 已落地：
+
+- ✅ span.EndSpan 从总是 nil 改为 buildSpanError(c) 三段判定（c.Errors / status>=500 / nil）
+- ✅ OAP UI 可直接过滤 5xx + error 维度
+- ✅ 不改 handler 现状（c.JSON(500, ...) 通过 status 兜底）
+
 剩余（PR-OBS-19）：
 - ⏳ ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor
 

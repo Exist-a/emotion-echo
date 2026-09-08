@@ -656,3 +656,13 @@ GinSkywalkingMiddleware 调 `logging.WithTraceID` 注入 Request ctx。Loki 日�
 可按 svc + trace_id 过滤（决策 6 字段闭环）。
 
 详细归档：[Stage 47](/docs/stages/stage-47-logging-helper-apply.md)
+
+---
+
+## 附录 D · Stage 48 PR-OBS-23 handler err 透传落地
+
+Stage 46 §二.2.3 落地：GinSkywalkingMiddleware EndSpan 从总是 nil 改为
+buildSpanError(c) 三段判定（c.Errors / status>=500 / nil）。OAP UI 可直接
+过滤 5xx + error 维度；不改 handler 现状（c.JSON(500, ...) 通过 status 兜底）。
+
+详细归档：[Stage 48](/docs/stages/stage-48-handler-err-propagate.md)

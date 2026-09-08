@@ -880,6 +880,18 @@ Stage 47 logging-helper-apply        ✅ DONE — PR-OBS-15 2 commit（2026-09-0
                                      剩余未做:PR-OBS-19/23/20。
 ```
 
+# Stage 48 · PR-OBS-23 handler err 透传 span.EndSpan(err) 收口
+Stage 48 handler-err-propagate      ✅ DONE — PR-OBS-23 2 commit（2026-09-08）
+                                     见 [stage-48-handler-err-propagate.md](../stages/stage-48-handler-err-propagate.md)。
+                                     落地:GinSkywalkingMiddleware EndSpan 从总是 nil
+                                     改为 buildSpanError(c) 三段判定(c.Errors /
+                                     status>=500 / nil),OAP UI 可直接过滤
+                                     5xx + error 维度;不改 handler 现状
+                                     (c.JSON(500, ...) 通过 status 兜底)。
+                                     剩余未做:PR-OBS-19 (gRPC interceptor,
+                                     需 go-zero 桥接)+ backlog 业务 tag。
+```
+
 ---
 
 # 下一步行动
