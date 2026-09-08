@@ -845,6 +845,18 @@ Stage 44 observability-sprint-b   ✅ DONE — 16 个 PR-OBS-X + 1 fix = 34 comm
                                   详见 stage-44 §四。
 ```
 
+# Stage 45 · PR-OBS-17 完整 trace 抽象收口（TracerInterface + Span.Tag 接口 + ai-svc 4 tag 精确断言）
+Stage 45 observability-sprint-b   ✅ DONE — PR-OBS-17 4 commit（2026-09-08）
+   regression                       见 [stage-45-observability-sprint-b-regression.md](../stages/stage-45-observability-sprint-b-regression.md)。
+                                  落地:Tracer.CreateLocalSpan + Span.Tag 接口扩展 +
+                                  Go2Sky adapter + 3 处签名变更走接口 + 6 svc main.go
+                                  机械改 NewGo2SkyTracer 包装 + ai-svc Kafka consumer
+                                  4 个 messaging.* tag 精确断言（mockSpan.tagCalls）。
+                                  PR-OBS-12/13/14 完整收口的步骤 1~3 落地（接口 +
+                                  consumer tag 断言），业务路径 tag（http.*/rpc.*/user_id）
+                                  留作 PR-OBS-18/19。
+```
+
 ---
 
 # 下一步行动

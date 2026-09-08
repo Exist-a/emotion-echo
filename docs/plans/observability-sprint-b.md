@@ -623,3 +623,14 @@ main
 - [Loki 单机模式](https://grafana.com/docs/loki/latest/operations/storage/filesystem/)
 - [AGENTS.md §〇](/AGENTS.md)（本 plan 的 TDD 与调研约定）
 - [Stage 43 Kafka 收口 §四](/docs/stages/stage-43-kafka-reliability-sprint-a.md)（本 plan 的 §1.4 来源）
+
+---
+
+## 附录 A · Stage 44 §四 B 部分收口（PR-OBS-17）
+
+Stage 44 §四 B 标注的"PR-OBS-12/13/14 完整 span tag 断言"由 PR-OBS-17 部分落地：
+
+- **已落地**：Tracer/Span 接口扩展（Tag + CreateLocalSpan）+ Go2Sky adapter + 3 处签名变更走接口 + 6 svc main.go 包装 + ai-svc Kafka consumer 4 个 messaging.* tag 精确断言（mock-based）
+- **未落地（PR-OBS-18+）**：GinSkywalkingMiddleware 创建真实 EntrySpan + http.method/url/status_code/user_id tag；ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor
+
+详细归档：[Stage 45](/docs/stages/stage-45-observability-sprint-b-regression.md)
