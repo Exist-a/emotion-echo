@@ -845,31 +845,16 @@ Stage 44 observability-sprint-b   ✅ DONE — 16 个 PR-OBS-X + 1 fix = 34 comm
                                   详见 stage-44 §四。
 ```
 
-# Stage 45-50 · 观测链路 Sprint B 业务功能 6/6 步全收口 + 端到端验证
-Stage 45 PR-OBS-17 收口           ✅ DONE — TracerInterface + Span.Tag + ai-svc 4 tag 断言,
-   observability-sprint-b-        见 [stage-45-observability-sprint-b-regression.md](../stages/stage-45-observability-sprint-b-regression.md)
-   regression
-Stage 46 PR-OBS-18 Gin EntrySpan   ✅ DONE — GinSkywalkingMiddleware 创建 EntrySpan + 4 tag,
-                                  见 [stage-46-observability-gin-entry-span.md](../stages/stage-46-observability-gin-entry-span.md)
-Stage 47 PR-OBS-15 logging 接入    ✅ DONE — 6 svc main.go 调 Init/SetGlobalSvc + middleware WithTraceID,
-                                  见 [stage-47-logging-helper-apply.md](../stages/stage-47-logging-helper-apply.md)
-Stage 48 PR-OBS-23 handler err     ✅ DONE — EndSpan 从总是 nil 改为 buildSpanError 三段判定,
-                                  见 [stage-48-handler-err-propagate.md](../stages/stage-48-handler-err-propagate.md)
-Stage 49 PR-OBS-19 gRPC rpc.* tag  ✅ DONE — Server/ClientTracingInterceptor 打 5/4 项,
-                                  见 [stage-49-grpc-tracing-rpc-tags.md](../stages/stage-49-grpc-tracing-rpc-tags.md)
-Stage 50 e2e validation           ✅ DONE — 端到端验证归档 + 6 项问题清单,
-                                  见 [stage-50-e2e-validation.md](../stages/stage-50-e2e-validation.md)
-
-# Stage 51 · 路线 Z 第 1 批合并归档（parked 等 dev Nacos 修复）
-Stage 51 batch-1-infra-merged    ⏸ PARKED — feat/observability-batch-1-infra 领先 main 42 commit
-                                  (PR-OBS-1/2/3/4/5/6/7/8 + O-1 sw-oap telemetry)
-                                  单测 100% 绿, merge 无冲突。
-                                  ⛔ smoke_data_layer.py 未跑通 (dev 5 svc Nacos ephemeral 500 Restarting,
-                                  阻塞根因: stage-44 §四 E + docs/plans/nacos-enablement-dev.md §二,
-                                  与本批无关,是 stage-44 记录的独立 Sprint)。
-                                  解锁路径: 修 Nacos → 干净环境 smoke 10/10 → rebuild 5 svc 镜像
-                                  → 端到端冒烟 → 合 main → 推路线 Z 第 2/3 批。
-                                  详见 [stage-51-batch-1-infra-merged.md](../stages/stage-51-batch-1-infra-merged.md)。
+# Stage 45 · PR-OBS-17 完整 trace 抽象收口（TracerInterface + Span.Tag 接口 + ai-svc 4 tag 精确断言）
+Stage 45 observability-sprint-b   ✅ DONE — PR-OBS-17 4 commit（2026-09-08）
+   regression                       见 [stage-45-observability-sprint-b-regression.md](../stages/stage-45-observability-sprint-b-regression.md)。
+                                  落地:Tracer.CreateLocalSpan + Span.Tag 接口扩展 +
+                                  Go2Sky adapter + 3 处签名变更走接口 + 6 svc main.go
+                                  机械改 NewGo2SkyTracer 包装 + ai-svc Kafka consumer
+                                  4 个 messaging.* tag 精确断言（mockSpan.tagCalls）。
+                                  PR-OBS-12/13/14 完整收口的步骤 1~3 落地（接口 +
+                                  consumer tag 断言），业务路径 tag（http.*/rpc.*/user_id）
+                                  留作 PR-OBS-18/19。
 ```
 
 ---

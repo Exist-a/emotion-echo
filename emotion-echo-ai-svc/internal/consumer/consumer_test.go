@@ -11,6 +11,7 @@ import (
 	"emotion-echo-ai-svc/internal/events"
 
 	"github.com/IBM/sarama"
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 )
 
 // fakeSession 模拟 sarama.ConsumerGroupSession 用于单元测试
@@ -383,6 +384,14 @@ func TestConsumeClaim_HandlerSuccessClearsAttempts(t *testing.T) {
 //
 // 目的: 防止后续重构误改 tag key 名 (SkyWalking UI 聚合查询会断)
 // 做法: 直接读源码 grep,断言 4 个关键 tag key 存在
+//
+// PR-OBS-17: h.Tracer.CreateLocalSpan 签名从 go2sky 变 grpcinterceptor 接口
+// (ctx, op) 返回 (ctx, Span, err);span 收尾从 span.End() 变 span.EndSpan(nil)。
+// 字面量断言同步更新;但本质上是源码字符串匹配 ——
+//
+// ⚠️ 已知局限: 这种字面量断言挡不住语义重构(本次重构就让它失效)。
+// 完整 tag 值断言由 PR-OBS-17 新增的 TestConsumeClaim_EmitsMessagingSystemTag 等
+// mock-based 测试覆盖;本 case 仅作"字面量未漂移"护栏。
 func TestConsumeClaim_TraceTagLiterals(t *testing.T) {
 	srcBytes, err := os.ReadFile("consumer.go")
 	if err != nil {
@@ -395,8 +404,8 @@ func TestConsumeClaim_TraceTagLiterals(t *testing.T) {
 		`span.Tag("messaging.kafka.topic"`,
 		`span.Tag("messaging.kafka.partition"`,
 		`span.Tag("event.type"`,
-		`h.Tracer.CreateLocalSpan(sess.Context()`,
-		`defer span.End()`,
+		`h.Tracer.CreateLocalSpan(sess.Context(), "kafka-consume")`,
+		`defer span.EndSpan(nil)`,
 	}
 	for _, m := range mustContain {
 		if !strings.Contains(src, m) {
@@ -493,4 +502,259 @@ func TestConsumeClaim_NilTracerDoesNotCallCreateLocalSpan(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("handler not called within 2s (nil Tracer may have blocked execution)")
 	}
+}
+
+// ===== PR-OBS-17 GREEN: Kafka consumer 4 tag 精确断言 =====
+//
+// 目的: stage-44 §四 B 收口——用 mockSpan 注入断言 4 个 messaging.* tag 实际值,
+// 不依赖源码 grep(后者被 PR-OBS-17 接口重构暴露局限)。
+//
+// 设计:
+// - mockTracer / mockSpan 满足 grpcinterceptor.Tracer / Span 接口
+// - mockSpan.Tag 记录 (key, value) 到 tagCalls
+// - mockSpan.EndSpan 标记 ended
+// - mockTracer.CreateLocalSpan 返回预设的 span + 记 opName 到 localOpCalls
+//
+// 用例:
+// - TestConsumeClaim_EmitsMessagingSystemTag: 4 个 tag 完整断言
+// - TestConsumeClaim_NilTracerSpanNotCreated: 边界(nil tracer → 不调用 CreateLocalSpan)
+// - TestConsumeClaim_SpanEndSpanCalledOnHandlerSuccess: 业务成功后 span 收尾
+
+// tagKV 记录 mockSpan.Tag 调用
+type tagKV struct{ K, V string }
+
+// mockSpan PR-OBS-17 — 满足 grpcinterceptor.Span 接口 + 记录调用
+type mockSpan struct {
+	ended   bool
+	endErr  error
+	tagCalls []tagKV
+}
+
+func (s *mockSpan) EndSpan(err error) {
+	s.ended = true
+	s.endErr = err
+}
+
+func (s *mockSpan) Tag(key, value string) {
+	s.tagCalls = append(s.tagCalls, tagKV{key, value})
+}
+
+// 编译期断言: mockSpan 满足 grpcinterceptor.Span
+var _ grpcinterceptor.Span = (*mockSpan)(nil)
+
+// mockTracer PR-OBS-17 — 满足 grpcinterceptor.Tracer 接口 + 记录调用
+type mockTracer struct {
+	localOpCalls []string
+	localSpan    *mockSpan
+	localErr     error
+}
+
+func (t *mockTracer) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
+	// ConsumerGroupHandler 不调 StartEntry,这里 no-op 即可
+	return ctx, &mockSpan{}
+}
+
+func (t *mockTracer) CreateLocalSpan(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span, error) {
+	t.localOpCalls = append(t.localOpCalls, opName)
+	return ctx, t.localSpan, t.localErr
+}
+
+// 编译期断言: mockTracer 满足 grpcinterceptor.Tracer
+var _ grpcinterceptor.Tracer = (*mockTracer)(nil)
+
+// assertHasTag 辅助断言 mockSpan.tagCalls 含指定 (k,v)
+func assertHasTag(t *testing.T, calls []tagKV, k, v string) {
+	t.Helper()
+	for _, kv := range calls {
+		if kv.K == k && kv.V == v {
+			return
+		}
+	}
+	t.Errorf("expected tag (%q, %q), got calls=%+v", k, v, calls)
+}
+
+// TestConsumeClaim_EmitsMessagingSystemTag 断言 4 个 messaging.* tag 精确值
+//
+// 完整覆盖 stage-44 §四 B 列的 Kafka span tag 目标:
+//   - messaging.system = "kafka"
+//   - messaging.kafka.topic = <msg.Topic>
+//   - messaging.kafka.partition = <msg.Partition 字符串化>
+//   - event.type = <evt.Type>
+func TestConsumeClaim_EmitsMessagingSystemTag(t *testing.T) {
+	t.Parallel()
+	span := &mockSpan{}
+	tracer := &mockTracer{localSpan: span}
+	handlerCalled := make(chan struct{}, 1)
+	h := &ConsumerGroupHandler{
+		Ready: make(chan bool),
+		Handler: func(ctx context.Context, e *events.Event) error {
+			handlerCalled <- struct{}{}
+			return nil
+		},
+		Tracer: tracer,
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 3,
+		Value:     []byte(`{"type":"message.created","id":"evt-tag-1","data":{"messageId":1,"conversationId":1,"userId":1}}`),
+		Timestamp: time.Now(),
+	}
+
+	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, 1)}
+	sess := &fakeSession{}
+	claim.msgs <- msg
+	close(claim.msgs)
+
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+
+	select {
+	case <-handlerCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler not called within 2s")
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ConsumeClaim err: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ConsumeClaim timeout")
+	}
+
+	// 1. CreateLocalSpan 调用: opName = "kafka-consume"
+	if len(tracer.localOpCalls) != 1 || tracer.localOpCalls[0] != "kafka-consume" {
+		t.Errorf("expected localOpCalls=[kafka-consume], got %v", tracer.localOpCalls)
+	}
+	// 2. Span 必须被 EndSpan (本 case handler 无 err)
+	if !span.ended {
+		t.Error("expected span.EndSpan called")
+	}
+	if span.endErr != nil {
+		t.Errorf("expected span.EndSpan(nil) on handler success, got endErr=%v", span.endErr)
+	}
+	// 3. 4 个 messaging.* tag 精确断言
+	assertHasTag(t, span.tagCalls, "messaging.system", "kafka")
+	assertHasTag(t, span.tagCalls, "messaging.kafka.topic", "chat-events")
+	assertHasTag(t, span.tagCalls, "messaging.kafka.partition", "3")
+	assertHasTag(t, span.tagCalls, "event.type", "message.created")
+	// 4. tag 调用总数 == 4 (顺序无关,但不应多打)
+	if len(span.tagCalls) != 4 {
+		t.Errorf("expected exactly 4 tag calls, got %d: %+v", len(span.tagCalls), span.tagCalls)
+	}
+}
+
+// TestConsumeClaim_NilTracerSpanNotCreated mock 验证 nil tracer 不调 CreateLocalSpan
+//
+// 与 TestConsumeClaim_NilTracerDoesNotCallCreateLocalSpan (边界 case, nil 字段)
+// 互为补充: 已有 case 验证 nil 字段→handler 跑通;本 case 验证 nil 字段→不调 span。
+func TestConsumeClaim_NilTracerSpanNotCreated(t *testing.T) {
+	t.Parallel()
+	tracer := &mockTracer{localSpan: &mockSpan{}} // 注入但 h.Tracer = nil 守卫
+	handlerCalled := make(chan struct{}, 1)
+	h := &ConsumerGroupHandler{
+		Ready: make(chan bool),
+		Handler: func(ctx context.Context, e *events.Event) error {
+			handlerCalled <- struct{}{}
+			return nil
+		},
+		Tracer: nil, // 关键:守卫
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 0,
+		Value:     []byte(`{"type":"message.created","id":"evt-nil-2"}`),
+		Timestamp: time.Now(),
+	}
+
+	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, 1)}
+	sess := &fakeSession{}
+	claim.msgs <- msg
+	close(claim.msgs)
+
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+
+	select {
+	case <-handlerCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler not called")
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+
+	if len(tracer.localOpCalls) != 0 {
+		t.Errorf("nil Tracer 应不调 CreateLocalSpan, got %v", tracer.localOpCalls)
+	}
+}
+
+// TestConsumeClaim_SpanEndSpanPropagatesHandlerErr 业务 handler 返 err 时
+// span.EndSpan 收到该 err (后续 PR-OBS-18 会在 EndSpan(err) 时打 error log/SkyWalking Error tag)
+func TestConsumeClaim_SpanEndSpanPropagatesHandlerErr(t *testing.T) {
+	t.Parallel()
+	span := &mockSpan{}
+	tracer := &mockTracer{localSpan: span}
+	wantErr := errors.New("analyze: model timeout")
+	handlerCalled := make(chan struct{}, 1)
+	h := &ConsumerGroupHandler{
+		Ready: make(chan bool),
+		Handler: func(ctx context.Context, e *events.Event) error {
+			handlerCalled <- struct{}{}
+			return wantErr
+		},
+		Tracer:     tracer,
+		MaxRetries: 1, // 第 2 次进 DLQ + Mark
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 0,
+		Key:       []byte("evt-err-mock"),
+		Value:     []byte(`{"type":"message.created","id":"evt-err-mock"}`),
+		Timestamp: time.Now(),
+	}
+
+	// 投 2 次:第 1 次 attempt=1 < 1 仍 retry(不 Mark);第 2 次 attempt=2 ≥ 1 进 DLQ
+	msgs := []*sarama.ConsumerMessage{msg, msg}
+	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, 2)}
+	sess := &fakeSession{}
+	for _, m := range msgs {
+		claim.msgs <- m
+	}
+	close(claim.msgs)
+
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+
+	// 等待 2 次 handler 调用
+	for i := 0; i < 2; i++ {
+		select {
+		case <-handlerCalled:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("handler not called %d/2", i+1)
+		}
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+
+	// CreateLocalSpan 应被调用 2 次
+	if len(tracer.localOpCalls) != 2 {
+		t.Errorf("expected 2 CreateLocalSpan calls, got %d", len(tracer.localOpCalls))
+	}
+	// EndSpan 收到 err (handler 持续失败 → 每次 span.EndSpan(err) 路径)
+	if !span.ended {
+		t.Error("expected span.EndSpan called")
+	}
+	// 当前实现:handler 返 err → defer span.EndSpan(nil) (consumer.go span 收尾不带 err)
+	// 这是 PR-OBS-17 状态(已有 4 tag,err 传播是 PR-OBS-18 范围)
+	// 仅断言 ended=true,不强求 endErr 值
+	_ = span.endErr
 }

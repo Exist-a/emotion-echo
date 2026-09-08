@@ -183,6 +183,18 @@ fix/seed-test-nacos-discovery-naming
   4. mockSpan + mockTracer 实现 + 完整 span tag 断言（user_id/rpc.method/messaging.*）
 - 估 1-2 天，独立 PR
 
+**🟡 PR-OBS-17（2026-09-08）部分收口**：
+
+[Stage 45](/docs/stages/stage-45-observability-sprint-b-regression.md) 已落地：
+
+- ✅ 步骤 1+2：`Tracer.CreateLocalSpan` + `Span.Tag` 接口扩展 + Go2Sky adapter
+- ✅ 步骤 3（部分）：GinSkywalkingMiddleware / ConsumerGroupHandler 改用接口（行为零变化）
+- ✅ 步骤 4（部分）：ai-svc Kafka consumer 4 个 messaging.* tag 精确断言（mockSpan.tagCalls）
+
+剩余（PR-OBS-18/19）：
+- ⏳ GinSkywalkingMiddleware 创建真实 EntrySpan + http.method/url/status_code/user_id tag
+- ⏳ ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor
+
 ### ❌ C. PR-OBS-15 6 svc 接入 logging helper
 
 - 现状：shared/pkg/logging 已有 SetGlobalSvc + WithTraceID/WithAction + enrichHandler，测试 5 case 全 PASS
