@@ -122,11 +122,16 @@ docker compose -f docker-compose.infra.yml ps
 
 ```bash
 # 6 Go svc + emotion-llm-service + ai-svc + BFF
-docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d --no-build
+# ADR-20 Stage 58 起：dev 启动必须加 -f compose.dev.yml（dev override 层）
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml up -d --no-build
 
-# （可选）启动 AI profile（FER / SenseVoice / XTTS）
-docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml --profile ai up -d --no-build emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
+# （可选）启动 AI profile（FER / SenseVoice / XTTS）— 前提是镜像已构建
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml --profile ai up -d --no-build emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
 ```
+
+> 📋 **环境配置分层（ADR-20）**：详见 [`deploy/configuration.md`](deploy/configuration.md)。
+> 简版：`apps.yml` 是中性基线，`compose.dev.yml` 覆盖 dev 假设（BFF 8894 端口 / 验证码回显 / CORS 等），
+> `compose.prod.yml` 是远端部署占位（待真部署时填具体值）。所有 env 变量支持 `${VAR:-default}` 形式覆盖。
 
 ### 步骤 5：验证联通
 
@@ -187,7 +192,7 @@ docker compose -f docker-compose.infra.yml down --volumes   # 同时删卷（**�
 
 ```bash
 cd deploy
-docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d --no-build
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml up -d --no-build
 ```
 
 **本地开发模式**（需要 go.mod / go.work）：
@@ -342,7 +347,7 @@ docker compose -f docker-compose.infra.yml up -d
 **终端 2：业务应用**
 ```powershell
 cd deploy
-docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml up -d --no-build
+docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml up -d --no-build
 ```
 
 **终端 3：（可选）AI profile**
