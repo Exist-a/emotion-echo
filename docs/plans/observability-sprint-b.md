@@ -646,3 +646,13 @@ Stage 44 §四 B 步骤 3 完整收口：GinSkywalkingMiddleware 创建 EntrySpa
 - **未落地（PR-OBS-19）**：ServerTracingInterceptor 打 rpc.method/rpc.system + 5 svc gRPC server 接入 shared interceptor
 
 详细归档：[Stage 46](/docs/stages/stage-46-observability-gin-entry-span.md)
+
+---
+
+## 附录 C · Stage 47 PR-OBS-15 6 svc logging helper 接入落地
+
+Stage 44 §四 C 落地：6 svc main.go 全调 `logging.Init()` + `SetGlobalSvc("<name>")`，
+GinSkywalkingMiddleware 调 `logging.WithTraceID` 注入 Request ctx。Loki 日志
+可按 svc + trace_id 过滤（决策 6 字段闭环）。
+
+详细归档：[Stage 47](/docs/stages/stage-47-logging-helper-apply.md)

@@ -28,6 +28,7 @@ import (
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
@@ -65,6 +66,10 @@ func applyEnvOverrides(c *config.Config) {
 
 func main() {
 	flag.Parse()
+
+	// PR-OBS-15: structured slog JSON to stdout + svc 字段(决策 6 必填)
+	sharedlogging.Init()
+	sharedlogging.SetGlobalSvc("user-svc")
 
 	var c config.Config
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })

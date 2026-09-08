@@ -207,6 +207,17 @@ fix/seed-test-nacos-discovery-naming
 - 落地后 Loki 日志查询可按 svc/trace_id/action 过滤
 - 估半天，独立 PR
 
+**🟢 PR-OBS-15（2026-09-08）已落地**：
+
+[Stage 47](/docs/stages/stage-47-logging-helper-apply.md) 已落地：
+
+- ✅ 6 svc main.go 全部调 `logging.Init()` + `logging.SetGlobalSvc("<name>")`（含 ai/web-bff re-export 补全）
+- ✅ GinSkywalkingMiddleware 调 `logging.WithTraceID` 注入 Request ctx（X-Trace-Id header 路径）
+- ✅ 接入层契约测试 `TestMain_FilesInvokeInitAndSetGlobalSvc`（RED → GREEN）
+- ✅ middleware 端到端测试 `TestGinSkywalkingMiddleware_InjectsTraceIDIntoRequestContext`
+
+Loki 日志现在可按 `svc="<name>"` + `trace_id="<id>"` 过滤（决策 6 字段闭环）。
+
 ### ❌ D. sw-oap telemetry 未启用
 
 - `SW_TELEMETRY=prometheus` 未加到 docker-compose.infra.yml sw-oap env

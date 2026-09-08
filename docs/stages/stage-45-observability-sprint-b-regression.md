@@ -131,6 +131,7 @@ func (t *Go2SkyTracer) CreateLocalSpan(ctx, op) (context.Context, Span, error) {
 | 项 | 估 | 依赖 |
 |---|---|---|
 | ~~PR-OBS-18 GinSkywalkingMiddleware 创建 EntrySpan + http.method/url/status_code/user_id tag~~ | ~~半天~~ ✅ Stage 46 | — |
+| ~~PR-OBS-15 6 svc 接入 logging helper SetGlobalSvc + WithTraceID/WithAction~~ | ~~半天~~ ✅ Stage 47 | — |
 | PR-OBS-19 ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor | 1-1.5 天 | 接口已就位（Stage 45）|
 | PR-OBS-19 顺带：span.SetSpanLayer(agentv3.SpanLayer_HTTP/GRPC) + SetComponent | 半天 | 需扩 Span 接口 |
 | PR-OBS-23 handler err 透传到 span.EndSpan(err) | 半天 | c.Next wrap 拿 c.Errors() |

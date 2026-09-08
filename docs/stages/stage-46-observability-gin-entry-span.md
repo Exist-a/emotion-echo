@@ -136,7 +136,7 @@ func GinSkywalkingMiddleware(tracer grpcinterceptor.Tracer) gin.HandlerFunc {
 | PR-OBS-19 顺带：`span.SetSpanLayer(agentv3.SpanLayer_HTTP/GRPC)` + `SetComponent` | 半天 | 需扩 Span 接口加 SetSpanLayer/SetComponent |
 | PR-OBS-23 handler err 透传到 span.EndSpan(err) | 半天 | c.Next wrap 拿 c.Errors() + status >= 500 判定 |
 | PR-OBS-20 业务层 tag（ai-svc fusion kind / chat-svc message length / analytics-svc chart source）| backlog | 取决于 PR-OBS-19 业务 handler 是否能拿到 span |
-| PR-OBS-15 6 svc 接入 logging helper SetGlobalSvc + WithTraceID/WithAction | 半天 | 独立 P1（stage-44 §四 C）|
+| ~~PR-OBS-15 6 svc 接入 logging helper SetGlobalSvc + WithTraceID/WithAction~~ | ~~半天~~ ✅ Stage 47 | — |
 
 ## 五、与 Stage 44 §四 B 的对账
 
