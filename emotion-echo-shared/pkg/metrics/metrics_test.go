@@ -117,6 +117,122 @@ func TestGinMetricsMiddleware_DifferentServicesIndependent(t *testing.T) {
 		"service": svcB, "method": "GET", "path": "/api/v1/health", "status": "200",
 	})
 
+	// ===== PR-OBS-9 RED: 4 个 metrics 契约增强 case =====
+	// 目的: 防止后续重构漏挂 /metrics + Content-Type 漂移 + histogram bucket 缺失
+	// (与 PR-4c-4 reset-password 同源教训: 单测绿 ≠ 端到端通)
+	//
+	// 期望覆盖:
+	// 1. PromHTTPHandler Content-Type 是 text/plain;version=0.0.4 (Prometheus 文本格式)
+	// 2. /metrics 端点暴露关键 series: http_requests_total + http_request_duration_seconds + go_goroutines
+	// 3. histogram bucket series 存在 (emotion_echo_http_request_duration_seconds_bucket)
+	// 4. /metrics 自循环 N 次请求不增 counter (强化现有 SkipsMetricsRoute)
+
+	// PR-OBS-9 case 1: PromHTTPHandler Content-Type = text/plain;version=0.0.4
+	// (现有 TestPromHTTPHandler_ServesMetrics 只断言 200 + body 含 series 名,未验 Content-Type)
+	// 期望 Content-Type = "text/plain; version=0.0.4; charset=utf-8" (promhttp 默认)
+	t.Run("Content-Type is Prometheus text format", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		r := gin.New()
+		r.GET("/metrics", gin.WrapH(PromHTTPHandler()))
+
+		req := httptest.NewRequest("GET", "/metrics", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("want 200, got %d", w.Code)
+		}
+		ct := w.Header().Get("Content-Type")
+		if !strings.HasPrefix(ct, "text/plain") {
+			t.Errorf("Content-Type should start with text/plain (Prometheus exposition format), got %q", ct)
+		}
+		if !strings.Contains(ct, "version=0.0.4") {
+			t.Errorf("Content-Type should contain Prometheus version=0.0.4, got %q", ct)
+		}
+	})
+
+	// PR-OBS-9 case 2: /metrics 暴露 3 个关键 series (请求总数 / 延迟直方图 / goroutines)
+	t.Run("exposes all 3 critical series", func(t *testing.T) {
+		const svc = "test-svc-critical-series"
+		gin.SetMode(gin.TestMode)
+		r := gin.New()
+		r.Use(GinMetricsMiddleware(svc))
+		r.GET("/health", func(c *gin.Context) { c.String(200, "ok") })
+		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/health", nil))
+
+		r2 := gin.New()
+		r2.GET("/metrics", gin.WrapH(PromHTTPHandler()))
+		w := httptest.NewRecorder()
+		r2.ServeHTTP(w, httptest.NewRequest("GET", "/metrics", nil))
+		body := w.Body.String()
+
+		mustContain := []string{
+			"emotion_echo_http_requests_total",                     // counter
+			"emotion_echo_http_request_duration_seconds",            // histogram (sum/count/bucket)
+			"go_goroutines",                                          // 进程级 metric
+		}
+		for _, m := range mustContain {
+			if !strings.Contains(body, m) {
+				t.Errorf("/metrics missing critical series %q", m)
+			}
+		}
+	})
+
+	// PR-OBS-9 case 3: histogram bucket series 存在 (emotion_echo_http_request_duration_seconds_bucket)
+	t.Run("histogram bucket series present", func(t *testing.T) {
+		const svc = "test-svc-bucket"
+		gin.SetMode(gin.TestMode)
+		r := gin.New()
+		r.Use(GinMetricsMiddleware(svc))
+		r.GET("/api/v1/test", func(c *gin.Context) { c.String(200, "ok") })
+		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/v1/test", nil))
+
+		r2 := gin.New()
+		r2.GET("/metrics", gin.WrapH(PromHTTPHandler()))
+		w := httptest.NewRecorder()
+		r2.ServeHTTP(w, httptest.NewRequest("GET", "/metrics", nil))
+		body := w.Body.String()
+
+		// histogram bucket 形如: emotion_echo_http_request_duration_seconds_bucket{...,le="0.005"}
+		// 必须含 _bucket 后缀 + le label
+		if !strings.Contains(body, "emotion_echo_http_request_duration_seconds_bucket") {
+			t.Errorf("/metrics missing histogram bucket series, body_len=%d", len(body))
+		}
+		if !strings.Contains(body, `le="`) {
+			t.Errorf("/metrics missing histogram le label")
+		}
+		// 至少要有 11 个 bucket (与 metrics.go:50 buckets 定义对齐)
+		bucketCount := strings.Count(body, "_bucket{")
+		if bucketCount < 11 {
+			t.Errorf("histogram bucket count = %d, want >= 11 (per metrics.go Buckets def)", bucketCount)
+		}
+	})
+
+	// PR-OBS-9 case 4: /metrics 自循环 N 次 (强化现有 SkipsMetricsRoute)
+	// 现有 case 只测 1 次,无法发现\"中间件逻辑漂移\"(如新增 path 检查但漏写)
+	t.Run("self-loop 100x does not increment counter", func(t *testing.T) {
+		const svc = "test-svc-self-loop"
+		gin.SetMode(gin.TestMode)
+		r := gin.New()
+		r.Use(GinMetricsMiddleware(svc))
+		r.GET("/metrics", gin.WrapH(PromHTTPHandler()))
+
+		before := readCounter(t, "emotion_echo_http_requests_total", map[string]string{
+			"service": svc, "method": "GET", "path": "/metrics", "status": "200",
+		})
+
+		for i := 0; i < 100; i++ {
+			r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/metrics", nil))
+		}
+
+		after := readCounter(t, "emotion_echo_http_requests_total", map[string]string{
+			"service": svc, "method": "GET", "path": "/metrics", "status": "200",
+		})
+		if after != before {
+			t.Errorf("100x /metrics should NOT increment counter, but before=%v after=%v", before, after)
+		}
+	})
+
 	if a < 5 {
 		t.Errorf("svcA counter = %v, want >= 5", a)
 	}
