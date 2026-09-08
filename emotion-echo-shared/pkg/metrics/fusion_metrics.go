@@ -86,3 +86,32 @@ var FusionLRUStat = promauto.NewGaugeVec(
 	},
 	[]string{"kind"},
 )
+
+// ===== PR-OBS-11: fusion 整体调用 metrics =====
+//
+// 与 Stage 35 emotion_fusion_llm_call_total / _llm_latency_seconds 区分:
+//   - LLMCall/LLMLatency: LLM stage specific (fusion 内部一阶段)
+//   - CallsTotal/DurationSeconds: fusion 整体入口 (跨多模态: text/face/voice/fused)
+//
+// label 选择:
+//   - modality: 输入模态 (text/face/voice/fused) — 用于按模态分析
+//   - result: success/failure/skipped_lru/circuit_open — 用于按结果分析
+//
+// FusionCallsTotal fusion 整体调用次数。
+var FusionCallsTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "emotion_fusion_calls_total",
+		Help: "Total number of fusion calls, labeled by modality and result.",
+	},
+	[]string{"modality", "result"},
+)
+
+// FusionDurationSeconds fusion 整体调用耗时 histogram (跨多模态)。
+var FusionDurationSeconds = promauto.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "emotion_fusion_duration_seconds",
+		Help:    "Histogram of fusion call latency in seconds, labeled by modality.",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+	},
+	[]string{"modality"},
+)
