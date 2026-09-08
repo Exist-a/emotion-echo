@@ -50,11 +50,21 @@ type Config struct {
 	// Stage 36-A3.2: ai-svc gRPC 地址（dev fallback 同步写中性情绪用）。
 	// 空 = 不启用 dev fallback（保持 NoopAIClient），与 KAFKA_ENABLED 组合决定是否调 ai-svc。
 	AIService AIService
+
+	// Stage 58 PR-GRPC-3：chat-svc 自身 gRPC server 配置（暴露 ChatService 给 BFF）。
+	// Port=0 表示不启动 gRPC server（向后兼容老 yaml）。
+	GRPC GRPCServer
 }
 
 // AIService ai-svc 客户端配置（Stage 36-A3.2）
 type AIService struct {
 	GRPCAddr string
+}
+
+// GRPCServer chat-svc 暴露的 gRPC server 配置（Stage 58 PR-GRPC-3）
+type GRPCServer struct {
+	Enabled bool
+	Port    int
 }
 
 // SetDefaults 填零值字段的默认值（shared/pkg/config.MustLoad 契约）。
@@ -97,5 +107,11 @@ func SetDefaults(c *Config) {
 	}
 	if c.AIService.GRPCAddr == "" {
 		c.AIService.GRPCAddr = "emotion-echo-ai-svc:8892"
+	}
+	// Stage 58 PR-GRPC-3：默认启用 chat-svc gRPC server（:8892），
+	// 与 ai-svc :8892 端口对齐（不同 svc，端口命名空间隔离）。
+	// 老 yaml 无 GRPC 段时 Port=0 不启动；新 yaml 显式给 :8892 才生效。
+	if c.GRPC.Port == 0 && c.GRPC.Enabled {
+		c.GRPC.Port = 8892
 	}
 }

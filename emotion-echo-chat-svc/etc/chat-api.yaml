@@ -42,3 +42,9 @@ Nacos:
 AIService:
   GRPCAddr: emotion-echo-ai-svc:8892
 
+# Stage 58 PR-GRPC-3: chat-svc 自身 gRPC server 配置（暴露 ChatService 给 BFF）。
+# Port 设为 0 或 Enabled=false 时不启动（向后兼容老 yaml）。
+GRPC:
+  Enabled: true
+  Port:    8892
+

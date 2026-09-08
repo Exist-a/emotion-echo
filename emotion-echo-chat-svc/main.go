@@ -22,6 +22,7 @@ import (
 	"emotion-echo-chat-svc/internal/outbox"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
+	"emotion-echo-chat-svc/internal/grpcserver"
 
 	"github.com/SkyAPM/go2sky"
 	"github.com/gin-gonic/gin"
@@ -252,6 +253,20 @@ func main() {
 		}
 		os.Exit(0)
 	}()
+
+	// Stage 58 PR-GRPC-3：双轨启动 — Gin HTTP (:8890) + gRPC (:8892)
+	// gRPC 端口从 yaml GRPC.Port 读；空则不启动（向后兼容老 yaml）
+	grpcPort := c.GRPC.Port
+	if grpcPort > 0 && svcCtx != nil {
+		gs := grpcserver.New(svcCtx, grpcPort)
+		go func() {
+			if err := gs.Start(bootCtx); err != nil {
+				log.Printf("[grpc] chat-svc gRPC server failed: %v", err)
+			}
+		}()
+	} else {
+		log.Printf("[grpc] chat-svc gRPC server 跳过（GRPC.Port=%d, svcCtx=%v）", grpcPort, svcCtx != nil)
+	}
 
 	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {
 		log.Fatalf("[gin] server crashed: %v", err)

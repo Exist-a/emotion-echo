@@ -145,9 +145,10 @@ services:
       KAFKA_BROKERS:       emotion-echo-kafka:9092
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"
-    # Stage 33 PR-20: 端口收紧
+    # Stage 58 PR-GRPC-3：gRPC server 暴露 :8892（BFF gRPC 客户端连这个端口）
     expose:
       - "8890"
+      - "8892"
     volumes:
       - ../emotion-echo-chat-svc/etc/chat-api.yaml:/app/etc/chat-api.yaml:ro
     networks:
