@@ -451,7 +451,7 @@ services:
     image: emotion-echo/fer:v0.1.0
     container_name: emotion-echo-fer
     restart: unless-stopped
-    # profiles: ["ai"]  # Stage 36-D Bug 6: 默认起（不藏在 profile 后）
+    profiles: ["ai"]
     environment:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
@@ -487,7 +487,7 @@ services:
     image: emotion-echo/sensevoice:v0.1.0
     container_name: emotion-echo-sensevoice
     restart: unless-stopped
-    # profiles: ["ai"]  # Stage 36-D Bug 6: 默认起（不藏在 profile 后）
+    profiles: ["ai"]
     environment:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
@@ -532,7 +532,7 @@ services:
     image: emotion-echo/xtts:v0.1.0
     container_name: emotion-echo-xtts
     restart: unless-stopped
-    # profiles: ["ai"]  # Stage 36-D Bug 6: 默认起（不藏在 profile 后）
+    profiles: ["ai"]
     environment:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
