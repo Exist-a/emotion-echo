@@ -6,8 +6,8 @@ date: 2026-09-08
 related-plans:
   - observability-sprint-b.md (Sprint B 工作定义,本批含其 §〇 PR-OBS-1/2/3/4/5/6/7/8)
 related-stages:
-  - stage-44-observability-sprint-b.md §四 E (dev Nacos 阻塞,合并闸门)
-  - stage-50-e2e-validation.md §九.1 (镜像滞后与本批同源)
+  - feat/observability-OBS-1 分支上 stage-44-observability-sprint-b.md §四 E (dev Nacos 阻塞,合并闸门 — 文档在 OBS 分支未合并 main,引用 §节号即可)
+  - feat/observability-OBS-19 分支上 stage-50-e2e-validation.md §九.1 (镜像滞后与本批同源 — 同上)
 related-decisions:
   - decisions.md 决策 6 (JSON 日志 + trace_id 串联)
 branch: feat/observability-batch-1-infra
@@ -240,8 +240,8 @@ Stage 47/48/49 的 main.go 改动才会真正生效。本批不解决 §九.1。
 ### ② 查相关 ADR / stage
 - decisions.md 决策 6（JSON 日志 + trace_id 串联，PR-OBS-15 落地）
 - decisions.md 决策 10/11/12/13（Nacos + APISIX 治理演进）
-- docs/stages/stage-44-observability-sprint-b.md §四（PR-OBS-1~16 拆分依据）
-- docs/stages/stage-50-e2e-validation.md §九（5 svc mirror 滞后同源）
+- feat/observability-OBS-1 分支上 stage-44-observability-sprint-b.md §四（PR-OBS-1~16 拆分依据 — 文档在 OBS 分支未合并 main）
+- feat/observability-OBS-19 分支上 stage-50-e2e-validation.md §九（5 svc mirror 滞后同源 — 同上）
 - docs/plans/nacos-enablement-dev.md §二（Nacos 阻塞根因）
 
 ### ③ 跑现状 smoke
