@@ -383,6 +383,14 @@ func TestConsumeClaim_HandlerSuccessClearsAttempts(t *testing.T) {
 //
 // 目的: 防止后续重构误改 tag key 名 (SkyWalking UI 聚合查询会断)
 // 做法: 直接读源码 grep,断言 4 个关键 tag key 存在
+//
+// PR-OBS-17: h.Tracer.CreateLocalSpan 签名从 go2sky 变 grpcinterceptor 接口
+// (ctx, op) 返回 (ctx, Span, err);span 收尾从 span.End() 变 span.EndSpan(nil)。
+// 字面量断言同步更新;但本质上是源码字符串匹配 ——
+//
+// ⚠️ 已知局限: 这种字面量断言挡不住语义重构(本次重构就让它失效)。
+// 完整 tag 值断言由 PR-OBS-17 新增的 TestConsumeClaim_EmitsMessagingSystemTag 等
+// mock-based 测试覆盖;本 case 仅作"字面量未漂移"护栏。
 func TestConsumeClaim_TraceTagLiterals(t *testing.T) {
 	srcBytes, err := os.ReadFile("consumer.go")
 	if err != nil {
@@ -395,8 +403,8 @@ func TestConsumeClaim_TraceTagLiterals(t *testing.T) {
 		`span.Tag("messaging.kafka.topic"`,
 		`span.Tag("messaging.kafka.partition"`,
 		`span.Tag("event.type"`,
-		`h.Tracer.CreateLocalSpan(sess.Context()`,
-		`defer span.End()`,
+		`h.Tracer.CreateLocalSpan(sess.Context(), "kafka-consume")`,
+		`defer span.EndSpan(nil)`,
 	}
 	for _, m := range mustContain {
 		if !strings.Contains(src, m) {

@@ -30,6 +30,7 @@ import (
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
+	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -199,7 +200,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(sharedmetrics.GinMetricsMiddleware("chat-svc"))
 	if tracer != nil {
-		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
+		r.Use(sharedmw.GinSkywalkingMiddleware(sharedgrpc.NewGo2SkyTracer(tracer)))
 	}
 	r.Use(sharedmw.GinAuthMiddleware())
 

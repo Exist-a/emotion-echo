@@ -30,6 +30,7 @@ import (
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
+	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -128,7 +129,7 @@ func main() {
 
 	// 中间件顺序：auth 必须在 trace 之后（trace 数据应包含 auth 后的 ctx）
 	if tracer != nil {
-		r.Use(sharedmw.GinSkywalkingMiddleware(tracer))
+		r.Use(sharedmw.GinSkywalkingMiddleware(sharedgrpc.NewGo2SkyTracer(tracer)))
 	}
 
 	// === 4.5 Stage 33 PR-19a：无 auth 中间件的路由组 ===
