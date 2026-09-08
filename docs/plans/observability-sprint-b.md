@@ -634,3 +634,15 @@ Stage 44 §四 B 标注的"PR-OBS-12/13/14 完整 span tag 断言"由 PR-OBS-17 
 - **未落地（PR-OBS-18+）**：GinSkywalkingMiddleware 创建真实 EntrySpan + http.method/url/status_code/user_id tag；ServerTracingInterceptor 打 rpc.method/rpc.system/user_id + 5 svc gRPC server 接入 shared interceptor
 
 详细归档：[Stage 45](/docs/stages/stage-45-observability-sprint-b-regression.md)
+
+---
+
+## 附录 B · Stage 46 PR-OBS-18 HTTP 链 EntrySpan 落地
+
+Stage 44 §四 B 步骤 3 完整收口：GinSkywalkingMiddleware 创建 EntrySpan +
+4 个 http.* / user_id tag 精确断言（mock-based）。
+
+- **已落地**：http.method / http.url / http.status_code / user_id 4 tag，span 挂 gin ctx (`skywalking_span`)
+- **未落地（PR-OBS-19）**：ServerTracingInterceptor 打 rpc.method/rpc.system + 5 svc gRPC server 接入 shared interceptor
+
+详细归档：[Stage 46](/docs/stages/stage-46-observability-gin-entry-span.md)

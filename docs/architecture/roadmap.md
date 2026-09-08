@@ -857,6 +857,17 @@ Stage 45 observability-sprint-b   ✅ DONE — PR-OBS-17 4 commit（2026-09-08�
                                   留作 PR-OBS-18/19。
 ```
 
+# Stage 46 · PR-OBS-18 GinSkywalkingMiddleware EntrySpan + 4 tag 收口
+Stage 46 observability-gin-entry-span  ✅ DONE — PR-OBS-18 3 commit（2026-09-08）
+                                     见 [stage-46-observability-gin-entry-span.md](../stages/stage-46-observability-gin-entry-span.md)。
+                                     落地:GinSkywalkingMiddleware 从 ctx 透传升级为创建
+                                     EntrySpan + 打 4 个 tag(http.method / http.url /
+                                     http.status_code / user_id),span 挂 ctx
+                                     (skywalking_span)供下游 handler 读。
+                                     Stage 44 §四 B 步骤 3 完整落地(步骤 1-5 共 5/6),
+                                     剩余步骤 6 (gRPC interceptor) 留 PR-OBS-19。
+```
+
 ---
 
 # 下一步行动（2026-09-08 更新）
