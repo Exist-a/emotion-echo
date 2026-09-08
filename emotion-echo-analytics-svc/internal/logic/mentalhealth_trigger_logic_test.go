@@ -102,7 +102,11 @@ func TestMentalHealthTriggerLogic_InvalidAssessmentType(t *testing.T) {
 
 func TestMentalHealthTriggerLogic_QueueFull_Backpressure(t *testing.T) {
 	t.Parallel()
-	// workers=0 不启动 worker — channel buffer 永远只接受 1 个 req，
+<<<<<<< HEAD
+	// workers=0 不启动 worker — channel buffer 永远只接受 1 个 req,
+=======
+	// workers=0 不启动 worker — channel buffer 永远只接受 1 个 req,
+>>>>>>> fix/analytics-mentalhealth-trigger-queue-full
 	// 第 2 次 Submit 必触发 ErrQueueFull（无需依赖并行调度时序）。
 	// 这是 NewTriggerQueue 文档明确支持的 buffer-only 用法。
 	queue := trigger.NewTriggerQueue(context.Background(), 0, 1, func(_ context.Context, _ trigger.Request) {})
