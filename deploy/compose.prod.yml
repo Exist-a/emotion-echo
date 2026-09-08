@@ -1,0 +1,67 @@
+# =====================================================
+#  Emotion-Echo prod 环境 override（ADR-20 C 方案 · 空壳占位）
+#
+#  状态：⏸ 空壳占位（Stage 58 PR-ENV-3 落地）
+#        待远端真部署时再补具体值。
+#
+#  为什么是空壳（ADR-20 §六 + 决策 18 §四）：
+#    决策 18 §四明确"结论须带可复现证据"。
+#    远端真部署未启动前，prod 配置全是假设——写进版本控制就成了未来文档失真的种子。
+#    故本文件**只列 TODO 提示**，不写未经验证的具体覆盖值。
+#
+#  启动命令（远端部署时）：
+#    docker compose -f docker-compose.infra.yml \
+#                   -f docker-compose.apps.yml \
+#                   -f compose.prod.yml up -d
+#
+#  关联文档：docs/architecture/adr/adr-2026-09-env-profile-strategy.md
+# =====================================================
+
+# =====================================================
+#  📋 待远端部署时填写的差异项（参考 ADR-20 §三关键差异清单）
+#
+#  以下项是 ADR-20 §三列出的 dev vs prod 差异，但本文件**故意留空**：
+#
+#  1. NACOS_NAMESPACE        — prod 应改为 "prod"（不是 emotion-echo-dev）
+#  2. BFF_DEV_RETURN_CODE    — prod 必须 0（验证码回显关闭）
+#  3. BFF_TRUST_APISIX       — prod 应由 APISIX 强制 X-User-Id 注入，BFF 不再信任直连
+#  4. KAFKA_ENABLED          — prod 必须 true（dev 默认 false 是例外）
+#  5. CORS_ALLOW_ORIGINS     — prod 用域名白名单（如 https://emotion-echo.example.com）
+#  6. NUXT_PUBLIC_API_BASE_URL — prod 用 HTTPS 域名而非 http://localhost:19080
+#  7. BFF 端口映射（8894）   — prod 必须移除（仅 APISIX 入口可达）
+#  8. Web 端口映射（3000）   — prod 反代或不放宿主
+#  9. SKYWALKING_ENABLED     — 默认 true 保持
+#  10. JWT secret            — prod 用真随机（部署时由密钥管理系统生成）
+#  11. TLS / HTTPS           — prod 由前置 nginx / APISIX ssl 终结
+#  12. 数据卷                — prod 用命名卷 + 备份策略
+#  13. 资源限制 (deploy.resources.limits) — prod 显式 CPU/内存 limit
+#
+#  ⚠️ 注：docker compose v2 要求 `services:` 必须是合法 mapping，
+#     故本文件保留一个 `_prod_pending` 占位服务（profiles: never，不实际启动）。
+#     远端真部署时把上方 TODO 项的实际值搬到该服务结构里。
+# =====================================================
+
+services:
+  # ---------------------------------------------------------------
+  # 占位服务（profiles: never，prod 启动链路下永不实际启动）
+  # 作用：让 docker compose config 能解析本文件语法
+  # 远端真部署时：把上方 TODO 项的具体值搬到下面这种结构：
+  #
+  #   emotion-echo-web-bff:
+  #     environment:
+  #       NACOS_NAMESPACE: "prod"
+  #       BFF_DEV_RETURN_CODE: 0
+  #       BFF_TRUST_APISIX: "false"
+  #       CORS_ALLOW_ORIGINS: "https://emotion-echo.example.com"
+  #   emotion-echo-chat-svc:
+  #     environment:
+  #       KAFKA_ENABLED: "true"
+  #     deploy:
+  #       resources:
+  #         limits:
+  #           cpus: "2.0"
+  #           memory: 1G
+  # ---------------------------------------------------------------
+  _prod_overrides_pending:
+    image: scratch
+    profiles: ["never"]
