@@ -107,6 +107,9 @@ services:
     environment:
       SW_STORAGE: h2
       SW_JDBC_URL: jdbc:h2:mem:skywalking-oap-db;DB_CLOSE_DELAY=-1
+      # O-1 启用 sw-oap self-metrics telemetry,OAP 监听 :1234
+      # prometheus scrape job "skywalking-oap" 在 deploy/prometheus/prometheus.yml 第 44-51 行
+      SW_TELEMETRY: prometheus
       TZ: Asia/Shanghai
     # Stage 33 PR-20: 端口收紧（UI 通过容器内 8080 访问；GRPC 通过容器内 11800）
     expose:

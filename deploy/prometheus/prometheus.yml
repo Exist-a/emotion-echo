@@ -42,10 +42,9 @@ scrape_configs:
           component: "apisix"
 
   # === SkyWalking OAP self-metrics ===
-  # 注: sw-oap env 未设 SW_TELEMETRY=prometheus,OAP 9.7 默认不监听 :1234
-  # scrape target 当前 DOWN;启用需在 deploy/docker-compose.infra.yml sw-oap env 加
-  #   SW_TELEMETRY=prometheus
-  # 属于 PR-OBS-? (OAP telemetry 启用),不在 PR-OBS-4 metrics infra 范围
+  # O-1 启用: deploy/docker-compose.infra.yml sw-oap env 已加 SW_TELEMETRY=prometheus,
+  # OAP 9.7 监听 :1234 输出 self-metrics (queue/grpc/jvm-h/metrics 维度)
+  # 关闭路径: 把 compose env SW_TELEMETRY 删掉或设 false 即可。
   - job_name: "skywalking-oap"
     static_configs:
       - targets: ["emotion-echo-sw-oap:1234"]
