@@ -1,8 +1,10 @@
 ---
-status: planned
+status: landed
+landed-at: 2026-09-08
+landed-stage: docs/stages/stage-44-observability-sprint-b.md
 priority: high
 owner: TBD
-target-stage: Stage 44（候选）
+target-stage: Stage 44
 created: 2026-09-08
 depends-on:
   - docs/plans/observability-compose-gap.md（PR-OBS-1/2/3 是其细化执行版）
@@ -14,6 +16,7 @@ related-stages:
   - stage-35-system-feasibility.md:78（SkyWalking dial fail 现象记录）
   - stage-38-system-status.md:46（BFF /metrics 201 series 手动验证）
   - stage-43-kafka-reliability-sprint-a.md（Kafka Sprint A 收口，§四尾巴未做）
+  - stage-44-observability-sprint-b.md（本 plan 落地归档）
 related-decisions:
   - adr-2026-09-loki-aggregator-dev.md（dev Loki 选型）
   - decisions.md 决策 6（JSON 日志 + trace_id 串联）
