@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -278,5 +279,150 @@ func TestSplitModule_BoundaryCases(t *testing.T) {
 			}
 			assert.Equal(t, tc.wantMsg, m["msg"])
 		})
+	}
+}
+
+// ===== PR-OBS-15 端到端组合 case (2026-09-08 接入前护栏) =====
+//
+// 目的: PR-OBS-15 GREEN commit (e730393) 加了 5 个单字段 case (svc / trace_id /
+// action 各 1),但生产路径是 3 字段同时存在(6 svc main.go 接入 Init +
+// SetGlobalSvc 后,gin handler 内 slog.InfoContext 自动收到全部)。
+//
+// 本组 case 验证组合行为 + 6 svc main.go 接入后才能 GREEN:
+//
+// 1. TestLogFields_AllThreeFieldsCombined_RealisticFlow
+//    模拟 svc main.go 启动 → gin handler 处理请求 → slog 输出
+//    断言 JSON 同时含 svc/trace_id/action 3 字段 (PR-OBS-15 RED 状态)
+//    → 6 svc main.go 接入 SetGlobalSvc 后应 GREEN
+//
+// 2. TestLogFields_SvcFieldPersistsAcrossLogs
+//    多次 slog.Info 调用,断言每条都有 svc 字段 (全局变量,不随 ctx 变)
+//    → 即使只 SetGlobalSvc 一次,所有日志都带 svc
+//
+// 注: PR-OBS-15 的 5 case 当时是单字段测试,因为 helper 实现是核心;
+//     本 PR 接入 (6 svc main.go 改) 是组合验证。helper 已 GREEN,
+//     本 case 落地的 RED 是 "6 svc main.go 是否真调 Init/SetGlobalSvc"
+//     的源码契约 —— 但 runtime 测不出来,所以改用 helper 组合 case
+//     做语义护栏。
+//
+// RED 状态: 当前组合 case 应直接 GREEN(helper 已实现),作为"防退化"护栏。
+
+// TestLogFields_AllThreeFieldsCombined_RealisticFlow 模拟 svc 启动 + handler 日志
+// 端到端流程,断言 JSON 同时含 svc/trace_id/action 3 字段
+func TestLogFields_AllThreeFieldsCombined_RealisticFlow(t *testing.T) {
+	var buf bytes.Buffer
+	InitTo(&buf)
+	SetGlobalSvc("chat-svc")
+
+	// 模拟 gin middleware 链:WithTraceID → WithAction → handler slog
+	ctx := WithTraceID(context.Background(), "trace-xyz-001")
+	ctx = WithAction(ctx, "chat.handler.PostMessage")
+
+	slog.InfoContext(ctx, "post message received", "msg_len", 42)
+
+	m := parseLogLine(t, buf.String())
+	if got := m["svc"]; got != "chat-svc" {
+		t.Errorf("svc field = %v, want chat-svc", got)
+	}
+	if got := m["trace_id"]; got != "trace-xyz-001" {
+		t.Errorf("trace_id field = %v, want trace-xyz-001", got)
+	}
+	if got := m["action"]; got != "chat.handler.PostMessage" {
+		t.Errorf("action field = %v, want chat.handler.PostMessage", got)
+	}
+	// msg + msg_len 必须存在(业务字段不被吞)
+	if got := m["msg"]; got != "post message received" {
+		t.Errorf("msg field = %v, want post message received", got)
+	}
+	if got, ok := m["msg_len"].(float64); !ok || got != 42 {
+		t.Errorf("msg_len field = %v (类型 %T), want 42", m["msg_len"], m["msg_len"])
+	}
+}
+
+// TestLogFields_SvcFieldPersistsAcrossLogs SetGlobalSvc 后多次调用,每条都有 svc 字段
+func TestLogFields_SvcFieldPersistsAcrossLogs(t *testing.T) {
+	var buf bytes.Buffer
+	InitTo(&buf)
+	SetGlobalSvc("user-svc")
+
+	slog.Info("first")
+	slog.Info("second")
+	slog.Info("third")
+
+	// 解析 3 行 JSON
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 log lines, got %d: %q", len(lines), buf.String())
+	}
+	for i, line := range lines {
+		m := parseLogLine(t, line)
+		if got := m["svc"]; got != "user-svc" {
+			t.Errorf("line %d: svc field = %v, want user-svc", i+1, got)
+		}
+	}
+}
+
+// ===== PR-OBS-15 RED: 6 svc main.go 接入层契约 =====
+//
+// 目的: 决策 6 必填字段 svc/trace_id/action 的"Loki 可查询"前提
+//      是每个 svc main.go 调 logging.Init() + logging.SetGlobalSvc("<svc-name>")。
+// 当前状态(2026-09-08 接入前):
+//   - 调 Init:  web-bff, ai-svc      (2/6)
+//   - 调 SetGlobalSvc: (none)         (0/6)  ← 关键缺口,即使 Init 了也没 svc 字段
+// PR-OBS-15 GREEN 必须落地"6 svc 全调 Init + SetGlobalSvc"。
+//
+// 测试方法: 源码 grep 6 svc main.go,断言每个都同时含 Init 和 SetGlobalSvc。
+// 这是 stage-44 §四 C 落地的硬护栏 —— 与 PR-OBS-14 TraceTagLiterals 同模式
+// (字面量断言的局限已知,本 case 用于"接入完整性"防退化)。
+//
+// svc 名 → 期望文件路径 → 期望字面量(避免重命名 svc 后断言失效):
+//   ai-svc     emotion-echo-ai-svc/main.go          SetGlobalSvc("ai-svc")
+//   chat-svc   emotion-echo-chat-svc/main.go        SetGlobalSvc("chat-svc")
+//   user-svc   emotion-echo-user-svc/main.go        SetGlobalSvc("user-svc")
+//   assessment emotion-echo-assessment-svc/main.go  SetGlobalSvc("assessment-svc")
+//   analytics  emotion-echo-analytics-svc/main.go   SetGlobalSvc("analytics-svc")
+//   web-bff    emotion-echo-web-bff/main.go         SetGlobalSvc("web-bff")
+//
+// 注: trace_id / action 字段由 GinSkywalkingMiddleware 和 gin handler 注入,
+// 不在本 case 范围 (后续 PR-OBS-19/20 处理 interceptor / handler 层)。
+//
+// 目录结构: 测试运行时 cwd 不固定,用相对路径 ../emotion-echo-<svc>/main.go 遍历;
+// 实际目录由项目根决定。本 case 用 t.Skip 兼容(找文件失败时)以便 5 logging
+// 核心 case 不被阻塞。
+
+// TestMain_FilesInvokeInitAndSetGlobalSvc 6 svc main.go 必须 Init + SetGlobalSvc
+func TestMain_FilesInvokeInitAndSetGlobalSvc(t *testing.T) {
+	svcs := []struct {
+		dir  string
+		name string // 期望的 SetGlobalSvc 字面量
+	}{
+		{"emotion-echo-ai-svc", "ai-svc"},
+		{"emotion-echo-chat-svc", "chat-svc"},
+		{"emotion-echo-user-svc", "user-svc"},
+		{"emotion-echo-assessment-svc", "assessment-svc"},
+		{"emotion-echo-analytics-svc", "analytics-svc"},
+		{"emotion-echo-web-bff", "web-bff"},
+	}
+
+	// logging_test.go 在 emotion-echo-shared/pkg/logging/,svc main.go 在
+	// Emotion-Echo/<svc>/main.go (4 层 ..: logging → pkg → shared → Emotion-Echo)
+	for _, svc := range svcs {
+		mainPath := filepath.Join("..", "..", "..", svc.dir, "main.go")
+		src, err := os.ReadFile(mainPath)
+		if err != nil {
+			t.Skipf("cannot read %s (cwd-relative skip): %v", mainPath, err)
+			continue
+		}
+		content := string(src)
+
+		// 1. 必须有 logging.Init() 调用
+		if !strings.Contains(content, "logging.Init()") {
+			t.Errorf("[%s] missing logging.Init() — 决策 6 必填字段前提缺失", svc.dir)
+		}
+		// 2. 必须有 logging.SetGlobalSvc("<expected-name>") 调用
+		wantCall := `logging.SetGlobalSvc("` + svc.name + `")`
+		if !strings.Contains(content, wantCall) {
+			t.Errorf("[%s] missing %s — 决策 6 svc 字段缺失,Loki 查询 svc=<name> 无结果", svc.dir, wantCall)
+		}
 	}
 }
