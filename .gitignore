@@ -20,6 +20,8 @@ desktop.ini
 .trae/
 .cursor/
 *.iml
+# Docker 清理脚本运行时生成的备份清单（每次跑 cleanup_docker.sh 都会重新生成）
+docker-images-before.txt
 
 # ---------- Go ----------
 *.exe
