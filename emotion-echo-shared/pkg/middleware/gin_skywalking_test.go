@@ -585,3 +585,122 @@ func TestGinSkywalkingMiddleware_InjectsTraceIDIntoRequestContext(t *testing.T) 
 		t.Errorf("svc field = %v, want test-svc", got)
 	}
 }
+
+// ===== PR-OBS-23 RED: handler err 透传到 span.EndSpan(err) =====
+//
+// 目的: stage-46 §二.2.3 + stage-45 §四 —— 当前实现总 EndSpan(nil),
+// 即使 handler 失败 OAP UI 也看不到 error 列。改造规则:
+//   - c.Errors() 非空 → EndSpan(c.Errors.Last().Err)
+//   - status >= 500 → EndSpan(http 500) (兜底,handler 未用 c.Error 时)
+//   - 其他 → EndSpan(nil)
+//
+// 4 个 RED case:
+// 1. EndSpanWithErr_OnStatus500_NoCError: handler 设 500 但未 c.Error → EndSpan(err)
+// 2. EndSpanWithErr_OnCError_EvenStatus200: handler 调 c.Error(err) + 200 → EndSpan(err)
+// 3. EndSpanNil_OnStatus404: handler 设 404 (业务正常) → EndSpan(nil)
+// 4. EndSpanNil_OnStatus200: 向后兼容(已有 case 隐式覆盖,但显式断言)
+//
+// 当前中间件总 EndSpan(nil) → 全部 RED(除 #4)
+
+// TestGinSkywalkingMiddleware_EndSpanWithErr_OnStatus500_NoCError handler 设 5xx
+// 但未调 c.Error 时,中间件应兜底传 err 让 OAP UI 标记 error
+func TestGinSkywalkingMiddleware_EndSpanWithErr_OnStatus500_NoCError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.GET("/api/v1/fail", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		// 模拟 chat-svc 现状: c.JSON(500, ...) 不用 c.Error
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal"})
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fail", nil)
+	r.ServeHTTP(rec, req)
+
+	if len(tracer.startEntryCalls) != 1 {
+		t.Fatalf("expected 1 StartEntry, got %d", len(tracer.startEntryCalls))
+	}
+	span := tracer.span
+	if !span.ended {
+		t.Fatal("expected span.EndSpan called")
+	}
+	if span.endErr == nil {
+		t.Fatal("expected span.EndSpan(err) for status 500 (兜底), got nil")
+	}
+	// err 信息应含 status 5xx 提示(OAP UI error 列可见)
+	if !strings.Contains(span.endErr.Error(), "500") {
+		t.Errorf("endErr 应含 status 信息 (500), got %q", span.endErr.Error())
+	}
+}
+
+// TestGinSkywalkingMiddleware_EndSpanWithErr_OnCError_EvenStatus200 handler 调
+// c.Error(err) 时(即使 status 200),中间件应透传 err 给 EndSpan
+func TestGinSkywalkingMiddleware_EndSpanWithErr_OnCError_EvenStatus200(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.GET("/api/v1/warn", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		// 业务自定义: handler 内记录 soft error,但仍返 200
+		_ = c.Error(fmt.Errorf("soft warning: partial cache miss"))
+		c.JSON(http.StatusOK, gin.H{"data": "ok"})
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/warn", nil)
+	r.ServeHTTP(rec, req)
+
+	span := tracer.span
+	if !span.ended {
+		t.Fatal("expected span.EndSpan called")
+	}
+	if span.endErr == nil {
+		t.Fatal("expected span.EndSpan(err) when handler called c.Error, got nil")
+	}
+	if !strings.Contains(span.endErr.Error(), "soft warning") {
+		t.Errorf("endErr 应透传 c.Error 内容, got %q", span.endErr.Error())
+	}
+}
+
+// TestGinSkywalkingMiddleware_EndSpanNil_OnStatus404 handler 设 4xx (业务正常,
+// 如 404 not found / 401 unauthorized) 不应误判为 err
+func TestGinSkywalkingMiddleware_EndSpanNil_OnStatus404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.GET("/api/v1/missing", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/missing", nil)
+	r.ServeHTTP(rec, req)
+
+	span := tracer.span
+	if !span.ended {
+		t.Fatal("expected span.EndSpan called")
+	}
+	if span.endErr != nil {
+		t.Errorf("expected span.EndSpan(nil) on 4xx, got endErr=%v", span.endErr)
+	}
+}
+
+// TestGinSkywalkingMiddleware_EndSpanNil_OnStatus200 向后兼容断言:
+// handler 正常返 200 + 未 c.Error → EndSpan(nil)
+// (与已有 TestGinSkywalkingMiddleware_TagsHTTPMethodURLStatus 重复覆盖,但
+// 显式断言 endErr=nil 是 PR-OBS-23 契约的一部分)
+func TestGinSkywalkingMiddleware_EndSpanNil_OnStatus200(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	r := gin.New()
+	r.GET("/api/v1/ok", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"data": "ok"})
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ok", nil)
+	r.ServeHTTP(rec, req)
+
+	span := tracer.span
+	if !span.ended {
+		t.Fatal("expected span.EndSpan called")
+	}
+	if span.endErr != nil {
+		t.Errorf("expected span.EndSpan(nil) on 200 + 无 c.Error, got endErr=%v", span.endErr)
+	}
+}
