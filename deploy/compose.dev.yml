@@ -1,0 +1,62 @@
+# =====================================================
+#  Emotion-Echo dev 环境 override（ADR-20 C 方案）
+#
+#  用途：本地开发环境的 dev 假设集中地，与 apps.yml 基线解耦。
+#  启动：docker compose -f docker-compose.infra.yml \
+#                    -f docker-compose.apps.yml \
+#                    -f compose.dev.yml up -d
+#
+#  设计原则：
+#    - 只覆盖既有 services（不引入新服务）
+#    - 覆盖项对应 ADR-20 §三关键差异清单中"dev vs prod"列
+#    - 所有 prod 不应出现的 dev 假设（端口暴露、DEV_RETURN_CODE 等）集中在此
+#
+#  当前覆盖项（Stage 58 PR-ENV-1）：
+#    1. BFF 8894:8894 端口映射（dev 调试便利；prod 应仅 APISIX 可达）
+#    2. BFF_DEV_RETURN_CODE=1（dev 回显验证码；prod 必须 0）
+#    3. BFF_TRUST_APISIX=true（dev 直连 BFF 调试；prod 由 APISIX 强制注入 X-User-Id）
+#    4. CORS_ALLOW_ORIGINS=http://localhost:3000（Nuxt dev server）
+#    5. emotion-echo-web NUXT_PUBLIC_API_BASE_URL=http://localhost:19080（APISIX 宿主映射）
+#    6. emotion-echo-web 3000:3000 端口映射（dev 看前端；prod 反代或不放宿主）
+#
+#  关联文档：docs/architecture/adr/adr-2026-09-env-profile-strategy.md
+# =====================================================
+
+services:
+
+  # BFF 覆盖：dev 调试便利（端口直连 + 验证码回显 + 信任 APISIX）
+  emotion-echo-web-bff:
+    environment:
+      # prod 必须 0，dev 默认 1（验证码回显方便 forget-pwd e2e）
+      BFF_DEV_RETURN_CODE: ${BFF_DEV_RETURN_CODE:-1}
+      # dev 默认 true（直连 BFF 调试）；prod 设 false（强制走 APISIX X-User-Id 注入）
+      BFF_TRUST_APISIX: ${BFF_TRUST_APISIX:-true}
+    ports:
+      # dev 调试直连；prod 移除此行（仅 APISIX 入口）
+      - "8894:8894"
+
+  # Web 覆盖：dev 浏览器访问 + API base 指向宿主 localhost:19080
+  emotion-echo-web:
+    environment:
+      # SPA 在浏览器执行，必须用宿主可达地址（19080 是 APISIX 宿主映射）
+      NUXT_PUBLIC_API_BASE_URL: http://localhost:19080/api/v1
+    ports:
+      # dev 看前端 UI；prod 反代到域名或不暴露宿主页
+      - "3000:3000"
+
+  # 业务 svc CORS（dev 默认允许 Nuxt 本地端口；prod 用域名白名单）
+  emotion-echo-chat-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+  emotion-echo-user-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+  emotion-echo-ai-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+  emotion-echo-analytics-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+  emotion-echo-assessment-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
