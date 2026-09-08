@@ -35,7 +35,7 @@ EXPECTED_TARGETS = [
     "emotion-echo-user-svc:8888",
     "emotion-echo-chat-svc:8890",
     "emotion-echo-assessment-svc:8889",
-    "emotion-echo-analytics-svc:8904",
+    "emotion-echo-analytics-svc:8893",
     "emotion-echo-ai-svc:8891",
     "emotion-echo-web-bff:8894",
     "emotion-echo-apisix:9091",

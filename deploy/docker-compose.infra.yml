@@ -107,9 +107,14 @@ services:
     environment:
       SW_STORAGE: h2
       SW_JDBC_URL: jdbc:h2:mem:skywalking-oap-db;DB_CLOSE_DELAY=-1
-      # O-1 启用 sw-oap self-metrics telemetry,OAP 监听 :1234
+      # O-1 + Stage-54 启用 sw-oap self-metrics telemetry,OAP 监听 :1234
+      # OAP 9.7 启动 telemetry receiver 需 SW_TELEMETRY=prometheus
+      # 同时 SW_TELEMETRY_PROMETHEUS_HOST 显式 0.0.0.0 (default=0.0.0.0 但 standalone
+      # 启动可能不绑 0.0.0.0,这里显式保险)
       # prometheus scrape job "skywalking-oap" 在 deploy/prometheus/prometheus.yml 第 44-51 行
       SW_TELEMETRY: prometheus
+      SW_TELEMETRY_PROMETHEUS_HOST: 0.0.0.0
+      SW_TELEMETRY_PROMETHEUS_PORT: "1234"
       TZ: Asia/Shanghai
     # Stage 33 PR-20: 端口收紧（UI 通过容器内 8080 访问；GRPC 通过容器内 11800）
     expose:
