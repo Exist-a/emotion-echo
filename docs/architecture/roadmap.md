@@ -892,6 +892,21 @@ Stage 48 handler-err-propagate      ✅ DONE — PR-OBS-23 2 commit（2026-09-08
                                      需 go-zero 桥接)+ backlog 业务 tag。
 ```
 
+# Stage 49 · PR-OBS-19 gRPC interceptor rpc.* tag + layer/component 收口
+Stage 49 grpc-tracing-rpc-tags     ✅ DONE — PR-OBS-19 2 commit（2026-09-08）
+                                     见 [stage-49-grpc-tracing-rpc-tags.md](../stages/stage-49-grpc-tracing-rpc-tags.md)。
+                                     落地:Span 接口扩 SetSpanLayer(int32) +
+                                     SetComponent(int32);ServerTracingInterceptor
+                                     打 5 项 (layer=GRPC + component=5001 +
+                                     rpc.system/method/user_id);
+                                     ClientTracingInterceptor 打 4 项(对称)。
+                                     5 svc 仅 ai-svc 有 gRPC server(stage-46 §四
+                                     描述已纠正),无需改 svc main.go,interceptor
+                                     升级自动让 ai-svc 受益。
+                                     🎉 Stage 44 §四 B 6/6 步全部收口。剩余:
+                                     sw-oap telemetry + 阻塞型 Nacos + backlog。
+```
+
 ---
 
 # 下一步行动

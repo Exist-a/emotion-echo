@@ -666,3 +666,18 @@ buildSpanError(c) 三段判定（c.Errors / status>=500 / nil）。OAP UI 可直
 过滤 5xx + error 维度；不改 handler 现状（c.JSON(500, ...) 通过 status 兜底）。
 
 详细归档：[Stage 48](/docs/stages/stage-48-handler-err-propagate.md)
+
+---
+
+## 附录 E · Stage 49 PR-OBS-19 gRPC rpc.* tag + layer/component 收口
+
+Stage 44 §四 B 步骤 6 收口（业务功能最后一步）：
+- ServerTracingInterceptor 打 5 项（layer=GRPC + component=Go gRPC + rpc.system/method/user_id）
+- ClientTracingInterceptor 打 4 项（对称）
+- Span 接口扩 SetSpanLayer + SetComponent
+- ai-svc 是唯一 gRPC server，无需改 svc main.go
+
+stage-46 §四 描述"5 svc gRPC server 接入"与代码现实不符（仅 ai-svc 有 gRPC server，
+其余 5 svc 是 gin HTTP，go-zero 已 Stage 41 移除）。本 stage-49 已纠正。
+
+详细归档：[Stage 49](/docs/stages/stage-49-grpc-tracing-rpc-tags.md)
