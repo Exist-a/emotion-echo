@@ -172,6 +172,15 @@ stage-46 §四 原话：
 | 业务层 handler 主动打业务 tag | backlog | 取决于各 handler 拿到 span 的便捷性 |
 | gRPC stream interceptor（Stage 19 没覆盖）| backlog | 业务路径未用 stream RPC |
 
+## 六、Stage 50 端到端验证（落地）
+
+[Stage 50](/docs/stages/stage-50-e2e-validation.md) 已完成本轮 5 stage 的端到端验证：
+
+- 单元测试层：grpcinterceptor 41/41 + middleware 24/24 + logging 10/10 + ai-svc consumer 14/14 全 PASS
+- Stage 47 logging helper 本机直接 run 验证：JSON 输出含 svc / trace_id / action / msg / msg_id 6 字段
+- dev compose smoke_observability.py：10/12 PASS（2 项 Nacos/warmup 阻塞与本轮无关）
+- ⚠️ 5 svc 镜像滞后：Stage 47/48/49 main.go 改动需 `build_dev_images.sh` 重建（待 stage-44 §四 §A 16 分支 merge main 后）
+
 ## 六、与 Stage 44 §四 的对账
 
 | §四 未做项 | 状态 |

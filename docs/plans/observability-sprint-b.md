@@ -681,3 +681,15 @@ stage-46 §四 描述"5 svc gRPC server 接入"与代码现实不符（仅 ai-sv
 其余 5 svc 是 gin HTTP，go-zero 已 Stage 41 移除）。本 stage-49 已纠正。
 
 详细归档：[Stage 49](/docs/stages/stage-49-grpc-tracing-rpc-tags.md)
+
+---
+
+## 附录 F · Stage 50 端到端验证归档
+
+本轮 5 stage（Stage 45-49，14 commit）的端到端验证归档：
+- 单元测试层 100% PASS（grpcinterceptor 41 + middleware 24 + logging 10 + ai-svc consumer 14 = 89 case）
+- Stage 47 logging helper 本机直接 run 验证：JSON 输出 svc/trace_id/action/msg/msg_id/time/level 7 字段
+- dev compose `smoke_observability.py`：10/12 PASS（2 项 Nacos/warmup 与本轮无关）
+- ⚠️ 6 svc 镜像 Stage 47/48/49 改动滞后：待 stage-44 §四 §A "16 分支 merge main" + `build_dev_images.sh` 重建后生效
+
+详细归档：[Stage 50](/docs/stages/stage-50-e2e-validation.md)
