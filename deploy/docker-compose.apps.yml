@@ -89,6 +89,7 @@ services:
       # 容器 DNS 占位化(Stage 26-P · Commit P3 yaml env 化对应)
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_user"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      SKYWALKING_ENABLED: "true"
     # Stage 33 PR-20: 删除宿主端口映射（APISIX 转发即可；dev 调试走 APISIX :19080）
     # expose: 容器内可见（其他 svc 互联）
     expose:
@@ -143,6 +144,7 @@ services:
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"
       KAFKA_BROKERS:       emotion-echo-kafka:9092
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      SKYWALKING_ENABLED: "true"
     # Stage 33 PR-20: 端口收紧
     expose:
       - "8890"
@@ -201,6 +203,7 @@ services:
       # ADR-19 PR-A3.1: DLQ topic 启用真实 Kafka topic（默认 Noop 静默丢）
       KAFKA_DLQ_TOPIC:     chat-events-dlq
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      SKYWALKING_ENABLED: "true"
     # Stage 33 PR-20: 端口收紧
     expose:
       - "8893"
@@ -253,6 +256,7 @@ services:
       GIN_MODE: release
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_assessment"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      SKYWALKING_ENABLED: "true"
     # Stage 33 PR-20: 端口收紧
     expose:
       - "8889"
@@ -375,6 +379,7 @@ services:
       # 配置即启用 KafkaDLQPublisher，毒消息进 chat-events-dlq 等待人工排查
       KAFKA_DLQ_TOPIC:     chat-events-dlq
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      SKYWALKING_ENABLED: "true"
       # Stage 19: ai-svc → emotion-llm-service 内部 FastAPI（dev / 离线）
       # Stage 36-B1: 真实 LLM（DeepSeek / OpenAI 兼容）通过 LLM_* env 注入。
       # ai-svc 直接读 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL / LLM_TIMEOUT
@@ -595,6 +600,7 @@ services:
       AI_SVC_GRPC_ADDR:    "emotion-echo-ai-svc:8892"
       XTTS_BASE_URL:       "http://emotion-echo-xtts:8003"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
+      SKYWALKING_ENABLED: "true"
       # Sprint 1 PR-4c-4: dev 模式回显 verification-code，便于 e2e 走通 forget-pwd。
       # commit msg 928bed2 承诺"前端 console 显示"但前端从未实现，这里补 BFF 侧。
       # prod 部署必须删掉这行（保持默认关闭）。

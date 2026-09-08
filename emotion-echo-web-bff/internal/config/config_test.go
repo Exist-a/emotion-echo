@@ -100,3 +100,26 @@ func TestConfig_ApplyEnvOverrides_EmptyEnv_KeepsDefault(t *testing.T) {
 
 	assert.Equal(t, "http://localhost:8888", c.UserService.BaseURL, "空 env 不应覆盖默认值")
 }
+
+// TestConfig_ApplyEnvOverrides_SkyWalkingEnabled Stage 57 B3 修复：
+// SKYWALKING_ENABLED=true 必须让 c.SkyWalking.Enabled 翻 true（防止 stage-36-A1.1
+// "默认 false" 误关 dev 模式 SkyWalking 链路——批 1 漏掉，stage-57 OAP 实测空 service
+// 才暴露）。
+func TestConfig_ApplyEnvOverrides_SkyWalkingEnabled(t *testing.T) {
+	c := loadTestConfig(t)
+	t.Setenv("SKYWALKING_ENABLED", "true")
+
+	ApplyEnvOverrides(&c)
+
+	assert.True(t, c.SkyWalking.Enabled, "SKYWALKING_ENABLED=true 应让 SkyWalking.Enabled=true")
+}
+
+// TestConfig_ApplyEnvOverrides_SkyWalkingEnabled_Empty 兜底：空 env 不应翻 enabled。
+func TestConfig_ApplyEnvOverrides_SkyWalkingEnabled_Empty(t *testing.T) {
+	c := loadTestConfig(t)
+	t.Setenv("SKYWALKING_ENABLED", "") // 空串视为未设置
+
+	ApplyEnvOverrides(&c)
+
+	assert.False(t, c.SkyWalking.Enabled, "空 env 不应让 SkyWalking.Enabled=true,保留 yaml 默认 false")
+}

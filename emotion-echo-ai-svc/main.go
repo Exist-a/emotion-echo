@@ -99,6 +99,9 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
 	}
+	if v := os.Getenv("SKYWALKING_ENABLED"); v != "" {
+		c.SkyWalking.Enabled = v == "true" || v == "1"
+	}
 	if v := os.Getenv("LLM_BASE_URL"); v != "" {
 		c.LLM.BaseURL = v
 	}
