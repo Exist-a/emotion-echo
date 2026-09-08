@@ -62,6 +62,11 @@ for img in $BASE_IMAGES; do
 done
 
 # Build 阶段：每个 svc 重试
+#
+# 成功识别（修复 stage-54 §七 D 误报 FAIL）：
+#   - Docker Compose v2 输出 `✔ Service xxx Built`（emoji ✔ + Service 关键字）
+#   - 或者包含 `naming to docker.io/xxx:tag`（image 已重新打 tag）
+#   - 旧 v1 格式 `^ Image .* Built$` 在 v2 永远不会出现，导致脚本误判失败
 echo
 echo "=== Build services ==="
 echo "  targets: ${SVCS[*]}"
@@ -72,7 +77,8 @@ for svc in "${SVCS[@]}"; do
     echo
     echo "--- [build $attempt/$MAX_RETRY] $svc ---"
     if docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml build "$svc" 2>&1 | tee /tmp/build_${svc}.log | tail -3; then
-      if grep -q "^ Image .* Built$" /tmp/build_${svc}.log; then
+      # v2 格式："✔ Service xxx Built"（推荐）或 "naming to docker.io/xxx"（兜底）
+      if grep -qE '✔ Service .+ Built|naming to docker\.io/' /tmp/build_${svc}.log; then
         echo "  [OK] $svc built"
         break
       fi
