@@ -868,6 +868,18 @@ Stage 46 observability-gin-entry-span  ✅ DONE — PR-OBS-18 3 commit（2026-09
                                      剩余步骤 6 (gRPC interceptor) 留 PR-OBS-19。
 ```
 
+# Stage 47 · PR-OBS-15 logging helper 6 svc 接入收口
+Stage 47 logging-helper-apply        ✅ DONE — PR-OBS-15 2 commit（2026-09-08）
+                                     见 [stage-47-logging-helper-apply.md](../stages/stage-47-logging-helper-apply.md)。
+                                     落地:6 svc main.go 全调 logging.Init() +
+                                     SetGlobalSvc(<name>)(含 ai/web-bff re-export
+                                     补全);GinSkywalkingMiddleware 调
+                                     logging.WithTraceID 注入 Request ctx。
+                                     Stage 44 §四 C 落地,Loki 日志可按 svc +
+                                     trace_id 过滤(决策 6 字段闭环)。
+                                     剩余未做:PR-OBS-19/23/20。
+```
+
 ---
 
 # 下一步行动
