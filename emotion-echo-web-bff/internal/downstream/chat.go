@@ -23,6 +23,8 @@ import (
 
 	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+
+	"google.golang.org/grpc"
 )
 
 // ConversationView 对应 chat-svc types.ConversationView
@@ -89,6 +91,10 @@ type ChatClientOptions struct {
 	Resolver bffdiscovery.Resolver
 	// ServiceName 用于 Resolver，默认 "emotion-echo-chat-svc"。
 	ServiceName string
+	// Transport "grpc"（默认）| "http"；grpc 模式需同时传 GRPCConn
+	Transport ChatTransport
+	// GRPCConn gRPC 连接（仅 Transport=grpc 时用）
+	GRPCConn *grpc.ClientConn
 }
 
 // chatHTTPClient 是 ChatClient 的 HTTP 实现
@@ -97,11 +103,34 @@ type chatHTTPClient struct {
 	http    *http.Client
 }
 
+// ChatTransport 决定 NewChatClient 返回 HTTP 还是 gRPC 实现
+//
+// 读取 opts.Transport，缺省 "grpc"（PR-GRPC-4 默认；HTTP 路径仍保留作 fallback）。
+type ChatTransport string
+
+const (
+	ChatTransportGRPC ChatTransport = "grpc"
+	ChatTransportHTTP ChatTransport = "http"
+)
+
 // NewChatClient 构造 ChatClient。
 //
-// BaseURL 解析优先级：opts.BaseURL（env 注入）> opts.Resolver.Resolve(ServiceName)。
-// 两者都缺 → 返回 nil。
+// 行为分支（Stage 58 PR-GRPC-4）：
+//   - Transport=grpc + GRPCConn != nil → 返 chatGRPCClient
+//   - Transport=http（默认 fallback）→ 返 chatHTTPClient（保留旧行为）
+//   - 都缺 → 返 nil
+//
+// BaseURL 解析优先级（HTTP 模式）：opts.BaseURL > opts.Resolver.Resolve(ServiceName)
 func NewChatClient(opts ChatClientOptions) ChatClient {
+	// gRPC 优先（PR-GRPC-4）
+	if opts.Transport == "" || opts.Transport == ChatTransportGRPC {
+		if opts.GRPCConn != nil {
+			return NewChatGRPCClient(opts.GRPCConn)
+		}
+		// grpc 但无 conn → 退化为 http（保留向后兼容）
+	}
+
+	// HTTP fallback（保留旧 chatHTTPClient 行为）
 	timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 5 * time.Second
