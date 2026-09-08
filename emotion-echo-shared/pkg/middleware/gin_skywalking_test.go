@@ -506,3 +506,31 @@ func TestGinSkywalkingMiddleware_EndSpanOnHandlerError(t *testing.T) {
 		t.Log("span.EndSpan(nil) — handler error 透传策略留作后续 PR")
 	}
 }
+
+// TestGinSkywalkingMiddleware_AttachesSpanOnContext 业务路径应把 span
+// 实例挂到 gin ctx (与 tracer 一致)。下游 handler 可通过 c.Get(\"skywalking_span\")
+// 拿到当前 span 并继续打业务 tag(后续 PR-OBS-19 业务层 tag 设置点)。
+func TestGinSkywalkingMiddleware_AttachesSpanOnContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tracer := &stubTracer{}
+	var gotSpan interface{}
+	var gotSame bool
+	r := gin.New()
+	r.GET("/api/v1/foo", GinSkywalkingMiddleware(tracer), func(c *gin.Context) {
+		gotSpan, _ = c.Get("skywalking_span")
+		if gotSpan != nil {
+			_, gotSame = gotSpan.(*stubSpan)
+		}
+		c.Status(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/foo", nil)
+	r.ServeHTTP(rec, req)
+
+	if gotSpan == nil {
+		t.Fatal("expected skywalking_span key on ctx")
+	}
+	if !gotSame {
+		t.Errorf("expected ctx span to be *stubSpan (instance from StartEntry), got %T", gotSpan)
+	}
+}
