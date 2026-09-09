@@ -448,8 +448,8 @@ services:
   emotion-echo-fer:
     build:
       context: ../emotion-echo-models
-      dockerfile: FER/Dockerfile
-    image: emotion-echo/fer:v0.1.0
+      dockerfile: FER-tflite/Dockerfile
+    image: emotion-echo/fer-tflite:v0.1.0
     container_name: emotion-echo-fer
     restart: unless-stopped
     profiles: ["ai"]
@@ -463,18 +463,20 @@ services:
     networks:
       - app-network
     deploy:
+      # PR-TTS-VENDOR landing: tflite 后端大幅降低资源占用（vs 原 fer+tensorflow 12.1GB）。
+      # limits 1GB 即够（含 tflite + opencv-contrib-headless + 模型权重）。
       resources:
         limits:
           cpus: "1.0"
-          memory: 1024M       # OpenCV + fer 模型需要 ~600MB
+          memory: 1024M
         reservations:
-          cpus: "0.3"
-          memory: 384M
+          cpus: "0.2"
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health', timeout=2)\""]
       interval: 30s
       timeout: 5s
-      start_period: 60s
+      start_period: 15s    # tflite 模型 <100KB，启动 < 5s，start_period 15s 充足
       retries: 3
 
   # =====================================================
@@ -525,15 +527,21 @@ services:
   # =====================================================
   # Stage 22-A.3 XTTS（语音克隆 TTS）
   #   profile: ai    （最重 ~3GB，Coqui-TTS 模型 + torch）
+  #
+  # PR-TTS-VENDOR landing: 替换自建镜像为 vendor `ai4all/coqui:latest`，
+  # 服务名/端口保持兼容 ai-svc XTTS_BASE_URL=http://emotion-echo-xtts:8003 不变。
+  # 本地预下 XTTS v2 模型挂载进 /model（绕开容器内 HuggingFace SSL EOF）。
+  # 模型路径来源：stage-59 §10.4 验证（Windows 真实路径挂载）。
   # =====================================================
   emotion-echo-xtts:
-    build:
-      context: ../emotion-echo-models
-      dockerfile: XTTS/Dockerfile
-    image: emotion-echo/xtts:v0.1.0
+    image: ai4all/coqui:latest
     container_name: emotion-echo-xtts
     restart: unless-stopped
+    user: root
     profiles: ["ai"]
+    # PR-TTS-VENDOR: ai4all/coqui 默认监听 8000，覆盖 CMD 改 8003
+    # 保持与 ai-svc XTTS_BASE_URL=http://emotion-echo-xtts:8003 兼容
+    command: ["fastapi", "run", "app.py", "--host=0.0.0.0", "--port=8003"]
     environment:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
@@ -542,9 +550,9 @@ services:
     expose:
       - "8003"
     volumes:
-      # 模型：本地已下载到 ../../emotion-echo-models/XTTS/AI-ModelScope/XTTS-v2
-      # Dockerfile COPY 已包含，但 dev 可覆盖挂载
-      - sensevoice-cache:/app/cache   # 复用 cache 卷
+      # PR-TTS-VENDOR: 本地预下模型挂载（stage-59 §10.3.1 通过 hf-mirror.com 分文件下完）
+      # coqui 启动时需要 /model/voices 可写；用 root user 规避 PermissionError
+      - ${XTTS_MODEL_PATH:-/c/Users/LENVOV/AppData/Local/Temp/coqui_model}:/model
     networks:
       - app-network
     deploy:
@@ -556,7 +564,9 @@ services:
           cpus: "0.5"
           memory: 1024M
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=2)\""]
+      # PR-TTS-VENDOR: ai4all/coqui 没有 /health 端点（实测 404），改用 / voice/result
+      # 探测 TCP listen 状态（wget 存在性 + 端口可达即可）。
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.socket();s.settimeout(2);s.connect(('127.0.0.1',8003));s.close()\""]
       interval: 30s
       timeout: 5s
       start_period: 180s    # 模型加载慢
