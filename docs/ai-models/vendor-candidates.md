@@ -110,20 +110,34 @@ Stage 36-B5 自建 3 个 AI 模型镜像（FER / SenseVoice / XTTS）路径在 d
 
 ---
 
-## 五、当前结论（截至 2026-09-09）
+## 五、当前结论（截至 2026-09-10 · Stage 60 landing）
 
-**dev 网络环境下**：
+### 5.1 三个 AI 模型落地路径（PR-TTS-VENDOR 闭环）
 
-| 路径 | 状态 |
-|---|---|
-| 自建 FER/SenseVoice/XTTS 镜像 | ❌ 卡 30+ 分钟（Stage 36 §B2 重现）|
-| Vendor 镜像（`serengil/deepface` 等）| ⚠️ 部分卡，**实测 0 张完整 pull 成功** |
-| 云 API（XTTS 阿里云）| ✅ 不依赖镜像下载，立即可做（需 key） |
+| 模型 | 路径 | 镜像 | 状态 |
+|---|---|---|---|
+| **XTTS** | ✅ **vendor `ai4all/coqui:latest`** | 11.3GB（vendor 提供） | 已接入 `deploy/docker-compose.apps.yml`；端到端调通（upload/generate/result 200，133KB WAV） |
+| **SenseVoice** | ✅ **本地仓 `emotion-echo-models/sensevoice-small/`** | `emotion-echo/sensevoice:v0.1.0`（compose build） | Stage 36 v0.1.2 镜像仓内已预烘焙 893MB `model.pt` + am.mvn + config；vendor 镜像 `yiminger/sensevoice` 挂错标签不可用 |
+| **FER** | ✅ **本地新仓 `emotion-echo-models/FER-tflite/`** | `emotion-echo/fer-tflite:v0.1.0`（538MB disk，**比原 12.1GB 缩 22.5×**）| tflite + Haar cascade 后端，绕开 tensorflow 572MB；49/49 单元测试全绿 |
 
-**建议当前策略**：
-1. **XTTS**：走云 API（阿里云 primary + OpenAI fallback，ADR-001 决策已确认）—— 立即可做
-2. **FER / SenseVoice**：保留 `emotion-echo-models/` 为**离线研究/未来 build 用**，dev 默认不起（PR-TTS-2 v2 profiles: [ai]）
-3. **vendor 尝试**：等网络恢复后，按本文件 §四 阶段规划启动 PR-TTS-VENDOR-1/2
+### 5.2 关键决策变更（vs 2026-09-09 旧结论）
+
+| 旧结论（§五 截至 2026-09-09） | 新结论（Stage 60） | 原因 |
+|---|---|---|
+| "Vendor 镜像 0 张完整 pull 成功" | ✅ 3 张 vendor/本地实现可拉/可 build | 开启 Clash TUN 模式后境外资源可达（stage-59 §十）|
+| "XTTS 走云 API（ADR-001）" | ✅ 改走 vendor `ai4all/coqui` | vendor 镜像端到端调通，比云 API 简单（无需 key）；云 API 仍保留为 future fallback |
+| "FER 自建卡死 + 重 30+ 分钟" | ✅ tflite 备选路径，build < 1min | 原型实测验证后正式落地为 `FER-tflite/` 独立目录 |
+| "SenseVoice 走 yiminger vendor" | ✅ 改走仓内本地实现 | yiminger 镜像挂错标签，仓内 `sensevoice-small/` 已完整可用 |
+
+### 5.3 ai-svc 调用链已通
+
+| 模型 | compose 服务名 | ai-svc env | 端到端契约 |
+|---|---|---|---|
+| FER | `emotion-echo-fer` (port 8004) | `FER_BASE_URL=http://emotion-echo-fer:8004` | POST /analyze → `{emotion, confidence, scores, source}` |
+| SenseVoice | `emotion-echo-sensevoice` (port 8002) | `SENSEVOICE_BASE_URL=http://emotion-echo-sensevoice:8002` | 同上 |
+| XTTS | `emotion-echo-xtts` (port 8003, vendor) | `XTTS_BASE_URL=http://emotion-echo-xtts:8003` | POST /tts → base64 WAV |
+
+ai-svc `applyEnvOverrides` (`main.go:86`) 在容器 DNS 可达时自动接通，**前端 TTS 按钮 dev 模式启用 AI profile 即可用**。
 
 ---
 
