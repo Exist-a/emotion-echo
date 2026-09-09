@@ -67,6 +67,29 @@ PRD / todo-pile §A1：
 
 **结论**：在当前 dev 网络环境下（含国内 mirror），PR-TTS-1 "真构建" **仍不可行**。梯子开 ≠ 完全解决 —— Stage 36 §B2 记录的问题（国内 mirror 大包卡死）依然存在。
 
+### 2.4 第 3 轮：vendor 镜像尝试（2026-09-09 07:25）
+
+**目的**：既然自建 build 不可行，验证 vendor 镜像（`serengil/deepface` 等）是否真能拉通。
+
+**实测结果**：
+
+| 操作 | 结果 |
+|---|---|
+| `docker pull hello-world` | ✅ 成功（25.9kB） |
+| `docker pull python:3.10-slim` | ✅ 成功（197MB） |
+| `docker pull serengil/deepface:latest` | ⚠️ **卡中间**（多个 layer Pull complete 后停，无明确错误）|
+| `docker pull ai4all/coqui:latest` | ⚠️ **正在拉**（Pulling fs layer 阶段）|
+| WebFetch hub.docker.com / github.com | ❌ **timeout**（443 10s timeout） |
+
+**关键观察**：
+- docker.io 顶层通（小镜像成功）
+- vendor 镜像（deepface / coqui）部分 layer 卡死——与 Stage 36 §B2 "国内 mirror 大包 0字节响应"同类问题
+- WebFetch 完全不通——可能梯子只针对 docker.io 部分域名
+
+**结论**：
+- ❌ **vendor 镜像在本环境实测 0 张完整 pull 成功**
+- vendor 候选清单与 PR-TTS-VENDOR 阶段规划见 [`docs/ai-models/vendor-candidates.md`](../ai-models/vendor-candidates.md)
+
 ---
 
 ## 三、决策建议（v2 更新）
