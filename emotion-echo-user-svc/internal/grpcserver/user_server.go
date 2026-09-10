@@ -91,3 +91,67 @@ func (s *userServer) GetUserById(ctx context.Context, req *emotionuser.GetUserBy
 	}
 	return toProtoUser(resp.User), nil
 }
+
+// Login 实现 Login RPC（Sprint E 2026-09-11）
+//
+// 行为契约：
+//   - 复用 logic.NewAuthLogic.Login（与 HTTP handler 同源）
+//   - 错误映射：
+//     - ErrInvalidCredentials → codes.Unauthenticated（与 HTTP 401 对齐）
+//     - ErrValidation → codes.InvalidArgument
+//     - 其他 → codes.Internal
+//   - accessToken 不在此 RPC 返回——由 BFF 收到 UserInfo 后用 jwt.Manager 签发
+func (s *userServer) Login(ctx context.Context, req *emotionuser.LoginRequest) (*emotionuser.LoginResponse, error) {
+	if s.svcCtx == nil {
+		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	}
+	resp, err := logic.NewAuthLogic(ctx, s.svcCtx).Login(&types.LoginReq{
+		Username: req.GetUsername(),
+		Password: req.GetPassword(),
+	})
+	if err != nil {
+		return nil, mapAuthError(err)
+	}
+	return &emotionuser.LoginResponse{User: toProtoUser(resp.User)}, nil
+}
+
+// Register 实现 Register RPC（Sprint E 2026-09-11）
+//
+// 错误映射：
+//   - ErrUsernameTaken → codes.AlreadyExists
+//   - ErrValidation → codes.InvalidArgument
+//   - 其他 → codes.Internal
+func (s *userServer) Register(ctx context.Context, req *emotionuser.RegisterRequest) (*emotionuser.RegisterResponse, error) {
+	if s.svcCtx == nil {
+		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	}
+	resp, err := logic.NewAuthLogic(ctx, s.svcCtx).Register(&types.RegisterReq{
+		Username: req.GetUsername(),
+		Password: req.GetPassword(),
+		// proto optional string → types string：空字符串 = 无验证码
+		VerificationCode: req.GetVerificationCode(),
+		Phone:            req.Phone,
+		Nickname:         req.Nickname,
+	})
+	if err != nil {
+		return nil, mapAuthError(err)
+	}
+	return &emotionuser.RegisterResponse{User: toProtoUser(resp.User)}, nil
+}
+
+// mapAuthError 把 logic.AuthLogic 错误映射到 gRPC status code
+func mapAuthError(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, logic.ErrInvalidCredentials):
+		return status.Error(codes.Unauthenticated, err.Error())
+	case errors.Is(err, logic.ErrUsernameTaken):
+		return status.Error(codes.AlreadyExists, err.Error())
+	case errors.Is(err, logic.ErrValidation):
+		return status.Error(codes.InvalidArgument, err.Error())
+	default:
+		return status.Error(codes.Internal, err.Error())
+	}
+}

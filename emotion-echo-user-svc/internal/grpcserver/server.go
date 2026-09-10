@@ -35,13 +35,26 @@ import (
 
 const healthServiceFullName = "/grpc.health.v1.Health"
 
-// newServiceAwareUserIDInterceptor 跳过 health probe 的 user id 检查
-//（k8s probe 不带 x-user-id metadata）
-func newServiceAwareUserIDInterceptor(skipServiceFullName string) grpc.UnaryServerInterceptor {
+// newServiceAwareUserIDInterceptor 跳过 health probe + Login/Register 的 user id 检查
+//
+// 跳过清单：
+//   - health check（k8s probe 不带 x-user-id metadata）
+//   - Login / Register（匿名调用，调用方无身份；user-svc 自己用 username/password 鉴权）
+//
+// Sprint E（2026-09-11）：补 Login/Register 跳过。实现用 method name 白名单（精确匹配），
+// 避免 prefix 误伤未来新增的 RPC。
+func newServiceAwareUserIDInterceptor(skipServiceFullName string, anonMethods ...string) grpc.UnaryServerInterceptor {
+	skipSet := make(map[string]bool, len(anonMethods)+1)
+	for _, m := range anonMethods {
+		skipSet[m] = true
+	}
 	inner := grpcinterceptor.NewServerUserIDInterceptor()
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		if info != nil && info.FullMethod != "" {
 			if strings.HasPrefix(info.FullMethod, skipServiceFullName) {
+				return handler(ctx, req)
+			}
+			if skipSet[info.FullMethod] {
 				return handler(ctx, req)
 			}
 		}
@@ -64,7 +77,11 @@ func New(svcCtx *svc.ServiceContext, port int) *Server {
 	tracer := skywalking.Tracer()
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
-			newServiceAwareUserIDInterceptor(healthServiceFullName),
+			newServiceAwareUserIDInterceptor(
+				healthServiceFullName,
+				emotionuser.UserService_Login_FullMethodName,
+				emotionuser.UserService_Register_FullMethodName,
+			),
 			grpcinterceptor.NewServerTracingInterceptor(grpcinterceptor.NewGo2SkyTracer(tracer)),
 			grpcinterceptor.ServerLoggingInterceptor(),
 			grpcinterceptor.ServerRecoveryInterceptor(),

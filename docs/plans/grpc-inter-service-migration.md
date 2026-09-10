@@ -17,12 +17,16 @@ related-adrs:
   - docs/architecture/adr/adr-2026-09-doc-drift-registry.md（#25 #26 #27）
 ---
 
-## 🆕 2026-09-11 增补：Stage 63 收口发现 3 条链路 bug
+## 🆕 2026-09-11 增补：Stage 63 收口发现 3 条链路 bug + Sprint C/D/E 落地
 
 Stage 63 端到端验证发现 BFF→4 svc gRPC 链路上有 3 层叠错（决策 18 #25 #26 #27）。
 **Sprint C（解 #26 ctxkey 重构）已落地** —— 见 [legacy-plans/landed/sprint-c-ctxkey-refactor.md](../legacy-plans/landed/sprint-c-ctxkey-refactor.md)。
 **Sprint D（解 #27 chat-svc 4 RPC 实现）已落地** —— 见 [legacy-plans/landed/sprint-d-chat-grpc-implementation.md](../legacy-plans/landed/sprint-d-chat-grpc-implementation.md)。
-**剩余 #32 chat-svc HTTP 端 /api/v1/conversations 500 bug** —— BFF 默认 grpc 后被规避，但根因未查，记后续。
+**Sprint E（解 #33 user-svc proto 半残缺）已落地** —— 见 [legacy-plans/landed/sprint-e-user-grpc-auth.md](../legacy-plans/landed/sprint-e-user-grpc-auth.md)。
+
+**剩余**：
+- **#32 chat-svc HTTP 端 /api/v1/conversations 500 bug**：BFF 默认 grpc 后被规避，根因未查
+- **Sprint F**（user-svc ResetPassword/Logout gRPC 化 + ai-svc 业务方法 gRPC 化）
 
 # Plan — 后端微服务间调用 HTTP → gRPC 改造
 
@@ -38,27 +42,40 @@ Stage 63 端到端验证发现 BFF→4 svc gRPC 链路上有 3 层叠错（决�
 
 决策 5：Python LLM 服务 = 独立微服务 + gRPC server。
 
-### 1.2 已落地 gRPC 的调用链（3 条）
+### 1.2 已落地 gRPC 的调用链（2026-09-11 Sprint C/D 后）
 
 | 调用链 | 协议 | proto / 接口 | 证据 |
 |---|---|---|---|
 | **chat-svc → ai-svc** | gRPC | `emotion_query.proto` · `UpsertNeutralEmotion`（dev fallback 用） | `chat-svc/internal/grpcclient/ai_client.go` + `ai-svc/internal/grpcserver/server.go` |
 | **ai-svc → emotion-llm-service** | gRPC | `emotion_llm.proto` · 文本情绪分析 | `ai-svc/internal/analyzer/grpc_analyzer.go` + Python `emotion-llm-service/` |
 | **BFF → ai-svc** | gRPC | `emotion_query.proto` · `GetEmotionByMessage` / `GetEmotionByConversation` / `GetFusedEmotion` | `web-bff/main.go:202` `grpc.NewClient` + `web-bff/internal/emotion_query.go` |
+| **BFF → chat-svc** | 🟢 gRPC（默认） | `chat.proto` · ListConversations/SendMessage/ListMessages/DeleteConversation（Sprint D 实现） | `web-bff/internal/downstream/chat_grpc.go` + `chat-svc/internal/grpcserver/chat_server.go` |
+| **BFF → assessment-svc** | 🟢 gRPC（默认） | `agent.proto` · ListSurveys/GetSurvey/SubmitSurvey/ListMyResults/GetSurveyResult（proto 5 RPC 全 BFF client 覆盖） | `web-bff/internal/downstream/assessment_grpc.go` + `assessment-svc/internal/grpcserver/metric_server.go` |
+| **BFF → analytics-svc** | 🟢 gRPC（默认） | `metric.proto` · ReportsDaily/ReportsTrend/UserBehavior{3}/MentalHealth{4}（proto 9 RPC 全 server 实现；BFF client 实现 6 个对应 handler 调用） | `web-bff/internal/downstream/analytics_grpc.go` + `analytics-svc/internal/grpcserver/metric_server.go` |
+| **BFF → user-svc** | 🟡 部分 gRPC | `user.proto` · GetMe/UpdateProfile/GetUserById（**Login/Register/ResetPassword 走 HTTP,proto 缺这 3 RPC**） | `web-bff/internal/downstream/user_grpc.go`（3 方法）+ `user-svc/internal/grpcserver/user_server.go` |
 
 ai-svc gRPC server（`grpcserver/server.go`）已挂完整拦截器链：user ID metadata 拦截器 + SkyWalking tracing + logging + recovery，并有 grpc_health_integration_test。
 
-### 1.3 仍是 HTTP 的内部调用（5 条）
+### 1.3 仍是 HTTP 的内部调用（细分）
 
-| 调用链 | 协议 | 证据 |
-|---|---|---|
-| **BFF → user-svc** | HTTP REST | `web-bff/internal/user.go` + config `UserService.BaseURL=http://emotion-echo-user-svc:8888` |
-| **BFF → chat-svc** | HTTP REST | `web-bff/internal/chat.go` + config `ChatService.BaseURL=http://emotion-echo-chat-svc:8890` |
-| **BFF → assessment-svc** | HTTP REST | `web-bff/internal/assessment.go` + config `AssessmentService.BaseURL=http://emotion-echo-assessment-svc:8889` |
-| **BFF → analytics-svc** | HTTP REST | `web-bff/internal/analytics.go` + config `AnalyticsService.BaseURL=http://emotion-echo-analytics-svc:8904` |
-| **ai-svc → FER / SenseVoice / XTTS** | HTTP REST | `ai-svc/internal/aiclient/{fer,sensevoice,xtts}.go`（FastAPI 模型服务）|
+| 调用链 | 协议 | 范围 | 备注 |
+|---|---|---|---|
+| **BFF → user-svc auth** | HTTP REST | Login / Register / ResetPassword（**proto 缺失**）/ Logout（**proto 缺失**） | Sprint E 解决（扩 proto + user-svc gRPC server 实现 + BFF client 接入） |
+| **BFF → ai-svc 业务** | HTTP REST | ai.go（MultiModalAnalyze 等，业务方法非 emotion_query） | 次高频，proto 是否扩待评估 |
+| **BFF → llm-service (DeepSeek)** | HTTP REST | llm.go（DeepSeek API 调用） | **外部 API，本就该 HTTP**（决策 4 例外） |
+| **ai-svc → FER / SenseVoice / XTTS** | HTTP REST | FastAPI 模型服务（ai-svc aiclient/{fer,sensevoice,xtts}.go） | **plan §决策 A 明确不做**（FastAPI 改 gRPC 成本高收益低，AI profile 按需启用，调用量低） |
 
 BFF 的 HTTP downstream client 在 `internal/downstream/`（user/chat/analytics/assessment/ai/xtts/llm/minio），支持 Nacos 服务发现（`internal/discovery/resolver.go`），但传输层仍是 HTTP。
+
+### 1.4 决策 4 全链路覆盖度（2026-09-11 实测）
+
+| 维度 | 覆盖率 | 评注 |
+|---|---|---|
+| **核心业务路径**（BFF→4 svc handler 调用） | **19/19 = 100%** | 4 svc handler 调用的 19 个方法全部走 gRPC |
+| **BFF→4 svc 全部方法**（含低频 + 未触发预留） | **~76%** | 16 gRPC + 5 HTTP（user-svc Login/Register/ResetPassword/Logout + ai-svc 业务方法）|
+| **所有内部 svc-to-svc**（决策 4 全文范围） | **~85%** | 7 gRPC + 2 半 gRPC（user-svc auth）+ 4 故意不做（ai-svc HTTP 业务 + llm + 模型服务）|
+
+**结论**：决策 4 在核心业务路径**已 100% 生效**；剩余工作集中在 user-svc auth gRPC 化（Sprint E）+ ai-svc 业务方法 gRPC 化（可选 Sprint F）+ 历史预留 RPC（chat PinConversation/StreamMessages）。
 
 ### 1.4 gRPC 基础设施就绪度
 

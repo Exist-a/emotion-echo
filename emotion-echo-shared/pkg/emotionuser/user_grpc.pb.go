@@ -1,16 +1,18 @@
 // proto/user.proto
 //
 // Stage 62 PR-3.1: user-svc 暴露给 BFF 的 gRPC 接口（gRPC 渐进迁移 Phase 2）
+// Sprint E (2026-09-11) 增补: Login / Register RPC
 //
 // 背景（docs/plans/grpc-inter-service-migration.md §二 决策 A）：
 //   Stage 58 PR-GRPC-1~6 已落地 chat-svc → BFF gRPC 化（CHAT_TRANSPORT=grpc 默认）。
-//   本批把同模式推广到 user-svc：HTTP :8888 保留给前端（APISIX 网关），
-//   内部 BFF 走 gRPC :8887（feature flag: USER_TRANSPORT=grpc|http）。
+//   Sprint E 推广到 user-svc auth：Login / Register 走 gRPC（accessToken 仍由 BFF jwt.Sign 签发）。
 //
 // 端点 1:1 对齐（emotion-echo-web-bff/internal/downstream/user.go）：
 //   GET    /api/v1/users/me       → GetMe
 //   PATCH  /api/v1/users/me       → UpdateProfile
 //   GET    /api/v1/users/:id      → GetUserById
+//   POST   /api/v1/auth/login     → Login       (Sprint E 新增)
+//   POST   /api/v1/auth/register  → Register    (Sprint E 新增)
 //
 // 与 chat.proto 区别：
 //   - package: emotion_user.v1（user-svc）
@@ -46,6 +48,8 @@ const (
 	UserService_GetMe_FullMethodName         = "/emotion_user.v1.UserService/GetMe"
 	UserService_UpdateProfile_FullMethodName = "/emotion_user.v1.UserService/UpdateProfile"
 	UserService_GetUserById_FullMethodName   = "/emotion_user.v1.UserService/GetUserById"
+	UserService_Login_FullMethodName         = "/emotion_user.v1.UserService/Login"
+	UserService_Register_FullMethodName      = "/emotion_user.v1.UserService/Register"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -55,7 +59,7 @@ const (
 // # UserService user-svc 暴露给 BFF 的接口
 //
 // user-svc 同时跑 HTTP (:8888) + gRPC (:8887)。前端继续走 HTTP（APISIX 网关），
-// 内部 BFF 走 gRPC（本批 PR-3.1~3.4 推进）。
+// 内部 BFF 走 gRPC。
 type UserServiceClient interface {
 	// GetMe 获取当前用户信息
 	//
@@ -67,6 +71,17 @@ type UserServiceClient interface {
 	UpdateProfile(ctx context.Context, in *UpdateProfileRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	// GetUserById 根据 user_id 查询用户（公开信息）
 	GetUserById(ctx context.Context, in *GetUserByIdRequest, opts ...grpc.CallOption) (*UserInfo, error)
+	// Login 用 username + password 登录，返 UserInfo
+	//
+	// 注意：accessToken 不在此 RPC 返回——由 BFF 收到 UserInfo 后用 jwt.Manager 自行签发。
+	// 这样 gRPC 契约只关心业务语义（用户身份），鉴权令牌签发仍归 BFF 单点管控。
+	//
+	// 鉴权：匿名调用（无 metadata x-user-id）。userid 拦截器需在 server 端跳过此 RPC。
+	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	// Register 新建用户（username 唯一），返 UserInfo
+	//
+	// 鉴权：匿名调用（同 Login）。
+	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 }
 
 type userServiceClient struct {
@@ -107,6 +122,26 @@ func (c *userServiceClient) GetUserById(ctx context.Context, in *GetUserByIdRequ
 	return out, nil
 }
 
+func (c *userServiceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LoginResponse)
+	err := c.cc.Invoke(ctx, UserService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterResponse)
+	err := c.cc.Invoke(ctx, UserService_Register_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
@@ -114,7 +149,7 @@ func (c *userServiceClient) GetUserById(ctx context.Context, in *GetUserByIdRequ
 // # UserService user-svc 暴露给 BFF 的接口
 //
 // user-svc 同时跑 HTTP (:8888) + gRPC (:8887)。前端继续走 HTTP（APISIX 网关），
-// 内部 BFF 走 gRPC（本批 PR-3.1~3.4 推进）。
+// 内部 BFF 走 gRPC。
 type UserServiceServer interface {
 	// GetMe 获取当前用户信息
 	//
@@ -126,6 +161,17 @@ type UserServiceServer interface {
 	UpdateProfile(context.Context, *UpdateProfileRequest) (*UserInfo, error)
 	// GetUserById 根据 user_id 查询用户（公开信息）
 	GetUserById(context.Context, *GetUserByIdRequest) (*UserInfo, error)
+	// Login 用 username + password 登录，返 UserInfo
+	//
+	// 注意：accessToken 不在此 RPC 返回——由 BFF 收到 UserInfo 后用 jwt.Manager 自行签发。
+	// 这样 gRPC 契约只关心业务语义（用户身份），鉴权令牌签发仍归 BFF 单点管控。
+	//
+	// 鉴权：匿名调用（无 metadata x-user-id）。userid 拦截器需在 server 端跳过此 RPC。
+	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	// Register 新建用户（username 唯一），返 UserInfo
+	//
+	// 鉴权：匿名调用（同 Login）。
+	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -144,6 +190,12 @@ func (UnimplementedUserServiceServer) UpdateProfile(context.Context, *UpdateProf
 }
 func (UnimplementedUserServiceServer) GetUserById(context.Context, *GetUserByIdRequest) (*UserInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserById not implemented")
+}
+func (UnimplementedUserServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedUserServiceServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -220,6 +272,42 @@ func _UserService_GetUserById_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Login(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_Login_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Register(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_Register_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Register(ctx, req.(*RegisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -238,6 +326,14 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserById",
 			Handler:    _UserService_GetUserById_Handler,
+		},
+		{
+			MethodName: "Login",
+			Handler:    _UserService_Login_Handler,
+		},
+		{
+			MethodName: "Register",
+			Handler:    _UserService_Register_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

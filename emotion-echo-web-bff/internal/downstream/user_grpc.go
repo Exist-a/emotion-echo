@@ -10,7 +10,12 @@
 //   - feature flag: UserClientOptions.Transport=grpc（默认）| http
 //
 // proto 类型：直接复用 shared/pkg/emotionuser 生成代码
-// 鉴权：metadata x-user-id（与 emotion_query.proto / ai-svc 拦截器一致）
+// 鉴权：metadata x-user-id（与 emotion_query.proto / emotion_chat.proto 一致）
+//
+// Sprint E（2026-09-11）：扩 proto user.proto 加 Login / Register RPC；
+// user-svc gRPC server 实现；userid 拦截器跳过这 2 个匿名调用。
+// accessToken 仍由 BFF jwt.Manager 签发。
+// ResetPassword 仍走 HTTP fallback（proto 未扩，Sprint F 跟进）。
 package downstream
 
 import (
@@ -71,19 +76,46 @@ func (c *userGRPCClient) GetByID(ctx context.Context, id int64) (*UserInfo, erro
 	return fromProtoUserInfo(resp), nil
 }
 
-// ResetPassword 走 HTTP fallback（user-svc 未暴露 gRPC 端点）
+// ResetPassword 走 HTTP fallback（user-svc proto 未扩，Sprint F 跟进）
 func (c *userGRPCClient) ResetPassword(ctx context.Context, req ResetPasswordReq) (*UserInfo, error) {
 	return c.httpFallback.ResetPassword(ctx, req)
 }
 
-// Login 走 HTTP fallback
+// Login gRPC RPC（Sprint E 2026-09-11）
+//
+// 注意：Login 是匿名调用，**不传** metadata x-user-id（user-svc 拦截器跳过 Login）。
+// 不能用 withUserID(ctx)——会强制注入 x-user-id metadata，虽然 server 跳过但语义错误。
 func (c *userGRPCClient) Login(ctx context.Context, username, password string) (*UserInfo, error) {
-	return c.httpFallback.Login(ctx, username, password)
+	cli := emotionuser.NewUserServiceClient(c.conn)
+	resp, err := cli.Login(ctx, &emotionuser.LoginRequest{
+		Username: username,
+		Password: password,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("downstream: user login: %w", err)
+	}
+	return fromProtoUserInfo(resp.GetUser()), nil
 }
 
-// Register 走 HTTP fallback
+// Register gRPC RPC（Sprint E 2026-09-11）
+//
+// 同 Login：匿名调用，不传 x-user-id metadata。
 func (c *userGRPCClient) Register(ctx context.Context, username, password, verificationCode string) (*UserInfo, error) {
-	return c.httpFallback.Register(ctx, username, password, verificationCode)
+	cli := emotionuser.NewUserServiceClient(c.conn)
+	req := &emotionuser.RegisterRequest{
+		Username: username,
+		Password: password,
+	}
+	// verificationCode 可选：空字符串不设字段
+	if verificationCode != "" {
+		vc := verificationCode
+		req.VerificationCode = &vc
+	}
+	resp, err := cli.Register(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("downstream: user register: %w", err)
+	}
+	return fromProtoUserInfo(resp.GetUser()), nil
 }
 
 // ============ proto → types 转换 ============

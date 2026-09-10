@@ -1,16 +1,18 @@
 // proto/user.proto
 //
 // Stage 62 PR-3.1: user-svc 暴露给 BFF 的 gRPC 接口（gRPC 渐进迁移 Phase 2）
+// Sprint E (2026-09-11) 增补: Login / Register RPC
 //
 // 背景（docs/plans/grpc-inter-service-migration.md §二 决策 A）：
 //   Stage 58 PR-GRPC-1~6 已落地 chat-svc → BFF gRPC 化（CHAT_TRANSPORT=grpc 默认）。
-//   本批把同模式推广到 user-svc：HTTP :8888 保留给前端（APISIX 网关），
-//   内部 BFF 走 gRPC :8887（feature flag: USER_TRANSPORT=grpc|http）。
+//   Sprint E 推广到 user-svc auth：Login / Register 走 gRPC（accessToken 仍由 BFF jwt.Sign 签发）。
 //
 // 端点 1:1 对齐（emotion-echo-web-bff/internal/downstream/user.go）：
 //   GET    /api/v1/users/me       → GetMe
 //   PATCH  /api/v1/users/me       → UpdateProfile
 //   GET    /api/v1/users/:id      → GetUserById
+//   POST   /api/v1/auth/login     → Login       (Sprint E 新增)
+//   POST   /api/v1/auth/register  → Register    (Sprint E 新增)
 //
 // 与 chat.proto 区别：
 //   - package: emotion_user.v1（user-svc）
@@ -31,7 +33,7 @@ option go_package = "github.com/emotion-echo/shared/pkg/emotionuser";
 // UserService user-svc 暴露给 BFF 的接口
 //
 // user-svc 同时跑 HTTP (:8888) + gRPC (:8887)。前端继续走 HTTP（APISIX 网关），
-// 内部 BFF 走 gRPC（本批 PR-3.1~3.4 推进）。
+// 内部 BFF 走 gRPC。
 service UserService {
   // GetMe 获取当前用户信息
   //
@@ -45,6 +47,19 @@ service UserService {
 
   // GetUserById 根据 user_id 查询用户（公开信息）
   rpc GetUserById (GetUserByIdRequest) returns (UserInfo);
+
+  // Login 用 username + password 登录，返 UserInfo
+  //
+  // 注意：accessToken 不在此 RPC 返回——由 BFF 收到 UserInfo 后用 jwt.Manager 自行签发。
+  // 这样 gRPC 契约只关心业务语义（用户身份），鉴权令牌签发仍归 BFF 单点管控。
+  //
+  // 鉴权：匿名调用（无 metadata x-user-id）。userid 拦截器需在 server 端跳过此 RPC。
+  rpc Login (LoginRequest) returns (LoginResponse);
+
+  // Register 新建用户（username 唯一），返 UserInfo
+  //
+  // 鉴权：匿名调用（同 Login）。
+  rpc Register (RegisterRequest) returns (RegisterResponse);
 }
 
 // ============== Requests / Responses ==============
@@ -68,6 +83,32 @@ message UpdateProfileRequest {
 // GetUserByIdRequest 查询用户请求
 message GetUserByIdRequest {
   int64 user_id = 1;
+}
+
+// LoginRequest 登录请求
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+// LoginResponse 登录响应（仅返 user info，accessToken 由 BFF 签发）
+message LoginResponse {
+  UserInfo user = 1;
+}
+
+// RegisterRequest 注册请求
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  // verificationCode 可选：dev mode 不强制验证码（生产由 BFF 校验）
+  optional string verification_code = 3;
+  optional string phone = 4;
+  optional string nickname = 5;
+}
+
+// RegisterResponse 注册响应
+message RegisterResponse {
+  UserInfo user = 1;
 }
 
 // UserInfo 用户信息视图

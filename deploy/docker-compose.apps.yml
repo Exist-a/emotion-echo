@@ -73,7 +73,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-user-svc/Dockerfile
-    image: emotion-echo/user-svc:v0.1.1
+    image: emotion-echo/user-svc:v0.1.2
     container_name: emotion-echo-user-svc
     restart: unless-stopped
     environment:
@@ -599,7 +599,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.4
+    image: emotion-echo/web-bff:v0.1.5
     container_name: emotion-echo-web-bff
     restart: unless-stopped
     depends_on:
