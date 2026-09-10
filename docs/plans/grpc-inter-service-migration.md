@@ -21,28 +21,8 @@ related-adrs:
 
 Stage 63 端到端验证发现 BFF→4 svc gRPC 链路上有 3 层叠错（决策 18 #25 #26 #27）。
 **Sprint C（解 #26 ctxkey 重构）已落地** —— 见 [legacy-plans/landed/sprint-c-ctxkey-refactor.md](../legacy-plans/landed/sprint-c-ctxkey-refactor.md)。
-**Sprint D（解 #27 chat-svc 6 RPC + #32 chat-svc HTTP 端 bug）仍未做**，范围如下。
-
-### Sprint D（chat-svc gRPC 6 RPC 实现 + chat-svc HTTP 端 bug，解 #27 #32）
-
-**问题 1（#27）**：Stage 58 PR-GRPC-3 实质只挂了 server skeleton，6 个 RPC 全 Unimplemented。
-**问题 2（#32）**：chat-svc HTTP 端 `/api/v1/conversations` 500（chat-svc logic 本身 bug，与 gRPC 无关）。
-
-**修法**（1-2 天）：
-
-- SendMessage（含 Kafka event 触发）
-- ListMessages
-- ListConversations
-- DeleteConversation
-- PinConversation
-- StreamMessages（gRPC server stream 替代 SSE）
-- 顺手修 chat-svc HTTP handler 的 conversations 500 bug
-
-**DoD**：
-- chat-svc gRPC 6 RPC 全实现 + 单测
-- BFF Transport=""（默认 grpc）+ docker 端到端 `conversations` 等 chat 业务 200
-- 决策 18 #27 #32 标关闭
-- **Sprint D 完成后**：BFF 默认 Transport=""（grpc）覆盖所有 4 svc，端到端 conversations 也能走 gRPC，**CHAT_TRANSPORT=http 测试 override 可以删**（`deploy/compose.sprint-c-override.yml`）
+**Sprint D（解 #27 chat-svc 4 RPC 实现）已落地** —— 见 [legacy-plans/landed/sprint-d-chat-grpc-implementation.md](../legacy-plans/landed/sprint-d-chat-grpc-implementation.md)。
+**剩余 #32 chat-svc HTTP 端 /api/v1/conversations 500 bug** —— BFF 默认 grpc 后被规避，但根因未查，记后续。
 
 # Plan — 后端微服务间调用 HTTP → gRPC 改造
 

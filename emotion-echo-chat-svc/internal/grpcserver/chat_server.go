@@ -24,6 +24,7 @@ import (
 	"errors"
 
 	"emotion-echo-chat-svc/internal/logic"
+	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 
@@ -50,6 +51,19 @@ func toProtoConversation(c types.ConversationView) *emotionchat.Conversation {
 		Status:    int32(c.Status),
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
+	}
+}
+
+// toProtoMessage 把 chat-svc types.MessageView 转 proto
+func toProtoMessage(m types.MessageView) *emotionchat.Message {
+	return &emotionchat.Message{
+		Id:             m.Id,
+		ConversationId: m.ConversationId,
+		UserId:         m.UserId,
+		Role:           m.Role,
+		Content:        m.Content,
+		TokensUsed:     int32(m.TokensUsed),
+		CreatedAt:      m.CreatedAt,
 	}
 }
 
@@ -81,36 +95,130 @@ func (s *chatServer) CreateConversation(ctx context.Context, req *emotionchat.Cr
 	return toProtoConversation(resp.Conversation), nil
 }
 
-// SendMessage 占位实现（PR-GRPC-3 阶段补完）
+// SendMessage 实现 SendMessage RPC（Sprint D）
+//
+// 行为契约：
+//   - 从 metadata x-user-id 取 user id（grpcinterceptor 注入 ctx，Sprint C ctxkey 别名通）
+//   - 调 logic.NewSendMessageLogic.SendMessage（与 HTTP handler 共享业务逻辑）
+//   - proto SendMessageRequest.ConversationId → types.SendMessageReq.Id
+//   - 错误映射：logic 业务错误 → codes.Internal（无法细分类别时）；not found → codes.NotFound
 func (s *chatServer) SendMessage(ctx context.Context, req *emotionchat.SendMessageRequest) (*emotionchat.Message, error) {
 	if s.svcCtx == nil {
 		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
 	}
-	return nil, status.Error(codes.Unimplemented, "SendMessage: PR-GRPC-3 阶段补完")
+
+	// proto ClientMsgId 是 string（非指针）；types.ClientMsgID 是 *string。
+	// 空字符串 → nil（避免把空字符串当作有效幂等 key）
+	var clientMsgID *string
+	if req.GetClientMsgId() != "" {
+		cmid := req.GetClientMsgId()
+		clientMsgID = &cmid
+	}
+	resp, err := logic.NewSendMessageLogic(ctx, s.svcCtx).SendMessage(&types.SendMessageReq{
+		Id:          req.GetConversationId(),
+		Role:        req.GetRole(),
+		Content:     req.GetContent(),
+		ClientMsgID: clientMsgID,
+		ContentType: req.GetContentType(),
+		EmotionTag:  req.GetEmotionTag(),
+	})
+	if err != nil {
+		return nil, mapLogicError(err, "send message")
+	}
+	if resp == nil {
+		return nil, status.Error(codes.Internal, "empty send message response")
+	}
+	return toProtoMessage(resp.Message), nil
 }
 
-// ListMessages 占位实现
+// ListMessages 实现 ListMessages RPC（Sprint D）
 func (s *chatServer) ListMessages(ctx context.Context, req *emotionchat.ListMessagesRequest) (*emotionchat.ListMessagesResponse, error) {
 	if s.svcCtx == nil {
 		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
 	}
-	return nil, status.Error(codes.Unimplemented, "ListMessages: PR-GRPC-3 阶段补完")
+
+	resp, err := logic.NewListMessagesLogic(ctx, s.svcCtx).ListMessages(&types.ListMessagesReq{
+		Id:    req.GetConversationId(),
+		Limit: int(req.GetLimit()),
+	})
+	if err != nil {
+		return nil, mapLogicError(err, "list messages")
+	}
+	out := &emotionchat.ListMessagesResponse{Messages: make([]*emotionchat.Message, 0, len(resp.Messages))}
+	for _, m := range resp.Messages {
+		out.Messages = append(out.Messages, toProtoMessage(m))
+	}
+	return out, nil
 }
 
-// ListConversations 占位实现
+// ListConversations 实现 ListConversations RPC（Sprint D）
 func (s *chatServer) ListConversations(ctx context.Context, req *emotionchat.ListConversationsRequest) (*emotionchat.ListConversationsResponse, error) {
 	if s.svcCtx == nil {
 		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
 	}
-	return nil, status.Error(codes.Unimplemented, "ListConversations: PR-GRPC-3 阶段补完")
+
+	resp, err := logic.NewListConversationsLogic(ctx, s.svcCtx).ListConversations(&types.ListConversationsReq{
+		Limit:  int(req.GetLimit()),
+		Offset: int(req.GetOffset()),
+	})
+	if err != nil {
+		return nil, mapLogicError(err, "list conversations")
+	}
+	out := &emotionchat.ListConversationsResponse{
+		List:    make([]*emotionchat.Conversation, 0, len(resp.List)),
+		HasMore: resp.HasMore,
+	}
+	for _, c := range resp.List {
+		out.List = append(out.List, toProtoConversation(c))
+	}
+	return out, nil
 }
 
-// DeleteConversation 占位实现
+// DeleteConversation 实现 DeleteConversation RPC（Sprint D）
 func (s *chatServer) DeleteConversation(ctx context.Context, req *emotionchat.DeleteConversationRequest) (*emotionchat.DeleteConversationResponse, error) {
 	if s.svcCtx == nil {
 		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
 	}
-	return nil, status.Error(codes.Unimplemented, "DeleteConversation: PR-GRPC-3 阶段补完")
+
+	resp, err := logic.NewDeleteConversationLogic(ctx, s.svcCtx).DeleteConversation(&types.DeleteConversationReq{
+		Id: req.GetConversationId(),
+	})
+	if err != nil {
+		return nil, mapLogicError(err, "delete conversation")
+	}
+	return &emotionchat.DeleteConversationResponse{
+		Success: resp.Success,
+		Id:      resp.Id,
+	}, nil
+}
+
+// mapLogicError 把 logic 层业务错误映射到 gRPC status code。
+//
+// Sprint D 简化策略：
+//   - repository.ErrNotFound → codes.NotFound
+//   - "unauthorized" 开头 → codes.Unauthenticated
+//   - "forbidden" 开头 → codes.PermissionDenied
+//   - "validation" 开头 → codes.InvalidArgument
+//   - 其他 → codes.Internal（保留原 err.Error() 在 msg 里）
+//
+// 未实现完整错误枚举是 Sprint E 的事（chat-svc 错误码统一收口），当前优先让 4 RPC 端到端通。
+func mapLogicError(err error, op string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		return status.Error(codes.NotFound, msg)
+	case len(msg) >= 12 && msg[:12] == "unauthorized":
+		return status.Error(codes.Unauthenticated, msg)
+	case len(msg) >= 9 && msg[:9] == "forbidden":
+		return status.Error(codes.PermissionDenied, msg)
+	case len(msg) >= 10 && msg[:10] == "validation":
+		return status.Error(codes.InvalidArgument, msg)
+	default:
+		return status.Errorf(codes.Internal, "%s: %s", op, msg)
+	}
 }
 
 // PinConversation 占位实现
