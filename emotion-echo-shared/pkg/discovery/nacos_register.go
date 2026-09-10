@@ -157,10 +157,7 @@ func (r *NacosRegistry) Register(ctx context.Context, ins Instance) error {
 	ephemeral := defaultRegisterEphemeral || r.cfg.Ephemeral
 	// PR-1 修复：Host 为 0.0.0.0（yaml 默认）会让 Nacos 把实例判 unhealthy；
 	// fallback 到本机非 loopback IPv4，Nacos 才能正确 health check。
-	host := ins.Host
-	if host == "" || host == "0.0.0.0" {
-		host = resolveRegisterIP()
-	}
+	host := registerHost(ins.Host)
 	ok, err := r.client.RegisterInstance(nacosvo.RegisterInstanceParam{
 		Ip:          host,
 		Port:        uint64(ins.Port),
@@ -188,7 +185,7 @@ func (r *NacosRegistry) Unregister(ctx context.Context, ins Instance) error {
 	}
 	ephemeral := defaultRegisterEphemeral || r.cfg.Ephemeral
 	_, err := r.client.DeregisterInstance(nacosvo.DeregisterInstanceParam{
-		Ip:          ins.Host,
+		Ip:          registerHost(ins.Host),
 		Port:        uint64(ins.Port),
 		Cluster:     "DEFAULT",
 		ServiceName: ins.ServiceName,
@@ -278,7 +275,7 @@ func (r *NacosRegistry) Heartbeat(ctx context.Context, ins Instance, interval ti
 				// 周期续约：调一次 UpdateInstance 让 Nacos 重新感知本实例。
 				// SDK 没有独立的 SendHeartbeat 公开方法，UpdateInstance 是公开心跳通道。
 				_, _ = r.client.UpdateInstance(nacosvo.UpdateInstanceParam{
-					Ip:          ins.Host,
+					Ip:          registerHost(ins.Host),
 					Port:        uint64(ins.Port),
 					Weight:      1.0,
 					Enable:      true,
@@ -357,6 +354,24 @@ var _ Registry = (*NacosRegistry)(nil)
 
 // resolveRegisterIP 返回本机非 loopback IPv4。Host=0.0.0.0（yaml 默认）会
 // 让 Nacos 把实例判 unhealthy，因此 Register 时用本机 IP。
+//
+// registerHost 把 yaml 里的 Host 占位符解析为可路由的本机 IP。
+//
+// Stage 62 PR-3.4 修复（决策 18 #28）：Register / Unregister / Heartbeat **三处必须共用**本函数。
+//
+// 历史 bug（2026-09-10 docker 实测）：
+//   - Register() 已解析 0.0.0.0 → 真实 IP（b869ff9 PR-1），实测 T+3s Nacos 显示 172.18.0.14:8888 ✅
+//   - 但 Heartbeat() 用原始 ins.Host（"0.0.0.0"）调 UpdateInstance，
+//     5s 后把正确注册覆盖成 0.0.0.0；Unregister() 同样注销不到真实实例。
+//   - 后果：APISIX nacos-discovery 拉到 0.0.0.0 上游 → connect refused → **dev 网关全 502**。
+func registerHost(h string) string {
+	if h == "" || h == "0.0.0.0" {
+		return resolveRegisterIP()
+	}
+	return h
+}
+
+// resolveRegisterIP 取本机非 loopback IPv4。
 //
 // 实现：net.Dial UDP 到 8.8.8.8 取本机 outbound IP（不真发包）——
 // 容器内通用，不依赖具体网卡名。
