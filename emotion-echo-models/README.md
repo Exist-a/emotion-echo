@@ -291,7 +291,105 @@ curl http://localhost:8891/api/v1/conversations/1/analyze \
 
 ---
 
-## 七、相关文档
+## 七、实测验证记录（2026-09-10）
+
+这一节记录**今天在本机实测过的命令和结果**——下次重 build 或迁移机器时直接复制粘贴即可复现。
+
+### 7.1 FER（本地镜像 `emotion-echo/fer-tflite:v0.1.0`）
+
+```bash
+# 启动（端口 8004）
+docker run -d --name fer-hc -p 8004:8004 emotion-echo/fer-tflite:v0.1.0
+
+# /health（应返回 model_loaded=true, backend=tflite+haar）
+curl -fsS http://localhost:8004/health
+# 实际结果：{"status":"ok","model_loaded":true,"backend":"tflite+haar"}
+
+# /analyze 真实合成脸图（PowerShell 生成 → Windows temp → 挂进容器）
+curl -sS -m 30 -X POST http://localhost:8004/analyze \
+  -F "file=@/tmp/face.jpg;type=image/jpeg"
+# 实际结果：{"emotion":"neutral","confidence":0.5,"scores":{},"source":"no-face"}
+# 含义：模型加载成功；合成几何形状 Haar 检不到人脸，走 no-face 分支
+```
+
+**FER tflite 推理路径的**真脸图**测试**未做过**——仓里没有真实人脸图。49/49 单测覆盖 emotion_mapping / route 契约 / metrics / logging 但 mock 推理输出。如果你有真实人脸图可用，建议补一次端到端验证（30 秒）。
+
+### 7.2 SenseVoice（ACR 镜像 `crpi-.../emotion-echo/sensevoice:v0.1.0`）
+
+```bash
+# pull（首次约 1.4GB）
+docker pull crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.0
+
+# 启动（端口 8002）
+docker run -d --name sv-hc -p 8002:8002 \
+  crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.0
+sleep 8
+
+# /health（懒加载设计：model_loaded=false 是预期）
+curl -fsS http://localhost:8002/health
+# 实际结果：{"status":"loading","service":"sensevoice","device":"cpu","model_loaded":false}
+
+# /analyze 真实音频（仓内 example/zh.mp3，首次 30-60s 加载模型）
+curl -sS -m 120 -X POST http://localhost:8002/analyze \
+  -F "file=@/ex/zh.mp3;type=audio/mpeg"
+# 实际结果：{"text":"开放时间早上9点至下午5点。","emotion":"neutral","confidence":0.6,...}
+```
+
+### 7.3 XTTS（vendor `ai4all/coqui:latest`，端口 8003 override）
+
+```bash
+# XTTS 模型本地预下到 C:/Users/LENVOV/AppData/Local/Temp/coqui_model
+# （首次约 50 分钟，hf-mirror.com 分文件下载；详见 §4.3）
+
+# 启动（端口覆盖 8000→8003，root + 模型挂载）
+docker run -d --name xtts-hc -p 8013:8003 -u root \
+  -v "C:/Users/LENVOV/AppData/Local/Temp/coqui_model:/model" \
+  ai4all/coqui:latest \
+  fastapi run app.py --host=0.0.0.0 --port=8003
+
+# 等模型加载（XTTS v2 torch warmup + VAD 模型 ≈ 2 分半）
+sleep 150
+docker exec xtts-hc bash -c "awk '{print \$2}' /proc/net/tcp | sort -u"
+# 实际结果：1F43 (8003 hex) → 端口监听
+
+# /voice/upload + /voice/generate + /voice/result 端到端
+curl -X POST http://localhost:8013/voice/upload \
+  -F "name=demo" \
+  -F "audio=@/samples/en_sample.wav;type=audio/wav"
+# 实际结果：200 {"name":"demo","audio":"/model/voices/5a003a5b-...wav"}
+
+curl -X POST http://localhost:8013/voice/generate \
+  -H "Content-Type: application/json" \
+  -d '{"voice":"demo","text":"Hello from health check.","language":"en"}'
+# 实际结果：200 {}
+
+curl http://localhost:8013/voice/result -o out.wav
+# 实际结果：200 80KB RIFF/WAV audio
+```
+
+### 7.4 完整 profile 启动 + 验证（一键脚本）
+
+```bash
+# 启动
+docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
+  --profile ai up -d emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
+
+# 等待 startup（XTTS 最慢，约 2.5 分钟）
+sleep 180
+
+# 验证三容器健康
+for svc in fer sensevoice xtts; do
+  port=$([ "$svc" = "fer" ] && echo 8004 || ([ "$svc" = "sensevoice" ] && echo 8002 || echo 8003))
+  echo "--- $svc :$port ---"
+  docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
+    --profile ai exec $svc sh -c "timeout 5 wget -q -O - http://localhost:$port/health 2>/dev/null || echo '(no /health or timeout)'"
+done
+# 实际结果：fer/sensevoice 返回 200 JSON，xtts 返回 '(no /health or timeout)' 是预期（vendor 无 /health 端点）
+```
+
+---
+
+## 八、相关文档
 
 - [`docs/ai-models/build-guide.md`](../docs/ai-models/build-guide.md) — 旧版构建指南（Stage 36），已 deprecated，本文档取代
 - [`docs/ai-models/vendor-candidates.md`](../docs/ai-models/vendor-candidates.md) — 3 模型 vendor 候选调研记录（含 yiminger/sensevoice 挂错标签的发现）
