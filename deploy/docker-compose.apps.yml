@@ -483,16 +483,18 @@ services:
   # Stage 22-A.2 SenseVoice（语音转写 + 情绪标签）
   #   profile: ai    （resources ~1.5GB，funasr + torch on CPU）
   # =====================================================
-emotion-echo-sensevoice:
-    # PR-TTS-VENDOR Phase 5: switch from Stage-36 v0.1.0 build context (which
-    # is unreproducible on the current offline dev host) to the SV-fastbuild
-    # pre-built image. The image includes 936MB SenseVoiceSmall model.pt and
-    # its dependencies. service_name + port unchanged so ai-svc applyEnvOverrides
-    # continues to wire SENSEVOICE_BASE_URL=http://emotion-echo-sensevoice:8002.
-    build:
-      context: ../emotion-echo-models
-      dockerfile: SV-fastbuild/Dockerfile
-    image: emotion-echo/sensevoice-fastbuild:v0.1.0
+  emotion-echo-sensevoice:
+    # PR-TTS-VENDOR Phase 6: pull pre-built image from Aliyun ACR instead of
+    # building locally. The base layer (python + torch + funasr + knf) lives at
+    # sensevoice-base:v0.1.0; the app layer (code + 936MB model.pt) at
+    # sensevoice:v0.1.0. Building locally requires ~140s and intermittent
+    # apt/pypi failures documented in stage-58/59; pulling from ACR takes
+    # < 1 min. Rebuild + push flow lives in scripts/push-to-acr.sh.
+    #
+    # To switch back to local build: replace 'image:' with the build block
+    # from Phase 5 (commit 8e09d03): context=../emotion-echo-models,
+    # dockerfile=SV-fastbuild/Dockerfile, image=emotion-echo/sensevoice-fastbuild:v0.1.0
+    image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.0
     container_name: emotion-echo-sensevoice
     restart: unless-stopped
     profiles: ["ai"]
