@@ -10,6 +10,33 @@
 
 ---
 
+> **🔧 2026-09-10 决策 18 §4.4 就地更正块（登记于 doc-drift-registry #23）**：
+>
+> 上面头 4 行的"🟡 Proposed / ⏸ 未开始"描述**与事实严重失真**——候选 C 已在 2026-09-09
+> 由 PR-ENV-1~4 全部落地：
+>
+> | Commit | 日期 | 内容 | 验证 |
+> |---|---|---|---|
+> | `ac0299e` | 2026-09-09 06:31 | PR-ENV-1 抽 `deploy/compose.dev.yml`（61 行） | `wc -l deploy/compose.dev.yml` → 61 |
+> | `f400e65` | 2026-09-09 06:32 | PR-ENV-2 `apps.yml` 中性化 `${VAR:-default}`（18 处硬编码 → 中性） | `git show f400e65 --stat` → 2 files / 155+/16- |
+> | `b89ecab` | 2026-09-09 06:33 | PR-ENV-3 `deploy/compose.prod.yml` 空壳占位（66 行） | `wc -l deploy/compose.prod.yml` → 66 |
+> | `b2ea516` | 2026-09-09 06:35 | PR-ENV-4 `deploy/configuration.md`（179 行）+ QUICKSTART.md 同步 | `wc -l deploy/configuration.md` → 179 |
+>
+> **测试记录**（stage-58-q3-followups.md §二）：
+> - `scripts/test_compose_override.sh`：10/10 PASS（dev.yml 覆盖项 + 语法合法）
+> - `scripts/test_apps_yml_neutral.sh`：8/8 PASS（无硬编码）
+> - `scripts/test_prod_yml_stub.sh`：11/11 PASS（空壳 + 语法合法 + 不引入新服务）
+> - `scripts/test_docs_update.sh`：14/14 PASS（QUICKSTART 启动命令全替换）
+>
+> **结论修正**：
+> - **决策状态**：✅ **Accepted**（候选 C 已落定，2026-09-09）
+> - **实施状态**：✅ **PR-ENV-1~4 landed**（2026-09-09）
+> - **唯一遗留**：本文档头 4 行未与事实同步——属"未复跑即记录"型失真（决策 18 §三 类型 2）
+> - **整改要求**：当 owner 拍板 ADR-20 §5.1/5.2/5.3 三个待决问题时，一并把头 4 行状态字段更新为 Accepted（commit 形式追溯）
+> - **同步动作**：本次会话已在 `decisions.md` 决策 20 区块与 `todo-pile §G` 反映此更正
+
+---
+
 ## 一、上下文（Context）
 
 Stage 57 批 3 收口时为修 `SKYWALKING_ENABLED` 默认 false 的真 bug，在 `deploy/docker-compose.apps.yml` 直接写死 `SKYWALKING_ENABLED: "true"`（6 处）。修复后引发一次内部讨论——**项目到底要不要做 dev / prod 环境分层？**
