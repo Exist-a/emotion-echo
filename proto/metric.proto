@@ -1,0 +1,201 @@
+// proto/metric.proto
+//
+// Stage 62 PR-3.1: analytics-svc 暴露给 BFF 的 gRPC 接口（gRPC 渐进迁移 Phase 2）
+//
+// 背景（docs/plans/grpc-inter-service-migration.md §二 决策 A）：
+//   analytics-svc HTTP :8893 保留给前端，内部 BFF 走 gRPC :8885
+//   （feature flag: ANALYTICS_TRANSPORT=grpc|http）。
+//
+// 端点 1:1 对齐（emotion-echo-web-bff/internal/downstream/analytics.go）：
+//   GET    /api/v1/reports/daily                      → ReportsDaily
+//   GET    /api/v1/reports/trend                      → ReportsTrend
+//   GET    /api/v1/user-behavior/day-night            → UserBehaviorDayNight
+//   GET    /api/v1/user-behavior/depth                → UserBehaviorDepth
+//   GET    /api/v1/user-behavior/frequency            → UserBehaviorFrequency
+//   GET    /api/v1/mental-health/assessment           → MentalHealthAssessment
+//   GET    /api/v1/mental-health/history                 → MentalHealthHistory
+//   POST   /api/v1/mental-health/trigger              → MentalHealthTrigger
+//   GET    /api/v1/mental-health/trend                → MentalHealthTrend
+//
+// 与 chat.proto / user.proto / agent.proto 区别：
+//   - package: emotion_analytics.v1
+//   - go_package: emotionanalytics
+//   - 9 个 RPC（最大单一服务）
+//
+// 命名说明：
+//   proto 文件名用 `metric.proto`（与 agent.proto 同理：避免与未来 `_service.proto`
+//   命名冲突；go_package 保留 emotionanalytics 语义）。
+
+syntax = "proto3";
+
+package emotion_analytics.v1;
+
+option go_package = "github.com/emotion-echo/shared/pkg/emotionanalytics";
+
+// AnalyticsService 行为分析服务暴露给 BFF 的接口
+//
+// analytics-svc 同时跑 HTTP (:8893) + gRPC (:8885)。前端继续走 HTTP，
+// 内部 BFF 走 gRPC。
+service AnalyticsService {
+  // ReportsDaily 每日情绪报告
+  rpc ReportsDaily (ReportsDailyRequest) returns (ReportsDailyResponse);
+
+  // ReportsTrend 趋势报告（按日/周/月）
+  rpc ReportsTrend (ReportsTrendRequest) returns (ReportsTrendResponse);
+
+  // UserBehaviorDayNight 用户行为按昼夜分布
+  rpc UserBehaviorDayNight (UserBehaviorRequest) returns (UserBehaviorDayNightResponse);
+
+  // UserBehaviorDepth 用户行为深度（会话长度分布）
+  rpc UserBehaviorDepth (UserBehaviorRequest) returns (UserBehaviorDepthResponse);
+
+  // UserBehaviorFrequency 用户行为频率（每日活跃天数）
+  rpc UserBehaviorFrequency (UserBehaviorRequest) returns (UserBehaviorFrequencyResponse);
+
+  // MentalHealthAssessment 心理健康评估（综合日报）
+  rpc MentalHealthAssessment (MentalHealthAssessmentRequest) returns (MentalHealthAssessmentResponse);
+
+  // MentalHealthHistory 心理健康历史
+  rpc MentalHealthHistory (MentalHealthHistoryRequest) returns (MentalHealthHistoryResponse);
+
+  // MentalHealthTrigger 心理健康触发器（手动触发评估）
+  rpc MentalHealthTrigger (MentalHealthTriggerRequest) returns (MentalHealthTriggerResponse);
+
+  // MentalHealthTrend 心理健康趋势
+  rpc MentalHealthTrend (MentalHealthTrendRequest) returns (MentalHealthTrendResponse);
+}
+
+// ============== Common ==============
+
+// DateRange 公共日期范围
+message DateRange {
+  int64 start_date = 1;               // unix seconds (start of day)
+  int64 end_date = 2;                 // unix seconds (end of day, inclusive)
+}
+
+// ChartDataPoint 图表数据点
+message ChartDataPoint {
+  int64 timestamp = 1;                // x 轴（unix seconds）
+  double value = 2;                   // y 轴
+  string label = 3;                   // 显示标签（可选）
+}
+
+// EmotionDistribution 情绪分布
+message EmotionDistribution {
+  string emotion = 1;                 // "happy" / "sad" / "angry" / "neutral" / ...
+  int32 count = 2;
+  double percentage = 3;
+}
+
+// UserBehaviorRequest 用户行为请求基类（公共参数）
+message UserBehaviorRequest {
+  int64 user_id = 1;
+  DateRange  date_range = 2;
+}
+
+// ============== Reports ==============
+
+// ReportsDailyRequest 日报请求
+message ReportsDailyRequest {
+  int64 user_id = 1;
+  int64 date = 2;                     // unix seconds (start of day, 0=今天)
+}
+
+// ReportsDailyResponse 日报响应
+message ReportsDailyResponse {
+  string summary = 1;                 // 自然语言总结
+  repeated EmotionDistribution emotion_distribution = 2;
+  repeated ChartDataPoint emotion_trend = 3;
+  int32 message_count = 4;
+  int32 conversation_count = 5;
+  int64 date = 6;                     // echo back
+}
+
+// ReportsTrendRequest 趋势请求
+message ReportsTrendRequest {
+  int64 user_id = 1;
+  string type = 2;                    // "daily" / "weekly" / "monthly"
+  DateRange date_range = 3;
+}
+
+// ReportsTrendResponse 趋势响应
+message ReportsTrendResponse {
+  repeated ChartDataPoint data_points = 1;
+  string type = 2;                    // echo back
+}
+
+// ============== User Behavior ==============
+
+// UserBehaviorDayNightResponse 昼夜分布响应
+message UserBehaviorDayNightResponse {
+  // 24 小时 × 2 类别（active / message）
+  repeated ChartDataPoint active_hours = 1;
+  repeated ChartDataPoint message_hours = 2;
+}
+
+// UserBehaviorDepthResponse 深度响应（会话长度分布）
+message UserBehaviorDepthResponse {
+  // 会话长度分桶（短/中/长）
+  repeated ChartDataPoint buckets = 1;
+  double average_length = 2;          // 平均会话长度（消息数）
+}
+
+// UserBehaviorFrequencyResponse 频率响应
+message UserBehaviorFrequencyResponse {
+  // daily_active: [{date, active}]
+  repeated ChartDataPoint daily_active = 1;
+  double streak_days = 2;             // 连续活跃天数
+}
+
+// ============== Mental Health ==============
+
+// MentalHealthAssessmentRequest 综合评估请求
+message MentalHealthAssessmentRequest {
+  int64 user_id = 1;
+  int64 date = 2;
+}
+
+// MentalHealthAssessmentResponse 综合评估响应
+message MentalHealthAssessmentResponse {
+  string summary = 1;
+  double score = 2;                   // 综合评分（0-100）
+  string risk_level = 3;              // "low" / "moderate" / "high" / "severe"
+  repeated EmotionDistribution emotion_distribution = 4;
+  int32 triggered_alert_count = 5;    // 触发的告警数
+}
+
+// MentalHealthHistoryRequest 历史请求
+message MentalHealthHistoryRequest {
+  int64 user_id = 1;
+  DateRange date_range = 2;
+}
+
+// MentalHealthHistoryResponse 历史响应
+message MentalHealthHistoryResponse {
+  repeated MentalHealthAssessmentResponse records = 1;
+}
+
+// MentalHealthTriggerRequest 触发请求
+message MentalHealthTriggerRequest {
+  int64 user_id = 1;
+  string trigger_reason = 2;          // "manual" / "scheduled" / "auto"
+}
+
+// MentalHealthTriggerResponse 触发响应
+message MentalHealthTriggerResponse {
+  bool triggered = 1;
+  int64 assessment_id = 2;            // 新建评估 ID（0 = 未新建）
+  string message = 3;
+}
+
+// MentalHealthTrendRequest 趋势请求
+message MentalHealthTrendRequest {
+  int64 user_id = 1;
+  DateRange date_range = 2;
+}
+
+// MentalHealthTrendResponse 趋势响应
+message MentalHealthTrendResponse {
+  repeated ChartDataPoint score_trend = 1;   // 综合评分趋势
+  repeated ChartDataPoint risk_trend = 2;    // 风险等级趋势
+}

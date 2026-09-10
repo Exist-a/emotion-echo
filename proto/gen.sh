@@ -7,6 +7,9 @@
 #   - Go pb:        emotion-echo-shared/pkg/emotionllm/
 #   - Go pb:        emotion-echo-shared/pkg/emotionquery/
 #   - Go pb:        emotion-echo-shared/pkg/emotionchat/   (Stage 58 PR-GRPC-1)
+#   - Go pb:        emotion-echo-shared/pkg/emotionuser/   (Stage 62 PR-3.1)
+#   - Go pb:        emotion-echo-shared/pkg/emotionassessment/ (Stage 62 PR-3.1)
+#   - Go pb:        emotion-echo-shared/pkg/emotionanalytics/   (Stage 62 PR-3.1)
 #   - Python pb:    emotion-llm-service/
 #
 # 用法：
@@ -74,6 +77,9 @@ gen_go() {
         emotion_llm.proto)  pkg_name="emotionllm" ;;
         emotion_query.proto) pkg_name="emotionquery" ;;
         chat.proto)         pkg_name="emotionchat" ;;
+        user.proto)         pkg_name="emotionuser" ;;
+        agent.proto)        pkg_name="emotionassessment" ;;
+        metric.proto)       pkg_name="emotionanalytics" ;;
         *)
             log_warn "未知 proto: $proto_name，跳过 Go 生成"
             return
@@ -84,13 +90,17 @@ gen_go() {
     mkdir -p "$out_dir"
     log_info "生成 Go pb: $proto_name → $out_dir"
 
-    protoc \
-        --proto_path="$PROTO_DIR" \
-        --go_out="$out_dir" \
+    # protoc 在 Windows + 中文目录 + 绝对路径下报错 "No such file or directory"
+    # （即使 cygpath 转换后仍是 bug）。改用 cd 到 output dir + 相对路径：
+    # protoc --proto_path=../../proto --go_out=. --go_opt=paths=source_relative
+    # 这样 protoc 看到的是纯 ASCII 相对路径，规避中文路径 bug
+    ( cd "$out_dir" && protoc \
+        --proto_path="../../../proto" \
+        --go_out=. \
         --go_opt=paths=source_relative \
-        --go-grpc_out="$out_dir" \
+        --go-grpc_out=. \
         --go-grpc_opt=paths=source_relative \
-        "$PROTO_DIR/$proto_name"
+        "../../../proto/$proto_name" )
 }
 
 # ============================================

@@ -1,0 +1,154 @@
+// proto/agent.proto
+//
+// Stage 62 PR-3.1: assessment-svc 暴露给 BFF 的 gRPC 接口（gRPC 渐进迁移 Phase 2）
+//
+// 背景（docs/plans/grpc-inter-service-migration.md §二 决策 A）：
+//   与 user.proto 同批推进；assessment-svc HTTP :8889 保留给前端，
+//   内部 BFF 走 gRPC :8886（feature flag: ASSESSMENT_TRANSPORT=grpc|http）。
+//
+// 端点 1:1 对齐（emotion-echo-web-bff/internal/downstream/assessment.go）：
+//   GET    /api/v1/surveys                  → ListSurveys
+//   GET    /api/v1/surveys/:id              → GetSurvey
+//   POST   /api/v1/surveys/:id/submit       → SubmitSurvey
+//   GET    /api/v1/surveys/results          → ListMyResults
+//   GET    /api/v1/surveys/results/:resultId → GetSurveyResult
+//
+// 与 chat.proto / user.proto 区别：
+//   - package: emotion_assessment.v1
+//   - go_package: emotionassessment
+//
+// 命名说明：
+//   proto 文件名用 `agent.proto`（避免与未来 gRPC `assessment_service.proto` 混淆，
+//   go_package 仍用 emotionassessment 保持语义）。决策 18 §三 类型 5 自报告风险提醒：
+//   本命名选择如有歧义请即时反馈（见 stage-62-cleanup-and-grpc-plan.md §二.3）。
+
+syntax = "proto3";
+
+package emotion_assessment.v1;
+
+option go_package = "github.com/emotion-echo/shared/pkg/emotionassessment";
+
+// AssessmentService 量表服务暴露给 BFF 的接口
+//
+// assessment-svc 同时跑 HTTP (:8889) + gRPC (:8886)。前端继续走 HTTP，
+// 内部 BFF 走 gRPC。
+service AssessmentService {
+  // ListSurveys 列出当前可用的量表（不含完整题目）
+  rpc ListSurveys (ListSurveysRequest) returns (ListSurveysResponse);
+
+  // GetSurvey 获取单个量表详情（含完整题目）
+  rpc GetSurvey (GetSurveyRequest) returns (Survey);
+
+  // SubmitSurvey 提交量表作答
+  rpc SubmitSurvey (SubmitSurveyRequest) returns (SurveyResult);
+
+  // ListMyResults 列出当前用户的所有作答记录
+  rpc ListMyResults (ListMyResultsRequest) returns (ListMyResultsResponse);
+
+  // GetSurveyResult 获取单个作答记录详情
+  rpc GetSurveyResult (GetSurveyResultRequest) returns (SurveyResult);
+}
+
+// ============== Requests / Responses ==============
+
+// ListSurveysRequest 列请求（支持分页）
+message ListSurveysRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+// ListSurveysResponse 列响应
+message ListSurveysResponse {
+  repeated SurveyItem items = 1;
+  int32 total = 2;
+}
+
+// SurveyItem 量表摘要（不含完整题目，用于列表展示）
+message SurveyItem {
+  int64 id = 1;
+  string code = 2;                    // e.g. "SDS" / "SAS"
+  string title = 3;
+  string category = 4;
+  int32 version = 5;
+  int32 question_count = 6;
+  int64 created_at = 7;
+}
+
+// GetSurveyRequest 单个量表请求
+message GetSurveyRequest {
+  int64 survey_id = 1;
+}
+
+// Survey 量表详情（含完整题目）
+message Survey {
+  int64 id = 1;
+  string code = 2;
+  string title = 3;
+  string category = 4;
+  int32 version = 5;
+  repeated SurveyQuestion questions = 6;
+}
+
+// SurveyQuestion 单题
+message SurveyQuestion {
+  int64 id = 1;
+  int32 order = 2;
+  string prompt = 3;                  // 题干
+  string question_type = 4;           // "single" / "multiple" / "scale" / "text"
+  // 选项：single/multiple 用 repeated string
+  repeated string options = 5;
+  // scale 类型：min/max/label（如 1=从不 5=总是）
+  int32 scale_min = 6;
+  int32 scale_max = 7;
+  string scale_min_label = 8;
+  string scale_max_label = 9;
+}
+
+// SubmitSurveyRequest 提交作答请求
+message SubmitSurveyRequest {
+  int64 survey_id = 1;
+  // user_id 通过 metadata "x-user-id" 传（其他 service 一致）
+  repeated Answer answers = 2;
+  int32 duration_sec = 3;             // 用户答题耗时
+}
+
+// Answer 单题作答
+message Answer {
+  int64 question_id = 1;
+  // 作答内容：scale = 整数选项；single/multiple = 字符串选项 ID；text = 文本
+  oneof value {
+    int32 scale_value = 2;
+    string text_value = 3;
+    string option_value = 4;
+  }
+}
+
+// SurveyResult 作答结果
+message SurveyResult {
+  int64 result_id = 1;
+  int64 survey_id = 2;
+  int64 user_id = 3;
+  int32 total_score = 4;
+  int32 answered = 5;                 // 已答题数
+  string risk_level = 6;              // "low" / "moderate" / "high" / "severe"
+  int32 duration_sec = 7;
+  repeated Answer answers = 8;
+  int64 submitted_at = 9;             // unix seconds
+}
+
+// ListMyResultsRequest 列我的作答请求
+message ListMyResultsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+// ListMyResultsResponse 列我的作答响应
+message ListMyResultsResponse {
+  repeated SurveyResult items = 1;
+  int32 total = 2;
+}
+
+// GetSurveyResultRequest 单个作答请求
+message GetSurveyResultRequest {
+  int64 result_id = 1;
+}
