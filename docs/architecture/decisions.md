@@ -148,11 +148,48 @@
 > 对外暴露路径（APISIX :19080 / dev BFF :8894 仅是 dev 调试例外）。
 > 详见决策 12 末尾的"关系说明"段。
 
+> **🔧 2026-09-10 决策 18 §4.4 / PR-C 正式收口**（登记于 doc-drift-registry #24 + #25）：
+>
+> 上方 2026-09-04 补正块已存在，但本决策**核心表头仍写"统一入口 = web-bff"**——
+> 与决策 11/12 "APISIX 是唯一业务入口"长期字面冲突 4 个月。
+> 经 PR-A（fail-fast helper 修复前端 fallback 字面值）+ PR-B（ADR-001 v2 决策栈收口）配套，
+> 本决策正式收口如下：
+>
+> | 维度 | 状态 |
+> |---|---|
+> | **业务入口**（外部用户视角） | APISIX `:19080`（决策 11）|
+> | **系统入口**（内部服务视角，BFF 与下游 5 svc 之间） | web-bff `:8894`（本决策）|
+> | **dev 调试**（特殊例外） | web-bff `:8894` 直连（仅本机 dev 环境可接受；prod 必须关闭 8894 端口映射）|
+>
+> **正式表述**：**APISIX 是唯一业务入口**；BFF 是 APISIX 的 upstream + 系统内聚合层。
+> 本决策标题"服务入口 = web-bff"措辞保留为历史快照，但实际语义以本收口段为准。
+>
+> **代码侧同步**（PR-A，commit 待落地）：
+> - `emotion-echo-web/app/lib/apiBaseUrl.ts` 新增 fail-fast helper（决策 18 #24）
+> - `useAIStreamHandler.ts:78` + `useTTSPlayer.ts:175` + `useApi.ts:29,31` 三处 fallback
+>   字面值 `'localhost:8894/api/v1'` / `'localhost:8080/api/v1'` 全部移除
+> - `nuxt.config.ts:19` 默认值 `'http://localhost:19080/api/v1'`（经 APISIX）作为唯一定义点
+>
+> **未做项**（不在 PR-C 范围）：
+> - dev/prod compose override 已由 PR-ENV-1~4 落地（决策 20）
+> - prod compose override 把 BFF 端口从宿主映射移除（compose.prod.yml 留 13 项 TODO 待远端部署时实现）
+
 | 维度 | 选择 |
 |------|------|
 | 统一入口（系统内） | **web-bff** :8894（`/api/v1/*` 聚合 5 下游 + SSE 流式编排 + CORS） |
 | 鉴权 | BFF 透传校验（当前 JWT **不验签**，审计 P0 问题 S-1，修复见审计 §八 R-3） |
 | 网关演进 | 需要边缘层时：路 1 = BFF 内限流/熔断；路 2 = 重引 APISIX 3.10+（`stage-30-apisix-retirement.md` §五） |
+
+> **🔧 2026-09-10 决策 18 §4.4 / doc-drift-registry #24 交叉引用**：
+>
+> 决策 9 写"统一入口 = web-bff :8894"是 Stage 30 视角，**但前端实际入口路径**由
+> `nuxt.config.ts:19` + `.env:5` 决定（cf1c798 后默认走 APISIX :19080）——决策 11/12 是当前
+> 准确视角（决策 12 末尾的"关系说明"已收口）。**代码侧残留**（决策 18 #24）：
+> `useAIStreamHandler.ts:78` + `useTTSPlayer.ts:175` + `useApi.ts:29,31` 三处 fallback
+> 字面值仍是 Stage 30 时代的 BFF 直连假设（`localhost:8894` / `localhost:8080`），
+> 当用户漏配 `NUXT_PUBLIC_API_BASE_URL` 时静默回退——**仅端口表 / 文档措辞收口，
+> 不足以根治语义未收口**。修正路径：3 处 fallback 统一改 `''` 或 throw + 强制
+> 依赖环境变量（独立 sprint 处理，本决策文档仅登记）。
 
 ### 决策 10：配置中心 / 服务注册 = **演进引入 Nacos**（2026-09 撤回原"不引入"判断）
 
@@ -335,6 +372,31 @@
 > **关键差异清单**（13 项）：BFF 直连端口 / BFF_DEV_RETURN_CODE / SKYWALKING_ENABLED / KAFKA_ENABLED / AI profile / 日志级别 / JWT secret / Nacos 命名空间 / STARTUP_STRICT_DEPS / 数据持久化卷 / 资源限制 / TLS。
 >
 > **待决策问题**：候选 C 实施时机（立即落地 vs 等真要远端部署时做）+ `compose.prod.yml` 是建空壳还是写完整 + `BFF_DEV_RETURN_CODE` 默认值在 compose 文件里如何分布。
+
+> **🔧 2026-09-10 决策 18 §4.4 就地更正块（登记于 doc-drift-registry #23）**：
+>
+> 上面"🟡 Proposed / 待决策"**与事实严重失真**——候选 C（compose override 文件分层 + `${VAR:-default}` 中性化）已于 **2026-09-09** 由 PR-ENV-1~4 全部 landed：
+>
+> | Commit | 日期（+0800） | 内容 |
+> |---|---|---|
+> | `ac0299e` | 2026-09-09 06:31 | PR-ENV-1 抽 `deploy/compose.dev.yml`（61 行） |
+> | `f400e65` | 2026-09-09 06:32 | PR-ENV-2 `deploy/docker-compose.apps.yml` 中性化（18 处硬编码 → `${VAR:-default}`） |
+> | `b89ecab` | 2026-09-09 06:33 | PR-ENV-3 `deploy/compose.prod.yml` 空壳占位（66 行） |
+> | `b2ea516` | 2026-09-09 06:35 | PR-ENV-4 `deploy/configuration.md`（179 行）+ `QUICKSTART.md` 同步（3 处启动命令加 `-f compose.dev.yml`） |
+>
+> **TDD 测试脚本**（stage-58-q3-followups.md §二）：
+> - `scripts/test_compose_override.sh`：10/10 PASS
+> - `scripts/test_apps_yml_neutral.sh`：8/8 PASS
+> - `scripts/test_prod_yml_stub.sh`：11/11 PASS
+> - `scripts/test_docs_update.sh`：14/14 PASS
+>
+> **结论修正**：
+> - **决策 20 实质已落地**，应改为 ✅ **Accepted**（2026-09-09）
+> - 三个"待决策问题"的状态：① C 实施时机 = 已"立即落地"；② prod.yml = 已选"空壳"；③ configuration.md = 已写
+> - 唯一遗留：owner 拍板正式 sign-off（决策 18 是失真台账，决策本身由 owner 签字收口）
+>
+> **原始 ADR 文档失真同步修复**：`docs/architecture/adr/adr-2026-09-env-profile-strategy.md` 头 4 行于本次会话追加就地更正块（不动原行，保留历史快照）。
+> **详细落地报告**：[`docs/stages/stage-58-q3-followups.md` §二 PR-ENV-1~4](../stages/stage-58-q3-followups.md)。
 
 ---
 
