@@ -19,6 +19,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 // UserInfo 对应 user-svc types.UserInfo
@@ -75,7 +77,24 @@ type UserClient interface {
 type UserClientOptions struct {
 	BaseURL   string
 	TimeoutMs int
+	// Transport "grpc"（默认）| "http"；grpc 模式需同时传 GRPCConn
+	// Stage 62 PR-3.3：GetMe/UpdateMe/GetByID 3 个 RPC 走 gRPC；
+	// Login/Register/ResetPassword 仍走 HTTP（user-svc 暂未暴露 gRPC 端点）。
+	Transport UserTransport
+	// GRPCConn gRPC 连接（仅 Transport=grpc 时用）
+	GRPCConn *grpc.ClientConn
 }
+
+// UserTransport 决定 NewUserClient 返回 HTTP 还是 gRPC 实现
+//
+// 仅 GetMe/UpdateMe/GetByID 走 gRPC（user-svc 暴露的 3 RPC）；
+// Login/Register/ResetPassword 强制走 HTTP。
+type UserTransport string
+
+const (
+	UserTransportGRPC UserTransport = "grpc"
+	UserTransportHTTP UserTransport = "http"
+)
 
 // userHTTPClient 是 UserClient 的 HTTP 实现
 type userHTTPClient struct {
@@ -84,7 +103,27 @@ type userHTTPClient struct {
 }
 
 // NewUserClient 构造 UserClient
+//
+// 行为分支（Stage 62 PR-3.3）：
+//   - Transport=grpc + GRPCConn != nil → 返 userGRPCClient（仅 3 RPC 走 gRPC，其余方法仍走 HTTP）
+//   - Transport=http（默认 fallback）→ 返 userHTTPClient（保留旧行为）
+//   - 都缺 → 返 nil
 func NewUserClient(opts UserClientOptions) UserClient {
+	if opts.Transport == "" || opts.Transport == UserTransportGRPC {
+		if opts.GRPCConn != nil {
+			timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
+			if timeout <= 0 {
+				timeout = 5 * time.Second
+			}
+			return &userGRPCClient{
+				conn: opts.GRPCConn,
+				httpFallback: &userHTTPClient{
+					baseURL: opts.BaseURL,
+					http:    &http.Client{Timeout: timeout},
+				},
+			}
+		}
+	}
 	timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 5 * time.Second

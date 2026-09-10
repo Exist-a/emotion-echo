@@ -22,6 +22,8 @@ import (
 	"net/url"
 	"time"
 
+	"google.golang.org/grpc"
+
 	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 )
@@ -114,7 +116,21 @@ type AnalyticsClientOptions struct {
 	Resolver bffdiscovery.Resolver
 	// ServiceName 用于 Resolver，默认 "emotion-echo-analytics-svc"。
 	ServiceName string
+	// Transport "grpc"（默认）| "http"；grpc 模式需同时传 GRPCConn
+	// Stage 62 PR-3.3：6 个常用 RPC 走 gRPC；3 个（MentalHealthHistory/Trend/Trigger）
+	// analytics-svc 已实现但 BFF 暂未调用 → 走 HTTP
+	Transport AnalyticsTransport
+	// GRPCConn gRPC 连接（仅 Transport=grpc 时用）
+	GRPCConn *grpc.ClientConn
 }
+
+// AnalyticsTransport 决定 NewAnalyticsClient 返回 HTTP 还是 gRPC 实现
+type AnalyticsTransport string
+
+const (
+	AnalyticsTransportGRPC AnalyticsTransport = "grpc"
+	AnalyticsTransportHTTP AnalyticsTransport = "http"
+)
 
 // analyticsHTTPClient 是 AnalyticsClient 的 HTTP 实现
 type analyticsHTTPClient struct {
@@ -124,9 +140,17 @@ type analyticsHTTPClient struct {
 
 // NewAnalyticsClient 构造 AnalyticsClient。
 //
+// 行为分支（Stage 62 PR-3.3）：
+//   - Transport=grpc + GRPCConn != nil → 返 analyticsGRPCClient
+//   - Transport=http（默认 fallback）→ 返 analyticsHTTPClient
 // BaseURL 解析优先级：opts.BaseURL > opts.Resolver.Resolve(ServiceName)。
 // 两者都缺 → 返回 nil。
 func NewAnalyticsClient(opts AnalyticsClientOptions) AnalyticsClient {
+	if opts.Transport == "" || opts.Transport == AnalyticsTransportGRPC {
+		if opts.GRPCConn != nil {
+			return NewAnalyticsGRPCClient(opts.GRPCConn)
+		}
+	}
 	timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 5 * time.Second

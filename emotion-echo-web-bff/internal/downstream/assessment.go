@@ -18,6 +18,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 // SurveyItem 对应 assessment-svc types.SurveyItem
@@ -95,7 +97,20 @@ type AssessmentClient interface {
 type AssessmentClientOptions struct {
 	BaseURL   string
 	TimeoutMs int
+	// Transport "grpc"（默认）| "http"；grpc 模式需同时传 GRPCConn
+	// Stage 62 PR-3.3：5 个方法全走 gRPC（assessment-svc 暴露 5 RPC 一一对应）
+	Transport AssessmentTransport
+	// GRPCConn gRPC 连接（仅 Transport=grpc 时用）
+	GRPCConn *grpc.ClientConn
 }
+
+// AssessmentTransport 决定 NewAssessmentClient 返回 HTTP 还是 gRPC 实现
+type AssessmentTransport string
+
+const (
+	AssessmentTransportGRPC AssessmentTransport = "grpc"
+	AssessmentTransportHTTP AssessmentTransport = "http"
+)
 
 // assessmentHTTPClient 是 AssessmentClient 的 HTTP 实现
 type assessmentHTTPClient struct {
@@ -104,7 +119,17 @@ type assessmentHTTPClient struct {
 }
 
 // NewAssessmentClient 构造 AssessmentClient
+//
+// 行为分支（Stage 62 PR-3.3）：
+//   - Transport=grpc + GRPCConn != nil → 返 assessmentGRPCClient
+//   - Transport=http（默认 fallback）→ 返 assessmentHTTPClient
+//   - 都缺 → 返 nil
 func NewAssessmentClient(opts AssessmentClientOptions) AssessmentClient {
+	if opts.Transport == "" || opts.Transport == AssessmentTransportGRPC {
+		if opts.GRPCConn != nil {
+			return NewAssessmentGRPCClient(opts.GRPCConn)
+		}
+	}
 	timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 5 * time.Second
