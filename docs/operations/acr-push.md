@@ -166,13 +166,35 @@ image: emotion-echo/sensevoice-fastbuild:v0.1.0
 
 ## 七、仓库总览
 
-私有 namespace `emotion-echo` 下当前4 个镜像仓库：
+私有 namespace `emotion-echo` 下当前**3 个镜像仓库**：
 
 | 仓库 | 来源 | 内容大小 | 备注 |
 |---|---|---|---|
 | `sensevoice-base` | 我们（built） | 502MB | Python + torch + funasr + knf + transformers |
 | `sensevoice` | 我们（built on top of base） | 1.37GB | 业务代码 + 936MB 模型 |
 | `fer-tflite` | 我们（built） | 134MB | tflite + Haar cascade 后端，无 tensorflow |
-| `xtts` | vendor ai4all/coqui 重 tag | 3.69GB | Coqui TTS server，已固化 command override |
 
-**总占 ACR 存储**：~5.7GB（不含 docker.io 缓存层）。ACR 个人版免费档够用。
+**总占 ACR 存储**：~2GB。
+
+### 7.1 XTTS 为什么不在 ACR
+
+XTTS vendor `ai4all/coqui:latest`（3.69GB）**未上 ACR**，仍走 docker.io pull（aliyun 加速）。
+
+**已知失败模式**（2026-09-10 实测5 次）：
+
+1. 直接 `docker push` → 卡在 `pushing layers`，ACR 端无 manifest
+2. `docker buildx build` 加 `--provenance=false --output type=image,oci-mediatypes=false` → `exporting manifest` 完成，但 `pushing layers` 仍卡
+3. 重启 Docker daemon + 重试 → 同症状
+4. kill 僵死进程多次 → daemon 内部 lock 不释放
+
+**根因（2026-09-10 阿里云官方文档确认）**：
+> 从2024 年04 月起，新创建的 **ACR 企业版**实例才支持 OCI 的 Image 和 Distribution 规范 v1.1.0。ACR **个人版不支持 OCI manifest**。
+
+`ai4all/coqui` 是 buildkit 产物（Comment: `buildkit.dockerfile.v0`），其 layer blob 实际可能混用 docker schema 2 + OCI 格式。buildx 重导出能改 manifest type，但 layer 本身的兼容问题 ACR 个人版仍可能在某些 chunk 上拒绝 PATCH。
+
+**未来可重试的场景**：
+- 升级到 ACR 企业版（费用约 ¥100/月）
+- 自建 `registry:2` 容器（个人版镜像）
+- vendor 升级后再次尝试（ai4all/coqui 可能改用纯 schema 2）
+
+**当前决策**：XTTS 走 docker.io，阶段 5（commit `8e09d03` 的早期版本）已验证 133KB WAV 端到端跑通，足以支撑 dev 模式使用。

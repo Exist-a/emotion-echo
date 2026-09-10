@@ -537,13 +537,17 @@ services:
   # Stage 22-A.3 XTTS（语音克隆 TTS）
   #   profile: ai    （最重 ~3GB，Coqui-TTS 模型 + torch）
   #
-  # PR-TTS-VENDOR landing: vendor `ai4all/coqui:latest` (3.69GB content) is
-  # now mirrored to our Aliyun ACR for stable, fast dev pulls. image:
-  # points to the ACR copy. command override and model volume mount are
-  # unchanged from Phase 5.
+  # PR-TTS-VENDOR landing: vendor `ai4all/coqui:latest` (3.69GB content).
+  # 为什么不在 ACR：3.69GB vendor 镜像有 13 个 layer（其中多个是几百 MB
+  # 大 blob），重复 push 在 ACR 个人版遇到 manifest 兼容 + 大块层 PATCH
+  # 不稳，5 次尝试都卡在 "pushing layers"。详见
+  # docs/operations/acr-push.md §七 + docs/stages/stage-60-1 §五。
+  #
+  # 回退到 docker.io 路径（daemon.json 配了 aliyun 加速镜像，stage-59 §十
+  # 验证过 133KB WAV 端到端跑通）。
   # =====================================================
   emotion-echo-xtts:
-    image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/xtts:v0.1.0
+    image: ai4all/coqui:latest
     container_name: emotion-echo-xtts
     restart: unless-stopped
     user: root
