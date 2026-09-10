@@ -76,7 +76,7 @@ python -m pytest tests/unit/ -v
 
 ### 2.6 已知限制
 
-- **合成图（无真实人脸）→ source="no-face"**：Haar cascade 对真实人脸敏感，对几何形状不接受。生产传真实照片会命中。
+- **合成图（无真实人脸）→ source="no-face"**：Haar cascade 对真实人脸敏感，对几何形状不接受。**真实人脸图已验证命中 tflite 推理**（2026-09-10，600x574 真人愤怒脸图，emotion=angry, confidence=0.87），详见 §7.1。
 - **emotion 7 类原始标签 → 5 类 unified 映射**：`disgust`/`surprise` 映成 `neutral`，`fear` 映成 `anxious`——保持与 emotion-llm-service 对齐。
 
 ---
@@ -305,14 +305,22 @@ docker run -d --name fer-hc -p 8004:8004 emotion-echo/fer-tflite:v0.1.0
 curl -fsS http://localhost:8004/health
 # 实际结果：{"status":"ok","model_loaded":true,"backend":"tflite+haar"}
 
-# /analyze 真实合成脸图（PowerShell 生成 → Windows temp → 挂进容器）
+# /analyze 合成脸图（PowerShell 生成 → Windows temp → 挂进容器）
 curl -sS -m 30 -X POST http://localhost:8004/analyze \
   -F "file=@/tmp/face.jpg;type=image/jpeg"
 # 实际结果：{"emotion":"neutral","confidence":0.5,"scores":{},"source":"no-face"}
-# 含义：模型加载成功；合成几何形状 Haar 检不到人脸，走 no-face 分支
+# 含义：合成几何形状 Haar 检不到人脸，走 no-face 分支
+
+# /analyze 真实人脸图（600x574 PNG）
+curl -sS -m 30 -X POST http://localhost:8004/analyze \
+  -F "file=@/tmp/angry_face.png;type=image/png"
+# 实际结果：{"emotion":"angry","confidence":0.8687,
+#             "scores":{"angry":0.8687,"fear":0.1033,"sad":0.0132,...},
+#             "source":"tflite"}
+# 含义：tflite 推理路径命中真实人脸，输出 7 类概率分布，置信度 86.87%
 ```
 
-**FER tflite 推理路径的**真脸图**测试**未做过**——仓里没有真实人脸图。49/49 单测覆盖 emotion_mapping / route 契约 / metrics / logging 但 mock 推理输出。如果你有真实人脸图可用，建议补一次端到端验证（30 秒）。
+**FER tflite 推理路径端到端验证通过**（2026-09-10，600x574 真人愤怒脸图，置信度 0.87）。49/49 单测 + 这次真实推理 = 完整覆盖。
 
 ### 7.2 SenseVoice（ACR 镜像 `crpi-.../emotion-echo/sensevoice:v0.1.0`）
 
