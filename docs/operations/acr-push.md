@@ -115,12 +115,22 @@ docker buildx build \
 
 ## 五、消费：从 ACR 拉镜像（compose / 手动）
 
-### 5.1 compose 当前配置
+### 5.1 compose 当前配置（已切到 ACR）
 
-[`deploy/docker-compose.apps.yml`](../../deploy/docker-compose.apps.yml) 的 `emotion-echo-sensevoice` 服务 image 已是 ACR 地址：
+[`deploy/docker-compose.apps.yml`](../../deploy/docker-compose.apps.yml) 三个 AI 服务 image 已切到 ACR：
 
 ```yaml
-image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.0
+emotion-echo-sensevoice:
+  image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.0
+
+emotion-echo-fer:
+  image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/fer-tflite:v0.1.0
+
+emotion-echo-xtts:
+  image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/xtts:v0.1.0
+  command: ["fastapi", "run", "app.py", "--host=0.0.0.0", "--port=8003"]
+  volumes:
+    - ${XTTS_MODEL_PATH:-/c/Users/LENVOV/AppData/Local/Temp/coqui_model}:/model
 ```
 
 `docker compose --profile ai up -d` 会自动 pull。
@@ -129,6 +139,8 @@ image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/s
 
 ```bash
 docker pull crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.0
+docker pull crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/fer-tflite:v0.1.0
+docker pull crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/xtts:v0.1.0
 ```
 
 ### 5.3 切换回本地 build
@@ -149,3 +161,18 @@ image: emotion-echo/sensevoice-fastbuild:v0.1.0
 | 日期 | 变更 | 作者 |
 |---|---|---|
 | 2026-09-10 | 初版：base + app 两层结构 + OCI manifest workaround | Stage 60.1 session |
+| 2026-09-10 | FER-tflite 镜像推到 ACR；compose emotion-echo-fer 切换到 ACR | Phase 6 followup |
+| 2026-09-10 | XTTS vendor镜像推到 ACR（3.69GB）；compose emotion-echo-xtts 切换到 ACR | Phase 6 followup |
+
+## 七、仓库总览
+
+私有 namespace `emotion-echo` 下当前4 个镜像仓库：
+
+| 仓库 | 来源 | 内容大小 | 备注 |
+|---|---|---|---|
+| `sensevoice-base` | 我们（built） | 502MB | Python + torch + funasr + knf + transformers |
+| `sensevoice` | 我们（built on top of base） | 1.37GB | 业务代码 + 936MB 模型 |
+| `fer-tflite` | 我们（built） | 134MB | tflite + Haar cascade 后端，无 tensorflow |
+| `xtts` | vendor ai4all/coqui 重 tag | 3.69GB | Coqui TTS server，已固化 command override |
+
+**总占 ACR 存储**：~5.7GB（不含 docker.io 缓存层）。ACR 个人版免费档够用。
