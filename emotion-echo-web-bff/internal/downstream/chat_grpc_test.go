@@ -245,6 +245,44 @@ func TestChatGRPCClient_StreamMessages_ReceivesUnimplementedAsEOF(t *testing.T) 
 	assert.Equal(t, 0, count, "Unimplemented 时不应收到任何 event")
 }
 
+// ============ ctx user_id 桥接（Stage 63 收口）============
+//
+// 行为契约：
+//   - handler 通过 session.WithRequestAuth → downstream.WithUserID(ctx, uid) 注入 user_id
+//   - gRPC client 调任何 RPC 时必须把 ctx 里的 user_id 写到 outgoing metadata x-user-id
+//   - 否则 chat-svc userid 拦截器返 Unauthenticated
+//
+// bug 背景：chat_grpc.go 私有类型 userIDKey{} 与 downstream.WithUserID 用的 userIDCtxKey{}
+// 不兼容，导致 ctx.Value 永远 miss → metadata 不注入 → 401。本测试 RED 阶段。
+func TestChatGRPCClient_WithUserIDFromDownstream_InjectsMetadata(t *testing.T) {
+	mock := &mockChatServer{
+		convResp: &emotionchat.Conversation{Id: 1, Title: "x", UserId: 42},
+	}
+	conn, cleanup := startMockBufConn(t, mock)
+	defer cleanup()
+
+	client := NewChatGRPCClient(conn).(*chatGRPCClient)
+	require.NotNil(t, client)
+
+	ctx := WithUserID(context.Background(), 42)
+	_, err := client.CreateConversation(ctx, CreateConversationReq{Title: "t"})
+	require.NoError(t, err)
+	assert.Equal(t, "42", mock.gotUserID, "metadata x-user-id 必须从下游 ctx 取出并注入")
+}
+
+func TestChatGRPCClient_NoUserID_NoMetadata(t *testing.T) {
+	mock := &mockChatServer{
+		convResp: &emotionchat.Conversation{Id: 1, Title: "x"},
+	}
+	conn, cleanup := startMockBufConn(t, mock)
+	defer cleanup()
+
+	client := NewChatGRPCClient(conn).(*chatGRPCClient)
+	_, err := client.CreateConversation(context.Background(), CreateConversationReq{Title: "t"})
+	require.NoError(t, err)
+	assert.Empty(t, mock.gotUserID, "ctx 无 user_id 时不应注入 metadata（让拦截器判 Unauthenticated）")
+}
+
 // ============ 类型断言 ============
 
 func TestChatGRPCClient_ImplementsChatClient(t *testing.T) {

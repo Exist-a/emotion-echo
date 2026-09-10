@@ -36,17 +36,14 @@ func NewChatGRPCClient(conn *grpc.ClientConn) ChatClient {
 
 // withUserID 注入 x-user-id metadata（chat-svc 拦截器读这个）
 //
-// userID 优先级：ctx.Value(UserIDKey)（HTTP middleware 注入）> 0
+// userID 优先级：ctx.Value(userIDCtxKey)（handler → downstream.WithUserID 注入）> 0
 // 0 → 不注入 metadata（依赖 chat-svc 拦截器判 Unauthenticated）
 func withUserID(ctx context.Context) context.Context {
-	if uid, ok := ctx.Value(userIDKey{}).(int64); ok && uid > 0 {
+	if uid, ok := ctx.Value(userIDCtxKey{}).(int64); ok && uid > 0 {
 		return metadata.AppendToOutgoingContext(ctx, "x-user-id", fmt.Sprintf("%d", uid))
 	}
 	return ctx
 }
-
-// userIDKey 与 HTTP 客户端共享的 ctx key（chat_handler 中间件注入用同一 key）
-type userIDKey struct{}
 
 // CreateConversation RPC
 func (c *chatGRPCClient) CreateConversation(ctx context.Context, req CreateConversationReq) (*ConversationView, error) {
@@ -214,7 +211,7 @@ func fromProtoMessage(m *emotionchat.Message) *MessageView {
 
 // uidFromCtx 从 ctx 取 user id（chat_handler 中间件注入）
 func uidFromCtx(ctx context.Context) int64 {
-	if uid, ok := ctx.Value(userIDKey{}).(int64); ok {
+	if uid, ok := ctx.Value(userIDCtxKey{}).(int64); ok {
 		return uid
 	}
 	return 0

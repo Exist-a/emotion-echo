@@ -3,15 +3,74 @@ status: planned
 priority: medium
 owner: TBD
 created: 2026-09-07
+updated: 2026-09-11
 related-stages:
   - stage-10-grpc-migration.md
   - stage-19-ai-svc-grpc-server.md
   - stage-34-multimodal-fusion.md
   - stage-36-fixes-roadmap.md
+  - stage-58-q3-followups.md（chat-svc gRPC 6 RPC 实测 Unimplemented）
+  - stage-63-bff-grpc-wiring.md（收口发现 #25 #26 #27）
 related-adrs:
   - docs/architecture/decisions.md（决策 4：跨服务调用 = gRPC + .proto）
   - docs/architecture/decisions.md（决策 5：Python LLM 服务 = 独立微服务 + gRPC server）
+  - docs/architecture/adr/adr-2026-09-doc-drift-registry.md（#25 #26 #27）
 ---
+
+## 🆕 2026-09-11 增补：Stage 63 收口发现 3 条链路 bug
+
+Stage 63 端到端验证发现 BFF→4 svc gRPC 链路上有 3 层叠错（决策 18 #25 #26 #27）。
+BFF 临时默认 `Transport="http"` 绕路通过，端到端恢复。修法需拆 2 个独立 sprint：
+
+### Sprint C（ctxkey 重构，解 #26）
+
+**问题**：`grpcinterceptor.CtxUserIDKeyType{}` 与 `middleware.CtxUserIDKey{}` 是两个不同 struct{} 类型，
+注释"同义"是错的。grpcinterceptor 注入 ctx 后，4 svc logic 永远 miss → 业务 401。
+
+**修法**：
+
+1. 新建 `shared/pkg/ctxkey/userid.go`：
+   ```go
+   package ctxkey
+   type UserID struct{}  // 唯一 ctx key
+   ```
+2. `shared/pkg/middleware/jwt_auth.go` 把 `CtxUserIDKey` 改为 `= ctxkey.UserID` 类型别名
+3. `shared/pkg/grpcinterceptor/userid.go` 把 `CtxUserIDKeyType` 改为 `= ctxkey.UserID` 类型别名
+4. 全仓 `grep -rn "CtxUserIDKey\|CtxUserIDKeyType" emotion-echo-*/internal/` 改成一致
+5. 4 svc logic 13 处 `l.ctx.Value(sharedmw.CtxUserIDKey{})` 自动跟着别名走，无需改
+6. chat-svc grpcserver/chat_server.go:67 `grpcinterceptor.UserIDFromGRPCContext` 内部读 ctxkey.UserID 一致化
+
+**DoD**：
+- `go test ./...` 5 个 svc 全绿
+- BFF Transport="grpc" + docker 端到端 4 业务全 200
+- 决策 18 #26 标关闭
+
+**风险**：类型别名（`type A = B`）编译期等价，运行时同 ctx key，**零风险**。
+唯一约束是 `ctxkey` 包不能引 `grpcinterceptor` 或 `middleware`，避免再次循环。
+
+### Sprint D（chat-svc gRPC 6 RPC 实现，解 #27）
+
+**问题**：Stage 58 PR-GRPC-3 实质只挂了 server skeleton，6 个 RPC 全 Unimplemented。
+
+**修法**：在 Sprint D 里把 grpc-inter-service-migration.md §三 Phase 1 的 PR-3 / PR-4 / PR-5
+全部落地（约 1-2 天），即：
+
+- SendMessage（含 Kafka event 触发）
+- ListMessages
+- ListConversations
+- DeleteConversation
+- PinConversation
+- StreamMessages（gRPC server stream 替代 SSE）
+
+**DoD**：
+- chat-svc gRPC 6 RPC 全实现 + 单测
+- BFF Transport="grpc" + docker 端到端 `conversations` 等 chat 业务 200
+- 决策 18 #27 标关闭
+- 与 chat-svc HTTP 端 `/api/v1/conversations` 500 问题一并修（chat-svc logic 本身的问题，与 gRPC 无关，独立 bug）
+
+**工作日估算**：Sprint C 半天 + Sprint D 1-2 天 = **2-3 天**。
+
+**Sprint C + D 完成后**：BFF 默认 `Transport=""`（即 grpc）回归决策 4 原设计。
 
 # Plan — 后端微服务间调用 HTTP → gRPC 改造
 

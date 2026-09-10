@@ -256,6 +256,38 @@ $ go vet ./emotion-echo-web-bff/...
 
 ---
 
-> 最后更新：2026-09-10 by Stage 63 session
-> 状态：🟡 代码 landed + 单测全绿 · 待 docker 端到端验证（§四.2 V1-V5）
+> 最后更新：2026-09-11 by Stage 63 closure session
+> 状态：🟡 **代码 landed · docker 端到端部分通过**（V1 ✅ V2 ✅ V3 部分 ✅ V4 ✅ V5 仅参考）
+>
+> **端到端实测结果（2026-09-11, BFF 镜像 v0.1.3）**：
+>
+> | V# | 项 | 结果 | 证据 |
+> |---|---|---|---|
+> | V1 | 4 条 gRPC connected 日志 | ✅ | BFF 启动日志 4 行 `[grpc] xxx-svc connected` |
+> | V2 | 4 svc gRPC 端口可达 | ✅ | BFF 容器内 `nc -zv emotion-echo-xxx 888x/8892` 全 open |
+> | V3 | 4 业务端到端 | 🟡 部分 | users/me / surveys / reports/daily 200; conversations 500（chat-svc HTTP 端本身返 500，与 gRPC 接线无关） |
+> | V4 | 回滚开关生效 | ✅ | 默认 Transport="http"（本次收口新增）即回滚路径，V3 已验 |
+> | V5 | gRPC server 不可用降级 | 🟡 仅参考 | 当前默认走 HTTP，此场景无意义；如未来 Transport=grpc，gRPC client 方法直接返 error 不 fallback 仍是 Stage 62 PR-3.3 的设计，不在本修复范围 |
+>
+> **新增发现（决策 18 待登记）**：
+>
+> 端到端验证发现 Stage 58 / 62 / 63 三层失真，全部纳入决策 18 台账：
+>
+> | # | 发现 | 影响 | 修复路径 |
+> |---|---|---|---|
+> | **#25** | `chat_grpc.go` 私有 `userIDKey{}` 与 `downstream.WithUserID` 的 `userIDCtxKey{}` 不通 | BFF gRPC client metadata x-user-id 永不注入 → chat-svc 拦截器 Unauthenticated | **本次已修**：chat_grpc.go userIDKey → userIDCtxKey（commit 见 git） |
+> | **#26** | `grpcinterceptor.CtxUserIDKeyType{}` 与 `middleware.CtxUserIDKey{}` 是两个不同类型 | 4 svc gRPC server userid 拦截器注入 user_id 后，svc logic 从 ctx 永远取不到 → 业务 401 | 需新建 `shared/pkg/ctxkey` 包统一两者 + 4 svc gRPC handler bridge（不在本次 PR） |
+> | **#27** | chat-svc gRPC 6 个 RPC 全是 `Unimplemented: PR-GRPC-3 阶段补完` | BFF→chat-svc gRPC 路径全不可用，Stage 58 PR-GRPC-3 实质只挂了 server skeleton | 需 chat-svc 补 6 个 RPC 实现（不在本次 PR） |
+>
+> **决策 18 §三 类型 5 自报告失真 #25 修复追踪**：
+> - Stage 63 原报告写"代码 landed + 单测全绿 · 待 docker 验证"
+> - 单测全绿不等于端到端通（与 Sprint 1 PR-4c-3 #22 同源）
+> - 修复后实际还有 2 个深层失真(#26 #27)需独立 sprint
+>
+> **下一步**（出 Stage 63 范围，独立排期）：
+> 1. 新 plan `docs/plans/grpc-inter-service-migration.md` 增加 Phase 1.5 / Phase 4
+>    - Phase 1.5：shared/pkg/ctxkey 包 + 4 svc gRPC handler bridge（解 #26）
+>    - Phase 4：chat-svc gRPC 6 RPC 完整实现（解 #27），可与 Phase 2 (user-svc gRPC 化) 合并做
+> 2. BFF 默认 Transport="http" 是 Stage 63 收口临时降级；#26 #27 修完改回默认 grpc
+> 3. 决策 18 台账登记本节三条新发现
 > 下一步：重建 BFF 镜像 → docker compose up → 验证 V1-V5 → 全过后翻 🟢 + 登记决策 18 台账

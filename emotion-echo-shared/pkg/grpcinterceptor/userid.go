@@ -27,6 +27,9 @@ const XUserIDMetadataKey = "x-user-id"
 
 // CtxUserIDKeyType 是 context 中 user id 的 key 类型（与 pkg/middleware.CtxUserIDKey 同义，
 // 但 gRPC 与 HTTP 中间件是不同包，故单独定义。调用方可用类型断言互转。）
+//
+// Stage 63 收口 TODO：与 pkg/middleware.CtxUserIDKey 互不通（见 §六.2 新发现 bug），
+// 应在 shared 顶级新加 pkg/ctxkey 包统一两者，本 PR 仅登记暂不修。
 type CtxUserIDKeyType struct{}
 
 // NewServerUserIDInterceptor creates a server-side interceptor that extracts

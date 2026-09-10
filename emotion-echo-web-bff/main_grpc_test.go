@@ -100,14 +100,19 @@ func TestBuildServiceContext_GRPCWiring_AllFourClients(t *testing.T) {
 		)
 	}
 
-	// 构造 config：4 个下游都配 GRPCAddr
+	// 构造 config：4 个下游都配 GRPCAddr，并显式 Transport=grpc（默认 http 是 Stage 63 收口后的
+	// 临时降级；测试此用例是为了验证"Transport=grpc 时接线正确"，与 Stage 63 终态对齐）
 	cfg := config.Config{}
 	config.SetDefaults(&cfg)
 	cfg.Auth.JWTSecret = "test-secret"
 	cfg.UserService.GRPCAddr = "user-buf"
+	cfg.UserService.Transport = "grpc"
 	cfg.ChatService.GRPCAddr = "chat-buf"
+	cfg.ChatService.Transport = "grpc"
 	cfg.AssessmentService.GRPCAddr = "assessment-buf"
+	cfg.AssessmentService.Transport = "grpc"
 	cfg.AnalyticsService.GRPCAddr = "analytics-buf"
+	cfg.AnalyticsService.Transport = "grpc"
 
 	svcCtx := buildServiceContext(&cfg, nil)
 
