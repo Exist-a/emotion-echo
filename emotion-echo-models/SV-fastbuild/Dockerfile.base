@@ -1,0 +1,68 @@
+# SenseVoice base layer (PR-TTS-VENDOR Phase 6)
+# 仅包含 Python 运行时 + 所有 wheel 依赖，不含 model.pt。
+# 应用层 Dockerfile.base 之上 COPY 业务代码 + 模型。
+#
+# 这个 Dockerfile 与 Dockerfile.base 是兄弟关系，共享 requirements.txt。
+# 维护规则：依赖变更同时改两个 Dockerfile。
+
+FROM python:3.10-slim AS builder
+
+WORKDIR /build
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN for i in 1 2 3; do \
+      apt-get update && \
+      apt-get install -y --no-install-recommends --fix-missing \
+        gcc g++ git libsndfile1 ffmpeg \
+        && break; \
+      echo "apt-get install attempt $i failed, retrying in 10s..."; \
+      sleep 10; \
+    done && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /build/wheels_requirements.txt
+COPY wheels/ /build/wheels/
+
+RUN pip install --prefix=/install \
+      --find-links /build/wheels/ \
+      --index-url https://mirrors.aliyun.com/pypi/simple \
+      -r /build/wheels_requirements.txt \
+      --timeout 600
+
+
+FROM python:3.10-slim AS runtime
+
+ARG TZ=Asia/Shanghai
+ENV TZ=${TZ} \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN for i in 1 2 3; do \
+      apt-get update && \
+      apt-get install -y --no-install-recommends --fix-missing \
+        libsndfile1 ca-certificates curl tini \
+        && break; \
+      echo "apt-get install attempt $i failed, retrying in 10s..."; \
+      sleep 10; \
+    done && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN groupadd -g 65532 app && useradd -u 65532 -g app -m -s /usr/sbin/nologin app
+
+WORKDIR /app
+COPY --from=builder /install /usr/local
+RUN mkdir -p /app/cache && chown -R app:app /app/cache
+
+ENV HF_HOME=/app/cache \
+    MODELSCOPE_CACHE=/app/cache \
+    PATH=/usr/local/bin:$PATH
+
+USER app
+
+# base 层不写 ENTRYPOINT/CMD，由应用层 Dockerfile 决定。
