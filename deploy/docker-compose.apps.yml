@@ -483,11 +483,16 @@ services:
   # Stage 22-A.2 SenseVoice（语音转写 + 情绪标签）
   #   profile: ai    （resources ~1.5GB，funasr + torch on CPU）
   # =====================================================
-  emotion-echo-sensevoice:
+emotion-echo-sensevoice:
+    # PR-TTS-VENDOR Phase 5: switch from Stage-36 v0.1.0 build context (which
+    # is unreproducible on the current offline dev host) to the SV-fastbuild
+    # pre-built image. The image includes 936MB SenseVoiceSmall model.pt and
+    # its dependencies. service_name + port unchanged so ai-svc applyEnvOverrides
+    # continues to wire SENSEVOICE_BASE_URL=http://emotion-echo-sensevoice:8002.
     build:
       context: ../emotion-echo-models
-      dockerfile: sensevoice-small/Dockerfile
-    image: emotion-echo/sensevoice:v0.1.0
+      dockerfile: SV-fastbuild/Dockerfile
+    image: emotion-echo/sensevoice-fastbuild:v0.1.0
     container_name: emotion-echo-sensevoice
     restart: unless-stopped
     profiles: ["ai"]
@@ -496,13 +501,13 @@ services:
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       SENSEVOICE_DEVICE: cpu
+      FUNASR_MODEL_DIR: /app/model
     # Stage 33 PR-20: 端口收紧
     expose:
       - "8002"
     volumes:
-      # 模型首次启动会从 ModelScope 自动下载 ~200MB am.mvn + checkpoint
-      # 若要预烘焙到镜像：取消下行注释并手动 copy 模型
-      # - ../../emotion-echo-models/sensevoice-small/am.mvn:/app/am.mvn:ro
+      # VAD 模型首次启动从 ModelScope 下载到 /app/cache，之后复用。
+      # SenseVoice 主模型已烘焙进镜像（FUNASR_MODEL_DIR=/app/model）
       - sensevoice-cache:/app/cache
     networks:
       - app-network
@@ -518,11 +523,10 @@ services:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=2)\""]
       interval: 30s
       timeout: 5s
-      # Stage 36-B5 fix: 模型已预烘焙进镜像（v0.1.2），但首次 /analyze 触发
-      # funasr 模型加载 + torch GPU warmup ~60s。start_period 提到 300s 防止
-      # docker healthcheck restart_policy 在 /analyze 处理期间误杀。
-      start_period: 300s
-      retries: 5
+      # SenseVoiceSmall 主模型已烘焙进镜像，但首次 /analyze 触发 funasr 懒加载
+      # VAD 模型 + torch warmup ~30-60s。start_period 设 90s 留余量。
+      start_period: 90s
+      retries: 3
 
   # =====================================================
   # Stage 22-A.3 XTTS（语音克隆 TTS）
