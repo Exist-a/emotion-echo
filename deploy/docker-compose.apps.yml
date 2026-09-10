@@ -627,6 +627,11 @@ services:
       ANALYTICS_SVC_URL:   "http://emotion-echo-analytics-svc:8893"
       AI_SVC_HTTP_URL:     "http://emotion-echo-ai-svc:8891"
       AI_SVC_GRPC_ADDR:    "emotion-echo-ai-svc:8892"
+      # Stage 63: BFF -> 4 svc gRPC 地址（容器 DNS；与各 svc grpcserver 监听端口对齐）
+      USER_SVC_GRPC_ADDR:       "emotion-echo-user-svc:8887"
+      CHAT_SVC_GRPC_ADDR:       "emotion-echo-chat-svc:8892"
+      ASSESSMENT_SVC_GRPC_ADDR: "emotion-echo-assessment-svc:8886"
+      ANALYTICS_SVC_GRPC_ADDR:  "emotion-echo-analytics-svc:8885"
       XTTS_BASE_URL:       "http://emotion-echo-xtts:8003"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"

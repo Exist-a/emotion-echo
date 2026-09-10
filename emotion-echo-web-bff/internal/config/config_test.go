@@ -123,3 +123,73 @@ func TestConfig_ApplyEnvOverrides_SkyWalkingEnabled_Empty(t *testing.T) {
 
 	assert.False(t, c.SkyWalking.Enabled, "空 env 不应让 SkyWalking.Enabled=true,保留 yaml 默认 false")
 }
+
+// --- Stage 63: BFF gRPC 接线启用（RED）---
+
+// TestConfig_DownstreamGRPCAddr_Defaults 断言 4 个下游服务都有 gRPC 地址默认值。
+// 这是 BFF→svc gRPC 接线的前提：config 层必须知道每个 svc 的 gRPC 监听地址。
+func TestConfig_DownstreamGRPCAddr_Defaults(t *testing.T) {
+	var c Config
+	SetDefaults(&c)
+
+	assert.Equal(t, "localhost:8887", c.UserService.GRPCAddr, "user-svc gRPC 默认 :8887")
+	assert.Equal(t, "localhost:8892", c.ChatService.GRPCAddr, "chat-svc gRPC 默认 :8892")
+	assert.Equal(t, "localhost:8886", c.AssessmentService.GRPCAddr, "assessment-svc gRPC 默认 :8886")
+	assert.Equal(t, "localhost:8885", c.AnalyticsService.GRPCAddr, "analytics-svc gRPC 默认 :8885")
+}
+
+// TestConfig_ApplyEnvOverrides_GRPCAddr 断言容器 env 可覆盖 4 个下游 gRPC 地址。
+func TestConfig_ApplyEnvOverrides_GRPCAddr(t *testing.T) {
+	c := loadTestConfig(t)
+
+	t.Setenv("USER_SVC_GRPC_ADDR", "emotion-echo-user-svc:8887")
+	t.Setenv("CHAT_SVC_GRPC_ADDR", "emotion-echo-chat-svc:8892")
+	t.Setenv("ASSESSMENT_SVC_GRPC_ADDR", "emotion-echo-assessment-svc:8886")
+	t.Setenv("ANALYTICS_SVC_GRPC_ADDR", "emotion-echo-analytics-svc:8885")
+
+	ApplyEnvOverrides(&c)
+
+	assert.Equal(t, "emotion-echo-user-svc:8887", c.UserService.GRPCAddr)
+	assert.Equal(t, "emotion-echo-chat-svc:8892", c.ChatService.GRPCAddr)
+	assert.Equal(t, "emotion-echo-assessment-svc:8886", c.AssessmentService.GRPCAddr)
+	assert.Equal(t, "emotion-echo-analytics-svc:8885", c.AnalyticsService.GRPCAddr)
+}
+
+// TestConfig_ApplyEnvOverrides_GRPCAddr_Empty 空 env 不覆盖默认值。
+func TestConfig_ApplyEnvOverrides_GRPCAddr_Empty(t *testing.T) {
+	var c Config
+	SetDefaults(&c)
+	t.Setenv("USER_SVC_GRPC_ADDR", "")
+
+	ApplyEnvOverrides(&c)
+
+	assert.Equal(t, "localhost:8887", c.UserService.GRPCAddr, "空 env 不应覆盖 gRPC 默认值")
+}
+
+// TestConfig_Transport_DefaultEmpty 断言 Transport 默认空串（下游工厂空串即 grpc）。
+func TestConfig_Transport_DefaultEmpty(t *testing.T) {
+	var c Config
+	SetDefaults(&c)
+
+	assert.Empty(t, c.UserService.Transport, "Transport 默认空 → 下游工厂按 grpc 处理")
+	assert.Empty(t, c.ChatService.Transport)
+	assert.Empty(t, c.AssessmentService.Transport)
+	assert.Empty(t, c.AnalyticsService.Transport)
+}
+
+// TestConfig_ApplyEnvOverrides_Transport 断言 *_TRANSPORT env 可强制 http（回滚开关）。
+func TestConfig_ApplyEnvOverrides_Transport(t *testing.T) {
+	c := loadTestConfig(t)
+
+	t.Setenv("USER_TRANSPORT", "http")
+	t.Setenv("CHAT_TRANSPORT", "http")
+	t.Setenv("ASSESSMENT_TRANSPORT", "http")
+	t.Setenv("ANALYTICS_TRANSPORT", "http")
+
+	ApplyEnvOverrides(&c)
+
+	assert.Equal(t, "http", c.UserService.Transport)
+	assert.Equal(t, "http", c.ChatService.Transport)
+	assert.Equal(t, "http", c.AssessmentService.Transport)
+	assert.Equal(t, "http", c.AnalyticsService.Transport)
+}

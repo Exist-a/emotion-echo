@@ -47,6 +47,30 @@ import (
 
 var configFile = flag.String("f", "etc/web-bff.yaml", "the config file")
 
+// grpcDialer 是 gRPC 连接构造函数，提取为包级变量以便测试覆盖（bufconn）。
+// 生产默认用 grpc.NewClient + insecure（内部服务间 mTLS 由基础设施层保障）。
+var grpcDialer = func(addr string) (*grpc.ClientConn, error) {
+	return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+}
+
+// dialGRPC 尝试 dial 下游 gRPC 地址，失败时打日志并返 nil（调用方走 HTTP fallback）。
+//
+// Stage 63: 修复 PR-3 "gRPC 建好了但 BFF 没接线" 的 bug。
+// 之前 buildServiceContext 构造 4 个下游 client 时只传 BaseURL，不传 GRPCConn，
+// 下游工厂静默 fallback 到 HTTP → 生产路径全走 HTTP，gRPC 等于没上线。
+func dialGRPC(addr, name string) *grpc.ClientConn {
+	if addr == "" {
+		return nil
+	}
+	conn, err := grpcDialer(addr)
+	if err != nil {
+		log.Printf("[grpc] %s dial %s failed: %v (fallback to HTTP)", name, addr, err)
+		return nil
+	}
+	log.Printf("[grpc] %s connected: %s", name, addr)
+	return conn
+}
+
 func main() {
 	flag.Parse()
 	logging.Init()
@@ -176,19 +200,36 @@ func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.
 
 	// HTTP clients（5 个下游 + XTTS）。
 	// 三个高优（ai/chat/analytics）走 Resolver 兜底；其他保持 env-only。
+	//
+	// Stage 63: dial 4 个下游 gRPC 连接，传入 client 构造。
+	// Transport=grpc（默认）+ GRPCConn!=nil → 走 gRPC；否则静默 HTTP fallback。
+	// dial 失败也降级 HTTP（不阻塞启动）。
+	userGRPCConn := dialGRPC(c.UserService.GRPCAddr, "user-svc")
+	chatGRPCConn := dialGRPC(c.ChatService.GRPCAddr, "chat-svc")
+	assessmentGRPCConn := dialGRPC(c.AssessmentService.GRPCAddr, "assessment-svc")
+	analyticsGRPCConn := dialGRPC(c.AnalyticsService.GRPCAddr, "analytics-svc")
+
 	svcCtx.SetUser(downstream.NewUserClient(downstream.UserClientOptions{
 		BaseURL: c.UserService.BaseURL, TimeoutMs: c.UserService.TimeoutMs,
+		Transport: downstream.UserTransport(c.UserService.Transport),
+		GRPCConn:  userGRPCConn,
 	}))
 	svcCtx.SetChat(downstream.NewChatClient(downstream.ChatClientOptions{
 		BaseURL: c.ChatService.BaseURL, TimeoutMs: c.ChatService.TimeoutMs,
 		Resolver: resolver,
+		Transport: downstream.ChatTransport(c.ChatService.Transport),
+		GRPCConn:  chatGRPCConn,
 	}))
 	svcCtx.SetAssessment(downstream.NewAssessmentClient(downstream.AssessmentClientOptions{
 		BaseURL: c.AssessmentService.BaseURL, TimeoutMs: c.AssessmentService.TimeoutMs,
+		Transport: downstream.AssessmentTransport(c.AssessmentService.Transport),
+		GRPCConn:  assessmentGRPCConn,
 	}))
 	svcCtx.SetAnalytics(downstream.NewAnalyticsClient(downstream.AnalyticsClientOptions{
 		BaseURL: c.AnalyticsService.BaseURL, TimeoutMs: c.AnalyticsService.TimeoutMs,
 		Resolver: resolver,
+		Transport: downstream.AnalyticsTransport(c.AnalyticsService.Transport),
+		GRPCConn:  analyticsGRPCConn,
 	}))
 	svcCtx.SetAI(downstream.NewAIClient(downstream.AIClientOptions{
 		BaseURL: c.AIService.HTTPAddr, TimeoutMs: c.AIService.TimeoutMs,

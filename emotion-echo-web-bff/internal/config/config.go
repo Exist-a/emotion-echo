@@ -16,9 +16,16 @@ type SkyWalking struct {
 }
 
 // HTTPService 是下游 HTTP 服务的通用配置
+//
+// Stage 63: 新增 GRPCAddr + Transport 字段，让 BFF 能 dial 下游 gRPC server。
+// GRPCAddr 为空 → 不 dial，下游工厂静默走 HTTP fallback。
+// Transport 为空 → 下游工厂按 "grpc" 处理（需同时 GRPCConn 非 nil）；
+// Transport="http" → 强制 HTTP（回滚开关）。
 type HTTPService struct {
 	BaseURL   string
 	TimeoutMs int
+	GRPCAddr  string
+	Transport string
 }
 
 // AIService 是 ai-svc 的双协议配置（HTTP + gRPC）
@@ -111,6 +118,19 @@ func SetDefaults(c *Config) {
 	setHTTPServiceDefaults(&c.ChatService, "http://localhost:8890")
 	setHTTPServiceDefaults(&c.AssessmentService, "http://localhost:8889")
 	setHTTPServiceDefaults(&c.AnalyticsService, "http://localhost:8904")
+	// Stage 63: 下游 gRPC 地址默认值（与各 svc grpcserver 监听端口对齐）
+	if c.UserService.GRPCAddr == "" {
+		c.UserService.GRPCAddr = "localhost:8887"
+	}
+	if c.ChatService.GRPCAddr == "" {
+		c.ChatService.GRPCAddr = "localhost:8892"
+	}
+	if c.AssessmentService.GRPCAddr == "" {
+		c.AssessmentService.GRPCAddr = "localhost:8886"
+	}
+	if c.AnalyticsService.GRPCAddr == "" {
+		c.AnalyticsService.GRPCAddr = "localhost:8885"
+	}
 	if c.AIService.HTTPAddr == "" {
 		c.AIService.HTTPAddr = "http://localhost:8891"
 	}
@@ -196,6 +216,32 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("ANALYTICS_SVC_URL"); v != "" {
 		c.AnalyticsService.BaseURL = v
+	}
+	// Stage 63: 下游 gRPC 地址 env 覆盖（容器 DNS）
+	if v := os.Getenv("USER_SVC_GRPC_ADDR"); v != "" {
+		c.UserService.GRPCAddr = v
+	}
+	if v := os.Getenv("CHAT_SVC_GRPC_ADDR"); v != "" {
+		c.ChatService.GRPCAddr = v
+	}
+	if v := os.Getenv("ASSESSMENT_SVC_GRPC_ADDR"); v != "" {
+		c.AssessmentService.GRPCAddr = v
+	}
+	if v := os.Getenv("ANALYTICS_SVC_GRPC_ADDR"); v != "" {
+		c.AnalyticsService.GRPCAddr = v
+	}
+	// Stage 63: 传输协议回滚开关（默认空 → grpc；设 "http" 强制走 HTTP fallback）
+	if v := os.Getenv("USER_TRANSPORT"); v != "" {
+		c.UserService.Transport = v
+	}
+	if v := os.Getenv("CHAT_TRANSPORT"); v != "" {
+		c.ChatService.Transport = v
+	}
+	if v := os.Getenv("ASSESSMENT_TRANSPORT"); v != "" {
+		c.AssessmentService.Transport = v
+	}
+	if v := os.Getenv("ANALYTICS_TRANSPORT"); v != "" {
+		c.AnalyticsService.Transport = v
 	}
 	if v := os.Getenv("AI_SVC_HTTP_URL"); v != "" {
 		c.AIService.HTTPAddr = v

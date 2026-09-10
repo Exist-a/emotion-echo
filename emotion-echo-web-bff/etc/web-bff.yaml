@@ -1,10 +1,10 @@
 # emotion-echo-web-bff 配置（Stage 30 / stage-30-web-bff.md）
 #
 # 端口约定（容器内）：
-#   user-svc        :8888  (HTTP)
-#   chat-svc        :8890  (HTTP)
-#   assessment-svc  :8889  (HTTP)
-#   analytics-svc   :8904  (HTTP；容器内 8893 避开 ai-svc 8892)
+#   user-svc        :8888  (HTTP) / :8887 (gRPC)
+#   chat-svc        :8890  (HTTP) / :8892 (gRPC)
+#   assessment-svc  :8889  (HTTP) / :8886 (gRPC)
+#   analytics-svc   :8904  (HTTP；容器内 8893 避开 ai-svc 8892) / :8885 (gRPC)
 #   ai-svc          :8891  (HTTP) / :8892 (gRPC)
 #
 # 注（T1.2 阶段）：此处为真实默认值，不写 ${VAR:-default} 占位符。
@@ -29,20 +29,26 @@ Nacos:
   HotReload: false
 
 # 下游服务地址（BFF 聚合 5 个下游 + XTTS）
+# Stage 63: 每个下游新增 GRPCAddr（gRPC server 监听地址）。
+#   Transport 默空 -> 走 gRPC（需 GRPCAddr 非空 + dial 成功）；设 "http" 强制 HTTP 回滚。
 UserService:
   BaseURL: http://localhost:8888
+  GRPCAddr: localhost:8887
   TimeoutMs: 5000
 
 ChatService:
   BaseURL: http://localhost:8890
+  GRPCAddr: localhost:8892
   TimeoutMs: 5000
 
 AssessmentService:
   BaseURL: http://localhost:8889
+  GRPCAddr: localhost:8886
   TimeoutMs: 5000
 
 AnalyticsService:
   BaseURL: http://localhost:8904
+  GRPCAddr: localhost:8885
   TimeoutMs: 5000
 
 AIService:
@@ -70,8 +76,8 @@ Auth:
 TrustAPISIX: true
 
 # BFF ai_stream 调用的真实 LLM（OpenAI 兼容，如 DeepSeek / OpenAI / Kimi / Ollama）
-# dev 留 APIKey 空 → ai_stream 走 mock 共情回复（开发友好）
-# 生产部署必填：container env BFF_LLM_API_KEY=<key>（**切勿 commit 真实 key**）
+# dev 留 APIKey 空 -> ai_stream 走 mock 共情回复（开发友好）
+# 生产部署必填：container env BFF_LLM_API_KEY=<key>（切勿 commit 真实 key）
 LLM:
   BaseURL: https://api.deepseek.com
   Model: deepseek-chat
