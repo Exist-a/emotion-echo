@@ -2,6 +2,7 @@ import { ref, onUnmounted } from "vue";
 import { stripMarkdown, extractReadableText } from "~/utils/stripMarkdown";
 import PcmPlayer from "pcm-player";
 import { API_ROUTES } from "../lib/apiRoutes";
+import { getApiBaseUrl } from "../lib/apiBaseUrl";
 
 export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral';
 
@@ -171,8 +172,8 @@ const playStream = async (
 
   try {
     abortController = new AbortController();
-    // Stage 30: TTS 流式走 BFF 唯一入口（聚合 XTTS 直连），带 Authorization 透传
-    const base = (useRuntimeConfig().public.API_BASE_URL as string) || 'http://localhost:8894/api/v1';
+    // PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8894
+    const base = getApiBaseUrl(useRuntimeConfig());
     const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || '';
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

@@ -9,6 +9,7 @@
  *       PR-17 改为 OpenAI 兼容解析。
  */
 import { API_ROUTES } from '../lib/apiRoutes'
+import { getApiBaseUrl } from '../lib/apiBaseUrl'
 export interface AIStreamParams {
   message: string
   emotion: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
@@ -75,7 +76,15 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
 
     const runtimeConfig = useRuntimeConfig()
     const token = import.meta.client ? localStorage.getItem('access_token') : ''
-    const streamUrl = `${runtimeConfig.public.API_BASE_URL || 'http://localhost:8894/api/v1'}${API_ROUTES.aiStream.path}`
+    // PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8894
+    // 计算 streamUrl 时若 API_BASE_URL 漏配 → 抛错 → 进 catch 返回 isOk=false
+    let streamUrl: string
+    try {
+      streamUrl = `${getApiBaseUrl(runtimeConfig)}${API_ROUTES.aiStream.path}`
+    } catch (e: any) {
+      callbacks.onError?.(e?.message || 'API_BASE_URL 未配置')
+      return { isOk: false, msg: e?.message || 'API_BASE_URL 未配置' }
+    }
 
     streamAbortController = new AbortController()
 

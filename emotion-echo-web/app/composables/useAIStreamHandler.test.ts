@@ -218,4 +218,28 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
     resolveFirst(makeSSEStream(['data: [DONE]\n\n']))
     await first
   })
+
+  // PR-A · decision 18 #24
+  // 修复 useAIStreamHandler.ts:78 fallback 字面值 'http://localhost:8894/api/v1'
+  // （Stage 30 时代 BFF 直连残留）。当 NUXT_PUBLIC_API_BASE_URL 漏配时，
+  // fetch 不应静默打到 8894，必须报错（让 dev 立刻发现 .env 缺失）。
+  it('PR-A · API_BASE_URL 漏配：fetch 不应静默打到 8894，必须报错', async () => {
+    ;(globalThis as any).useRuntimeConfig = () => ({
+      public: { API_BASE_URL: '' } // 漏配
+    })
+
+    fetchSpy.mockResolvedValue(
+      makeSSEStream(['data: {"choices":[{"delta":{"content":"x"}}]}\n\n', 'data: [DONE]\n\n'])
+    )
+
+    const { sendAIStream } = useAIStreamHandler()
+    const onError = vi.fn()
+    const result = await sendAIStream({ message: 'test', emotion: 'neutral' }, { onError })
+
+    expect(result.isOk).toBe(false)
+    // fetch 必须从未被调用（fail-fast 在调 fetch 之前抛错）
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0]).toMatch(/API_BASE_URL.*未配置|NUXT_PUBLIC_API_BASE_URL/i)
+  })
 })

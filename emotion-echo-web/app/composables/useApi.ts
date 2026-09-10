@@ -4,6 +4,7 @@ import { ApiError } from "~/types/api";
 import { useUserStore } from "~/stores/user";
 import { navigateTo } from "#app";
 import { API_ROUTES } from "../lib/apiRoutes";
+import { getApiBaseUrl } from "../lib/apiBaseUrl";
 
 export function useApi() {
   return {
@@ -23,13 +24,9 @@ export function useApi() {
  */
 
 // 基础配置（从 runtimeConfig 读取，支持运行时获取）
+// PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8080
 function getBaseUrl(): string {
-  try {
-    const config = useRuntimeConfig();
-    return (config.public.API_BASE_URL as string) || "http://localhost:8080/api/v1";
-  } catch {
-    return "http://localhost:8080/api/v1";
-  }
+  return getApiBaseUrl(useRuntimeConfig());
 }
 
 // 429 限流配置
