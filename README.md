@@ -114,10 +114,17 @@ docker compose -f docker-compose.infra.yml up -d
 # 等待 30~60 秒各容器健康
 
 # 2. 启动 5 个 Go 微服务
-docker compose -f docker-compose.apps.yml up -d
+docker compose -f docker-compose.dev.yml -f docker-compose.apps.yml up -d
 
-# 3. （可选）启动 AI profile
-docker compose --profile ai up -d --build
+# 3. （可选）启动 AI profile（TTS / 人脸识别 / 语音识别）
+# 镜像已在 docker.io / 阿里云 ACR（推荐）
+docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml --profile ai up -d emotion-echo-xtts emotion-echo-fer emotion-echo-sensevoice
+# 首次拉镜像 + build（耗时长 + 受国内镜像影响，见 stage-60 §五）
+# docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml --profile ai up -d --build emotion-echo-xtts emotion-echo-fer emotion-echo-sensevoice
+
+# ⚠️ 5 秒必读 · AI profile 不启用 = TTS 按钮无声 / 多模态不可用
+# 总镜像约 18GB（XTTS 11.3GB + SenseVoice 4.16GB + FER 538MB），
+# dev 默认不起避免拖慢启动；prod 部署时按需启用（详见 docs/stages/stage-60-pr-tts-vendor-landing.md）。
 ```
 
 ### 方式二：本地开发

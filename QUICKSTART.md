@@ -85,6 +85,23 @@ Emotion-Echo/
 
 ---
 
+> ⚠️ **5 秒必读 · AI profile 是可选的**
+>
+> `docker compose -f docker-compose.apps.yml up -d` 默认**只起 7 业务 + 8 infra 容器**——
+> TTS / 人脸识别 / 语音识别需显式启用 AI profile：
+>
+> ```bash
+> # 镜像已在本地仓库 / 阿里云 ACR（推荐）
+> docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
+>     --profile ai up -d emotion-echo-xtts emotion-echo-fer emotion-echo-sensevoice
+> ```
+>
+> **未启用的后果**：聊天页 TTS 按钮点无声音 / 上传图片不识别人脸 / 上传语音不转情绪。
+> **镜像体积**：XTTS 11.3GB + SenseVoice 4.16GB + FER 538MB ≈ **18GB**——dev 默认不起避免拖慢启动；
+> prod 部署时按需启用。详见 [stage-60-pr-tts-vendor-landing.md §五](stage-60-pr-tts-vendor-landing.md)。
+
+---
+
 ## 2. 快速启动（Docker Compose 推荐）
 
 ### 前置要求
