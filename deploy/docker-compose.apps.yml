@@ -92,8 +92,10 @@ services:
       SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"
     # Stage 33 PR-20: 删除宿主端口映射（APISIX 转发即可；dev 调试走 APISIX :19080）
     # expose: 容器内可见（其他 svc 互联）
+    # Stage 62 PR-3.2: gRPC server :8887（UserService 给内部 BFF）
     expose:
       - "8888"
+      - "8887"
     volumes:
       - ../emotion-echo-user-svc/etc/user-api.yaml:/app/etc/user-api.yaml:ro
     networks:
@@ -206,8 +208,10 @@ services:
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"
     # Stage 33 PR-20: 端口收紧
+    # Stage 62 PR-3.2: gRPC server :8885（AnalyticsService 给内部 BFF）
     expose:
       - "8893"
+      - "8885"
     volumes:
       - ../emotion-echo-analytics-svc/etc/analytics-api.yaml:/app/etc/analytics-api.yaml:ro
     networks:
@@ -259,8 +263,10 @@ services:
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"
     # Stage 33 PR-20: 端口收紧
+    # Stage 62 PR-3.2: gRPC server :8886（AssessmentService 给内部 BFF）
     expose:
       - "8889"
+      - "8886"
     volumes:
       - ../emotion-echo-assessment-svc/etc/assessment-api.yaml:/app/etc/assessment-api.yaml:ro
     networks:
