@@ -22,6 +22,8 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+
+	"github.com/emotion-echo/shared/pkg/ctxkey"
 )
 
 // Middleware 是 HTTP 中间件类型，等价 go-zero rest.Middleware 的契约。
@@ -29,8 +31,15 @@ import (
 // 替代方案：直接用 `func(http.HandlerFunc) http.HandlerFunc`，无需任何外部依赖。
 type Middleware = func(http.HandlerFunc) http.HandlerFunc
 
-// CtxUserIDKey 是 context 中 user id 的 key
-type CtxUserIDKey struct{}
+// CtxUserIDKey 是 context 中 user id 的 key（Sprint C 重构）。
+//
+// 历史：原定义为独立 struct{}（jwt_auth.go:33），grpcinterceptor 又有自己的
+// CtxUserIDKeyType{}，两个类型不一致导致 gRPC 拦截器注入的 user_id 与 svc logic
+// 从 middleware.CtxUserIDKey 读永远 miss（决策 18 #26，Stage 63 端到端验证发现）。
+//
+// 改类型别名后：middleware 与 grpcinterceptor 都指向 ctxkey.UserID，编译期完全等同，
+// 跨包读写同一 ctx value。现有调用 ctx.Value(CtxUserIDKey{}) 无须改（别名透明）。
+type CtxUserIDKey = ctxkey.UserID
 
 // XUserIDHeader 是 APISIX 注入的 user id header 名
 const XUserIDHeader = "X-User-Id"

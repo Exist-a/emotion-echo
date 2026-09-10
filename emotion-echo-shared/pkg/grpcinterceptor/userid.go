@@ -13,6 +13,7 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/emotion-echo/shared/pkg/ctxkey"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -25,12 +26,17 @@ import (
 // 与 HTTP header X-User-Id 对应（APISIX 透传时大小写不敏感）。
 const XUserIDMetadataKey = "x-user-id"
 
-// CtxUserIDKeyType 是 context 中 user id 的 key 类型（与 pkg/middleware.CtxUserIDKey 同义，
-// 但 gRPC 与 HTTP 中间件是不同包，故单独定义。调用方可用类型断言互转。）
+// CtxUserIDKeyType 是 context 中 user id 的 key 类型别名，与 pkg/middleware.CtxUserIDKey
+// 完全等同（Sprint C 重构）。
 //
-// Stage 63 收口 TODO：与 pkg/middleware.CtxUserIDKey 互不通（见 §六.2 新发现 bug），
-// 应在 shared 顶级新加 pkg/ctxkey 包统一两者，本 PR 仅登记暂不修。
-type CtxUserIDKeyType struct{}
+// 历史：原定义为独立 struct{}，注释称"与 pkg/middleware.CtxUserIDKey 同义"，
+// 但实际是不同类型 → 4 svc gRPC server userid 拦截器注入 ctx 后，svc logic 从
+// middleware.CtxUserIDKey 读永远 miss → 业务 401（决策 18 #26）。
+//
+// 改类型别名后：两端都指向 ctxkey.UserID，编译期完全等同，跨包读写同一 ctx value。
+// 现有调用 ctx.Value(CtxUserIDKeyType{}) 与 grpcinterceptor.UserIDFromGRPCContext 都
+// 无须改（别名透明）。
+type CtxUserIDKeyType = ctxkey.UserID
 
 // NewServerUserIDInterceptor creates a server-side interceptor that extracts
 // end user id from incoming metadata and injects it into ctx.

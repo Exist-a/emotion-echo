@@ -195,18 +195,14 @@ func setHTTPServiceDefaults(s *HTTPService, defaultBaseURL string) {
 	if s.TimeoutMs == 0 {
 		s.TimeoutMs = 5000
 	}
-	// Stage 63 收口（2026-09-11）：默认 Transport = "http" 走 HTTP fallback。
+	// Transport 默认空 → 下游工厂按 "grpc" 处理（与决策 4 "内部 svc-to-svc = gRPC" 对齐）。
 	//
-	// 背景：原 Stage 63 设计默认 Transport 空 → 下游工厂按 "grpc" 处理，但
-	//   (a) BFF gRPC client 内部 ctx key (userIDCtxKey) 与 chat-svc/assessment-svc
-	//       logic 读的 middleware.CtxUserIDKey 不通，metadata x-user-id 注入失败
-	//   (b) chat-svc gRPC 6 个 RPC (SendMessage/ListMessages/ListConversations/...) 全是 Unimplemented 占位
-	//   (c) user-svc gRPC GetMe 内部读 middleware.CtxUserIDKey，gRPC server userid 拦截器
-	//       注入的是 grpcinterceptor.CtxUserIDKeyType，两套 key 不互通
-	// 默认改 http 后立即恢复端到端可用。修 (a)(b)(c) 后可改回默认 grpc。
-	if s.Transport == "" {
-		s.Transport = "http"
-	}
+	// Sprint C（2026-09-11）历史：曾因 grpcinterceptor.CtxUserIDKeyType 与 middleware.CtxUserIDKey
+	// 两个类型不一致（决策 18 #26）临时默认 "http" 绕路。Sprint C ctxkey 重构后两类型别名指向
+	// ctxkey.UserID，跨包 ctx 读写一致，可恢复 grpc 默认。
+	//
+	// Sprint D（chat-svc 6 RPC 实现）未做前，chat-svc gRPC 仍返 Unimplemented；
+	// 届时 BFF 端 conversations 仍 500，需要 Sprint D 解决。
 }
 
 // ApplyEnvOverrides 用容器环境变量覆盖 config 字段（Stage 22-B 范式）。

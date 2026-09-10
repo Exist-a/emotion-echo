@@ -166,21 +166,21 @@ func TestConfig_ApplyEnvOverrides_GRPCAddr_Empty(t *testing.T) {
 	assert.Equal(t, "localhost:8887", c.UserService.GRPCAddr, "空 env 不应覆盖 gRPC 默认值")
 }
 
-// TestConfig_Transport_DefaultHTTP 断言 Transport 默认 "http"（Stage 63 收口后）。
+// TestConfig_Transport_DefaultEmpty 断言 Transport 默认空串（下游工厂空串即 grpc）。
 //
-// 历史：原 Stage 63 设计默认空串 → 下游工厂按 "grpc" 处理。但端到端验证发现：
-//   (a) BFF chat_grpc 私有 userIDKey 与 downstream.WithUserID 的 userIDCtxKey 不通
-//   (b) chat-svc gRPC 6 个 RPC 全是 Unimplemented
-//   (c) 4 svc gRPC server userid 拦截器与 svc logic 读的两套 ctx key 不互通
-// 默认改 http 后端到端可用。修 (a)(b)(c) 后可改回默认 grpc。
-func TestConfig_Transport_DefaultHTTP(t *testing.T) {
+// 历史：Stage 63 收口期间曾临时改为 "http" 绕路 ctxkey 不通问题，Sprint C ctxkey 重构后
+// 恢复默认空 → grpc（与决策 4 "内部 svc-to-svc = gRPC" 对齐）。
+//
+// Sprint D 修 chat-svc 6 RPC 之前，chat-svc gRPC 路径仍返 Unimplemented，但其他 3 个 svc
+// （user/assessment/analytics）应能正常走 gRPC。
+func TestConfig_Transport_DefaultEmpty(t *testing.T) {
 	var c Config
 	SetDefaults(&c)
 
-	assert.Equal(t, "http", c.UserService.Transport, "Transport 默认 http (Stage 63 收口)")
-	assert.Equal(t, "http", c.ChatService.Transport)
-	assert.Equal(t, "http", c.AssessmentService.Transport)
-	assert.Equal(t, "http", c.AnalyticsService.Transport)
+	assert.Empty(t, c.UserService.Transport, "Transport 默认空 → 下游工厂按 grpc 处理")
+	assert.Empty(t, c.ChatService.Transport)
+	assert.Empty(t, c.AssessmentService.Transport)
+	assert.Empty(t, c.AnalyticsService.Transport)
 }
 
 // TestConfig_ApplyEnvOverrides_Transport 断言 *_TRANSPORT env 可强制 http（回滚开关）。
