@@ -10,9 +10,16 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: [
-      { find: '~', replacement: ROOT },
-      { find: '@', replacement: ROOT },
-      { find: '#app', replacement: ROOT }
+      // Nuxt alias `~` / `@` / `#app` = <srcDir> = `<ROOT>/app`
+      // （之前直接 alias 到 ROOT 让 `~/types/api` 解析失败——见 PR-A 测试）
+      { find: /^~(?=\/)/, replacement: path.join(ROOT, 'app') },
+      { find: /^@(?=\/)/, replacement: path.join(ROOT, 'app') },
+      { find: /^#app(?=\/)/, replacement: path.join(ROOT, 'app') },
+      { find: /^#imports(?=\/)/, replacement: path.join(ROOT, 'app') },
+      // 兜底：~ / @ / #app 单独出现（不带 /）时 alias 到 app
+      { find: '~', replacement: path.join(ROOT, 'app') },
+      { find: '@', replacement: path.join(ROOT, 'app') },
+      { find: '#app', replacement: path.join(ROOT, 'app') }
     ]
   },
   test: {
