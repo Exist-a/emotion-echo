@@ -400,6 +400,22 @@
 
 ---
 
+### 决策 21：OAuth DDL 残留清理 = **✅ Accepted**（2026-09-10）
+
+> ✅ 2026-09-10 生效。详见 [`adr-2026-09-drop-user-oauth-ddl.md`](adr/adr-2026-09-drop-user-oauth-ddl.md)。
+>
+> **触发**：Stage 62 PR-5 调查发现 `emotion_echo_user.user_oauth` 表零引用（契约测试 [`scripts/test_user_oauth_zero_ref.sh`](../../scripts/test_user_oauth_zero_ref.sh) 5/5 PASS），确认 Stage 38-A 已主动弃 OAuth 路径但 DDL / 注释残留。
+>
+> **范围**：
+> - 删除 `emotion_echo_user.user_oauth` 表（`deploy/db/05-drop-user-oauth.sql`，挂 `initdb.d`）
+> - 清理 `01-create-schemas.sql` + `02-create-tables-in-schemas.sql` 中 OAuth DDL 块
+> - 清理 `emotion-echo-web/.env.example` 中 WECHAT/QQ 模板注释
+> - **保留**：`legacy/emotion-echo-gin/oauth_handler.go` 按决策 19 归档不动
+>
+> **撤销流程**（ADR 21 §三）：满足"用户明确决策 + 新建撤销 ADR + 新建 migration + 新 plan"四条件才能恢复 OAuth。
+>
+> **未做项**：已存在 dev 环境的 user_oauth 残留（数据卷非空）由后续 `migrate.sh` 单独 PR 收口。
+
 ## 🏗 当前架构全景
 
 ```

@@ -31,18 +31,9 @@ CREATE TABLE IF NOT EXISTS emotion_echo_user.refresh_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON emotion_echo_user.refresh_tokens(user_id);
 
-CREATE TABLE IF NOT EXISTS emotion_echo_user.user_oauth (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    provider VARCHAR(32) NOT NULL,
-    open_id VARCHAR(128) NOT NULL,
-    union_id VARCHAR(128),
-    access_token TEXT,
-    refresh_token TEXT,
-    expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(provider, open_id)
-);
+-- Stage 62 PR-5：emotion_echo_user.user_oauth 表已删（ADR 21，wechat-qq-login-and-upload.md
+-- superseded-by Stage 38-A）。历史 DDL 块从本文件移除，避免新人误读 OAuth 已落地。
+-- drop table 由 deploy/db/06-drop-user-oauth.sql 单独执行（migrate.sh 会按顺序应用）。
 
 CREATE TABLE IF NOT EXISTS emotion_echo_user.upload_files (
     id BIGSERIAL PRIMARY KEY,

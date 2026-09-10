@@ -45,18 +45,8 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 
-CREATE TABLE IF NOT EXISTS user_oauth (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id),
-    provider VARCHAR(32) NOT NULL,  -- wechat / apple / qq
-    open_id VARCHAR(128) NOT NULL,
-    union_id VARCHAR(128),
-    access_token TEXT,
-    refresh_token TEXT,
-    expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(provider, open_id)
-);
+-- Stage 62 PR-5：user_oauth 表已删（ADR 21，wechat-qq-login-and-upload.md superseded-by Stage 38-A）
+-- 历史 DDL 块从本文件移除，避免新人误读 'OAuth 已落地'
 
 CREATE TABLE IF NOT EXISTS upload_files (
     id BIGSERIAL PRIMARY KEY,
