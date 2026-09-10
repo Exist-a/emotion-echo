@@ -82,10 +82,17 @@
 | 21 | Sprint 1 PR-4d 前端 sha256 残留 | modify.vue:57 仍用 `sha256(formInfo.value.newPassword)` 调 `/auth/reset-password` | 决策 18 §四.1 + emotion-echo-shared/pkg/password.go 注释明示"不做 bcrypt(sha256) — 削弱 bcrypt 安全性"，但 PR-2 调研时未发现此历史 bug（todo-pile-2026-09-04.md 已记 PR-4d 但未就地更正）。Stage 33 PR-19b 已净化 login/index.vue（line 122 注释明示），但 modify.vue 漏。**修正**（PR-4d commit）：modify.vue:57 改明文 + 删 `import { sha256 } from 'js-sha256'`。前端 vitest 21/21 235/235 PASS 无回归。 | 未复跑即记录（同 #3 型：todo-pile 已标 PR-4d 但 PR-2 实施时未复跑）+ 类型 5 自报告。**教训**：plan 列出的"未做项"在 sprint 实施时必须**逐条 grep 验证**而非信任；本次若 grep `'sha256' app/pages` 必立即发现 |
 | 22 | Sprint 1 PR-4c-3 commit msg（928bed2 "实测"小节） | "emotion-echo-user-svc 7 包全 PASS（含 6 个新 reset-password 单测）" + "emotion-echo-web-bff 10 包全 PASS（含 4 个新 reset-password handler 测试）" + "scripts/test_route_contract.sh 0 fail / 27 warn" | (a) **镜像未 rebuild**：`emotion-echo/user-svc:v0.1.0` / `emotion-echo/web-bff:v0.1.0` 是 PR-4c-3 commit 前的旧镜像，跑端到端时 reset-password 路由根本不存在（带 `X-User-Id: 1` 也返 404；不带 token 时 Gin 全局中间件先 abort 返 401 "missing or invalid X-User-Id"——与"中间件拦"假象一致）。(b) **单测只覆盖 logic 层**：`authlogic_test.go TestAuthLogic_ResetPassword_*` 直接调 `l.ResetPassword()`，没经过 handler binding / GinAuthMiddleware，**单测绿 ≠ HTTP 路径通**。(c) **APISIX 白名单漏 `/api/v1/auth/reset-password`**：seed.sh id 110-114 只覆盖 login/register/verification-code/refresh/logout，reset-password 没白名单 → 走 `/api/v1/*` catch-all 被 jwt-auth 401。(d) **BFF 验证码黑洞**：commit msg "未做"小节承诺"前端 console 显示"——但前端代码从未实现 console 输出，dev 模式 e2e 卡在第二步。**修正**（PR-4c-4）：user-svc `internal/handler/auth_handler_test.go` 加 HTTP 端到端测试（复刻 main.go 路由结构 + GinAuthMiddleware 全局注册）+ 重建 user-svc + BFF 镜像 + seed.sh id=115 `/api/v1/auth/reset-password` 白名单 + BFF `verificationCode` 响应 `devCode` 字段（`BFF_DEV_RETURN_CODE=1` 控制，prod 永远关）。**端到端**：注册→拿 devCode→reset-password→DB 验证登录 4 步全绿。修复过程与复现命令详见 [todo-pile § H](/docs/plans/todo-pile-2026-09-04.md)。 | 探测方法错误（同 #6 / #8 / #11 型：单测绿即宣告"实测通过"，未跑过 docker 端到端）+ 未复跑即记录（同 #3 / #21 型：commit msg 自称 Sprint 1 收口，未真起 docker compose 验证）。**教训**：单测（特别是 logic-only 单测，mock 掉 HTTP binding 与 middleware）不能作为"端到端通"的证据；commit msg "实测"小节**必须列可复现命令 + 原始输出**，否则一律视为"自报告"，AGENTS.md §〇 写文档前调研的纪律必须延伸到 commit msg 自验证 | 
 
-附带**累积的失真速率**统计（**修正后**）：本 ADR 7 天内累积登记 **22 条失真 / 5 类成因**（新增类型 6），
-其中类型 1（根因臆断）5 条、类型 3（未复跑即记录）6 条、类型 4（探测方法错误）10 条、
-类型 2（陈旧结论）1 条、**类型 6（破坏性脚本未带默认护栏）2 条**。
-**根因臆断 + 探测方法错误**合计 12 条（占 65%）——这两类
+#### 2026-09-10 增补（本次会话 #23 #24）
+
+| # | 出处 | 文档写的 | 实测事实 | 类型 |
+|---|---|---|---|---|
+| 23 | `docs/architecture/adr/adr-2026-09-env-profile-strategy.md` 头 4 行（ADR-20）+ `decisions.md` 决策 20 区块 + `README.md` Status 段（停留在 Stage 36/35） | 头 4 行 "🟡 Proposed / 待决策" + "⏸ 未开始（决策落地前不做任何代码/compose 改动）" + README 徽章 `Stage-35--Hardening` + Status 段只到 Stage 36 | (1) `deploy/compose.dev.yml` 61 行（PR-ENV-1 `ac0299e` 2026-09-09 06:31）+ `compose.prod.yml` 66 行（PR-ENV-3 `b89ecab` 06:33）+ `configuration.md` 179 行（PR-ENV-4 `b2ea516` 06:35）+ `apps.yml` 中性化 18 处硬编码（PR-ENV-2 `f400e65` 06:32）；测试脚本 4 项共 43/43 PASS。(2) 仓库已 148 commits ahead of origin/main，stage 文档最新 `stage-60-pr-tts-vendor-landing.md`（XTTS vendor / FER-tflite / SV-fastbuild 三模型落地）。**修正**：ADR-20 头 4 行后追加就地更正块 + decisions.md 决策 20 区块追加就地更正块 + README 顶部徽章改 `Stage-60--PR--TTS--VENDOR` + Status 段后追加 16 行阶段进展表。决策 20 的 owner sign-off 仍未到（保留 Proposed 标签） | 未复跑即记录（同 #3 / #9 / #21 型：决策落地 1 天后 ADR 头 4 行仍未更新）+ 陈旧结论（同 #2 / #4 型：README Status 段停留在 Stage 36，git log 已 Stage 60）。**教训**：ADR 头 4 行的"决策状态 / 实施状态"字段必须**随 commit 同步更新**，建议未来用 pre-commit hook 或 PR-CI 校验 ADR 头 4 行 commit hash 是否指向该 ADR 涉及的 commit |
+| 24 | `emotion-echo-web/app/composables/useAIStreamHandler.ts:78` + `useTTSPlayer.ts:175` + `useApi.ts:29,31` | （代码 fallback 字面值 + 文档假设"前端经 APISIX"）| (1) `useAIStreamHandler.ts:78` `const streamUrl = '${runtimeConfig.public.API_BASE_URL \|\| 'http://localhost:8894/api/v1'}${...}'`——fallback 字面值 8894 是**Stage 30 时代的"BFF 直连"残留**；(2) `useTTSPlayer.ts:175` 同款 fallback 8894；(3) `useApi.ts:29,31` fallback 写 `localhost:8080/api/v1`——8080 是 Spring 默认端口，本项目无任何服务监听 8080（user-svc:8888 / chat-svc:8890 / ai-svc:8891 / analytics-svc:8893 / assessment-svc:8889 / web-bff:8894 / apisix:19080 / llm-svc:8000）。**实际产品现状**（已实测）：`nuxt.config.ts:19` 默认 + `.env:5` + `.env.example:24` 都指向 `http://localhost:19080/api/v1`（经 APISIX，cf1c798 之后默认），所以**用户在 `.env` 设好 `NUXT_PUBLIC_API_BASE_URL` 时这3 处 fallback 不触发**；但**任何 docker compose 没起 / .env 漏配的场景**，聊天流 + TTS 播放会无声回退到 8894（BFF 已起可走通）或 8080（HTTP 000 死端口）。**失真类型**：决策 9 vs 决策 11/12 的"BFF 是否唯一入口"长期未收口（`decisions.md` 决策 9 至今仍写 "web-bff 是统一入口"，决策 11/12 写 APISIX 是唯一业务入口——字面冲突 4 个月），fallback 字面值是这套语义未收口的**代码侧残留**。**修正路径**（未做）：把 3 处 fallback 字面值统一改为 `''` 或 throw，强制依赖环境变量；同时把 `decisions.md` 决策 9 末尾加"决策 12 已修正此视角"的正式收口（cf. 决策 9 末尾已有的非正式注释）| 根因臆断（同 #1 / #5 / #11 型：写 fallback 时凭"直觉选个 localhost 端口"，未验证端口是否存在）+ 探测方法错误（同 #6 / #8 型：未在 fallback 路径上跑一次端到端，只看 happy path `.env` 设值的情况）+ 类型 5 自报告（本会话作者本次没复跑 fallback，只读 `.env` + `nuxt.config.ts` 就下结论"前端经 APISIX"，未读 3 个 composable 的 fallback 字面值）。**教训**：产品变更（Stage 30 → Stage 32 入口改回 APISIX）必须做"代码侧残留扫描"——`grep -rn "localhost:[0-9]\+" emotion-echo-web/app/` + `grep -rn "BFF 直连\|直连 BFF" docs/`；本条属于"未做残留扫描"的失真 | 
+
+附带**累积的失真速率**统计（**修正后**）：本 ADR 8 天内累积登记 **24 条失真 / 5 类成因**（新增类型 6），
+其中类型 1（根因臆断）6 条、类型 3（未复跑即记录）7 条、类型 4（探测方法错误）11 条、
+类型 2（陈旧结论）2 条、**类型 6（破坏性脚本未带默认护栏）2 条**。
+**根因臆断 + 探测方法错误**合计 13 条（占 54%）——这两类
 都属于"按合理推断/错误方法得出结论"，共同的根治办法就是**多花 5 分钟真跑一次**
 （决策 4.1 的"结论须附可复现命令 + 原始输出"是针对这两类最强的防线）。
 
@@ -117,11 +124,17 @@ purge / rm -rf / format / drop database / truncate）的脚本，必须默认 `-
 
 #### 2026-09-04 增补的子类型
 
-**类型 5：自报告失真（#7 #10）**——文档的作者/报告者**自己**就是探测者，结论/措辞
+**类型 5：自报告失真（#7 #10 #14 #15 #18 #22 #24）**——文档的作者/报告者**自己**就是探测者，结论/措辞
 与实际情况错位而本人未察觉。这条与前 4 类的区别在于：前 4 类是"前人写下的文档
 与现在的代码/现状不符"，类型 5 是"我/你当下对用户说的话/对 commit 的描述与事实
 不符"。补救：向用户汇报前**先做一次关键事实的 grep/查证**（不要仅凭"看起来对"），
 尤其是那些"如果我错了会导致大返工"的判断。
+
+**类型 5 子类型 #24（2026-09-10 增）：代码侧残留扫描未做**——产品架构变更
+（Stage 30 → Stage 32 入口从 BFF 改回 APISIX）后，**未做"代码侧残留扫描"**
+（`grep -rn "localhost:[0-9]\+" emotion-echo-web/app/` + `grep -rn "直连 BFF" docs/`），
+导致 fallback 字面值 / 文档措辞的旧假设继续存在。补救：每次架构入口或端口变更，
+**必须**额外跑一次"残留扫描"——这是 plan 文档里从未列过的隐含纪律。
 
 ## 四、决策
 
