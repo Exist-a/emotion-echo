@@ -272,7 +272,19 @@ OBSERVABILITY_PLUGINS_JSON='
   },
   "file-logger": {
     "path": "/tmp/apisix-access.log",
-    "log_format": "{\"client_ip\":\"$remote_addr\",\"user\":\"$remote_user\",\"timestamp\":\"$time_iso8601\",\"method\":\"$request_method\",\"url\":\"$request_uri\",\"status\":$status,\"bytes_sent\":$bytes_sent,\"bytes_received\":$bytes_received,\"resp_time\":$request_time,\"upstream\":\"$upstream_addr\",\"upstream_time\":$upstream_response_time}"
+    "log_format": {
+      "client_ip": "$remote_addr",
+      "user": "$remote_user",
+      "timestamp": "$time_iso8601",
+      "method": "$request_method",
+      "url": "$request_uri",
+      "status": "$status",
+      "bytes_sent": "$bytes_sent",
+      "bytes_received": "$bytes_received",
+      "resp_time": "$request_time",
+      "upstream": "$upstream_addr",
+      "upstream_time": "$upstream_response_time"
+    }
   }'
 
 # jwt-auth 真正验签（替换 shared jwt_auth.go 的"信任 APISIX"模型）
@@ -425,9 +437,17 @@ EOF
 }
 
 # 健康探针（不挂鉴权/限流，monitoring 用）—— 直接放 health 端点
+#
+# Stage 62 PR-3.4 修复：探针路由原样转发 /<svc>-health 到下游，
+# 但各 svc 的 gin_auth 中间件只豁免 /health → 实测全部返
+# {"error":"unauthorized: missing or invalid X-User-Id"} 401。
+# 加 proxy-rewrite 把 /<svc>-health 重写为 /health。
 HEALTH_PLUGINS=$(cat <<'EOF'
 {
-  "prometheus": {}
+  "prometheus": {},
+  "proxy-rewrite": {
+    "uri": "/health"
+  }
 }
 EOF
 )
