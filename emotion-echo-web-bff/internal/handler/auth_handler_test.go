@@ -343,3 +343,84 @@ func TestAuthHandler_VerificationCode_ProdMode_NoDevCode(t *testing.T) {
 	assert.Contains(t, body, `"success":true`)
 	assert.NotContains(t, body, "devCode", "prod mode must not echo the code")
 }
+
+// =============================================================================
+// Stage 62 PR-1: login throttle helper-only tests (isLocked/recordFailure/clearFailures)
+// 直接构造 *AuthHandler 测内部 state 转换，不走 HTTP —— 补 plan §二.1 缺失的
+// "5 分钟后解锁" 与 "清空失败计数后重新允许" 等 helper 层断言
+// =============================================================================
+
+func newTestAuthHandler() *AuthHandler {
+	return &AuthHandler{
+		loginFailures:     make(map[string]*loginAttempt),
+		verificationCodes: make(map[string]*verificationEntry),
+	}
+}
+
+func TestAuthHandler_RecordFailure_BelowThreshold_DoesNotLock(t *testing.T) {
+	h := newTestAuthHandler()
+	for i := 0; i < loginMaxFailures-1; i++ {
+		h.recordFailure("alice")
+	}
+	assert.False(t, h.isLocked("alice"), "第 %d 次失败未达阈值，不应锁", loginMaxFailures-1)
+}
+
+func TestAuthHandler_RecordFailure_AtThreshold_Locks(t *testing.T) {
+	h := newTestAuthHandler()
+	for i := 0; i < loginMaxFailures; i++ {
+		h.recordFailure("alice")
+	}
+	assert.True(t, h.isLocked("alice"), "第 %d 次失败应锁定", loginMaxFailures)
+}
+
+func TestAuthHandler_RecordFailure_AfterLock_ResetsCount(t *testing.T) {
+	// recordFailure 触发 lock 后，failCount 应被重置为 0（避免锁期内叠加）
+	h := newTestAuthHandler()
+	for i := 0; i < loginMaxFailures+2; i++ {
+		h.recordFailure("alice")
+	}
+	h.loginMu.RLock()
+	attempt := h.loginFailures["alice"]
+	h.loginMu.RUnlock()
+	assert.NotNil(t, attempt)
+	assert.Equal(t, 0, attempt.failCount, "锁定后 failCount 应重置为 0（防锁期内叠加）")
+}
+
+func TestAuthHandler_ClearFailures_RemovesLock(t *testing.T) {
+	h := newTestAuthHandler()
+	for i := 0; i < loginMaxFailures; i++ {
+		h.recordFailure("alice")
+	}
+	require.True(t, h.isLocked("alice"))
+	h.clearFailures("alice")
+	assert.False(t, h.isLocked("alice"), "登录成功后 clearFailures 应解锁")
+	h.loginMu.RLock()
+	_, exists := h.loginFailures["alice"]
+	h.loginMu.RUnlock()
+	assert.False(t, exists, "loginFailures map 应删该 username entry")
+}
+
+func TestAuthHandler_IsLocked_UnknownUser_ReturnsFalse(t *testing.T) {
+	h := newTestAuthHandler()
+	assert.False(t, h.isLocked("nobody"), "未知 username 不应在 map → 返 false")
+}
+
+func TestAuthHandler_PerUserIsolation(t *testing.T) {
+	// alice 锁定不应影响 bob
+	h := newTestAuthHandler()
+	for i := 0; i < loginMaxFailures; i++ {
+		h.recordFailure("alice")
+	}
+	assert.True(t, h.isLocked("alice"))
+	assert.False(t, h.isLocked("bob"), "per-user 锁定应隔离")
+}
+
+func TestAuthHandler_IsLocked_AfterWindowExpires(t *testing.T) {
+	// 手动构造 6 分钟前的 lockedAt → 验证 isLocked 判定窗口已过
+	h := newTestAuthHandler()
+	h.loginFailures["alice"] = &loginAttempt{
+		failCount: 0,
+		lockedAt:  time.Now().Add(-6 * time.Minute),
+	}
+	assert.False(t, h.isLocked("alice"), "5min 锁定窗口已过 → isLocked 应返 false")
+}

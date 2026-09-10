@@ -288,6 +288,10 @@ func (h *AuthHandler) recordFailure(username string) {
 		attempt = &loginAttempt{}
 		h.loginFailures[username] = attempt
 	}
+	// 已锁定用户 → 不再累加计数（防锁定期内 failCount 叠加）
+	if !attempt.lockedAt.IsZero() && time.Since(attempt.lockedAt) < loginLockWindow {
+		return
+	}
 	attempt.failCount++
 	if attempt.failCount >= loginMaxFailures {
 		attempt.lockedAt = time.Now()
