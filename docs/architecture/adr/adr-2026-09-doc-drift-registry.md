@@ -89,12 +89,35 @@
 | 23 | `docs/architecture/adr/adr-2026-09-env-profile-strategy.md` 头 4 行（ADR-20）+ `decisions.md` 决策 20 区块 + `README.md` Status 段（停留在 Stage 36/35） | 头 4 行 "🟡 Proposed / 待决策" + "⏸ 未开始（决策落地前不做任何代码/compose 改动）" + README 徽章 `Stage-35--Hardening` + Status 段只到 Stage 36 | (1) `deploy/compose.dev.yml` 61 行（PR-ENV-1 `ac0299e` 2026-09-09 06:31）+ `compose.prod.yml` 66 行（PR-ENV-3 `b89ecab` 06:33）+ `configuration.md` 179 行（PR-ENV-4 `b2ea516` 06:35）+ `apps.yml` 中性化 18 处硬编码（PR-ENV-2 `f400e65` 06:32）；测试脚本 4 项共 43/43 PASS。(2) 仓库已 148 commits ahead of origin/main，stage 文档最新 `stage-60-pr-tts-vendor-landing.md`（XTTS vendor / FER-tflite / SV-fastbuild 三模型落地）。**修正**：ADR-20 头 4 行后追加就地更正块 + decisions.md 决策 20 区块追加就地更正块 + README 顶部徽章改 `Stage-60--PR--TTS--VENDOR` + Status 段后追加 16 行阶段进展表。决策 20 的 owner sign-off 仍未到（保留 Proposed 标签） | 未复跑即记录（同 #3 / #9 / #21 型：决策落地 1 天后 ADR 头 4 行仍未更新）+ 陈旧结论（同 #2 / #4 型：README Status 段停留在 Stage 36，git log 已 Stage 60）。**教训**：ADR 头 4 行的"决策状态 / 实施状态"字段必须**随 commit 同步更新**，建议未来用 pre-commit hook 或 PR-CI 校验 ADR 头 4 行 commit hash 是否指向该 ADR 涉及的 commit |
 | 24 | `emotion-echo-web/app/composables/useAIStreamHandler.ts:78` + `useTTSPlayer.ts:175` + `useApi.ts:29,31` | （代码 fallback 字面值 + 文档假设"前端经 APISIX"）| (1) `useAIStreamHandler.ts:78` `const streamUrl = '${runtimeConfig.public.API_BASE_URL \|\| 'http://localhost:8894/api/v1'}${...}'`——fallback 字面值 8894 是**Stage 30 时代的"BFF 直连"残留**；(2) `useTTSPlayer.ts:175` 同款 fallback 8894；(3) `useApi.ts:29,31` fallback 写 `localhost:8080/api/v1`——8080 是 Spring 默认端口，本项目无任何服务监听 8080（user-svc:8888 / chat-svc:8890 / ai-svc:8891 / analytics-svc:8893 / assessment-svc:8889 / web-bff:8894 / apisix:19080 / llm-svc:8000）。**实际产品现状**（已实测）：`nuxt.config.ts:19` 默认 + `.env:5` + `.env.example:24` 都指向 `http://localhost:19080/api/v1`（经 APISIX，cf1c798 之后默认），所以**用户在 `.env` 设好 `NUXT_PUBLIC_API_BASE_URL` 时这3 处 fallback 不触发**；但**任何 docker compose 没起 / .env 漏配的场景**，聊天流 + TTS 播放会无声回退到 8894（BFF 已起可走通）或 8080（HTTP 000 死端口）。**失真类型**：决策 9 vs 决策 11/12 的"BFF 是否唯一入口"长期未收口（`decisions.md` 决策 9 至今仍写 "web-bff 是统一入口"，决策 11/12 写 APISIX 是唯一业务入口——字面冲突 4 个月），fallback 字面值是这套语义未收口的**代码侧残留**。**修正路径**（未做）：把 3 处 fallback 字面值统一改为 `''` 或 throw，强制依赖环境变量；同时把 `decisions.md` 决策 9 末尾加"决策 12 已修正此视角"的正式收口（cf. 决策 9 末尾已有的非正式注释）| 根因臆断（同 #1 / #5 / #11 型：写 fallback 时凭"直觉选个 localhost 端口"，未验证端口是否存在）+ 探测方法错误（同 #6 / #8 型：未在 fallback 路径上跑一次端到端，只看 happy path `.env` 设值的情况）+ 类型 5 自报告（本会话作者本次没复跑 fallback，只读 `.env` + `nuxt.config.ts` 就下结论"前端经 APISIX"，未读 3 个 composable 的 fallback 字面值）。**教训**：产品变更（Stage 30 → Stage 32 入口改回 APISIX）必须做"代码侧残留扫描"——`grep -rn "localhost:[0-9]\+" emotion-echo-web/app/` + `grep -rn "BFF 直连\|直连 BFF" docs/`；本条属于"未做残留扫描"的失真 | 
 
-附带**累积的失真速率**统计（**修正后**）：本 ADR 8 天内累积登记 **24 条失真 / 5 类成因**（新增类型 6），
-其中类型 1（根因臆断）6 条、类型 3（未复跑即记录）7 条、类型 4（探测方法错误）11 条、
+#### 2026-09-10 再增补（Stage 62 PR-3.4 docker 冒烟期间发现 #28 #29 #30）
+
+Stage 62 PR-3.1~3.4 落地后跑 docker 端到端冒烟（`docker compose up -d` 全栈 +
+`scripts/grpc_smoke`），gRPC 链路 7/7 PASS，但**顺带实测出 3 个长期存在、
+影响"dev 能否正常工作"的独立 bug**。三条都不是本次 gRPC 改动引入，而是历史遗留。
+
+| # | 出处 | 文档写的 | 实测事实 | 类型 |
+|---|---|---|---|---|
+| 28 | `emotion-echo-shared/pkg/discovery/nacos_register.go` Heartbeat（:281）+ Unregister（:191） | b869ff9（PR-1）注释："PR-1 修复：Host 为 0.0.0.0（yaml 默认）会让 Nacos 把实例判 unhealthy；fallback 到本机非 loopback IPv4" | **只修了 Register 一处**。实测时序（重启 user-svc 后每 3s 轮询 Nacos）：T+3s `172.18.0.14:8888`（Register 正确）→ T+6s `0.0.0.0:8888`（Heartbeat 5s tick 覆盖）。全 6 svc 均如此。**后果**：APISIX nacos-discovery 拉到 0.0.0.0 上游 → `connect() failed (111: Connection refused)` → **dev 网关所有请求 502**（`curl :19080/api/v1/auth/login` → 502）。**修复**（commit `3f3a970`）：抽纯函数 `registerHost()`，Register/Unregister/Heartbeat 三处统一调用；新增 3 测试（含源码级契约测试锁住"三处都必须用 helper"）。**验证**：重建 6 svc 后 Nacos 全部真实 IP（172.18.0.12~17），25s 后仍保持；APISIX 登录 200 | 未复跑即记录（同 #3 / #9 / #22 型：b869ff9 只改 Register 一处、未在真实 docker 跑满一个心跳周期（≥5s）就收工） |
+| 29 | `deploy/apisix/seed.sh:275` file-logger 插件 | `observability-sprint-b.md §2.2` 要求 seed.sh 主入口路由 plugins 加 file-logger（PR-OBS-1 `89b0117` / PR-OBS-5） | `log_format` 写成 **JSON 字符串**（nginx 风格），但 APISIX 3.18.0（`apache/apisix:3.18.0-debian`）file-logger schema 要求 **object**。实测 apisix-seed 容器 FATAL：`failed to PUT route 100: ... property "log_format" validation failed: wrong type: expected object, got string`。**后果**：**12 条路由一条都没建成**——网关完全空载。**修复**（commit `cb372cd`）：log_format 改 object；seed 日志恢复 `seed complete: 6 upstreams + 12 routes` | 未复跑即记录（同 #3 / #22 / #28 型：PR-OBS 系列文档只写"配置应含哪些插件"，从未写"跑一次确认路由建出来"；APISIX 版本升到 3.18 时 schema 变了也没人复跑） |
+| 30 | `deploy/apisix/seed.sh` `put_route_health()`（:446） | `stage-32-apisix-reintroduction` 系列：5 个 health 探针路由"直接打到下游 svc，绕开 BFF 聚合" | 路由只设 `uri` + `upstream_id`，**缺 path rewrite**。请求以 `/user-health` 原样转发下游，而各 svc 的 `gin_auth` 中间件只豁免 `/health` → 全部 401（实测错误串出自 `shared/pkg/middleware/gin_auth.go:31`）。修掉 #29 后 5 个探针全线 401。**修复**（同上 commit `cb372cd`）：`HEALTH_PLUGINS` 加 `"proxy-rewrite": {"uri": "/health"}`；实测 5/5 HTTP 200 | 探测方法错误（同 #6 / #8 / #11 型：路由"设计意图"写在注释里，但**从未有人 curl 过这 5 个端点**验证；#29 掩盖了它——路由压根没建出来时连 401 都看不到） |
+
+**遗留（本条未修，登记待办）**：`/apisix-health`（route 205）无 upstream → 恒返 503。
+APISIX 能响应即证明网关存活，但状态码语义误导（应 200）。建议后续改为静态 200 响应或 mock upstream。
+
+附带**累积的失真速率**统计（**Stage 62 后**）：本 ADR **9 天内累积登记 27 条失真 / 5 类成因**（新增类型 6），
+其中类型 1（根因臆断）6 条、类型 3（未复跑即记录）9 条、类型 4（探测方法错误）12 条、
 类型 2（陈旧结论）2 条、**类型 6（破坏性脚本未带默认护栏）2 条**。
-**根因臆断 + 探测方法错误**合计 13 条（占 54%）——这两类
+**根因臆断 + 探测方法错误**合计 13 条（占 48%）——这两类
 都属于"按合理推断/错误方法得出结论"，共同的根治办法就是**多花 5 分钟真跑一次**
 （决策 4.1 的"结论须附可复现命令 + 原始输出"是针对这两类最强的防线）。
+
+> **2026-09-10 观察（值得单列）**：#28 / #29 都是"修了一处、漏了同源的另几处"。
+> #28 是 Register 修了、Heartbeat/Unregister 漏；
+> #29 是文档写了"要加 file-logger"、没跑验证；
+> #30 是路由写出来了、没人 curl 过。
+> 三者共同点：**修复动作覆盖不完整 + 缺少"跑一次"的收尾**。
+> 这与 AGENTS.md §〇.2「⑥ 写完后回填」要求的"commit message 末尾列调研依据"
+> 是同一层防护——**本次冒烟能一次性抓出 3 条，正是因为跑了真实 docker 端到端**。
 
 **类型 6 根治办法**（决策 §四.6 新增）：**任何会改系统状态（down / drop / delete / reset /
 purge / rm -rf / format / drop database / truncate）的脚本，必须默认 `--dry-run` 或

@@ -1,11 +1,15 @@
-# Stage 62 · 2026-09-10 合规优先最小集 + BFF 登录限流真 bug 修复（PR-1/2/4/5 landed · PR-3 留独立 sprint）
+# Stage 62 · 2026-09-10 合规优先最小集 + BFF→3 svc gRPC 化 + docker 端到端冒烟
 
-> **状态**：🟢 **4 PR landed + 1 PR blocked-规模**（PR-1/2/4/5；PR-3 BFF→3 svc gRPC 化留独立 sprint）
+> **状态**：🟢 **PR-1/2/3(全部 4 子)/4/5 全部 landed** · docker 冒烟 gRPC 7/7 PASS
 > **关联**：[`docs/plans/stage-62-cleanup-and-grpc-plan.md`](../plans/stage-62-cleanup-and-grpc-plan.md) ·
 > [`docs/architecture/adr/adr-2026-09-drop-user-oauth-ddl.md`](../architecture/adr/adr-2026-09-drop-user-oauth-ddl.md)（ADR 21）·
-> [`scripts/test_user_oauth_zero_ref.sh`](../../scripts/test_user_oauth_zero_ref.sh)
+> [`adr-2026-09-doc-drift-registry.md`](../architecture/adr/adr-2026-09-doc-drift-registry.md)（#23~#30）·
+> [`scripts/test_user_oauth_zero_ref.sh`](../../scripts/test_user_oauth_zero_ref.sh) ·
+> [`scripts/grpc_smoke/`](../../scripts/grpc_smoke/)
 
-本批覆盖 4 工作面（PR-1 / PR-2 / PR-4 / PR-5），PR-3 因工作量（17 RPC + 3 proto + 3 server + 3 client + smoke）超过本次会话容量，留独立 sprint 推进。
+本批覆盖 8 个工作面：PR-1（BFF 登录限流真 bug）、PR-2（全景图）、PR-3.1~3.4（BFF→3 svc gRPC 化）、
+PR-4（`--profile ai` 5 秒必读）、PR-5（OAuth DDL 清理），以及 docker 冒烟顺带修复的 3 个历史 bug
+（Nacos 0.0.0.0 / APISIX seed log_format / health 探针 rewrite）。
 
 ---
 
@@ -110,31 +114,73 @@ README.md 启动段第 119-120 行 `docker compose --profile ai up -d --build` �
 
 ---
 
-## 五、PR-3 · BFF→3 svc gRPC 化（独立 sprint）
+## 五、PR-3 · BFF→3 svc gRPC 化（✅ 4 子 PR 全部 landed）
 
 ### 5.1 状态
 
-**未在本会话推进**——工作量超出本次会话容量：
+**✅ 全部落地**（2026-09-10，4 个 commit）：
 
-| 维度 | 内容 |
+| 子 PR | 范围 | Commit | 验证 |
+|---|---|---|---|
+| **PR-3.1** | proto/user.proto + agent.proto + metric.proto（17 RPC）+ stub 生成 | `e644be8` | 3 stub 包各 2 单测 PASS；`bash proto/gen.sh` 全 6 proto 生成 |
+| **PR-3.2** | 3 svc grpcserver/（server.go + X_server.go + X_server_test.go）+ 双轨启动 | `c11ed45` | 3 svc 全包 `go test` PASS；gRPC 端口 8887/8886/8885 LISTENING |
+| **PR-3.3** | 17 RPC 真实逻辑（复用 logic 层）+ BFF 3 gRPC client + feature flag | `530d30f` | 3 svc + BFF build 干净；downstream/grpcserver 测试 PASS |
+| **PR-3.4** | `scripts/grpc_smoke/` 冒烟客户端 + compose gRPC 端口 expose | `7707345` | **docker 实测 7 PASS / 0 FAIL** |
+
+### 5.2 PR-3.4 docker 冒烟实测结果
+
+```
+§契约 10 · BFF → user-svc gRPC
+  ✅ 10.1 health check (status=SERVING)
+  ✅ 10.2 GetMe 无 x-user-id → Unauthenticated    （拦截器链生效）
+  ✅ 10.3 GetUserById → id=1 username="echo"      （真实 DB 查询）
+§契约 11 · BFF → assessment-svc gRPC
+  ✅ 11.1 health check (status=SERVING)
+  ✅ 11.2 ListSurveys → 0 items (total=0)
+§契约 12 · BFF → analytics-svc gRPC
+  ✅ 12.1 health check (status=SERVING)
+  ✅ 12.2 ReportsDaily → msgCount=0 convCount=0 emotions=0
+=== 结果: 7 PASS / 0 FAIL ===
+```
+
+**对照组（确认无回归）**：
+
+| 路径 | 结果 |
 |---|---|
-| proto | 3 个新文件（user.proto + assessment.proto + analytics.proto）|
-| RPC | 17 个（user 3 + assessment 5 + analytics 9）|
-| server | 3 个 svc 各加 grpcserver/（参照 chat-svc PR-GRPC-1~6）|
-| client | 3 个 BFF downstream gRPC client（参照 chat_grpc.go）|
-| feature flag | USER_TRANSPORT / ASSESSMENT_TRANSPORT / ANALYTICS_TRANSPORT=grpc\|http |
-| smoke | §契约 10/11/12 端到端（参照 §契约 9 模式）|
-| 端口 | user :8887 / assessment :8886 / analytics :8885（避开 :8888/:8889/:8893）|
+| BFF 直连 HTTP（users/me / conversations / surveys / reports/daily）| 4/4 HTTP 200 |
+| 经 APISIX + JWT（同上 4 端点）| 4/4 HTTP 200 |
+| 5 个 svc 健康探针（/user-health … /ai-health）| 5/5 HTTP 200 |
 
-### 5.2 建议执行顺序
+### 5.3 冒烟期间发现并修复的 3 个独立 bug
+
+PR-3.4 跑真实 docker 端到端时，**顺带抓出 3 个长期存在、与 gRPC 改动无关、
+但让"dev 完全不可用"的历史 bug**（决策 18 台账 #28 #29 #30）：
+
+| # | 问题 | 影响 | Commit |
+|---|---|---|---|
+| **#28** | Nacos `Heartbeat()`/`Unregister()` 漏用 `registerHost()`，5s 后把正确注册的 IP 覆盖成 `0.0.0.0` | APISIX 拉上游拿到 0.0.0.0 → `connect refused` → **网关全 502** | `3f3a970` |
+| **#29** | `seed.sh` file-logger `log_format` 是字符串，APISIX 3.18 schema 要求 object | apisix-seed FATAL → **12 条路由一条没建成** | `cb372cd` |
+| **#30** | health 探针路由缺 `proxy-rewrite`（`/user-health` 原样转发，被 gin_auth 拦） | 5 个探针全 401 | `cb372cd` |
+
+**修复验证**：
 
 ```
-PR-3.1 proto + stub 生成（半天）
-PR-3.2 三 svc 加 gRPC server（半天）
-PR-3.3 BFF 改 gRPC client + feature flag（半天）
-PR-3.4 smoke §契约 10/11/12 + OAP rpc tag（半天）
-合计 2 天
+Nacos 注册 IP（重建 6 svc 后，25s 时仍保持真实 IP）：
+  user-svc 172.18.0.12:8888    chat-svc 172.18.0.13:8890
+  assessment-svc 172.18.0.14:8889   analytics-svc 172.18.0.15:8893
+  ai-svc 172.18.0.16:8891      web-bff 172.18.0.17:8894
+
+APISIX：POST /api/v1/auth/login → 200 + accessToken（修复前 502）
 ```
+
+### 5.4 遗留（登记待办）
+
+- `/apisix-health`（route 205）无 upstream → 恒返 503（APISIX 能响应即证明存活，
+  但状态码语义误导，应 200）。建议后续改静态响应。
+- **BFF `main.go` 尚未接线 gRPC 连接**：`Transport` 默认 `grpc` 但 `GRPCConn=nil`
+  → 静默走 HTTP fallback。所以当前生产路径仍是 HTTP，gRPC 链路已就绪但未启用。
+  下一步：BFF 读 `USER_TRANSPORT`/`ASSESSMENT_TRANSPORT`/`ANALYTICS_TRANSPORT` env
+  + dial 3 个 gRPC 地址 + 传 `GRPCConn`。
 
 **预计开工时间**：Stage 62 收口后下一 sprint。
 
