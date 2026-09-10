@@ -122,12 +122,17 @@ Stage 36-B5 自建 3 个 AI 模型镜像（FER / SenseVoice / XTTS）路径在 d
 
 ### 5.2 关键决策变更（vs 2026-09-09 旧结论）
 
-| 旧结论（§五 截至 2026-09-09） | 新结论（Stage 60） | 原因 |
+| 旧结论（§五 截至 2026-09-09） | 新结论（Stage 60/60.1） | 原因 |
 |---|---|---|
 | "Vendor 镜像 0 张完整 pull 成功" | ✅ 3 张 vendor/本地实现可拉/可 build | 开启 Clash TUN 模式后境外资源可达（stage-59 §十）|
-| "XTTS 走云 API（ADR-001）" | ✅ 改走 vendor `ai4all/coqui` | vendor 镜像端到端调通，比云 API 简单（无需 key）；云 API 仍保留为 future fallback |
-| "FER 自建卡死 + 重 30+ 分钟" | ✅ tflite 备选路径，build < 1min | 原型实测验证后正式落地为 `FER-tflite/` 独立目录 |
-| "SenseVoice 走 yiminger vendor" | ✅ 改走仓内本地实现 | yiminger 镜像挂错标签，仓内 `sensevoice-small/` 已完整可用 |
+| "XTTS 走云 API（ADR-001）" | ✅ 改走 vendor `ai4all/coqui`（docker.io aliyun 加速拉取） | vendor 镜像端到端调通（133KB WAV 输出）；云 API 仍保留为 future fallback（`docs/ai-models/xtts-decision.md`） |
+| "FER 自建卡死 + 重 30+ 分钟" | ✅ tflite 备选路径，build < 1min | 原型实测验证后正式落地为 `FER-tflite/` 独立目录（镜像 538MB disk） |
+| "SenseVoice 走 yiminger vendor" | ✅ 改走仓内本地实现（`SV-fastbuild/`） | yiminger 镜像挂错标签，仓内 `sensevoice-small/` 已完整可用；funasr+wheels预下+TUN 实现 |
+
+### 5.3 实施入口（实施者从 emotion-echo-models/README.md 开始）
+
+> 本文件是**调研选型记录**（"为什么是这个方案"）。具体怎么 build / 怎么跑 / 怎么排错，看：
+> **[`emotion-echo-models/README.md`](../../emotion-echo-models/README.md)** —— 3 个 AI 容器的主实施指南（FER-tflite / SV-fastbuild / XTTS vendor 三节）。
 
 ### 5.3 ai-svc 调用链已通
 

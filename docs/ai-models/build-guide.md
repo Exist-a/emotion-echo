@@ -1,5 +1,14 @@
 # AI 镜像构建指导文档（Stage 36-B5 实战总结）
 
+> **⛔ 已废弃 / DEPRECATED**：本文档记录的是 Stage 36 时代的镜像构建方案（自建 fer+tensorflow / sensevoice v0.1.2 / xtts torch 5.3GB），但当前 dev 环境**无法复现这些自建 build**——stage-58 / stage-59 / stage-60 反复实测确认。
+>
+> **当前的指导文档**：[`emotion-echo-models/README.md`](../../emotion-echo-models/README.md) —— 包含：
+> - FER-tflite（替代原 fer+tensorflow，镜像缩 22.5×）
+> - SV-fastbuild（替代原 sensevoice v0.1.2，wheels 预下 + TUN 兼容）
+> - XTTS vendor `ai4all/coqui`（替代自建，docker.io aliyun 加速拉取）
+>
+> 本文档**保留**作为历史记录，但请**不要按本指南去 build 镜像**——大概率会卡在 pypi 下载阶段（stage-58 §二记录）。`emotion-echo-models/README.md` 才是当前 dev 环境的真指南。
+
 > **目的**：把 Stage 36 本地模型打包镜像过程中踩过的坑 + 修复方案完整记录，下次构建时不再重新挖一遍。
 > **适用**：`emotion-echo/fer` / `emotion-echo/sensevoice` / `emotion-echo/xtts` 三个 `profile: ai` 镜像。
 > **编写日期**：2026-09-02 · **编写者**：Stage 36 agent + 用户协作

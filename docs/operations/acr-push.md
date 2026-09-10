@@ -1,7 +1,14 @@
 # ACR 镜像推送与发布流程
 
-> **范围**：本项目 SenseVoice 镜像（`sensevoice-base` + `sensevoice`）推到阿里云 ACR 个人版的完整工作流。
-> **关联**：[`scripts/push-to-acr.sh`](../../scripts/push-to-acr.sh) ·
+> **⛔ **内部参考 / 暂未启用**：本文档记录的是把 3 个 AI 镜像推到阿里云 ACR 个人版的实验记录。
+>
+> **当前结论**（2026-09-10 commit `9ff3335`）：**当前 dev 不使用 ACR**——XTTS 推到 ACR 失败（vendor OCI manifest 不被个人版兼容，5 次尝试都卡在 `pushing layers`），Fer/SenseVoice 推 ACR 走通了但**当前选择 docker.io / 本地 build**，ACR 路径作为备用。
+>
+> 实施指南见 [`emotion-echo-models/README.md`](../../emotion-echo-models/README.md)。本文档只作历史参考，**请不要按本文档去设 ACR**。
+>
+> ---
+> 范围（历史）：本项目 SenseVoice 镜像（`sensevoice-base` + `sensevoice`）推到阿里云 ACR 个人版的完整工作流。
+> 关联：[`scripts/push-to-acr.sh`](../../scripts/push-to-acr.sh) ·
 > [`docs/stages/stage-60-1-pr-tts-vendor-sv-landing.md`](../../stages/stage-60-1-pr-tts-vendor-sv-landing.md)
 
 ## 一、架构：为什么拆 base + app 两层
