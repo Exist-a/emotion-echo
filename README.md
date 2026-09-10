@@ -12,7 +12,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-1.x-244c5a?style=flat-square&logo=grpc&logoColor=white)](https://grpc.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Stage](https://img.shields.io/badge/Stage-35--Hardening-blueviolet?style=flat-square)](/docs/stages/stage-35-landing.md)
+[![Stage](https://img.shields.io/badge/Stage-60--PR--TTS--VENDOR-blueviolet?style=flat-square)](/docs/stages/stage-60-pr-tts-vendor-landing.md)
 
 ---
 
@@ -191,6 +191,32 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
   - 36-B：G2（chat list）+ G4（消息自动情绪分析）
   - 36-C：G5（真实 LLM）+ G6（FER/SenseVoice）
   - 36-D：G7（APISIX 镜像）+ G8（Nacos 全栈）
+
+> **🔧 2026-09-10 决策 18 §4.4 就地更正块（README 顶部徽章已同步）**：
+>
+> 上面 Status 段（Stage 36 之前）与实际进度**已严重失真**——按 git log 实际已达 **Stage 60**。
+> 完整实际阶段记录如下（原行保留作为历史快照）：
+>
+> | Stage | 范围 | 状态 | landing 文档 |
+> |---|---|---|---|
+> | **Stage 36** | ADR-16 8 项缺口修复（chart contract alignment / msg_list / dev fallback） | ✅ landed | [stage-36-landing.md](/docs/stages/stage-36-landing.md) |
+> | **Stage 37** | fixes-roadmap 收口（A/B 两批）| ✅ landed | [stage-37-A-landing.md](/docs/stages/stage-37-A-landing.md) + [stage-37-B-landing.md](/docs/stages/stage-37-B-landing.md) |
+> | **Stage 38** | dev apisix path 端到端打通 + 系统状态盘点 | ✅ landed | [stage-38-A-landing.md](/docs/stages/stage-38-A-landing.md) + [stage-38-system-status.md](/docs/stages/stage-38-system-status.md) |
+> | **Stage 39** | Nacos dev enablement 落地 | ✅ landed | [stage-39-nacos-enablement.md](/docs/stages/stage-39-nacos-enablement.md) |
+> | **Stage 40** | doc drift rectification 集中清理 | ✅ landed | [stage-40-doc-drift-rectification.md](/docs/stages/stage-40-doc-drift-rectification.md) |
+> | **Stage 41** | 7 个 Go svc go-zero 全量移除（决策 1 收口） | ✅ landed | [stage-41-gozero-removal.md](/docs/stages/stage-41-gozero-removal.md) + [stage-41-smoke-2026-09-07.txt](/docs/stages/stage-41-smoke-2026-09-07.txt) |
+> | **Stage 42** | 容器 TZ 修复 | ✅ landed | [stage-42-container-tz-fix.md](/docs/stages/stage-42-container-tz-fix.md) |
+> | **Stage 43** | Kafka reliability sprint A | ✅ landed | [stage-43-kafka-reliability-sprint-a.md](/docs/stages/stage-43-kafka-reliability-sprint-a.md) |
+> | **Stage 44~49** | observability sprint B（OTel / gin entry span / logging helper / err tag / grpc rpc tag / 回归） | ✅ landed | [stage-44~49](/docs/stages/) |
+> | **Stage 50~55** | 端到端验证 / Nacos 修复 / port mismatch / roadmap Z 状态 | ✅ landed | [stage-50~55](/docs/stages/) |
+> | **Stage 56~57** | 批 2/3 合并（Kafka fallback / mentalhealth trigger） | ✅ landed | [stage-56-b2-merged.md](/docs/stages/stage-56-b2-merged.md) + [stage-57-b3-merged.md](/docs/stages/stage-57-b3-merged.md) |
+> | **Stage 58** | Q3 后续 8 工作面 24 commit（ENV-1~4 / UP-1~3 / TTS-1~4 / GRPC-1~6） | ✅ landed | [stage-58-q3-followups.md](/docs/stages/stage-58-q3-followups.md) |
+> | **Stage 59** | vendor 镜像实测（ai4all/coqui ✅ / serengil/deepface ⚠ / yiminger/sensevoice ❌） | ✅ landed | [stage-59-vendor-image-verification.md](/docs/stages/stage-59-vendor-image-verification.md) |
+> | **Stage 60** | PR-TTS-VENDOR 三 AI 模型落地（XTTS vendor 133KB WAV / FER-tflite 538MB / SV-fastbuild 5.88GB） | ✅ landed | [stage-60-pr-tts-vendor-landing.md](/docs/stages/stage-60-pr-tts-vendor-landing.md) |
+> | **Stage 60.1** | SV-fastbuild 真实验证 + 仓库分层 base/app Dockerfile + 阿里云 ACR 推送 | ✅ landed | [stage-60-1-pr-tts-vendor-sv-landing.md](/docs/stages/stage-60-1-pr-tts-vendor-sv-landing.md) |
+>
+> **失真类型**（决策 18 §三）：类型 2 "陈旧结论" — README 顶部徽章与 Status 段长期未跟随 git log 更新。
+> **当前最新 commit**：`5a8927d docs(ai-models): emotion-echo-models/README.md becomes the canonical guide`
 
 ---
 
