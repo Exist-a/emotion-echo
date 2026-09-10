@@ -1,0 +1,13 @@
+torch==1.13.1+cpu
+funasr>=1.1.2
+# funasr 特征提取需要 fbank 后端：torchaudio 或 kaldi-native-fbank 二选一。
+# 选后者（~1MB wheel），避免再引入 torchaudio 及其与 torch 的版本绑定。
+kaldi-native-fbank>=1.18
+modelscope
+transformers<5
+prometheus-client>=0.19.0
+fastapi>=0.100.0
+uvicorn>=0.23.2
+python-multipart>=0.0.9
+python-json-logger>=2.0.7
+numpy<2
