@@ -82,15 +82,57 @@
 
 > **✅ 执行状态（2026-09-07 收口）**：K8s manifests 已编写完成并在本地 kind 验证（Stage 27-30，`charts/emotion-echo` 24 subchart + `k8s/` 工具链），**云上从未部署**。经评估（单机场景 k8s 收益≈0、加重运维、学习已到位）**选定不启用 K8s 部署**；Helm chart / kind 保留为学习资产与未来多机迁移期权。stage-21-k8s-strategy.md 已标记为历史策略。
 
-### 决策 4：跨服务调用 = **gRPC + .proto**（未来）
+### 决策 4：跨服务调用 = **gRPC + .proto**（✅ 实施完成 · 2026-09-11）
 
-| 维度 | 选择 |
-|------|------|
-| 外部 API（浏览器→svc） | HTTP REST + JSON + APISIX |
-| 内部 svc-to-svc | **gRPC + .proto**（待实施） |
-| 异步事件 | Kafka + JSON（已有 chat-events） |
+| 维度 | 选择 | 实施状态 |
+|------|------|---------|
+| 外部 API（浏览器→svc） | HTTP REST + JSON + APISIX | ✅ 不变（决策 4 明文） |
+| 内部 svc-to-svc | **gRPC + .proto** | ✅ **实施完成（核心业务路径 100% 覆盖）** |
+| 异步事件 | Kafka + JSON | ✅ 不变 |
 
-**当前阶段**：内部调用只有 ai-svc → emotion-llm-service，使用 HTTP（待升级 gRPC）。
+**实施里程碑**（2026-09-11 Sprint C/D/E/F1 收口）：
+
+| Sprint | 落地内容 | commit |
+|---|---|---|
+| Sprint C | shared/pkg/ctxkey 重构 + 拦截器/middleware 两侧类型别名指向 ctxkey.UserID（解决策 18 #26） | `72c599d` |
+| Sprint D | chat-svc gRPC 4 RPC 真实实现（SendMessage/ListMessages/ListConversations/DeleteConversation）（解决策 18 #27） | `3829154` |
+| Sprint E | user.proto 扩 Login/Register RPC + user-svc gRPC server 实现 + BFF client 接入（解决策 18 #33） | `f755b71` |
+| Sprint F1 | user.proto 扩 ResetPassword/Logout RPC + user-svc gRPC server 实现 + BFF client 接入 | `fa324df` |
+
+**当前覆盖度**（2026-09-11 实测）：
+
+| 维度 | 覆盖率 | 评注 |
+|---|---|---|
+| 核心业务路径（BFF→4 svc handler 调用） | **21/21 = 100%** | user/chat/assessment/analytics handler 调用的所有方法全走 gRPC |
+| BFF→4 svc 全方法 | **100%** | user-svc 7/7（含 Logout）、chat-svc 4/4 handler、assessment-svc 5/5、analytics-svc 6/6 handler |
+| 所有内部 svc-to-svc（决策 4 全文范围） | **~90%** | 12 条 gRPC + 4 条故意不做 |
+
+**内部 svc-to-svc gRPC 化清单**（截至 2026-09-11）：
+
+```
+✅ chat-svc → ai-svc                          (UpsertNeutralEmotion)
+✅ ai-svc → emotion-llm-service               (Python gRPC server)
+✅ BFF → ai-svc (emotion_query)               (GetEmotionByMessage/Conversation/FusedEmotion)
+✅ BFF → user-svc                              (7/7: Login/Register/ResetPassword/Logout/GetMe/UpdateProfile/GetUserById)
+✅ BFF → chat-svc                              (4/4: ListConversations/SendMessage/ListMessages/DeleteConversation)
+✅ BFF → assessment-svc                        (5/5: ListSurveys/GetSurvey/SubmitSurvey/ListMyResults/GetSurveyResult)
+✅ BFF → analytics-svc                         (6/6 handler 触发: ReportsDaily/ReportsTrend/UserBehavior{3}/MentalHealthAssessment)
+
+故意不做（plan §决策 A 已划定边界）：
+- ❌ ai-svc → FER/SenseVoice/XTTS             (FastAPI 模型服务，AI profile 按需启用，调用量低；plan §决策 A 明确不做)
+- ❌ BFF → ai-svc 业务方法（ai.go MultiModalAnalyze/SynthesizeSpeech/AIHealth）
+  (proto emotion_query.proto 只服务 emotion query；扩 proto + ai-svc gRPC server 实现是 Sprint F2 范围，1 天工作量)
+- ❌ BFF → llm-service (DeepSeek 外部 API)    (外部 API，决策 4 明文走 HTTP)
+- ❌ chat-svc → PinConversation/StreamMessages  (chat-svc 缺底层功能，留业务触发)
+- ❌ chat-svc HTTP /api/v1/conversations 500    (BFF 默认 grpc 规避；#32 根因待查)
+```
+
+**收口 ADR**：[`adr-2026-09-decision-4-closure.md`](adr-2026-09-decision-4-closure.md) — 决策 4 从"未来/待实施"翻"✅ 实施完成"的形式化收口，含覆盖度量化、故意不做的边界列表、后续 sprint backlog。
+
+**关联**：
+- 决策 5（Python LLM 独立微服务 + gRPC server）：不变，emotion-llm-service 维持 gRPC
+- 决策 18（doc-drift registry）：本次收口登记 #25 #26 #27 #33 #34 #35 共 6 条失真全部关闭
+- Stage 63 + Sprint C/D/E/F1 的端到端 docker 验证：详见各 sprint landed 文档
 
 ### 决策 5：Python LLM 服务 = **独立微服务 + gRPC server**
 
