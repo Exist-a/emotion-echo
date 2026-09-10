@@ -12,10 +12,10 @@
 // proto 类型：直接复用 shared/pkg/emotionuser 生成代码
 // 鉴权：metadata x-user-id（与 emotion_query.proto / emotion_chat.proto 一致）
 //
-// Sprint E（2026-09-11）：扩 proto user.proto 加 Login / Register RPC；
-// user-svc gRPC server 实现；userid 拦截器跳过这 2 个匿名调用。
+// Sprint E + F（2026-09-11）：扩 proto user.proto 加 Login / Register / ResetPassword / Logout RPC；
+// user-svc gRPC server 实现；userid 拦截器跳过 Login/Register/ResetPassword 3 个匿名调用。
 // accessToken 仍由 BFF jwt.Manager 签发。
-// ResetPassword 仍走 HTTP fallback（proto 未扩，Sprint F 跟进）。
+// **所有 7 个 UserClient 方法（Login/Register/ResetPassword/Logout/GetMe/UpdateProfile/GetUserById）全走 gRPC**。
 package downstream
 
 import (
@@ -76,9 +76,32 @@ func (c *userGRPCClient) GetByID(ctx context.Context, id int64) (*UserInfo, erro
 	return fromProtoUserInfo(resp), nil
 }
 
-// ResetPassword 走 HTTP fallback（user-svc proto 未扩，Sprint F 跟进）
+// ResetPassword gRPC RPC（Sprint F 2026-09-11）
+//
+// 同 Login：匿名调用，不传 x-user-id metadata。
 func (c *userGRPCClient) ResetPassword(ctx context.Context, req ResetPasswordReq) (*UserInfo, error) {
-	return c.httpFallback.ResetPassword(ctx, req)
+	cli := emotionuser.NewUserServiceClient(c.conn)
+	resp, err := cli.ResetPassword(ctx, &emotionuser.ResetPasswordRequest{
+		Username:         req.Username,
+		VerificationCode: req.VerificationCode,
+		NewPassword:      req.NewPassword,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("downstream: user reset password: %w", err)
+	}
+	return fromProtoUserInfo(resp.GetUser()), nil
+}
+
+// Logout gRPC RPC（Sprint F 2026-09-11）
+//
+// 需要 x-user-id metadata（Logout 不在拦截器跳过清单），所以用 withUserID(ctx)。
+func (c *userGRPCClient) Logout(ctx context.Context) error {
+	cli := emotionuser.NewUserServiceClient(c.conn)
+	_, err := cli.Logout(withUserID(ctx), &emotionuser.LogoutRequest{})
+	if err != nil {
+		return fmt.Errorf("downstream: user logout: %w", err)
+	}
+	return nil
 }
 
 // Login gRPC RPC（Sprint E 2026-09-11）

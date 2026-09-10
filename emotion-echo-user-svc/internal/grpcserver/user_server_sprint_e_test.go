@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -160,4 +161,87 @@ func TestUserServer_Login_WrongPassword(t *testing.T) {
 	st, _ := status.FromError(err)
 	assert.Equal(t, codes.Unauthenticated, st.Code(),
 		"错误密码应返 Unauthenticated，实际=%s msg=%s", st.Code(), st.Message())
+}
+
+// ============ Sprint F RED 测试（ResetPassword + Logout）============
+
+// TestUserServer_ResetPassword_Success 断言 ResetPassword 不再返 Unimplemented
+func TestUserServer_ResetPassword_Success(t *testing.T) {
+	conn, cleanup := startUserTestServerWithCtx(t, newMockSvcCtx())
+	defer cleanup()
+
+	client := emotionuser.NewUserServiceClient(conn)
+
+	// 先注册
+	_, err := client.Register(context.Background(), &emotionuser.RegisterRequest{
+		Username: "sprint_f_reset",
+		Password: "old_password",
+	})
+	require.NoError(t, err)
+
+	// ResetPassword（匿名调用）
+	resp, err := client.ResetPassword(context.Background(), &emotionuser.ResetPasswordRequest{
+		Username:         "sprint_f_reset",
+		VerificationCode: "111111",
+		NewPassword:      "new_password",
+	})
+	if err != nil {
+		st, _ := status.FromError(err)
+		assert.NotEqual(t, codes.Unimplemented, st.Code(),
+			"ResetPassword 不应返 Unimplemented，实际 code=%s msg=%s", st.Code(), st.Message())
+	}
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.User)
+	assert.Equal(t, "sprint_f_reset", resp.User.Username)
+}
+
+// TestUserServer_ResetPassword_ThenLogin 完整流程：ResetPassword 后用新密码 Login 成功
+func TestUserServer_ResetPassword_ThenLogin(t *testing.T) {
+	conn, cleanup := startUserTestServerWithCtx(t, newMockSvcCtx())
+	defer cleanup()
+
+	client := emotionuser.NewUserServiceClient(conn)
+
+	_, _ = client.Register(context.Background(), &emotionuser.RegisterRequest{
+		Username: "sprint_f_full",
+		Password: "old_password",
+	})
+
+	_, err := client.ResetPassword(context.Background(), &emotionuser.ResetPasswordRequest{
+		Username:         "sprint_f_full",
+		VerificationCode: "111111",
+		NewPassword:      "new_password",
+	})
+	require.NoError(t, err)
+
+	// 用新密码登录
+	resp, err := client.Login(context.Background(), &emotionuser.LoginRequest{
+		Username: "sprint_f_full",
+		Password: "new_password",
+	})
+	require.NoError(t, err, "ResetPassword 后用新密码应登录成功")
+	require.NotNil(t, resp.User)
+}
+
+// TestUserServer_Logout_Success 断言 Logout 返 OK（鉴权要求 x-user-id）
+func TestUserServer_Logout_Success(t *testing.T) {
+	conn, cleanup := startUserTestServerWithCtx(t, newMockSvcCtx())
+	defer cleanup()
+
+	client := emotionuser.NewUserServiceClient(conn)
+
+	// 带 x-user-id metadata（Logout 是需鉴权调用）
+	ctx := metadata.NewOutgoingContext(context.Background(),
+		metadata.Pairs("x-user-id", "1"))
+
+	resp, err := client.Logout(ctx, &emotionuser.LogoutRequest{})
+	if err != nil {
+		st, _ := status.FromError(err)
+		assert.NotEqual(t, codes.Unimplemented, st.Code(),
+			"Logout 不应返 Unimplemented，实际 code=%s msg=%s", st.Code(), st.Message())
+	}
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.Success)
 }

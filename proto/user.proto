@@ -60,6 +60,18 @@ service UserService {
   //
   // 鉴权：匿名调用（同 Login）。
   rpc Register (RegisterRequest) returns (RegisterResponse);
+
+  // ResetPassword 用 username + verificationCode + newPassword 重置密码，返 UserInfo
+  //
+  // 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
+  // 当前 Sprint 1 PR-4c-4 后的行为：verificationCode 由 BFF 校验后转发 user-svc，
+  // 这里是 dev mode（user-svc 自己校验 verificationCode 字段）；prod 接入 SMS/Email 后由 BFF 校验。
+  rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse);
+
+  // Logout 登出（服务端无状态，主要让客户端清 token；这里返 OK 即可）
+  //
+  // 鉴权：需要 metadata x-user-id（userid 拦截器不跳过此 RPC）。
+  rpc Logout (LogoutRequest) returns (LogoutResponse);
 }
 
 // ============== Requests / Responses ==============
@@ -109,6 +121,28 @@ message RegisterRequest {
 // RegisterResponse 注册响应
 message RegisterResponse {
   UserInfo user = 1;
+}
+
+// ResetPasswordRequest 重置密码请求
+message ResetPasswordRequest {
+  string username = 1;
+  string verification_code = 2;
+  string new_password = 3;
+}
+
+// ResetPasswordResponse 重置密码响应
+message ResetPasswordResponse {
+  UserInfo user = 1;
+}
+
+// LogoutRequest 登出请求（空消息体；user_id 从 metadata 取）
+message LogoutRequest {
+}
+
+// LogoutResponse 登出响应
+message LogoutResponse {
+  // success 字段便于 BFF 透传
+  bool success = 1;
 }
 
 // UserInfo 用户信息视图

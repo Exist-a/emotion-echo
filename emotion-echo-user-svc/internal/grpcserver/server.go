@@ -81,6 +81,7 @@ func New(svcCtx *svc.ServiceContext, port int) *Server {
 				healthServiceFullName,
 				emotionuser.UserService_Login_FullMethodName,
 				emotionuser.UserService_Register_FullMethodName,
+				emotionuser.UserService_ResetPassword_FullMethodName,
 			),
 			grpcinterceptor.NewServerTracingInterceptor(grpcinterceptor.NewGo2SkyTracer(tracer)),
 			grpcinterceptor.ServerLoggingInterceptor(),

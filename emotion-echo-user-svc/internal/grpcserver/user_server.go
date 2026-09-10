@@ -139,6 +139,39 @@ func (s *userServer) Register(ctx context.Context, req *emotionuser.RegisterRequ
 	return &emotionuser.RegisterResponse{User: toProtoUser(resp.User)}, nil
 }
 
+// ResetPassword 实现 ResetPassword RPC（Sprint F 2026-09-11）
+//
+// 错误映射：
+//   - ErrInvalidCredentials → codes.Unauthenticated（用户不存在）
+//   - ErrInvalidVerifyCode → codes.PermissionDenied（验证码错）
+//   - ErrValidation → codes.InvalidArgument
+func (s *userServer) ResetPassword(ctx context.Context, req *emotionuser.ResetPasswordRequest) (*emotionuser.ResetPasswordResponse, error) {
+	if s.svcCtx == nil {
+		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	}
+	resp, err := logic.NewAuthLogic(ctx, s.svcCtx).ResetPassword(&types.ResetPasswordReq{
+		Username:         req.GetUsername(),
+		VerificationCode: req.GetVerificationCode(),
+		NewPassword:      req.GetNewPassword(),
+	})
+	if err != nil {
+		return nil, mapAuthError(err)
+	}
+	return &emotionuser.ResetPasswordResponse{User: toProtoUser(resp.User)}, nil
+}
+
+// Logout 实现 Logout RPC（Sprint F 2026-09-11）
+//
+// 服务端无状态（mock auth 模式），主要让客户端清 token。这里仅返 success=true。
+// 鉴权：userid 拦截器**不跳过**此 RPC，调用方需带 metadata x-user-id。
+func (s *userServer) Logout(ctx context.Context, req *emotionuser.LogoutRequest) (*emotionuser.LogoutResponse, error) {
+	if s.svcCtx == nil {
+		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	}
+	// 鉴权拦截器已从 ctx 注入 user_id，这里无需再读（mock 模式不做服务端黑名单）
+	return &emotionuser.LogoutResponse{Success: true}, nil
+}
+
 // mapAuthError 把 logic.AuthLogic 错误映射到 gRPC status code
 func mapAuthError(err error) error {
 	if err == nil {
@@ -147,6 +180,8 @@ func mapAuthError(err error) error {
 	switch {
 	case errors.Is(err, logic.ErrInvalidCredentials):
 		return status.Error(codes.Unauthenticated, err.Error())
+	case errors.Is(err, logic.ErrInvalidVerifyCode):
+		return status.Error(codes.PermissionDenied, err.Error())
 	case errors.Is(err, logic.ErrUsernameTaken):
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, logic.ErrValidation):

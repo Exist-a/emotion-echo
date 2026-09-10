@@ -429,6 +429,195 @@ func (x *RegisterResponse) GetUser() *UserInfo {
 	return nil
 }
 
+// ResetPasswordRequest 重置密码请求
+type ResetPasswordRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Username         string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	VerificationCode string                 `protobuf:"bytes,2,opt,name=verification_code,json=verificationCode,proto3" json:"verification_code,omitempty"`
+	NewPassword      string                 `protobuf:"bytes,3,opt,name=new_password,json=newPassword,proto3" json:"new_password,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ResetPasswordRequest) Reset() {
+	*x = ResetPasswordRequest{}
+	mi := &file_user_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetPasswordRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetPasswordRequest) ProtoMessage() {}
+
+func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetPasswordRequest.ProtoReflect.Descriptor instead.
+func (*ResetPasswordRequest) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ResetPasswordRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *ResetPasswordRequest) GetVerificationCode() string {
+	if x != nil {
+		return x.VerificationCode
+	}
+	return ""
+}
+
+func (x *ResetPasswordRequest) GetNewPassword() string {
+	if x != nil {
+		return x.NewPassword
+	}
+	return ""
+}
+
+// ResetPasswordResponse 重置密码响应
+type ResetPasswordResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *UserInfo              `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetPasswordResponse) Reset() {
+	*x = ResetPasswordResponse{}
+	mi := &file_user_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetPasswordResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetPasswordResponse) ProtoMessage() {}
+
+func (x *ResetPasswordResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetPasswordResponse.ProtoReflect.Descriptor instead.
+func (*ResetPasswordResponse) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ResetPasswordResponse) GetUser() *UserInfo {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+// LogoutRequest 登出请求（空消息体；user_id 从 metadata 取）
+type LogoutRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogoutRequest) Reset() {
+	*x = LogoutRequest{}
+	mi := &file_user_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogoutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogoutRequest) ProtoMessage() {}
+
+func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
+func (*LogoutRequest) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{9}
+}
+
+// LogoutResponse 登出响应
+type LogoutResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// success 字段便于 BFF 透传
+	Success       bool `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogoutResponse) Reset() {
+	*x = LogoutResponse{}
+	mi := &file_user_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogoutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogoutResponse) ProtoMessage() {}
+
+func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogoutResponse.ProtoReflect.Descriptor instead.
+func (*LogoutResponse) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LogoutResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 // UserInfo 用户信息视图
 //
 // 字段命名遵循 emotion_query.proto 已确立的 snake_case
@@ -449,7 +638,7 @@ type UserInfo struct {
 
 func (x *UserInfo) Reset() {
 	*x = UserInfo{}
-	mi := &file_user_proto_msgTypes[7]
+	mi := &file_user_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -461,7 +650,7 @@ func (x *UserInfo) String() string {
 func (*UserInfo) ProtoMessage() {}
 
 func (x *UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_user_proto_msgTypes[7]
+	mi := &file_user_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -474,7 +663,7 @@ func (x *UserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
 func (*UserInfo) Descriptor() ([]byte, []int) {
-	return file_user_proto_rawDescGZIP(), []int{7}
+	return file_user_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *UserInfo) GetId() int64 {
@@ -576,7 +765,16 @@ const file_user_proto_rawDesc = "" +
 	"\x06_phoneB\v\n" +
 	"\t_nickname\"A\n" +
 	"\x10RegisterResponse\x12-\n" +
-	"\x04user\x18\x01 \x01(\v2\x19.emotion_user.v1.UserInfoR\x04user\"\xf3\x01\n" +
+	"\x04user\x18\x01 \x01(\v2\x19.emotion_user.v1.UserInfoR\x04user\"\x82\x01\n" +
+	"\x14ResetPasswordRequest\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\x12+\n" +
+	"\x11verification_code\x18\x02 \x01(\tR\x10verificationCode\x12!\n" +
+	"\fnew_password\x18\x03 \x01(\tR\vnewPassword\"F\n" +
+	"\x15ResetPasswordResponse\x12-\n" +
+	"\x04user\x18\x01 \x01(\v2\x19.emotion_user.v1.UserInfoR\x04user\"\x0f\n" +
+	"\rLogoutRequest\"*\n" +
+	"\x0eLogoutResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xf3\x01\n" +
 	"\bUserInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
@@ -589,13 +787,15 @@ const file_user_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\x03R\tupdatedAt2\x8b\x03\n" +
+	"updated_at\x18\t \x01(\x03R\tupdatedAt2\xb6\x04\n" +
 	"\vUserService\x12A\n" +
 	"\x05GetMe\x12\x1d.emotion_user.v1.GetMeRequest\x1a\x19.emotion_user.v1.UserInfo\x12Q\n" +
 	"\rUpdateProfile\x12%.emotion_user.v1.UpdateProfileRequest\x1a\x19.emotion_user.v1.UserInfo\x12M\n" +
 	"\vGetUserById\x12#.emotion_user.v1.GetUserByIdRequest\x1a\x19.emotion_user.v1.UserInfo\x12F\n" +
 	"\x05Login\x12\x1d.emotion_user.v1.LoginRequest\x1a\x1e.emotion_user.v1.LoginResponse\x12O\n" +
-	"\bRegister\x12 .emotion_user.v1.RegisterRequest\x1a!.emotion_user.v1.RegisterResponseB0Z.github.com/emotion-echo/shared/pkg/emotionuserb\x06proto3"
+	"\bRegister\x12 .emotion_user.v1.RegisterRequest\x1a!.emotion_user.v1.RegisterResponse\x12^\n" +
+	"\rResetPassword\x12%.emotion_user.v1.ResetPasswordRequest\x1a&.emotion_user.v1.ResetPasswordResponse\x12I\n" +
+	"\x06Logout\x12\x1e.emotion_user.v1.LogoutRequest\x1a\x1f.emotion_user.v1.LogoutResponseB0Z.github.com/emotion-echo/shared/pkg/emotionuserb\x06proto3"
 
 var (
 	file_user_proto_rawDescOnce sync.Once
@@ -609,35 +809,44 @@ func file_user_proto_rawDescGZIP() []byte {
 	return file_user_proto_rawDescData
 }
 
-var file_user_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_user_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_user_proto_goTypes = []any{
-	(*GetMeRequest)(nil),         // 0: emotion_user.v1.GetMeRequest
-	(*UpdateProfileRequest)(nil), // 1: emotion_user.v1.UpdateProfileRequest
-	(*GetUserByIdRequest)(nil),   // 2: emotion_user.v1.GetUserByIdRequest
-	(*LoginRequest)(nil),         // 3: emotion_user.v1.LoginRequest
-	(*LoginResponse)(nil),        // 4: emotion_user.v1.LoginResponse
-	(*RegisterRequest)(nil),      // 5: emotion_user.v1.RegisterRequest
-	(*RegisterResponse)(nil),     // 6: emotion_user.v1.RegisterResponse
-	(*UserInfo)(nil),             // 7: emotion_user.v1.UserInfo
+	(*GetMeRequest)(nil),          // 0: emotion_user.v1.GetMeRequest
+	(*UpdateProfileRequest)(nil),  // 1: emotion_user.v1.UpdateProfileRequest
+	(*GetUserByIdRequest)(nil),    // 2: emotion_user.v1.GetUserByIdRequest
+	(*LoginRequest)(nil),          // 3: emotion_user.v1.LoginRequest
+	(*LoginResponse)(nil),         // 4: emotion_user.v1.LoginResponse
+	(*RegisterRequest)(nil),       // 5: emotion_user.v1.RegisterRequest
+	(*RegisterResponse)(nil),      // 6: emotion_user.v1.RegisterResponse
+	(*ResetPasswordRequest)(nil),  // 7: emotion_user.v1.ResetPasswordRequest
+	(*ResetPasswordResponse)(nil), // 8: emotion_user.v1.ResetPasswordResponse
+	(*LogoutRequest)(nil),         // 9: emotion_user.v1.LogoutRequest
+	(*LogoutResponse)(nil),        // 10: emotion_user.v1.LogoutResponse
+	(*UserInfo)(nil),              // 11: emotion_user.v1.UserInfo
 }
 var file_user_proto_depIdxs = []int32{
-	7, // 0: emotion_user.v1.LoginResponse.user:type_name -> emotion_user.v1.UserInfo
-	7, // 1: emotion_user.v1.RegisterResponse.user:type_name -> emotion_user.v1.UserInfo
-	0, // 2: emotion_user.v1.UserService.GetMe:input_type -> emotion_user.v1.GetMeRequest
-	1, // 3: emotion_user.v1.UserService.UpdateProfile:input_type -> emotion_user.v1.UpdateProfileRequest
-	2, // 4: emotion_user.v1.UserService.GetUserById:input_type -> emotion_user.v1.GetUserByIdRequest
-	3, // 5: emotion_user.v1.UserService.Login:input_type -> emotion_user.v1.LoginRequest
-	5, // 6: emotion_user.v1.UserService.Register:input_type -> emotion_user.v1.RegisterRequest
-	7, // 7: emotion_user.v1.UserService.GetMe:output_type -> emotion_user.v1.UserInfo
-	7, // 8: emotion_user.v1.UserService.UpdateProfile:output_type -> emotion_user.v1.UserInfo
-	7, // 9: emotion_user.v1.UserService.GetUserById:output_type -> emotion_user.v1.UserInfo
-	4, // 10: emotion_user.v1.UserService.Login:output_type -> emotion_user.v1.LoginResponse
-	6, // 11: emotion_user.v1.UserService.Register:output_type -> emotion_user.v1.RegisterResponse
-	7, // [7:12] is the sub-list for method output_type
-	2, // [2:7] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	11, // 0: emotion_user.v1.LoginResponse.user:type_name -> emotion_user.v1.UserInfo
+	11, // 1: emotion_user.v1.RegisterResponse.user:type_name -> emotion_user.v1.UserInfo
+	11, // 2: emotion_user.v1.ResetPasswordResponse.user:type_name -> emotion_user.v1.UserInfo
+	0,  // 3: emotion_user.v1.UserService.GetMe:input_type -> emotion_user.v1.GetMeRequest
+	1,  // 4: emotion_user.v1.UserService.UpdateProfile:input_type -> emotion_user.v1.UpdateProfileRequest
+	2,  // 5: emotion_user.v1.UserService.GetUserById:input_type -> emotion_user.v1.GetUserByIdRequest
+	3,  // 6: emotion_user.v1.UserService.Login:input_type -> emotion_user.v1.LoginRequest
+	5,  // 7: emotion_user.v1.UserService.Register:input_type -> emotion_user.v1.RegisterRequest
+	7,  // 8: emotion_user.v1.UserService.ResetPassword:input_type -> emotion_user.v1.ResetPasswordRequest
+	9,  // 9: emotion_user.v1.UserService.Logout:input_type -> emotion_user.v1.LogoutRequest
+	11, // 10: emotion_user.v1.UserService.GetMe:output_type -> emotion_user.v1.UserInfo
+	11, // 11: emotion_user.v1.UserService.UpdateProfile:output_type -> emotion_user.v1.UserInfo
+	11, // 12: emotion_user.v1.UserService.GetUserById:output_type -> emotion_user.v1.UserInfo
+	4,  // 13: emotion_user.v1.UserService.Login:output_type -> emotion_user.v1.LoginResponse
+	6,  // 14: emotion_user.v1.UserService.Register:output_type -> emotion_user.v1.RegisterResponse
+	8,  // 15: emotion_user.v1.UserService.ResetPassword:output_type -> emotion_user.v1.ResetPasswordResponse
+	10, // 16: emotion_user.v1.UserService.Logout:output_type -> emotion_user.v1.LogoutResponse
+	10, // [10:17] is the sub-list for method output_type
+	3,  // [3:10] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_user_proto_init() }
@@ -653,7 +862,7 @@ func file_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_proto_rawDesc), len(file_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
