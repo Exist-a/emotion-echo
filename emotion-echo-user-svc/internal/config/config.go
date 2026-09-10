@@ -30,6 +30,14 @@ type Nacos struct {
 	HotReload bool
 }
 
+// GRPCServer user-svc 暴露的 gRPC server 配置（Stage 62 PR-3.2）
+//
+// Port=0 表示不启动 gRPC server（向后兼容老 yaml）；新 yaml 显式给 :8887 才生效。
+type GRPCServer struct {
+	Enabled bool
+	Port    int
+}
+
 // Config 是 user-svc 的总配置
 type Config struct {
 	Name       string
@@ -38,6 +46,7 @@ type Config struct {
 	SkyWalking SkyWalking
 	Postgres   Postgres
 	Nacos      Nacos
+	GRPC       GRPCServer
 }
 
 // SetDefaults 填零值字段的默认值（shared/pkg/config.MustLoad 契约）。
@@ -70,5 +79,10 @@ func SetDefaults(c *Config) {
 	}
 	if c.Nacos.GroupName == "" {
 		c.Nacos.GroupName = "DEFAULT_GROUP"
+	}
+	// Stage 62 PR-3.2：默认启用 user-svc gRPC server（:8887），
+	// 老 yaml 无 GRPC 段时 Port=0 不启动；新 yaml 显式给 :8887 才生效。
+	if c.GRPC.Port == 0 && c.GRPC.Enabled {
+		c.GRPC.Port = 8887
 	}
 }

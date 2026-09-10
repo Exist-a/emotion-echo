@@ -27,6 +27,14 @@ type Kafka struct {
 	DLQTopic string
 }
 
+// GRPCServer analytics-svc 暴露的 gRPC server 配置（Stage 62 PR-3.2）
+//
+// Port=0 表示不启动 gRPC server（向后兼容老 yaml）；新 yaml 显式给 :8885 才生效。
+type GRPCServer struct {
+	Enabled bool
+	Port    int
+}
+
 type Config struct {
 	Name       string
 	Host       string
@@ -35,6 +43,7 @@ type Config struct {
 	Postgres   Postgres
 	Kafka      Kafka
 	Nacos      Nacos
+	GRPC       GRPCServer
 
 	// TriggerQueueCap Round 3 part 2: async trigger queue buffer size.
 	// <=0 用 trigger.DefaultQueueCap (64).
@@ -94,5 +103,10 @@ func SetDefaults(c *Config) {
 	}
 	if c.Nacos.GroupName == "" {
 		c.Nacos.GroupName = "DEFAULT_GROUP"
+	}
+	// Stage 62 PR-3.2：默认启用 analytics-svc gRPC server（:8885），
+	// 老 yaml 无 GRPC 段时 Port=0 不启动；新 yaml 显式给 :8885 才生效。
+	if c.GRPC.Port == 0 && c.GRPC.Enabled {
+		c.GRPC.Port = 8885
 	}
 }

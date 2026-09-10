@@ -108,6 +108,12 @@ gen_go() {
 # ============================================
 gen_python() {
     local proto_name="$1"
+    # 仅 emotion_llm.proto 被 emotion-llm-service（Python LLM）消费；其他 proto 是 Go-only
+    # （chat / emotion_query / user / agent / metric 端点只在 BFF ↔ Go svc 之间）。
+    # 避免污染 emotion-llm-service 目录。
+    if [[ "$proto_name" != "emotion_llm.proto" ]]; then
+        return
+    fi
     log_info "生成 Python pb: $proto_name → $PYTHON_OUT"
 
     python -m grpc_tools.protoc \

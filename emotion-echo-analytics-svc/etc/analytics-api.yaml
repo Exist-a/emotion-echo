@@ -37,3 +37,9 @@ Nacos:
   GroupName: DEFAULT_GROUP
   # HotReload: 省略 → Config struct tag default=false
 
+
+# Stage 62 PR-3.2：analytics-svc gRPC server 配置（暴露 AnalyticsService 给 BFF）
+# 与 chat-svc gRPC 同模式：HTTP :8893 给前端/APISIX，gRPC :8885 给内部 BFF
+GRPC:
+  Enabled: true
+  Port:    8885
