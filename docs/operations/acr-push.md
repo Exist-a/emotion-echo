@@ -1,14 +1,22 @@
 # ACR 镜像推送与发布流程
 
-> **⛔ **内部参考 / 暂未启用**：本文档记录的是把 3 个 AI 镜像推到阿里云 ACR 个人版的实验记录。
+> **⛔ 部分已弃用 / 仍可参考**：本文档记录的是把 3 个 AI 镜像推到阿里云 ACR 个人版的实验记录。
 >
-> **当前结论**（2026-09-10 commit `9ff3335`）：**当前 dev 不使用 ACR**——XTTS 推到 ACR 失败（vendor OCI manifest 不被个人版兼容，5 次尝试都卡在 `pushing layers`），Fer/SenseVoice 推 ACR 走通了但**当前选择 docker.io / 本地 build**，ACR 路径作为备用。
+> **当前结论**（2026-09-11 commit `8702615`）：
 >
-> 实施指南见 [`emotion-echo-models/README.md`](../../emotion-echo-models/README.md)。本文档只作历史参考，**请不要按本文档去设 ACR**。
+> | 镜像 | ACR 状态 | 实际使用 |
+> |---|---|---|
+> | `sensevoice-base` / `sensevoice` / `fer-tflite` | ✅ 已推 ACR（§一 ~ §五流程仍有效） | compose 拉 ACR（§五.1） |
+> | XTTS vendor `ai4all/coqui` | ❌ 未推 ACR（§7.1） | docker.io pull（aliyun 加速） |
+> | SV-fastbuild `wheels/` | ❌ 未推 ACR（§7.2）+ ❌ 未进 git（filter-repo） | 本地预下（`scripts/download-sv-wheels.sh`）|
+>
+> 实施指南见 [`emotion-echo-models/README.md`](../../emotion-echo-models/README.md)。
+> SV-fastbuild wheels 本地管理流程见 [§7.2](#72-sv-fastbuild-wheels本地管理不在-git-不在-acr)。
 >
 > ---
 > 范围（历史）：本项目 SenseVoice 镜像（`sensevoice-base` + `sensevoice`）推到阿里云 ACR 个人版的完整工作流。
 > 关联：[`scripts/push-to-acr.sh`](../../scripts/push-to-acr.sh) ·
+> [`scripts/download-sv-wheels.sh`](../../scripts/download-sv-wheels.sh) ·
 > [`docs/stages/stage-60-1-pr-tts-vendor-sv-landing.md`](../../stages/stage-60-1-pr-tts-vendor-sv-landing.md)
 
 ## 一、架构：为什么拆 base + app 两层
@@ -170,6 +178,9 @@ image: emotion-echo/sensevoice-fastbuild:v0.1.0
 | 2026-09-10 | 初版：base + app 两层结构 + OCI manifest workaround | Stage 60.1 session |
 | 2026-09-10 | FER-tflite 镜像推到 ACR；compose emotion-echo-fer 切换到 ACR | Phase 6 followup |
 | 2026-09-10 | XTTS vendor镜像推到 ACR（3.69GB）；compose emotion-echo-xtts 切换到 ACR | Phase 6 followup |
+| 2026-09-11 | 顶部状态表修正（XTTS / SV-fastbuild 状态准确化）| commit 8702615 |
+| 2026-09-11 | 新增 §7.2 SV-fastbuild wheels 本地管理 + scripts/download-sv-wheels.sh | commit 8702615 |
+| 2026-09-11 | git-filter-repo 从历史删除 wheels/ + force-push；filter-repo 重写 675 commit SHA | commit 50f2a3d |
 
 ## 七、仓库总览
 
@@ -205,3 +216,85 @@ XTTS vendor `ai4all/coqui:latest`（3.69GB）**未上 ACR**，仍走 docker.io p
 - vendor 升级后再次尝试（ai4all/coqui 可能改用纯 schema 2）
 
 **当前决策**：XTTS 走 docker.io，阶段 5（commit `8e09d03` 的早期版本）已验证 133KB WAV 端到端跑通，足以支撑 dev 模式使用。
+
+### 7.2 SV-fastbuild wheels：本地管理（不在 git 不在 ACR）
+
+SV-fastbuild 镜像构建依赖 6 个本地 `.whl`（合计 ~231 MB），其中 `torch-1.13.1+cpu-cp310-cp310-linux_x86_64.whl` 单文件 **190 MB**，超过 GitHub 单文件 100 MB 限制。
+
+**历史**：commit `98e01ed` / `8e418a6` 把 wheels 直接 commit 进 git（commit 留言提 "ACR layer caching"，但实际未接 ACR 推送脚本 `scripts/push-to-acr.sh`）。后果是 push 被 GitHub 远端拒，错误 GH001: file exceeds 100.00 MB。
+
+**当前状态（commit `8702615` 后）**：
+
+| 存储位置 | 状态 |
+|---|---|
+| **GitHub 远端 main** | ❌ 无（filter-repo 从历史彻底清除，新 commit 只含 `.gitignore` + `.gitkeep`）|
+| **ACR** | ❌ 无（`scripts/push-to-acr.sh` 未含 SV-fastbuild 块）|
+| **本地 `emotion-echo-models/SV-fastbuild/wheels/`** | ✅ 6 个 .whl + .gitignore + .gitkeep |
+
+**为什么不上 ACR**：
+
+1. ACR 个人版不支持 OCI manifest，SV-fastbuild Dockerfile 是 buildkit 产物（`Dockerfile` line 2 注释提到 "fastbuild"），与 §7.1 XTTS 同源问题
+2. ACR 1.4GB + 190MB torch wheel 单 layer 已超个人版 quota
+3. ACR 设计是"运行时拉镜像"语义，wheels 是**构建期中间产物**（注释 `Dockerfile` line 25: "构建期中间产物，不进入 runtime 镜像"），不该作为独立镜像分发
+
+**为什么不上 git**：
+
+1. GitHub 单文件 100 MB 红线
+2. 模型 + wheels 加起来 `emotion-echo-models/` ~5.9 GB，超过 LFS 免费 1 GB 配额
+3. LFS 化能解决本次 push，但下一轮再加新大文件（如 `XTTS-v2/model.pth` 893MB）又会撞墙
+4. 个人开发为主，单机构建 → **本地一份 wheels 文件 + build 时复用**最简单
+
+**首次/重建流程**：
+
+```bash
+# 1. clone 后，wheels/ 目录里只有 .gitignore + .gitkeep，6 个 .whl 缺失
+ls emotion-echo-models/SV-fastbuild/wheels/
+# 输出: .gitignore  .gitkeep  （没 .whl）
+
+# 2. 跑下载脚本（首次 ~3 分钟，主要时间在 torch 190MB）
+bash scripts/download-sv-wheels.sh
+
+# 3. 验证 wheels 完整
+ls emotion-echo-models/SV-fastbuild/wheels/*.whl | wc -l
+# 输出: 6
+
+# 4. build SV-fastbuild 镜像（Dockerfile COPY wheels/ + --find-links 正常用）
+docker build -t emotion-echo/sensevoice-fastbuild:test \
+  -f emotion-echo-models/SV-fastbuild/Dockerfile \
+  emotion-echo-models/SV-fastbuild/
+```
+
+**脚本设计要点（见 `scripts/download-sv-wheels.sh` 文件头注释）**：
+
+- **不用 pip download**：pip 26+ 走 PyTorch CPU index 时 torch==1.13.1+cpu 目录已被 PyTorch 官方删除（403），但 S3 文件还在；pip 找不到候选版本 → 失败
+- **curl 直拉 6 个 .whl**：torch 用 `download.pytorch.org/whl/cpu/<file>` 直链，其他 5 个用 `pypi.org/simple/<package>/` 解析优先选 linux x86_64
+- **重试 + 大小校验**：torch 必须 >= 100MB，其他 >= 1KB，避免下载残缺
+- **可切镜像**：`PYTORCH_INDEX` / `PIP_INDEX_URL` 环境变量覆盖
+
+**何时需要重跑**：
+
+- requirements.txt 变更（加/升/降依赖）
+- 现有 wheel 文件损坏或缺失
+- 切换 Python 版本（3.10 → 3.11 等）
+
+**未来可重试的场景**：
+
+- ACR 企业版（¥100/月）+ 加 SV-fastbuild 块到 `scripts/push-to-acr.sh`（避免每次本地预下）
+- LFS 付费扩容（$5/月 50GB），全部 `emotion-echo-models/` 走 LFS
+- vendor 升级（torch >= 2.x）后普通 PyPI simple 能解析，pip download 路径重新可用
+
+**Refs**：
+- `scripts/download-sv-wheels.sh`（端到端测试 funasr wheel byte-identical）
+- commit `8702615` feat(scripts): SV-fastbuild 本地 wheels 下载脚本
+- commit `50f2a3d` chore(models): SV-fastbuild/wheels/ 重新加 .gitignore + .gitkeep
+- filter-repo 操作（force-push，~675 commit SHA 重写，详见 AGENTS.md 2026-09-11 session log）
+
+调研依据 (AGENTS.md §〇):
+- 读代码: SV-fastbuild/Dockerfile (COPY wheels/ + --find-links 硬依赖);
+          scripts/push-to-acr.sh (无 SV-fastbuild 块);
+          .gitattributes (无 .whl LFS 规则);
+          `emotion-echo-models/` du -sh 实测 5.9GB;
+          `torch==1.13.1+cpu` PyTorch 官方 index 目录 403 但 S3 文件 200
+- 查 ADR: docs/architecture/decisions.md (无相关决策)
+- 跑现状: git push GH001 失败 + filter-repo 重写 + curl 直链 199MB 下载成功
+- 网上信息: download.pytorch.org/whl/cpu/ 老版本目录索引被删但 S3 文件保留
