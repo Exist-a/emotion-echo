@@ -96,6 +96,17 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("KAFKA_BROKERS"); v != "" {
 		c.Kafka.BrokersCSV = v
 	}
+	// Stage 70 PR-P1.1.1: applyEnvOverrides 漏读 KAFKA_ENABLED，
+	// 导致 KAFKA_ENABLED=true env 注入后 c.Kafka.Enabled 仍为 false（bool 零值），
+	// Kafka Consumer goroutine 永远不启动 → chat-events 事件无 ai-svc 消费。
+	if v := os.Getenv("KAFKA_ENABLED"); v != "" {
+		c.Kafka.Enabled = v == "true" || v == "1"
+	}
+	// Stage 70 PR-P1.1.1: 同样补 KAFKA_DLQ_TOPIC env 注入（main.go:293 已读，
+	// 但万一 yaml 有覆盖逻辑，需要 env 优先）
+	if v := os.Getenv("KAFKA_DLQ_TOPIC"); v != "" {
+		c.Kafka.DLQTopic = v
+	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
 	}

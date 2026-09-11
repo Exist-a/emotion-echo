@@ -130,7 +130,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-chat-svc/Dockerfile
-    image: emotion-echo/chat-svc:v0.1.6
+    image: emotion-echo/chat-svc:v0.1.8
     # v0.1.3: PR-2 中间件分层（/health、/metrics 免鉴权 + 业务群 auth.Use 分组）
     container_name: emotion-echo-chat-svc
     restart: unless-stopped
@@ -146,6 +146,7 @@ services:
       GIN_MODE: release
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"
       KAFKA_BROKERS:       emotion-echo-kafka:9092
+      KAFKA_ENABLED:      "true"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"
     # Stage 58 PR-GRPC-3：gRPC server 暴露 :8892（BFF gRPC 客户端连这个端口）
@@ -189,7 +190,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-analytics-svc/Dockerfile
-    image: emotion-echo/analytics-svc:v0.1.3
+    image: emotion-echo/analytics-svc:v0.1.5
     container_name: emotion-echo-analytics-svc
     restart: unless-stopped
     environment:
@@ -204,6 +205,7 @@ services:
       GIN_MODE: release
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_analytics"
       KAFKA_BROKERS:       emotion-echo-kafka:9092
+      KAFKA_ENABLED:      "true"
       # ADR-19 PR-A3.1: DLQ topic 启用真实 Kafka topic（默认 Noop 静默丢）
       KAFKA_DLQ_TOPIC:     chat-events-dlq
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
@@ -362,7 +364,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-ai-svc/Dockerfile
-    image: emotion-echo/ai-svc:v0.1.2   # P0-4: pinned tag
+    image: emotion-echo/ai-svc:v0.1.5   # P0-4: pinned tag
     container_name: emotion-echo-ai-svc
     restart: unless-stopped
     environment:

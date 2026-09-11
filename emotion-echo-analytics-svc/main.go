@@ -45,6 +45,15 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("KAFKA_BROKERS"); v != "" {
 		c.Kafka.BrokersCSV = v
 	}
+	// Stage 70 PR-P1.1: 补 KAFKA_ENABLED env 注入。
+	// 修复前：applyEnvOverrides 漏读 env，yaml 无 Enabled 字段 → c.Kafka.Enabled
+	// 永远 bool 零值 false → consumer goroutine 永远不启动。
+	if v := os.Getenv("KAFKA_ENABLED"); v != "" {
+		c.Kafka.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("KAFKA_DLQ_TOPIC"); v != "" {
+		c.Kafka.DLQTopic = v
+	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
 	}
