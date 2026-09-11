@@ -208,16 +208,21 @@ func main() {
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(sharedgrpc.NewGo2SkyTracer(tracer)))
 	}
-	r.Use(sharedmw.GinAuthMiddleware())
 
-	// 6. routes
+	// PR-2：分层鉴权中间件
+	//   /health、/metrics 不需要鉴权（K8s liveness probe / Prometheus scrape 依赖）
+	//   5 个业务端点统一走 /api/v1 group + GinAuthMiddleware
+	//   仿 user-svc main.go:147-155 noAuth group + r.Use 范式
 	r.GET("/health", handler.HealthHandler(svcCtx))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
-	r.POST("/api/v1/conversations", handler.CreateConversationHandler(svcCtx))
-	r.GET("/api/v1/conversations", handler.ListConversationsHandler(svcCtx)) // Stage 36-A2.1 (G2 upper)
-	r.POST("/api/v1/conversations/:id/messages", handler.SendMessageHandler(svcCtx))
-	r.GET("/api/v1/conversations/:id/messages", handler.ListMessagesHandler(svcCtx))
-	r.DELETE("/api/v1/conversations/:id", handler.DeleteConversationHandler(svcCtx))
+
+	auth := r.Group("/api/v1")
+	auth.Use(sharedmw.GinAuthMiddleware())
+	auth.POST("/conversations", handler.CreateConversationHandler(svcCtx))
+	auth.GET("/conversations", handler.ListConversationsHandler(svcCtx)) // Stage 36-A2.1 (G2 upper)
+	auth.POST("/conversations/:id/messages", handler.SendMessageHandler(svcCtx))
+	auth.GET("/conversations/:id/messages", handler.ListMessagesHandler(svcCtx))
+	auth.DELETE("/conversations/:id", handler.DeleteConversationHandler(svcCtx))
 
 	// 6.5 Stage 31 PR-08: Nacos 注册 + 配置
 	bootCtx, bootCancel := context.WithCancel(context.Background())
