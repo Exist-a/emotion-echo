@@ -15,6 +15,7 @@ import (
 
 	"emotion-echo-chat-svc/internal/config"
 	"emotion-echo-chat-svc/internal/events"
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/model"
 	"emotion-echo-chat-svc/internal/repository"
@@ -330,4 +331,65 @@ func TestDeleteConversationHandler_InvalidID_400(t *testing.T) {
 	r.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// PR-2 RED · chat-svc 中间件分层
+// 现状（PR-2 前）：main.go:214 `r.Use(sharedmw.GinAuthMiddleware())` 全局挂中间件，
+// 导致 /health 与 /metrics 也要 X-User-Id（K8s liveness probe / Prometheus scrape 必坏）。
+// 目标：仿 user-svc 范式分层——/health 与 /metrics 在 auth 之前注册，业务端点在 auth 群内。
+
+// TestChatHandler_Health_NoUserID_Returns200 RED：复刻修复后 main.go 的路由结构，
+// /health 不带 X-User-Id 应返 200。修复前全局 auth 会让该路径返 401，测试应失败。
+func TestChatHandler_Health_NoUserID_Returns200(t *testing.T) {
+	svcCtx := newTestSVC()
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	// PR-2 目标：/health 在 auth 中间件之前注册
+	r.GET("/health", HealthHandler(svcCtx))
+	// 业务群内挂 auth（仿 user-svc main.go:155 r.Use 范式）
+	auth := r.Group("/api/v1")
+	auth.Use(sharedmw.GinAuthMiddleware())
+	auth.GET("/conversations", ListConversationsHandler(svcCtx))
+
+	// /health 无 X-User-Id → 200
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code,
+		"/health should be 200 without X-User-Id, got %d body=%s", rec.Code, rec.Body.String())
+
+	// /metrics 不在路由表中——单独测：直接 GET /metrics 走 PR-2 后的 main.go 应 200
+	r2 := gin.New()
+	r2.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
+	auth2 := r2.Group("/api/v1")
+	auth2.Use(sharedmw.GinAuthMiddleware())
+	auth2.GET("/conversations", ListConversationsHandler(svcCtx))
+
+	req2 := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec2 := httptest.NewRecorder()
+	r2.ServeHTTP(rec2, req2)
+	require.Equal(t, http.StatusOK, rec2.Code,
+		"/metrics should be 200 without X-User-Id, got %d", rec2.Code)
+	require.Contains(t, rec2.Header().Get("Content-Type"), "text/plain",
+		"/metrics content-type should be text/plain")
+}
+
+// TestChatHandler_BusinessRoute_NoUserID_Returns401 RED：业务群内路径无 X-User-Id
+// 必须返 401 "missing or invalid X-User-Id"，不能因为 PR-2 改动破坏鉴权契约。
+func TestChatHandler_BusinessRoute_NoUserID_Returns401(t *testing.T) {
+	svcCtx := newTestSVC()
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	auth := r.Group("/api/v1")
+	auth.Use(sharedmw.GinAuthMiddleware())
+	auth.GET("/conversations", ListConversationsHandler(svcCtx))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code,
+		"业务群内无 X-User-Id 应 401，got %d body=%s", rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "X-User-Id")
 }
