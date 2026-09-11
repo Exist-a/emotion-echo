@@ -38,6 +38,7 @@ import (
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/metadata"
 )
 
 // newFailingPublisher is a tiny EventPublisher that always returns the
@@ -541,12 +542,14 @@ func TestSendMessageLogic_ClientMsgID_DifferentUser_NotShared(t *testing.T) {
 // fakeAIClient 模拟 ai-svc gRPC client 的 UpsertNeutralEmotion 接口。
 type fakeAIClient struct {
 	gotReq *emotionquery.UpsertNeutralEmotionRequest
+	gotCtx context.Context
 	gotN   int
 	err    error
 }
 
-func (f *fakeAIClient) UpsertNeutralEmotion(_ context.Context, req *emotionquery.UpsertNeutralEmotionRequest) (*emotionquery.UpsertNeutralEmotionResponse, error) {
+func (f *fakeAIClient) UpsertNeutralEmotion(ctx context.Context, req *emotionquery.UpsertNeutralEmotionRequest) (*emotionquery.UpsertNeutralEmotionResponse, error) {
 	f.gotReq = req
+	f.gotCtx = ctx
 	f.gotN++
 	if f.err != nil {
 		return nil, f.err
@@ -617,4 +620,45 @@ func TestSendMessageLogic_AIClientError_DoesNotBlock(t *testing.T) {
 	require.NoError(t, err, "ai-svc 失败 → 消息仍应成功")
 	require.NotNil(t, resp)
 	assert.Equal(t, 1, ai.gotN, "即使失败也应尝试过")
+}
+
+// Stage 69 RED · chat-svc → ai-svc dev fallback 缺 x-user-id metadata bug
+//
+// 现象：docker logs emotion-echo-chat-svc 显示
+//   "dev fallback UpsertNeutralEmotion failed:
+//    rpc error: code = Unauthenticated desc = missing x-user-id metadata"
+//
+// 根因：ai_client_grpc.go UpsertNeutralEmotion 直接传 ctx，没把 l.ctx 里的
+// user_id 注入到 outgoing metadata 的 x-user-id 头。ai-svc gRPC server
+// 拦截器 (shared/pkg/grpcinterceptor/auth.go NewServerUserIDInterceptor)
+// 从 incoming metadata 读 x-user-id，找不到 → codes.Unauthenticated。
+//
+// 修复路径：在 maybeUpsertNeutralEmotion 调 UpsertNeutralEmotion 之前，
+// 用 metadata.AppendToOutgoingContext 注入 x-user-id = uid。
+//
+// RED：本测试断言 ctx 注入 metadata 后 fakeAIClient 收到的 ctx 能读到
+// x-user-id 且值等于 ctx 里的 uid。修复前 RED（fakeAIClient gotCtx 为 nil）。
+func TestSendMessageLogic_DevFallback_InjectsXUserIDMetadata(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, _ := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100, Title: "metadata-inject-conv",
+	}))
+	svcCtx.Config.Kafka.Enabled = false
+	ai := &fakeAIClient{}
+	svcCtx.AIClient = ai
+
+	const uid int64 = 100
+	l := NewSendMessageLogic(ctxWithUserID(context.Background(), uid), svcCtx)
+	_, err := l.SendMessage(&types.SendMessageReq{Id: 1, Role: "user", Content: "hi"})
+	require.NoError(t, err)
+	require.Equal(t, 1, ai.gotN, "dev fallback 应触发 UpsertNeutralEmotion")
+
+	// 断言 ctx 含 x-user-id metadata = uid
+	md, ok := metadata.FromOutgoingContext(ai.gotCtx)
+	require.True(t, ok, "ctx 必须含 outgoing metadata")
+	vals := md.Get("x-user-id")
+	require.NotEmpty(t, vals, "outgoing metadata 必须含 x-user-id")
+	assert.Equal(t, "100", vals[0], "x-user-id 值应等于 ctx 里的 uid")
 }
