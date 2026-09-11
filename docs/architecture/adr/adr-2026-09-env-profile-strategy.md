@@ -1,7 +1,7 @@
 # ADR · 2026-09 · 环境配置分层策略（dev 本地调试 vs prod 远端部署）
 
-> **决策状态**：🟡 **Proposed / 待决策**（2026-09-08 起，本 ADR 立项）
-> **实施状态**：⏸ 未开始（决策落地前不做任何代码/compose 改动）
+> **决策状态**：✅ **Accepted**（2026-09-11 owner sign-off）
+> **实施状态**：✅ 完成（2026-09-09 PR-ENV-1~4 全 landed + 43/43 TDD PASS）
 > **关联**：
 > - [stage-55-roadmap-z-status.md §九 P3](../../stages/stage-55-roadmap-z-status.md)（todo-pile §B1 BFF dev/prod 端口分离 半天）
 > - [stage-57-b3-merged.md §三](../../stages/stage-57-b3-merged.md)（批 3 收口发现 SKYWALKING_ENABLED 真 bug 触发本次讨论）

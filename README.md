@@ -221,9 +221,12 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 > | **Stage 59** | vendor 镜像实测（ai4all/coqui ✅ / serengil/deepface ⚠ / yiminger/sensevoice ❌） | ✅ landed | [stage-59-vendor-image-verification.md](/docs/stages/stage-59-vendor-image-verification.md) |
 > | **Stage 60** | PR-TTS-VENDOR 三 AI 模型落地（XTTS vendor 133KB WAV / FER-tflite 538MB / SV-fastbuild 5.88GB） | ✅ landed | [stage-60-pr-tts-vendor-landing.md](/docs/stages/stage-60-pr-tts-vendor-landing.md) |
 > | **Stage 60.1** | SV-fastbuild 真实验证 + 仓库分层 base/app Dockerfile + 阿里云 ACR 推送 | ✅ landed | [stage-60-1-pr-tts-vendor-sv-landing.md](/docs/stages/stage-60-1-pr-tts-vendor-sv-landing.md) |
+> | **Stage 61~63** | Sprint C/D/E/F1/F2 + gRPC 化决策 4 收口 + Sprint G BFF 全局 gRPC error 映射 | ✅ landed | [stage-61~63](/docs/stages/) + [stage-63-grpc-closure-report.md](/docs/stages/stage-63-grpc-closure-report.md) |
+> | **Stage 64** | bug 类未做事项集中收口（chat-svc 中间件分层 + 决策 18 #32 关闭 + 杂项） | ✅ landed | [stage-64-bug-cleanup-2026-09-11.md](/docs/stages/stage-64-bug-cleanup-2026-09-11.md) |
+> | **决策 20** | 环境配置分层策略（dev 本地 vs prod 远端）owner sign-off（PR-ENV-1~4 已落地）| ✅ Accepted 2026-09-11 | [adr-2026-09-env-profile-strategy.md](/docs/architecture/adr/adr-2026-09-env-profile-strategy.md) |
 >
 > **失真类型**（决策 18 §三）：类型 2 "陈旧结论" — README 顶部徽章与 Status 段长期未跟随 git log 更新。
-> **当前最新 commit**：`5a8927d docs(ai-models): emotion-echo-models/README.md becomes the canonical guide`
+> **当前最新 commit**：`17af536 docs(adr,stage): PR-5 决策 4 ADR §八 + 决策 18 #32 关闭追踪`
 
 ---
 

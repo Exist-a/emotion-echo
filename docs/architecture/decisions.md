@@ -399,7 +399,7 @@
 
 ---
 
-### 决策 20：环境配置分层策略（dev 本地 vs prod 远端）= **🟡 Proposed / 待决策**（2026-09-08）
+### 决策 20：环境配置分层策略（dev 本地 vs prod 远端）= **✅ Accepted**（2026-09-11 owner sign-off）
 
 > 🟡 2026-09-08 立项，**待用户最终拍板**。详见 `adr-2026-09-env-profile-strategy.md`。
 >
@@ -439,6 +439,8 @@
 >
 > **原始 ADR 文档失真同步修复**：`docs/architecture/adr/adr-2026-09-env-profile-strategy.md` 头 4 行于本次会话追加就地更正块（不动原行，保留历史快照）。
 > **详细落地报告**：[`docs/stages/stage-58-q3-followups.md` §二 PR-ENV-1~4](../stages/stage-58-q3-followups.md)。
+
+> **✅ Owner Sign-off**（2026-09-11）：候选 C（compose override 文件分层 + `${VAR:-default}` 中性化）已由 PR-ENV-1~4 全 landed + 43/43 TDD 脚本 PASS。本决策从 🟡 Proposed 翻 ✅ Accepted。后续如需切换/扩展 profile，遵循 ADR-20 §C 候选方案 + Stage 58 §二测试脚本模式新增。
 
 ---
 
