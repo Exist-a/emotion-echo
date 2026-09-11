@@ -24,10 +24,10 @@ related-stages:
 
 | # | 项 | 来源 | 工作量 | 状态 |
 |---|---|---|---|---|
-| 1 | chat-svc PinConversation + UpdateConversation 两个 RPC（含 schema migration + BFF 接通 + 前端 store 恢复真实 API） | 决策 4 ADR §八 + Stage 71 §六 | 1~2 天 | 🔨 本轮实施 |
-| 2 | Kafka P2：consumer lag 监控 + 事件 Protobuf 迁移 | kafka-reliability-gaps.md §1.4/§1.5 | 3~4 天 | planned |
-| 3 | Nacos dev 模式全链路启用（ephemeral 实例 30s 被踢 / Heartbeat 未真正触发） | nacos-enablement-dev.md | 1~2 天 | planned |
-| 4 | Helm chart ↔ compose dev 全面对齐 | todo-pile §D6 | 1 天 | planned |
+| 1 | chat-svc PinConversation + UpdateConversation 两个 RPC（含 schema migration + BFF 接通 + 前端 store 恢复真实 API） | 决策 4 ADR §八 + Stage 71 §六 | 1~2 天 | ✅ **已落地（Stage 72）** |
+| 2 | Kafka P2：consumer lag 监控 + 事件 Protobuf 迁移 | kafka-reliability-gaps.md §1.4/§1.5 | 3~4 天 | 🔍 已调查（§1.4 骨架已落地需纠偏，§1.5 确实未做） |
+| 3 | Nacos dev 模式全链路启用（ephemeral 实例 30s 被踢 / Heartbeat 未真正触发） | nacos-enablement-dev.md | 1~2 天 | 🔧 **部分落地（Stage 72）**：PR-1 验收达成 |
+| 4 | Helm chart ↔ compose dev 全面对齐 | todo-pile §D6 | 1 天 | 🔍 已调查（偏差清单见 §项4；configmap 端口错值已修） |
 
 ---
 
@@ -64,15 +64,38 @@ RED（grpcserver + BFF handler 测试先行，断言真实行为而非 Unimpleme
 
 ## 项 2 · Kafka P2（下轮）
 
-细则见 `kafka-reliability-gaps.md` §1.4（consumer lag 监控：Burrow/prometheus kafka_exporter 选型 +lag 告警阈值）与 §1.5（outbox payload JSON→Protobuf 迁移：双写窗口 + consumer 兼容期）。前置：项 1 落地后 chat-svc 事件链稳定。
+细则见 `kafka-reliability-gaps.md` §1.4（consumer lag 监控）与 §1.5（outbox payload JSON→Protobuf 迁移）。
 
-## 项 3 · Nacos dev 全链路（下下轮）
+**Stage 72 调查结论（2026-09-12）**：
+- §1.4 lag 监控**骨架已落地**（kafka-exporter + Prometheus scrape + lag 告警规则均已存在，计划文档原记录过期，已在 §1.4 纠偏）。残余：Grafana lag 面板确认 + 可选的 consumer 进程级指标。
+- §1.5 Protobuf 迁移**确实未做**：链路仍全 JSON（producer `kafka_publisher.go:42` / consumer `consumer.go:101,221`），`chat_events.proto` 不存在；但 `shared/pkg/eventrow` 已统一事件→DB 行映射，消解部分镜像风险。迁移范围：proto 定义 → producer/consumer 双写切换 → event_type 命名统一（eventrow 头注释登记的 chat-svc `message.created` vs analytics-svc 规范化值不一致，属数据迁移 PR）。
+- DLQ（Stage 70）topic=`chat-events-dlq`，依赖 Kafka auto-create；infra compose 无 KAFKA_CREATE_TOPICS，可留意。
 
-细则见 `nacos-enablement-dev.md` §一.1.1：SDK ephemeral 实例 30s 被踢的三个候选根因（单节点 Derby 启动慢 / Heartbeat 未真正触发 BeatRequest / namespace 配置），PR-1 先修心跳。前置：docker 栈拉起复现。
+## 项 3 · Nacos dev 全链路（部分落地）
 
-## 项 4 · Helm chart 对齐（收尾）
+细则见 `nacos-enablement-dev.md`。
 
-细则见 `todo-pile §D6`：charts/ 与 deploy/compose*.yml 的镜像 tag、env、端口三方 diff。纯比对+修 chart，无代码改动。
+**Stage 72 调查 + 修复（2026-09-12）**：
+- 原"30s 被踢"归因中，**0.0.0.0 Heartbeat 覆盖 bug 已在 Stage 62 PR-3.4 修复**（Register/Unregister/Heartbeat 三处统一 registerHost()，nacos_register.go:360 注释自证）——计划文档对此的"待修"描述过期。
+- **集成测试 fixture 从未跑通过**：testcontainers 随机端口映射 vs SDK「服务端口+1000」gRPC 拨号矛盾 → 永远 `client not connected, current status:STARTING`。已修：固定绑定 18848/19848 保持偏移。
+- **Register STARTING race 已修**：SDK gRPC 通道异步建立，Register 立即调用报瞬时错误 → 加 500ms×30 退避重试。
+- **Discover 两处契约修复**：SDK 空 hosts 返 error → 映射空列表；服务名剥 `GROUP@@` 前缀。
+- **实测**：RegisterAndDiscover / HeartbeatKeepsInstanceAlive（30s 存活 = PR-1 验收）/ UnregisterRemoves 三集成用例**首次全绿**。
+- **已登记残余**：SDK SelectInstances 读本地缓存，服务端空列表 push 有延迟保护 → 注销后 Discover 陈旧 30s+（Unregister 测试改用 HTTP API 断言服务端真相）。BFF 走 Discover（PR-2）时需注意优雅退出短窗口仍可发现已停实例。
+
+## 项 4 · Helm chart 对齐（已出偏差清单，机械修批次待排期）
+
+**Stage 72 调查结论（2026-09-12）**：chart 自 Stage 32 后未跟 compose 演进，23 个 subchart 零处 NACOS_*，业务 svc tag 全停 v0.1.0（compose 已 v0.1.2~v0.1.11）。已修：web-bff configmap analytics 端口 8904→8893。其余偏差清单：
+
+| 类别 | 偏差 |
+|---|---|
+| image tag | user v0.1.4 / chat v0.1.8 / analytics v0.1.5 / assessment v0.1.2 / ai v0.1.5 / bff v0.1.11（chart 全 v0.1.0） |
+| Stage 70 env | KAFKA_ENABLED / KAFKA_DLQ_TOPIC chat+analytics+ai 缺失（K8s 下会走 DevEventPublisher 而非 Kafka） |
+| gRPC 端口 | 5 个 svc 的 gRPC 端口（8887/8892/8885/8886 + bff 4 个 *_SVC_GRPC_ADDR）未暴露 |
+| NACOS_* | 23 个 subchart 全缺 |
+| 錯值 | analytics-svc chart 5 个 env 名代码不读（臆造）；web 的 apiBaseUrl 绕过网关；fer repository 应为 fer-tflite；apisix chart 引用不存在的 dashboard 镜像 |
+| 平台件 | 无 MinIO chart；无 db-migrate Job；无 apisix-seed Job（etcd emptyDir 重启即清） |
+| 文档失真 | compose.dev.yml 覆盖项大部分已被 apps.yml 基线内联（冗余非失效） |
 
 ---
 

@@ -8,6 +8,12 @@ created: 2026-09-04
 
 # Plan — Nacos dev 模式启用（从"半启用"到"全链路"）
 
+> **Stage 72 状态注记（2026-09-12，详见 docs/stages/stage-72-chat-rpc-nacos-fixture-2026-09-12.md）**：
+> - §一.1.1 记录的"hosts: []"现象中，0.0.0.0 Heartbeat 覆盖 bug 已在 Stage 62 PR-3.4 修复（本文档"待修"描述过期）。
+> - PR-1 验收项 **TestNacosRegistry_HeartbeatKeepsInstanceAlive_Integration（30s 存活）实测通过**——前提是修复 testcontainers fixture 的随机端口映射 bug（SDK 拨 服务端口+1000，随机映射下无对应宿主端口，gRPC 通道永远 STARTING，该 fixture 自建立以来从未跑通过）。
+> - Register 对 STARTING 瞬时错误加了退避重试；Discover 空 hosts error→空列表、服务名剥 GROUP@@ 前缀。
+> - 新登记残余：SDK SelectInstances 本地缓存 + 服务端空列表 push 延迟保护 → 注销后 Discover 陈旧 30s+（PR-2 BFF 走 Discover 前需评估）。
+
 ## 一、现状（与代码事实对齐）
 
 ### 1.1 启动 + 注册：✅ 通

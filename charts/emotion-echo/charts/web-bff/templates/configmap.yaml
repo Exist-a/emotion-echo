@@ -24,7 +24,7 @@ data:
       BaseURL: http://assessment-svc.ee-app.svc.cluster.local:8889
       TimeoutMs: 5000
     AnalyticsService:
-      BaseURL: http://analytics-svc.ee-app.svc.cluster.local:8904
+      BaseURL: http://analytics-svc.ee-app.svc.cluster.local:8893
       TimeoutMs: 5000
     AIService:
       HTTPAddr: http://ai-svc.ee-app.svc.cluster.local:8891

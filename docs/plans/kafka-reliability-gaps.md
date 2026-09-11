@@ -63,13 +63,18 @@ sarama 内部能处理 transient 错误（单次 fetch 失败、rebalance），�
 
 "毒消息不卡死 partition"这一点是保证的（因为 Noop 也会 MarkMessage），但"可回放/可告警"缺失。
 
-### 1.4 🟡 P2 — 无 consumer lag 监控
+### 1.4 🟢 P2 — consumer lag 监控（2026-09-12 Stage 72 调查纠偏：骨架已落地）
 
-**事实**：
-- 没有 kafka-exporter / Prometheus JMX exporter，无 consumer group lag 指标
-- Stage 30-C B1 已列为"可以做"但待排期
-- 无法感知消费滞后，毒消息/慢消费导致 lag 堆积时无告警
-- SkyWalking 有 kafka span，但无 lag 维度
+**原记录（已过期）**：没有 kafka-exporter，无 lag 指标。
+
+**实测现状（Stage 72 调查，本节修订）**：
+- kafka-exporter 已落地：deploy/docker-compose.infra.yml:337-351（danielqsj/kafka-exporter，:9308，obs profile）
+- Prometheus scrape 已配：deploy/prometheus/prometheus.yml:62-66（job kafka-exporter）
+- 告警规则已配：deploy/prometheus/rules/kafka-lag.yml（KafkaConsumerGroupLagHigh，lag>10000 for 5m，warning）
+
+**残余缺口**：
+- Grafana consumer lag 面板未确认存在（deploy/grafana/ provisioning 待查）
+- consumer 进程级指标（消费速率/处理耗时）未埋——shared/pkg/metrics 无 kafka 计数器（可选，lag 告警已覆盖主场景）
 
 ### 1.5 🟡 P2 — 无 Schema Registry，事件 schema 人肉镜像
 
