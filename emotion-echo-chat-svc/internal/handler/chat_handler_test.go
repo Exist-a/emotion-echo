@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -337,54 +338,62 @@ func TestDeleteConversationHandler_InvalidID_400(t *testing.T) {
 // 现状（PR-2 前）：main.go:214 `r.Use(sharedmw.GinAuthMiddleware())` 全局挂中间件，
 // 导致 /health 与 /metrics 也要 X-User-Id（K8s liveness probe / Prometheus scrape 必坏）。
 // 目标：仿 user-svc 范式分层——/health 与 /metrics 在 auth 之前注册，业务端点在 auth 群内。
+//
+// 测试策略：复刻真实 main.go 路由结构作为契约守卫。任何后续重构若把 auth
+// 再次全挂、或把 /health 移进 auth 群，对应测试会失败。
 
-// TestChatHandler_Health_NoUserID_Returns200 RED：复刻修复后 main.go 的路由结构，
-// /health 不带 X-User-Id 应返 200。修复前全局 auth 会让该路径返 401，测试应失败。
-func TestChatHandler_Health_NoUserID_Returns200(t *testing.T) {
-	svcCtx := newTestSVC()
+// newPR2Router 复刻 chat-svc main.go 的路由结构（PR-2 目标形态）。
+// 后续 PR-3 / PR-5 等用同一构造器做端到端断言。
+func newPR2Router(svcCtx *svc.ServiceContext) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-
 	r := gin.New()
-	// PR-2 目标：/health 在 auth 中间件之前注册
+	// 无需鉴权：/health、/metrics
 	r.GET("/health", HealthHandler(svcCtx))
-	// 业务群内挂 auth（仿 user-svc main.go:155 r.Use 范式）
+	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
+	// 业务群：挂 auth
 	auth := r.Group("/api/v1")
 	auth.Use(sharedmw.GinAuthMiddleware())
+	auth.POST("/conversations", CreateConversationHandler(svcCtx))
 	auth.GET("/conversations", ListConversationsHandler(svcCtx))
+	auth.POST("/conversations/:id/messages", SendMessageHandler(svcCtx))
+	auth.GET("/conversations/:id/messages", ListMessagesHandler(svcCtx))
+	auth.DELETE("/conversations/:id", DeleteConversationHandler(svcCtx))
+	return r
+}
 
-	// /health 无 X-User-Id → 200
+// TestChatHandler_Health_NoUserID_Returns200：/health 不带 X-User-Id 必须 200。
+// 若 main.go 把 /health 移进 auth 群（PR-2 错误回退），此测试返 401 失败。
+func TestChatHandler_Health_NoUserID_Returns200(t *testing.T) {
+	svcCtx := newTestSVC()
+	r := newPR2Router(svcCtx)
+
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code,
 		"/health should be 200 without X-User-Id, got %d body=%s", rec.Code, rec.Body.String())
+}
 
-	// /metrics 不在路由表中——单独测：直接 GET /metrics 走 PR-2 后的 main.go 应 200
-	r2 := gin.New()
-	r2.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
-	auth2 := r2.Group("/api/v1")
-	auth2.Use(sharedmw.GinAuthMiddleware())
-	auth2.GET("/conversations", ListConversationsHandler(svcCtx))
+// TestChatHandler_Metrics_NoUserID_Returns200：/metrics 不带 X-User-Id 必须 200 + text/plain。
+// Prometheus scrape job 依赖此契约；任何把 /metrics 移进 auth 群都会失败。
+func TestChatHandler_Metrics_NoUserID_Returns200(t *testing.T) {
+	svcCtx := newTestSVC()
+	r := newPR2Router(svcCtx)
 
-	req2 := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	rec2 := httptest.NewRecorder()
-	r2.ServeHTTP(rec2, req2)
-	require.Equal(t, http.StatusOK, rec2.Code,
-		"/metrics should be 200 without X-User-Id, got %d", rec2.Code)
-	require.Contains(t, rec2.Header().Get("Content-Type"), "text/plain",
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code,
+		"/metrics should be 200 without X-User-Id, got %d", rec.Code)
+	require.Contains(t, rec.Header().Get("Content-Type"), "text/plain",
 		"/metrics content-type should be text/plain")
 }
 
-// TestChatHandler_BusinessRoute_NoUserID_Returns401 RED：业务群内路径无 X-User-Id
-// 必须返 401 "missing or invalid X-User-Id"，不能因为 PR-2 改动破坏鉴权契约。
+// TestChatHandler_BusinessRoute_NoUserID_Returns401：业务群 /api/v1/* 无 X-User-Id 必须 401。
+// 防 PR-2 误拆鉴权契约——若后续重构把 auth 从 group 上摘掉，此测试返 200/500 失败。
 func TestChatHandler_BusinessRoute_NoUserID_Returns401(t *testing.T) {
 	svcCtx := newTestSVC()
-	gin.SetMode(gin.TestMode)
-
-	r := gin.New()
-	auth := r.Group("/api/v1")
-	auth.Use(sharedmw.GinAuthMiddleware())
-	auth.GET("/conversations", ListConversationsHandler(svcCtx))
+	r := newPR2Router(svcCtx)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
 	rec := httptest.NewRecorder()
@@ -392,4 +401,143 @@ func TestChatHandler_BusinessRoute_NoUserID_Returns401(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, rec.Code,
 		"业务群内无 X-User-Id 应 401，got %d body=%s", rec.Code, rec.Body.String())
 	require.Contains(t, rec.Body.String(), "X-User-Id")
+}
+
+// PR-3 RED · chat-svc ListConversations HTTP 端到端覆盖
+//
+// 现状：chat-svc/internal/handler/chat_handler_test.go 已有 Create / Send / List / Delete
+// 端到端用例，唯独 ListConversationsHandler 缺失。Sprint D 落地后 chat-svc gRPC
+// ListConversations 已有测试（grpcserver/chat_server_sprint_d_test.go），但 HTTP
+// 路径完全裸奔——任何 logic / handler 层的回归无人能拦截。
+//
+// 同时是 #32 根因排查的载体：以下测试先红再绿，定位 500 的具体位置。
+
+// TestListConversationsHandler_Happy_ReturnsUserScopedList
+// seed uid=7 两个会话 + uid=8 一个会话；GET /api/v1/conversations 带 X-User-Id: 7
+// 应返 200 + 2 条会话（用户隔离）。
+func TestListConversationsHandler_Happy_ReturnsUserScopedList(t *testing.T) {
+	svcCtx := newTestSVC()
+	repo := svcCtx.ConversationRepo.(*repository.InMemoryConversationRepo)
+
+	now := time.Now()
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		ID: 1, UserID: 7, Title: "t1", Status: 1, CreatedAt: now, UpdatedAt: now.Add(2 * time.Hour),
+	}))
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		ID: 2, UserID: 7, Title: "t2", Status: 1, CreatedAt: now, UpdatedAt: now.Add(1 * time.Hour),
+	}))
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		ID: 3, UserID: 8, Title: "t3-other-user", Status: 1, CreatedAt: now, UpdatedAt: now,
+	}))
+
+	r := newPR2Router(svcCtx)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	req.Header.Set("X-User-Id", "7")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	list, ok := resp["list"].([]any)
+	require.True(t, ok, "list field must be array, body=%s", rec.Body.String())
+	require.Len(t, list, 2, "uid=7 only sees 2 conversations")
+	require.Equal(t, false, resp["hasMore"])
+}
+
+// TestListConversationsHandler_Pagination_HasMore
+// seed 5 个会话 + limit=2 → hasMore=true + list 2 条；limit=10 → hasMore=false + list 5 条
+func TestListConversationsHandler_Pagination_HasMore(t *testing.T) {
+	svcCtx := newTestSVC()
+	repo := svcCtx.ConversationRepo.(*repository.InMemoryConversationRepo)
+
+	base := time.Now().Add(-time.Hour)
+	for i := 1; i <= 5; i++ {
+		require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+			ID: int64(i), UserID: 7, Title: "t", Status: 1,
+			CreatedAt: base, UpdatedAt: base.Add(time.Duration(i) * time.Minute),
+		}))
+	}
+	r := newPR2Router(svcCtx)
+
+	// limit=2
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations?limit=2", nil)
+	req.Header.Set("X-User-Id", "7")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	var resp1 map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp1))
+	list1 := resp1["list"].([]any)
+	require.Len(t, list1, 2)
+	require.Equal(t, true, resp1["hasMore"], "limit=2 + 5 seed 应 hasMore")
+
+	// limit=10
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/conversations?limit=10", nil)
+	req2.Header.Set("X-User-Id", "7")
+	rec2 := httptest.NewRecorder()
+	r.ServeHTTP(rec2, req2)
+	require.Equal(t, http.StatusOK, rec2.Code, "body=%s", rec2.Body.String())
+	var resp2 map[string]any
+	require.NoError(t, json.Unmarshal(rec2.Body.Bytes(), &resp2))
+	list2 := resp2["list"].([]any)
+	require.Len(t, list2, 5)
+	require.Equal(t, false, resp2["hasMore"])
+}
+
+// TestListConversationsHandler_EmptyUser_ReturnsEmptyList
+// uid=7 没有任何会话 → 200 + 空 list + hasMore=false（不能返 500 也不能返 nil）
+func TestListConversationsHandler_EmptyUser_ReturnsEmptyList(t *testing.T) {
+	svcCtx := newTestSVC()
+	r := newPR2Router(svcCtx)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	req.Header.Set("X-User-Id", "9999")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	list, ok := resp["list"].([]any)
+	require.True(t, ok, "list field must be array even when empty, body=%s", rec.Body.String())
+	require.Empty(t, list)
+	require.Equal(t, false, resp["hasMore"])
+}
+
+// TestListConversationsHandler_InvalidLimit_DefaultsTo20
+// limit=abc → handler 走 fallback 不覆盖，logic 内 limit<=0 → 20。
+// seed 3 条 + GET ?limit=abc → 200 + 3 条（不应返 400，也不应返 500）
+func TestListConversationsHandler_InvalidLimit_DefaultsTo20(t *testing.T) {
+	svcCtx := newTestSVC()
+	repo := svcCtx.ConversationRepo.(*repository.InMemoryConversationRepo)
+
+	now := time.Now()
+	for i := 1; i <= 3; i++ {
+		require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+			ID: int64(i), UserID: 7, Title: "t", Status: 1, CreatedAt: now, UpdatedAt: now,
+		}))
+	}
+	r := newPR2Router(svcCtx)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations?limit=abc", nil)
+	req.Header.Set("X-User-Id", "7")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	list := resp["list"].([]any)
+	require.Len(t, list, 3, "limit=abc 应默认 20 而非 0")
+}
+
+// TestListConversationsHandler_NoUserID_Returns401：业务群内必须鉴权（兜底测试）
+func TestListConversationsHandler_NoUserID_Returns401(t *testing.T) {
+	svcCtx := newTestSVC()
+	r := newPR2Router(svcCtx)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "body=%s", rec.Body.String())
 }
