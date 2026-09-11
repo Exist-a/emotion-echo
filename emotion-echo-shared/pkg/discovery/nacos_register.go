@@ -158,7 +158,7 @@ func (r *NacosRegistry) Register(ctx context.Context, ins Instance) error {
 	// PR-1 修复：Host 为 0.0.0.0（yaml 默认）会让 Nacos 把实例判 unhealthy；
 	// fallback 到本机非 loopback IPv4，Nacos 才能正确 health check。
 	host := registerHost(ins.Host)
-	ok, err := r.client.RegisterInstance(nacosvo.RegisterInstanceParam{
+	param := nacosvo.RegisterInstanceParam{
 		Ip:          host,
 		Port:        uint64(ins.Port),
 		Weight:      1.0,
@@ -169,7 +169,29 @@ func (r *NacosRegistry) Register(ctx context.Context, ins Instance) error {
 		ServiceName: ins.ServiceName,
 		GroupName:   r.cfg.GroupName,
 		Ephemeral:   ephemeral,
-	})
+	}
+
+	// Stage 72：SDK v2 gRPC 通道异步建立——NewNamingClient 返回时连接可能仍在
+	// STARTING，Register 立即调用会报 "client not connected, current status:STARTING"
+	//（集成测试实测复现）。WaitForNacos 只探测 HTTP 8848，等不到 gRPC 9849 就绪，
+	// 因此这里对瞬时错误做退避重试，否则 dev 容器启动即 Register 失败 / 实例无法续活。
+	var ok bool
+	var err error
+retry:
+	for attempt := 0; ; attempt++ {
+		ok, err = r.client.RegisterInstance(param)
+		if err == nil || !isClientNotConnected(err) {
+			break
+		}
+		if attempt >= 29 || ctx.Err() != nil { // 29×500ms ≈ 15s 上限
+			break
+		}
+		select {
+		case <-ctx.Done():
+			break retry
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("discovery: register %s/%s:%d: %w", ins.ServiceName, ins.Host, ins.Port, err)
 	}
@@ -177,6 +199,11 @@ func (r *NacosRegistry) Register(ctx context.Context, ins Instance) error {
 		return fmt.Errorf("discovery: register %s/%s:%d: nacos returned not-ok", ins.ServiceName, ins.Host, ins.Port)
 	}
 	return nil
+}
+
+// isClientNotConnected 识别 SDK gRPC 通道尚未就绪的瞬时错误（连接异步建立）。
+func isClientNotConnected(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "client not connected")
 }
 
 func (r *NacosRegistry) Unregister(ctx context.Context, ins Instance) error {
@@ -208,9 +235,14 @@ func (r *NacosRegistry) Discover(ctx context.Context, serviceName string) ([]Ins
 		HealthyOnly: true,
 	})
 	if err != nil {
+		// Stage 72：SDK 对"缓存中 hosts 为空"返 error("instance list is empty!")，
+		// 语义上是"无可用实例"而非故障 → 映射为空列表（Registry 契约：空 = 空 slice, nil error）。
+		if strings.Contains(err.Error(), "instance list is empty") {
+			return []Instance{}, nil
+		}
 		return nil, fmt.Errorf("discovery: select %s: %w", serviceName, err)
 	}
-	return convertInstances(nacosInstances), nil
+	return convertInstances(r.cfg.GroupName, nacosInstances), nil
 }
 
 func (r *NacosRegistry) Subscribe(ctx context.Context, serviceName string, cb func([]Instance)) error {
@@ -231,7 +263,7 @@ func (r *NacosRegistry) Subscribe(ctx context.Context, serviceName string, cb fu
 				// 调用方可通过 SelectInstances 主动 poll 检测状态。
 				return
 			}
-			cb(convertInstances(services))
+			cb(convertInstances(r.cfg.GroupName, services))
 		},
 	}
 
@@ -251,7 +283,7 @@ func (r *NacosRegistry) Subscribe(ctx context.Context, serviceName string, cb fu
 		HealthyOnly: true,
 	})
 	if err == nil {
-		cb(convertInstances(initial))
+		cb(convertInstances(r.cfg.GroupName, initial))
 	}
 	return nil
 }
@@ -292,11 +324,15 @@ func (r *NacosRegistry) Heartbeat(ctx context.Context, ins Instance, interval ti
 }
 
 // convertInstances 把 SDK model.Instance 列表转成 discovery.Instance 列表。
-func convertInstances(src []nacosmodel.Instance) []Instance {
+//
+// Stage 72：SDK 返回的 ServiceName 带 "GROUP@@name" 前缀（如
+// "DEFAULT_GROUP@@user-svc"，集成测试实测），剥掉前缀让调用方看到注册名。
+func convertInstances(groupName string, src []nacosmodel.Instance) []Instance {
+	prefix := groupName + "@@"
 	out := make([]Instance, 0, len(src))
 	for _, n := range src {
 		out = append(out, Instance{
-			ServiceName: n.ServiceName,
+			ServiceName: strings.TrimPrefix(n.ServiceName, prefix),
 			Host:        n.Ip,
 			Port:        int(n.Port),
 			Metadata:    n.Metadata,
