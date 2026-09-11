@@ -36,10 +36,11 @@
 | Sprint D | chat-svc gRPC 4 RPC 真实实现（ListConversations/SendMessage/ListMessages/DeleteConversation） | `3829154` | #27（chat-svc gRPC 6 RPC 全 Unimplemented） |
 | Sprint E | user.proto 扩 Login/Register RPC + user-svc gRPC server 实现 + BFF client 接入 | `f755b71` | #33（user.proto 半残缺） |
 | Sprint F1 | user.proto 扩 ResetPassword/Logout RPC + user-svc gRPC server 实现 + BFF client 接入 | `fa324df` | #35（Sprint E 报告"还差 ResetPassword/Logout"延迟收口） |
+| Sprint F2 | emotion_query.proto 扩 MultiModalAnalyze/SynthesizeSpeech/AIHealth 3 RPC + ai-svc gRPC server 实现 + BFF aiGRPCClient 接入 + `/api/v1/ai/health` 路由补 | 本次 commit | 完成决策 4 "全文范围"目标 |
 
 ## 四、内部 svc-to-svc gRPC 化全清单
 
-### ✅ 已 gRPC（12 条调用链）
+### ✅ 已 gRPC（15 条调用链）
 
 | # | 调用链 | proto / RPC | 关键文件 |
 |---|---|---|---|
@@ -54,23 +55,25 @@
 | 9 | BFF → chat-svc (ListConversations/SendMessage/ListMessages/DeleteConversation) | `chat.proto` · 4 RPC | Sprint D |
 | 10 | BFF → assessment-svc (5 RPC 全) | `agent.proto` · ListSurveys/GetSurvey/SubmitSurvey/ListMyResults/GetSurveyResult | Stage 62 PR-3.3 |
 | 11 | BFF → analytics-svc (6 handler 触发的 RPC) | `metric.proto` · ReportsDaily/ReportsTrend/UserBehavior{3}/MentalHealthAssessment | Stage 62 PR-3.3 |
+| 12 | BFF → ai-svc (MultiModalAnalyze) | `emotion_query.proto` · MultiModalAnalyze | Sprint F2 |
+| 13 | BFF → ai-svc (SynthesizeSpeech) | `emotion_query.proto` · SynthesizeSpeech | Sprint F2 |
+| 14 | BFF → ai-svc (AIHealth) | `emotion_query.proto` · AIHealth | Sprint F2 |
 
-### ❌ 故意不做（4 条 + 1 边界）
+### ❌ 故意不做（3 条 + 1 边界）
 
 | # | 调用链 | 不做原因 | 出处 |
 |---|---|---|---|
 | 1 | ai-svc → FER/SenseVoice/XTTS | FastAPI 模型服务（Python），改 gRPC 成本高；AI profile 按需启用，调用量低 | [`grpc-inter-service-migration.md`](../../plans/grpc-inter-service-migration.md) §决策 A |
-| 2 | BFF → ai-svc 业务方法（MultiModalAnalyze/SynthesizeSpeech/AIHealth） | `emotion_query.proto` 只服务 emotion query；扩 proto + ai-svc gRPC server 实现是 Sprint F2 backlog（约 1 天工作量） | 待排期 |
-| 3 | BFF → llm-service (DeepSeek 外部 API) | **外部 API，决策 4 明文走 HTTP** | 决策 4 |
-| 4 | chat-svc gRPC PinConversation/StreamMessages | chat-svc 缺底层功能（无 pin 字段、无流式业务）；proto 留接口，业务未触发 | Sprint D 决策 |
-| 5 | chat-svc HTTP `/api/v1/conversations` 500 | BFF 默认 grpc 规避；根因待查（决策 18 #32） | 决策 18 #32 |
+| 2 | BFF → llm-service (DeepSeek 外部 API) | **外部 API，决策 4 明文走 HTTP** | 决策 4 |
+| 3 | chat-svc gRPC PinConversation/StreamMessages | chat-svc 缺底层功能（无 pin 字段、无流式业务）；proto 留接口，业务未触发 | Sprint D 决策 |
+| 4 | chat-svc HTTP `/api/v1/conversations` 500 | BFF 默认 grpc 规避；根因待查（决策 18 #32） | 决策 18 #32 |
 
 ## 五、proto 契约全清单
 
 | proto 文件 | package | go_package | RPC 数 | 状态 |
 |---|---|---|---|---|
 | `proto/emotion_llm.proto` | `emotion_llm.v1` | `emotionllm` | 1 | ✅ 已用（ai-svc → llm） |
-| `proto/emotion_query.proto` | `emotion_query.v1` | `emotionquery` | 4 | ✅ 已用（chat→ai、BFF→ai） |
+| `proto/emotion_query.proto` | `emotion_query.v1` | `emotionquery` | **7** | ✅ 已用（chat→ai UpsertNeutralEmotion；BFF→ai 6 RPC: 3 emotion_query + 3 业务） |
 | `proto/chat.proto` | `emotion_chat.v1` | `emotionchat` | 7 | ✅ 4 已实现（Pin/Stream 留 Unimplemented） |
 | `proto/agent.proto` | `emotion_assessment.v1` | `emotionassessment` | 5 | ✅ 5 全实现 |
 | `proto/metric.proto` | `emotion_analytics.v1` | `emotionanalytics` | 9 | ✅ 9 全 server 实现 + 6 BFF client |
@@ -87,23 +90,23 @@
 
 ## 七、决策 4 收口判定标准（self-audit checklist）
 
-- [x] 决策 4 原文"内部 svc-to-svc = gRPC + .proto" 100% 覆盖（BFF→4 svc handler 调用 21/21 = 100%）
+- [x] 决策 4 原文"内部 svc-to-svc = gRPC + .proto" 100% 覆盖（BFF→4 svc handler 调用 24/24 = 100% + BFF→ai-svc 业务 3 RPC 走 gRPC）
 - [x] proto 契约有单一事实源（`proto/*.proto` 6 个文件，gen.sh 一键生成）
 - [x] gRPC 拦截器套件完整（userid/tracing/logging/recovery 全 9 个）
 - [x] ctx key 跨包一致（ctxkey 重构后 middleware + grpcinterceptor 互通）
 - [x] 故意不做的边界有 plan §决策 A 明确划定（不静默不写）
 - [x] 决策 18 doc-drift registry 中相关失真 #25-#35 已关闭或登记
-- [x] docker 端到端验证：Stage 63 V1-V4 + Sprint E/F1 register/login/reset-password/users-me/conversations/surveys/reports/daily 全 200
+- [x] docker 端到端验证：Stage 63 V1-V4 + Sprint E/F1/F2 register/login/reset-password/users-me/conversations/surveys/reports/daily/ai-health/multimodal-analyze/tts-synthesize 全 200（除 tts 因 XTTS 容器未启 503 预期错误流）
 
 ## 八、不在本 ADR 范围（后续 sprint backlog）
 
 | 项 | 工作量 | 优先级 |
 |---|---|---|
 | **#32** chat-svc HTTP `/api/v1/conversations` 500 bug 根因排查 | 1-2 小时 | 🟡 中（debug 场景触发） |
-| **Sprint F2** ai-svc 业务方法 gRPC 化（MultiModalAnalyze/SynthesizeSpeech/AIHealth） | 1 天 | 🟡 中 |
 | **chat-svc PinConversation gRPC** | 1 天（需 schema migration） | 🟢 低（业务未触发） |
 | **chat-svc StreamMessages gRPC** | 1 天（需重新评估流式业务场景） | 🟢 低 |
 | **错误码统一映射**（chat-svc mapLogicError / user-svc mapAuthError / analytics-svc / assessment-svc 各自分散） | 1 天 | 🟡 中 |
+| **BFF 全局 gRPC error → HTTP code 映射**（Sprint F2 V3 暴露：BFF 把 gRPC codes.Unavailable 统一标 502，与 HTTP handler 503 行为不符；建议在 `web-bff/internal/downstream/error.go` 加 `mapGRPCError(err) (int, string)` helper，4 svc gRPC client 复用） | 半天 | 🟡 中（用户可见错误语义） |
 | **gRPC mTLS**（dev 用 insecure，prod mTLS） | 1 周 | 🟡 中（决策 18 已记录 prod 必做） |
 
 ## 九、调研依据

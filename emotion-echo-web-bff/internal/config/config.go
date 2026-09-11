@@ -33,6 +33,9 @@ type AIService struct {
 	HTTPAddr  string
 	GRPCAddr  string
 	TimeoutMs int
+	// Sprint F2（2026-09-11）：加 Transport 字段，与 4 svc 同模式。
+	// 默认空 → 工厂按 "grpc" 处理；= "http" → 强制 HTTP 回滚。
+	Transport string
 }
 
 // Config 是 BFF 总配置
@@ -250,6 +253,9 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("ANALYTICS_TRANSPORT"); v != "" {
 		c.AnalyticsService.Transport = v
+	}
+	if v := os.Getenv("AI_TRANSPORT"); v != "" {
+		c.AIService.Transport = v
 	}
 	if v := os.Getenv("AI_SVC_HTTP_URL"); v != "" {
 		c.AIService.HTTPAddr = v

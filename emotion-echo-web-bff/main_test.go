@@ -51,6 +51,7 @@ var wantRoutes = gin.RoutesInfo{
 	{Method: "GET", Path: "/metrics"},
 	{Method: "POST", Path: "/api/v1/auth/:action"},
 	{Method: "POST", Path: "/api/v1/ai/stream"},
+	{Method: "GET", Path: "/api/v1/ai/health"},  // Sprint F2（2026-09-11）
 
 	// ----- user_handler.go (4 条) -----
 	{Method: "GET", Path: "/api/v1/user/profile"},
@@ -281,6 +282,7 @@ var knownPathPrefixes = []string{
 	"/metrics",
 	"/api/v1/auth/:action",
 	"/api/v1/ai/stream",
+	"/api/v1/ai/health",  // Sprint F2（2026-09-11）
 	"/api/v1/user/profile",
 	"/api/v1/users/",
 	"/api/v1/conversations",

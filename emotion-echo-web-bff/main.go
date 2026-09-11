@@ -208,6 +208,7 @@ func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.
 	chatGRPCConn := dialGRPC(c.ChatService.GRPCAddr, "chat-svc")
 	assessmentGRPCConn := dialGRPC(c.AssessmentService.GRPCAddr, "assessment-svc")
 	analyticsGRPCConn := dialGRPC(c.AnalyticsService.GRPCAddr, "analytics-svc")
+	aiGRPCConn := dialGRPC(c.AIService.GRPCAddr, "ai-svc")
 
 	svcCtx.SetUser(downstream.NewUserClient(downstream.UserClientOptions{
 		BaseURL: c.UserService.BaseURL, TimeoutMs: c.UserService.TimeoutMs,
@@ -234,6 +235,8 @@ func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.
 	svcCtx.SetAI(downstream.NewAIClient(downstream.AIClientOptions{
 		BaseURL: c.AIService.HTTPAddr, TimeoutMs: c.AIService.TimeoutMs,
 		Resolver: resolver,
+		GRPCConn:  aiGRPCConn,
+		Transport: downstream.AITransport(c.AIService.Transport),
 	}))
 	svcCtx.SetXTTS(downstream.NewXTTSClient(downstream.XTTSClientOptions{
 		BaseURL: c.XTTS.BaseURL, TimeoutMs: c.XTTS.TimeoutMs,
@@ -311,6 +314,9 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config) {
 	// Sprint 1 PR-4c-2: user avatar upload (multipart → MinIO → user-svc UpdateMe)
 	// 总是注册：handler 内部 nil 检查；缺 Storage 时 503
 	handler.NewAvatarHandler(s.User, s.Storage).Register(r)
+	// Sprint F2（2026-09-11）：ai-svc gRPC AIHealth RPC 接入
+	// /api/v1/ai/health 探针路由（之前未注册，pre-existing 缺失；本次 Sprint 顺手补）
+	r.GET("/api/v1/ai/health", handler.NewAIHealthHandler(s.AI).Health)
 	if s.EmotionQ != nil {
 		handler.NewEmotionQueryHandler(s.EmotionQ).Register(r)
 	}

@@ -23,6 +23,9 @@ const (
 	EmotionQueryService_GetEmotionByConversation_FullMethodName = "/emotion_ai.v1.EmotionQueryService/GetEmotionByConversation"
 	EmotionQueryService_GetFusedEmotion_FullMethodName          = "/emotion_ai.v1.EmotionQueryService/GetFusedEmotion"
 	EmotionQueryService_UpsertNeutralEmotion_FullMethodName     = "/emotion_ai.v1.EmotionQueryService/UpsertNeutralEmotion"
+	EmotionQueryService_MultiModalAnalyze_FullMethodName        = "/emotion_ai.v1.EmotionQueryService/MultiModalAnalyze"
+	EmotionQueryService_SynthesizeSpeech_FullMethodName         = "/emotion_ai.v1.EmotionQueryService/SynthesizeSpeech"
+	EmotionQueryService_AIHealth_FullMethodName                 = "/emotion_ai.v1.EmotionQueryService/AIHealth"
 )
 
 // EmotionQueryServiceClient is the client API for EmotionQueryService service.
@@ -60,6 +63,26 @@ type EmotionQueryServiceClient interface {
 	//   - 写入失败 → Internal
 	//   - 成功 → 返回写入（或已存在）的 emotion_analysis 行 id
 	UpsertNeutralEmotion(ctx context.Context, in *UpsertNeutralEmotionRequest, opts ...grpc.CallOption) (*UpsertNeutralEmotionResponse, error)
+	// MultiModalAnalyze 多模态情绪/语音/图像分析（Sprint F2 2026-09-11）
+	//
+	// 与 HTTP `POST /api/v1/multimodal/analyze` 语义对齐（multipart/form-data 转 bytes）。
+	// 内部 svc-to-svc（BFF → ai-svc）走 gRPC；外部前端继续走 HTTP。
+	//
+	// 错误语义：
+	//   - kind 非法 / file 缺失（kind!=text） → InvalidArgument
+	//   - 上游 FER/SenseVoice/XTTS 不可用 → Unavailable（与 HTTP 503 对齐）
+	//   - 其他 → Internal
+	MultiModalAnalyze(ctx context.Context, in *MultiModalAnalyzeRequest, opts ...grpc.CallOption) (*MultiModalAnalyzeResponse, error)
+	// SynthesizeSpeech TTS 语音合成（Sprint F2 2026-09-11）
+	//
+	// 与 HTTP `POST /api/v1/tts/synthesize` 语义对齐。
+	// 错误语义：XTTS 未配置 / 上游不可用 → Unavailable；其他 → Internal。
+	SynthesizeSpeech(ctx context.Context, in *SynthesizeSpeechRequest, opts ...grpc.CallOption) (*SynthesizeSpeechResponse, error)
+	// AIHealth AI 服务集群健康探针（Sprint F2 2026-09-11）
+	//
+	// 与 HTTP `GET /api/v1/ai/health` 语义对齐。返回 FER/SenseVoice/XTTS
+	// 各自 enabled/healthy 状态 + all_healthy 总标志。
+	AIHealth(ctx context.Context, in *AIHealthRequest, opts ...grpc.CallOption) (*AIHealthResponse, error)
 }
 
 type emotionQueryServiceClient struct {
@@ -110,6 +133,36 @@ func (c *emotionQueryServiceClient) UpsertNeutralEmotion(ctx context.Context, in
 	return out, nil
 }
 
+func (c *emotionQueryServiceClient) MultiModalAnalyze(ctx context.Context, in *MultiModalAnalyzeRequest, opts ...grpc.CallOption) (*MultiModalAnalyzeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MultiModalAnalyzeResponse)
+	err := c.cc.Invoke(ctx, EmotionQueryService_MultiModalAnalyze_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *emotionQueryServiceClient) SynthesizeSpeech(ctx context.Context, in *SynthesizeSpeechRequest, opts ...grpc.CallOption) (*SynthesizeSpeechResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SynthesizeSpeechResponse)
+	err := c.cc.Invoke(ctx, EmotionQueryService_SynthesizeSpeech_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *emotionQueryServiceClient) AIHealth(ctx context.Context, in *AIHealthRequest, opts ...grpc.CallOption) (*AIHealthResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AIHealthResponse)
+	err := c.cc.Invoke(ctx, EmotionQueryService_AIHealth_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EmotionQueryServiceServer is the server API for EmotionQueryService service.
 // All implementations must embed UnimplementedEmotionQueryServiceServer
 // for forward compatibility.
@@ -145,6 +198,26 @@ type EmotionQueryServiceServer interface {
 	//   - 写入失败 → Internal
 	//   - 成功 → 返回写入（或已存在）的 emotion_analysis 行 id
 	UpsertNeutralEmotion(context.Context, *UpsertNeutralEmotionRequest) (*UpsertNeutralEmotionResponse, error)
+	// MultiModalAnalyze 多模态情绪/语音/图像分析（Sprint F2 2026-09-11）
+	//
+	// 与 HTTP `POST /api/v1/multimodal/analyze` 语义对齐（multipart/form-data 转 bytes）。
+	// 内部 svc-to-svc（BFF → ai-svc）走 gRPC；外部前端继续走 HTTP。
+	//
+	// 错误语义：
+	//   - kind 非法 / file 缺失（kind!=text） → InvalidArgument
+	//   - 上游 FER/SenseVoice/XTTS 不可用 → Unavailable（与 HTTP 503 对齐）
+	//   - 其他 → Internal
+	MultiModalAnalyze(context.Context, *MultiModalAnalyzeRequest) (*MultiModalAnalyzeResponse, error)
+	// SynthesizeSpeech TTS 语音合成（Sprint F2 2026-09-11）
+	//
+	// 与 HTTP `POST /api/v1/tts/synthesize` 语义对齐。
+	// 错误语义：XTTS 未配置 / 上游不可用 → Unavailable；其他 → Internal。
+	SynthesizeSpeech(context.Context, *SynthesizeSpeechRequest) (*SynthesizeSpeechResponse, error)
+	// AIHealth AI 服务集群健康探针（Sprint F2 2026-09-11）
+	//
+	// 与 HTTP `GET /api/v1/ai/health` 语义对齐。返回 FER/SenseVoice/XTTS
+	// 各自 enabled/healthy 状态 + all_healthy 总标志。
+	AIHealth(context.Context, *AIHealthRequest) (*AIHealthResponse, error)
 	mustEmbedUnimplementedEmotionQueryServiceServer()
 }
 
@@ -166,6 +239,15 @@ func (UnimplementedEmotionQueryServiceServer) GetFusedEmotion(context.Context, *
 }
 func (UnimplementedEmotionQueryServiceServer) UpsertNeutralEmotion(context.Context, *UpsertNeutralEmotionRequest) (*UpsertNeutralEmotionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpsertNeutralEmotion not implemented")
+}
+func (UnimplementedEmotionQueryServiceServer) MultiModalAnalyze(context.Context, *MultiModalAnalyzeRequest) (*MultiModalAnalyzeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MultiModalAnalyze not implemented")
+}
+func (UnimplementedEmotionQueryServiceServer) SynthesizeSpeech(context.Context, *SynthesizeSpeechRequest) (*SynthesizeSpeechResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SynthesizeSpeech not implemented")
+}
+func (UnimplementedEmotionQueryServiceServer) AIHealth(context.Context, *AIHealthRequest) (*AIHealthResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AIHealth not implemented")
 }
 func (UnimplementedEmotionQueryServiceServer) mustEmbedUnimplementedEmotionQueryServiceServer() {}
 func (UnimplementedEmotionQueryServiceServer) testEmbeddedByValue()                             {}
@@ -260,6 +342,60 @@ func _EmotionQueryService_UpsertNeutralEmotion_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EmotionQueryService_MultiModalAnalyze_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MultiModalAnalyzeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EmotionQueryServiceServer).MultiModalAnalyze(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EmotionQueryService_MultiModalAnalyze_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EmotionQueryServiceServer).MultiModalAnalyze(ctx, req.(*MultiModalAnalyzeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EmotionQueryService_SynthesizeSpeech_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SynthesizeSpeechRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EmotionQueryServiceServer).SynthesizeSpeech(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EmotionQueryService_SynthesizeSpeech_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EmotionQueryServiceServer).SynthesizeSpeech(ctx, req.(*SynthesizeSpeechRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EmotionQueryService_AIHealth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AIHealthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EmotionQueryServiceServer).AIHealth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EmotionQueryService_AIHealth_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EmotionQueryServiceServer).AIHealth(ctx, req.(*AIHealthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // EmotionQueryService_ServiceDesc is the grpc.ServiceDesc for EmotionQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -282,6 +418,18 @@ var EmotionQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpsertNeutralEmotion",
 			Handler:    _EmotionQueryService_UpsertNeutralEmotion_Handler,
+		},
+		{
+			MethodName: "MultiModalAnalyze",
+			Handler:    _EmotionQueryService_MultiModalAnalyze_Handler,
+		},
+		{
+			MethodName: "SynthesizeSpeech",
+			Handler:    _EmotionQueryService_SynthesizeSpeech_Handler,
+		},
+		{
+			MethodName: "AIHealth",
+			Handler:    _EmotionQueryService_AIHealth_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

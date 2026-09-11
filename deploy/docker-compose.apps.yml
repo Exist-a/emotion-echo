@@ -361,7 +361,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-ai-svc/Dockerfile
-    image: emotion-echo/ai-svc:v0.1.0   # P0-4: pinned tag
+    image: emotion-echo/ai-svc:v0.1.1   # P0-4: pinned tag
     container_name: emotion-echo-ai-svc
     restart: unless-stopped
     environment:
@@ -599,7 +599,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.6
+    image: emotion-echo/web-bff:v0.1.9
     container_name: emotion-echo-web-bff
     restart: unless-stopped
     depends_on:

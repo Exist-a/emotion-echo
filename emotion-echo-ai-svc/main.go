@@ -404,7 +404,7 @@ func main() {
 		if db != nil {
 			fusedRepo = repository.NewPostgresFusedEmotionRepo(db)
 		}
-		gs := grpcserver.New(emoRepo, fusedRepo, c.GRPC.Port)
+		gs := grpcserver.New(emoRepo, fusedRepo, svcCtx, c.GRPC.Port)
 		go func() {
 			if err := gs.Start(rootCtx); err != nil {
 				slog.Error("grpc server failed", "err", err)

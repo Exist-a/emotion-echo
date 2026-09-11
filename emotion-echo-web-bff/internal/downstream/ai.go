@@ -25,6 +25,8 @@ import (
 
 	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+
+	"google.golang.org/grpc"
 )
 
 // =====================================================
@@ -140,7 +142,14 @@ type AIClientOptions struct {
 	Resolver bffdiscovery.Resolver
 	// ServiceName 用于 Resolver，默认 "emotion-echo-ai-svc"。
 	ServiceName string
+	// Sprint F2（2026-09-11）：gRPC 接线选项
+	GRPCConn *grpc.ClientConn
+	// Transport="grpc"（默认）| "http" 强制 HTTP 回滚
+	Transport string
 }
+
+// AITransport 把 config 字符串透传（与 4 svc 同模式）
+func AITransport(s string) string { return s }
 
 // aiHTTPClient 是 AIClient 的 HTTP 实现
 type aiHTTPClient struct {
@@ -151,11 +160,23 @@ type aiHTTPClient struct {
 	resolveCtx context.Context
 }
 
-// NewAIClient 构造 AIClient（HTTP 实现）。
+// NewAIClient 构造 AIClient。
 //
-// BaseURL 解析优先级：opts.BaseURL（env 注入）> opts.Resolver.Resolve(ServiceName)。
-// 两者都缺 → 返回 nil（调用方需 nil-check，与其他下游一致）。
+// Sprint F2（2026-09-11）：加 Transport feature flag（与 4 svc 同模式）。
+//   - Transport="http" → 强制 HTTP 路径（即使 GRPCConn 非 nil）
+//   - Transport="grpc"（默认）→ GRPCConn 非 nil 走 gRPC，否则 HTTP fallback
 func NewAIClient(opts AIClientOptions) AIClient {
+	if opts.Transport == "http" {
+		return newAIHTTPClient(opts)
+	}
+	if opts.GRPCConn != nil {
+		return NewAIGRPCClient(opts.GRPCConn)
+	}
+	return newAIHTTPClient(opts)
+}
+
+// newAIHTTPClient 构造 HTTP 实现（与原 NewAIClient 逻辑等价）
+func newAIHTTPClient(opts AIClientOptions) AIClient {
 	timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 5 * time.Second

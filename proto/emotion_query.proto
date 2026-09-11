@@ -35,6 +35,29 @@ service EmotionQueryService {
   //   - 写入失败 → Internal
   //   - 成功 → 返回写入（或已存在）的 emotion_analysis 行 id
   rpc UpsertNeutralEmotion (UpsertNeutralEmotionRequest) returns (UpsertNeutralEmotionResponse);
+
+  // MultiModalAnalyze 多模态情绪/语音/图像分析（Sprint F2 2026-09-11）
+  //
+  // 与 HTTP `POST /api/v1/multimodal/analyze` 语义对齐（multipart/form-data 转 bytes）。
+  // 内部 svc-to-svc（BFF → ai-svc）走 gRPC；外部前端继续走 HTTP。
+  //
+  // 错误语义：
+  //   - kind 非法 / file 缺失（kind!=text） → InvalidArgument
+  //   - 上游 FER/SenseVoice/XTTS 不可用 → Unavailable（与 HTTP 503 对齐）
+  //   - 其他 → Internal
+  rpc MultiModalAnalyze (MultiModalAnalyzeRequest) returns (MultiModalAnalyzeResponse);
+
+  // SynthesizeSpeech TTS 语音合成（Sprint F2 2026-09-11）
+  //
+  // 与 HTTP `POST /api/v1/tts/synthesize` 语义对齐。
+  // 错误语义：XTTS 未配置 / 上游不可用 → Unavailable；其他 → Internal。
+  rpc SynthesizeSpeech (SynthesizeSpeechRequest) returns (SynthesizeSpeechResponse);
+
+  // AIHealth AI 服务集群健康探针（Sprint F2 2026-09-11）
+  //
+  // 与 HTTP `GET /api/v1/ai/health` 语义对齐。返回 FER/SenseVoice/XTTS
+  // 各自 enabled/healthy 状态 + all_healthy 总标志。
+  rpc AIHealth (AIHealthRequest) returns (AIHealthResponse);
 }
 
 // Emotion 单条消息的情绪数据
@@ -110,4 +133,78 @@ message UpsertNeutralEmotionRequest {
 message UpsertNeutralEmotionResponse {
   int64 emotion_analysis_id = 1;  // emotion_echo_ai.emotion_analysis.id
   bool  was_inserted        = 2;  // true=新建，false=event_id 已存在跳过
+}
+
+// =====================================================
+// Sprint F2（2026-09-11）：3 业务 RPC + 6 message
+// =====================================================
+
+// MultiModalAnalyzeRequest 多模态分析请求
+//
+// kind: "image" | "audio" | "text"
+// file_bytes: 当 kind != text 时必填
+// persist: 是否写库（Stage 34）
+// upload_id / message_id / user_id / conversation_id: persist=true 时用
+// transcript / duration_ms / language: voice 附加字段
+message MultiModalAnalyzeRequest {
+  string kind            = 1;
+  string filename        = 2;  // 可选
+  bytes  file_bytes      = 3;  // kind != text 时必填
+  string text_content    = 4;  // 文本（kind=text 时或辅助）
+  bool   persist         = 5;
+  string upload_id       = 6;
+  int64  message_id      = 7;
+  int64  user_id         = 8;
+  int64  conversation_id = 9;
+  string transcript      = 10;
+  int32  duration_ms     = 11;
+  string language        = 12;
+}
+
+// MultiModalAnalyzeResponse 多模态分析响应
+message MultiModalAnalyzeResponse {
+  string kind                = 1;
+  string emotion             = 2;
+  double confidence          = 3;
+  double sentiment_score     = 4;
+  string model               = 5;
+  string transcript          = 6;  // 可空
+  map<string, double> all_scores = 7;  // 可空
+}
+
+// SynthesizeSpeechRequest TTS 请求
+message SynthesizeSpeechRequest {
+  string text     = 1;
+  string language = 2;  // e.g. "zh-cn"
+  double speed    = 3;
+}
+
+// SynthesizeSpeechResponse TTS 响应
+message SynthesizeSpeechResponse {
+  string audio       = 1;  // base64-encoded WAV
+  int32  sample_rate = 2;
+  string mime        = 3;
+  int32  bytes       = 4;
+  string text        = 5;
+  string language    = 6;
+}
+
+// AIHealthRequest 健康探针请求（空消息体）
+message AIHealthRequest {
+}
+
+// AIHealthEntry 单个 AI 服务健康状态
+message AIHealthEntry {
+  bool   enabled = 1;
+  bool   healthy = 2;
+  string error   = 3;  // 可空
+}
+
+// AIHealthResponse 健康探针响应
+message AIHealthResponse {
+  int64          time_ms    = 1;
+  bool           all_healthy = 2;
+  AIHealthEntry  fer        = 3;  // 可空
+  AIHealthEntry  sensevoice = 4;  // 可空
+  AIHealthEntry  xtts       = 5;  // 可空
 }

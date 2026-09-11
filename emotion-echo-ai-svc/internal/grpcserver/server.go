@@ -15,13 +15,17 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
 
+	"emotion-echo-ai-svc/internal/aiclient"
 	"emotion-echo-ai-svc/internal/logging"
+	"emotion-echo-ai-svc/internal/logic"
 	"emotion-echo-ai-svc/internal/model"
 	"emotion-echo-ai-svc/internal/repository"
+	"emotion-echo-ai-svc/internal/svc"
 
 	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
@@ -64,7 +68,11 @@ type Server struct {
 //
 // Stage 34: 增加 fusedEmotionRepo 参数（查询 fused_emotions 表）。
 // 现有调用方需要传 nil（向后兼容，单测已用 fake repo）。
-func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRepo, port int) *Server {
+//
+// Sprint F2（2026-09-11）：加 svcCtx 参数，MultiModalAnalyze/SynthesizeSpeech/AIHealth
+// 3 RPC 需要 svcCtx（构造 logic + aiclient）。现有 4 RPC（Get*/Upsert*）不依赖 svcCtx。
+// 单测仍可传 nil（向前兼容）。
+func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRepo, svcCtx *svc.ServiceContext, port int) *Server {
 	// Interceptor 链
 	tracer := skywalking.Tracer()
 	opts := []grpc.ServerOption{
@@ -84,6 +92,7 @@ func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRe
 	emotionquery.RegisterEmotionQueryServiceServer(gs, &emotionQueryServer{
 		repo:              repo,
 		fusedEmotionRepo:  fusedEmotionRepo,
+		svcCtx:            svcCtx,
 	})
 
 	// 注册 health check（不带 user id 要求）
@@ -130,6 +139,10 @@ type emotionQueryServer struct {
 	emotionquery.UnimplementedEmotionQueryServiceServer
 	repo             repository.EmotionRepo
 	fusedEmotionRepo repository.FusedEmotionRepo
+	// Sprint F2（2026-09-11）：加 svcCtx 以支持 MultiModalAnalyze/SynthesizeSpeech/AIHealth
+	// 3 个业务 RPC（需要 logic 包内的 aiclient + svcCtx）。
+	// 注：现有 4 RPC（Get*/Upsert*）不依赖 svcCtx，可继续 nil-safe。
+	svcCtx *svc.ServiceContext
 }
 
 func (s *emotionQueryServer) GetEmotionByMessage(ctx context.Context, req *emotionquery.GetEmotionByMessageRequest) (*emotionquery.Emotion, error) {
@@ -245,6 +258,149 @@ func (s *emotionQueryServer) UpsertNeutralEmotion(ctx context.Context, req *emot
 		EmotionAnalysisId: e.ID,
 		WasInserted:       true,
 	}, nil
+}
+
+// =====================================================
+// Sprint F2（2026-09-11）：3 业务 RPC 实现
+// =====================================================
+
+// MultiModalAnalyze 实现 MultiModalAnalyze RPC
+//
+// 行为契约：
+//   - 复用 logic.NewMultiModalAnalyzeLogic（与 HTTP handler 同源，零行为变化）
+//   - proto file_bytes (bytes) → logic.Analyze(kind, fileBytes, filename, text)
+//   - 错误映射：
+//     - aiclient.ErrNotConfigured / XTTSUnavailable → codes.Unavailable
+//     - 其他 → codes.Internal
+//
+// 注意：本 RPC 当前只覆盖 persist=false 路径（与 chat 路径一致；persist=true
+// 走 PersistMultiModalAnalyzeLogic，需要 svcCtx.Repo，本次 sprint 不扩）。
+// 这是与 HTTP handler 行为差异，需在 chat 触发时扩。
+func (s *emotionQueryServer) MultiModalAnalyze(ctx context.Context, req *emotionquery.MultiModalAnalyzeRequest) (*emotionquery.MultiModalAnalyzeResponse, error) {
+	if s.svcCtx == nil {
+		return nil, status.Error(codes.Unavailable, "ai-svc service context not initialized")
+	}
+	if req.Kind == "" {
+		return nil, status.Error(codes.InvalidArgument, "kind is required")
+	}
+	if req.Kind != "text" && len(req.FileBytes) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "file_bytes is required for kind="+req.Kind)
+	}
+
+	// proto 中 text_content 是 string（空 = 无文本）；logic 也接受 string
+	resp, err := logic.NewMultiModalAnalyzeLogic(s.svcCtx).Analyze(
+		ctx, req.GetKind(), req.GetFileBytes(), req.GetFilename(), req.GetTextContent(),
+	)
+	if err != nil {
+		return nil, mapAIError(err)
+	}
+	if resp == nil {
+		return nil, status.Error(codes.Internal, "empty multi modal analyze response")
+	}
+	return &emotionquery.MultiModalAnalyzeResponse{
+		Kind:           resp.Kind,
+		Emotion:        resp.Emotion,
+		Confidence:     resp.Confidence,
+		SentimentScore: resp.Sentiment,
+		Model:          resp.Model,
+		Transcript:     resp.Transcript,
+		AllScores:      resp.AllScores,
+	}, nil
+}
+
+// SynthesizeSpeech 实现 SynthesizeSpeech RPC
+//
+// 复用 logic.NewSynthesizeSpeechLogic（与 HTTP /api/v1/tts/synthesize 同源）。
+func (s *emotionQueryServer) SynthesizeSpeech(ctx context.Context, req *emotionquery.SynthesizeSpeechRequest) (*emotionquery.SynthesizeSpeechResponse, error) {
+	if s.svcCtx == nil {
+		return nil, status.Error(codes.Unavailable, "ai-svc service context not initialized")
+	}
+	if req.GetText() == "" {
+		return nil, status.Error(codes.InvalidArgument, "text is required")
+	}
+	resp, err := logic.NewSynthesizeSpeechLogic(s.svcCtx).Synthesize(
+		ctx, req.GetText(), req.GetLanguage(), req.GetSpeed(),
+	)
+	if err != nil {
+		return nil, mapAIError(err)
+	}
+	if resp == nil {
+		return nil, status.Error(codes.Internal, "empty synthesize speech response")
+	}
+	return &emotionquery.SynthesizeSpeechResponse{
+		Audio:      resp.Audio,
+		SampleRate: int32(resp.SampleRate),
+		Mime:       resp.MIME,
+		Bytes:      int32(resp.Bytes),
+		Text:       resp.Text,
+		Language:   resp.Language,
+	}, nil
+}
+
+// AIHealth 实现 AIHealth RPC
+//
+// 复用 logic.NewAIHealthLogic（与 HTTP /api/v1/ai/health 同源）。
+func (s *emotionQueryServer) AIHealth(ctx context.Context, req *emotionquery.AIHealthRequest) (*emotionquery.AIHealthResponse, error) {
+	if s.svcCtx == nil {
+		return nil, status.Error(codes.Unavailable, "ai-svc service context not initialized")
+	}
+	resp, err := logic.NewAIHealthLogic(s.svcCtx).Health(ctx)
+	if err != nil {
+		return nil, mapAIError(err)
+	}
+	if resp == nil {
+		return nil, status.Error(codes.Internal, "empty ai health response")
+	}
+	out := &emotionquery.AIHealthResponse{
+		TimeMs:     resp.Time,
+		AllHealthy: resp.All,
+	}
+	if resp.FER != nil {
+		out.Fer = &emotionquery.AIHealthEntry{
+			Enabled: resp.FER.Enabled,
+			Healthy: resp.FER.Healthy,
+			Error:   resp.FER.Error,
+		}
+	}
+	if resp.SV != nil {
+		out.Sensevoice = &emotionquery.AIHealthEntry{
+			Enabled: resp.SV.Enabled,
+			Healthy: resp.SV.Healthy,
+			Error:   resp.SV.Error,
+		}
+	}
+	if resp.TTS != nil {
+		out.Xtts = &emotionquery.AIHealthEntry{
+			Enabled: resp.TTS.Enabled,
+			Healthy: resp.TTS.Healthy,
+			Error:   resp.TTS.Error,
+		}
+	}
+	return out, nil
+}
+
+// mapAIError 把 ai-svc 业务错误映射到 gRPC status code
+//
+// 语义与 HTTP handler 一致：
+//   - aiclient.ErrNotConfigured / logic.ErrXTTSUnavailable → codes.Unavailable（与 HTTP 503 对齐）
+//   - 其他 → codes.Internal
+//
+// 不在此做 NotFound / InvalidArgument 区分——业务错误信息在 err.Error() 里。
+func mapAIError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	switch {
+	case errors.Is(err, aiclient.ErrNotConfigured),
+		errors.Is(err, logic.ErrXTTSUnavailable),
+		errors.Is(err, logic.ErrMultiModalNotInit),
+		strings.Contains(msg, "call XTTS"),
+		strings.Contains(msg, "XTTS_BASE_URL"):
+		return status.Error(codes.Unavailable, msg)
+	default:
+		return status.Error(codes.Internal, msg)
+	}
 }
 
 func toProtoEmotion(e *model.EmotionAnalysis) *emotionquery.Emotion {

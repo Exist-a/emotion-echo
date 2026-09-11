@@ -17,17 +17,18 @@ related-adrs:
   - docs/architecture/adr/adr-2026-09-doc-drift-registry.md（#25 #26 #27）
 ---
 
-## 🆕 2026-09-11 增补：Stage 63 收口发现 3 条链路 bug + Sprint C/D/E/F1 落地
+## 🆕 2026-09-11 增补：Stage 63 收口发现 3 条链路 bug + Sprint C/D/E/F1/F2 落地
 
 Stage 63 端到端验证发现 BFF→4 svc gRPC 链路上有 3 层叠错（决策 18 #25 #26 #27）。
 **Sprint C（解 #26 ctxkey 重构）已落地** —— 见 [legacy-plans/landed/sprint-c-ctxkey-refactor.md](../legacy-plans/landed/sprint-c-ctxkey-refactor.md)。
 **Sprint D（解 #27 chat-svc 4 RPC 实现）已落地** —— 见 [legacy-plans/landed/sprint-d-chat-grpc-implementation.md](../legacy-plans/landed/sprint-d-chat-grpc-implementation.md)。
 **Sprint E（解 #33 user-svc proto 半残缺）已落地** —— 见 [legacy-plans/landed/sprint-e-user-grpc-auth.md](../legacy-plans/landed/sprint-e-user-grpc-auth.md)。
 **Sprint F1（user-svc ResetPassword/Logout gRPC 化）已落地** —— 见 [legacy-plans/landed/sprint-f1-user-grpc-reset-logout.md](../legacy-plans/landed/sprint-f1-user-grpc-reset-logout.md)。
+**Sprint F2（ai-svc 业务方法 gRPC 化，ai.go MultiModal/Synthesize/AIHealth 3 RPC）已落地** —— 见 [legacy-plans/landed/sprint-f2-ai-grpc-business-rpcs.md](../legacy-plans/landed/sprint-f2-ai-grpc-business-rpcs.md)。
 
 **剩余**：
 - **#32 chat-svc HTTP 端 /api/v1/conversations 500 bug**：BFF 默认 grpc 后被规避，根因未查
-- **Sprint F2**（ai-svc 业务方法 gRPC 化，ai.go MultiModalAnalyze 等）
+- **BFF 全局 gRPC error → HTTP code 映射**：Sprint F2 V3 暴露 BFF 把 gRPC codes.Unavailable 统一标 502，4 svc 都有同问题，下次 sprint 统一在 `web-bff/internal/downstream/error.go` 加 `mapGRPCError` helper
 - **chat-svc PinConversation/StreamMessages**（chat-svc 缺底层功能，留业务触发）
 
 # Plan — 后端微服务间调用 HTTP → gRPC 改造

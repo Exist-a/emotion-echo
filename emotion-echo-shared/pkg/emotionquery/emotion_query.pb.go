@@ -577,6 +577,559 @@ func (x *UpsertNeutralEmotionResponse) GetWasInserted() bool {
 	return false
 }
 
+// MultiModalAnalyzeRequest 多模态分析请求
+//
+// kind: "image" | "audio" | "text"
+// file_bytes: 当 kind != text 时必填
+// persist: 是否写库（Stage 34）
+// upload_id / message_id / user_id / conversation_id: persist=true 时用
+// transcript / duration_ms / language: voice 附加字段
+type MultiModalAnalyzeRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Kind           string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	Filename       string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`                          // 可选
+	FileBytes      []byte                 `protobuf:"bytes,3,opt,name=file_bytes,json=fileBytes,proto3" json:"file_bytes,omitempty"`       // kind != text 时必填
+	TextContent    string                 `protobuf:"bytes,4,opt,name=text_content,json=textContent,proto3" json:"text_content,omitempty"` // 文本（kind=text 时或辅助）
+	Persist        bool                   `protobuf:"varint,5,opt,name=persist,proto3" json:"persist,omitempty"`
+	UploadId       string                 `protobuf:"bytes,6,opt,name=upload_id,json=uploadId,proto3" json:"upload_id,omitempty"`
+	MessageId      int64                  `protobuf:"varint,7,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	UserId         int64                  `protobuf:"varint,8,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ConversationId int64                  `protobuf:"varint,9,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	Transcript     string                 `protobuf:"bytes,10,opt,name=transcript,proto3" json:"transcript,omitempty"`
+	DurationMs     int32                  `protobuf:"varint,11,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	Language       string                 `protobuf:"bytes,12,opt,name=language,proto3" json:"language,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MultiModalAnalyzeRequest) Reset() {
+	*x = MultiModalAnalyzeRequest{}
+	mi := &file_emotion_query_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MultiModalAnalyzeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MultiModalAnalyzeRequest) ProtoMessage() {}
+
+func (x *MultiModalAnalyzeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MultiModalAnalyzeRequest.ProtoReflect.Descriptor instead.
+func (*MultiModalAnalyzeRequest) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *MultiModalAnalyzeRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeRequest) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeRequest) GetFileBytes() []byte {
+	if x != nil {
+		return x.FileBytes
+	}
+	return nil
+}
+
+func (x *MultiModalAnalyzeRequest) GetTextContent() string {
+	if x != nil {
+		return x.TextContent
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeRequest) GetPersist() bool {
+	if x != nil {
+		return x.Persist
+	}
+	return false
+}
+
+func (x *MultiModalAnalyzeRequest) GetUploadId() string {
+	if x != nil {
+		return x.UploadId
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeRequest) GetMessageId() int64 {
+	if x != nil {
+		return x.MessageId
+	}
+	return 0
+}
+
+func (x *MultiModalAnalyzeRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *MultiModalAnalyzeRequest) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *MultiModalAnalyzeRequest) GetTranscript() string {
+	if x != nil {
+		return x.Transcript
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeRequest) GetDurationMs() int32 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *MultiModalAnalyzeRequest) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+// MultiModalAnalyzeResponse 多模态分析响应
+type MultiModalAnalyzeResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Kind           string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	Emotion        string                 `protobuf:"bytes,2,opt,name=emotion,proto3" json:"emotion,omitempty"`
+	Confidence     float64                `protobuf:"fixed64,3,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	SentimentScore float64                `protobuf:"fixed64,4,opt,name=sentiment_score,json=sentimentScore,proto3" json:"sentiment_score,omitempty"`
+	Model          string                 `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`
+	Transcript     string                 `protobuf:"bytes,6,opt,name=transcript,proto3" json:"transcript,omitempty"`                                                                                            // 可空
+	AllScores      map[string]float64     `protobuf:"bytes,7,rep,name=all_scores,json=allScores,proto3" json:"all_scores,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"` // 可空
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MultiModalAnalyzeResponse) Reset() {
+	*x = MultiModalAnalyzeResponse{}
+	mi := &file_emotion_query_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MultiModalAnalyzeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MultiModalAnalyzeResponse) ProtoMessage() {}
+
+func (x *MultiModalAnalyzeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MultiModalAnalyzeResponse.ProtoReflect.Descriptor instead.
+func (*MultiModalAnalyzeResponse) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *MultiModalAnalyzeResponse) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeResponse) GetEmotion() string {
+	if x != nil {
+		return x.Emotion
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeResponse) GetConfidence() float64 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+func (x *MultiModalAnalyzeResponse) GetSentimentScore() float64 {
+	if x != nil {
+		return x.SentimentScore
+	}
+	return 0
+}
+
+func (x *MultiModalAnalyzeResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeResponse) GetTranscript() string {
+	if x != nil {
+		return x.Transcript
+	}
+	return ""
+}
+
+func (x *MultiModalAnalyzeResponse) GetAllScores() map[string]float64 {
+	if x != nil {
+		return x.AllScores
+	}
+	return nil
+}
+
+// SynthesizeSpeechRequest TTS 请求
+type SynthesizeSpeechRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Language      string                 `protobuf:"bytes,2,opt,name=language,proto3" json:"language,omitempty"` // e.g. "zh-cn"
+	Speed         float64                `protobuf:"fixed64,3,opt,name=speed,proto3" json:"speed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SynthesizeSpeechRequest) Reset() {
+	*x = SynthesizeSpeechRequest{}
+	mi := &file_emotion_query_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SynthesizeSpeechRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SynthesizeSpeechRequest) ProtoMessage() {}
+
+func (x *SynthesizeSpeechRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SynthesizeSpeechRequest.ProtoReflect.Descriptor instead.
+func (*SynthesizeSpeechRequest) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SynthesizeSpeechRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *SynthesizeSpeechRequest) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *SynthesizeSpeechRequest) GetSpeed() float64 {
+	if x != nil {
+		return x.Speed
+	}
+	return 0
+}
+
+// SynthesizeSpeechResponse TTS 响应
+type SynthesizeSpeechResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Audio         string                 `protobuf:"bytes,1,opt,name=audio,proto3" json:"audio,omitempty"` // base64-encoded WAV
+	SampleRate    int32                  `protobuf:"varint,2,opt,name=sample_rate,json=sampleRate,proto3" json:"sample_rate,omitempty"`
+	Mime          string                 `protobuf:"bytes,3,opt,name=mime,proto3" json:"mime,omitempty"`
+	Bytes         int32                  `protobuf:"varint,4,opt,name=bytes,proto3" json:"bytes,omitempty"`
+	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
+	Language      string                 `protobuf:"bytes,6,opt,name=language,proto3" json:"language,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SynthesizeSpeechResponse) Reset() {
+	*x = SynthesizeSpeechResponse{}
+	mi := &file_emotion_query_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SynthesizeSpeechResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SynthesizeSpeechResponse) ProtoMessage() {}
+
+func (x *SynthesizeSpeechResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SynthesizeSpeechResponse.ProtoReflect.Descriptor instead.
+func (*SynthesizeSpeechResponse) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SynthesizeSpeechResponse) GetAudio() string {
+	if x != nil {
+		return x.Audio
+	}
+	return ""
+}
+
+func (x *SynthesizeSpeechResponse) GetSampleRate() int32 {
+	if x != nil {
+		return x.SampleRate
+	}
+	return 0
+}
+
+func (x *SynthesizeSpeechResponse) GetMime() string {
+	if x != nil {
+		return x.Mime
+	}
+	return ""
+}
+
+func (x *SynthesizeSpeechResponse) GetBytes() int32 {
+	if x != nil {
+		return x.Bytes
+	}
+	return 0
+}
+
+func (x *SynthesizeSpeechResponse) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *SynthesizeSpeechResponse) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+// AIHealthRequest 健康探针请求（空消息体）
+type AIHealthRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AIHealthRequest) Reset() {
+	*x = AIHealthRequest{}
+	mi := &file_emotion_query_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AIHealthRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AIHealthRequest) ProtoMessage() {}
+
+func (x *AIHealthRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AIHealthRequest.ProtoReflect.Descriptor instead.
+func (*AIHealthRequest) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{12}
+}
+
+// AIHealthEntry 单个 AI 服务健康状态
+type AIHealthEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Healthy       bool                   `protobuf:"varint,2,opt,name=healthy,proto3" json:"healthy,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"` // 可空
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AIHealthEntry) Reset() {
+	*x = AIHealthEntry{}
+	mi := &file_emotion_query_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AIHealthEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AIHealthEntry) ProtoMessage() {}
+
+func (x *AIHealthEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AIHealthEntry.ProtoReflect.Descriptor instead.
+func (*AIHealthEntry) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *AIHealthEntry) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *AIHealthEntry) GetHealthy() bool {
+	if x != nil {
+		return x.Healthy
+	}
+	return false
+}
+
+func (x *AIHealthEntry) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+// AIHealthResponse 健康探针响应
+type AIHealthResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TimeMs        int64                  `protobuf:"varint,1,opt,name=time_ms,json=timeMs,proto3" json:"time_ms,omitempty"`
+	AllHealthy    bool                   `protobuf:"varint,2,opt,name=all_healthy,json=allHealthy,proto3" json:"all_healthy,omitempty"`
+	Fer           *AIHealthEntry         `protobuf:"bytes,3,opt,name=fer,proto3" json:"fer,omitempty"`               // 可空
+	Sensevoice    *AIHealthEntry         `protobuf:"bytes,4,opt,name=sensevoice,proto3" json:"sensevoice,omitempty"` // 可空
+	Xtts          *AIHealthEntry         `protobuf:"bytes,5,opt,name=xtts,proto3" json:"xtts,omitempty"`             // 可空
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AIHealthResponse) Reset() {
+	*x = AIHealthResponse{}
+	mi := &file_emotion_query_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AIHealthResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AIHealthResponse) ProtoMessage() {}
+
+func (x *AIHealthResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_query_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AIHealthResponse.ProtoReflect.Descriptor instead.
+func (*AIHealthResponse) Descriptor() ([]byte, []int) {
+	return file_emotion_query_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *AIHealthResponse) GetTimeMs() int64 {
+	if x != nil {
+		return x.TimeMs
+	}
+	return 0
+}
+
+func (x *AIHealthResponse) GetAllHealthy() bool {
+	if x != nil {
+		return x.AllHealthy
+	}
+	return false
+}
+
+func (x *AIHealthResponse) GetFer() *AIHealthEntry {
+	if x != nil {
+		return x.Fer
+	}
+	return nil
+}
+
+func (x *AIHealthResponse) GetSensevoice() *AIHealthEntry {
+	if x != nil {
+		return x.Sensevoice
+	}
+	return nil
+}
+
+func (x *AIHealthResponse) GetXtts() *AIHealthEntry {
+	if x != nil {
+		return x.Xtts
+	}
+	return nil
+}
+
 var File_emotion_query_proto protoreflect.FileDescriptor
 
 const file_emotion_query_proto_rawDesc = "" +
@@ -630,12 +1183,76 @@ const file_emotion_query_proto_rawDesc = "" +
 	"\bevent_id\x18\x04 \x01(\tR\aeventId\"q\n" +
 	"\x1cUpsertNeutralEmotionResponse\x12.\n" +
 	"\x13emotion_analysis_id\x18\x01 \x01(\x03R\x11emotionAnalysisId\x12!\n" +
-	"\fwas_inserted\x18\x02 \x01(\bR\vwasInserted2\x9f\x03\n" +
+	"\fwas_inserted\x18\x02 \x01(\bR\vwasInserted\"\x81\x03\n" +
+	"\x18MultiModalAnalyzeRequest\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1a\n" +
+	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1d\n" +
+	"\n" +
+	"file_bytes\x18\x03 \x01(\fR\tfileBytes\x12!\n" +
+	"\ftext_content\x18\x04 \x01(\tR\vtextContent\x12\x18\n" +
+	"\apersist\x18\x05 \x01(\bR\apersist\x12\x1b\n" +
+	"\tupload_id\x18\x06 \x01(\tR\buploadId\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\a \x01(\x03R\tmessageId\x12\x17\n" +
+	"\auser_id\x18\b \x01(\x03R\x06userId\x12'\n" +
+	"\x0fconversation_id\x18\t \x01(\x03R\x0econversationId\x12\x1e\n" +
+	"\n" +
+	"transcript\x18\n" +
+	" \x01(\tR\n" +
+	"transcript\x12\x1f\n" +
+	"\vduration_ms\x18\v \x01(\x05R\n" +
+	"durationMs\x12\x1a\n" +
+	"\blanguage\x18\f \x01(\tR\blanguage\"\xde\x02\n" +
+	"\x19MultiModalAnalyzeResponse\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x18\n" +
+	"\aemotion\x18\x02 \x01(\tR\aemotion\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x03 \x01(\x01R\n" +
+	"confidence\x12'\n" +
+	"\x0fsentiment_score\x18\x04 \x01(\x01R\x0esentimentScore\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\x12\x1e\n" +
+	"\n" +
+	"transcript\x18\x06 \x01(\tR\n" +
+	"transcript\x12V\n" +
+	"\n" +
+	"all_scores\x18\a \x03(\v27.emotion_ai.v1.MultiModalAnalyzeResponse.AllScoresEntryR\tallScores\x1a<\n" +
+	"\x0eAllScoresEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"_\n" +
+	"\x17SynthesizeSpeechRequest\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1a\n" +
+	"\blanguage\x18\x02 \x01(\tR\blanguage\x12\x14\n" +
+	"\x05speed\x18\x03 \x01(\x01R\x05speed\"\xab\x01\n" +
+	"\x18SynthesizeSpeechResponse\x12\x14\n" +
+	"\x05audio\x18\x01 \x01(\tR\x05audio\x12\x1f\n" +
+	"\vsample_rate\x18\x02 \x01(\x05R\n" +
+	"sampleRate\x12\x12\n" +
+	"\x04mime\x18\x03 \x01(\tR\x04mime\x12\x14\n" +
+	"\x05bytes\x18\x04 \x01(\x05R\x05bytes\x12\x12\n" +
+	"\x04text\x18\x05 \x01(\tR\x04text\x12\x1a\n" +
+	"\blanguage\x18\x06 \x01(\tR\blanguage\"\x11\n" +
+	"\x0fAIHealthRequest\"Y\n" +
+	"\rAIHealthEntry\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x18\n" +
+	"\ahealthy\x18\x02 \x01(\bR\ahealthy\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xec\x01\n" +
+	"\x10AIHealthResponse\x12\x17\n" +
+	"\atime_ms\x18\x01 \x01(\x03R\x06timeMs\x12\x1f\n" +
+	"\vall_healthy\x18\x02 \x01(\bR\n" +
+	"allHealthy\x12.\n" +
+	"\x03fer\x18\x03 \x01(\v2\x1c.emotion_ai.v1.AIHealthEntryR\x03fer\x12<\n" +
+	"\n" +
+	"sensevoice\x18\x04 \x01(\v2\x1c.emotion_ai.v1.AIHealthEntryR\n" +
+	"sensevoice\x120\n" +
+	"\x04xtts\x18\x05 \x01(\v2\x1c.emotion_ai.v1.AIHealthEntryR\x04xtts2\xb9\x05\n" +
 	"\x13EmotionQueryService\x12X\n" +
 	"\x13GetEmotionByMessage\x12).emotion_ai.v1.GetEmotionByMessageRequest\x1a\x16.emotion_ai.v1.Emotion\x12f\n" +
 	"\x18GetEmotionByConversation\x12..emotion_ai.v1.GetEmotionByConversationRequest\x1a\x1a.emotion_ai.v1.EmotionList\x12U\n" +
 	"\x0fGetFusedEmotion\x12%.emotion_ai.v1.GetFusedEmotionRequest\x1a\x1b.emotion_ai.v1.FusedEmotion\x12o\n" +
-	"\x14UpsertNeutralEmotion\x12*.emotion_ai.v1.UpsertNeutralEmotionRequest\x1a+.emotion_ai.v1.UpsertNeutralEmotionResponseB1Z/github.com/emotion-echo/shared/pkg/emotionqueryb\x06proto3"
+	"\x14UpsertNeutralEmotion\x12*.emotion_ai.v1.UpsertNeutralEmotionRequest\x1a+.emotion_ai.v1.UpsertNeutralEmotionResponse\x12f\n" +
+	"\x11MultiModalAnalyze\x12'.emotion_ai.v1.MultiModalAnalyzeRequest\x1a(.emotion_ai.v1.MultiModalAnalyzeResponse\x12c\n" +
+	"\x10SynthesizeSpeech\x12&.emotion_ai.v1.SynthesizeSpeechRequest\x1a'.emotion_ai.v1.SynthesizeSpeechResponse\x12K\n" +
+	"\bAIHealth\x12\x1e.emotion_ai.v1.AIHealthRequest\x1a\x1f.emotion_ai.v1.AIHealthResponseB1Z/github.com/emotion-echo/shared/pkg/emotionqueryb\x06proto3"
 
 var (
 	file_emotion_query_proto_rawDescOnce sync.Once
@@ -649,7 +1266,7 @@ func file_emotion_query_proto_rawDescGZIP() []byte {
 	return file_emotion_query_proto_rawDescData
 }
 
-var file_emotion_query_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_emotion_query_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_emotion_query_proto_goTypes = []any{
 	(*Emotion)(nil),                         // 0: emotion_ai.v1.Emotion
 	(*GetEmotionByMessageRequest)(nil),      // 1: emotion_ai.v1.GetEmotionByMessageRequest
@@ -659,22 +1276,40 @@ var file_emotion_query_proto_goTypes = []any{
 	(*GetFusedEmotionRequest)(nil),          // 5: emotion_ai.v1.GetFusedEmotionRequest
 	(*UpsertNeutralEmotionRequest)(nil),     // 6: emotion_ai.v1.UpsertNeutralEmotionRequest
 	(*UpsertNeutralEmotionResponse)(nil),    // 7: emotion_ai.v1.UpsertNeutralEmotionResponse
+	(*MultiModalAnalyzeRequest)(nil),        // 8: emotion_ai.v1.MultiModalAnalyzeRequest
+	(*MultiModalAnalyzeResponse)(nil),       // 9: emotion_ai.v1.MultiModalAnalyzeResponse
+	(*SynthesizeSpeechRequest)(nil),         // 10: emotion_ai.v1.SynthesizeSpeechRequest
+	(*SynthesizeSpeechResponse)(nil),        // 11: emotion_ai.v1.SynthesizeSpeechResponse
+	(*AIHealthRequest)(nil),                 // 12: emotion_ai.v1.AIHealthRequest
+	(*AIHealthEntry)(nil),                   // 13: emotion_ai.v1.AIHealthEntry
+	(*AIHealthResponse)(nil),                // 14: emotion_ai.v1.AIHealthResponse
+	nil,                                     // 15: emotion_ai.v1.MultiModalAnalyzeResponse.AllScoresEntry
 }
 var file_emotion_query_proto_depIdxs = []int32{
-	0, // 0: emotion_ai.v1.EmotionList.items:type_name -> emotion_ai.v1.Emotion
-	1, // 1: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:input_type -> emotion_ai.v1.GetEmotionByMessageRequest
-	2, // 2: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:input_type -> emotion_ai.v1.GetEmotionByConversationRequest
-	5, // 3: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:input_type -> emotion_ai.v1.GetFusedEmotionRequest
-	6, // 4: emotion_ai.v1.EmotionQueryService.UpsertNeutralEmotion:input_type -> emotion_ai.v1.UpsertNeutralEmotionRequest
-	0, // 5: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:output_type -> emotion_ai.v1.Emotion
-	3, // 6: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:output_type -> emotion_ai.v1.EmotionList
-	4, // 7: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:output_type -> emotion_ai.v1.FusedEmotion
-	7, // 8: emotion_ai.v1.EmotionQueryService.UpsertNeutralEmotion:output_type -> emotion_ai.v1.UpsertNeutralEmotionResponse
-	5, // [5:9] is the sub-list for method output_type
-	1, // [1:5] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0,  // 0: emotion_ai.v1.EmotionList.items:type_name -> emotion_ai.v1.Emotion
+	15, // 1: emotion_ai.v1.MultiModalAnalyzeResponse.all_scores:type_name -> emotion_ai.v1.MultiModalAnalyzeResponse.AllScoresEntry
+	13, // 2: emotion_ai.v1.AIHealthResponse.fer:type_name -> emotion_ai.v1.AIHealthEntry
+	13, // 3: emotion_ai.v1.AIHealthResponse.sensevoice:type_name -> emotion_ai.v1.AIHealthEntry
+	13, // 4: emotion_ai.v1.AIHealthResponse.xtts:type_name -> emotion_ai.v1.AIHealthEntry
+	1,  // 5: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:input_type -> emotion_ai.v1.GetEmotionByMessageRequest
+	2,  // 6: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:input_type -> emotion_ai.v1.GetEmotionByConversationRequest
+	5,  // 7: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:input_type -> emotion_ai.v1.GetFusedEmotionRequest
+	6,  // 8: emotion_ai.v1.EmotionQueryService.UpsertNeutralEmotion:input_type -> emotion_ai.v1.UpsertNeutralEmotionRequest
+	8,  // 9: emotion_ai.v1.EmotionQueryService.MultiModalAnalyze:input_type -> emotion_ai.v1.MultiModalAnalyzeRequest
+	10, // 10: emotion_ai.v1.EmotionQueryService.SynthesizeSpeech:input_type -> emotion_ai.v1.SynthesizeSpeechRequest
+	12, // 11: emotion_ai.v1.EmotionQueryService.AIHealth:input_type -> emotion_ai.v1.AIHealthRequest
+	0,  // 12: emotion_ai.v1.EmotionQueryService.GetEmotionByMessage:output_type -> emotion_ai.v1.Emotion
+	3,  // 13: emotion_ai.v1.EmotionQueryService.GetEmotionByConversation:output_type -> emotion_ai.v1.EmotionList
+	4,  // 14: emotion_ai.v1.EmotionQueryService.GetFusedEmotion:output_type -> emotion_ai.v1.FusedEmotion
+	7,  // 15: emotion_ai.v1.EmotionQueryService.UpsertNeutralEmotion:output_type -> emotion_ai.v1.UpsertNeutralEmotionResponse
+	9,  // 16: emotion_ai.v1.EmotionQueryService.MultiModalAnalyze:output_type -> emotion_ai.v1.MultiModalAnalyzeResponse
+	11, // 17: emotion_ai.v1.EmotionQueryService.SynthesizeSpeech:output_type -> emotion_ai.v1.SynthesizeSpeechResponse
+	14, // 18: emotion_ai.v1.EmotionQueryService.AIHealth:output_type -> emotion_ai.v1.AIHealthResponse
+	12, // [12:19] is the sub-list for method output_type
+	5,  // [5:12] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_emotion_query_proto_init() }
@@ -688,7 +1323,7 @@ func file_emotion_query_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emotion_query_proto_rawDesc), len(file_emotion_query_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
