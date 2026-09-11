@@ -109,6 +109,7 @@ type Conversation struct {
 	Status        int32                  `protobuf:"varint,5,opt,name=status,proto3" json:"status,omitempty"`                        // 0=open 1=closed
 	CreatedAt     int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix seconds
 	UpdatedAt     int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	IsPinned      bool                   `protobuf:"varint,8,opt,name=is_pinned,json=isPinned,proto3" json:"is_pinned,omitempty"` // 置顶状态（Stage 72 PinConversation 落地）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -190,6 +191,13 @@ func (x *Conversation) GetUpdatedAt() int64 {
 		return x.UpdatedAt
 	}
 	return 0
+}
+
+func (x *Conversation) GetIsPinned() bool {
+	if x != nil {
+		return x.IsPinned
+	}
+	return false
 }
 
 // SendMessageRequest 发送消息请求
@@ -688,10 +696,11 @@ func (x *DeleteConversationResponse) GetId() int64 {
 	return 0
 }
 
-// PinConversationRequest 置顶会话请求
+// PinConversationRequest 置顶/取消置顶会话请求
 type PinConversationRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ConversationId int64                  `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	IsPinned       bool                   `protobuf:"varint,2,opt,name=is_pinned,json=isPinned,proto3" json:"is_pinned,omitempty"` // true=置顶 false=取消置顶
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -733,11 +742,19 @@ func (x *PinConversationRequest) GetConversationId() int64 {
 	return 0
 }
 
+func (x *PinConversationRequest) GetIsPinned() bool {
+	if x != nil {
+		return x.IsPinned
+	}
+	return false
+}
+
 // PinConversationResponse 置顶会话响应
 type PinConversationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
 	Id            int64                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	IsPinned      bool                   `protobuf:"varint,3,opt,name=is_pinned,json=isPinned,proto3" json:"is_pinned,omitempty"` // 回显最终状态
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -786,6 +803,127 @@ func (x *PinConversationResponse) GetId() int64 {
 	return 0
 }
 
+func (x *PinConversationResponse) GetIsPinned() bool {
+	if x != nil {
+		return x.IsPinned
+	}
+	return false
+}
+
+// UpdateConversationRequest 更新会话请求
+type UpdateConversationRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ConversationId int64                  `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	Title          string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"` // 当前仅支持改标题
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *UpdateConversationRequest) Reset() {
+	*x = UpdateConversationRequest{}
+	mi := &file_chat_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateConversationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateConversationRequest) ProtoMessage() {}
+
+func (x *UpdateConversationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_chat_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateConversationRequest.ProtoReflect.Descriptor instead.
+func (*UpdateConversationRequest) Descriptor() ([]byte, []int) {
+	return file_chat_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateConversationRequest) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *UpdateConversationRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+// UpdateConversationResponse 更新会话响应
+type UpdateConversationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Id            int64                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"` // 更新后的标题
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateConversationResponse) Reset() {
+	*x = UpdateConversationResponse{}
+	mi := &file_chat_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateConversationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateConversationResponse) ProtoMessage() {}
+
+func (x *UpdateConversationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_chat_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateConversationResponse.ProtoReflect.Descriptor instead.
+func (*UpdateConversationResponse) Descriptor() ([]byte, []int) {
+	return file_chat_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UpdateConversationResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *UpdateConversationResponse) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpdateConversationResponse) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
 // StreamMessagesRequest 流式消息请求
 type StreamMessagesRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -799,7 +937,7 @@ type StreamMessagesRequest struct {
 
 func (x *StreamMessagesRequest) Reset() {
 	*x = StreamMessagesRequest{}
-	mi := &file_chat_proto_msgTypes[12]
+	mi := &file_chat_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -811,7 +949,7 @@ func (x *StreamMessagesRequest) String() string {
 func (*StreamMessagesRequest) ProtoMessage() {}
 
 func (x *StreamMessagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_proto_msgTypes[12]
+	mi := &file_chat_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -824,7 +962,7 @@ func (x *StreamMessagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamMessagesRequest.ProtoReflect.Descriptor instead.
 func (*StreamMessagesRequest) Descriptor() ([]byte, []int) {
-	return file_chat_proto_rawDescGZIP(), []int{12}
+	return file_chat_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *StreamMessagesRequest) GetConversationId() int64 {
@@ -866,7 +1004,7 @@ type ChatEvent struct {
 
 func (x *ChatEvent) Reset() {
 	*x = ChatEvent{}
-	mi := &file_chat_proto_msgTypes[13]
+	mi := &file_chat_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -878,7 +1016,7 @@ func (x *ChatEvent) String() string {
 func (*ChatEvent) ProtoMessage() {}
 
 func (x *ChatEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_proto_msgTypes[13]
+	mi := &file_chat_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -891,7 +1029,7 @@ func (x *ChatEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatEvent.ProtoReflect.Descriptor instead.
 func (*ChatEvent) Descriptor() ([]byte, []int) {
-	return file_chat_proto_rawDescGZIP(), []int{13}
+	return file_chat_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ChatEvent) GetEvent() isChatEvent_Event {
@@ -960,7 +1098,7 @@ type NewMessageEvent struct {
 
 func (x *NewMessageEvent) Reset() {
 	*x = NewMessageEvent{}
-	mi := &file_chat_proto_msgTypes[14]
+	mi := &file_chat_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -972,7 +1110,7 @@ func (x *NewMessageEvent) String() string {
 func (*NewMessageEvent) ProtoMessage() {}
 
 func (x *NewMessageEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_proto_msgTypes[14]
+	mi := &file_chat_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -985,7 +1123,7 @@ func (x *NewMessageEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewMessageEvent.ProtoReflect.Descriptor instead.
 func (*NewMessageEvent) Descriptor() ([]byte, []int) {
-	return file_chat_proto_rawDescGZIP(), []int{14}
+	return file_chat_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *NewMessageEvent) GetMessage() *Message {
@@ -1007,7 +1145,7 @@ type StatusChangeEvent struct {
 
 func (x *StatusChangeEvent) Reset() {
 	*x = StatusChangeEvent{}
-	mi := &file_chat_proto_msgTypes[15]
+	mi := &file_chat_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1019,7 +1157,7 @@ func (x *StatusChangeEvent) String() string {
 func (*StatusChangeEvent) ProtoMessage() {}
 
 func (x *StatusChangeEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_proto_msgTypes[15]
+	mi := &file_chat_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1032,7 +1170,7 @@ func (x *StatusChangeEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusChangeEvent.ProtoReflect.Descriptor instead.
 func (*StatusChangeEvent) Descriptor() ([]byte, []int) {
-	return file_chat_proto_rawDescGZIP(), []int{15}
+	return file_chat_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *StatusChangeEvent) GetConversationId() int64 {
@@ -1066,7 +1204,7 @@ type HeartbeatEvent struct {
 
 func (x *HeartbeatEvent) Reset() {
 	*x = HeartbeatEvent{}
-	mi := &file_chat_proto_msgTypes[16]
+	mi := &file_chat_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1078,7 +1216,7 @@ func (x *HeartbeatEvent) String() string {
 func (*HeartbeatEvent) ProtoMessage() {}
 
 func (x *HeartbeatEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_proto_msgTypes[16]
+	mi := &file_chat_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1091,7 +1229,7 @@ func (x *HeartbeatEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatEvent.ProtoReflect.Descriptor instead.
 func (*HeartbeatEvent) Descriptor() ([]byte, []int) {
-	return file_chat_proto_rawDescGZIP(), []int{16}
+	return file_chat_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *HeartbeatEvent) GetTimestamp() int64 {
@@ -1109,7 +1247,7 @@ const file_chat_proto_rawDesc = "" +
 	"chat.proto\x12\x0femotion_chat.v1\"J\n" +
 	"\x19CreateConversationRequest\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\"\xc0\x01\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\"\xdd\x01\n" +
 	"\fConversation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x14\n" +
@@ -1119,7 +1257,8 @@ const file_chat_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x06 \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\x03R\tupdatedAt\"\xec\x01\n" +
+	"updated_at\x18\a \x01(\x03R\tupdatedAt\x12\x1b\n" +
+	"\tis_pinned\x18\b \x01(\bR\bisPinned\"\xec\x01\n" +
 	"\x12SendMessageRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x12\n" +
@@ -1155,12 +1294,21 @@ const file_chat_proto_rawDesc = "" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\"F\n" +
 	"\x1aDeleteConversationResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\x03R\x02id\"A\n" +
+	"\x02id\x18\x02 \x01(\x03R\x02id\"^\n" +
 	"\x16PinConversationRequest\x12'\n" +
-	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\"C\n" +
+	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x1b\n" +
+	"\tis_pinned\x18\x02 \x01(\bR\bisPinned\"`\n" +
 	"\x17PinConversationResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\x03R\x02id\"\x81\x01\n" +
+	"\x02id\x18\x02 \x01(\x03R\x02id\x12\x1b\n" +
+	"\tis_pinned\x18\x03 \x01(\bR\bisPinned\"Z\n" +
+	"\x19UpdateConversationRequest\x12'\n" +
+	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\"\\\n" +
+	"\x1aUpdateConversationResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\x03R\x02id\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\"\x81\x01\n" +
 	"\x15StreamMessagesRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12&\n" +
@@ -1179,14 +1327,15 @@ const file_chat_proto_rawDesc = "" +
 	"new_status\x18\x02 \x01(\x05R\tnewStatus\x12\x1c\n" +
 	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\".\n" +
 	"\x0eHeartbeatEvent\x12\x1c\n" +
-	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp2\xb2\x05\n" +
+	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp2\xa1\x06\n" +
 	"\vChatService\x12_\n" +
 	"\x12CreateConversation\x12*.emotion_chat.v1.CreateConversationRequest\x1a\x1d.emotion_chat.v1.Conversation\x12L\n" +
 	"\vSendMessage\x12#.emotion_chat.v1.SendMessageRequest\x1a\x18.emotion_chat.v1.Message\x12[\n" +
 	"\fListMessages\x12$.emotion_chat.v1.ListMessagesRequest\x1a%.emotion_chat.v1.ListMessagesResponse\x12j\n" +
 	"\x11ListConversations\x12).emotion_chat.v1.ListConversationsRequest\x1a*.emotion_chat.v1.ListConversationsResponse\x12m\n" +
 	"\x12DeleteConversation\x12*.emotion_chat.v1.DeleteConversationRequest\x1a+.emotion_chat.v1.DeleteConversationResponse\x12d\n" +
-	"\x0fPinConversation\x12'.emotion_chat.v1.PinConversationRequest\x1a(.emotion_chat.v1.PinConversationResponse\x12V\n" +
+	"\x0fPinConversation\x12'.emotion_chat.v1.PinConversationRequest\x1a(.emotion_chat.v1.PinConversationResponse\x12m\n" +
+	"\x12UpdateConversation\x12*.emotion_chat.v1.UpdateConversationRequest\x1a+.emotion_chat.v1.UpdateConversationResponse\x12V\n" +
 	"\x0eStreamMessages\x12&.emotion_chat.v1.StreamMessagesRequest\x1a\x1a.emotion_chat.v1.ChatEvent0\x01B0Z.github.com/emotion-echo/shared/pkg/emotionchatb\x06proto3"
 
 var (
@@ -1201,7 +1350,7 @@ func file_chat_proto_rawDescGZIP() []byte {
 	return file_chat_proto_rawDescData
 }
 
-var file_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_chat_proto_goTypes = []any{
 	(*CreateConversationRequest)(nil),  // 0: emotion_chat.v1.CreateConversationRequest
 	(*Conversation)(nil),               // 1: emotion_chat.v1.Conversation
@@ -1215,18 +1364,20 @@ var file_chat_proto_goTypes = []any{
 	(*DeleteConversationResponse)(nil), // 9: emotion_chat.v1.DeleteConversationResponse
 	(*PinConversationRequest)(nil),     // 10: emotion_chat.v1.PinConversationRequest
 	(*PinConversationResponse)(nil),    // 11: emotion_chat.v1.PinConversationResponse
-	(*StreamMessagesRequest)(nil),      // 12: emotion_chat.v1.StreamMessagesRequest
-	(*ChatEvent)(nil),                  // 13: emotion_chat.v1.ChatEvent
-	(*NewMessageEvent)(nil),            // 14: emotion_chat.v1.NewMessageEvent
-	(*StatusChangeEvent)(nil),          // 15: emotion_chat.v1.StatusChangeEvent
-	(*HeartbeatEvent)(nil),             // 16: emotion_chat.v1.HeartbeatEvent
+	(*UpdateConversationRequest)(nil),  // 12: emotion_chat.v1.UpdateConversationRequest
+	(*UpdateConversationResponse)(nil), // 13: emotion_chat.v1.UpdateConversationResponse
+	(*StreamMessagesRequest)(nil),      // 14: emotion_chat.v1.StreamMessagesRequest
+	(*ChatEvent)(nil),                  // 15: emotion_chat.v1.ChatEvent
+	(*NewMessageEvent)(nil),            // 16: emotion_chat.v1.NewMessageEvent
+	(*StatusChangeEvent)(nil),          // 17: emotion_chat.v1.StatusChangeEvent
+	(*HeartbeatEvent)(nil),             // 18: emotion_chat.v1.HeartbeatEvent
 }
 var file_chat_proto_depIdxs = []int32{
 	3,  // 0: emotion_chat.v1.ListMessagesResponse.messages:type_name -> emotion_chat.v1.Message
 	1,  // 1: emotion_chat.v1.ListConversationsResponse.list:type_name -> emotion_chat.v1.Conversation
-	14, // 2: emotion_chat.v1.ChatEvent.new_message:type_name -> emotion_chat.v1.NewMessageEvent
-	15, // 3: emotion_chat.v1.ChatEvent.status_change:type_name -> emotion_chat.v1.StatusChangeEvent
-	16, // 4: emotion_chat.v1.ChatEvent.heartbeat:type_name -> emotion_chat.v1.HeartbeatEvent
+	16, // 2: emotion_chat.v1.ChatEvent.new_message:type_name -> emotion_chat.v1.NewMessageEvent
+	17, // 3: emotion_chat.v1.ChatEvent.status_change:type_name -> emotion_chat.v1.StatusChangeEvent
+	18, // 4: emotion_chat.v1.ChatEvent.heartbeat:type_name -> emotion_chat.v1.HeartbeatEvent
 	3,  // 5: emotion_chat.v1.NewMessageEvent.message:type_name -> emotion_chat.v1.Message
 	0,  // 6: emotion_chat.v1.ChatService.CreateConversation:input_type -> emotion_chat.v1.CreateConversationRequest
 	2,  // 7: emotion_chat.v1.ChatService.SendMessage:input_type -> emotion_chat.v1.SendMessageRequest
@@ -1234,16 +1385,18 @@ var file_chat_proto_depIdxs = []int32{
 	6,  // 9: emotion_chat.v1.ChatService.ListConversations:input_type -> emotion_chat.v1.ListConversationsRequest
 	8,  // 10: emotion_chat.v1.ChatService.DeleteConversation:input_type -> emotion_chat.v1.DeleteConversationRequest
 	10, // 11: emotion_chat.v1.ChatService.PinConversation:input_type -> emotion_chat.v1.PinConversationRequest
-	12, // 12: emotion_chat.v1.ChatService.StreamMessages:input_type -> emotion_chat.v1.StreamMessagesRequest
-	1,  // 13: emotion_chat.v1.ChatService.CreateConversation:output_type -> emotion_chat.v1.Conversation
-	3,  // 14: emotion_chat.v1.ChatService.SendMessage:output_type -> emotion_chat.v1.Message
-	5,  // 15: emotion_chat.v1.ChatService.ListMessages:output_type -> emotion_chat.v1.ListMessagesResponse
-	7,  // 16: emotion_chat.v1.ChatService.ListConversations:output_type -> emotion_chat.v1.ListConversationsResponse
-	9,  // 17: emotion_chat.v1.ChatService.DeleteConversation:output_type -> emotion_chat.v1.DeleteConversationResponse
-	11, // 18: emotion_chat.v1.ChatService.PinConversation:output_type -> emotion_chat.v1.PinConversationResponse
-	13, // 19: emotion_chat.v1.ChatService.StreamMessages:output_type -> emotion_chat.v1.ChatEvent
-	13, // [13:20] is the sub-list for method output_type
-	6,  // [6:13] is the sub-list for method input_type
+	12, // 12: emotion_chat.v1.ChatService.UpdateConversation:input_type -> emotion_chat.v1.UpdateConversationRequest
+	14, // 13: emotion_chat.v1.ChatService.StreamMessages:input_type -> emotion_chat.v1.StreamMessagesRequest
+	1,  // 14: emotion_chat.v1.ChatService.CreateConversation:output_type -> emotion_chat.v1.Conversation
+	3,  // 15: emotion_chat.v1.ChatService.SendMessage:output_type -> emotion_chat.v1.Message
+	5,  // 16: emotion_chat.v1.ChatService.ListMessages:output_type -> emotion_chat.v1.ListMessagesResponse
+	7,  // 17: emotion_chat.v1.ChatService.ListConversations:output_type -> emotion_chat.v1.ListConversationsResponse
+	9,  // 18: emotion_chat.v1.ChatService.DeleteConversation:output_type -> emotion_chat.v1.DeleteConversationResponse
+	11, // 19: emotion_chat.v1.ChatService.PinConversation:output_type -> emotion_chat.v1.PinConversationResponse
+	13, // 20: emotion_chat.v1.ChatService.UpdateConversation:output_type -> emotion_chat.v1.UpdateConversationResponse
+	15, // 21: emotion_chat.v1.ChatService.StreamMessages:output_type -> emotion_chat.v1.ChatEvent
+	14, // [14:22] is the sub-list for method output_type
+	6,  // [6:14] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -1254,7 +1407,7 @@ func file_chat_proto_init() {
 	if File_chat_proto != nil {
 		return
 	}
-	file_chat_proto_msgTypes[13].OneofWrappers = []any{
+	file_chat_proto_msgTypes[15].OneofWrappers = []any{
 		(*ChatEvent_NewMessage)(nil),
 		(*ChatEvent_StatusChange)(nil),
 		(*ChatEvent_Heartbeat)(nil),
@@ -1265,7 +1418,7 @@ func file_chat_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_chat_proto_rawDesc), len(file_chat_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

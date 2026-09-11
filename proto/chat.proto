@@ -49,8 +49,11 @@ service ChatService {
   // DeleteConversation 删除会话
   rpc DeleteConversation (DeleteConversationRequest) returns (DeleteConversationResponse);
 
-  // PinConversation 置顶会话（chat-svc 尚未实现 HTTP；接口保留，未来支持后可用）
+  // PinConversation 置顶/取消置顶会话（is_pinned 字段指定目标状态）
   rpc PinConversation (PinConversationRequest) returns (PinConversationResponse);
+
+  // UpdateConversation 更新会话（当前仅支持 title；Stage 72 决策 4 ADR §八 收口）
+  rpc UpdateConversation (UpdateConversationRequest) returns (UpdateConversationResponse);
 
   // StreamMessages 流式接收消息（gRPC server stream）——替代 SSE 聊天流
   //
@@ -79,6 +82,7 @@ message Conversation {
   int32 status = 5;             // 0=open 1=closed
   int64 created_at = 6;         // unix seconds
   int64 updated_at = 7;
+  bool is_pinned = 8;           // 置顶状态（Stage 72 PinConversation 落地）
 }
 
 // SendMessageRequest 发送消息请求
@@ -138,15 +142,30 @@ message DeleteConversationResponse {
   int64 id = 2;
 }
 
-// PinConversationRequest 置顶会话请求
+// PinConversationRequest 置顶/取消置顶会话请求
 message PinConversationRequest {
   int64 conversation_id = 1;
+  bool is_pinned = 2;           // true=置顶 false=取消置顶
 }
 
 // PinConversationResponse 置顶会话响应
 message PinConversationResponse {
   bool success = 1;
   int64 id = 2;
+  bool is_pinned = 3;           // 回显最终状态
+}
+
+// UpdateConversationRequest 更新会话请求
+message UpdateConversationRequest {
+  int64 conversation_id = 1;
+  string title = 2;             // 当前仅支持改标题
+}
+
+// UpdateConversationResponse 更新会话响应
+message UpdateConversationResponse {
+  bool success = 1;
+  int64 id = 2;
+  string title = 3;             // 更新后的标题
 }
 
 // StreamMessagesRequest 流式消息请求

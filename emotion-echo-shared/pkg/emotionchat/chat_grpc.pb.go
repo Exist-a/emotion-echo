@@ -50,6 +50,7 @@ const (
 	ChatService_ListConversations_FullMethodName  = "/emotion_chat.v1.ChatService/ListConversations"
 	ChatService_DeleteConversation_FullMethodName = "/emotion_chat.v1.ChatService/DeleteConversation"
 	ChatService_PinConversation_FullMethodName    = "/emotion_chat.v1.ChatService/PinConversation"
+	ChatService_UpdateConversation_FullMethodName = "/emotion_chat.v1.ChatService/UpdateConversation"
 	ChatService_StreamMessages_FullMethodName     = "/emotion_chat.v1.ChatService/StreamMessages"
 )
 
@@ -72,8 +73,10 @@ type ChatServiceClient interface {
 	ListConversations(ctx context.Context, in *ListConversationsRequest, opts ...grpc.CallOption) (*ListConversationsResponse, error)
 	// DeleteConversation 删除会话
 	DeleteConversation(ctx context.Context, in *DeleteConversationRequest, opts ...grpc.CallOption) (*DeleteConversationResponse, error)
-	// PinConversation 置顶会话（chat-svc 尚未实现 HTTP；接口保留，未来支持后可用）
+	// PinConversation 置顶/取消置顶会话（is_pinned 字段指定目标状态）
 	PinConversation(ctx context.Context, in *PinConversationRequest, opts ...grpc.CallOption) (*PinConversationResponse, error)
+	// UpdateConversation 更新会话（当前仅支持 title；Stage 72 决策 4 ADR §八 收口）
+	UpdateConversation(ctx context.Context, in *UpdateConversationRequest, opts ...grpc.CallOption) (*UpdateConversationResponse, error)
 	// StreamMessages 流式接收消息（gRPC server stream）——替代 SSE 聊天流
 	//
 	// 设计动机：BFF 当前用 SSE（HTTP）转给浏览器，链路长且需要 APISIX 兼容 SSE。
@@ -152,6 +155,16 @@ func (c *chatServiceClient) PinConversation(ctx context.Context, in *PinConversa
 	return out, nil
 }
 
+func (c *chatServiceClient) UpdateConversation(ctx context.Context, in *UpdateConversationRequest, opts ...grpc.CallOption) (*UpdateConversationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateConversationResponse)
+	err := c.cc.Invoke(ctx, ChatService_UpdateConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *chatServiceClient) StreamMessages(ctx context.Context, in *StreamMessagesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ChatService_ServiceDesc.Streams[0], ChatService_StreamMessages_FullMethodName, cOpts...)
@@ -190,8 +203,10 @@ type ChatServiceServer interface {
 	ListConversations(context.Context, *ListConversationsRequest) (*ListConversationsResponse, error)
 	// DeleteConversation 删除会话
 	DeleteConversation(context.Context, *DeleteConversationRequest) (*DeleteConversationResponse, error)
-	// PinConversation 置顶会话（chat-svc 尚未实现 HTTP；接口保留，未来支持后可用）
+	// PinConversation 置顶/取消置顶会话（is_pinned 字段指定目标状态）
 	PinConversation(context.Context, *PinConversationRequest) (*PinConversationResponse, error)
+	// UpdateConversation 更新会话（当前仅支持 title；Stage 72 决策 4 ADR §八 收口）
+	UpdateConversation(context.Context, *UpdateConversationRequest) (*UpdateConversationResponse, error)
 	// StreamMessages 流式接收消息（gRPC server stream）——替代 SSE 聊天流
 	//
 	// 设计动机：BFF 当前用 SSE（HTTP）转给浏览器，链路长且需要 APISIX 兼容 SSE。
@@ -227,6 +242,9 @@ func (UnimplementedChatServiceServer) DeleteConversation(context.Context, *Delet
 }
 func (UnimplementedChatServiceServer) PinConversation(context.Context, *PinConversationRequest) (*PinConversationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PinConversation not implemented")
+}
+func (UnimplementedChatServiceServer) UpdateConversation(context.Context, *UpdateConversationRequest) (*UpdateConversationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateConversation not implemented")
 }
 func (UnimplementedChatServiceServer) StreamMessages(*StreamMessagesRequest, grpc.ServerStreamingServer[ChatEvent]) error {
 	return status.Error(codes.Unimplemented, "method StreamMessages not implemented")
@@ -360,6 +378,24 @@ func _ChatService_PinConversation_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ChatService_UpdateConversation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateConversationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChatServiceServer).UpdateConversation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ChatService_UpdateConversation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChatServiceServer).UpdateConversation(ctx, req.(*UpdateConversationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ChatService_StreamMessages_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(StreamMessagesRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -401,6 +437,10 @@ var ChatService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PinConversation",
 			Handler:    _ChatService_PinConversation_Handler,
+		},
+		{
+			MethodName: "UpdateConversation",
+			Handler:    _ChatService_UpdateConversation_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
