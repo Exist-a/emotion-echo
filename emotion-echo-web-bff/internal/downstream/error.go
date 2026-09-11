@@ -11,6 +11,7 @@
 //   - gRPC codes.PermissionDenied  → HTTP 403 Forbidden
 //   - gRPC codes.NotFound          → HTTP 404 Not Found
 //   - gRPC codes.InvalidArgument   → HTTP 400 Bad Request
+//   - gRPC codes.AlreadyExists     → HTTP 409 Conflict（B4 补：Sprint G 漏）
 //   - gRPC codes.DeadlineExceeded  → HTTP 504 Gateway Timeout
 //   - gRPC codes.Unauthenticated   → HTTP 401 Unauthorized
 //   - 其他 gRPC（Internal/Unknown/Canceled）→ HTTP 500 Internal Server Error
@@ -74,6 +75,8 @@ func MapGRPCError(err error) (httpStatus int, code int, message string) {
 			return http.StatusNotFound, 1, "not found: " + st.Message()
 		case codes.InvalidArgument:
 			return http.StatusBadRequest, 1, "invalid argument: " + st.Message()
+		case codes.AlreadyExists:
+			return http.StatusConflict, 1, "conflict: " + st.Message()
 		case codes.DeadlineExceeded:
 			return http.StatusGatewayTimeout, 1, "timeout: " + st.Message()
 		default:
