@@ -176,8 +176,8 @@ const quickLogin = async () => {
   if (isQuickLoading.value) return
   isQuickLoading.value = true
   try {
-    // Stage 38-A: dev quick login 账号 = echo / echo123（之前是 demo@emotion-echo.com / Demo12345，
-    //               后端从未实现 quick-login 端点，实际走标准 login 路径——本快捷键直接发 echo/echo123）
+    // PR-4: 体验模式 = 标准登录 + demo 账号 echo/echo123（seed 默认用户）
+    // 后端无 /auth/quick-login 端点；历史 demo@emotion-echo.com / Demo12345 已停用
     const result = await userStore.login({
       username: 'echo',
       password: 'echo123',
