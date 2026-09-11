@@ -460,6 +460,25 @@
 >
 > **未做项**：已存在 dev 环境的 user_oauth 残留（数据卷非空）由后续 `migrate.sh` 单独 PR 收口。
 
+---
+
+### 决策 22：chat-svc 表依赖清单 + 字段变更契约 = **✅ Accepted**（2026-09-11）
+
+> ✅ 2026-09-11 生效。详见 [`adr-2026-09-chat-svc-table-deps.md`](adr/adr-2026-09-chat-svc-table-deps.md)。
+>
+> **触发**：todo-pile §D5「chat-svc 表依赖清单 ADR」—— Stage 36-FU 报告 dashboard 4 个 chartData.length===0（实际根因见 [stage-65-dashboard-empty-root-cause.md](../stages/stage-65-dashboard-empty-root-cause.md)），历史多次因 chat-svc 表字段变更未与下游对齐导致静默失效（cf Stage 36-D Bug 2 initdb 容错包错语句）。
+>
+> **范围**：
+> - chat-svc 拥有 `emotion_echo_chat` schema 的 3 张表（`conversations` / `messages` / `outbox_events`）的字段 + 索引 + 跨域依赖清单
+> - 跨域依赖矩阵（chat-svc 表 → analytics-svc 视图 / ai-svc Kafka consumer / 前端 dashboard）
+> - 跨域写入约束（chat-svc 零跨 svc 写入；event_id 生成是跨 svc 契约）
+> - 字段变更 9 步 checklist（migration → model → types → proto → 跨域评估 → 集成测试 → regression 守护 → 文档同步）
+> - 6 类禁止事项（跨 schema 外键 / JSONB 字段塞关键数据 / 删除 outbox 行 / 改 UNIQUE 约束 / 跨 svc 直接写库）
+>
+> **撤销流程**（ADR 22 §四）：任何字段变更必须按 §四 checklist 顺序执行，缺一步 reviewer 必须 reject PR。
+>
+> **未做项**（本决策不覆盖，留待下次 sprint）：chat-svc PinConversation / StreamMessages gRPC 实现（决策 4 ADR §八 backlog）。
+
 > **🔧 2026-09-10 Stage 62 PR-2 微调**：下方 `## 🏗 当前架构全景` 已对齐决策 11/12
 > 关系说明（APISIX = 唯一业务入口；BFF = 聚合层 / APISIX upstream）。
 > 早期决策 18 #24 登记时基于"作者推断"误以为全景图含 '唯一前端入口' 措辞——实测全景图本身合规。
