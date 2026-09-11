@@ -130,7 +130,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-chat-svc/Dockerfile
-    image: emotion-echo/chat-svc:v0.1.4
+    image: emotion-echo/chat-svc:v0.1.5
     # v0.1.3: PR-2 中间件分层（/health、/metrics 免鉴权 + 业务群 auth.Use 分组）
     container_name: emotion-echo-chat-svc
     restart: unless-stopped

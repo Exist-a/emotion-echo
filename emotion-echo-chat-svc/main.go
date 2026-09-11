@@ -171,8 +171,16 @@ func main() {
 		}
 	}
 
-	// 4.1 Stage 30-C A3: 启 Outbox relay goroutine（每 1s 扫一次）
-	if db != nil && outboxRepo != nil && c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
+	// 4.1 Stage 30-C A3 + ADR-19: 启 Outbox relay goroutine（每 1s 扫一次）
+	//
+	// 启动条件修正（2026-09-11 / Stage 67）：
+	//   - 旧：db != nil && outboxRepo != nil && c.Kafka.Enabled && len(brokers) > 0
+	//   - 问题：KAFKA_ENABLED=false 时 relay 不启动 → outbox 行永久 pending → 即使
+	//     DevEventPublisher 已就位也无人调它（ADR-19 §一描述的"publisher=nil 永远失败"变体）
+	//   - 新：db != nil && outboxRepo != nil && pub != nil
+	//   - 行为：KAFKA_ENABLED=true → KafkaEventPublisher；KAFKA_ENABLED=false → DevEventPublisher
+	//     两者都已在 §2 构造，pub 永远非 nil（最差情况是 InMemoryEventPublisher fallback）
+	if db != nil && outboxRepo != nil && pub != nil {
 		relayCtx, relayCancel := context.WithCancel(context.Background())
 		defer relayCancel()
 		relay := outbox.NewRelay(outboxRepo, pub, 1*time.Second, 100)
