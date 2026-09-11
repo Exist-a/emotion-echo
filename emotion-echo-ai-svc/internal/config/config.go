@@ -137,6 +137,9 @@ func SetDefaults(c *Config) {
 	if len(c.Kafka.Topics) == 0 {
 		c.Kafka.Topics = []string{"chat-events"}
 	}
+	// Kafka.Enabled 不在 SetDefaults 默认（bool 零值 = false 与"显式 false"无法区分）。
+	// dev compose env KAFKA_ENABLED=true 必须在 applyEnvOverrides 显式覆盖。
+	// 详见 main.go applyEnvOverrides 函数注释。
 	if c.Kafka.MaxRetries == 0 {
 		c.Kafka.MaxRetries = 3
 	}
