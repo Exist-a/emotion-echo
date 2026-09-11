@@ -1,12 +1,27 @@
 ---
-status: planned
-priority: medium
-owner: TBD
-created: 2026-09-11
+status: landed
+landed: 2026-09-11
+owner: User
+original-plan: docs/plans/bff-grpc-error-mapping-backlog.md
 related-stages:
   - stage-63-bff-grpc-wiring.md
 related-adrs:
   - docs/architecture/adr/adr-2026-09-decision-4-closure.md §八 backlog
+---
+
+# Plan — BFF 全局 gRPC error → HTTP code 映射（已 landed Sprint G）
+
+## 〇、Sprint G 收口（2026-09-11）
+
+**commit**: `f874d3f`
+
+**修复结果**（docker 端到端实测）：
+- `POST /api/v1/tts/synthesize` 走 ai-svc gRPC SynthesizeSpeech，XTTS 容器不可用时：
+  - 原（Sprint F2）：HTTP 502（Bad Gateway） ❌
+  - 修复后（Sprint G）：HTTP 503（Service Unavailable） ✅
+- 7 路径 Final E2E 回归：users/me / conversations / surveys / reports/daily / multimodal/analyze / ai/health 全部 200
+- message 文本也更清晰：`rpc error: code = Unavailable desc = ...` → `upstream unavailable: ...`
+
 ---
 
 # Plan — BFF 全局 gRPC error → HTTP code 映射 backlog
