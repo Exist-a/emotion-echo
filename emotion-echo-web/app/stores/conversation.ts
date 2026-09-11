@@ -183,21 +183,21 @@ export const useConversationStore = defineStore("conversation", () => {
 /**
    * 更新会话标题
    *
-   * Stage 71 PR-C8 TODO：chat-svc 暂未实现 UpdateConversation RPC
-   * （决策 4 ADR §八 backlog：chat-svc Pin/Update 业务未触发）。
-   * 前端保留入口，行为改为"更新本地 + 提示用户"，等 chat-svc 落地后改回真实 API。
+   * Stage 72：chat-svc UpdateConversation RPC 已落地（决策 4 ADR §八 收口），
+   * 恢复真实 PATCH /conversations/:id 调用；成功后同步本地列表。
    */
   const updateConversationTitle = async (id: string, title: string): Promise<returnMsgType> => {
-    // TODO(决策 4 ADR §八): chat-svc UpdateConversation RPC 落地后改回:
-    //   await patch(API_ROUTES.conversationById.path.replace(':id', id), { title });
-    // 当前只更新本地 + 提示用户
-    const conversation = conversationList.value.find(c => c.id === id);
-    if (conversation) {
-      conversation.title = title;
-      conversation.updatedAt = new Date().toISOString();
+    try {
+      await patch(API_ROUTES.conversationById.path.replace(':id', id), { title });
+      const conversation = conversationList.value.find(c => c.id === id);
+      if (conversation) {
+        conversation.title = title;
+        conversation.updatedAt = new Date().toISOString();
+      }
+      return { isOk: true, msg: "标题更新成功" };
+    } catch (error: any) {
+      return { isOk: false, msg: error.message || "标题更新失败" };
     }
-    return { isOk: false, msg: "标题更新功能待 chat-svc UpdateConversation 落地（决策 4 ADR §八 backlog）" };
-  };
   };
   
   /**
@@ -212,9 +212,9 @@ export const useConversationStore = defineStore("conversation", () => {
       
       const newIsTop = isTop !== undefined ? isTop : !conversation.isTop;
       
-      // Stage 71 PR-C8：pinConversation 移 knownOrphans（chat-svc PinConversation 未实现，
-      // 决策 4 ADR §八 backlog）。前端保留调用入口（等业务触发时启用）
-      await post(API_ROUTES.pinConversationOrphan.path.replace(':id', id), { isTop: newIsTop });
+      // Stage 72：pinConversation 转正（chat-svc PinConversation RPC 已落地，
+      // 决策 4 ADR §八 收口；从 knownOrphans pinConversationOrphan 迁回正式路由）
+      await post(API_ROUTES.conversationPin.path.replace(':id', id), { isTop: newIsTop });
       
       // 更新本地数据
       conversation.isTop = newIsTop;
