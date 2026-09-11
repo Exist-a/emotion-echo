@@ -71,6 +71,7 @@ func (l *ListConversationsLogic) ListConversations(req *types.ListConversationsR
 			Title:     c.Title,
 			MsgCount:  c.MessageCount,
 			Status:    int(c.Status),
+			IsPinned:  c.Pinned,
 			CreatedAt: c.CreatedAt.UnixMilli(),
 			UpdatedAt: c.UpdatedAt.UnixMilli(),
 		})

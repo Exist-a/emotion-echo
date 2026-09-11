@@ -19,6 +19,7 @@ type Conversation struct {
 	MessageCount  int        `gorm:"column:message_count;default:0"`
 	LastMessageAt *time.Time `gorm:"column:last_message_at"`
 	Status        int16      `gorm:"column:status;default:1"`
+	Pinned        bool       `gorm:"column:pinned;default:false"`
 	CreatedAt     time.Time  `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt     time.Time  `gorm:"column:updated_at;autoUpdateTime"`
 }

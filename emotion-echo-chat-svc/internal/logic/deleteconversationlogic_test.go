@@ -144,6 +144,14 @@ func (f *failingDeleteRepo) ListConversations(ctx context.Context, userID int64,
 	return f.inner.ListConversations(ctx, userID, limit, offset)
 }
 
+// Stage 72：补 SetPinned/UpdateTitle 透传，让 failingDeleteRepo 仍满足 interface。
+func (f *failingDeleteRepo) SetPinned(ctx context.Context, id int64, pinned bool) error {
+	return f.inner.SetPinned(ctx, id, pinned)
+}
+func (f *failingDeleteRepo) UpdateTitle(ctx context.Context, id int64, title string) error {
+	return f.inner.UpdateTitle(ctx, id, title)
+}
+
 // Stage 30-C A3: Tx 占位（InMemory 退化路径不真用 tx，但接口要求实现）
 func (f *failingDeleteRepo) CreateConversationTx(_ *gorm.DB, ctx context.Context, c *model.Conversation) error {
 	return f.CreateConversation(ctx, c)

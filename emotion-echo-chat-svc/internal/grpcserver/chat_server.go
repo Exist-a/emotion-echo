@@ -50,6 +50,7 @@ func toProtoConversation(c types.ConversationView) *emotionchat.Conversation {
 		Title:     c.Title,
 		MsgCount:  int32(c.MsgCount),
 		Status:    int32(c.Status),
+		IsPinned:  c.IsPinned,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}
@@ -208,12 +209,62 @@ func mapLogicError(err error, op string) error {
 	return grpcerr.MapToError(err, op)
 }
 
-// PinConversation 占位实现
+// PinConversation 实现 PinConversation RPC（Stage 72，决策 4 ADR §八 收口）
+//
+// 行为契约：
+//   - 从 metadata x-user-id 取 user id
+//   - 调 logic.NewPinConversationLogic.PinConversation（owner 校验 + repo.SetPinned）
+//   - 错误映射：not found → NotFound；forbidden → PermissionDenied（grpcerr 关键词表）
 func (s *chatServer) PinConversation(ctx context.Context, req *emotionchat.PinConversationRequest) (*emotionchat.PinConversationResponse, error) {
 	if s.svcCtx == nil {
 		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
 	}
-	return nil, status.Error(codes.Unimplemented, "PinConversation: PR-GRPC-3 阶段补完")
+	uid, ok := grpcinterceptor.UserIDFromGRPCContext(ctx)
+	if !ok || uid <= 0 {
+		return nil, status.Error(codes.Unauthenticated, "missing x-user-id metadata")
+	}
+
+	resp, err := logic.NewPinConversationLogic(ctx, s.svcCtx).PinConversation(&types.PinConversationReq{
+		Id:       req.GetConversationId(),
+		IsPinned: req.GetIsPinned(),
+	})
+	if err != nil {
+		return nil, mapLogicError(err, "pin conversation")
+	}
+	return &emotionchat.PinConversationResponse{
+		Success:  resp.Success,
+		Id:       resp.Id,
+		IsPinned: resp.IsPinned,
+	}, nil
+}
+
+// UpdateConversation 实现 UpdateConversation RPC（Stage 72，决策 4 ADR §八 收口）
+//
+// 行为契约：
+//   - 从 metadata x-user-id 取 user id
+//   - 调 logic.NewUpdateConversationLogic.UpdateConversation（空标题校验 + owner 校验 + repo.UpdateTitle）
+//   - 错误映射：not found → NotFound；forbidden → PermissionDenied；validation → InvalidArgument
+func (s *chatServer) UpdateConversation(ctx context.Context, req *emotionchat.UpdateConversationRequest) (*emotionchat.UpdateConversationResponse, error) {
+	if s.svcCtx == nil {
+		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	}
+	uid, ok := grpcinterceptor.UserIDFromGRPCContext(ctx)
+	if !ok || uid <= 0 {
+		return nil, status.Error(codes.Unauthenticated, "missing x-user-id metadata")
+	}
+
+	resp, err := logic.NewUpdateConversationLogic(ctx, s.svcCtx).UpdateConversation(&types.UpdateConversationReq{
+		Id:    req.GetConversationId(),
+		Title: req.GetTitle(),
+	})
+	if err != nil {
+		return nil, mapLogicError(err, "update conversation")
+	}
+	return &emotionchat.UpdateConversationResponse{
+		Success: resp.Success,
+		Id:      resp.Id,
+		Title:   resp.Title,
+	}, nil
 }
 
 // StreamMessages gRPC server stream（PR-GRPC-5 阶段架构判断：暂不实现）

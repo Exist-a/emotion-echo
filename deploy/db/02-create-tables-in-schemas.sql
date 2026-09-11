@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS emotion_echo_chat.conversations (
     message_count INT DEFAULT 0,
     last_message_at TIMESTAMPTZ,
     status SMALLINT DEFAULT 1,
+    pinned BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     closed_at TIMESTAMPTZ

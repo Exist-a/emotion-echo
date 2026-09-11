@@ -7,6 +7,7 @@ type ConversationView struct {
 	Title     string `json:"title"`
 	MsgCount  int    `json:"msgCount"`
 	Status    int    `json:"status"`
+	IsPinned  bool   `json:"isPinned"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
 }
@@ -81,4 +82,30 @@ type ListConversationsReq struct {
 type ListConversationsResp struct {
 	List    []ConversationView `json:"list"`
 	HasMore bool               `json:"hasMore"`
+}
+
+// PinConversationReq POST /api/v1/conversations/:id/pin（Stage 72）
+type PinConversationReq struct {
+	Id       int64 `path:"id"`
+	IsPinned bool  `json:"isPinned"`
+}
+
+// PinConversationResp 置顶响应（回显最终状态）
+type PinConversationResp struct {
+	Success  bool  `json:"success"`
+	Id       int64 `json:"id"`
+	IsPinned bool  `json:"isPinned"`
+}
+
+// UpdateConversationReq PATCH /api/v1/conversations/:id（Stage 72，当前仅支持 title）
+type UpdateConversationReq struct {
+	Id    int64  `path:"id"`
+	Title string `json:"title"`
+}
+
+// UpdateConversationResp 更新响应
+type UpdateConversationResp struct {
+	Success bool   `json:"success"`
+	Id      int64  `json:"id"`
+	Title   string `json:"title"`
 }

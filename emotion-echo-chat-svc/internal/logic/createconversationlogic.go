@@ -74,6 +74,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 			Title:     conv.Title,
 			MsgCount:  conv.MessageCount,
 			Status:    int(conv.Status),
+			IsPinned:  conv.Pinned,
 			CreatedAt: conv.CreatedAt.UnixMilli(),
 			UpdatedAt: conv.UpdatedAt.UnixMilli(),
 		},

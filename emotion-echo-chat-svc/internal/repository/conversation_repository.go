@@ -11,6 +11,7 @@ import (
 	"errors"
 	"sort"
 	"sync"
+	"time"
 
 	"emotion-echo-chat-svc/internal/model"
 
@@ -48,6 +49,11 @@ type ConversationRepo interface {
 	// Stage 36-A2.1：按用户列出最近会话，按 updated_at desc 排序。
 	// limit<=0 视为 20，offset<0 视为 0。
 	ListConversations(ctx context.Context, userID int64, limit, offset int) ([]model.Conversation, error)
+
+	// Stage 72：置顶/取消置顶会话（PinConversation RPC）；同时刷新 updated_at
+	SetPinned(ctx context.Context, id int64, pinned bool) error
+	// Stage 72：更新会话标题（UpdateConversation RPC）；同时刷新 updated_at
+	UpdateTitle(ctx context.Context, id int64, title string) error
 
 	// Stage 30-C A3: 事务版本（接受可选 tx，nil = 非事务）
 	CreateConversationTx(tx *gorm.DB, ctx context.Context, c *model.Conversation) error
@@ -149,6 +155,28 @@ func (r *InMemoryConversationRepo) GetMessageByClientMsgID(ctx context.Context, 
 		}
 	}
 	return nil, nil
+}
+
+// SetPinned Stage 72：内存版置顶/取消置顶（不存在的 id 为 no-op，与 DeleteConversation 约定一致）
+func (r *InMemoryConversationRepo) SetPinned(ctx context.Context, id int64, pinned bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c, ok := r.conversations[id]; ok {
+		c.Pinned = pinned
+		c.UpdatedAt = time.Now()
+	}
+	return nil
+}
+
+// UpdateTitle Stage 72：内存版改标题（不存在的 id 为 no-op）
+func (r *InMemoryConversationRepo) UpdateTitle(ctx context.Context, id int64, title string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c, ok := r.conversations[id]; ok {
+		c.Title = title
+		c.UpdatedAt = time.Now()
+	}
+	return nil
 }
 
 func (r *InMemoryConversationRepo) Ping(ctx context.Context) error { return nil }
@@ -332,6 +360,22 @@ func (r *PostgresConversationRepo) ListConversations(ctx context.Context, userID
 		Offset(offset).
 		Find(&out).Error
 	return out, err
+}
+
+// SetPinned Stage 72：Postgres 版置顶/取消置顶（同时刷新 updated_at）
+func (r *PostgresConversationRepo) SetPinned(ctx context.Context, id int64, pinned bool) error {
+	return r.db.WithContext(ctx).
+		Exec(`UPDATE emotion_echo_chat.conversations
+		      SET pinned = ?, updated_at = NOW()
+		      WHERE id = ?`, pinned, id).Error
+}
+
+// UpdateTitle Stage 72：Postgres 版改标题（同时刷新 updated_at）
+func (r *PostgresConversationRepo) UpdateTitle(ctx context.Context, id int64, title string) error {
+	return r.db.WithContext(ctx).
+		Exec(`UPDATE emotion_echo_chat.conversations
+		      SET title = ?, updated_at = NOW()
+		      WHERE id = ?`, title, id).Error
 }
 
 // Stage 30-C A3: 事务版本（tx == nil 退化为 r.db；非事务路径）
