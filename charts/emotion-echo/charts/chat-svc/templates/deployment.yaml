@@ -29,15 +29,29 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: {{ .Values.service.port }}
+            - name: http
+              containerPort: {{ .Values.service.port }}
+            - name: grpc
+              containerPort: {{ .Values.service.grpcPort }}
           env:
+            - name: NACOS_ENABLED
+              value: "true"
+            - name: NACOS_ADDR
+              value: "nacos.ee-app.svc.cluster.local:8848"
+            - name: NACOS_NAMESPACE
+              value: "emotion-echo-dev"
+            - name: NACOS_HOT_RELOAD
+              value: "false"
             - name: POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
                   name: chat-svc-secret
                   key: postgresDsn
             - name: KAFKA_BROKERS
-              value: "kafka-0.kafka-headless.ee-data.svc.cluster.local:9092"
+              value: "kafka.ee-data.svc.cluster.local:9092"
+            # Stage 72 对齐 compose：KAFKA_ENABLED=false 时走 DevEventPublisher（ADR-19）
+            - name: KAFKA_ENABLED
+              value: "true"
             - name: SKYWALKING_OAP_ADDR
               value: "skywalking-oap.ee-data:11800"
             - name: LOG_FORMAT

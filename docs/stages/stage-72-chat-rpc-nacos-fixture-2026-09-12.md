@@ -12,7 +12,7 @@
 | 项 1 集成测试（§契约 5） | ✅ testcontainers 真实 Postgres + migration 幂等 | (见 integration commit) |
 | 项 2 Kafka P2 调查 | ✅ 纠偏：§1.4 骨架已落地；§1.5 确实未做 | docs |
 | 项 3 Nacos | ✅ PR-1 验收达成：3 集成用例首次全绿 + 4 处代码修复 | (见 shared commit) |
-| 项 4 Helm 对齐 | ✅ 偏差清单产出 + configmap 端口错值修复 | docs + chart |
+| 项 4 Helm 对齐 | ✅ 机械对齐批次落地（tags/NACOS/KAFKA/gRPC 端口/错值），helm lint+template 断言全过 | docs + charts |
 
 ## 二、项 1：PinConversation / UpdateConversation（决策 4 ADR §八 收口）
 
@@ -79,7 +79,7 @@ SDK SelectInstances 读 serviceInfoHolder 本地缓存（push 刷新），服务
 | chat-svc/bff 容器 rebuild | 镜像仍是 v0.1.8/v0.1.11，dev 栈拉起前需 rebuild 才能让 PATCH 端到端生效 |
 | dev 模式全量 §契约 1-6 | 待 docker 栈拉起后补跑（含 PATCH/pin 容器端到端） |
 | Kafka P2 §1.5 Protobuf 迁移 | 范围已明确，3~4 天独立批次 |
-| Helm 机械修批次 | 偏差清单已出，1 天批次 |
+| Helm 残余 | nacos 安装 ns 假定 / web apiBaseUrl 走网关 / xtts 镜像源 / MinIO+db-migrate+apisix-seed chart 等价物 / values-prod 同步（见 backlog-order §项4 残余） |
 | SDK Discover 缓存陈旧性 | PR-2 前评估（push 空列表延迟保护） |
 
 ---

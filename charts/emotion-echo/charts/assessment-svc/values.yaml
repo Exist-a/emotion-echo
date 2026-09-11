@@ -1,9 +1,10 @@
 image:
   repository: emotion-echo/assessment-svc
-  tag: v0.1.0
+  tag: v0.1.2
   pullPolicy: IfNotPresent
 replicas: 1
 service:
+  grpcPort: 8886
   port: 8889
 resources:
   requests: {cpu: 100m, memory: 64Mi}

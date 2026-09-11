@@ -1,5 +1,5 @@
 image:
-  repository: emotion-echo/fer
+  repository: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/fer-tflite
   tag: v0.1.0
   pullPolicy: IfNotPresent
 replicas: 1

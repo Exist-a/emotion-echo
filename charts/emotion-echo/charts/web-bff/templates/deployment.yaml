@@ -31,14 +31,31 @@ spec:
           ports:
             - containerPort: {{ .Values.service.port }}
           env:
+            - name: NACOS_ENABLED
+              value: "true"
+            - name: NACOS_ADDR
+              value: "nacos.ee-app.svc.cluster.local:8848"
+            - name: NACOS_NAMESPACE
+              value: "emotion-echo-dev"
+            - name: NACOS_HOT_RELOAD
+              value: "false"
             - name: LOG_FORMAT
               value: json
             - name: LOG_LEVEL
               value: INFO
             - name: TZ
               value: Asia/Shanghai
-            - name: BFF_JWT_SECRET
-              value: "dev-bff-secret"
+            # Stage 72 对齐 compose：BFF → 4 svc gRPC 地址（Stage 63/64；HTTP BaseURL 见 configmap）
+            - name: USER_SVC_GRPC_ADDR
+              value: "user-svc.ee-app:8887"
+            - name: CHAT_SVC_GRPC_ADDR
+              value: "chat-svc.ee-app:8892"
+            - name: ASSESSMENT_SVC_GRPC_ADDR
+              value: "assessment-svc.ee-app:8886"
+            - name: ANALYTICS_SVC_GRPC_ADDR
+              value: "analytics-svc.ee-app:8885"
+            - name: AI_SVC_GRPC_ADDR
+              value: "ai-svc.ee-app:8892"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           startupProbe:

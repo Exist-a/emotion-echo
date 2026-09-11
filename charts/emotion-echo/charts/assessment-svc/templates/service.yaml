@@ -1,17 +1,18 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: user-svc
+  name: assessment-svc
   namespace: ee-app
   labels:
-    {{- include "user-svc.labels" . | nindent 4 }}
+    {{- include "assessment-svc.labels" . | nindent 4 }}
 spec:
   ports:
     - name: http
       port: {{ .Values.service.port }}
       targetPort: {{ .Values.service.port }}
+    # Stage 72：gRPC server :8886（AssessmentService 给内部 BFF，对齐 compose expose）
     - name: grpc
       port: {{ .Values.service.grpcPort }}
       targetPort: {{ .Values.service.grpcPort }}
   selector:
-    {{- include "user-svc.selectorLabels" . | nindent 4 }}
+    {{- include "assessment-svc.selectorLabels" . | nindent 4 }}

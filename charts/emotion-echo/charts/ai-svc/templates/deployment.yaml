@@ -34,13 +34,31 @@ spec:
             - name: grpc
               containerPort: {{ .Values.service.grpcPort }}
           env:
+            - name: NACOS_ENABLED
+              value: "true"
+            - name: NACOS_ADDR
+              value: "nacos.ee-app.svc.cluster.local:8848"
+            - name: NACOS_NAMESPACE
+              value: "emotion-echo-dev"
+            - name: NACOS_HOT_RELOAD
+              value: "false"
             - name: POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
                   name: ai-svc-secret
                   key: postgresDsn
             - name: KAFKA_BROKERS
-              value: "kafka-0.kafka-headless.ee-data.svc.cluster.local:9092"
+              value: "kafka.ee-data.svc.cluster.local:9092"
+            # Stage 72 对齐 compose：chat-svc → ai-svc 情绪分析 consumer（Stage 36-D G4）
+            - name: KAFKA_TOPIC
+              value: "chat-events"
+            - name: KAFKA_GROUP
+              value: "ai-svc"
+            - name: KAFKA_ENABLED
+              value: "true"
+            # ADR-19 PR-A3.1: DLQ topic（Stage 70）
+            - name: KAFKA_DLQ_TOPIC
+              value: "chat-events-dlq"
             - name: SKYWALKING_OAP_ADDR
               value: "skywalking-oap.ee-data:11800"
             - name: LLM_BASE_URL

@@ -34,6 +34,14 @@ spec:
             - name: grpc
               containerPort: {{ .Values.service.grpcPort }}
           env:
+            - name: NACOS_ENABLED
+              value: "true"
+            - name: NACOS_ADDR
+              value: "nacos.ee-app.svc.cluster.local:8848"
+            - name: NACOS_NAMESPACE
+              value: "emotion-echo-dev"
+            - name: NACOS_HOT_RELOAD
+              value: "false"
             - name: HTTP_PORT
               value: "{{ .Values.service.httpPort }}"
             - name: GRPC_PORT

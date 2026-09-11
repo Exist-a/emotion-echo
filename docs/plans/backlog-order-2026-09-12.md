@@ -27,7 +27,7 @@ related-stages:
 | 1 | chat-svc PinConversation + UpdateConversation 两个 RPC（含 schema migration + BFF 接通 + 前端 store 恢复真实 API） | 决策 4 ADR §八 + Stage 71 §六 | 1~2 天 | ✅ **已落地（Stage 72）** |
 | 2 | Kafka P2：consumer lag 监控 + 事件 Protobuf 迁移 | kafka-reliability-gaps.md §1.4/§1.5 | 3~4 天 | 🔍 已调查（§1.4 骨架已落地需纠偏，§1.5 确实未做） |
 | 3 | Nacos dev 模式全链路启用（ephemeral 实例 30s 被踢 / Heartbeat 未真正触发） | nacos-enablement-dev.md | 1~2 天 | 🔧 **部分落地（Stage 72）**：PR-1 验收达成 |
-| 4 | Helm chart ↔ compose dev 全面对齐 | todo-pile §D6 | 1 天 | 🔍 已调查（偏差清单见 §项4；configmap 端口错值已修） |
+| 4 | Helm chart ↔ compose dev 全面对齐 | todo-pile §D6 | 1 天 | ✅ **机械对齐批次已落地（Stage 72）**，残余见 §项4 末 |
 
 ---
 
@@ -83,9 +83,17 @@ RED（grpcserver + BFF handler 测试先行，断言真实行为而非 Unimpleme
 - **实测**：RegisterAndDiscover / HeartbeatKeepsInstanceAlive（30s 存活 = PR-1 验收）/ UnregisterRemoves 三集成用例**首次全绿**。
 - **已登记残余**：SDK SelectInstances 读本地缓存，服务端空列表 push 有延迟保护 → 注销后 Discover 陈旧 30s+（Unregister 测试改用 HTTP API 断言服务端真相）。BFF 走 Discover（PR-2）时需注意优雅退出短窗口仍可发现已停实例。
 
-## 项 4 · Helm chart 对齐（已出偏差清单，机械修批次待排期）
+## 项 4 · Helm chart 对齐（机械对齐批次已落地）
 
-**Stage 72 调查结论（2026-09-12）**：chart 自 Stage 32 后未跟 compose 演进，23 个 subchart 零处 NACOS_*，业务 svc tag 全停 v0.1.0（compose 已 v0.1.2~v0.1.11）。已修：web-bff configmap analytics 端口 8904→8893。其余偏差清单：
+**Stage 72 执行记录（2026-09-12）**，`helm lint` 0 failed + `helm template` 渲染断言全过：
+- image tag 对齐 compose：user v0.1.4 / chat v0.1.8 / analytics v0.1.5 / assessment v0.1.2 / ai v0.1.5 / bff v0.1.11
+- NACOS_* 四件套注入 7 个消费方（user/chat/analytics/assessment/ai/bff/llm-service，与 compose 一致；infra chart 不注入）
+- KAFKA_ENABLED（chat/analytics/ai）+ KAFKA_DLQ_TOPIC（analytics/ai）+ ai 的 KAFKA_TOPIC/GROUP 补齐；analytics 臆造 env 名（KAFKA_TOPIC_CHAT_EVENTS/KAFKA_CONSUMER_GROUP，代码不读）改为 KAFKA_ENABLED/DLQ；broker host 统一 kafka.ee-data.svc.cluster.local:9092
+- gRPC 端口暴露：user 8887 / chat 8892（service.yaml 补端口）+ analytics 8885 / assessment 8886（**新建 service.yaml**，原缺失）；BFF 注入 5 个 *_SVC_GRPC_ADDR
+- 错值顺修：web-bff 删写死 BFF_JWT_SECRET（Stage 32 PR-20 后不需要）；fer repository → ACR fer-tflite；web-bff configmap analytics 端口 8904→8893
+- **残余**（不在本批范围）：NACOS_ADDR 假定 nacos 在 ee-app（nacos subchart 未 hardcode namespace，取决于 release 安装 ns）；web apiBaseUrl 仍指 BFF（改走 APISIX 需确认 apisix subchart 安装 ns）；xtts 镜像源差异；MinIO/db-migrate/apisix-seed 的 chart 等价物缺失；values-prod 未同步
+
+**Stage 72 调查结论（2026-09-12）**：chart 自 Stage 32 后未跟 compose 演进，23 个 subchart 零处 NACOS_*，业务 svc tag 全停 v0.1.0（compose 已 v0.1.2~v0.1.11）。其余偏差清单：
 
 | 类别 | 偏差 |
 |---|---|

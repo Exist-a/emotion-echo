@@ -29,8 +29,19 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: {{ .Values.service.port }}
+            - name: http
+              containerPort: {{ .Values.service.port }}
+            - name: grpc
+              containerPort: {{ .Values.service.grpcPort }}
           env:
+            - name: NACOS_ENABLED
+              value: "true"
+            - name: NACOS_ADDR
+              value: "nacos.ee-app.svc.cluster.local:8848"
+            - name: NACOS_NAMESPACE
+              value: "emotion-echo-dev"
+            - name: NACOS_HOT_RELOAD
+              value: "false"
             - name: POSTGRES_DSN
               valueFrom:
                 secretKeyRef:

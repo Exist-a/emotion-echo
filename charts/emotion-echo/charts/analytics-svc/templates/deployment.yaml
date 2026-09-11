@@ -32,7 +32,18 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.service.grpcPort }}
+              protocol: TCP
           env:
+            - name: NACOS_ENABLED
+              value: "true"
+            - name: NACOS_ADDR
+              value: "nacos.ee-app.svc.cluster.local:8848"
+            - name: NACOS_NAMESPACE
+              value: "emotion-echo-dev"
+            - name: NACOS_HOT_RELOAD
+              value: "false"
             - name: POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
@@ -43,11 +54,13 @@ spec:
             - name: POSTGRES_SEARCH_PATH
               value: "emotion_echo_analytics,emotion_echo_chat,emotion_echo_ai,emotion_echo_assessment"
             - name: KAFKA_BROKERS
-              value: "kafka.ee-data:9092"
-            - name: KAFKA_TOPIC_CHAT_EVENTS
-              value: "chat-events"
-            - name: KAFKA_CONSUMER_GROUP
-              value: "analytics-svc"
+              value: "kafka.ee-data.svc.cluster.local:9092"
+            # Stage 72 对齐 compose：原 KAFKA_TOPIC_CHAT_EVENTS/KAFKA_CONSUMER_GROUP 代码不读
+            - name: KAFKA_ENABLED
+              value: "true"
+            # ADR-19 PR-A3.1: DLQ topic（Stage 70）
+            - name: KAFKA_DLQ_TOPIC
+              value: "chat-events-dlq"
             - name: TRIGGER_QUEUE_CAP
               value: "64"
             - name: SKYWALKING_OAP_ADDR
