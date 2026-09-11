@@ -37,6 +37,7 @@
 | Sprint E | user.proto 扩 Login/Register RPC + user-svc gRPC server 实现 + BFF client 接入 | `f755b71` | #33（user.proto 半残缺） |
 | Sprint F1 | user.proto 扩 ResetPassword/Logout RPC + user-svc gRPC server 实现 + BFF client 接入 | `fa324df` | #35（Sprint E 报告"还差 ResetPassword/Logout"延迟收口） |
 | Sprint F2 | emotion_query.proto 扩 MultiModalAnalyze/SynthesizeSpeech/AIHealth 3 RPC + ai-svc gRPC server 实现 + BFF aiGRPCClient 接入 + `/api/v1/ai/health` 路由补 | 本次 commit | 完成决策 4 "全文范围"目标 |
+| Sprint G | BFF 全局 gRPC error → HTTP code 映射（`MapGRPCError` helper + 5 client 24 处 `fmt.Errorf` → `wrapGRPCError` 包装 + handler 侧零改动自动生效） | `f874d3f` | 解决 tts/synthesize gRPC Unavailable 误返 502 问题（Sprint F2 V3 暴露） |
 
 ## 四、内部 svc-to-svc gRPC 化全清单
 
@@ -106,7 +107,7 @@
 | **chat-svc PinConversation gRPC** | 1 天（需 schema migration） | 🟢 低（业务未触发） |
 | **chat-svc StreamMessages gRPC** | 1 天（需重新评估流式业务场景） | 🟢 低 |
 | **错误码统一映射**（chat-svc mapLogicError / user-svc mapAuthError / analytics-svc / assessment-svc 各自分散） | 1 天 | 🟡 中 |
-| **BFF 全局 gRPC error → HTTP code 映射**（Sprint F2 V3 暴露：BFF 把 gRPC codes.Unavailable 统一标 502，与 HTTP handler 503 行为不符；建议在 `web-bff/internal/downstream/error.go` 加 `mapGRPCError(err) (int, string)` helper，4 svc gRPC client 复用） | 半天 | 🟡 中（用户可见错误语义） |
+| **BFF 全局 gRPC error → HTTP code 映射**（Sprint F2 V3 暴露：BFF 把 gRPC codes.Unavailable 统一标 502，与 HTTP handler 503 行为不符；建议在 `web-bff/internal/downstream/error.go` 加 `mapGRPCError(err) (int, string)` helper，4 svc gRPC client 复用） | 半天 | 🟢 **Sprint G 已完成（`f874d3f`）** — tts/synthesize 502→503；7 路径 Final E2E 全 200/503 |
 | **gRPC mTLS**（dev 用 insecure，prod mTLS） | 1 周 | 🟡 中（决策 18 已记录 prod 必做） |
 
 ## 九、调研依据

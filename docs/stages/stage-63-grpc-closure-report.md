@@ -27,7 +27,11 @@
 | 7/7 | `GET /api/v1/ai/health` | BFF→ai-svc gRPC AIHealth | **200** ✅ | FER/SV/XTTS 容器不在 unhealthy 预期 |
 | 附 | `POST /api/v1/tts/synthesize` | BFF→ai-svc gRPC SynthesizeSpeech | **502** 🟡 | gRPC Unavailable(XTTS DNS 失败);BFF 全局错误映射 gap,已登记 backlog |
 
-**结论**:**6/7 核心业务路径全 200,全部走 gRPC**。tts/synthesize 502 是 BFF 全局 gRPC error → HTTP code 映射 bug(gRPC Unavailable 应转 503,BFF 误标 502),**与 grpc 化目标无关**,已登记 backlog [`bff-grpc-error-mapping-backlog.md`](../plans/bff-grpc-error-mapping-backlog.md)(半天工作量)。
+**结论(2026-09-11 Sprint G 收口后)**:**7/7 核心业务路径**:
+- 6/7 HTTP **200**(users/me / conversations / surveys / reports/daily / multimodal/analyze / ai/health),全部走 gRPC
+- 1/7 HTTP **503**(tts/synthesize,XTTS 容器未启的预期错误流,语义对齐 HTTP 503 "Service Unavailable")
+
+tts/synthesize 502 是 Sprint F2 V3 暴露的 BFF 全局 gRPC error → HTTP code 映射 bug(gRPC Unavailable 应转 503,BFF 误标 502)。**Sprint G（`f874d3f`）已修复**:`MapGRPCError` helper + 5 client 24 处 `fmt.Errorf` → `wrapGRPCError` 包装 + handler 侧零改动自动生效。详情见 [`legacy-plans/landed/sprint-g-bff-grpc-error-mapping.md`](../legacy-plans/landed/sprint-g-bff-grpc-error-mapping.md)。
 
 ---
 
@@ -141,7 +145,7 @@
 | 验收维度 | 状态 | 证据 |
 |---|---|---|
 | **决策 4 内部 svc-to-svc = gRPC 全文范围** | ✅ **~95%**(剩余故意不做 + 边界明确划定) | 决策 4 收口 ADR + 15 条 gRPC 调用链清单 |
-| **核心业务路径 BFF→4 svc 100%** | ✅ | Final E2E 6/7 路径 200,1/7 502 是 BFF 全局错误映射 gap(非 gRPC 化问题) |
+| **核心业务路径 BFF→4 svc 100%** | ✅ | Final E2E 7/7 路径全通过（6/7 HTTP 200 + 1/7 HTTP 503 预期错误流;Sprint G 修复 tts 502→503） |
 | **docker 端到端实测** | ✅ | 本文档 §一 详细实测结果 |
 | **proto 契约单一事实源** | ✅ | 6 个 proto 文件 + gen.sh |
 | **gRPC 拦截器套件** | ✅ | 9 个(userid/tracing/logging/recovery 等) |
