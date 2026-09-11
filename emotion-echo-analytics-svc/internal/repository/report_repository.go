@@ -178,7 +178,7 @@ SELECT
     COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_chat.msg_summary_v
               WHERE user_id = $1 AND send_time::date = $2::date), 0) AS message_count,
     COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_analytics.user_behavior_events
-              WHERE user_id = $1 AND event_type = 'conversation' AND occurred_at::date = $2::date), 0) AS conversation_count,
+              WHERE user_id = $1 AND event_type LIKE 'conversation%' AND occurred_at::date = $2::date), 0) AS conversation_count,
     COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_assessment.assessment_v
               WHERE user_id = $1 AND created_at::date = $2::date), 0) AS assessment_count,
     COALESCE((SELECT AVG(sentiment_score)::float8 FROM emotion_echo_ai.daily_emotion_v

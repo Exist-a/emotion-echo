@@ -189,7 +189,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-analytics-svc/Dockerfile
-    image: emotion-echo/analytics-svc:v0.1.2
+    image: emotion-echo/analytics-svc:v0.1.3
     container_name: emotion-echo-analytics-svc
     restart: unless-stopped
     environment:
