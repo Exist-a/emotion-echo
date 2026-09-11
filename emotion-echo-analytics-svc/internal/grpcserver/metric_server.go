@@ -20,6 +20,7 @@ import (
 	"emotion-echo-analytics-svc/internal/types"
 
 	emotionanalytics "github.com/emotion-echo/shared/pkg/emotionanalytics"
+	grpcerr "github.com/emotion-echo/shared/pkg/grpcerr"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -29,6 +30,11 @@ import (
 type analyticsServer struct {
 	emotionanalytics.UnimplementedAnalyticsServiceServer
 	svcCtx *svc.ServiceContext
+}
+
+// B4: 注册业务 sentinel errors
+func init() {
+	grpcerr.MapError(repository.ErrNotFound, codes.NotFound)
 }
 
 // parseDate YYYY-MM-DD → unix seconds（start of day UTC）
@@ -101,7 +107,7 @@ func (s *analyticsServer) ReportsDaily(ctx context.Context, req *emotionanalytic
 				Date: req.Date,
 			}, nil
 		}
-		return nil, status.Errorf(codes.Internal, "reportsDaily: %v", err)
+		return nil, grpcerr.MapToError(err, "reportsDaily")
 	}
 	if resp == nil || resp.Report == nil {
 		return &emotionanalytics.ReportsDailyResponse{Date: req.Date}, nil
@@ -136,7 +142,7 @@ func (s *analyticsServer) ReportsTrend(ctx context.Context, req *emotionanalytic
 		if errors.Is(err, repository.ErrNotFound) {
 			return &emotionanalytics.ReportsTrendResponse{Type: req.Type}, nil
 		}
-		return nil, status.Errorf(codes.Internal, "reportsTrend: %v", err)
+		return nil, grpcerr.MapToError(err, "reportsTrend")
 	}
 	if resp == nil || resp.Report == nil {
 		return &emotionanalytics.ReportsTrendResponse{Type: req.Type}, nil
@@ -205,7 +211,7 @@ func (s *analyticsServer) MentalHealthAssessment(ctx context.Context, req *emoti
 		if errors.Is(err, repository.ErrNotFound) {
 			return &emotionanalytics.MentalHealthAssessmentResponse{}, nil
 		}
-		return nil, status.Errorf(codes.Internal, "mentalHealthAssessment: %v", err)
+		return nil, grpcerr.MapToError(err, "mentalHealthAssessment")
 	}
 	if resp == nil || resp.Assessment == nil {
 		return &emotionanalytics.MentalHealthAssessmentResponse{}, nil
@@ -246,7 +252,7 @@ func (s *analyticsServer) MentalHealthTrigger(ctx context.Context, req *emotiona
 		AssessmentType: req.TriggerReason,
 	})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "mentalHealthTrigger: %v", err)
+		return nil, grpcerr.MapToError(err, "mentalHealthTrigger")
 	}
 	if resp == nil {
 		return &emotionanalytics.MentalHealthTriggerResponse{Triggered: false, Message: "no-op"}, nil
@@ -269,7 +275,7 @@ func (s *analyticsServer) MentalHealthTrend(ctx context.Context, req *emotionana
 		if errors.Is(err, repository.ErrNotFound) {
 			return &emotionanalytics.MentalHealthTrendResponse{}, nil
 		}
-		return nil, status.Errorf(codes.Internal, "mentalHealthTrend: %v", err)
+		return nil, grpcerr.MapToError(err, "mentalHealthTrend")
 	}
 	if resp == nil || resp.Report == nil {
 		return &emotionanalytics.MentalHealthTrendResponse{}, nil

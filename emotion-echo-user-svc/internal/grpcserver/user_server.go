@@ -19,10 +19,19 @@ import (
 	"emotion-echo-user-svc/internal/types"
 
 	emotionuser "github.com/emotion-echo/shared/pkg/emotionuser"
+	grpcerr "github.com/emotion-echo/shared/pkg/grpcerr"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// B4: 注册业务 sentinel errors（grpcerr.Map 优先匹配）
+func init() {
+	grpcerr.MapError(logic.ErrInvalidCredentials, codes.Unauthenticated)
+	grpcerr.MapError(logic.ErrInvalidVerifyCode, codes.PermissionDenied)
+	grpcerr.MapError(logic.ErrUsernameTaken, codes.AlreadyExists)
+	grpcerr.MapError(logic.ErrValidation, codes.InvalidArgument)
+}
 
 // userServer 实现 emotionuser.UserServiceServer
 type userServer struct {
@@ -70,7 +79,7 @@ func (s *userServer) UpdateProfile(ctx context.Context, req *emotionuser.UpdateP
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "user not found")
 		}
-		return nil, status.Errorf(codes.Internal, "updateProfile: %v", err)
+		return nil, grpcerr.MapToError(err, "updateProfile")
 	}
 	return toProtoUser(resp.User), nil
 }
@@ -87,7 +96,7 @@ func (s *userServer) GetUserById(ctx context.Context, req *emotionuser.GetUserBy
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "user not found")
 		}
-		return nil, status.Errorf(codes.Internal, "getUserById: %v", err)
+		return nil, grpcerr.MapToError(err, "getUserById")
 	}
 	return toProtoUser(resp.User), nil
 }
@@ -173,20 +182,12 @@ func (s *userServer) Logout(ctx context.Context, req *emotionuser.LogoutRequest)
 }
 
 // mapAuthError 把 logic.AuthLogic 错误映射到 gRPC status code
+//
+// B4：迁移到 grpcerr.Wrap，业务 sentinel errors 由 init() 注册到 grpcerr。
+// 保留函数名作为 BFF handler 已有调用点的稳定入口。
 func mapAuthError(err error) error {
 	if err == nil {
 		return nil
 	}
-	switch {
-	case errors.Is(err, logic.ErrInvalidCredentials):
-		return status.Error(codes.Unauthenticated, err.Error())
-	case errors.Is(err, logic.ErrInvalidVerifyCode):
-		return status.Error(codes.PermissionDenied, err.Error())
-	case errors.Is(err, logic.ErrUsernameTaken):
-		return status.Error(codes.AlreadyExists, err.Error())
-	case errors.Is(err, logic.ErrValidation):
-		return status.Error(codes.InvalidArgument, err.Error())
-	default:
-		return status.Error(codes.Internal, err.Error())
-	}
+	return grpcerr.MapToError(err, "auth")
 }

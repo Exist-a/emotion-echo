@@ -28,8 +28,9 @@ import (
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 
-	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	emotionchat "github.com/emotion-echo/shared/pkg/emotionchat"
+	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	grpcerr "github.com/emotion-echo/shared/pkg/grpcerr"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -87,7 +88,7 @@ func (s *chatServer) CreateConversation(ctx context.Context, req *emotionchat.Cr
 		Title: req.GetTitle(),
 	})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create conversation: %v", err)
+		return nil, grpcerr.MapToError(err, "create conversation")
 	}
 	if resp == nil || resp.Conversation.Id == 0 {
 		return nil, status.Error(codes.Internal, "empty conversation response")
@@ -194,31 +195,17 @@ func (s *chatServer) DeleteConversation(ctx context.Context, req *emotionchat.De
 
 // mapLogicError 把 logic 层业务错误映射到 gRPC status code。
 //
-// Sprint D 简化策略：
-//   - repository.ErrNotFound → codes.NotFound
-//   - "unauthorized" 开头 → codes.Unauthenticated
-//   - "forbidden" 开头 → codes.PermissionDenied
-//   - "validation" 开头 → codes.InvalidArgument
-//   - 其他 → codes.Internal（保留原 err.Error() 在 msg 里）
-//
-// 未实现完整错误枚举是 Sprint E 的事（chat-svc 错误码统一收口），当前优先让 4 RPC 端到端通。
+// B4：迁移到 grpcerr.Wrap + MapError 注册。chat-svc 业务 sentinel
+// （repository.ErrNotFound 等）由 init() 注册到 grpcerr 全局表。
+func init() {
+	grpcerr.MapError(repository.ErrNotFound, codes.NotFound)
+}
+
 func mapLogicError(err error, op string) error {
 	if err == nil {
 		return nil
 	}
-	msg := err.Error()
-	switch {
-	case errors.Is(err, repository.ErrNotFound):
-		return status.Error(codes.NotFound, msg)
-	case len(msg) >= 12 && msg[:12] == "unauthorized":
-		return status.Error(codes.Unauthenticated, msg)
-	case len(msg) >= 9 && msg[:9] == "forbidden":
-		return status.Error(codes.PermissionDenied, msg)
-	case len(msg) >= 10 && msg[:10] == "validation":
-		return status.Error(codes.InvalidArgument, msg)
-	default:
-		return status.Errorf(codes.Internal, "%s: %s", op, msg)
-	}
+	return grpcerr.MapToError(err, op)
 }
 
 // PinConversation 占位实现

@@ -22,10 +22,16 @@ import (
 	"emotion-echo-assessment-svc/internal/types"
 
 	emotionassessment "github.com/emotion-echo/shared/pkg/emotionassessment"
+	grpcerr "github.com/emotion-echo/shared/pkg/grpcerr"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// B4: 注册业务 sentinel errors
+func init() {
+	grpcerr.MapError(repository.ErrNotFound, codes.NotFound)
+}
 
 // assessmentServer 实现 emotionassessment.AssessmentServiceServer
 type assessmentServer struct {
@@ -130,7 +136,7 @@ func (s *assessmentServer) ListSurveys(ctx context.Context, req *emotionassessme
 		Limit: limit,
 	})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listSurveys: %v", err)
+		return nil, grpcerr.MapToError(err, "listSurveys")
 	}
 	if resp == nil {
 		return &emotionassessment.ListSurveysResponse{Items: nil, Total: 0}, nil
@@ -154,7 +160,7 @@ func (s *assessmentServer) GetSurvey(ctx context.Context, req *emotionassessment
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "survey not found")
 		}
-		return nil, status.Errorf(codes.Internal, "getSurvey: %v", err)
+		return nil, grpcerr.MapToError(err, "getSurvey")
 	}
 	return toProtoSurvey(resp), nil
 }
@@ -186,7 +192,7 @@ func (s *assessmentServer) SubmitSurvey(ctx context.Context, req *emotionassessm
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "survey not found")
 		}
-		return nil, status.Errorf(codes.Internal, "submitSurvey: %v", err)
+		return nil, grpcerr.MapToError(err, "submitSurvey")
 	}
 	return toProtoSurveyResult(resp), nil
 }
@@ -200,7 +206,7 @@ func (s *assessmentServer) ListMyResults(ctx context.Context, req *emotionassess
 		Limit: int(req.Limit),
 	})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listMyResults: %v", err)
+		return nil, grpcerr.MapToError(err, "listMyResults")
 	}
 	if resp == nil {
 		return &emotionassessment.ListMyResultsResponse{Items: nil, Total: 0}, nil
@@ -224,7 +230,7 @@ func (s *assessmentServer) GetSurveyResult(ctx context.Context, req *emotionasse
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "result not found")
 		}
-		return nil, status.Errorf(codes.Internal, "getSurveyResult: %v", err)
+		return nil, grpcerr.MapToError(err, "getSurveyResult")
 	}
 	return &emotionassessment.SurveyResult{
 		ResultId:   int64(resp.ResultID),

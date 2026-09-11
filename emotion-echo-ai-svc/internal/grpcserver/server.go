@@ -15,7 +15,6 @@ package grpcserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -29,6 +28,7 @@ import (
 
 	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
+	grpcerr "github.com/emotion-echo/shared/pkg/grpcerr"
 	"github.com/emotion-echo/shared/pkg/skywalking"
 
 	"google.golang.org/grpc"
@@ -151,7 +151,7 @@ func (s *emotionQueryServer) GetEmotionByMessage(ctx context.Context, req *emoti
 	}
 	e, err := s.repo.GetByMessageID(ctx, req.MessageId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "query failed: %v", err)
+		return nil, grpcerr.MapToError(err, "query")
 	}
 	if e == nil {
 		return nil, status.Error(codes.NotFound, "emotion not found for this message")
@@ -169,7 +169,7 @@ func (s *emotionQueryServer) GetEmotionByConversation(ctx context.Context, req *
 	}
 	rows, err := s.repo.ListByConversationID(ctx, req.ConversationId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "query failed: %v", err)
+		return nil, grpcerr.MapToError(err, "query")
 	}
 	if len(rows) > limit {
 		rows = rows[:limit]
@@ -198,7 +198,7 @@ func (s *emotionQueryServer) GetFusedEmotion(ctx context.Context, req *emotionqu
 	}
 	f, err := s.fusedEmotionRepo.GetByMessageID(ctx, req.MessageId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "query failed: %v", err)
+		return nil, grpcerr.MapToError(err, "query")
 	}
 	if f == nil {
 		return nil, status.Error(codes.NotFound, "fused emotion not found for this message")
@@ -232,7 +232,7 @@ func (s *emotionQueryServer) UpsertNeutralEmotion(ctx context.Context, req *emot
 
 	// 幂等检查：先按 event_id 查一次
 	if existing, err := s.repo.GetByEventID(ctx, req.EventId); err != nil {
-		return nil, status.Errorf(codes.Internal, "lookup by event_id: %v", err)
+		return nil, grpcerr.MapToError(err, "lookup by event_id")
 	} else if existing != nil {
 		return &emotionquery.UpsertNeutralEmotionResponse{
 			EmotionAnalysisId: existing.ID,
@@ -252,7 +252,7 @@ func (s *emotionQueryServer) UpsertNeutralEmotion(ctx context.Context, req *emot
 		Model:          "sync-fallback",
 	}
 	if err := s.repo.Create(ctx, e); err != nil {
-		return nil, status.Errorf(codes.Internal, "create neutral placeholder: %v", err)
+		return nil, grpcerr.MapToError(err, "create neutral placeholder")
 	}
 	return &emotionquery.UpsertNeutralEmotionResponse{
 		EmotionAnalysisId: e.ID,
@@ -379,28 +379,22 @@ func (s *emotionQueryServer) AIHealth(ctx context.Context, req *emotionquery.AIH
 	return out, nil
 }
 
+// B4: 注册 ai-svc 业务 sentinel errors（grpcerr.Map 优先匹配）
+func init() {
+	grpcerr.MapError(aiclient.ErrNotConfigured, codes.Unavailable)
+	grpcerr.MapError(logic.ErrXTTSUnavailable, codes.Unavailable)
+	grpcerr.MapError(logic.ErrMultiModalNotInit, codes.Unavailable)
+}
+
 // mapAIError 把 ai-svc 业务错误映射到 gRPC status code
 //
-// 语义与 HTTP handler 一致：
-//   - aiclient.ErrNotConfigured / logic.ErrXTTSUnavailable → codes.Unavailable（与 HTTP 503 对齐）
-//   - 其他 → codes.Internal
-//
-// 不在此做 NotFound / InvalidArgument 区分——业务错误信息在 err.Error() 里。
+// B4：迁移到 grpcerr.MapToError，业务 errors 由 init() 注册。
+// 历史 "call XTTS" / "XTTS_BASE_URL" 字符串前缀兜底由 grpcerr stringPrefixes 覆盖。
 func mapAIError(err error) error {
 	if err == nil {
 		return nil
 	}
-	msg := err.Error()
-	switch {
-	case errors.Is(err, aiclient.ErrNotConfigured),
-		errors.Is(err, logic.ErrXTTSUnavailable),
-		errors.Is(err, logic.ErrMultiModalNotInit),
-		strings.Contains(msg, "call XTTS"),
-		strings.Contains(msg, "XTTS_BASE_URL"):
-		return status.Error(codes.Unavailable, msg)
-	default:
-		return status.Error(codes.Internal, msg)
-	}
+	return grpcerr.MapToError(err, "ai")
 }
 
 func toProtoEmotion(e *model.EmotionAnalysis) *emotionquery.Emotion {
