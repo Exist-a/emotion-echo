@@ -154,6 +154,30 @@ FastAPI 用 `TestClient` / `AsyncClient` 测路由；算法逻辑单独 unit tes
 | 单 PR 范围 | 一个 TDD 循环（一个或一组相关测试 + 它们的实现） |
 | 合并前 | `go test ./...` + `go vet ./...` + (前端) `npm run lint` **+ §2.4 数据契约 smoke 全绿** |
 
+### 2.5 分支生命周期与推送纪律（2026-09-12 起生效）
+
+> **背景**：2026-09-12 仓库体检发现 32 个远端分支、34 个本地分支、11 个 worktree **全部已合并进 main 却残留未删**（最早的可追溯到 Stage 36 时代），严重干扰"哪些工作还没落地"的判断。
+> 为杜绝复发，每轮工作结束时必须执行以下收口动作。
+
+**"一轮工作"** = 一个 TDD 循环 / 一个 Stage 收口 / 一次会话结束。
+
+每轮完成时，按顺序执行：
+
+| 步骤 | 动作 | 命令 |
+|------|------|------|
+| ① push | 本轮 commit 必须推到远端。main 直接 push；feature 分支 push 后合并 | `git push origin <branch>` |
+| ② 删已合并分支 | feature 分支合并进 main 后，**立刻**删本地 + 远端分支 | `git branch -d <branch>` + `git push origin --delete <branch>` |
+| ③ 删 worktree | 临时 worktree 用完即删（连带 sibling 目录） | `git worktree remove <path>` |
+| ④ 收口自检 | 三条命令全过才算收口 | 见下 |
+
+**收口自检**（任何一轮结束前必跑，输出必须满足右侧断言）：
+
+```bash
+git status                    # working tree 干净（或改动是有意留下的）
+git status -sb                # main 与 origin/main 无 ahead/behind
+git branch --merged main      # 除 main 外应为空 —— 有输出说明残留了已合并分支
+```
+
 ### 2.3 覆盖率底线
 
 | 类型 | 底线 |
@@ -269,6 +293,7 @@ type IDGen interface { New() string }
 | 跳过 §2.4 数据契约 smoke 直接合并 | smoke 16/16 全绿但 dev 模式 `chartData=[]` / `event_type='conversation'` / `permission denied` 类 bug 永远抓不到 |
 | dev 模式改动只测 `KAFKA_ENABLED=true` 路径 | outbox publisher=nil、Kafka fallback 等 dev-only 路径 bug 潜伏到下次拉数据才暴露 |
 | 写文档前不读代码 / 不查 ADR / 不跑 smoke 直接动笔 | roadmap / ADR / plan 与实际架构不符，修代码时按错文档走（如 A1 修复方向定错、A4 修 GRANT 但视图没建） |
+| 合并后残留 feature 分支 / worktree 不删（违反 §2.5） | 残留分支干扰"哪些工作未落地"判断——2026-09-12 一次性清理了 32 远端 + 34 本地分支 + 11 worktree，全部已合并却无人删 |
 
 ---
 
@@ -291,7 +316,7 @@ PR review 时若发现违反 TDD：
 
 ---
 
-> 最后更新：2026-07-15 by 当前协作 Agent  
+> 最后更新：2026-09-12 by 当前协作 Agent（新增 §2.5 分支生命周期与推送纪律）  
 > 适用版本：本约定生效后的所有 PR
 
 ---
