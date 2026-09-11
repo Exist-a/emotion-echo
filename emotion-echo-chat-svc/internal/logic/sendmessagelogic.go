@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"emotion-echo-chat-svc/internal/events"
@@ -17,6 +18,7 @@ import (
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/google/uuid"
+	"google.golang.org/grpc/metadata"
 	
 	"gorm.io/gorm"
 )
@@ -224,6 +226,12 @@ func (l *SendMessageLogic) persistWithOutbox(
 //   - KAFKA_ENABLED=true（生产模式）：Kafka 异步管道已能写入 ai-svc，不重复写
 //
 // 错误处理：best-effort，失败只 log 不阻塞消息返回（dev fallback 语义）。
+//
+// Stage 69 修复：调 UpsertNeutralEmotion 前必须把 uid 注入 outgoing metadata
+// 的 x-user-id 头，否则 ai-svc gRPC server NewServerUserIDInterceptor
+// （shared/pkg/grpcinterceptor/auth.go）从 incoming metadata 找不到
+// x-user-id → 返 codes.Unauthenticated。修复前 docker logs 出现
+// "missing x-user-id metadata"。
 func (l *SendMessageLogic) maybeUpsertNeutralEmotion(uid, convID, messageID int64, eventID string) {
 	if l.svcCtx.Config.Kafka.Enabled {
 		// 生产模式：Kafka consumer 会负责写 emotion_analysis，不重复
@@ -239,7 +247,9 @@ func (l *SendMessageLogic) maybeUpsertNeutralEmotion(uid, convID, messageID int6
 		ConversationId: convID,
 		EventId:        eventID,
 	}
-	if _, err := l.svcCtx.AIClient.UpsertNeutralEmotion(l.ctx, req); err != nil {
+	// Stage 69：注入 x-user-id metadata 让 ai-svc 拦截器能读到 user_id
+	outCtx := metadata.AppendToOutgoingContext(l.ctx, "x-user-id", strconv.FormatInt(uid, 10))
+	if _, err := l.svcCtx.AIClient.UpsertNeutralEmotion(outCtx, req); err != nil {
 		slog.ErrorContext(l.ctx, "dev fallback UpsertNeutralEmotion failed",
 			"msg_id", messageID, "event_id", eventID, "err", err)
 	}
