@@ -96,7 +96,7 @@ func TestChatClient_DeleteConversation_Success(t *testing.T) {
 	assert.Equal(t, "/api/v1/conversations/5", gotPath)
 }
 
-func TestChatClient_PinConversation_NotImplemented(t *testing.T) {
+func TestChatClient_PinConversation_Upstream404_ReturnsError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "404 page not found"})
@@ -104,8 +104,8 @@ func TestChatClient_PinConversation_NotImplemented(t *testing.T) {
 	defer srv.Close()
 
 	c := NewChatClient(ChatClientOptions{BaseURL: srv.URL, TimeoutMs: 1000})
-	err := c.PinConversation(context.Background(), 5)
-	require.Error(t, err, "下游未实现 pin → 404 → error")
+	err := c.PinConversation(context.Background(), 5, true)
+	require.Error(t, err, "HTTP fallback 下游 404 → error")
 }
 
 func TestChatClient_Upstream500_ReturnsError(t *testing.T) {

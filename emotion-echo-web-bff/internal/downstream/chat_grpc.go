@@ -123,16 +123,34 @@ func (c *chatGRPCClient) DeleteConversation(ctx context.Context, conversationID 
 	return nil
 }
 
-// PinConversation 占位（chat-svc HTTP 端点也未实现；保留接口）
-func (c *chatGRPCClient) PinConversation(ctx context.Context, conversationID int64) error {
+// PinConversation RPC（Stage 72：chat-svc 已实现）
+func (c *chatGRPCClient) PinConversation(ctx context.Context, conversationID int64, isPinned bool) error {
 	cli := emotionchat.NewChatServiceClient(c.conn)
 	_, err := cli.PinConversation(withUserID(ctx), &emotionchat.PinConversationRequest{
 		ConversationId: conversationID,
+		IsPinned:       isPinned,
 	})
 	if err != nil {
 		return wrapGRPCError(err, "chat pin conversation")
 	}
 	return nil
+}
+
+// UpdateConversation RPC（Stage 72：chat-svc 已实现，当前仅支持 title）
+func (c *chatGRPCClient) UpdateConversation(ctx context.Context, conversationID int64, title string) (*UpdateConversationResp, error) {
+	cli := emotionchat.NewChatServiceClient(c.conn)
+	resp, err := cli.UpdateConversation(withUserID(ctx), &emotionchat.UpdateConversationRequest{
+		ConversationId: conversationID,
+		Title:          title,
+	})
+	if err != nil {
+		return nil, wrapGRPCError(err, "chat update conversation")
+	}
+	return &UpdateConversationResp{
+		Success: resp.GetSuccess(),
+		Id:      resp.GetId(),
+		Title:   resp.GetTitle(),
+	}, nil
 }
 
 // StreamMessages gRPC server stream 客户端（PR-GRPC-5 阶段：架构判断）
@@ -189,6 +207,7 @@ func fromProtoConversation(c *emotionchat.Conversation) *ConversationView {
 		Title:     c.Title,
 		MsgCount:  int(c.MsgCount),
 		Status:    int(c.Status),
+		IsPinned:  c.IsPinned,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}

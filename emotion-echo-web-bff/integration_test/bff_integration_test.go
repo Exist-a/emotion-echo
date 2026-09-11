@@ -200,6 +200,11 @@ func (f *fakeIntegrationChat) ListMessages(_ context.Context, _ int64, _ int) ([
 	return []downstream.MessageView{{ID: 1, Content: "hi"}}, nil
 }
 func (f *fakeIntegrationChat) DeleteConversation(_ context.Context, _ int64) error { return nil }
-func (f *fakeIntegrationChat) PinConversation(_ context.Context, _ int64) error   { return nil }
+func (f *fakeIntegrationChat) PinConversation(_ context.Context, _ int64, _ bool) error {
+	return nil
+}
+func (f *fakeIntegrationChat) UpdateConversation(_ context.Context, conversationID int64, title string) (*downstream.UpdateConversationResp, error) {
+	return &downstream.UpdateConversationResp{Success: true, Id: conversationID, Title: title}, nil
+}
 
 var _ = time.Second // 保留 time import（部分平台编译）

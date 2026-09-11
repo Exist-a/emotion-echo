@@ -8,8 +8,7 @@
 //   GET    /api/v1/conversations/:id/messages?limit= → {messages: [MessageView]}
 //   DELETE /api/v1/conversations/:id        → {success, id}
 //
-// 注：文档 T2 列的 PinConversation 下游尚未实现（chat-svc 无 pin 端点）；
-// 接口保留占位，实现返回下游 404 错误（未来 chat-svc 增加后可直接用）。
+// 注：PinConversation / UpdateConversation 已在 Stage 72 落地（chat-svc gRPC RPC）。
 package downstream
 
 import (
@@ -34,8 +33,16 @@ type ConversationView struct {
 	Title     string `json:"title"`
 	MsgCount  int    `json:"msgCount"`
 	Status    int    `json:"status"`
+	IsPinned  bool   `json:"isPinned"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
+}
+
+// UpdateConversationResp 对应 chat-svc types.UpdateConversationResp（Stage 72）
+type UpdateConversationResp struct {
+	Success bool   `json:"success"`
+	Id      int64  `json:"id"`
+	Title   string `json:"title"`
 }
 
 // MessageView 对应 chat-svc types.MessageView
@@ -79,8 +86,10 @@ type ChatClient interface {
 	ListConversations(ctx context.Context, limit, offset int) ([]ConversationView, bool, error)
 	// DeleteConversation 删除会话
 	DeleteConversation(ctx context.Context, conversationID int64) error
-	// PinConversation 置顶会话（下游未实现；接口保留，未来 chat-svc 支持后可用）
-	PinConversation(ctx context.Context, conversationID int64) error
+	// PinConversation 置顶/取消置顶会话（Stage 72 chat-svc RPC 已落地）
+	PinConversation(ctx context.Context, conversationID int64, isPinned bool) error
+	// UpdateConversation 更新会话（当前仅支持 title；Stage 72）
+	UpdateConversation(ctx context.Context, conversationID int64, title string) (*UpdateConversationResp, error)
 }
 
 // ChatClientOptions 构造选项
@@ -306,12 +315,17 @@ func (c *chatHTTPClient) DeleteConversation(ctx context.Context, conversationID 
 	return nil
 }
 
-func (c *chatHTTPClient) PinConversation(ctx context.Context, conversationID int64) error {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut,
-		c.baseURL+"/api/v1/conversations/"+strconv.FormatInt(conversationID, 10)+"/pin", nil)
+func (c *chatHTTPClient) PinConversation(ctx context.Context, conversationID int64, isPinned bool) error {
+	body, err := json.Marshal(map[string]bool{"isPinned": isPinned})
 	if err != nil {
 		return err
 	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		c.baseURL+"/api/v1/conversations/"+strconv.FormatInt(conversationID, 10)+"/pin", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
 	applyAuthHeader(httpReq, ctx)
 
 	resp, err := c.http.Do(httpReq)
@@ -320,7 +334,37 @@ func (c *chatHTTPClient) PinConversation(ctx context.Context, conversationID int
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return readError(resp) // 下游未实现 → 404（未来支持后自动工作）
+		return readError(resp)
 	}
 	return nil
+}
+
+// UpdateConversation HTTP fallback：PATCH chat-svc /api/v1/conversations/:id。
+// chat-svc HTTP 端点未实现（Stage 72 走 gRPC only）→ 404 readError；未来补 HTTP 端点后自动工作。
+func (c *chatHTTPClient) UpdateConversation(ctx context.Context, conversationID int64, title string) (*UpdateConversationResp, error) {
+	body, err := json.Marshal(map[string]string{"title": title})
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+		c.baseURL+"/api/v1/conversations/"+strconv.FormatInt(conversationID, 10), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	applyAuthHeader(httpReq, ctx)
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("downstream: update conversation: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readError(resp)
+	}
+	var out UpdateConversationResp
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("downstream: update conversation: decode resp: %w", err)
+	}
+	return &out, nil
 }

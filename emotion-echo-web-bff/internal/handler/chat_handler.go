@@ -36,29 +36,58 @@ func NewChatHandler(chat downstream.ChatClient) *ChatHandler {
 func (h *ChatHandler) Register(r *gin.Engine) {
 	r.GET("/api/v1/conversations", h.listConversations)
 	r.POST("/api/v1/conversations", h.createConversation)
-	// Stage 71 PR-C8：注册 PATCH /api/v1/conversations/:id（前端 store 调用对齐）
-	// 当前 chat-svc 缺 UpdateConversation RPC（决策 4 ADR §八 backlog），
-	// handler 临时返 501 Not Implemented + 透明错误信息；前端 store
-	// updateConversationTitle 已降级为本地更新，等 chat-svc 落地后改 handler。
+	// Stage 72：PATCH 接真实 chat-svc UpdateConversation RPC（决策 4 ADR §八 收口）
 	r.PATCH("/api/v1/conversations/:id", h.updateConversation)
+	// Stage 72：置顶/取消置顶（chat-svc PinConversation RPC 已落地）
+	r.POST("/api/v1/conversations/:id/pin", h.pinConversation)
 	r.POST("/api/v1/conversations/:id/messages", h.sendMessage)
 	r.GET("/api/v1/conversations/:id/messages", h.listMessages)
 	r.DELETE("/api/v1/conversations/:id", h.deleteConversation)
 }
 
-// updateConversation PATCH /api/v1/conversations/:id 暂存 handler
+// updateConversation PATCH /api/v1/conversations/:id（Stage 72 真实实现）
 //
-// Stage 71 PR-C8：让前端契约测试对齐（API_ROUTES.conversationById 路径 PATCH）。
-// 真实实现需要 chat-svc UpdateConversation RPC + repo + logic（决策 4 ADR §八 backlog）。
+// 调 chat-svc UpdateConversation RPC（当前仅支持 title）。
 func (h *ChatHandler) updateConversation(c *gin.Context) {
 	id, ok := pathID(c)
 	if !ok {
 		return
 	}
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "chat-svc UpdateConversation RPC not implemented (decision 4 ADR §八 backlog)",
-		"id":    id,
-	})
+	var req struct {
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
+		return
+	}
+	resp, err := h.chat.UpdateConversation(session.WithRequestAuth(c), id, req.Title)
+	if err != nil {
+		Fail(c, statusFor(err), 1, err.Error())
+		return
+	}
+	OK(c, gin.H{"success": resp.Success, "id": resp.Id, "title": resp.Title})
+}
+
+// pinConversation POST /api/v1/conversations/:id/pin（Stage 72 真实实现）
+//
+// 调 chat-svc PinConversation RPC；请求体 {"isPinned": true|false}。
+func (h *ChatHandler) pinConversation(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		IsPinned bool `json:"isPinned"`
+	}
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
+		return
+	}
+	if err := h.chat.PinConversation(session.WithRequestAuth(c), id, req.IsPinned); err != nil {
+		Fail(c, statusFor(err), 1, err.Error())
+		return
+	}
+	OK(c, gin.H{"success": true, "id": id, "isPinned": req.IsPinned})
 }
 
 // listConversations 会话列表（前端契约 {list, hasMore}）

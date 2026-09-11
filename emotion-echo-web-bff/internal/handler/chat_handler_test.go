@@ -27,10 +27,15 @@ type fakeChatClient struct {
 	listErr      error
 	convErr      error
 	sendErr      error
+	pinErr       error
+	updateErr    error
+	updateResp   *downstream.UpdateConversationResp
 	gotConvID    int64
 	gotLimit     int
 	gotOffset    int
 	gotListLimit int
+	gotTitle     string
+	gotIsPinned  bool
 }
 
 func (f *fakeChatClient) CreateConversation(_ context.Context, _ downstream.CreateConversationReq) (*downstream.ConversationView, error) {
@@ -64,7 +69,21 @@ func (f *fakeChatClient) DeleteConversation(_ context.Context, conversationID in
 	f.gotConvID = conversationID
 	return f.delErr
 }
-func (f *fakeChatClient) PinConversation(_ context.Context, _ int64) error { return nil }
+func (f *fakeChatClient) PinConversation(_ context.Context, conversationID int64, isPinned bool) error {
+	f.gotConvID, f.gotIsPinned = conversationID, isPinned
+	return f.pinErr
+}
+
+func (f *fakeChatClient) UpdateConversation(_ context.Context, conversationID int64, title string) (*downstream.UpdateConversationResp, error) {
+	f.gotConvID, f.gotTitle = conversationID, title
+	if f.updateErr != nil {
+		return nil, f.updateErr
+	}
+	if f.updateResp == nil {
+		f.updateResp = &downstream.UpdateConversationResp{Success: true, Id: conversationID, Title: title}
+	}
+	return f.updateResp, nil
+}
 
 func newChatRouter(client downstream.ChatClient) *gin.Engine {
 	gin.SetMode(gin.TestMode)
@@ -181,4 +200,67 @@ func TestChatHandler_ListConversations_UpstreamError_Returns500(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Contains(t, w.Body.String(), "downstream down")
+}
+
+// Stage 72：PATCH /api/v1/conversations/:id 接真实 UpdateConversation RPC（替换 Stage 71 的 501 暂存）。
+func TestChatHandler_UpdateConversation_Success(t *testing.T) {
+	fc := &fakeChatClient{}
+	r := newChatRouter(fc)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/conversations/5",
+		bytes.NewReader([]byte(`{"title":"新标题"}`)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, int64(5), fc.gotConvID)
+	assert.Equal(t, "新标题", fc.gotTitle)
+	assert.Contains(t, w.Body.String(), `"success":true`)
+	assert.Contains(t, w.Body.String(), `"title":"新标题"`)
+}
+
+// Stage 72：PATCH 上游 NotFound 透传（grpcerr 映射 codes.NotFound → HTTP 404）。
+func TestChatHandler_UpdateConversation_Upstream404_Returns404(t *testing.T) {
+	r := newChatRouter(&fakeChatClient{updateErr: &downstream.APIError{StatusCode: http.StatusNotFound, Msg: "chat: resource not found"}})
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/conversations/999",
+		bytes.NewReader([]byte(`{"title":"x"}`)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// Stage 72：PATCH 空 body → 400。
+func TestChatHandler_UpdateConversation_InvalidBody_Returns400(t *testing.T) {
+	r := newChatRouter(&fakeChatClient{})
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/conversations/5", bytes.NewReader([]byte(`not json`)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// Stage 72：POST /api/v1/conversations/:id/pin 接真实 PinConversation RPC。
+func TestChatHandler_PinConversation_Success(t *testing.T) {
+	fc := &fakeChatClient{}
+	r := newChatRouter(fc)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/5/pin",
+		bytes.NewReader([]byte(`{"isPinned":true}`)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, int64(5), fc.gotConvID)
+	assert.True(t, fc.gotIsPinned, "isPinned 应从 body 解析并传给下游")
+	assert.Contains(t, w.Body.String(), `"isPinned":true`)
+}
+
+// Stage 72：pin 上游 PermissionDenied（越权）透传为 403。
+func TestChatHandler_PinConversation_Forbidden_Returns403(t *testing.T) {
+	r := newChatRouter(&fakeChatClient{pinErr: &downstream.APIError{StatusCode: http.StatusForbidden, Msg: "forbidden"}})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/5/pin",
+		bytes.NewReader([]byte(`{"isPinned":true}`)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }

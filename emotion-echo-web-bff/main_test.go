@@ -62,10 +62,11 @@ var wantRoutes = gin.RoutesInfo{
 	{Method: "PATCH", Path: "/api/v1/users/me"},
 	{Method: "GET", Path: "/api/v1/users/:id"},
 
-	// ----- chat_handler.go (6 条，Stage 71 PR-C8 加 PATCH /:id) -----
+	// ----- chat_handler.go (7 条，Stage 71 PR-C8 加 PATCH /:id；Stage 72 加 POST /:id/pin) -----
 	{Method: "GET", Path: "/api/v1/conversations"},
 	{Method: "POST", Path: "/api/v1/conversations"},
 	{Method: "PATCH", Path: "/api/v1/conversations/:id"},
+	{Method: "POST", Path: "/api/v1/conversations/:id/pin"},
 	{Method: "POST", Path: "/api/v1/conversations/:id/messages"},
 	{Method: "GET", Path: "/api/v1/conversations/:id/messages"},
 	{Method: "DELETE", Path: "/api/v1/conversations/:id"},

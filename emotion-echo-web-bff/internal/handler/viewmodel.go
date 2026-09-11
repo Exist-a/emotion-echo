@@ -61,7 +61,7 @@ func toConversationItemVM(c *downstream.ConversationView) ConversationItemVM {
 		ID:        fmt.Sprintf("%d", c.ID),
 		UserID:    fmt.Sprintf("%d", c.UserID),
 		Title:     c.Title,
-		IsTop:     false,
+		IsTop:     c.IsPinned, // Stage 72：chat-svc pinned 状态透传（此前固定 false）
 		CreatedAt: createdAt.Format(time.RFC3339),
 		UpdatedAt: updatedAt.Format(time.RFC3339),
 	}
