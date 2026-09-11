@@ -145,6 +145,11 @@ artifacts/
 # ZCode agent session plans (transient)
 .zcode/
 
+# ---------- Windows quirks ----------
+# mv/rename 失败时残留的 "Duplicate name" 影子目录（如 emotion-echo-shared;D）
+# Git Bash 在 Win 上 mv 偶发；手动清理即可，避免污染索引
+*;D
+
 # ---------- Test artifacts (Playwright / pytest reports) ----------
 # Playwright HTML reporter output
 playwright-report/

@@ -170,9 +170,6 @@ func main() {
 			}
 		}
 	}
-	if outboxRepo != nil {
-		svcCtx.WithOutboxRepo(outboxRepo)
-	}
 
 	// 4.1 Stage 30-C A3: 启 Outbox relay goroutine（每 1s 扫一次）
 	if db != nil && outboxRepo != nil && c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
