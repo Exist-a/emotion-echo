@@ -36,7 +36,7 @@ func (c *assessmentGRPCClient) ListSurveys(ctx context.Context, limit int) ([]Su
 		Limit: int32(limit),
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("downstream: assessment listSurveys: %w", err)
+		return nil, 0, wrapGRPCError(err, "assessment listSurveys")
 	}
 	out := make([]SurveyItem, 0, len(resp.Items))
 	for _, item := range resp.Items {
@@ -52,7 +52,7 @@ func (c *assessmentGRPCClient) GetSurvey(ctx context.Context, id uint64) (*Surve
 		SurveyId: int64(id),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: assessment getSurvey: %w", err)
+		return nil, wrapGRPCError(err, "assessment getSurvey")
 	}
 	return fromProtoSurvey(resp), nil
 }
@@ -75,7 +75,7 @@ func (c *assessmentGRPCClient) SubmitSurvey(ctx context.Context, id uint64, req 
 		DurationSec: int32(req.DurationSec),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: assessment submitSurvey: %w", err)
+		return nil, wrapGRPCError(err, "assessment submitSurvey")
 	}
 	return &SubmitSurveyResp{
 		ResultID:   uint64(resp.ResultId),

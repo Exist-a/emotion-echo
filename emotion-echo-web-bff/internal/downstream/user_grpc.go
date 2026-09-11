@@ -20,7 +20,6 @@ package downstream
 
 import (
 	"context"
-	"fmt"
 
 	emotionuser "github.com/emotion-echo/shared/pkg/emotionuser"
 
@@ -46,7 +45,7 @@ func (c *userGRPCClient) GetMe(ctx context.Context) (*UserInfo, error) {
 	cli := emotionuser.NewUserServiceClient(c.conn)
 	resp, err := cli.GetMe(withUserID(ctx), &emotionuser.GetMeRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: user getMe: %w", err)
+		return nil, wrapGRPCError(err, "user getMe")
 	}
 	return fromProtoUserInfo(resp), nil
 }
@@ -59,7 +58,7 @@ func (c *userGRPCClient) UpdateMe(ctx context.Context, req UpdateProfileReq) (*U
 		Gender:   genderPtrToInt32(req.Gender),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: user updateMe: %w", err)
+		return nil, wrapGRPCError(err, "user updateMe")
 	}
 	return fromProtoUserInfo(resp), nil
 }
@@ -71,7 +70,7 @@ func (c *userGRPCClient) GetByID(ctx context.Context, id int64) (*UserInfo, erro
 		UserId: id,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: user getByID: %w", err)
+		return nil, wrapGRPCError(err, "user getByID")
 	}
 	return fromProtoUserInfo(resp), nil
 }
@@ -87,7 +86,7 @@ func (c *userGRPCClient) ResetPassword(ctx context.Context, req ResetPasswordReq
 		NewPassword:      req.NewPassword,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: user reset password: %w", err)
+		return nil, wrapGRPCError(err, "user reset password")
 	}
 	return fromProtoUserInfo(resp.GetUser()), nil
 }
@@ -99,7 +98,7 @@ func (c *userGRPCClient) Logout(ctx context.Context) error {
 	cli := emotionuser.NewUserServiceClient(c.conn)
 	_, err := cli.Logout(withUserID(ctx), &emotionuser.LogoutRequest{})
 	if err != nil {
-		return fmt.Errorf("downstream: user logout: %w", err)
+		return wrapGRPCError(err, "user logout")
 	}
 	return nil
 }
@@ -115,7 +114,7 @@ func (c *userGRPCClient) Login(ctx context.Context, username, password string) (
 		Password: password,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: user login: %w", err)
+		return nil, wrapGRPCError(err, "user login")
 	}
 	return fromProtoUserInfo(resp.GetUser()), nil
 }
@@ -136,7 +135,7 @@ func (c *userGRPCClient) Register(ctx context.Context, username, password, verif
 	}
 	resp, err := cli.Register(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("downstream: user register: %w", err)
+		return nil, wrapGRPCError(err, "user register")
 	}
 	return fromProtoUserInfo(resp.GetUser()), nil
 }

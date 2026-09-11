@@ -599,7 +599,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.9
+    image: emotion-echo/web-bff:v0.1.10
     container_name: emotion-echo-web-bff
     restart: unless-stopped
     depends_on:

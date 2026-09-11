@@ -10,7 +10,6 @@ package downstream
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	emotionanalytics "github.com/emotion-echo/shared/pkg/emotionanalytics"
@@ -59,7 +58,7 @@ func (c *analyticsGRPCClient) DailyReport(ctx context.Context, userID int64, dat
 		Date:   parseDate(date),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: analytics dailyReport: %w", err)
+		return nil, wrapGRPCError(err, "analytics dailyReport")
 	}
 	if resp == nil {
 		return nil, nil
@@ -89,7 +88,7 @@ func (c *analyticsGRPCClient) TrendReport(ctx context.Context, userID int64, rep
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: analytics trendReport: %w", err)
+		return nil, wrapGRPCError(err, "analytics trendReport")
 	}
 	if resp == nil {
 		return nil, nil
@@ -124,7 +123,7 @@ func (c *analyticsGRPCClient) DayNightPattern(ctx context.Context, userID int64,
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: analytics dayNightPattern: %w", err)
+		return nil, wrapGRPCError(err, "analytics dayNightPattern")
 	}
 	out := make(map[int]int64, 24)
 	for _, p := range resp.ActiveHours {
@@ -145,7 +144,7 @@ func (c *analyticsGRPCClient) InteractionDepth(ctx context.Context, userID int64
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: analytics interactionDepth: %w", err)
+		return nil, wrapGRPCError(err, "analytics interactionDepth")
 	}
 	if resp == nil {
 		return nil, nil
@@ -168,7 +167,7 @@ func (c *analyticsGRPCClient) FrequencyTrend(ctx context.Context, userID int64, 
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: analytics frequencyTrend: %w", err)
+		return nil, wrapGRPCError(err, "analytics frequencyTrend")
 	}
 	out := make([]DailyCount, 0, len(resp.DailyActive))
 	for _, p := range resp.DailyActive {
@@ -188,7 +187,7 @@ func (c *analyticsGRPCClient) MentalAssessment(ctx context.Context, userID int64
 		Date:   0,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: analytics mentalAssessment: %w", err)
+		return nil, wrapGRPCError(err, "analytics mentalAssessment")
 	}
 	if resp == nil {
 		return nil, nil

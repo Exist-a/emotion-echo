@@ -53,7 +53,7 @@ func (c *chatGRPCClient) CreateConversation(ctx context.Context, req CreateConve
 		UserId: uidFromCtx(ctx),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: chat create conv: %w", err)
+		return nil, wrapGRPCError(err, "chat create conv")
 	}
 	return fromProtoConversation(resp), nil
 }
@@ -72,7 +72,7 @@ func (c *chatGRPCClient) SendMessage(ctx context.Context, conversationID int64, 
 		EmotionTag:    req.EmotionTag,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: chat send msg: %w", err)
+		return nil, wrapGRPCError(err, "chat send msg")
 	}
 	return fromProtoMessage(resp), nil
 }
@@ -85,7 +85,7 @@ func (c *chatGRPCClient) ListMessages(ctx context.Context, conversationID int64,
 		Limit:          int32(limit),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: chat list messages: %w", err)
+		return nil, wrapGRPCError(err, "chat list messages")
 	}
 	out := make([]MessageView, 0, len(resp.Messages))
 	for _, m := range resp.Messages {
@@ -102,7 +102,7 @@ func (c *chatGRPCClient) ListConversations(ctx context.Context, limit, offset in
 		Offset: int32(offset),
 	})
 	if err != nil {
-		return nil, false, fmt.Errorf("downstream: chat list conversations: %w", err)
+		return nil, false, wrapGRPCError(err, "chat list conversations")
 	}
 	out := make([]ConversationView, 0, len(resp.List))
 	for _, c := range resp.List {
@@ -118,7 +118,7 @@ func (c *chatGRPCClient) DeleteConversation(ctx context.Context, conversationID 
 		ConversationId: conversationID,
 	})
 	if err != nil {
-		return fmt.Errorf("downstream: chat delete conversation: %w", err)
+		return wrapGRPCError(err, "chat delete conversation")
 	}
 	return nil
 }
@@ -130,7 +130,7 @@ func (c *chatGRPCClient) PinConversation(ctx context.Context, conversationID int
 		ConversationId: conversationID,
 	})
 	if err != nil {
-		return fmt.Errorf("downstream: chat pin conversation: %w", err)
+		return wrapGRPCError(err, "chat pin conversation")
 	}
 	return nil
 }
@@ -155,7 +155,7 @@ func (c *chatGRPCClient) StreamMessages(ctx context.Context, conversationID int6
 		FromMessageId:  fromMessageID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: chat stream messages: %w", err)
+		return nil, wrapGRPCError(err, "chat stream messages")
 	}
 
 	out := make(chan *emotionchat.ChatEvent, 16)

@@ -40,6 +40,9 @@ func NewAIGRPCClient(conn *grpc.ClientConn) AIClient {
 // MultiModalAnalyze gRPC RPC
 //
 // proto MultiModalAnalyzeRequest.file_bytes (bytes) → logic.Analyze 第二参数
+//
+// Sprint G（2026-09-11）：错误用 APIError 包装，handler 用 StatusCodeOf(err)
+// 动态决定 HTTP code（gRPC Unavailable → 503 等）。
 func (c *aiGRPCClient) MultiModalAnalyze(ctx context.Context, req MultiModalAnalyzeReq) (*MultiModalAnalyzeResp, error) {
 	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
 	grpcReq := &emotionquery.MultiModalAnalyzeRequest{
@@ -53,7 +56,7 @@ func (c *aiGRPCClient) MultiModalAnalyze(ctx context.Context, req MultiModalAnal
 	}
 	resp, err := cli.MultiModalAnalyze(withUserID(ctx), grpcReq)
 	if err != nil {
-		return nil, fmt.Errorf("downstream: ai multi modal analyze: %w", err)
+		return nil, wrapGRPCError(err, "ai multi modal analyze")
 	}
 	return fromProtoMultiModalAnalyze(resp), nil
 }
@@ -67,7 +70,7 @@ func (c *aiGRPCClient) SynthesizeSpeech(ctx context.Context, req SynthesizeSpeec
 		Speed:    req.Speed,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: ai synthesize speech: %w", err)
+		return nil, wrapGRPCError(err, "ai synthesize speech")
 	}
 	return fromProtoSynthesizeSpeech(resp), nil
 }
@@ -77,7 +80,7 @@ func (c *aiGRPCClient) AIHealth(ctx context.Context) (*AIHealthResp, error) {
 	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
 	resp, err := cli.AIHealth(withUserID(ctx), &emotionquery.AIHealthRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("downstream: ai health: %w", err)
+		return nil, wrapGRPCError(err, "ai health")
 	}
 	return fromProtoAIHealth(resp), nil
 }
@@ -161,4 +164,19 @@ func fileToBytes(r interface{ Read(p []byte) (n int, err error) }) []byte {
 		return nil
 	}
 	return buf.Bytes()
+}
+
+// wrapGRPCError 把 gRPC error 包装为 APIError（用 MapGRPCError 决定 StatusCode）。
+//
+// Sprint G（2026-09-11）：所有 5 个 gRPC client 用此统一包装。
+// handler 侧调 StatusCodeOf(err) 拿到正确 HTTP code（gRPC Unavailable → 503）。
+func wrapGRPCError(err error, op string) error {
+	if err == nil {
+		return nil
+	}
+	status, _, msg := MapGRPCError(err)
+	return &APIError{
+		StatusCode: status,
+		Msg:        fmt.Sprintf("downstream: %s: %s", op, msg),
+	}
 }
