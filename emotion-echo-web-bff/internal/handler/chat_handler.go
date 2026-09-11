@@ -36,9 +36,29 @@ func NewChatHandler(chat downstream.ChatClient) *ChatHandler {
 func (h *ChatHandler) Register(r *gin.Engine) {
 	r.GET("/api/v1/conversations", h.listConversations)
 	r.POST("/api/v1/conversations", h.createConversation)
+	// Stage 71 PR-C8：注册 PATCH /api/v1/conversations/:id（前端 store 调用对齐）
+	// 当前 chat-svc 缺 UpdateConversation RPC（决策 4 ADR §八 backlog），
+	// handler 临时返 501 Not Implemented + 透明错误信息；前端 store
+	// updateConversationTitle 已降级为本地更新，等 chat-svc 落地后改 handler。
+	r.PATCH("/api/v1/conversations/:id", h.updateConversation)
 	r.POST("/api/v1/conversations/:id/messages", h.sendMessage)
 	r.GET("/api/v1/conversations/:id/messages", h.listMessages)
 	r.DELETE("/api/v1/conversations/:id", h.deleteConversation)
+}
+
+// updateConversation PATCH /api/v1/conversations/:id 暂存 handler
+//
+// Stage 71 PR-C8：让前端契约测试对齐（API_ROUTES.conversationById 路径 PATCH）。
+// 真实实现需要 chat-svc UpdateConversation RPC + repo + logic（决策 4 ADR §八 backlog）。
+func (h *ChatHandler) updateConversation(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"error": "chat-svc UpdateConversation RPC not implemented (decision 4 ADR §八 backlog)",
+		"id":    id,
+	})
 }
 
 // listConversations 会话列表（前端契约 {list, hasMore}）

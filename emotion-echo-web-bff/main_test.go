@@ -25,6 +25,7 @@
 package main
 
 import (
+	"context"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -33,6 +34,8 @@ import (
 	"emotion-echo-web-bff/internal/auth"
 	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/svc"
+
+	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
@@ -59,9 +62,10 @@ var wantRoutes = gin.RoutesInfo{
 	{Method: "PATCH", Path: "/api/v1/users/me"},
 	{Method: "GET", Path: "/api/v1/users/:id"},
 
-	// ----- chat_handler.go (5 条) -----
+	// ----- chat_handler.go (6 条，Stage 71 PR-C8 加 PATCH /:id) -----
 	{Method: "GET", Path: "/api/v1/conversations"},
 	{Method: "POST", Path: "/api/v1/conversations"},
+	{Method: "PATCH", Path: "/api/v1/conversations/:id"},
 	{Method: "POST", Path: "/api/v1/conversations/:id/messages"},
 	{Method: "GET", Path: "/api/v1/conversations/:id/messages"},
 	{Method: "DELETE", Path: "/api/v1/conversations/:id"},
@@ -124,13 +128,28 @@ func stubServiceContext(t *testing.T, withEmotionQ bool) (*svc.ServiceContext, *
 	s := svc.NewServiceContext(*cfg)
 	s.Auth = mgr
 	// 6 个 client 保持 nil —— registerRoutes 不触发调用
-	if withEmotionQ {
-		// EmotionQ 是 interface 字段；nil 也算"非 nil"——所以这里其实只能 stub 真实 client
-		// 但调研结论：保持 nil + EmotionQ != nil 判断 = false → 分支不进；与 EmotionQ != nil 分支
-		// 完全等价（都会跳过 emotion_query 注册）。**这里特意保持 nil 以测主分支**。
-		// 第二个 case (TestRegisterRoutes_WithEmotionQ) 不在本 PR 范围，留待后续 PR（需要 stub EmotionQueryClient）
+if withEmotionQ {
+			// EmotionQueryHandler.Register() 仅注册路由，不调 client 方法，
+			// 所以可以传一个非 nil 的 fakeEmotionQueryClient 让 `s.EmotionQ != nil` 进
+			// 分支（main.go:320）。fakeEmotionQueryClient 是 stub 模式。
+			s.EmotionQ = fakeEmotionQueryClient{}
+		}
+		return s, cfg
 	}
-	return s, cfg
+
+	// fakeEmotionQueryClient 是 stub — 让 registerRoutes 走 EmotionQ 分支但不触发实际调用。
+	type fakeEmotionQueryClient struct{}
+
+// 实现 downstream EmotionQueryClient 接口（3 方法）。Register() 不调这些方法；
+// 测试代码意外触发会 panic 立即暴露。
+func (fakeEmotionQueryClient) ByMessage(context.Context, int64) (*emotionquery.Emotion, error) {
+	panic("fakeEmotionQueryClient.ByMessage should not be called")
+}
+func (fakeEmotionQueryClient) ByFusedMessage(context.Context, int64) (*emotionquery.FusedEmotion, error) {
+	panic("fakeEmotionQueryClient.ByFusedMessage should not be called")
+}
+func (fakeEmotionQueryClient) ByConversation(context.Context, int64, int) ([]*emotionquery.Emotion, int32, error) {
+	panic("fakeEmotionQueryClient.ByConversation should not be called")
 }
 
 func TestRegisterRoutes_MainContract(t *testing.T) {
@@ -395,4 +414,27 @@ func TestBootstrap_WebBFF_AllMiddlewaresAttached(t *testing.T) {
 	if wNoAuth.Code != 401 {
 		t.Errorf("/api/v1/users/me without X-User-Id should return 401 (GinAuthMiddleware not attached?), got %d", wNoAuth.Code)
 	}
+}
+
+func TestRegisterRoutes_WithEmotionQ(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	s, cfg := stubServiceContext(t, true) // withEmotionQ=true
+	registerRoutes(r, s, cfg)
+
+	got := r.Routes()
+	for i := range got {
+		got[i].Handler = ""
+		got[i].HandlerFunc = nil
+	}
+
+	// 主路径仍然全部存在
+	assert.Subset(t, got, wantRoutes, "EmotionQ 启用时主路径仍应全注册")
+
+	// EmotionQ 额外 3 条必须存在
+	assert.Subset(t, got, wantRoutesWithEmotionQ, "EmotionQ 启用时 3 条 emotion 路由必须注册")
+
+	// 总路由数 = 主 + EmotionQ 3 条
+	wantLen := len(wantRoutes) + len(wantRoutesWithEmotionQ)
+	assert.Len(t, got, wantLen, "EmotionQ 启用时路由总数必须等于 wantRoutes + wantRoutesWithEmotionQ")
 }

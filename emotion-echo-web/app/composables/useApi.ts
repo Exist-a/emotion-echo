@@ -325,6 +325,16 @@ export function put<T = any>(url: string, body?: any): Promise<T> {
 }
 
 /**
+ * PATCH 请求（Stage 71 PR-C8：与 BFF /users/me + /conversations/:id 对齐）
+ */
+export function patch<T = any>(url: string, body?: any): Promise<T> {
+  return request<T>(url, {
+    method: "PATCH",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+/**
  * DELETE 请求
  */
 export function del<T = any>(url: string): Promise<T> {

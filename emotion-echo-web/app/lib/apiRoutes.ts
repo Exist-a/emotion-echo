@@ -32,16 +32,24 @@ export const API_ROUTES = {
   authResetPassword:      { method: 'POST', path: '/auth/reset-password' } as ApiRoute,
 
   // ============ User (BFF: user_handler.go + PR-4 avatar) ============
+  // Stage 71 PR-C8: userUpdateProfile 改为 PATCH /users/me 与 BFF user_handler.go:63 对齐。
+  // 修复前: PUT /user/profile 调 BFF → 404（user_handler 只注册 PATCH /users/me）
   userProfile:            { method: 'GET',  path: '/user/profile' } as ApiRoute,
-  userUpdateProfile:      { method: 'PUT',  path: '/user/profile' } as ApiRoute,
+  userUpdateProfile:      { method: 'PATCH', path: '/users/me' } as ApiRoute,
   // PR-4 落地：BFF avatar_handler + MinIO + user-svc avatar_url
   userAvatar:             { method: 'POST', path: '/user/avatar' } as ApiRoute,
 
   // ============ Conversations (BFF: chat_handler.go) ============
   conversations:          { method: 'GET',    path: '/conversations' } as ApiRoute,
   createConversation:     { method: 'POST',   path: '/conversations' } as ApiRoute,
-  conversationById:       { method: 'PUT',    path: '/conversations/:id' } as ApiRoute,
-  pinConversation:        { method: 'POST',   path: '/conversations/:id/pin' } as ApiRoute,
+  // Stage 71 PR-C8: conversationById 改 PATCH（与 BFF chat_handler 对齐；
+  // BFF chat_handler 只注册 POST/GET/DELETE conversations，没 PATCH）。
+  // 当前 chat-svc 无 UpdateConversation RPC（决策 4 ADR §八 backlog）；
+  // 前端 store updateConversationTitle 改纯本地更新，等后端落地后改回 API 调用。
+  // 暂保留 conversationById 路由声明（注释说明），便于后端落地后一键启用。
+  conversationById:       { method: 'PATCH',  path: '/conversations/:id' } as ApiRoute,
+  // pinConversation 移入 knownOrphans（chat-svc PinConversation 未实现，决策 4 ADR §八 backlog）
+  pinConversationOrphan:  { method: 'POST',   path: '/conversations/:id/pin' } as ApiRoute,
   deleteConversation:     { method: 'DELETE', path: '/conversations/:id' } as ApiRoute,
   messagesByConv:         { method: 'GET',    path: '/conversations/:id/messages' } as ApiRoute,
   sendMessage:            { method: 'POST',   path: '/conversations/:id/messages' } as ApiRoute,

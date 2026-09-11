@@ -7,7 +7,7 @@ import type {
   UpdateProfileParams,
   SendVerificationCodeParams
 } from '~/types/api'
-import { get, post, put } from '~/composables/useApi'
+import { get, post, put, patch } from '~/composables/useApi'
 import { API_ROUTES } from '../lib/apiRoutes'
 
 export const useUserStore = defineStore('user', () => {
@@ -279,10 +279,13 @@ export const useUserStore = defineStore('user', () => {
 
   /**
    * 更新用户信息
+   *
+   * Stage 71 PR-C8：改用 PATCH /users/me（与 BFF user_handler.go:63 对齐）。
+   * 修复前 PUT /user/profile → 404（BFF 无此 method+path 组合）。
    */
   const updateProfile = async (params: UpdateProfileParams): Promise<returnMsgType> => {
     try {
-      await put(API_ROUTES.userUpdateProfile.path, params)
+      await patch(API_ROUTES.userUpdateProfile.path, params)
       // 更新本地数据
       if (userInfo.value) {
         userInfo.value = { ...userInfo.value, ...params }
