@@ -53,6 +53,11 @@ class EmotionLLMServiceStub:
                 request_serializer=emotion__llm__pb2.ChatCompletionRequest.SerializeToString,
                 response_deserializer=emotion__llm__pb2.ChatChunk.FromString,
                 _registered_method=True)
+        self.ClassifyIntent = channel.unary_unary(
+                '/emotion_llm.v1.EmotionLLMService/ClassifyIntent',
+                request_serializer=emotion__llm__pb2.ClassifyIntentRequest.SerializeToString,
+                response_deserializer=emotion__llm__pb2.IntentResult.FromString,
+                _registered_method=True)
 
 
 class EmotionLLMServiceServicer:
@@ -90,6 +95,16 @@ class EmotionLLMServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ClassifyIntent(self, request, context):
+        """ClassifyIntent 消息意图分类（Stage 82 · PR-3a）
+
+        规则式 6 分类（emotional_support/study_help/tech_help/career_help/lifestyle/other），
+        与情绪分析同款关键词打分风格——无 LLM 依赖、确定性可测。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_EmotionLLMServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -107,6 +122,11 @@ def add_EmotionLLMServiceServicer_to_server(servicer, server):
                     servicer.ChatCompletion,
                     request_deserializer=emotion__llm__pb2.ChatCompletionRequest.FromString,
                     response_serializer=emotion__llm__pb2.ChatChunk.SerializeToString,
+            ),
+            'ClassifyIntent': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClassifyIntent,
+                    request_deserializer=emotion__llm__pb2.ClassifyIntentRequest.FromString,
+                    response_serializer=emotion__llm__pb2.IntentResult.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -194,6 +214,33 @@ class EmotionLLMService:
             '/emotion_llm.v1.EmotionLLMService/ChatCompletion',
             emotion__llm__pb2.ChatCompletionRequest.SerializeToString,
             emotion__llm__pb2.ChatChunk.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClassifyIntent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/emotion_llm.v1.EmotionLLMService/ClassifyIntent',
+            emotion__llm__pb2.ClassifyIntentRequest.SerializeToString,
+            emotion__llm__pb2.IntentResult.FromString,
             options,
             channel_credentials,
             insecure,

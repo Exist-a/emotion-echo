@@ -24,6 +24,23 @@ service EmotionLLMService {
   // OpenAI 兼容端点）；无 key 或上游失败时降级内置 mock 文案（fallback_reason 非空），
   // 保证 CI / 离线 demo 全链路可跑（§契约 6 同款哲学）。
   rpc ChatCompletion (ChatCompletionRequest) returns (stream ChatChunk);
+
+  // ClassifyIntent 消息意图分类（Stage 82 · PR-3a）
+  //
+  // 规则式 6 分类（emotional_support/study_help/tech_help/career_help/lifestyle/other），
+  // 与情绪分析同款关键词打分风格——无 LLM 依赖、确定性可测。
+  rpc ClassifyIntent (ClassifyIntentRequest) returns (IntentResult);
+}
+
+// ClassifyIntentRequest 意图分类请求
+message ClassifyIntentRequest {
+  string text = 1;   // 待分类文本（通常为最后一条 user 消息）
+}
+
+// IntentResult 意图分类结果
+message IntentResult {
+  string intent = 1;      // 6 类之一；无法判定 → other
+  double confidence = 2;  // 0.0 ~ 1.0（关键词命中强度）
 }
 
 // ChatMessage 对话消息（OpenAI role/content 语义）
@@ -39,6 +56,9 @@ message ChatCompletionRequest {
   double temperature = 3;    // 可选；0 = 服务端默认
   int32 max_tokens = 4;      // 可选；0 = 不限制
   string user_id = 5;        // 审计/限流维度
+  // Stage 82 PR-3a：true = 服务端对最后一条 user 消息做意图分类，
+  // 按意图注入回复风格指令到 system prompt，并在首帧回带 intent
+  bool with_intent = 6;
 }
 
 // ChatChunk 流式响应帧
@@ -47,6 +67,7 @@ message ChatChunk {
   bool done = 2;              // 结束帧（其后不再有帧）
   string model = 3;           // 实际使用的模型（首帧携带；mock 时为 "mock"）
   string fallback_reason = 4; // 非空 = 本响应走了 mock 兜底（原因说明）
+  string intent = 5;          // Stage 82：意图分类结果（仅首帧携带；未启用 with_intent 时空）
 }
 
 // AnalyzeRequest 单条消息的情绪分析请求

@@ -22,6 +22,7 @@ const (
 	EmotionLLMService_Analyze_FullMethodName        = "/emotion_llm.v1.EmotionLLMService/Analyze"
 	EmotionLLMService_AnalyzeBatch_FullMethodName   = "/emotion_llm.v1.EmotionLLMService/AnalyzeBatch"
 	EmotionLLMService_ChatCompletion_FullMethodName = "/emotion_llm.v1.EmotionLLMService/ChatCompletion"
+	EmotionLLMService_ClassifyIntent_FullMethodName = "/emotion_llm.v1.EmotionLLMService/ClassifyIntent"
 )
 
 // EmotionLLMServiceClient is the client API for EmotionLLMService service.
@@ -46,6 +47,11 @@ type EmotionLLMServiceClient interface {
 	// OpenAI 兼容端点）；无 key 或上游失败时降级内置 mock 文案（fallback_reason 非空），
 	// 保证 CI / 离线 demo 全链路可跑（§契约 6 同款哲学）。
 	ChatCompletion(ctx context.Context, in *ChatCompletionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
+	// ClassifyIntent 消息意图分类（Stage 82 · PR-3a）
+	//
+	// 规则式 6 分类（emotional_support/study_help/tech_help/career_help/lifestyle/other），
+	// 与情绪分析同款关键词打分风格——无 LLM 依赖、确定性可测。
+	ClassifyIntent(ctx context.Context, in *ClassifyIntentRequest, opts ...grpc.CallOption) (*IntentResult, error)
 }
 
 type emotionLLMServiceClient struct {
@@ -104,6 +110,16 @@ func (c *emotionLLMServiceClient) ChatCompletion(ctx context.Context, in *ChatCo
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type EmotionLLMService_ChatCompletionClient = grpc.ServerStreamingClient[ChatChunk]
 
+func (c *emotionLLMServiceClient) ClassifyIntent(ctx context.Context, in *ClassifyIntentRequest, opts ...grpc.CallOption) (*IntentResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IntentResult)
+	err := c.cc.Invoke(ctx, EmotionLLMService_ClassifyIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EmotionLLMServiceServer is the server API for EmotionLLMService service.
 // All implementations must embed UnimplementedEmotionLLMServiceServer
 // for forward compatibility.
@@ -126,6 +142,11 @@ type EmotionLLMServiceServer interface {
 	// OpenAI 兼容端点）；无 key 或上游失败时降级内置 mock 文案（fallback_reason 非空），
 	// 保证 CI / 离线 demo 全链路可跑（§契约 6 同款哲学）。
 	ChatCompletion(*ChatCompletionRequest, grpc.ServerStreamingServer[ChatChunk]) error
+	// ClassifyIntent 消息意图分类（Stage 82 · PR-3a）
+	//
+	// 规则式 6 分类（emotional_support/study_help/tech_help/career_help/lifestyle/other），
+	// 与情绪分析同款关键词打分风格——无 LLM 依赖、确定性可测。
+	ClassifyIntent(context.Context, *ClassifyIntentRequest) (*IntentResult, error)
 	mustEmbedUnimplementedEmotionLLMServiceServer()
 }
 
@@ -144,6 +165,9 @@ func (UnimplementedEmotionLLMServiceServer) AnalyzeBatch(*AnalyzeBatchRequest, g
 }
 func (UnimplementedEmotionLLMServiceServer) ChatCompletion(*ChatCompletionRequest, grpc.ServerStreamingServer[ChatChunk]) error {
 	return status.Error(codes.Unimplemented, "method ChatCompletion not implemented")
+}
+func (UnimplementedEmotionLLMServiceServer) ClassifyIntent(context.Context, *ClassifyIntentRequest) (*IntentResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClassifyIntent not implemented")
 }
 func (UnimplementedEmotionLLMServiceServer) mustEmbedUnimplementedEmotionLLMServiceServer() {}
 func (UnimplementedEmotionLLMServiceServer) testEmbeddedByValue()                           {}
@@ -206,6 +230,24 @@ func _EmotionLLMService_ChatCompletion_Handler(srv interface{}, stream grpc.Serv
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type EmotionLLMService_ChatCompletionServer = grpc.ServerStreamingServer[ChatChunk]
 
+func _EmotionLLMService_ClassifyIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClassifyIntentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EmotionLLMServiceServer).ClassifyIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: EmotionLLMService_ClassifyIntent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EmotionLLMServiceServer).ClassifyIntent(ctx, req.(*ClassifyIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // EmotionLLMService_ServiceDesc is the grpc.ServiceDesc for EmotionLLMService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -216,6 +258,10 @@ var EmotionLLMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Analyze",
 			Handler:    _EmotionLLMService_Analyze_Handler,
+		},
+		{
+			MethodName: "ClassifyIntent",
+			Handler:    _EmotionLLMService_ClassifyIntent_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
