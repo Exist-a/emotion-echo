@@ -289,6 +289,32 @@ def main() -> int:
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             check("grafana kafka-consumer-lag JSON parseable", False, f"{type(e).__name__}: {e}")
 
+    # 断言 10b (Stage 74): prometheus datasource 显式 uid
+    # kafka-consumer-lag.json 3 个 panel 硬编码 datasource uid="prometheus";
+    # datasource.yaml 若不写 uid,grafana 生成随机 uid → 面板报 datasource not found
+    status, body = http_get(
+        f"{GRAFANA}/api/datasources/name/Prometheus",
+        headers={"Authorization": f"Basic {grafana_auth}"},
+    )
+    if status == 0:
+        check("grafana datasource Prometheus name-API reachable", False, body)
+    elif status != 200:
+        check(
+            "grafana datasource Prometheus name-API returns 200",
+            False,
+            f"HTTP {status}: {body[:100]}",
+        )
+    else:
+        try:
+            data = json.loads(body)
+            check(
+                "grafana prometheus datasource uid == 'prometheus'",
+                data.get("uid") == "prometheus",
+                f"uid={data.get('uid')!r}",
+            )
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            check("grafana datasource name-API JSON parseable", False, f"{type(e).__name__}: {e}")
+
     # 断言 11: prometheus alert rule 文件 KafkaConsumerGroupLagHigh 存在
     # prometheus rules path 是 container 内路径,我们用 API 查询 rule_files + alerting rules
     status, body = http_get(f"{PROMETHEUS}/api/v1/rules")
