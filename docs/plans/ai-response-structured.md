@@ -17,6 +17,11 @@ round: 2-C
 >   头注释自证"当前为 mock 实现（无真实 LLM 对话）"），无 prompt 可改。
 >   阶段 2 与 6 类意图分类共同的前置 = 真实 LLM 对话链路，见 `llm-chat-real-pipeline.md`。
 
+> **Stage 82 状态注记（2026-09-12，阶段 2 骨架已落地）**：per-intent 风格指令已实现于
+> `emotion-llm-service/intent.py` STYLE_INSTRUCTIONS（本文 §阶段 2 的 prompt 原文照搬），
+> ChatCompletion `with_intent=True` 时注入 system prompt（stage-82 报告）。dev 无 key 时走
+> mock 看不到风格差异，配真实 `LLM_API_KEY` 即生效；前端 Markdown 渲染（阶段 1）已就绪直接消费。
+
 # AI 回复结构化 & Markdown 支持 - 规划文档
 
 ## 📋 概述

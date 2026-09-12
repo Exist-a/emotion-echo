@@ -956,13 +956,16 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   mock 降级双路径真实容器 e2e；env 沿用 LLM_* 约定修正计划原文 Moonshot）
 - Stage 81：llm-chat-real-pipeline PR-2（BFF ai/stream 切 llm-service gRPC 上游，
   优先级链 gRPC→HTTP直连→mock；经 APISIX 端到端 SSE 实测 + llm-service trace 双实证）
+- Stage 82：llm-chat-real-pipeline PR-3a（规则式 6 类意图分类 + ClassifyIntent RPC +
+  with_intent 首帧回带 + 按意图注入风格指令；真实容器 e2e 4 类全对）
 
-**当前 open 清单**（2026-09-12 Stage 81 收口后刷新）：
+**当前 open 清单**（2026-09-12 Stage 82 收口后刷新）：
 
-1. **llm-chat-real-pipeline PR-3**（意图分类重写版 + 按意图结构化回复——挂载点已就绪：
-   llm-service ChatCompletion 前后插分类/风格指令；解锁 ai-response-structured 阶段 2
-   与 intent-classification-6-types）
-2. llm-service Python 端 Nacos 注册（BFF 目前 env 直连；注册后切 Nacos 优先模式）
+1. **PR-3b 报表链路**：intent 落库（chat-svc 消息列 or 事件透传）→ analytics
+   intentDistribution（替代旧单体 EmotionalSupportRate）→ BFF → 前端饼图；
+   涉及 §契约 5（新枚举列一致性）——stage-82 §三
+2. llm-service Python 端 Nacos 注册（BFF 目前 env 直连；注册后切 Nacos 优先模式）+
+   prod 独立 bff-client 证书
 3. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
    §1.4 可选：consumer 进程级指标
 4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /

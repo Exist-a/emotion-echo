@@ -20,6 +20,12 @@ round: 2-C
 > **结论**：6 类意图的前置 = 真实 LLM 对话/分析链路（`llm-chat-real-pipeline.md`）。
 > 链路落地后本文需按新架构重写：分类挂 llm-service（gRPC 扩展 intent 字段）→
 > ai-svc 消费管道透传 → analytics 报表加 intentDistribution → BFF summary → 前端饼图。
+
+> **Stage 82 状态注记（2026-09-12，PR-3a 已落地）**：分类侧按重写架构落地（stage-82 报告）——
+> 规则式 6 类分类（`emotion-llm-service/intent.py`，关键词打分，零命中/并列 → other）+
+> `ClassifyIntent` RPC + `ChatCompletion.with_intent` 首帧回带 intent + 按意图注入回复风格
+> 指令。真实容器 e2e 4 类分类 + 首帧回带全过。**残余（PR-3b，报表链路）**：intent 落库 →
+> analytics intentDistribution → BFF → 前端饼图，独立批次；分类器可后续用 LLM 增强规则式兜底。
 > 6 分类定义与前端结构（intentDistribution 数组）仍可复用。
 
 # 消息分类扩展规划（6类）
