@@ -16,3 +16,6 @@ SELECT
     LENGTH(content) AS content_len,
     created_at AS send_time
 FROM emotion_echo_chat.messages;
+
+-- DROP 视图会连带丢失其授权 → 重建后必须重新 GRANT（04-create-views.sql §GRANT 同款）
+GRANT SELECT ON emotion_echo_chat.msg_summary_v TO analytics_reader;
