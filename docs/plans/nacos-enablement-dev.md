@@ -20,6 +20,20 @@ created: 2026-09-04
 > - 陈旧 30s 窗口评估结论：boot 期一次性解析 + env 兜底 → 不构成阻塞（详见 stage-75 §二）。
 > - PR-2 验收（Nacos 控制台手动 Deregister 5s 快速失败）以"boot 期解析 + 兜底日志"替代：BFF 启动日志明确标注每个 gRPC 地址来源（`[nacos] resolve ... (grpc)` / `fallback to ...`）。
 
+> **2026-09-12 排期核查注记（更正 stage-74/75 open 表的文档漂移）**：
+> 本计划 §四 PR-3/PR-4/PR-5 **已在 Stage 39（2026-09-04）全部落地**，代码证据：
+> - PR-3：`deploy/apisix/seed.sh` 6 upstream 已走 `put_nacos_upstream()`（nacos-discovery +
+>   discovery_args），`deploy/apisix/test_seed_nacos.sh` 契约测试在，
+>   `charts/emotion-echo/charts/apisix/templates/configmap.yaml` 已有顶层 `discovery.nacos` 段
+> - PR-4：web-bff `nacos_boot.go` ListenConfig + HotReloadLimiter（commit `7e7d59a`）
+> - PR-5：`shared/pkg/discovery/failfast.go` + 6 svc fail-fast（commit `86e570e`）
+>
+> Stage 74/75 open 表把 PR-3 列为"半天工作量未启动"属漂移（把本文档 §四 当唯一事实源、
+> 未核对 stage-39）。**真实残余**：① PR-3 的 dev e2e 验收从未跑（stage-39 §七.2：真实栈
+> `seed.sh` + `test_seed_nacos.sh` + stop svc 后不健康实例摘除验证）→ 已排入 Stage 76；
+> ② PR-4 dev 真推送受 SDK v2.3.5 ListenConfig 偶发不回调限制（stage-39 §七.1）；
+> ③ 本文档 status 待迁 `legacy-plans/landed/`（Stage 76 收口时随验收一并办理）。
+
 ## 一、现状（与代码事实对齐）
 
 ### 1.1 启动 + 注册：✅ 通
