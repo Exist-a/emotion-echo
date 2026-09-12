@@ -88,7 +88,7 @@ const barChart = defineAsyncComponent(
 );
 
 const radarChart = defineAsyncComponent(
-  () => import("~/components/charts/radarChart.vue")
+  () => import("~/components/charts/RadarChart.vue")
 );
 
 // 响应式布局配置 - 调整断点使最小宽度更大
