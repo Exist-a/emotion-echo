@@ -966,16 +966,21 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 - Stage 85：趋势报告意图维度（ReportsTrendResponse 加 intent_distribution →
   repo 区间聚合 → BFF 透传 → weekly/monthly/annual 三页饼图；真实容器 e2e +
   DB 交叉实证）
+- Stage 86：outbox dead 告警全链（emotion_echo_outbox_events_dead_total 指标 →
+  OutboxEventsDead critical 规则 → alertmanager :9093；MaxAttempts 配置化 OUTBOX_MAX_ATTEMPTS；
+  毒消息真实容器 e2e 全链 firing 实证；顺手修 analytics 001 msg_summary_v 旧定义幂等性 bug
+  ——Stage 82 视图升级漏同步，db-migrate 全量重跑必炸）；
+  kafka-reliability-gaps 六项缺口全部收口，计划迁 landed
 
-**当前 open 清单**（2026-09-12 Stage 85 收口后刷新）：
+**当前 open 清单**（2026-09-13 Stage 86 收口后刷新）：
 
 **llm-chat-real-pipeline 全线落地**（PR-1/2/3a/3b，Stage 80-83）。业务功能主线剩余：
 
 1. file-upload"发给 Kimi 带文件引用"（依赖多模态文件理解，挂 llm 后续增强）
 2. LLM 式分类增强 / 歧义消息消歧（规则式兜底已就位；key 可用时 LLM 重分类可选）
 3. llm-service Python 端 Nacos 注册 + prod 独立 bff-client 证书
-4. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
-   §1.4 可选：consumer 进程级指标
+4. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景，
+   kafka-reliability-gaps 已迁 landed 记 residuals）
 5. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
    llm-service Python 端注册；DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）
 6. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）

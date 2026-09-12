@@ -161,3 +161,11 @@ migrated-at: 2026-09-03
 
 历史 stage 报告（如 stage-37-fixes-roadmap）中对 `docs/plans/...` 旧路径的引用保留原文不改写
 ——历史记录以落笔时状态为准，本表即迁移事实源。
+
+---
+
+## 九、2026-09-13 追加迁移记录（Stage 86 Kafka P3 收口批次）
+
+| 计划 | 迁移时间 | 落地证据 |
+|---|---|---|
+| `plans/kafka-reliability-gaps.md` → `legacy-plans/landed/` | Stage 86 收口 | stage-43（§1.1-1.3/状态机）/PR-OBS-7+stage-74（lag 监控）/stage-73（Protobuf）/stage-86（dead 告警全链）；六项缺口全部收口 |

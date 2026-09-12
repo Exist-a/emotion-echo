@@ -1,21 +1,33 @@
 ---
-status: planned
-priority: high
+status: landed
+landed: 2026-09-13
 owner: TBD
 created: 2026-09-07
+landed-stages:
+  - stage-43-kafka-reliability-sprint-a.md（§1.1 P0 DevEventPublisher / §1.2 P1 ai-svc 重试 / §1.3 P1 DLQ 真实 topic / §1.6 dead 状态机）
+  - PR-OBS-7 + stage-74-tech-debt-closure-2026-09-12.md（§1.4 P2 kafka-exporter + lag 面板 + 告警）
+  - stage-73-kafka-protobuf-migration-2026-09-12.md（§1.5 P2 事件 Protobuf 迁移 + eventrow 单点映射）
+  - stage-86-outbox-dead-alert-2026-09-13.md（§1.6/§3.6 P3 dead 指标 + Prometheus 规则 + Alertmanager 接线）
+residuals:
+  - consumer 进程级指标（消费速率/处理耗时）未埋——lag 告警已覆盖主场景，可选
+  - Alertmanager dev 仅 Web UI 展示，prod 按 severity 分流 webhook 时再扩 receivers
+  - Schema Registry 仍未引入（proto 契约 + eventrow 替代，§1.5 迁移时已评估"够用"）
 related-stages:
   - stage-30-B-kafka-pipeline.md
   - stage-30-C-kafka-ext-backlog.md
   - stage-36-fixes-roadmap.md
   - stage-37-fixes-roadmap.md
 related-adrs:
-  - adr-2026-09-dev-publisher-user-behavior-events.md（ADR-19 · DevEventPublisher 方案未落地）
-  - adr-2026-09-known-gaps.md（ADR-16 · G4 Kafka 默认关导致情绪分析无数据）
+  - adr-2026-09-dev-publisher-user-behavior-events.md（ADR-19 · Sprint A 已落地，见 stage-43）
+  - adr-2026-09-known-gaps.md（ADR-16 · G4 已由 DevEventPublisher + Stage 67 relay 启动条件修复消解）
 related-plans:
   - todo-pile-2026-09-04.md（A1/B4 dev 模式多模态不可用）
 ---
 
-# Plan — Kafka 管线健壮性缺口汇总与修复排期
+# Plan — Kafka 管线健壮性缺口汇总与修复排期（已全部落地，2026-09-13 迁 landed）
+
+> **landed 注记**：六项缺口已全部收口（映射见 front-matter landed-stages）。
+> 下方"现状/优先级/要点"为排期时快照，落笔状态以各 stage 报告为准。
 
 ## 一、现状（与代码事实对齐）
 
@@ -92,6 +104,10 @@ sarama 内部能处理 transient 错误（单次 fetch 失败、rebalance），�
 
 ### 1.6 🟢 P3 — outbox relay 单线程轮询，无最大重试上限
 
+> ✅ **已落地（两段）**：dead 状态机 = Stage 43 PR-A6.1（62a293b）；
+> dead 指标 + Prometheus 规则 + Alertmanager = **Stage 86**（2026-09-13，
+> 见 docs/stages/stage-86-outbox-dead-alert-2026-09-13.md）。
+
 **事实**：
 - `outbox/relay.go`：单 goroutine，每 1s 扫一批 100 条，单线程顺序发送
 - `MarkFailed` 只递增 attempts + 记录 last_error，status 保留 pending，下次 relay 再试——**无最大重试次数上限**，永久失败的消息会无限重试
@@ -162,6 +178,10 @@ sarama 内部能处理 transient 错误（单次 fetch 失败、rebalance），�
 - 兼容性：加字段不破坏旧消费者（Protobuf 向后兼容特性）
 
 ### 3.6 P3 — outbox relay 最大重试上限
+
+> ✅ **已落地**：按 Stage 43（状态机）+ Stage 86（指标 `emotion_echo_outbox_events_dead_total`
+> → rules/outbox-dead.yml `OutboxEventsDead` critical → alertmanager :9093）实现，
+> 实际形态与下述方案一致，另补 MaxAttempts 配置化（OUTBOX_MAX_ATTEMPTS env，默认 100）。
 
 - `outbox/repository.go` MarkFailed 加判断：attempts > MaxAttempts（如 100）→ status 改为 `dead`，不再被 ListPending 扫到
 - 加 `dead` 状态的告警（log error + 可选 metrics）

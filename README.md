@@ -235,9 +235,10 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 > | **Stage 80~83** | llm-chat-real-pipeline PR-1/2/3a/3b（llm-service 流式 ChatCompletion RPC → BFF gRPC 上游 → 规则式 6 类意图分类/风格化回复 → intent 落库 + 日报意图饼图全链） | ✅ landed | [stage-80~83](/docs/stages/) |
 > | **Stage 84** | chat-svc events 包 3 个存量测试适配 Stage 73 Protobuf 契约（`go test ./...` 合并门槛恢复） | ✅ landed | [stage-84-kafka-publisher-test-contract-2026-09-12.md](/docs/stages/stage-84-kafka-publisher-test-contract-2026-09-12.md) |
 > | **Stage 85** | 趋势报告意图维度（weekly/monthly/annual 饼图全链；真实容器 e2e + DB 交叉实证） | ✅ landed | [stage-85-trend-report-intent-2026-09-12.md](/docs/stages/stage-85-trend-report-intent-2026-09-12.md) |
+> | **Stage 86** | outbox dead 告警全链（dead 指标 → critical 规则 → alertmanager :9093；MaxAttempts 配置化；毒消息 e2e 全链 firing 实证；修 analytics 001 幂等性 bug） | ✅ landed | [stage-86-outbox-dead-alert-2026-09-13.md](/docs/stages/stage-86-outbox-dead-alert-2026-09-13.md) |
 >
 > **失真类型**（决策 18 §三）：类型 2 "陈旧结论" — README 顶部徽章与 Status 段长期未跟随 git log 更新。
-> **当前最新 commit**：`40f9f73 feat(analytics,bff,web): Stage 85 — 趋势报告意图维度全链落地`（2026-09-12 更新本表至 Stage 85）
+> **当前最新 commit**：Stage 86 outbox dead 告警全链（2026-09-13 更新本表至 Stage 86）
 
 ---
 
