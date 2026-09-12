@@ -76,3 +76,21 @@ func TestKafka_Struct(t *testing.T) {
 		t.Fatalf("group id mismatch")
 	}
 }
+
+// TestOutbox_SetDefaults — Stage 86：outbox dead 状态机阈值配置化。
+// 默认 100（与 Stage 43 NewRelay 硬编码值一致）；显式值（含 0=关闭 dead 状态机）不被覆盖。
+func TestOutbox_SetDefaults(t *testing.T) {
+	// 零值 → 默认 100
+	var c Config
+	SetDefaults(&c)
+	if c.Outbox.MaxAttempts != 100 {
+		t.Fatalf("default MaxAttempts = %d, want 100", c.Outbox.MaxAttempts)
+	}
+
+	// 显式值保留（yaml 覆盖默认，R3 顺序契约）
+	c2 := Config{Outbox: Outbox{MaxAttempts: 3}}
+	SetDefaults(&c2)
+	if c2.Outbox.MaxAttempts != 3 {
+		t.Fatalf("explicit MaxAttempts = %d, want 3", c2.Outbox.MaxAttempts)
+	}
+}
