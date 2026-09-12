@@ -32,7 +32,8 @@ import emotion_llm_pb2_grpc
 from main import analyze as http_analyze
 from chat_completion import ChatChunk as ChatChunkData
 from chat_completion import iter_chat_chunks
-from intent import classify_intent, inject_style
+from intent import inject_style
+from intent_llm import classify_intent_adaptive
 
 from logging_setup import setup_logging
 from metrics_setup import GRPC_REQUESTS_TOTAL
@@ -243,9 +244,9 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
             return emotion_llm_pb2.AnalyzeResponse()
 
     def ClassifyIntent(self, request, context):
-        """Stage 82 PR-3a：规则式 6 类意图分类（无 LLM 依赖，确定性可测）"""
+        """Stage 82 PR-3a：6 类意图分类；Stage 87：LLM 重分类消歧（规则式兜底）"""
         try:
-            intent, confidence = classify_intent(request.text)
+            intent, confidence = classify_intent_adaptive(request.text)
             GRPC_REQUESTS_TOTAL.labels(method="ClassifyIntent", status="ok").inc()
             return emotion_llm_pb2.IntentResult(intent=intent, confidence=confidence)
         except Exception as e:
@@ -272,12 +273,13 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
             )
 
             # Stage 82 PR-3a：意图分类 + 按意图注入风格指令；首帧回带 intent
+            # Stage 87：分类升级为自适应（规则式兜底 + LLM 消歧，无 key 行为不变）
             intent = ""
             if request.with_intent and messages:
                 user_text = next(
                     (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
                 )
-                intent, confidence = classify_intent(user_text)
+                intent, confidence = classify_intent_adaptive(user_text)
                 messages = inject_style(messages, intent)
                 logger.info(f"[intent] {intent} (confidence={confidence})")
 
