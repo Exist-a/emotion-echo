@@ -3,7 +3,7 @@ status: planned
 priority: medium
 owner: TBD
 created: 2026-09-07
-updated: 2026-09-11
+updated: 2026-09-13
 related-stages:
   - stage-10-grpc-migration.md
   - stage-19-ai-svc-grpc-server.md
@@ -26,10 +26,11 @@ Stage 63 端到端验证发现 BFF→4 svc gRPC 链路上有 3 层叠错（决�
 **Sprint F1（user-svc ResetPassword/Logout gRPC 化）已落地** —— 见 [legacy-plans/landed/sprint-f1-user-grpc-reset-logout.md](../legacy-plans/landed/sprint-f1-user-grpc-reset-logout.md)。
 **Sprint F2（ai-svc 业务方法 gRPC 化，ai.go MultiModal/Synthesize/AIHealth 3 RPC）已落地** —— 见 [legacy-plans/landed/sprint-f2-ai-grpc-business-rpcs.md](../legacy-plans/landed/sprint-f2-ai-grpc-business-rpcs.md)。
 
-**剩余**：
-- **#32 chat-svc HTTP 端 /api/v1/conversations 500 bug**：BFF 默认 grpc 后被规避，根因未查
-- **BFF 全局 gRPC error → HTTP code 映射**：Sprint F2 V3 暴露 BFF 把 gRPC codes.Unavailable 统一标 502，4 svc 都有同问题，下次 sprint 统一在 `web-bff/internal/downstream/error.go` 加 `mapGRPCError` helper
-- **chat-svc PinConversation/StreamMessages**（chat-svc 缺底层功能，留业务触发）
+**剩余**（2026-09-13 销账刷新——本段此前停留过期信息：#32 与 BFF error 映射实际已关闭却仍列为待办）：
+- ~~#32 chat-svc HTTP 端 /api/v1/conversations 500 bug~~ 🟢 **Stage 64 PR-3 关闭**（`3e07571`）：chat-svc v0.1.3 rebuild 实测 4 路径全 200/401，500 源自 v0.1.0 前后旧镜像时代 bug，已被 PR-2 中间件分层 + Sprint D 重构无意修复（详见 [stage-64-bug-cleanup-2026-09-11.md §5.2](../stages/stage-64-bug-cleanup-2026-09-11.md)）
+- ~~BFF 全局 gRPC error → HTTP code 映射~~ 🟢 **Sprint G 关闭**（`f874d3f`）：`web-bff/internal/downstream/error.go` MapGRPCError + 5 gRPC client 接入，tts/synthesize 实测 Unavailable→503（详见 [sprint-g-bff-grpc-error-mapping.md](../legacy-plans/landed/sprint-g-bff-grpc-error-mapping.md)）
+- ~~chat-svc PinConversation~~ 🟢 **Stage 72 落地**（BFF→chat-svc gRPC Pin/Update 全链）
+- **chat-svc StreamMessages**（唯一残余）：业务未触发，维持 Unimplemented（见决策 4 ADR §八）
 
 # Plan — 后端微服务间调用 HTTP → gRPC 改造
 
