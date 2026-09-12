@@ -362,7 +362,9 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"  # dev mode 默认匿名可读,prod 必须改 false
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
     ports:
-      - "3000:3000"
+      # Stage 74: 宿主 13000 —— 让位给 web 前端 3000（apps.yml/compose.dev.yml，
+      # CORS 默认 http://localhost:3000）。二者曾同为 3000，无法同时起
+      - "13000:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       # PR-OBS-6: dashboards JSON sidecar mount (与 provisioning 路径分离)

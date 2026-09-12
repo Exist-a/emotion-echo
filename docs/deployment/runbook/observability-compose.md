@@ -30,7 +30,7 @@ sleep 60
 |---|------|------|------|
 | 1 | 容器健康 | `docker ps --format "{{.Names}}\t{{.Status}}" \| grep -E 'obs\|bff\|chat\|user'"` | 6 个 obs 容器 + 6 个业务 svc healthy |
 | 2 | Prometheus 就绪 | `curl :9090/-/ready` | "Prometheus Server is Ready." |
-| 3 | Grafana 就绪 | `curl :3000/api/health` | `{"database":"ok"}` |
+| 3 | Grafana 就绪 | `curl :13000/api/health` | `{"database":"ok"}` |
 | 4 | Loki 就绪 | `curl :3100/ready` | "ready"（注意：loki /ready 在 compactor 启动后 ~15s 才返回 200）|
 | 5 | Kafka exporter 就绪 | `curl :9308/metrics` | body 含 `kafka_consumergroup_lag` |
 | 6 | 跑全 smoke | `python scripts/smoke_observability.py` | 11 项 PASS + 1 项 FAIL（prometheus scrape targets，需干净环境） |
@@ -39,7 +39,7 @@ sleep 60
 
 | 组件 | URL | 默认凭证 |
 |------|-----|----------|
-| Grafana | http://localhost:3000 | admin / admin（dev 默认，**prod 必须改**）|
+| Grafana | http://localhost:13000（Stage 74 起让位 web :3000）| admin / admin（dev 默认，**prod 必须改**）|
 | Prometheus | http://localhost:9090 | 无（dev 无鉴权）|
 | Alertmanager | （PR-OBS-8 范围外，dev 未启用）| — |
 | SkyWalking UI | http://localhost:8080 | 无 |
@@ -93,7 +93,7 @@ curl -sG http://localhost:3100/loki/api/v1/query \
 
 ### 3.2 通过 Grafana Explore
 
-1. 打开 http://localhost:3000/explore
+1. 打开 http://localhost:13000/explore
 2. datasource 选 **Loki**
 3. query: `{job="apisix"}`
 4. 时间范围：Last 15 minutes

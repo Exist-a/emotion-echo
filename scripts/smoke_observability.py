@@ -23,7 +23,7 @@ import urllib.request
 
 # ====== 配置 (dev compose 默认 + obs profile) ======
 PROMETHEUS = "http://localhost:9090"
-GRAFANA = "http://localhost:3000"
+GRAFANA = "http://localhost:13000"  # Stage 74: 宿主 13000（让位 web 前端 :3000）
 LOKI = "http://localhost:3100"
 KAFKA_EXPORTER = "http://localhost:9308"
 
