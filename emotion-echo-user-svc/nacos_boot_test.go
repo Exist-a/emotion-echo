@@ -297,3 +297,50 @@ func TestGitVersion_UsesEnvWhenSet(t *testing.T) {
 	t.Setenv("GIT_VERSION", "abc1234")
 	assert.Equal(t, "abc1234", gitVersion())
 }
+
+// Stage 75: BFF gRPC 拨号走 Nacos Discover，靠 metadata.grpc_port 找 gRPC 端口
+// （对齐 ai-svc Stage 32 先例）。
+func TestBootNacos_RegistersGrpcPortMetadata(t *testing.T) {
+	reg := &fakeRegistry{}
+	cc := newFakeCC()
+	cfg := newTestConfig()
+	cfg.GRPC = config.GRPCServer{Enabled: true, Port: 8887}
+	deps := bootDeps{
+		waitForNacos: func(context.Context, string, time.Duration) error { return nil },
+		registryFactory: func(context.Context, string, string, string) (shareddiscovery.Registry, error) {
+			return reg, nil
+		},
+		configFactory: func(context.Context, string, string, string) (sharedconfig.ConfigCenter, error) {
+			return cc, nil
+		},
+	}
+	rt, err := BootNacos(context.Background(), cfg, deps)
+	require.NoError(t, err)
+	require.Len(t, reg.registered, 1)
+	got := reg.registered[0]
+	assert.Equal(t, "8887", got.Metadata["grpc_port"],
+		"gRPC port must be in metadata for Stage 75 BFF discovery")
+	rt.Cancel()
+}
+
+func TestBootNacos_DisabledGrpcExcludesGrpcPort(t *testing.T) {
+	reg := &fakeRegistry{}
+	cc := newFakeCC()
+	cfg := newTestConfig()
+	cfg.GRPC = config.GRPCServer{Enabled: false, Port: 8887}
+	deps := bootDeps{
+		waitForNacos: func(context.Context, string, time.Duration) error { return nil },
+		registryFactory: func(context.Context, string, string, string) (shareddiscovery.Registry, error) {
+			return reg, nil
+		},
+		configFactory: func(context.Context, string, string, string) (sharedconfig.ConfigCenter, error) {
+			return cc, nil
+		},
+	}
+	rt, err := BootNacos(context.Background(), cfg, deps)
+	require.NoError(t, err)
+	require.Len(t, reg.registered, 1)
+	_, hasGrpcPort := reg.registered[0].Metadata["grpc_port"]
+	assert.False(t, hasGrpcPort, "no grpc_port metadata when GRPC.Enabled=false")
+	rt.Cancel()
+}
