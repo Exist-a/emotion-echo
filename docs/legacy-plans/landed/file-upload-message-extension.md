@@ -1,6 +1,9 @@
 ---
-status: planned
-superseded-by: 后端 upload_handler + 前端 ChatFile.vue 均已存在；残余 = handleAttachment 接线 + store/composables 扩展（见 2026-09-12 注记）
+status: landed
+landed: 2026-09-12
+landed-stages:
+  - stage-58（BFF uploads 端点 + useFileUpload + ChatFile + apiRoutes 转正）
+  - stage-79-post-file-upload-wiring-2026-09-12.md（装配层 + contentType 全链路）
 original-path: .trae/documents/文件上传与消息扩展功能实施计划.md
 original-date: 2026-07-XX
 migrated-at: 2026-09-03

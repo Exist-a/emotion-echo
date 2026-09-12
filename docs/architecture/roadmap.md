@@ -949,17 +949,19 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   5 svc gRPC nil-repo → Unavailable 守卫；RED→GREEN + dev 栈 e2e 全绿）
 - Stage 78：业务计划排期核查（ai-response-structured 阶段 1 已实现销账 /
   intent-classification 旧路径失效 / file-upload 残余盘点；新增 llm-chat-real-pipeline 计划）
+- Stage 79：file-upload 收口（前端装配层接线 + e2e 揪出 contentType 响应链 5 处丢失
+  并全链路修复——BFF camelCase 绑定 / proto Message.content_type / 三层视图透传；
+  file-upload-message-extension.md 迁 landed）
 
-**当前 open 清单**（2026-09-12 Stage 78 收口后刷新）：
+**当前 open 清单**（2026-09-12 Stage 79 收口后刷新）：
 
-1. **file-upload-message-extension 收口**（可立即实施，不依赖 LLM；handleAttachment 接线
-   + contentType 类型扩展 + useFileUpload composable + chat-svc ContentType 枚举 §契约 5 核查）
-2. **llm-chat-real-pipeline PR-1/PR-2**（真实 LLM 对话链路：llm-service ChatCompletion RPC +
+1. **llm-chat-real-pipeline PR-1/PR-2**（真实 LLM 对话链路：llm-service ChatCompletion RPC +
    BFF 切 gRPC 上游，mock 保留兜底；详见 docs/plans/llm-chat-real-pipeline.md）
-3. intent-classification-6-types（重写版）→ ai-response-structured 阶段 2（被 2 解锁）
-4. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
+2. intent-classification-6-types（重写版）→ ai-response-structured 阶段 2（被 1 解锁）
+3. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
    §1.4 可选：consumer 进程级指标
-5. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
-   llm-service Python 端注册；DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）（nacos-enablement-dev.md §一.1）
+4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
+   llm-service Python 端注册；DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）
+5. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。
