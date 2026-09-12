@@ -77,7 +77,7 @@ func TestLLMGRPCClient_StreamsDeltas(t *testing.T) {
 
 	var got []string
 	var lastModel string
-	err := c.ChatCompletionStream(context.Background(), LLMStreamRequest{
+	err := c.StreamChat(context.Background(), LLMStreamRequest{
 		Model:    "deepseek-chat",
 		Messages: []Message{{Role: "user", Content: "hi"}},
 	}, func(delta, model string) {
@@ -100,7 +100,7 @@ func TestLLMGRPCClient_UpstreamError_ReturnsError(t *testing.T) {
 	servicer := &fakeLLMServiceServicer{withError: true}
 	c := startFakeLLMServer(t, servicer)
 
-	err := c.ChatCompletionStream(context.Background(), LLMStreamRequest{
+	err := c.StreamChat(context.Background(), LLMStreamRequest{
 		Messages: []Message{{Role: "user", Content: "hi"}},
 	}, func(string, string) {})
 	require.Error(t, err)

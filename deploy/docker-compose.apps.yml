@@ -655,11 +655,22 @@ services:
       BFF_LLM_API_KEY:     ${BFF_LLM_API_KEY:-}
       BFF_LLM_BASE_URL:    ${BFF_LLM_BASE_URL:-https://api.deepseek.com}
       BFF_LLM_MODEL:       ${BFF_LLM_MODEL:-deepseek-chat}
+      # Stage 81 PR-2: llm-service ChatCompletion gRPC 上游（真实 LLM 收敛到 llm-service；
+      # llm-service 未注册 Nacos → env 直连；无 key 时 llm-service 自降级 mock）
+      LLM_SVC_GRPC_ADDR:   emotion-llm-service:50051
+      TLS_ENABLED: "1"
+      TLS_CA_CERT: /app/etc/tls/ca.crt
+      TLS_CLIENT_CERT: /app/etc/tls/ai-client.crt
+      TLS_CLIENT_KEY: /app/etc/tls/ai-client.key
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
     # Stage 33 PR-20: BFF 端口保留（dev 调试 / Postman 直连；prod 应仅暴露 APISIX）
     ports:
       - "8894:8894"
     volumes:
       - ../emotion-echo-web-bff/etc/web-bff.yaml:/app/etc/web-bff.yaml:ro
+      - ../deploy/tls/ca.crt:/app/etc/tls/ca.crt:ro
+      - ../deploy/tls/ai-client.crt:/app/etc/tls/ai-client.crt:ro
+      - ../deploy/tls/ai-client.key:/app/etc/tls/ai-client.key:ro
     networks:
       - app-network
     deploy:

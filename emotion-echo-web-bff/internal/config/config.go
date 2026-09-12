@@ -76,6 +76,9 @@ type Config struct {
 		APIKey  string
 		Model   string
 		Timeout int
+		// Stage 81 PR-2：llm-service ChatCompletion gRPC 上游地址（LLM_SVC_GRPC_ADDR；
+		// 非空 = 启用 gRPC 优先路径，llm-service 未注册 Nacos 故仅 env 直连）
+		GRPCAddr string
 	}
 
 	// Sprint 1 PR-4b: MinIO 对象存储
@@ -286,6 +289,9 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("BFF_LLM_MODEL"); v != "" {
 		c.LLM.Model = v
+	}
+	if v := os.Getenv("LLM_SVC_GRPC_ADDR"); v != "" {
+		c.LLM.GRPCAddr = v
 	}
 	// Stage 31 PR-09: Nacos
 	if v := os.Getenv("NACOS_ENABLED"); v != "" {

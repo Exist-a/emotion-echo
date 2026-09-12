@@ -8,6 +8,7 @@
 package handler
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/downstream"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,26 +29,28 @@ type fakeLLMStreamer struct {
 	gotMsgs    []downstream.Message
 }
 
-func (f *fakeLLMStreamer) StreamChat(req downstream.LLMStreamRequest, onDelta func(string)) error {
+func (f *fakeLLMStreamer) StreamChat(_ context.Context, req downstream.LLMStreamRequest, onDelta func(delta, model string)) error {
 	f.gotModel = req.Model
 	f.gotMsgs = req.Messages
 	if f.err != nil {
 		return f.err
 	}
 	for _, d := range f.deltas {
-		onDelta(d)
+		onDelta(d, "deepseek-chat")
 	}
 	return nil
 }
 
 func TestAIStreamHandler_LLMGRPCUpstream_StreamsDeltas(t *testing.T) {
 	fake := &fakeLLMStreamer{deltas: []string{"真实", "LLM", "回复"}}
-	h := &AIStreamHandler{cfg: config.Config{}, llm: fake}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithLLM(config.Config{}, fake))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/ai/stream",
 		strings.NewReader(`{"message":"今天有点累","emotion":"neutral","conversationId":"1"}`))
-	h.ServeHTTP(w, req)
+	router.ServeHTTP(w, req)
 
 	body := w.Body.String()
 	assert.Contains(t, body, "真实", "gRPC 上游 delta 必须透传")
@@ -62,14 +66,17 @@ func TestAIStreamHandler_LLMGRPCUpstream_StreamsDeltas(t *testing.T) {
 
 func TestAIStreamHandler_LLMGRPCError_FallsBackToMock(t *testing.T) {
 	fake := &fakeLLMStreamer{err: assert.AnError}
-	h := &AIStreamHandler{cfg: config.Config{}, llm: fake}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithLLM(config.Config{}, fake))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/ai/stream",
 		strings.NewReader(`{"message":"我很难过"}`))
-	h.ServeHTTP(w, req)
+	router.ServeHTTP(w, req)
 
 	body := w.Body.String()
-	assert.Contains(t, body, "抱抱你", "gRPC 失败必须回落 mock 话术")
+	assert.Contains(t, body, "抱抱", "gRPC 失败必须回落 mock 话术（mock 按 2 rune 分块）")
 	assert.Contains(t, body, "data: [DONE]")
+	assert.NotContains(t, body, "真实", "失败后不得再输出上游 delta")
 }

@@ -34,11 +34,19 @@ import (
 // AIStreamHandler 是 /api/v1/ai/stream 的处理逻辑
 type AIStreamHandler struct {
 	cfg config.Config
+	// llm 是 llm-service ChatCompletion gRPC 上游（Stage 81 PR-2）；nil = 未装配（走 mock/HTTP 直连）
+	llm downstream.LLMChatStreamer
 }
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
 func NewAIStreamHandler(cfg config.Config) gin.HandlerFunc {
 	h := &AIStreamHandler{cfg: cfg}
+	return h.ServeHTTP
+}
+
+// NewAIStreamHandlerWithLLM 构造带 llm-service gRPC 上游的 handler（Stage 81 PR-2）
+func NewAIStreamHandlerWithLLM(cfg config.Config, llm downstream.LLMChatStreamer) gin.HandlerFunc {
+	h := &AIStreamHandler{cfg: cfg, llm: llm}
 	return h.ServeHTTP
 }
 
@@ -87,6 +95,56 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 
 	// mock 回复（按情绪关键词给出共情话术）
 	reply := mockEmpathyReply(userContent)
+
+	flusher0, _ := c.Writer.(http.Flusher)
+	writeDelta0 := func(content string) error {
+		payload, err := json.Marshal(map[string]any{
+			"choices": []map[string]any{{
+				"delta": map[string]any{"content": content},
+			}},
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := io.WriteString(c.Writer, "data: "+string(payload)+"\n\n"); err != nil {
+			return err
+		}
+		if flusher0 != nil {
+			flusher0.Flush()
+		}
+		return nil
+	}
+
+	// Stage 81 PR-2：llm-service ChatCompletion gRPC 优先（LLM key 管理与降级收敛在
+	// llm-service——PR-1；fallback_reason 随 delta 透传给前端日志）。传输失败回落
+	// 既有 Phase D HTTP 直连 / mock。
+	if h.llm != nil {
+		llmMessages := []downstream.Message{
+			{Role: "system", Content: "你是一个温柔、共情的情绪疏导陪伴者。用中文简短回应（2-3 句话），表达理解、不评判、鼓励继续说。"},
+			{Role: "user", Content: userContent},
+		}
+		ctx, cancel := context.WithCancel(c.Request.Context())
+		defer cancel()
+		err := h.llm.StreamChat(ctx, downstream.LLMStreamRequest{
+			Model:    h.cfg.LLM.Model,
+			Messages: llmMessages,
+		}, func(delta, model string) {
+			if writeErr := writeDelta0(delta); writeErr != nil {
+				slog.ErrorContext(c.Request.Context(), "ai-stream write llm-grpc delta failed", "err", writeErr)
+				cancel()
+			}
+		})
+		if err == nil {
+			_, _ = io.WriteString(c.Writer, "data: [DONE]\n\n")
+			if flusher0 != nil {
+				flusher0.Flush()
+			}
+			return
+		}
+		slog.ErrorContext(c.Request.Context(), "ai-stream llm-grpc upstream failed, falling back", "err", err)
+		// 重置已写内容不可行——SSE 已发出；此处仅记日志并走下方降级（delta 前置提示）
+		_ = writeDelta0("[AI 上游切换] ")
+	}
 
 	// SSE 逐块输出（OpenAI 格式）
 	flusher, _ := c.Writer.(http.Flusher)

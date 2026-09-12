@@ -76,6 +76,14 @@ func dialGRPC(addr, name string) *grpc.ClientConn {
 //
 // Stage 75 前置条件：各 svc 注册时把 gRPC 端口写进 metadata.grpc_port（见各 svc
 // nacos_boot.go）；resolver 侧用 WithPortHint("grpc_port") 读它。
+// envOr Stage 81 PR-2：env 优先，缺省兜底（ai-svc analyzer 同款）
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func resolveGRPCAddr(resolver bffdiscovery.Resolver, fallbackAddr, svcName string) string {
 	if resolver == nil {
 		return fallbackAddr
@@ -166,8 +174,30 @@ func main() {
 		r.Use(authPathBypass(sharedmw.GinAuthMiddleware()))
 	}
 
+	// 3.5 Stage 81 PR-2：llm-service ChatCompletion gRPC 上游（LLM_SVC_GRPC_ADDR 非空时启用）
+	var llmStreamer downstream.LLMChatStreamer
+	if c.LLM.GRPCAddr != "" {
+		llmGRPC, err := downstream.NewLLMGRPCClient(downstream.LLMGRPCOptions{
+			Addr:           c.LLM.GRPCAddr,
+			TLSEnabled:     os.Getenv("TLS_ENABLED") == "1",
+			CACertPath:     envOr("TLS_CA_CERT", "/app/etc/tls/ca.crt"),
+			ClientCertPath: envOr("TLS_CLIENT_CERT", "/app/etc/tls/ai-client.crt"),
+			ClientKeyPath:  envOr("TLS_CLIENT_KEY", "/app/etc/tls/ai-client.key"),
+			TLSServerName:  envOr("TLS_SERVER_NAME", "emotion-llm-service"),
+			InternalAPIKey: os.Getenv("INTERNAL_API_KEY"),
+		})
+		if err != nil {
+			// 降级链兜底在 handler（mock / HTTP 直连），这里只告警不阻断启动
+			log.Printf("[llm-grpc] client init failed (ai/stream will fall back): %v", err)
+		} else {
+			llmStreamer = llmGRPC
+			defer func() { _ = llmGRPC.Close() }()
+			log.Printf("[llm-grpc] ChatCompletion upstream enabled: %s", c.LLM.GRPCAddr)
+		}
+	}
+
 	// 4. 路由（handler 装配）
-	registerRoutes(r, svcCtx, &c)
+	registerRoutes(r, svcCtx, &c, llmStreamer)
 
 	log.Printf("Starting web-bff at %s:%d...", c.Host, c.Port)
 	go func() {
@@ -304,7 +334,7 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 // 路径契约（路由清单）：main_test.go 的 wantRoutes + wantRoutesWithEmotionQ 切片。
 // 改路由必须同步更新测试文件 + 在 PR 描述里说明（决策 18 §四.1 结论须附证据）。
 // 调试时临时增减路由也行——但合 PR 前 main_test.go 必须绿。
-func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config) {
+func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer) {
 	// health（聚合下游探测）— 免鉴权（GinAuthMiddleware 白名单已含 /health）
 	r.GET("/health", handler.NewHealthHandler([]handler.DownstreamTarget{
 		{Name: "user", BaseURL: c.UserService.BaseURL},
@@ -339,7 +369,8 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config) {
 		handler.NewEmotionQueryHandler(s.EmotionQ).Register(r)
 	}
 	// SSE 流式
-	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandler(*c))
+	// Stage 81 PR-2：llm-service ChatCompletion gRPC 上游优先（llmStreamer 非 nil 时）
+	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithLLM(*c, llmStreamer))
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
