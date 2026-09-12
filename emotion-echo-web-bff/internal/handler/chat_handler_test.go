@@ -244,7 +244,7 @@ func TestChatHandler_PinConversation_Success(t *testing.T) {
 	fc := &fakeChatClient{}
 	r := newChatRouter(fc)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/5/pin",
-		bytes.NewReader([]byte(`{"isPinned":true}`)))
+		bytes.NewReader([]byte(`{"isTop":true}`)))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -258,7 +258,7 @@ func TestChatHandler_PinConversation_Success(t *testing.T) {
 func TestChatHandler_PinConversation_Forbidden_Returns403(t *testing.T) {
 	r := newChatRouter(&fakeChatClient{pinErr: &downstream.APIError{StatusCode: http.StatusForbidden, Msg: "forbidden"}})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/5/pin",
-		bytes.NewReader([]byte(`{"isPinned":true}`)))
+		bytes.NewReader([]byte(`{"isTop":true}`)))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

@@ -76,18 +76,20 @@ func (h *ChatHandler) pinConversation(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// Stage 73 e2e 修正：前端 store togglePinConversation 发 {"isTop": bool}
+	//（conversation.ts），字段名必须对齐前端契约，否则状态永远 false。
 	var req struct {
-		IsPinned bool `json:"isPinned"`
+		IsTop bool `json:"isTop"`
 	}
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
 		return
 	}
-	if err := h.chat.PinConversation(session.WithRequestAuth(c), id, req.IsPinned); err != nil {
+	if err := h.chat.PinConversation(session.WithRequestAuth(c), id, req.IsTop); err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"success": true, "id": id, "isPinned": req.IsPinned})
+	OK(c, gin.H{"success": true, "id": id, "isPinned": req.IsTop})
 }
 
 // listConversations 会话列表（前端契约 {list, hasMore}）
