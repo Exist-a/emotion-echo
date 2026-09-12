@@ -1,5 +1,5 @@
 ---
-status: planned
+status: superseded
 superseded-by: docs/plans/observability-sprint-b.md（PR 拆分被 PR-OBS-1~8 取代；本文档 §一/§二现状保留作为参考）
 priority: high
 owner: TBD

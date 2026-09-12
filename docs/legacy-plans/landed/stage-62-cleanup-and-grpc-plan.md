@@ -1,5 +1,10 @@
 ---
-status: planned
+status: landed
+landed: 2026-09-12
+landed-stages:
+  - stage-62-landing.md（PR-1 登录限流测试+recordFailure 真 bug / PR-2 全景图同步 / PR-3.1 proto+stub / PR-3.2 三 svc gRPC server）
+  - stage-63-bff-grpc-wiring.md（PR-3.3 BFF 接线 gRPC 连接 + V1-V4 端到端）
+  - stage-44-observability-sprint-b.md + stage-69-aigrpc-metadata-2026-09-12.md（PR-3.4 OAP rpc tag；smoke 契约断言由 Stage 44 收口）
 priority: high
 owner: TBD
 created: 2026-09-10

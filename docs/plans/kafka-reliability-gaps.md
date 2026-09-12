@@ -78,7 +78,13 @@ sarama 内部能处理 transient 错误（单次 fetch 失败、rebalance），�
 
 ### 1.5 🟡 P2 — 无 Schema Registry，事件 schema 人肉镜像
 
-**事实**：
+> ✅ **Stage 73 已落地（2026-09-12）**：Kafka 事件 JSON→Protobuf 迁移完成（`chat_events.proto` +
+> producer/consumer 双端切换 + `shared/pkg/eventrow` 统一事件→DB 行映射，消解两份手动镜像），
+> dev 栈 e2e 全绿，见 `docs/stages/stage-73-kafka-protobuf-migration-2026-09-12.md`。
+> 下方"事实"为迁移前快照，保留作背景。Schema Registry 本身仍未引入（当前由 proto 契约 +
+> eventrow 单点映射替代，够用）。
+
+**事实（迁移前）**：
 - 事件 schema 是 ad-hoc JSON，`chat-svc/internal/events/events.go` 定义，`analytics-svc/internal/events/events.go` 手动镜像一份
 - Stage 37-A 刚修过 event_type 细分（conversation.created/closed 不再合并成 "conversation"）和 target 语义（用 message.id/conversation.id 而非 Event.ID）——就是 schema 漂移的实例
 - 项目已用 protobuf（proto/ + gRPC），但 Kafka 事件未迁 Protobuf

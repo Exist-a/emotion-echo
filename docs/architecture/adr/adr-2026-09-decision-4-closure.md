@@ -104,9 +104,9 @@
 | 项 | 工作量 | 优先级 |
 |---|---|---|
 | ~~**#32** chat-svc HTTP `/api/v1/conversations` 500 bug 根因排查~~ | ~~1-2 小时~~ | 🟢 **已关闭（PR-3 `3e07571`）** — chat-svc v0.1.3 rebuild 后实测 4 路径（/health、/metrics、无 auth、有 auth）全 200/401；InMemory repo + Postgres 真库均无 500。bug 在镜像升级（v0.1.3 含 PR-2 分层 + Sprint D chat-svc gRPC 4 RPC 实现）中已被规避 |
-| **chat-svc PinConversation gRPC** | 1 天（需 schema migration） | 🟢 低（业务未触发） |
+| ~~**chat-svc PinConversation gRPC**~~ | ~~1 天（需 schema migration）~~ | 🟢 **已关闭（Stage 72）** — PinConversation + UpdateConversation 全链路落地（proto→chat-svc→BFF→前端，migration `003_add_pinned_to_conversations.sql`），见 stage-72 §二 |
 | **chat-svc StreamMessages gRPC** | 1 天（需重新评估流式业务场景） | 🟢 低 |
-| **错误码统一映射**（chat-svc mapLogicError / user-svc mapAuthError / analytics-svc / assessment-svc 各自分散） | 1 天 | 🟡 中 |
+| ~~**错误码统一映射**（chat-svc mapLogicError / user-svc mapAuthError / analytics-svc / assessment-svc 各自分散）~~ | ~~1 天~~ | 🟢 **已关闭（Stage 66 B4，commits `edc016e`/`9aff13a`/`f57ba9f`）** — 5 svc 接入 grpcerr + 19 处 status.Errorf 散写归零 + BFF 补 409 |
 | ~~BFF 全局 gRPC error → HTTP code 映射~~（Sprint F2 V3 暴露：BFF 把 gRPC codes.Unavailable 统一标 502，与 HTTP handler 503 行为不符） | 半天 | 🟢 **Sprint G 已完成（`f874d3f`）** — tts/synthesize 502→503；7 路径 Final E2E 全 200/503 |
 | **gRPC mTLS**（dev 用 insecure，prod mTLS） | 1 周 | 🟡 中（决策 18 已记录 prod 必做） |
 

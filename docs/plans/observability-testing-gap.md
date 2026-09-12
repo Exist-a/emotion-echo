@@ -1,5 +1,5 @@
 ---
-status: planned
+status: superseded
 superseded-by: docs/plans/observability-sprint-b.md（PR 拆分被 PR-OBS-9~16 取代；本文档 §一/§二/§三保留作为参考）
 priority: medium
 owner: TBD
