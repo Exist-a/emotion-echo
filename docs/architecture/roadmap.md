@@ -968,13 +968,11 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 
 1. file-upload"发给 Kimi 带文件引用"（依赖多模态文件理解，挂 llm 后续增强）
 2. 趋势报告（weekly/monthly/annual）意图维度 + LLM 式分类增强（PR-3 残余，见 stage-83 §五）
-3. chat-svc events 包 3 个存量测试失败（Stage 73 起即有，待修——Data nil 分支）
-4. llm-service Python 端 Nacos 注册 + prod 独立 bff-client 证书
-5. Kafka P3（outbox relay dead 告警）/ §1.4 consumer 进程级指标
-3. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
+3. llm-service Python 端 Nacos 注册 + prod 独立 bff-client 证书
+4. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
    §1.4 可选：consumer 进程级指标
-4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
+5. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
    llm-service Python 端注册；DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）
-5. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）
+6. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。

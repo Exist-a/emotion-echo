@@ -10,9 +10,11 @@
 //
 // Coverage matrix:
 //
-//   - Happy path: Publish encodes event JSON, uses event ID as key,
-//     sends to mock producer; mock returns (partition=0, offset=0),
-//     Publish returns nil
+//   - Happy path: Publish encodes event as Protobuf envelope (Stage 73),
+//     uses event ID as key, writes content-type header, sends to mock
+//     producer; mock returns (partition=0, offset=0), Publish returns nil
+//   - Marshal error: Event without typed Data is rejected by
+//     MarshalChatEvent BEFORE reaching the broker (oneof 契约)
 //   - SendMessage error: mock returns SendMessage error; Publish
 //     propagates the error verbatim
 //   - Close: propagates mock Close error
@@ -25,13 +27,16 @@ package events
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/IBM/sarama/mocks"
+	"google.golang.org/protobuf/proto"
+
+	chatevents "github.com/emotion-echo/shared/pkg/chatevents"
 )
 
 func TestKafkaEventPublisher_Publish_HappyPath_EncodesJSON(t *testing.T) {
@@ -87,7 +92,10 @@ func TestKafkaEventPublisher_Publish_KeyIsEventID(t *testing.T) {
 	}
 }
 
-func TestKafkaEventPublisher_Publish_ValueIsValidJSON(t *testing.T) {
+// Stage 73 契约：payload 是 Protobuf 编码的 ChatEventEnvelope + content-type
+// header 标记（不再是 JSON）。本测试锁定编码格式与 header，防止回退到 JSON
+// 或丢 header（consumer 靠 header 识别新旧格式，双写窗口依赖它）。
+func TestKafkaEventPublisher_Publish_ValueIsValidProtoEnvelope(t *testing.T) {
 	t.Parallel()
 	mockProducer := mocks.NewSyncProducer(t, nil)
 	mockProducer.ExpectSendMessageWithMessageCheckerFunctionAndSucceed(
@@ -96,19 +104,30 @@ func TestKafkaEventPublisher_Publish_ValueIsValidJSON(t *testing.T) {
 			if !ok {
 				t.Fatalf("msg.Value is %T, want sarama.ByteEncoder", msg.Value)
 			}
-			// Round-trip JSON → verify shape.
-			var got map[string]any
-			if err := json.Unmarshal(enc, &got); err != nil {
-				t.Fatalf("msg.Value is not valid JSON: %v", err)
+			var got chatevents.ChatEventEnvelope
+			if err := proto.Unmarshal(enc, &got); err != nil {
+				t.Fatalf("msg.Value is not a valid ChatEventEnvelope: %v", err)
 			}
-			if got["id"] != "evt-1" {
-				t.Errorf("JSON id = %v, want evt-1", got["id"])
+			if got.GetId() != "evt-1" {
+				t.Errorf("envelope id = %q, want evt-1", got.GetId())
 			}
-			if got["type"] != EventTypeMessageCreated {
-				t.Errorf("JSON type = %v, want %v", got["type"], EventTypeMessageCreated)
+			if got.GetType() != EventTypeMessageCreated {
+				t.Errorf("envelope type = %q, want %q", got.GetType(), EventTypeMessageCreated)
 			}
-			if got["source"] != "chat-svc" {
-				t.Errorf("JSON source = %v, want chat-svc", got["source"])
+			if got.GetSource() != "chat-svc" {
+				t.Errorf("envelope source = %q, want chat-svc", got.GetSource())
+			}
+			if got.GetMessageCreated() == nil {
+				t.Errorf("envelope oneof data is nil, want message_created set")
+			}
+			var ct []byte
+			for _, h := range msg.Headers {
+				if string(h.Key) == "content-type" {
+					ct = h.Value
+				}
+			}
+			if string(ct) != ContentTypeHeaderProto {
+				t.Errorf("content-type header = %q, want %q", string(ct), ContentTypeHeaderProto)
 			}
 			return nil
 		},
@@ -127,6 +146,31 @@ func TestKafkaEventPublisher_Publish_ValueIsValidJSON(t *testing.T) {
 	}
 }
 
+// Marshal 阶段报错（如 Data nil，违反 oneof 契约）必须发生在触达 broker 之前，
+// 且错误原样返回——不能被吞掉也不能空发消息。
+func TestKafkaEventPublisher_Publish_MarshalError_NotSentToBroker(t *testing.T) {
+	t.Parallel()
+	mockProducer := mocks.NewSyncProducer(t, nil)
+	mockProducer.ExpectSendMessageWithMessageCheckerFunctionAndSucceed(
+		func(msg *sarama.ProducerMessage) error {
+			t.Error("SendMessage reached broker, want marshal error before send")
+			return nil
+		},
+	)
+
+	p := &KafkaEventPublisher{producer: mockProducer}
+	err := p.Publish(context.Background(), TopicChatEvents, &Event{
+		ID:   "evt-nil-data",
+		Type: EventTypeMessageCreated,
+	})
+	if err == nil {
+		t.Fatal("expected Publish to return marshal error for nil Data, got nil")
+	}
+	if !strings.Contains(err.Error(), "unsupported Data type") {
+		t.Errorf("Publish err = %v, want marshal error mentioning unsupported Data type", err)
+	}
+}
+
 func TestKafkaEventPublisher_Publish_SendMessageError_Propagates(t *testing.T) {
 	t.Parallel()
 	mockProducer := mocks.NewSyncProducer(t, nil)
@@ -137,6 +181,9 @@ func TestKafkaEventPublisher_Publish_SendMessageError_Propagates(t *testing.T) {
 	err := p.Publish(context.Background(), TopicChatEvents, &Event{
 		ID:   "evt-err",
 		Type: EventTypeMessageCreated,
+		// Stage 73 起 Data 必须是 typed payload，否则 marshal 先于 SendMessage
+		// 报错；本测试验证的是 broker 错误透传，故需合法 Data 才能走到发送。
+		Data: MessageCreatedData{MessageID: 1},
 	})
 	if err == nil {
 		t.Fatal("expected Publish to return SendMessage error, got nil")
@@ -178,6 +225,7 @@ func TestKafkaEventPublisher_Publish_TopicIsForwarded(t *testing.T) {
 	err := p.Publish(context.Background(), customTopic, &Event{
 		ID:   "evt-topic",
 		Type: EventTypeMessageCreated,
+		Data: MessageCreatedData{MessageID: 1},
 	})
 	if err != nil {
 		t.Fatalf("Publish failed: %v", err)
