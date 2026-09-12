@@ -57,6 +57,21 @@ func unixToDateProto(sec int64) string {
 	return time.Unix(sec, 0).UTC().Format("2006-01-02")
 }
 
+// intentWhitelistProto 6 类意图白名单（确定性顺序，与 llm intent.INTENTS 对齐）
+var intentWhitelistProto = []string{"emotional_support", "study_help", "tech_help", "career_help", "lifestyle", "other"}
+
+// intentDistToProto map → 按白名单确定性顺序的 []*IntentCount（白名单外不输出）。
+// Stage 85：从 ReportsDaily 内联逻辑提取，日报/趋势共用。
+func intentDistToProto(counts map[string]int64) []*emotionanalytics.IntentCount {
+	out := make([]*emotionanalytics.IntentCount, 0, len(counts))
+	for _, intent := range intentWhitelistProto {
+		if cnt, ok := counts[intent]; ok {
+			out = append(out, &emotionanalytics.IntentCount{Intent: intent, Count: int32(cnt)})
+		}
+	}
+	return out
+}
+
 // toProtoChartDataPoints []TrendPoint → []*emotionanalytics.ChartDataPoint
 func toProtoChartDataPoints(points []types.TrendPoint) []*emotionanalytics.ChartDataPoint {
 	out := make([]*emotionanalytics.ChartDataPoint, 0, len(points))
@@ -118,12 +133,7 @@ func (s *analyticsServer) ReportsDaily(ctx context.Context, req *emotionanalytic
 		totalEmotions += c
 	}
 	// Stage 82 PR-3b：意图分布映射（确定性顺序便于测试断言）
-	intentDist := make([]*emotionanalytics.IntentCount, 0, len(r.IntentCounts))
-	for _, intent := range []string{"emotional_support", "study_help", "tech_help", "career_help", "lifestyle", "other"} {
-		if cnt, ok := r.IntentCounts[intent]; ok {
-			intentDist = append(intentDist, &emotionanalytics.IntentCount{Intent: intent, Count: int32(cnt)})
-		}
-	}
+	intentDist := intentDistToProto(r.IntentCounts)
 	return &emotionanalytics.ReportsDailyResponse{
 		Summary:            fmt.Sprintf("情绪分布 %d 类，消息 %d 条", len(r.EmotionCounts), r.MessageCount),
 		EmotionDistribution: toProtoEmotionDistribution(r.EmotionCounts, totalEmotions),
@@ -156,8 +166,9 @@ func (s *analyticsServer) ReportsTrend(ctx context.Context, req *emotionanalytic
 		return &emotionanalytics.ReportsTrendResponse{Type: req.Type}, nil
 	}
 	return &emotionanalytics.ReportsTrendResponse{
-		DataPoints: toProtoChartDataPoints(resp.Report.Points),
-		Type:       resp.Report.Type,
+		DataPoints:         toProtoChartDataPoints(resp.Report.Points),
+		Type:               resp.Report.Type,
+		IntentDistribution: intentDistToProto(resp.Report.IntentCounts),
 	}, nil
 }
 

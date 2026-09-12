@@ -81,6 +81,9 @@ type TrendReport struct {
 	StartDate string       `json:"startDate"`
 	EndDate   string       `json:"endDate"`
 	Points    []TrendPoint `json:"points"`
+	// Stage 85：区间意图分布（msg_summary_v.intent 聚合，'' 未分类不计入）。
+	// 与 DailyReport.IntentCounts 同源同义，只是聚合窗口为 [start, end]。
+	IntentCounts map[string]int64 `json:"intentCounts,omitempty"`
 }
 
 // trendTypeBucket 趋势类型 → 桶大小
@@ -291,12 +294,33 @@ ORDER BY 1`
 		return nil, err
 	}
 
+	// Stage 85：区间意图分布（与日报同源 msg_summary_v，窗口为整个区间）
+	const qIntents = `
+SELECT intent, COUNT(*)::bigint AS cnt
+FROM emotion_echo_chat.msg_summary_v
+WHERE user_id = $1 AND send_time::date BETWEEN $2::date AND $3::date AND intent <> ''
+GROUP BY 1`
+	var intents []struct {
+		Intent string
+		Cnt    int64
+	}
+	if err := r.db.WithContext(ctx).Raw(qIntents, userID,
+		start.Format("2006-01-02"), end.Format("2006-01-02"),
+	).Scan(&intents).Error; err != nil {
+		return nil, err
+	}
+	intentCounts := make(map[string]int64, len(intents))
+	for _, c := range intents {
+		intentCounts[c.Intent] = c.Cnt
+	}
+
 	return &TrendReport{
-		UserID:    userID,
-		Type:      trendType,
-		StartDate: start.Format("2006-01-02"),
-		EndDate:   end.Format("2006-01-02"),
-		Points:    buildTrendPoints(rows, bucketDays, start.Format("2006-01-02"), end.Format("2006-01-02")),
+		UserID:       userID,
+		Type:         trendType,
+		StartDate:    start.Format("2006-01-02"),
+		EndDate:      end.Format("2006-01-02"),
+		Points:       buildTrendPoints(rows, bucketDays, start.Format("2006-01-02"), end.Format("2006-01-02")),
+		IntentCounts: intentCounts,
 	}, nil
 }
 

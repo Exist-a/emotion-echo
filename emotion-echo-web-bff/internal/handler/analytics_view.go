@@ -52,13 +52,31 @@ type FrontendEmotionTrendSeries struct {
 
 // FrontendEmotionTrend 前端 EmotionTrend 类型契约
 type FrontendEmotionTrend struct {
-	Type                string                    `json:"type"`
-	Dates               []string                  `json:"dates"`
+	Type                string                       `json:"type"`
+	Dates               []string                     `json:"dates"`
 	Series              []FrontendEmotionTrendSeries `json:"series"`
-	Summary             string                    `json:"summary"`
-	EmotionDistribution []EmotionDistributionItem `json:"emotionDistribution"`
-	ConversationCount   int64                     `json:"conversationCount"`
-	MessageCount        int64                     `json:"messageCount"`
+	Summary             string                       `json:"summary"`
+	EmotionDistribution []EmotionDistributionItem    `json:"emotionDistribution"`
+	ConversationCount   int64                        `json:"conversationCount"`
+	MessageCount        int64                        `json:"messageCount"`
+	// Stage 85：区间意图分布；omitempty = 无数据不输出，前端按字段缺失隐藏饼图
+	IntentDistribution []IntentCountItem `json:"intentDistribution,omitempty"`
+}
+
+// intentWhitelistView 6 类意图白名单（确定性顺序，与 analytics-svc /
+// emotion-llm-service intent.INTENTS 对齐）
+var intentWhitelistView = []string{"emotional_support", "study_help", "tech_help", "career_help", "lifestyle", "other"}
+
+// intentCountsToItems map → 按白名单确定性顺序的 []IntentCountItem（白名单外不输出）。
+// Stage 85：从 toFrontendDailyReport 内联逻辑提取，日报/趋势共用。
+func intentCountsToItems(counts map[string]int64) []IntentCountItem {
+	items := make([]IntentCountItem, 0, len(counts))
+	for _, intent := range intentWhitelistView {
+		if cnt, ok := counts[intent]; ok {
+			items = append(items, IntentCountItem{Intent: intent, Count: cnt})
+		}
+	}
+	return items
 }
 
 // toFrontendDailyReport 把下游 *DailyReport 转成前端契约
@@ -69,12 +87,7 @@ func toFrontendDailyReport(r *downstream.DailyReport) *FrontendDailyReport {
 		return &FrontendDailyReport{Summary: "今日还没有数据。"}
 	}
 	// Stage 82 PR-3b：意图分布透传（确定性顺序）
-	intents := make([]IntentCountItem, 0, len(r.IntentCounts))
-	for _, intent := range []string{"emotional_support", "study_help", "tech_help", "career_help", "lifestyle", "other"} {
-		if cnt, ok := r.IntentCounts[intent]; ok {
-			intents = append(intents, IntentCountItem{Intent: intent, Count: cnt})
-		}
-	}
+	intents := intentCountsToItems(r.IntentCounts)
 	return &FrontendDailyReport{
 		Date:                r.Date,
 		Summary:             BuildDaily(r),
@@ -170,6 +183,7 @@ func toFrontendTrendReport(r *downstream.TrendReport) *FrontendEmotionTrend {
 		EmotionDistribution: emotionTotalToSlice(emotionTotal),
 		MessageCount:        totalCount,
 		ConversationCount:   0, // TrendReport 没有 conv 维度；前端目前模板用 0 等同"未提供"
+		IntentDistribution:  intentCountsToItems(r.IntentCounts),
 	}
 }
 

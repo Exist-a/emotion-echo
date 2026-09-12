@@ -341,4 +341,6 @@ export interface EmotionTrend {
   emotionDistribution: EmotionDistribution[]
   conversationCount: number
   messageCount: number
+  /** Stage 85：区间意图分布（可选——旧下游无此字段，缺失隐藏饼图） */
+  intentDistribution?: IntentCount[]
 }

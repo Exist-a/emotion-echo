@@ -130,6 +130,9 @@ message ReportsTrendRequest {
 message ReportsTrendResponse {
   repeated ChartDataPoint data_points = 1;
   string type = 2;                    // echo back
+  // Stage 85：区间意图分布（msg_summary_v.intent 聚合，'' 未分类不计入；
+  // 服务端按 6 类白名单确定性顺序输出）
+  repeated IntentCount intent_distribution = 3;
 }
 
 // ============== User Behavior ==============

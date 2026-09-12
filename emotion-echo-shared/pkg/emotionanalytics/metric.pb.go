@@ -540,11 +540,14 @@ func (x *ReportsTrendRequest) GetDateRange() *DateRange {
 
 // ReportsTrendResponse 趋势响应
 type ReportsTrendResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DataPoints    []*ChartDataPoint      `protobuf:"bytes,1,rep,name=data_points,json=dataPoints,proto3" json:"data_points,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"` // echo back
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	DataPoints []*ChartDataPoint      `protobuf:"bytes,1,rep,name=data_points,json=dataPoints,proto3" json:"data_points,omitempty"`
+	Type       string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"` // echo back
+	// Stage 85：区间意图分布（msg_summary_v.intent 聚合，” 未分类不计入；
+	// 服务端按 6 类白名单确定性顺序输出）
+	IntentDistribution []*IntentCount `protobuf:"bytes,3,rep,name=intent_distribution,json=intentDistribution,proto3" json:"intent_distribution,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ReportsTrendResponse) Reset() {
@@ -589,6 +592,13 @@ func (x *ReportsTrendResponse) GetType() string {
 		return x.Type
 	}
 	return ""
+}
+
+func (x *ReportsTrendResponse) GetIntentDistribution() []*IntentCount {
+	if x != nil {
+		return x.IntentDistribution
+	}
+	return nil
 }
 
 // UserBehaviorDayNightResponse 昼夜分布响应
@@ -1242,11 +1252,12 @@ const file_metric_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12>\n" +
 	"\n" +
-	"date_range\x18\x03 \x01(\v2\x1f.emotion_analytics.v1.DateRangeR\tdateRange\"q\n" +
+	"date_range\x18\x03 \x01(\v2\x1f.emotion_analytics.v1.DateRangeR\tdateRange\"\xc5\x01\n" +
 	"\x14ReportsTrendResponse\x12E\n" +
 	"\vdata_points\x18\x01 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\n" +
 	"dataPoints\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\"\xb2\x01\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12R\n" +
+	"\x13intent_distribution\x18\x03 \x03(\v2!.emotion_analytics.v1.IntentCountR\x12intentDistribution\"\xb2\x01\n" +
 	"\x1cUserBehaviorDayNightResponse\x12G\n" +
 	"\factive_hours\x18\x01 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\vactiveHours\x12I\n" +
 	"\rmessage_hours\x18\x02 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\fmessageHours\"\x82\x01\n" +
@@ -1342,39 +1353,40 @@ var file_metric_proto_depIdxs = []int32{
 	6,  // 3: emotion_analytics.v1.ReportsDailyResponse.intent_distribution:type_name -> emotion_analytics.v1.IntentCount
 	0,  // 4: emotion_analytics.v1.ReportsTrendRequest.date_range:type_name -> emotion_analytics.v1.DateRange
 	1,  // 5: emotion_analytics.v1.ReportsTrendResponse.data_points:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 6: emotion_analytics.v1.UserBehaviorDayNightResponse.active_hours:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 7: emotion_analytics.v1.UserBehaviorDayNightResponse.message_hours:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 8: emotion_analytics.v1.UserBehaviorDepthResponse.buckets:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 9: emotion_analytics.v1.UserBehaviorFrequencyResponse.daily_active:type_name -> emotion_analytics.v1.ChartDataPoint
-	2,  // 10: emotion_analytics.v1.MentalHealthAssessmentResponse.emotion_distribution:type_name -> emotion_analytics.v1.EmotionDistribution
-	0,  // 11: emotion_analytics.v1.MentalHealthHistoryRequest.date_range:type_name -> emotion_analytics.v1.DateRange
-	13, // 12: emotion_analytics.v1.MentalHealthHistoryResponse.records:type_name -> emotion_analytics.v1.MentalHealthAssessmentResponse
-	0,  // 13: emotion_analytics.v1.MentalHealthTrendRequest.date_range:type_name -> emotion_analytics.v1.DateRange
-	1,  // 14: emotion_analytics.v1.MentalHealthTrendResponse.score_trend:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 15: emotion_analytics.v1.MentalHealthTrendResponse.risk_trend:type_name -> emotion_analytics.v1.ChartDataPoint
-	4,  // 16: emotion_analytics.v1.AnalyticsService.ReportsDaily:input_type -> emotion_analytics.v1.ReportsDailyRequest
-	7,  // 17: emotion_analytics.v1.AnalyticsService.ReportsTrend:input_type -> emotion_analytics.v1.ReportsTrendRequest
-	3,  // 18: emotion_analytics.v1.AnalyticsService.UserBehaviorDayNight:input_type -> emotion_analytics.v1.UserBehaviorRequest
-	3,  // 19: emotion_analytics.v1.AnalyticsService.UserBehaviorDepth:input_type -> emotion_analytics.v1.UserBehaviorRequest
-	3,  // 20: emotion_analytics.v1.AnalyticsService.UserBehaviorFrequency:input_type -> emotion_analytics.v1.UserBehaviorRequest
-	12, // 21: emotion_analytics.v1.AnalyticsService.MentalHealthAssessment:input_type -> emotion_analytics.v1.MentalHealthAssessmentRequest
-	14, // 22: emotion_analytics.v1.AnalyticsService.MentalHealthHistory:input_type -> emotion_analytics.v1.MentalHealthHistoryRequest
-	16, // 23: emotion_analytics.v1.AnalyticsService.MentalHealthTrigger:input_type -> emotion_analytics.v1.MentalHealthTriggerRequest
-	18, // 24: emotion_analytics.v1.AnalyticsService.MentalHealthTrend:input_type -> emotion_analytics.v1.MentalHealthTrendRequest
-	5,  // 25: emotion_analytics.v1.AnalyticsService.ReportsDaily:output_type -> emotion_analytics.v1.ReportsDailyResponse
-	8,  // 26: emotion_analytics.v1.AnalyticsService.ReportsTrend:output_type -> emotion_analytics.v1.ReportsTrendResponse
-	9,  // 27: emotion_analytics.v1.AnalyticsService.UserBehaviorDayNight:output_type -> emotion_analytics.v1.UserBehaviorDayNightResponse
-	10, // 28: emotion_analytics.v1.AnalyticsService.UserBehaviorDepth:output_type -> emotion_analytics.v1.UserBehaviorDepthResponse
-	11, // 29: emotion_analytics.v1.AnalyticsService.UserBehaviorFrequency:output_type -> emotion_analytics.v1.UserBehaviorFrequencyResponse
-	13, // 30: emotion_analytics.v1.AnalyticsService.MentalHealthAssessment:output_type -> emotion_analytics.v1.MentalHealthAssessmentResponse
-	15, // 31: emotion_analytics.v1.AnalyticsService.MentalHealthHistory:output_type -> emotion_analytics.v1.MentalHealthHistoryResponse
-	17, // 32: emotion_analytics.v1.AnalyticsService.MentalHealthTrigger:output_type -> emotion_analytics.v1.MentalHealthTriggerResponse
-	19, // 33: emotion_analytics.v1.AnalyticsService.MentalHealthTrend:output_type -> emotion_analytics.v1.MentalHealthTrendResponse
-	25, // [25:34] is the sub-list for method output_type
-	16, // [16:25] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	6,  // 6: emotion_analytics.v1.ReportsTrendResponse.intent_distribution:type_name -> emotion_analytics.v1.IntentCount
+	1,  // 7: emotion_analytics.v1.UserBehaviorDayNightResponse.active_hours:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 8: emotion_analytics.v1.UserBehaviorDayNightResponse.message_hours:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 9: emotion_analytics.v1.UserBehaviorDepthResponse.buckets:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 10: emotion_analytics.v1.UserBehaviorFrequencyResponse.daily_active:type_name -> emotion_analytics.v1.ChartDataPoint
+	2,  // 11: emotion_analytics.v1.MentalHealthAssessmentResponse.emotion_distribution:type_name -> emotion_analytics.v1.EmotionDistribution
+	0,  // 12: emotion_analytics.v1.MentalHealthHistoryRequest.date_range:type_name -> emotion_analytics.v1.DateRange
+	13, // 13: emotion_analytics.v1.MentalHealthHistoryResponse.records:type_name -> emotion_analytics.v1.MentalHealthAssessmentResponse
+	0,  // 14: emotion_analytics.v1.MentalHealthTrendRequest.date_range:type_name -> emotion_analytics.v1.DateRange
+	1,  // 15: emotion_analytics.v1.MentalHealthTrendResponse.score_trend:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 16: emotion_analytics.v1.MentalHealthTrendResponse.risk_trend:type_name -> emotion_analytics.v1.ChartDataPoint
+	4,  // 17: emotion_analytics.v1.AnalyticsService.ReportsDaily:input_type -> emotion_analytics.v1.ReportsDailyRequest
+	7,  // 18: emotion_analytics.v1.AnalyticsService.ReportsTrend:input_type -> emotion_analytics.v1.ReportsTrendRequest
+	3,  // 19: emotion_analytics.v1.AnalyticsService.UserBehaviorDayNight:input_type -> emotion_analytics.v1.UserBehaviorRequest
+	3,  // 20: emotion_analytics.v1.AnalyticsService.UserBehaviorDepth:input_type -> emotion_analytics.v1.UserBehaviorRequest
+	3,  // 21: emotion_analytics.v1.AnalyticsService.UserBehaviorFrequency:input_type -> emotion_analytics.v1.UserBehaviorRequest
+	12, // 22: emotion_analytics.v1.AnalyticsService.MentalHealthAssessment:input_type -> emotion_analytics.v1.MentalHealthAssessmentRequest
+	14, // 23: emotion_analytics.v1.AnalyticsService.MentalHealthHistory:input_type -> emotion_analytics.v1.MentalHealthHistoryRequest
+	16, // 24: emotion_analytics.v1.AnalyticsService.MentalHealthTrigger:input_type -> emotion_analytics.v1.MentalHealthTriggerRequest
+	18, // 25: emotion_analytics.v1.AnalyticsService.MentalHealthTrend:input_type -> emotion_analytics.v1.MentalHealthTrendRequest
+	5,  // 26: emotion_analytics.v1.AnalyticsService.ReportsDaily:output_type -> emotion_analytics.v1.ReportsDailyResponse
+	8,  // 27: emotion_analytics.v1.AnalyticsService.ReportsTrend:output_type -> emotion_analytics.v1.ReportsTrendResponse
+	9,  // 28: emotion_analytics.v1.AnalyticsService.UserBehaviorDayNight:output_type -> emotion_analytics.v1.UserBehaviorDayNightResponse
+	10, // 29: emotion_analytics.v1.AnalyticsService.UserBehaviorDepth:output_type -> emotion_analytics.v1.UserBehaviorDepthResponse
+	11, // 30: emotion_analytics.v1.AnalyticsService.UserBehaviorFrequency:output_type -> emotion_analytics.v1.UserBehaviorFrequencyResponse
+	13, // 31: emotion_analytics.v1.AnalyticsService.MentalHealthAssessment:output_type -> emotion_analytics.v1.MentalHealthAssessmentResponse
+	15, // 32: emotion_analytics.v1.AnalyticsService.MentalHealthHistory:output_type -> emotion_analytics.v1.MentalHealthHistoryResponse
+	17, // 33: emotion_analytics.v1.AnalyticsService.MentalHealthTrigger:output_type -> emotion_analytics.v1.MentalHealthTriggerResponse
+	19, // 34: emotion_analytics.v1.AnalyticsService.MentalHealthTrend:output_type -> emotion_analytics.v1.MentalHealthTrendResponse
+	26, // [26:35] is the sub-list for method output_type
+	17, // [17:26] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_metric_proto_init() }

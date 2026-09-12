@@ -961,13 +961,18 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 - Stage 83：llm-chat-real-pipeline PR-3b（intent 落库 → msg_summary_v → analytics 意图分布
   → 日报饼图全链；e2e 揪出 VM 丢字段/视图升级/GRANT 三问题并修复；
   intent-classification 与 ai-response-structured 两计划迁 landed）
+- Stage 84：chat-svc events 包 3 个存量测试失败修复（测试适配 Stage 73 Protobuf
+  契约 + marshal 错误不触达 broker 回归锁；go test ./... 合并门槛恢复绿色）
+- Stage 85：趋势报告意图维度（ReportsTrendResponse 加 intent_distribution →
+  repo 区间聚合 → BFF 透传 → weekly/monthly/annual 三页饼图；真实容器 e2e +
+  DB 交叉实证）
 
-**当前 open 清单**（2026-09-12 Stage 83 收口后刷新）：
+**当前 open 清单**（2026-09-12 Stage 85 收口后刷新）：
 
 **llm-chat-real-pipeline 全线落地**（PR-1/2/3a/3b，Stage 80-83）。业务功能主线剩余：
 
 1. file-upload"发给 Kimi 带文件引用"（依赖多模态文件理解，挂 llm 后续增强）
-2. 趋势报告（weekly/monthly/annual）意图维度 + LLM 式分类增强（PR-3 残余，见 stage-83 §五）
+2. LLM 式分类增强 / 歧义消息消歧（规则式兜底已就位；key 可用时 LLM 重分类可选）
 3. llm-service Python 端 Nacos 注册 + prod 独立 bff-client 证书
 4. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
    §1.4 可选：consumer 进程级指标

@@ -17,16 +17,24 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"emotion-echo-analytics-svc/internal/config"
+	"emotion-echo-analytics-svc/internal/repository"
+	"emotion-echo-analytics-svc/internal/svc"
 )
 
-func startAnalyticsTestServer(t *testing.T) (*Server, *grpc.ClientConn, func()) {
+func startAnalyticsTestServer(t *testing.T, svcCtxs ...*svc.ServiceContext) (*Server, *grpc.ClientConn, func()) {
 	t.Helper()
+	var svcCtx *svc.ServiceContext
+	if len(svcCtxs) > 0 {
+		svcCtx = svcCtxs[0]
+	}
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := lis.Addr().(*net.TCPAddr).Port
 	lis.Close()
 
-	srv := New(nil, port)
+	srv := New(svcCtx, port)
 	require.NotNil(t, srv)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -57,6 +65,59 @@ func startAnalyticsTestServer(t *testing.T) (*Server, *grpc.ClientConn, func()) 
 }
 
 // ============ Unimplemented 阶段行为契约 ============
+
+// TestAnalyticsServer_ReportsTrend_IntentDistribution_DeterministicOrder 锁定
+// Stage 85 契约：ReportsTrend 响应携带区间意图分布（msg_summary_v 聚合），且
+// 按 6 类白名单确定性顺序输出（与 ReportsDaily 同序），便于前端饼图稳定渲染。
+func TestAnalyticsServer_ReportsTrend_IntentDistribution_DeterministicOrder(t *testing.T) {
+	reportRepo := repository.NewInMemoryReportRepo()
+	reportRepo.SetTrend(&repository.TrendReport{
+		UserID:    7,
+		Type:      "weekly",
+		StartDate: "2026-09-01",
+		EndDate:   "2026-09-07",
+		Points: []repository.TrendPoint{
+			{Date: "2026-09-01", PrimaryEmotion: "happy", Count: 3},
+		},
+		// 故意乱序注入，验证输出仍按白名单顺序
+		IntentCounts: map[string]int64{
+			"tech_help":        2,
+			"lifestyle":        1,
+			"emotional_support": 3,
+			"unknown_intent":   99, // 白名单外不输出
+		},
+	}, nil)
+	svcCtx := svc.NewServiceContextWithReports(config.Config{}, repository.NewInMemoryEventRepo(), reportRepo)
+
+	_, conn, cleanup := startAnalyticsTestServer(t, svcCtx)
+	defer cleanup()
+
+	client := emotionanalytics.NewAnalyticsServiceClient(conn)
+	// 服务有 user-id 拦截器，须带 x-user-id metadata（同其他测试）
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-user-id", "7"))
+	resp, err := client.ReportsTrend(ctx, &emotionanalytics.ReportsTrendRequest{
+		UserId: 7,
+		Type:   "weekly",
+		DateRange: &emotionanalytics.DateRange{
+			StartDate: parseDateProto("2026-09-01"),
+			EndDate:   parseDateProto("2026-09-07"),
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	got := make([]string, 0, len(resp.IntentDistribution))
+	counts := make(map[string]int32, len(resp.IntentDistribution))
+	for _, ic := range resp.IntentDistribution {
+		got = append(got, ic.Intent)
+		counts[ic.Intent] = ic.Count
+	}
+	assert.Equal(t, []string{"emotional_support", "tech_help", "lifestyle"}, got,
+		"按 6 类白名单相对顺序输出，白名单外（unknown_intent）不出现")
+	assert.Equal(t, int32(3), counts["emotional_support"])
+	assert.Equal(t, int32(2), counts["tech_help"])
+	assert.Equal(t, int32(1), counts["lifestyle"])
+}
 
 func TestAnalyticsServer_ReportsDaily_MissingUserID_ReturnsNonOK(t *testing.T) {
 	_, conn, cleanup := startAnalyticsTestServer(t)

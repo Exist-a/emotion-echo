@@ -126,6 +126,66 @@ func TestAnalyticsHandler_DailyReport_ReturnsFrontendShape(t *testing.T) {
 	assert.Equal(t, int64(1), resp.Data.EmotionDistribution[1].Value)
 }
 
+// TestAnalyticsHandler_TrendReport_IntentDistribution_Transparent 锁定 Stage 85
+// 契约：趋势响应透传区间意图分布，按 6 类白名单确定性顺序。
+func TestAnalyticsHandler_TrendReport_IntentDistribution_Transparent(t *testing.T) {
+	fc := &fakeAnalyticsClient{trend: &downstream.TrendReport{
+		UserID: 42,
+		Type:   "weekly",
+		Points: []downstream.TrendPoint{
+			{Date: "2026-09-01", PrimaryEmotion: "happy", Count: 3},
+		},
+		// 故意乱序注入，验证输出按白名单相对顺序
+		IntentCounts: map[string]int64{
+			"tech_help":         2,
+			"lifestyle":         1,
+			"emotional_support": 3,
+			"unknown_intent":    99,
+		},
+	}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/reports/trend?user_id=42&type=weekly&start=2026-09-01&end=2026-09-07", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			IntentDistribution []struct {
+				Intent string `json:"intent"`
+				Count  int64  `json:"count"`
+			} `json:"intentDistribution"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Data.IntentDistribution, 3, "白名单外 unknown_intent 不输出")
+	assert.Equal(t, "emotional_support", resp.Data.IntentDistribution[0].Intent)
+	assert.Equal(t, int64(3), resp.Data.IntentDistribution[0].Count)
+	assert.Equal(t, "tech_help", resp.Data.IntentDistribution[1].Intent)
+	assert.Equal(t, "lifestyle", resp.Data.IntentDistribution[2].Intent)
+}
+
+// TestAnalyticsHandler_TrendReport_IntentDistribution_OmittedWhenEmpty 锁定
+// 空意图分布时字段整体缺席（前端按"字段缺失隐藏饼图"兼容旧下游）。
+func TestAnalyticsHandler_TrendReport_IntentDistribution_OmittedWhenEmpty(t *testing.T) {
+	fc := &fakeAnalyticsClient{trend: &downstream.TrendReport{
+		Type:   "weekly",
+		Points: []downstream.TrendPoint{{Date: "2026-09-01", PrimaryEmotion: "happy", Count: 3}},
+	}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/reports/trend?user_id=42&type=weekly&start=2026-09-01&end=2026-09-07", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.NotContains(t, w.Body.String(), "intentDistribution",
+		"空意图分布不应输出字段（omitempty）")
+}
+
 func TestAnalyticsHandler_MissingUserID_Returns400(t *testing.T) {
 	r := newAnalyticsRouter(&fakeAnalyticsClient{})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily", nil)

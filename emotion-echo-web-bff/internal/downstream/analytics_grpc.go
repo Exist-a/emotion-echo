@@ -108,12 +108,18 @@ func (c *analyticsGRPCClient) TrendReport(ctx context.Context, userID int64, rep
 			PrimaryEmotion: p.Label,
 		})
 	}
+	// Stage 85：区间意图分布透传（proto 重复字段 → map，view 层再做确定性排序）
+	intentCounts := make(map[string]int64, len(resp.IntentDistribution))
+	for _, ic := range resp.IntentDistribution {
+		intentCounts[ic.Intent] = int64(ic.Count)
+	}
 	return &TrendReport{
-		UserID:    userID,
-		Type:      resp.Type,
-		StartDate: startDate,
-		EndDate:   endDate,
-		Points:    points,
+		UserID:       userID,
+		Type:         resp.Type,
+		StartDate:    startDate,
+		EndDate:      endDate,
+		Points:       points,
+		IntentCounts: intentCounts,
 	}, nil
 }
 
