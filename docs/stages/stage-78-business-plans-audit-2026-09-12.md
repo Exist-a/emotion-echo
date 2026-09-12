@@ -15,12 +15,12 @@
 
 **关键发现**：AI 聊天回复当前是 **BFF mock**（`web-bff/internal/handler/ai_stream_handler.go:22`
 头注释自证"当前为 mock 实现（无真实 LLM 对话）"）——这是两份 AI 计划的共同缺失前置，
-且该前置从未立过计划 → 新增 [`docs/plans/llm-chat-real-pipeline.md`](../plans/llm-chat-real-pipeline.md)。
+且该前置从未立过计划 → 新增 [`docs/legacy-plans/landed/llm-chat-real-pipeline.md`](../legacy-plans/landed/llm-chat-real-pipeline.md)。
 
 ## 二、产出
 
 1. 三份计划各加 2026-09-12 核查注记（就地更正过期前提，保留原文供历史追溯）
-2. 新计划 `docs/plans/llm-chat-real-pipeline.md`（PR-1 llm-service ChatCompletion RPC →
+2. 新计划 `docs/legacy-plans/landed/llm-chat-real-pipeline.md`（2026-09-12 迁 landed；PR-1 llm-service ChatCompletion RPC →
    PR-2 BFF 切 gRPC 上游 → PR-3 解锁意图分类与结构化回复）
 3. roadmap open 清单重排
 

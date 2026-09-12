@@ -1,12 +1,21 @@
 ---
-status: planned
-priority: high
-owner: TBD
-target-stage: Stage 80（候选）
+status: landed
+landed: 2026-09-12
+owner: User
 created: 2026-09-12
+landed-stages:
+  - stage-80-llm-chat-completion-rpc-2026-09-12.md（PR-1：llm-service ChatCompletion 流式 RPC + mock 降级）
+  - stage-81-bff-llm-grpc-upstream-2026-09-12.md（PR-2：BFF ai/stream 切 gRPC 上游，优先级链 gRPC→HTTP直连→mock）
+  - stage-82-intent-classification-styled-replies-2026-09-12.md（PR-3a：意图分类 6 类 + 风格指令注入）
+  - stage-83-intent-report-pipeline-2026-09-12.md（PR-3b：intent 落库 → 意图分布报表全链）
+residuals:
+  - 趋势报告（weekly/monthly/annual）意图维度未做（日报已有）
+  - llm-service Python 端 Nacos 注册未做（BFF 暂 env 直连）
+  - dev 无真实 LLM key（链路通、回复走 mock 降级；配 LLM_API_KEY 即真实）
+  - prod 应为 BFF 签发独立客户端证书（dev 复用 ai-client）
 related-plans:
-  - docs/plans/ai-response-structured.md（阶段 2 依赖本计划）
-  - docs/plans/intent-classification-6-types.md（依赖本计划）
+  - docs/legacy-plans/landed/ai-response-structured.md（阶段 2 已随 PR-3a 落地）
+  - docs/legacy-plans/landed/intent-classification-6-types.md（已随 PR-3a/3b 落地）
 related-stages:
   - docs/stages/stage-78-business-plans-audit-2026-09-12.md（三计划核查）
 related-adrs:

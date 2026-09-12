@@ -2,7 +2,7 @@
 
 > 日期：2026-09-12
 > 来源：Stage 79 收口后 roadmap 首项 → 用户"按推荐进行"
-> 计划：[docs/plans/llm-chat-real-pipeline.md](../plans/llm-chat-real-pipeline.md) §三 PR-1
+> 计划：[docs/legacy-plans/landed/llm-chat-real-pipeline.md](../legacy-plans/landed/llm-chat-real-pipeline.md) §三 PR-1
 > 性质：TDD（RED `69a27b0` → GREEN `250498f`），2 commit
 
 ## 一、落地内容

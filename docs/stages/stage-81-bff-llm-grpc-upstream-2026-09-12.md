@@ -2,7 +2,7 @@
 
 > 日期：2026-09-12
 > 来源：Stage 80 收口后 roadmap 首项 → 用户"那就继续吧"
-> 计划：[docs/plans/llm-chat-real-pipeline.md](../plans/llm-chat-real-pipeline.md) §三 PR-2
+> 计划：[docs/legacy-plans/landed/llm-chat-real-pipeline.md](../legacy-plans/landed/llm-chat-real-pipeline.md) §三 PR-2
 > 性质：TDD（RED `3833ff2` → GREEN `6d7662d`），2 commit
 
 ## 一、调研修正（PR-2 实际缺口）

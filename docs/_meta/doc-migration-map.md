@@ -145,3 +145,19 @@ migrated-at: 2026-09-03
 ## 七、待用户确认
 
 无重大歧义。可直接进入 Round 1（搭建 `docs/` 新骨架空目录）。如对某份归档文件归宿有异议，单独指出即可，本表是可调整的"工作文档"。
+
+---
+
+## 八、2026-09-12 追加迁移记录（Stage 79-83 业务功能批次）
+
+四份计划随功能落地迁入 `docs/legacy-plans/landed/`（front-matter 均含 landed-stages 与 residuals）：
+
+| 计划 | 迁移时间 | 落地证据 |
+|---|---|---|
+| `plans/file-upload-message-extension.md` → `legacy-plans/landed/` | Stage 79 收口 | stage-79（装配层 + contentType 全链修复） |
+| `plans/llm-chat-real-pipeline.md` → `legacy-plans/landed/` | Stage 83 收口 | stage-80（PR-1）/81（PR-2）/82（PR-3a）/83（PR-3b） |
+| `plans/intent-classification-6-types.md` → `legacy-plans/landed/` | Stage 83 收口 | stage-82（分类+风格注入）/83（意图分布报表） |
+| `plans/ai-response-structured.md` → `legacy-plans/landed/` | Stage 83 收口 | 阶段 1=Stage 58 时代已实现；阶段 2=stage-82 风格指令注入 |
+
+历史 stage 报告（如 stage-37-fixes-roadmap）中对 `docs/plans/...` 旧路径的引用保留原文不改写
+——历史记录以落笔时状态为准，本表即迁移事实源。
