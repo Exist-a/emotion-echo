@@ -32,6 +32,7 @@ import emotion_llm_pb2_grpc
 from main import analyze as http_analyze
 from chat_completion import ChatChunk as ChatChunkData
 from chat_completion import iter_chat_chunks
+from intent import classify_intent, inject_style
 
 from logging_setup import setup_logging
 from metrics_setup import GRPC_REQUESTS_TOTAL
@@ -241,6 +242,19 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
             context.set_details(str(e))
             return emotion_llm_pb2.AnalyzeResponse()
 
+    def ClassifyIntent(self, request, context):
+        """Stage 82 PR-3a：规则式 6 类意图分类（无 LLM 依赖，确定性可测）"""
+        try:
+            intent, confidence = classify_intent(request.text)
+            GRPC_REQUESTS_TOTAL.labels(method="ClassifyIntent", status="ok").inc()
+            return emotion_llm_pb2.IntentResult(intent=intent, confidence=confidence)
+        except Exception as e:
+            logger.error(f"ClassifyIntent error: {e}", exc_info=True)
+            GRPC_REQUESTS_TOTAL.labels(method="ClassifyIntent", status="err").inc()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return emotion_llm_pb2.IntentResult()
+
     def ChatCompletion(self, request, context):
         """Stage 80 · 流式对话（llm-chat-real-pipeline PR-1）
 
@@ -256,6 +270,18 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
             logger.info(
                 f"ChatCompletion request: messages={len(messages)} model={request.model or 'default'}"
             )
+
+            # Stage 82 PR-3a：意图分类 + 按意图注入风格指令；首帧回带 intent
+            intent = ""
+            if request.with_intent and messages:
+                user_text = next(
+                    (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
+                )
+                intent, confidence = classify_intent(user_text)
+                messages = inject_style(messages, intent)
+                logger.info(f"[intent] {intent} (confidence={confidence})")
+
+            first = True
             for chunk in iter_chat_chunks(
                 messages,
                 model=request.model,
@@ -270,7 +296,9 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
                     done=chunk.done,
                     model=chunk.model,
                     fallback_reason=chunk.fallback_reason,
+                    intent=intent if first else "",
                 )
+                first = False
         except Exception as e:
             logger.error(f"ChatCompletion error: {e}", exc_info=True)
             GRPC_REQUESTS_TOTAL.labels(method="ChatCompletion", status="err").inc()

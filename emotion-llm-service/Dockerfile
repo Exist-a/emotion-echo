@@ -32,6 +32,7 @@ COPY emotion-llm-service/emotion_llm_pb2_grpc.py ./emotion_llm_pb2_grpc.py
 # 复制业务代码（含 logging_setup + metrics_setup）
 COPY emotion-llm-service/main.py           ./main.py
 COPY emotion-llm-service/chat_completion.py ./chat_completion.py
+COPY emotion-llm-service/intent.py           ./intent.py
 COPY emotion-llm-service/grpc_server.py   ./grpc_server.py
 COPY emotion-llm-service/logging_setup.py ./logging_setup.py
 COPY emotion-llm-service/metrics_setup.py ./metrics_setup.py
@@ -65,6 +66,7 @@ COPY --from=builder /install /usr/local
 # 复制业务代码（关键：logging_setup.py / metrics_setup.py / nacos_client.py 都必须在，import 才能成功）
 COPY --from=builder /build/main.py                 ./main.py
 COPY --from=builder /build/chat_completion.py      ./chat_completion.py
+COPY --from=builder /build/intent.py               ./intent.py
 COPY --from=builder /build/grpc_server.py          ./grpc_server.py
 COPY --from=builder /build/logging_setup.py        ./logging_setup.py
 COPY --from=builder /build/metrics_setup.py        ./metrics_setup.py

@@ -434,3 +434,39 @@ class TestHealthRPC:
                 health_pb2.HealthCheckRequest(service="emotion.LLM")
             )
         assert resp.status == health_pb2.HealthCheckResponse.SERVING
+
+class TestChatCompletionIntent:
+    """Stage 82 PR-3a：with_intent 意图分类 + 首帧回带（真实 gRPC，mock 降级路径）。"""
+
+    def test_with_intent_first_chunk_carries_intent(self, grpc_server):
+        with grpc.insecure_channel(grpc_server.addr) as ch:
+            stub = emotion_llm_pb2_grpc.EmotionLLMServiceStub(ch)
+            chunks = list(stub.ChatCompletion(
+                emotion_llm_pb2.ChatCompletionRequest(
+                    messages=[
+                        emotion_llm_pb2.ChatMessage(role="user", content="我的 Python 代码报错了"),
+                    ],
+                    with_intent=True,
+                )
+            ))
+        assert chunks, "必须至少返回一帧"
+        assert chunks[0].intent == "tech_help", "首帧必须回带意图分类结果"
+        assert all(c.intent == "" for c in chunks[1:]), "只有首帧携带 intent"
+        assert chunks[-1].done
+
+    def test_without_intent_chunks_have_empty_intent(self, grpc_server):
+        with grpc.insecure_channel(grpc_server.addr) as ch:
+            stub = emotion_llm_pb2_grpc.EmotionLLMServiceStub(ch)
+            chunks = list(stub.ChatCompletion(
+                emotion_llm_pb2.ChatCompletionRequest(
+                    messages=[emotion_llm_pb2.ChatMessage(role="user", content="hi")],
+                )
+            ))
+        assert all(c.intent == "" for c in chunks)
+
+    def test_classify_intent_rpc(self, grpc_server):
+        with grpc.insecure_channel(grpc_server.addr) as ch:
+            stub = emotion_llm_pb2_grpc.EmotionLLMServiceStub(ch)
+            resp = stub.ClassifyIntent(emotion_llm_pb2.ClassifyIntentRequest(text="面试被拒了"))
+        assert resp.intent == "career_help"
+        assert 0.0 <= resp.confidence <= 1.0
