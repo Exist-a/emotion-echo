@@ -28,6 +28,7 @@ import (
 	"github.com/gin-gonic/gin"
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
+	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
@@ -89,10 +90,14 @@ func main() {
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
 	applyEnvOverrides(&c)
 
-	// 1. Postgres
-	convRepo, db, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	// 1. Postgres（Stage 77：失败按 500ms×10 退避重试，盖过瞬时 DNS 抖动；耗尽才降级）
+	pg, err := dbconnect.ConnectWithRetry(func() (pgConn, error) {
+		repo, gdb, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+		return pgConn{repo: repo, db: gdb}, err
+	}, dbconnect.DefaultAttempts, dbconnect.DefaultBackoff, time.Sleep)
+	convRepo, db := pg.repo, pg.db
 	if err != nil {
-		log.Printf("[postgres] connect failed: %v", err)
+		log.Printf("[postgres] connect failed after %d attempts: %v", dbconnect.DefaultAttempts, err)
 	} else {
 		log.Printf("[postgres] connected")
 	}
@@ -287,6 +292,12 @@ func main() {
 	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {
 		log.Fatalf("[gin] server crashed: %v", err)
 	}
+}
+
+// pgConn 聚合 openPostgres 的双返回值，供 dbconnect.ConnectWithRetry 泛型包装
+type pgConn struct {
+	repo repository.ConversationRepo
+	db   *gorm.DB
 }
 
 func openPostgres(dsn string, maxOpen, maxIdle int) (repository.ConversationRepo, *gorm.DB, error) {

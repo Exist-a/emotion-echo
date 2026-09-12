@@ -39,6 +39,18 @@ type userServer struct {
 	svcCtx *svc.ServiceContext
 }
 
+// ensureRepo 统一守卫：svcCtx 未注入，或 dev 降级启动（Stage 77，stage-76 §二.3）
+// 下 UserRepo 为 nil 时，端点返 Unavailable 而非在 logic 层 panic。
+func (s *userServer) ensureRepo() error {
+	if s.svcCtx == nil {
+		return status.Error(codes.Unavailable, "user-svc service context not initialized")
+	}
+	if s.svcCtx.UserRepo == nil {
+		return status.Error(codes.Unavailable, "user-svc repository not initialized (degraded start)")
+	}
+	return nil
+}
+
 // toProtoUser 把 types.UserInfo 转 proto UserInfo
 func toProtoUser(u types.UserInfo) *emotionuser.UserInfo {
 	return &emotionuser.UserInfo{
@@ -51,8 +63,8 @@ func toProtoUser(u types.UserInfo) *emotionuser.UserInfo {
 
 // GetMe 实现 GetMe RPC（复用 logic.NewGetMeLogic）
 func (s *userServer) GetMe(ctx context.Context, req *emotionuser.GetMeRequest) (*emotionuser.UserInfo, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
 	}
 	resp, err := logic.NewGetMeLogic(ctx, s.svcCtx).GetMe(&types.GetMeReq{})
 	if err != nil {
@@ -63,8 +75,8 @@ func (s *userServer) GetMe(ctx context.Context, req *emotionuser.GetMeRequest) (
 
 // UpdateProfile 实现 UpdateProfile RPC（复用 logic.NewUpdateProfileLogic）
 func (s *userServer) UpdateProfile(ctx context.Context, req *emotionuser.UpdateProfileRequest) (*emotionuser.UserInfo, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
 	}
 	// proto optional → types optional
 	profileReq := &types.UpdateProfileReq{
@@ -86,8 +98,8 @@ func (s *userServer) UpdateProfile(ctx context.Context, req *emotionuser.UpdateP
 
 // GetUserById 实现 GetUserById RPC（复用 logic.NewGetUserByIdLogic）
 func (s *userServer) GetUserById(ctx context.Context, req *emotionuser.GetUserByIdRequest) (*emotionuser.UserInfo, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
 	}
 	resp, err := logic.NewGetUserByIdLogic(ctx, s.svcCtx).GetUserById(&types.GetUserByIdReq{
 		Id: req.UserId,
@@ -111,8 +123,8 @@ func (s *userServer) GetUserById(ctx context.Context, req *emotionuser.GetUserBy
 //     - 其他 → codes.Internal
 //   - accessToken 不在此 RPC 返回——由 BFF 收到 UserInfo 后用 jwt.Manager 签发
 func (s *userServer) Login(ctx context.Context, req *emotionuser.LoginRequest) (*emotionuser.LoginResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
 	}
 	resp, err := logic.NewAuthLogic(ctx, s.svcCtx).Login(&types.LoginReq{
 		Username: req.GetUsername(),
@@ -131,8 +143,8 @@ func (s *userServer) Login(ctx context.Context, req *emotionuser.LoginRequest) (
 //   - ErrValidation → codes.InvalidArgument
 //   - 其他 → codes.Internal
 func (s *userServer) Register(ctx context.Context, req *emotionuser.RegisterRequest) (*emotionuser.RegisterResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
 	}
 	resp, err := logic.NewAuthLogic(ctx, s.svcCtx).Register(&types.RegisterReq{
 		Username: req.GetUsername(),
@@ -155,8 +167,8 @@ func (s *userServer) Register(ctx context.Context, req *emotionuser.RegisterRequ
 //   - ErrInvalidVerifyCode → codes.PermissionDenied（验证码错）
 //   - ErrValidation → codes.InvalidArgument
 func (s *userServer) ResetPassword(ctx context.Context, req *emotionuser.ResetPasswordRequest) (*emotionuser.ResetPasswordResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
 	}
 	resp, err := logic.NewAuthLogic(ctx, s.svcCtx).ResetPassword(&types.ResetPasswordReq{
 		Username:         req.GetUsername(),
@@ -174,8 +186,8 @@ func (s *userServer) ResetPassword(ctx context.Context, req *emotionuser.ResetPa
 // 服务端无状态（mock auth 模式），主要让客户端清 token。这里仅返 success=true。
 // 鉴权：userid 拦截器**不跳过**此 RPC，调用方需带 metadata x-user-id。
 func (s *userServer) Logout(ctx context.Context, req *emotionuser.LogoutRequest) (*emotionuser.LogoutResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "user-svc service context not initialized")
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
 	}
 	// 鉴权拦截器已从 ctx 注入 user_id，这里无需再读（mock 模式不做服务端黑名单）
 	return &emotionuser.LogoutResponse{Success: true}, nil

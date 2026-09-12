@@ -125,8 +125,8 @@ func toProtoSurveyResultItem(t types.SurveyResultItem) *emotionassessment.Survey
 
 // ListSurveys 实现 ListSurveys RPC
 func (s *assessmentServer) ListSurveys(ctx context.Context, req *emotionassessment.ListSurveysRequest) (*emotionassessment.ListSurveysResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "assessment-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.SurveyRepo == nil {
+		return nil, status.Error(codes.Unavailable, "assessment-svc repository not initialized (degraded start)")
 	}
 	limit := int(req.Limit)
 	if limit <= 0 {
@@ -150,8 +150,8 @@ func (s *assessmentServer) ListSurveys(ctx context.Context, req *emotionassessme
 
 // GetSurvey 实现 GetSurvey RPC
 func (s *assessmentServer) GetSurvey(ctx context.Context, req *emotionassessment.GetSurveyRequest) (*emotionassessment.Survey, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "assessment-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.SurveyRepo == nil {
+		return nil, status.Error(codes.Unavailable, "assessment-svc repository not initialized (degraded start)")
 	}
 	resp, err := logic.NewGetSurveyLogic(ctx, s.svcCtx).GetSurvey(&types.GetSurveyReq{
 		Id: uint64(req.SurveyId),
@@ -167,8 +167,8 @@ func (s *assessmentServer) GetSurvey(ctx context.Context, req *emotionassessment
 
 // SubmitSurvey 实现 SubmitSurvey RPC
 func (s *assessmentServer) SubmitSurvey(ctx context.Context, req *emotionassessment.SubmitSurveyRequest) (*emotionassessment.SurveyResult, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "assessment-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.SurveyRepo == nil {
+		return nil, status.Error(codes.Unavailable, "assessment-svc repository not initialized (degraded start)")
 	}
 	// proto Answer oneof → types.Answers map[string]int
 	answers := make(map[string]int, len(req.Answers))
@@ -199,8 +199,8 @@ func (s *assessmentServer) SubmitSurvey(ctx context.Context, req *emotionassessm
 
 // ListMyResults 实现 ListMyResults RPC（PR-3.4 阶段补全 BFF 端调用）
 func (s *assessmentServer) ListMyResults(ctx context.Context, req *emotionassessment.ListMyResultsRequest) (*emotionassessment.ListMyResultsResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "assessment-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.SurveyRepo == nil {
+		return nil, status.Error(codes.Unavailable, "assessment-svc repository not initialized (degraded start)")
 	}
 	resp, err := logic.NewGetSurveyResultLogic(ctx, s.svcCtx).ListMyResults(&types.ListMyResultsReq{
 		Limit: int(req.Limit),
@@ -220,8 +220,8 @@ func (s *assessmentServer) ListMyResults(ctx context.Context, req *emotionassess
 
 // GetSurveyResult 实现 GetSurveyResult RPC
 func (s *assessmentServer) GetSurveyResult(ctx context.Context, req *emotionassessment.GetSurveyResultRequest) (*emotionassessment.SurveyResult, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "assessment-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.SurveyRepo == nil {
+		return nil, status.Error(codes.Unavailable, "assessment-svc repository not initialized (degraded start)")
 	}
 	resp, err := logic.NewGetSurveyResultLogic(ctx, s.svcCtx).GetSurveyResult(&types.GetSurveyResultReq{
 		ResultId: uint64(req.ResultId),

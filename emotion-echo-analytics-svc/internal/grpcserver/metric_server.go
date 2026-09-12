@@ -89,8 +89,8 @@ func toProtoEmotionDistribution(counts map[string]int64, total int64) []*emotion
 
 // ReportsDaily 实现 ReportsDaily RPC
 func (s *analyticsServer) ReportsDaily(ctx context.Context, req *emotionanalytics.ReportsDailyRequest) (*emotionanalytics.ReportsDailyResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	dateStr := unixToDateProto(req.Date)
 	if dateStr == "" {
@@ -129,8 +129,8 @@ func (s *analyticsServer) ReportsDaily(ctx context.Context, req *emotionanalytic
 
 // ReportsTrend 实现 ReportsTrend RPC
 func (s *analyticsServer) ReportsTrend(ctx context.Context, req *emotionanalytics.ReportsTrendRequest) (*emotionanalytics.ReportsTrendResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	resp, err := logic.NewReportsTrendLogic(ctx, s.svcCtx).GetTrendReport(&types.GetTrendReportReq{
 		UserID:    req.UserId,
@@ -158,8 +158,8 @@ func (s *analyticsServer) ReportsTrend(ctx context.Context, req *emotionanalytic
 // PR-3.3 阶段：简化为日级聚合（实际 repo 提供 hour-level bucket；proto
 // ChartDataPoint timestamp 当作 hour slot）
 func (s *analyticsServer) UserBehaviorDayNight(ctx context.Context, req *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorDayNightResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	// PR-3.3: behavior logic 未对接（PR-3.4 阶段补）
 	// 当前返空响应 + 注释
@@ -172,8 +172,8 @@ func (s *analyticsServer) UserBehaviorDayNight(ctx context.Context, req *emotion
 
 // UserBehaviorDepth 实现 UserBehaviorDepth RPC
 func (s *analyticsServer) UserBehaviorDepth(ctx context.Context, req *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorDepthResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	_ = req
 	return &emotionanalytics.UserBehaviorDepthResponse{
@@ -184,8 +184,8 @@ func (s *analyticsServer) UserBehaviorDepth(ctx context.Context, req *emotionana
 
 // UserBehaviorFrequency 实现 UserBehaviorFrequency RPC
 func (s *analyticsServer) UserBehaviorFrequency(ctx context.Context, req *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorFrequencyResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	_ = req
 	return &emotionanalytics.UserBehaviorFrequencyResponse{
@@ -196,8 +196,8 @@ func (s *analyticsServer) UserBehaviorFrequency(ctx context.Context, req *emotio
 
 // MentalHealthAssessment 实现 MentalHealthAssessment RPC
 func (s *analyticsServer) MentalHealthAssessment(ctx context.Context, req *emotionanalytics.MentalHealthAssessmentRequest) (*emotionanalytics.MentalHealthAssessmentResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	assessmentType := "daily"
 	if req.Date > 0 {
@@ -235,8 +235,8 @@ func (s *analyticsServer) MentalHealthAssessment(ctx context.Context, req *emoti
 
 // MentalHealthHistory 实现 MentalHealthHistory RPC（PR-3.3 阶段简化）
 func (s *analyticsServer) MentalHealthHistory(ctx context.Context, req *emotionanalytics.MentalHealthHistoryRequest) (*emotionanalytics.MentalHealthHistoryResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	_ = req
 	return &emotionanalytics.MentalHealthHistoryResponse{Records: nil}, nil
@@ -244,8 +244,8 @@ func (s *analyticsServer) MentalHealthHistory(ctx context.Context, req *emotiona
 
 // MentalHealthTrigger 实现 MentalHealthTrigger RPC
 func (s *analyticsServer) MentalHealthTrigger(ctx context.Context, req *emotionanalytics.MentalHealthTriggerRequest) (*emotionanalytics.MentalHealthTriggerResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	resp, err := logic.NewMentalHealthTriggerLogic(ctx, s.svcCtx).TriggerAssessment(&types.TriggerMentalHealthReq{
 		UserID:         req.UserId,
@@ -265,8 +265,8 @@ func (s *analyticsServer) MentalHealthTrigger(ctx context.Context, req *emotiona
 
 // MentalHealthTrend 实现 MentalHealthTrend RPC
 func (s *analyticsServer) MentalHealthTrend(ctx context.Context, req *emotionanalytics.MentalHealthTrendRequest) (*emotionanalytics.MentalHealthTrendResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "analytics-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
+		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
 	resp, err := logic.NewMentalHealthTrendLogic(ctx, s.svcCtx).GetTrend(&types.GetMentalHealthTrendReq{
 		UserID: req.UserId,

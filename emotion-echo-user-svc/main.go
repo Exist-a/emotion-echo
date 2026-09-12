@@ -27,6 +27,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/gin-gonic/gin"
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
+	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
@@ -79,11 +80,14 @@ func main() {
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
 	applyEnvOverrides(&c)
 
-	// === 1. Postgres 连接 ===
-	userRepo, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	// === 1. Postgres 连接（Stage 77：失败按 500ms×10 退避重试，盖过瞬时 DNS 抖动；
+	// 重试耗尽仍失败才降级 nil repo——dev 阶段不阻断，但 health 接口会显示 dbOk=false） ===
+	userRepo, err := dbconnect.ConnectWithRetry(func() (repository.UserRepo, error) {
+		return openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	}, dbconnect.DefaultAttempts, dbconnect.DefaultBackoff, time.Sleep)
 	if err != nil {
-		log.Printf("[postgres] connect failed: %v", err)
-		// dev 阶段不阻断：让 svc 起，但 health 接口会显示 dbOk=false
+		log.Printf("[postgres] connect failed after %d attempts: %v", dbconnect.DefaultAttempts, err)
+		// dev 阶段不阻断：让 svc 起，gRPC 端点对 nil repo 返 Unavailable（ensureRepo）
 	}
 	if userRepo != nil {
 		log.Printf("[postgres] connected, dsn=%s", maskDSN(c.Postgres.DSN))

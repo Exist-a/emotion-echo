@@ -77,8 +77,8 @@ func toProtoMessage(m types.MessageView) *emotionchat.Message {
 //   - 把 types.CreateConversationResp 转 proto.Conversation
 //   - svcCtx 为 nil → 返 Unavailable（PR-GRPC-3 阶段 main.go 注入真实 svcCtx）
 func (s *chatServer) CreateConversation(ctx context.Context, req *emotionchat.CreateConversationRequest) (*emotionchat.Conversation, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
+		return nil, status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")
 	}
 	uid, ok := grpcinterceptor.UserIDFromGRPCContext(ctx)
 	if !ok || uid <= 0 {
@@ -105,8 +105,8 @@ func (s *chatServer) CreateConversation(ctx context.Context, req *emotionchat.Cr
 //   - proto SendMessageRequest.ConversationId → types.SendMessageReq.Id
 //   - 错误映射：logic 业务错误 → codes.Internal（无法细分类别时）；not found → codes.NotFound
 func (s *chatServer) SendMessage(ctx context.Context, req *emotionchat.SendMessageRequest) (*emotionchat.Message, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
+		return nil, status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")
 	}
 
 	// proto ClientMsgId 是 string（非指针）；types.ClientMsgID 是 *string。
@@ -135,8 +135,8 @@ func (s *chatServer) SendMessage(ctx context.Context, req *emotionchat.SendMessa
 
 // ListMessages 实现 ListMessages RPC（Sprint D）
 func (s *chatServer) ListMessages(ctx context.Context, req *emotionchat.ListMessagesRequest) (*emotionchat.ListMessagesResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
+		return nil, status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")
 	}
 
 	resp, err := logic.NewListMessagesLogic(ctx, s.svcCtx).ListMessages(&types.ListMessagesReq{
@@ -155,8 +155,8 @@ func (s *chatServer) ListMessages(ctx context.Context, req *emotionchat.ListMess
 
 // ListConversations 实现 ListConversations RPC（Sprint D）
 func (s *chatServer) ListConversations(ctx context.Context, req *emotionchat.ListConversationsRequest) (*emotionchat.ListConversationsResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
+		return nil, status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")
 	}
 
 	resp, err := logic.NewListConversationsLogic(ctx, s.svcCtx).ListConversations(&types.ListConversationsReq{
@@ -178,8 +178,8 @@ func (s *chatServer) ListConversations(ctx context.Context, req *emotionchat.Lis
 
 // DeleteConversation 实现 DeleteConversation RPC（Sprint D）
 func (s *chatServer) DeleteConversation(ctx context.Context, req *emotionchat.DeleteConversationRequest) (*emotionchat.DeleteConversationResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
+		return nil, status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")
 	}
 
 	resp, err := logic.NewDeleteConversationLogic(ctx, s.svcCtx).DeleteConversation(&types.DeleteConversationReq{
@@ -216,8 +216,8 @@ func mapLogicError(err error, op string) error {
 //   - 调 logic.NewPinConversationLogic.PinConversation（owner 校验 + repo.SetPinned）
 //   - 错误映射：not found → NotFound；forbidden → PermissionDenied（grpcerr 关键词表）
 func (s *chatServer) PinConversation(ctx context.Context, req *emotionchat.PinConversationRequest) (*emotionchat.PinConversationResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
+		return nil, status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")
 	}
 	uid, ok := grpcinterceptor.UserIDFromGRPCContext(ctx)
 	if !ok || uid <= 0 {
@@ -245,8 +245,8 @@ func (s *chatServer) PinConversation(ctx context.Context, req *emotionchat.PinCo
 //   - 调 logic.NewUpdateConversationLogic.UpdateConversation（空标题校验 + owner 校验 + repo.UpdateTitle）
 //   - 错误映射：not found → NotFound；forbidden → PermissionDenied；validation → InvalidArgument
 func (s *chatServer) UpdateConversation(ctx context.Context, req *emotionchat.UpdateConversationRequest) (*emotionchat.UpdateConversationResponse, error) {
-	if s.svcCtx == nil {
-		return nil, status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
+		return nil, status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")
 	}
 	uid, ok := grpcinterceptor.UserIDFromGRPCContext(ctx)
 	if !ok || uid <= 0 {
@@ -282,8 +282,8 @@ func (s *chatServer) UpdateConversation(ctx context.Context, req *emotionchat.Up
 // 收到 codes.Unimplemented 时 fallback 到现有路径（暂无 fallback，因为
 // BFF 没有用 StreamMessages 的调用点）。
 func (s *chatServer) StreamMessages(req *emotionchat.StreamMessagesRequest, stream emotionchat.ChatService_StreamMessagesServer) error {
-	if s.svcCtx == nil {
-		return status.Error(codes.Unavailable, "chat-svc service context not initialized")
+	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
+		return status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")
 	}
 	return status.Error(codes.Unimplemented, "StreamMessages: chat-svc 当前无流式订阅业务；留待未来多客户端实时协作场景")
 }

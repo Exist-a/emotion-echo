@@ -146,6 +146,9 @@ type emotionQueryServer struct {
 }
 
 func (s *emotionQueryServer) GetEmotionByMessage(ctx context.Context, req *emotionquery.GetEmotionByMessageRequest) (*emotionquery.Emotion, error) {
+	if s.repo == nil {
+		return nil, status.Error(codes.Unavailable, "ai-svc repository not initialized (degraded start)")
+	}
 	if req.MessageId == 0 {
 		return nil, status.Error(codes.InvalidArgument, "message_id is required")
 	}
@@ -160,6 +163,9 @@ func (s *emotionQueryServer) GetEmotionByMessage(ctx context.Context, req *emoti
 }
 
 func (s *emotionQueryServer) GetEmotionByConversation(ctx context.Context, req *emotionquery.GetEmotionByConversationRequest) (*emotionquery.EmotionList, error) {
+	if s.repo == nil {
+		return nil, status.Error(codes.Unavailable, "ai-svc repository not initialized (degraded start)")
+	}
 	if req.ConversationId == 0 {
 		return nil, status.Error(codes.InvalidArgument, "conversation_id is required")
 	}
@@ -228,6 +234,10 @@ func (s *emotionQueryServer) UpsertNeutralEmotion(ctx context.Context, req *emot
 	}
 	if req.EventId == "" {
 		return nil, status.Error(codes.InvalidArgument, "event_id is required (chat-svc outbox UUID) for idempotency")
+	}
+
+	if s.repo == nil {
+		return nil, status.Error(codes.Unavailable, "ai-svc repository not initialized (degraded start)")
 	}
 
 	// 幂等检查：先按 event_id 查一次

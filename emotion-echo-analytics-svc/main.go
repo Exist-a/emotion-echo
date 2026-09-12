@@ -25,6 +25,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/gin-gonic/gin"
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
+	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
@@ -86,10 +87,12 @@ func main() {
 	applyEnvOverrides(&c)
 
 	// 1. Postgres（单一 gorm.DB — Round 5 migrations 落地后驱动 search_path）
-	db, dbErr := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	db, dbErr := dbconnect.ConnectWithRetry(func() (*gorm.DB, error) {
+		return openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	}, dbconnect.DefaultAttempts, dbconnect.DefaultBackoff, time.Sleep)
 	var evtRepo repository.EventRepo
 	if dbErr != nil {
-		log.Printf("[postgres] connect failed: %v (EventRepo = nil)", dbErr)
+		log.Printf("[postgres] connect failed after %d attempts: %v (EventRepo = nil)", dbconnect.DefaultAttempts, dbErr)
 		evtRepo = nil
 	} else {
 		log.Printf("[postgres] connected")

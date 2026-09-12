@@ -20,6 +20,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/gin-gonic/gin"
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
+	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
@@ -69,9 +70,11 @@ func main() {
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
 	applyEnvOverrides(&c)
 
-	surveyRepo, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	surveyRepo, err := dbconnect.ConnectWithRetry(func() (repository.SurveyRepo, error) {
+		return openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	}, dbconnect.DefaultAttempts, dbconnect.DefaultBackoff, time.Sleep)
 	if err != nil {
-		log.Printf("[postgres] connect failed: %v", err)
+		log.Printf("[postgres] connect failed after %d attempts: %v", dbconnect.DefaultAttempts, err)
 	} else {
 		log.Printf("[postgres] connected")
 	}

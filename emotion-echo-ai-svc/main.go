@@ -44,6 +44,7 @@ import (
 	"github.com/SkyAPM/go2sky"
 	"github.com/gin-gonic/gin"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
+	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
@@ -232,9 +233,13 @@ func main() {
 	}
 
 	// 1. Postgres
-	emoRepo, db, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	pg, err := dbconnect.ConnectWithRetry(func() (aiPgConn, error) {
+		repo, gdb, err := openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+		return aiPgConn{repo: repo, db: gdb}, err
+	}, dbconnect.DefaultAttempts, dbconnect.DefaultBackoff, time.Sleep)
+	emoRepo, db := pg.repo, pg.db
 	if err != nil {
-		slog.Error("postgres connect failed", "err", err)
+		slog.Error("postgres connect failed", "err", err, "attempts", dbconnect.DefaultAttempts)
 		if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("postgres") {
 			logging.Fatalf("[postgres] strict mode + required dep, refusing to start")
 		}
@@ -522,6 +527,12 @@ func main() {
 		}
 		logging.Printf("[shutdown] ai-svc exited")
 	}
+}
+
+// aiPgConn 聚合 openPostgres 的双返回值，供 dbconnect.ConnectWithRetry 泛型包装
+type aiPgConn struct {
+	repo repository.EmotionRepo
+	db   *gorm.DB
 }
 
 func openPostgres(dsn string, maxOpen, maxIdle int) (repository.EmotionRepo, *gorm.DB, error) {
