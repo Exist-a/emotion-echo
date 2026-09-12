@@ -29,7 +29,7 @@ related-stages:
 |---|---|---|---|---|
 | 1 | chat-svc PinConversation + UpdateConversation 两个 RPC（含 schema migration + BFF 接通 + 前端 store 恢复真实 API） | 决策 4 ADR §八 + Stage 71 §六 | 1~2 天 | ✅ **已落地（Stage 72）** |
 | 2 | Kafka P2：consumer lag 监控 + 事件 Protobuf 迁移 | kafka-reliability-gaps.md §1.4/§1.5 | 3~4 天 | ✅ **§1.5 已落地（Stage 73，含 relay/pin 契约 2 bug 修复 + dev 栈 e2e 11/11）**；§1.4 已纠偏（骨架已落地） |
-| 3 | Nacos dev 模式全链路启用（ephemeral 实例 30s 被踢 / Heartbeat 未真正触发） | nacos-enablement-dev.md | 1~2 天 | 🔧 **部分落地（Stage 72）**：PR-1 验收达成 |
+| 3 | Nacos dev 模式全链路启用（ephemeral 实例 30s 被踢 / Heartbeat 未真正触发） | nacos-enablement-dev.md | 1~2 天 | ✅ **PR-1 落地（Stage 72）+ PR-2 落地（Stage 75）**：BFF 5 处 gRPC 拨号 Nacos 优先（stage-75-nacos-pr2-grpc-discovery-2026-09-12.md）；残余 PR-3/4/5 见 nacos-enablement-dev §四 |
 | 4 | Helm chart ↔ compose dev 全面对齐 | todo-pile §D6 | 1 天 | ✅ **机械对齐批次已落地（Stage 72）**，残余见 §项4 末 |
 
 ---

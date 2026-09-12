@@ -14,6 +14,12 @@ created: 2026-09-04
 > - Register 对 STARTING 瞬时错误加了退避重试；Discover 空 hosts error→空列表、服务名剥 GROUP@@ 前缀。
 > - 新登记残余：SDK SelectInstances 本地缓存 + 服务端空列表 push 延迟保护 → 注销后 Discover 陈旧 30s+（PR-2 BFF 走 Discover 前需评估）。
 
+> **Stage 75 状态注记（2026-09-12，详见 docs/stages/stage-75-nacos-pr2-grpc-discovery-2026-09-12.md）**：
+> - **PR-2 已落地**。本文档 §1.2"业务代码 0 处调用 Discover"自 Stage 72 起（HTTP 路径）即过期；Stage 75 补齐 gRPC 路径：BFF 5 处 `dialGRPC` 经 `resolveGRPCAddr` Nacos 优先解析（`WithPortHint("grpc_port")`），env `*_SVC_GRPC_ADDR` 降为兜底。
+> - §1.4 表中 user/chat/assessment/analytics 的 metadata 已补 `grpc_port`（8887/8892/8886/8885），与 ai-svc 对齐。
+> - 陈旧 30s 窗口评估结论：boot 期一次性解析 + env 兜底 → 不构成阻塞（详见 stage-75 §二）。
+> - PR-2 验收（Nacos 控制台手动 Deregister 5s 快速失败）以"boot 期解析 + 兜底日志"替代：BFF 启动日志明确标注每个 gRPC 地址来源（`[nacos] resolve ... (grpc)` / `fallback to ...`）。
+
 ## 一、现状（与代码事实对齐）
 
 ### 1.1 启动 + 注册：✅ 通

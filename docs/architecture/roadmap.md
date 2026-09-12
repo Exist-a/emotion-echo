@@ -926,18 +926,24 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 
 ---
 
-# 下一步行动（2026-09-08 更新）
+# 下一步行动（2026-09-12 更新，Stage 75 收口后）
 
-**主推路线**：
-1. 🔴 **修 dev Nacos ephemeral 500 阻塞**（docs/plans/nacos-enablement-dev.md §二）—— 解锁批 1 合 main 闸门
-2. 批 1 合并 main（stage-51 续推）
-3. 路线 Z 第 2 批：测试护栏 OBS-9/10/11/12/13/14/15/16
-4. 路线 Z 第 3 批：业务 tag OBS-17/18/19/23
-5. Stage 47/48/49 镜像重建（stage-50 §九.1 收口）
+> ⚠️ **本段是快照，不是权威来源**。Stage 节奏下待办的权威来源是**最近一期 stage 收口报告
+> 的"本批未做（open）"表**（`docs/stages/stage-NN-*.md` §五/§六）+ `docs/plans/` 中
+> `status: planned` 的计划。每期 stage 收口时应顺手刷新本段；发现本段与 open 表矛盾时，
+> 以 open 表为准并回改本段（2026-09-12 即曾发生：本段停留在 Stage 50 时代逾 1 个月）。
 
-**备选 backlog**：
-- T-4 QUICKSTART.md BFF 端口表述 + 决策 9/12 收口（30 分钟）
-- T-5 Stage 36 dashboard 空根因回查（半天）
-- T-3 BFF 路由三方契约收口（1.5-2 天）
+**已收口**（详见各 stage 报告）：
+- Stage 72：chat Pin/Update RPC 全链路 + Nacos PR-1
+- Stage 73：Kafka §1.5 Protobuf 迁移（P2）
+- Stage 74：技术债收尾（Grafana lag 面板 / dev web 容器首通 / Helm 残余冻结 = 决策 23）
+- Stage 75：Nacos PR-2（BFF 5 处 gRPC 拨号 Nacos 优先，env 降为兜底）
 
-随时告诉我哪个方向推、卡在哪 —— 我会带你逐项推进。
+**当前 open 清单**（按推荐顺序，源自 stage-75 §四）：
+1. Nacos PR-3：APISIX upstream 切 nacos-discovery（nacos-enablement-dev.md §四，半天）
+2. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）
+3. Kafka §1.4 可选增强：consumer 进程级指标（消费速率/处理耗时埋点，小）
+4. 业务功能计划排期（docs/plans/，均未排期）：ai-response-structured /
+   intent-classification-6-types / file-upload-message-extension 等
+
+**已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。
