@@ -22,7 +22,6 @@ import (
 	"log"
 	"time"
 
-	"emotion-echo-analytics-svc/internal/events"
 	"emotion-echo-analytics-svc/internal/model"
 	"emotion-echo-analytics-svc/internal/repository"
 
@@ -217,8 +216,9 @@ func attemptKey(msg *sarama.ConsumerMessage) string {
 // 由 migrations/002_create_user_behavior_events.sql 末尾的 ADR-19 数据迁移
 // SQL 段负责一次性 UPDATE。
 func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
-	var ev events.Event
-	if err := json.Unmarshal(msg.Value, &ev); err != nil {
+	// Stage 73：Protobuf 优先 + 旧 JSON fallback（双写窗口）
+	ev, err := DecodeChatEvent(msg.Value, saramaHeaders(msg))
+	if err != nil {
 		return err
 	}
 

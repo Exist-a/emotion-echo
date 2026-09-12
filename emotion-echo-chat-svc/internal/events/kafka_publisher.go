@@ -3,7 +3,6 @@ package events
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 
 	"github.com/IBM/sarama"
@@ -37,9 +36,11 @@ func NewKafkaEventPublisher(brokers []string) (*KafkaEventPublisher, error) {
 
 // Publish 同步发布事件到 topic
 //
-// JSON 编码为 message value，事件 ID 作为 message key（保证同事件 id 落同 partition，便于消费者去重）
+// Stage 73：payload 改 Protobuf 编码（§1.5 迁移），并写 content-type header 供
+// consumer 识别；旧 JSON 消息由 consumer 的 JSON fallback 兼容（双写窗口）。
+// 事件 ID 作为 message key（保证同事件 id 落同 partition，便于消费者去重）。
 func (p *KafkaEventPublisher) Publish(ctx context.Context, topic string, e *Event) error {
-	body, err := json.Marshal(e)
+	body, err := MarshalChatEvent(e)
 	if err != nil {
 		return err
 	}
@@ -47,6 +48,9 @@ func (p *KafkaEventPublisher) Publish(ctx context.Context, topic string, e *Even
 		Topic: topic,
 		Key:   sarama.StringEncoder(e.ID),
 		Value: sarama.ByteEncoder(body),
+		Headers: []sarama.RecordHeader{
+			{Key: []byte("content-type"), Value: []byte(ContentTypeHeaderProto)},
+		},
 	}
 	_, _, err = p.producer.SendMessage(msg)
 	if err != nil {

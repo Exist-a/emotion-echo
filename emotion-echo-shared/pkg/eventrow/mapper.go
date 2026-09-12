@@ -12,11 +12,12 @@
 //   - 调用方传入 eventID (string) / eventType (string) / data (any)
 //   - data 由调用方先 marshal 成 []byte 再 unmarshal 到目标 DTO,或直接传目标 DTO
 //
-// EventType 命名差异（PR-A1.3 不修复,留作后续数据迁移 PR）:
+// EventType 命名差异（Stage 73 核查：已由 ADR-19 PR-A1.4 收口，本段仅留档）:
 //   - chat-svc DevEventPublisher: 用 ev.Type 原值（message.created / conversation.created / conversation.closed）
-//   - analytics-svc consumer:     用 normalizeEventType 后（message / conversation_created / conversation_closed）
-//   - 两路径最终落库的 event_type 字符串不同 → 同一事件从 dev vs prod 走会有不同落库值
-//   - 修复路径（不在 PR-A1.3 范围）：选定一种命名 + 数据迁移脚本,后续 sprint 单独起
+//   - analytics-svc consumer:     PR-A1.4 起同样直接用 ev.Type 原值（不再 normalizeEventType，
+//     见 analytics-svc/internal/kafka/consumer.go handleOne 注释；历史 normalize 后值由
+//     migrations/002 末尾的 ADR-19 数据迁移 SQL 一次性 UPDATE）
+//   - 两路径 event_type 字面值现已一致，不存在 dev/prod 落库差异
 package eventrow
 
 import (

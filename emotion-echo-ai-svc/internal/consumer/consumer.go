@@ -14,7 +14,6 @@ package consumer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -96,10 +95,10 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			if !ok {
 				return nil
 			}
-			// 解析事件
-			var evt events.Event
-			if err := json.Unmarshal(msg.Value, &evt); err != nil {
-				slog.ErrorContext(sess.Context(), "consumer unmarshal failed (skipping)", "err", err)
+			// 解析事件（Stage 73：Protobuf 优先 + 旧 JSON fallback，双写窗口）
+			evt, err := DecodeChatEvent(msg.Value, saramaHeaders(msg))
+			if err != nil {
+				slog.ErrorContext(sess.Context(), "consumer decode failed (skipping)", "err", err)
 				sess.MarkMessage(msg, "")
 				continue
 			}
@@ -123,7 +122,7 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 				}
 			}
 			// 调业务
-			if err := h.Handler(sess.Context(), &evt); err != nil {
+			if err := h.Handler(sess.Context(), evt); err != nil {
 				h.handleFailure(sess, msg, err, maxRetries)
 				continue
 			}
