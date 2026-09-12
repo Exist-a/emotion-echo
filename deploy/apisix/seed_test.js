@@ -116,6 +116,15 @@ const checks = [
     src.includes('"skywalking-logger"')],
   ['PR-OBS-1 catch-all 主入口路由 plugins 含 file-logger',
     src.includes('"file-logger"')],
+
+  // === Stage 74 RED: cors 插件字段名必须是 APISIX schema 的 allow_credential（单数） ===
+  // seed.sh 曾写 allow_credentials（复数）→ 插件静默忽略 → 不发
+  // Access-Control-Allow-Credentials 头 → 前端 credentials:include 请求全部
+  // "Failed to fetch"（stage-74 dev 栈 web 容器实测暴露）
+  ['Stage 74 cors allow_credential 字段名（单数，APISIX schema）',
+    src.includes('"allow_credential": true')],
+  ['Stage 74 cors 不再使用错误的 allow_credentials 复数字段',
+    !src.includes('"allow_credentials"')],
 ];
 
 let passCount = 0, failCount = 0;
