@@ -47,6 +47,11 @@ type Config struct {
 	Kafka      Kafka
 	Nacos      Nacos
 
+	// Stage 86：outbox dead 状态机阈值配置化。
+	// MaxAttempts=发布重试上限，超出 status=dead（Stage 43 PR-A6.1 语义）；
+	// 0 = 关闭 dead 状态机（无限重试，向后兼容）。
+	Outbox Outbox
+
 	// Stage 36-A3.2: ai-svc gRPC 地址（dev fallback 同步写中性情绪用）。
 	// 空 = 不启用 dev fallback（保持 NoopAIClient），与 KAFKA_ENABLED 组合决定是否调 ai-svc。
 	AIService AIService
@@ -54,6 +59,11 @@ type Config struct {
 	// Stage 58 PR-GRPC-3：chat-svc 自身 gRPC server 配置（暴露 ChatService 给 BFF）。
 	// Port=0 表示不启动 gRPC server（向后兼容老 yaml）。
 	GRPC GRPCServer
+}
+
+// Outbox relay dead 状态机配置（Stage 86）
+type Outbox struct {
+	MaxAttempts int
 }
 
 // AIService ai-svc 客户端配置（Stage 36-A3.2）
@@ -96,6 +106,10 @@ func SetDefaults(c *Config) {
 		c.Kafka.GroupID = "chat-svc"
 	}
 	// Kafka.Enabled 默认 true（R3 高风险:yaml 显式 false 必须覆盖默认 true——已由 TestLoad_DefaultsBeforeYaml 钉死）
+	// Stage 86：outbox dead 阈值默认 100（与 Stage 43 NewRelay 原硬编码值一致）
+	if c.Outbox.MaxAttempts == 0 {
+		c.Outbox.MaxAttempts = 100
+	}
 	if c.Nacos.Addr == "" {
 		c.Nacos.Addr = "emotion-echo-nacos:8848"
 	}

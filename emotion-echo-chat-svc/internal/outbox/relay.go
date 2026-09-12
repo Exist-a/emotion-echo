@@ -99,6 +99,8 @@ func (r *Relay) FlushOnce(ctx context.Context) error {
 				if mdErr := r.repo.MarkDead(ctx, e.ID, err.Error()); mdErr != nil {
 					log.Printf("[outbox-relay] MarkDead err id=%d: %v", e.ID, mdErr)
 				} else {
+					// Stage 86（§3.6）: dead 行计数器，Prometheus 规则 outbox-dead.yml 据此告警
+					IncDead()
 					log.Printf("[outbox-relay] row marked dead id=%d attempts=%d max=%d (will NOT retry)",
 						e.ID, newAttempts, r.MaxAttempts)
 				}

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -58,6 +59,13 @@ func applyEnvOverrides(c *config.Config) {
 	// 永远 bool 零值 false → publisher = InMemoryEventPublisher fallback。
 	if v := os.Getenv("KAFKA_ENABLED"); v != "" {
 		c.Kafka.Enabled = v == "true" || v == "1"
+	}
+	// Stage 86：outbox dead 阈值 env 覆盖（0 = 关闭 dead 状态机）。
+	// 非法值忽略——走 SetDefaults 默认 100，与其它 bool env 的宽松语义一致。
+	if v := os.Getenv("OUTBOX_MAX_ATTEMPTS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Outbox.MaxAttempts = n
+		}
 	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
@@ -195,6 +203,8 @@ func main() {
 		relayCtx, relayCancel := context.WithCancel(context.Background())
 		defer relayCancel()
 		relay := outbox.NewRelay(outboxRepo, pub, 1*time.Second, 100)
+		// Stage 86：dead 阈值走配置（yaml/OUTBOX_MAX_ATTEMPTS env，默认 100，0=关闭 dead 状态机）
+		relay.MaxAttempts = c.Outbox.MaxAttempts
 		go func() {
 			log.Printf("[outbox] relay started")
 			_ = relay.Run(relayCtx)
