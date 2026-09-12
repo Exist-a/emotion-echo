@@ -77,6 +77,7 @@ gen_go() {
         emotion_llm.proto)  pkg_name="emotionllm" ;;
         emotion_query.proto) pkg_name="emotionquery" ;;
         chat.proto)         pkg_name="emotionchat" ;;
+        chat_events.proto)  pkg_name="chatevents" ;;
         user.proto)         pkg_name="emotionuser" ;;
         agent.proto)        pkg_name="emotionassessment" ;;
         metric.proto)       pkg_name="emotionanalytics" ;;

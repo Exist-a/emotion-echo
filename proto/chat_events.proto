@@ -1,0 +1,70 @@
+// proto/chat_events.proto
+//
+// Stage 73：Kafka 事件 payload JSON → Protobuf 迁移（kafka-reliability-gaps.md §1.5/§3.5）
+//
+// 背景：
+//   chat-svc → Kafka → analytics/ai 的事件链此前是 ad-hoc JSON
+//   （chat-svc/internal/events/events.go 定义，analytics/ai 各自镜像），
+//   schema 漂移已实际发生（Stage 37-A event_type 细分）。
+//   本文件成为事件的单一事实源，生成代码归位 shared/pkg/chatevents。
+//
+// 兼容性策略（双写窗口）：
+//   - producer（chat-svc KafkaEventPublisher）：Protobuf 序列化 + Kafka header
+//     "content-type: application/x-protobuf"
+//   - consumer（analytics/ai）：优先按 header 识别，否则嗅探首字节（'{' = 旧 JSON），
+//     旧 JSON 消息在迁移窗口内继续可消费
+//   - outbox_events.payload 列保持 JSONB（DB 内 JSON 是 outbox 自己的存储格式，
+//     relay 出站时才转 Protobuf）
+//
+// event_type 命名契约（ADR-19 PR-A1.4 统一后）：
+//   type 字段恒为带点原值：message.created / conversation.created / conversation.closed
+
+syntax = "proto3";
+
+package emotion_chat.events.v1;
+
+option go_package = "github.com/emotion-echo/shared/pkg/chatevents";
+
+// ChatEventEnvelope chat-svc 事件信封（对应 JSON 时代的 events.Event）
+message ChatEventEnvelope {
+  // 事件唯一标识（UUID v4），消费者幂等去重键；同 JSON 时代 events.Event.ID
+  string id = 1;
+  // 事件类型（message.created / conversation.created / conversation.closed）
+  string type = 2;
+  // 事件源服务名
+  string source = 3;
+  // 事件产生时间（unix 毫秒；JSON 时代为 RFC3339 字符串，proto 用 int64 消除时区/格式歧义）
+  int64 time_unix_milli = 4;
+  // 事件载荷，按 type 恰好设置其一
+  oneof data {
+    MessageCreatedData message_created = 5;
+    ConversationCreatedData conversation_created = 6;
+    ConversationClosedData conversation_closed = 7;
+  }
+}
+
+// MessageCreatedData message.created 载荷
+// ai-svc 读 content 做情绪分析；message_id 用于回填 emotion_analysis
+message MessageCreatedData {
+  int64 message_id = 1;
+  int64 conversation_id = 2;
+  int64 user_id = 3;
+  string role = 4;
+  string content = 5;
+  int64 created_at = 6;
+}
+
+// ConversationCreatedData conversation.created 载荷
+message ConversationCreatedData {
+  int64 conversation_id = 1;
+  int64 user_id = 2;
+  string title = 3;
+  int64 created_at = 4;
+}
+
+// ConversationClosedData conversation.closed 载荷
+message ConversationClosedData {
+  int64 conversation_id = 1;
+  int64 user_id = 2;
+  int64 closed_at = 3;
+}
