@@ -19,6 +19,10 @@ related-adrs:
 > 阶段 2 与 intent-classification-6-types 的共同前置是"存在真实 LLM 对话/分析链路"——
 > 而当前 AI 聊天回复是 **BFF 硬编码 mock**，该链路在 docs/plans 里从未立过计划，本文件补上。
 
+> **Stage 81 状态注记（2026-09-12）**：PR-2 已落地（stage-81 报告）。上游优先级链 =
+> gRPC（llm-service）→ Phase D HTTP 直连（BFF_LLM_API_KEY 有 key 时保留）→ mock；
+> llm-service 未注册 Nacos，BFF 用 `LLM_SVC_GRPC_ADDR` env 直连 + mTLS（复用 ai-client 证书）。
+
 > **Stage 80 状态注记（2026-09-12）**：PR-1 已落地（stage-80 报告）。两处实施修正：
 > ① 上游 env 沿用仓库既有 `LLM_API_KEY/LLM_BASE_URL/LLM_MODEL`（DeepSeek 等 OpenAI
 > 兼容端点），非本文初稿所写的 Moonshot；② llm-service 对内已有 Stage 17/18 的
