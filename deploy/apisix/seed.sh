@@ -323,7 +323,7 @@ PLUGINS_JSON=$(cat <<EOF
     "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
     "allow_headers": "Content-Type,Authorization,X-User-Id",
     "expose_headers": "X-User-Id",
-    "allow_credentials": true,
+    "allow_credential": true,
     "max_age": 600
   },
 ${OBSERVABILITY_PLUGINS_JSON},
@@ -393,7 +393,7 @@ CATCHALL_PLUGINS_JSON=$(cat <<EOF
     "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
     "allow_headers": "Content-Type,Authorization,X-User-Id",
     "expose_headers": "X-User-Id",
-    "allow_credentials": true,
+    "allow_credential": true,
     "max_age": 600
   },
 ${OBSERVABILITY_PLUGINS_JSON},
@@ -487,7 +487,7 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH"]'
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
   "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "local"},
-  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credentials": true, "allow_headers": "*"}
+  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "*"}
 }
 EOF
 )
