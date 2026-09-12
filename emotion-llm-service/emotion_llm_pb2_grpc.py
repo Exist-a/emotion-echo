@@ -48,6 +48,11 @@ class EmotionLLMServiceStub:
                 request_serializer=emotion__llm__pb2.AnalyzeBatchRequest.SerializeToString,
                 response_deserializer=emotion__llm__pb2.AnalyzeResponse.FromString,
                 _registered_method=True)
+        self.ChatCompletion = channel.unary_stream(
+                '/emotion_llm.v1.EmotionLLMService/ChatCompletion',
+                request_serializer=emotion__llm__pb2.ChatCompletionRequest.SerializeToString,
+                response_deserializer=emotion__llm__pb2.ChatChunk.FromString,
+                _registered_method=True)
 
 
 class EmotionLLMServiceServicer:
@@ -73,6 +78,18 @@ class EmotionLLMServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ChatCompletion(self, request, context):
+        """ChatCompletion 流式对话（Stage 80 · llm-chat-real-pipeline PR-1）
+
+        OpenAI chat.completions 兼容语义：消息数组入、增量 chunk 流出。
+        上游 LLM 由 env 决定（LLM_BASE_URL/LLM_API_KEY/LLM_MODEL，DeepSeek 等
+        OpenAI 兼容端点）；无 key 或上游失败时降级内置 mock 文案（fallback_reason 非空），
+        保证 CI / 离线 demo 全链路可跑（§契约 6 同款哲学）。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_EmotionLLMServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -85,6 +102,11 @@ def add_EmotionLLMServiceServicer_to_server(servicer, server):
                     servicer.AnalyzeBatch,
                     request_deserializer=emotion__llm__pb2.AnalyzeBatchRequest.FromString,
                     response_serializer=emotion__llm__pb2.AnalyzeResponse.SerializeToString,
+            ),
+            'ChatCompletion': grpc.unary_stream_rpc_method_handler(
+                    servicer.ChatCompletion,
+                    request_deserializer=emotion__llm__pb2.ChatCompletionRequest.FromString,
+                    response_serializer=emotion__llm__pb2.ChatChunk.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -145,6 +167,33 @@ class EmotionLLMService:
             '/emotion_llm.v1.EmotionLLMService/AnalyzeBatch',
             emotion__llm__pb2.AnalyzeBatchRequest.SerializeToString,
             emotion__llm__pb2.AnalyzeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ChatCompletion(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/emotion_llm.v1.EmotionLLMService/ChatCompletion',
+            emotion__llm__pb2.ChatCompletionRequest.SerializeToString,
+            emotion__llm__pb2.ChatChunk.FromString,
             options,
             channel_credentials,
             insecure,

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11\x65motion_llm.proto\x12\x0e\x65motion_llm.v1\"C\n\x0e\x41nalyzeRequest\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x0c\n\x04text\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"\x90\x01\n\x0f\x41nalyzeResponse\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x17\n\x0fprimary_emotion\x18\x02 \x01(\t\x12\x17\n\x0fsentiment_score\x18\x03 \x01(\x01\x12\x12\n\nconfidence\x18\x04 \x01(\x01\x12\r\n\x05model\x18\x05 \x01(\t\x12\x14\n\x0craw_response\x18\x06 \x01(\t\"U\n\x13\x41nalyzeBatchRequest\x12-\n\x05items\x18\x01 \x03(\x0b\x32\x1e.emotion_llm.v1.AnalyzeRequest\x12\x0f\n\x07user_id\x18\x02 \x01(\t2\xb7\x01\n\x11\x45motionLLMService\x12J\n\x07\x41nalyze\x12\x1e.emotion_llm.v1.AnalyzeRequest\x1a\x1f.emotion_llm.v1.AnalyzeResponse\x12V\n\x0c\x41nalyzeBatch\x12#.emotion_llm.v1.AnalyzeBatchRequest\x1a\x1f.emotion_llm.v1.AnalyzeResponse0\x01\x42/Z-github.com/emotion-echo/shared/pkg/emotionllmb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11\x65motion_llm.proto\x12\x0e\x65motion_llm.v1\",\n\x0b\x43hatMessage\x12\x0c\n\x04role\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\"\x8f\x01\n\x15\x43hatCompletionRequest\x12-\n\x08messages\x18\x01 \x03(\x0b\x32\x1b.emotion_llm.v1.ChatMessage\x12\r\n\x05model\x18\x02 \x01(\t\x12\x13\n\x0btemperature\x18\x03 \x01(\x01\x12\x12\n\nmax_tokens\x18\x04 \x01(\x05\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"X\n\tChatChunk\x12\x15\n\rdelta_content\x18\x01 \x01(\t\x12\x0c\n\x04\x64one\x18\x02 \x01(\x08\x12\r\n\x05model\x18\x03 \x01(\t\x12\x17\n\x0f\x66\x61llback_reason\x18\x04 \x01(\t\"C\n\x0e\x41nalyzeRequest\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x0c\n\x04text\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"\x90\x01\n\x0f\x41nalyzeResponse\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x17\n\x0fprimary_emotion\x18\x02 \x01(\t\x12\x17\n\x0fsentiment_score\x18\x03 \x01(\x01\x12\x12\n\nconfidence\x18\x04 \x01(\x01\x12\r\n\x05model\x18\x05 \x01(\t\x12\x14\n\x0craw_response\x18\x06 \x01(\t\"U\n\x13\x41nalyzeBatchRequest\x12-\n\x05items\x18\x01 \x03(\x0b\x32\x1e.emotion_llm.v1.AnalyzeRequest\x12\x0f\n\x07user_id\x18\x02 \x01(\t2\x8d\x02\n\x11\x45motionLLMService\x12J\n\x07\x41nalyze\x12\x1e.emotion_llm.v1.AnalyzeRequest\x1a\x1f.emotion_llm.v1.AnalyzeResponse\x12V\n\x0c\x41nalyzeBatch\x12#.emotion_llm.v1.AnalyzeBatchRequest\x1a\x1f.emotion_llm.v1.AnalyzeResponse0\x01\x12T\n\x0e\x43hatCompletion\x12%.emotion_llm.v1.ChatCompletionRequest\x1a\x19.emotion_llm.v1.ChatChunk0\x01\x42/Z-github.com/emotion-echo/shared/pkg/emotionllmb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,12 +32,18 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'emotion_llm_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z-github.com/emotion-echo/shared/pkg/emotionllm'
-  _globals['_ANALYZEREQUEST']._serialized_start=37
-  _globals['_ANALYZEREQUEST']._serialized_end=104
-  _globals['_ANALYZERESPONSE']._serialized_start=107
-  _globals['_ANALYZERESPONSE']._serialized_end=251
-  _globals['_ANALYZEBATCHREQUEST']._serialized_start=253
-  _globals['_ANALYZEBATCHREQUEST']._serialized_end=338
-  _globals['_EMOTIONLLMSERVICE']._serialized_start=341
-  _globals['_EMOTIONLLMSERVICE']._serialized_end=524
+  _globals['_CHATMESSAGE']._serialized_start=37
+  _globals['_CHATMESSAGE']._serialized_end=81
+  _globals['_CHATCOMPLETIONREQUEST']._serialized_start=84
+  _globals['_CHATCOMPLETIONREQUEST']._serialized_end=227
+  _globals['_CHATCHUNK']._serialized_start=229
+  _globals['_CHATCHUNK']._serialized_end=317
+  _globals['_ANALYZEREQUEST']._serialized_start=319
+  _globals['_ANALYZEREQUEST']._serialized_end=386
+  _globals['_ANALYZERESPONSE']._serialized_start=389
+  _globals['_ANALYZERESPONSE']._serialized_end=533
+  _globals['_ANALYZEBATCHREQUEST']._serialized_start=535
+  _globals['_ANALYZEBATCHREQUEST']._serialized_end=620
+  _globals['_EMOTIONLLMSERVICE']._serialized_start=623
+  _globals['_EMOTIONLLMSERVICE']._serialized_end=892
 # @@protoc_insertion_point(module_scope)

@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	EmotionLLMService_Analyze_FullMethodName      = "/emotion_llm.v1.EmotionLLMService/Analyze"
-	EmotionLLMService_AnalyzeBatch_FullMethodName = "/emotion_llm.v1.EmotionLLMService/AnalyzeBatch"
+	EmotionLLMService_Analyze_FullMethodName        = "/emotion_llm.v1.EmotionLLMService/Analyze"
+	EmotionLLMService_AnalyzeBatch_FullMethodName   = "/emotion_llm.v1.EmotionLLMService/AnalyzeBatch"
+	EmotionLLMService_ChatCompletion_FullMethodName = "/emotion_llm.v1.EmotionLLMService/ChatCompletion"
 )
 
 // EmotionLLMServiceClient is the client API for EmotionLLMService service.
@@ -38,6 +39,13 @@ type EmotionLLMServiceClient interface {
 	//
 	// 适用：AI 一次推多条消息，server 流式返回每条结果（首字节延迟低）
 	AnalyzeBatch(ctx context.Context, in *AnalyzeBatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AnalyzeResponse], error)
+	// ChatCompletion 流式对话（Stage 80 · llm-chat-real-pipeline PR-1）
+	//
+	// OpenAI chat.completions 兼容语义：消息数组入、增量 chunk 流出。
+	// 上游 LLM 由 env 决定（LLM_BASE_URL/LLM_API_KEY/LLM_MODEL，DeepSeek 等
+	// OpenAI 兼容端点）；无 key 或上游失败时降级内置 mock 文案（fallback_reason 非空），
+	// 保证 CI / 离线 demo 全链路可跑（§契约 6 同款哲学）。
+	ChatCompletion(ctx context.Context, in *ChatCompletionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
 }
 
 type emotionLLMServiceClient struct {
@@ -77,6 +85,25 @@ func (c *emotionLLMServiceClient) AnalyzeBatch(ctx context.Context, in *AnalyzeB
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type EmotionLLMService_AnalyzeBatchClient = grpc.ServerStreamingClient[AnalyzeResponse]
 
+func (c *emotionLLMServiceClient) ChatCompletion(ctx context.Context, in *ChatCompletionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &EmotionLLMService_ServiceDesc.Streams[1], EmotionLLMService_ChatCompletion_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ChatCompletionRequest, ChatChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EmotionLLMService_ChatCompletionClient = grpc.ServerStreamingClient[ChatChunk]
+
 // EmotionLLMServiceServer is the server API for EmotionLLMService service.
 // All implementations must embed UnimplementedEmotionLLMServiceServer
 // for forward compatibility.
@@ -92,6 +119,13 @@ type EmotionLLMServiceServer interface {
 	//
 	// 适用：AI 一次推多条消息，server 流式返回每条结果（首字节延迟低）
 	AnalyzeBatch(*AnalyzeBatchRequest, grpc.ServerStreamingServer[AnalyzeResponse]) error
+	// ChatCompletion 流式对话（Stage 80 · llm-chat-real-pipeline PR-1）
+	//
+	// OpenAI chat.completions 兼容语义：消息数组入、增量 chunk 流出。
+	// 上游 LLM 由 env 决定（LLM_BASE_URL/LLM_API_KEY/LLM_MODEL，DeepSeek 等
+	// OpenAI 兼容端点）；无 key 或上游失败时降级内置 mock 文案（fallback_reason 非空），
+	// 保证 CI / 离线 demo 全链路可跑（§契约 6 同款哲学）。
+	ChatCompletion(*ChatCompletionRequest, grpc.ServerStreamingServer[ChatChunk]) error
 	mustEmbedUnimplementedEmotionLLMServiceServer()
 }
 
@@ -107,6 +141,9 @@ func (UnimplementedEmotionLLMServiceServer) Analyze(context.Context, *AnalyzeReq
 }
 func (UnimplementedEmotionLLMServiceServer) AnalyzeBatch(*AnalyzeBatchRequest, grpc.ServerStreamingServer[AnalyzeResponse]) error {
 	return status.Error(codes.Unimplemented, "method AnalyzeBatch not implemented")
+}
+func (UnimplementedEmotionLLMServiceServer) ChatCompletion(*ChatCompletionRequest, grpc.ServerStreamingServer[ChatChunk]) error {
+	return status.Error(codes.Unimplemented, "method ChatCompletion not implemented")
 }
 func (UnimplementedEmotionLLMServiceServer) mustEmbedUnimplementedEmotionLLMServiceServer() {}
 func (UnimplementedEmotionLLMServiceServer) testEmbeddedByValue()                           {}
@@ -158,6 +195,17 @@ func _EmotionLLMService_AnalyzeBatch_Handler(srv interface{}, stream grpc.Server
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type EmotionLLMService_AnalyzeBatchServer = grpc.ServerStreamingServer[AnalyzeResponse]
 
+func _EmotionLLMService_ChatCompletion_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ChatCompletionRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(EmotionLLMServiceServer).ChatCompletion(m, &grpc.GenericServerStream[ChatCompletionRequest, ChatChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EmotionLLMService_ChatCompletionServer = grpc.ServerStreamingServer[ChatChunk]
+
 // EmotionLLMService_ServiceDesc is the grpc.ServiceDesc for EmotionLLMService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -174,6 +222,11 @@ var EmotionLLMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "AnalyzeBatch",
 			Handler:       _EmotionLLMService_AnalyzeBatch_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ChatCompletion",
+			Handler:       _EmotionLLMService_ChatCompletion_Handler,
 			ServerStreams: true,
 		},
 	},

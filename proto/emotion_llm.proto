@@ -16,6 +16,37 @@ service EmotionLLMService {
   //
   // 适用：AI 一次推多条消息，server 流式返回每条结果（首字节延迟低）
   rpc AnalyzeBatch (AnalyzeBatchRequest) returns (stream AnalyzeResponse);
+
+  // ChatCompletion 流式对话（Stage 80 · llm-chat-real-pipeline PR-1）
+  //
+  // OpenAI chat.completions 兼容语义：消息数组入、增量 chunk 流出。
+  // 上游 LLM 由 env 决定（LLM_BASE_URL/LLM_API_KEY/LLM_MODEL，DeepSeek 等
+  // OpenAI 兼容端点）；无 key 或上游失败时降级内置 mock 文案（fallback_reason 非空），
+  // 保证 CI / 离线 demo 全链路可跑（§契约 6 同款哲学）。
+  rpc ChatCompletion (ChatCompletionRequest) returns (stream ChatChunk);
+}
+
+// ChatMessage 对话消息（OpenAI role/content 语义）
+message ChatMessage {
+  string role = 1;     // system / user / assistant
+  string content = 2;
+}
+
+// ChatCompletionRequest 对话请求
+message ChatCompletionRequest {
+  repeated ChatMessage messages = 1;
+  string model = 2;          // 可选；空 = 服务端 env 默认
+  double temperature = 3;    // 可选；0 = 服务端默认
+  int32 max_tokens = 4;      // 可选；0 = 不限制
+  string user_id = 5;        // 审计/限流维度
+}
+
+// ChatChunk 流式响应帧
+message ChatChunk {
+  string delta_content = 1;   // 增量文本（OpenAI delta.content 语义）
+  bool done = 2;              // 结束帧（其后不再有帧）
+  string model = 3;           // 实际使用的模型（首帧携带；mock 时为 "mock"）
+  string fallback_reason = 4; // 非空 = 本响应走了 mock 兜底（原因说明）
 }
 
 // AnalyzeRequest 单条消息的情绪分析请求
