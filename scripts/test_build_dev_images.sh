@@ -98,7 +98,8 @@ echo "--- 4) Stage 74: web 前端纳入 build 列表 + node 基础镜像预拉 -
 # stage-73 §五：web 前端容器未起的次生问题——脚本默认不 build web、
 # 预拉列表不含 node:20-alpine，Docker Hub 限流时 build web 第一步即失败
 
-if grep -qE 'ALL_SVCS=.*emotion-echo-web' "$SCRIPT"; then
+# ALL_SVCS 数组可能跨多行，取声明块整体匹配
+if sed -n '/^ALL_SVCS=/,/)/p' "$SCRIPT" | grep -q 'emotion-echo-web'; then
   echo "  ✓ ALL_SVCS 默认包含 emotion-echo-web"
   pass=$((pass + 1))
 else
