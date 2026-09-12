@@ -952,11 +952,14 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 - Stage 79：file-upload 收口（前端装配层接线 + e2e 揪出 contentType 响应链 5 处丢失
   并全链路修复——BFF camelCase 绑定 / proto Message.content_type / 三层视图透传；
   file-upload-message-extension.md 迁 landed）
+- Stage 80：llm-chat-real-pipeline PR-1（llm-service ChatCompletion 流式 RPC +
+  mock 降级双路径真实容器 e2e；env 沿用 LLM_* 约定修正计划原文 Moonshot）
 
-**当前 open 清单**（2026-09-12 Stage 79 收口后刷新）：
+**当前 open 清单**（2026-09-12 Stage 80 收口后刷新）：
 
-1. **llm-chat-real-pipeline PR-1/PR-2**（真实 LLM 对话链路：llm-service ChatCompletion RPC +
-   BFF 切 gRPC 上游，mock 保留兜底；详见 docs/plans/llm-chat-real-pipeline.md）
+1. **llm-chat-real-pipeline PR-2**（BFF AIStreamHandler 切 llm-service ChatCompletion
+   gRPC 上游，mock 保留兜底；PR-1 已于 Stage 80 落地——详见
+   docs/plans/llm-chat-real-pipeline.md + stage-80 报告）
 2. intent-classification-6-types（重写版）→ ai-response-structured 阶段 2（被 1 解锁）
 3. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
    §1.4 可选：consumer 进程级指标

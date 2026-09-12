@@ -2,7 +2,7 @@
 status: planned
 priority: high
 owner: TBD
-target-stage: Stage 79（候选）
+target-stage: Stage 80（候选）
 created: 2026-09-12
 related-plans:
   - docs/plans/ai-response-structured.md（阶段 2 依赖本计划）
@@ -18,6 +18,13 @@ related-adrs:
 > 来源：2026-09-12 三份业务计划排期核查（stage-78）。核查发现 ai-response-structured
 > 阶段 2 与 intent-classification-6-types 的共同前置是"存在真实 LLM 对话/分析链路"——
 > 而当前 AI 聊天回复是 **BFF 硬编码 mock**，该链路在 docs/plans 里从未立过计划，本文件补上。
+
+> **Stage 80 状态注记（2026-09-12）**：PR-1 已落地（stage-80 报告）。两处实施修正：
+> ① 上游 env 沿用仓库既有 `LLM_API_KEY/LLM_BASE_URL/LLM_MODEL`（DeepSeek 等 OpenAI
+> 兼容端点），非本文初稿所写的 Moonshot；② llm-service 对内已有 Stage 17/18 的
+> x-internal-api-key + mTLS 约定，PR-2 的 BFF 客户端需对齐（Go 侧复用 ai-svc 调
+> llm-service 的既有 TLS/auth 客户端模式）。PR-2 前置核查：llm-service 的 Nacos 注册
+> 是否带 metadata.grpc_port（Stage 75 模式）。
 
 ## 一、现状（与代码事实对齐）
 
