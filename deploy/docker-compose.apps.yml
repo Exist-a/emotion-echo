@@ -577,7 +577,7 @@ services:
     volumes:
       # PR-TTS-VENDOR: 本地预下模型挂载（stage-59 §10.3.1 通过 hf-mirror.com 分文件下完）
       # coqui 启动时需要 /model/voices 可写；用 root user 规避 PermissionError
-      - ${XTTS_MODEL_PATH:-/c/Users/LENVOV/AppData/Local/Temp/coqui_model}:/model
+      - ${XTTS_MODEL_PATH:-/d/DockerData/coqui_model}:/model
     networks:
       - app-network
     deploy:
