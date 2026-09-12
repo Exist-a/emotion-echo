@@ -11,7 +11,9 @@
 package events
 
 import (
+	"encoding/json"
 	"fmt"
+	"time"
 
 	chatevents "github.com/emotion-echo/shared/pkg/chatevents"
 	"google.golang.org/protobuf/proto"
@@ -76,4 +78,55 @@ func MarshalChatEvent(e *Event) ([]byte, error) {
 		return nil, fmt.Errorf("events: unsupported Data type %T for event %s (type=%s)", e.Data, e.ID, e.Type)
 	}
 	return proto.Marshal(env)
+}
+
+// UnmarshalChatEventJSON 把 outbox JSONB payload 反序列化为 typed Event
+//
+// Stage 73 e2e bug 修复：relay 直接 json.Unmarshal 会让 Data 落成
+// map[string]interface{}，MarshalChatEvent 拒绝 map → outbox 行重试至 dead。
+// 本函数按 Type 把 data 反序列化到具体 Data struct，relay 必须使用本函数。
+func UnmarshalChatEventJSON(payload []byte) (*Event, error) {
+	var probe struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(payload, &probe); err != nil {
+		return nil, fmt.Errorf("events: unmarshal event probe: %w", err)
+	}
+	switch probe.Type {
+	case EventTypeMessageCreated:
+		var e struct {
+			ID     string             `json:"id"`
+			Source string             `json:"source"`
+			Time   time.Time          `json:"time"`
+			Data   MessageCreatedData `json:"data"`
+		}
+		if err := json.Unmarshal(payload, &e); err != nil {
+			return nil, fmt.Errorf("events: unmarshal %s: %w", probe.Type, err)
+		}
+		return &Event{ID: e.ID, Type: probe.Type, Source: e.Source, Time: e.Time, Data: e.Data}, nil
+	case EventTypeConversationCreated:
+		var e struct {
+			ID     string                   `json:"id"`
+			Source string                   `json:"source"`
+			Time   time.Time                `json:"time"`
+			Data   ConversationCreatedData  `json:"data"`
+		}
+		if err := json.Unmarshal(payload, &e); err != nil {
+			return nil, fmt.Errorf("events: unmarshal %s: %w", probe.Type, err)
+		}
+		return &Event{ID: e.ID, Type: probe.Type, Source: e.Source, Time: e.Time, Data: e.Data}, nil
+	case EventTypeConversationClosed:
+		var e struct {
+			ID     string                `json:"id"`
+			Source string                `json:"source"`
+			Time   time.Time             `json:"time"`
+			Data   ConversationClosedData `json:"data"`
+		}
+		if err := json.Unmarshal(payload, &e); err != nil {
+			return nil, fmt.Errorf("events: unmarshal %s: %w", probe.Type, err)
+		}
+		return &Event{ID: e.ID, Type: probe.Type, Source: e.Source, Time: e.Time, Data: e.Data}, nil
+	default:
+		return nil, fmt.Errorf("events: unknown event type %q", probe.Type)
+	}
 }

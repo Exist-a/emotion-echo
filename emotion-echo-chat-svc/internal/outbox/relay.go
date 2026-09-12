@@ -20,7 +20,6 @@ package outbox
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"time"
@@ -114,13 +113,17 @@ func (r *Relay) FlushOnce(ctx context.Context) error {
 }
 
 // publishOne 反序列化 payload + 调 EventPublisher.Publish
+//
+// Stage 73：必须用 UnmarshalChatEventJSON（按 Type 反序列化 data 到具体 struct）。
+// 直接 json.Unmarshal 会让 Data 落成 map[string]interface{}，
+// MarshalChatEvent 拒绝 map → outbox 行重试 100 次后 dead（docker e2e 实测）。
 func (r *Relay) publishOne(ctx context.Context, e repository.OutboxEvent) error {
-	var evt events.Event
-	if err := json.Unmarshal(e.Payload, &evt); err != nil {
+	evt, err := events.UnmarshalChatEventJSON(e.Payload)
+	if err != nil {
 		return err
 	}
 	if r.publisher == nil {
 		return errors.New("outbox-relay: publisher is nil")
 	}
-	return r.publisher.Publish(ctx, e.Topic, &evt)
+	return r.publisher.Publish(ctx, e.Topic, evt)
 }
