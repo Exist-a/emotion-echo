@@ -68,8 +68,14 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 	if err != nil {
 		return nil, fmt.Errorf("[nacos] NewNacosRegistry: %w", err)
 	}
+	// Stage 75: gRPC 端口写入 metadata.grpc_port，供 web-bff resolveGRPCAddr
+	// Nacos 优先解析 gRPC 拨号地址（对齐 ai-svc Stage 32 先例）。
+	metadata := map[string]string{"stage": namespace, "version": gitVersion()}
+	if cfg.GRPC.Enabled {
+		metadata["grpc_port"] = fmt.Sprintf("%d", cfg.GRPC.Port)
+	}
 	instance := shareddiscovery.Instance{ServiceName: cfg.Name, Host: cfg.Host, Port: cfg.Port,
-		Metadata: map[string]string{"stage": namespace, "version": gitVersion()}}
+		Metadata: metadata}
 	if err := reg.Register(ctx, instance); err != nil {
 		return nil, fmt.Errorf("[nacos] Register: %w", err)
 	}

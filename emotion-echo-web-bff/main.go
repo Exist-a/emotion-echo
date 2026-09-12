@@ -71,6 +71,25 @@ func dialGRPC(addr, name string) *grpc.ClientConn {
 	return conn
 }
 
+// resolveGRPCAddr 决定下游 gRPC 拨号地址：Nacos 优先（Discover 有实例），env/config
+// 的 GRPCAddr 兜底（Nacos 抖动或 NACOS_ENABLED=false 时不阻断启动）。
+//
+// Stage 75 前置条件：各 svc 注册时把 gRPC 端口写进 metadata.grpc_port（见各 svc
+// nacos_boot.go）；resolver 侧用 WithPortHint("grpc_port") 读它。
+func resolveGRPCAddr(resolver bffdiscovery.Resolver, fallbackAddr, svcName string) string {
+	if resolver == nil {
+		return fallbackAddr
+	}
+	host, port, err := resolver.Resolve(context.Background(), svcName)
+	if err != nil || host == "" {
+		log.Printf("[nacos] resolve %s failed (%v), grpc addr fallback to %s", svcName, err, fallbackAddr)
+		return fallbackAddr
+	}
+	addr := fmt.Sprintf("%s:%d", host, port)
+	log.Printf("[nacos] resolve %s -> %s (grpc)", svcName, addr)
+	return addr
+}
+
 func main() {
 	flag.Parse()
 	logging.Init()
@@ -99,11 +118,13 @@ func main() {
 	}()
 
 	// 1. 下游 client 装配（PR-2: Resolver 由 nacosRuntime.Registry 派生）
-	var resolver bffdiscovery.Resolver
+	// Stage 75: grpcResolver 带 grpc_port portHint，gRPC 拨号地址 Nacos 优先（env 兜底）。
+	var resolver, grpcResolver bffdiscovery.Resolver
 	if nacosRuntime != nil && nacosRuntime.Registry != nil {
 		resolver = bffdiscovery.NewNacosResolver(nacosRuntime.Registry, c.Nacos.Namespace)
+		grpcResolver = bffdiscovery.NewNacosResolver(nacosRuntime.Registry, c.Nacos.Namespace).WithPortHint("grpc_port")
 	}
-	svcCtx := buildServiceContext(&c, resolver)
+	svcCtx := buildServiceContext(&c, resolver, grpcResolver)
 
 	// 2. SkyWalking（可选, PR-OBS-2: 用 shared BootstrapSkyWalkingTracer 统一 7 svc 行为）
 	var tracer *go2sky.Tracer
@@ -188,7 +209,11 @@ func authPathBypass(authMW gin.HandlerFunc) gin.HandlerFunc {
 //
 // PR-2：三个目标 client（ai / chat / analytics）支持 Resolver 兜底。
 // 当 env 注入 BaseURL 为空时，从 Nacos Discover 拉实例。
-func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.ServiceContext {
+//
+// Stage 75：grpcResolver（带 grpc_port portHint）非 nil 时，5 处 gRPC 拨号地址
+// Nacos 优先、env GRPCAddr 兜底——dev 默认 Transport=grpc（决策 4），此前 gRPC
+// 流量从未经过 Nacos。grpcResolver 为 nil 时行为与 Stage 63 一致。
+func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.Resolver) *svc.ServiceContext {
 	svcCtx := svc.NewServiceContext(*c)
 
 	// auth manager（自有 JWT 签发）
@@ -204,11 +229,11 @@ func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.
 	// Stage 63: dial 4 个下游 gRPC 连接，传入 client 构造。
 	// Transport=grpc（默认）+ GRPCConn!=nil → 走 gRPC；否则静默 HTTP fallback。
 	// dial 失败也降级 HTTP（不阻塞启动）。
-	userGRPCConn := dialGRPC(c.UserService.GRPCAddr, "user-svc")
-	chatGRPCConn := dialGRPC(c.ChatService.GRPCAddr, "chat-svc")
-	assessmentGRPCConn := dialGRPC(c.AssessmentService.GRPCAddr, "assessment-svc")
-	analyticsGRPCConn := dialGRPC(c.AnalyticsService.GRPCAddr, "analytics-svc")
-	aiGRPCConn := dialGRPC(c.AIService.GRPCAddr, "ai-svc")
+	userGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.UserService.GRPCAddr, shareddiscovery.ServiceUser), "user-svc")
+	chatGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.ChatService.GRPCAddr, shareddiscovery.ServiceChat), "chat-svc")
+	assessmentGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AssessmentService.GRPCAddr, shareddiscovery.ServiceAssessment), "assessment-svc")
+	analyticsGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AnalyticsService.GRPCAddr, shareddiscovery.ServiceAnalytics), "analytics-svc")
+	aiGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI), "ai-svc")
 
 	svcCtx.SetUser(downstream.NewUserClient(downstream.UserClientOptions{
 		BaseURL: c.UserService.BaseURL, TimeoutMs: c.UserService.TimeoutMs,
@@ -242,17 +267,10 @@ func buildServiceContext(c *config.Config, resolver bffdiscovery.Resolver) *svc.
 		BaseURL: c.XTTS.BaseURL, TimeoutMs: c.XTTS.TimeoutMs,
 	}))
 
-	// ai-svc gRPC（EmotionQueryService）— 走 Resolver 拉 gRPC 端口
-	grpcHost, grpcPort := "", 0
-	if resolver != nil {
-		if h, p, rerr := resolver.Resolve(context.Background(), shareddiscovery.ServiceAI); rerr == nil {
-			grpcHost, grpcPort = h, p
-		}
-	}
-	grpcAddr := c.AIService.GRPCAddr
-	if grpcHost != "" {
-		grpcAddr = fmt.Sprintf("%s:%d", grpcHost, grpcPort)
-	}
+	// ai-svc gRPC（EmotionQueryService）— Stage 75 起统一走 resolveGRPCAddr。
+	// 修复潜伏 bug：原实现用无 portHint 的 HTTP resolver 解析 ai-svc，拿到 HTTP
+	// 端口 8891 覆盖正确的 env AI_SVC_GRPC_ADDR(:8892)。
+	grpcAddr := resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI)
 	conn, err := grpc.NewClient(grpcAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)

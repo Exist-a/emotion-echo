@@ -114,7 +114,7 @@ func TestBuildServiceContext_GRPCWiring_AllFourClients(t *testing.T) {
 	cfg.AnalyticsService.GRPCAddr = "analytics-buf"
 	cfg.AnalyticsService.Transport = "grpc"
 
-	svcCtx := buildServiceContext(&cfg, nil)
+	svcCtx := buildServiceContext(&cfg, nil, nil)
 
 	// 断言 4 个 client 都是 gRPC 实现
 	isGRPCClient(t, svcCtx.User)
@@ -140,7 +140,7 @@ func TestBuildServiceContext_TransportHTTP_ForcesHTTPFallback(t *testing.T) {
 	cfg.ChatService.GRPCAddr = "localhost:8892"
 	cfg.ChatService.Transport = "http"
 
-	svcCtx := buildServiceContext(&cfg, nil)
+	svcCtx := buildServiceContext(&cfg, nil, nil)
 
 	isHTTPClient(t, svcCtx.User)
 	isHTTPClient(t, svcCtx.Chat)
@@ -157,7 +157,7 @@ func TestBuildServiceContext_GRPCAddrEmpty_HTTPFallback(t *testing.T) {
 	cfg.AssessmentService.GRPCAddr = ""
 	cfg.AnalyticsService.GRPCAddr = ""
 
-	svcCtx := buildServiceContext(&cfg, nil)
+	svcCtx := buildServiceContext(&cfg, nil, nil)
 
 	isHTTPClient(t, svcCtx.User)
 	isHTTPClient(t, svcCtx.Chat)
@@ -179,7 +179,7 @@ func TestBuildServiceContext_DialFailure_HTTPFallback(t *testing.T) {
 	cfg.Auth.JWTSecret = "test-secret"
 	cfg.UserService.GRPCAddr = "invalid:1234"
 
-	svcCtx := buildServiceContext(&cfg, nil)
+	svcCtx := buildServiceContext(&cfg, nil, nil)
 
 	isHTTPClient(t, svcCtx.User)
 }
