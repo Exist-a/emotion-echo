@@ -276,7 +276,9 @@ services:
     command:
       - "/bin/sh"
       - "-c"
-      - "/usr/bin/apisix init 2>&1 || true; /usr/bin/apisix init_etcd 2>&1 || true; exec /usr/local/openresty/bin/openresty -p /usr/local/apisix -g 'daemon off;'"
+      # Stage 74: 先清残留 worker_events.sock —— docker restart 保留可写层，
+      # 旧 socket 导致 openresty bind EADDRINUSE 崩溃循环（stage-74 实测）
+      - "rm -f /usr/local/apisix/logs/*.sock; /usr/bin/apisix init 2>&1 || true; /usr/bin/apisix init_etcd 2>&1 || true; exec /usr/local/openresty/bin/openresty -p /usr/local/apisix -g 'daemon off;'"
     volumes:
       - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml
       # PR-OBS-5: APISIX file-logger (PR-OBS-1 89b0117) 落盘 /tmp/apisix-access.log
