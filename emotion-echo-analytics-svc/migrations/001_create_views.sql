@@ -11,19 +11,13 @@
 -- 注意：执行本 SQL 前必须先 CREATE SCHEMA IF NOT EXISTS 各 schema。
 -- deploy/init.sql 已经建好所有 4 个 schema；本 migration 假定 schema 存在。
 
--- emotion_echo_chat: 暴露 messages 给 analytics（不暴露 content，仅元数据）
--- 注意：新微服务 messages 表时间列是 created_at（send_time 仅存在于 legacy 单体）。
-CREATE OR REPLACE VIEW emotion_echo_chat.msg_summary_v AS
-SELECT
-    id,
-    conversation_id,
-    user_id,
-    role,
-    content_type,
-    tokens_used,
-    LENGTH(content) AS content_len,
-    created_at AS send_time
-FROM emotion_echo_chat.messages;
+-- emotion_echo_chat.msg_summary_v:
+--   本文件原有一份旧 8 列定义（无 intent），Stage 86 发现幂等性 bug：
+--   chat-svc 005（Stage 82 PR-3b）已把该视图升级为带 intent 列的 9 列版
+--   （DROP+CREATE + 重新 GRANT），本文件的 CREATE OR REPLACE 旧定义在
+--   migrate.sh 全量重跑时会把 intent 列挤掉 → "cannot drop columns from view"。
+--   视图所有权收敛到 chat-svc 005 + 集中式 deploy/db/04-create-views.sql，
+--   此处不再重复定义（消除双 owner 漂移点）。
 
 -- emotion_echo_ai: 暴露 emotion_analysis 给 analytics
 CREATE OR REPLACE VIEW emotion_echo_ai.daily_emotion_v AS
