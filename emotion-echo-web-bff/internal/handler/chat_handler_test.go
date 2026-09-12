@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeChatClient 实现 downstream.ChatClient
@@ -31,6 +32,7 @@ type fakeChatClient struct {
 	updateErr    error
 	updateResp   *downstream.UpdateConversationResp
 	gotConvID    int64
+	gotSendReq   downstream.SendMessageReq // Stage 79: 捕获 body 绑定结果
 	gotLimit     int
 	gotOffset    int
 	gotListLimit int
@@ -44,8 +46,9 @@ func (f *fakeChatClient) CreateConversation(_ context.Context, _ downstream.Crea
 	}
 	return f.conv, nil
 }
-func (f *fakeChatClient) SendMessage(_ context.Context, conversationID int64, _ downstream.SendMessageReq) (*downstream.MessageView, error) {
+func (f *fakeChatClient) SendMessage(_ context.Context, conversationID int64, req downstream.SendMessageReq) (*downstream.MessageView, error) {
 	f.gotConvID = conversationID
+	f.gotSendReq = req
 	if f.sendErr != nil {
 		return nil, f.sendErr
 	}
@@ -116,6 +119,26 @@ func TestChatHandler_SendMessage_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, int64(5), fc.gotConvID, "conversation id 应从 path 解析")
 	assert.Contains(t, w.Body.String(), `"code":0`)
+}
+
+// Stage 79 RED：前端（stores/message.ts）发 camelCase（contentType/emotionTag/clientMsgId），
+// 此前 BFF struct tag 是 snake_case（content_type/emotion_tag/client_msg_id），三个字段
+// 一直被静默丢弃——e2e 实测文件消息落库成 contentType:"text"（stage-79 调研）。
+// 契约：BFF 必须按前端 camelCase JSON 绑定。
+func TestChatHandler_SendMessage_CamelCaseBody_BindsFields(t *testing.T) {
+	fc := &fakeChatClient{msg: &downstream.MessageView{ID: 10, ConversationID: 5, Content: "x"}}
+	r := newChatRouter(fc)
+	body := `{"content":"https://minio/x.png","contentType":"image","emotionTag":"happy","clientMsgId":"uuid-1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/5/messages",
+		bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "image", fc.gotSendReq.ContentType, "contentType 应被绑定（camelCase）")
+	assert.Equal(t, "happy", fc.gotSendReq.EmotionTag, "emotionTag 应被绑定（camelCase）")
+	require.NotNil(t, fc.gotSendReq.ClientMsgID)
+	assert.Equal(t, "uuid-1", *fc.gotSendReq.ClientMsgID, "clientMsgId 应被绑定（camelCase）")
 }
 
 func TestChatHandler_ListMessages_Success(t *testing.T) {
