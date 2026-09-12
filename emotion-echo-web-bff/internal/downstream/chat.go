@@ -68,9 +68,12 @@ type CreateConversationReq struct {
 type SendMessageReq struct {
 	Role         string  `json:"role,omitempty"`
 	Content      string  `json:"content"`
-	ClientMsgID  *string `json:"client_msg_id,omitempty"`
-	ContentType  string  `json:"content_type,omitempty"`
-	EmotionTag   string  `json:"emotion_tag,omitempty"`
+	// Stage 79：三个字段 tag 从 snake_case 改 camelCase——唯一客户端是前端 web
+	// （stores/message.ts 发 contentType/emotionTag/clientMsgId），原 snake_case tag
+	// 导致三字段一直绑定不上（e2e 实测 contentType 落库成默认 text）。
+	ClientMsgID  *string `json:"clientMsgId,omitempty"`
+	ContentType  string  `json:"contentType,omitempty"`
+	EmotionTag   string  `json:"emotionTag,omitempty"`
 }
 
 // ChatClient BFF → chat-svc HTTP 客户端
