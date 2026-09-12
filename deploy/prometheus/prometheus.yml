@@ -69,3 +69,11 @@ scrape_configs:
 # === PR-OBS-7: alert rules (Kafka consumer lag 高负载告警) ===
 rule_files:
   - "/etc/prometheus/rules/*.yml"
+
+# === Stage 86 (§3.6): 告警推送 alertmanager ===
+# outbox dead 行 (OutboxEventsDead, critical) 与 kafka lag (warning) 经此路由进
+# alertmanager (dev 只做聚合去重 + :9093 Web UI 展示, 见 deploy/alertmanager/alertmanager.yml)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["emotion-echo-alertmanager:9093"]

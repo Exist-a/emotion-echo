@@ -1,0 +1,22 @@
+# Stage 86: dev alertmanager 配置（kafka-reliability-gaps.md §3.6 "dead 告警接 alertmanager"）
+#
+# dev 范围: alertmanager 只做 告警聚合去重 + Web UI 展示（:9093），
+# 不接外部通知渠道（无钉钉/slack/webhook 值班群——dev 单人开发场景无意义）。
+# 告警在 http://localhost:9093 可见 silences/inhibited/firing 全状态。
+#
+# prod 演进: route 按 severity 分流（critical → 值班 webhook，warning → 群机器人），
+# 此文件是接入点，届时只加 receivers 不动 prometheus 侧。
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: dev-ui
+  group_by: ["alertname", "component"]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+
+receivers:
+  # dev-ui: 无任何集成——告警仅进 alertmanager Web UI（dev 预期行为）
+  - name: dev-ui

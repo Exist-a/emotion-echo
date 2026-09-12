@@ -26,6 +26,7 @@ PROMETHEUS = "http://localhost:9090"
 GRAFANA = "http://localhost:13000"  # Stage 74: 宿主 13000（让位 web 前端 :3000）
 LOKI = "http://localhost:3100"
 KAFKA_EXPORTER = "http://localhost:9308"
+ALERTMANAGER = "http://localhost:9093"  # Stage 86: alertmanager Web UI
 
 # 期望的 scrape target 列表（prometheus.yml 静态 targets）
 # 与 deploy/prometheus/prometheus.yml 的 scrape_configs.static_configs 对齐
@@ -317,7 +318,9 @@ def main() -> int:
 
     # 断言 11: prometheus alert rule 文件 KafkaConsumerGroupLagHigh 存在
     # prometheus rules path 是 container 内路径,我们用 API 查询 rule_files + alerting rules
+    # Stage 86: 同一解析顺带断言 OutboxEventsDead (outbox-dead.yml) 已加载
     status, body = http_get(f"{PROMETHEUS}/api/v1/rules")
+    loaded_alerts: set[str] = set()
     if status == 0:
         check("prometheus /api/v1/rules reachable", False, body)
     elif status != 200:
@@ -326,23 +329,81 @@ def main() -> int:
         try:
             data = json.loads(body)
             rule_groups = data.get("data", {}).get("groups", [])
-            # 查找 alert 名 KafkaConsumerGroupLagHigh
-            found_alert = False
             for group in rule_groups:
                 for rule in group.get("rules", []):
-                    if (
-                        rule.get("type") == "alerting"
-                        and rule.get("name") == "KafkaConsumerGroupLagHigh"
-                    ):
-                        found_alert = True
-                        break
+                    if rule.get("type") == "alerting":
+                        loaded_alerts.add(rule.get("name", ""))
             check(
                 "prometheus alert rule 'KafkaConsumerGroupLagHigh' loaded",
-                found_alert,
+                "KafkaConsumerGroupLagHigh" in loaded_alerts,
                 f"groups={len(rule_groups)}, total_rules={sum(len(g.get('rules', [])) for g in rule_groups)}",
+            )
+            check(
+                "prometheus alert rule 'OutboxEventsDead' loaded (Stage 86)",
+                "OutboxEventsDead" in loaded_alerts,
+                f"loaded_alerts={sorted(loaded_alerts)}",
             )
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             check("prometheus rules JSON parseable", False, f"{type(e).__name__}: {e}")
+
+    # ===== Stage 86 (kafka-reliability-gaps.md §3.6): dead 告警接 alertmanager =====
+
+    # 断言 13: alertmanager /-/healthy 200
+    status, body = http_get(f"{ALERTMANAGER}/-/healthy")
+    if status == 0:
+        check("alertmanager /-/healthy reachable", False, body)
+    else:
+        check(
+            "alertmanager /-/healthy returns 200",
+            status == 200,
+            f"HTTP {status}: {body[:80]}",
+        )
+
+    # 断言 14: prometheus 已发现 alertmanager (alerting 段接线生效)
+    # 注: prometheus v2.51 该端点返回 data.activeAlertmanagers[].url（非 labels.instance）
+    status, body = http_get(f"{PROMETHEUS}/api/v1/alertmanagers")
+    if status == 200:
+        try:
+            data = json.loads(body)
+            am_urls = [
+                a.get("url", "")
+                for a in data.get("data", {}).get("activeAlertmanagers", [])
+            ]
+            check(
+                "prometheus discovered alertmanager target",
+                any("alertmanager" in u and "9093" in u for u in am_urls),
+                f"activeAlertmanagers={am_urls}",
+            )
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            check("prometheus alertmanagers JSON parseable", False, f"{type(e).__name__}: {e}")
+    else:
+        check("prometheus /api/v1/alertmanagers returns 200", False, f"HTTP {status}")
+
+    # 断言 15: dead 计数器 series 可从 prometheus 查到 (端到端: chat-svc → scrape → TSDB)
+    # counter 初始值为 0 也暴露 series,所以此断言不依赖真实 dead 行
+    query_url = (
+        f"{PROMETHEUS}/api/v1/query?query="
+        + urllib.parse.quote("emotion_echo_outbox_events_dead_total")
+    )
+    status, body = http_get(query_url, timeout=10.0)
+    if status == 200:
+        try:
+            data = json.loads(body)
+            series = data.get("data", {}).get("result", [])
+            check(
+                "prometheus exposes emotion_echo_outbox_events_dead_total series",
+                len(series) >= 1,
+                f"series={len(series)}, values={[s.get('value', [None, '?'])[1] for s in series]}",
+            )
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            check("prometheus dead counter query JSON parseable", False, f"{type(e).__name__}: {e}")
+    else:
+        # series 缺失常见于 chat-svc 未起 / obs profile 未开——给出明确线索而非静默跳过
+        check(
+            "prometheus query emotion_echo_outbox_events_dead_total returns 200",
+            False,
+            f"HTTP {status}: {body[:80]} (chat-svc 未启动或 obs profile 未开?)",
+        )
 
     # ===== PR-OBS-5: Loki + Promtail 断言 =====
 

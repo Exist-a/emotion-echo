@@ -1,0 +1,29 @@
+# Stage 86 (kafka-reliability-gaps.md §3.6): outbox dead 行告警
+#
+# 指标: emotion_echo_outbox_events_dead_total (chat-svc /metrics)
+#   relay 对发布重试 MaxAttempts(默认100) 次仍失败的事件行标记 dead——
+#   该事件永久丢失，不再被 relay 扫描，需要人工排查 last_error / 回放。
+#
+# severity=critical（区别于 kafka-lag 的 warning）: dead = 事件数据丢失，
+# 不是积压可追；出现任何一例都应值班介入。
+#
+# 处置: 查 chat-svc 日志 "row marked dead id=..." + psql 查
+#   SELECT id, event_type, last_error FROM emotion_echo_chat.outbox_events WHERE status='dead'
+#   排查根因（如 Stage 73 之前的 map 反序列化 bug）后修复 + 回放。
+
+groups:
+  - name: outbox-dead
+    interval: 30s
+    rules:
+      - alert: OutboxEventsDead
+        expr: emotion_echo_outbox_events_dead_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: chat-svc
+        annotations:
+          summary: "chat-svc outbox row(s) marked dead (events permanently dropped)"
+          description: |
+            outbox dead counter = {{ $value }}。
+            有事件行超过 MaxAttempts 仍发布失败，已被标记 dead 并永久放弃。
+            查 chat-svc 日志 + emotion_echo_chat.outbox_events 表 last_error 排查根因。

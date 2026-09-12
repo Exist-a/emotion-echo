@@ -335,6 +335,27 @@ services:
     depends_on:
       - apisix
 
+  # ===== Stage 86 (§3.6): Alertmanager (告警聚合去重 + :9093 Web UI) =====
+  # 镜像: prom/alertmanager:v0.27.0 (与 prometheus v2.51.2 同代发布线)
+  # 配置: deploy/alertmanager/alertmanager.yml — dev 只做 UI 展示,不接外部通知渠道
+  # 告警来源: prometheus.yml alerting 段 → rules/*.yml (kafka-lag.yml / outbox-dead.yml)
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: emotion-echo-alertmanager
+    profiles: ["obs"]
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+
   # ===== PR-OBS-7: Kafka exporter (consumer lag 监控) =====
   # 镜像: danielqsj/kafka-exporter:latest
   # 暴露 :9308 metrics,自动发现 consumer group
@@ -417,6 +438,8 @@ volumes:
   # PR-OBS-4: observability 持久化卷
   prometheus_data:
   grafana_data:
+  # Stage 86: alertmanager 状态持久化（silence / notification log）
+  alertmanager_data:
   # PR-OBS-5: loki 持久化卷
   loki_data:
 
