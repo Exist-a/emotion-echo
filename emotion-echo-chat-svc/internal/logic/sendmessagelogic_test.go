@@ -662,3 +662,26 @@ func TestSendMessageLogic_DevFallback_InjectsXUserIDMetadata(t *testing.T) {
 	require.NotEmpty(t, vals, "outgoing metadata 必须含 x-user-id")
 	assert.Equal(t, "100", vals[0], "x-user-id 值应等于 ctx 里的 uid")
 }
+// Stage 79 RED：SendMessage 响应 MessageView 必须回带 ContentType——
+// e2e 实测 DB 落库 file 但响应丢字段（响应链第 4 处缺口：logic 响应组装）。
+// 契约：请求带 contentType="file" → 响应 MessageView.ContentType=="file"。
+func TestSendMessageLogic_ContentType_RoundTripsInResponse(t *testing.T) {
+	t.Parallel()
+
+	svcCtx, repo, _ := newTestCtx(t)
+	require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{
+		UserID: 100,
+		Title:  "file conv",
+	}))
+
+	l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+	resp, err := l.SendMessage(&types.SendMessageReq{
+		Id:          1,
+		Role:        "user",
+		Content:     "https://minio/x.txt",
+		ContentType: "file",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "file", resp.Message.ContentType, "响应视图必须回带 contentType")
+}

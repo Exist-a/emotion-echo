@@ -125,6 +125,7 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 			UserId:         msg.UserID,
 			Role:           msg.Role,
 			Content:        msg.Content,
+			ContentType:    msg.ContentType, // Stage 79：响应回带（第 4 处缺口）
 			TokensUsed:     msg.TokensUsed,
 			CreatedAt:      msg.CreatedAt.UnixMilli(),
 		},

@@ -65,6 +65,7 @@ func (l *ListMessagesLogic) ListMessages(req *types.ListMessagesReq) (resp *type
 			UserId:         m.UserID,
 			Role:           m.Role,
 			Content:        m.Content,
+			ContentType:    m.ContentType, // Stage 79：列表响应同样回带
 			TokensUsed:     m.TokensUsed,
 			CreatedAt:      m.CreatedAt.UnixMilli(),
 		})
