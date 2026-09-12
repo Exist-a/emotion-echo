@@ -339,8 +339,10 @@ type ReportsDailyResponse struct {
 	MessageCount        int32                  `protobuf:"varint,4,opt,name=message_count,json=messageCount,proto3" json:"message_count,omitempty"`
 	ConversationCount   int32                  `protobuf:"varint,5,opt,name=conversation_count,json=conversationCount,proto3" json:"conversation_count,omitempty"`
 	Date                int64                  `protobuf:"varint,6,opt,name=date,proto3" json:"date,omitempty"` // echo back
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Stage 82 PR-3b：6 类消息意图分布（intent=” 的历史行不计入）
+	IntentDistribution []*IntentCount `protobuf:"bytes,7,rep,name=intent_distribution,json=intentDistribution,proto3" json:"intent_distribution,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ReportsDailyResponse) Reset() {
@@ -415,6 +417,66 @@ func (x *ReportsDailyResponse) GetDate() int64 {
 	return 0
 }
 
+func (x *ReportsDailyResponse) GetIntentDistribution() []*IntentCount {
+	if x != nil {
+		return x.IntentDistribution
+	}
+	return nil
+}
+
+// IntentCount 单类意图计数（PR-3b）
+type IntentCount struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Intent        string                 `protobuf:"bytes,1,opt,name=intent,proto3" json:"intent,omitempty"` // emotional_support/study_help/tech_help/career_help/lifestyle/other
+	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IntentCount) Reset() {
+	*x = IntentCount{}
+	mi := &file_metric_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IntentCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IntentCount) ProtoMessage() {}
+
+func (x *IntentCount) ProtoReflect() protoreflect.Message {
+	mi := &file_metric_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IntentCount.ProtoReflect.Descriptor instead.
+func (*IntentCount) Descriptor() ([]byte, []int) {
+	return file_metric_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *IntentCount) GetIntent() string {
+	if x != nil {
+		return x.Intent
+	}
+	return ""
+}
+
+func (x *IntentCount) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
 // ReportsTrendRequest 趋势请求
 type ReportsTrendRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -427,7 +489,7 @@ type ReportsTrendRequest struct {
 
 func (x *ReportsTrendRequest) Reset() {
 	*x = ReportsTrendRequest{}
-	mi := &file_metric_proto_msgTypes[6]
+	mi := &file_metric_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -439,7 +501,7 @@ func (x *ReportsTrendRequest) String() string {
 func (*ReportsTrendRequest) ProtoMessage() {}
 
 func (x *ReportsTrendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[6]
+	mi := &file_metric_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -452,7 +514,7 @@ func (x *ReportsTrendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportsTrendRequest.ProtoReflect.Descriptor instead.
 func (*ReportsTrendRequest) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{6}
+	return file_metric_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ReportsTrendRequest) GetUserId() int64 {
@@ -487,7 +549,7 @@ type ReportsTrendResponse struct {
 
 func (x *ReportsTrendResponse) Reset() {
 	*x = ReportsTrendResponse{}
-	mi := &file_metric_proto_msgTypes[7]
+	mi := &file_metric_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -499,7 +561,7 @@ func (x *ReportsTrendResponse) String() string {
 func (*ReportsTrendResponse) ProtoMessage() {}
 
 func (x *ReportsTrendResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[7]
+	mi := &file_metric_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -512,7 +574,7 @@ func (x *ReportsTrendResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportsTrendResponse.ProtoReflect.Descriptor instead.
 func (*ReportsTrendResponse) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{7}
+	return file_metric_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ReportsTrendResponse) GetDataPoints() []*ChartDataPoint {
@@ -541,7 +603,7 @@ type UserBehaviorDayNightResponse struct {
 
 func (x *UserBehaviorDayNightResponse) Reset() {
 	*x = UserBehaviorDayNightResponse{}
-	mi := &file_metric_proto_msgTypes[8]
+	mi := &file_metric_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +615,7 @@ func (x *UserBehaviorDayNightResponse) String() string {
 func (*UserBehaviorDayNightResponse) ProtoMessage() {}
 
 func (x *UserBehaviorDayNightResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[8]
+	mi := &file_metric_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +628,7 @@ func (x *UserBehaviorDayNightResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserBehaviorDayNightResponse.ProtoReflect.Descriptor instead.
 func (*UserBehaviorDayNightResponse) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{8}
+	return file_metric_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *UserBehaviorDayNightResponse) GetActiveHours() []*ChartDataPoint {
@@ -595,7 +657,7 @@ type UserBehaviorDepthResponse struct {
 
 func (x *UserBehaviorDepthResponse) Reset() {
 	*x = UserBehaviorDepthResponse{}
-	mi := &file_metric_proto_msgTypes[9]
+	mi := &file_metric_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -607,7 +669,7 @@ func (x *UserBehaviorDepthResponse) String() string {
 func (*UserBehaviorDepthResponse) ProtoMessage() {}
 
 func (x *UserBehaviorDepthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[9]
+	mi := &file_metric_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -620,7 +682,7 @@ func (x *UserBehaviorDepthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserBehaviorDepthResponse.ProtoReflect.Descriptor instead.
 func (*UserBehaviorDepthResponse) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{9}
+	return file_metric_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *UserBehaviorDepthResponse) GetBuckets() []*ChartDataPoint {
@@ -649,7 +711,7 @@ type UserBehaviorFrequencyResponse struct {
 
 func (x *UserBehaviorFrequencyResponse) Reset() {
 	*x = UserBehaviorFrequencyResponse{}
-	mi := &file_metric_proto_msgTypes[10]
+	mi := &file_metric_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -661,7 +723,7 @@ func (x *UserBehaviorFrequencyResponse) String() string {
 func (*UserBehaviorFrequencyResponse) ProtoMessage() {}
 
 func (x *UserBehaviorFrequencyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[10]
+	mi := &file_metric_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -674,7 +736,7 @@ func (x *UserBehaviorFrequencyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserBehaviorFrequencyResponse.ProtoReflect.Descriptor instead.
 func (*UserBehaviorFrequencyResponse) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{10}
+	return file_metric_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *UserBehaviorFrequencyResponse) GetDailyActive() []*ChartDataPoint {
@@ -702,7 +764,7 @@ type MentalHealthAssessmentRequest struct {
 
 func (x *MentalHealthAssessmentRequest) Reset() {
 	*x = MentalHealthAssessmentRequest{}
-	mi := &file_metric_proto_msgTypes[11]
+	mi := &file_metric_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -714,7 +776,7 @@ func (x *MentalHealthAssessmentRequest) String() string {
 func (*MentalHealthAssessmentRequest) ProtoMessage() {}
 
 func (x *MentalHealthAssessmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[11]
+	mi := &file_metric_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -727,7 +789,7 @@ func (x *MentalHealthAssessmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentalHealthAssessmentRequest.ProtoReflect.Descriptor instead.
 func (*MentalHealthAssessmentRequest) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{11}
+	return file_metric_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *MentalHealthAssessmentRequest) GetUserId() int64 {
@@ -758,7 +820,7 @@ type MentalHealthAssessmentResponse struct {
 
 func (x *MentalHealthAssessmentResponse) Reset() {
 	*x = MentalHealthAssessmentResponse{}
-	mi := &file_metric_proto_msgTypes[12]
+	mi := &file_metric_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -770,7 +832,7 @@ func (x *MentalHealthAssessmentResponse) String() string {
 func (*MentalHealthAssessmentResponse) ProtoMessage() {}
 
 func (x *MentalHealthAssessmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[12]
+	mi := &file_metric_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -783,7 +845,7 @@ func (x *MentalHealthAssessmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentalHealthAssessmentResponse.ProtoReflect.Descriptor instead.
 func (*MentalHealthAssessmentResponse) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{12}
+	return file_metric_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *MentalHealthAssessmentResponse) GetSummary() string {
@@ -832,7 +894,7 @@ type MentalHealthHistoryRequest struct {
 
 func (x *MentalHealthHistoryRequest) Reset() {
 	*x = MentalHealthHistoryRequest{}
-	mi := &file_metric_proto_msgTypes[13]
+	mi := &file_metric_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -844,7 +906,7 @@ func (x *MentalHealthHistoryRequest) String() string {
 func (*MentalHealthHistoryRequest) ProtoMessage() {}
 
 func (x *MentalHealthHistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[13]
+	mi := &file_metric_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -857,7 +919,7 @@ func (x *MentalHealthHistoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentalHealthHistoryRequest.ProtoReflect.Descriptor instead.
 func (*MentalHealthHistoryRequest) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{13}
+	return file_metric_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MentalHealthHistoryRequest) GetUserId() int64 {
@@ -884,7 +946,7 @@ type MentalHealthHistoryResponse struct {
 
 func (x *MentalHealthHistoryResponse) Reset() {
 	*x = MentalHealthHistoryResponse{}
-	mi := &file_metric_proto_msgTypes[14]
+	mi := &file_metric_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -896,7 +958,7 @@ func (x *MentalHealthHistoryResponse) String() string {
 func (*MentalHealthHistoryResponse) ProtoMessage() {}
 
 func (x *MentalHealthHistoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[14]
+	mi := &file_metric_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -909,7 +971,7 @@ func (x *MentalHealthHistoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentalHealthHistoryResponse.ProtoReflect.Descriptor instead.
 func (*MentalHealthHistoryResponse) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{14}
+	return file_metric_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MentalHealthHistoryResponse) GetRecords() []*MentalHealthAssessmentResponse {
@@ -930,7 +992,7 @@ type MentalHealthTriggerRequest struct {
 
 func (x *MentalHealthTriggerRequest) Reset() {
 	*x = MentalHealthTriggerRequest{}
-	mi := &file_metric_proto_msgTypes[15]
+	mi := &file_metric_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -942,7 +1004,7 @@ func (x *MentalHealthTriggerRequest) String() string {
 func (*MentalHealthTriggerRequest) ProtoMessage() {}
 
 func (x *MentalHealthTriggerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[15]
+	mi := &file_metric_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -955,7 +1017,7 @@ func (x *MentalHealthTriggerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentalHealthTriggerRequest.ProtoReflect.Descriptor instead.
 func (*MentalHealthTriggerRequest) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{15}
+	return file_metric_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MentalHealthTriggerRequest) GetUserId() int64 {
@@ -984,7 +1046,7 @@ type MentalHealthTriggerResponse struct {
 
 func (x *MentalHealthTriggerResponse) Reset() {
 	*x = MentalHealthTriggerResponse{}
-	mi := &file_metric_proto_msgTypes[16]
+	mi := &file_metric_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -996,7 +1058,7 @@ func (x *MentalHealthTriggerResponse) String() string {
 func (*MentalHealthTriggerResponse) ProtoMessage() {}
 
 func (x *MentalHealthTriggerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[16]
+	mi := &file_metric_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1009,7 +1071,7 @@ func (x *MentalHealthTriggerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentalHealthTriggerResponse.ProtoReflect.Descriptor instead.
 func (*MentalHealthTriggerResponse) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{16}
+	return file_metric_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *MentalHealthTriggerResponse) GetTriggered() bool {
@@ -1044,7 +1106,7 @@ type MentalHealthTrendRequest struct {
 
 func (x *MentalHealthTrendRequest) Reset() {
 	*x = MentalHealthTrendRequest{}
-	mi := &file_metric_proto_msgTypes[17]
+	mi := &file_metric_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1056,7 +1118,7 @@ func (x *MentalHealthTrendRequest) String() string {
 func (*MentalHealthTrendRequest) ProtoMessage() {}
 
 func (x *MentalHealthTrendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[17]
+	mi := &file_metric_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1069,7 +1131,7 @@ func (x *MentalHealthTrendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentalHealthTrendRequest.ProtoReflect.Descriptor instead.
 func (*MentalHealthTrendRequest) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{17}
+	return file_metric_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *MentalHealthTrendRequest) GetUserId() int64 {
@@ -1097,7 +1159,7 @@ type MentalHealthTrendResponse struct {
 
 func (x *MentalHealthTrendResponse) Reset() {
 	*x = MentalHealthTrendResponse{}
-	mi := &file_metric_proto_msgTypes[18]
+	mi := &file_metric_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1109,7 +1171,7 @@ func (x *MentalHealthTrendResponse) String() string {
 func (*MentalHealthTrendResponse) ProtoMessage() {}
 
 func (x *MentalHealthTrendResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_metric_proto_msgTypes[18]
+	mi := &file_metric_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1122,7 +1184,7 @@ func (x *MentalHealthTrendResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MentalHealthTrendResponse.ProtoReflect.Descriptor instead.
 func (*MentalHealthTrendResponse) Descriptor() ([]byte, []int) {
-	return file_metric_proto_rawDescGZIP(), []int{18}
+	return file_metric_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MentalHealthTrendResponse) GetScoreTrend() []*ChartDataPoint {
@@ -1164,14 +1226,18 @@ const file_metric_proto_rawDesc = "" +
 	"date_range\x18\x02 \x01(\v2\x1f.emotion_analytics.v1.DateRangeR\tdateRange\"B\n" +
 	"\x13ReportsDailyRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
-	"\x04date\x18\x02 \x01(\x03R\x04date\"\xc1\x02\n" +
+	"\x04date\x18\x02 \x01(\x03R\x04date\"\x95\x03\n" +
 	"\x14ReportsDailyResponse\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12\\\n" +
 	"\x14emotion_distribution\x18\x02 \x03(\v2).emotion_analytics.v1.EmotionDistributionR\x13emotionDistribution\x12I\n" +
 	"\remotion_trend\x18\x03 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\femotionTrend\x12#\n" +
 	"\rmessage_count\x18\x04 \x01(\x05R\fmessageCount\x12-\n" +
 	"\x12conversation_count\x18\x05 \x01(\x05R\x11conversationCount\x12\x12\n" +
-	"\x04date\x18\x06 \x01(\x03R\x04date\"\x82\x01\n" +
+	"\x04date\x18\x06 \x01(\x03R\x04date\x12R\n" +
+	"\x13intent_distribution\x18\a \x03(\v2!.emotion_analytics.v1.IntentCountR\x12intentDistribution\";\n" +
+	"\vIntentCount\x12\x16\n" +
+	"\x06intent\x18\x01 \x01(\tR\x06intent\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\"\x82\x01\n" +
 	"\x13ReportsTrendRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12>\n" +
@@ -1246,7 +1312,7 @@ func file_metric_proto_rawDescGZIP() []byte {
 	return file_metric_proto_rawDescData
 }
 
-var file_metric_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_metric_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_metric_proto_goTypes = []any{
 	(*DateRange)(nil),                      // 0: emotion_analytics.v1.DateRange
 	(*ChartDataPoint)(nil),                 // 1: emotion_analytics.v1.ChartDataPoint
@@ -1254,59 +1320,61 @@ var file_metric_proto_goTypes = []any{
 	(*UserBehaviorRequest)(nil),            // 3: emotion_analytics.v1.UserBehaviorRequest
 	(*ReportsDailyRequest)(nil),            // 4: emotion_analytics.v1.ReportsDailyRequest
 	(*ReportsDailyResponse)(nil),           // 5: emotion_analytics.v1.ReportsDailyResponse
-	(*ReportsTrendRequest)(nil),            // 6: emotion_analytics.v1.ReportsTrendRequest
-	(*ReportsTrendResponse)(nil),           // 7: emotion_analytics.v1.ReportsTrendResponse
-	(*UserBehaviorDayNightResponse)(nil),   // 8: emotion_analytics.v1.UserBehaviorDayNightResponse
-	(*UserBehaviorDepthResponse)(nil),      // 9: emotion_analytics.v1.UserBehaviorDepthResponse
-	(*UserBehaviorFrequencyResponse)(nil),  // 10: emotion_analytics.v1.UserBehaviorFrequencyResponse
-	(*MentalHealthAssessmentRequest)(nil),  // 11: emotion_analytics.v1.MentalHealthAssessmentRequest
-	(*MentalHealthAssessmentResponse)(nil), // 12: emotion_analytics.v1.MentalHealthAssessmentResponse
-	(*MentalHealthHistoryRequest)(nil),     // 13: emotion_analytics.v1.MentalHealthHistoryRequest
-	(*MentalHealthHistoryResponse)(nil),    // 14: emotion_analytics.v1.MentalHealthHistoryResponse
-	(*MentalHealthTriggerRequest)(nil),     // 15: emotion_analytics.v1.MentalHealthTriggerRequest
-	(*MentalHealthTriggerResponse)(nil),    // 16: emotion_analytics.v1.MentalHealthTriggerResponse
-	(*MentalHealthTrendRequest)(nil),       // 17: emotion_analytics.v1.MentalHealthTrendRequest
-	(*MentalHealthTrendResponse)(nil),      // 18: emotion_analytics.v1.MentalHealthTrendResponse
+	(*IntentCount)(nil),                    // 6: emotion_analytics.v1.IntentCount
+	(*ReportsTrendRequest)(nil),            // 7: emotion_analytics.v1.ReportsTrendRequest
+	(*ReportsTrendResponse)(nil),           // 8: emotion_analytics.v1.ReportsTrendResponse
+	(*UserBehaviorDayNightResponse)(nil),   // 9: emotion_analytics.v1.UserBehaviorDayNightResponse
+	(*UserBehaviorDepthResponse)(nil),      // 10: emotion_analytics.v1.UserBehaviorDepthResponse
+	(*UserBehaviorFrequencyResponse)(nil),  // 11: emotion_analytics.v1.UserBehaviorFrequencyResponse
+	(*MentalHealthAssessmentRequest)(nil),  // 12: emotion_analytics.v1.MentalHealthAssessmentRequest
+	(*MentalHealthAssessmentResponse)(nil), // 13: emotion_analytics.v1.MentalHealthAssessmentResponse
+	(*MentalHealthHistoryRequest)(nil),     // 14: emotion_analytics.v1.MentalHealthHistoryRequest
+	(*MentalHealthHistoryResponse)(nil),    // 15: emotion_analytics.v1.MentalHealthHistoryResponse
+	(*MentalHealthTriggerRequest)(nil),     // 16: emotion_analytics.v1.MentalHealthTriggerRequest
+	(*MentalHealthTriggerResponse)(nil),    // 17: emotion_analytics.v1.MentalHealthTriggerResponse
+	(*MentalHealthTrendRequest)(nil),       // 18: emotion_analytics.v1.MentalHealthTrendRequest
+	(*MentalHealthTrendResponse)(nil),      // 19: emotion_analytics.v1.MentalHealthTrendResponse
 }
 var file_metric_proto_depIdxs = []int32{
 	0,  // 0: emotion_analytics.v1.UserBehaviorRequest.date_range:type_name -> emotion_analytics.v1.DateRange
 	2,  // 1: emotion_analytics.v1.ReportsDailyResponse.emotion_distribution:type_name -> emotion_analytics.v1.EmotionDistribution
 	1,  // 2: emotion_analytics.v1.ReportsDailyResponse.emotion_trend:type_name -> emotion_analytics.v1.ChartDataPoint
-	0,  // 3: emotion_analytics.v1.ReportsTrendRequest.date_range:type_name -> emotion_analytics.v1.DateRange
-	1,  // 4: emotion_analytics.v1.ReportsTrendResponse.data_points:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 5: emotion_analytics.v1.UserBehaviorDayNightResponse.active_hours:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 6: emotion_analytics.v1.UserBehaviorDayNightResponse.message_hours:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 7: emotion_analytics.v1.UserBehaviorDepthResponse.buckets:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 8: emotion_analytics.v1.UserBehaviorFrequencyResponse.daily_active:type_name -> emotion_analytics.v1.ChartDataPoint
-	2,  // 9: emotion_analytics.v1.MentalHealthAssessmentResponse.emotion_distribution:type_name -> emotion_analytics.v1.EmotionDistribution
-	0,  // 10: emotion_analytics.v1.MentalHealthHistoryRequest.date_range:type_name -> emotion_analytics.v1.DateRange
-	12, // 11: emotion_analytics.v1.MentalHealthHistoryResponse.records:type_name -> emotion_analytics.v1.MentalHealthAssessmentResponse
-	0,  // 12: emotion_analytics.v1.MentalHealthTrendRequest.date_range:type_name -> emotion_analytics.v1.DateRange
-	1,  // 13: emotion_analytics.v1.MentalHealthTrendResponse.score_trend:type_name -> emotion_analytics.v1.ChartDataPoint
-	1,  // 14: emotion_analytics.v1.MentalHealthTrendResponse.risk_trend:type_name -> emotion_analytics.v1.ChartDataPoint
-	4,  // 15: emotion_analytics.v1.AnalyticsService.ReportsDaily:input_type -> emotion_analytics.v1.ReportsDailyRequest
-	6,  // 16: emotion_analytics.v1.AnalyticsService.ReportsTrend:input_type -> emotion_analytics.v1.ReportsTrendRequest
-	3,  // 17: emotion_analytics.v1.AnalyticsService.UserBehaviorDayNight:input_type -> emotion_analytics.v1.UserBehaviorRequest
-	3,  // 18: emotion_analytics.v1.AnalyticsService.UserBehaviorDepth:input_type -> emotion_analytics.v1.UserBehaviorRequest
-	3,  // 19: emotion_analytics.v1.AnalyticsService.UserBehaviorFrequency:input_type -> emotion_analytics.v1.UserBehaviorRequest
-	11, // 20: emotion_analytics.v1.AnalyticsService.MentalHealthAssessment:input_type -> emotion_analytics.v1.MentalHealthAssessmentRequest
-	13, // 21: emotion_analytics.v1.AnalyticsService.MentalHealthHistory:input_type -> emotion_analytics.v1.MentalHealthHistoryRequest
-	15, // 22: emotion_analytics.v1.AnalyticsService.MentalHealthTrigger:input_type -> emotion_analytics.v1.MentalHealthTriggerRequest
-	17, // 23: emotion_analytics.v1.AnalyticsService.MentalHealthTrend:input_type -> emotion_analytics.v1.MentalHealthTrendRequest
-	5,  // 24: emotion_analytics.v1.AnalyticsService.ReportsDaily:output_type -> emotion_analytics.v1.ReportsDailyResponse
-	7,  // 25: emotion_analytics.v1.AnalyticsService.ReportsTrend:output_type -> emotion_analytics.v1.ReportsTrendResponse
-	8,  // 26: emotion_analytics.v1.AnalyticsService.UserBehaviorDayNight:output_type -> emotion_analytics.v1.UserBehaviorDayNightResponse
-	9,  // 27: emotion_analytics.v1.AnalyticsService.UserBehaviorDepth:output_type -> emotion_analytics.v1.UserBehaviorDepthResponse
-	10, // 28: emotion_analytics.v1.AnalyticsService.UserBehaviorFrequency:output_type -> emotion_analytics.v1.UserBehaviorFrequencyResponse
-	12, // 29: emotion_analytics.v1.AnalyticsService.MentalHealthAssessment:output_type -> emotion_analytics.v1.MentalHealthAssessmentResponse
-	14, // 30: emotion_analytics.v1.AnalyticsService.MentalHealthHistory:output_type -> emotion_analytics.v1.MentalHealthHistoryResponse
-	16, // 31: emotion_analytics.v1.AnalyticsService.MentalHealthTrigger:output_type -> emotion_analytics.v1.MentalHealthTriggerResponse
-	18, // 32: emotion_analytics.v1.AnalyticsService.MentalHealthTrend:output_type -> emotion_analytics.v1.MentalHealthTrendResponse
-	24, // [24:33] is the sub-list for method output_type
-	15, // [15:24] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	6,  // 3: emotion_analytics.v1.ReportsDailyResponse.intent_distribution:type_name -> emotion_analytics.v1.IntentCount
+	0,  // 4: emotion_analytics.v1.ReportsTrendRequest.date_range:type_name -> emotion_analytics.v1.DateRange
+	1,  // 5: emotion_analytics.v1.ReportsTrendResponse.data_points:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 6: emotion_analytics.v1.UserBehaviorDayNightResponse.active_hours:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 7: emotion_analytics.v1.UserBehaviorDayNightResponse.message_hours:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 8: emotion_analytics.v1.UserBehaviorDepthResponse.buckets:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 9: emotion_analytics.v1.UserBehaviorFrequencyResponse.daily_active:type_name -> emotion_analytics.v1.ChartDataPoint
+	2,  // 10: emotion_analytics.v1.MentalHealthAssessmentResponse.emotion_distribution:type_name -> emotion_analytics.v1.EmotionDistribution
+	0,  // 11: emotion_analytics.v1.MentalHealthHistoryRequest.date_range:type_name -> emotion_analytics.v1.DateRange
+	13, // 12: emotion_analytics.v1.MentalHealthHistoryResponse.records:type_name -> emotion_analytics.v1.MentalHealthAssessmentResponse
+	0,  // 13: emotion_analytics.v1.MentalHealthTrendRequest.date_range:type_name -> emotion_analytics.v1.DateRange
+	1,  // 14: emotion_analytics.v1.MentalHealthTrendResponse.score_trend:type_name -> emotion_analytics.v1.ChartDataPoint
+	1,  // 15: emotion_analytics.v1.MentalHealthTrendResponse.risk_trend:type_name -> emotion_analytics.v1.ChartDataPoint
+	4,  // 16: emotion_analytics.v1.AnalyticsService.ReportsDaily:input_type -> emotion_analytics.v1.ReportsDailyRequest
+	7,  // 17: emotion_analytics.v1.AnalyticsService.ReportsTrend:input_type -> emotion_analytics.v1.ReportsTrendRequest
+	3,  // 18: emotion_analytics.v1.AnalyticsService.UserBehaviorDayNight:input_type -> emotion_analytics.v1.UserBehaviorRequest
+	3,  // 19: emotion_analytics.v1.AnalyticsService.UserBehaviorDepth:input_type -> emotion_analytics.v1.UserBehaviorRequest
+	3,  // 20: emotion_analytics.v1.AnalyticsService.UserBehaviorFrequency:input_type -> emotion_analytics.v1.UserBehaviorRequest
+	12, // 21: emotion_analytics.v1.AnalyticsService.MentalHealthAssessment:input_type -> emotion_analytics.v1.MentalHealthAssessmentRequest
+	14, // 22: emotion_analytics.v1.AnalyticsService.MentalHealthHistory:input_type -> emotion_analytics.v1.MentalHealthHistoryRequest
+	16, // 23: emotion_analytics.v1.AnalyticsService.MentalHealthTrigger:input_type -> emotion_analytics.v1.MentalHealthTriggerRequest
+	18, // 24: emotion_analytics.v1.AnalyticsService.MentalHealthTrend:input_type -> emotion_analytics.v1.MentalHealthTrendRequest
+	5,  // 25: emotion_analytics.v1.AnalyticsService.ReportsDaily:output_type -> emotion_analytics.v1.ReportsDailyResponse
+	8,  // 26: emotion_analytics.v1.AnalyticsService.ReportsTrend:output_type -> emotion_analytics.v1.ReportsTrendResponse
+	9,  // 27: emotion_analytics.v1.AnalyticsService.UserBehaviorDayNight:output_type -> emotion_analytics.v1.UserBehaviorDayNightResponse
+	10, // 28: emotion_analytics.v1.AnalyticsService.UserBehaviorDepth:output_type -> emotion_analytics.v1.UserBehaviorDepthResponse
+	11, // 29: emotion_analytics.v1.AnalyticsService.UserBehaviorFrequency:output_type -> emotion_analytics.v1.UserBehaviorFrequencyResponse
+	13, // 30: emotion_analytics.v1.AnalyticsService.MentalHealthAssessment:output_type -> emotion_analytics.v1.MentalHealthAssessmentResponse
+	15, // 31: emotion_analytics.v1.AnalyticsService.MentalHealthHistory:output_type -> emotion_analytics.v1.MentalHealthHistoryResponse
+	17, // 32: emotion_analytics.v1.AnalyticsService.MentalHealthTrigger:output_type -> emotion_analytics.v1.MentalHealthTriggerResponse
+	19, // 33: emotion_analytics.v1.AnalyticsService.MentalHealthTrend:output_type -> emotion_analytics.v1.MentalHealthTrendResponse
+	25, // [25:34] is the sub-list for method output_type
+	16, // [16:25] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_metric_proto_init() }
@@ -1320,7 +1388,7 @@ func file_metric_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_metric_proto_rawDesc), len(file_metric_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

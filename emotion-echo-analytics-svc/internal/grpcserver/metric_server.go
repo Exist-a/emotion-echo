@@ -117,12 +117,20 @@ func (s *analyticsServer) ReportsDaily(ctx context.Context, req *emotionanalytic
 	for _, c := range r.EmotionCounts {
 		totalEmotions += c
 	}
+	// Stage 82 PR-3b：意图分布映射（确定性顺序便于测试断言）
+	intentDist := make([]*emotionanalytics.IntentCount, 0, len(r.IntentCounts))
+	for _, intent := range []string{"emotional_support", "study_help", "tech_help", "career_help", "lifestyle", "other"} {
+		if cnt, ok := r.IntentCounts[intent]; ok {
+			intentDist = append(intentDist, &emotionanalytics.IntentCount{Intent: intent, Count: int32(cnt)})
+		}
+	}
 	return &emotionanalytics.ReportsDailyResponse{
 		Summary:            fmt.Sprintf("情绪分布 %d 类，消息 %d 条", len(r.EmotionCounts), r.MessageCount),
 		EmotionDistribution: toProtoEmotionDistribution(r.EmotionCounts, totalEmotions),
 		EmotionTrend:       nil,
 		MessageCount:      int32(r.MessageCount),
 		ConversationCount: int32(r.ConversationCount),
+		IntentDistribution: intentDist,
 		Date:              req.Date,
 	}, nil
 }

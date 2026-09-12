@@ -38,6 +38,8 @@ type DailyReport struct {
 	AssessmentCount     int64            `json:"assessmentCount"`
 	AvgSentiment        float64          `json:"avgSentiment"`
 	AvgConfidence       float64          `json:"avgConfidence"`
+	// Stage 82 PR-3b：6 类消息意图分布
+	IntentCounts map[string]int64 `json:"intentCounts,omitempty"`
 }
 
 // TrendPoint 对应 analytics-svc repository.TrendPoint

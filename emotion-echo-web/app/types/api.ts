@@ -303,6 +303,14 @@ export interface EmotionDistribution {
 }
 
 /**
+ * 消息意图计数（Stage 82 PR-3b；6 类，intentDistribution 仅含计数>0 的类）
+ */
+export interface IntentCount {
+  intent: string
+  count: number
+}
+
+/**
  * 日报数据
  *
  * fix/chart-contract-alignment：删 wordCount（产品决策：只要会话/消息次数）。
@@ -313,6 +321,8 @@ export interface DailyReport {
   emotionDistribution: EmotionDistribution[]
   conversationCount: number
   messageCount: number
+  /** Stage 82 PR-3b：6 类消息意图分布（可选——旧报表无此字段） */
+  intentDistribution?: IntentCount[]
 }
 
 /**

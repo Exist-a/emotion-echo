@@ -67,12 +67,17 @@ func (c *analyticsGRPCClient) DailyReport(ctx context.Context, userID int64, dat
 	for _, d := range resp.EmotionDistribution {
 		emotions[d.Emotion] = int64(d.Count)
 	}
+	intents := make(map[string]int64, len(resp.IntentDistribution))
+	for _, d := range resp.IntentDistribution {
+		intents[d.Intent] = int64(d.Count)
+	}
 	return &DailyReport{
 		UserID:            userID,
 		Date:              date,
 		EmotionCounts:     emotions,
 		MessageCount:      int64(resp.MessageCount),
 		ConversationCount: int64(resp.ConversationCount),
+		IntentCounts:      intents, // Stage 82 PR-3b
 	}, nil
 }
 

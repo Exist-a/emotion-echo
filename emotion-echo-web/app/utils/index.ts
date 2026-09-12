@@ -8,6 +8,7 @@ export { deepClone, debounce, throttle, generateId, sleep, isEmpty } from './fun
 
 // 情绪标签工具
 export { EMOTION_LABEL_MAP, getEmotionLabel } from './emotion'
+export { INTENT_LABEL_MAP, getIntentLabel } from './intent'
 export type { EmotionLabel } from './emotion'
 
 // 文件和剪贴板工具

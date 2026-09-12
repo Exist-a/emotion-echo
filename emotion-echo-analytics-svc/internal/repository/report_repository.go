@@ -60,6 +60,9 @@ type DailyReport struct {
 	// Stage 34: 按模态细分（text/face/voice），前端 ECharts 可自动多 series。
 	// 老字段 EmotionCounts 保留（向后兼容 = text 模态合并）。
 	EmotionDistributionByModality *ModalityEmotionDistribution `json:"emotionDistributionByModality,omitempty"`
+	// Stage 82 PR-3b：6 类消息意图分布（intent='' 历史行不计入）。
+	// 数据源 msg_summary_v.intent（chat.messages.intent 经视图暴露）。
+	IntentCounts map[string]int64 `json:"intentCounts,omitempty"`
 }
 
 // TrendPoint 趋势上一个数据点
@@ -215,6 +218,24 @@ GROUP BY 1`
 		emotionCounts[c.Emotion] = c.Cnt
 	}
 
+	// Stage 82 PR-3b：意图分布（msg_summary_v.intent；'' = 未分类不计入）
+	const qIntents = `
+SELECT intent, COUNT(*)::bigint AS cnt
+FROM emotion_echo_chat.msg_summary_v
+WHERE user_id = $1 AND send_time::date = $2::date AND intent <> ''
+GROUP BY 1`
+	var intents []struct {
+		Intent string
+		Cnt    int64
+	}
+	if err := r.db.WithContext(ctx).Raw(qIntents, userID, date.Format("2006-01-02")).Scan(&intents).Error; err != nil {
+		return nil, err
+	}
+	intentCounts := make(map[string]int64, len(intents))
+	for _, c := range intents {
+		intentCounts[c.Intent] = c.Cnt
+	}
+
 	return &DailyReport{
 		UserID:            userID,
 		Date:              date.Format("2006-01-02"),
@@ -224,6 +245,7 @@ GROUP BY 1`
 		AssessmentCount:   row.AssessmentCount,
 		AvgSentiment:      row.AvgSentiment,
 		AvgConfidence:     row.AvgConfidence,
+		IntentCounts:      intentCounts,
 	}, nil
 }
 

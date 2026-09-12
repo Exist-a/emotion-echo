@@ -32,7 +32,7 @@ import type { ChartItem } from '~/types/charts/common'
 import type { DailyReport } from '~/types/api'
 import { get } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
-import { getEmotionLabel } from '~/utils'
+import { getEmotionLabel, getIntentLabel } from '~/utils'
 
 const date = ref(formatDate(new Date()))
 const isLoading = ref(false)
@@ -53,6 +53,14 @@ const chartData = computed<ChartItem[]>(() => {
       chartType: 'pie',
       title: '情绪分布',
       data: reportData.value.emotionDistribution.map((item) => ({ ...item, name: getEmotionLabel(item.name) }))
+    })
+  }
+  // Stage 82 PR-3b：消息意图分布饼图（6 类；字段缺失/为空时隐藏——旧报表兼容）
+  if (reportData.value.intentDistribution?.length) {
+    items.push({
+      chartType: 'pie',
+      title: '消息意图分布',
+      data: reportData.value.intentDistribution.map((item) => ({ name: getIntentLabel(item.intent), value: item.count }))
     })
   }
   return items

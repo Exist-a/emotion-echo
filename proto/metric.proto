@@ -109,6 +109,14 @@ message ReportsDailyResponse {
   int32 message_count = 4;
   int32 conversation_count = 5;
   int64 date = 6;                     // echo back
+  // Stage 82 PR-3b：6 类消息意图分布（intent='' 的历史行不计入）
+  repeated IntentCount intent_distribution = 7;
+}
+
+// IntentCount 单类意图计数（PR-3b）
+message IntentCount {
+  string intent = 1;   // emotional_support/study_help/tech_help/career_help/lifestyle/other
+  int32 count = 2;
 }
 
 // ReportsTrendRequest 趋势请求
