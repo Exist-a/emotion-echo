@@ -326,6 +326,10 @@ services:
       # gRPC auth (Stage 17)：生产必开 required + 强 key
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
       INTERNAL_API_KEY_REQUIRED: ${INTERNAL_API_KEY_REQUIRED:-0}
+      # Stage 80 PR-1: 真实 LLM 对话上游（OpenAI 兼容；无 key 时 ChatCompletion 走 mock 降级）
+      LLM_API_KEY:  ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
+      LLM_MODEL:    ${LLM_MODEL:-deepseek-chat}
       # mTLS (Stage 18)
       TLS_ENABLED: "1"
       TLS_CA_CERT: /app/etc/tls/ca.crt

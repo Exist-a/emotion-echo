@@ -51,9 +51,10 @@ class FakeClient:
         self.chat = uti_mock.MagicMock()
         self._deltas = deltas
         self._error = error
-        self.completions = FakeCompletions(deltas)
+        # 注意必须挂在 chat 上（实现访问 client.chat.completions）
+        self.chat.completions = FakeCompletions(deltas)
         if error:
-            self.completions.create = uti_mock.MagicMock(side_effect=error)
+            self.chat.completions.create = uti_mock.MagicMock(side_effect=error)
 
 
 class TestResolveBackendConfig:
@@ -121,4 +122,4 @@ class TestUpstreamStreaming:
         ]
         fake = FakeClient(["ok"])
         list(iter_chat_chunks(msgs, client=fake))
-        assert fake.completions.kwargs["messages"] == msgs
+        assert fake.chat.completions.kwargs["messages"] == msgs

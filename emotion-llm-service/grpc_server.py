@@ -30,6 +30,8 @@ import emotion_llm_pb2
 import emotion_llm_pb2_grpc
 
 from main import analyze as http_analyze
+from chat_completion import ChatChunk as ChatChunkData
+from chat_completion import iter_chat_chunks
 
 from logging_setup import setup_logging
 from metrics_setup import GRPC_REQUESTS_TOTAL
@@ -238,6 +240,43 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return emotion_llm_pb2.AnalyzeResponse()
+
+    def ChatCompletion(self, request, context):
+        """Stage 80 · 流式对话（llm-chat-real-pipeline PR-1）
+
+        无 key / 上游失败由 chat_completion 整条降级 mock（fallback_reason 标注），
+        保证 CI / 离线 demo 可跑；本方法只做 pb 转换与指标。
+        """
+        try:
+            messages = [{"role": m.role, "content": m.content} for m in request.messages]
+            if not messages:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("messages must not be empty")
+                return
+            logger.info(
+                f"ChatCompletion request: messages={len(messages)} model={request.model or 'default'}"
+            )
+            for chunk in iter_chat_chunks(
+                messages,
+                model=request.model,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                user_id=request.user_id,
+            ):
+                status = "err" if chunk.fallback_reason and "upstream_error" in chunk.fallback_reason else "ok"
+                GRPC_REQUESTS_TOTAL.labels(method="ChatCompletion", status=status).inc()
+                yield emotion_llm_pb2.ChatChunk(
+                    delta_content=chunk.delta_content,
+                    done=chunk.done,
+                    model=chunk.model,
+                    fallback_reason=chunk.fallback_reason,
+                )
+        except Exception as e:
+            logger.error(f"ChatCompletion error: {e}", exc_info=True)
+            GRPC_REQUESTS_TOTAL.labels(method="ChatCompletion", status="err").inc()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return
 
     def AnalyzeBatch(self, request, context):
         """Server-streaming 批量分析（Stage 16）。

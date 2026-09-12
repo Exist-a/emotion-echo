@@ -6,3 +6,5 @@ grpcio-health-checking>=1.60.0
 prometheus_client>=0.20.0   # Stage 20-P0-2: /metrics
 # Stage 31 PR-10: Nacos 注册中心 + 配置中心
 nacos-sdk-python>=3.1.0
+# Stage 80 PR-1: OpenAI 兼容 chat completion 客户端（DeepSeek 等端点；延迟 import，未装时走 mock 降级）
+openai>=1.40.0
