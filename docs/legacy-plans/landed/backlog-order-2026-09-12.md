@@ -1,8 +1,11 @@
 ---
-status: in-progress
-priority: high
+status: landed
+landed: 2026-09-12
 owner: User
 created: 2026-09-12
+landed-stages:
+  - stage-72-chat-rpc-nacos-fixture-2026-09-12.md（项 1 chat RPC / 项 3 Nacos / 项 4 Helm 对齐）
+  - stage-73-kafka-protobuf-migration-2026-09-12.md（项 2 Kafka §1.5 + dev 栈 e2e）
 related-adrs:
   - adr-2026-09-decision-4-closure.md §八（后续 sprint backlog）
   - adr-2026-09-doc-drift-registry.md（决策 18）

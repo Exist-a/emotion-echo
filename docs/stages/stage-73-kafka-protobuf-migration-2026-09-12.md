@@ -2,7 +2,7 @@
 
 > 日期：2026-09-12
 > 来源：Stage 72 收口后验证器指示：实施 kafka-reliability-gaps.md §1.5 批次 + 拉起 dev 栈补跑 §契约 smoke 与 PATCH/pin 端到端
-> 计划：[docs/plans/backlog-order-2026-09-12.md](../plans/backlog-order-2026-09-12.md) 项 2
+> 计划：[docs/legacy-plans/landed/backlog-order-2026-09-12.md](../legacy-plans/landed/backlog-order-2026-09-12.md) 项 2
 
 ## 一、§1.5 Protobuf 迁移本体
 

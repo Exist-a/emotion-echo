@@ -2,7 +2,7 @@
 
 > 日期：2026-09-12
 > 来源：会话目标"按推荐顺序将 4 项 backlog 加入计划，然后调查并修复"
-> 计划：[docs/plans/backlog-order-2026-09-12.md](../plans/backlog-order-2026-09-12.md)
+> 计划：[docs/legacy-plans/landed/backlog-order-2026-09-12.md](../legacy-plans/landed/backlog-order-2026-09-12.md)
 
 ## 一、本轮落地汇总
 
@@ -62,7 +62,7 @@ SDK SelectInstances 读 serviceInfoHolder 本地缓存（push 刷新），服务
 
 ## 四、项 2 / 项 4 调查结论
 
-见 [backlog-order-2026-09-12.md](../plans/backlog-order-2026-09-12.md) §项2（Kafka P2 纠偏后残余）/ §项4（Helm 偏差清单表格）。
+见 [backlog-order-2026-09-12.md](../legacy-plans/landed/backlog-order-2026-09-12.md) §项2（Kafka P2 纠偏后残余）/ §项4（Helm 偏差清单表格）。
 
 ## 五、调研依据
 
