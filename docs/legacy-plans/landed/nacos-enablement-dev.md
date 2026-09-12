@@ -1,9 +1,17 @@
 ---
-status: planned
-priority: high
-owner: TBD
-target-stage: Stage 39（候选）
+status: landed
+landed: 2026-09-12
+owner: User
 created: 2026-09-04
+landed-stages:
+  - stage-39-nacos-enablement.md（PR-0~PR-5 初版落地，2026-09-04）
+  - stage-72-chat-rpc-nacos-fixture-2026-09-12.md（PR-1 验收：fixture 修复 + 30s 存活实测）
+  - stage-75-nacos-pr2-grpc-discovery-2026-09-12.md（PR-2 gRPC 路径：BFF 5 处拨号 Nacos 优先）
+  - stage-76-nacos-pr3-e2e-acceptance-2026-09-12.md（PR-3 dev e2e 验收：契约测试 23/23 + 摘除/恢复 + §契约 7）
+residuals:
+  - SDK v2.3.5 ListenConfig 偶发不回调（PR-4 dev 真推送受限，stage-39 §七.1）
+  - Subscribe 动态感知暂缓（stage-75 §二：boot 期解析 + env 兜底）
+  - llm-service Python 端未实现 Nacos 注册
 ---
 
 # Plan — Nacos dev 模式启用（从"半启用"到"全链路"）
