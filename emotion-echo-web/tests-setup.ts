@@ -9,3 +9,9 @@ import { ref, computed, watch, watchEffect, reactive } from 'vue'
 ;(globalThis as any).watch = watch
 ;(globalThis as any).watchEffect = watchEffect
 ;(globalThis as any).reactive = reactive
+
+// Stage 79: pinia store 测试需要 defineStore（同为 Nuxt auto-import 注入）。
+import { defineStore as __piniaDefineStore, createPinia as __piniaCreatePinia, setActivePinia as __piniaSetActivePinia } from 'pinia'
+;(globalThis as any).defineStore = __piniaDefineStore
+;(globalThis as any).createPinia = __piniaCreatePinia
+;(globalThis as any).setActivePinia = __piniaSetActivePinia
