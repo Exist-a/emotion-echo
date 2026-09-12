@@ -484,11 +484,11 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH"]'
 # 用裸 plugins（仅保留 limit-count 全局限流 + cors，不挂 jwt-auth）。
 # Stage 38-A 修正：APISIX cors 插件的 allow_origins/allow_methods/allow_headers
 # 期望**字符串**（逗号分隔），不是 JSON 数组。原 heredoc 用数组导致 PUT 校验失败。
+# Stage 74: allow_credential=true 时 APISIX schema 禁止其它字段用 "*"，
+# allow_headers 必须显式列出（400: you can not set '*' for other option）
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
   "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "local"},
-  # Stage 74: allow_credential=true 时 APISIX schema 禁止其它字段用 "*"，
-# allow_headers 必须显式列出（400: you can not set '*' for other option）
   "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-User-Id"}
 }
 EOF
