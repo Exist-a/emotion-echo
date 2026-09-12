@@ -20,10 +20,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/../deploy"
 
-# 6 业务 svc + llm-service（AI profile fer/sensevoice/xtts 是可选 + image 私有，跳过）
+# 6 业务 svc + llm-service + web 前端（AI profile fer/sensevoice/xtts 是可选 + image 私有，跳过）
 ALL_SVCS=(emotion-echo-user-svc emotion-echo-chat-svc emotion-echo-analytics-svc \
           emotion-echo-assessment-svc emotion-echo-ai-svc emotion-echo-web-bff \
-          emotion-llm-service)
+          emotion-llm-service emotion-echo-web)
 
 # 用户参数：指定要 build 的 svc
 if [ $# -gt 0 ]; then
@@ -33,7 +33,8 @@ else
 fi
 
 # 默认要预拉的基础镜像（避免 build 时拉到一半被 docker.io 401）
-BASE_IMAGES="${BASE_IMAGES:-alpine:3.19 golang:1.26-alpine python:3.12-slim}"
+# Stage 74: 补 node:20-alpine（web 前端 Dockerfile builder+runtime 基础镜像）
+BASE_IMAGES="${BASE_IMAGES:-alpine:3.19 golang:1.26-alpine python:3.12-slim node:20-alpine}"
 
 # 预拉配置：每个 base image 重试 N 次
 MAX_RETRY="${MAX_RETRY:-3}"
