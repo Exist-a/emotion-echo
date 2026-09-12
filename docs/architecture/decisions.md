@@ -479,6 +479,23 @@
 >
 > **未做项**（本决策不覆盖，留待下次 sprint）：chat-svc PinConversation / StreamMessages gRPC 实现（决策 4 ADR §八 backlog）。
 
+### 决策 23：Helm chart 残余处置 = **冻结（学习资产不追加投入）**（2026-09-12）
+
+> ✅ 2026-09-12 生效（Stage 74，owner sign-off）。上游依据：决策 3（K8s 备好不部署，2026-09-07 收口）。
+>
+> **触发**：backlog-order-2026-09-12 项 4 "Helm chart ↔ compose dev 全面对齐" 的 Stage 72 机械对齐后仍登记 5 项残余；Stage 74 计划时对照决策 3 复核——残余投入的对象是一个"不部署的学习资产"，收益不成立。
+>
+> **冻结清单**（K8s 不启用期内不处置，与 compose 演进保持已知偏差）：
+> 1. NACOS_ADDR 硬编码 `nacos.ee-app.svc.cluster.local`（依赖 `--namespace ee-app` 安装约定，换 ns 即断）
+> 2. web 子 chart apiBaseUrl 直连 web-bff（绕过 APISIX，违背决策 11；且无 apisix-seed chart，路由不会就位）
+> 3. xtts / sensevoice 子 chart 镜像源与 compose 基线不一致（`emotion-echo/xtts` vs `ai4all/coqui`；sensevoice 缺 ACR 前缀）
+> 4. 缺 MinIO / db-migrate / apisix-seed 三个 chart 等价物（compose 的 一次性容器在 K8s 侧无对应）
+> 5. values-prod.yaml 停更于 Stage 28-F（镜像 tag / NACOS_* / KAFKA_* / gRPC 端口均落后 Stage 72 对齐基线）
+>
+> **纠偏（随本决策执行）**：Chart.yaml / values.yaml 中"APISIX 已退役"过期注释已改为指向决策 11（Stage 32 网关回归）；values-prod.yaml 头部加停更声明。
+>
+> **重启条件**：多机迁移正式启动时，按上述清单逆序重建（先 values-prod 与 namespace 约定，再补三个一次性 Job chart，最后接 APISIX 入口），以当时 compose 基线为唯一事实源。
+
 > **🔧 2026-09-10 Stage 62 PR-2 微调**：下方 `## 🏗 当前架构全景` 已对齐决策 11/12
 > 关系说明（APISIX = 唯一业务入口；BFF = 聚合层 / APISIX upstream）。
 > 早期决策 18 #24 登记时基于"作者推断"误以为全景图含 '唯一前端入口' 措辞——实测全景图本身合规。
@@ -729,6 +746,7 @@ Stage 33 P0 修复+BFF净化 ░░░░░░░░░░░░░░░░░
 | 2026-09-03 | 演进路线 | 无明确分阶段 → **Stage 31/32/33 串行**（决策 13） | 骨架先胶水后；每 Stage 含 TDD + 收口文档 + 独立 PR |
 | 2026-09-05 | 顶层目录命名 | 大小写混用 + `Emotion-Echo-LLM` 名不符实 → **统一小写 kebab**（`emotion-echo-web` / `emotion-echo-models`） | 消除前端/BFF/LLM 辨识混乱、对齐容器与文档（决策 19） |
 | 2026-09-07 | 部署形态 | K8s 未来部署 → **维持单机多实例，K8s 不启用**（决策 3 收口） | 单机场景 k8s 收益≈0 且加重运维；Helm/kind 保留为学习资产「备好不部署」 |
+| 2026-09-12 | Helm chart 残余 5 项 | open backlog → **冻结**（学习资产不追加投入） | 决策 3 已定 K8s 不部署；对不部署的资产追加投入收益不成立（决策 23，Stage 74） |
 
 ---
 

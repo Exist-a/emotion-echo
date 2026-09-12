@@ -95,6 +95,7 @@ RED（grpcserver + BFF handler 测试先行，断言真实行为而非 Unimpleme
 - gRPC 端口暴露：user 8887 / chat 8892（service.yaml 补端口）+ analytics 8885 / assessment 8886（**新建 service.yaml**，原缺失）；BFF 注入 5 个 *_SVC_GRPC_ADDR
 - 错值顺修：web-bff 删写死 BFF_JWT_SECRET（Stage 32 PR-20 后不需要）；fer repository → ACR fer-tflite；web-bff configmap analytics 端口 8904→8893
 - **残余**（不在本批范围）：NACOS_ADDR 假定 nacos 在 ee-app（nacos subchart 未 hardcode namespace，取决于 release 安装 ns）；web apiBaseUrl 仍指 BFF（改走 APISIX 需确认 apisix subchart 安装 ns）；xtts 镜像源差异；MinIO/db-migrate/apisix-seed 的 chart 等价物缺失；values-prod 未同步
+- **❄️ 2026-09-12 Stage 74 处置**：上列残余已按 **决策 23** 冻结（决策 3 K8s 备好不部署 → 学习资产不追加投入）。过期注释已纠偏、values-prod 已加停更声明。重启条件 = 多机迁移启动。不要再把本清单当 open backlog 捡起
 
 **Stage 72 调查结论（2026-09-12）**：chart 自 Stage 32 后未跟 compose 演进，23 个 subchart 零处 NACOS_*，业务 svc tag 全停 v0.1.0（compose 已 v0.1.2~v0.1.11）。其余偏差清单：
 

@@ -27,7 +27,8 @@ redis:
   enabled: true
 kafka:
   enabled: true
-# Stage 30: APISIX + etcd 已退役（Stage 31 重新引入仅在 Stage 32 治理层）
+# Stage 30: etcd 已退役（决策 10，静态 DNS 替代；Stage 31 重新引入仅在 Stage 32 治理层）。
+# 注意：APISIX 未退役——Stage 32 PR-13 网关层回归（见下方 apisix 块，决策 11）
 etcd:
   enabled: true
 # Stage 32 PR-13: APISIX 网关层回归（独立网关层，与 web-bff 解耦）
@@ -59,8 +60,10 @@ llm-service:
 web:
   enabled: true
 
-# Stage 30: APISIX 网关已退役（BFF 替代网关职责），apisix-routes/apisix-ingress 子 chart 已移除。
-# 历史背景见 docs/stage-29-D-tls-all-routes.md 与 docs/stage-30-web-bff.md。
+# Stage 32 PR-13 纠偏（原注"APISIX 网关已退役"过期）：APISIX 网关层已回归
+# （决策 11），apisix 子 chart 见 charts/apisix；apisix-routes/apisix-ingress
+# 子 chart 确已移除。历史背景见 docs/stage-29-D-tls-all-routes.md。
+# 本 chart 整体处于 决策 23 冻结期（学习资产不追加投入）。
 
 # AI profile — heavy models (XTTS ~3GB). Off by default in dev to keep
 # kind happy. Flip fer/sensevoice/xtts to true when you want full pipeline.

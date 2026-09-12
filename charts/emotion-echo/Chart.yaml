@@ -10,7 +10,8 @@ description: |
     - AI profile:       fer, sensevoice, xtts (toggleable via values)
     - Frontend:         web
     - Observability:    prometheus (Stage 28-A), grafana, loki, alertmanager
-    - Stage 30: BFF 替代了原 APISIX 网关职责，apisix-routes 子 chart 已移除
+    # Stage 32 PR-13 纠偏（原注"APISIX 已退役"过期）：APISIX 网关层已回归，
+    # 见决策 11；本 chart 整体处于 决策 23 冻结期（学习资产不追加投入）
 
 type: application
 version: 0.1.0

@@ -2,6 +2,12 @@
 #  values-prod.yaml — production overlay (Stage 28-F)
 #  Reference profile for a real K8s cluster (EKS / GKE / 自建).
 #  Local dev: use values-dev.yaml instead.
+#
+#  ⚠️ 冻结声明（决策 23，2026-09-12）：本文件停更于 Stage 28-F。
+#  决策 3 已定 K8s「备好不部署」，chart 为学习资产，本文件不再跟随
+#  compose 演进同步（镜像 tag / NACOS_* / KAFKA_* / gRPC 端口均落后于
+#  Stage 72 对齐基线）。多机迁移启动时以当时 compose 基线为唯一事实源
+#  重建本文件，不要在此基础上增量修补。
 # =====================================================
 
 imagePullPolicy: Always   # 镜像必须从 registry 拉，不要用本地缓存
