@@ -94,6 +94,27 @@ else
 fi
 
 echo
+echo "--- 4) Stage 74: web 前端纳入 build 列表 + node 基础镜像预拉 ---"
+# stage-73 §五：web 前端容器未起的次生问题——脚本默认不 build web、
+# 预拉列表不含 node:20-alpine，Docker Hub 限流时 build web 第一步即失败
+
+if grep -qE 'ALL_SVCS=.*emotion-echo-web' "$SCRIPT"; then
+  echo "  ✓ ALL_SVCS 默认包含 emotion-echo-web"
+  pass=$((pass + 1))
+else
+  echo "  ✗ ALL_SVCS 默认缺 emotion-echo-web（stage-73 §五 open 项）"
+  fail=$((fail + 1))
+fi
+
+if grep -qE 'BASE_IMAGES=.*node:20-alpine' "$SCRIPT"; then
+  echo "  ✓ 默认 BASE_IMAGES 包含 node:20-alpine"
+  pass=$((pass + 1))
+else
+  echo "  ✗ 默认 BASE_IMAGES 缺 node:20-alpine（web Dockerfile 基础镜像）"
+  fail=$((fail + 1))
+fi
+
+echo
 echo "=== Result: $pass passed, $fail failed ==="
 if [ $fail -gt 0 ]; then
   exit 1
