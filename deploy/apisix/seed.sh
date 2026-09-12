@@ -487,7 +487,9 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH"]'
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
   "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "local"},
-  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "*"}
+  # Stage 74: allow_credential=true 时 APISIX schema 禁止其它字段用 "*"，
+# allow_headers 必须显式列出（400: you can not set '*' for other option）
+  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-User-Id"}
 }
 EOF
 )
