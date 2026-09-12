@@ -105,6 +105,9 @@ message Message {
   string content = 5;
   int32 tokens_used = 6;
   int64 created_at = 7;
+  // Stage 79：响应视图补 content_type——此前只在 SendMessageRequest 有，
+  // 响应链（toProtoMessage/fromProtoMessage/toMessageItemVM）整体丢失该字段
+  string content_type = 8;
 }
 
 // ListMessagesRequest 列消息请求

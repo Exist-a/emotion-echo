@@ -223,6 +223,7 @@ func fromProtoMessage(m *emotionchat.Message) *MessageView {
 		UserID:         m.UserId,
 		Role:           m.Role,
 		Content:        m.Content,
+		ContentType:    m.ContentType, // Stage 79：响应透传（proto content_type=8）
 		TokensUsed:     int(m.TokensUsed),
 		CreatedAt:      m.CreatedAt,
 	}

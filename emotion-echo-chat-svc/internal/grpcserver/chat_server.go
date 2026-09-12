@@ -64,6 +64,7 @@ func toProtoMessage(m types.MessageView) *emotionchat.Message {
 		UserId:         m.UserId,
 		Role:           m.Role,
 		Content:        m.Content,
+		ContentType:    m.ContentType, // Stage 79：响应视图回带（proto content_type=8）
 		TokensUsed:     int32(m.TokensUsed),
 		CreatedAt:      m.CreatedAt,
 	}

@@ -5,6 +5,7 @@
 package handler
 
 import (
+	"cmp"
 	"fmt"
 	"time"
 
@@ -77,8 +78,10 @@ func toMessageItemVM(m *downstream.MessageView) MessageItemVM {
 		ID:             fmt.Sprintf("%d", m.ID),
 		ConversationID: fmt.Sprintf("%d", m.ConversationID),
 		Sender:         sender,
-		Content:        m.Content,
-		ContentType:    "text",
+		Content: m.Content,
+		// Stage 79：透传下游 contentType（此前硬编码 "text"，文件消息无法正确渲染）；
+		// 空值兜底 text 兼容旧消息
+		ContentType: cmp.Or(m.ContentType, "text"),
 		SendTime:       m.CreatedAt,
 		CreatedAt:      m.CreatedAt,
 	}

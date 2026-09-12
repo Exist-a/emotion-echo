@@ -303,8 +303,11 @@ type Message struct {
 	Content        string                 `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
 	TokensUsed     int32                  `protobuf:"varint,6,opt,name=tokens_used,json=tokensUsed,proto3" json:"tokens_used,omitempty"`
 	CreatedAt      int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Stage 79：响应视图补 content_type——此前只在 SendMessageRequest 有，
+	// 响应链（toProtoMessage/fromProtoMessage/toMessageItemVM）整体丢失该字段
+	ContentType   string `protobuf:"bytes,8,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Message) Reset() {
@@ -384,6 +387,13 @@ func (x *Message) GetCreatedAt() int64 {
 		return x.CreatedAt
 	}
 	return 0
+}
+
+func (x *Message) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
 }
 
 // ListMessagesRequest 列消息请求
@@ -1267,7 +1277,7 @@ const file_chat_proto_rawDesc = "" +
 	"\rclient_msg_id\x18\x05 \x01(\tR\vclientMsgId\x12!\n" +
 	"\fcontent_type\x18\x06 \x01(\tR\vcontentType\x12\x1f\n" +
 	"\vemotion_tag\x18\a \x01(\tR\n" +
-	"emotionTag\"\xc9\x01\n" +
+	"emotionTag\"\xec\x01\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
 	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\x12\x17\n" +
@@ -1277,7 +1287,8 @@ const file_chat_proto_rawDesc = "" +
 	"\vtokens_used\x18\x06 \x01(\x05R\n" +
 	"tokensUsed\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\a \x01(\x03R\tcreatedAt\"l\n" +
+	"created_at\x18\a \x01(\x03R\tcreatedAt\x12!\n" +
+	"\fcontent_type\x18\b \x01(\tR\vcontentType\"l\n" +
 	"\x13ListMessagesRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +

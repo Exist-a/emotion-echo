@@ -52,8 +52,10 @@ type MessageView struct {
 	UserID         int64  `json:"userId"`
 	Role           string `json:"role"`
 	Content        string `json:"content"`
-	TokensUsed     int    `json:"tokensUsed"`
-	CreatedAt      int64  `json:"createdAt"`
+	// Stage 79：响应视图补 contentType（proto Message content_type=8）
+	ContentType string `json:"contentType"`
+	TokensUsed  int    `json:"tokensUsed"`
+	CreatedAt   int64  `json:"createdAt"`
 }
 
 // CreateConversationReq 对应 chat-svc types.CreateConversationReq
