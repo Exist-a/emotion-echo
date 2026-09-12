@@ -28,11 +28,20 @@ type EmotionDistributionItem struct {
 
 // FrontendDailyReport 前端 DailyReport 类型契约
 type FrontendDailyReport struct {
-	Date                string                   `json:"date"`
-	Summary             string                   `json:"summary"`
+	Date                string                    `json:"date"`
+	Summary             string                    `json:"summary"`
 	EmotionDistribution []EmotionDistributionItem `json:"emotionDistribution"`
-	ConversationCount   int64                    `json:"conversationCount"`
-	MessageCount        int64                    `json:"messageCount"`
+	ConversationCount   int64                     `json:"conversationCount"`
+	MessageCount        int64                     `json:"messageCount"`
+	// Stage 82 PR-3b：6 类消息意图分布（intentCount{intent,count}）；
+	// omitempty = 旧报表/无数据时不输出，前端按字段缺失隐藏饼图
+	IntentDistribution []IntentCountItem `json:"intentDistribution,omitempty"`
+}
+
+// IntentCountItem 前端意图分布数组元素
+type IntentCountItem struct {
+	Intent string `json:"intent"`
+	Count  int64  `json:"count"`
 }
 
 // FrontendEmotionTrendSeries 前端线图 series 元素
@@ -59,12 +68,20 @@ func toFrontendDailyReport(r *downstream.DailyReport) *FrontendDailyReport {
 	if r == nil {
 		return &FrontendDailyReport{Summary: "今日还没有数据。"}
 	}
+	// Stage 82 PR-3b：意图分布透传（确定性顺序）
+	intents := make([]IntentCountItem, 0, len(r.IntentCounts))
+	for _, intent := range []string{"emotional_support", "study_help", "tech_help", "career_help", "lifestyle", "other"} {
+		if cnt, ok := r.IntentCounts[intent]; ok {
+			intents = append(intents, IntentCountItem{Intent: intent, Count: cnt})
+		}
+	}
 	return &FrontendDailyReport{
 		Date:                r.Date,
 		Summary:             BuildDaily(r),
 		EmotionDistribution: emotionCountsToSlice(r.EmotionCounts),
 		ConversationCount:   r.ConversationCount,
 		MessageCount:        r.MessageCount,
+		IntentDistribution:  intents,
 	}
 }
 
