@@ -2,7 +2,7 @@
 
 > 日期：2026-09-12
 > 来源：Stage 74 收口报告 §五 open 表 → 用户指示"按推荐推进 + 修复 roadmap 文档漂移"
-> 计划：[docs/plans/nacos-enablement-dev.md](../plans/nacos-enablement-dev.md) §四 PR-2
+> 计划：[docs/legacy-plans/landed/nacos-enablement-dev.md](../legacy-plans/landed/nacos-enablement-dev.md) §四 PR-2
 
 ## 〇、调研修正（计划文档过期部分）
 
@@ -61,10 +61,14 @@ compose 注入的 `*_SVC_GRPC_ADDR` 从主路径**降为 Nacos 故障兜底**—
 
 ## 四、本批未做（open）
 
+> ⚠️ **2026-09-12 排期核查更正**（详见 stage-76）：本表前两行的 PR-3/PR-4/PR-5 实现已在
+> **Stage 39（2026-09-04）** 落地（seed.sh nacos-discovery / HotReloadLimiter `7e7d59a` /
+> fail-fast `86e570e`），当时误列为 open；真实残余是 PR-3 的 dev e2e 验收，已在 Stage 76 补跑。
+
 | 项 | 说明 |
 |---|---|
-| Nacos PR-3 | APISIX upstream 切 nacos-discovery（计划 §四 PR-3，独立批次） |
-| Nacos PR-4/PR-5 | HotReload 真启用 / BootNacos fail-fast（计划 §四） |
+| ~~Nacos PR-3~~ | ~~APISIX upstream 切 nacos-discovery~~ → 实现已在 Stage 39；e2e 验收 Stage 76 完成 |
+| ~~Nacos PR-4/PR-5~~ | ~~HotReload 真启用 / BootNacos fail-fast~~ → 均已在 Stage 39 落地 |
 | Subscribe 动态感知 | 当前 boot 期解析一次；实例变更（扩缩容）需重启 BFF 或后续接 Subscribe |
 | Kafka P3 / consumer 进程级指标 | Stage 74 §五 残余，不变 |
 

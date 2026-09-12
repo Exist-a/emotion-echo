@@ -938,18 +938,19 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 - Stage 73：Kafka §1.5 Protobuf 迁移（P2）
 - Stage 74：技术债收尾（Grafana lag 面板 / dev web 容器首通 / Helm 残余冻结 = 决策 23）
 - Stage 75：Nacos PR-2（BFF 5 处 gRPC 拨号 Nacos 优先，env 降为兜底）
+- Stage 76：Nacos PR-3 dev e2e 验收
+- Stage 72：chat Pin/Update RPC 全链路 + Nacos PR-1
+- Stage 73：Kafka §1.5 Protobuf 迁移（P2）
+- Stage 74：技术债收尾（Grafana lag 面板 / dev web 容器首通 / Helm 残余冻结 = 决策 23）
+- Stage 75：Nacos PR-2（BFF 5 处 gRPC 拨号 Nacos 优先，env 降为兜底）
+- Stage 76：Nacos PR-3 dev e2e 验收（契约测试 23/23 + 摘除/恢复实测 + §契约 7 6/6）+
+  排期核查更正（PR-3/4/5 实现 Stage 39 已落地）+ nacos-enablement-dev.md 迁 landed
 
-**当前 open 清单**（2026-09-12 排期核查后修订，修正 stage-75 §四 的文档漂移）：
-> ⚠️ stage-75 §四 曾把 "Nacos PR-3（APISIX upstream 切 nacos-discovery）" 列为 open，
-> **经代码核实该 PR-3/PR-4/PR-5 已在 Stage 39（2026-09-04）全部落地**：
-> seed.sh 6 upstream 已切 nacos-discovery（put_nacos_upstream + test_seed_nacos.sh）、
-> chart configmap 已有 discovery.nacos 段、web-bff HotReloadLimiter（commit 7e7d59a）、
-> fail-fast（commit 86e570e）。真实残余只是**验收未跑**，不是未实现。
+**当前 open 清单**（2026-09-12 Stage 76 收口后刷新）：
 
-1. **Stage 76 · Nacos PR-3/PR-5 dev e2e 验收 + 文档销账**（半天）：
-   dev 栈起 APISIX+Nacos → 跑 `seed.sh` + `test_seed_nacos.sh`（stage-39 §七.2）→
-   验证不健康实例摘除 / §契约 7 smoke；顺手把 nacos-enablement-dev.md 迁入
-   legacy-plans/landed/ 并更正 stage-75 §四 open 表
+1. **Postgres nil repo 无自愈**（Stage 76 新登记，优先级最高）：启动期 DB 连接失败静默降级
+   + 瞬时 DNS 故障 → svc 长期带 nil repo 跑、Login RPC panic（stage-76 §二.3）。
+   候选：启动重试退避 / DB 纳入 fail-fast required 依赖
 2. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）
 3. Kafka §1.4 可选增强：consumer 进程级指标（消费速率/处理耗时埋点，小）
 4. 业务功能计划排期（docs/plans/，均未排期）：ai-response-structured /
