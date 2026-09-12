@@ -224,9 +224,20 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 > | **Stage 61~63** | Sprint C/D/E/F1/F2 + gRPC 化决策 4 收口 + Sprint G BFF 全局 gRPC error 映射 | ✅ landed | [stage-61~63](/docs/stages/) + [stage-63-grpc-closure-report.md](/docs/stages/stage-63-grpc-closure-report.md) |
 > | **Stage 64** | bug 类未做事项集中收口（chat-svc 中间件分层 + 决策 18 #32 关闭 + 杂项） | ✅ landed | [stage-64-bug-cleanup-2026-09-11.md](/docs/stages/stage-64-bug-cleanup-2026-09-11.md) |
 > | **决策 20** | 环境配置分层策略（dev 本地 vs prod 远端）owner sign-off（PR-ENV-1~4 已落地）| ✅ Accepted 2026-09-11 | [adr-2026-09-env-profile-strategy.md](/docs/architecture/adr/adr-2026-09-env-profile-strategy.md) |
+> | **Stage 65~71** | dev dashboard 空数据根因/seed + bug 集中收口 + DevEventPublisher + ai-svc metadata + Kafka P1 retry/DLQ + BFF 路由三方对齐 | ✅ landed | [stage-65~71](/docs/stages/) |
+> | **Stage 72** | chat Pin/Update RPC 全链路 + Nacos PR-1 | ✅ landed | [stage-72-chat-rpc-nacos-fixture-2026-09-12.md](/docs/stages/stage-72-chat-rpc-nacos-fixture-2026-09-12.md) |
+> | **Stage 73** | Kafka §1.5 Protobuf 迁移（eventrow 共享包 + JSON 双写窗口） | ✅ landed | [stage-73-kafka-protobuf-migration-2026-09-12.md](/docs/stages/stage-73-kafka-protobuf-migration-2026-09-12.md) |
+> | **Stage 74** | 技术债收尾（Grafana lag 面板 / dev web 容器首通 / Helm 残余冻结 = 决策 23） | ✅ landed | [stage-74-tech-debt-closure-2026-09-12.md](/docs/stages/stage-74-tech-debt-closure-2026-09-12.md) |
+> | **Stage 75~76** | Nacos PR-2（BFF gRPC 拨号 Nacos 优先）+ PR-3 dev e2e 验收（契约测试 23/23 + §契约 7 6/6） | ✅ landed | [stage-75](/docs/stages/stage-75-nacos-pr2-grpc-discovery-2026-09-12.md) + [stage-76](/docs/stages/stage-76-nacos-pr3-e2e-acceptance-2026-09-12.md) |
+> | **Stage 77** | Postgres 启动重试 + 5 svc gRPC nil-repo → Unavailable 守卫 | ✅ landed | [stage-77-postgres-retry-nilrepo-guard-2026-09-12.md](/docs/stages/stage-77-postgres-retry-nilrepo-guard-2026-09-12.md) |
+> | **Stage 78** | 业务计划排期核查（销账/失效盘点 + 新增 llm-chat-real-pipeline 计划） | ✅ landed | [stage-78-business-plans-audit-2026-09-12.md](/docs/stages/stage-78-business-plans-audit-2026-09-12.md) |
+> | **Stage 79** | file-upload 收口（前端装配层接线 + contentType 响应链 5 处丢失全链修复） | ✅ landed | [stage-79-post-file-upload-wiring-2026-09-12.md](/docs/stages/stage-79-post-file-upload-wiring-2026-09-12.md) |
+> | **Stage 80~83** | llm-chat-real-pipeline PR-1/2/3a/3b（llm-service 流式 ChatCompletion RPC → BFF gRPC 上游 → 规则式 6 类意图分类/风格化回复 → intent 落库 + 日报意图饼图全链） | ✅ landed | [stage-80~83](/docs/stages/) |
+> | **Stage 84** | chat-svc events 包 3 个存量测试适配 Stage 73 Protobuf 契约（`go test ./...` 合并门槛恢复） | ✅ landed | [stage-84-kafka-publisher-test-contract-2026-09-12.md](/docs/stages/stage-84-kafka-publisher-test-contract-2026-09-12.md) |
+> | **Stage 85** | 趋势报告意图维度（weekly/monthly/annual 饼图全链；真实容器 e2e + DB 交叉实证） | ✅ landed | [stage-85-trend-report-intent-2026-09-12.md](/docs/stages/stage-85-trend-report-intent-2026-09-12.md) |
 >
 > **失真类型**（决策 18 §三）：类型 2 "陈旧结论" — README 顶部徽章与 Status 段长期未跟随 git log 更新。
-> **当前最新 commit**：`17af536 docs(adr,stage): PR-5 决策 4 ADR §八 + 决策 18 #32 关闭追踪`
+> **当前最新 commit**：`40f9f73 feat(analytics,bff,web): Stage 85 — 趋势报告意图维度全链落地`（2026-09-12 更新本表至 Stage 85）
 
 ---
 
