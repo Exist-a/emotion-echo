@@ -9,7 +9,11 @@
 apiVersion: 1
 
 datasources:
+  # Stage 74: 显式 uid —— kafka-consumer-lag.json / emotion-echo-overview.json
+  # 的 panel datasource 硬编码引用 uid="prometheus"，不写则 grafana 生成随机 uid
+  # 导致面板 datasource not found（smoke_observability.py 断言 10b）
   - name: Prometheus
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
@@ -21,6 +25,7 @@ datasources:
 
   # PR-OBS-5: Loki datasource (logs layer)
   - name: Loki
+    uid: loki
     type: loki
     access: proxy
     url: http://loki:3100
