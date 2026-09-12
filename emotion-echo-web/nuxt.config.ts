@@ -77,24 +77,6 @@ export default defineNuxtConfig({
       ]
     },
     build: {
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            // 将 echarts 相关模块合并为单个 chunk，减少请求数
-            if (id.includes('echarts')) {
-              return 'echarts';
-            }
-            // 将 element-plus 合并为单个 chunk
-            if (id.includes('element-plus')) {
-              return 'element-plus';
-            }
-            // 将 node_modules 中的其他大型依赖合并为 vendor chunk
-            if (id.includes('node_modules')) {
-              return 'vendor';
-            }
-          },
-        },
-      },
     },
   },
   echarts: {
