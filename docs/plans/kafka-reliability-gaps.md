@@ -72,8 +72,8 @@ sarama 内部能处理 transient 错误（单次 fetch 失败、rebalance），�
 - Prometheus scrape 已配：deploy/prometheus/prometheus.yml:62-66（job kafka-exporter）
 - 告警规则已配：deploy/prometheus/rules/kafka-lag.yml（KafkaConsumerGroupLagHigh，lag>10000 for 5m，warning）
 
-**残余缺口**：
-- Grafana consumer lag 面板未确认存在（deploy/grafana/ provisioning 待查）
+**残余缺口（2026-09-12 Stage 74 收口更新）**：
+- ~~Grafana consumer lag 面板未确认存在~~ **已收口**：面板 JSON 早已落地（uid `kafka-consumer-lag`，3 panel），Stage 74 实质缺口是 datasource.yaml 未写显式 `uid: prometheus`（面板硬编码引用 → 随机 uid → datasource not found）+ Grafana 与 web 前端同抢宿主 :3000。两者已修（Grafana 迁宿主 :13000），smoke_observability.py 断言 10b 守护 + 浏览器渲染确认（stage-74 §A）
 - consumer 进程级指标（消费速率/处理耗时）未埋——shared/pkg/metrics 无 kafka 计数器（可选，lag 告警已覆盖主场景）
 
 ### 1.5 🟡 P2 — 无 Schema Registry，事件 schema 人肉镜像

@@ -67,13 +67,15 @@ Protobuf 链路证明：smoke 新事件由新 chat-svc（Protobuf+header）发�
 
 ## 五、本批未做（open）
 
+> 2026-09-12 Stage 74 已对下表逐项销账，销账结果见各行括号与 [stage-74-tech-debt-closure-2026-09-12.md](stage-74-tech-debt-closure-2026-09-12.md)。
+
 | 项 | 说明 |
 |---|---|
-| §1.4 Grafana lag 面板确认 | kafka-exporter+scrape+告警已在，面板 provisioning 待查 |
-| Kafka P3（outbox relay 重试上限已有 dead 机制；告警走 alertmanager） | 见计划 §3.6 |
-| Helm 残余（nacos 安装 ns / web apiBaseUrl / xtts / MinIO chart） | backlog-order §项4 残余 |
-| dev 栈 web 前端容器 | node:20-alpine 拉取受限未起；不影响契约链路 |
-| eventrow 命名段留档 vs 实际删除 | 已改为留档说明，历史 normalize 数据迁移 SQL 见 migrations/002 |
+| §1.4 Grafana lag 面板确认 | kafka-exporter+scrape+告警已在，面板 provisioning 待查（✅ Stage 74 收口：实质缺口 = datasource uid 缺失 + Grafana/web 宿主 :3000 冲突，均已修，smoke 13/13 + 渲染确认） |
+| Kafka P3（outbox relay 重试上限已有 dead 机制；告警走 alertmanager） | 见计划 §3.6（⏳ 仍 open） |
+| Helm 残余（nacos 安装 ns / web apiBaseUrl / xtts / MinIO chart） | backlog-order §项4 残余（❄️ Stage 74 决策 23 冻结：K8s 备好不部署，学习资产不追加投入） |
+| dev 栈 web 前端容器 | node:20-alpine 拉取受限未起；不影响契约链路（✅ Stage 74 收口：镜像源 retag + 连修 5 bug——npm lockfile musl 缺依赖 / radarChart 大小写 / 18 处 apiRoutes 相对路径 / manualChunks 生产构建空白 / 网关 CORS allow_credential 字段名，登录 e2e 已通） |
+| eventrow 命名段留档 vs 实际删除 | 已改为留档说明，历史 normalize 数据迁移 SQL 见 migrations/002（已闭） |
 
 ---
 
