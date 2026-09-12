@@ -1,6 +1,13 @@
 ---
-status: planned
-superseded-by: 旧单体路径全部失效；意图分类链路在当前架构不存在；阻塞于真实 LLM 链路（见 llm-chat-real-pipeline.md）
+status: landed
+landed: 2026-09-12
+landed-stages:
+  - stage-82-intent-classification-styled-replies-2026-09-12.md（PR-3a：规则式 6 类分类 + ClassifyIntent RPC + with_intent 风格指令注入）
+  - stage-83-intent-report-pipeline-2026-09-12.md（PR-3b：intent 落库 → msg_summary_v → analytics 意图分布 → 日报饼图）
+residuals:
+  - weekly/monthly/annual 趋势报告暂无意图维度（日报已有）
+  - LLM 式分类增强（规则式为兜底）待真实 key 可用
+  - 歧义消息（多意图并列）归 other 为防误路由设计，可 LLM 消歧
 original-path: .trae/documents/消息分类扩展规划.md
 original-date: 2026-07-XX
 migrated-at: 2026-09-03

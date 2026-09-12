@@ -1,6 +1,12 @@
 ---
-status: planned
-superseded-by: 阶段 1（前端 Markdown 渲染）已实现未销账；阶段 2 阻塞于真实 LLM 链路（见 llm-chat-real-pipeline.md）
+status: landed
+landed: 2026-09-12
+landed-stages:
+  - Stage 58 时代（阶段 1：前端 Markdown 渲染，marked + vue-dompurify-html）
+  - stage-82-intent-classification-styled-replies-2026-09-12.md（阶段 2：per-intent 风格指令注入 ChatCompletion system prompt）
+residuals:
+  - 阶段 3（流式渲染优化，P2 可选）未做
+  - 风格效果依赖真实 LLM key（dev 无 key 时走 mock 看不到差异）
 original-path: .trae/documents/ai-response-structured.md
 original-date: 2026-07-XX
 migrated-at: 2026-09-03

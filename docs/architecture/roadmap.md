@@ -958,14 +958,19 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   优先级链 gRPC→HTTP直连→mock；经 APISIX 端到端 SSE 实测 + llm-service trace 双实证）
 - Stage 82：llm-chat-real-pipeline PR-3a（规则式 6 类意图分类 + ClassifyIntent RPC +
   with_intent 首帧回带 + 按意图注入风格指令；真实容器 e2e 4 类全对）
+- Stage 83：llm-chat-real-pipeline PR-3b（intent 落库 → msg_summary_v → analytics 意图分布
+  → 日报饼图全链；e2e 揪出 VM 丢字段/视图升级/GRANT 三问题并修复；
+  intent-classification 与 ai-response-structured 两计划迁 landed）
 
-**当前 open 清单**（2026-09-12 Stage 82 收口后刷新）：
+**当前 open 清单**（2026-09-12 Stage 83 收口后刷新）：
 
-1. **PR-3b 报表链路**：intent 落库（chat-svc 消息列 or 事件透传）→ analytics
-   intentDistribution（替代旧单体 EmotionalSupportRate）→ BFF → 前端饼图；
-   涉及 §契约 5（新枚举列一致性）——stage-82 §三
-2. llm-service Python 端 Nacos 注册（BFF 目前 env 直连；注册后切 Nacos 优先模式）+
-   prod 独立 bff-client 证书
+**llm-chat-real-pipeline 全线落地**（PR-1/2/3a/3b，Stage 80-83）。业务功能主线剩余：
+
+1. file-upload"发给 Kimi 带文件引用"（依赖多模态文件理解，挂 llm 后续增强）
+2. 趋势报告（weekly/monthly/annual）意图维度 + LLM 式分类增强（PR-3 残余，见 stage-83 §五）
+3. chat-svc events 包 3 个存量测试失败（Stage 73 起即有，待修——Data nil 分支）
+4. llm-service Python 端 Nacos 注册 + prod 独立 bff-client 证书
+5. Kafka P3（outbox relay dead 告警）/ §1.4 consumer 进程级指标
 3. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
    §1.4 可选：consumer 进程级指标
 4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
