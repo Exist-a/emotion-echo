@@ -6,7 +6,7 @@ import { ref, onUnmounted } from 'vue'
 import type { FaceEmotionResult } from '~/types/api'
 import { useApi } from './useApi'
 import { useUserStore } from '~/stores/user'
-import { API_ROUTES } from '../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 
 export interface UseFaceEmotionOptions {
   captureInterval?: number // 捕获间隔（毫秒），默认2000ms

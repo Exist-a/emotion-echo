@@ -61,7 +61,7 @@ import barChart from "~/components/charts/barChart.vue";
 import type { ChartItem } from "~/types/charts/common";
 import { ref, onMounted } from "vue";
 import { get, post } from "~/composables/useApi";
-import { API_ROUTES } from "../../lib/apiRoutes";
+import { API_ROUTES } from "~/lib/apiRoutes";
 import { useNotify } from "~/composables/useNotify";
 
 const { success: notifySuccess, error: notifyError } = useNotify();

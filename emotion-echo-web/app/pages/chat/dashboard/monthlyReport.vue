@@ -32,7 +32,7 @@ import ChartCard from '~/components/report/chartsCard.vue'
 import type { ChartItem } from '~/types/charts/common'
 import type { EmotionTrend } from '~/types/api'
 import { get } from '~/composables/useApi'
-import { API_ROUTES } from '../../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 import { getEmotionLabel } from '~/utils'
 
 const month = ref(formatMonth(new Date()))

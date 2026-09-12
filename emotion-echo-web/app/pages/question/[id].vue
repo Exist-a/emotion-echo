@@ -90,7 +90,7 @@
 <script setup lang="ts">
 import type { SurveyDetail, SurveyResult } from '~/types/api'
 import { get, post } from '~/composables/useApi'
-import { API_ROUTES } from '../../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 
 definePageMeta({ layout: 'default' })
 

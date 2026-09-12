@@ -8,7 +8,7 @@
  *       与 BFF 实际 OpenAI 输出格式不匹配，导致用户看到永远"streaming"。
  *       PR-17 改为 OpenAI 兼容解析。
  */
-import { API_ROUTES } from '../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 import { getApiBaseUrl } from '../lib/apiBaseUrl'
 export interface AIStreamParams {
   message: string

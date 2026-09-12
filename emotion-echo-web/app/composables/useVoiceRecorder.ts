@@ -3,7 +3,7 @@
  * 管理 MediaRecorder 生命周期和状态
  */
 import { post } from '~/composables/useApi'
-import { API_ROUTES } from '../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 import { useMessageStore } from '~/stores/message'
 import { useConversationStore } from '~/stores/conversation'
 

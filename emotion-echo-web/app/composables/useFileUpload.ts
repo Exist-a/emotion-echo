@@ -1,6 +1,6 @@
 import type { UploadResult, FileType, UploadProgress, FileUploadConfig } from '~/types/api'
 import { post } from '~/composables/useApi'
-import { API_ROUTES } from '../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 
 /**
  * 文件上传配置

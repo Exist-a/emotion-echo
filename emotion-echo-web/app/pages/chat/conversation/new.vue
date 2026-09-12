@@ -53,7 +53,7 @@ import { useUserStore } from '~/stores/user'
 import { useMessageStore } from '~/stores/message'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { post } from '~/composables/useApi'
-import { API_ROUTES } from '../../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 import { notify } from '~/composables/useNotify'
 
 const userStore = useUserStore()

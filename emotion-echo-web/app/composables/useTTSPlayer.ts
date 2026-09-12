@@ -1,7 +1,7 @@
 import { ref, onUnmounted } from "vue";
 import { stripMarkdown, extractReadableText } from "~/utils/stripMarkdown";
 import PcmPlayer from "pcm-player";
-import { API_ROUTES } from "../lib/apiRoutes";
+import { API_ROUTES } from "~/lib/apiRoutes";
 import { getApiBaseUrl } from "../lib/apiBaseUrl";
 
 export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral';

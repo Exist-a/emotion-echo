@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import type { returnMsgType } from "~/types/commonType";
 import type { ConversationItem, CreateConversationParams } from "~/types/api";
 import { get, post, put, patch, del } from "~/composables/useApi";
-import { API_ROUTES } from "../lib/apiRoutes";
+import { API_ROUTES } from "~/lib/apiRoutes";
 
 export const useConversationStore = defineStore("conversation", () => {
   // ==================== State ====================

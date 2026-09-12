@@ -3,7 +3,7 @@ import type { ApiResponse } from "~/types/api";
 import { ApiError } from "~/types/api";
 import { useUserStore } from "~/stores/user";
 import { navigateTo } from "#app";
-import { API_ROUTES } from "../lib/apiRoutes";
+import { API_ROUTES } from "~/lib/apiRoutes";
 import { getApiBaseUrl } from "../lib/apiBaseUrl";
 
 export function useApi() {

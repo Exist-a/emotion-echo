@@ -7,9 +7,12 @@ WORKDIR /app
 COPY package*.json ./
 # Stage 36-D Bug 9: 默认 npmjs 镜像（npmmirror.com 容器内不可达,改为可配置 BuildArg）
 # npm ci 在 node 20 上对最新 npm 包 EBADENGINE 报错,加 engine-strict=false 跳过
+# Stage 74: 仓库 lockfile 在 Windows 生成,缺 linux-x64-musl 平台 optional 原生依赖
+# （npm/cli#4828）,构建期删除 lockfile 重装——官方推荐 workaround
 ARG NPM_REGISTRY=https://registry.npmjs.org/
 RUN npm config set registry ${NPM_REGISTRY} \
     && npm config set engine-strict false \
+    && rm -f package-lock.json \
     && npm install --no-audit --no-fund --prefer-offline
 
 # 复制源代码

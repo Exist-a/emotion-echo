@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import type { SurveyItem, SurveyResult } from '~/types/api'
 import { get } from '~/composables/useApi'
-import { API_ROUTES } from '../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 import { useNotify } from '~/composables/useNotify'
 
 definePageMeta({ layout: 'default' })

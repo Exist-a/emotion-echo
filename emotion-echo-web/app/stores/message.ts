@@ -1,7 +1,7 @@
 import type { MessageWithStatus, SendMessageParams } from '~/types/api'
 import type { returnMsgType } from '~/types/commonType'
 import { get, post } from '~/composables/useApi'
-import { API_ROUTES } from '../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 import { useConversationStore } from './conversation'
 
 export type MessageStatus = 'sending' | 'sent' | 'failed' | 'streaming' | 'truncated'

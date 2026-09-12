@@ -8,7 +8,7 @@ import type {
   SendVerificationCodeParams
 } from '~/types/api'
 import { get, post, put, patch } from '~/composables/useApi'
-import { API_ROUTES } from '../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 
 export const useUserStore = defineStore('user', () => {
   // ==================== State ====================

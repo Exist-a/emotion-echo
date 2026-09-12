@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import { useForgetPwdState } from '~/composables/forgetPwdState'
 import { post } from '~/composables/useApi'
-import { API_ROUTES } from '../../lib/apiRoutes'
+import { API_ROUTES } from '~/lib/apiRoutes'
 
 definePageMeta({ middleware: 'forget-pwd' })
 const emits = defineEmits(['changeActive'])
