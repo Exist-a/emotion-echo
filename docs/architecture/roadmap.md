@@ -947,17 +947,19 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   排期核查更正（PR-3/4/5 实现 Stage 39 已落地）+ nacos-enablement-dev.md 迁 landed
 - Stage 77：Postgres nil repo 修复（shared dbconnect 启动重试 500ms×10 +
   5 svc gRPC nil-repo → Unavailable 守卫；RED→GREEN + dev 栈 e2e 全绿）
+- Stage 78：业务计划排期核查（ai-response-structured 阶段 1 已实现销账 /
+  intent-classification 旧路径失效 / file-upload 残余盘点；新增 llm-chat-real-pipeline 计划）
 
-**当前 open 清单**（2026-09-12 Stage 77 收口后刷新）：
+**当前 open 清单**（2026-09-12 Stage 78 收口后刷新）：
 
-1. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）
-2. Kafka §1.4 可选增强：consumer 进程级指标（消费速率/处理耗时埋点，小）
-3. 业务功能计划排期（docs/plans/，均未排期）：ai-response-structured /
-   intent-classification-6-types / file-upload-message-extension 等——治理项已基本清账，建议下轮转向
-4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x（ListenConfig 偶发不回调，stage-39 §七.1）/
-   Subscribe 动态感知（stage-75 §二评估：boot 期解析 + env 兜底下暂缓；Stage 77 滚动重启
-   再次实证实例变更需重启 BFF）/ llm-service Python 端注册
-5. DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）：若 dev 要求 DB 强制，
-   走 PR-5 `IsRequired("postgres")` 模式（nacos-enablement-dev.md §一.1）
+1. **file-upload-message-extension 收口**（可立即实施，不依赖 LLM；handleAttachment 接线
+   + contentType 类型扩展 + useFileUpload composable + chat-svc ContentType 枚举 §契约 5 核查）
+2. **llm-chat-real-pipeline PR-1/PR-2**（真实 LLM 对话链路：llm-service ChatCompletion RPC +
+   BFF 切 gRPC 上游，mock 保留兜底；详见 docs/plans/llm-chat-real-pipeline.md）
+3. intent-classification-6-types（重写版）→ ai-response-structured 阶段 2（被 2 解锁）
+4. Kafka P3：outbox relay dead 告警接 alertmanager（kafka-reliability-gaps.md §3.6，小）/
+   §1.4 可选：consumer 进程级指标
+5. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
+   llm-service Python 端注册；DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）（nacos-enablement-dev.md §一.1）
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。

@@ -1,11 +1,26 @@
 ---
 status: planned
-superseded-by: stage-26-N 已落实基础 2 类，6 类扩展在 backlog
+superseded-by: 旧单体路径全部失效；意图分类链路在当前架构不存在；阻塞于真实 LLM 链路（见 llm-chat-real-pipeline.md）
 original-path: .trae/documents/消息分类扩展规划.md
 original-date: 2026-07-XX
 migrated-at: 2026-09-03
 round: 2-C
 ---
+
+> **2026-09-12 Stage 78 排期核查注记**：本文所列文件在当前分布式代码库**全部不存在**
+> （`internal/workflow/text/nodes/intent.go` / `internal/repository/message_repo.go` /
+> `internal/service/report_service.go` 均为 2026-07 单体时代路径）。
+> 当前事实（grep 实证）：
+> - 意图分类**零命中**：ai-svc / analytics-svc / web-bff / web 均无 intent /
+>   emotional_support / EmotionalSupportRate 相关代码——旧单体该链路未迁移
+> - 现有"分类"是**情绪 9 分类**（happy/sad/...，`emotion-llm-service` 规则式情感词命中，
+>   非 LLM），落到 analytics `emotion_analysis.primary_emotion`
+> - AI 聊天回复是 BFF mock（`ai_stream_handler.go`），无 LLM prompt 可扩展
+>
+> **结论**：6 类意图的前置 = 真实 LLM 对话/分析链路（`llm-chat-real-pipeline.md`）。
+> 链路落地后本文需按新架构重写：分类挂 llm-service（gRPC 扩展 intent 字段）→
+> ai-svc 消费管道透传 → analytics 报表加 intentDistribution → BFF summary → 前端饼图。
+> 6 分类定义与前端结构（intentDistribution 数组）仍可复用。
 
 # 消息分类扩展规划（6类）
 

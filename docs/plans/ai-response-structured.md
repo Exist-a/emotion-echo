@@ -1,11 +1,21 @@
 ---
 status: planned
-superseded-by: 尚未实施；前端 marked 已装但分类渲染未做
+superseded-by: 阶段 1（前端 Markdown 渲染）已实现未销账；阶段 2 阻塞于真实 LLM 链路（见 llm-chat-real-pipeline.md）
 original-path: .trae/documents/ai-response-structured.md
 original-date: 2026-07-XX
 migrated-at: 2026-09-03
 round: 2-C
 ---
+
+> **2026-09-12 Stage 78 排期核查注记**：
+> - **阶段 1 已实现**：`emotion-echo-web/package.json` 已装 `marked@18` + `vue-dompurify-html@5`；
+>   `app/plugins/vueInject.ts` 已注册；`app/pages/chat/conversation/[id].vue:29` 已用
+>   `v-dompurify-html="getHtmlContent(item.content)"` 渲染（marked.parse，异常回退纯文本）。
+>   本文"阶段 1 未做"的前提过期。
+> - **阶段 2 无法按本文实施**：本文写的 `internal/pkg/llm/chain.go` 是旧单体路径，
+>   已不存在。当前 AI 聊天回复是 **BFF mock**（`web-bff/internal/handler/ai_stream_handler.go`
+>   头注释自证"当前为 mock 实现（无真实 LLM 对话）"），无 prompt 可改。
+>   阶段 2 与 6 类意图分类共同的前置 = 真实 LLM 对话链路，见 `llm-chat-real-pipeline.md`。
 
 # AI 回复结构化 & Markdown 支持 - 规划文档
 

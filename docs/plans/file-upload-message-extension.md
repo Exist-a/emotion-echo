@@ -1,11 +1,22 @@
 ---
 status: planned
-superseded-by: backlog；前端 ChatFile 组件未完整收口
+superseded-by: 后端 upload_handler + 前端 ChatFile.vue 均已存在；残余 = handleAttachment 接线 + store/composables 扩展（见 2026-09-12 注记）
 original-path: .trae/documents/文件上传与消息扩展功能实施计划.md
 original-date: 2026-07-XX
 migrated-at: 2026-09-03
 round: 2-C
 ---
+
+> **2026-09-12 Stage 78 排期核查注记**（当前架构残余盘点）：
+> - 已存在：BFF `internal/handler/upload_handler.go`（+测试）；前端 `app/components/ChatFile.vue`
+>   （image/video/file 三态渲染已写）；marked 渲染管线（ai-response-structured 阶段 1）
+> - 残余（本文"阶段二"仍未做的部分）：
+>   1. `app/types/api.ts` contentType 仍是 `'text' | 'audio' | 'img'`，缺 image/file/video
+>   2. `app/pages/chat/conversation/[id].vue:197` `handleAttachment` 仍是空实现
+>   3. `useFileUpload.ts` composable 未建；`useConversationSender.ts` / message store
+>      无文件消息发送路径
+>   4. 后端消息 ContentType 枚举（chat-svc）是否收 image/file/video 需 §契约 5 一致性核查
+> - 本计划可独立实施（不依赖 LLM 链路），排期优先级因此高于意图分类/结构化回复
 
 # 文件上传与消息扩展功能实施计划
 
