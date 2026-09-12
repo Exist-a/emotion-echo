@@ -176,6 +176,7 @@ func main() {
 
 	// 3.5 Stage 81 PR-2：llm-service ChatCompletion gRPC 上游（LLM_SVC_GRPC_ADDR 非空时启用）
 	var llmStreamer downstream.LLMChatStreamer
+	var intentClassifier downstream.LLMIntentClassifier
 	if c.LLM.GRPCAddr != "" {
 		llmGRPC, err := downstream.NewLLMGRPCClient(downstream.LLMGRPCOptions{
 			Addr:           c.LLM.GRPCAddr,
@@ -191,13 +192,14 @@ func main() {
 			log.Printf("[llm-grpc] client init failed (ai/stream will fall back): %v", err)
 		} else {
 			llmStreamer = llmGRPC
+			intentClassifier = llmGRPC
 			defer func() { _ = llmGRPC.Close() }()
 			log.Printf("[llm-grpc] ChatCompletion upstream enabled: %s", c.LLM.GRPCAddr)
 		}
 	}
 
 	// 4. 路由（handler 装配）
-	registerRoutes(r, svcCtx, &c, llmStreamer)
+	registerRoutes(r, svcCtx, &c, llmStreamer, intentClassifier)
 
 	log.Printf("Starting web-bff at %s:%d...", c.Host, c.Port)
 	go func() {
@@ -334,7 +336,7 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 // 路径契约（路由清单）：main_test.go 的 wantRoutes + wantRoutesWithEmotionQ 切片。
 // 改路由必须同步更新测试文件 + 在 PR 描述里说明（决策 18 §四.1 结论须附证据）。
 // 调试时临时增减路由也行——但合 PR 前 main_test.go 必须绿。
-func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer) {
+func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier) {
 	// health（聚合下游探测）— 免鉴权（GinAuthMiddleware 白名单已含 /health）
 	r.GET("/health", handler.NewHealthHandler([]handler.DownstreamTarget{
 		{Name: "user", BaseURL: c.UserService.BaseURL},
@@ -351,7 +353,7 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 
 	// 业务 handler（各自 Register）
 	handler.NewUserHandler(s.User).Register(r)
-	handler.NewChatHandler(s.Chat).Register(r)
+	handler.NewChatHandlerWithIntent(s.Chat, llmIntent).Register(r)
 	handler.NewSurveyHandler(s.Assessment).Register(r)
 	handler.NewAnalyticsHandler(s.Analytics).Register(r)
 	handler.NewMultimodalHandler(s.AI).Register(r)

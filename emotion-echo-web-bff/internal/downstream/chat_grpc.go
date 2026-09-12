@@ -70,6 +70,7 @@ func (c *chatGRPCClient) SendMessage(ctx context.Context, conversationID int64, 
 		ClientMsgId:   stringPtr(clientMsgID),
 		ContentType:   req.ContentType,
 		EmotionTag:    req.EmotionTag,
+		Intent:        req.Intent, // Stage 82 PR-3b
 	})
 	if err != nil {
 		return nil, wrapGRPCError(err, "chat send msg")
@@ -224,6 +225,7 @@ func fromProtoMessage(m *emotionchat.Message) *MessageView {
 		Role:           m.Role,
 		Content:        m.Content,
 		ContentType:    m.ContentType, // Stage 79：响应透传（proto content_type=8）
+		Intent:         m.Intent,      // Stage 82 PR-3b
 		TokensUsed:     int(m.TokensUsed),
 		CreatedAt:      m.CreatedAt,
 	}

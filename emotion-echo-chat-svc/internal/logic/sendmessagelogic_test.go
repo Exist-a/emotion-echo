@@ -685,3 +685,34 @@ func TestSendMessageLogic_ContentType_RoundTripsInResponse(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, "file", resp.Message.ContentType, "响应视图必须回带 contentType")
 }
+
+// Stage 82 PR-3b：intent 白名单校验（§契约 5）——合法值入库并回带，非法值落 ''。
+// 白名单三方一致：DDL 注释 / allowedIntents / emotion-llm intent.INTENTS。
+func TestSendMessageLogic_IntentWhitelist(t *testing.T) {
+	t.Parallel()
+
+	valid := []string{"emotional_support", "study_help", "tech_help",
+		"career_help", "lifestyle", "other"}
+	for _, intent := range valid {
+		svcCtx, repo, _ := newTestCtx(t)
+		require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{UserID: 100, Title: "t"}))
+		l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+		resp, err := l.SendMessage(&types.SendMessageReq{
+			Id: 1, Role: "user", Content: "x", ContentType: "text", Intent: intent,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, intent, resp.Message.Intent, "合法意图应入库并回带: %s", intent)
+	}
+
+	invalid := []string{"", "hacker--drop", "EMOTIONAL_SUPPORT", "unknown_intent"}
+	for _, intent := range invalid {
+		svcCtx, repo, _ := newTestCtx(t)
+		require.NoError(t, repo.CreateConversation(context.Background(), &model.Conversation{UserID: 100, Title: "t"}))
+		l := NewSendMessageLogic(ctxWithUserID(context.Background(), 100), svcCtx)
+		resp, err := l.SendMessage(&types.SendMessageReq{
+			Id: 1, Role: "user", Content: "x", ContentType: "text", Intent: intent,
+		})
+		require.NoError(t, err)
+		assert.Empty(t, resp.Message.Intent, "非法意图必须落 ''(未分类): %q", intent)
+	}
+}

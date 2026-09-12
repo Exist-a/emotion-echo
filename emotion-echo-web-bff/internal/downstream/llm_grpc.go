@@ -36,6 +36,11 @@ type LLMStreamRequest struct {
 }
 
 // LLMChatStreamer 对话流式上游接口（handler 依赖此接口，便于测试与后续替换）
+// LLMIntentClassifier 意图分类接口（LLMGRPCClient 实现；nil = 未装配）
+type LLMIntentClassifier interface {
+	ClassifyIntent(ctx context.Context, text string) (string, error)
+}
+
 type LLMChatStreamer interface {
 	// StreamChat 阻塞式拉取整条流；每个增量 delta 调一次 onDelta(delta, model)。
 	// ctx 取消（客户端断开）须中断上游流。返回 error = 传输层/上游 gRPC 状态错误
@@ -148,6 +153,19 @@ func (c *LLMGRPCClient) StreamChat(ctx context.Context, req LLMStreamRequest, on
 			return nil
 		}
 	}
+}
+
+// ClassifyIntent 意图分类（Stage 82 PR-3b）：规则式 6 类，llm-service 侧实现
+func (c *LLMGRPCClient) ClassifyIntent(ctx context.Context, text string) (string, error) {
+	callCtx := ctx
+	if c.apiKey != "" {
+		callCtx = metadata.AppendToOutgoingContext(callCtx, "x-internal-api-key", c.apiKey)
+	}
+	resp, err := c.client.ClassifyIntent(callCtx, &emotionllm.ClassifyIntentRequest{Text: text})
+	if err != nil {
+		return "", fmt.Errorf("llm classify intent rpc: %w", err)
+	}
+	return resp.GetIntent(), nil
 }
 
 // Close 释放连接

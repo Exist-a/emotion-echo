@@ -65,6 +65,7 @@ func toProtoMessage(m types.MessageView) *emotionchat.Message {
 		Role:           m.Role,
 		Content:        m.Content,
 		ContentType:    m.ContentType, // Stage 79：响应视图回带（proto content_type=8）
+		Intent:         m.Intent,      // Stage 82 PR-3b
 		TokensUsed:     int32(m.TokensUsed),
 		CreatedAt:      m.CreatedAt,
 	}
@@ -123,6 +124,7 @@ func (s *chatServer) SendMessage(ctx context.Context, req *emotionchat.SendMessa
 		Content:     req.GetContent(),
 		ClientMsgID: clientMsgID,
 		ContentType: req.GetContentType(),
+		Intent:      req.GetIntent(), // Stage 82 PR-3b
 		EmotionTag:  req.GetEmotionTag(),
 	})
 	if err != nil {

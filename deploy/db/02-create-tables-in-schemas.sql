@@ -81,6 +81,9 @@ CREATE TABLE IF NOT EXISTS emotion_echo_chat.messages (
     role VARCHAR(16) NOT NULL,
     content TEXT NOT NULL,
     content_type VARCHAR(16) DEFAULT 'text',
+    -- Stage 82 PR-3b：6 类消息意图；写入端白名单校验（sendmessagelogic.go allowedIntents），
+    -- 非法值落 ''；'' = 未分类（兼容历史行）。migration: 004_add_intent_to_messages.sql
+    intent VARCHAR(16) NOT NULL DEFAULT '',
     metadata JSONB DEFAULT '{}',
     tokens_used INT DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()

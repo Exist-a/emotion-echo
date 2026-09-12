@@ -25,11 +25,18 @@ import (
 // ChatHandler 处理 /api/v1/conversations/* 端点
 type ChatHandler struct {
 	chat downstream.ChatClient
+	// intentClassifier（Stage 82 PR-3b）：llm-service 意图分类；nil = 降级不标注
+	intentClassifier downstream.LLMIntentClassifier
 }
 
 // NewChatHandler 构造
 func NewChatHandler(chat downstream.ChatClient) *ChatHandler {
 	return &ChatHandler{chat: chat}
+}
+
+// NewChatHandlerWithIntent 构造带意图分类的 handler（Stage 82 PR-3b）
+func NewChatHandlerWithIntent(chat downstream.ChatClient, ic downstream.LLMIntentClassifier) *ChatHandler {
+	return &ChatHandler{chat: chat, intentClassifier: ic}
 }
 
 // Register 注册路由
@@ -145,6 +152,13 @@ func (h *ChatHandler) sendMessage(c *gin.Context) {
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
 		return
+	}
+	// Stage 82 PR-3b：发送前经 llm-service 标注意图（规则式 6 类；
+	// 失败/未装配 → intent 空 = 未分类，不阻断发送）
+	if h.intentClassifier != nil && req.Content != "" {
+		if intent, err := h.intentClassifier.ClassifyIntent(c.Request.Context(), req.Content); err == nil && intent != "" {
+			req.Intent = intent
+		}
 	}
 	msg, err := h.chat.SendMessage(session.WithRequestAuth(c), id, req)
 	if err != nil {

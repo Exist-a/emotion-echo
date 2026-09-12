@@ -32,6 +32,7 @@ type MessageItemVM struct {
 	Content        string  `json:"content"`
 	ContentType    string  `json:"contentType"`
 	EmotionTag     *string `json:"emotionTag,omitempty"`
+	Intent         string  `json:"intent,omitempty"` // Stage 82 PR-3b：6 类消息意图（空省略）
 	SendTime       int64   `json:"sendTime"`
 	CreatedAt      int64   `json:"createdAt"`
 }
@@ -82,6 +83,7 @@ func toMessageItemVM(m *downstream.MessageView) MessageItemVM {
 		// Stage 79：透传下游 contentType（此前硬编码 "text"，文件消息无法正确渲染）；
 		// 空值兜底 text 兼容旧消息
 		ContentType: cmp.Or(m.ContentType, "text"),
+		Intent:      m.Intent, // Stage 82 PR-3b
 		SendTime:       m.CreatedAt,
 		CreatedAt:      m.CreatedAt,
 	}

@@ -39,6 +39,8 @@ type Message struct {
 	Role           string    `gorm:"column:role;size:16"`
 	Content        string    `gorm:"column:content"`
 	ContentType    string    `gorm:"column:content_type;size:16;default:text"`
+	// Stage 82 PR-3b：6 类消息意图（§契约 5：allowedIntents 白名单校验，非法落 ''）
+	Intent         string    `gorm:"column:intent;size:16;default:''"`
 	TokensUsed     int       `gorm:"column:tokens_used;default:0"`
 	ClientMsgID    *string   `gorm:"column:client_msg_id;uniqueIndex:uq_messages_client_msg_id,where:client_msg_id IS NOT NULL"`
 	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`

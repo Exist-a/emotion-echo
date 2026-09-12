@@ -48,6 +48,17 @@ func NewSendMessageLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SendM
 var allowedRoles = map[string]bool{"user": true, "assistant": true, "system": true}
 
 // SendMessage 追加一条消息到指定会话
+// allowedIntents 意图白名单（§契约 5：与 deploy/db/02-create-tables-in-schemas.sql
+// messages.intent 注释、emotion-llm-service intent.INTENTS 三方一致）
+var allowedIntents = map[string]bool{
+	"emotional_support": true,
+	"study_help":        true,
+	"tech_help":         true,
+	"career_help":       true,
+	"lifestyle":         true,
+	"other":             true,
+}
+
 func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.SendMessageResp, err error) {
 	uid, ok := l.ctx.Value(sharedmw.CtxUserIDKey{}).(int64)
 	if !ok || uid <= 0 {
@@ -102,12 +113,18 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 	if contentType == "" {
 		contentType = "text"
 	}
+	// Stage 82 PR-3b：意图白名单校验（§契约 5）——非法值/空值落 ''（未分类）
+	intent := req.Intent
+	if !allowedIntents[intent] {
+		intent = ""
+	}
 	msg := &model.Message{
 		ConversationID: req.Id,
 		UserID:         uid,
 		Role:           role,
 		Content:        req.Content,
 		ContentType:    contentType,
+		Intent:         intent,
 		TokensUsed:     0,
 		ClientMsgID:    req.ClientMsgID,
 		CreatedAt:      now,
@@ -126,6 +143,7 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 			Role:           msg.Role,
 			Content:        msg.Content,
 			ContentType:    msg.ContentType, // Stage 79：响应回带（第 4 处缺口）
+			Intent:         msg.Intent,      // Stage 82 PR-3b：意图回带
 			TokensUsed:     msg.TokensUsed,
 			CreatedAt:      msg.CreatedAt.UnixMilli(),
 		},

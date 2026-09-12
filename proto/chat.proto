@@ -94,6 +94,9 @@ message SendMessageRequest {
   string client_msg_id = 5;     // 幂等 key（UUID；重复发送仅落库一次）
   string content_type = 6;      // "text" / "markdown" / ...
   string emotion_tag = 7;       // 客户端预标注情绪（可选）
+  // Stage 82 PR-3b：消息意图（6 类，BFF 发送前经 llm-service ClassifyIntent 标注；
+  // 空 = 未分类——llm-service 不可达时降级）
+  string intent = 8;
 }
 
 // Message 消息视图
@@ -108,6 +111,8 @@ message Message {
   // Stage 79：响应视图补 content_type——此前只在 SendMessageRequest 有，
   // 响应链（toProtoMessage/fromProtoMessage/toMessageItemVM）整体丢失该字段
   string content_type = 8;
+  // Stage 82 PR-3b：消息意图（6 类；'' = 未分类）
+  string intent = 9;
 }
 
 // ListMessagesRequest 列消息请求

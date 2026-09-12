@@ -20,6 +20,8 @@ SELECT
     user_id,
     role,
     content_type,
+    -- Stage 82 PR-3b：意图分布报表经此视图聚合（intent VARCHAR(16)，'' = 未分类）
+    intent,
     tokens_used,
     LENGTH(content) AS content_len,
     created_at AS send_time

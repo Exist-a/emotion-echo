@@ -210,8 +210,11 @@ type SendMessageRequest struct {
 	ClientMsgId    string                 `protobuf:"bytes,5,opt,name=client_msg_id,json=clientMsgId,proto3" json:"client_msg_id,omitempty"` // 幂等 key（UUID；重复发送仅落库一次）
 	ContentType    string                 `protobuf:"bytes,6,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`   // "text" / "markdown" / ...
 	EmotionTag     string                 `protobuf:"bytes,7,opt,name=emotion_tag,json=emotionTag,proto3" json:"emotion_tag,omitempty"`      // 客户端预标注情绪（可选）
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Stage 82 PR-3b：消息意图（6 类，BFF 发送前经 llm-service ClassifyIntent 标注；
+	// 空 = 未分类——llm-service 不可达时降级）
+	Intent        string `protobuf:"bytes,8,opt,name=intent,proto3" json:"intent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SendMessageRequest) Reset() {
@@ -293,6 +296,13 @@ func (x *SendMessageRequest) GetEmotionTag() string {
 	return ""
 }
 
+func (x *SendMessageRequest) GetIntent() string {
+	if x != nil {
+		return x.Intent
+	}
+	return ""
+}
+
 // Message 消息视图
 type Message struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -305,7 +315,9 @@ type Message struct {
 	CreatedAt      int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Stage 79：响应视图补 content_type——此前只在 SendMessageRequest 有，
 	// 响应链（toProtoMessage/fromProtoMessage/toMessageItemVM）整体丢失该字段
-	ContentType   string `protobuf:"bytes,8,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	ContentType string `protobuf:"bytes,8,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	// Stage 82 PR-3b：消息意图（6 类；” = 未分类）
+	Intent        string `protobuf:"bytes,9,opt,name=intent,proto3" json:"intent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -392,6 +404,13 @@ func (x *Message) GetCreatedAt() int64 {
 func (x *Message) GetContentType() string {
 	if x != nil {
 		return x.ContentType
+	}
+	return ""
+}
+
+func (x *Message) GetIntent() string {
+	if x != nil {
+		return x.Intent
 	}
 	return ""
 }
@@ -1268,7 +1287,7 @@ const file_chat_proto_rawDesc = "" +
 	"created_at\x18\x06 \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\a \x01(\x03R\tupdatedAt\x12\x1b\n" +
-	"\tis_pinned\x18\b \x01(\bR\bisPinned\"\xec\x01\n" +
+	"\tis_pinned\x18\b \x01(\bR\bisPinned\"\x84\x02\n" +
 	"\x12SendMessageRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x12\n" +
@@ -1277,7 +1296,8 @@ const file_chat_proto_rawDesc = "" +
 	"\rclient_msg_id\x18\x05 \x01(\tR\vclientMsgId\x12!\n" +
 	"\fcontent_type\x18\x06 \x01(\tR\vcontentType\x12\x1f\n" +
 	"\vemotion_tag\x18\a \x01(\tR\n" +
-	"emotionTag\"\xec\x01\n" +
+	"emotionTag\x12\x16\n" +
+	"\x06intent\x18\b \x01(\tR\x06intent\"\x84\x02\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
 	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\x12\x17\n" +
@@ -1288,7 +1308,8 @@ const file_chat_proto_rawDesc = "" +
 	"tokensUsed\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\a \x01(\x03R\tcreatedAt\x12!\n" +
-	"\fcontent_type\x18\b \x01(\tR\vcontentType\"l\n" +
+	"\fcontent_type\x18\b \x01(\tR\vcontentType\x12\x16\n" +
+	"\x06intent\x18\t \x01(\tR\x06intent\"l\n" +
 	"\x13ListMessagesRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +

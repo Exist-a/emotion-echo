@@ -46,6 +46,8 @@ type MessageView struct {
 	Content        string `json:"content"`
 	// Stage 79：响应视图补 contentType（proto Message 同步加 content_type=8）
 	ContentType string `json:"contentType"`
+	// Stage 82 PR-3b：消息意图（6 类；'' = 未分类）
+	Intent      string `json:"intent"`
 	TokensUsed  int    `json:"tokensUsed"`
 	CreatedAt   int64  `json:"createdAt"`
 }
@@ -57,6 +59,7 @@ type SendMessageReq struct {
 	ClientMsgID  *string `json:"client_msg_id,optional"`
 	ContentType  string  `json:"content_type,optional"`
 	EmotionTag   string  `json:"emotion_tag,optional"`
+	Intent       string  `json:"intent,optional"` // Stage 82 PR-3b：6 类消息意图
 }
 
 type SendMessageResp struct {

@@ -157,7 +157,7 @@ func TestRegisterRoutes_MainContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	s, cfg := stubServiceContext(t, false)
-	registerRoutes(r, s, cfg, nil)
+	registerRoutes(r, s, cfg, nil, nil)
 
 	// testify assert.Subset 用 reflect.DeepEqual 比对 RouteInfo 全字段（含 Handler/HandlerFunc）；
 	// got 的 Handler/HandlerFunc 是真实值（字符串 + 函数指针），want 是零值，会永远不等。
@@ -200,7 +200,7 @@ func TestMetricsEndpoint_WebBFF(t *testing.T) {
 	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
 	// 不手动注册 /metrics 与 /health — registerRoutes 已注册
 	// (main.go:252 r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler())))
-	registerRoutes(r, s, cfg, nil)
+	registerRoutes(r, s, cfg, nil, nil)
 
 	// 触发 1 次 registerRoutes 已注册的路由 (auth/login),让 counter 出现
 	// 用 POST /api/v1/auth/login (registerRoutes 注册的 catch-all auth 路由)
@@ -325,7 +325,7 @@ func TestRegisterRoutes_NoUnknownPathPrefix(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	s, cfg := stubServiceContext(t, false)
-	registerRoutes(r, s, cfg, nil)
+	registerRoutes(r, s, cfg, nil, nil)
 
 	got := r.Routes()
 
@@ -380,7 +380,7 @@ func TestBootstrap_WebBFF_AllMiddlewaresAttached(t *testing.T) {
 	// Tracer=nil 即可 (Stage 43 PR-OBS-2 已让 GinSkywalkingMiddleware 支持 nil)
 	r.Use(sharedmw.GinSkywalkingMiddleware(nil))
 	r.Use(sharedmw.GinAuthMiddleware())
-	registerRoutes(r, s, cfg, nil)
+	registerRoutes(r, s, cfg, nil, nil)
 
 	// 1. /metrics 端点 200 (GinMetricsMiddleware 跳过 /metrics 自循环,但 /metrics 端点仍注册)
 	wMetrics := httptest.NewRecorder()
@@ -421,7 +421,7 @@ func TestRegisterRoutes_WithEmotionQ(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	s, cfg := stubServiceContext(t, true) // withEmotionQ=true
-	registerRoutes(r, s, cfg, nil)
+	registerRoutes(r, s, cfg, nil, nil)
 
 	got := r.Routes()
 	for i := range got {
