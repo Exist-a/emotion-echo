@@ -1,5 +1,8 @@
 ---
-status: planned
+status: landed
+landed: 2026-09-12
+landed-stages:
+  - stage-74-tech-debt-closure-2026-09-12.md
 priority: high
 created: 2026-09-12
 owner: User
