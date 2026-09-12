@@ -21,6 +21,13 @@
             />
             <span v-else class="voice-no-url">语音消息</span>
           </div>
+          <!-- Stage 79: 文件消息（image/file/video）走 ChatFile 渲染（组件 Stage 58 已备，
+               此前未挂载——stage-78 核查残余） -->
+          <ChatFile
+            v-else-if="item.contentType === 'image' || item.contentType === 'video' || (item.contentType === 'file' && item.content)"
+            :content="item.content"
+            :content-type="item.contentType as 'image' | 'file' | 'video'"
+          />
           <div
             v-else-if="item.content"
             class="bubble"
@@ -47,7 +54,15 @@
           @keydown.enter.exact.prevent="handleSubmit"
         />
         <div class="composer-actions">
-          <button type="button" class="icon-btn ghost" aria-label="添加附件" @click="handleAttachment">
+          <input
+            ref="fileInputRef"
+            type="file"
+            class="visually-hidden-input"
+            aria-hidden="true"
+            tabindex="-1"
+            @change="onFilePicked"
+          />
+          <button type="button" class="icon-btn ghost" aria-label="添加附件" @click="handleAttachment" :disabled="fileUpload.isUploading.value">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 11.5l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />
             </svg>
@@ -106,6 +121,7 @@ import DigitalHuman from '~/components/digital-human/DigitalHuman.vue'
 import VoiceMessage from '~/components/voice/VoiceMessage.vue'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { useVoiceRecorder } from '~/composables/useVoiceRecorder'
+import { useFileUpload } from '~/composables/useFileUpload'
 import { useDigitalHumanStore } from '~/stores/digitalHuman'
 import { useUserStore } from '~/stores/user'
 import { marked } from 'marked'
@@ -194,8 +210,35 @@ const handleCancel = () => {
   conversationSender.stopTTS()
 }
 
+// ===== Stage 79: 附件上传装配（useFileUpload/ChatFile 此前已备但未接线） =====
+const fileUpload = useFileUpload()
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
 const handleAttachment = () => {
-  console.log('打开附件上传')
+  fileInputRef.value?.click()
+}
+
+const onFilePicked = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 允许重选同一文件
+  if (!file) return
+
+  try {
+    const result = await fileUpload.uploadFile(file)
+    // 文件消息：content = MinIO URL；不走 AI 流（文件引用分析依赖 llm-chat-real-pipeline）
+    const persist = await messageStore.sendMessage(
+      result.url,
+      undefined,
+      typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-f`,
+      result.type
+    )
+    if (!persist.isOk) {
+      window.alert(`文件消息发送失败：${persist.msg}`)
+    }
+  } catch (err: any) {
+    window.alert(`上传失败：${err?.message || '未知错误'}`)
+  }
 }
 
 const toggleRecording = async () => {
@@ -424,6 +467,14 @@ onUnmounted(() => {
 }
 
 .spacer { flex: 1; }
+
+.visually-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 
 .icon-btn {
   display: inline-flex;

@@ -120,6 +120,38 @@ export interface CreateConversationParams {
   title?: string
 }
 
+// ==================== 文件上传（Stage 58 PR-UP-2 引入，Stage 79 补导出） ====================
+// 注：useFileUpload.ts 自落地起就 import 这四个类型，但从未在本文导出——
+// vite 编译期类型擦除掩盖了缺失，typecheck 才暴露（stage-79 补齐）。
+
+export type FileType = 'image' | 'file' | 'video'
+
+export interface UploadResult {
+  url: string
+  kind: string
+  size: number
+  mime: string
+}
+
+export interface UploadProgress {
+  percent: number
+  loaded: number
+  total: number
+}
+
+export interface FileUploadConfig {
+  maxSize: number
+  allowedExtensions: string[]
+}
+
+/** ai-svc multimodal 表情识别结果（useFaceEmotion 引用，同批补导出） */
+export interface FaceEmotionResult {
+  emotion: string
+  confidence: number
+  faces?: number
+  timestamp?: number
+}
+
 // ==================== 消息模块 ====================
 
 /**
@@ -130,7 +162,9 @@ export interface MessageItem {
   conversationId: string
   sender: 'user' | 'ai'
   content: string
-  contentType: 'text' | 'audio' | 'img'
+  // Stage 79: 扩展 file-upload 三类（与 BFF /uploads/:kind、ChatFile.vue 对齐）；
+  // 'img' 为历史遗留值，保留只读兼容
+  contentType: 'text' | 'audio' | 'img' | 'image' | 'file' | 'video'
   emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
   sendTime: number
   createdAt: number
@@ -153,7 +187,8 @@ export interface MessageWithStatus extends MessageItem {
  */
 export interface SendMessageParams {
   content: string
-  contentType?: 'text' | 'audio' | 'img'
+  // Stage 79: 文件消息走 'image' | 'file' | 'video'（与 useFileUpload FileType 对齐）
+  contentType?: 'text' | 'audio' | 'img' | 'image' | 'file' | 'video'
   emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
   clientMsgId?: string
 }

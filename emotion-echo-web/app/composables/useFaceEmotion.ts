@@ -2,7 +2,7 @@
  * 面部情绪分析 Composable
  * 处理摄像头捕获和面部情绪分析逻辑
  */
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, type ComputedRef } from 'vue'
 import type { FaceEmotionResult } from '~/types/api'
 import { useApi } from './useApi'
 import { useUserStore } from '~/stores/user'
@@ -10,7 +10,7 @@ import { API_ROUTES } from '~/lib/apiRoutes'
 
 export interface UseFaceEmotionOptions {
   captureInterval?: number // 捕获间隔（毫秒），默认2000ms
-  sessionId?: string
+  sessionId?: string | ComputedRef<string>
 }
 
 export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
@@ -18,7 +18,8 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
   const userStore = useUserStore()
   
   const isCameraOn = ref(false)
-  const currentEmotion = ref<FaceEmotionResult | null>(null)
+  // 存储形态恒带 timestamp（capture 成功后 spread 赋值），比接口多一个必填字段
+  const currentEmotion = ref<(FaceEmotionResult & { timestamp: number }) | null>(null)
   const lastCaptureTime = ref(0)
   
   let stream: MediaStream | null = null

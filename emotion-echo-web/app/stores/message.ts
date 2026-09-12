@@ -74,7 +74,9 @@ export const useMessageStore = defineStore('message', () => {
   const sendMessage = async (
     content: string,
     emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral',
-    clientMsgId?: string
+    clientMsgId?: string,
+    // Stage 79: 文件消息（image/file/video）透传；缺省 text 保持向后兼容
+    contentType?: SendMessageParams['contentType']
   ): Promise<returnMsgType> => {
     if (!currentSessionId.value || isSending.value) {
       return { isOk: false, msg: '无法发送消息' }
@@ -85,7 +87,7 @@ export const useMessageStore = defineStore('message', () => {
     try {
       const params: SendMessageParams = {
         content,
-        contentType: 'text'
+        contentType: contentType || 'text'
       }
       if (emotionTag) params.emotionTag = emotionTag
       if (clientMsgId) params.clientMsgId = clientMsgId
