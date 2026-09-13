@@ -11,7 +11,7 @@ landed-stages:
 residuals:
   - SDK v2.3.5 ListenConfig 偶发不回调（PR-4 dev 真推送受限，stage-39 §七.1）
   - Subscribe 动态感知暂缓（stage-75 §二：boot 期解析 + env 兜底）
-  - llm-service Python 端未实现 Nacos 注册
+  - ~~llm-service Python 端未实现 Nacos 注册~~ 🟢 Stage 88 落地（v3 gRPC SDK + grpc_port metadata + BFF 发现链第 6 处；见 stage-88 报告）
 ---
 
 # Plan — Nacos dev 模式启用（从"半启用"到"全链路"）

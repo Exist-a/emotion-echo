@@ -34,6 +34,7 @@ Round 3 完成后此索引将自动生成（按 stage 编号）。
 | Stage 81~85 | llm-chat-real-pipeline PR-2/3a/3b（BFF gRPC 上游 + 意图分类/落库/日报饼图）+ events 测试契约修复 + 趋势报告意图维度 | 5 |
 | Stage 86 | outbox dead 告警全链（指标 → critical 规则 → alertmanager）+ kafka-reliability-gaps 全线收口迁 landed | 1 |
 | Stage 87 | LLM 意图重分类（规则式兜底 + key 可用时消歧，离线路径零变化）+ grpc 迁移计划过期剩余段销账 | 1 |
+| Stage 88 | llm-service Nacos 注册（v3 gRPC SDK 移植 + BFF 发现链第 6 处）+ 两计划 residual 销账 | 1 |
 
-> 注：41 以后按主题分段统计（2026-09-13 更新至 Stage 87）；每期 stage 的"本批未做（open）"
+> 注：41 以后按主题分段统计（2026-09-13 更新至 Stage 88）；每期 stage 的"本批未做（open）"
 > 表 + [architecture/roadmap.md](../architecture/roadmap.md) §下一步行动 是待办的权威来源。

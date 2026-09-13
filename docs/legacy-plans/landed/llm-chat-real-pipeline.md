@@ -10,7 +10,7 @@ landed-stages:
   - stage-83-intent-report-pipeline-2026-09-12.md（PR-3b：intent 落库 → 意图分布报表全链）
 residuals:
   - 趋势报告（weekly/monthly/annual）意图维度未做（日报已有）
-  - llm-service Python 端 Nacos 注册未做（BFF 暂 env 直连）
+  - ~~llm-service Python 端 Nacos 注册未做~~ 🟢 Stage 88 落地（v3 gRPC SDK，BFF 第 6 处 resolveGRPCAddr 接入）
   - dev 无真实 LLM key（链路通、回复走 mock 降级；配 LLM_API_KEY 即真实）
   - prod 应为 BFF 签发独立客户端证书（dev 复用 ai-client）
 related-plans:
@@ -21,6 +21,12 @@ related-stages:
 related-adrs:
   - docs/architecture/decisions.md 决策 4（gRPC）
 ---
+
+> **Stage 88 状态注记（2026-09-13）**：residual「llm-service Python 端 Nacos 注册」已销账
+> （[stage-88 报告](../stages/stage-88-llm-nacos-registration-2026-09-13.md)）——nacos_client.py
+> 移植 v3 gRPC SDK（旧同步 import 路径与 >=3.1.0 锁定不匹配，容器内自 Stage 31 起静默失效），
+> 注册带 metadata.grpc_port，BFF resolveGRPCAddr 第 6 处接入，摘除验态 env 兜底无感。
+> prod 独立 bff-client 证书 residual 保留（纯 prod 事项）。
 
 # Plan — 真实 LLM 对话链路（打通 mock → llm-service）
 

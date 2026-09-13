@@ -977,16 +977,22 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   16.2s→2.1s 并修复）；intent-classification-6-types residuals 销账。
   顺手 docs：grpc-inter-service-migration「剩余」段过期信息销账（#32/Sprint G/Stage 72）
 
-**当前 open 清单**（2026-09-13 Stage 87 收口后刷新）：
+- Stage 88：llm-service Python 端 Nacos 注册（根因 = Stage 31 旧同步 SDK import 路径与
+  >=3.1.0 锁定不匹配，容器内静默失效 12 天；nacos_client.py 移植 v3 异步 gRPC SDK +
+  _advertise_ip 真实 IP 探测 + grpc_port metadata + e2e 揪出 log/cache dir 非 root 权限两坑；
+  BFF resolveGRPCAddr 第 6 处接入，摘除验态 env 兜底无感）；
+  nacos-enablement-dev 与 llm-chat-real-pipeline 两计划 residual 销账
 
-**llm-chat-real-pipeline 全线落地**（PR-1/2/3a/3b + Stage 87 增强）。业务功能主线剩余：
+**当前 open 清单**（2026-09-13 Stage 88 收口后刷新）：
+
+**llm-chat-real-pipeline 全线落地**（PR-1/2/3a/3b + Stage 87/88 增强）。业务功能主线剩余：
 
 1. file-upload"发给 Kimi 带文件引用"（依赖多模态文件理解，挂 llm 后续增强）
-2. llm-service Python 端 Nacos 注册 + prod 独立 bff-client 证书
-3. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景，
+2. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景，
    kafka-reliability-gaps 已迁 landed 记 residuals）
-4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
-   llm-service Python 端注册；DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）
-5. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）
+3. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；
+   DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）
+4. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）
+5. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项，stage-88 §五）
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。
