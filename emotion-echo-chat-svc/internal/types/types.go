@@ -48,6 +48,8 @@ type MessageView struct {
 	ContentType string `json:"contentType"`
 	// Stage 82 PR-3b：消息意图（6 类；'' = 未分类）
 	Intent      string `json:"intent"`
+	// Stage 89 PR-2：文件消息原始文件名（'' = 非文件或未提供）
+	FileName    string `json:"fileName,omitempty"`
 	TokensUsed  int    `json:"tokensUsed"`
 	CreatedAt   int64  `json:"createdAt"`
 }
@@ -60,6 +62,7 @@ type SendMessageReq struct {
 	ContentType  string  `json:"content_type,optional"`
 	EmotionTag   string  `json:"emotion_tag,optional"`
 	Intent       string  `json:"intent,optional"` // Stage 82 PR-3b：6 类消息意图
+	FileName     string  `json:"file_name,optional"` // Stage 89 PR-2：文件原始名（contentType=file 时）
 }
 
 type SendMessageResp struct {

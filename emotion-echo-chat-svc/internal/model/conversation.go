@@ -41,6 +41,8 @@ type Message struct {
 	ContentType    string    `gorm:"column:content_type;size:16;default:text"`
 	// Stage 82 PR-3b：6 类消息意图（§契约 5：allowedIntents 白名单校验，非法落 ''）
 	Intent         string    `gorm:"column:intent;size:16;default:''"`
+	// Stage 89 PR-2：文件消息原始文件名（migration 006；§契约 5：写入端超 255 截断）
+	FileName       string    `gorm:"column:file_name;size:255;default:''"`
 	TokensUsed     int       `gorm:"column:tokens_used;default:0"`
 	ClientMsgID    *string   `gorm:"column:client_msg_id;uniqueIndex:uq_messages_client_msg_id,where:client_msg_id IS NOT NULL"`
 	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`

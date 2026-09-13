@@ -66,6 +66,7 @@ func toProtoMessage(m types.MessageView) *emotionchat.Message {
 		Content:        m.Content,
 		ContentType:    m.ContentType, // Stage 79：响应视图回带（proto content_type=8）
 		Intent:         m.Intent,      // Stage 82 PR-3b
+		FileName:       m.FileName,    // Stage 89 PR-2（proto file_name=10）
 		TokensUsed:     int32(m.TokensUsed),
 		CreatedAt:      m.CreatedAt,
 	}
@@ -125,6 +126,7 @@ func (s *chatServer) SendMessage(ctx context.Context, req *emotionchat.SendMessa
 		ClientMsgID: clientMsgID,
 		ContentType: req.GetContentType(),
 		Intent:      req.GetIntent(), // Stage 82 PR-3b
+		FileName:    req.GetFileName(), // Stage 89 PR-2（proto file_name=9）
 		EmotionTag:  req.GetEmotionTag(),
 	})
 	if err != nil {

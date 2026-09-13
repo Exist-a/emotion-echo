@@ -118,6 +118,11 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 	if !allowedIntents[intent] {
 		intent = ""
 	}
+	// Stage 89 PR-2：文件原始名（§契约 5：超 255 截断，与 DDL VARCHAR(255) 一致）
+	fileName := req.FileName
+	if len(fileName) > 255 {
+		fileName = fileName[:255]
+	}
 	msg := &model.Message{
 		ConversationID: req.Id,
 		UserID:         uid,
@@ -125,6 +130,7 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 		Content:        req.Content,
 		ContentType:    contentType,
 		Intent:         intent,
+		FileName:       fileName,
 		TokensUsed:     0,
 		ClientMsgID:    req.ClientMsgID,
 		CreatedAt:      now,
@@ -144,6 +150,7 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 			Content:        msg.Content,
 			ContentType:    msg.ContentType, // Stage 79：响应回带（第 4 处缺口）
 			Intent:         msg.Intent,      // Stage 82 PR-3b：意图回带
+			FileName:       msg.FileName,    // Stage 89 PR-2：文件名回带
 			TokensUsed:     msg.TokensUsed,
 			CreatedAt:      msg.CreatedAt.UnixMilli(),
 		},

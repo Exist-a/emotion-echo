@@ -67,6 +67,7 @@ func (l *ListMessagesLogic) ListMessages(req *types.ListMessagesReq) (resp *type
 			Content:        m.Content,
 			ContentType:    m.ContentType, // Stage 79：列表响应同样回带
 			Intent:         m.Intent,      // Stage 82 PR-3b
+			FileName:       m.FileName,    // Stage 89 PR-2：文件名回带
 			TokensUsed:     m.TokensUsed,
 			CreatedAt:      m.CreatedAt.UnixMilli(),
 		})
