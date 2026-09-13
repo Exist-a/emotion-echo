@@ -56,8 +56,10 @@ NACOS_NAMESPACE = os.getenv("NACOS_NAMESPACE", "emotion-echo-dev")
 NACOS_GROUP = os.getenv("NACOS_GROUP", "DEFAULT_GROUP")
 NACOS_HOT_RELOAD = os.getenv("NACOS_HOT_RELOAD", "false").lower() in ("1", "true", "yes")
 SVC_NAME = os.getenv("SVC_NAME", "emotion-llm-service")
-SVC_HOST = os.getenv("SVC_HOST", "0.0.0.0")  # 注册到 Nacos 时的 IP（容器内为 0.0.0.0）
+SVC_HOST = os.getenv("SVC_HOST", "0.0.0.0")  # 0.0.0.0 时 nacos_client 自动探测真实 IP
 SVC_PORT = int(os.getenv("SVC_PORT", "8000"))
+# Stage 88: gRPC 端口进注册 metadata——BFF resolveGRPCAddr(WithPortHint("grpc_port")) 消费
+GRPC_PORT = os.getenv("GRPC_PORT", "50051")
 
 
 @asynccontextmanager
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI):
                 svc_name=SVC_NAME,
                 host=SVC_HOST,
                 port=SVC_PORT,
+                metadata={"grpc_port": GRPC_PORT},
             )
         except Exception as e:
             logger.warning("[nacos] boot failed (continuing): %s", e)
