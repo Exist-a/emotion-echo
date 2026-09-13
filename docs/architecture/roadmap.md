@@ -1001,18 +1001,18 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   residual）——RED→GREEN→REFACTOR 完整 TDD 循环；新增 test_file_context_prompt_directive.py
   4 用例锁住"请基于/原文/引用"等强指令性关键词契约；file_context.py 抽 _PROMPT_HEADER
   模块常量；docker-compose.apps.yml 镜像标签 v0.1.0 → v0.1.2。**单元测试 196/196 绿
-  （含 Stage 89/90 全部存量测试）**。**容器 e2e 阻塞**：GitHub tini ADD 超时（与
-  Stage 36/89/90 同源网络问题），待恢复后用新镜像重跑 PDF 哨兵 5-10 次验证拒读消除。
-  详见 [stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md](../stages/stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md)。
+  （含 Stage 89/90 全部存量测试）**。**容器 e2e PDF 哨兵 5/5 HIT 100%（v0.1.2 +
+  DeepSeek 真实 key）**——Stage 89/90 baseline 50% → Stage 91 100%，DeepSeek 行为
+  判定从"可选噪声"升级为"必读任务 + 引用原文"。e2e 脚本沉淀在
+  [`emotion-llm-service/tests/e2e/stage91_pdf_sentinel.py`](../emotion-llm-service/tests/e2e/stage91_pdf_sentinel.py)
+  备未来回归。详见 [stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md](../stages/stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md)。
 
 **当前 open 清单**（2026-09-14 Stage 91 收口后刷新）：
 
 **file-understanding-llm 全线落地**（Stage 89 六 PR + Stage 90 注入位置 + Stage 91 prompt 强指令性）。
 业务功能主线剩余：
 
-1. **Stage 91 容器 e2e 验证【BLOCKED】**：GitHub tini ADD 超时阻塞镜像重建。网络恢复后：
-   `docker compose build --no-cache emotion-llm-service` → 启动新容器 → PDF 哨兵
-   5-10 次验证拒读消除（目标 ≥ 80% 引用率 vs Stage 90 baseline ~50%）。
+1. （✅ Stage 91 关闭）PDF 哨兵 100% 引用率消除拒读。
 2. observability-edge-gaps-from-code-review 6 issue（外部审查发现）：
    A. Kafka sw8 透传 P1 半天 / B. consumer.attempts 加锁 P2 0.5h / C. metrics unmatched
    路径 P2 1.5h / D. GinSkywalking 跳过路径配置化 P3 0.5h / E. AI model init failed
