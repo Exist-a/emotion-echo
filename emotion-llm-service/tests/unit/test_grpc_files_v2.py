@@ -9,6 +9,7 @@ Stage 89 residual：DeepSeek 对 system 末尾追加的 file_context 多次拒�
 - 无 user 消息（罕见，例如纯 system 摘要场景）：fallback 旧行为——system 末尾追加
 """
 
+import base64
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from concurrent.futures import ThreadPoolExecutor
@@ -24,9 +25,22 @@ import grpc_server
 
 @pytest.fixture
 def http_server():
+    # 合法 PDF fixture（手工构造，含 Tj 文本流 PDF-SENTINEL-pypdf-OK-2026）
+    PDF_BYTES = base64.b64decode(
+        "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2Jq"
+        "CjIgMCBvYmo8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWzMgMCBSXSAvQ291bnQgMSA+PgplbmRvYmoK"
+        "MyAwIG9iajw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFswIDAgNjEyIDc5"
+        "Ml0gL0NvbnRlbnRzIDQgMCBSIC9SZXNvdXJjZXMgPDwgL0ZvbnQgPDwgL0YxIDUgMCBSID4+ID4+"
+        "ID4+CjQgMCBvYmo8PCAvTGVuZ3RoIDU5ID4+CnN0cmVhbQpCVCAvRjEgMjQgVGYgNzIgNzIwIFRk"
+        "IChQREYtU0VOVElORUwtcHlwZGYtT0stMjAyNikgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAg"
+        "b2JqPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+"
+        "CmVuZG9iagp0cmFpbGVyCjw8IC9TaXplIDYgL1Jvb3QgMSAwIFIgPj4Kc3RhcnR4cmVmCjAKJSVF"
+        "T0YK"
+    )
+
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            body = "PDF-SENTINEL-pypdf-OK-2026".encode()
+            body = PDF_BYTES
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()

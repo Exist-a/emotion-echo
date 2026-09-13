@@ -83,11 +83,16 @@ class TestChatCompletionFileContext:
             ))
         assert chunks[-1].done
         msgs = capture_upstream["messages"]
+        # Stage 90：file_context 注入到 user 消息尾部而非 system
+        user_msgs = [m["content"] for m in msgs if m["role"] == "user"]
+        assert len(user_msgs) == 1, "应有且仅有一条 user 消息承载附件上下文"
+        user_text = user_msgs[0]
+        assert "附件上下文" in user_text
+        assert "notes.txt" in user_text
+        assert "E2E文件哨兵内容-蓝天白云" in user_text, "抽取的文件文本必须进入 user 上下文"
+        # system 不应被附件改动
         system_texts = [m["content"] for m in msgs if m["role"] == "system"]
-        joined = "\n".join(system_texts)
-        assert "附件上下文" in joined
-        assert "notes.txt" in joined
-        assert "E2E文件哨兵内容-蓝天白云" in joined, "抽取的文件文本必须进入 system 上下文"
+        assert all("附件上下文" not in t for t in system_texts), "system 不应包含附件上下文"
 
     def test_no_files_no_context_block(self, grpc_addr, capture_upstream):
         with grpc.insecure_channel(grpc_addr) as ch:

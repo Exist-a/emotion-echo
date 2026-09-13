@@ -284,19 +284,29 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
                 messages = inject_style(messages, intent)
                 logger.info(f"[intent] {intent} (confidence={confidence})")
 
-            # Stage 89 PR-4：附件上下文注入（文件理解）。宽 fail——抽取失败只产注记，
-            # 绝不阻断对话；注入位置 = 首个 system 消息尾部（无 system 则前置一条）
+            # Stage 89 PR-4：附件上下文注入（文件理解）。宽 fail——抽取失败只产注记。
+            # Stage 90：注入位置改为 user 消息尾部（更接近"用户粘贴文本提问"形态，
+            # Stage 89 实测 PDF 多次 system 末尾注入导致 DeepSeek 拒读）。
+            # Fallback：无 user 消息时仍追加到 system 末尾（极少见，行为兼容）
             file_context_text = build_file_context_text(
                 [{"url": f.url, "name": f.name} for f in request.files]
             )
             if file_context_text:
-                if messages and messages[0]["role"] == "system":
+                last_user_idx = None
+                for i in range(len(messages) - 1, -1, -1):
+                    if messages[i]["role"] == "user":
+                        last_user_idx = i
+                        break
+                if last_user_idx is not None:
+                    messages[last_user_idx]["content"] += "\n\n" + file_context_text
+                elif messages and messages[0]["role"] == "system":
                     messages[0]["content"] += "\n\n" + file_context_text
                 else:
                     messages.insert(0, {"role": "system", "content": file_context_text})
                 logger.info(
                     f"[file_context] injected {len(request.files)} attachment(s), "
-                    f"{len(file_context_text)} chars"
+                    f"{len(file_context_text)} chars into "
+                    f"{'user[%d]' % last_user_idx if last_user_idx is not None else 'system'}"
                 )
 
             first = True
