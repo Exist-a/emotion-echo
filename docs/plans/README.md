@@ -1,4 +1,4 @@
----
+﻿---
 purpose: 当前有效、未来排期的功能计划
 status: Round 1 占位 · Round 2 首批内容迁入
 ---
@@ -26,6 +26,7 @@ status: Round 1 占位 · Round 2 首批内容迁入
 | `observability-sprint-b.md` | 新增（2026-09-08） → 已落地 | 观测链路 Sprint B 执行源。**16 个 PR-OBS-X + 1 fix = 34 commit 全落地**（2026-09-08），见 [stages/stage-44-observability-sprint-b.md](../stages/stage-44-observability-sprint-b.md)。**PR-OBS-17/18/23/15/19（2026-09-08）§四 B/C 收口**：Stage 45 接口抽象 + Stage 46 HTTP EntrySpan + Stage 47 logging 接入 + Stage 48 err 透传 + Stage 49 gRPC rpc.* tag。**业务功能 6/6 步 100% 收口**。**Stage 50 端到端验证归档**：单元测试 100% PASS + smoke 10/12，具体见 [stages/stage-50-e2e-validation.md](../stages/stage-50-e2e-validation.md)。剩余非业务（sw-oap telemetry / 分支 merge / Nacos / 运维 SQL）见 stage-44 §四 |
 | ~~`gozero-removal.md`~~ | 已 landed 2026-09-07 | go-zero 完全移除收尾（决策 1）：conf→shared/pkg/config + logx→slog 下沉 shared + rest.Middleware 类型清零 + goctl 归档；10 个 TDD PR 全部 merged。详见 `legacy-plans/landed/gozero-removal.md` 与 `stages/stage-41-gozero-removal.md` |
 | ~~`file-understanding-llm.md`~~ | 已 landed 2026-09-13（**Stage 89**） | 文件理解发给 LLM（文件+提问一起发，会话内持续引用）：chat.proto file_name + emotion_llm.proto FileAttachment.files；chat-svc file_name 五处映射 + migration 007 修 intent VARCHAR(16)→32 暗坑；BFF ai-stream 文件收集注入（≤2 条 + URL 重写）；llm-service file_context（pypdf + python-docx + 白名单 SSRF）；前端附件挂输入框 + 三分支发送流。txt 哨兵 e2e + 追问引用全通；PDF 路径注入正常但 DeepSeek 拒读记 residual。详见 `legacy-plans/landed/file-understanding-llm.md` 与 `stages/stage-89-file-understanding-llm-2026-09-13.md` |
+| `observability-edge-gaps-from-code-review.md` | 新增（2026-09-13） | 2026-09-13 会话对可观测链路相关代码（SkyWalking / Prometheus / metrics / Kafka 链路）做细致审查时发现的问题汇总。6 个 issue：(A) Kafka 异步链路 sw8 没透传（P1） / (B) consumer.attempts map 缺并发保护（P2） / (C) metrics path "unmatched" 兜底造成潜在指标污染（P2） / (D) GinSkywalking 跳过路径硬编码（P3） / (E) AI 模型客户端 env 静默失败（P2） / (F) consumer.go 文件职责混杂（P3）。每个 issue 含代码佐证 + 修复方案 + DoD + 工作量。**总工作量 ≈ 1 人天**。**注意：本计划由外部代码审查发现，非项目演进内部识别** |
 
 ## 写入规范
 
