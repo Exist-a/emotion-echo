@@ -61,3 +61,27 @@ describe('message store sendMessage contentType 透传（Stage 79）', () => {
     expect(body.contentType).toBe('file')
   })
 })
+
+describe('message store sendMessage fileName 透传（Stage 89 PR-5 RED）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    postMock.mockReset()
+    postMock.mockResolvedValue({ ...okMessage })
+  })
+
+  it('传 fileName 时请求体原样透传（文件理解特性：LLM 与 ChatFile 都需要原始名）', async () => {
+    const store = useMessageStore()
+    store.currentSessionId = 'c1'
+    await store.sendMessage('https://minio/x.pdf', undefined, undefined, 'file', '季度报告.pdf')
+    const [, body] = postMock.mock.calls[0]
+    expect(body.fileName).toBe('季度报告.pdf')
+  })
+
+  it('不传 fileName 时请求体不带该字段（向后兼容）', async () => {
+    const store = useMessageStore()
+    store.currentSessionId = 'c1'
+    await store.sendMessage('纯文字')
+    const [, body] = postMock.mock.calls[0]
+    expect(body.fileName).toBeUndefined()
+  })
+})
