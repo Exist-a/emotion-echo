@@ -2,7 +2,7 @@
 status: landed
 landed: 2026-09-11
 owner: User
-original-plan: docs/plans/grpc-inter-service-migration.md
+original-plan: docs/legacy-plans/landed/grpc-inter-service-migration.md（2026-09-13 自 docs/plans/ 迁入）
 related-stages:
   - stage-63-bff-grpc-wiring.md
 related-adrs:

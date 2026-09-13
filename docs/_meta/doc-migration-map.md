@@ -169,3 +169,11 @@ migrated-at: 2026-09-03
 | 计划 | 迁移时间 | 落地证据 |
 |---|---|---|
 | `plans/kafka-reliability-gaps.md` → `legacy-plans/landed/` | Stage 86 收口 | stage-43（§1.1-1.3/状态机）/PR-OBS-7+stage-74（lag 监控）/stage-73（Protobuf）/stage-86（dead 告警全链）；六项缺口全部收口 |
+
+---
+
+## 十、2026-09-13 追加迁移记录（gRPC 迁移计划收口）
+
+| 计划 | 迁移时间 | 落地证据 |
+|---|---|---|
+| `plans/grpc-inter-service-migration.md` → `legacy-plans/landed/` | 2026-09-13 文档收口 | 2026-09-11 Sprint C/D/E/F1/F2（各自 landed 文档）+ Sprint G（`f874d3f`）+ Stage 64（#32 关闭）+ Stage 72（PinConversation）；决策 4 收口 ADR `adr-2026-09-decision-4-closure.md`。唯一残余 = chat-svc StreamMessages（有意维持 Unimplemented）。**本次迁移同时就地修正了 plan 正文 §1.2/§1.3/§1.4 三处 2026-09-07 撰写时的过期快照**（user-svc 🟡 部分 gRPC → 7/7；user auth/ai 业务/llm 三条 HTTP 行 → 已 gRPC 化；结论行"剩余 Sprint E/F" → 全线落地）——此前该失真曾导致 2026-09-13 会话据其错误推荐"下一 Stage 做 Sprint E" |

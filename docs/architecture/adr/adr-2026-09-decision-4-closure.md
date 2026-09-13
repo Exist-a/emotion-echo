@@ -64,7 +64,7 @@
 
 | # | 调用链 | 不做原因 | 出处 |
 |---|---|---|---|
-| 1 | ai-svc → FER/SenseVoice/XTTS | FastAPI 模型服务（Python），改 gRPC 成本高；AI profile 按需启用，调用量低 | [`grpc-inter-service-migration.md`](../../plans/grpc-inter-service-migration.md) §决策 A |
+| 1 | ai-svc → FER/SenseVoice/XTTS | FastAPI 模型服务（Python），改 gRPC 成本高；AI profile 按需启用，调用量低 | [`grpc-inter-service-migration.md`](../../legacy-plans/landed/grpc-inter-service-migration.md) §决策 A |
 | 2 | BFF → llm-service (DeepSeek 外部 API) | **外部 API，决策 4 明文走 HTTP** | 决策 4 |
 | 3 | chat-svc gRPC PinConversation/StreamMessages | chat-svc 缺底层功能（无 pin 字段、无流式业务）；proto 留接口，业务未触发 | Sprint D 决策 |
 | 4 | chat-svc HTTP `/api/v1/conversations` 500 | BFF 默认 grpc 规避；根因待查（决策 18 #32） | 决策 18 #32 |
@@ -113,7 +113,7 @@
 ## 九、调研依据
 
 - `docs/architecture/decisions.md` 决策 4 区块
-- `docs/plans/grpc-inter-service-migration.md` §一.2/§一.3/§决策 A/B
+- `docs/legacy-plans/landed/grpc-inter-service-migration.md` §一.2/§一.3/§决策 A/B（2026-09-13 自 plans/ 迁入）
 - `docs/legacy-plans/landed/sprint-{c,d,e,f1}-*.md`（4 份 sprint landed 文档）
 - `docs/architecture/adr/adr-2026-09-doc-drift-registry.md` #25-#35
 - `docs/stages/stage-63-bff-grpc-wiring.md`（V1-V4 端到端实测表）

@@ -1,34 +1,52 @@
 ---
-status: planned
-priority: medium
-owner: TBD
+status: landed
+landed: 2026-09-13
+owner: User
 created: 2026-09-07
 updated: 2026-09-13
-related-stages:
-  - stage-10-grpc-migration.md
-  - stage-19-ai-svc-grpc-server.md
-  - stage-34-multimodal-fusion.md
-  - stage-36-fixes-roadmap.md
-  - stage-58-q3-followups.md（chat-svc gRPC 6 RPC 实测 Unimplemented）
-  - stage-63-bff-grpc-wiring.md（收口发现 #25 #26 #27）
+landed-stages:
+  - stage-63-bff-grpc-wiring.md（BFF→4 svc gRPC 接线 + 收口发现 #25 #26 #27）
+  - stage-64-bug-cleanup-2026-09-11.md（#32 chat-svc HTTP 500 关闭）
+  - stage-72（PinConversation gRPC 全链）
+  - stage-81-bff-llm-grpc-upstream-2026-09-12.md（BFF→llm-service 也提前 gRPC 化，超原计划预期）
+  - stage-88-llm-nacos-registration-2026-09-13.md（llm-service Nacos 注册 grpc_port metadata）
+residuals:
+  - chat-svc StreamMessages：业务未触发，维持 Unimplemented（架构判断，见决策 4 ADR §八；流式聊天走 BFF 直连 llm-service SSE，不经 chat-svc 中转）
+related-plans:
+  - docs/legacy-plans/landed/sprint-c-ctxkey-refactor.md
+  - docs/legacy-plans/landed/sprint-d-chat-grpc-implementation.md
+  - docs/legacy-plans/landed/sprint-e-user-grpc-auth.md
+  - docs/legacy-plans/landed/sprint-f1-user-grpc-reset-logout.md
+  - docs/legacy-plans/landed/sprint-f2-ai-grpc-business-rpcs.md
+  - docs/legacy-plans/landed/sprint-g-bff-grpc-error-mapping.md
 related-adrs:
-  - docs/architecture/decisions.md（决策 4：跨服务调用 = gRPC + .proto）
+  - docs/architecture/adr/adr-2026-09-decision-4-closure.md（决策 4 收口 ADR——覆盖度量化 + 故意不做边界的权威来源）
+  - docs/architecture/decisions.md（决策 4：跨服务调用 = gRPC + .proto，✅ 实施完成 2026-09-11）
   - docs/architecture/decisions.md（决策 5：Python LLM 服务 = 独立微服务 + gRPC server）
-  - docs/architecture/adr/adr-2026-09-doc-drift-registry.md（#25 #26 #27）
+  - docs/architecture/adr/adr-2026-09-doc-drift-registry.md（#25 #26 #27 #33 #34 #35 全部关闭）
 ---
+
+> **✅ 收口声明（2026-09-13 迁 landed）**：本计划已全线落地——决策 4（内部 svc-to-svc = gRPC）
+> 在核心业务路径 21/21 = 100% 生效，BFF→4 svc 全方法（user 7/7、chat 4/4、assessment 5/5、
+> analytics 6/6）+ ai-svc 业务 3 方法全部走 gRPC（代码实证：`proto/user.proto` Login/Register/
+> ResetPassword/Logout RPC、`web-bff/internal/downstream/{user_grpc,ai_grpc}.go`、
+> ai-svc `grpcserver/server.go` MultiModalAnalyze/SynthesizeSpeech/AIHealth）。
+> **唯一残余 = chat-svc StreamMessages**（业务未触发，有意维持 Unimplemented）。
+> 权威状态见收口 ADR 与 decisions.md 决策 4；正文 §一 的"现状"表格是 2026-09-07 撰写时的
+> 历史快照（其中过期行已就地标注），勿作为当前架构依据。
 
 ## 🆕 2026-09-11 增补：Stage 63 收口发现 3 条链路 bug + Sprint C/D/E/F1/F2 落地
 
 Stage 63 端到端验证发现 BFF→4 svc gRPC 链路上有 3 层叠错（决策 18 #25 #26 #27）。
-**Sprint C（解 #26 ctxkey 重构）已落地** —— 见 [legacy-plans/landed/sprint-c-ctxkey-refactor.md](../legacy-plans/landed/sprint-c-ctxkey-refactor.md)。
-**Sprint D（解 #27 chat-svc 4 RPC 实现）已落地** —— 见 [legacy-plans/landed/sprint-d-chat-grpc-implementation.md](../legacy-plans/landed/sprint-d-chat-grpc-implementation.md)。
-**Sprint E（解 #33 user-svc proto 半残缺）已落地** —— 见 [legacy-plans/landed/sprint-e-user-grpc-auth.md](../legacy-plans/landed/sprint-e-user-grpc-auth.md)。
-**Sprint F1（user-svc ResetPassword/Logout gRPC 化）已落地** —— 见 [legacy-plans/landed/sprint-f1-user-grpc-reset-logout.md](../legacy-plans/landed/sprint-f1-user-grpc-reset-logout.md)。
-**Sprint F2（ai-svc 业务方法 gRPC 化，ai.go MultiModal/Synthesize/AIHealth 3 RPC）已落地** —— 见 [legacy-plans/landed/sprint-f2-ai-grpc-business-rpcs.md](../legacy-plans/landed/sprint-f2-ai-grpc-business-rpcs.md)。
+**Sprint C（解 #26 ctxkey 重构）已落地** —— 见 [legacy-plans/landed/sprint-c-ctxkey-refactor.md](sprint-c-ctxkey-refactor.md)。
+**Sprint D（解 #27 chat-svc 4 RPC 实现）已落地** —— 见 [legacy-plans/landed/sprint-d-chat-grpc-implementation.md](sprint-d-chat-grpc-implementation.md)。
+**Sprint E（解 #33 user-svc proto 半残缺）已落地** —— 见 [legacy-plans/landed/sprint-e-user-grpc-auth.md](sprint-e-user-grpc-auth.md)。
+**Sprint F1（user-svc ResetPassword/Logout gRPC 化）已落地** —— 见 [legacy-plans/landed/sprint-f1-user-grpc-reset-logout.md](sprint-f1-user-grpc-reset-logout.md)。
+**Sprint F2（ai-svc 业务方法 gRPC 化，ai.go MultiModal/Synthesize/AIHealth 3 RPC）已落地** —— 见 [legacy-plans/landed/sprint-f2-ai-grpc-business-rpcs.md](sprint-f2-ai-grpc-business-rpcs.md)。
 
 **剩余**（2026-09-13 销账刷新——本段此前停留过期信息：#32 与 BFF error 映射实际已关闭却仍列为待办）：
-- ~~#32 chat-svc HTTP 端 /api/v1/conversations 500 bug~~ 🟢 **Stage 64 PR-3 关闭**（`3e07571`）：chat-svc v0.1.3 rebuild 实测 4 路径全 200/401，500 源自 v0.1.0 前后旧镜像时代 bug，已被 PR-2 中间件分层 + Sprint D 重构无意修复（详见 [stage-64-bug-cleanup-2026-09-11.md §5.2](../stages/stage-64-bug-cleanup-2026-09-11.md)）
-- ~~BFF 全局 gRPC error → HTTP code 映射~~ 🟢 **Sprint G 关闭**（`f874d3f`）：`web-bff/internal/downstream/error.go` MapGRPCError + 5 gRPC client 接入，tts/synthesize 实测 Unavailable→503（详见 [sprint-g-bff-grpc-error-mapping.md](../legacy-plans/landed/sprint-g-bff-grpc-error-mapping.md)）
+- ~~#32 chat-svc HTTP 端 /api/v1/conversations 500 bug~~ 🟢 **Stage 64 PR-3 关闭**（`3e07571`）：chat-svc v0.1.3 rebuild 实测 4 路径全 200/401，500 源自 v0.1.0 前后旧镜像时代 bug，已被 PR-2 中间件分层 + Sprint D 重构无意修复（详见 [stage-64-bug-cleanup-2026-09-11.md §5.2](../../stages/stage-64-bug-cleanup-2026-09-11.md)）
+- ~~BFF 全局 gRPC error → HTTP code 映射~~ 🟢 **Sprint G 关闭**（`f874d3f`）：`web-bff/internal/downstream/error.go` MapGRPCError + 5 gRPC client 接入，tts/synthesize 实测 Unavailable→503（详见 [sprint-g-bff-grpc-error-mapping.md](sprint-g-bff-grpc-error-mapping.md)）
 - ~~chat-svc PinConversation~~ 🟢 **Stage 72 落地**（BFF→chat-svc gRPC Pin/Update 全链）
 - **chat-svc StreamMessages**（唯一残余）：业务未触发，维持 Unimplemented（见决策 4 ADR §八）
 
@@ -56,7 +74,7 @@ Stage 63 端到端验证发现 BFF→4 svc gRPC 链路上有 3 层叠错（决�
 | **BFF → chat-svc** | 🟢 gRPC（默认） | `chat.proto` · ListConversations/SendMessage/ListMessages/DeleteConversation（Sprint D 实现） | `web-bff/internal/downstream/chat_grpc.go` + `chat-svc/internal/grpcserver/chat_server.go` |
 | **BFF → assessment-svc** | 🟢 gRPC（默认） | `agent.proto` · ListSurveys/GetSurvey/SubmitSurvey/ListMyResults/GetSurveyResult（proto 5 RPC 全 BFF client 覆盖） | `web-bff/internal/downstream/assessment_grpc.go` + `assessment-svc/internal/grpcserver/metric_server.go` |
 | **BFF → analytics-svc** | 🟢 gRPC（默认） | `metric.proto` · ReportsDaily/ReportsTrend/UserBehavior{3}/MentalHealth{4}（proto 9 RPC 全 server 实现；BFF client 实现 6 个对应 handler 调用） | `web-bff/internal/downstream/analytics_grpc.go` + `analytics-svc/internal/grpcserver/metric_server.go` |
-| **BFF → user-svc** | 🟡 部分 gRPC | `user.proto` · GetMe/UpdateProfile/GetUserById（**Login/Register/ResetPassword 走 HTTP,proto 缺这 3 RPC**） | `web-bff/internal/downstream/user_grpc.go`（3 方法）+ `user-svc/internal/grpcserver/user_server.go` |
+| **BFF → user-svc** | ~~🟡 部分 gRPC~~ 🟢 **7/7 全 gRPC**（Sprint E/F1 补齐 Login/Register/ResetPassword/Logout，2026-09-11 落地） | `user.proto` · 全部 7 RPC（Login/Register/ResetPassword/Logout/GetMe/UpdateProfile/GetUserById） | `web-bff/internal/downstream/user_grpc.go`（7 方法）+ `user-svc/internal/grpcserver/user_server.go` |
 
 ai-svc gRPC server（`grpcserver/server.go`）已挂完整拦截器链：user ID metadata 拦截器 + SkyWalking tracing + logging + recovery，并有 grpc_health_integration_test。
 
@@ -64,22 +82,23 @@ ai-svc gRPC server（`grpcserver/server.go`）已挂完整拦截器链：user ID
 
 | 调用链 | 协议 | 范围 | 备注 |
 |---|---|---|---|
-| **BFF → user-svc auth** | HTTP REST | Login / Register / ResetPassword（**proto 缺失**）/ Logout（**proto 缺失**） | Sprint E 解决（扩 proto + user-svc gRPC server 实现 + BFF client 接入） |
-| **BFF → ai-svc 业务** | HTTP REST | ai.go（MultiModalAnalyze 等，业务方法非 emotion_query） | 次高频，proto 是否扩待评估 |
-| **BFF → llm-service (DeepSeek)** | HTTP REST | llm.go（DeepSeek API 调用） | **外部 API，本就该 HTTP**（决策 4 例外） |
+| **BFF → user-svc auth** | ~~HTTP REST~~ 🟢 **已 gRPC 化** | ~~Login / Register / ResetPassword（**proto 缺失**）/ Logout（**proto 缺失**）~~ | 🟢 **Sprint E/F1 已落地**（2026-09-11）：proto 扩 4 RPC + user-svc server 实现 + BFF client 接入，Login/Register/ResetPassword 为匿名调用（拦截器跳过 x-user-id） |
+| **BFF → ai-svc 业务** | ~~HTTP REST~~ 🟢 **已 gRPC 化** | ~~ai.go（MultiModalAnalyze 等，业务方法非 emotion_query）~~ | 🟢 **Sprint F2 已落地**（2026-09-11）：emotion_query.proto 扩 MultiModalAnalyze/SynthesizeSpeech/AIHealth 3 RPC，BFF `ai_grpc.go` 接入 |
+| **BFF → llm-service (DeepSeek)** | ~~HTTP REST~~ 🟢 **已 gRPC 化** | ~~llm.go（DeepSeek API 调用）~~ | 🟢 **Stage 81 已落地**（超出本计划预期——原划为"外部 API 本就该 HTTP"，后 llm-service 独立微服务化，BFF ai/stream 切 gRPC 上游，优先级链 gRPC→HTTP直连→mock；Stage 88 Nacos 注册第 6 处接入） |
 | **ai-svc → FER / SenseVoice / XTTS** | HTTP REST | FastAPI 模型服务（ai-svc aiclient/{fer,sensevoice,xtts}.go） | **plan §决策 A 明确不做**（FastAPI 改 gRPC 成本高收益低，AI profile 按需启用，调用量低） |
 
 BFF 的 HTTP downstream client 在 `internal/downstream/`（user/chat/analytics/assessment/ai/xtts/llm/minio），支持 Nacos 服务发现（`internal/discovery/resolver.go`），但传输层仍是 HTTP。
 
-### 1.4 决策 4 全链路覆盖度（2026-09-11 实测）
+### 1.4 决策 4 全链路覆盖度（2026-09-07 撰写快照；🟢 2026-09-13 终态见括号内更新）
 
 | 维度 | 覆盖率 | 评注 |
 |---|---|---|
-| **核心业务路径**（BFF→4 svc handler 调用） | **19/19 = 100%** | 4 svc handler 调用的 19 个方法全部走 gRPC |
-| **BFF→4 svc 全部方法**（含低频 + 未触发预留） | **~76%** | 16 gRPC + 5 HTTP（user-svc Login/Register/ResetPassword/Logout + ai-svc 业务方法）|
-| **所有内部 svc-to-svc**（决策 4 全文范围） | **~85%** | 7 gRPC + 2 半 gRPC（user-svc auth）+ 4 故意不做（ai-svc HTTP 业务 + llm + 模型服务）|
+| **核心业务路径**（BFF→4 svc handler 调用） | **19/19 = 100%**（🟢 终态 **21/21 = 100%**） | 4 svc handler 调用的方法全部走 gRPC |
+| **BFF→4 svc 全部方法**（含低频 + 未触发预留） | **~76%**（🟢 终态 **100%**：user 7/7 含 Logout、chat 4/4、assessment 5/5、analytics 6/6，另 ai-svc 业务 3 方法也 gRPC 化） | ~~16 gRPC + 5 HTTP（user-svc Login/Register/ResetPassword/Logout + ai-svc 业务方法）~~ Sprint E/F1/F2 后 HTTP 残余清零 |
+| **所有内部 svc-to-svc**（决策 4 全文范围） | **~85%**（🟢 终态：12 条 gRPC（另 BFF→llm 也 gRPC 化）+ 故意不做 4 条维持——模型服务 3 条 + StreamMessages 预留，量化口径见决策 4 ADR） | ~~7 gRPC + 2 半 gRPC（user-svc auth）+ 4 故意不做~~ |
 
-**结论**：决策 4 在核心业务路径**已 100% 生效**；剩余工作集中在 user-svc auth gRPC 化（Sprint E）+ ai-svc 业务方法 gRPC 化（可选 Sprint F）+ 历史预留 RPC（chat PinConversation/StreamMessages）。
+**结论**（🟢 2026-09-13 更新）：~~决策 4 在核心业务路径已 100% 生效；剩余工作集中在 user-svc auth gRPC 化（Sprint E）+ ai-svc 业务方法 gRPC 化（可选 Sprint F）+ 历史预留 RPC（chat PinConversation/StreamMessages）。~~
+**计划已全线落地**：Sprint E/F1/F2 于 2026-09-11 落地，PinConversation 于 Stage 72 落地，#32 于 Stage 64 关闭，BFF error 映射于 Sprint G 关闭。**唯一残余 = chat-svc StreamMessages**（业务未触发，维持 Unimplemented，见决策 4 ADR §八）。权威覆盖度量化见 [adr-2026-09-decision-4-closure.md](../../architecture/adr/adr-2026-09-decision-4-closure.md)。
 
 ### 1.4 gRPC 基础设施就绪度
 
