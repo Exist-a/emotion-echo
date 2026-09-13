@@ -27,6 +27,7 @@
             v-else-if="item.contentType === 'image' || item.contentType === 'video' || (item.contentType === 'file' && item.content)"
             :content="item.content"
             :content-type="item.contentType as 'image' | 'file' | 'video'"
+            :filename="item.fileName"
           />
           <div
             v-else-if="item.content"
@@ -44,6 +45,12 @@
     </main>
 
     <form class="composer" @submit.prevent="handleSubmit">
+      <!-- Stage 89 PR-5：附件挂输入框（选文件即上传，随下一次发送一起走） -->
+      <div v-if="pendingAttachment" class="attachment-chip">
+        <span class="attachment-name">📎 {{ pendingAttachment.name }}</span>
+        <span v-if="fileUpload.isUploading.value" class="attachment-status">上传中…</span>
+        <button type="button" class="attachment-remove" aria-label="移除附件" @click="pendingAttachment = null">×</button>
+      </div>
       <div class="composer-shell">
         <textarea
           v-model="message"
@@ -192,8 +199,28 @@ const handleSubmit = async () => {
     return
   }
   const value = message.value.trim()
+  // Stage 89 PR-5：文件+提问一起发——附件无文字时用默认 prompt 触发 AI 读文件
+  if (pendingAttachment.value && !value) {
+    if (!await sendAttachmentMessage()) return
+    await conversationSender.sendToExistingConversation(
+      conversationIdRef.value,
+      '请帮我看看这个文件，用中文简短说明它的内容要点。',
+      'neutral',
+      {
+        onFinish: (messageId, aiEmotion) => {
+          if (aiEmotion) digitalHumanRef.value?.setEmotion(aiEmotion)
+          conversationSender.flushTTS()
+        },
+        onError: (error) => {
+          window.alert(`AI 回复失败：${error}`)
+        }
+      }
+    )
+    return
+  }
   if (!value) return
   message.value = ''
+  if (pendingAttachment.value && !await sendAttachmentMessage()) return
   await conversationSender.sendToExistingConversation(conversationIdRef.value, value, 'neutral', {
     onFinish: (messageId, aiEmotion) => {
       if (aiEmotion) digitalHumanRef.value?.setEmotion(aiEmotion)
@@ -218,6 +245,14 @@ const handleAttachment = () => {
   fileInputRef.value?.click()
 }
 
+// Stage 89 PR-5：待发送附件（选文件即上传，随下一次发送一起走——文件+提问一次发出）
+interface PendingAttachment {
+  url: string
+  name: string
+  type: 'image' | 'file' | 'video'
+}
+const pendingAttachment = ref<PendingAttachment | null>(null)
+
 const onFilePicked = async (e: Event) => {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
@@ -226,19 +261,29 @@ const onFilePicked = async (e: Event) => {
 
   try {
     const result = await fileUpload.uploadFile(file)
-    // 文件消息：content = MinIO URL；不走 AI 流（文件引用分析依赖 llm-chat-real-pipeline）
-    const persist = await messageStore.sendMessage(
-      result.url,
-      undefined,
-      typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-f`,
-      result.type
-    )
-    if (!persist.isOk) {
-      window.alert(`文件消息发送失败：${persist.msg}`)
-    }
+    pendingAttachment.value = { url: result.url, name: file.name, type: result.type }
   } catch (err: any) {
     window.alert(`上传失败：${err?.message || '未知错误'}`)
   }
+}
+
+// Stage 89 PR-5：文件消息落库（content = MinIO URL，fileName = 原始名）
+const sendAttachmentMessage = async (): Promise<boolean> => {
+  const att = pendingAttachment.value
+  if (!att) return true
+  const persist = await messageStore.sendMessage(
+    att.url,
+    undefined,
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-f`,
+    att.type,
+    att.name
+  )
+  if (!persist.isOk) {
+    window.alert(`文件消息发送失败：${persist.msg}`)
+    return false
+  }
+  pendingAttachment.value = null
+  return true
 }
 
 const toggleRecording = async () => {
@@ -426,6 +471,23 @@ onUnmounted(() => {
 }
 
 /* 输入区 */
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: var(--color-surface-muted, rgba(0, 0, 0, 0.04));
+  font-size: 13px;
+}
+.attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-status { color: var(--color-text-secondary, #888); }
+.attachment-remove {
+  border: none; background: none; cursor: pointer;
+  font-size: 16px; line-height: 1; color: var(--color-text-secondary, #888);
+}
+
 .composer {
   display: flex;
   justify-content: center;

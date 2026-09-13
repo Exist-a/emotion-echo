@@ -165,6 +165,8 @@ export interface MessageItem {
   // Stage 79: 扩展 file-upload 三类（与 BFF /uploads/:kind、ChatFile.vue 对齐）；
   // 'img' 为历史遗留值，保留只读兼容
   contentType: 'text' | 'audio' | 'img' | 'image' | 'file' | 'video'
+  // Stage 89 PR-5：文件消息原始文件名（ChatFile 展示 + 会话内文件引用）
+  fileName?: string
   emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
   sendTime: number
   createdAt: number
@@ -191,6 +193,8 @@ export interface SendMessageParams {
   contentType?: 'text' | 'audio' | 'img' | 'image' | 'file' | 'video'
   emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
   clientMsgId?: string
+  // Stage 89 PR-5：文件消息原始文件名（contentType=file 时）
+  fileName?: string
 }
 
 // ==================== AI 模块 ====================

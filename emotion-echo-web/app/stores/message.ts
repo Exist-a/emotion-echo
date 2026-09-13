@@ -76,7 +76,9 @@ export const useMessageStore = defineStore('message', () => {
     emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral',
     clientMsgId?: string,
     // Stage 79: 文件消息（image/file/video）透传；缺省 text 保持向后兼容
-    contentType?: SendMessageParams['contentType']
+    contentType?: SendMessageParams['contentType'],
+    // Stage 89 PR-5: 文件消息原始文件名（contentType=file 时透传 chat-svc file_name）
+    fileName?: string
   ): Promise<returnMsgType> => {
     if (!currentSessionId.value || isSending.value) {
       return { isOk: false, msg: '无法发送消息' }
@@ -91,6 +93,7 @@ export const useMessageStore = defineStore('message', () => {
       }
       if (emotionTag) params.emotionTag = emotionTag
       if (clientMsgId) params.clientMsgId = clientMsgId
+      if (fileName) params.fileName = fileName
 
       const message = await post<MessageWithStatus>(
         API_ROUTES.sendMessage.path.replace(':id', currentSessionId.value || ''),
