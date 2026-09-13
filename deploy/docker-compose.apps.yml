@@ -307,7 +307,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-llm-service/Dockerfile
-    image: emotion-echo/llm-service:v0.1.0   # P0-4: pinned tag
+    image: emotion-echo/llm-service:v0.1.2   # P0-4: pinned tag (Stage 91 PR-1 prompt 强指令性)
     container_name: emotion-llm-service
     restart: unless-stopped
     depends_on:
