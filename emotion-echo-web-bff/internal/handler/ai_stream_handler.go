@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"strconv"
 	"net/http"
 	"strings"
 	"time"
@@ -31,11 +32,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// fileMessageLister 会话消息列表来源（downstream.ChatClient 满足此接口）；
+// 独立小接口便于测试 fake（Stage 89 PR-3）
+type fileMessageLister interface {
+	ListMessages(ctx context.Context, conversationID int64, limit int) ([]downstream.MessageView, error)
+}
+
+// maxFileAttachments 每次 ai/stream 注入的最新文件消息上限（控制拉取/抽取开销）
+const maxFileAttachments = 2
+
 // AIStreamHandler 是 /api/v1/ai/stream 的处理逻辑
 type AIStreamHandler struct {
 	cfg config.Config
 	// llm 是 llm-service ChatCompletion gRPC 上游（Stage 81 PR-2）；nil = 未装配（走 mock/HTTP 直连）
 	llm downstream.LLMChatStreamer
+	// files 是会话消息列表来源（Stage 89 PR-3）；nil = 不注入文件上下文
+	files fileMessageLister
 }
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
@@ -48,6 +60,64 @@ func NewAIStreamHandler(cfg config.Config) gin.HandlerFunc {
 func NewAIStreamHandlerWithLLM(cfg config.Config, llm downstream.LLMChatStreamer) gin.HandlerFunc {
 	h := &AIStreamHandler{cfg: cfg, llm: llm}
 	return h.ServeHTTP
+}
+
+// NewAIStreamHandlerWithDeps 构造带 llm 上游 + 文件列表来源的 handler（Stage 89 PR-3）
+func NewAIStreamHandlerWithDeps(cfg config.Config, llm downstream.LLMChatStreamer, files fileMessageLister) gin.HandlerFunc {
+	h := &AIStreamHandler{cfg: cfg, llm: llm, files: files}
+	return h.ServeHTTP
+}
+
+// fileSourceURL 把消息里存的 MinIO 公开 URL（PublicBaseURL，面向浏览器）
+// 重写为 llm-service 容器内可达的内部端点。前缀不匹配时原样返回
+// （llm-service 侧 FILE_FETCH_ALLOWLIST 会拒绝并降级为"附件未能读取"）。
+func fileSourceURL(publicURL string, cfg config.Config) string {
+	base := cfg.MinIO.PublicBaseURL
+	if base == "" || !strings.HasPrefix(publicURL, base) {
+		return publicURL
+	}
+	scheme := "http"
+	if cfg.MinIO.UseSSL {
+		scheme = "https"
+	}
+	if cfg.MinIO.Endpoint == "" {
+		return publicURL
+	}
+	return scheme + "://" + cfg.MinIO.Endpoint + strings.TrimPrefix(publicURL, base)
+}
+
+// collectFileAttachments 取会话最近消息中最新的 ≤2 条 file 消息转为附件引用。
+// 拉取失败只记日志不阻断对话（文件上下文是增强，不是依赖）。
+func (h *AIStreamHandler) collectFileAttachments(ctx context.Context, conversationID string) []downstream.FileAttachment {
+	if h.files == nil || conversationID == "" {
+		return nil
+	}
+	convID, err := strconv.ParseInt(conversationID, 10, 64)
+	if err != nil || convID <= 0 {
+		return nil
+	}
+	msgs, err := h.files.ListMessages(ctx, convID, 50)
+	if err != nil {
+		slog.ErrorContext(ctx, "ai-stream list messages for file context failed", "err", err)
+		return nil
+	}
+	var out []downstream.FileAttachment
+	// msgs 按时间倒序（最新在前）；倒着收集保证 Files 顺序为旧→新
+	for i := 0; i < len(msgs) && len(out) < maxFileAttachments; i++ {
+		m := msgs[len(msgs)-1-i]
+		if m.ContentType != "file" || m.Content == "" {
+			continue
+		}
+		out = append(out, downstream.FileAttachment{
+			URL:  fileSourceURL(m.Content, h.cfg),
+			Name: m.FileName,
+		})
+	}
+	// 上面循环按倒序从新到旧 append 后需反转回旧→新
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
 }
 
 // aiStreamReq 兼容两种前端请求格式：
@@ -125,9 +195,13 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		}
 		ctx, cancel := context.WithCancel(c.Request.Context())
 		defer cancel()
+		// Stage 89 PR-3：会话内文件持续引用——最新 ≤2 条 file 消息随请求下发，
+		// llm-service 负责拉取/抽取/注入 system 上下文
+		files := h.collectFileAttachments(c.Request.Context(), req.ConversationID)
 		err := h.llm.StreamChat(ctx, downstream.LLMStreamRequest{
 			Model:    h.cfg.LLM.Model,
 			Messages: llmMessages,
+			Files:    files,
 		}, func(delta, model string) {
 			if writeErr := writeDelta0(delta); writeErr != nil {
 				slog.ErrorContext(c.Request.Context(), "ai-stream write llm-grpc delta failed", "err", writeErr)

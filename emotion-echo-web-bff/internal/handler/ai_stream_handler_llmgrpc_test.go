@@ -27,11 +27,13 @@ type fakeLLMStreamer struct {
 	err        error
 	gotModel   string
 	gotMsgs    []downstream.Message
+	gotFiles   []downstream.FileAttachment // Stage 89 PR-3
 }
 
 func (f *fakeLLMStreamer) StreamChat(_ context.Context, req downstream.LLMStreamRequest, onDelta func(delta, model string)) error {
 	f.gotModel = req.Model
 	f.gotMsgs = req.Messages
+	f.gotFiles = req.Files
 	if f.err != nil {
 		return f.err
 	}

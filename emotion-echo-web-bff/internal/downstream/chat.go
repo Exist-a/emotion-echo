@@ -56,6 +56,8 @@ type MessageView struct {
 	ContentType string `json:"contentType"`
 	// Stage 82 PR-3b：消息意图（6 类；'' = 未分类）
 	Intent      string `json:"intent"`
+	// Stage 89 PR-3：文件消息原始文件名（chat-svc file_name 回带）
+	FileName    string `json:"fileName,omitempty"`
 	TokensUsed  int    `json:"tokensUsed"`
 	CreatedAt   int64  `json:"createdAt"`
 }
@@ -79,6 +81,7 @@ type SendMessageReq struct {
 	ContentType  string  `json:"contentType,omitempty"`
 	EmotionTag   string  `json:"emotionTag,omitempty"`
 	Intent       string  `json:"intent,omitempty"` // Stage 82 PR-3b：6 类消息意图
+	FileName     string  `json:"fileName,omitempty"` // Stage 89 PR-3：文件原始名（contentType=file 时）
 }
 
 // ChatClient BFF → chat-svc HTTP 客户端

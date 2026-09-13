@@ -374,7 +374,8 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	}
 	// SSE 流式
 	// Stage 81 PR-2：llm-service ChatCompletion gRPC 上游优先（llmStreamer 非 nil 时）
-	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithLLM(*c, llmStreamer))
+	// Stage 89 PR-3：chat client 作为文件消息列表来源（会话内文件持续引用）
+	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, llmStreamer, s.Chat))
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})

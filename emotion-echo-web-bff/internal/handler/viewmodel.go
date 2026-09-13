@@ -33,6 +33,7 @@ type MessageItemVM struct {
 	ContentType    string  `json:"contentType"`
 	EmotionTag     *string `json:"emotionTag,omitempty"`
 	Intent         string  `json:"intent,omitempty"` // Stage 82 PR-3b：6 类消息意图（空省略）
+	FileName       string  `json:"fileName,omitempty"` // Stage 89 PR-3：文件原始名（ChatFile 展示 + 历史引用）
 	SendTime       int64   `json:"sendTime"`
 	CreatedAt      int64   `json:"createdAt"`
 }
@@ -84,6 +85,7 @@ func toMessageItemVM(m *downstream.MessageView) MessageItemVM {
 		// 空值兜底 text 兼容旧消息
 		ContentType: cmp.Or(m.ContentType, "text"),
 		Intent:      m.Intent, // Stage 82 PR-3b
+		FileName:    m.FileName, // Stage 89 PR-3
 		SendTime:       m.CreatedAt,
 		CreatedAt:      m.CreatedAt,
 	}

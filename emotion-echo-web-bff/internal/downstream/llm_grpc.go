@@ -27,12 +27,21 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// FileAttachment 附件引用（Stage 89 PR-3）：只传 {url,name}，字节不过 gRPC；
+// url 已由 handler 重写为 llm-service 可达的内部 MinIO 端点（白名单校验在 llm-service）
+type FileAttachment struct {
+	URL  string
+	Name string
+}
+
 // LLMStreamRequest 一次对话请求（handler 侧形状）
 type LLMStreamRequest struct {
 	Model       string
 	Messages    []Message
 	Temperature float64
 	MaxTokens   int32
+	// Files 附件引用（Stage 89 PR-3）：≤2 条；空 = 本会话无文件上下文
+	Files []FileAttachment
 }
 
 // LLMChatStreamer 对话流式上游接口（handler 依赖此接口，便于测试与后续替换）
@@ -131,11 +140,17 @@ func (c *LLMGRPCClient) StreamChat(ctx context.Context, req LLMStreamRequest, on
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-internal-api-key", c.apiKey)
 	}
 
+	pbFiles := make([]*emotionllm.FileAttachment, 0, len(req.Files))
+	for _, f := range req.Files {
+		pbFiles = append(pbFiles, &emotionllm.FileAttachment{Url: f.URL, Name: f.Name})
+	}
+
 	stream, err := c.client.ChatCompletion(ctx, &emotionllm.ChatCompletionRequest{
 		Model:       req.Model,
 		Messages:    pbMessages,
 		Temperature: req.Temperature,
 		MaxTokens:   req.MaxTokens,
+		Files:       pbFiles, // Stage 89 PR-3
 	})
 	if err != nil {
 		return fmt.Errorf("llm chat completion rpc: %w", err)
