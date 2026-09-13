@@ -997,17 +997,30 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   5 条候选优化路线记入 Stage 91。顺手销 todo-pile A1/A2/B4 章节正文（§五 状态表已
   正确，仅章节与现状脱节）。
 
-**当前 open 清单**（2026-09-13 Stage 90 收口后刷新）：
+- Stage 91：file_context prompt 头从描述性改强指令性措辞（修 Stage 89/90 PDF 拒读
+  residual）——RED→GREEN→REFACTOR 完整 TDD 循环；新增 test_file_context_prompt_directive.py
+  4 用例锁住"请基于/原文/引用"等强指令性关键词契约；file_context.py 抽 _PROMPT_HEADER
+  模块常量；docker-compose.apps.yml 镜像标签 v0.1.0 → v0.1.2。**单元测试 196/196 绿
+  （含 Stage 89/90 全部存量测试）**。**容器 e2e 阻塞**：GitHub tini ADD 超时（与
+  Stage 36/89/90 同源网络问题），待恢复后用新镜像重跑 PDF 哨兵 5-10 次验证拒读消除。
+  详见 [stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md](../stages/stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md)。
 
-**file-understanding-llm 全线落地**（Stage 89 六 PR + Stage 90 注入位置优化）。
+**当前 open 清单**（2026-09-14 Stage 91 收口后刷新）：
+
+**file-understanding-llm 全线落地**（Stage 89 六 PR + Stage 90 注入位置 + Stage 91 prompt 强指令性）。
 业务功能主线剩余：
 
-1. **PDF 路径 DeepSeek 拒读 residual（Stage 91）**：Stage 90 注入位置改为 user 尾部后
-   容器 e2e PDF 部分成功部分仍拒——根因属模型对单短文本判定保守。Stage 91 候选方案：
-   注入第二条独立 user turn / prompt 前置明确措辞 / 长 PDF 切片摘要 / 换模型对比
-2. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景）
-3. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；DB 纳入 fail-fast required 依赖
-4. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）
-5. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项）
+1. **Stage 91 容器 e2e 验证【BLOCKED】**：GitHub tini ADD 超时阻塞镜像重建。网络恢复后：
+   `docker compose build --no-cache emotion-llm-service` → 启动新容器 → PDF 哨兵
+   5-10 次验证拒读消除（目标 ≥ 80% 引用率 vs Stage 90 baseline ~50%）。
+2. observability-edge-gaps-from-code-review 6 issue（外部审查发现）：
+   A. Kafka sw8 透传 P1 半天 / B. consumer.attempts 加锁 P2 0.5h / C. metrics unmatched
+   路径 P2 1.5h / D. GinSkywalking 跳过路径配置化 P3 0.5h / E. AI model init failed
+   metric P2 1h / F. consumer.go 拆分 P3 0.5h。总 ≈ 1 人天。
+3. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景）
+4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；DB 纳入 fail-fast required 依赖
+5. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）
+6. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项）
+7. todo-pile C6（quick-login 端点）1-2h / D5（chat-svc 表依赖 ADR）半天
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。
