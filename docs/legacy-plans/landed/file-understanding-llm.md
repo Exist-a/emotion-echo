@@ -1,9 +1,10 @@
 ---
-status: planned
-priority: high
+status: landed
+landed: 2026-09-13
 owner: User
 created: 2026-09-13
 related-stages:
+  - stage-89-file-understanding-llm-2026-09-13.md（收口报告，含 6 个 PR + e2e 实测 + 残差清单）
   - stage-79-post-file-upload-wiring-2026-09-12.md（文件消息落库 + contentType 全链修复；文件理解登记为后续解锁项）
   - stage-80-llm-chat-completion-rpc-2026-09-12.md（ChatCompletion 流式 RPC）
   - stage-81-bff-llm-grpc-upstream-2026-09-12.md（BFF ai/stream gRPC 上游）

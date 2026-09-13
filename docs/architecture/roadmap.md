@@ -983,16 +983,23 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   BFF resolveGRPCAddr 第 6 处接入，摘除验态 env 兜底无感）；
   nacos-enablement-dev 与 llm-chat-real-pipeline 两计划 residual 销账
 
-**当前 open 清单**（2026-09-13 Stage 88 收口后刷新）：
+- Stage 89：file-understanding-llm 全线落地（文件+提问一起发，会话内持续引用）——
+  proto 加 file_name/FileAttachment.files；chat-svc 五处映射 + migration 007 修 Stage 82 §契约 5
+  intent VARCHAR(16)→32 暗坑（e2e 实证 emotional_support 18 字符曾 22001 落库 500）；
+  BFF ai-stream 文件收集注入（≤2 条 + URL 重写 + session.WithRequestAuth 修 e2e 揪出的
+  auth ctx 缺失）；llm-service file_context（pypdf + python-docx + 白名单 SSRF）；
+  前端附件挂输入框 + 三分支发送流 + ChatFile 真实文件名。txt 哨兵 e2e + 追问引用全通；
+  PDF 路径注入正常但 DeepSeek 拒读记 residual（注入位置/prompt 优化挂 Stage 90）。
 
-**llm-chat-real-pipeline 全线落地**（PR-1/2/3a/3b + Stage 87/88 增强）。业务功能主线剩余：
+**当前 open 清单**（2026-09-13 Stage 89 收口后刷新）：
 
-1. file-upload"发给 Kimi 带文件引用"（依赖多模态文件理解，挂 llm 后续增强）
-2. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景，
-   kafka-reliability-gaps 已迁 landed 记 residuals）
-3. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；
-   DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）
-4. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）
-5. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项，stage-88 §五）
+**file-understanding-llm 全线落地**（PR-1 proto / PR-2 chat-svc / PR-3 BFF / PR-4 llm-service / PR-5 web / PR-6 容器 e2e + 暗坑修）。
+业务功能主线剩余：
+
+1. **PDF 路径 DeepSeek 拒读 residual**：llm-service 注入报告正常（100 chars 含 sentinel），但模型多次返"没读取到"。可优化注入位置（移到 user 消息尾部）+ prompt 文案；后续可换多模态模型或自建 OCR
+2. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景）
+3. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；DB 纳入 fail-fast required 依赖
+4. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）
+5. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项）
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。

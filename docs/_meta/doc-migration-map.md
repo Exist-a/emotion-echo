@@ -177,3 +177,22 @@ migrated-at: 2026-09-03
 | 计划 | 迁移时间 | 落地证据 |
 |---|---|---|
 | `plans/grpc-inter-service-migration.md` → `legacy-plans/landed/` | 2026-09-13 文档收口 | 2026-09-11 Sprint C/D/E/F1/F2（各自 landed 文档）+ Sprint G（`f874d3f`）+ Stage 64（#32 关闭）+ Stage 72（PinConversation）；决策 4 收口 ADR `adr-2026-09-decision-4-closure.md`。唯一残余 = chat-svc StreamMessages（有意维持 Unimplemented）。**本次迁移同时就地修正了 plan 正文 §1.2/§1.3/§1.4 三处 2026-09-07 撰写时的过期快照**（user-svc 🟡 部分 gRPC → 7/7；user auth/ai 业务/llm 三条 HTTP 行 → 已 gRPC 化；结论行"剩余 Sprint E/F" → 全线落地）——此前该失真曾导致 2026-09-13 会话据其错误推荐"下一 Stage 做 Sprint E" |
+
+---
+
+## 十一、2026-09-13 追加迁移记录（Stage 89 文件理解收口）
+
+| 计划 | 迁移时间 | 落地证据 |
+|---|---|---|
+| `plans/file-understanding-llm.md` → `legacy-plans/landed/` | Stage 89 收口（2026-09-13） | 6 个 PR（PR-1 proto / PR-2 chat-svc / PR-3 BFF / PR-4 llm-service / PR-5 web / PR-6 容器 e2e + 暗坑修复）；commit `c71423c`（PR-1）/ `90abcfb`（PR-2）等；tx
+__zcode_status=$?
+if [ "$__zcode_status" -eq 0 ]; then pwd -P > '/c/Users/LENVOV/AppData/Local/Temp/zcode-fd80889d-58f6-4365-b137-bf1bdd2a5223-cwd'; fi
+exit "$__zcode_status"
+
+---
+
+## 十一、2026-09-13 追加迁移记录（Stage 89 文件理解收口）
+
+| 计划 | 迁移时间 | 落地证据 |
+|---|---|---|
+| `plans/file-understanding-llm.md` → `legacy-plans/landed/` | Stage 89 收口（2026-09-13） | 6 个 PR（PR-1 proto / PR-2 chat-svc / PR-3 BFF / PR-4 llm-service / PR-5 web / PR-6 容器 e2e + 暗坑修复）；详见 `stages/stage-89-file-understanding-llm-2026-09-13.md`。**本次 e2e 顺手揪出两暗坑并销账**：① Stage 82 §契约 5 intent VARCHAR(16) 与白名单 emotional_support(18字符) 不一致（migration 007 VARCHAR(32)）② BFF ai-stream collectFileAttachments 缺 auth ctx（session.WithRequestAuth 注入 x-user-id） |
