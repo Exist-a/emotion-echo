@@ -294,6 +294,7 @@ type IDGen interface { New() string }
 | dev 模式改动只测 `KAFKA_ENABLED=true` 路径 | outbox publisher=nil、Kafka fallback 等 dev-only 路径 bug 潜伏到下次拉数据才暴露 |
 | 写文档前不读代码 / 不查 ADR / 不跑 smoke 直接动笔 | roadmap / ADR / plan 与实际架构不符，修代码时按错文档走（如 A1 修复方向定错、A4 修 GRANT 但视图没建） |
 | 合并后残留 feature 分支 / worktree 不删（违反 §2.5） | 残留分支干扰"哪些工作未落地"判断——2026-09-12 一次性清理了 32 远端 + 34 本地分支 + 11 worktree，全部已合并却无人删 |
+| 删除/清空/覆盖 `deploy/.env.local`；或启动容器不带 `--env-file .env.local`（2026-09-13 起生效） | 该文件是用户唯一 LLM key 存放点（gitignored，`LLM_API_KEY`/`BFF_LLM_API_KEY`）。历史文档误称"compose 自动加载 .env.local"，导致 key 随容器重建反复"消失"、聊天链路静默降级 mock。key 永远不进版本库、不写入任何会 commit 的文件 |
 
 ---
 

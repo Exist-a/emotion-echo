@@ -121,9 +121,15 @@ cd d:\源码\Emotion-Echo
 
 ```bash
 # 默认走 mock LLM fallback；接入真实 DeepSeek：
-cp deploy/env/.env.local.example deploy/env/.env.local
+cp deploy/env/.env.local.example deploy/.env.local
 # 编辑 LLM_API_KEY=sk-... 和 BFF_LLM_API_KEY=sk-...
 ```
+
+> 🔴 **路径必须是 `deploy/.env.local`（不是 `deploy/env/.env.local`）**——历史上曾因写错目录
+> 导致 key"配了却不生效"。且 compose **不会**自动加载 `.env.local`，启动/重建容器时必须
+> 显式加 `--env-file .env.local`（见步骤 4），否则容器里 key 为空、整条聊天链路静默降级 mock。
+> 本文件已被 .gitignore（`.env.local` 规则），真实 key 永远不进版本库；
+> **任何 agent / 脚本不得删除或清空该文件**（2026-09-13 用户明令）。
 
 ### 步骤 3：启动基础设施
 
@@ -140,10 +146,11 @@ docker compose -f docker-compose.infra.yml ps
 ```bash
 # 6 Go svc + emotion-llm-service + ai-svc + BFF
 # ADR-20 Stage 58 起：dev 启动必须加 -f compose.dev.yml（dev override 层）
-docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml up -d --no-build
+# 🔴 有 deploy/.env.local（真实 LLM key）时必须带 --env-file，否则 key 不进容器、聊天走 mock
+docker compose --env-file .env.local -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml up -d --no-build
 
 # （可选）启动 AI profile（FER / SenseVoice / XTTS）— 前提是镜像已构建
-docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml --profile ai up -d --no-build emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
+docker compose --env-file .env.local -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml --profile ai up -d --no-build emotion-echo-fer emotion-echo-sensevoice emotion-echo-xtts
 ```
 
 > 📋 **环境配置分层（ADR-20）**：详见 [`deploy/configuration.md`](deploy/configuration.md)。
@@ -338,9 +345,13 @@ docker logs emotion-echo-postgres
 
 参考 `docs/stage-36-smoke-report.md` §八 T8：
 ```bash
-cp deploy/env/.env.local.example deploy/env/.env.local
+cp deploy/env/.env.local.example deploy/.env.local
 # 填 LLM_API_KEY=sk-... 和 BFF_LLM_API_KEY=sk-...
-docker compose ... up -d --force-recreate emotion-echo-web-bff emotion-echo-ai-svc
+# 🔴 必须带 --env-file（compose 不自动加载 .env.local），且重建要带上 llm-service（gRPC 上游持有 key 的是它）：
+docker compose --env-file .env.local -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml \
+  up -d --force-recreate emotion-llm-service emotion-echo-web-bff emotion-echo-ai-svc
+# 验证 key 真的进容器了：
+docker exec emotion-llm-service sh -c 'echo "key len: ${#LLM_API_KEY}"'   # 期望 35+，0 = 没进去
 ```
 
 ### Q7: 浏览器打不开 (http://localhost:3000)

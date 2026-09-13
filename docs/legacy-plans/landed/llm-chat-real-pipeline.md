@@ -11,7 +11,11 @@ landed-stages:
 residuals:
   - 趋势报告（weekly/monthly/annual）意图维度未做（日报已有）
   - ~~llm-service Python 端 Nacos 注册未做~~ 🟢 Stage 88 落地（v3 gRPC SDK，BFF 第 6 处 resolveGRPCAddr 接入）
-  - dev 无真实 LLM key（链路通、回复走 mock 降级；配 LLM_API_KEY 即真实）
+  - ~~dev 无真实 LLM key（链路通、回复走 mock 降级；配 LLM_API_KEY 即真实）~~ 🟢 2026-09-13 销账：
+    DeepSeek key 落盘 `deploy/.env.local`（gitignored）+ `--env-file` 注入重建 llm-service/bff，
+    容器内直测 + BFF ai/stream 全链 SSE 实测均返回 `model=deepseek-chat` 真实流式回复。
+    根因顺带定位：历史文档误称"compose 自动加载 .env.local"，key 曾随容器重建反复丢失
+    （已修 QUICKSTART/example/AGENTS.md，key 文件保护入 §四禁止事项）
   - prod 应为 BFF 签发独立客户端证书（dev 复用 ai-client）
 related-plans:
   - docs/legacy-plans/landed/ai-response-structured.md（阶段 2 已随 PR-3a 落地）
