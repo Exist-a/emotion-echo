@@ -47,6 +47,10 @@ async def test_lifespan_starts_and_closes_nacos(monkeypatch, mock_nacos_runtime_
     assert fake_instance.start.call_count == 1
     assert fake_instance.close.call_count == 1
 
+    # Stage 88：注册 metadata 必须带 grpc_port（BFF resolveGRPCAddr 消费）
+    start_kwargs = fake_instance.start.call_args.kwargs
+    assert start_kwargs["metadata"]["grpc_port"] == "50051"
+
     # 清理 module-level 副作用
     importlib.reload(main_mod)
 
