@@ -8,6 +8,9 @@
 
 失败永不抛出——返回 (None, 原因)，由 build_file_context_text 注入"附件未能读取"注记。
 （宽.fail 设计：文件上下文是增强，绝不阻断对话主链路。）
+
+Stage 91 PR-1：build_file_context_text 的 prompt 头改为强指令性措辞，
+修 Stage 89/90 PDF 短文本哨兵拒读 residual。规格契约由 test_file_context_prompt_directive 锁住。
 """
 
 import io
@@ -24,6 +27,16 @@ DEFAULT_MAX_BYTES = 21 * 1024 * 1024  # 上传上限 20MiB + 余量
 DEFAULT_MAX_CHARS = 6000
 
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".log"}
+
+# Stage 91 PR-1：file_context prompt 头（强指令性，规格契约由 test_file_context_prompt_directive 锁住）
+# 设计意图：让 LLM 把附件内容视为"必读任务"而非"可选噪声"，明确要求"引用原文"。
+# 字符预算：≤ 200 字符（测试契约）。改动需同步更新测试文件。
+_PROMPT_HEADER = (
+    "[附件上下文 · 请基于以下用户上传的附件原文回答用户问题，必要时逐字引用原文]\n"
+    "以下内容来自用户上传的附件，是必读上下文：\n"
+)
+# 提示词头摘要：紧跟头部的简介句——独立常量便于未来 A/B 测试不同措辞。
+_PROMPT_INTRO = ""  # 已合并到 _PROMPT_HEADER；保留为空以备未来扩展
 
 
 @dataclass
@@ -170,7 +183,4 @@ def build_file_context_text(attachments, cfg: FetchConfig | None = None) -> str:
     # 新措辞：明确"必读任务 + 引用原文"，让 LLM 不再忽略附件内容。
     # 兼容：仍保留"用户上传"身份标注与"无关请说明"尾句，
     #       仅替换 head + 调整结构；最大长度硬约束 ≤ 200 字符（合同）。
-    return (
-        "[附件上下文 · 请基于以下用户上传的附件原文回答用户问题，必要时逐字引用原文]\n"
-        "以下内容来自用户上传的附件，是必读上下文：\n" + "\n".join(sections)
-    )
+    return _PROMPT_HEADER + "\n".join(sections)
