@@ -105,25 +105,35 @@ def _import_v3_sdk():
 async def _create_naming_service(cfg: NacosConfig):
     """构建 v3 Naming 服务（异步 gRPC 连接）"""
     sdk = _import_v3_sdk()
-    client_config = sdk.ClientConfig(
-        server_addresses=cfg.server_addr,
-        namespace_id=cfg.namespace,
-        username=cfg.username or None,
-        password=cfg.password or None,
-    )
+    client_config = _client_config(sdk, cfg)
     return await sdk.NacosNamingService.create_naming_service(client_config)
 
 
 async def _create_config_service(cfg: NacosConfig):
     """构建 v3 Config 服务"""
     sdk = _import_v3_sdk()
+    client_config = _client_config(sdk, cfg)
+    return await sdk.NacosConfigService.create_config_service(client_config)
+
+
+def _client_config(sdk, cfg: NacosConfig):
+    """公共 ClientConfig：非 root 容器里 SDK 的日志/磁盘缓存目录必须可写
+    （默认相对 cwd → /app 只读；Stage 88 e2e 实测 Permission denied）"""
     client_config = sdk.ClientConfig(
         server_addresses=cfg.server_addr,
         namespace_id=cfg.namespace,
         username=cfg.username or None,
         password=cfg.password or None,
+        log_dir=_ensure_writable_dir("NACOS_LOG_DIR", "/tmp/nacos-logs"),
     )
-    return await sdk.NacosConfigService.create_config_service(client_config)
+    client_config.set_cache_dir(_ensure_writable_dir("NACOS_CACHE_DIR", "/tmp/nacos-cache"))
+    return client_config
+
+
+def _ensure_writable_dir(env_key: str, default: str) -> str:
+    d = os.getenv(env_key, default)
+    os.makedirs(d, exist_ok=True)
+    return d
 
 
 def _advertise_ip(server_addr: str) -> str:

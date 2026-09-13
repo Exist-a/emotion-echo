@@ -22,6 +22,6 @@ const (
 	ServiceAI = "emotion-echo-ai-svc"
 	// ServiceWebBFF web-bff 服务名（供 APISIX nacos-discovery 上游拉取）。
 	ServiceWebBFF = "emotion-echo-web-bff"
-	// ServiceLLM emotion-llm-service 服务名（Python svc；Python 端 BootNacos 尚未实现）。
+	// ServiceLLM emotion-llm-service 服务名（Python svc；Stage 88 起 v3 gRPC SDK 注册，metadata 带 grpc_port）。
 	ServiceLLM = "emotion-llm-service"
 )
