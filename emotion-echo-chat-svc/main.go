@@ -119,32 +119,10 @@ func main() {
 		}
 	}
 
-	// 2. Kafka publisher
-	// Kafka.BrokersCSV 是 Stage 26-P 改造后从 yaml list 改为 CSV 字符串,
-	// 因为 go-zero conf 不原生支持 ${ENV} 占位在 list 字段上展开
-	// (同 ai-svc 范式)。容器内由 KAFKA_BROKERS env 注入。
+	// 2. Kafka publisher（先记配置；实际构造推迟到 SkyWalking tracer 之后，
+	// 因为 Stage 92 PR-1 KafkaEventPublisher.WithTracer 需要 tracer 引用）
 	kafkaBrokersList := splitBrokersCSV(c.Kafka.BrokersCSV)
-	var pub events.EventPublisher = events.NewInMemoryEventPublisher()
-	if c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
-		kp, err := events.NewKafkaEventPublisher(kafkaBrokersList)
-		if err != nil {
-			log.Printf("[kafka] producer init failed: %v (fallback to in-memory)", err)
-		} else {
-			pub = kp
-			log.Printf("[kafka] producer connected, brokers=%v", kafkaBrokersList)
-			defer func() { _ = kp.Close() }()
-		}
-	} else if db != nil {
-		// ADR-19 PR-A1.2: KAFKA_ENABLED=false 时启用 DevEventPublisher
-		// 同步写 user_behavior_events（dev-only，prod 不会命中此分支）。
-		// db 为 nil 时仍 fallback 到 InMemoryEventPublisher（向后兼容）。
-		if sqlDB, derr := db.DB(); derr == nil {
-			pub = events.NewDevEventPublisher(sqlDB)
-			log.Printf("[events] using DevEventPublisher (KAFKA_ENABLED=false, dev-only path)")
-		} else {
-			log.Printf("[events] dev publisher init failed (gorm.DB() returned err=%v, fallback to in-memory)", derr)
-		}
-	}
+	kafkaEnabled := c.Kafka.Enabled && len(kafkaBrokersList) > 0
 
 	// 3. SkyWalking (PR-OBS-2: 用 shared BootstrapSkyWalkingTracer 统一 7 svc 行为)
 	var tracer *go2sky.Tracer
@@ -163,6 +141,34 @@ func main() {
 		} else {
 			tracer = t
 			log.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
+		}
+	}
+
+	// 2.5 Kafka publisher（tracer 初始化后构造，可注入）
+	var pub events.EventPublisher = events.NewInMemoryEventPublisher()
+	if kafkaEnabled {
+		kp, err := events.NewKafkaEventPublisher(kafkaBrokersList)
+		if err != nil {
+			log.Printf("[kafka] producer init failed: %v (fallback to in-memory)", err)
+		} else {
+			// Stage 92 PR-1：注入 SkyWalking tracer → Publish 时写 sw8 header
+			if tracer != nil {
+				kp.WithTracer(sharedgrpc.NewGo2SkyTracer(tracer))
+				log.Printf("[kafka] producer + tracer wired (Stage 92 PR-1: sw8 propagation enabled)")
+			}
+			pub = kp
+			log.Printf("[kafka] producer connected, brokers=%v", kafkaBrokersList)
+			defer func() { _ = kp.Close() }()
+		}
+	} else if db != nil {
+		// ADR-19 PR-A1.2: KAFKA_ENABLED=false 时启用 DevEventPublisher
+		// 同步写 user_behavior_events（dev-only，prod 不会命中此分支）。
+		// db 为 nil 时仍 fallback 到 InMemoryEventPublisher（向后兼容）。
+		if sqlDB, derr := db.DB(); derr == nil {
+			pub = events.NewDevEventPublisher(sqlDB)
+			log.Printf("[events] using DevEventPublisher (KAFKA_ENABLED=false, dev-only path)")
+		} else {
+			log.Printf("[events] dev publisher init failed (gorm.DB() returned err=%v, fallback to in-memory)", derr)
 		}
 	}
 

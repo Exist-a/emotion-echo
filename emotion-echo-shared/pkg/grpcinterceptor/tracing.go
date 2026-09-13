@@ -72,6 +72,11 @@ type Span interface {
 // PR-OBS-17 新增 CreateLocalSpan 用于 Kafka consumer 等本地操作的 span 创建;
 // 原 StartEntry 专用于入口 span(server side)。两方法在生产 adapter 中均映射到
 // go2sky.Tracer 的对应方法。
+//
+// Stage 92 PR-1 新增 CreateExitSpan + CreateEntrySpan:跨进程(Kafka / HTTP)trace
+// 透传专用。CreateExitSpan 用于客户端(发请求/发消息),通过 injector 把 sw8 写入
+// carrier(Kafka header / HTTP req header);CreateEntrySpan 用于服务端(收消息),
+// 通过 extractor 从 carrier 重建父 trace context。
 type Tracer interface {
 	// StartEntry begins an entry span for an incoming request.
 	// Returns ctx (with span attached) and the span itself.
@@ -83,6 +88,27 @@ type Tracer interface {
 	// consumer message handler or a cron job. Returns ctx + span + err.
 	// err 非 nil 时调用方应回退到 noop span(与 StartEntry 行为一致)。
 	CreateLocalSpan(ctx context.Context, operationName string) (context.Context, Span, error)
+
+	// CreateExitSpan begins an exit span for an outbound operation (e.g. Kafka
+	// producer publishing a message). The adapter must call injector(key, value)
+	// for each propagation header (key="sw8" / "sw8-correlation"). Returns
+	// ctx + span + err; err 非 nil 时调用方应回退到 noop span.
+	//
+	// operationName: e.g. "kafka-publish"
+	// peer:          e.g. "chat-events" (target topic)
+	CreateExitSpan(ctx context.Context, operationName, peer string,
+		injector func(key, value string) error) (context.Context, Span, error)
+
+	// CreateEntrySpan begins an entry span for an inbound Kafka message,
+	// restoring the parent trace from sw8 carried in the message headers.
+	// The adapter must call extractor(key) to read each propagation header
+	// (key="sw8" / "sw8-correlation"). Returns ctx + span + err; extractor
+	// returning ("", nil) is treated as no upstream trace (Valid=false →
+	// new trace starts). err 非 nil 时调用方应回退到 noop span.
+	//
+	// operationName: e.g. "kafka-consume"
+	CreateEntrySpan(ctx context.Context, operationName string,
+		extractor func(key string) (string, error)) (context.Context, Span, error)
 }
 
 // NewServerTracingInterceptor creates a server-side tracing interceptor.

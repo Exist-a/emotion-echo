@@ -37,6 +37,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	chatevents "github.com/emotion-echo/shared/pkg/chatevents"
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 )
 
 func TestKafkaEventPublisher_Publish_HappyPath_EncodesJSON(t *testing.T) {
@@ -298,16 +299,31 @@ func newSw8MockTracer(sw8 string) *sw8MockTracer {
 // CreateExitSpan：按 propagation.Injector 协议写 sw8
 func (m *sw8MockTracer) CreateExitSpan(
 	ctx context.Context, operationName, peer string,
-	injector interface {
-		// 用接口类型避免直接依赖 propagation 包（生产端 import 即可）
-	},
-) (context.Context, interface{}, error) {
-	// 通过类型断言调用注入器
-	type injectorFunc func(string, string) error
-	if inj, ok := injector.(injectorFunc); ok {
-		_ = inj("sw8", m.fakeSw8)
+	injector func(key, value string) error,
+) (context.Context, grpcinterceptor.Span, error) {
+	if injector != nil {
+		_ = injector("sw8", m.fakeSw8)
 	}
 	return ctx, nil, nil
+}
+
+// CreateEntrySpan：mock 实现（本测试不涉及，保留接口合规）
+func (m *sw8MockTracer) CreateEntrySpan(
+	ctx context.Context, operationName string,
+	extractor func(string) (string, error),
+) (context.Context, grpcinterceptor.Span, error) {
+	return ctx, nil, nil
+}
+
+// CreateLocalSpan + StartEntry：mock 实现（接口合规所需）
+func (m *sw8MockTracer) CreateLocalSpan(
+	ctx context.Context, opName string,
+) (context.Context, grpcinterceptor.Span, error) {
+	return ctx, nil, nil
+}
+
+func (m *sw8MockTracer) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
+	return ctx, nil
 }
 
 // Stage 92 PR-1 RED：tracer 为 nil 时 Publish 不应 panic 且必须保持现有行为

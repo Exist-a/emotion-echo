@@ -62,6 +62,21 @@ type mockTracer struct {
 	localCtx context.Context
 	// localErr 每次 CreateLocalSpan 返回的 err
 	localErr error
+
+	// Stage 92 PR-1: CreateExitSpan 字段
+	exitOpCalls  []string
+	exitPeerCalls []string
+	exitFakeSw8  string // 注入到 injector("sw8", ...) 的值
+	exitSpan     *mockSpan
+	exitCtx      context.Context
+	exitErr      error
+
+	// Stage 92 PR-1: CreateEntrySpan 字段
+	entryOpCalls  []string
+	entrySw8Seen  string // extractor("sw8") 读到的值
+	entrySpan     *mockSpan
+	entryCtx      context.Context
+	entryErr      error
 }
 
 func (t *mockTracer) StartEntry(ctx context.Context, opName string) (context.Context, Span) {
@@ -79,6 +94,109 @@ func (t *mockTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 		outCtx = t.localCtx
 	}
 	return outCtx, t.localSpan, t.localErr
+}
+
+// Stage 92 PR-1: Tracer 接口扩 CreateExitSpan（用于 Kafka producer 注入 sw8）
+// + CreateEntrySpan（用于 Kafka consumer 从 sw8 header 重建父 trace）。
+// mockTracer 必须实现这两个方法才能满足编译期 Tracer 接口断言。
+func (t *mockTracer) CreateExitSpan(
+	ctx context.Context, opName, peer string,
+	injector func(string, string) error,
+) (context.Context, Span, error) {
+	t.exitOpCalls = append(t.exitOpCalls, opName)
+	t.exitPeerCalls = append(t.exitPeerCalls, peer)
+	if injector != nil {
+		_ = injector("sw8", t.exitFakeSw8)
+	}
+	outCtx := ctx
+	if t.exitCtx != nil {
+		outCtx = t.exitCtx
+	}
+	return outCtx, t.exitSpan, t.exitErr
+}
+
+func (t *mockTracer) CreateEntrySpan(
+	ctx context.Context, opName string,
+	extractor func(string) (string, error),
+) (context.Context, Span, error) {
+	t.entryOpCalls = append(t.entryOpCalls, opName)
+	if extractor != nil {
+		if v, _ := extractor("sw8"); v != "" {
+			t.entrySw8Seen = v
+		}
+	}
+	outCtx := ctx
+	if t.entryCtx != nil {
+		outCtx = t.entryCtx
+	}
+	return outCtx, t.entrySpan, t.entryErr
+}
+
+// =====================================================
+// Stage 92 PR-1: CreateExitSpan / CreateEntrySpan 契约测试
+// =====================================================
+
+// TestTracer_CreateExitSpan_PassesInjectorAndOpName mockTracer 必须实现
+// CreateExitSpan，并正确传递 opName/peer + 调用 injector。
+func TestTracer_CreateExitSpan_PassesInjectorAndOpName(t *testing.T) {
+	t.Parallel()
+	wantSw8 := "1-aabbccdd-eeff-1-aabbccdd-aabb-aabb-aabb-aabb-aabb"
+	span := &mockSpan{}
+	tracer := &mockTracer{exitSpan: span, exitFakeSw8: wantSw8}
+
+	var injectedKey, injectedVal string
+	injector := func(k, v string) error { injectedKey, injectedVal = k, v; return nil }
+
+	ctx, retSpan, err := tracer.CreateExitSpan(context.Background(), "kafka-publish", "chat-events", injector)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if ctx == nil {
+		t.Fatal("ctx should be non-nil")
+	}
+	if retSpan != span {
+		t.Errorf("returned span = %v, want %v", retSpan, span)
+	}
+	if len(tracer.exitOpCalls) != 1 || tracer.exitOpCalls[0] != "kafka-publish" {
+		t.Errorf("exitOpCalls = %v, want [kafka-publish]", tracer.exitOpCalls)
+	}
+	if len(tracer.exitPeerCalls) != 1 || tracer.exitPeerCalls[0] != "chat-events" {
+		t.Errorf("exitPeerCalls = %v, want [chat-events]", tracer.exitPeerCalls)
+	}
+	if injectedKey != "sw8" || injectedVal != wantSw8 {
+		t.Errorf("injector called with (%q, %q), want (sw8, %q)", injectedKey, injectedVal, wantSw8)
+	}
+}
+
+// TestTracer_CreateEntrySpan_PassesExtractorAndOpName mockTracer.CreateEntrySpan
+// 必须能读 extractor 抽到的 sw8（供 chat-svc→ai-svc 跨进程 trace 重建）。
+func TestTracer_CreateEntrySpan_PassesExtractorAndOpName(t *testing.T) {
+	t.Parallel()
+	wantSw8 := "1-aabbccdd-eeff-1-aabbccdd-aabb-aabb-aabb-aabb-aabb"
+	span := &mockSpan{}
+	tracer := &mockTracer{entrySpan: span}
+
+	extractor := func(k string) (string, error) {
+		if k == "sw8" {
+			return wantSw8, nil
+		}
+		return "", nil
+	}
+
+	_, retSpan, err := tracer.CreateEntrySpan(context.Background(), "kafka-consume", extractor)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if retSpan != span {
+		t.Errorf("returned span = %v, want %v", retSpan, span)
+	}
+	if len(tracer.entryOpCalls) != 1 || tracer.entryOpCalls[0] != "kafka-consume" {
+		t.Errorf("entryOpCalls = %v, want [kafka-consume]", tracer.entryOpCalls)
+	}
+	if tracer.entrySw8Seen != wantSw8 {
+		t.Errorf("entrySw8Seen = %q, want %q (extractor 没被调或没把 sw8 传过来)",
+			tracer.entrySw8Seen, wantSw8)
+	}
 }
 
 // =====================================================

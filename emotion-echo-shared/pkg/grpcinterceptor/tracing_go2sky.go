@@ -128,3 +128,62 @@ func (t *Go2SkyTracer) CreateLocalSpan(ctx context.Context, operationName string
 	}
 	return nCtx, &Go2SkySpan{span: span}, nil
 }
+
+// CreateExitSpan implements Tracer for outbound operations that propagate
+// the sw8 trace header to a downstream peer (e.g. Kafka producer publishing
+// a message to chat-events topic).
+//
+// Stage 92 PR-1: 包装 go2sky.Tracer.CreateExitSpanWithContext,通过注入器把
+// go2sky 内部的 SpanContext 编码为 sw8 + sw8-correlation string,调用方写到
+// carrier(Kafka RecordHeader / HTTP req header)。
+//
+// injector 必须实现 propagation.Injector 协议:对每个 (key, value) 调一次;
+// 当前实现只注入 sw8(sw8-correlation 通常为空,go2sky 自动跳过)。
+//
+// 返回 (ctx, Span, error);nil receiver / nil tracer 时降级 noop span + nil err。
+func (t *Go2SkyTracer) CreateExitSpan(
+	ctx context.Context, operationName, peer string,
+	injector func(key, value string) error,
+) (context.Context, Span, error) {
+	if t == nil || t.tracer == nil || injector == nil {
+		return ctx, &Go2SkySpan{}, nil
+	}
+	span, nCtx, err := t.tracer.CreateExitSpanWithContext(ctx, operationName, peer,
+		func(key, value string) error { return injector(key, value) })
+	if err != nil {
+		return nCtx, &Go2SkySpan{}, err
+	}
+	if span == nil {
+		return nCtx, &Go2SkySpan{}, nil
+	}
+	return nCtx, &Go2SkySpan{span: span}, nil
+}
+
+// CreateEntrySpan implements Tracer for inbound operations that restore the
+// parent trace from a sw8 header carried by the upstream peer (e.g. Kafka
+// consumer reading a message that chat-svc producer wrote sw8 into).
+//
+// Stage 92 PR-1: 包装 go2sky.Tracer.CreateEntrySpan,通过 extractor 从 carrier
+// 抽 sw8 + sw8-correlation,内部解码为 SpanContext 并 attach 为父 trace。
+//
+// extractor 必须实现 propagation.Extractor 协议:对每个 key 返回对应的 value
+// (找不到返 "", nil 表示无此 header,go2sky 内部判 Valid=false → 新 trace 起点)。
+//
+// 返回 (ctx, Span, error);nil receiver / nil tracer / nil extractor 时降级 noop。
+func (t *Go2SkyTracer) CreateEntrySpan(
+	ctx context.Context, operationName string,
+	extractor func(key string) (string, error),
+) (context.Context, Span, error) {
+	if t == nil || t.tracer == nil || extractor == nil {
+		return ctx, &Go2SkySpan{}, nil
+	}
+	span, nCtx, err := t.tracer.CreateEntrySpan(ctx, operationName,
+		func(key string) (string, error) { return extractor(key) })
+	if err != nil {
+		return nCtx, &Go2SkySpan{}, err
+	}
+	if span == nil {
+		return nCtx, &Go2SkySpan{}, nil
+	}
+	return nCtx, &Go2SkySpan{span: span}, nil
+}
