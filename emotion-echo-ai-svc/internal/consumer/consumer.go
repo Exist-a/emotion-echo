@@ -108,10 +108,21 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 				continue
 			}
 			// Stage 25-F: SkyWalking span（可选）
+			// Stage 92 PR-2: 用 CreateEntrySpan 从 msg.Headers[sw8] 重建父 trace
+			// (chat-svc producer → ai-svc consumer 跨进程 trace)。降级语义:
+			//   - msg 无 sw8 header → extractor 返 "" → go2sky Valid=false → 新 trace 起点
+			//   - Tracer=nil → 完全跳过 span 创建 (Stage 25-F 原行为)
 			if h.Tracer != nil {
-				_, span, err := h.Tracer.CreateLocalSpan(sess.Context(), "kafka-consume")
+				sw8Header := extractSw8Header(msg.Headers)
+				extractor := func(key string) (string, error) {
+					if key == "sw8" {
+						return sw8Header, nil
+					}
+					return "", nil
+				}
+				_, span, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
 				if err != nil {
-					slog.WarnContext(sess.Context(), "create local span failed (continuing without trace)", "err", err)
+					slog.WarnContext(sess.Context(), "create entry span failed (continuing without trace)", "err", err)
 				}
 				if span != nil {
 					defer span.EndSpan(nil)
@@ -185,6 +196,25 @@ func attemptKey(msg *sarama.ConsumerMessage) string {
 		return string(msg.Key)
 	}
 	return fmt.Sprintf("%d:%d", msg.Partition, msg.Offset)
+}
+
+// extractSw8Header 从 sarama RecordHeader 列表抽 sw8 header value
+//
+// Stage 92 PR-2: chat-svc producer (PR-1) 写到 Kafka header["sw8"] 的字符串
+// 由此函数抽回 → 喂给 Tracer.CreateEntrySpan 的 extractor → go2sky 重建父 trace。
+//
+// header 名常量与 chat-svc kafka_publisher.sw8HeaderName 一致 ("sw8")；
+// 这里不复用 shared 常量（避免引入 go2sky 依赖到 ai-svc 的 consumer 包）。
+func extractSw8Header(headers []*sarama.RecordHeader) string {
+	for _, h := range headers {
+		if h == nil {
+			continue
+		}
+		if string(h.Key) == "sw8" {
+			return string(h.Value)
+		}
+	}
+	return ""
 }
 
 // =====================================================

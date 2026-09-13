@@ -404,7 +404,8 @@ func TestConsumeClaim_TraceTagLiterals(t *testing.T) {
 		`span.Tag("messaging.kafka.topic"`,
 		`span.Tag("messaging.kafka.partition"`,
 		`span.Tag("event.type"`,
-		`h.Tracer.CreateLocalSpan(sess.Context(), "kafka-consume")`,
+		// Stage 92 PR-2: CreateLocalSpan → CreateEntrySpan（从 sw8 header 重建父 trace）
+		`h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)`,
 		`defer span.EndSpan(nil)`,
 	}
 	for _, m := range mustContain {
@@ -628,7 +629,8 @@ func assertHasTag(t *testing.T, calls []tagKV, k, v string) {
 func TestConsumeClaim_EmitsMessagingSystemTag(t *testing.T) {
 	t.Parallel()
 	span := &mockSpan{}
-	tracer := &mockTracer{localSpan: span}
+	// Stage 92 PR-2: span 由 CreateEntrySpan 返（不是 CreateLocalSpan）
+	tracer := &mockTracer{entrySpan: span}
 	handlerCalled := make(chan struct{}, 1)
 	h := &ConsumerGroupHandler{
 		Ready: make(chan bool),
@@ -668,9 +670,9 @@ func TestConsumeClaim_EmitsMessagingSystemTag(t *testing.T) {
 		t.Fatal("ConsumeClaim timeout")
 	}
 
-	// 1. CreateLocalSpan 调用: opName = "kafka-consume"
-	if len(tracer.localOpCalls) != 1 || tracer.localOpCalls[0] != "kafka-consume" {
-		t.Errorf("expected localOpCalls=[kafka-consume], got %v", tracer.localOpCalls)
+	// 1. CreateEntrySpan 调用: opName = "kafka-consume"（Stage 92 PR-2 改用 entry）
+	if len(tracer.entryOpCalls) != 1 || tracer.entryOpCalls[0] != "kafka-consume" {
+		t.Errorf("expected entryOpCalls=[kafka-consume], got %v", tracer.entryOpCalls)
 	}
 	// 2. Span 必须被 EndSpan (本 case handler 无 err)
 	if !span.ended {
@@ -743,7 +745,7 @@ func TestConsumeClaim_NilTracerSpanNotCreated(t *testing.T) {
 func TestConsumeClaim_SpanEndSpanPropagatesHandlerErr(t *testing.T) {
 	t.Parallel()
 	span := &mockSpan{}
-	tracer := &mockTracer{localSpan: span}
+	tracer := &mockTracer{entrySpan: span} // Stage 92 PR-2: entry 路径返 span
 	wantErr := errors.New("analyze: model timeout")
 	handlerCalled := make(chan struct{}, 1)
 	h := &ConsumerGroupHandler{
@@ -790,9 +792,9 @@ func TestConsumeClaim_SpanEndSpanPropagatesHandlerErr(t *testing.T) {
 		t.Fatal("timeout")
 	}
 
-	// CreateLocalSpan 应被调用 2 次
-	if len(tracer.localOpCalls) != 2 {
-		t.Errorf("expected 2 CreateLocalSpan calls, got %d", len(tracer.localOpCalls))
+	// CreateEntrySpan 应被调用 2 次（Stage 92 PR-2: 用 entry 替代 local）
+	if len(tracer.entryOpCalls) != 2 {
+		t.Errorf("expected 2 CreateEntrySpan calls, got %d", len(tracer.entryOpCalls))
 	}
 	// EndSpan 收到 err (handler 持续失败 → 每次 span.EndSpan(err) 路径)
 	if !span.ended {

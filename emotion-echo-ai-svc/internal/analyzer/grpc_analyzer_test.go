@@ -61,6 +61,18 @@ func (f *fakeEmotionLLMClient) AnalyzeBatch(_ context.Context, _ *emotionllm.Ana
 	return nil, errors.New("AnalyzeBatch not implemented in fake")
 }
 
+// ChatCompletion Stage 80 后 EmotionLLMService 新增的 RPC（llm-chat-real-pipeline
+// PR-1）；本测试 surface 不覆盖 ChatCompletion 路径，仅补接口合规避免 build fail。
+func (f *fakeEmotionLLMClient) ChatCompletion(_ context.Context, _ *emotionllm.ChatCompletionRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[emotionllm.ChatChunk], error) {
+	return nil, errors.New("ChatCompletion not implemented in fake")
+}
+
+// ClassifyIntent Stage 82/87 后 EmotionLLMService 新增的 RPC（intent-classification
+// 6-types）；本测试 surface 不覆盖此路径，仅补接口合规避免 build fail。
+func (f *fakeEmotionLLMClient) ClassifyIntent(_ context.Context, _ *emotionllm.ClassifyIntentRequest, _ ...grpc.CallOption) (*emotionllm.IntentResult, error) {
+	return nil, errors.New("ClassifyIntent not implemented in fake")
+}
+
 func TestGRPCAnalyzer_Analyze_HappyPath_MapsResponse(t *testing.T) {
 	t.Parallel()
 	fake := &fakeEmotionLLMClient{
