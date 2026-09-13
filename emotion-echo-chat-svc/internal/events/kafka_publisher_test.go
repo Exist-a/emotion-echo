@@ -231,3 +231,119 @@ func TestKafkaEventPublisher_Publish_TopicIsForwarded(t *testing.T) {
 		t.Fatalf("Publish failed: %v", err)
 	}
 }
+
+// Stage 92 PR-1 RED：KafkaEventPublisher 必须支持注入 sw8 trace header 到
+// ProducerMessage.Headers，让 ai-svc / analytics-svc consumer 通过 sarama
+// header 重建上游 trace context（跨进程 trace）。
+//
+// 行为契约：
+//   - 构造时注入 tracer（grpcinterceptor.Tracer 接口）
+//   - Publish 时 ctx 含上游 sw8 → 必须把 sw8 写到 msg.Headers["sw8"]
+//   - tracer 为 nil 时降级原行为（不破坏现有 dev/in-memory 路径）
+//
+// 注意：本测试只锁"sw8 被写到 header"；consumer 端用 sw8 重建父 span 由
+// ai-svc PR-2 验证（独立 RED/GREEN）。
+func TestKafkaEventPublisher_Publish_InjectsSw8Header(t *testing.T) {
+	t.Parallel()
+	mockProducer := mocks.NewSyncProducer(t, nil)
+
+	const fakeSw8 = "1-aabbccdd-eeff0011-1-aabbccdd-aabbccdd-aabbccdd-aabbccdd-aabbccdd"
+	var gotSw8 string
+
+	mockProducer.ExpectSendMessageWithMessageCheckerFunctionAndSucceed(
+		func(msg *sarama.ProducerMessage) error {
+			for _, h := range msg.Headers {
+				if string(h.Key) == "sw8" {
+					gotSw8 = string(h.Value)
+				}
+			}
+			return nil
+		},
+	)
+
+	// mock Tracer：CreateExitSpan 时调 injector 注入 fakeSw8 到 SpanContext
+	mockTracer := newSw8MockTracer(fakeSw8)
+
+	p := &KafkaEventPublisher{
+		producer: mockProducer,
+		tracer:   mockTracer,
+	}
+	ctx := context.Background()
+	err := p.Publish(ctx, TopicChatEvents, &Event{
+		ID:     "evt-sw8",
+		Type:   EventTypeMessageCreated,
+		Source: "chat-svc",
+		Time:   time.Unix(1700000000, 0).UTC(),
+		Data:   MessageCreatedData{MessageID: 1},
+	})
+	if err != nil {
+		t.Fatalf("Publish failed: %v", err)
+	}
+	if gotSw8 != fakeSw8 {
+		t.Errorf("sw8 header = %q, want %q (CreateExitSpan 未被 Publish 调用或 injector 未生效)",
+			gotSw8, fakeSw8)
+	}
+}
+
+// mock Tracer 实现：CreateExitSpan 时用 fakeSw8 填充 injector("sw8", ...)
+// 测试只关心 sw8 是否被写到 header，不关心 span lifecycle
+type sw8MockTracer struct {
+	fakeSw8 string
+}
+
+func newSw8MockTracer(sw8 string) *sw8MockTracer {
+	return &sw8MockTracer{fakeSw8: sw8}
+}
+
+// CreateExitSpan：按 propagation.Injector 协议写 sw8
+func (m *sw8MockTracer) CreateExitSpan(
+	ctx context.Context, operationName, peer string,
+	injector interface {
+		// 用接口类型避免直接依赖 propagation 包（生产端 import 即可）
+	},
+) (context.Context, interface{}, error) {
+	// 通过类型断言调用注入器
+	type injectorFunc func(string, string) error
+	if inj, ok := injector.(injectorFunc); ok {
+		_ = inj("sw8", m.fakeSw8)
+	}
+	return ctx, nil, nil
+}
+
+// Stage 92 PR-1 RED：tracer 为 nil 时 Publish 不应 panic 且必须保持现有行为
+// （headers 仍含 content-type，但无 sw8）—— 锁定降级语义。
+func TestKafkaEventPublisher_Publish_NoTracer_NoSw8Header(t *testing.T) {
+	t.Parallel()
+	mockProducer := mocks.NewSyncProducer(t, nil)
+	var hasSw8 bool
+	var hasContentType bool
+	mockProducer.ExpectSendMessageWithMessageCheckerFunctionAndSucceed(
+		func(msg *sarama.ProducerMessage) error {
+			for _, h := range msg.Headers {
+				switch string(h.Key) {
+				case "sw8":
+					hasSw8 = true
+				case "content-type":
+					hasContentType = true
+				}
+			}
+			return nil
+		},
+	)
+
+	p := &KafkaEventPublisher{producer: mockProducer, tracer: nil}
+	err := p.Publish(context.Background(), TopicChatEvents, &Event{
+		ID:   "evt-no-tracer",
+		Type: EventTypeMessageCreated,
+		Data: MessageCreatedData{MessageID: 1},
+	})
+	if err != nil {
+		t.Fatalf("Publish failed: %v", err)
+	}
+	if hasSw8 {
+		t.Error("tracer=nil 时不应有 sw8 header（不创造假的 trace context）")
+	}
+	if !hasContentType {
+		t.Error("tracer=nil 时仍必须有 content-type header（向后兼容）")
+	}
+}
