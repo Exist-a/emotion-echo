@@ -178,8 +178,10 @@ func main() {
 	var llmStreamer downstream.LLMChatStreamer
 	var intentClassifier downstream.LLMIntentClassifier
 	if c.LLM.GRPCAddr != "" {
+		// Stage 88: llm-service 已注册 Nacos（v3 gRPC SDK，metadata.grpc_port=50051），
+		// 与 4 个 Go 上游同走 resolveGRPCAddr 优先链；env 降为兜底。
 		llmGRPC, err := downstream.NewLLMGRPCClient(downstream.LLMGRPCOptions{
-			Addr:           c.LLM.GRPCAddr,
+			Addr:           resolveGRPCAddr(grpcResolver, c.LLM.GRPCAddr, shareddiscovery.ServiceLLM),
 			TLSEnabled:     os.Getenv("TLS_ENABLED") == "1",
 			CACertPath:     envOr("TLS_CA_CERT", "/app/etc/tls/ca.crt"),
 			ClientCertPath: envOr("TLS_CLIENT_CERT", "/app/etc/tls/ai-client.crt"),

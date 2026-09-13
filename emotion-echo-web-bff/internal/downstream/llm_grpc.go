@@ -106,7 +106,7 @@ func NewLLMGRPCClient(opts LLMGRPCOptions) (*LLMGRPCClient, error) {
 		creds = insecure.NewCredentials()
 	}
 
-	// grpc.NewClient 是惰性拨号（首次 RPC 才真正建连）；llm-service 未注册 Nacos、
+	// grpc.NewClient 是惰性拨号（首次 RPC 才真正建连）；Stage 88 起 llm-service 已注册 Nacos、
 	// BFF 用 env 地址，配置错误会在首次请求 fail-fast 并走 handler 的降级链。
 	conn, err := grpc.NewClient(opts.Addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
