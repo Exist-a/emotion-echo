@@ -32,6 +32,7 @@ import emotion_llm_pb2_grpc
 from main import analyze as http_analyze
 from chat_completion import ChatChunk as ChatChunkData
 from chat_completion import iter_chat_chunks
+from file_context import build_file_context_text
 from intent import inject_style
 from intent_llm import classify_intent_adaptive
 
@@ -282,6 +283,21 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
                 intent, confidence = classify_intent_adaptive(user_text)
                 messages = inject_style(messages, intent)
                 logger.info(f"[intent] {intent} (confidence={confidence})")
+
+            # Stage 89 PR-4：附件上下文注入（文件理解）。宽 fail——抽取失败只产注记，
+            # 绝不阻断对话；注入位置 = 首个 system 消息尾部（无 system 则前置一条）
+            file_context_text = build_file_context_text(
+                [{"url": f.url, "name": f.name} for f in request.files]
+            )
+            if file_context_text:
+                if messages and messages[0]["role"] == "system":
+                    messages[0]["content"] += "\n\n" + file_context_text
+                else:
+                    messages.insert(0, {"role": "system", "content": file_context_text})
+                logger.info(
+                    f"[file_context] injected {len(request.files)} attachment(s), "
+                    f"{len(file_context_text)} chars"
+                )
 
             first = True
             for chunk in iter_chat_chunks(

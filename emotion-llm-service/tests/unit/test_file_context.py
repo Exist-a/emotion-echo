@@ -199,10 +199,7 @@ class TestBuildFileContextText:
         assert "notes.txt" in out
 
     def test_ok_attachment_includes_extracted_text(self):
-        # 构造一个必然成功的场景：bytes 抽取直接可验，fetch 失败场景已在上面覆盖。
-        # 这里验证 build 的注入格式（通过 monkeypatch fetch_and_extract 打桩）
-        from file_context import _fetch_and_extract
-
+        # 构造一个必然成功的场景：fetch 打桩，验证 build 的注入格式
         atts = [{"url": "http://127.0.0.1/x.pdf", "name": "report.pdf"}]
         orig = build_file_context_text.__globals__["fetch_and_extract"]
         build_file_context_text.__globals__["fetch_and_extract"] = (

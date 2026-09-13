@@ -33,7 +33,7 @@ def http_server():
     srv = HTTPServer(("127.0.0.1", 0), Handler)
     port = srv.server_address[1]
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    yield f"127.0.0.1:{port}"
+    yield f"127.0.0.1:{port}", port
     srv.shutdown()
 
 

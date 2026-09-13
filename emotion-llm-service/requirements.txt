@@ -8,3 +8,6 @@ prometheus_client>=0.20.0   # Stage 20-P0-2: /metrics
 nacos-sdk-python>=3.1.0
 # Stage 80 PR-1: OpenAI 兼容 chat completion 客户端（DeepSeek 等端点；延迟 import，未装时走 mock 降级）
 openai>=1.40.0
+# Stage 89 PR-4: 附件文本抽取（file_context.py；均为纯 Python 包）
+pypdf>=4.0.0
+python-docx>=1.1.0
