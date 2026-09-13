@@ -553,6 +553,18 @@ type mockTracer struct {
 	localOpCalls []string
 	localSpan    *mockSpan
 	localErr     error
+
+	// Stage 92 PR-2: CreateEntrySpan 字段（用于 Kafka consumer 从 sw8 header 重建父 trace）
+	entryOpCalls  []string
+	entrySw8Seen  string // extractor("sw8") 抽到的值
+	entrySpan     *mockSpan
+	entryCtx      context.Context
+	entryErr      error
+
+	// Stage 92 PR-2: CreateExitSpan 字段（本测试不验证，本服务不发消息；保留接口合规）
+	exitOpCalls  []string
+	exitSpan     *mockSpan
+	exitErr      error
 }
 
 func (t *mockTracer) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
@@ -563,6 +575,33 @@ func (t *mockTracer) StartEntry(ctx context.Context, opName string) (context.Con
 func (t *mockTracer) CreateLocalSpan(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span, error) {
 	t.localOpCalls = append(t.localOpCalls, opName)
 	return ctx, t.localSpan, t.localErr
+}
+
+// CreateEntrySpan Stage 92 PR-2：从 msg.Headers 抽 sw8 → 重建父 trace
+func (t *mockTracer) CreateEntrySpan(
+	ctx context.Context, opName string,
+	extractor func(string) (string, error),
+) (context.Context, grpcinterceptor.Span, error) {
+	t.entryOpCalls = append(t.entryOpCalls, opName)
+	if extractor != nil {
+		if v, _ := extractor("sw8"); v != "" {
+			t.entrySw8Seen = v
+		}
+	}
+	outCtx := ctx
+	if t.entryCtx != nil {
+		outCtx = t.entryCtx
+	}
+	return outCtx, t.entrySpan, t.entryErr
+}
+
+// CreateExitSpan Stage 92 PR-2：mock（接口合规所需）
+func (t *mockTracer) CreateExitSpan(
+	ctx context.Context, opName, peer string,
+	injector func(string, string) error,
+) (context.Context, grpcinterceptor.Span, error) {
+	t.exitOpCalls = append(t.exitOpCalls, opName)
+	return ctx, t.exitSpan, t.exitErr
 }
 
 // 编译期断言: mockTracer 满足 grpcinterceptor.Tracer
@@ -763,4 +802,130 @@ func TestConsumeClaim_SpanEndSpanPropagatesHandlerErr(t *testing.T) {
 	// 这是 PR-OBS-17 状态(已有 4 tag,err 传播是 PR-OBS-18 范围)
 	// 仅断言 ended=true,不强求 endErr 值
 	_ = span.endErr
+}
+
+// ===== Stage 92 PR-2: Kafka consumer sw8 透传 =====
+//
+// 目的: ai-svc consumer 必须从 msg.Headers 抽 sw8 → 用 Tracer.CreateEntrySpan
+// 重建父 trace（chat-svc producer → ai-svc consumer 跨进程 trace）。
+//
+// 行为契约:
+//   - msg 含 sw8 header → consumer 调 CreateEntrySpan("kafka-consume", ext)
+//   - extractor 收到 sw8 值（透传给 go2sky 重建父 SpanContext）
+//   - span.SetSpanLayer(MQ=6) + SetComponent(GoKafka=5003) + 4 个 messaging.* tag
+//   - msg 无 sw8 header → CreateEntrySpan 仍调（extractor 返 "" → Valid=false → 新 trace 起点）
+func TestConsumeClaim_RestoresParentTraceFromSw8Header(t *testing.T) {
+	t.Parallel()
+	const fakeSw8 = "1-aabbccdd-eeff0011-2-aabbccdd-aabbccdd-aabbccdd-aabbccdd-aabbccdd"
+
+	span := &mockSpan{}
+	tracer := &mockTracer{entrySpan: span}
+	handlerCalled := make(chan struct{}, 1)
+	h := &ConsumerGroupHandler{
+		Ready: make(chan bool),
+		Handler: func(ctx context.Context, e *events.Event) error {
+			handlerCalled <- struct{}{}
+			return nil
+		},
+		Tracer: tracer,
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 5,
+		Value:     []byte(`{"type":"message.created","id":"evt-sw8-1","data":{"messageId":1}}`),
+		Headers: []*sarama.RecordHeader{
+			{Key: []byte("sw8"), Value: []byte(fakeSw8)},
+		},
+		Timestamp: time.Now(),
+	}
+
+	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, 1)}
+	sess := &fakeSession{}
+	claim.msgs <- msg
+	close(claim.msgs)
+
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+
+	select {
+	case <-handlerCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler not called")
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+
+	// 1. 必须调 CreateEntrySpan（不再用 CreateLocalSpan——PR-2 切换）
+	if len(tracer.entryOpCalls) != 1 || tracer.entryOpCalls[0] != "kafka-consume" {
+		t.Errorf("CreateEntrySpan calls = %v, want [kafka-consume]", tracer.entryOpCalls)
+	}
+	// 2. extractor 收到 sw8（父 trace 重建的依据）
+	if tracer.entrySw8Seen != fakeSw8 {
+		t.Errorf("extractor(\"sw8\") = %q, want %q (msg.Headers[sw8] 没被抽到)",
+			tracer.entrySw8Seen, fakeSw8)
+	}
+	// 3. span 必须 EndSpan + 4 个 messaging.* tag（同 PR-OBS-17）
+	if !span.ended {
+		t.Error("expected span.EndSpan called")
+	}
+	assertHasTag(t, span.tagCalls, "messaging.system", "kafka")
+	assertHasTag(t, span.tagCalls, "messaging.kafka.topic", "chat-events")
+	assertHasTag(t, span.tagCalls, "messaging.kafka.partition", "5")
+	assertHasTag(t, span.tagCalls, "event.type", "message.created")
+}
+
+// TestConsumeClaim_NoSw8Header_StillCreatesSpan 验证降级：msg 无 sw8 时
+// CreateEntrySpan 仍调（extractor 返 "" → Valid=false → 新 trace 起点），不 panic。
+func TestConsumeClaim_NoSw8Header_StillCreatesSpan(t *testing.T) {
+	t.Parallel()
+	span := &mockSpan{}
+	tracer := &mockTracer{entrySpan: span}
+	handlerCalled := make(chan struct{}, 1)
+	h := &ConsumerGroupHandler{
+		Ready: make(chan bool),
+		Handler: func(ctx context.Context, e *events.Event) error {
+			handlerCalled <- struct{}{}
+			return nil
+		},
+		Tracer: tracer,
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 0,
+		Value:     []byte(`{"type":"message.created","id":"evt-no-sw8"}`),
+		// 无 sw8 header（兼容 Stage 73 之前的旧消息）
+		Headers:   nil,
+		Timestamp: time.Now(),
+	}
+
+	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, 1)}
+	sess := &fakeSession{}
+	claim.msgs <- msg
+	close(claim.msgs)
+
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+
+	select {
+	case <-handlerCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler not called")
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+
+	if len(tracer.entryOpCalls) != 1 {
+		t.Errorf("CreateEntrySpan must still be called for msgs without sw8, got %v", tracer.entryOpCalls)
+	}
+	if tracer.entrySw8Seen != "" {
+		t.Errorf("entrySw8Seen = %q, want empty (no sw8 header)", tracer.entrySw8Seen)
+	}
 }
