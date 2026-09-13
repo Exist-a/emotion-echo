@@ -991,12 +991,20 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   前端附件挂输入框 + 三分支发送流 + ChatFile 真实文件名。txt 哨兵 e2e + 追问引用全通；
   PDF 路径注入正常但 DeepSeek 拒读记 residual（注入位置/prompt 优化挂 Stage 90）。
 
-**当前 open 清单**（2026-09-13 Stage 89 收口后刷新）：
+- Stage 90：file_context 注入位置改为 user 尾部（接近"用户粘贴文本提问"形态）
+  ——单元测试 192/192 绿（spec 由 test_grpc_files_v2.py 锁住，旧 test_grpc_files.py 同步
+  跟进 spec）；容器 e2e PDF 部分成功部分拒读，根因属 DeepSeek 对单短文本判定保守，
+  5 条候选优化路线记入 Stage 91。顺手销 todo-pile A1/A2/B4 章节正文（§五 状态表已
+  正确，仅章节与现状脱节）。
 
-**file-understanding-llm 全线落地**（PR-1 proto / PR-2 chat-svc / PR-3 BFF / PR-4 llm-service / PR-5 web / PR-6 容器 e2e + 暗坑修）。
+**当前 open 清单**（2026-09-13 Stage 90 收口后刷新）：
+
+**file-understanding-llm 全线落地**（Stage 89 六 PR + Stage 90 注入位置优化）。
 业务功能主线剩余：
 
-1. **PDF 路径 DeepSeek 拒读 residual**：llm-service 注入报告正常（100 chars 含 sentinel），但模型多次返"没读取到"。可优化注入位置（移到 user 消息尾部）+ prompt 文案；后续可换多模态模型或自建 OCR
+1. **PDF 路径 DeepSeek 拒读 residual（Stage 91）**：Stage 90 注入位置改为 user 尾部后
+   容器 e2e PDF 部分成功部分仍拒——根因属模型对单短文本判定保守。Stage 91 候选方案：
+   注入第二条独立 user turn / prompt 前置明确措辞 / 长 PDF 切片摘要 / 换模型对比
 2. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景）
 3. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；DB 纳入 fail-fast required 依赖
 4. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）
