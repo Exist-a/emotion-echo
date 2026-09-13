@@ -28,6 +28,7 @@ import (
 
 	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/downstream"
+	"emotion-echo-web-bff/internal/session"
 
 	"github.com/gin-gonic/gin"
 )
@@ -197,7 +198,8 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		defer cancel()
 		// Stage 89 PR-3：会话内文件持续引用——最新 ≤2 条 file 消息随请求下发，
 		// llm-service 负责拉取/抽取/注入 system 上下文
-		files := h.collectFileAttachments(c.Request.Context(), req.ConversationID)
+		// Stage 89 PR-6 e2e 揪出：必须用 auth ctx（注入 x-user-id），否则 chat gRPC ListMessages 鉴权拒
+		files := h.collectFileAttachments(session.WithRequestAuth(c), req.ConversationID)
 		err := h.llm.StreamChat(ctx, downstream.LLMStreamRequest{
 			Model:    h.cfg.LLM.Model,
 			Messages: llmMessages,
