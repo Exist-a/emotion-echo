@@ -49,6 +49,14 @@ message ChatMessage {
   string content = 2;
 }
 
+// FileAttachment 附件引用（Stage 89 PR-1）
+// 只传 {url,name}，字节不过 gRPC（默认 4MiB 帧限制）；拉取与文本抽取在 llm-service 内完成，
+// url 必须命中服务端 FILE_FETCH_ALLOWLIST 白名单（SSRF 防护）
+message FileAttachment {
+  string url = 1;   // 文件可下载 URL（BFF 已重写为 llm-service 可达的内部 MinIO 端点）
+  string name = 2;  // 原始文件名（抽取按扩展名分流；也进 prompt）
+}
+
 // ChatCompletionRequest 对话请求
 message ChatCompletionRequest {
   repeated ChatMessage messages = 1;
@@ -59,6 +67,8 @@ message ChatCompletionRequest {
   // Stage 82 PR-3a：true = 服务端对最后一条 user 消息做意图分类，
   // 按意图注入回复风格指令到 system prompt，并在首帧回带 intent
   bool with_intent = 6;
+  // Stage 89 PR-1：附件引用（≤2 条由 BFF 侧截取）；文本抽取后以 system 上下文注入
+  repeated FileAttachment files = 7;
 }
 
 // ChatChunk 流式响应帧

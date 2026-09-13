@@ -172,6 +172,61 @@ func (x *ChatMessage) GetContent() string {
 	return ""
 }
 
+// FileAttachment 附件引用（Stage 89 PR-1）
+// 只传 {url,name}，字节不过 gRPC（默认 4MiB 帧限制）；拉取与文本抽取在 llm-service 内完成，
+// url 必须命中服务端 FILE_FETCH_ALLOWLIST 白名单（SSRF 防护）
+type FileAttachment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`   // 文件可下载 URL（BFF 已重写为 llm-service 可达的内部 MinIO 端点）
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"` // 原始文件名（抽取按扩展名分流；也进 prompt）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FileAttachment) Reset() {
+	*x = FileAttachment{}
+	mi := &file_emotion_llm_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileAttachment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileAttachment) ProtoMessage() {}
+
+func (x *FileAttachment) ProtoReflect() protoreflect.Message {
+	mi := &file_emotion_llm_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileAttachment.ProtoReflect.Descriptor instead.
+func (*FileAttachment) Descriptor() ([]byte, []int) {
+	return file_emotion_llm_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *FileAttachment) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *FileAttachment) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 // ChatCompletionRequest 对话请求
 type ChatCompletionRequest struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -182,14 +237,16 @@ type ChatCompletionRequest struct {
 	UserId      string                 `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`           // 审计/限流维度
 	// Stage 82 PR-3a：true = 服务端对最后一条 user 消息做意图分类，
 	// 按意图注入回复风格指令到 system prompt，并在首帧回带 intent
-	WithIntent    bool `protobuf:"varint,6,opt,name=with_intent,json=withIntent,proto3" json:"with_intent,omitempty"`
+	WithIntent bool `protobuf:"varint,6,opt,name=with_intent,json=withIntent,proto3" json:"with_intent,omitempty"`
+	// Stage 89 PR-1：附件引用（≤2 条由 BFF 侧截取）；文本抽取后以 system 上下文注入
+	Files         []*FileAttachment `protobuf:"bytes,7,rep,name=files,proto3" json:"files,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChatCompletionRequest) Reset() {
 	*x = ChatCompletionRequest{}
-	mi := &file_emotion_llm_proto_msgTypes[3]
+	mi := &file_emotion_llm_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -201,7 +258,7 @@ func (x *ChatCompletionRequest) String() string {
 func (*ChatCompletionRequest) ProtoMessage() {}
 
 func (x *ChatCompletionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_emotion_llm_proto_msgTypes[3]
+	mi := &file_emotion_llm_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -214,7 +271,7 @@ func (x *ChatCompletionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatCompletionRequest.ProtoReflect.Descriptor instead.
 func (*ChatCompletionRequest) Descriptor() ([]byte, []int) {
-	return file_emotion_llm_proto_rawDescGZIP(), []int{3}
+	return file_emotion_llm_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ChatCompletionRequest) GetMessages() []*ChatMessage {
@@ -259,6 +316,13 @@ func (x *ChatCompletionRequest) GetWithIntent() bool {
 	return false
 }
 
+func (x *ChatCompletionRequest) GetFiles() []*FileAttachment {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
 // ChatChunk 流式响应帧
 type ChatChunk struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -273,7 +337,7 @@ type ChatChunk struct {
 
 func (x *ChatChunk) Reset() {
 	*x = ChatChunk{}
-	mi := &file_emotion_llm_proto_msgTypes[4]
+	mi := &file_emotion_llm_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -285,7 +349,7 @@ func (x *ChatChunk) String() string {
 func (*ChatChunk) ProtoMessage() {}
 
 func (x *ChatChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_emotion_llm_proto_msgTypes[4]
+	mi := &file_emotion_llm_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -298,7 +362,7 @@ func (x *ChatChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatChunk.ProtoReflect.Descriptor instead.
 func (*ChatChunk) Descriptor() ([]byte, []int) {
-	return file_emotion_llm_proto_rawDescGZIP(), []int{4}
+	return file_emotion_llm_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ChatChunk) GetDeltaContent() string {
@@ -348,7 +412,7 @@ type AnalyzeRequest struct {
 
 func (x *AnalyzeRequest) Reset() {
 	*x = AnalyzeRequest{}
-	mi := &file_emotion_llm_proto_msgTypes[5]
+	mi := &file_emotion_llm_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +424,7 @@ func (x *AnalyzeRequest) String() string {
 func (*AnalyzeRequest) ProtoMessage() {}
 
 func (x *AnalyzeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_emotion_llm_proto_msgTypes[5]
+	mi := &file_emotion_llm_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +437,7 @@ func (x *AnalyzeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnalyzeRequest.ProtoReflect.Descriptor instead.
 func (*AnalyzeRequest) Descriptor() ([]byte, []int) {
-	return file_emotion_llm_proto_rawDescGZIP(), []int{5}
+	return file_emotion_llm_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AnalyzeRequest) GetMessageId() string {
@@ -412,7 +476,7 @@ type AnalyzeResponse struct {
 
 func (x *AnalyzeResponse) Reset() {
 	*x = AnalyzeResponse{}
-	mi := &file_emotion_llm_proto_msgTypes[6]
+	mi := &file_emotion_llm_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -424,7 +488,7 @@ func (x *AnalyzeResponse) String() string {
 func (*AnalyzeResponse) ProtoMessage() {}
 
 func (x *AnalyzeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_emotion_llm_proto_msgTypes[6]
+	mi := &file_emotion_llm_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -437,7 +501,7 @@ func (x *AnalyzeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnalyzeResponse.ProtoReflect.Descriptor instead.
 func (*AnalyzeResponse) Descriptor() ([]byte, []int) {
-	return file_emotion_llm_proto_rawDescGZIP(), []int{6}
+	return file_emotion_llm_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AnalyzeResponse) GetMessageId() string {
@@ -493,7 +557,7 @@ type AnalyzeBatchRequest struct {
 
 func (x *AnalyzeBatchRequest) Reset() {
 	*x = AnalyzeBatchRequest{}
-	mi := &file_emotion_llm_proto_msgTypes[7]
+	mi := &file_emotion_llm_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -505,7 +569,7 @@ func (x *AnalyzeBatchRequest) String() string {
 func (*AnalyzeBatchRequest) ProtoMessage() {}
 
 func (x *AnalyzeBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_emotion_llm_proto_msgTypes[7]
+	mi := &file_emotion_llm_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -518,7 +582,7 @@ func (x *AnalyzeBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnalyzeBatchRequest.ProtoReflect.Descriptor instead.
 func (*AnalyzeBatchRequest) Descriptor() ([]byte, []int) {
-	return file_emotion_llm_proto_rawDescGZIP(), []int{7}
+	return file_emotion_llm_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *AnalyzeBatchRequest) GetItems() []*AnalyzeRequest {
@@ -549,7 +613,10 @@ const file_emotion_llm_proto_rawDesc = "" +
 	"confidence\";\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"\xe1\x01\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"6\n" +
+	"\x0eFileAttachment\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\x97\x02\n" +
 	"\x15ChatCompletionRequest\x127\n" +
 	"\bmessages\x18\x01 \x03(\v2\x1b.emotion_llm.v1.ChatMessageR\bmessages\x12\x14\n" +
 	"\x05model\x18\x02 \x01(\tR\x05model\x12 \n" +
@@ -558,7 +625,8 @@ const file_emotion_llm_proto_rawDesc = "" +
 	"max_tokens\x18\x04 \x01(\x05R\tmaxTokens\x12\x17\n" +
 	"\auser_id\x18\x05 \x01(\tR\x06userId\x12\x1f\n" +
 	"\vwith_intent\x18\x06 \x01(\bR\n" +
-	"withIntent\"\x9b\x01\n" +
+	"withIntent\x124\n" +
+	"\x05files\x18\a \x03(\v2\x1e.emotion_llm.v1.FileAttachmentR\x05files\"\x9b\x01\n" +
 	"\tChatChunk\x12#\n" +
 	"\rdelta_content\x18\x01 \x01(\tR\fdeltaContent\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\bR\x04done\x12\x14\n" +
@@ -601,33 +669,35 @@ func file_emotion_llm_proto_rawDescGZIP() []byte {
 	return file_emotion_llm_proto_rawDescData
 }
 
-var file_emotion_llm_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_emotion_llm_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_emotion_llm_proto_goTypes = []any{
 	(*ClassifyIntentRequest)(nil), // 0: emotion_llm.v1.ClassifyIntentRequest
 	(*IntentResult)(nil),          // 1: emotion_llm.v1.IntentResult
 	(*ChatMessage)(nil),           // 2: emotion_llm.v1.ChatMessage
-	(*ChatCompletionRequest)(nil), // 3: emotion_llm.v1.ChatCompletionRequest
-	(*ChatChunk)(nil),             // 4: emotion_llm.v1.ChatChunk
-	(*AnalyzeRequest)(nil),        // 5: emotion_llm.v1.AnalyzeRequest
-	(*AnalyzeResponse)(nil),       // 6: emotion_llm.v1.AnalyzeResponse
-	(*AnalyzeBatchRequest)(nil),   // 7: emotion_llm.v1.AnalyzeBatchRequest
+	(*FileAttachment)(nil),        // 3: emotion_llm.v1.FileAttachment
+	(*ChatCompletionRequest)(nil), // 4: emotion_llm.v1.ChatCompletionRequest
+	(*ChatChunk)(nil),             // 5: emotion_llm.v1.ChatChunk
+	(*AnalyzeRequest)(nil),        // 6: emotion_llm.v1.AnalyzeRequest
+	(*AnalyzeResponse)(nil),       // 7: emotion_llm.v1.AnalyzeResponse
+	(*AnalyzeBatchRequest)(nil),   // 8: emotion_llm.v1.AnalyzeBatchRequest
 }
 var file_emotion_llm_proto_depIdxs = []int32{
 	2, // 0: emotion_llm.v1.ChatCompletionRequest.messages:type_name -> emotion_llm.v1.ChatMessage
-	5, // 1: emotion_llm.v1.AnalyzeBatchRequest.items:type_name -> emotion_llm.v1.AnalyzeRequest
-	5, // 2: emotion_llm.v1.EmotionLLMService.Analyze:input_type -> emotion_llm.v1.AnalyzeRequest
-	7, // 3: emotion_llm.v1.EmotionLLMService.AnalyzeBatch:input_type -> emotion_llm.v1.AnalyzeBatchRequest
-	3, // 4: emotion_llm.v1.EmotionLLMService.ChatCompletion:input_type -> emotion_llm.v1.ChatCompletionRequest
-	0, // 5: emotion_llm.v1.EmotionLLMService.ClassifyIntent:input_type -> emotion_llm.v1.ClassifyIntentRequest
-	6, // 6: emotion_llm.v1.EmotionLLMService.Analyze:output_type -> emotion_llm.v1.AnalyzeResponse
-	6, // 7: emotion_llm.v1.EmotionLLMService.AnalyzeBatch:output_type -> emotion_llm.v1.AnalyzeResponse
-	4, // 8: emotion_llm.v1.EmotionLLMService.ChatCompletion:output_type -> emotion_llm.v1.ChatChunk
-	1, // 9: emotion_llm.v1.EmotionLLMService.ClassifyIntent:output_type -> emotion_llm.v1.IntentResult
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 1: emotion_llm.v1.ChatCompletionRequest.files:type_name -> emotion_llm.v1.FileAttachment
+	6, // 2: emotion_llm.v1.AnalyzeBatchRequest.items:type_name -> emotion_llm.v1.AnalyzeRequest
+	6, // 3: emotion_llm.v1.EmotionLLMService.Analyze:input_type -> emotion_llm.v1.AnalyzeRequest
+	8, // 4: emotion_llm.v1.EmotionLLMService.AnalyzeBatch:input_type -> emotion_llm.v1.AnalyzeBatchRequest
+	4, // 5: emotion_llm.v1.EmotionLLMService.ChatCompletion:input_type -> emotion_llm.v1.ChatCompletionRequest
+	0, // 6: emotion_llm.v1.EmotionLLMService.ClassifyIntent:input_type -> emotion_llm.v1.ClassifyIntentRequest
+	7, // 7: emotion_llm.v1.EmotionLLMService.Analyze:output_type -> emotion_llm.v1.AnalyzeResponse
+	7, // 8: emotion_llm.v1.EmotionLLMService.AnalyzeBatch:output_type -> emotion_llm.v1.AnalyzeResponse
+	5, // 9: emotion_llm.v1.EmotionLLMService.ChatCompletion:output_type -> emotion_llm.v1.ChatChunk
+	1, // 10: emotion_llm.v1.EmotionLLMService.ClassifyIntent:output_type -> emotion_llm.v1.IntentResult
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_emotion_llm_proto_init() }
@@ -641,7 +711,7 @@ func file_emotion_llm_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emotion_llm_proto_rawDesc), len(file_emotion_llm_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

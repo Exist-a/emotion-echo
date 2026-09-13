@@ -97,6 +97,9 @@ message SendMessageRequest {
   // Stage 82 PR-3b：消息意图（6 类，BFF 发送前经 llm-service ClassifyIntent 标注；
   // 空 = 未分类——llm-service 不可达时降级）
   string intent = 8;
+  // Stage 89 PR-1：文件消息的原始文件名（可选；content=MinIO URL，原始名此前只存在
+  // 于上传瞬间的浏览器内存中，对象 key 仅 uid+hash+ext）。供 LLM prompt 与前端展示
+  string file_name = 9;
 }
 
 // Message 消息视图
@@ -113,6 +116,8 @@ message Message {
   string content_type = 8;
   // Stage 82 PR-3b：消息意图（6 类；'' = 未分类）
   string intent = 9;
+  // Stage 89 PR-1：文件消息原始文件名（与 content_type='file' 配套；空 = 非文件或未提供）
+  string file_name = 10;
 }
 
 // ListMessagesRequest 列消息请求
