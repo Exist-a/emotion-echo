@@ -164,8 +164,13 @@ def build_file_context_text(attachments, cfg: FetchConfig | None = None) -> str:
             sections.append(f"--- 附件 {i}：{name} ---\n{text}")
         else:
             sections.append(f"--- 附件 {i}：{name}（未能读取：{reason}）---")
+    # Stage 91 PR-1 GREEN：prompt 头从描述性改指令性。
+    # 原因：Stage 89/90 两次位置改造后 PDF 短文本哨兵仍部分拒读——
+    # 原措辞"可参考/如实说明"是描述性，LLM 把附件判作"可选噪声"。
+    # 新措辞：明确"必读任务 + 引用原文"，让 LLM 不再忽略附件内容。
+    # 兼容：仍保留"用户上传"身份标注与"无关请说明"尾句，
+    #       仅替换 head + 调整结构；最大长度硬约束 ≤ 200 字符（合同）。
     return (
-        "[附件上下文]\n"
-        "以下内容来自用户上传的附件，回答用户问题时可参考；"
-        "若附件内容与问题无关请如实说明：\n" + "\n".join(sections)
+        "[附件上下文 · 请基于以下用户上传的附件原文回答用户问题，必要时逐字引用原文]\n"
+        "以下内容来自用户上传的附件，是必读上下文：\n" + "\n".join(sections)
     )
