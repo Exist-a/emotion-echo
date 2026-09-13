@@ -10,7 +10,7 @@ docs/plans/intent-classification-6-types.md「LLM 式分类增强」（Stage 82 
 import logging
 import os
 
-from chat_completion import _default_openai_client, resolve_backend_config
+from chat_completion import resolve_backend_config
 from intent import INTENTS, classify_intent
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,17 @@ def _extract_label(content: str) -> str | None:
         if label in lowered:
             return label
     return None
+
+
+def _default_openai_client(config: dict):
+    """分类专用 client：禁用 SDK 重试——ClassifyIntent 在 BFF 发消息同步链路上，
+    SDK 默认重试 2 次会把最坏耗时放大 3 倍（timeout 5s × 3 ≈ 15s+）"""
+    from openai import OpenAI
+    return OpenAI(
+        api_key=config["api_key"],
+        base_url=config["base_url"],
+        max_retries=0,
+    )
 
 
 def llm_classify_label(text: str, config: dict, client=None) -> str | None:

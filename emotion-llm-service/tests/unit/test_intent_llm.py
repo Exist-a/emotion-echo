@@ -144,6 +144,14 @@ class TestClassifyIntentAdaptive:
         assert (intent, conf) == classify_intent(AMBIGUOUS_TEXT)
         assert fake.chat.completions.calls == []
 
+    def test_client_factory_disables_retries(self):
+        """分类专用 client 必须禁用 SDK 重试：ClassifyIntent 在 BFF 发消息同步链路上，
+        SDK 默认重试 2 次会把最坏耗时放大 3 倍（timeout 5s × 3 ≈ 15s+，容器 e2e 实测）"""
+        client = intent_llm._default_openai_client(
+            {"api_key": "k", "base_url": "http://fake", "model": "m"}
+        )
+        assert client.max_retries == 0
+
     def test_low_confidence_non_other_also_reclassified(self, monkeypatch):
         """弱置信（<阈值）但非 other 也走 LLM 消歧——歧义消息不止零命中一种"""
         _with_llm_config(monkeypatch)
