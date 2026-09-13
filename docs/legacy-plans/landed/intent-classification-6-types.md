@@ -5,9 +5,9 @@ landed-stages:
   - stage-82-intent-classification-styled-replies-2026-09-12.md（PR-3a：规则式 6 类分类 + ClassifyIntent RPC + with_intent 风格指令注入）
   - stage-83-intent-report-pipeline-2026-09-12.md（PR-3b：intent 落库 → msg_summary_v → analytics 意图分布 → 日报饼图）
   - stage-85-trend-report-intent-2026-09-12.md（趋势报告意图维度：weekly/monthly/annual 饼图全链）
+  - stage-87-llm-intent-reclassify-2026-09-13.md（LLM 式分类增强 + 歧义消歧：规则式兜底，key 可用时 LLM 重分类，离线路径零变化）
 residuals:
-  - LLM 式分类增强（规则式为兜底）待真实 key 可用
-  - 歧义消息（多意图并列）归 other 为防误路由设计，可 LLM 消歧
+  - LLM 消歧效果评估（真实 key 上线后对比规则/LLM 分歧率）——观测项，无代码动作
 original-path: .trae/documents/消息分类扩展规划.md
 original-date: 2026-07-XX
 migrated-at: 2026-09-03
@@ -40,7 +40,14 @@ round: 2-C
 > ReportsTrendResponse 加 intent_distribution → repo 区间聚合（msg_summary_v，
 > 与日报同源同义）→ BFF intentCountsToItems 确定性排序 → 三张趋势页饼图
 > （字段缺失隐藏，旧下游兼容）。真实容器 e2e + psql GROUP BY 交叉实证一致。
-> 剩余残余仅 LLM 式分类增强 / 歧义消歧两项（依赖真实 LLM key，非近期）。
+
+> **Stage 87 状态注记（2026-09-13，LLM 式分类增强已落地）**：residuals 两项
+> "LLM 式分类增强 / 歧义消歧" 已销账（stage-87 报告）——`intent_llm.py
+> classify_intent_adaptive`：规则式高置信直返（零 LLM 开销），模糊（other /
+> confidence < 0.5）且 LLM_API_KEY 可用时 LLM 重分类（temperature=0、小配额、
+> max_retries=0），LLM 失败/输出 other/无 key/`LLM_INTENT_RECLASSIFY=0` 全部
+> 优雅回规则结果，离线路径与 Stage 82 逐字段一致（容器 e2e 实证）。
+> 唯一残余：LLM 消歧效果评估（观测项，无代码动作）。
 
 # 消息分类扩展规划（6类）
 

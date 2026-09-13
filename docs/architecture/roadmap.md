@@ -971,18 +971,22 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   毒消息真实容器 e2e 全链 firing 实证；顺手修 analytics 001 msg_summary_v 旧定义幂等性 bug
   ——Stage 82 视图升级漏同步，db-migrate 全量重跑必炸）；
   kafka-reliability-gaps 六项缺口全部收口，计划迁 landed
+- Stage 87：LLM 意图重分类（classify_intent_adaptive：规则式高置信直返 / 模糊且
+  key 可用时 LLM 重分类 temperature=0+max_retries=0，失败/无 key/env 关闭优雅回
+  规则；离线路径与 Stage 82 逐字段一致；容器 e2e 揪出 SDK 默认重试放大降级耗时
+  16.2s→2.1s 并修复）；intent-classification-6-types residuals 销账。
+  顺手 docs：grpc-inter-service-migration「剩余」段过期信息销账（#32/Sprint G/Stage 72）
 
-**当前 open 清单**（2026-09-13 Stage 86 收口后刷新）：
+**当前 open 清单**（2026-09-13 Stage 87 收口后刷新）：
 
-**llm-chat-real-pipeline 全线落地**（PR-1/2/3a/3b，Stage 80-83）。业务功能主线剩余：
+**llm-chat-real-pipeline 全线落地**（PR-1/2/3a/3b + Stage 87 增强）。业务功能主线剩余：
 
 1. file-upload"发给 Kimi 带文件引用"（依赖多模态文件理解，挂 llm 后续增强）
-2. LLM 式分类增强 / 歧义消息消歧（规则式兜底已就位；key 可用时 LLM 重分类可选）
-3. llm-service Python 端 Nacos 注册 + prod 独立 bff-client 证书
-4. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景，
+2. llm-service Python 端 Nacos 注册 + prod 独立 bff-client 证书
+3. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景，
    kafka-reliability-gaps 已迁 landed 记 residuals）
-5. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
+4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知 /
    llm-service Python 端注册；DB 纳入 fail-fast required 依赖（可选强化，stage-77 §四）
-6. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）
+5. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）（nacos-enablement-dev.md §一.1）
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。
