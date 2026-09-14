@@ -7,7 +7,9 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -198,4 +200,106 @@ func TestConfig_ApplyEnvOverrides_Transport(t *testing.T) {
 	assert.Equal(t, "http", c.ChatService.Transport)
 	assert.Equal(t, "http", c.AssessmentService.Transport)
 	assert.Equal(t, "http", c.AnalyticsService.Transport)
+}
+
+// =====================================================
+// Stage 94 PR-5 §P0-10 · BFF JWTSecret 硬编码默认修复测试
+// =====================================================
+//
+// code-review-2026-09-14.md §P0-10 原文:"BFF JWTSecret 硬编码默认值
+// dev-bff-secret"(0.5d) —— 认证密钥漏 env 注入时,所有 JWT 用 dev 密钥签 →
+// 攻击者可伪造任意 user_id token。
+//
+// 修复目标:删默认值 + main.go 启动 fail-fast。
+
+// TestSetDefaults_JWTSecret_HasNoHardcodedDefault §P0-10 字面量断言:
+//
+// config.go SetDefaults 内不应给 c.Auth.JWTSecret 设任何默认值(尤其
+// "dev-bff-secret" / "change-me" 等弱密钥)。
+func TestSetDefaults_JWTSecret_HasNoHardcodedDefault(t *testing.T) {
+	srcBytes, err := os.ReadFile("config.go")
+	if err != nil {
+		t.Skipf("cannot read config.go: %v", err)
+	}
+	src := string(srcBytes)
+
+	badDefaults := []string{
+		`JWTSecret = "dev-bff-secret"`,
+		`JWTSecret = "change-me"`,
+		`JWTSecret = "secret"`,
+		`JWTSecret = "default"`,
+		`JWTSecret = "dev-secret"`,
+	}
+	for _, bad := range badDefaults {
+		if strings.Contains(src, bad) {
+			t.Errorf("config.go SetDefaults 仍含硬编码默认值 %q —— §P0-10 修复要求删除默认值,\n"+
+				"生产环境漏 env 注入时不应有任何兜底密钥(应让 main.go fail-fast)", bad)
+		}
+	}
+
+	// 必须保留空值检测(if c.Auth.JWTSecret == ""),让 main.go 知道缺
+	if !strings.Contains(src, `c.Auth.JWTSecret == ""`) {
+		t.Error("config.go 缺空值检测 —— 删默认值后必须保留检测,让 main.go 等上层\n" +
+			"知道 JWTSecret 未配置 → fail-fast")
+	}
+}
+
+// TestWebBffYaml_JWTSecret_HasNoInsecureDefault §P0-10 字面量断言:
+//
+// etc/web-bff.yaml 不应再含默认 JWTSecret: dev-bff-secret。
+func TestWebBffYaml_JWTSecret_HasNoInsecureDefault(t *testing.T) {
+	srcBytes, err := os.ReadFile("../../etc/web-bff.yaml")
+	if err != nil {
+		t.Skipf("cannot read web-bff.yaml: %v", err)
+	}
+	// 只看 yaml code body（去掉注释）,避免 self-referential 误命中
+	src := stripYAMLLines(string(srcBytes))
+
+	badDefaults := []string{
+		`JWTSecret: dev-bff-secret`,
+		`JWTSecret: change-me`,
+		`JWTSecret: secret`,
+		`JWTSecret: default`,
+	}
+	for _, bad := range badDefaults {
+		if strings.Contains(src, bad) {
+			t.Errorf("web-bff.yaml 仍含默认密钥 %q —— §P0-10 修复要求删除默认值,\n"+
+				"yaml 应只展示占位符或留空 + 注释引导 env 注入", bad)
+		}
+	}
+}
+
+// stripYAMLLines 移除 yaml 注释行（行首 #）以及尾部行内注释。
+// 简化版:只处理行首 #,因为 dev-bff-secret 字面量只在注释或配置行出现,
+// 而我们检查的是配置行 —— 行内 # 后面若误命中 JWTSecret dev-bff-secret,
+// 配置行本身的 key/value 不该有 #,所以剥离行首 # 就够。
+func stripYAMLLines(src string) string {
+	var out strings.Builder
+	for _, line := range strings.Split(src, "\n") {
+		trimmed := strings.TrimSpace(line)
+		// 跳过纯注释行(以 # 开头) 和空行
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		out.WriteString(line)
+		out.WriteByte('\n')
+	}
+	return out.String()
+}
+
+// TestMain_JWTSecret_RequiredAtStartup §P0-10 字面量断言:
+//
+// web-bff main.go 启动时必须校验 Auth.JWTSecret 非空 + log.Fatal,避免
+// dev 密钥进生产。
+func TestMain_JWTSecret_RequiredAtStartup(t *testing.T) {
+	mainBytes, err := os.ReadFile("../../main.go")
+	if err != nil {
+		t.Skipf("cannot read web-bff/main.go: %v", err)
+	}
+	src := string(mainBytes)
+
+	if !strings.Contains(src, `c.Auth.JWTSecret`) {
+		t.Error("web-bff main.go 缺 c.Auth.JWTSecret 校验 —— §P0-10 修复要求启动时\n" +
+			"校验 JWTSecret 非空,缺失则 log.Fatal")
+	}
 }

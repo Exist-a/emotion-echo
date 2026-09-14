@@ -61,7 +61,7 @@ landed-parts: []
 | **P0-7** | **GinAuthMiddleware 信任未签名 X-User-Id header + 白名单过窄**（svc 端口若直连 → 任意用户身份） | D §A1 | `shared/pkg/middleware/gin_auth.go:20-39` | 1-2d | 是 |
 | **P0-8** | **chat-svc `persistWithOutbox` 路径 2/3：DB 写完但 outbox 写失败 → 事件静默丢失** | D §B3 | `chat-svc/internal/logic/createconversationlogic.go:90-150` | 1-2d | 是（命中率高） |
 | **P0-9** | **`analytics_reader` role 密码硬编码 `CHANGE_ME_AT_DEPLOY`（initdb 自动跑 SQL → 真实建出该 login）** | D §B6 | `analytics-svc/migrations/004_create_analytics_reader_role.sql:25` | 0.5d | 是 |
-| **P0-10** | **BFF `JWTSecret` 硬编码默认值 `dev-bff-secret`** | D §D1 | `web-bff/internal/config/config.go:156-158` + `etc/web-bff.yaml:70` | 0.5d | 是 |
+| **P0-10** | **BFF `JWTSecret` 硬编码默认值 `dev-bff-secret`** | D §D1 | `web-bff/internal/config/config.go:156-158` + `etc/web-bff.yaml:70` | 0.5d | 是 | ✅ Stage 94 PR-5 landed (2026-09-14, web-bff:v0.1.13 + SetDefaults 删默认值 + auth.NewManager fail-fast)
 
 > **注**：原文 P0 共 ~12 项，本计划合并为 10 个独立 P0（P0-1/2/3/6 是 BFF/Kafka trace 链路 4 个共因 bug，建议合并 PR）。其余 D §D4（.env.local）经 git check-ignore 验证**已正确忽略**，从 P0 降为 P1。
 

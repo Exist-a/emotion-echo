@@ -66,8 +66,15 @@ Health:
 
 # Stage 33 PR-19b: BFF 真实登录（user-svc bcrypt 校验）+ JWTSecret 仅用于 sign JWT 给前端用。
 # JWTSecret 必须与 APISIX jwt-auth secret 同源（部署时通过 env 注入同步）。
+#
+# Stage 94 PR-5 §P0-10：移除 JWTSecret: dev-bff-secret 默认值。dev 密钥进生产
+# 会让攻击者可伪造任意 user_id token。部署时必须显式通过 env 注入：
+#   export BFF_JWT_SECRET=$(openssl rand -hex 32)
+# 或在 compose override 里设 JWTSecret: <生产密钥>。
+# 未注入时 main.go 调 auth.NewManager(secret, ttl) 时 NewManager 内部
+# fail-fast + log.Fatal,避免 dev 密钥进生产。
 Auth:
-  JWTSecret: dev-bff-secret
+  JWTSecret: ""
   TokenTTLSeconds: 86400
 
 # Stage 32 PR-16: BFF 是否信任 APISIX 注入的 X-User-Id header

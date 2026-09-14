@@ -606,7 +606,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.12  # Stage 94 PR-4: 5+1 个下游 gRPC conn 挂 tracing/timeout/logging 链 (§P0-1)
+    image: emotion-echo/web-bff:v0.1.13  # Stage 94 PR-5: JWTSecret 默认值删除 + 启动 fail-fast (§P0-10)
     container_name: emotion-echo-web-bff
     restart: unless-stopped
     depends_on:
