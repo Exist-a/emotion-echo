@@ -44,7 +44,7 @@ status: Round 1 占位 · Round 2 首批内容迁入
 - `kafka-reliability-gaps.md`（Stage 86 落地后归档）
 - `nacos-enablement-dev.md`（Stage 88 落地后归档）
 - `llm-chat-real-pipeline.md`（Stage 81 落地后归档）
-- `observability-edge-gaps-from-code-review.md`（Stage 92 + 93 落地后归档,§A 全 2 项 closed;§B-F 5 项 P2-P3 residuals 留 Stage 94+ 候选）
+- `observability-edge-gaps-from-code-review.md`（Stage 92 + 93 + Round 5 落地后归档,§A 全 2 项 + §B + §C + §E 共 5/7 项 closed;§D + §F P3 2 项留 Stage 94+ 候选）
 
 ### shifted/（Round 2 迁入）
 

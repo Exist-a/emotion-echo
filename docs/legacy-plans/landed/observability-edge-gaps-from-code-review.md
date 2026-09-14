@@ -16,6 +16,9 @@ related-adrs: []
 landed-parts:
   - §A Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN（2026-09-14）
   - §A-extension analytics-svc consumer sw8 透传 —— Stage 93 全 GREEN（2026-09-14,镜像 v0.1.6）
+  - §B consumer.attempts map 加锁（ai-svc + analytics-svc）—— Round 5 全 GREEN（2026-09-14,commits 7af41a5/aba2476）
+  - §C metrics unmatched 路径跳过 —— Round 5 全 GREEN（2026-09-14,commit 4bc2b21）
+  - §E AI model init failed metric —— Round 5 全 GREEN（2026-09-14,commits 4710493/4c2ca90;docker e2e 3 个 series 各=1）
 residuals:
   - §D. GinSkywalking 跳过路径配置化 P3 0.5h（健康检查 / metrics endpoint 不应入 trace）
   - §F. consumer.go 拆分 P3 0.5h（chatEventHandler 拆出 trace/DLQ/repo 三个 sub-handler）

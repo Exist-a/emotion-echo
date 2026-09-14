@@ -1034,12 +1034,13 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 
 **当前 open 清单**（2026-09-14 Stage 93 收口后刷新）：
 
-**observability-edge-gaps 收口进度**（Stage 92 + 93 完成 §A 全 2 项）：
+**observability-edge-gaps 收口进度**（Stage 92 + 93 + Round 5 完成 5/7 项）：
 - ✅ A. Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN
 - ✅ A-extension. analytics-svc consumer sw8 透传 —— Stage 93 landed（2026-09-14）
-- ⏳ B. consumer.attempts 加锁 P2 0.5h / C. metrics unmatched 路径 P2 1.5h /
-   D. GinSkywalking 跳过路径配置化 P3 0.5h / E. AI model init failed metric P2 1h /
-   F. consumer.go 拆分 P3 0.5h。总 ≈ 0.5 人天（B/C/E 优先）。
+- ✅ B. consumer.attempts 加锁 —— Round 5 landed（2026-09-14, commits 7af41a5/aba2476）
+- ✅ C. metrics unmatched 路径跳过 —— Round 5 landed（2026-09-14, commit 4bc2b21）
+- ✅ E. AI model init failed metric —— Round 5 landed（2026-09-14, docker e2e 3 个 series 各=1）
+- ⏳ D. GinSkywalking 跳过路径配置化 P3 0.5h / F. consumer.go 拆分 P3 0.5h（独立 sprint）
 
 **其他**：
 1. SkyWalking OAP 9.x graphql queryDuration 时间格式 bug 修——否则 UI 跨进程 trace 可视化受阻
