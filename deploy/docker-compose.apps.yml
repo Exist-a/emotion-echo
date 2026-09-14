@@ -20,6 +20,10 @@
 x-logging-env: &logging-env
   TZ: Asia/Shanghai
 
+# P0-R2-10: env_file 锚点 — 所有需要 .env.local 的服务引用此锚点
+x-env-file: &env-file
+  - .env.local
+
 services:
 
   # =====================================================
@@ -76,6 +80,7 @@ services:
     image: emotion-echo/user-svc:v0.1.4
     container_name: emotion-echo-user-svc
     restart: unless-stopped
+    env_file: *env-file
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
@@ -134,6 +139,7 @@ services:
     # v0.1.3: PR-2 中间件分层（/health、/metrics 免鉴权 + 业务群 auth.Use 分组）
     container_name: emotion-echo-chat-svc
     restart: unless-stopped
+    env_file: *env-file
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
@@ -193,6 +199,7 @@ services:
     image: emotion-echo/analytics-svc:v0.1.8  # Stage 94 PR-5: analytics_reader role 改 NOLOGIN (§P0-9)
     container_name: emotion-echo-analytics-svc
     restart: unless-stopped
+    env_file: *env-file
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
@@ -252,6 +259,7 @@ services:
     image: emotion-echo/assessment-svc:v0.1.2
     container_name: emotion-echo-assessment-svc
     restart: unless-stopped
+    env_file: *env-file
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
@@ -310,6 +318,7 @@ services:
     image: emotion-echo/llm-service:v0.1.2   # P0-4: pinned tag (Stage 91 PR-1 prompt 强指令性)
     container_name: emotion-llm-service
     restart: unless-stopped
+    env_file: *env-file
     depends_on:
       nacos:
         condition: service_started
@@ -350,10 +359,11 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          # P1-R2-13: 512M → 1024M（Python runtime + openai SDK + grpc 框架近爆）
+          memory: 1024M
         reservations:
           cpus: "0.2"
-          memory: 128M
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)\""]
       interval: 15s
@@ -371,6 +381,7 @@ services:
     image: emotion-echo/ai-svc:v0.1.8   # Stage 94 PR-2: ai-svc→llm-service grpc_analyzer.go 改用 ClientDialOptions helper (§P0-2 + §P0-3a)
     container_name: emotion-echo-ai-svc
     restart: unless-stopped
+    env_file: *env-file
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
@@ -399,13 +410,14 @@ services:
       # ai-svc 直接读 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL / LLM_TIMEOUT
       # （main.go:419-432）；compose .env.local 覆盖，无 key 时 LLM_BASE_URL 空
       # → LLMFuser 禁用，FusionWorker 走 late_fuser_weighted fallback（Stage 34 默认行为）。
-      # 留 LLM_INTERNAL_* 给内部 llm-service 兼容（Stage 19 路径）。
+      # 留 INTERNAL_API_KEY 给内部 llm-service 鉴权（P0-R2-5: 统一 env 名）。
       LLM_BASE_URL:        ${LLM_BASE_URL:-}
       LLM_API_KEY:         ${LLM_API_KEY:-}
       LLM_MODEL:           ${LLM_MODEL:-deepseek-chat}
       LLM_TIMEOUT:         ${LLM_TIMEOUT:-3}
       LLM_GRPC_ADDR:       "emotion-llm-service:50051"
-      LLM_INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
+      # P0-R2-5: 统一 env 名 INTERNAL_API_KEY（与 llm-service / web-bff 一致）
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
 
       # Stage 22-A.5: AI 模型服务（可选，未启用 ai profile 时不连）
       FER_BASE_URL:        ${FER_BASE_URL:-http://emotion-echo-fer:8004}
@@ -428,10 +440,11 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          # P1-R2-13: 512M → 1024M（Go runtime + grpc + skywalking + 3 模型客户端）
+          memory: 1024M
         reservations:
           cpus: "0.2"
-          memory: 128M
+          memory: 256M
     depends_on:
       postgres:
         condition: service_started
@@ -609,8 +622,8 @@ services:
     image: emotion-echo/web-bff:v0.1.14  # Stage 94 PR-6: TrustAPISIX=true 时 APISIXCIDRs 白名单强制 (§P0-7)
     container_name: emotion-echo-web-bff
     restart: unless-stopped
+    env_file: *env-file
     depends_on:
-      - emotion-echo-user-svc
       - emotion-echo-chat-svc
       - emotion-echo-assessment-svc
       - emotion-echo-analytics-svc

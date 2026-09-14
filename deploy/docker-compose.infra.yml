@@ -153,6 +153,10 @@ services:
     image: nacos/nacos-server:v2.4.3
     container_name: emotion-echo-nacos
     restart: unless-stopped
+    # P2-R2-20: 把 Nacos console 8848 端口移入 profiles=["dev"]，避免
+    # staging / prod 误起 → 控制台无鉴权暴露宿主机，攻击者改路由 / 注册伪造服务。
+    # dev 启动方式：docker compose --profile dev up -d
+    profiles: ["dev"]
     environment:
       <<: *logging-env
       MODE: standalone
