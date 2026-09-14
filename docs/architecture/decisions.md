@@ -155,6 +155,9 @@
 | 必含字段 | `ts`, `level`, `svc`, `trace_id`, `user_id`, `action` |
 | API 访问日志 | APISIX access log（边缘） |
 | 用户操作审计 | 各 svc 业务 logger |
+
+> **DOC-6 (Round 1) 就地更正**：trace_id 跨 APISIX 边界串联在 Stage 95 P1-3 已修复
+> （APISIX file-logger 现含 trace_id 字段）。Loki↔OAP 联动待 Promtail 多源采集落地后打通。
 | 集中存储（dev） | 各 svc `out.log` 文件 |
 | 集中存储（prod） | Loki + Grafana 或 ELK |
 
