@@ -43,11 +43,17 @@ var HTTPRequestsTotal = promauto.NewCounterVec(
 )
 
 // HTTPRequestDuration HTTP 请求耗时 histogram（按 service/method/path 区分）
+//
+// P2-3 (Round 1): DefBuckets 上限 5s 太紧，AI 慢请求落 +Inf。
+// 扩展桶到 30s，覆盖 LLM 上游 DeepSeek 10-20s 响应。
+var customDurationBuckets = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30}
+
 var HTTPRequestDuration = promauto.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "emotion_echo_http_request_duration_seconds",
 		Help:    "Histogram of HTTP request latency in seconds.",
-		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		// P2-3 (Round 1): 上限 5s 太紧，AI 慢请求（DeepSeek 10-20s）落 +Inf。
+		Buckets: customDurationBuckets,
 	},
 	[]string{"service", "method", "path"},
 )
@@ -99,6 +105,40 @@ var ModelClientInitFailedTotal = promauto.NewCounterVec(
 // model: 模型短名（"fer" / "sensevoice" / "xtts"）
 func IncModelClientInitFailed(service, model string) {
 	ModelClientInitFailedTotal.WithLabelValues(service, model).Inc()
+}
+
+// P2-22 (Round 1): MV REFRESH metrics
+// 背景：analytics-svc 启动期 REFRESH MATERIALIZED VIEW 失败仅 log，
+// Grafana 看不到 REFRESH 健康状态。
+var (
+	MVRefreshSuccess = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "emotion_echo_mv_refresh_success_total",
+		Help: "Total successful MV REFRESH operations.",
+	})
+	MVRefreshFail = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "emotion_echo_mv_refresh_fail_total",
+		Help: "Total failed MV REFRESH operations.",
+	})
+	MVRefreshDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "emotion_echo_mv_refresh_duration_seconds",
+		Help:    "Duration of MV REFRESH operations.",
+		Buckets: prometheus.DefBuckets,
+	})
+)
+
+// P2-5 (Round 1): panic 计数器 — 当前 panic 只打日志，无 metric，
+// AlertManager 无法抓到 panic 事件。counter 按 service label 区分。
+var PanicTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "emotion_echo_panic_total",
+		Help: "Total handler panics caught by Recovery interceptors.",
+	},
+	[]string{"service"},
+)
+
+// IncPanic 递增 panic 计数（在 Recovery 中间件 / gRPC ServerRecovery 调用）
+func IncPanic(service string) {
+	PanicTotal.WithLabelValues(service).Inc()
 }
 
 // PromHTTPHandler 返回 promhttp 的 http.Handler（用于 gin.WrapH 注册 /metrics）

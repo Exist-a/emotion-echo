@@ -26,6 +26,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/emotion-echo/shared/pkg/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -87,8 +88,11 @@ func ServerRecoveryInterceptor() grpc.UnaryServerInterceptor {
 					r,
 					debug.Stack(),
 				)
+				metrics.IncPanic("grpc-server") // P2-5: panic 计数
+				// P2-18 (Round 1): panic value 直接写到 status.Message 会泄露内部信息
+				//（如 SQL 表名 / 文件路径 / 用户输入）。改为固定文案 + log 原始 panic。
 				// 13 = codes.Internal
-				err = status.Errorf(13, "internal error: %v", r)
+				err = status.Error(13, "internal error")
 			}
 		}()
 		return handler(ctx, req)

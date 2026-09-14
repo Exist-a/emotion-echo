@@ -46,10 +46,35 @@ type bucket struct {
 //   - ratePerSec: 每秒补充的 token 数（可小数，如 0.5 = 每 2s 一个 token）
 //   - burst: 桶容量（最大瞬时并发）
 func NewTokenBucket(ratePerSec float64, burst int) *TokenBucket {
-	return &TokenBucket{
+	tb := &TokenBucket{
 		rate:    ratePerSec,
 		burst:   float64(burst),
 		buckets: make(map[string]*bucket),
+	}
+	// P1-18 (Round 1): buckets map 无清理 → 长跑 OOM。
+	// 启动后台 goroutine 每 5 分钟扫一次，剔除 idle > 10 分钟的桶。
+	// idle 阈值 = max(refill_time, 10min) —— refill_time 是补满桶需要的时间。
+	refillMinutes := int(burst)/int(ratePerSec*60) + 1
+	if refillMinutes < 10 {
+		refillMinutes = 10
+	}
+	go tb.gcLoop(time.Duration(refillMinutes) * time.Minute)
+	return tb
+}
+
+// gcLoop P1-18：周期清理 idle bucket
+func (t *TokenBucket) gcLoop(idleThreshold time.Duration) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		cutoff := time.Now().Add(-idleThreshold)
+		t.mu.Lock()
+		for k, b := range t.buckets {
+			if b.lastFill.Before(cutoff) {
+				delete(t.buckets, k)
+			}
+		}
+		t.mu.Unlock()
 	}
 }
 

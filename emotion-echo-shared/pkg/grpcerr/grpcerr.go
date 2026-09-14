@@ -151,8 +151,10 @@ func Map(err error) (codes.Code, string) {
 		return codes.DeadlineExceeded, msg
 	}
 
-	// 默认 fallback
-	return codes.Internal, msg
+	// P1-28 (Round 1): 默认 fallback codes.Internal 不能直接返 err.Error() 全文
+	// —— SQL/PG/HTTP 错误可能含表名 / 列名 / 内部 IP，泄露给前端。
+	// 改为 codes.Internal + 通用文案，原始 err 通过 errors.As 由调用方 log。
+	return codes.Internal, "internal error"
 }
 
 // MapToError 便利方法：err → gRPC status.Error。

@@ -39,6 +39,7 @@ import (
 
 	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/emotion-echo/shared/pkg/logging"
+	"github.com/emotion-echo/shared/pkg/metrics"
 	"github.com/gin-gonic/gin"
 )
 
@@ -77,6 +78,8 @@ func GinSkywalkingMiddleware(tracer grpcinterceptor.Tracer) gin.HandlerFunc {
 		if tracer != nil {
 			_, span = tracer.StartEntry(c.Request.Context(), c.FullPath())
 		}
+		// P1-5 (Round 1): panic 后 EndSpan 兜底
+		defer ginSkywalkingRecover(span)
 		if span != nil {
 			c.Set("skywalking_span", span)
 			span.Tag("http.method", c.Request.Method)
@@ -97,6 +100,21 @@ func GinSkywalkingMiddleware(tracer grpcinterceptor.Tracer) gin.HandlerFunc {
 			span.Tag("http.status_code", strconv.Itoa(c.Writer.Status()))
 			span.EndSpan(buildSpanError(c))
 		}
+	}
+}
+
+// ginSkywalkingRecover 包装 helper: P1-5 (Round 1) panic 后 EndSpan
+//
+// 拆出来是因为 panic 后 c.Next 不会返回,要把 EndSpan 写在 defer+recover 里,
+// 然后再 re-panic 给外层 gin.Recovery 处理(写 stack + 500 响应)。
+func ginSkywalkingRecover(span grpcinterceptor.Span) {
+	if r := recover(); r != nil {
+		if span != nil {
+			span.Tag("http.status_code", "500")
+			span.EndSpan(fmt.Errorf("panic: %v", r))
+		}
+		metrics.IncPanic("gin-handler") // P2-5: panic 计数
+		panic(r)
 	}
 }
 

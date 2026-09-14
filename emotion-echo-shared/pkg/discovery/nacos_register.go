@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,7 +65,9 @@ func (c *NacosConfig) defaults() {
 		c.GroupName = "DEFAULT_GROUP"
 	}
 	if c.TimeoutMs == 0 {
-		c.TimeoutMs = 5000
+		// P1-6 (Round 1): 默认 5000ms 太短 → 30s 心跳期间 RPC 超时。
+		// 提升到 10000ms，给网络抖动留余量。
+		c.TimeoutMs = 10000
 	}
 }
 
@@ -364,11 +367,16 @@ func WaitForNacos(ctx context.Context, serverAddr string, maxWait time.Duration)
 			return ctx.Err()
 		}
 		url := fmt.Sprintf("http://%s:%s/nacos/actuator/health", host, port)
-		// 极简探测：避免引入 net/http 客户端依赖；用 Dial 替代。
+		// P1-8 (Round 1): 升级探测为 HTTP HEAD —— 原 TCP-only 等不到 gRPC 9849
+		// 就绪就 ack，业务服务注册时 Nacos 内部端口未 listen → 30s 后被踢。
+		// 用 HEAD 探测 /actuator/health 返回 200 才算就绪。
 		conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 2*time.Second)
 		if err == nil {
 			_ = conn.Close()
-			return nil
+			// 简易 HTTP probe（避免引入 net/http 客户端全局配置）
+			if probeHTTP200(url, 2*time.Second) {
+				return nil
+			}
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("discovery: nacos %s not reachable within %s (last url=%s)", serverAddr, maxWait, url)
@@ -383,6 +391,22 @@ func WaitForNacos(ctx context.Context, serverAddr string, maxWait time.Duration)
 			delay = maxDelay
 		}
 	}
+}
+
+// probeHTTP200 极简 HTTP HEAD 探测，返回是否 200。
+// 用 net/http 而非裸 TCP + 手写 HTTP — 避免边界 case（chunked / close）。
+func probeHTTP200(url string, timeout time.Duration) bool {
+	client := &http.Client{Timeout: timeout}
+	req, err := http.NewRequest("HEAD", url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 // 编译期断言：NacosRegistry 必须实现 Registry interface。
