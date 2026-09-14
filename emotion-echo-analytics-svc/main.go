@@ -198,6 +198,14 @@ func main() {
 					log.Printf("[kafka] DLQ enabled: topic=%s", dlqTopic)
 				}
 			}
+			// Stage 93 PR-2: 注入 SkyWalking tracer — 从 chat-svc producer 写入的
+			// sw8 header 重建父 trace（chat-svc → analytics-svc 跨进程 trace 闭环）。
+			// tracer=nil 时 WithTracer no-op,业务不受影响（与 WithDLQ/WithMaxRetries 同模式）。
+			// 对齐 chat-svc (Stage 92 PR-1 main.go wire) + ai-svc (Stage 92 PR-2)。
+			if tracer != nil {
+				kc.WithTracer(sharedgrpc.NewGo2SkyTracer(tracer))
+				log.Printf("[skywalking] analytics-svc sw8 propagation enabled")
+			}
 			go func() {
 				if err := kc.Run(appCtx); err != nil && err != context.Canceled {
 					log.Printf("[kafka] consumer exited: %v", err)
