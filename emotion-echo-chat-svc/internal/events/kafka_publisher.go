@@ -4,6 +4,8 @@ package events
 import (
 	"context"
 	"log"
+	"strconv"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
@@ -23,6 +25,9 @@ type KafkaEventPublisher struct {
 // NewKafkaEventPublisher 用 sarama 构造 Kafka 发布器
 //
 // brokers：Kafka 地址列表，如 []string{"localhost:9092"}
+//
+// P1-16 (Round 1): Net.DialTimeout 默认 30s → broker 抖动期间 Gin handler
+// 卡 30s。显式压短到 5s + 整体 Producer.Timeout=10s 兜底。
 func NewKafkaEventPublisher(brokers []string) (*KafkaEventPublisher, error) {
 	cfg := sarama.NewConfig()
 	cfg.Producer.RequiredAcks = sarama.WaitForAll          // 强 durability
@@ -30,6 +35,10 @@ func NewKafkaEventPublisher(brokers []string) (*KafkaEventPublisher, error) {
 	cfg.Producer.Return.Successes = true                   // 同步等待成功
 	cfg.Producer.Return.Errors = true                       // 错误回传
 	cfg.Producer.Partitioner = sarama.NewHashPartitioner   // 同 key 落同 partition
+	cfg.Producer.Timeout = 10 * time.Second                 // 整 Producer 兜底
+	cfg.Net.DialTimeout = 5 * time.Second                   // P1-16 单次 dial
+	cfg.Net.ReadTimeout = 5 * time.Second
+	cfg.Net.WriteTimeout = 5 * time.Second
 	cfg.Version = sarama.V2_8_0_0                          // 兼容 Kafka 2.x/3.x
 
 	producer, err := sarama.NewSyncProducer(brokers, cfg)
@@ -72,13 +81,27 @@ func (p *KafkaEventPublisher) Publish(ctx context.Context, topic string, e *Even
 	if err != nil {
 		return err
 	}
+	// P2-11 (Round 1): 分区键改 conversation_id —— 同会话事件落同 partition，
+	// 保留分区局部性 + 顺序保证。原用 e.ID (event_id) 跨会话散列到不同 partition，
+	// 导致 ai-svc 处理 conversation 上下文时跨 partition join。
+	partitionKey := e.ID
+	if mcData, ok := e.Data.(MessageCreatedData); ok && mcData.ConversationID > 0 {
+		partitionKey = strconv.FormatInt(mcData.ConversationID, 10)
+	} else if ccData, ok := e.Data.(ConversationCreatedData); ok && ccData.ConversationID > 0 {
+		partitionKey = strconv.FormatInt(ccData.ConversationID, 10)
+	}
 	msg := &sarama.ProducerMessage{
-		Topic: topic,
-		Key:   sarama.StringEncoder(e.ID),
-		Value: sarama.ByteEncoder(body),
+		Topic:   topic,
+		Key:     sarama.StringEncoder(partitionKey),
+		Value:   sarama.ByteEncoder(body),
 		Headers: []sarama.RecordHeader{
 			{Key: []byte("content-type"), Value: []byte(ContentTypeHeaderProto)},
 		},
+	}
+	// P2-14 (Round 1): ctx 取消时跳过 SendMessage — sarama SyncProducer 无原生 ctx 支持，
+	// 阻塞在 broker ack 上时 ctx 取消无法中断，但至少避免已取消 ctx 发新请求。
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 	// Stage 92 PR-1 + Stage 94 PR-1：注入 sw8 trace header + 保留 span 句柄
 	// tracer=nil 时降级跳过（保持 dev / in-memory 路径不变）

@@ -111,11 +111,18 @@ func main() {
 	}
 
 	// 1.1 Stage 30-C A3: Outbox 迁移 + 表初始化（如果 DB 可达）
+	// P1-27 (Round 1): 迁移失败 fail-fast —— 原仅 log 不 exit，
+	// svc 带 missing 表启动，后续请求 500 全链路报错。
+	// dev 模式可通过 SKIP_MIGRATION=1 跳过（应急调试用）。
 	var outboxRepo repository.OutboxRepo
 	if db != nil {
 		outboxRepo = repository.NewPostgresOutboxRepo(db)
 		if err := runOutboxMigration(db); err != nil {
-			log.Printf("[outbox] migration failed: %v", err)
+			if os.Getenv("SKIP_MIGRATION") == "1" {
+				log.Printf("[outbox] migration failed (SKIP_MIGRATION=1): %v", err)
+			} else {
+					log.Fatalf("[outbox] migration failed: %v", err)
+				}
 		}
 	}
 

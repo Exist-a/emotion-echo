@@ -20,6 +20,7 @@ package consumer
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/IBM/sarama"
 )
@@ -138,6 +139,10 @@ func NewKafkaDLQPublisher(brokers []string, dlqTopic string) (*KafkaDLQPublisher
 }
 
 // Publish 把 DLQ entry 发到 DLQ topic。
+//
+// P1-15 (Round 1): DLQ 投递失败时加重试 — 3 次，指数退避（100ms / 500ms / 2s）。
+// sarama SyncProducer 已内置 retry，但跨网络分区时单次失败 → 业务 + DLQ 双丢。
+// 这里的二次重试兜底 broker 短暂不可达。
 func (p *KafkaDLQPublisher) Publish(_ context.Context, entry DLQEntry) error {
 	headers := []sarama.RecordHeader{
 		{Key: []byte("x-original-topic"), Value: []byte(entry.OriginalTopic)},
@@ -153,8 +158,19 @@ func (p *KafkaDLQPublisher) Publish(_ context.Context, entry DLQEntry) error {
 		Value:   sarama.ByteEncoder(entry.Value),
 		Headers: headers,
 	}
-	_, _, err := p.producer.SendMessage(msg)
-	return err
+	delays := []time.Duration{0, 100 * time.Millisecond, 500 * time.Millisecond}
+	var lastErr error
+	for _, d := range delays {
+		if d > 0 {
+			time.Sleep(d)
+		}
+		_, _, err := p.producer.SendMessage(msg)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+	}
+	return lastErr
 }
 
 // Close 关闭 producer。

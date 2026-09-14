@@ -25,6 +25,8 @@ type Kafka struct {
 	// DLQTopic ADR-19 PR-A3.2: 非空时 main.go 用 NewKafkaDLQPublisher 注入,
 	// 替代默认 NoopDLQPublisher{}。空字符串保持 Noop（向后兼容）。
 	DLQTopic string
+	// MaxRetries P2-13: 消费失败最大重试次数，与 ai-svc 对齐（默认 3）。
+	MaxRetries int
 }
 
 // GRPCServer analytics-svc 暴露的 gRPC server 配置（Stage 62 PR-3.2）

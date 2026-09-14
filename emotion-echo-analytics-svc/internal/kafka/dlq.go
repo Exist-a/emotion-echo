@@ -16,6 +16,7 @@ package kafka
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/IBM/sarama"
 )
@@ -28,6 +29,7 @@ type DLQEntry struct {
 	Attempts      int
 	LastError     string
 	OriginalTopic string
+	Headers       map[string]string // P1-2 (Round 1): 透传原 headers（含 sw8）到 DLQ
 }
 
 // DLQPublisher 抽象：把毒消息投到 DLQ topic
@@ -115,8 +117,20 @@ func (p *KafkaDLQPublisher) Publish(_ context.Context, entry DLQEntry) error {
 		Value:   sarama.ByteEncoder(entry.Value),
 		Headers: headers,
 	}
-	_, _, err := p.producer.SendMessage(msg)
-	return err
+	// P1-15 (Round 1): 二次重试兜底 broker 短暂不可达
+	delays := []time.Duration{0, 100 * time.Millisecond, 500 * time.Millisecond}
+	var lastErr error
+	for _, d := range delays {
+		if d > 0 {
+			time.Sleep(d)
+		}
+		_, _, err := p.producer.SendMessage(msg)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+	}
+	return lastErr
 }
 
 func (p *KafkaDLQPublisher) Close() error { return p.producer.Close() }

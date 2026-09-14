@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -66,6 +67,12 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 	}
 	if req.Content == "" {
 		return nil, errors.New("validation: content is required")
+	}
+	// P1-13 (Round 1): 消息体大小无限制 → outbox 100 次后死信。
+	// 4 KiB 与单条消息平均 50-200 字符对齐，留 20x 缓冲。
+	const maxMessageLen = 4 * 1024
+	if len(req.Content) > maxMessageLen {
+		return nil, fmt.Errorf("validation: content too long (%d > %d)", len(req.Content), maxMessageLen)
 	}
 	role := req.Role
 	if role == "" {

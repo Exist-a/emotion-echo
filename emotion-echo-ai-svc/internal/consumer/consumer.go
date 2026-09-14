@@ -200,6 +200,12 @@ func (h *ConsumerGroupHandler) handleFailure(
 
 	// 已达最大重试 → DLQ + Mark
 	if h.DLQ != nil {
+		// P1-2 (Round 1): 把原消息 headers 透传到 DLQ，便于 OAP 上能追到 sw8/trace_id。
+		// 否则 DLQ 消息在 OAP 上是孤儿，与上游 producer trace 断链。
+		dlqHeaders := make(map[string]string, len(msg.Headers))
+		for _, h := range msg.Headers {
+			dlqHeaders[string(h.Key)] = string(h.Value)
+		}
 		dlqEntry := DLQEntry{
 			Topic:         msg.Topic,
 			Key:           msg.Key,
@@ -207,6 +213,7 @@ func (h *ConsumerGroupHandler) handleFailure(
 			Attempts:      attempt,
 			LastError:     handlerErr.Error(),
 			OriginalTopic: msg.Topic,
+			Headers:       dlqHeaders,
 		}
 		if dlqErr := h.DLQ.Publish(sess.Context(), dlqEntry); dlqErr != nil {
 			slog.ErrorContext(sess.Context(), "consumer DLQ publish failed (dropping msg)", "err", dlqErr)

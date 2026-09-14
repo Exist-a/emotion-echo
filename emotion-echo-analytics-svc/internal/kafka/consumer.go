@@ -288,6 +288,11 @@ func (h *chatEventHandler) handleFailure(sess sarama.ConsumerGroupSession, msg *
 
 	// 已达最大重试 → DLQ + Mark
 	if h.dlq != nil {
+		// P1-2 (Round 1): 透传原 headers（含 sw8），让 OAP 端能继续追 trace。
+		dlqHeaders := make(map[string]string, len(msg.Headers))
+		for _, h := range msg.Headers {
+			dlqHeaders[string(h.Key)] = string(h.Value)
+		}
 		dlqEntry := DLQEntry{
 			Topic:         msg.Topic,
 			Key:           msg.Key,
@@ -295,6 +300,7 @@ func (h *chatEventHandler) handleFailure(sess sarama.ConsumerGroupSession, msg *
 			Attempts:      attempt,
 			LastError:     handlerErr.Error(),
 			OriginalTopic: msg.Topic,
+			Headers:       dlqHeaders,
 		}
 		if dlqErr := h.dlq.Publish(sess.Context(), dlqEntry); dlqErr != nil {
 			log.Printf("[kafka-consumer] DLQ publish failed (dropping msg): %v", dlqErr)

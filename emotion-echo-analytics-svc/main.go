@@ -55,6 +55,12 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("KAFKA_DLQ_TOPIC"); v != "" {
 		c.Kafka.DLQTopic = v
 	}
+	// P2-13 (Round 1): 从 env 读 MaxRetries 对齐 ai-svc（默认 3）
+	if v := os.Getenv("KAFKA_MAX_RETRIES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			c.Kafka.MaxRetries = n
+		}
+	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
 	}
@@ -107,12 +113,17 @@ func main() {
 
 	// v1 启动时刷新 mv_daily_emotion（migration 003；pg_cron 调度留 Stage-2）。
 	// 非致命：MV 失败不影响实时 VIEW 查询（reports 端点走 daily_emotion_v）。
+	// P2-22 (Round 1): 失败 / 成功都打 metric，便于 Grafana 监控 REFRESH 健康。
 	if db != nil {
+		refreshStart := time.Now()
 		if err := db.Exec("REFRESH MATERIALIZED VIEW emotion_echo_analytics.mv_daily_emotion").Error; err != nil {
 			log.Printf("[postgres] refresh mv_daily_emotion failed (non-fatal): %v", err)
+			sharedmetrics.MVRefreshFail.Inc()
 		} else {
 			log.Printf("[postgres] refreshed mv_daily_emotion")
+			sharedmetrics.MVRefreshSuccess.Inc()
 		}
+		sharedmetrics.MVRefreshDuration.Observe(time.Since(refreshStart).Seconds())
 	}
 
 	// Round 3：MentalHealthRepo（跨 schema 只读）
@@ -184,6 +195,10 @@ func main() {
 			topic = c.Kafka.Topics[0]
 		}
 		kc, err := kafka.NewConsumer(brokers, c.Kafka.GroupID, topic, evtRepo)
+		// P2-13: 注入 MaxRetries（配置优先，默认 3）
+		if c.Kafka.MaxRetries > 0 {
+			kc.WithMaxRetries(c.Kafka.MaxRetries)
+		}
 		if err != nil {
 			log.Printf("[kafka] consumer init failed: %v (behavior events disabled)", err)
 		} else {
