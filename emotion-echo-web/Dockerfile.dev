@@ -9,7 +9,9 @@ ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8
 
 # 国内 npm 镜像
-RUN npm config set registry https://registry.npmmirror.com
+# P2-R2-14: 用 BuildArg 允许 dev/prod 统一 registry，避免 Dockerfile 硬编码漂移
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+RUN npm config set registry ${NPM_REGISTRY}
 
 WORKDIR /app
 
