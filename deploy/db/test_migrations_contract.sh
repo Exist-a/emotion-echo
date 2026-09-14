@@ -101,4 +101,20 @@ err=$(docker logs "$PG_CONTAINER" 2>&1 | grep -c "docker-entrypoint-initdb.d.*ER
 pass "initdb 日志无 ERROR"
 
 echo
+echo "=== 契约 6: 视图定义跨文件一致性（Round 1.4 / P2-R2-10）==="
+# scripts/check_view_consistency.py 锁死契约：同名 view 在不同文件中定义必须一致
+# 防止"某文件改了 SELECT 字段另文件没改"的口径漂移。
+# 工具自动扫描全仓 *.sql，提取 CREATE OR REPLACE VIEW 块，normalize 后 diff。
+if [ ! -f "$REPO_ROOT/scripts/check_view_consistency.py" ]; then
+  fail "缺 scripts/check_view_consistency.py —— 视图漂移无护栏"
+fi
+if command -v python >/dev/null 2>&1; then
+  out=$(python "$REPO_ROOT/scripts/check_view_consistency.py" 2>&1) || fail "视图一致性检查 FAIL：$(echo "$out" | tail -10)"
+  pass "视图定义跨文件一致（check_view_consistency.py PASS）"
+else
+  # 无 python 环境的 CI 跳过（不 fail）
+  log "未找到 python，跳过契约 6（视图一致性）"
+fi
+
+echo
 echo "迁移契约全部 PASS"

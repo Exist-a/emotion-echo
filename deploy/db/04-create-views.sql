@@ -16,23 +16,17 @@
 -- 老 deploy/initdb 链路会先跑本文件再跑 svc migrations，所以原"先建后改"无副作用；
 -- 但本文件与 005 同时定义会冲突，CREATE OR REPLACE + DROP/RECREATE 在并发场景下竞态。
 
--- emotion_echo_ai: 暴露 emotion_analysis 给 analytics
-CREATE OR REPLACE VIEW emotion_echo_ai.daily_emotion_v AS
-SELECT
-    id,
-    message_id,
-    conversation_id,
-    user_id,
-    primary_emotion,
-    sentiment_score,
-    confidence,
-    model,
-    created_at
-FROM emotion_echo_ai.emotion_analysis;
+-- emotion_echo_ai: daily_emotion_v 定义已迁至 emotion-echo-analytics-svc/migrations/a001
+-- Round 1.4 / P2-R2-10: 此处不再创建 daily_emotion_v（消除双 owner 漂移点）。
+-- 权威源在 emotion-echo-analytics-svc/migrations/a001_create_views.sql（运行时迁移），
+-- 单一 owner 避免未来某文件改了 SELECT 字段另文件没改的口径漂移。
+-- scripts/check_view_consistency.py 锁死契约：未来若再新增 daily_emotion_v 定义，
+-- 该脚本会 fail 提醒收敛。
+-- （删除原 CREATE OR REPLACE VIEW emotion_echo_ai.daily_emotion_v AS ... 块）
 
--- emotion_echo_assessment: 暴露 assessment 给 analytics
--- 注意：mental_health_assessments 无 risk_level 列（risk_level 在 survey_results 上）；
--- risk_level 由 analytics-svc 在 Go 侧从 overall_score 阈值推导。
+-- emotion_echo_assessment: assessment_v 定义仍在 deploy/db 04（评估数据由 dev
+-- compose init 链建立，analytics 暂无对应运行时 migration 接管）。
+-- 若未来 analytics 引入 a00X_create_assessment_v.sql，本注释更新并迁移。
 CREATE OR REPLACE VIEW emotion_echo_assessment.assessment_v AS
 SELECT
     id,
