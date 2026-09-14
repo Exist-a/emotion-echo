@@ -29,9 +29,129 @@ import (
 	"emotion-echo-analytics-svc/internal/repository"
 
 	"github.com/IBM/sarama"
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// =====================================================
+// Stage 93 PR-1 RED · analytics-svc consumer sw8 透传测试
+// =====================================================
+//
+// 沿用 ai-svc internal/consumer/consumer_test.go 的 mockTracer / mockSpan 模式
+// （PR-OBS-17 + Stage 92 PR-2 同款 mock）。Stage 93 让 analytics-svc 与 ai-svc
+// consumer 同模式从 msg.Headers["sw8"] 重建父 trace。
+//
+// 本段 mock 实现独立于 ai-svc 测试——analytics-svc 不 import ai-svc 内部包，
+// mock 镜像一份是为了单仓内测试代码各自可独立编译、独立演进。
+
+// tagKV93 记录 mockSpan93.Tag 调用
+type tagKV93 struct{ K, V string }
+
+// mockSpan93 PR-OBS-17 — 满足 grpcinterceptor.Span 接口 + 记录调用
+type mockSpan93 struct {
+	ended    bool
+	endErr   error
+	tagCalls []tagKV93
+}
+
+func (s *mockSpan93) EndSpan(err error) {
+	s.ended = true
+	s.endErr = err
+}
+
+func (s *mockSpan93) Tag(key, value string) {
+	s.tagCalls = append(s.tagCalls, tagKV93{key, value})
+}
+
+// SetComponent PR-OBS-19:mock 与接口对齐
+func (s *mockSpan93) SetComponent(componentID int32) {}
+
+// SetSpanLayer PR-OBS-19:mock 与接口对齐
+func (s *mockSpan93) SetSpanLayer(layer int32) {}
+
+// 编译期断言: mockSpan93 满足 grpcinterceptor.Span
+var _ grpcinterceptor.Span = (*mockSpan93)(nil)
+
+// mockTracer93 — 满足 grpcinterceptor.Tracer 接口 + 记录 CreateEntrySpan 调用
+//
+// 完整实现 StartEntry / CreateLocalSpan / CreateExitSpan / CreateEntrySpan
+// (Stage 92 扩展后),其中 CreateEntrySpan 是本测试关注点。
+type mockTracer93 struct {
+	entryOpCalls []string
+	entrySw8Seen string
+	entrySpan    *mockSpan93
+	entryErr     error
+
+	exitOpCalls []string
+	exitSpan    *mockSpan93
+	exitErr     error
+}
+
+func (t *mockTracer93) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
+	return ctx, &mockSpan93{}
+}
+
+func (t *mockTracer93) CreateLocalSpan(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span, error) {
+	return ctx, &mockSpan93{}, nil
+}
+
+// CreateEntrySpan Stage 93 — 从 msg.Headers 抽 sw8 → 重建父 trace
+func (t *mockTracer93) CreateEntrySpan(
+	ctx context.Context, opName string,
+	extractor func(string) (string, error),
+) (context.Context, grpcinterceptor.Span, error) {
+	t.entryOpCalls = append(t.entryOpCalls, opName)
+	if extractor != nil {
+		if v, _ := extractor("sw8"); v != "" {
+			t.entrySw8Seen = v
+		}
+	}
+	return ctx, t.entrySpan, t.entryErr
+}
+
+// CreateExitSpan Stage 92:mock(接口合规所需)
+func (t *mockTracer93) CreateExitSpan(
+	ctx context.Context, opName, peer string,
+	injector func(string, string) error,
+) (context.Context, grpcinterceptor.Span, error) {
+	t.exitOpCalls = append(t.exitOpCalls, opName)
+	return ctx, t.exitSpan, t.exitErr
+}
+
+// 编译期断言: mockTracer93 满足 grpcinterceptor.Tracer
+var _ grpcinterceptor.Tracer = (*mockTracer93)(nil)
+
+// fakeClaim93 提供可控的 Messages channel(sarama.ConsumerGroupClaim 接口)
+type fakeClaim93 struct {
+	sarama.ConsumerGroupClaim
+	msgs chan *sarama.ConsumerMessage
+}
+
+func (f *fakeClaim93) Messages() <-chan *sarama.ConsumerMessage { return f.msgs }
+
+// fakeSession93 模拟 sarama.ConsumerGroupSession,只实现 MarkMessage + Context
+type fakeSession93 struct {
+	sarama.ConsumerGroupSession
+	marked []string
+}
+
+func (f *fakeSession93) MarkMessage(msg *sarama.ConsumerMessage, metadata string) {
+	f.marked = append(f.marked, string(msg.Value))
+}
+
+func (f *fakeSession93) Context() context.Context { return context.Background() }
+
+// assertHasTag93 断言 tagCalls 含指定 (k,v)
+func assertHasTag93(t *testing.T, calls []tagKV93, k, v string) {
+	t.Helper()
+	for _, kv := range calls {
+		if kv.K == k && kv.V == v {
+			return
+		}
+	}
+	t.Errorf("expected tag (%q, %q), got calls=%+v", k, v, calls)
+}
 
 // captureEventRepo captures Create() calls for assertion.
 type captureEventRepo struct {
@@ -462,4 +582,174 @@ func TestHandleOne_PropagatesEventIDForAllEventTypes(t *testing.T) {
 				"EventID 应等于 ev.ID（Stage 30-C A1 幂等键）")
 		})
 	}
+}
+
+// =====================================================
+// Stage 93 PR-1 RED · analytics-svc consumer sw8 透传测试
+// =====================================================
+//
+// 设计参照 ai-svc internal/consumer/consumer_test.go:819
+// TestConsumeClaim_RestoresParentTraceFromSw8Header（同语义）：
+//   - msg 含 sw8 header → consumer 调 CreateEntrySpan("kafka-consume", ext)
+//   - extractor 收到 sw8 值（透传给 go2sky 重建父 SpanContext）
+//   - span.EndSpan + 4 个 messaging.* tag
+//   - msg 无 sw8 header → CreateEntrySpan 仍调（extractor 返 "" → Valid=false → 新 trace 起点）
+//   - Tracer=nil → 跳过 span 创建（向后兼容 Stage 30-A Round 4 原行为）
+
+// driveConsumeClaim93 跑一轮 chatEventHandler.ConsumeClaim 返回。
+// 复用 ai-svc consumer_test.go 的 driveConsumeClaim 模式（fakeClaim93/fakeSession93）。
+func driveConsumeClaim93(t *testing.T, h *chatEventHandler, msgs ...*sarama.ConsumerMessage) {
+	t.Helper()
+	claim := &fakeClaim93{msgs: make(chan *sarama.ConsumerMessage, len(msgs))}
+	sess := &fakeSession93{}
+	for _, m := range msgs {
+		claim.msgs <- m
+	}
+	close(claim.msgs)
+
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ConsumeClaim timeout")
+	}
+}
+
+// TestConsumeClaim_RestoresParentTraceFromSw8Header Stage 93 PR-1 RED：
+//
+// 验证 msg.Headers[sw8] 被抽到并通过 extractor 喂给 CreateEntrySpan；
+// span 走 EndSpan + 4 个 messaging.* tag。
+func TestConsumeClaim_RestoresParentTraceFromSw8Header(t *testing.T) {
+	t.Parallel()
+	const fakeSw8 = "1-aabbccdd93eeff0011-2-aabbccdd93-aabbccdd93-aabbccdd93-aabbccdd93"
+
+	span := &mockSpan93{}
+	tracer := &mockTracer93{entrySpan: span}
+
+	h := &chatEventHandler{
+		repo:       &captureEventRepo{},
+		topic:      "chat-events",
+		dlq:        NoopDLQPublisher{},
+		maxRetries: 3,
+		attempts:   make(map[string]int),
+	}
+
+	// 通过 WithTracer builder 注入 tracer（GREEN 阶段提供 builder）。
+	// 这里直接构造（绕开 builder）保持 RED 测试与 GREEN 实现解耦——只要 GREEN
+	// 提供某种方式让 tracer 进入 chatEventHandler 字段，RED 测试都应通过。
+	// 沿用 ai-svc 同模式：chatEventHandler.Tracer 字段（builder 模式）
+	h.Tracer = tracer
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 5,
+		Value:     mustJSON(t, events.Event{ID: "evt-sw8-93", Type: events.EventTypeMessageCreated, Time: time.Now(), Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 7}}),
+		Headers: []*sarama.RecordHeader{
+			{Key: []byte("sw8"), Value: []byte(fakeSw8)},
+			{Key: []byte("content-type"), Value: []byte("application/x-protobuf")},
+		},
+		Timestamp: time.Now(),
+	}
+
+	driveConsumeClaim93(t, h, msg)
+
+	// 1. 必须调 CreateEntrySpan,operationName=kafka-consume
+	if len(tracer.entryOpCalls) != 1 || tracer.entryOpCalls[0] != "kafka-consume" {
+		t.Errorf("CreateEntrySpan calls = %v, want [kafka-consume]", tracer.entryOpCalls)
+	}
+	// 2. extractor 必须抽到 sw8 header value
+	if tracer.entrySw8Seen != fakeSw8 {
+		t.Errorf("extractor(\"sw8\") = %q, want %q (msg.Headers[sw8] 没被抽到)",
+			tracer.entrySw8Seen, fakeSw8)
+	}
+	// 3. span.EndSpan 必须调（defer）
+	if !span.ended {
+		t.Error("expected span.EndSpan called (defer 在 ConsumeClaim 内执行)")
+	}
+	// 4. 4 个 messaging.* tag 精确断言
+	assertHasTag93(t, span.tagCalls, "messaging.system", "kafka")
+	assertHasTag93(t, span.tagCalls, "messaging.kafka.topic", "chat-events")
+	assertHasTag93(t, span.tagCalls, "messaging.kafka.partition", "5")
+	assertHasTag93(t, span.tagCalls, "event.type", "message.created")
+}
+
+// TestConsumeClaim_NoSw8Header_StillCreatesSpan Stage 93 PR-1 RED 边界用例：
+//
+// 验证降级语义——msg 无 sw8 header 时 CreateEntrySpan 仍调（extractor 返 "" →
+// go2sky Valid=false → 新 trace 起点），不 panic，业务继续。
+func TestConsumeClaim_NoSw8Header_StillCreatesSpan(t *testing.T) {
+	t.Parallel()
+	span := &mockSpan93{}
+	tracer := &mockTracer93{entrySpan: span}
+
+	h := &chatEventHandler{
+		repo:       &captureEventRepo{},
+		topic:      "chat-events",
+		dlq:        NoopDLQPublisher{},
+		maxRetries: 3,
+		attempts:   make(map[string]int),
+		Tracer:     tracer,
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 0,
+		Value:     mustJSON(t, events.Event{ID: "evt-no-sw8-93", Type: events.EventTypeMessageCreated, Time: time.Now(), Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 7}}),
+		// 无 sw8 header（兼容 Stage 73 之前的旧消息）
+		Headers: nil,
+	}
+
+	driveConsumeClaim93(t, h, msg)
+
+	// CreateEntrySpan 必调一次（extractor 收 "" → 新 trace 起点）
+	if len(tracer.entryOpCalls) != 1 || tracer.entryOpCalls[0] != "kafka-consume" {
+		t.Errorf("CreateEntrySpan calls = %v, want [kafka-consume] (无 sw8 仍应调)", tracer.entryOpCalls)
+	}
+	// extractor 抽 sw8 应返 ""（没命中）
+	if tracer.entrySw8Seen != "" {
+		t.Errorf("extractor(\"sw8\") = %q, want \"\" (msg 无 sw8 header)", tracer.entrySw8Seen)
+	}
+	if !span.ended {
+		t.Error("expected span.EndSpan called")
+	}
+}
+
+// TestConsumeClaim_NilTracer_DoesNotCallCreateEntrySpan Stage 93 PR-1 RED 边界用例：
+//
+// 验证 Tracer=nil 时（向后兼容 Stage 30-A Round 4 原行为）CreateEntrySpan 不调,
+// handler 仍正常处理消息,业务不受影响。
+func TestConsumeClaim_NilTracer_DoesNotCallCreateEntrySpan(t *testing.T) {
+	t.Parallel()
+	tracer := &mockTracer93{}
+	repo := &captureEventRepo{}
+
+	h := &chatEventHandler{
+		repo:       repo,
+		topic:      "chat-events",
+		dlq:        NoopDLQPublisher{},
+		maxRetries: 3,
+		attempts:   make(map[string]int),
+		Tracer:     nil, // 关键：tracer=nil
+	}
+
+	msg := &sarama.ConsumerMessage{
+		Topic:     "chat-events",
+		Partition: 0,
+		Value:     mustJSON(t, events.Event{ID: "evt-nil-tracer-93", Type: events.EventTypeMessageCreated, Time: time.Now(), Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 7}}),
+		Headers: []*sarama.RecordHeader{
+			{Key: []byte("sw8"), Value: []byte("1-aabbccdd")},
+		},
+	}
+
+	driveConsumeClaim93(t, h, msg)
+
+	// Tracer=nil 时 CreateEntrySpan 不应被调
+	if len(tracer.entryOpCalls) != 0 {
+		t.Errorf("Tracer=nil 时 CreateEntrySpan 不应被调，got calls=%v", tracer.entryOpCalls)
+	}
+	// 业务不受影响：handler 仍写一条 user_behavior_events 行
+	require.Len(t, repo.items, 1, "Tracer=nil 时业务处理必须继续（向后兼容）")
+	assert.Equal(t, "evt-nil-tracer-93", repo.items[0].EventID)
 }
