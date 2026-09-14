@@ -35,6 +35,10 @@ Round 3 完成后此索引将自动生成（按 stage 编号）。
 | Stage 86 | outbox dead 告警全链（指标 → critical 规则 → alertmanager）+ kafka-reliability-gaps 全线收口迁 landed | 1 |
 | Stage 87 | LLM 意图重分类（规则式兜底 + key 可用时消歧，离线路径零变化）+ grpc 迁移计划过期剩余段销账 | 1 |
 | Stage 88 | llm-service Nacos 注册（v3 gRPC SDK 移植 + BFF 发现链第 6 处）+ 两计划 residual 销账 | 1 |
+| Stage 89 | file-understanding-llm 全线落地（proto + chat-svc 五处映射 + BFF 文件收集 + llm-service file_context + 前端附件上传；txt 哨兵 + 追问引用全通；PDF 拒读记 residual → Stage 90/91） | 1 |
+| Stage 90 | file_context 注入位置 system 末 → user 尾（PDF 拒读 residual 第 1 次尝试；未根除） | 1 |
+| Stage 91 | file_context prompt 头改强指令性措辞（PDF 拒读 residual 第 2 次尝试；容器 e2e 5/5 HIT 100%） | 1 |
+| Stage 92 | Kafka sw8 跨进程 trace 透传（observability P1；shared Tracer 扩 CreateExitSpan/CreateEntrySpan + chat-svc producer 注入 + ai-svc consumer 重建父 trace；docker e2e sw8 header 实证 221 chars） | 1 |
 
-> 注：41 以后按主题分段统计（2026-09-13 更新至 Stage 88）；每期 stage 的"本批未做（open）"
+> 注：41 以后按主题分段统计（2026-09-14 更新至 Stage 92）；每期 stage 的"本批未做（open）"
 > 表 + [architecture/roadmap.md](../architecture/roadmap.md) §下一步行动 是待办的权威来源。

@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 priority: medium
 owner: TBD
 created: 2026-09-13
@@ -9,7 +9,11 @@ related-stages:
   - stage-44-observability-sprint-b.md
   - stage-50-e2e-validation.md
   - stage-86-outbox-dead-alert-2026-09-13.md
+  - stage-92-kafka-sw8-propagation-2026-09-14.md
 related-adrs: []
+landed-parts:
+  - §A Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN（2026-09-14）
+  - §A-extension analytics-svc consumer sw8 透传 —— Stage 93 候选（无 Tracer 集成，需先加）
 ---
 
 # Plan - observability edge gaps from code review (non-sprint scope)
@@ -32,6 +36,13 @@ related-adrs: []
 ---
 
 ## A. Kafka 异步链路在 SkyWalking 上是断的 (P1, 最值得修复)
+
+> **🟢 2026-09-14 已 landed — Stage 92**（详见
+> [`legacy-plans/landed/stage-92-kafka-sw8-propagation.md`](../legacy-plans/landed/stage-92-kafka-sw8-propagation.md)
+> 与 [`stages/stage-92-kafka-sw8-propagation-2026-09-14.md`](../stages/stage-92-kafka-sw8-propagation-2026-09-14.md)）。
+> Stage 92 PR-1+PR-2 全 GREEN + docker e2e 实证 chat-svc producer 写入完整 sw8（221 chars）；
+> ai-svc:v0.1.6 consumer 用 CreateEntrySpan 重建父 trace。
+> **唯一残余**：analytics-svc consumer sw8 透传（§A-extension，Stage 93 候选）。
 
 ### A.1 问题
 
