@@ -99,7 +99,11 @@ func GinMetricsMiddleware(serviceName string) gin.HandlerFunc {
 
 		path := c.FullPath() // 路由模板（如 /api/v1/conversations/:id/messages），避免高基数
 		if path == "" {
-			path = "unmatched"
+			// Round 5c §C: 未匹配路由（404 攻击/扫描/探测）不计入 metrics,
+			// 避免 path="unmatched" 绝对计数持续上涨污染指标,
+			// 也避免攻击者扫端口刷高 counter 让指标"看起来很忙".
+			// 注:status 仍由 nginx / OAP upstream / 安全审计层记录,本中间件只跳 metrics.
+			return
 		}
 		method := c.Request.Method
 		status := strconv.Itoa(c.Writer.Status())

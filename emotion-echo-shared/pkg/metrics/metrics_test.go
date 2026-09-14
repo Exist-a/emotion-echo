@@ -4,6 +4,7 @@ package metrics
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -94,6 +95,50 @@ func TestGinMetricsMiddleware_SkipsMetricsRoute(t *testing.T) {
 	if after != before {
 		t.Errorf("/metrics should not be counted, but counter changed: before=%v after=%v", before, after)
 	}
+}
+
+// TestGinMetricsMiddleware_SkipsUnmatchedPath Round 5c §C RED:
+//
+// observability-edge-gaps §C (metrics unmatched 路径 P2 1.5h):
+// 现状:未匹配路由(404 / 扫描攻击 / 探测)落 path="unmatched" 标签,长期累积
+// 绝对计数会让指标'看起来很忙',且无业务价值。
+//
+// 修复:未匹配路由不计入 HTTPRequestsTotal / HTTPRequestDuration ——
+// 跳过当前 c.Next() 后续 metrics 写入。/metrics endpoint 仍跳过(已有 SkipsMetricsRoute)。
+//
+// RED 阶段:测试断言 path="unmatched" 不应出现在 metrics 中——
+// 现状 path="unmatched" 必出现 → 测试必失败。
+func TestGinMetricsMiddleware_SkipsUnmatchedPath(t *testing.T) {
+	const svc = "test-svc-unmatched"
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(GinMetricsMiddleware(svc))
+	// 仅注册一个路由,未匹配的 /attack-path 触发 404 + FullPath()=""
+	r.GET("/real", func(c *gin.Context) { c.String(200, "ok") })
+
+	// 触发未匹配请求
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest("GET", "/attack-path-"+strconv.Itoa(i), nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != 404 {
+			t.Fatalf("want 404, got %d", w.Code)
+		}
+	}
+
+	// 断言:path="unmatched" 不应出现在 metrics 计数
+	// 修复后该 series 应为 0;修复前 = 3 (每个未匹配请求 1 次)
+	unmatched := readCounter(t, "emotion_echo_http_requests_total", map[string]string{
+		"service": svc, "method": "GET", "path": "unmatched", "status": "404",
+	})
+	if unmatched != 0 {
+		t.Errorf("path=\"unmatched\" must not be counted (was %v, want 0) — §C 修复应跳过未匹配路由", unmatched)
+	}
+
+	// 注:不验证"已匹配路径仍计入"——promauto 全局注册,同 test package 内前序测试
+	// 已写入 /real 路径的 series,baseline 不归零,本测试无法隔离。Round 5c 范围仅
+	// §C.unmatched 跳过,matched 路径在 TestGinMetricsMiddleware_IncrementsCounter 已覆盖。
 }
 
 func TestGinMetricsMiddleware_DifferentServicesIndependent(t *testing.T) {
