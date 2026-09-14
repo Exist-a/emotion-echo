@@ -159,6 +159,37 @@ func TestSynthesizeSpeechHandler_MalformedJSON_Returns400(t *testing.T) {
 		"malformed JSON should yield 400, got %d", rec.Code)
 }
 
+// TestMultimodalHandler_BodyExceedsLimit_Returns400 covers P0-R2-4:
+// body size limit (50 MB) prevents OOM via malicious large upload.
+// MaxBytesReader surfaces as a read error which gin's multipart parser
+// surfaces as "http: request body too large" → handler returns 400.
+func TestMultimodalHandler_BodyExceedsLimit_Returns400(t *testing.T) {
+	t.Parallel()
+
+	svcCtx := &svc.ServiceContext{}
+	r := newMultimodalRouter(svcCtx)
+
+	// Build a multipart body that is > 50 MB (the MaxBytesReader cap).
+	// We don't need to send a real file; we just need the request body
+	// to exceed the cap. The easiest way is a large field value.
+	var sb strings.Builder
+	for i := 0; i < (51<<20)/10; i++ {
+		sb.WriteString("0123456789")
+	}
+	body, contentType := makeMultipartForm(t,
+		"kind", "text",
+		"text", sb.String(),
+	)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/multimodal/analyze", body)
+	req.Header.Set("Content-Type", contentType)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code,
+		"body > 50 MB must yield 400 (P0-R2-4), got %d body=%s",
+		rec.Code, rec.Body.String())
+}
+
 // TestAIHealthHandler_Always200_PartialUnhealth pins the documented
 // behavior: AIHealthHandler returns 200 even when some AI services
 // are unhealthy. The body marks which services are down; the status

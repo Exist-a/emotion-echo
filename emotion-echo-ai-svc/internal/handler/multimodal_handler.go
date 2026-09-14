@@ -32,6 +32,10 @@ import (
 //   - transcript / duration_ms: voice 附加字段
 func MultiModalAnalyzeHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// P0-R2-4: body size limit 防恶意大文件 OOM（256M memory limit）
+		const maxBody int64 = 50 << 20 // 50 MB
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBody)
+
 		kind := c.PostForm("kind")
 		text := c.PostForm("text")
 		persist := c.PostForm("persist") == "true"
