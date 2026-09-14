@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"emotion-echo-ai-svc/internal/model"
 
@@ -28,6 +29,9 @@ type EmotionRepo interface {
 	ListByConversationID(ctx context.Context, conversationID int64) ([]model.EmotionAnalysis, error)
 	// Create 保存一条情绪分析结果
 	Create(ctx context.Context, e *model.EmotionAnalysis) error
+	// Delete 软删除（UPDATE deleted_at = NOW()；i007 加 DDL + 本 PR 加 GORM 集成）
+	// 软删除后 GetByID / ListByConversationID 自动排除该行（GORM scope）
+	Delete(ctx context.Context, id int64) error
 	// Ping 健康检查
 	Ping(ctx context.Context) error
 }
@@ -64,6 +68,9 @@ func (r *InMemoryEmotionRepo) GetByID(ctx context.Context, id int64) (*model.Emo
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if e, ok := r.byID[id]; ok {
+		if e.DeletedAt.Valid {
+			return nil, nil // 软删除行：与 PG GORM scope 语义对齐
+		}
 		return e, nil
 	}
 	return nil, nil
@@ -76,7 +83,10 @@ func (r *InMemoryEmotionRepo) GetByMessageID(ctx context.Context, messageID int6
 	if !ok {
 		return nil, nil
 	}
-	return r.byID[id], nil
+	if e := r.byID[id]; e != nil && !e.DeletedAt.Valid {
+		return e, nil
+	}
+	return nil, nil
 }
 
 func (r *InMemoryEmotionRepo) ListByConversationID(ctx context.Context, conversationID int64) ([]model.EmotionAnalysis, error) {
@@ -85,7 +95,7 @@ func (r *InMemoryEmotionRepo) ListByConversationID(ctx context.Context, conversa
 	ids := r.byConversation[conversationID]
 	out := make([]model.EmotionAnalysis, 0, len(ids))
 	for _, id := range ids {
-		if e, ok := r.byID[id]; ok {
+		if e, ok := r.byID[id]; ok && !e.DeletedAt.Valid {
 			out = append(out, *e)
 		}
 	}
@@ -124,6 +134,17 @@ func (r *InMemoryEmotionRepo) Create(ctx context.Context, e *model.EmotionAnalys
 
 func (r *InMemoryEmotionRepo) Ping(ctx context.Context) error { return nil }
 
+// Delete 软删除（内存实现：设置 DeletedAt；查询方法已过滤 Valid=true 行）
+// 语义与 Postgres GORM DeletedAt scope 对齐。
+func (r *InMemoryEmotionRepo) Delete(ctx context.Context, id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if e, ok := r.byID[id]; ok {
+		e.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+	}
+	return nil
+}
+
 // GetByEventID Stage 36-A3：按 event_id 查已存在的情绪分析行（用于 UpsertNeutralEmotion
 // 幂等检查）。空 event_id 返回 nil（与 Create 的非去重分支语义对齐）。
 func (r *InMemoryEmotionRepo) GetByEventID(ctx context.Context, eventID string) (*model.EmotionAnalysis, error) {
@@ -136,7 +157,7 @@ func (r *InMemoryEmotionRepo) GetByEventID(ctx context.Context, eventID string) 
 	if !ok {
 		return nil, nil
 	}
-	if e, ok := r.byID[id]; ok {
+	if e, ok := r.byID[id]; ok && !e.DeletedAt.Valid {
 		return e, nil
 	}
 	return nil, nil
@@ -186,6 +207,12 @@ func (r *PostgresEmotionRepo) ListByConversationID(ctx context.Context, conversa
 		return nil, err
 	}
 	return out, nil
+}
+
+// Delete 软删除：EmotionAnalysis 含 gorm.DeletedAt → db.Delete 走 UPDATE SET deleted_at = NOW()
+// 而非物理 DELETE。后续 First / Find 自动加 WHERE deleted_at IS NULL。
+func (r *PostgresEmotionRepo) Delete(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Delete(&model.EmotionAnalysis{}, id).Error
 }
 
 // Create 持久化一条情绪分析。
