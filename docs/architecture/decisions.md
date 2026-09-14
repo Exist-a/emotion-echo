@@ -292,6 +292,17 @@
 > 生产通过 gRPC 调用（决策 5 + 决策 11），HTTP 端仅供 dev 调试，prod 部署如启用必须配置 key。
 > 详见 [`stages/stage-97-round2-p0-closure.md`](../stages/stage-97-round2-p0-closure.md) PR-1。
 
+> **✅ 2026-09-15 Round 0.2 验收 — BFF/APISIX 入口语义已收口**（[`docs/plans/multi-round-iteration-2026-09-15.md`](../plans/multi-round-iteration-2026-09-15.md) §二 Round 0.2）：
+>
+> 决策 9 / 11 / 12 在 "BFF 是否唯一入口" 上的语义冲突**已于 2026-09-10 决策 18 §4.4 / PR-C 正式收口**（本文件 line 189-194 + 196-220 + 228-237 + 267-284 共 4 处关系说明段）。
+> 本决策末尾的关系说明（line 286-293）补 `bff` / `apisix` 关键词引用，
+> 方便 `grep` 快速定位语义冲突的"已收口"证据。
+>
+> `QUICKSTART.md:43` 端口表行措辞同步：
+> - "BFF (唯一入口)" → "BFF (APISIX 后端，dev 调试可直连；prod 仅 APISIX 访问)"
+> - "APISIX（唯一业务入口，决策 11/12）" 一行同步加
+> 现状已合，本段仅做交叉引用登记（不重复 line 60-62 就地更正块）。
+
 | 维度 | 选择 |
 |------|------|
 | BFF 职责（**仅做**） | 多服务聚合、字段裁剪、SSE 流式编排、多端适配（PC/移动）、业务上下文（会话级） |

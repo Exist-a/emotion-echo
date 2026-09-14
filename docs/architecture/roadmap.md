@@ -1032,22 +1032,51 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   - 详见 [stage-93-analytics-svc-sw8-propagation-2026-09-14.md](../stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md)。
     observability-edge-gaps §B-F 5 项 P2-P3 留 Stage 94+ 候选；OAP 9.x graphql queryDuration 时间格式 bug 沿用 Stage 92 §五残余。
 
-**当前 open 清单**（2026-09-14 Stage 93 收口后刷新）：
+**当前 open 清单**（2026-09-15 Stage 97 收口后 + Round 0.1 文档治理收口后刷新）：
 
-**observability-edge-gaps 收口进度**（Stage 92 + 93 + Round 5 完成 5/7 项）：
+> **本段是快照，不是权威来源**（roadmap.md:931-934 段警告）。每项 open 列出来源
+> 文档 + section，方便读者交叉验证。Stage 收口时顺手刷新本段；与 open 表矛盾时
+> 以 [`docs/plans/multi-round-iteration-2026-09-15.md`](../plans/multi-round-iteration-2026-09-15.md)
+> 状态盘点为准。
+
+**observability-edge-gaps 收口进度**（Stage 92 + 93 + Round 5 + Stage 97 完成 5/7 项）：
 - ✅ A. Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN
 - ✅ A-extension. analytics-svc consumer sw8 透传 —— Stage 93 landed（2026-09-14）
 - ✅ B. consumer.attempts 加锁 —— Round 5 landed（2026-09-14, commits 7af41a5/aba2476）
 - ✅ C. metrics unmatched 路径跳过 —— Round 5 landed（2026-09-14, commit 4bc2b21）
 - ✅ E. AI model init failed metric —— Round 5 landed（2026-09-14, docker e2e 3 个 series 各=1）
-- ⏳ D. GinSkywalking 跳过路径配置化 P3 0.5h / F. consumer.go 拆分 P3 0.5h（独立 sprint）
+- ⏳ D. GinSkywalking 跳过路径配置化 P3 0.5h —— [Round 4.7 PR-1](../plans/multi-round-iteration-2026-09-15.md#round-47--长期-p3-收口2d)
+- ⏳ F. consumer.go 拆分 P3 0.5h —— [Round 4.7 PR-2](../plans/multi-round-iteration-2026-09-15.md#round-47--长期-p3-收口2d)
 
-**其他**：
+**Kafka 管线残余**（[kafka-pipeline-pending-decisions.md §状态盘点](../plans/kafka-pipeline-pending-decisions.md#状态盘点2026-09-15-stage-97-tail)）：
+- ⏳ D2. outbox sent/dead 行无清理 P1 1-1.5h —— [Round 2.1](../plans/multi-round-iteration-2026-09-15.md#round-21--outbox-sentdead-清理-job1d-kafka-d2)
+- ⏳ D3. consumer attempts 不跨重启 P2 —— 触发条件：ai-svc/analytics-svc 多副本部署
+- ⏳ D5. relay 多副本互斥 P2 —— 触发条件：chat-svc 决定扩副本的 stage（ADR-19 已登记单副本承诺）
+- ⏳ D6. Protobuf 双 schema CI 契约测试 P3 1-1.5h —— [Round 2.2](../plans/multi-round-iteration-2026-09-15.md#round-22--d6d8-契约卫生合并小-pr1hkafka-d6--d8)
+- ⏳ D7. 删除会话生命周期不一致 P3 —— owner 拍板（产品语义决策，非纯技术）
+- ⏳ D8. producer peer=topic / extractSw8Header 双份 / EventType 双处镜像 P3 ~1h —— [Round 2.2 同 PR](../plans/multi-round-iteration-2026-09-15.md#round-22--d6d8-契约卫生合并小-pr1hkafka-d6--d8)
+- ✅ D1. InMemory fallback counter —— Stage 94 PR-3 commit `44e9767` + ADR-19 段
+- ✅ D4. analytics MaxRetries 配置 —— Stage 96 PR-9a commit `2cc05c8`
+
+**Round 1 plan 残余**（[code-review-2026-09-14.md §residuals](../legacy-plans/landed/code-review-2026-09-14.md)）：
+- ⏳ 6 P1 deferred（P1-1/4/7/9/11/12/14/17/19/23/24/25/26 散落）—— [Round 4.1-4.4 各项](../plans/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)
+- ⏳ 13 P2 deferred —— [Round 4.6 杂项打包](../plans/multi-round-iteration-2026-09-15.md#round-46--杂项1d-round-1-p1-26--round-1-p2-222325--round-2-p2-141720)
+
+**Round 2 plan 残余**（[code-review-2026-09-14-round-2.md §residuals](../legacy-plans/landed/code-review-2026-09-14-round-2.md)）：
+- ⏳ 13 P1 + 8 P2 + 4 P3 deferred —— [Round 1-3 详细分布](../plans/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)
+
+**todo-pile 残余**（[todo-pile-2026-09-04.md](../plans/todo-pile-2026-09-04.md)）：
+- ⏳ C5 QUICKSTART 端口表措辞 —— 实际 2026-09-10 PR-C 修过（[`QUICKSTART.md:43,60-62`](../QUICKSTART.md)），**仅文档登记**：决策 9/12 末尾的"关系说明"段在 2026-09-10 已加，**本段无需新动作**，仅记录
+- ⏳ C7 Stage 36-FU 报告 dashboard 16/16 绿但空 —— 待回查 dev 库缺 `msg_summary_v` 根因
+- ⏳ C8 BFF 路由清单无契约测试 1-2h —— 与 P2-23 dev mode CORS 联动
+- ✅ C6 quick-login 端点 —— commit `c9b05e6` 销账（前端实际走 `/auth/login`）
+- ✅ D5 chat-svc 表依赖 ADR —— `adr-2026-09-chat-svc-table-deps.md` 229 行已 Accepted（决策 22）
+
+**其他长期 open**：
 1. SkyWalking OAP 9.x graphql queryDuration 时间格式 bug 修——否则 UI 跨进程 trace 可视化受阻
-2. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景）
+2. Kafka consumer 进程级指标（消费速率/处理耗时；lag 告警 Round 4.1 PR-1 已盖）—— [Round 4.4 PR-4](../plans/multi-round-iteration-2026-09-15.md#round-44--pg-连接池预算--skywalking-gormredis-接入--kafka-进程级指标3-4d-round-1-p1-11912--round-1-p1-19--roadmap-2)
 3. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；DB 纳入 fail-fast required 依赖
 4. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）
 5. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项）
-6. todo-pile C6（quick-login 端点）1-2h / D5（chat-svc 表依赖 ADR）半天
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。
