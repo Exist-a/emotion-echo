@@ -83,10 +83,17 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 
 // persistWithOutbox 在事务中写业务 + outbox 行
 //
-// 路径优先级：
+// 路径优先级（Stage 94 PR-7 §P0-8 修复后）：
 //   1. svcCtx.DB 非 nil && OutboxRepo 非 nil：开事务，业务 + outbox 同事务（生产场景）
-//   2. svcCtx.DB nil && OutboxRepo 非 nil：退化（无事务），业务 + outbox 各自独立（部分测试用）
-//   3. OutboxRepo nil：原行为，直接 EventPublisher.Publish（保留向后兼容，让旧单测通过）
+//   2. svcCtx.DB 非 nil && OutboxRepo nil：开事务，只写业务（直 Publish 退化）
+//   3. svcCtx.DB nil：业务直接 CreateConversation（非事务），事件走 EventPublisher.Publish
+//      （best-effort；dev / 测试场景。注：原"路径 2 = DB nil + OutboxRepo 非 nil"的
+//      拆分无事务写模式已被 §P0-8 修复移除——这种配置本就不安全:
+//      业务写完但 outbox 写失败 → 事件静默丢失）
+//
+// §P0-8 修复要点:不允许"业务写成功后再独立调 CreateInTx(nil, ...)"模式。
+// 退化路径(DB nil)直接走 best-effort Publish,允许事件丢失的可见降级
+// (log 触发告警)而非"看似成功但实际黑洞"。
 func (l *CreateConversationLogic) persistWithOutbox(uid int64, conv *model.Conversation, now time.Time) error {
 	evt := &events.Event{
 		ID:     uuid.NewString(),
@@ -101,29 +108,44 @@ func (l *CreateConversationLogic) persistWithOutbox(uid int64, conv *model.Conve
 		},
 	}
 
-	// 路径 1：生产场景 — DB + OutboxRepo 都齐备
-	if l.svcCtx.DB != nil && l.svcCtx.OutboxRepo != nil {
+	// 路径 1 + 2：DB 齐备 → 事务化
+	if l.svcCtx.DB != nil {
 		return l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+			// 业务写（事务内）
 			if err := l.svcCtx.ConversationRepo.CreateConversationTx(tx, l.ctx, conv); err != nil {
 				return err
 			}
+			// 回填 evt.Data
 			d := evt.Data.(events.ConversationCreatedData)
 			d.ConversationID = conv.ID
 			evt.Data = d
-			payload, err := json.Marshal(evt)
-			if err != nil {
-				return err
+			// OutboxRepo 存在 → 同事务写 outbox
+			if l.svcCtx.OutboxRepo != nil {
+				payload, err := json.Marshal(evt)
+				if err != nil {
+					return err
+				}
+				return l.svcCtx.OutboxRepo.CreateInTx(tx, &repository.OutboxEvent{
+					EventID:   evt.ID,
+					EventType: evt.Type,
+					Topic:     events.TopicChatEvents,
+					Payload:   payload,
+				})
 			}
-			return l.svcCtx.OutboxRepo.CreateInTx(tx, &repository.OutboxEvent{
-				EventID:   evt.ID,
-				EventType: evt.Type,
-				Topic:     events.TopicChatEvents,
-				Payload:   payload,
-			})
+			// OutboxRepo nil（prod 不该出现）→ 事务提交后 best-effort Publish
+			// 事务内调 Publish 会阻塞事务,不当
+			return nil
 		})
+		// 事务外 best-effort Publish（仅 OutboxRepo nil 时）
+		if l.svcCtx.OutboxRepo == nil {
+			if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
+				slog.ErrorContext(l.ctx, "publish conversation.created failed (no outbox, dev only)", "err", err)
+			}
+		}
+		return nil
 	}
 
-	// 业务表持久化（路径 2/3 共用）
+	// 路径 3：DB nil — dev / 测试场景。直接非事务业务写 + best-effort Publish
 	if err := l.svcCtx.ConversationRepo.CreateConversation(l.ctx, conv); err != nil {
 		return err
 	}
@@ -131,20 +153,8 @@ func (l *CreateConversationLogic) persistWithOutbox(uid int64, conv *model.Conve
 	d.ConversationID = conv.ID
 	evt.Data = d
 
-	// 路径 2：OutboxRepo 非 nil — 写 outbox（无事务，由 relay 异步发）
-	if l.svcCtx.OutboxRepo != nil {
-		payload, _ := json.Marshal(evt)
-		return l.svcCtx.OutboxRepo.CreateInTx(nil, &repository.OutboxEvent{
-			EventID:   evt.ID,
-			EventType: evt.Type,
-			Topic:     events.TopicChatEvents,
-			Payload:   payload,
-		})
-	}
-
-	// 路径 3：原行为 — 直接 EventPublisher.Publish（best-effort，失败仅 log）
 	if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
-		slog.ErrorContext(l.ctx, "publish conversation.created failed", "err", err)
+		slog.ErrorContext(l.ctx, "publish conversation.created failed (no DB, dev only)", "err", err)
 	}
 	return nil
 }

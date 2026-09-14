@@ -207,36 +207,25 @@ func (l *SendMessageLogic) persistWithOutbox(
 		return nil
 	}
 
-	// 退化路径
+	// 退化路径(DB nil，dev / 测试场景)
+// §P0-8 修复:删"业务 AppendMessage + 独立 CreateInTx(nil, ...)"无事务拆分模式
+// —— 业务写完但 outbox 写失败 = 事件静默丢失。现在直接 best-effort Publish。
 	if err := l.svcCtx.ConversationRepo.AppendMessage(l.ctx, msg); err != nil {
 		return err
 	}
 	_ = l.svcCtx.ConversationRepo.IncrementMessageCount(l.ctx, convID) // best-effort
 
-	if l.svcCtx.OutboxRepo != nil {
-		d := evt.Data.(events.MessageCreatedData)
-		d.MessageID = msg.ID
-		evt.Data = d
-		payload, _ := json.Marshal(evt)
-		if err := l.svcCtx.OutboxRepo.CreateInTx(nil, &repository.OutboxEvent{
-			EventID:   evt.ID,
-			EventType: evt.Type,
-			Topic:     events.TopicChatEvents,
-			Payload:   payload,
-		}); err != nil {
-			return err
-		}
-		// Stage 36-A3.2：同上，commit 后再调 ai-svc
-		l.maybeUpsertNeutralEmotion(uid, convID, msg.ID, evt.ID)
-		return nil
-	}
-
-	// 原行为（向后兼容）— 用 AppendMessage 已回填的 msg.ID
+	// 用 AppendMessage 已回填的 msg.ID
 	d := evt.Data.(events.MessageCreatedData)
 	d.MessageID = msg.ID
 	evt.Data = d
-	if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
-		slog.ErrorContext(l.ctx, "publish message.created failed", "err", err)
+
+	// §P0-8:OutboxRepo 在退化路径(DB nil)下也不调用——避免拆开写黑洞。
+	// 直接 best-effort Publish(原行为);dev fallback 同路径。
+	if l.svcCtx.EventPublisher != nil {
+		if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
+			slog.ErrorContext(l.ctx, "publish message.created failed (no DB, dev only)", "err", err)
+		}
 	}
 
 	// Stage 36-A3.2：InMemory / 退化路径（无 Kafka 无 Outbox）也走 dev fallback，
