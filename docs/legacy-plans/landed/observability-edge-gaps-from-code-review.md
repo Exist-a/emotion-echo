@@ -17,16 +17,17 @@ landed-parts:
   - §A Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN（2026-09-14）
   - §A-extension analytics-svc consumer sw8 透传 —— Stage 93 全 GREEN（2026-09-14,镜像 v0.1.6）
 residuals:
-  - §B. consumer.attempts 加锁 P2 0.5h（ai-svc + analytics-svc 两处，maps 无并发保护）
-  - §C. metrics unmatched 路径 P2 1.5h（消费者未匹配 topic/事件类型未计数）
   - §D. GinSkywalking 跳过路径配置化 P3 0.5h（健康检查 / metrics endpoint 不应入 trace）
-  - §E. AI model init failed metric P2 1h（FER/SenseVoice/XTTS 启动失败未埋点）
   - §F. consumer.go 拆分 P3 0.5h（chatEventHandler 拆出 trace/DLQ/repo 三个 sub-handler）
   - container e2e 实证 stage93_sw8_verify.py（与 Stage 92 stage92_sw8_verify.py 同模式,留 Stage 94+ 沉淀）
   - SkyWalking OAP 9.x graphql queryDuration 时间格式 bug——OAP UI 跨进程 trace 可视化阻塞,Stage 92 §五残余沿用
 landed-stages:
   - stage-92-kafka-sw8-propagation-2026-09-14.md（§A chat-svc + ai-svc sw8 透传）
   - stage-93-analytics-svc-sw8-propagation-2026-09-14.md（§A-extension analytics-svc sw8 透传）
+  - round 5b-7af41a5 fix(ai-svc): §B consumer.attempts 加 sync.Mutex + 并发安全测试
+  - round 5b-aba2476 fix(analytics-svc): §B consumer.attempts 加 sync.Mutex + 并发安全测试
+  - round 5c-4bc2b21 fix(metrics): §C 未匹配路由不计入 HTTPRequestsTotal/Duration
+  - round 5d-4710493 feat(observability): §E AI model init failed metric (FER/SenseVoice/XTTS)
 ---
 
 # Plan - observability edge gaps from code review (non-sprint scope)
