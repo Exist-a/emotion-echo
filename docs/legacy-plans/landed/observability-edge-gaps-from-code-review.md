@@ -28,6 +28,7 @@ landed-stages:
   - round 5b-aba2476 fix(analytics-svc): §B consumer.attempts 加 sync.Mutex + 并发安全测试
   - round 5c-4bc2b21 fix(metrics): §C 未匹配路由不计入 HTTPRequestsTotal/Duration
   - round 5d-4710493 feat(observability): §E AI model init failed metric (FER/SenseVoice/XTTS)
+  - e2e 实证: docker e2e §E metric（FER/SenseVoice/XTTS BaseURL="" → emotion_echo_model_client_init_failed_total{model,service} 各=1，2026-09-14）
 ---
 
 # Plan - observability edge gaps from code review (non-sprint scope)
