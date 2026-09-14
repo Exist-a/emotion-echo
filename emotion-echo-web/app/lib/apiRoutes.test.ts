@@ -126,7 +126,7 @@ describe('API routes contract', () => {
     ).toEqual([])
   }, 30_000)
 
-  it('API_ROUTES 至少包含 26 条标准路径 + 5 条 knownOrphans', () => {
+  it('API_ROUTES 至少包含 26 条标准路径', () => {
     // 展开嵌套 knownOrphans 段（递归处理任意深度嵌套）
     function flatten(obj: any): ApiRoute[] {
       const out: ApiRoute[] = []
@@ -140,7 +140,8 @@ describe('API routes contract', () => {
       return out
     }
     const all = flatten(API_ROUTES)
-    expect(all.length).toBeGreaterThanOrEqual(31)
+    // P0-R2-2: faceEmotionOrphan 已修复并移除，knownOrphans 为空
+    expect(all.length).toBeGreaterThanOrEqual(26)
   })
 
   it('API_ROUTES 不含空 (method,path) 组合或重复组合', () => {

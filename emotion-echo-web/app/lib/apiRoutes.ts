@@ -83,7 +83,6 @@ export const API_ROUTES = {
   // 前端已调用但 BFF 端未注册（或 BFF 路径错位）。PR-4 落地后这些孤儿应转入主路径或加 handler。
   // 路径写在这里是为了让契约测试不误报，不构成对实现的承诺。
   knownOrphans: {
-    // useFaceEmotion.ts 调 /face/emotion — 是死代码，Camera 抓拍走 /multimodal/analyze
-    faceEmotionOrphan:  { method: 'POST', path: '/face/emotion' } as ApiRoute,
+    // P0-R2-2: faceEmotionOrphan 已修复 — useFaceEmotion 改用 /multimodal/analyze
   },
 } as const

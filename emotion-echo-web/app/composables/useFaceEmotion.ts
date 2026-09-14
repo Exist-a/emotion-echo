@@ -119,12 +119,19 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
         ? options.sessionId.value 
         : options.sessionId
       
-      // 发送到后端分析
-      const result = await post<FaceEmotionResult>(API_ROUTES.knownOrphans.faceEmotionOrphan.path, {
-        imageBase64: imageBase64.split(',')[1], // 去掉 data:image/jpeg;base64, 前缀
-        sessionId,
-        userId
-      })
+      // P0-R2-2: 改用 /multimodal/analyze（修复前调 orphan 路径无 handler）
+      const formData = new FormData()
+      formData.append('kind', 'image')
+      // base64 → Blob
+      const byteChars = atob(imageBase64.split(',')[1] || '')
+      const byteArray = new Uint8Array(byteChars.length)
+      for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i)
+      const blob = new Blob([byteArray], { type: 'image/jpeg' })
+      formData.append('file', blob, 'capture.jpg')
+      formData.append('persist', 'false')
+      if (sessionId) formData.append('text', sessionId)
+
+      const result = await post<FaceEmotionResult>(API_ROUTES.multimodalAnalyze.path, formData)
       
       currentEmotion.value = {
         ...result,
