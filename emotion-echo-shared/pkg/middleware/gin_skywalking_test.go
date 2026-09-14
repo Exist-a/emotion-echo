@@ -249,6 +249,10 @@ func TestGinSkywalkingMiddleware_AttachesStatusCode(t *testing.T) {
 
 // stubTracer PR-OBS-17 — 满足 grpcinterceptor.Tracer 接口,记录调用次数
 // PR-OBS-18 扩展: StartEntry 返回共享 span 实例,记录调用 + tag + EndSpan err
+// Stage 92 PR-1 扩展: + CreateExitSpan + CreateEntrySpan mock（满足接口,
+// 中间件测试不验证跨进程透传细节——Kafka sw8 测试在 chat-svc/ai-svc/analytics-svc
+// 各自测试覆盖）。fix:Stage 92 收口未同步扩展 stubTracer,导致 pkg/middleware 测试
+// 编译失败(Stage 93 收口自检发现,与 Stage 92 §"顺手修历史孤儿 build fail"同模式)
 type stubTracer struct {
 	startEntryCalls []string
 	createLocalCalls []string
@@ -266,6 +270,22 @@ func (t *stubTracer) StartEntry(ctx context.Context, opName string) (context.Con
 
 func (t *stubTracer) CreateLocalSpan(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span, error) {
 	t.createLocalCalls = append(t.createLocalCalls, opName)
+	return ctx, &stubSpan{}, nil
+}
+
+// CreateExitSpan Stage 92 PR-1 — stub 满足 Tracer 接口(中间件测试不验证 injector 细节)
+func (t *stubTracer) CreateExitSpan(
+	ctx context.Context, operationName, peer string,
+	injector func(key, value string) error,
+) (context.Context, grpcinterceptor.Span, error) {
+	return ctx, &stubSpan{}, nil
+}
+
+// CreateEntrySpan Stage 92 PR-1 — stub 满足 Tracer 接口(中间件测试不验证 extractor 细节)
+func (t *stubTracer) CreateEntrySpan(
+	ctx context.Context, operationName string,
+	extractor func(key string) (string, error),
+) (context.Context, grpcinterceptor.Span, error) {
 	return ctx, &stubSpan{}, nil
 }
 
