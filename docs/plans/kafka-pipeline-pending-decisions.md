@@ -78,10 +78,36 @@ if kafkaEnabled {
 
 选 C（短期）+ B（长期）。C 是 30 分钟工作量；B 需要明确「relay 只为真 publisher 服务」的语义。**当前状态建议在 ADR-19 补一段登记**，避免后续读代码的人误判这是可靠路径。
 
+### 已落地登记（2026-09-15 Stage 94 PR-3 · commit `44e9767`）
+
+选项 C（短期 metric）已落地：
+
+- `emotion-echo-chat-svc/internal/outbox/metrics.go` 定义 `OutboxSentViaFallbackTotal` counter：
+  - Name: `emotion_echo_outbox_sent_via_fallback_total`
+  - Inc 函数 `IncSentViaFallback()`，由 chat-svc main.go §2.5 Kafka init 失败 fallback 时调用一次
+- `emotion-echo-chat-svc/main.go:159-164`：
+  ```go
+  if err != nil {
+      log.Printf("[kafka] producer init failed: %v (fallback to in-memory)", err)
+      outbox.IncSentViaFallback()
+      // prometheus alert: emotion_echo_outbox_sent_via_fallback_total > 0 持续 1m → page
+  }
+  ```
+- `emotion-echo-chat-svc/internal/outbox/metrics_test.go` 验证 counter 存在 + IncSentViaFallback() 能递增
+
+**黑洞变成可见**：发送行数与 Kafka 实际消息数对账可监控；剩余事件级黑洞（fallback 后 InMemory slice 内的数据不可逐条观测）需要后续选项 B 解决（relay 只为真 publisher 服务 + Kafka 重连机制）。
+
+选项 B（长期）待 kafka 扩副本 / 多副本迁移启动时再做。
+
+### ADR-19 补登记
+
+[adr-2026-09-dev-publisher-user-behavior-events.md](../architecture/adr/adr-2026-09-dev-publisher-user-behavior-events.md)
+末尾已加 "## D1 fallback 路径登记" 段（Stage 97 tail 闭环动作）。
+
 ### 工作量
 
-- 选项 C：0.5h（shared metrics + relay 判断 + 告警规则）
-- 选项 B：1h（main.go 启动条件收紧 + 注释）
+- 选项 C：0.5h ✅ 已落地（Stage 94 PR-3 commit `44e9767`）
+- 选项 B：1h（main.go 启动条件收紧 + 注释）— 待 kafka 扩副本触发时做
 
 ---
 
@@ -167,6 +193,27 @@ analytics-svc 的 config 结构里没有 `Kafka.MaxRetries` 字段。运维调�
 ### 工作量
 
 0.5h
+
+### 已落地登记（2026-09-15 Stage 96 PR-9a · commit `2cc05c8`）
+
+选项 A 已落地：
+
+- `emotion-echo-analytics-svc/internal/config/config.go:25-29` 加 `Kafka.MaxRetries int` 字段：
+  ```go
+  // MaxRetries P2-13: 消费失败最大重试次数，与 ai-svc 对齐（默认 3）。
+  MaxRetries int
+  ```
+- `emotion-echo-analytics-svc/main.go:58-61,198` applyEnvOverrides 读 `KAFKA_MAX_RETRIES` env：
+  ```go
+  // P2-13 (Round 1): 从 env 读 MaxRetries 对齐 ai-svc（默认 3）
+  // ...
+  c.Kafka.MaxRetries = n
+  ```
+- `emotion-echo-analytics-svc/main.go` 注入 consumer：`c.consumer = &chatEventHandler{..., maxRetries: c.Kafka.MaxRetries}`
+- ai-svc/analytics-svc 配置对称：两者都走 yaml `Kafka.MaxRetries` + env `KAFKA_MAX_RETRIES` + 默认 3
+
+**测试**：[stage-96-code-review-round1-p1p2-closure.md §2 P2-13 已记录](../stages/stage-96-code-review-round1-p1p2-closure.md)，
+analytics-svc `go test ./...` 全绿。运维可改 `KAFKA_MAX_RETRIES` 调重试阈值，无需重编译。
 
 ---
 
@@ -289,6 +336,27 @@ B：1-1.5h
 **全部登记版 ≈ 1h；全部落地版 ≈ 1.5-2 人天。**
 
 排期建议：D1+D2 组成「Kafka 管线可靠性补完」小 sprint（半天）；D4 搭 Stage 93 顺风车；D3/D5/D7 先做文档登记等触发条件；D6+D8 合并一个契约测试 PR。
+
+## 状态盘点（2026-09-15 Stage 97 tail）
+
+| # | 严重度 | 工作量 | 状态 | 落地证据 / 触发条件 |
+|---|---|---|---|---|
+| **D1** | 🟡 P1 | 0.5h（已落）/ 1h（B 长期）| ✅ **短期 C 已落** | [emotion-echo-chat-svc/internal/outbox/metrics.go](../../emotion-echo-chat-svc/internal/outbox/metrics.go) `OutboxSentViaFallbackTotal` counter + main.go fallback 路径 `IncSentViaFallback()`；ADR-19 "D1 fallback 路径登记" 段已加。Stage 94 PR-3 commit `44e9767` |
+| **D2** | 🟡 P1 | 1-1.5h | ⏳ **待下一 sprint** | outbox sent/dead 行无清理；触发条件 = 项目真的要给真实用户跑（演示期/简历项目也算）。Stage 97 调研：grep 无 cleanup/retention/vacuum 实现 |
+| **D3** | 🟡 P2 | 0.25h（登记）/ 3-4h（持久化）| ⏳ **待触发** | attempts 不跨 rebalance/进程重启；触发条件 = ai-svc/analytics-svc 多副本部署。当前单副本 dev 模式无影响 |
+| **D4** | 🟡 P2 | 0.5h | ✅ **已落** | [emotion-echo-analytics-svc/internal/config/config.go](../../emotion-echo-analytics-svc/internal/config/config.go) `Kafka.MaxRetries` 字段 + main.go applyEnvOverrides 读 `KAFKA_MAX_RETRIES`。Stage 96 PR-9a commit `2cc05c8` |
+| **D5** | 🟡 P2 | 0.25h（承诺）/ 2-3h（SKIP LOCKED）| ⏳ **待触发** | relay 多副本互斥前置；触发条件 = chat-svc 决定扩副本的那个 stage。当前单副本 + ADR-19 "单副本承诺" 登记已含 |
+| **D6** | 🟢 P3 | 1-1.5h | ⏳ **下一 sprint** | outbox payload JSONB ↔ Protobuf 双 schema 转换链；建议与 D8-3 合并 |
+| **D7** | 🟢 P3 | 0.25h（登记）/ 3h+（改行为）| ⏳ **owner 拍板** | 删除会话生命周期不一致（消息没了情绪数据还在）；owner 从产品语义出发拍板 |
+| **D8** | 🟢 P3 | ~1h | ⏳ **下一 sprint** | producer peer=topic 名 / extractSw8Header 双份 / EventType 字符串双处镜像；与 D6 合并小 PR |
+
+**Stage 97 调研结论**（代码事实）：
+- D2 现状：`emotion-echo-chat-svc/migrations/c001_create_outbox_events.sql` 仅有 `idx_outbox_pending` (partial status=pending) + `idx_outbox_attempts`；`outbox/relay.go` 仅处理 pending；无 cleanup/retention/vacuum
+- D3 现状：`ai-svc/internal/consumer/consumer.go` attempts 注释明写"消费周期内有效"；`analytics-svc/internal/kafka/consumer.go` 同款
+- D5 现状：`outbox/relay.go FlushOnce` + `repository/outbox.go ListPending` 无 `FOR UPDATE SKIP LOCKED`；chat-svc 单副本运行
+- D6 现状：`events/proto_marshal.go` + `outbox/relay.go publishOne` 注释承认双 schema 转换链；Stage 73 Protobuf 迁移后保留 JSONB 备份
+- D7 现状：`conversation_repository.go DeleteConversationTx` 硬删 messages/conversations；事件复用 `conversation.closed`；ai schema `emotion_analysis`/`fused_emotions` 不级联清理
+- D8 现状：`events/kafka_publisher.go Publish` CreateExitSpan peer 用 topic 名；`shared/pkg/eventrow/mapper.go` 包注释明写"EventType 字符串变更必须同步两处"
 
 ## 与既有文档的关系
 

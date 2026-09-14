@@ -179,3 +179,68 @@ PR-A1.3: REFACTOR 抽 eventrow.MapEventToUserBehaviorRow 到 shared 包
 
 - ADR-20（chat-svc 表依赖清单）：等 Stage 37-A 全收口后单独起
 - ADR-21（dev 模式跨服务职责总清单）：积累到 3+ 个 dev-only 跨服务点时起
+
+## D1 fallback 路径登记（2026-09-15 Stage 94 PR-3 · commit `44e9767`）
+
+> [kafka-pipeline-pending-decisions.md §D1](../plans/kafka-pipeline-pending-decisions.md)
+> 要求"在 ADR-19 补一段登记"——本节落地。
+
+**风险**：原 [emotion-echo-chat-svc/main.go §2.5](../../emotion-echo-chat-svc/main.go)
+```go
+var pub events.EventPublisher = events.NewInMemoryEventPublisher()
+if kafkaEnabled {
+    kp, err := events.NewKafkaEventPublisher(kafkaBrokersList)
+    if err != nil {
+        log.Printf("[kafka] producer init failed: %v (fallback to in-memory)", err)
+    } else {
+        ...
+        pub = kp
+    }
+}
+```
+
+`InMemoryEventPublisher.Publish` append 进内存 slice 返 nil → relay MarkSent。
+**`KAFKA_ENABLED=true` 但 broker 不可达**（重启 Kafka、网络抖动、DNS 未就绪）窗口下：
+- 业务落库 ↔ 事件发布原子承诺**被静默击穿**
+- 行已 sent 不再重试 → 事件永久丢失
+- 仅 log 一行，sent 行数 vs Kafka 实际消息数对不上账——无任何指标发现
+
+**已知边界**：
+- ✅ dev 模式（`KAFKA_ENABLED=false`）走 DevEventPublisher（本 ADR §A 主体）不受影响
+- ⚠️ 问题只出现在「开关开了但 init 失败」窗口——最隐蔽场景
+- ⚠️ fallback 后 InMemory slice 内的数据**事件级不可逐条观测**（属选项 B 长期工作）
+
+**已落地缓解**（Stage 94 PR-3 commit `44e9767` 短期选项 C）：
+
+[emotion-echo-chat-svc/internal/outbox/metrics.go](../../emotion-echo-chat-svc/internal/outbox/metrics.go)：
+```go
+Name: "emotion_echo_outbox_sent_via_fallback_total",
+Help: "Kafka init 失败时 fallback 计数；> 0 持续 1m → page on-call",
+func IncSentViaFallback() { OutboxSentViaFallbackTotal.Inc() }
+```
+
+[main.go §2.5](../../emotion-echo-chat-svc/main.go)（fallback 路径）：
+```go
+if err != nil {
+    log.Printf("[kafka] producer init failed: %v (fallback to in-memory)", err)
+    outbox.IncSentViaFallback()  // ← D1 短期 C 钉死
+}
+```
+
+黑洞**从不可见变为可观测**：
+- Prometheus 抓 `emotion_echo_outbox_sent_via_fallback_total`
+- 告警规则：`> 0 for 1m` → page on-call
+- 配合 `emotion_echo_outbox_events_total`（relay 已 sent 行数）+ Kafka broker 端消息计数
+  三方对账，可定位"fallback 期间丢了多少事件"
+
+**测试**：[emotion-echo-chat-svc/internal/outbox/metrics_test.go](../../emotion-echo-chat-svc/internal/outbox/metrics_test.go)
+验证 counter 存在 + `IncSentViaFallback()` 能递增。
+
+**未做（属选项 B）**：relay 启动条件收紧（`pub` 必须是真 Kafka 或 DevEventPublisher）
++ Kafka 重连机制——触发条件 = chat-svc 决定扩副本的那个 stage（建议先做 ADR-19
+补登记提醒，再排期）。
+
+**关联**：
+- [kafka-pipeline-pending-decisions.md §D1](../plans/kafka-pipeline-pending-decisions.md)
+- [stage-94-code-review-2026-09-14-p0-closure.md](../stages/stage-94-code-review-2026-09-14-p0-closure.md) PR-3 §P0-5
+- [emotion-echo-chat-svc/internal/outbox/metrics.go](../../emotion-echo-chat-svc/internal/outbox/metrics.go)
