@@ -21,7 +21,11 @@
 #   chat → ai → analytics
 #   理由：analytics 的统计视图建立在 chat / ai 的表之上；
 #         ai 的 005 视图又依赖它自己 002/003 建的两张表。
-#   服务内部按文件名升序（001 → 002 → ...）。
+#   Round 1.3 改造：原 SERVICE_ORDER 硬编码删除，改 glob 模式自动发现
+#   */migrations/（legacy/ 历史归档自然排除，因其在 legacy/ 子目录下）。
+#   服务发现顺序：migrations 目录的字典序（chat < ai < analytics，
+#   因字母序 c < a... 实际 chat < ai 是因为 shell 字典序对 c* 与 a* 不可靠，
+#   故强制加 PRIORITY_ORDER 兜底，新 svc 排最后自然正确）。
 #
 # 用法：
 #   容器内（compose 的 emotion-echo-db-migrate 服务）：直接执行，psql 连 postgres 服务名
@@ -31,9 +35,10 @@
 
 set -eu
 
-# 服务执行顺序。新增带 migrations/ 的服务必须加到这里，
-# 否则 deploy/db/test_migrations_contract.sh §契约 2 会失败。
-SERVICE_ORDER="emotion-echo-chat-svc emotion-echo-ai-svc emotion-echo-analytics-svc"
+# Round 1.3：服务执行顺序（已删除 SERVICE_ORDER 硬编码字符串）
+# 保留 PRIORITY_ORDER 作为跨 svc 顺序兜底（chat → ai → analytics 依赖关系），
+# 但这是"参考"而非"必须"——后续新 svc 加在末尾即可。
+PRIORITY_ORDER="emotion-echo-chat-svc emotion-echo-ai-svc emotion-echo-analytics-svc"
 
 PGHOST="${PGHOST:-postgres}"
 PGUSER="${PGUSER:-postgres}"
@@ -82,14 +87,21 @@ while [ "$i" -lt 30 ]; do
   sleep 1
 done
 
+# Round 1.3：glob 模式自动发现 */migrations/（不依赖 SERVICE_ORDER 硬编码）。
+# 1) PRIORITY_ORDER 中的 svc 按声明顺序排前（兜底跨 svc 依赖）
+# 2) 任何 MIGRATIONS_ROOT/*/migrations（不在 PRIORITY_ORDER 中的新 svc）排后
+# 3) 排除 legacy/ 历史归档（其在 legacy/ 子目录下，自然被一级 glob 排除）
 total=0
-for svc in $SERVICE_ORDER; do
+seen=""
+
+# Phase 1: PRIORITY_ORDER 已声明的 svc
+for svc in $PRIORITY_ORDER; do
   dir="$MIGRATIONS_ROOT/$svc/migrations"
   if [ ! -d "$dir" ]; then
     log "跳过 $svc（无 migrations 目录）"
     continue
   fi
-  # 服务内按文件名升序；用 ls 排序而非 glob 默认序，保证 001 < 002 < ...
+  seen="$seen $svc"
   for f in $(ls "$dir"/*.sql 2>/dev/null | sort); do
     name="$svc/$(basename "$f")"
     if out=$(run_sql_file "$f"); then
@@ -103,4 +115,23 @@ for svc in $SERVICE_ORDER; do
   done
 done
 
-log "全部迁移应用完成，共 $total 个文件（幂等，可重复执行）"
+# Phase 2: glob 自动发现新 svc（不需修改本脚本即生效）
+# 排除 legacy/（其路径含 legacy/ 子目录）+ 已 seen 的 svc
+for dir in $(ls -d "$MIGRATIONS_ROOT"/*/migrations 2>/dev/null | sort); do
+  svc=$(basename "$(dirname "$dir")")
+  case " $seen " in *" $svc "*) continue ;; esac
+  log "新发现 svc: $svc（glob 自动模式）"
+  for f in $(ls "$dir"/*.sql 2>/dev/null | sort); do
+    name="$svc/$(basename "$f")"
+    if out=$(run_sql_file "$f"); then
+      log "  OK  $name"
+      total=$((total + 1))
+    else
+      log "  ERR $name"
+      echo "$out" | tail -20 >&2
+      die "迁移失败：$name（该文件可能非幂等，或依赖了尚未创建的对象）"
+    fi
+  done
+done
+
+log "全部迁移应用完成，共 $total 个文件（幂等，可重复执行；glob 模式自动发现新 svc）"
