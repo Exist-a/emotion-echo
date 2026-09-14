@@ -6,6 +6,13 @@
 //
 // dead = 发布重试 MaxAttempts 次仍失败、永久放弃的事件行——意味着事件丢失，
 // 与 consumer lag（warning）不同级别，值班需要人工排查/回放。
+//
+// Stage 94 PR-3 §P0-5：outbox_sent_via_fallback_total — chat-svc main.go Kafka
+// producer init 失败时 fallback InMemoryEventPublisher 时递增。这是 §P0-5
+// "Kafka producer InMemory fallback 静默击穿 outbox" 的"短期 C"修复
+// (kafka-pipeline-pending-decisions.md D1): 让黑洞变成可见
+// ——指标非 0 时说明事件"sent 但未进 Kafka"正在发生,需立即排查。
+// 长期 B（relay 收紧,kafka init 失败时 relay 不启动）独立 sprint 跟踪。
 package outbox
 
 import (
@@ -21,3 +28,22 @@ var OutboxEventsDeadTotal = promauto.NewCounter(prometheus.CounterOpts{
 
 // IncDead relay MarkDead 成功后调用
 func IncDead() { OutboxEventsDeadTotal.Inc() }
+
+// OutboxSentViaFallbackTotal Kafka init 失败 → fallback InMemory 计数器
+// （Stage 94 PR-3 §P0-5 短期 C 修复）
+//
+// 含义:chat-svc 启动时若 NewKafkaEventPublisher 失败且 KAFKA_ENABLED=true,
+// main.go fallback 到 InMemoryEventPublisher 同时 IncSentViaFallback() 一次。
+// 后续每条 outbox 事件被 relay MarkSent 但实际未进 Kafka,此 counter **不再递增**
+// （事件级黑洞不可逐条观测,只能用 Kafka 消息数 vs MarkSent 行数对账）。
+//
+// 推荐告警规则（部署 prometheus/rules/ 时补）:
+//   - emotion_echo_outbox_sent_via_fallback_total > 0 持续 1m → page on-call
+//     （说明生产模式下 Kafka 不可达,事件正在静默丢失,需立即排查）
+var OutboxSentViaFallbackTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "emotion_echo_outbox_sent_via_fallback_total",
+	Help: "Number of times chat-svc fell back to InMemoryEventPublisher due to Kafka init failure (each startup; events silently lost thereafter).",
+})
+
+// IncSentViaFallback chat-svc main.go Kafka init 失败 fallback 时调用
+func IncSentViaFallback() { OutboxSentViaFallbackTotal.Inc() }

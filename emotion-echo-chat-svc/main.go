@@ -149,7 +149,12 @@ func main() {
 	if kafkaEnabled {
 		kp, err := events.NewKafkaEventPublisher(kafkaBrokersList)
 		if err != nil {
+			// Stage 94 PR-3 §P0-5：fallback 必须显式递增 counter（kafka-pipeline-pending-decisions.md
+			// D1 短期 C 修复）—— 让黑洞变成可见。后续 MarkSent 行不再递增（事件级黑洞不可逐条观测，
+			// 需用 Kafka 消息数 vs MarkSent 行数对账）。推荐 prometheus 告警:
+			//   emotion_echo_outbox_sent_via_fallback_total > 0 持续 1m → page
 			log.Printf("[kafka] producer init failed: %v (fallback to in-memory)", err)
+			outbox.IncSentViaFallback()
 		} else {
 			// Stage 92 PR-1：注入 SkyWalking tracer → Publish 时写 sw8 header
 			if tracer != nil {
@@ -278,17 +283,18 @@ func main() {
 
 	log.Printf("Starting chat-svc at %s:%d...", c.Host, c.Port)
 
-	// 优雅退出：SIGINT/SIGTERM → Nacos Close
+	// Stage 94 PR-4 §P0-4：graceful shutdown —— signal handler cancel rootCtx
+	// 让 r.Run 返回 + main 自然 return → 所有 defer 触发(kp.Close / nacosRuntime.Close /
+	// bootCancel)。原实现 os.Exit(0) 绕过 main 函数 return,defer 不触发,关闭时丢消息。
+	rootCtx, rootCancel := context.WithCancel(context.Background())
+	defer rootCancel()
+
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		log.Printf("[signal] received, shutting down...")
-		bootCancel()
-		if nacosRuntime != nil {
-			nacosRuntime.Close(context.Background(), c.Name, c.Host, c.Port)
-		}
-		os.Exit(0)
+		rootCancel() // 取消 rootCtx → 下面 select 触发 → main 自然 return → defer 链
 	}()
 
 	// Stage 58 PR-GRPC-3：双轨启动 — Gin HTTP (:8890) + gRPC (:8892)
@@ -305,9 +311,26 @@ func main() {
 		log.Printf("[grpc] chat-svc gRPC server 跳过（GRPC.Port=%d, svcCtx=%v）", grpcPort, svcCtx != nil)
 	}
 
-	if err := r.Run(fmt.Sprintf("%s:%d", c.Host, c.Port)); err != nil {
-		log.Fatalf("[gin] server crashed: %v", err)
+	// §P0-4：用 http.Server 替代 gin.Run —— signal 触发 rootCancel → httpServer.Shutdown
+	// 优雅关闭（让 in-flight request 收尾）,然后 main 返回 → 所有 defer 触发。
+	httpServer := &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", c.Host, c.Port),
+		Handler: r,
 	}
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("[gin] server crashed: %v", err)
+			rootCancel() // 同样让 main 自然 return（不走 os.Exit）
+		}
+	}()
+	<-rootCtx.Done()
+	log.Printf("[shutdown] rootCtx canceled, draining in-flight requests...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("[shutdown] http server shutdown error: %v", err)
+	}
+	log.Printf("[shutdown] complete; main returning (deferred kp.Close() / nacosRuntime.Close() / bootCancel will execute)")
 }
 
 // pgConn 聚合 openPostgres 的双返回值，供 dbconnect.ConnectWithRetry 泛型包装
