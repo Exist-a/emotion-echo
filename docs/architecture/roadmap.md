@@ -1022,11 +1022,11 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   - 详见 [stage-92-kafka-sw8-propagation-2026-09-14.md](../stages/stage-92-kafka-sw8-propagation-2026-09-14.md)。
     analytics-svc consumer 移到 Stage 93（无 Tracer 集成，需先加 tracer 链路再用 PR-2 同模式）。
 
-**当前 open 清单**（2026-09-14 Stage 92 收口后刷新）：
+**当前 open 清单**（2026-09-14 Stage 93 收口后刷新）：
 
-**observability-edge-gaps 收口进度**（Stage 92 完成 §A）：
+**observability-edge-gaps 收口进度**（Stage 92 + 93 完成 §A 全 2 项）：
 - ✅ A. Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN
-- 🔄 A-extension. analytics-svc consumer sw8 透传 —— Stage 93 候选
+- ✅ A-extension. analytics-svc consumer sw8 透传 —— Stage 93 landed（2026-09-14）
 - ⏳ B. consumer.attempts 加锁 P2 0.5h / C. metrics unmatched 路径 P2 1.5h /
    D. GinSkywalking 跳过路径配置化 P3 0.5h / E. AI model init failed metric P2 1h /
    F. consumer.go 拆分 P3 0.5h。总 ≈ 0.5 人天（B/C/E 优先）。

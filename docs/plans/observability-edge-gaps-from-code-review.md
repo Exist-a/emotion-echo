@@ -13,7 +13,7 @@ related-stages:
 related-adrs: []
 landed-parts:
   - §A Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN（2026-09-14）
-  - §A-extension analytics-svc consumer sw8 透传 —— Stage 93 候选（无 Tracer 集成，需先加）
+  - §A-extension analytics-svc consumer sw8 透传 —— Stage 93 全 GREEN（2026-09-14,镜像 v0.1.6）
 ---
 
 # Plan - observability edge gaps from code review (non-sprint scope)
