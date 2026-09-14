@@ -59,6 +59,32 @@ func TestAnalyticsReaderRole_HasNoHardcodedPassword(t *testing.T) {
 	}
 }
 
+// TestAnalyticsReaderRole_DailyEmotionByModalityV_P0R2_6 P0-R2-6: 字面量断言
+// analytics_reader role 持有 emotion_echo_ai.daily_emotion_by_modality_v 的
+// SELECT 权限。
+//
+// 风险：原 a004 缺这条 GRANT → dashboard EmotionDistributionByModality 报表
+// SELECT 该视图 → permission denied，整页 500（§契约 3 必抓 bug）。
+// 修复：a004 第 54 行加 GRANT SELECT ON ... daily_emotion_by_modality_v ...
+// 本测试钉死：以后重构此 migration 时必须保留这条 GRANT。
+func TestAnalyticsReaderRole_DailyEmotionByModalityV_P0R2_6(t *testing.T) {
+	srcBytes, err := os.ReadFile("a004_create_analytics_reader_role.sql")
+	if err != nil {
+		t.Skipf("cannot read a004: %v", err)
+	}
+	src := stripSQLComments(string(srcBytes))
+
+	// 正向断言：a004 必须对 daily_emotion_by_modality_v 显式 GRANT SELECT
+	if !strings.Contains(src, "emotion_echo_ai.daily_emotion_by_modality_v") {
+		t.Error("a004_create_analytics_reader_role.sql 缺 GRANT ON " +
+			"emotion_echo_ai.daily_emotion_by_modality_v —— §P0-R2-6 必抓 bug：\n" +
+			"dashboard EmotionDistributionByModality 必报 permission denied")
+	}
+	if !strings.Contains(src, "GRANT SELECT") {
+		t.Error("a004_create_analytics_reader_role.sql 缺 GRANT SELECT 关键字")
+	}
+}
+
 // stripSQLComments 剥离 SQL 行注释 (--) 与块注释 (/* ... */),
 // 简化版用于字面量断言避免 self-referential 误命中。
 func stripSQLComments(src string) string {

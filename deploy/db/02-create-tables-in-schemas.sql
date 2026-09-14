@@ -76,7 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_conversations_user_at ON emotion_echo_chat.conver
 
 CREATE TABLE IF NOT EXISTS emotion_echo_chat.messages (
     id BIGSERIAL PRIMARY KEY,
-    conversation_id BIGINT NOT NULL,
+    conversation_id BIGINT NOT NULL REFERENCES emotion_echo_chat.conversations(id) ON DELETE CASCADE,
     user_id BIGINT NOT NULL,
     role VARCHAR(16) NOT NULL,
     content TEXT NOT NULL,

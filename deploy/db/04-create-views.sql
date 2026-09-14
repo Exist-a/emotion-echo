@@ -11,21 +11,10 @@
 -- 注意：执行本 SQL 前必须先 CREATE SCHEMA IF NOT EXISTS 各 schema。
 -- deploy/init.sql 已经建好所有 4 个 schema；本 migration 假定 schema 存在。
 
--- emotion_echo_chat: 暴露 messages 给 analytics（不暴露 content，仅元数据）
--- 注意：新微服务 messages 表时间列是 created_at（send_time 仅存在于 legacy 单体）。
-CREATE OR REPLACE VIEW emotion_echo_chat.msg_summary_v AS
-SELECT
-    id,
-    conversation_id,
-    user_id,
-    role,
-    content_type,
-    -- Stage 82 PR-3b：意图分布报表经此视图聚合（intent VARCHAR(16)，'' = 未分类）
-    intent,
-    tokens_used,
-    LENGTH(content) AS content_len,
-    created_at AS send_time
-FROM emotion_echo_chat.messages;
+-- emotion_echo_chat: msg_summary_v 定义已迁至 emotion-echo-chat-svc/migrations/005
+-- P2-R2-8: 此处不再创建 msg_summary_v（单一权威源收敛到 chat-svc migrations）。
+-- 老 deploy/initdb 链路会先跑本文件再跑 svc migrations，所以原"先建后改"无副作用；
+-- 但本文件与 005 同时定义会冲突，CREATE OR REPLACE + DROP/RECREATE 在并发场景下竞态。
 
 -- emotion_echo_ai: 暴露 emotion_analysis 给 analytics
 CREATE OR REPLACE VIEW emotion_echo_ai.daily_emotion_v AS

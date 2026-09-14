@@ -51,6 +51,7 @@ TO analytics_reader;
 GRANT SELECT ON
     emotion_echo_chat.msg_summary_v,
     emotion_echo_ai.daily_emotion_v,
+    emotion_echo_ai.daily_emotion_by_modality_v,
     emotion_echo_assessment.assessment_v,
     emotion_echo_analytics.user_behavior_events,
     emotion_echo_analytics.mv_daily_emotion
