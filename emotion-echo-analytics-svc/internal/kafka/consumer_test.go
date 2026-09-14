@@ -78,11 +78,18 @@ var _ grpcinterceptor.Span = (*mockSpan93)(nil)
 //
 // 完整实现 StartEntry / CreateLocalSpan / CreateExitSpan / CreateEntrySpan
 // (Stage 92 扩展后),其中 CreateEntrySpan 是本测试关注点。
+//
+// Stage 94 PR-2b §P0-3 扩展：entryFn 可选,若非 nil 则 CreateEntrySpan 走自定义
+// 路径(每次返回新 mockSpan)。老测试 entryFn=nil 走原路径(向后兼容)。
 type mockTracer93 struct {
 	entryOpCalls []string
 	entrySw8Seen string
 	entrySpan    *mockSpan93
 	entryErr     error
+
+	// Stage 94 PR-2b: 自定义 CreateEntrySpan —— 每次返新 mockSpan,让"case 末尾
+	// EndSpan"测试可观测多消息 span 独立生命周期
+	entryFn func(ctx context.Context, opName string, extractor func(string) (string, error)) (context.Context, grpcinterceptor.Span, error)
 
 	exitOpCalls []string
 	exitSpan    *mockSpan93
@@ -98,10 +105,16 @@ func (t *mockTracer93) CreateLocalSpan(ctx context.Context, opName string) (cont
 }
 
 // CreateEntrySpan Stage 93 — 从 msg.Headers 抽 sw8 → 重建父 trace
+//
+// Stage 94 PR-2b §P0-3 扩展：entryFn 非 nil 时优先走自定义（每次返回新 mockSpan,
+// 让 PR-2b 新加的"span 在 case 末尾 EndSpan"测试可观测多消息 span 独立生命周期）。
 func (t *mockTracer93) CreateEntrySpan(
 	ctx context.Context, opName string,
 	extractor func(string) (string, error),
 ) (context.Context, grpcinterceptor.Span, error) {
+	if t.entryFn != nil {
+		return t.entryFn(ctx, opName, extractor)
+	}
 	t.entryOpCalls = append(t.entryOpCalls, opName)
 	if extractor != nil {
 		if v, _ := extractor("sw8"); v != "" {
@@ -831,4 +844,106 @@ func TestHandleFailure_ConcurrentAccessIsSafe(t *testing.T) {
 	if got := len(h.attempts); got < N {
 		t.Errorf("attempts map len = %d, want >= %d (handleFailure 写入被并发丢失?)", got, N)
 	}
+}
+
+// =====================================================
+// Stage 94 PR-2b §P0-3 RED · analytics-svc consumer "span 在 case 末尾 EndSpan"
+// =====================================================
+//
+// 与 ai-svc 同名测试同语义：钉死 §P0-3 修复契约 —— "每条消息的 span 必须在 case
+// 分支末尾立即 EndSpan"。原 `defer span.EndSpan(nil)` 在 for-loop case 内会延后到
+// ConsumeClaim 退出才批量收尾。
+//
+// 设计：自定义 observeRepo 记录每条 msg 写入时刻所有 span 的 ended 状态。
+// 关键差异：handleOne 内部调 repo.Create(),在那一刻观测"上一条 span 是否已 ended"。
+// 如果"上一条 span 已 EndSpan",说明 case 末尾立刻收尾（PASS,方案 A）。
+// 如果"上一条 span 未 EndSpan",说明 defer 延后（FAIL,旧实现）。
+func TestConsumeClaim_SpanEndSpanCalledWithinCaseBody(t *testing.T) {
+	t.Parallel()
+
+	// 每次 CreateEntrySpan 返回独立 mockSpan
+	spans := make([]*mockSpan93, 3)
+	idx := 0
+	tracer := &mockTracer93{
+		entrySpan: &mockSpan93{}, // 占位（entryFn 非 nil 时 entrySpan 不被读）
+		entryFn: func(ctx context.Context, opName string, _ func(string) (string, error)) (context.Context, grpcinterceptor.Span, error) {
+			s := &mockSpan93{}
+			spans[idx] = s
+			idx++
+			return ctx, s, nil
+		},
+	}
+
+	// 自定义 observeRepo:Create 在第 2/3 条 msg 写入时观测 span[0/1] 的 ended 状态
+	// 嵌入 captureEventRepo 让其保持 EventRepo 接口合规 + items 累积不变
+	repo := &observeRepoP03{
+		inner:      &captureEventRepo{},
+		spans:      spans,
+		prevEnded:  make([]bool, 3),
+		invokeIdx:  &idx,
+	}
+
+	h := &chatEventHandler{
+		repo:       repo,
+		topic:      "chat-events",
+		dlq:        NoopDLQPublisher{},
+		maxRetries: 3,
+		attempts:   make(map[string]int),
+		Tracer:     tracer,
+	}
+
+	// 构造 3 条消息
+	mkMsg := func(id string) *sarama.ConsumerMessage {
+		return &sarama.ConsumerMessage{
+			Topic:     "chat-events",
+			Partition: 0,
+			Value:     mustJSON(t, events.Event{ID: id, Type: events.EventTypeMessageCreated, Time: time.Now(), Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 7}}),
+			Headers:   []*sarama.RecordHeader{{Key: []byte("sw8"), Value: []byte("1-p03b-" + id)}},
+		}
+	}
+	driveConsumeClaim93(t, h,
+		mkMsg("evt-1b"), mkMsg("evt-2b"), mkMsg("evt-3b"),
+	)
+
+	// 第 2 条消息处理时,span[0] 应已 ended（钉死 case 末尾立刻收尾）
+	if !repo.prevEnded[1] {
+		t.Error("第 2 条消息处理时 span[0] 必须已 EndSpan（§P0-3 修复契约）；\n" +
+			"如 fail 说明 defer 仍留在 case 内（§P0-3 未修）")
+	}
+	// 第 3 条消息处理时,span[1] 应已 ended
+	if !repo.prevEnded[2] {
+		t.Error("第 3 条消息处理时 span[1] 必须已 EndSpan（§P0-3 修复契约）")
+	}
+}
+
+// observeRepoP03 在 Create 时观测"上一条 span 状态"，其余 EventRepo 方法透传。
+// invokeIdx 指向 CreateEntrySpan 分配 span 的递增计数器（闭包共享）。
+type observeRepoP03 struct {
+	inner     *captureEventRepo
+	spans     []*mockSpan93
+	prevEnded []bool
+	invokeIdx *int
+}
+
+func (r *observeRepoP03) Create(_ context.Context, e *model.UserBehaviorEvent) error {
+	// 此刻 idx 已递增到当前消息;idx-1 是当前 span;idx-2 是上一条
+	if *r.invokeIdx >= 2 {
+		r.prevEnded[*r.invokeIdx-1] = r.spans[*r.invokeIdx-2].ended
+	}
+	return r.inner.Create(context.Background(), e)
+}
+
+// EventRepo 其他方法 stub
+func (r *observeRepoP03) GetByID(_ context.Context, _ int64) (*model.UserBehaviorEvent, error) {
+	return nil, nil
+}
+func (r *observeRepoP03) Ping(_ context.Context) error { return nil }
+func (r *observeRepoP03) GetDayNightPattern(_ context.Context, _ int64, _, _ time.Time) (map[int]int64, error) {
+	return nil, nil
+}
+func (r *observeRepoP03) GetInteractionDepth(_ context.Context, _ int64, _, _ time.Time) (*repository.InteractionDepth, error) {
+	return nil, nil
+}
+func (r *observeRepoP03) GetFrequencyTrend(_ context.Context, _ int64, _, _ time.Time) ([]repository.DailyCount, error) {
+	return nil, nil
 }

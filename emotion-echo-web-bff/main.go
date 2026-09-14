@@ -49,8 +49,10 @@ var configFile = flag.String("f", "etc/web-bff.yaml", "the config file")
 
 // grpcDialer 是 gRPC 连接构造函数，提取为包级变量以便测试覆盖（bufconn）。
 // 生产默认用 grpc.NewClient + insecure（内部服务间 mTLS 由基础设施层保障）。
-var grpcDialer = func(addr string) (*grpc.ClientConn, error) {
-	return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+var grpcDialer = func(addr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	return grpc.NewClient(addr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, opts...)...)
 }
 
 // dialGRPC 尝试 dial 下游 gRPC 地址，失败时打日志并返 nil（调用方走 HTTP fallback）。
@@ -58,11 +60,16 @@ var grpcDialer = func(addr string) (*grpc.ClientConn, error) {
 // Stage 63: 修复 PR-3 "gRPC 建好了但 BFF 没接线" 的 bug。
 // 之前 buildServiceContext 构造 4 个下游 client 时只传 BaseURL，不传 GRPCConn，
 // 下游工厂静默 fallback 到 HTTP → 生产路径全走 HTTP，gRPC 等于没上线。
-func dialGRPC(addr, name string) *grpc.ClientConn {
+//
+// Stage 94 PR-4 §P0-1b：调 sharedgrpc.ClientDialOptions 给所有 dial 加
+// tracing/timeout/logging interceptor 链 —— 跨 gRPC 进程 sw8 透传到下游 server,
+// 同时避免某 handler 忘了设 deadline 时永久阻塞。opts 透传给 grpcDialer,后者
+// 把 insecure credentials + opts 一起传给 grpc.NewClient。
+func dialGRPC(addr, name string, opts ...grpc.DialOption) *grpc.ClientConn {
 	if addr == "" {
 		return nil
 	}
-	conn, err := grpcDialer(addr)
+	conn, err := grpcDialer(addr, opts...)
 	if err != nil {
 		log.Printf("[grpc] %s dial %s failed: %v (fallback to HTTP)", name, addr, err)
 		return nil
@@ -70,6 +77,11 @@ func dialGRPC(addr, name string) *grpc.ClientConn {
 	log.Printf("[grpc] %s connected: %s", name, addr)
 	return conn
 }
+
+// packageTracer 是 SkyWalking tracer,main() 在 SkyWalking init 后赋值。
+// 提升为包级 var 让 dialGRPC 内部 helper 能拿到（用于 ClientDialOptions）。
+// tracer=nil 时 ClientDialOptions 自动跳过 tracing interceptor。
+var packageTracer *go2sky.Tracer
 
 // resolveGRPCAddr 决定下游 gRPC 拨号地址：Nacos 优先（Discover 有实例），env/config
 // 的 GRPCAddr 兜底（Nacos 抖动或 NACOS_ENABLED=false 时不阻断启动）。
@@ -146,6 +158,9 @@ func main() {
 			log.Printf("[skywalking] tracer init failed (warn mode, continue): %v", err)
 		} else {
 			tracer = t
+			// Stage 94 PR-4 §P0-1b：把 tracer 提升为包级 var,让 dialGRPC 通过
+			// ClientDialOptions 挂到 5+1 个下游 gRPC conn 上
+			packageTracer = t
 			log.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
 		}
 	}
@@ -263,11 +278,16 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	// Stage 63: dial 4 个下游 gRPC 连接，传入 client 构造。
 	// Transport=grpc（默认）+ GRPCConn!=nil → 走 gRPC；否则静默 HTTP fallback。
 	// dial 失败也降级 HTTP（不阻塞启动）。
-	userGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.UserService.GRPCAddr, shareddiscovery.ServiceUser), "user-svc")
-	chatGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.ChatService.GRPCAddr, shareddiscovery.ServiceChat), "chat-svc")
-	assessmentGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AssessmentService.GRPCAddr, shareddiscovery.ServiceAssessment), "assessment-svc")
-	analyticsGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AnalyticsService.GRPCAddr, shareddiscovery.ServiceAnalytics), "analytics-svc")
-	aiGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI), "ai-svc")
+	//
+	// Stage 94 PR-4 §P0-1b：所有 dial 走 sharedgrpc.ClientDialOptions 挂
+	// tracing + timeout + logging 链。timeout=5s 是 BFF 跨下游统一兜底
+	// (handler 层仍可 ctx.WithTimeout 收紧具体业务超时)。
+	dialOpts := sharedgrpc.ClientDialOptions(sharedgrpc.NewGo2SkyTracer(packageTracer), 5*time.Second)
+	userGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.UserService.GRPCAddr, shareddiscovery.ServiceUser), "user-svc", dialOpts...)
+	chatGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.ChatService.GRPCAddr, shareddiscovery.ServiceChat), "chat-svc", dialOpts...)
+	assessmentGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AssessmentService.GRPCAddr, shareddiscovery.ServiceAssessment), "assessment-svc", dialOpts...)
+	analyticsGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AnalyticsService.GRPCAddr, shareddiscovery.ServiceAnalytics), "analytics-svc", dialOpts...)
+	aiGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI), "ai-svc", dialOpts...)
 
 	svcCtx.SetUser(downstream.NewUserClient(downstream.UserClientOptions{
 		BaseURL: c.UserService.BaseURL, TimeoutMs: c.UserService.TimeoutMs,
@@ -304,13 +324,10 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	// ai-svc gRPC（EmotionQueryService）— Stage 75 起统一走 resolveGRPCAddr。
 	// 修复潜伏 bug：原实现用无 portHint 的 HTTP resolver 解析 ai-svc，拿到 HTTP
 	// 端口 8891 覆盖正确的 env AI_SVC_GRPC_ADDR(:8892)。
+	//
+	// Stage 94 PR-4 §P0-1b：第 6 处盲点改走 dialGRPC（与其他 5 处统一 fallback / interceptor 链）
 	grpcAddr := resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI)
-	conn, err := grpc.NewClient(grpcAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		log.Printf("[grpc] ai-svc dial failed: %v (emotion query disabled)", err)
-	} else {
+	if conn := dialGRPC(grpcAddr, "ai-svc-emotion-q", dialOpts...); conn != nil {
 		svcCtx.SetEmotionQ(downstream.NewEmotionQueryClient(conn))
 	}
 

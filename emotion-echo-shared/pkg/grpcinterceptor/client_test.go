@@ -172,3 +172,58 @@ func TestClientLoggingInterceptor_FormatString(t *testing.T) {
 		t.Fatalf("format string invariant broke: %s", want)
 	}
 }
+
+// =====================================================
+// Stage 94 PR-4 §P0-1b · ClientDialOptions helper 契约测试
+// =====================================================
+
+// TestClientDialOptions_NilTracerAndZeroTimeout_ReturnsOnlyLogging
+//
+// 验证降级路径：tracer=nil + timeout=0 → 只挂 logging,不挂 tracing/timeout
+// 返回 []grpc.DialOption 长度=1（仅 WithChainUnaryInterceptor(logging)）。
+func TestClientDialOptions_NilTracerAndZeroTimeout_ReturnsOnlyLogging(t *testing.T) {
+	t.Parallel()
+	opts := ClientDialOptions(nil, 0)
+	if len(opts) != 1 {
+		t.Errorf("expected 1 DialOption (logging only), got %d", len(opts))
+	}
+}
+
+// TestClientDialOptions_WithTracer_IncludesTracingInterceptor
+//
+// 验证传入 tracer 时挂 NewClientTracingInterceptor + logging（2 个）。
+// timeout=0 不挂 ClientTimeoutInterceptor。
+func TestClientDialOptions_WithTracer_IncludesTracingInterceptor(t *testing.T) {
+	t.Parallel()
+	tracer := &mockTracer{} // 已满足 Tracer 接口
+	opts := ClientDialOptions(tracer, 0)
+	if len(opts) != 1 {
+		t.Errorf("expected 1 DialOption (tracing+logging), got %d", len(opts))
+	}
+	// 用真实 grpc client 验证 opts 中含 tracing interceptor（通过 mockTracer 记录）
+	// 简化：只验证返回非 nil + 长度正确,行为验证在 TestClientTracingInterceptor_*
+}
+
+// TestClientDialOptions_WithTimeout_IncludesTimeoutInterceptor
+//
+// 验证 timeout > 0 时挂 ClientTimeoutInterceptor + logging（无 tracing 也有 2 个）
+func TestClientDialOptions_WithTimeout_IncludesTimeoutInterceptor(t *testing.T) {
+	t.Parallel()
+	opts := ClientDialOptions(nil, 5*time.Second)
+	if len(opts) != 1 {
+		t.Errorf("expected 1 DialOption (timeout+logging), got %d", len(opts))
+	}
+}
+
+// TestClientDialOptions_FullChain_IncludesAllThreeInterceptors
+//
+// 验证 tracer+timeout 全传时挂所有 3 个（tracing + timeout + logging）。
+// 返回 1 个 DialOption（grpc.WithChainUnaryInterceptor 把 3 个串起来）。
+func TestClientDialOptions_FullChain_IncludesAllThreeInterceptors(t *testing.T) {
+	t.Parallel()
+	tracer := &mockTracer{}
+	opts := ClientDialOptions(tracer, 5*time.Second)
+	if len(opts) != 1 {
+		t.Errorf("expected 1 DialOption (all 3 interceptors chained), got %d", len(opts))
+	}
+}

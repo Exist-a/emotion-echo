@@ -77,7 +77,7 @@ func TestBuildServiceContext_GRPCDial_AddrsResolvedViaNacos(t *testing.T) {
 	origDialer := grpcDialer
 	t.Cleanup(func() { grpcDialer = origDialer })
 	var dialed []string
-	grpcDialer = func(addr string) (*grpc.ClientConn, error) {
+	grpcDialer = func(addr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		dialed = append(dialed, addr)
 		// 连接是惰性的，真实地址拨不上不影响断言
 		return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -99,8 +99,9 @@ func TestBuildServiceContext_GRPCDial_AddrsResolvedViaNacos(t *testing.T) {
 	})
 	require.NotNil(t, svcCtx)
 
-	// 5 处 gRPC 拨号全部命中 Nacos 地址，env 值一个都没被用
-	require.Len(t, dialed, 5, "user/chat/assessment/analytics + ai EmotionQuery")
+	// 6 处 gRPC 拨号全部命中 Nacos 地址，env 值一个都没被用
+	// （Stage 94 PR-4 §P0-1b：EmotionQuery 第 6 处也走 dialGRPC,统一 fallback / interceptor 链）
+	require.Len(t, dialed, 6, "user/chat/assessment/analytics + ai + ai EmotionQuery")
 	for _, addr := range dialed {
 		assert.Equal(t, "nacos-host:18888", addr)
 	}
@@ -112,7 +113,7 @@ func TestBuildServiceContext_GRPCDial_NilGrpcResolverKeepsEnv(t *testing.T) {
 	origDialer := grpcDialer
 	t.Cleanup(func() { grpcDialer = origDialer })
 	var dialed []string
-	grpcDialer = func(addr string) (*grpc.ClientConn, error) {
+	grpcDialer = func(addr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		dialed = append(dialed, addr)
 		return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
@@ -128,9 +129,9 @@ func TestBuildServiceContext_GRPCDial_NilGrpcResolverKeepsEnv(t *testing.T) {
 
 	buildServiceContext(&cfg, nil, nil)
 
-	require.Len(t, dialed, 5)
+	require.Len(t, dialed, 6, "user/chat/assessment/analytics + ai + ai EmotionQuery 第 6 处 (Stage 94 PR-4 §P0-1b)")
 	assert.Equal(t, []string{
 		"env-user:8887", "env-chat:8892", "env-assessment:8886",
-		"env-analytics:8885", "env-ai:8892",
+		"env-analytics:8885", "env-ai:8892", "env-ai:8892",
 	}, dialed)
 }

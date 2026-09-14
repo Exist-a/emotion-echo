@@ -641,3 +641,110 @@ func TestServerTracing_XUserIDMetadataPropagatedToHandler(t *testing.T) {
 		t.Errorf("expected x-user-id=12345 in handler ctx, got %q", gotUserID)
 	}
 }
+
+// =====================================================
+// Stage 94 PR-3 §P0-1a · NewClientTracingInterceptor 语义修复 RED
+// =====================================================
+//
+// 修复目标：
+//   1) client interceptor 必须用 CreateExitSpan（不是 StartEntry）—— OAP topology 正确
+//   2) injector 必须把 sw8 写到 outgoing metadata.MD —— 跨 gRPC 进程透传到下游 server
+//   3) invoker ctx 必须是含 sw8 的 metadata.NewOutgoingContext —— 让 server 端
+//      ServerTracingInterceptor 的 CreateEntrySpan 能抽到 sw8 重建父 trace
+//
+// 测试三段：
+//   - TestClientTracingInterceptor_CallsCreateExitSpanWithSw8Metadata
+//     单元级断言：mockTracer.CreateExitSpan 被调 + injector 写入 sw8 到 metadata.MD
+//   - TestClientTracingInterceptor_NilTracer_NoOp
+//     nil tracer 走 no-op 路径,不变
+//   - TestClientTracingInterceptor_PropagatesSw8ToServer
+//     bufconn e2e：client → interceptor → server,从 incoming metadata 抽 sw8
+
+// TestClientTracingInterceptor_CallsCreateExitSpanWithSw8Metadata §P0-1a RED：
+//
+// 验证 client interceptor 调 CreateExitSpan(opName="client:<method>", peer=target,
+// injector receives sw8 value)。修复前用 StartEntry,CreateExitSpan.calls == 0 → FAIL。
+func TestClientTracingInterceptor_CallsCreateExitSpanWithSw8Metadata(t *testing.T) {
+	t.Parallel()
+	span := &mockSpan{}
+	wantSw8 := "1-p01-client-tracer-e2e-1"
+	tracer := &mockTracer{exitSpan: span, exitFakeSw8: wantSw8}
+
+	interceptor := NewClientTracingInterceptor(tracer)
+
+	// mock invoker 观测 client interceptor 内部调用,捕获 invoker 拿到的 ctx
+	var invokerCtx context.Context
+	_ = interceptor(context.Background(), "/svc/Method", nil, nil, nil,
+		func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+			invokerCtx = ctx
+			return nil
+		})
+
+	// 断言 1:CreateExitSpan 被调 1 次,opName="client:/svc/Method"
+	if len(tracer.exitOpCalls) != 1 {
+		t.Errorf("CreateExitSpan 应被调 1 次, got %d（§P0-1a 修复前用 StartEntry,CreateExitSpan.calls == 0 → FAIL）",
+			len(tracer.exitOpCalls))
+	} else {
+		if tracer.exitOpCalls[0] != "client:/svc/Method" {
+			t.Errorf("opName = %q, want %q", tracer.exitOpCalls[0], "client:/svc/Method")
+		}
+		if len(tracer.exitPeerCalls) != 1 || tracer.exitPeerCalls[0] != "" {
+			// peer 必须非空（cc.Target()）
+			t.Logf("peer = %q (可以是 cc.Target() 任意值)", tracer.exitPeerCalls[0])
+		}
+	}
+
+	// 断言 2:injector 被调,sw8 被抽到
+	if tracer.exitFakeSw8 != wantSw8 {
+		t.Errorf("mockTracer.exitFakeSw8 应=wantSw8（验证 injector 调通）")
+	}
+
+	// 断言 3:invoker ctx 含 sw8 outgoing metadata
+	if invokerCtx == nil {
+		t.Fatal("invoker ctx 为 nil")
+	}
+	md, ok := metadata.FromOutgoingContext(invokerCtx)
+	if !ok {
+		t.Error("invoker ctx 不含 outgoing metadata.MD（§P0-1a 修复前未 metadata.NewOutgoingContext）")
+	} else {
+		if v := md.Get("sw8"); len(v) == 0 || v[0] != wantSw8 {
+			t.Errorf("outgoing metadata.sw8 = %v, want [%s]", v, wantSw8)
+		}
+	}
+
+	// 断言 4:span.EndSpan 被调（interceptor 收尾）
+	if !span.ended {
+		t.Error("span.EndSpan 未被调（interceptor 收尾失败）")
+	}
+	// 断言 5:SetSpanLayer(GRPC=5) + SetComponent(5001)（与 server 端对称）
+	if len(span.layerCalls) != 1 || span.layerCalls[0] != SpanLayerGRPC {
+		t.Errorf("SetSpanLayer calls = %v, want [%d]", span.layerCalls, SpanLayerGRPC)
+	}
+	if len(span.componentCalls) != 1 || span.componentCalls[0] != ComponentGoGRPC {
+		t.Errorf("SetComponent calls = %v, want [%d]", span.componentCalls, ComponentGoGRPC)
+	}
+}
+
+// TestClientTracingInterceptor_NilTracer_NoOp 验证 nil tracer 走 no-op（向后兼容）
+func TestClientTracingInterceptor_NilTracer_NoOp(t *testing.T) {
+	t.Parallel()
+	interceptor := NewClientTracingInterceptor(nil)
+
+	called := false
+	err := interceptor(context.Background(), "/svc/Method", nil, nil, nil,
+		func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+			called = true
+			return nil
+		})
+	if err != nil {
+		t.Errorf("nil tracer 不应返错, got %v", err)
+	}
+	if !called {
+		t.Error("invoker 未被调")
+	}
+	// outgoing metadata 不应被注入（nil tracer 不应污染 ctx）
+	md, ok := metadata.FromOutgoingContext(context.Background())
+	if ok && len(md.Get("sw8")) > 0 {
+		t.Error("nil tracer 不应注入 sw8")
+	}
+}

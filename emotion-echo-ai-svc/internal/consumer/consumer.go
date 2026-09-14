@@ -87,6 +87,11 @@ func (h *ConsumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 // 标签包含 messaging.system / topic / partition / event.type，便于 SkyWalking UI 聚合分析。
 //
 // Stage 30-C A2: Handler 返 error → handleFailure：重试计数 + DLQ。
+//
+// Stage 94 PR-2a §P0-3：方案 A — span 生命周期提到 case 顶部、case 末尾显式
+// span.EndSpan(handlerErr)。原 `defer span.EndSpan(nil)` 在 for-loop case 内会
+// 延后到 ConsumeClaim 退出才批量收尾，OAP 上每条消息 duration = 整 consumer
+// goroutine 寿命（或永不 EndSpan 直到进程退出）。本次修复 + err 透传。
 func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	h.attemptsMu.Lock()
 	if h.attempts == nil {
@@ -115,11 +120,12 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 				sess.MarkMessage(msg, "")
 				continue
 			}
-			// Stage 25-F: SkyWalking span（可选）
 			// Stage 92 PR-2: 用 CreateEntrySpan 从 msg.Headers[sw8] 重建父 trace
 			// (chat-svc producer → ai-svc consumer 跨进程 trace)。降级语义:
 			//   - msg 无 sw8 header → extractor 返 "" → go2sky Valid=false → 新 trace 起点
 			//   - Tracer=nil → 完全跳过 span 创建 (Stage 25-F 原行为)
+			// Stage 94 PR-2a §P0-3：span 提到 case 顶、不用 defer，case 末尾立刻 EndSpan
+			var span grpcinterceptor.Span
 			if h.Tracer != nil {
 				sw8Header := extractSw8Header(msg.Headers)
 				extractor := func(key string) (string, error) {
@@ -128,30 +134,36 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 					}
 					return "", nil
 				}
-				_, span, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
+				_, s, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
 				if err != nil {
 					slog.WarnContext(sess.Context(), "create entry span failed (continuing without trace)", "err", err)
 				}
+				span = s
 				if span != nil {
-					defer span.EndSpan(nil)
 					span.Tag("messaging.system", "kafka")
 					span.Tag("messaging.kafka.topic", msg.Topic)
 					span.Tag("messaging.kafka.partition", fmt.Sprintf("%d", msg.Partition))
 					span.Tag("event.type", evt.Type)
 				}
 			}
-			// 调业务
-			if err := h.Handler(sess.Context(), evt); err != nil {
-				h.handleFailure(sess, msg, err, maxRetries)
-				continue
+			// 调业务。Stage 94 PR-2a：handlerErr 透传给 span.EndSpan，让 OAP 标记失败
+			var handlerErr error
+			if handlerErr = h.Handler(sess.Context(), evt); handlerErr != nil {
+				h.handleFailure(sess, msg, handlerErr, maxRetries)
+			} else {
+				// 业务成功：清空 attempts（key 复用 = 同事件再次成功）
+				if key := attemptKey(msg); key != "" {
+					h.attemptsMu.Lock()
+					delete(h.attempts, key)
+					h.attemptsMu.Unlock()
+				}
+				sess.MarkMessage(msg, "")
 			}
-			// 业务成功：清空 attempts（key 复用 = 同事件再次成功）
-			if key := attemptKey(msg); key != "" {
-				h.attemptsMu.Lock()
-				delete(h.attempts, key)
-				h.attemptsMu.Unlock()
+			// Stage 94 PR-2a §P0-3：case 末尾立刻 EndSpan（不用 defer —— defer 绑定到
+			// ConsumeClaim 函数返回，会让 N 条消息 span 累积到 consumer 退出才收尾）
+			if span != nil {
+				span.EndSpan(handlerErr)
 			}
-			sess.MarkMessage(msg, "")
 		case <-sess.Context().Done():
 			return nil
 		}

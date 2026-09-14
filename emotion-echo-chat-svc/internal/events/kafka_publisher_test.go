@@ -288,8 +288,13 @@ func TestKafkaEventPublisher_Publish_InjectsSw8Header(t *testing.T) {
 
 // mock Tracer 实现：CreateExitSpan 时用 fakeSw8 填充 injector("sw8", ...)
 // 测试只关心 sw8 是否被写到 header，不关心 span lifecycle
+//
+// Stage 94 PR-1 §P0-6 扩展：可选 outSpan 字段。
+// - nil（旧测试）：CreateExitSpan 返 (ctx, nil, nil) —— span 隐式丢弃，行为不变
+// - 非 nil（新测试）：CreateExitSpan 返 (ctx, outSpan, nil) —— Publish 可调 EndSpan 断言
 type sw8MockTracer struct {
 	fakeSw8 string
+	outSpan grpcinterceptor.Span // Stage 94 PR-1：可选，让 mock 返回真实 span 供 EndSpan 断言
 }
 
 func newSw8MockTracer(sw8 string) *sw8MockTracer {
@@ -304,7 +309,88 @@ func (m *sw8MockTracer) CreateExitSpan(
 	if injector != nil {
 		_ = injector("sw8", m.fakeSw8)
 	}
-	return ctx, nil, nil
+	return ctx, m.outSpan, nil
+}
+
+// spanEndRecorder 记录 EndSpan 调用次数与 err，用于 §P0-6 钉死 span 生命周期契约
+type spanEndRecorder struct {
+	endCalls int
+	lastErr  error
+}
+
+func (s *spanEndRecorder) EndSpan(err error) {
+	s.endCalls++
+	s.lastErr = err
+}
+func (s *spanEndRecorder) Tag(k, v string)            {}
+func (s *spanEndRecorder) SetComponent(id int32)     {}
+func (s *spanEndRecorder) SetSpanLayer(layer int32)  {}
+
+// 编译期断言 spanEndRecorder 满足 grpcinterceptor.Span 接口
+var _ grpcinterceptor.Span = (*spanEndRecorder)(nil)
+
+// newSw8MockTracerWithSpan 构造带 spanEndRecorder 的 mock tracer
+func newSw8MockTracerWithSpan(sw8 string) (*sw8MockTracer, *spanEndRecorder) {
+	rec := &spanEndRecorder{}
+	return &sw8MockTracer{fakeSw8: sw8, outSpan: rec}, rec
+}
+
+// TestKafkaEventPublisher_Publish_SpanEndSpanCalled §P0-6 RED：
+//
+// 钉死 producer span 生命周期 —— happy path 必须 EndSpan(nil) 1 次。
+// 旧实现（_, _, _ = tracer.CreateExitSpan）：span 被丢弃，endCalls == 0 → FAIL
+// 新实现（span, _, _ := ...; defer/显式 span.EndSpan(sendErr)）：endCalls == 1 → PASS
+func TestKafkaEventPublisher_Publish_SpanEndSpanCalled(t *testing.T) {
+	t.Parallel()
+	mockProducer := mocks.NewSyncProducer(t, nil)
+	mockProducer.ExpectSendMessageAndSucceed()
+
+	mockTr, rec := newSw8MockTracerWithSpan("1-p06-endspan-1")
+	p := &KafkaEventPublisher{producer: mockProducer, tracer: mockTr}
+
+	err := p.Publish(context.Background(), TopicChatEvents, &Event{
+		ID:   "evt-end-span-p06",
+		Type: EventTypeMessageCreated,
+		Data: MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 1},
+	})
+	if err != nil {
+		t.Fatalf("Publish err: %v", err)
+	}
+	if rec.endCalls != 1 {
+		t.Errorf("span.EndSpan 应被调 1 次，实际 %d 次（§P0-6 未修：span 被 _, _, _ 丢弃）", rec.endCalls)
+	}
+	if rec.lastErr != nil {
+		t.Errorf("happy path EndSpan err = %v, want nil", rec.lastErr)
+	}
+}
+
+// TestKafkaEventPublisher_Publish_SpanEndSpanOnBrokerError §P0-6 RED 边界用例：
+//
+// SendMessage 失败时也必须 EndSpan(sendErr) —— 让 OAP 上 producer span 标记失败。
+// 旧实现：span 已被丢弃，endCalls == 0；新实现：endCalls == 1 且 lastErr = sendErr
+func TestKafkaEventPublisher_Publish_SpanEndSpanOnBrokerError(t *testing.T) {
+	t.Parallel()
+	mockProducer := mocks.NewSyncProducer(t, nil)
+	brokerErr := errors.New("broker down")
+	mockProducer.ExpectSendMessageAndFail(brokerErr)
+
+	mockTr, rec := newSw8MockTracerWithSpan("1-p06-broker-err")
+	p := &KafkaEventPublisher{producer: mockProducer, tracer: mockTr}
+
+	err := p.Publish(context.Background(), TopicChatEvents, &Event{
+		ID:   "evt-broker-err-p06",
+		Type: EventTypeMessageCreated,
+		Data: MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 1},
+	})
+	if err == nil {
+		t.Fatal("Publish 应返回 broker error")
+	}
+	if rec.endCalls != 1 {
+		t.Errorf("SendMessage 失败时 span.EndSpan 仍应被调 1 次（让 OAP 标记失败），got %d", rec.endCalls)
+	}
+	if !errors.Is(rec.lastErr, brokerErr) {
+		t.Errorf("EndSpan err = %v, want broker error %v", rec.lastErr, brokerErr)
+	}
 }
 
 // CreateEntrySpan：mock 实现（本测试不涉及，保留接口合规）

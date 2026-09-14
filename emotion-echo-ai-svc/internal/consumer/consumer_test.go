@@ -570,6 +570,10 @@ type mockTracer struct {
 	entryCtx      context.Context
 	entryErr      error
 
+	// Stage 94 PR-2 §P0-3 扩展：entryFn 可选，若非 nil 则 CreateEntrySpan 走自定义
+	// 路径（每次返回新 mockSpan）。老测试 entryFn=nil 走原路径（向后兼容）。
+	entryFn func(ctx context.Context, opName string, extractor func(string) (string, error)) (context.Context, grpcinterceptor.Span, error)
+
 	// Stage 92 PR-2: CreateExitSpan 字段（本测试不验证，本服务不发消息；保留接口合规）
 	exitOpCalls  []string
 	exitSpan     *mockSpan
@@ -587,10 +591,15 @@ func (t *mockTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 }
 
 // CreateEntrySpan Stage 92 PR-2：从 msg.Headers 抽 sw8 → 重建父 trace
+// Stage 94 PR-2 §P0-3 扩展：entryFn 非 nil 时优先走自定义（每次返回新 mockSpan，
+// 让 PR-2 新加的"span 在 case 末尾 EndSpan"测试可观测多消息 span 独立生命周期）。
 func (t *mockTracer) CreateEntrySpan(
 	ctx context.Context, opName string,
 	extractor func(string) (string, error),
 ) (context.Context, grpcinterceptor.Span, error) {
+	if t.entryFn != nil {
+		return t.entryFn(ctx, opName, extractor)
+	}
 	t.entryOpCalls = append(t.entryOpCalls, opName)
 	if extractor != nil {
 		if v, _ := extractor("sw8"); v != "" {
@@ -1018,8 +1027,116 @@ func TestHandleFailure_ConcurrentAccessIsSafe(t *testing.T) {
 
 	// 断言 1:无 panic(若 sync.Mutex 漏锁,读 map 时偶发 panic,测试失败)
 	// 断言 2:attempts map 至少含 N 个 handleFailure 写入的 key
-	// (ConsumeClaim 失败路径也会 delete 一部分,故用 ≥)
 	if got := len(h.attempts); got < N {
 		t.Errorf("attempts map len = %d, want >= %d (handleFailure 写入被并发丢失?)", got, N)
+	}
+}
+
+// =====================================================
+// Stage 94 PR-2a §P0-3 RED · ai-svc consumer "span 在 case 末尾 EndSpan"
+// =====================================================
+//
+// 钉死 §P0-3 修复契约 ——"每条消息的 span 必须在 case 分支末尾立即 EndSpan"。
+// 旧实现 (`defer span.EndSpan(nil)` 在 for-loop case 内) 触发 case 末尾返回后
+// defer 才执行,N 条消息的 span EndSpan 全部延迟到 ConsumeClaim 退出 → OAP 上
+// 每条消息 duration = 整个 consumer goroutine 寿命（事实上等于全失败/丢失）。
+//
+// 测试设计：
+//   - 构造 N=3 条消息,handler 内闭包记录「我的 span 状态」 + 「上一条 span 状态」
+//   - mockTracer.entryFn 每次 CreateEntrySpan 返回一个新 mockSpan
+//   - 断言：
+//     1) handler #2 / #3 看到前一条 span.ended == true（钉死 case 末尾立刻收尾）
+//     2) handler 自己的 span 在业务执行时 ended == false（span 还活着）
+//     3) ConsumeClaim 返回时所有 span 都 ended == true
+//
+// 旧实现跑此测试：handler #2 看到 span0.ended == false → FAIL
+// 新实现（方案 A）：handler #2 看到 span0.ended == true  → PASS
+func TestConsumeClaim_SpanEndSpanCalledWithinCaseBody(t *testing.T) {
+	t.Parallel()
+
+	// 每次 CreateEntrySpan 返回独立 mockSpan
+	spans := make([]*mockSpan, 3)
+	idx := 0
+	tracer := &mockTracer{
+		entrySpan: &mockSpan{}, // 占位（entryFn 非 nil 时 entrySpan 不被读）
+		entryFn: func(ctx context.Context, opName string, _ func(string) (string, error)) (context.Context, grpcinterceptor.Span, error) {
+			s := &mockSpan{}
+			spans[idx] = s
+			idx++
+			return ctx, s, nil
+		},
+	}
+
+	type observation struct {
+		ownEnded  bool
+		prevEnded bool // 上一条消息 span 是否已 EndSpan
+	}
+	obsCh := make(chan observation, 3)
+
+	h := &ConsumerGroupHandler{
+		Ready: make(chan bool),
+		Handler: func(_ context.Context, _ *events.Event) error {
+			// 当前 span 还应活着（前 idx 已被 CreateEntrySpan 分配）
+			ownEnded := spans[idx-1].ended
+			// 上一条 span（idx >= 2 时）应已 EndSpan —— 这是 §P0-3 钉死的契约
+			var prevEnded bool
+			if idx >= 2 {
+				prevEnded = spans[idx-2].ended
+			}
+			obsCh <- observation{ownEnded: ownEnded, prevEnded: prevEnded}
+			return nil
+		},
+		Tracer: tracer,
+	}
+
+	// 构造 3 条消息（每条带 sw8 header）
+	mkMsg := func(id string) *sarama.ConsumerMessage {
+		return &sarama.ConsumerMessage{
+			Topic:     "chat-events",
+			Partition: 0,
+			Value:     []byte(`{"type":"message.created","id":"` + id + `","data":{"messageId":1,"conversationId":1,"userId":1}}`),
+			Headers:   []*sarama.RecordHeader{{Key: []byte("sw8"), Value: []byte("1-p03-" + id)}},
+		}
+	}
+	driveConsumeClaim(t, h, []*sarama.ConsumerMessage{
+		mkMsg("evt-1"), mkMsg("evt-2"), mkMsg("evt-3"),
+	})
+
+	close(obsCh)
+	var obs []observation
+	for o := range obsCh {
+		obs = append(obs, o)
+	}
+	if len(obs) != 3 {
+		t.Fatalf("handler 应调 3 次, got %d", len(obs))
+	}
+
+	// handler #1：自己的 span 应还活着（业务执行中）；无前一条 span
+	if obs[0].ownEnded {
+		t.Error("handler #1: 自己的 span 在业务执行时不应已 EndSpan")
+	}
+
+	// handler #2：上一条（#1）span 必须已 EndSpan —— 钉死"case 末尾立刻收尾"
+	if !obs[1].prevEnded {
+		t.Error("handler #2: 上一条 span 必须已 EndSpan（case 末尾立刻收尾）\n" +
+			"如 fail 说明 defer 仍留在 case 内（§P0-3 未修）")
+	}
+	if obs[1].ownEnded {
+		t.Error("handler #2: 自己的 span 在业务执行时不应已 EndSpan")
+	}
+
+	// handler #3：上一条（#2）span 必须已 EndSpan
+	if !obs[2].prevEnded {
+		t.Error("handler #3: 上一条 span 必须已 EndSpan")
+	}
+	if obs[2].ownEnded {
+		t.Error("handler #3: 自己的 span 在业务执行时不应已 EndSpan")
+	}
+
+	// ConsumeClaim 返回时所有 span.ended == true
+	for i, s := range spans {
+		if !s.ended {
+			t.Errorf("span[%d] 在 ConsumeClaim 返回时仍未 EndSpan", i)
+		}
 	}
 }

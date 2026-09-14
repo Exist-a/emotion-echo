@@ -190,13 +190,25 @@ func extractUserIDFromCtx(ctx context.Context) string {
 
 // NewClientTracingInterceptor creates a client-side tracing interceptor.
 //
-// Each outbound RPC starts a "client span" (exit span in distributed tracing terms).
+// Each outbound RPC starts an "exit span" (distributed tracing: 客户端出站 span,
+// OAP UI 标记为 exit + peer 信息)。
 // If tracer is nil, returns a no-op interceptor.
 //
 // PR-OBS-19 增强: 与 server 端对称设置 layer/component + 2 个 RPC tag。
 // 注: client 端无 user_id(metadata 由上游 server 端注入,client 端无法读到
 // 自己的 user_id 除非从 ctx 抽,但 client ctx 通常由调用方注入 — 此处不抽,
 // 留作业务层需要时扩展)。
+//
+// Stage 94 PR-3 §P0-1a 修复：原实现用 `tracer.StartEntry(...)`（语义错 ——
+// client 端应创建 exit span 而不是 entry），且完全没有把 sw8 注入 outgoing
+// metadata.MD，导致跨 gRPC 进程 trace 链在 BFF→downstream 段完全断裂。
+//
+// 修复：
+//   1) 用 `tracer.CreateExitSpan(ctx, opName, cc.Target(), injector)` 替换 StartEntry
+//   2) injector 写入 metadata.MD["sw8"]，把 sw8 透传到 outgoing ctx
+//   3) invoker 前 `metadata.NewOutgoingContext(ctx, md)` 把 sw8 挂在 ctx 上 ——
+//      这样下游 server 端的 ServerTracingInterceptor 用 CreateEntrySpan 能从
+//      incoming metadata 抽到 sw8 重建父 trace
 func NewClientTracingInterceptor(tracer Tracer) grpc.UnaryClientInterceptor {
 	if tracer == nil {
 		return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -212,13 +224,48 @@ func NewClientTracingInterceptor(tracer Tracer) grpc.UnaryClientInterceptor {
 		invoker grpc.UnaryInvoker,
 		opts ...grpc.CallOption,
 	) error {
-		ctx, span := tracer.StartEntry(ctx, "client:"+method)
-		span.SetSpanLayer(SpanLayerGRPC)
-		span.SetComponent(ComponentGoGRPC)
-		span.Tag("rpc.system", "grpc")
-		span.Tag("rpc.method", method)
-		err := invoker(ctx, method, req, reply, cc, opts...)
-		span.EndSpan(err)
+		opName := "client:" + method
+
+		// 取 ctx 已有的 outgoing metadata (保留上游链路注入的 x-user-id 等)
+		// 防止 md 为 nil (无 outgoing metadata 时 FromOutgoingContext 返 nil,Set 会 panic)
+		md, _ := metadata.FromOutgoingContext(ctx)
+		if md == nil {
+			md = metadata.MD{}
+		}
+
+		// peer：cc.Target() 在 cc 为 nil 时 panic（实际 gRPC 调用时 cc 必非 nil）,
+		// 测试场景会传 nil,所以这里 nil-guard
+		peer := ""
+		if cc != nil {
+			peer = cc.Target()
+		}
+
+		// injector: go2sky/CreateExitSpanWithContext 内部对每个 sw8 header 调一次
+		// 我们把值写入 md —— go2sky 完成编码(产出 8 段格式)后回调过来
+		injector := func(_, value string) error {
+			md.Set("sw8", value)
+			return nil
+		}
+
+		_, span, err := tracer.CreateExitSpan(ctx, opName, peer, injector)
+		if err != nil {
+			// CreateExitSpan 失败不阻塞 RPC —— log 后继续(与 server 端降级语义一致)
+			// 但仍需走 invoker,否则 RPC 不发
+		}
+		// CreateExitSpan 后把 md 装回 outgoing ctx —— 让 gRPC 把 sw8 透传给下游 server
+		ctx = metadata.NewOutgoingContext(ctx, md)
+
+		if span != nil {
+			span.SetSpanLayer(SpanLayerGRPC)
+			span.SetComponent(ComponentGoGRPC)
+			span.Tag("rpc.system", "grpc")
+			span.Tag("rpc.method", method)
+		}
+
+		err = invoker(ctx, method, req, reply, cc, opts...)
+		if span != nil {
+			span.EndSpan(err)
+		}
 		return err
 	}
 }

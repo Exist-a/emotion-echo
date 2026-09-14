@@ -178,6 +178,11 @@ func (h *chatEventHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
 // 与 ai-svc Stage 92 PR-2 同模式 (consumer.go:115-134)：先 DecodeChatEvent 抽出 evt,
 // 再创建 span 并打 4 个 messaging.* tag (含 event.type),最后调 handleOne 写库。
 // 解析失败时仍走 handleOne 自身错误路径(返回 error 走 attempt 计数)。
+//
+// Stage 94 PR-2b §P0-3：方案 A — span 生命周期提到 case 顶部、case 末尾显式
+// span.EndSpan(handlerErr)。原 `defer span.EndSpan(nil)` 在 for-loop case 内
+// 会延后到 ConsumeClaim 退出才批量收尾，OAP 上每条消息 duration = 整 consumer
+// goroutine 寿命。本次修复 + err 透传。
 func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	h.attemptsMu.Lock()
 	if h.attempts == nil {
@@ -190,10 +195,10 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 			if !ok {
 				return nil
 			}
-			// Stage 93 PR-1: SkyWalking span (可选) —— 与 ai-svc 同模式。
-			// 解析 evt 提前到 span 创建之前,4 个 messaging.* tag 用 evt.Type 精确值
-			// （而不是 msg topic 兜底,后者不区分 conversation.created/message.created）。
-			// 解析失败时跳过 span 创建(走 handleOne 自身 error 路径,与 ai-svc 一致)。
+			// Stage 93 PR-1 + Stage 94 PR-2b: span 创建前先 DecodeChatEvent 拿到 evt.Type
+			// （让 4 个 messaging.* tag 用精确值，不用 msg.Topic 兜底）
+			// span 提到 case 顶,不用 defer —— 避免 N 条消息 span 累积到 ConsumeClaim 退出
+			var span grpcinterceptor.Span
 			if h.Tracer != nil {
 				evt, decodeErr := DecodeChatEvent(msg.Value, saramaHeaders(msg))
 				if decodeErr == nil {
@@ -204,12 +209,12 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 						}
 						return "", nil
 					}
-					_, span, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
+					_, s, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
 					if err != nil {
 						log.Printf("[kafka-consumer] create entry span failed (continuing without trace): %v", err)
 					}
+					span = s
 					if span != nil {
-						defer span.EndSpan(nil)
 						span.Tag("messaging.system", "kafka")
 						span.Tag("messaging.kafka.topic", msg.Topic)
 						span.Tag("messaging.kafka.partition", fmt.Sprintf("%d", msg.Partition))
@@ -219,17 +224,24 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 					log.Printf("[kafka-consumer] decode failed (skip span, handleOne will retry): %v", decodeErr)
 				}
 			}
-			if err := h.handleOne(msg); err != nil {
-				h.handleFailure(sess, msg, err)
-				continue
+			// 业务处理 + handlerErr 收集,让 span.EndSpan(handlerErr) 透传失败
+			var handlerErr error
+			if handlerErr = h.handleOne(msg); handlerErr != nil {
+				h.handleFailure(sess, msg, handlerErr)
+			} else {
+				// 业务成功：清 attempts
+				if key := string(msg.Key); key != "" {
+					h.attemptsMu.Lock()
+					delete(h.attempts, key)
+					h.attemptsMu.Unlock()
+				}
+				sess.MarkMessage(msg, "")
 			}
-			// 业务成功：清 attempts
-			if key := string(msg.Key); key != "" {
-				h.attemptsMu.Lock()
-				delete(h.attempts, key)
-				h.attemptsMu.Unlock()
+			// Stage 94 PR-2b §P0-3：case 末尾立刻 EndSpan（不用 defer —— 绑定到
+			// ConsumeClaim 函数返回会让 N 条消息 span 累积到 consumer 退出才收尾）
+			if span != nil {
+				span.EndSpan(handlerErr)
 			}
-			sess.MarkMessage(msg, "")
 		case <-sess.Context().Done():
 			return nil
 		}

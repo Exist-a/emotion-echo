@@ -80,7 +80,7 @@ func TestBuildServiceContext_GRPCWiring_AllFourClients(t *testing.T) {
 	// 覆盖 grpcDialer：按地址返回对应 bufconn 连接
 	origDialer := grpcDialer
 	t.Cleanup(func() { grpcDialer = origDialer })
-	grpcDialer = func(addr string) (*grpc.ClientConn, error) {
+	grpcDialer = func(addr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		var lis *bufconn.Listener
 		switch addr {
 		case "user-buf":
@@ -128,7 +128,7 @@ func TestBuildServiceContext_GRPCWiring_AllFourClients(t *testing.T) {
 func TestBuildServiceContext_TransportHTTP_ForcesHTTPFallback(t *testing.T) {
 	origDialer := grpcDialer
 	t.Cleanup(func() { grpcDialer = origDialer })
-	grpcDialer = func(addr string) (*grpc.ClientConn, error) {
+	grpcDialer = func(addr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
@@ -170,7 +170,7 @@ func TestBuildServiceContext_GRPCAddrEmpty_HTTPFallback(t *testing.T) {
 func TestBuildServiceContext_DialFailure_HTTPFallback(t *testing.T) {
 	origDialer := grpcDialer
 	t.Cleanup(func() { grpcDialer = origDialer })
-	grpcDialer = func(addr string) (*grpc.ClientConn, error) {
+	grpcDialer = func(addr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		return nil, assert.AnError
 	}
 
@@ -194,7 +194,7 @@ func TestDialGRPC_EmptyAddr_ReturnsNil(t *testing.T) {
 func TestDialGRPC_InvalidAddr_ReturnsNil(t *testing.T) {
 	origDialer := grpcDialer
 	t.Cleanup(func() { grpcDialer = origDialer })
-	grpcDialer = func(addr string) (*grpc.ClientConn, error) {
+	grpcDialer = func(addr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		return nil, assert.AnError
 	}
 
