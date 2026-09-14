@@ -53,7 +53,7 @@ landed-parts: []
 | # | 标题 | 来源 | 文件 | 工作量 | 影响 dev |
 |---|------|------|------|--------|---------|
 | **P0-1** | **BFF 5 个下游 gRPC conn 全部无任何拦截器、无 metadata 透传** | B §7 + D §M3 | `web-bff/main.go:52-54, 266-298` | 1d | 是 | ✅ Stage 94 landed (2026-09-14, web-bff:v0.1.12 + shared ClientDialOptions helper + 6 处接入含 EmotionQuery 第 6 处盲点)
-| **P0-2** | **chat-svc → ai-svc gRPC client 完全无拦截器（无 trace / 无 retry / 无 timeout）** | B §6 | `chat-svc/internal/grpcclient/ai_client_grpc.go:33-50` | 0.5d | 否（仅 fallback 路径） |
+| **P0-2** | **chat-svc → ai-svc gRPC client 完全无拦截器（无 trace / 无 retry / 无 timeout）** | B §6 | `chat-svc/internal/grpcclient/ai_client_grpc.go:33-50` | 0.5d | 否（仅 fallback 路径） | ✅ Stage 94 PR-2 landed (2026-09-14, chat-svc:v0.1.12 + shared ClientDialOptions helper 接入)
 | **P0-3** | **`defer span.EndSpan(nil)` 在 for-loop 内 → consumer span 永远累积、OAP 上每条消息耗时 = 整 consumer goroutine 生命周期（Stage 92/93 核心收益被抵消 50%）** | B §2 + C §14 | `ai-svc/internal/consumer/consumer.go:135-142` + `analytics-svc/internal/kafka/consumer.go:212` | 1d | 是 | ✅ Stage 94 landed (2026-09-14, ai-svc:v0.1.7 + analytics-svc:v0.1.7 + 方案 A case 末尾显式 EndSpan)
 | **P0-4** | **Kafka producer 关闭路径：chat-svc `os.Exit(0)` 让 `defer kp.Close()` 不执行 + relay ctx 取消无序 → in-flight 消息丢失** | C §2 + §18 | `chat-svc/main.go:161, 209-225, 282-292` | 1d | 是（compose 重启高频） |
 | **P0-5** | **Kafka Producer InMemory fallback 静默击穿 outbox 承诺：producer init 失败 → 事件进内存 slice → relay MarkSent → 永久丢失** | C §1 | `chat-svc/main.go:148-173` | 0.5-1d | 是 |

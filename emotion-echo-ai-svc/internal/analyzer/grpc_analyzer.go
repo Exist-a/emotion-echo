@@ -65,15 +65,24 @@ func NewGRPCAnalyzer(target string) (*GRPCAnalyzer, error) {
 	}
 
 	// 非阻塞 dial：先建立 TCP，再做业务级 health check
+	//
+	// Stage 94 PR-2 §P0-2：改用 sharedgrpc.ClientDialOptions helper 装配
+	// tracing + timeout + logging 链，与 web-bff 5+1 处接入同模式（Stage 94 PR-4）。
+	// helper 内置 NewClientTracingInterceptor 调 CreateExitSpan + metadata.MD
+	// 注入 sw8（Stage 94 PR-3 修复），让 chat-svc → ai-svc → llm-service 的
+	// trace 链贯通。retry 是 ai-svc 业务特化（transient 错误自动重试），
+	// 在 helper 之外单独 append。
+	dialOpts := grpcinterceptor.ClientDialOptions(
+		grpcinterceptor.NewGo2SkyTracer(traceTracer()),
+		3*time.Second,
+	)
+	dialOpts = append(dialOpts,
+		grpc.WithChainUnaryInterceptor(grpcinterceptor.ClientRetryInterceptor(grpcinterceptor.DefaultRetryOptions())),
+	)
 	conn, err := grpc.NewClient(target,
-		grpc.WithTransportCredentials(creds),
-		grpc.WithChainUnaryInterceptor(
-			grpcinterceptor.NewClientTracingInterceptor(grpcinterceptor.NewGo2SkyTracer(traceTracer())),
-			grpcinterceptor.ClientLoggingInterceptor(),
-			grpcinterceptor.ClientTimeoutInterceptor(3*time.Second),
-			// Stage 15：transient 错误自动重试
-			grpcinterceptor.ClientRetryInterceptor(grpcinterceptor.DefaultRetryOptions()),
-		),
+		append([]grpc.DialOption{
+			grpc.WithTransportCredentials(creds),
+		}, dialOpts...)...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("grpc new client %s failed: %w", target, err)

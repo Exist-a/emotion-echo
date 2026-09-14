@@ -8,6 +8,13 @@
 //   - dial 失败不 panic（NewAIgRPCClient 返回 error，main.go 决定降级为 NoopAIClient 还是 hard fail）
 //   - 不带 client-side user-id metadata（chat-svc 是 producer 不是 consumer；ai-svc 那边的
 //     x-user-id 拦截器对 producer RPC 不要求；Stage 32 PR-16 注释说明）
+//
+// Stage 94 PR-2 §P0-2：dial options 加 sharedgrpc.ClientDialOptions 链
+// (tracing + timeout + logging) — 让 chat-svc → ai-svc 的 sw8 metadata
+// 跨 gRPC 进程透传到 ai-svc server 端。Stage 94 PR-3 已修 NewClientTracingInterceptor
+// 用 CreateExitSpan + metadata.MD 注入 sw8。本 PR 让 chat-svc 这边也接入 helper,
+// 与 web-bff PR-4 / ai-svc→llm-service 同模式。retry 不挂(ai-svc 业务调用,
+// single-attempt 即可,失败走 NoopAIClient 降级)。
 package grpcclient
 
 import (
@@ -16,9 +23,19 @@ import (
 	"time"
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
+	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	"github.com/emotion-echo/shared/pkg/skywalking"
+
+	"github.com/SkyAPM/go2sky"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+// traceTracer returns the global SkyWalking tracer (nil if not initialized).
+// 对齐 ai-svc/internal/analyzer/grpc_analyzer.go 模式。
+func traceTracer() *go2sky.Tracer {
+	return skywalking.Tracer()
+}
 
 // aigrpcClient 是 AIClient 的 gRPC 实现
 type aigrpcClient struct {
@@ -36,9 +53,18 @@ func NewAIgRPCClient(aiSvcAddr string) (AIClient, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	// Stage 94 PR-2 §P0-2：挂 shared ClientDialOptions(tracing + 5s timeout + logging)
+	// 让 chat-svc → ai-svc 的 sw8 跨 gRPC 进程透传。
+	// (Stage 94 PR-3 已修 NewClientTracingInterceptor 内部走 metadata.MD 注入)
+	dialOpts := grpcinterceptor.ClientDialOptions(
+		grpcinterceptor.NewGo2SkyTracer(traceTracer()),
+		5*time.Second,
+	)
 	conn, err := grpc.DialContext(ctx, aiSvcAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
+		append([]grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithBlock(),
+		}, dialOpts...)...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("dial ai-svc gRPC %s: %w", aiSvcAddr, err)
