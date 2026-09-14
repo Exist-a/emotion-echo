@@ -196,10 +196,46 @@ related-adrs:
 - 续号 010/011 必然撞名
 
 **修复路径**（**注意**：Stage 97 PR-9d 已部分落地，必须先查现状再决定增量范围）：
-1. `find . -name "00*_*.sql" -path "*/migrations/*" | sort` 列全
-2. 按 svc 维度加前缀（chat/ai/analytics/identity 各一字母）
-3. `migrate.sh` SERVICE_ORDER 改成 glob 模式（如 `*/migrations/[a-z]00*_*.sql`）
-4. RED→GREEN test 验证 migrate.sh 不依赖 SERVICE_ORDER 字符串
+
+**步骤 1（AGENTS.md §〇 必做功课 #1 — 现状核查）**：
+```bash
+# 1a. 全仓 migrations 清单（按 svc 维度 + 全局编号 + 命名）
+find . -name "*.sql" -path "*/migrations/*" | sort
+
+# 1b. 已加 i/a/c 前缀 vs 未加的对比
+find . -name "[a-z]00*_*.sql" -path "*/migrations/*" | sort   # 已前缀
+find . -name "00*_*.sql" -path "*/migrations/*" | sort        # 未前缀
+
+# 1c. deploy/db 全局脚本
+ls -la deploy/db/*.sql deploy/db/[0-9]*-*.sql 2>/dev/null
+
+# 1d. migrate.sh 现状依赖
+grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
+```
+**预期产出**（基于 Stage 97 PR-9d commit `391f592`）：
+- ai-svc migrations 已加 `i0XX_*` 前缀（identity）
+- analytics-svc migrations 已加 `a0XX_*` 前缀
+- chat-svc migrations 已加 `c0XX_*` 前缀
+- **但 deploy/db/01~04-create-*.sql 仍用全局 01~04**（c001~c009 已有，但 deploy 全局未统一）
+- 续号 010/011 必然撞名（chat-svc 已有 c001~c009，加 c010 时 deploy/db 若也加 10 会冲突）
+
+**步骤 2**：按步骤 1 输出，**仅对未加前缀的 file rename**（不重命名 Stage 97 已落的 i/a/c 范围）
+
+**步骤 3**：`migrate.sh` SERVICE_ORDER 改成 glob 模式（如 `*/migrations/[a-z]00*_*.sql`）
+
+**步骤 4**：RED→GREEN test 验证 migrate.sh 不依赖 SERVICE_ORDER 字符串
+
+**TDD 步骤**（完整流程）：
+1. **步骤 1** 现状核查（必做，输出纳入 commit message）
+2. RED: `deploy/db/migrate_test.go`
+   - mock 1 个空 svc migrations 目录 + 3 个新 `[a-z]010_*.sql` 文件
+   - 断言 `migrate.sh` glob 模式自动找到这 3 个文件
+   - 不修改 SERVICE_ORDER 字符串也跑通
+3. GREEN: `migrate.sh` 改 glob 模式
+4. PR-1: 仅对步骤 1 grep 输出的"未前缀"文件做 rename（file rename 单独 PR，按 AGENTS.md §2.5 不与逻辑 PR 混）
+5. PR-2: migrate.sh glob 改造 + 上述 RED→GREEN test
+6. `go test -tags integration ./deploy/db/...` 全绿
+7. commit（拆 2 PR：file rename + glob 改造）
 
 **成功标准**：
 - [ ] 全仓 migration 文件名唯一可排序
@@ -403,99 +439,293 @@ related-adrs:
 ### Round 4.1 — DLQ 监控 + 告警 + 业务 svc stdout 采集（2d）⚡ Round 1 P1-4/14 + Round 2 P2-16/18
 
 **问题**：
-- DLQ 投递不计数 + 无 lag 指标（P1-14）
-- Promtail 仅采 APISIX，未采 6 业务 svc stdout（P1-4）
+- DLQ 投递不计数 + 无 lag 指标（P1-14）—— `deploy/prometheus/rules/kafka-lag.yml:7-9` 空规则
+- Promtail 仅采 APISIX，未采 6 业务 svc stdout（P1-4）—— `deploy/loki/promtail-config.yaml:22-30` 缺业务 svc scrape
 - web-bff 无 healthcheck（P2-18）
 - web Dockerfile 无 HEALTHCHECK + values-prod 无 probe（P2-16）
 
 **TDD 步骤**（拆 3 PR）：
-1. PR-1: ai-svc/analytics-svc DLQ publish 成功/失败 metric + prometheus rule
-2. PR-2: `deploy/loki/promtail-config.yaml` 加 6 业务 svc `/var/log/services/*.log` 路径
-3. PR-3: web-bff + web Dockerfile 加 HEALTHCHECK + values-prod probe
-4. 触发告警：mock DLQ lag > 0 验证 Slack 告警
-5. commit
+
+**PR-1 DLQ metric + 告警**（0.5d）
+1. RED: `ai-svc/internal/dlq/dlq_publish_test.go`
+   - mock DLQ publisher 成功/失败两种 case
+   - 断言 `dlq_publish_total{result="success|failure"}` counter 自增
+2. GREEN: `dlq.go` `Publish()` 包 metric counter（prometheus client）
+3. analytics-svc 同款（共享 `shared/pkg/messaging` DLQ helper）
+4. PR-1 提交；独立 `deploy/prometheus/rules/kafka-dlq.yml` 规则
+5. RED: promtool 校验 `kafka-dlq.yml` 语法
+6. GREEN: 规则 `dlq_publish_failure_rate > 0.1 for 5m` 触发 alertmanager
+
+**PR-2 Promtail 业务 svc stdout 采集**（0.5d）
+1. RED: `deploy/loki/test_promtail_config.sh`
+   - 启动 1 个 fake svc log 写到 `/var/log/services/test-svc.log`
+   - 跑 promtail 5s 后断言 Loki API 能查到这个 label
+2. GREEN: `promtail-config.yaml` 加 `scrape_configs[].job_name=business-services` + path `/var/log/services/*.log`
+3. docker-compose.apps.yml 加 6 svc `volumes: [./logs/<svc>:/var/log/services]`
+4. PR-2 提交
+
+**PR-3 healthcheck + probe**（0.5d）
+1. RED: `web-bff/internal/handler/health_test.go` 断言 `/healthz` 200 + 返回 `{"status":"ok","version":"..."}`
+2. GREEN: `web-bff/main.go` 新增 `GET /healthz` handler
+3. RED: `web/Dockerfile` 含 `HEALTHCHECK` 指令（docker build 后 `docker inspect` 断言有 Healthcheck spec）
+4. GREEN: Dockerfile 加 `HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:3000/healthz || exit 1`
+5. `charts/emotion-echo/values-prod.yaml` 加 `livenessProbe` / `readinessProbe`（同 `/healthz`）
+6. PR-3 提交
+
+**收口**：
+- mock 一次 DLQ failure（kill broker）→ 验证 Slack 告警 < 1min
+- `git status -sb` main 与 origin/main 同步
+
+**成功标准**：
+- [ ] DLQ publish success/failure 指标在 `http://oap:12800/graphql` 可查
+- [ ] Promtail 抓到 6 业务 svc 的 stdout（Loki Explore 能看到对应 labels）
+- [ ] `docker inspect emotion-echo-web` 含 `Healthcheck` 字段
+- [ ] `docker inspect emotion-echo-web-bff` 含 `Healthcheck` 字段
+- [ ] helm template render 后含 `livenessProbe` / `readinessProbe`
 
 ### Round 4.2 — Nacos 心跳 + 失败 fail-fast（1d）⚡ Round 1 P1-7/9
 
 **问题**：
 - Heartbeat 用 `UpdateInstance` 而非 `BeatInstance` → 30s 注册过期（P1-7）
-- web-bff / llm-service Nacos 失败被 `except Exception` 吞掉，无 fail-fast（P1-9）
+- web-bff / llm-service Nacos 失败被 `except Exception` / `log.Printf` 吞掉，无 fail-fast（P1-9）
 
-**TDD 步骤**：
-1. RED: `web-bff/main_test.go` 断言 Nacos 注册失败时 main.go 返非 0
-2. GREEN: 改 `BeatInstance` + 失败时 `os.Exit(1)`
-3. llm-service 同款修
-4. commit
+**TDD 步骤**（拆 2 PR）：
+
+**PR-1 web-bff Nacos fail-fast**（0.5d）
+1. RED: `web-bff/main_test.go`
+   - mock Nacos client `RegisterInstance` 返 error
+   - 断言 `main()` 退出码 != 0
+2. GREEN: `web-bff/main.go` 注册失败时 `os.Exit(1)`（移除 `except Exception` / `log.Printf` 吞错）
+3. RED: `BeatInstance` 调用断言（grep `BeatInstance` 当前为 0 命中）
+4. GREEN: 改 `BeatInstance(ctx, ...)` + 30s ticker goroutine
+5. PR-1 提交
+
+**PR-2 llm-service Nacos fail-fast**（0.5d）
+1. RED: `emotion-llm-service/tests/unit/test_nacos_registration.py`
+   - mock Nacos client `register_instance` 抛异常
+   - 断言 main 进程 sys.exit(1)
+2. GREEN: `main.py` 移除 `except Exception: pass` 改 `sys.exit(1)`
+3. PR-2 提交
+
+**收口**：
+- docker compose down nacos → 启 web-bff → 期望容器退出非 0
+- Nacos 实例 30s 后不消失（`curl http://nacos:8848/nacos/v1/ns/instance/list?serviceName=web-bff` 仍可查）
+
+**成功标准**：
+- [ ] Nacos 故障时 web-bff / llm-service 容器退出码 = 1（CI 用 docker compose 故障注入验证）
+- [ ] Heartbeat 30s 内持续注册（grep `BeatInstance` 命中数 ≥ 2）
+- [ ] 现有 0 回归（chat-svc/ai-svc/analytics-svc 启停不受影响）
 
 ### Round 4.3 — limiter buckets 清理 + 多实例共享（1d）⚡ Round 1 P1-17/18/23 + Round 1 P2-10
 
 **问题**：
-- limiter in-memory 多实例失效（P1-17）
+- limiter in-memory 多实例失效（P1-17）—— 已被代码注释警示，prod ≥ 2 副本实际限流 = 配置 × pod 数
 - limiter buckets map 无清理 → 长跑 OOM（P1-18）
 - HotReloadLimiter 多副本不共享（P2-10）
-- 全仓 0 处使用 Redis → 限流 + 缓存全缺位（P1-23，3-5d）
+- 全仓 0 处使用 Redis → 限流 + 缓存全缺位（P1-23）
 
-**TDD 步骤**：
-1. PR-1: `limiter.go` 加 buckets map `time.AfterFunc` 自动清理（`shared/pkg/middleware/limiter.go`）
-2. PR-2: 限流 backend 改 Redis（共享，引入 miniredis 单测）
-3. integration test 多副本模拟
-4. commit
+**TDD 步骤**（拆 2 PR）：
+
+**PR-1 buckets map 自动清理**（0.25d）
+1. RED: `shared/pkg/middleware/limiter_test.go`
+   - 注入 1000 个 key 写入 buckets
+   - 跑 24h 时间（用 `clock.Step(24*time.Hour)`）
+   - 断言 buckets map size ≤ 100（按 LRU 清理）
+2. GREEN: `limiter.go` `getBucket(key)` 加 `time.AfterFunc(cleanupInterval, removeBucket)`
+3. PR-1 提交
+
+**PR-2 限流 backend 改 Redis**（0.75d）
+1. RED: `shared/pkg/middleware/limiter_redis_test.go`
+   - 用 miniredis 起 fake Redis
+   - 模拟 2 个 limiter 实例共享同一个 Redis
+   - 断言 instance A 触发限流后，instance B 同一 key 也被限流
+2. GREEN: 新增 `LimiterBackend` 接口（`InMemoryBackend` + `RedisBackend`），按 env `LIMITER_BACKEND=redis|inmemory` 选
+3. `shared/pkg/middleware/limiter.go` factory 改
+4. RED: integration test `tests/integration/limiter_2replicas_test.go`
+   - 起 2 个 web-bff 进程 + 1 个 Redis
+   - 第 1 个进程触发限流后，第 2 个进程同一 key 应被限流
+5. GREEN: 不动（已绿）
+6. PR-2 提交
+
+**收口**：
+- 长跑 24h 内存 profile（pprof heap）→ buckets 内存 < 10MB
+- 2 副本 docker compose up + 限流测试 → 1 次失败 / 2 次通过（与 prod 实际行为一致）
 
 **成功标准**：
-- [ ] buckets 24h 长跑 OOM 测试 PASS
-- [ ] 2 副本模拟共享限流 1 次失败 / 2 次通过（与 prod 实际行为一致）
+- [ ] buckets 24h 长跑 OOM 测试 PASS（pprof heap_inuse < 10MB）
+- [ ] 2 副本模拟共享限流 1 次失败 / 2 次通过
+- [ ] LIMITER_BACKEND=inmemory 旧行为兼容（fallback）
 
 ### Round 4.4 — PG 连接池预算 + skywalking gorm/redis 接入 + Kafka 进程级指标（3-4d）⚡ Round 1 P1-1/19/12 + Round 1 P1-19 + roadmap #2
 
 **问题**：
 - `skywalking.InstrumentGORM` / `InstrumentRedis` 从未被调用 + 包级 `Init()` 未调（P1-1）
 - PG 连接池每个 svc 10 conn + 5 idle → 总连接预算未规划（P1-19）
-- chat-events topic 默认 1 partition + auto-create（P1-12，2d）
-- Kafka consumer 进程级指标（消费速率/处理耗时）
+- chat-events topic 默认 1 partition + auto-create（P1-12，2d）—— 触发条件 = 真上 prod
+- Kafka consumer 进程级指标（消费速率/处理耗时；lag 告警 Round 4.1 已盖）
 
 **TDD 步骤**（拆 4 PR）：
-1. PR-1: `shared/pkg/skywalking/{gorm,redis}_tracing.go` 暴露 `Init(ctx)` 函数 + 5 svc `openPostgres` 后调用
-2. PR-2: PG 连接池改配置驱动（`PG_MAX_CONNS=10` 等 env），docs 加连接预算表
-3. PR-3: chat-events topic 改 6 partition（`deploy/docker-compose.infra.yml:80` 改 Kafka topic config）
-4. PR-4: ai-svc/analytics-svc consumer 加 `messages_consumed_total` / `processing_duration_seconds` histogram
-5. commit
+
+**PR-1 skywalking gorm/redis 接入**（1d）
+1. RED: `shared/pkg/skywalking/gorm_tracing_test.go` 断言 `Init(ctx)` 后 GORM query trace 入 OAP
+   - 跑 1 次 SELECT → 期望 OAP 收到 `gorm.query` span
+2. GREEN: `gorm_tracing.go` 暴露 `Init(ctx, tracer)` + 5 svc `openPostgres` 后调
+3. RED: `redis_tracing_test.go` 同模式
+4. GREEN: `redis_tracing.go` 暴露 `Init(ctx, tracer)` + 引用 redis 的 svc 调
+5. PR-1 提交
+
+**PR-2 PG 连接池配置化**（0.5d）
+1. RED: `shared/pkg/db/pool_test.go` 断言 `PG_MAX_CONNS=20` env 注入后池 max conns = 20
+2. GREEN: `shared/pkg/db/pool.go` 读 `PG_MAX_CONNS` / `PG_MIN_IDLE` / `PG_MAX_LIFETIME` env
+3. 5 svc main.go 调
+4. `docs/architecture/observability.md` 加 PG 连接预算表（5 svc × 20 = 100 conns / PG `max_connections=200`）
+5. PR-2 提交
+
+**PR-3 chat-events topic 6 partition**（1d，触发条件 = 真上 prod）
+1. RED: `deploy/kafka/test_topic_partition.py` 断言 `chat-events` topic `partition_count=6`
+2. GREEN: `deploy/docker-compose.infra.yml:80` Kafka topic config `num.partitions=6`（加 `KAFKA_NUM_PARTITIONS=6` env）
+3. integration test: 6 个 producer 并发写 → 期望 6 partition 都收到消息
+4. PR-3 提交
+
+**PR-4 Kafka consumer 进程级指标**（0.5d）
+1. RED: `ai-svc/internal/consumer/metrics_test.go` 断言 consume 后 `messages_consumed_total{topic="chat-events",status="success"}` 自增
+2. GREEN: ai-svc consumer + analytics-svc consumer 加 `prometheus.NewCounterVec` + `Observe(duration)` histogram
+3. 暴露 `/metrics` 端点（已有）
+4. PR-4 提交
+
+**收口**：
+- docker compose up → curl `ai-svc:8080/metrics | grep messages_consumed_total` 看到 metric
+- OAP UI 看到 `gorm.query` span
+- 5 svc × 20 conns = 100 < PG `max_connections=200`
+
+**成功标准**：
+- [ ] skywalking gorm/redis 接入后 OAP 看到对应 span（docker e2e 实证）
+- [ ] PG 连接池可配置，5 svc 文档连接预算表
+- [ ] chat-events topic 6 partition（触发 prod 部署时执行）
+- [ ] ai-svc/analytics-svc `/metrics` 含 `messages_consumed_total` + `processing_duration_seconds`
 
 ### Round 4.5 — chat-svc 大小限制 + compose 健康依赖 + Nacos 控制台（1d）⚡ Round 1 P1-13 + Round 2 P2-15/17/20
 
 **问题**：
-- 消息体大小无限制 → outbox 100 次后死信（P1-13，1-2d；与 Round 2.3 PR-3 部分重复）
+- 消息体大小无限制 → outbox 100 次后死信（P1-13）—— `chat-svc/internal/logic/sendmessagelogic.go:67-69` 无 size check（与 Round 2.3 PR-3 部分重复；本轮收口统一）
 - 业务 svc `depends_on postgres` 用 `service_started` 而非 `service_healthy`（P2-15）
 - ai-svc 无 IP 限流可被 anonymous DoS（P2-17）
 - Nacos 控制台 9001 暴露宿主机无 profile 保护（P2-20）
 
-**TDD 步骤**：
-1. PR-1: chat-svc `sendMessageLogic` 加 max body size（与 Round 2.3 PR-3 合并）
-2. PR-2: `docker-compose.{apps,infra}.yml` 所有 `depends_on: postgres` 改 `condition: service_healthy`
-3. PR-3: ai-svc 前置 IP 限流中间件
-4. PR-4: Nacos 控制台改 `profiles: ["ops"]` + APISIX 端口转发加 IP 白名单
-5. commit
+**TDD 步骤**（拆 4 PR）：
+
+**PR-1 chat-svc 消息体大小限制**（0.25d）
+1. RED: `chat-svc/internal/logic/sendmessagelogic_test.go`
+   - mock 1 个 100KB 文本消息
+   - 期望返回 `error("message too large")`（max 64KB）
+2. GREEN: `sendMessageLogic` 加 `if len(content) > 65536 { return error }`
+3. PR-1 提交
+
+**PR-2 compose healthcheck 依赖**（0.25d）
+1. RED: `deploy/docker-compose.test.sh` 断言 `docker compose config` 输出含 `condition: service_healthy`（所有 `depends_on: postgres`）
+2. GREEN: `docker-compose.{apps,infra}.yml` 所有 `depends_on: postgres` 改 `condition: service_healthy`
+3. PR-2 提交
+
+**PR-3 ai-svc IP 限流**（0.25d）
+1. RED: `ai-svc/main_test.go` 断言同 IP 1s 内 100 次请求 → 429
+2. GREEN: `ai-svc/main.go` 加 IP-based 限流中间件（用 Round 4.3 Redis backend）
+3. PR-3 提交
+
+**PR-4 Nacos 控制台保护**（0.25d）
+1. RED: `deploy/docker-compose.test.sh` 断言 `nacos` 服务含 `profiles: ["ops"]`（不默认启）
+2. GREEN: `docker-compose.infra.yml` nacos 服务加 `profiles: ["ops"]`
+3. `docs/operations/acr-push.md` 加"启用 nacos 控制台：`--profile ops up nacos`"
+4. PR-4 提交
+
+**成功标准**：
+- [ ] 64KB+ 消息被 chat-svc 拒绝（http 400）
+- [ ] `docker compose config` 验证所有 `depends_on: postgres` 用 `service_healthy`
+- [ ] ai-svc 同 IP 100 RPS → 第 101 个 429
+- [ ] Nacos 控制台 `--profile ops` 启，默认 `docker compose up` 不含
 
 ### Round 4.6 — 杂项（1d）⚡ Round 1 P1-26 + Round 1 P2-22/23/25 + Round 2 P2-14/17/20
 
-**问题**（打包）：
-- `ai-api.yaml` 仍含 `${VAR:-default}` 字面值（P1-26）
+**问题**（打包 8 项）：
+- `ai-api.yaml` 仍含 `${VAR:-default}` 字面值（P1-26）—— `ai-svc/etc/ai-api.yaml:33-88`
 - `applyDefaultFallbacks` 把 string 默认 localhost，prod 误配 silent fallback（P2-25）
 - MV REFRESH 失败仅 log，无 metric（P2-22）
-- dev mode 无 CORS 处理（P2-23）
-- web dev/prod registry 不一致（P2-14）
+- dev mode 无 CORS 处理（P2-23）—— `web-bff/main.go:235-240`
+- web dev/prod registry 不一致（P2-14）—— npmmirror vs npmjs
 - emotion-llm-service 国内源与外网源不一致（P2-17）
-- ai-svc / llm-service memory limit 256M/512M 偏低（P1-13，已顺手改 1024M 但需 verify）
+- ai-svc / llm-service memory limit 256M/512M 偏低（P1-13）
 - web-bff 信任 APISIX 注释承诺未实现（P2-16）
 
-**TDD 步骤**：
-- 每个小项 1 个独立 PR（PR-1~PR-8），全部 commit
-- CORS / registry / 国内源 这类需 docker build 验证
+**TDD 步骤**（拆 8 PR，每项独立 commit）：
+
+**PR-1 ai-api.yaml 字面值收敛**
+1. RED: `ai-svc/etc/test_yaml_lint.sh` 跑 `yq` 解析 `ai-api.yaml`，断言无 `${VAR:-default}` 字面值
+2. GREEN: 替换为 `${VAR}`（无 default），由 `applyEnvOverrides` 强制注入
+3. 集成测试：缺 env 时 `main.go` 启动 fail-fast
+
+**PR-2 applyDefaultFallbacks 收紧**
+1. RED: `ai-svc/main_test.go` 断言 `applyDefaultFallbacks` 不覆盖 prod 关键字段（FER/SenseVoice/XTTS BaseURL）
+2. GREEN: prod profile 下 default 不应用
+
+**PR-3 MV REFRESH 失败 metric**
+1. RED: `analytics-svc/main_test.go` 断言 MV refresh 失败时 `mv_refresh_failure_total` 自增
+2. GREEN: 加 metric + alertmanager 规则
+
+**PR-4 dev mode CORS**
+1. RED: `web-bff/main_test.go` 断言 dev profile 下 `OPTIONS` 请求 200 + CORS headers
+2. GREEN: `web-bff/main.go:235-240` 加 dev profile CORS middleware
+
+**PR-5 web registry 一致**
+1. RED: `web/Dockerfile.test.sh` 断言 prod stage 用 `registry.npmjs.org`
+2. GREEN: 改 Dockerfile 一致
+3. docker build verify
+
+**PR-6 llm-service 国内源**
+1. RED: `emotion-llm-service/tests/unit/test_pip_source.py` 断言 `pip.conf` prod 模式用官方源
+2. GREEN: 改 pip.conf + verify
+
+**PR-7 memory limit 校验**
+1. RED: `deploy/check_memory_limits.py` 解析 `docker-compose.apps.yml` 断言 ai-svc/llm-service mem_limit ≥ 1024M
+2. GREEN: 改 compose（Stage 97 PR-9c 已部分改 1024M，但需全量 verify）
+
+**PR-8 web-bff TrustAPISIX 注释实现**
+1. RED: `web-bff/main_test.go` 断言 `TrustAPISIX=true` 时解析 X-User-Id from header
+2. GREEN: 实现 `APISIXUserIDMiddleware`（`shared/pkg/middleware`）
+
+**成功标准**：
+- [ ] 8 个 PR 全部 merged + 测试全绿
+- [ ] CORS / registry / 国内源 这类需 docker build 验证（PR-4/5/6）
+- [ ] 0 业务逻辑回归
 
 ### Round 4.7 — 长期 P3 收口（2d）
 
-- observability-edge-gaps §D GinSkywalking 跳过路径配置化（0.5d）
-- observability-edge-gaps §F consumer.go 拆分（0.5d）
+**问题**：
+- observability-edge-gaps §D GinSkywalking 跳过路径硬编码（0.5d）
+- observability-edge-gaps §F consumer.go 文件职责混杂（拆分，0.5d）
 - 基础镜像 pin digest（P2-19，CI sync digest 流程，1d）
+
+**TDD 步骤**（拆 3 PR）：
+
+**PR-1 GinSkywalking 跳过路径配置化**（0.5d）
+1. RED: `shared/pkg/middleware/gin_skywalking_test.go` 断言从 `SKIP_PATH_LIST` env 读取跳过路径
+2. GREEN: `gin_skywalking.go` 改 `getenv("SKIP_PATH_LIST", "/healthz,/metrics")` 替代硬编码
+3. PR-1 提交
+
+**PR-2 consumer.go 拆分**（0.5d）
+1. RED: `ai-svc/internal/consumer/consumer_test.go` 断言新文件 `consumer_runner.go` / `consumer_metrics.go` / `consumer_dlq.go` 各自独立
+2. GREEN: 把 `consumer.go` 500+ 行按职责拆 3 个文件，公共类型抽 `consumer.go`
+3. PR-2 提交
+
+**PR-3 基础镜像 pin digest**（1d）
+1. RED: `scripts/check_docker_digests.sh` 解析所有 `Dockerfile`，断言 `FROM xxx@sha256:...`
+2. GREEN: 6 Dockerfile 全部改 digest 形式（手动查 docker hub API）
+3. CI 流程加 `docs/ci-workflows/docker-digest-sync.yml` 每周自动更新
+4. PR-3 提交
+
+**成功标准**：
+- [ ] `SKIP_PATH_LIST` env 控制 GinSkywalking 跳过路径
+- [ ] `consumer.go` < 200 行（其他逻辑在独立文件）
+- [ ] 6 Dockerfile 全部 digest pinned，CI 自动 sync 流程可跑
+- [ ] 0 业务回归
 
 ---
 
@@ -575,6 +805,35 @@ related-adrs:
 - [x] 引用 AGENTS.md §〇必做功课（已读代码/ADR/smoke/web）
 - [x] commit message 含调研依据（本文件 §十）
 - [x] 不重复 plan 已写内容（指向 source，不复述）
+- [x] **Round 1.3 步骤 1 强制加 `find . -name "*.sql" -path "*/migrations/*" | sort` grep 现状**（含 4 条 grep：全仓 / 已前缀 / 未前缀 / migrate.sh）+ 步骤 2 显式说"仅对未加前缀的 file rename"
+- [x] **Round 4.1-4.7 全部 sub-round 含 TDD Red→Green 步骤 + 成功标准**（与 Round 1-3 同密度）
+  - Round 4.1：3 PR (DLQ metric + Promtail + healthcheck) + 5 条成功标准
+  - Round 4.2：2 PR (web-bff + llm-service fail-fast) + 3 条成功标准
+  - Round 4.3：2 PR (buckets 清理 + Redis backend) + 3 条成功标准
+  - Round 4.4：4 PR (skywalking + PG pool + topic + Kafka metric) + 4 条成功标准
+  - Round 4.5：4 PR (消息大小 + compose healthcheck + IP 限流 + Nacos profile) + 4 条成功标准
+  - Round 4.6：8 PR (杂项打包) + 3 条成功标准
+  - Round 4.7：3 PR (GinSkywalking + consumer 拆分 + digest pin) + 4 条成功标准
+  - **总 PR 数 = 26**，每 PR ≤ 8 文件 + 单测 ≥ 1 文件（AGENTS.md §2.2）
+
+---
+
+## 十一B、Round 4 工作量核对（commit verifier 提的缺口）
+
+**roadmap #2 "Kafka 进程级指标"** 已计入 Round 4.4 PR-4（ai-svc/analytics-svc consumer 加 `messages_consumed_total` + `processing_duration_seconds`），工作量 0.5d 已含在 Round 4.4 的 3-4d 估算内。
+
+**Round 4 sub-round 工作量分布**：
+
+| Sub-round | 工作量 | PR 数 | 与原始估算对比 |
+|-----------|--------|-------|----------------|
+| 4.1 DLQ 监控 + 告警 + healthcheck | 2d | 3 | 一致 |
+| 4.2 Nacos 心跳 + fail-fast | 1d | 2 | 一致 |
+| 4.3 limiter buckets + Redis | 1d | 2 | 一致 |
+| 4.4 PG 池 + skywalking + topic + Kafka 指标 | 3-4d | 4 | 一致（roadmap #2 含在 PR-4）|
+| 4.5 chat-svc 大小 + compose + IP 限流 + Nacos | 1d | 4 | 一致 |
+| 4.6 杂项（8 项打包）| 1d | 8 | 一致（每项 0.125d）|
+| 4.7 长期 P3 收口 | 2d | 3 | 一致（digest pin 1d 是大头）|
+| **合计** | **11-12d** | **26** | 与 §六开头 "8-12d" 估算对齐（实际略超 0-1d，可接受）|
 
 ---
 
