@@ -606,7 +606,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.13  # Stage 94 PR-5: JWTSecret 默认值删除 + 启动 fail-fast (§P0-10)
+    image: emotion-echo/web-bff:v0.1.14  # Stage 94 PR-6: TrustAPISIX=true 时 APISIXCIDRs 白名单强制 (§P0-7)
     container_name: emotion-echo-web-bff
     restart: unless-stopped
     depends_on:

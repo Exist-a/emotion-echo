@@ -80,7 +80,13 @@ Auth:
 # Stage 32 PR-16: BFF 是否信任 APISIX 注入的 X-User-Id header
 # true（默认）：直接读 X-User-Id，不再解析 Authorization（生产路径）
 # false：本地直连 BFF 调试时回退到解析 Authorization（dev fallback）
+#
+# Stage 94 PR-6 §P0-7：TrustAPISIX=true 时必须配 APISIXCIDRs（k8s pod CIDR），
+# 否则 BFF 端口被外部直连时攻击者可伪造 X-User-Id header 假冒任意用户。
+# APISIXCIDRs 通过 env BFF_APISIX_CIDRS 注入（部署时按实际 k8s Network CIDR 填）。
+# dev 环境（TrustAPISIX=false）APISIXCIDRs 留空即可。
 TrustAPISIX: true
+# APISIXCIDRs: []
 
 # BFF ai_stream 调用的真实 LLM（OpenAI 兼容，如 DeepSeek / OpenAI / Kimi / Ollama）
 # dev 留 APIKey 空 -> ai_stream 走 mock 共情回复（开发友好）

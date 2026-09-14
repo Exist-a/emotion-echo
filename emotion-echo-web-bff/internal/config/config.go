@@ -6,7 +6,10 @@
 // 占位符字面值原样保留)。
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 // SkyWalking 链路追踪配置（与 chat-svc 同构）
 type SkyWalking struct {
@@ -69,6 +72,11 @@ type Config struct {
 
 	// TrustAPISIX 控制 BFF 是否信任 APISIX 注入的 X-User-Id header
 	TrustAPISIX bool
+	// APISIXCIDRs Stage 94 PR-6 §P0-7：可信 APISIX IP 段(CIDR),用于
+	// GinAuthMiddlewareWithOpts 的 RequireAPISIXIP 校验。svc 端口直连场景
+	// 攻击者伪造 X-User-Id 必须来自这些 IP 才被信任。dev 模式留空 +
+	// TrustAPISIX=false 时跳过 IP 校验。
+	APISIXCIDRs []string
 
 	// LLM 是 BFF ai_stream 调用的真实 LLM（OpenAI 兼容）
 	LLM struct {
@@ -284,6 +292,16 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("BFF_TRUST_APISIX"); v != "" {
 		c.TrustAPISIX = v == "true" || v == "1"
+	}
+	// Stage 94 PR-6 §P0-7:逗号分隔 APISIX CIDR 列表(默认 k8s pod CIDR)
+	if v := os.Getenv("BFF_APISIX_CIDRS"); v != "" {
+		var cidrs []string
+		for _, c := range strings.Split(v, ",") {
+			if t := strings.TrimSpace(c); t != "" {
+				cidrs = append(cidrs, t)
+			}
+		}
+		c.APISIXCIDRs = cidrs
 	}
 	if v := os.Getenv("BFF_LLM_API_KEY"); v != "" {
 		c.LLM.APIKey = v

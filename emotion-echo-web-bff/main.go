@@ -176,18 +176,27 @@ func main() {
 	if tracer != nil {
 		r.Use(sharedmw.GinSkywalkingMiddleware(sharedgrpc.NewGo2SkyTracer(tracer)))
 	}
-	// Stage 32 PR-16: 鉴权由 APISIX jwt-auth 统一处理（注入 X-User-Id header），
-	// BFF 信任 shared GinAuthMiddleware（解析 X-User-Id 注入 ctx）。
-	// CORS 由 APISIX cors 插件统一配；BFF 不再回显 Origin。
-	// /api/v1/auth/* 白名单：login/register/refresh 不需要 X-User-Id（用户未登录）。
+	// Stage 32 PR-16 + Stage 94 PR-6 §P0-7：鉴权由 APISIX jwt-auth 统一处理
+	//（注入 X-User-Id header），BFF 信任 shared GinAuthMiddleware（解析
+	// X-User-Id 注入 ctx）。
+// §P0-7 修复：c.TrustAPISIX=true 时用 GinAuthMiddlewareWithOpts 加 APISIX
+// IP 白名单校验——只有可信 APISIX 来源 IP 才接受 X-User-Id，防止 svc 端口
+// 被外部直连时 header 伪造。c.TrustAPISIX=false 时（dev）跳过 IP 校验。
+//
+// 注释承诺的"TrustAPISIX=false 时 Authorization JWT 解析"路径从未实现
+//（决策 18 §2 #22 / Decision9），这里彻底删除死分支注释。
+// CORS 由 APISIX cors 插件统一配；BFF 不再回显 Origin。
+// /api/v1/auth/* 白名单：login/register/refresh 不需要 X-User-Id（用户未登录）。
+	authMW := sharedmw.GinAuthMiddlewareWithOpts(sharedmw.AuthOpts{
+		RequireAPISIXIP: c.TrustAPISIX, // true 时要求 APISIX CIDR 内 IP
+		APISIXCIDRs:     c.APISIXCIDRs,
+	})
 	if c.TrustAPISIX {
-		// 生产路径：APISIX 已注入 X-User-Id
-		r.Use(authPathBypass(sharedmw.GinAuthMiddleware()))
+		log.Printf("[auth] TrustAPISIX=true; APISIX CIDRs=%v (RequireAPISIXIP enforcement on)", c.APISIXCIDRs)
 	} else {
-		// Dev fallback：本地直连 BFF 调试（不经过 APISIX），从 Authorization 解析 JWT
-		log.Println("[warn] BFF_TRUST_APISIX=false: dev fallback to Authorization JWT parsing")
-		r.Use(authPathBypass(sharedmw.GinAuthMiddleware()))
+		log.Printf("[warn] TrustAPISIX=false; dev mode, any X-User-Id accepted (DO NOT use in prod)")
 	}
+	r.Use(authPathBypass(authMW))
 
 	// 3.5 Stage 81 PR-2：llm-service ChatCompletion gRPC 上游（LLM_SVC_GRPC_ADDR 非空时启用）
 	var llmStreamer downstream.LLMChatStreamer
