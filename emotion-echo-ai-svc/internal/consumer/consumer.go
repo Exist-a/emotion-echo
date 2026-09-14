@@ -55,7 +55,13 @@ type ConsumerGroupHandler struct {
 	// MaxRetries Stage 30-C A2：失败最大重试次数，0 时取默认值 3。
 	MaxRetries int
 	// attempts Stage 30-C A2：msg.Key → 已重试次数（消费周期内有效）
-	attempts map[string]int
+	//
+	// Round 5b §B：attemptsMu 守卫 map 读写。sarama 当前版本 ConsumeClaim
+	// 是单 goroutine(SARAMA 内部保证),但未来重构(worker pool / 异步 retry)
+	// 或 sarama 跨 goroutine 派发 partition 时,map 会触发 race detector。
+	// 加 sync.Mutex 防御性保护 —— 比 sync.Map 简单且对小 map(<1000 key)性能更好。
+	attempts   map[string]int
+	attemptsMu sync.Mutex
 }
 
 // MessageHandler 是单条消息的业务处理函数
@@ -82,9 +88,11 @@ func (h *ConsumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 //
 // Stage 30-C A2: Handler 返 error → handleFailure：重试计数 + DLQ。
 func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	h.attemptsMu.Lock()
 	if h.attempts == nil {
 		h.attempts = make(map[string]int)
 	}
+	h.attemptsMu.Unlock()
 	maxRetries := h.MaxRetries
 	if maxRetries <= 0 {
 		maxRetries = 3
@@ -139,7 +147,9 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			}
 			// 业务成功：清空 attempts（key 复用 = 同事件再次成功）
 			if key := attemptKey(msg); key != "" {
+				h.attemptsMu.Lock()
 				delete(h.attempts, key)
+				h.attemptsMu.Unlock()
 			}
 			sess.MarkMessage(msg, "")
 		case <-sess.Context().Done():
@@ -161,8 +171,14 @@ func (h *ConsumerGroupHandler) handleFailure(
 	maxRetries int,
 ) {
 	key := attemptKey(msg)
+	// Round 5b §B: 读写 attempts 加 sync.Mutex 守卫(防御性,跨 goroutine 安全)
+	h.attemptsMu.Lock()
+	if h.attempts == nil {
+		h.attempts = make(map[string]int)
+	}
 	h.attempts[key]++
 	attempt := h.attempts[key]
+	h.attemptsMu.Unlock()
 
 	if attempt <= maxRetries {
 		slog.Error("consumer handler err (will retry)",
@@ -186,7 +202,9 @@ func (h *ConsumerGroupHandler) handleFailure(
 	}
 	slog.ErrorContext(sess.Context(), "consumer handler err after retries → DLQ",
 		"attempt", attempt, "key", key, "err", handlerErr)
+	h.attemptsMu.Lock()
 	delete(h.attempts, key)
+	h.attemptsMu.Unlock()
 	sess.MarkMessage(msg, "")
 }
 

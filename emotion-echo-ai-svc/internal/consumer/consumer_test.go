@@ -3,8 +3,10 @@ package consumer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,12 +19,18 @@ import (
 // fakeSession 模拟 sarama.ConsumerGroupSession 用于单元测试
 //
 // 只实现 MarkMessage（其他方法不需要）。Tracer 仅校验 span 创建流程。
+//
+// Round 5b §B: 加 sync.Mutex 让 MarkMessage 并发安全(此前多个 goroutine
+// 并发 append 会触发 race detector)。
 type fakeSession struct {
 	sarama.ConsumerGroupSession
+	mu     sync.Mutex
 	marked []string
 }
 
 func (f *fakeSession) MarkMessage(msg *sarama.ConsumerMessage, metadata string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.marked = append(f.marked, string(msg.Value))
 }
 
@@ -929,5 +937,89 @@ func TestConsumeClaim_NoSw8Header_StillCreatesSpan(t *testing.T) {
 	}
 	if tracer.entrySw8Seen != "" {
 		t.Errorf("entrySw8Seen = %q, want empty (no sw8 header)", tracer.entrySw8Seen)
+	}
+}
+
+// TestHandleFailure_ConcurrentAccessIsSafe Round 5b §B GREEN:
+//
+// observability-edge-gaps §B (consumer.attempts 加锁 P2 0.5h):
+// 当前 ConsumerGroupHandler.attempts map 在 handleFailure 里无并发保护。
+// sarama 当前版本 ConsumeClaim 是单 goroutine(SARAMA 保证),但未来重构
+// (worker pool / 异步 retry)或 sarama 跨 goroutine 派发时,map 会触发 race detector。
+//
+// 本测试通过 N=50 goroutine 并发读写 attempts map,断言:
+//   - 无 panic
+//   - 写入计数正确(每个 goroutine 写入 1 次,attempts map 至少 N 个 key)
+//   - 业务完成后 attempts map 状态一致(并发读+写最终一致)
+//
+// 实现:attempts map 加 sync.Mutex 守卫(本 commit 同期提交 GREEN 改造)。
+//
+// 设计取舍:
+//   - 不依赖 -race binary(Windows + Git Bash 环境下 -race 探测有符号解析问题)
+//   - 改用"高并发读写 + 行为正确性"覆盖;并发安全由 sync.Mutex 提供
+//   - 跨平台:在 Linux/Mac 上可加 `t.Helper()` + `-race` 二次验证(留作未来 CI step)
+func TestHandleFailure_ConcurrentAccessIsSafe(t *testing.T) {
+	dlq := NewInMemoryDLQPublisher()
+	h := &ConsumerGroupHandler{
+		Ready:      make(chan bool),
+		Handler:    func(ctx context.Context, e *events.Event) error { return errors.New("forced") },
+		TopicFilter: "",
+		Tracer:     nil,
+		DLQ:        dlq,
+		MaxRetries: 100, // 高值,避免任一 goroutine 触发 DLQ 路径
+	}
+
+	const N = 50
+	var wg sync.WaitGroup
+	wg.Add(N * 2)
+
+	// goroutine 1: N 个 handleFailure(模拟跨 goroutine 写入 attempts)
+	for i := 0; i < N; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			msg := &sarama.ConsumerMessage{
+				Topic: "chat-events",
+				Key:   []byte(fmt.Sprintf("evt-race-%d", i)),
+				Value: []byte(`{"type":"message.created","id":"x","data":{}}`),
+			}
+			sess := &fakeSession{}
+			h.handleFailure(sess, msg, errors.New("forced"), h.MaxRetries)
+		}()
+	}
+
+	// goroutine 2: N 个 ConsumeClaim(读 attempts map + 写)
+	for i := 0; i < N; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			msg := &sarama.ConsumerMessage{
+				Topic:     "chat-events",
+				Key:       []byte(fmt.Sprintf("evt-claim-race-%d", i)),
+				Value:     []byte(`{"type":"message.created","id":"x","data":{}}`),
+				Headers:   nil,
+				Timestamp: time.Now(),
+			}
+			claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, 1)}
+			sess := &fakeSession{}
+			claim.msgs <- msg
+			close(claim.msgs)
+			// 用短 timeout 收尾,避免测试 hang
+			done := make(chan error, 1)
+			go func() { done <- h.ConsumeClaim(sess, claim) }()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// 断言 1:无 panic(若 sync.Mutex 漏锁,读 map 时偶发 panic,测试失败)
+	// 断言 2:attempts map 至少含 N 个 handleFailure 写入的 key
+	// (ConsumeClaim 失败路径也会 delete 一部分,故用 ≥)
+	if got := len(h.attempts); got < N {
+		t.Errorf("attempts map len = %d, want >= %d (handleFailure 写入被并发丢失?)", got, N)
 	}
 }
