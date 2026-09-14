@@ -208,6 +208,130 @@ func TestAuthHandler_Logout_ReturnsSuccess(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"success":true`)
 }
 
+// TestAuthHandler_Login_SetsAccessTokenCookie_P0R2_1 P0-R2-1: 登录成功后 BFF
+// 必须通过 Set-Cookie: access_token=<jwt>; HttpOnly 把 token 下发给浏览器。
+//
+// 背景：原实现仅在 JSON body 里返 accessToken，前端 useApi.ts 把 token 同时
+// 存进 localStorage + 非 HttpOnly cookie → XSS 一键登录绕过任何后端鉴权。
+//
+// 修复：handler.login 调 setAccessTokenCookie(c, ...) 注入 HttpOnly cookie，
+// APISIX jwt-auth 通过 cookie: "access_token" 校验，浏览器 JS 不可读。
+//
+// 本测试钉死 4 个行为：
+//   1. 响应头含 Set-Cookie，cookie 名正确
+//   2. cookie 值等于 JSON body 的 accessToken
+//   3. cookie 含 HttpOnly flag（防 XSS 窃取）
+//   4. cookie Max-Age 等于 token 的 expiresIn 秒
+func TestAuthHandler_Login_SetsAccessTokenCookie_P0R2_1(t *testing.T) {
+	router := newAuthRouter(t, &fakeUserClient{
+		login: &downstream.UserInfo{UserID: 42, Account: "alice", Nickname: "Alice"},
+	})
+
+	w := postJSON(router, "/api/v1/auth/login", `{"username":"alice","password":"correct"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	// 解析 JSON body 拿 token
+	var data LoginData
+	decodeData(t, w.Body.Bytes(), &data)
+	require.NotEmpty(t, data.AccessToken, "JSON body 仍需返 accessToken（向后兼容）")
+
+	// 1) + 2) Set-Cookie 必须含 access_token=<token>
+	cookies := w.Result().Cookies()
+	require.NotEmpty(t, cookies, "登录响应必须 Set-Cookie（P0-R2-1）")
+	var found *http.Cookie
+	for _, ck := range cookies {
+		if ck.Name == "access_token" {
+			found = ck
+			break
+		}
+	}
+	require.NotNil(t, found, "Set-Cookie 必须含 access_token（APISIX jwt-auth 依赖此名）")
+	assert.Equal(t, data.AccessToken, found.Value,
+		"cookie 值必须等于 JSON body 的 accessToken（保证 APISIX 验证一致）")
+
+	// 3) HttpOnly flag —— 浏览器 JS document.cookie 不可读
+	assert.True(t, found.HttpOnly, "access_token cookie 必须 HttpOnly（防 XSS 窃取，P0-R2-1）")
+
+	// 4) Max-Age —— 与 token expiresIn 对齐
+	assert.Greater(t, found.MaxAge, 0, "access_token cookie Max-Age 必须 > 0")
+}
+
+// TestAuthHandler_Logout_ClearsAccessTokenCookie_P0R2_1 P0-R2-1: 登出时
+// 必须清掉 HttpOnly cookie，否则旧 token 残留 → 复用旧会话。
+func TestAuthHandler_Logout_ClearsAccessTokenCookie_P0R2_1(t *testing.T) {
+	router := newAuthRouter(t, &fakeUserClient{
+		login: &downstream.UserInfo{UserID: 42, Account: "alice"},
+	})
+	postJSON(router, "/api/v1/auth/login", `{"username":"alice","password":"correct"}`)
+
+	w := postJSON(router, "/api/v1/auth/logout", `{}`)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	cookies := w.Result().Cookies()
+	var found *http.Cookie
+	for _, ck := range cookies {
+		if ck.Name == "access_token" {
+			found = ck
+			break
+		}
+	}
+	require.NotNil(t, found, "登出响应必须 Set-Cookie access_token=; Max-Age=-1")
+	assert.Equal(t, -1, found.MaxAge, "登出 cookie Max-Age 必须 -1，立即过期")
+	assert.True(t, found.HttpOnly, "登出 cookie 也必须 HttpOnly（与登录对称）")
+}
+
+// TestAuthHandler_Refresh_PrefersCookieOverHeader_P0R2_1 P0-R2-1: refresh
+// 接口优先读 HttpOnly cookie 中的 token，fallback 才走 Authorization header。
+// 浏览器刷新页面后 Pinia 状态丢失但 cookie 仍在，必须能继续 refresh。
+func TestAuthHandler_Refresh_PrefersCookieOverHeader_P0R2_1(t *testing.T) {
+	mgr, _ := auth.NewManager("test-secret", 3600)
+	// 用真实 jwt 签发 cookie token
+	cookieToken, err := mgr.Sign(99, "alice")
+	require.NoError(t, err)
+
+	router := newAuthRouter(t, &fakeUserClient{
+		login: &downstream.UserInfo{UserID: 99, Account: "alice"},
+	})
+
+	// 模拟浏览器：Cookie header 带 access_token，无 Authorization
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	req.Header.Set("Cookie", "access_token="+cookieToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var data LoginData
+	decodeData(t, w.Body.Bytes(), &data)
+	uid, err := mgr.Parse(data.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, int64(99), uid, "refresh 应优先从 HttpOnly cookie 读 user_id=99")
+}
+
+// TestAuthHandler_Refresh_FallsBackToAuthorizationHeader BFF 当前保留兼容：
+// 若无 cookie 才走 Authorization header（前端老版本/CLI/Postman 仍能 refresh）。
+func TestAuthHandler_Refresh_FallsBackToAuthorizationHeader(t *testing.T) {
+	mgr, _ := auth.NewManager("test-secret", 3600)
+	headerToken, err := mgr.Sign(77, "bob")
+	require.NoError(t, err)
+
+	router := newAuthRouter(t, &fakeUserClient{
+		login: &downstream.UserInfo{UserID: 77, Account: "bob"},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	req.Header.Set("Authorization", "Bearer "+headerToken)
+	// 不带 cookie
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var data LoginData
+	decodeData(t, w.Body.Bytes(), &data)
+	uid, err := mgr.Parse(data.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, int64(77), uid, "无 cookie 时 fallback 到 Authorization header")
+}
+
 // =============================================================================
 // Refresh 测试（保持 mock 行为）
 // =============================================================================

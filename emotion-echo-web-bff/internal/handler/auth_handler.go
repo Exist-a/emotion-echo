@@ -150,7 +150,9 @@ func (h *AuthHandler) login(c *gin.Context) {
 
 	// 登录成功 → 清空失败计数
 	h.clearFailures(req.Username)
-	OK(c, h.buildLoginData(info.UserID, info.Account, info.Nickname))
+	data := h.buildLoginData(info.UserID, info.Account, info.Nickname)
+	h.setAccessTokenCookie(c, data.AccessToken, data.ExpiresIn)
+	OK(c, data)
 }
 
 func (h *AuthHandler) register(c *gin.Context) {
@@ -189,25 +191,39 @@ func (h *AuthHandler) register(c *gin.Context) {
 		return
 	}
 
-	OK(c, h.buildLoginData(info.UserID, info.Account, info.Nickname))
+	data := h.buildLoginData(info.UserID, info.Account, info.Nickname)
+	h.setAccessTokenCookie(c, data.AccessToken, data.ExpiresIn)
+	OK(c, data)
 }
 
 func (h *AuthHandler) refresh(c *gin.Context) {
 	// mock：直接重新签发（user 从 Authorization 解析）
 	// Stage 32 PR-16: 不再依赖 downstream.JWTFromContext（已删），
-	// 改为直接从 Authorization header 解析。
+	// 改为直接从 Authorization header 或 cookie 解析。
 	var userID int64 = 1
-	authHeader := c.GetHeader("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if uid, err := h.jwt.Parse(token); err == nil {
+	// P0-R2-1: 优先从 HttpOnly cookie 读取，其次从 Authorization header
+	cookieToken, _ := c.Cookie("access_token")
+	if cookieToken != "" {
+		if uid, err := h.jwt.Parse(cookieToken); err == nil {
 			userID = uid
 		}
+	} else {
+		authHeader := c.GetHeader("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			if uid, err := h.jwt.Parse(token); err == nil {
+				userID = uid
+			}
+		}
 	}
-	OK(c, h.buildLoginData(userID, "user", ""))
+	data := h.buildLoginData(userID, "user", "")
+	h.setAccessTokenCookie(c, data.AccessToken, data.ExpiresIn)
+	OK(c, data)
 }
 
 func (h *AuthHandler) logout(c *gin.Context) {
+	// P0-R2-1: 清除 HttpOnly cookie
+	c.SetCookie("access_token", "", -1, "/", "", false, true)
 	OK(c, gin.H{"success": true})
 }
 
@@ -260,6 +276,15 @@ func (h *AuthHandler) buildLoginData(userID int64, username, nickname string) Lo
 			CreatedAt: time.Now().Format(time.RFC3339),
 		},
 	}
+}
+
+// setAccessTokenCookie 设置 HttpOnly cookie（P0-R2-1: 防 XSS 窃取 token）
+// cookie 同时被 APISIX jwt-auth 读取（seed.sh 配置 cookie: "access_token"）
+func (h *AuthHandler) setAccessTokenCookie(c *gin.Context, token string, maxAge int64) {
+	// SameSite=Lax: 允许顶层导航携带 cookie（如 OAuth 回调）
+	// Secure=false: dev 模式下 HTTP 也能用；生产应由 APISIX TLS 终止
+	// HttpOnly=true: JavaScript 不可读，防 XSS
+	c.SetCookie("access_token", token, int(maxAge), "/", "", false, true)
 }
 
 // =====================================================

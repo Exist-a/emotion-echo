@@ -116,30 +116,18 @@ export const useUserStore = defineStore('user', () => {
 
   /**
    * 设置 AccessToken
-   * @param rememberMe true=记住我（localStorage + cookie），false=不记住（sessionStorage + SessionCookie）
+   * P0-R2-1: 移除 localStorage/sessionStorage 存储（防 XSS 窃取持久 token）
+   * 仅保留 cookie（SameSite=Lax）供 SSR 读取 + APISIX jwt-auth 验证
+   * @param rememberMe 保留参数兼容性，不再影响存储策略
    */
   const setAccessToken = (token: string, expiresIn: number = 900, rememberMe: boolean = false) => {
     accessToken.value = token
     tokenExpiry.value = Date.now() + expiresIn * 1000
 
-    if (import.meta.client) {
-      if (rememberMe) {
-        localStorage.setItem('access_token', token)
-        localStorage.setItem('token_expiry', tokenExpiry.value.toString())
-        // 清除另一处的存储，避免混淆
-        sessionStorage.removeItem('access_token')
-        sessionStorage.removeItem('token_expiry')
-      } else {
-        sessionStorage.setItem('access_token', token)
-        sessionStorage.setItem('token_expiry', tokenExpiry.value.toString())
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('token_expiry')
-      }
-    }
-
     // SSR 支持：设置 cookie，maxAge 使用实际的 expiresIn
+    // cookie 同时被 APISIX jwt-auth 读取（seed.sh 配置 cookie: "access_token"）
     const tokenCookie = useCookie('access_token', {
-      maxAge: rememberMe ? expiresIn : 0,
+      maxAge: expiresIn,
       sameSite: 'lax',
       path: '/'
     })
@@ -155,11 +143,7 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = null
 
     if (import.meta.client) {
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('token_expiry')
       localStorage.removeItem('user_info')
-      sessionStorage.removeItem('access_token')
-      sessionStorage.removeItem('token_expiry')
       sessionStorage.removeItem('user_info')
     }
 
@@ -328,54 +312,52 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
-   * 初始化（从 localStorage / sessionStorage 恢复）
+   * 初始化（P0-R2-1: 从 cookie 恢复，不再读 localStorage/sessionStorage）
    */
   const init = () => {
     if (!import.meta.client) return
 
-    // 优先从 localStorage 恢复（记住我）
-    let storedToken = localStorage.getItem('access_token')
-    let storedExpiry = localStorage.getItem('token_expiry')
-    let storedUser = localStorage.getItem('user_info')
-    let rememberMe = true
+    // 从 cookie 恢复 token（页面刷新后 Pinia 状态丢失，cookie 仍在）
+    const tokenCookie = useCookie('access_token', { sameSite: 'lax', path: '/' })
+    const storedToken = tokenCookie.value
 
-    // 没有则尝试 sessionStorage（不记住我）
-    if (!storedToken) {
-      storedToken = sessionStorage.getItem('access_token')
-      storedExpiry = sessionStorage.getItem('token_expiry')
-      storedUser = sessionStorage.getItem('user_info')
-      rememberMe = false
-    }
-
-    if (storedToken && storedExpiry) {
-      const expiryNum = parseInt(storedExpiry)
-      const expiresIn = Math.floor((expiryNum - Date.now()) / 1000)
-
-      // 已过期：自动清理
-      if (expiresIn <= 0) {
+    if (storedToken) {
+      // 简单校验 token 格式（JWT = 3 段 base64）
+      const parts = storedToken.split('.')
+      if (parts.length !== 3) {
         clearToken()
         return
       }
 
-      accessToken.value = storedToken
-      tokenExpiry.value = expiryNum
-
-      // 恢复 userInfo（让 isAuthenticated 立即为 true）
-      if (storedUser) {
-        try {
-          userInfo.value = JSON.parse(storedUser)
-        } catch {
-          userInfo.value = null
+      // 从 JWT payload 解析过期时间
+      try {
+        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+        const payload = JSON.parse(atob(base64))
+        if (payload.exp) {
+          const expiryMs = payload.exp * 1000
+          if (expiryMs <= Date.now()) {
+            clearToken()
+            return
+          }
+          tokenExpiry.value = expiryMs
         }
+      } catch {
+        // JWT 解析失败，不清除 token（可能是格式不同的 JWT）
       }
 
-      // 同步恢复 cookie，供 SSR 使用
-      const tokenCookie = useCookie('access_token', {
-        maxAge: rememberMe ? expiresIn : 0,
-        sameSite: 'lax',
-        path: '/'
-      })
-      tokenCookie.value = storedToken
+      accessToken.value = storedToken
+
+      // 恢复 userInfo（让 isAuthenticated 立即为 true）
+      if (import.meta.client) {
+        const storedUser = localStorage.getItem('user_info')
+        if (storedUser) {
+          try {
+            userInfo.value = JSON.parse(storedUser)
+          } catch {
+            userInfo.value = null
+          }
+        }
+      }
     }
   }
 

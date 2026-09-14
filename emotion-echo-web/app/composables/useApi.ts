@@ -37,23 +37,90 @@ const DEFAULT_RETRY_DELAY_MS = 2000; // 延长退避基准
 let refreshPromise: Promise<string | null> | null = null;
 
 // 请求去重：记录正在进行的请求
+// P2-R2-2: 加上 size 上限 + 失败时清理，避免 Map 无限增长导致内存泄漏
 const pendingRequests = new Map<string, Promise<any>>();
+const MAX_PENDING_REQUESTS = 100;  // 单次页面允许并发去重 GET 数
 
 // 生成请求唯一标识
+// P2-R2-1: JSON.stringify 顺序敏感问题——同语义请求若 key 顺序不同会被视为不同
+// 修复：对 GET URL 的 query 参数按 key 排序后再生成 key
 function getRequestKey(url: string, options: RequestInit = {}): string {
   const method = options.method || "GET";
-  const body = options.body ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body)) : "";
-  return `${method}:${url}:${body}`;
+  let body = "";
+  if (options.body) {
+    if (typeof options.body === "string") {
+      body = options.body;
+    } else {
+      try {
+        body = JSON.stringify(sortObjectKeys(options.body));
+      } catch {
+        body = String(options.body);
+      }
+    }
+  }
+  // GET 请求：URL 的 query 也按 key 排序
+  const sortedUrl = method === "GET" ? sortUrlQuery(url) : url;
+  return `${method}:${sortedUrl}:${body}`;
+}
+
+/** 递归对象 key 排序（深拷贝但 key 顺序确定） */
+function sortObjectKeys(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(sortObjectKeys);
+  if (obj && typeof obj === "object" && obj.constructor === Object) {
+    const sorted: Record<string, any> = {};
+    for (const k of Object.keys(obj).sort()) sorted[k] = sortObjectKeys(obj[k]);
+    return sorted;
+  }
+  return obj;
+}
+
+/** URL query 参数按 key 排序（仅 GET 走此路径） */
+function sortUrlQuery(url: string): string {
+  const qIdx = url.indexOf("?");
+  if (qIdx < 0) return url;
+  const base = url.slice(0, qIdx);
+  const query = url.slice(qIdx + 1);
+  const params = query.split("&").filter(Boolean).sort();
+  return params.length > 0 ? `${base}?${params.join("&")}` : base;
+}
+
+/**
+ * P2-R2-2: pendingRequests 写入前检查 size 上限，避免 Map 无限增长
+ */
+function trackPending(key: string, promise: Promise<any>): void {
+  if (pendingRequests.size >= MAX_PENDING_REQUESTS) {
+    // LRU 简化版：删第一个 entry（FIFO）。最旧请求大概率已 settled 但未清理
+    const firstKey = pendingRequests.keys().next().value;
+    if (firstKey) pendingRequests.delete(firstKey);
+  }
+  pendingRequests.set(key, promise);
+}
+
+/**
+ * P2-R2-3: 合并两个 AbortSignal——任一触发即中止
+ */
+function mergeSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  a.addEventListener("abort", onAbort);
+  b.addEventListener("abort", onAbort);
+  if (a.aborted || b.aborted) ctrl.abort();
+  return ctrl.signal;
 }
 
 /**
  * 获取 AccessToken
- * SSR 时从 cookie 读取，CSR 时从 userStore 读取
+ * P0-R2-1: SSR 从 cookie 读取；CSR 优先从 userStore 读取，fallback 到 cookie
+ * （页面刷新后 Pinia 状态丢失，但 cookie 仍在）
  */
 function getAccessToken(): string | null {
   if (import.meta.client) {
     const userStore = useUserStore();
-    return userStore.getAccessToken || null;
+    const storeToken = userStore.getAccessToken;
+    if (storeToken) return storeToken;
+    // fallback: 页面刷新后 Pinia 状态丢失，从 cookie 恢复
+    const tokenCookie = useCookie("access_token");
+    return tokenCookie.value || null;
   }
   // SSR 时从 cookie 读取
   const tokenCookie = useCookie("access_token");
@@ -61,15 +128,12 @@ function getAccessToken(): string | null {
 }
 
 /**
- * 设置 AccessToken（通过 userStore，统一处理 rememberMe 逻辑）
+ * 设置 AccessToken（通过 userStore）
+ * P0-R2-1: rememberMe 参数保留兼容性，不再影响存储策略
  */
 function setAccessToken(token: string, expiresIn: number = 900, rememberMe?: boolean): void {
   const userStore = useUserStore();
-  // 如果未传入 rememberMe，根据现有存储推断
-  if (rememberMe === undefined) {
-    rememberMe = import.meta.client ? !!localStorage.getItem("access_token") : false;
-  }
-  userStore.setAccessToken(token, expiresIn, rememberMe);
+  userStore.setAccessToken(token, expiresIn, rememberMe ?? false);
 }
 
 /**
@@ -202,11 +266,26 @@ export async function request<T = any>(
   // 执行请求
   const requestPromise = (async () => {
     try {
+      // P2-R2-3: 消费 NUXT_PUBLIC_REQUEST_TIMEOUT 配置（默认 30s）
+      // 实现方式：合并已有 signal 与 timeout signal，任一触发即 abort
+      const timeoutMs = Number(
+        (typeof useRuntimeConfig === "function"
+          ? useRuntimeConfig()?.public?.REQUEST_TIMEOUT
+          : null) || 30000
+      );
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+      const existingSignal = options.signal;
+      const combinedSignal = existingSignal
+        ? mergeSignals(existingSignal, timeoutController.signal)
+        : timeoutController.signal;
       let res = await fetch(fullUrl, {
         ...options,
         headers,
         credentials: "include", // 携带 Cookie
+        signal: combinedSignal,
       });
+      clearTimeout(timeoutId);
 
   // 处理 429 - 限流（优先于 401 处理）
   if (res.status === 429 && retryAttempt < MAX_RETRY_COUNT) {
@@ -277,7 +356,7 @@ export async function request<T = any>(
 
   // 缓存 GET 请求
   if (method === "GET") {
-    pendingRequests.set(requestKey, requestPromise);
+    trackPending(requestKey, requestPromise);
   }
 
   return requestPromise;

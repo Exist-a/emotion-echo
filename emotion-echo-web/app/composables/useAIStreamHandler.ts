@@ -50,6 +50,10 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
   let streamCancelled = ref(false)
   let parseErrorCount = 0
   let finished = false
+  // P1-R2-1: 跨 stream 调用累计"已发射给 UI 的内容"
+  // 用法：SSE 重连（401 refresh）后，server 返回的 delta 与本变量前 N 字符
+  //      相同则跳过（client 已有），仅 emit 真正新增部分
+  let emittedContent = ''
 
   const cancelAIStream = () => {
     if (streamAbortController) {
@@ -62,10 +66,10 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
 
   const sendAIStream = async (
     params: AIStreamParams,
-    callbacks: AIStreamCallbacks = {}
+    callbacks?: AIStreamCallbacks
   ): Promise<{ isOk: boolean; msg: string }> => {
     if (isStreaming.value) {
-      return { isOk: false, msg: '正在对话中' }
+      return { isOk: false, msg: '已有流在进行中' }
     }
 
     isStreaming.value = true
@@ -73,9 +77,12 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     streamCancelled.value = false
     parseErrorCount = 0
     finished = false
+    // P1-R2-1: 记录"已发射内容"用于 401 重连后的去重（避免重复 emit）
+    emittedContent = ''
 
     const runtimeConfig = useRuntimeConfig()
-    const token = import.meta.client ? localStorage.getItem('access_token') : ''
+    // P0-R2-1: 从 cookie 读取 token（不再读 localStorage）
+    const token = useCookie('access_token').value || ''
     // PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8894
     // 计算 streamUrl 时若 API_BASE_URL 漏配 → 抛错 → 进 catch 返回 isOk=false
     let streamUrl: string
@@ -164,9 +171,17 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
 
             const deltaContent = payload?.choices?.[0]?.delta?.content
             if (typeof deltaContent === 'string' && deltaContent.length > 0) {
-              fullContent += deltaContent
+              // P1-R2-1: dedup — 401 重连后 server 整段从头推，
+              // 跳过本轮已 emit 过的前缀，仅 emit 真正新增的 chunk
+              let toEmit = deltaContent
+              if (emittedContent && deltaContent.startsWith(emittedContent)) {
+                toEmit = deltaContent.slice(emittedContent.length)
+                if (!toEmit) continue  // 完全重复，跳过
+              }
+              fullContent += toEmit
               streamingContent.value = fullContent
-              callbacks.onDelta?.(deltaContent)
+              emittedContent += toEmit
+              callbacks.onDelta?.(toEmit)
             }
           }
         }

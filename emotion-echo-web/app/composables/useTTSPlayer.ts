@@ -174,7 +174,8 @@ const playStream = async (
     abortController = new AbortController();
     // PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8894
     const base = getApiBaseUrl(useRuntimeConfig());
-    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || '';
+    // P0-R2-1: 从 cookie 读取 token（不再读 localStorage）
+    const token = useCookie('access_token').value || '';
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

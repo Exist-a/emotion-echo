@@ -44,7 +44,7 @@ export function useAIStream() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.client ? localStorage.getItem("access_token") : ""}`,
+            Authorization: `Bearer ${useCookie('access_token').value || ""}`,
           },
           body: {
             model: runtimeConfig.public.LLM_MODEL,
