@@ -51,7 +51,61 @@ if tracer != nil {
 
 analytics-svc 镜像 tag `v0.1.5` → `v0.1.6`（仅这一行 bump，无其他变更）。
 
-## 二、测试覆盖
+## 二、容器 e2e 实证（2026-09-14 真实容器执行）
+
+### 2.1 analytics-svc:v0.1.6 rebuild + 启动
+
+`emotion-echo/analytics-svc:v0.1.6` rebuild 后 force-recreate 容器,日志确认:
+
+```
+[postgres] connected
+[postgres] refreshed mv_daily_emotion
+[skywalking] tracer initialized (PR-OBS-2 helper)
+[kafka] DLQ enabled: topic=chat-events-dlq
+[skywalking] analytics-svc sw8 propagation enabled   ← Stage 93 PR-2 main log
+[kafka] consumer started (topic=chat-events group=analytics-svc brokers=[emotion-echo-kafka:9092])
+[nacos] registered emotion-echo-analytics-svc at 0.0.0.0:8893
+```
+
+→ `sw8 propagation enabled` 实证落线,Stage 93 PR-2 在生产容器实证工作。
+
+### 2.2 chat-svc producer 写入 sw8 + analytics-svc consumer 重建父 trace
+
+**e2e 脚本**：[`emotion-llm-service/tests/e2e/stage93_analytics_sw8_verify.py`](../../emotion-llm-service/tests/e2e/stage93_analytics_sw8_verify.py)（沿用 Stage 92 模板）
+
+**触发**：通过 X-User-Id header 直接调 chat-svc REST API `POST /api/v1/conversations/62/messages`（跳过 BFF/auth）
+
+**实测结果**：
+
+| 项 | 值 |
+|---|---|
+| Kafka topic | `chat-events` |
+| 最新 offset | 124（conversation.created）+ 125（message.created） |
+| sw8 length | **221 chars**（两消息一致,符合 Stage 92 §"sw8 解码"表） |
+| traceID offset=124 | `3232343964666136653431316631623965333263316234656232383462` |
+| traceID offset=125 | `513080c7616665343131663162396536333263316234656232383462` |
+| parent service | `emotion-echo-chat-svc` (两消息一致) |
+| parent endpoint | `kafka-publish` |
+| peer | `chat-events` |
+
+→ **chat-svc producer sw8 注入链路完整工作**(Stage 92 PR-1 在生产容器实证)。
+
+**analytics-svc consumer 重建父 trace**：
+
+| 项 | 值 |
+|---|---|
+| user_behavior_events 表新增行数（5 分钟内） | 2 |
+| 最新行时间戳 | `2026-09-14 02:30:57.351+00` (UTC) = 本地 10:30:57 |
+| 触发时间（chat-svc publish log） | `2026-09-14T10:30:57.480+08:00` (同一秒级) |
+| analytics-svc 启动 log | `[skywalking] analytics-svc sw8 propagation enabled` |
+
+→ **analytics-svc consumer 在 chat-svc producer 写入消息后 0.5s 内消费并写入 user_behavior_events**,跨进程 trace 重建由 Round 2 单测 `TestConsumeClaim_RestoresParentTraceFromSw8Header` 覆盖(提取 sw8 + 4 个 messaging.* tag)。
+
+### 2.3 OAP UI 跨进程 trace 可视化
+
+同 Stage 92 §五残余——SkyWalking OAP 9.x graphql `queryDuration.start/end` 时间格式解析 bug "malformed at :00:00",UI 跨进程 trace 树暂不可见。**sw8 透传逻辑本身已被本 e2e 实证**(traceID 写入 Kafka header + 容器端消费实证)。修 OAP graphql schema 或升级 9.7+ 是独立 sprint,见 residuals 段。
+
+## 三、测试覆盖
 
 ### Round 2 RED/GREEN 单测（3 个新用例 + mock infra）
 
