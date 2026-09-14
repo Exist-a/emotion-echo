@@ -12,6 +12,7 @@ status: Round 1 占位 · Round 2 首批内容迁入
 
 | 文件 | 来源 | 主题 |
 |------|------|------|
+| `multi-round-iteration-2026-09-15.md` | 新增（2026-09-15，Stage 97 收口后）| **多轮迭代修复计划**：把当前 49 个 open 项按 5 主题（文档治理/数据层/Kafka/AI 内容安全/中间件可观测）排成 5 个独立 round + 1 收口 round，4 周左右工作量 18-25d 紧凑 10-14d。Round 0 文档治理 → Round 1 数据层 → Round 2 Kafka → Round 3 LLM 安全 → Round 4 中间件 → Round 5 全量收口 |
 | `ai-response-structured.md` | `.trae/documents/ai-response-structured.md` | AI 回复结构化 + Markdown 渲染 |
 | `three-vrm-usage-reference.md` | `.trae/documents/three-vrm-usage-reference.md` | Three-VRM API 参考手册 |
 | `wechat-qq-login-and-upload.md` | `.trae/documents/微信QQ登录和文件上传实施计划.md` | QQ OAuth + 通用文件上传 |
