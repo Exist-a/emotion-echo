@@ -1,5 +1,6 @@
 ---
-status: planned
+status: landed
+landed: 2026-09-14
 priority: high
 owner: TBD
 created: 2026-09-14
@@ -9,10 +10,17 @@ related-stages:
   - stage-44-observability-sprint-b.md
   - stage-50-e2e-validation.md
   - stage-86-outbox-dead-alert-2026-09-13.md
+  - stage-93-analytics-svc-sw8-propagation-2026-09-14.md
 related-plans:
   - observability-edge-gaps-from-code-review.md §A-extension
 related-adrs: []
-estimated-effort: 0.5d (半天)
+landed-stages:
+  - stage-93-analytics-svc-sw8-propagation-2026-09-14.md (commit 2a065d0 PR-2 main.go wire + 镜像 v0.1.6 + Round 2 单测 13/13 全绿)
+residuals:
+  - 容器 e2e 实证 stage93_sw8_verify.py (留 Stage 94+ 沉淀,沿用 Stage 92 stage92_sw8_verify.py 模式)
+  - SkyWalking OAP 9.x graphql queryDuration 时间格式 bug (OAP UI 跨进程 trace 可视化阻塞,Stage 92 §五残余沿用)
+  - extractSw8Header 收敛到 shared/pkg/messaging (ai-svc + analytics-svc 各一份 ~10 行)
+  - observability-edge-gaps §D (GinSkywalking 跳过路径配置化 P3 0.5h) / §F (consumer.go 拆分 P3 0.5h)
 ---
 
 # Plan - Stage 93 · analytics-svc consumer sw8 透传
