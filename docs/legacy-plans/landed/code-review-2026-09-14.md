@@ -1,8 +1,10 @@
 ---
-status: planned
+status: landed
 priority: critical
 owner: TBD
 created: 2026-09-14
+landed: 2026-09-14
+landed-by: stage-94 (P0) + stage-96 (Round 1 P1/P2 残余)
 source: external code review（会话 2026-09-14, 4 个并发子 agent 系统排查,非项目内部演进）
 depends-on: []
 related-stages:
@@ -12,6 +14,10 @@ related-stages:
   - stage-86-outbox-dead-alert-2026-09-13.md
   - stage-92-kafka-sw8-propagation-2026-09-14.md
   - stage-93-analytics-svc-sw8-propagation-2026-09-14.md
+  - stage-94-code-review-2026-09-14-p0-closure.md
+  - stage-95-code-review-2026-09-14-round2-closure.md
+  - stage-96-code-review-round1-p1p2-closure.md
+  - stage-97-round2-p0-closure.md
 related-adrs:
   - 决策 4 gRPC 化
   - 决策 6 JSON 日志 + trace_id 串联
@@ -19,9 +25,17 @@ related-adrs:
   - 决策 12 APISIX 信任头
 related-plans:
   - observability-edge-gaps-from-code-review.md (已 landed §A, 部分 §B/C/E)
-  - kafka-pipeline-pending-decisions.md
-residuals: []
-landed-parts: []
+  - code-review-2026-09-14-round-2.md (Stage 97 全 10 P0 + 部分 P1/P2 收口)
+  - kafka-pipeline-pending-decisions.md (D1-D8 仍 planned)
+landed-stages:
+  - stage-94: Round 1 全 10 P0 (10 commits)
+  - stage-95: Round 2 P0+P1+P2+P3+DOC (61 items, 43 files)
+  - stage-96: Round 1 P1+P2 (22 P1 + 12 P2 应用, 6 P1 + 13 P2 deferred)
+  - stage-97: Round 2 P0 全部 + 顺手 Round 1/2 P1+P2 (13 commits)
+residuals:
+  - Round 1 P1 6 项 deferred 到下一 sprint (P1-1/4/7/9/11/12/14/17/19/23/24/25/26)
+  - Round 1 P2 13 项 deferred
+  - 详见 stage-96-code-review-round1-p1p2-closure.md §1/§2 表
 ---
 
 # Plan — 2026-09-14 外部代码审查综合漏洞清单

@@ -1,0 +1,46 @@
+# docs/ci-workflows/llm-test.yml
+#
+# Stage 97 PR-9e · Round 2 §P1-R2-16 · AGENTS.md §2.2
+#
+# 用途：emotion-llm-service (Python) pytest 全跑 + 关键模块契约测试。
+# 覆盖范围：
+#   - test_http_routes.py: /health /metrics /analyze + P0-R2-3 Internal-API-Key 4 用例
+#   - test_grpc_server.py / test_grpc_intent_llm.py: gRPC + 意图分类
+#   - test_file_context_prompt_directive.py: Stage 91 PDF 强指令性 prompt
+#   - test_nacos_bootstrap.py / test_nacos_client.py: Stage 88 Nacos 注册
+#
+# 落地步骤：见 docs/ci-workflows/go-test.yml 头部说明
+
+name: llm-test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'emotion-llm-service/**'
+      - 'docs/ci-workflows/llm-test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'emotion-llm-service/**'
+
+defaults:
+  run:
+    working-directory: emotion-llm-service
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+      - name: pytest
+        run: python -m pytest tests/unit/ -v

@@ -1,8 +1,10 @@
 ---
-status: planned
+status: landed
 stage: 97
 title: Round 2 Code Review P0 收口（基于工作区待提交草稿）
 date: 2026-09-15
+landed: 2026-09-15
+landed-by: stage-97 (13 commits, 12 PR + docs commit + drift-fix commit)
 source-plan: code-review-2026-09-14-round-2.md
 depends-on: stage-94, stage-95, stage-96
 related-stages:

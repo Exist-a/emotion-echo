@@ -1,0 +1,69 @@
+# docs/ci-workflows/go-test.yml
+#
+# Stage 97 PR-9e · Round 2 §P1-R2-16 · AGENTS.md §2.2 合并前门槛
+#
+# 用途：6 个 Go svc 全跑 `go test ./...` + `go vet ./...`，CI fail 即不允许 merge。
+#
+# 本文件存放在 `docs/ci-workflows/` 而非 `.github/workflows/`，原因：
+# - 当前 PAT 仅含 `repo` scope，GitHub 拒绝 push 修改 `.github/workflows/*.yml`
+# - 用户后续可通过 3 选 1 落地：(1) PAT 加 workflow scope 后复制到 .github/workflows/
+#   (2) GitHub UI → Actions → New workflow → 粘贴本文件内容；(3) PR 流程
+#
+# 落地步骤（推荐）：
+#   mkdir -p .github/workflows
+#   cp docs/ci-workflows/go-test.yml   .github/workflows/
+#   cp docs/ci-workflows/llm-test.yml  .github/workflows/
+#   cp docs/ci-workflows/web-test.yml  .github/workflows/
+#   git add .github/workflows/ && git commit -m "ci: 启用 GitHub Actions"
+#   git push   # 此时需要 PAT 有 workflow scope 或走 SSH key
+
+name: go-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - emotion-echo-ai-svc
+          - emotion-echo-analytics-svc
+          - emotion-echo-chat-svc
+          - emotion-echo-web-bff
+          - emotion-echo-assessment-svc
+          - emotion-echo-user-svc
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test -count=1 ./...
+        env:
+          GOFLAGS: -mod=mod
+
+  shared-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: emotion-echo-shared
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      - name: shared go test
+        run: go test -count=1 ./...

@@ -109,9 +109,10 @@ depends-on:
 - [x] `git branch --merged main` 仅 `* main` 自身（无残留）
 - [x] `git status -sb` main ahead=1 (workflow 待 push), behind=0
 
-### 6.1 PR-9e (.github workflows) 阻塞说明
+### 6.1 PR-9e (.github workflows) 闭环说明
 
-Round 2 §P1-R2-16 已落地 3 个 GitHub Actions workflows，但 push 被 GitHub 拒绝：
+Round 2 §P1-R2-16 已落地 3 个 GitHub Actions workflows。原始方案是 commit 到
+`.github/workflows/*.yml`，但 push 被 GitHub 拒绝：
 
 ```
 ! [remote rejected] main -> main (refusing to allow a Personal Access Token
@@ -121,18 +122,34 @@ to create or update workflow .github/workflows/go-test.yml without `workflow` sc
 **根因**：当前 PAT 仅含 `repo` scope，GitHub 出于供应链安全对 workflows 文件的
 修改要求额外的 `workflow` scope。
 
-**本地状态**：commit `23419eb` 已落地 working copy，3 个 workflow 文件已 add。
-ahead=1（workflow commit 待推）。
+**闭环方案**：workflow 文件不放在 `.github/workflows/`（PAT push 拦截），而存放在
+`docs/ci-workflows/`（git 可跟踪位置，不受 workflow scope 限制），README 详细说明
+3 选 1 启用方式：
 
-**用户后续 3 选 1**：
-1. 重新生成 PAT 加 `workflow` scope 后 `git push origin main`
-2. GitHub UI → Settings → Personal access tokens → 编辑现有 PAT → 加 workflow
-3. fork 到自己仓库后改用 SSH key (`ssh-add` 后 `git push origin main`)
+```
+docs/ci-workflows/
+├── README.md           # 启用步骤说明（PAT 加 scope / GitHub UI / SSH key）
+├── go-test.yml         # 6 Go svc + shared 全跑 go test + go vet
+├── llm-test.yml        # emotion-llm-service pytest
+└── web-test.yml        # emotion-echo-web vitest + lint
+```
 
-**CI 内容物**（commit `23419eb` 已固化在 working copy）：
-- `.github/workflows/go-test.yml`: 6 Go svc 全跑 `go test ./...` + `go vet`
-- `.github/workflows/llm-test.yml`: emotion-llm-service pytest
-- `.github/workflows/web-test.yml`: emotion-echo-web vitest + lint
+**用户后续启用 3 选 1**：
+1. **PAT 加 workflow scope**（最快）：GitHub Settings → Personal access tokens
+   → 编辑现有 token → 勾 `workflow` → `cp docs/ci-workflows/*.yml .github/workflows/`
+   → `git push`
+2. **GitHub UI 粘贴**：Settings → Actions → New workflow → 把 docs/ci-workflows
+   下的 yml 内容粘贴进去
+3. **改用 SSH key**（推荐长期）：`ssh-add` + `git remote set-url origin git@github.com:...`
+   + 复制 yml → push
+
+**CI 内容物**（已 commit 到 main，存放在 docs/ci-workflows/）：
+- `go-test.yml`: 6 Go svc 全跑 `go test ./...` + `go vet`
+- `llm-test.yml`: emotion-llm-service pytest
+- `web-test.yml`: emotion-echo-web vitest + lint
+
+**启用后效果**：与 AGENTS.md §2.2 "合并前 go test + 前端 npm run lint" 挂钩，
+PR test 失败不可 merge。
 
 ## 7. 风险点（已识别）
 

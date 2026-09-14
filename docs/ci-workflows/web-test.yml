@@ -1,0 +1,53 @@
+# docs/ci-workflows/web-test.yml
+#
+# Stage 97 PR-9e · Round 2 §P1-R2-16 · AGENTS.md §2.2
+#
+# 用途：emotion-echo-web (Nuxt + Vitest) vitest 单元测试 + lint。
+# 覆盖范围：
+#   - composables/*.test.ts (useApi/useAIStreamHandler/useFileUpload 等)
+#   - lib/apiRoutes.test.ts
+#   - middleware/auth.global.test.ts (P1-R2-3 白名单 prefix 边界)
+#   - pages/chat/conversation/renderMarkdown.test.ts (P1-R2-2 marked 安全)
+#
+# 落地步骤：见 docs/ci-workflows/go-test.yml 头部说明
+
+name: web-test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'emotion-echo-web/**'
+      - 'docs/ci-workflows/web-test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'emotion-echo-web/**'
+
+defaults:
+  run:
+    working-directory: emotion-echo-web
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: vitest
+        run: pnpm vitest run
+      - name: lint (optional, 当前项目未必启用)
+        run: |
+          if [ -f package.json ] && grep -q '"lint"' package.json; then
+            pnpm lint
+          else
+            echo "lint script not configured — skipping"
+          fi
