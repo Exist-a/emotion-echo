@@ -2,11 +2,13 @@
 package metrics
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -139,6 +141,40 @@ func TestGinMetricsMiddleware_SkipsUnmatchedPath(t *testing.T) {
 	// 注:不验证"已匹配路径仍计入"——promauto 全局注册,同 test package 内前序测试
 	// 已写入 /real 路径的 series,baseline 不归零,本测试无法隔离。Round 5c 范围仅
 	// §C.unmatched 跳过,matched 路径在 TestGinMetricsMiddleware_IncrementsCounter 已覆盖。
+}
+
+// TestModelClientInitFailedTotal_Increments Round 5d §E RED:
+//
+// observability-edge-gaps §E (AI model init failed metric P2 1h):
+// 验证 ModelClientInitFailedTotal counter 出口可用——
+// 调 IncModelClientInitFailed(service, model) 后 counter 增加。
+//
+// 此测试独立于 ai-svc 接线——Round 5d GREEN 阶段 ai-svc InitMultiModal
+// 会调这个出口,BaseURL=="" 时递增 1 次。
+//
+// 隔离策略:用唯一 svc 名(test-svc-init-{random})避免 promauto 全局 registry
+// 多轮测试间累积影响。
+func TestModelClientInitFailedTotal_Increments(t *testing.T) {
+	svc := fmt.Sprintf("test-svc-init-%d", time.Now().UnixNano())
+	const model = "fer"
+
+	IncModelClientInitFailed(svc, model)
+	IncModelClientInitFailed(svc, model)
+	IncModelClientInitFailed(svc, "sensevoice")
+
+	afterFer := readCounter(t, "emotion_echo_model_client_init_failed_total", map[string]string{
+		"service": svc, "model": "fer",
+	})
+	afterSV := readCounter(t, "emotion_echo_model_client_init_failed_total", map[string]string{
+		"service": svc, "model": "sensevoice",
+	})
+
+	if afterFer != 2 {
+		t.Errorf("fer counter = %v, want 2", afterFer)
+	}
+	if afterSV != 1 {
+		t.Errorf("sensevoice counter = %v, want 1", afterSV)
+	}
 }
 
 func TestGinMetricsMiddleware_DifferentServicesIndependent(t *testing.T) {

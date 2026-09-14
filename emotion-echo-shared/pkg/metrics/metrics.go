@@ -74,6 +74,33 @@ func IncSkyWalkingInitFailed(service string) {
 	SkyWalkingInitFailedTotal.WithLabelValues(service).Inc()
 }
 
+// ModelClientInitFailedTotal AI 模型客户端初始化失败计数（Round 5d §E）
+//
+// 动机：ai-svc InitMultiModal 在 FER / SenseVoice / XTTS BaseURL 为空时
+// 静默 client=nil,只打一行 INFO log——配置错误时运维无感知。
+// counter 让 smoke / alertmanager 能抓到 init 失败事件。
+//
+// 用法：InitMultiModal 检测到 BaseURL=="" 调
+//   metrics.IncModelClientInitFailed("ai-svc", "fer")
+//
+// label 说明：
+//   - service: 调用方 svc 名（固定 "ai-svc"，多模态分析集中在此）
+//   - model: 模型短名（"fer" / "sensevoice" / "xtts"），便于按模型聚合告警
+var ModelClientInitFailedTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "emotion_echo_model_client_init_failed_total",
+		Help: "Total AI model client init failures (BaseURL empty or constructor error), labeled by service and model.",
+	},
+	[]string{"service", "model"},
+)
+
+// IncModelClientInitFailed 递增 ModelClientInitFailedTotal 计数
+// service: svc 短名（"ai-svc"）
+// model: 模型短名（"fer" / "sensevoice" / "xtts"）
+func IncModelClientInitFailed(service, model string) {
+	ModelClientInitFailedTotal.WithLabelValues(service, model).Inc()
+}
+
 // PromHTTPHandler 返回 promhttp 的 http.Handler（用于 gin.WrapH 注册 /metrics）
 func PromHTTPHandler() http.Handler {
 	return promhttp.Handler()

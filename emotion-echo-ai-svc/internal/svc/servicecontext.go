@@ -6,6 +6,8 @@ import (
 	"emotion-echo-ai-svc/internal/analyzer"
 	"emotion-echo-ai-svc/internal/config"
 	"emotion-echo-ai-svc/internal/repository"
+
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 )
 
 type ServiceContext struct {
@@ -61,6 +63,21 @@ func NewServiceContext(c config.Config, repo repository.EmotionRepo,
 // *XTTSClient 先保留在局部变量，赋值给 interface 字段后再传给
 // MultiModalAnalyzer（后者签名仍要求具体类型）。
 func (s *ServiceContext) InitMultiModal() {
+	// Round 5d §E: BaseURL=="" 时 client=nil,递增 ModelClientInitFailed metric
+	// 让运维 / alertmanager 能立刻感知配置错误(env 没注入 / yaml 写错)。
+	// 不破坏原有 nil-client 语义(快速失败 + MultiModal analyzer 降级)。
+	const svcLabel = "ai-svc"
+
+	if s.Config.FER.BaseURL == "" {
+		sharedmetrics.IncModelClientInitFailed(svcLabel, "fer")
+	}
+	if s.Config.SenseVoice.BaseURL == "" {
+		sharedmetrics.IncModelClientInitFailed(svcLabel, "sensevoice")
+	}
+	if s.Config.XTTS.BaseURL == "" {
+		sharedmetrics.IncModelClientInitFailed(svcLabel, "xtts")
+	}
+
 	ferClient := aiclient.NewFERClient(aiclient.Config{BaseURL: s.Config.FER.BaseURL, Timeout: s.Config.FER.Timeout})
 	svClient := aiclient.NewSenseVoiceClient(aiclient.Config{BaseURL: s.Config.SenseVoice.BaseURL, Timeout: s.Config.SenseVoice.Timeout})
 	xttsClient := aiclient.NewXTTSClient(aiclient.Config{BaseURL: s.Config.XTTS.BaseURL, Timeout: s.Config.XTTS.Timeout},
