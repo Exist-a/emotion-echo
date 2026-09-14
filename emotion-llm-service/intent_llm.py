@@ -87,7 +87,10 @@ def llm_classify_label(text: str, config: dict, client=None) -> str | None:
         )
         content = resp.choices[0].message.content or ""
     except Exception as e:
-        logger.warning(f"[intent-llm] upstream classify failed, keep rule result: {e}")
+        # P1-R2-4: 清洗 api_key 前缀再写日志
+        import re
+        msg = re.sub(r"(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]+", r"\1***", str(e))
+        logger.warning(f"[intent-llm] upstream classify failed, keep rule result: {msg}")
         return None
     return _extract_label(content)
 

@@ -305,7 +305,28 @@ const getFullAudioUrl = (url: string) => {
 const getHtmlContent = (content: string) => {
   if (!content || typeof content !== 'string') return ''
   try {
-    const result = marked.parse(content)
+    // P1-R2-2: marked.parse 默认允许 HTML（mermaid/script 可直接嵌入），
+    // 依赖 vue-dompurify-html 在 v-html 渲染前净化。但 marked 输出仍是
+    // 未净化 HTML，在 SSR / 非 vue 上下文有 XSS 风险。显式禁用 HTML 解析：
+    const result = marked.parse(content, {
+      gfm: true,
+      breaks: true,
+      async: false,
+      // 关键：禁用 raw HTML 透传（marked v9+ 选项名为 mangle/headerIds 等无关）
+      // 老版本 marked 没有专门"sanitize"开关，需要通过自定义 renderer 过滤
+      renderer: (() => {
+        const renderer = new marked.Renderer()
+        const origHtml = renderer.html.bind(renderer)
+        // html token → 转义后输出（不是真的 HTML）
+        renderer.html = (token: any) => {
+          const raw = typeof token === 'string' ? token : (token?.text || '')
+          return origHtml(raw.replace(/[&<>"']/g, (c) =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string)
+          ))
+        }
+        return renderer
+      })(),
+    })
     return typeof result === 'string' ? result : String(result)
   } catch (e) {
     return content

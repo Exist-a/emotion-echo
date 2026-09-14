@@ -262,7 +262,7 @@ curl http://emotion-echo-fer:8004/health
 1. 打开浏览器：<http://localhost:3000>（或 curl BFF `/health`）
 2. 登录用测试账号：
    - 用户名：`echo`
-   - 密码：`echo123`
+   - 密码：`echo123`（P1-R2-11：明文密码仅用于 dev；staging 应在 seed 启动期生成随机密码）
 3. 进入首页
 
 ### 测试 2：端到端冒烟（推荐）

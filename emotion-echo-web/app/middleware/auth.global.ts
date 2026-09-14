@@ -30,14 +30,19 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   // ==================== 白名单路由（无需登录） ====================
-  const whiteList = [
-    "/login", 
-    "/login/forget", 
-    "/login/forget/verify", 
-    "/login/forget/modify", 
-    "/login/forget/success"
+  // P1-R2-3: 严格使用 === 或带边界检查的 prefix 匹配
+  // 原因：原 startsWith("/login") 会被 "/loginxxx" "/Login" "/loginbackdoor" 绕过
+  // 修复：对带子路径的前缀（如 /login/forget）用 === + "/" 边界；
+  //      对 /login 单独要求 === 或 /login/...
+  const whiteListExact = new Set([
+    "/login",
+  ]);
+  const whiteListPrefix = [
+    "/login/forget",  // /login/forget, /login/forget/verify, /login/forget/modify, /login/forget/success
   ];
-  const isInWhiteList = whiteList.some((path) => to.path.startsWith(path));
+  const isInWhiteList =
+    whiteListExact.has(to.path) ||
+    whiteListPrefix.some((p) => to.path === p || to.path.startsWith(p + "/"));
 
   // ==================== 获取用户登录状态 ====================
   // SSR 时通过 cookie 判断，CSR 时通过 Pinia store 判断

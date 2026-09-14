@@ -34,8 +34,8 @@ describe('useFileUpload API routes alignment (Stage 58 PR-UP-2)', () => {
     expect(orphanPaths).not.toContain('/upload/image')
     expect(orphanPaths).not.toContain('/upload/video')
     expect(orphanPaths).not.toContain('/upload/file')
-    // 只剩 faceEmotionOrphan 死代码
-    expect(orphanPaths).toContain('/face/emotion')
+    // P0-R2-2: faceEmotionOrphan 已修复，useFaceEmotion 改用 /multimodal/analyze
+    expect(orphanPaths).not.toContain('/face/emotion')
   })
 
   it('主路径与 BFF upload_handler.go 注册路径对齐（/uploads/:kind）', () => {

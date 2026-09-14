@@ -12,6 +12,8 @@
 # 阶段 2: runtime  - 仅 python:3.12-slim + tini + 业务代码（非 root 运行）
 
 # ============ Stage 1: builder ============
+# P2-R2-19: 基础镜像未 pin digest — 见 emotion-echo-web/Dockerfile 注释，
+# prod CI 应 sync digest 后改 FROM python:3.12-slim@sha256:<digest>
 FROM python:3.12-slim AS builder
 
 WORKDIR /build
@@ -54,8 +56,14 @@ ENV TZ=Asia/Shanghai \
     GRPC_PORT=50051
 
 # tini: 轻量 init，提供 PID 1 + 信号转发（SIGTERM → 子进程优雅退出）
+# P1-R2-14: 加 SHA256 校验——ADD https:// 默认不校验二进制完整性，
+# tini 仓库若被攻陷 → 后门注入到所有 llm-service 容器。
 ARG TINI_VERSION=v0.19.0
+ARG TINI_SHA256=93dccd091001205fb6bd1edfaf66f50bc6b054b5b8212ddc6aa4633c12e4c0bb
 ADD --chmod=755 https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /usr/local/bin/tini
+# 校验：失败则中断构建（防止恶意二进制被 RUN 阶段加载）
+RUN echo "${TINI_SHA256}  /usr/local/bin/tini" | sha256sum -c - || \
+    (echo "FATAL: tini SHA256 mismatch (expected ${TINI_SHA256})" && exit 1)
 
 # 创建非 root 用户（UID 65532，对应 distroless nonroot）
 RUN groupadd --system --gid 65532 app \

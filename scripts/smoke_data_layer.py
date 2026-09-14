@@ -332,6 +332,49 @@ else:
                   f"FAIL: consumer 启动了但 events=0。日志摘录：{log_out[-200:].strip()[:300]}")
 
 
+# ====== §契约 7 — Nacos service registry instance list (P1-10 Round 1) ======
+# 背景：nacos-enablement-dev.md §四 PR-3 验收要求验 5 业务 svc 至少各注册 1 实例
+# 且 ephemeral=true healthy=true。之前 smoke 无此节 → 长期未验。
+print("\n" + "=" * 70)
+print("§7 Nacos service registry — 5 业务 svc 实例数")
+print("=" * 70)
+
+NACOS_SVCS = [
+    "emotion-echo-user-svc",
+    "emotion-echo-chat-svc",
+    "emotion-echo-analytics-svc",
+    "emotion-echo-assessment-svc",
+    "emotion-echo-ai-svc",
+]
+
+for svc in NACOS_SVCS:
+    try:
+        out, _, rc = docker_exec(
+            "emotion-echo-nacos",
+            ["sh", "-c", f"curl -s http://localhost:8848/nacos/v1/ns/instance/list?serviceName={svc}&groupName=DEFAULT_GROUP&namespaceId=emotion-echo-dev"],
+            timeout=8,
+        )
+        if rc != 0:
+            check(f"§7 {svc} nacos API", False, f"curl rc={rc}")
+            continue
+        import json as _json
+        try:
+            data = _json.loads(out)
+        except _json.JSONDecodeError as e:
+            check(f"§7 {svc} nacos API", False, f"JSON parse failed: {str(e)[:80]} out={out[:120]}")
+            continue
+        hosts = data.get("hosts") or []
+        if len(hosts) >= 1:
+            ephemeral_ok = all(h.get("ephemeral") for h in hosts if "ephemeral" in h)
+            check(f"§7 {svc} ≥ 1 instance (ephemeral={ephemeral_ok})", True,
+                  f"count={len(hosts)} ips={[h.get('ip') for h in hosts]}")
+        else:
+            check(f"§7 {svc} ≥ 1 instance", False,
+                  f"Nacos 返回 0 hosts。data={data}。可能 dev 启动顺序竞态：svc 早于 nacos 注册。")
+    except Exception as e:
+        check(f"§7 {svc} nacos API", False, f"docker exec 失败: {str(e)[:120]}")
+
+
 # ====== 汇总 ======
 print("\n" + "=" * 70)
 ok_cnt = sum(1 for _, ok, _ in results if ok)

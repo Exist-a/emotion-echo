@@ -177,6 +177,9 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 ## 状态
 
 - ✅ Stage 0~28 全部完成（微服务化 + AI 容器化 + 端到端验证 + K8s 化 + 可观测性）
+  > ⚠️ P1-R2-15: K8s chart 自 Stage 28-F 冻结（决策 23「备好不部署」）。`charts/values-prod.yaml`
+  > 落后于当前 compose 基线（镜像 tag / NACOS_* / KAFKA_* / gRPC 端口均未跟进）。本仓库
+  > **生产部署请用 `deploy/docker-compose.*.yml`**，不要直接 apply helm chart。
 - ✅ Stage 29-A / 29-A.5：cert-manager + Grafana Ingress TLS（render + live smoke 已绿）
 - ✅ Stage 29-D：5-family TLS retrofit for the 15 business ApisixRoutes（render-assert 已绿；live smoke 待集群验证）
 - ✅ Stage 30-A/B/C：analytics 9 端点 + Kafka pipeline + 消费幂等/DLQ/Outbox（全绿）

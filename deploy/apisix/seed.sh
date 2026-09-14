@@ -283,7 +283,8 @@ OBSERVABILITY_PLUGINS_JSON='
       "bytes_received": "$bytes_received",
       "resp_time": "$request_time",
       "upstream": "$upstream_addr",
-      "upstream_time": "$upstream_response_time"
+      "upstream_time": "$upstream_response_time",
+      "trace_id": "$http_x_request_id",
     }
   }'
 
@@ -297,7 +298,9 @@ OBSERVABILITY_PLUGINS_JSON='
 # skywalking-logger + file-logger 引用 OBSERVABILITY_PLUGINS_JSON (PR-OBS-1 REFACTOR)
 PLUGINS_JSON=$(cat <<EOF
 {
-  "jwt-auth": {},
+  "jwt-auth": {
+    "cookie": "access_token"
+  },
   "limit-count": {
     "count": 60,
     "time_window": 60,
@@ -361,7 +364,7 @@ EOF
 # 换来的是零额外运行时依赖。
 CATCHALL_PLUGINS_JSON=$(cat <<EOF
 {
-  "jwt-auth": { "store_in_ctx": true },
+  "jwt-auth": { "store_in_ctx": true, "cookie": "access_token" },
   "serverless-post-function": {
     "phase": "rewrite",
     "functions": [

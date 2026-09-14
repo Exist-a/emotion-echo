@@ -28,3 +28,13 @@ scrape_configs:
         labels:
           job: apisix
           __path__: /var/log/apisix-access.log
+
+  # P1-4: 业务 svc stdout（dev compose 阶段各 svc 日志落 /var/log/<svc>.log，
+  # 由 docker-compose volume mount 暴露到 host；promtail 通过 host path 采集）
+  - job_name: services
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: services
+          __path__: /var/log/services/*.log
