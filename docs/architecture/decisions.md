@@ -283,6 +283,15 @@
 > 因此"web-bff 是统一入口"是 Stage 30 视角，**当前视角** = "web-bff 是聚合层，APISIX 是网关层"。
 > 决策 9 末尾的关系说明段同步加此注脚。
 
+> **🔧 2026-09-15 Stage 97 就地更正 — llm-service HTTP 端鉴权**（Round 2 §P0-R2-3）：
+>
+> `emotion-llm-service/main.py` HTTP 端（`/analyze` / `/health` / `/metrics`）
+> **dev 模式**（`INTERNAL_API_KEY` 未配置）开放无鉴权，便于本地调试 + e2e。
+> **prod 模式**（`INTERNAL_API_KEY` 配置且非空）必须强制 `Internal-API-Key` header 校验，
+> `test_http_routes.py::TestHttpApiKey` 4 用例锁死契约。
+> 生产通过 gRPC 调用（决策 5 + 决策 11），HTTP 端仅供 dev 调试，prod 部署如启用必须配置 key。
+> 详见 [`stages/stage-97-round2-p0-closure.md`](../stages/stage-97-round2-p0-closure.md) PR-1。
+
 | 维度 | 选择 |
 |------|------|
 | BFF 职责（**仅做**） | 多服务聚合、字段裁剪、SSE 流式编排、多端适配（PC/移动）、业务上下文（会话级） |
