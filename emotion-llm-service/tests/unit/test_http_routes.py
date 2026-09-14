@@ -52,6 +52,61 @@ def client(monkeypatch):
 # /health tests
 # =====================================================
 
+class TestHttpApiKey:
+    """P0-R2-3: HTTP /analyze Internal-API-Key 鉴权契约。
+
+    prod 模式（INTERNAL_API_KEY 配置且非空）必须强制鉴权：
+      - 无 header → 401
+      - 错 key → 401
+      - 对 key → 200
+    dev 模式（INTERNAL_API_KEY 未配置）必须保持开放，便于本地调试。
+    """
+
+    @pytest.fixture
+    def prod_client(self, monkeypatch):
+        """prod 模式：INTERNAL_API_KEY=secret32chars 模拟强制鉴权。"""
+        monkeypatch.setattr(main, "NACOS_ENABLED", False)
+        # module 启动时已读 os.environ；INTERNAL_API_KEY 走 _HTTP_API_KEY module 变量
+        monkeypatch.setattr(main, "_HTTP_API_KEY", "secret32chars_min_prod_key")
+        with TestClient(app) as c:
+            yield c
+
+    def test_analyze_no_header_returns_401(self, prod_client):
+        r = prod_client.post("/analyze", json={"text": "hi"})
+        assert r.status_code == 401, (
+            f"missing Internal-API-Key must be 401, got {r.status_code} body={r.text}"
+        )
+
+    def test_analyze_wrong_key_returns_401(self, prod_client):
+        r = prod_client.post(
+            "/analyze",
+            json={"text": "hi"},
+            headers={"Internal-API-Key": "wrong-key"},
+        )
+        assert r.status_code == 401, (
+            f"wrong Internal-API-Key must be 401, got {r.status_code} body={r.text}"
+        )
+
+    def test_analyze_correct_key_returns_200(self, prod_client):
+        r = prod_client.post(
+            "/analyze",
+            json={"text": "我今天很开心"},
+            headers={"Internal-API-Key": "secret32chars_min_prod_key"},
+        )
+        assert r.status_code == 200, (
+            f"correct Internal-API-Key must be 200, got {r.status_code} body={r.text}"
+        )
+        body = r.json()
+        assert body["primaryEmotion"] in {
+            "happy", "sad", "angry", "anxious", "calm", "neutral"
+        }
+
+    def test_dev_mode_no_key_allows_request(self, client):
+        """dev 模式（_HTTP_API_KEY=""）所有请求不鉴权，沿用历史 happy path。"""
+        r = client.post("/analyze", json={"text": "hi"})
+        assert r.status_code == 200
+
+
 class TestHealthRoute:
     """GET /health returns {status, service, version}."""
 

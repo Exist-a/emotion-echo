@@ -28,7 +28,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -85,8 +85,13 @@ async def lifespan(app: FastAPI):
                 metadata={"grpc_port": GRPC_PORT},
             )
         except Exception as e:
-            logger.warning("[nacos] boot failed (continuing): %s", e)
+            # DOC-9 (Round 1): Nacos 注册失败 fail-fast -- 原仅 warn 不 exit,
+            # svc "半启用"(HTTP 可达但 Nacos 无实例 -> BFF Resolve 失败 -> 502)。
+            logger.error("[nacos] boot failed: %s", e)
             runtime = None
+            # dev 模式继续(NACOS_REQUIRED=0 默认), prod 必须 fail-fast
+            if os.environ.get("NACOS_REQUIRED", "").lower() in ("1", "true", "yes"):
+                raise
     else:
         logger.info("[nacos] disabled by env")
 
@@ -100,11 +105,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Emotion LLM Service", version="0.1.0", lifespan=lifespan)
 
+# P0-R2-3: CORS 修复 — 不允许 credentials + wildcard origin 同时存在
+# llm-service 是内部服务，HTTP 端仅供 dev 调试；生产通过 gRPC 调用
+_CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8894").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=[o.strip() for o in _CORS_ORIGINS],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 # Stage 20-P0-2: Prometheus metrics 中间件（ASGI level，记录 HTTPRequestsTotal + HTTPRequestDuration）
@@ -112,6 +120,20 @@ app.add_middleware(MetricsMiddleware)
 
 
 # ============ Schemas ============
+
+# P0-R2-3: HTTP 端 Internal-API-Key 鉴权（与 gRPC 端 AuthInterceptor 对称）
+_HTTP_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
+
+
+def _check_http_api_key(request: Request):
+    """FastAPI dependency: 校验 Internal-API-Key header。空 key = 鉴权跳过（dev 模式）。"""
+    if not _HTTP_API_KEY:
+        return  # dev 模式，无 key → 跳过鉴权
+    provided = request.headers.get("Internal-API-Key", "")
+    if provided != _HTTP_API_KEY:
+        logger.warning("[http] AUTH REJECTED: invalid or missing Internal-API-Key")
+        raise HTTPException(status_code=401, detail="invalid or missing Internal-API-Key")
+
 
 class AnalyzeRequest(BaseModel):
     text: str = Field(..., min_length=0, max_length=4096, description="待分析文本")
@@ -195,7 +217,7 @@ async def metrics():
     return metrics_endpoint()
 
 
-@app.post("/analyze", response_model=AnalyzeResponse)
+@app.post("/analyze", response_model=AnalyzeResponse, dependencies=[Depends(_check_http_api_key)])
 async def analyze_endpoint(req: AnalyzeRequest):
     try:
         result = analyze(req.text)

@@ -65,7 +65,7 @@ spec:
               value: "http://llm-service.ee-app:8000"
             - name: LLM_GRPC_ADDR
               value: "llm-service.ee-app:50051"
-            - name: LLM_INTERNAL_API_KEY
+            - name: INTERNAL_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: llm-service-secret

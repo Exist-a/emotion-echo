@@ -394,6 +394,13 @@ def serve(port: int = 50051):
             )
         weak = {"test", "dev", "changeme", "default", "secret", "password"}
         if api_key.lower() in weak or any(w in api_key.lower() for w in weak):
+            # P2-R2-5: REQUIRED=1 时弱 key 必须 fail-fast，否则 prod 误用 dev key
+            if required:
+                logger.error(
+                    f"INTERNAL_API_KEY_REQUIRED=1 but key contains weak pattern "
+                    f"(test/dev/changeme/default/secret/password). Refusing to start."
+                )
+                sys.exit(1)
             logger.warning(
                 f"INTERNAL_API_KEY contains weak pattern (test/dev/changeme/default/secret/password). "
                 "Use strong random key in production."

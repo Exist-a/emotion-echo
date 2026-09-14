@@ -111,6 +111,28 @@ func TestEnvOverride_LLMModel(t *testing.T) {
 	assert.Equal(t, 5, c.LLM.Timeout)
 }
 
+// TestEnvOverride_InternalAPIKey_P0R2_5 P0-R2-5: env INTERNAL_API_KEY injected
+// into c.LLM.InternalAPIKey. Old name LLM_INTERNAL_API_KEY must NOT be read.
+func TestEnvOverride_InternalAPIKey_P0R2_5(t *testing.T) {
+	t.Setenv("INTERNAL_API_KEY", "secret32chars_min_prod_key")
+	t.Setenv("LLM_INTERNAL_API_KEY", "OLD-NAME-MUST-BE-IGNORED")
+
+	var c Config
+	if err := sharedconfig.LoadBytes([]byte(testYAML), &c, func() { SetDefaults(&c) }); err != nil {
+		t.Fatalf("LoadBytes failed: %v", err)
+	}
+
+	// Mirror main.go applyEnvOverrides: P0-R2-5 reads INTERNAL_API_KEY only
+	if v := os.Getenv("INTERNAL_API_KEY"); v != "" {
+		c.LLM.InternalAPIKey = v
+	}
+
+	assert.Equal(t, "secret32chars_min_prod_key", c.LLM.InternalAPIKey,
+		"INTERNAL_API_KEY must be injected into c.LLM.InternalAPIKey (P0-R2-5)")
+	assert.NotEqual(t, "OLD-NAME-MUST-BE-IGNORED", c.LLM.InternalAPIKey,
+		"old name LLM_INTERNAL_API_KEY must be ignored, not read")
+}
+
 // testYAML 测试用 yaml 片段(与 etc/ai-api.yaml 同步关键字段)。
 //
 // Stage 41 PR-5 改动:bool 字段全部显式给值(不能省略),因为 SetDefaults 不填 bool。

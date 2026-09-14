@@ -16,7 +16,7 @@ Port: 8891
 #   LLM_MODEL          — 模型名
 #   LLM_TIMEOUT        — 超时秒数
 #   LLM_GRPC_ADDR      — 形如 emotion-llm-service:50051
-#   LLM_INTERNAL_API_KEY — gRPC auth key
+#   INTERNAL_API_KEY — gRPC auth key（P0-R2-5: 统一 env 名）
 #   LLM_BREAKER_FAIL_THRESHOLD — 连续失败次数
 #   LLM_BREAKER_OPEN_SECONDS   — Open 持续秒数
 #   NACOS_ENABLED      — "true"/"false"
@@ -51,7 +51,7 @@ Kafka:
 LLM:
   BaseURL:        ${LLM_BASE_URL:-http://localhost:8000}
   GRPCAddr:       ${LLM_GRPC_ADDR:-localhost:50051}
-  InternalAPIKey: ${LLM_INTERNAL_API_KEY:-}
+  InternalAPIKey: ${INTERNAL_API_KEY:-}
   Model:          ${LLM_MODEL:-deepseek-chat}
   Enabled:        true
   # Timeout: 省略 → Config struct tag default=3；env LLM_TIMEOUT 由 main.go applyEnvOverrides 注入

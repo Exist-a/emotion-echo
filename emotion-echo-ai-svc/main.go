@@ -120,7 +120,8 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("LLM_GRPC_ADDR"); v != "" {
 		c.LLM.GRPCAddr = v
 	}
-	if v := os.Getenv("LLM_INTERNAL_API_KEY"); v != "" {
+	// P0-R2-5: 统一 env 名 INTERNAL_API_KEY（与 llm-service / web-bff 一致）
+	if v := os.Getenv("INTERNAL_API_KEY"); v != "" {
 		c.LLM.InternalAPIKey = v
 	}
 	if v := os.Getenv("FER_BASE_URL"); v != "" {
