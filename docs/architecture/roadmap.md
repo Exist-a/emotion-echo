@@ -1007,20 +1007,36 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   [`emotion-llm-service/tests/e2e/stage91_pdf_sentinel.py`](../emotion-llm-service/tests/e2e/stage91_pdf_sentinel.py)
   备未来回归。详见 [stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md](../stages/stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md)。
 
-**当前 open 清单**（2026-09-14 Stage 91 收口后刷新）：
+- Stage 92：Kafka sw8 透传 PR-1+PR-2 全收口——RED→GREEN→REFACTOR 完整 TDD 循环：
+  - shared Tracer 接口扩 CreateExitSpan/CreateEntrySpan（adapter 包装 go2sky v1.5 原生 API）
+  - chat-svc KafkaEventPublisher 加 tracer 字段 + Publish 注入 sw8 到 ProducerMessage.Headers
+    （v0.1.8 → v0.1.10；main.go wire 加 defer log 标记 sw8 propagation enabled）
+  - ai-svc ConsumerGroupHandler 把 CreateLocalSpan 换 CreateEntrySpan + extractSw8Header helper
+    从 sarama RecordHeader 抽 sw8（v0.1.5 → v0.1.6）
+  - 顺手修 ai-svc analyzer/grpc_analyzer_test.go 历史孤儿 build fail（fakeEmotionLLMClient
+    缺 ChatCompletion + ClassifyIntent 接口实现——Stage 80/82/87 累积的接口扩张未同步）
+  - docker e2e 实证：chat-svc:v0.1.10 producer 写入完整 sw8 header（221 chars，含
+    traceID=cc661c1a... + parent service=emotion-echo-chat-svc + peer=chat-events）
+  - **OAP UI 跨进程 trace 可视化待 SkyWalking 9.x graphql queryDuration 时间格式 bug 修后补**
+    （不影响 sw8 透传逻辑正确性——单测 + Kafka header 实证已覆盖）
+  - 详见 [stage-92-kafka-sw8-propagation-2026-09-14.md](../stages/stage-92-kafka-sw8-propagation-2026-09-14.md)。
+    analytics-svc consumer 移到 Stage 93（无 Tracer 集成，需先加 tracer 链路再用 PR-2 同模式）。
 
-**file-understanding-llm 全线落地**（Stage 89 六 PR + Stage 90 注入位置 + Stage 91 prompt 强指令性）。
-业务功能主线剩余：
+**当前 open 清单**（2026-09-14 Stage 92 收口后刷新）：
 
-1. （✅ Stage 91 关闭）PDF 哨兵 100% 引用率消除拒读。
-2. observability-edge-gaps-from-code-review 6 issue（外部审查发现）：
-   A. Kafka sw8 透传 P1 半天 / B. consumer.attempts 加锁 P2 0.5h / C. metrics unmatched
-   路径 P2 1.5h / D. GinSkywalking 跳过路径配置化 P3 0.5h / E. AI model init failed
-   metric P2 1h / F. consumer.go 拆分 P3 0.5h。总 ≈ 1 人天。
-3. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景）
-4. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；DB 纳入 fail-fast required 依赖
-5. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）
-6. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项）
-7. todo-pile C6（quick-login 端点）1-2h / D5（chat-svc 表依赖 ADR）半天
+**observability-edge-gaps 收口进度**（Stage 92 完成 §A）：
+- ✅ A. Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN
+- 🔄 A-extension. analytics-svc consumer sw8 透传 —— Stage 93 候选
+- ⏳ B. consumer.attempts 加锁 P2 0.5h / C. metrics unmatched 路径 P2 1.5h /
+   D. GinSkywalking 跳过路径配置化 P3 0.5h / E. AI model init failed metric P2 1h /
+   F. consumer.go 拆分 P3 0.5h。总 ≈ 0.5 人天（B/C/E 优先）。
+
+**其他**：
+1. SkyWalking OAP 9.x graphql queryDuration 时间格式 bug 修——否则 UI 跨进程 trace 可视化受阻
+2. Kafka 可选残余：consumer 进程级指标（消费速率/处理耗时；lag 告警已覆盖主场景）
+3. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；DB 纳入 fail-fast required 依赖
+4. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）
+5. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项）
+6. todo-pile C6（quick-login 端点）1-2h / D5（chat-svc 表依赖 ADR）半天
 
 **已冻结**（勿捡）：Helm 残余 5 项（决策 23：K8s 备好不部署，重启条件 = 多机迁移启动）。
