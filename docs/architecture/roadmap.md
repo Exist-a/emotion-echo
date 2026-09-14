@@ -1022,6 +1022,16 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   - 详见 [stage-92-kafka-sw8-propagation-2026-09-14.md](../stages/stage-92-kafka-sw8-propagation-2026-09-14.md)。
     analytics-svc consumer 移到 Stage 93（无 Tracer 集成，需先加 tracer 链路再用 PR-2 同模式）。
 
+- Stage 93：analytics-svc consumer sw8 透传（observability §A-extension 收口）—— RED→GREEN 完整 TDD 循环：
+  - shared Tracer 接口已就位（Stage 92 PR-1 扩 CreateExitSpan/CreateEntrySpan,无需再扩）
+  - chatEventHandler 加 Tracer 字段 + WithTracer builder + extractSw8Header helper（与 ai-svc consumer.go:115-134 + 208-218 同模式）
+  - ConsumeClaim DecodeChatEvent 提前解 evt → CreateEntrySpan 抽 sw8 → 4 个 messaging.* tag（system/topic/partition/event.type,与 ai-svc 完全对称）
+  - main.go wire + defer log `sw8 propagation enabled` + 镜像 v0.1.5 → v0.1.6
+  - 顺手修 shared/pkg/middleware gin_skywalking_test.go stubTracer 历史孤儿 build fail（Stage 92 PR-1 扩展 Tracer 接口后 stubTracer 未同步扩展,与 Stage 92 §"顺手修历史孤儿 build fail"同模式）
+  - observability-edge-gaps §A 全 2 项 closed；plan 整体迁 legacy-plans/landed/（front-matter status: landed + landed-stages + residuals 列 §B-F 5 项 P2-P3 + OAP graphql bug 留 Stage 94+）
+  - 详见 [stage-93-analytics-svc-sw8-propagation-2026-09-14.md](../stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md)。
+    observability-edge-gaps §B-F 5 项 P2-P3 留 Stage 94+ 候选；OAP 9.x graphql queryDuration 时间格式 bug 沿用 Stage 92 §五残余。
+
 **当前 open 清单**（2026-09-14 Stage 93 收口后刷新）：
 
 **observability-edge-gaps 收口进度**（Stage 92 + 93 完成 §A 全 2 项）：

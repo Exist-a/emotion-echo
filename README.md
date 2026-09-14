@@ -12,7 +12,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-1.x-244c5a?style=flat-square&logo=grpc&logoColor=white)](https://grpc.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Stage](https://img.shields.io/badge/Stage-60--PR--TTS--VENDOR-blueviolet?style=flat-square)](/docs/stages/stage-60-pr-tts-vendor-landing.md)
+[![Stage](https://img.shields.io/badge/Stage-93--ANALYTICS--SW8-blueviolet?style=flat-square)](/docs/stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md)
 
 ---
 
@@ -236,9 +236,16 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 > | **Stage 84** | chat-svc events 包 3 个存量测试适配 Stage 73 Protobuf 契约（`go test ./...` 合并门槛恢复） | ✅ landed | [stage-84-kafka-publisher-test-contract-2026-09-12.md](/docs/stages/stage-84-kafka-publisher-test-contract-2026-09-12.md) |
 > | **Stage 85** | 趋势报告意图维度（weekly/monthly/annual 饼图全链；真实容器 e2e + DB 交叉实证） | ✅ landed | [stage-85-trend-report-intent-2026-09-12.md](/docs/stages/stage-85-trend-report-intent-2026-09-12.md) |
 > | **Stage 86** | outbox dead 告警全链（dead 指标 → critical 规则 → alertmanager :9093；MaxAttempts 配置化；毒消息 e2e 全链 firing 实证；修 analytics 001 幂等性 bug） | ✅ landed | [stage-86-outbox-dead-alert-2026-09-13.md](/docs/stages/stage-86-outbox-dead-alert-2026-09-13.md) |
+> | **Stage 87** | LLM 意图重分类（classify_intent_adaptive：规则式高置信直返 / 模糊且 key 可用时 LLM 重分类；离线路径与 Stage 82 逐字段一致；容器 e2e 揪出 SDK 默认重试放大降级耗时 16.2s→2.1s） | ✅ landed | [stage-87-llm-intent-reclassify-2026-09-13.md](/docs/stages/stage-87-llm-intent-reclassify-2026-09-13.md) |
+> | **Stage 88** | llm-service Python 端 Nacos 注册（根因 = Stage 31 旧同步 SDK import 路径与 >=3.1.0 锁定不匹配；nacos_client.py 移植 v3 异步 gRPC SDK + _advertise_ip 真实 IP 探测 + grpc_port metadata；e2e 揪出 log/cache dir 非 root 权限两坑） | ✅ landed | [stage-88-llm-nacos-registration-2026-09-13.md](/docs/stages/stage-88-llm-nacos-registration-2026-09-13.md) |
+> | **Stage 89** | file-understanding-llm 全线落地（文件+提问一起发，会话内持续引用）—— proto 加 file_name/FileAttachment.files；chat-svc 五处映射 + migration 007 修 Stage 82 §契约 5 intent VARCHAR(16)→32 暗坑；llm-service file_context（pypdf + python-docx + 白名单 SSRF）；txt 哨兵 e2e 全通；PDF 路径注入正常但 DeepSeek 拒读记 residual | ✅ landed | [stage-89-file-understanding-llm-2026-09-13.md](/docs/stages/stage-89-file-understanding-llm-2026-09-13.md) |
+> | **Stage 90** | file_context 注入位置改为 user 尾部（接近"用户粘贴文本提问"形态）—— 单元测试 192/192 绿；容器 e2e PDF 部分成功部分拒读，根因属 DeepSeek 对单短文本判定保守，5 条候选优化路线记入 Stage 91。顺手销 todo-pile A1/A2/B4 章节正文 | ✅ landed | [stage-90-file-understanding-pdf-tail-inject-2026-09-13.md](/docs/stages/stage-90-file-understanding-pdf-tail-inject-2026-09-13.md) |
+> | **Stage 91** | file_context prompt 头从描述性改强指令性措辞（修 Stage 89/90 PDF 拒读 residual）—— RED→GREEN→REFACTOR 完整 TDD 循环；新增 test_file_context_prompt_directive.py 4 用例锁住"请基于/原文/引用"等强指令性关键词契约；镜像 v0.1.0 → v0.1.2；容器 e2e PDF 哨兵 5/5 HIT 100%（Stage 89/90 baseline 50% → Stage 91 100%） | ✅ landed | [stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md](/docs/stages/stage-91-file-understanding-pdf-prompt-directive-2026-09-14.md) |
+> | **Stage 92** | Kafka sw8 透传 PR-1+PR-2 全收口 —— shared Tracer 接口扩 CreateExitSpan/CreateEntrySpan（adapter 包装 go2sky v1.5 原生 API）；chat-svc producer 注入 sw8 到 ProducerMessage.Headers（v0.1.8 → v0.1.10）；ai-svc consumer 把 CreateLocalSpan 换 CreateEntrySpan + extractSw8Header helper（v0.1.5 → v0.1.6）；顺手修 ai-svc analyzer 历史孤儿 build fail；docker e2e 实证 chat-svc producer 写入完整 sw8 header（221 chars） | ✅ landed | [stage-92-kafka-sw8-propagation-2026-09-14.md](/docs/stages/stage-92-kafka-sw8-propagation-2026-09-14.md) |
+> | **Stage 93** | analytics-svc consumer sw8 透传（observability §A-extension 收口）—— analytics-svc chatEventHandler 加 Tracer 字段 + WithTracer builder + extractSw8Header helper（与 ai-svc 同模式）；ConsumeClaim DecodeChatEvent 提前解 evt → CreateEntrySpan 抽 sw8 → 4 个 messaging.* tag（system/topic/partition/event.type）；main.go wire + defer log + 镜像 v0.1.5 → v0.1.6；顺手修 shared/pkg/middleware stubTracer 孤儿 build fail（Stage 92 累积未同步扩展 Tracer 接口）；observability-edge-gaps §A 全 2 项 closed，plan 整体迁 landed/ | ✅ landed | [stage-93-analytics-svc-sw8-propagation-2026-09-14.md](/docs/stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md) |
 >
 > **失真类型**（决策 18 §三）：类型 2 "陈旧结论" — README 顶部徽章与 Status 段长期未跟随 git log 更新。
-> **当前最新 commit**：Stage 86 outbox dead 告警全链（2026-09-13 更新本表至 Stage 86）
+> **当前最新 commit**：Stage 93 analytics-svc consumer sw8 透传（2026-09-14 更新本表至 Stage 93,observability-edge-gaps §A 全 2 项 closed）
 
 ---
 

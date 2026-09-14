@@ -38,6 +38,13 @@ status: Round 1 占位 · Round 2 首批内容迁入
 - `ai-stream-cancel-fix.md`
 - `digital-human-phase1.md`
 - `text-workflow-refactor.md`
+- `intent-classification-6-types.md`（Stage 82/87 落地后归档）
+- `ai-response-structured.md`（Stage 83 落地后归档）
+- `file-upload-message-extension.md`（Stage 79 落地后归档）
+- `kafka-reliability-gaps.md`（Stage 86 落地后归档）
+- `nacos-enablement-dev.md`（Stage 88 落地后归档）
+- `llm-chat-real-pipeline.md`（Stage 81 落地后归档）
+- `observability-edge-gaps-from-code-review.md`（Stage 92 + 93 落地后归档,§A 全 2 项 closed;§B-F 5 项 P2-P3 residuals 留 Stage 94+ 候选）
 
 ### shifted/（Round 2 迁入）
 
