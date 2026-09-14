@@ -648,7 +648,7 @@ func TestConsumeClaim_RestoresParentTraceFromSw8Header(t *testing.T) {
 		Value:     mustJSON(t, events.Event{ID: "evt-sw8-93", Type: events.EventTypeMessageCreated, Time: time.Now(), Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 7}}),
 		Headers: []*sarama.RecordHeader{
 			{Key: []byte("sw8"), Value: []byte(fakeSw8)},
-			{Key: []byte("content-type"), Value: []byte("application/x-protobuf")},
+			{Key: []byte("content-type"), Value: []byte("application/json")},
 		},
 		Timestamp: time.Now(),
 	}

@@ -27,6 +27,7 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/emotion-echo/shared/pkg/eventrow"
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 )
 
 // Consumer 订阅 chat-events topic 并写 User_beBehaviorEvent
@@ -86,6 +87,21 @@ func (c *Consumer) WithMaxRetries(n int) *Consumer {
 	return c
 }
 
+// WithTracer 注入 SkyWalking tracer（builder 模式，与 WithDLQ / WithMaxRetries 对称）
+//
+// Stage 93 PR-1: 从 chat-svc producer (Stage 92 PR-1) 写入的 Kafka sw8 header 抽回
+// 重建父 trace。tracer=nil 时不注入,与 Stage 30-A Round 4 原行为一致（向后兼容）。
+func (c *Consumer) WithTracer(tracer grpcinterceptor.Tracer) *Consumer {
+	c.consumer = &chatEventHandler{
+		repo:       c.repo,
+		topic:      c.topic,
+		dlq:        c.dlq,
+		maxRetries: c.maxRetries,
+		Tracer:     tracer,
+	}
+	return c
+}
+
 // Run 启动 consumer；ctx 取消时退出。
 //
 // 失败语义：topic 不存在 / broker 不可达 — log warn + 继续运行
@@ -122,6 +138,12 @@ type chatEventHandler struct {
 	dlq        DLQPublisher
 	maxRetries int
 	attempts   map[string]int // msg.Key → 重试次数（消费周期内）
+
+	// Stage 93 PR-1: 可选 SkyWalking tracer（grpcinterceptor.Tracer 接口,
+	// PR-OBS-17 + Stage 92 PR-1 扩展)。非 nil 时每条消息走 CreateEntrySpan
+	// 从 msg.Headers[sw8] 重建父 trace（chat-svc producer → analytics-svc consumer
+	// 跨进程 trace）。nil 时跳过 span 创建（向后兼容 Stage 30-A Round 4）。
+	Tracer grpcinterceptor.Tracer
 }
 
 func (h *chatEventHandler) Setup(_ sarama.ConsumerGroupSession) error {
@@ -139,6 +161,16 @@ func (h *chatEventHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
 //   - attempt <= MaxRetries：返回 error 让 sarama 不 Mark（自动重投）
 //   - attempt > MaxRetries：调 DLQ.Publish + Mark + 清 attempts
 //   - DLQ=NoopDLQPublisher 时等价于"无 DLQ 兜底"，仍走 attempt 计数（避免毒消息卡死）
+//
+// Stage 93 PR-1: 当 h.Tracer 非 nil 时,每条消息调 CreateEntrySpan 从 msg.Headers[sw8]
+// 重建父 trace（chat-svc producer → analytics-svc consumer 跨进程 trace）。
+//   - msg 含 sw8 header → extractor 抽到 → go2sky 重建父 SpanContext
+//   - msg 无 sw8 header → extractor 返 "" → go2sky Valid=false → 新 trace 起点
+//   - Tracer=nil → 完全跳过 span 创建（Stage 30-A Round 4 原行为,向后兼容）
+//
+// 与 ai-svc Stage 92 PR-2 同模式 (consumer.go:115-134)：先 DecodeChatEvent 抽出 evt,
+// 再创建 span 并打 4 个 messaging.* tag (含 event.type),最后调 handleOne 写库。
+// 解析失败时仍走 handleOne 自身错误路径(返回 error 走 attempt 计数)。
 func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	if h.attempts == nil {
 		h.attempts = make(map[string]int)
@@ -148,6 +180,35 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 		case msg, ok := <-claim.Messages():
 			if !ok {
 				return nil
+			}
+			// Stage 93 PR-1: SkyWalking span (可选) —— 与 ai-svc 同模式。
+			// 解析 evt 提前到 span 创建之前,4 个 messaging.* tag 用 evt.Type 精确值
+			// （而不是 msg topic 兜底,后者不区分 conversation.created/message.created）。
+			// 解析失败时跳过 span 创建(走 handleOne 自身 error 路径,与 ai-svc 一致)。
+			if h.Tracer != nil {
+				evt, decodeErr := DecodeChatEvent(msg.Value, saramaHeaders(msg))
+				if decodeErr == nil {
+					sw8Header := extractSw8Header(msg.Headers)
+					extractor := func(key string) (string, error) {
+						if key == "sw8" {
+							return sw8Header, nil
+						}
+						return "", nil
+					}
+					_, span, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
+					if err != nil {
+						log.Printf("[kafka-consumer] create entry span failed (continuing without trace): %v", err)
+					}
+					if span != nil {
+						defer span.EndSpan(nil)
+						span.Tag("messaging.system", "kafka")
+						span.Tag("messaging.kafka.topic", msg.Topic)
+						span.Tag("messaging.kafka.partition", fmt.Sprintf("%d", msg.Partition))
+						span.Tag("event.type", evt.Type)
+					}
+				} else {
+					log.Printf("[kafka-consumer] decode failed (skip span, handleOne will retry): %v", decodeErr)
+				}
 			}
 			if err := h.handleOne(msg); err != nil {
 				h.handleFailure(sess, msg, err)
@@ -162,6 +223,26 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 			return nil
 		}
 	}
+}
+
+// extractSw8Header 从 sarama RecordHeader 列表抽 sw8 header value
+//
+// Stage 93 PR-1: chat-svc producer (Stage 92 PR-1) 写到 Kafka header["sw8"] 的
+// 字符串由此函数抽回 → 喂给 Tracer.CreateEntrySpan 的 extractor → go2sky 重建父 trace。
+//
+// header 名常量与 chat-svc kafka_publisher.sw8HeaderName 一致 ("sw8")。
+// 这里不复用 shared 常量(避免 analytics-svc 引入 chat-svc 才有的传递依赖;
+// 函数体与 ai-svc internal/consumer/consumer.go:208-218 完全对称)。
+func extractSw8Header(headers []*sarama.RecordHeader) string {
+	for _, hdr := range headers {
+		if hdr == nil {
+			continue
+		}
+		if string(hdr.Key) == "sw8" {
+			return string(hdr.Value)
+		}
+	}
+	return ""
 }
 
 // handleFailure 处理 handleOne 失败（Stage 30-C A2）
