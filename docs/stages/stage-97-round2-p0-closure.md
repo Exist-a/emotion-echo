@@ -102,9 +102,37 @@ depends-on:
 - [x] vitest useFaceEmotion 5/5
 - [x] 2 个 Python 字面量契约脚本 PASS
 - [x] working copy 与已写测试一致
-- [ ] git push + commit（按 PR 拆分执行）
-- [ ] `code-review-2026-09-14-round-2.md` front-matter 改 `status: landed`
-- [ ] roadmap / decisions.md 同步
+- [x] 13 个 commit 全部落地（main 上）
+- [x] 12 个 commit 推到 origin/main（`460b814..391f592`）
+- [x] `code-review-2026-09-14-round-2.md` front-matter 改 `status: landed`
+- [x] roadmap / decisions.md 同步
+- [x] `git branch --merged main` 仅 `* main` 自身（无残留）
+- [x] `git status -sb` main ahead=1 (workflow 待 push), behind=0
+
+### 6.1 PR-9e (.github workflows) 阻塞说明
+
+Round 2 §P1-R2-16 已落地 3 个 GitHub Actions workflows，但 push 被 GitHub 拒绝：
+
+```
+! [remote rejected] main -> main (refusing to allow a Personal Access Token
+to create or update workflow .github/workflows/go-test.yml without `workflow` scope)
+```
+
+**根因**：当前 PAT 仅含 `repo` scope，GitHub 出于供应链安全对 workflows 文件的
+修改要求额外的 `workflow` scope。
+
+**本地状态**：commit `23419eb` 已落地 working copy，3 个 workflow 文件已 add。
+ahead=1（workflow commit 待推）。
+
+**用户后续 3 选 1**：
+1. 重新生成 PAT 加 `workflow` scope 后 `git push origin main`
+2. GitHub UI → Settings → Personal access tokens → 编辑现有 PAT → 加 workflow
+3. fork 到自己仓库后改用 SSH key (`ssh-add` 后 `git push origin main`)
+
+**CI 内容物**（commit `23419eb` 已固化在 working copy）：
+- `.github/workflows/go-test.yml`: 6 Go svc 全跑 `go test ./...` + `go vet`
+- `.github/workflows/llm-test.yml`: emotion-llm-service pytest
+- `.github/workflows/web-test.yml`: emotion-echo-web vitest + lint
 
 ## 7. 风险点（已识别）
 

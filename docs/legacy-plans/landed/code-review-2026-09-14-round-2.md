@@ -20,7 +20,11 @@ related-plans:
 related-adrs:
   - 决策 11 / 12 (APISIX 唯一入口)
 landed-stages:
-  - stage-97 (10 P0 + 顺手 Round 1/2 P1/P2)
+  - stage-97 (10 P0 + 顺手 Round 1/2 P1/P2 + Round 2 P3-CI)
+push-status:
+  - 12 commits pushed to origin/main: 460b814..391f592
+  - PR-9e (workflow commit 23419eb) push blocked: PAT 缺 workflow scope
+    见 docs/stages/stage-97-round2-p0-closure.md §6.1
 residuals:
   - P0-R2-1 残余：userInfo 仍存 localStorage（emotion-echo-web/app/stores/user.ts:226-229）
     + forgetPwdState 验证码写 localStorage（XSS 同源风险）—— 下一 sprint 单独排期
