@@ -22,7 +22,19 @@
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'analytics_reader') THEN
-        CREATE ROLE analytics_reader LOGIN PASSWORD 'CHANGE_ME_AT_DEPLOY'
+        -- Stage 94 PR-5 §P0-9:删 LOGIN PASSWORD 'CHANGE_ME_AT_DEPLOY' 硬编码。
+        -- 原实现让 analytics_reader 成为可 login role + 默认密码,生产环境若漏
+        -- env 替换 → 攻击者用 dev 密码直接 psql 登录读所有 *_v 视图(对话/情绪/
+        -- 评估/用户行为),违反最小权限。
+        --
+        -- 修复:NOLOGIN — 该 role 仅作 schema/GRANT 定义存在(grant SELECT ... TO
+        -- analytics_reader),应用层通过 SET LOCAL ROLE analytics_reader 临时切换
+        -- 权限跑只读查询(Sprint A ADR-19 模式)。需要登录的客户端不应使用此 role,
+        -- 应配置专门的只读账号(独立密码管理)。
+        --
+        -- 为什么不直接 DROP PASSWORD:LOGIN 标志 + PASSWORD 同时设会让 PG 接受
+        -- 默认空密码(同样风险),NOLOGIN 是最干净的"非 login 角色"语义。
+        CREATE ROLE analytics_reader NOLOGIN
             NOSUPERUSER NOCREATEDB NOCREATEROLE;
     END IF;
 END
