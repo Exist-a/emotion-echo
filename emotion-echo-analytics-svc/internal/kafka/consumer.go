@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"emotion-echo-analytics-svc/internal/model"
@@ -137,7 +138,13 @@ type chatEventHandler struct {
 	topic      string
 	dlq        DLQPublisher
 	maxRetries int
-	attempts   map[string]int // msg.Key → 重试次数（消费周期内）
+	// attempts msg.Key → 重试次数（消费周期内）
+	//
+	// Round 5b §B: attemptsMu 守卫 map 读写。sarama 当前 ConsumeClaim 是单
+	// goroutine(内部保证),但未来重构或 sarama 跨 goroutine 派发 partition 时
+	// map 会触发 race detector。加 sync.Mutex 防御性保护。
+	attempts   map[string]int
+	attemptsMu sync.Mutex
 
 	// Stage 93 PR-1: 可选 SkyWalking tracer（grpcinterceptor.Tracer 接口,
 	// PR-OBS-17 + Stage 92 PR-1 扩展)。非 nil 时每条消息走 CreateEntrySpan
@@ -172,9 +179,11 @@ func (h *chatEventHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
 // 再创建 span 并打 4 个 messaging.* tag (含 event.type),最后调 handleOne 写库。
 // 解析失败时仍走 handleOne 自身错误路径(返回 error 走 attempt 计数)。
 func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	h.attemptsMu.Lock()
 	if h.attempts == nil {
 		h.attempts = make(map[string]int)
 	}
+	h.attemptsMu.Unlock()
 	for {
 		select {
 		case msg, ok := <-claim.Messages():
@@ -216,7 +225,9 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 			}
 			// 业务成功：清 attempts
 			if key := string(msg.Key); key != "" {
+				h.attemptsMu.Lock()
 				delete(h.attempts, key)
+				h.attemptsMu.Unlock()
 			}
 			sess.MarkMessage(msg, "")
 		case <-sess.Context().Done():
@@ -248,8 +259,14 @@ func extractSw8Header(headers []*sarama.RecordHeader) string {
 // handleFailure 处理 handleOne 失败（Stage 30-C A2）
 func (h *chatEventHandler) handleFailure(sess sarama.ConsumerGroupSession, msg *sarama.ConsumerMessage, handlerErr error) {
 	key := attemptKey(msg)
+	// Round 5b §B: 读写 attempts 加 sync.Mutex 守卫(防御性,跨 goroutine 安全)
+	h.attemptsMu.Lock()
+	if h.attempts == nil {
+		h.attempts = make(map[string]int)
+	}
 	h.attempts[key]++
 	attempt := h.attempts[key]
+	h.attemptsMu.Unlock()
 
 	if attempt <= h.maxRetries {
 		log.Printf("[kafka-consumer] handle %s failed (will retry attempt=%d/%d offset=%d): %v",
@@ -273,7 +290,9 @@ func (h *chatEventHandler) handleFailure(sess sarama.ConsumerGroupSession, msg *
 	}
 	log.Printf("[kafka-consumer] handle %s failed after %d retries → DLQ: %v",
 		string(msg.Key), attempt, handlerErr)
+	h.attemptsMu.Lock()
 	delete(h.attempts, key)
+	h.attemptsMu.Unlock()
 	sess.MarkMessage(msg, "")
 }
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -131,12 +132,17 @@ type fakeClaim93 struct {
 func (f *fakeClaim93) Messages() <-chan *sarama.ConsumerMessage { return f.msgs }
 
 // fakeSession93 模拟 sarama.ConsumerGroupSession,只实现 MarkMessage + Context
+//
+// Round 5b §B: 加 sync.Mutex 让 MarkMessage 并发安全
 type fakeSession93 struct {
 	sarama.ConsumerGroupSession
+	mu     sync.Mutex
 	marked []string
 }
 
 func (f *fakeSession93) MarkMessage(msg *sarama.ConsumerMessage, metadata string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.marked = append(f.marked, string(msg.Value))
 }
 
@@ -752,4 +758,77 @@ func TestConsumeClaim_NilTracer_DoesNotCallCreateEntrySpan(t *testing.T) {
 	// 业务不受影响：handler 仍写一条 user_behavior_events 行
 	require.Len(t, repo.items, 1, "Tracer=nil 时业务处理必须继续（向后兼容）")
 	assert.Equal(t, "evt-nil-tracer-93", repo.items[0].EventID)
+}
+
+// TestHandleFailure_ConcurrentAccessIsSafe Round 5b §B GREEN:
+//
+// observability-edge-gaps §B (consumer.attempts 加锁 P2 0.5h):
+// 与 ai-svc TestHandleFailure_ConcurrentAccessIsSafe 同模式:N=50 goroutine
+// 并发调 chatEventHandler.handleFailure + ConsumeClaim,断言 attempts map
+// 至少 N 个 key 且无 panic。
+//
+// 测试设计:
+//   - 启动 N=50 goroutine 并发调 handleFailure + ConsumeClaim
+//   - 断言:attempts map 至少 N 个 key(无锁会偶发 panic + 数据丢失)
+//   - 不依赖 -race(Windows 限制,详见 ai-svc 测试注释)
+func TestHandleFailure_ConcurrentAccessIsSafe(t *testing.T) {
+	t.Parallel()
+	dlq := NewInMemoryDLQPublisher()
+	h := &chatEventHandler{
+		repo:       &captureEventRepo{},
+		topic:      "chat-events",
+		dlq:        dlq,
+		maxRetries: 100, // 高值,避免任一 goroutine 触发 DLQ 路径
+		attempts:   make(map[string]int),
+	}
+
+	const N = 50
+	var wg sync.WaitGroup
+	wg.Add(N * 2)
+
+	// goroutine 1: N 个 handleFailure
+	for i := 0; i < N; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			msg := &sarama.ConsumerMessage{
+				Topic: "chat-events",
+				Key:   []byte(fmt.Sprintf("evt-an-race-%d", i)),
+				Value: mustJSON(t, events.Event{ID: "x", Type: events.EventTypeMessageCreated, Time: time.Now()}),
+			}
+			sess := &fakeSession93{}
+			h.handleFailure(sess, msg, errors.New("forced"))
+		}()
+	}
+
+	// goroutine 2: N 个 ConsumeClaim
+	for i := 0; i < N; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			msg := &sarama.ConsumerMessage{
+				Topic:     "chat-events",
+				Key:       []byte(fmt.Sprintf("evt-an-claim-race-%d", i)),
+				Value:     mustJSON(t, events.Event{ID: "x", Type: events.EventTypeMessageCreated, Time: time.Now()}),
+				Headers:   nil,
+				Timestamp: time.Now(),
+			}
+			claim := &fakeClaim93{msgs: make(chan *sarama.ConsumerMessage, 1)}
+			sess := &fakeSession93{}
+			claim.msgs <- msg
+			close(claim.msgs)
+			done := make(chan error, 1)
+			go func() { done <- h.ConsumeClaim(sess, claim) }()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if got := len(h.attempts); got < N {
+		t.Errorf("attempts map len = %d, want >= %d (handleFailure 写入被并发丢失?)", got, N)
+	}
 }
