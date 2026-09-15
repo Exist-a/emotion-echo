@@ -48,9 +48,6 @@ services:
     image: postgres:15-alpine        # 与 infra 的 postgres 同版本，自带 psql
     container_name: emotion-echo-db-migrate
     restart: "no"                    # 一次性任务：跑完退出，失败不重启以免刷屏掩盖错误
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
       PGHOST: postgres
       PGUSER: postgres
@@ -114,16 +111,8 @@ services:
           cpus: "0.1"
           memory: 64M
     depends_on:
-      postgres:
-        condition: service_healthy
-      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
-      skywalking-oap:
-        condition: service_healthy
-
-      nacos:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8888/health || exit 1"]
       interval: 30s
@@ -172,18 +161,8 @@ services:
           cpus: "0.1"
           memory: 64M
     depends_on:
-      postgres:
-        condition: service_healthy
-      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
-      kafka:
-        condition: service_healthy
-      skywalking-oap:
-        condition: service_healthy
-
-      nacos:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8890/health || exit 1"]
       interval: 30s
@@ -235,16 +214,8 @@ services:
           cpus: "0.1"
           memory: 64M
     depends_on:
-      postgres:
-        condition: service_healthy
-      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
-      skywalking-oap:
-        condition: service_healthy
-
-      nacos:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8893/health || exit 1"]
       interval: 30s
@@ -291,16 +262,8 @@ services:
           cpus: "0.1"
           memory: 64M
     depends_on:
-      postgres:
-        condition: service_healthy
-      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
-      skywalking-oap:
-        condition: service_healthy
-
-      nacos:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8889/health || exit 1"]
       interval: 30s
@@ -319,9 +282,6 @@ services:
     container_name: emotion-llm-service
     restart: unless-stopped
     env_file: *env-file
-    depends_on:
-      nacos:
-        condition: service_healthy
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
@@ -449,20 +409,11 @@ services:
           cpus: "0.2"
           memory: 1024M
     depends_on:
-      postgres:
-        condition: service_healthy
-      # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
-      kafka:
-        condition: service_healthy
-      skywalking-oap:
-        condition: service_healthy
       emotion-llm-service:
         condition: service_healthy
 
-      nacos:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8891/health || exit 1"]
       interval: 30s
@@ -631,8 +582,8 @@ services:
       - emotion-echo-assessment-svc
       - emotion-echo-analytics-svc
       - emotion-echo-ai-svc
-      # Stage 32 PR-14: 修复 service key 引用（service key 是 `nacos`，container_name 才是 `emotion-echo-nacos`）
-      - nacos
+      # Stage 32 PR-14: nacos 从 depends_on 移除（Compose v5.5.1 不允许跨文件 depends_on），
+      # 改为运行时按 NACOS_ENABLED 检查，infra 已先 up，dev 启动 nacos 必然 healthy
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
