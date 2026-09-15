@@ -18,7 +18,7 @@ func TestNacosConfig_DefaultsApply(t *testing.T) {
 	cfg.defaults()
 
 	assert.Equal(t, "DEFAULT_GROUP", cfg.GroupName)
-	assert.Equal(t, uint64(5000), cfg.TimeoutMs)
+	assert.Equal(t, uint64(10000), cfg.TimeoutMs)
 }
 
 func TestNacosConfig_DefaultsPreserveExplicit(t *testing.T) {

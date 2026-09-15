@@ -15,3 +15,29 @@ import { defineStore as __piniaDefineStore, createPinia as __piniaCreatePinia, s
 ;(globalThis as any).defineStore = __piniaDefineStore
 ;(globalThis as any).createPinia = __piniaCreatePinia
 ;(globalThis as any).setActivePinia = __piniaSetActivePinia
+
+// Stage 101 follow-up: useCookie Nuxt auto-import fake。
+// Nuxt 的 useCookie 依赖 #build/nuxt.config.mjs / useNuxtApp 等内部模块，
+// vitest 拉不动。这里提供一个最小 mock：只覆盖 useAIStreamHandler / useApi /
+// useTTSPlayer / useAIStream 实际用到的 `.value` getter，cookie 写走 happy-dom
+// 的 document.cookie（happy-dom 默认 globalThis.document 已就位）。
+function fakeUseCookie<T = string>(name: string) {
+  const read = (): T | undefined => {
+    if (typeof document === 'undefined') return undefined
+    const match = document.cookie.split('; ').find((row) => row.startsWith(`${name}=`))
+    if (!match) return undefined
+    const raw = decodeURIComponent(match.slice(name.length + 1))
+    if (raw === 'undefined') return undefined as T | undefined
+    return raw as unknown as T
+  }
+  const cookieRef = ref(read() as T)
+  // 监听 document.cookie 变化（happy-dom 支持）
+  if (typeof document !== 'undefined') {
+    setInterval(() => {
+      const next = read()
+      if (next !== cookieRef.value) cookieRef.value = next as T
+    }, 50)
+  }
+  return cookieRef
+}
+;(globalThis as any).useCookie = fakeUseCookie

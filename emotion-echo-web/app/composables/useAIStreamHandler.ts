@@ -69,7 +69,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     callbacks?: AIStreamCallbacks
   ): Promise<{ isOk: boolean; msg: string }> => {
     if (isStreaming.value) {
-      return { isOk: false, msg: '已有流在进行中' }
+      return { isOk: false, msg: '正在对话中' }
     }
 
     isStreaming.value = true
@@ -196,7 +196,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
         return { isOk: true, msg: '已取消' }
       }
       const errMsg = error?.message || '对话失败'
-      callbacks.onError?.(errMsg)
+      callbacks?.onError?.(errMsg)
       return { isOk: false, msg: errMsg }
     } finally {
       isStreaming.value = false

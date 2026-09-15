@@ -151,15 +151,14 @@ func TestGolden_AISvc(t *testing.T) {
 
 	assert.Equal(t, "emotion-echo-ai-svc", c.Name)
 	assert.Equal(t, 8891, c.Port)
-	assert.Contains(t, c.LLM.BaseURL, "${LLM_BASE_URL", "占位符字面值应原样保留，由 main.go applyEnvOverrides 接管")
-	assert.Contains(t, c.LLM.BaseURL, "localhost:8000", "占位符里的默认值应保留在字面值里")
-	assert.Equal(t, "${LLM_MODEL:-deepseek-chat}", c.LLM.Model, "ai-svc 占位符字面值原样保留")
+	assert.Equal(t, "${LLM_BASE_URL}", c.LLM.BaseURL, "Round 4.6 P1-26：占位符裸形式（无 default），由 main.go applyEnvOverrides/env 接管")
+	assert.Equal(t, "${LLM_MODEL}", c.LLM.Model, "Round 4.6 P1-26：同上")
 	assert.True(t, c.LLM.Enabled, "LLM.Enabled: true 必须覆盖默认 false")
 	assert.True(t, c.GRPC.Enabled)
 	assert.Equal(t, 8892, c.GRPC.Port)
 	assert.Equal(t, "", c.FER.BaseURL, "FER.BaseURL 显式空字符串应保留（dev 默认不调用）")
-	assert.Equal(t, "${NACOS_ADDR:-emotion-echo-nacos:8848}", c.Nacos.Addr, "ai-svc 独有：占位符字面值原样保留，main.go applyEnvOverrides 接管")
-	assert.Equal(t, "${NACOS_NAMESPACE:-emotion-echo-dev}", c.Nacos.Namespace, "同上")
+	assert.Equal(t, "${NACOS_ADDR}", c.Nacos.Addr, "Round 4.6 P1-26：占位符裸形式")
+	assert.Equal(t, "${NACOS_NAMESPACE}", c.Nacos.Namespace, "Round 4.6 P1-26：占位符裸形式")
 }
 
 // TestGolden_BFF 验证 BFF 配置（5 个下游 + Auth + TrustAPISIX + MinIO）。
@@ -198,7 +197,7 @@ func TestGolden_BFF(t *testing.T) {
 	assert.Equal(t, "http://localhost:8888", c.UserService.BaseURL)
 	assert.Equal(t, "http://localhost:8890", c.ChatService.BaseURL)
 	assert.Equal(t, "http://localhost:8891", c.AIService.HTTPAddr)
-	assert.Equal(t, "dev-bff-secret", c.Auth.JWTSecret)
+	assert.Equal(t, "", c.Auth.JWTSecret, "Stage 94 PR-5 §P0-10：JWTSecret 移除 dev-bff-secret 默认值（避免 dev 密钥进生产）")
 	assert.Equal(t, 86400, c.Auth.TokenTTLSeconds)
 	assert.True(t, c.TrustAPISIX)
 	assert.Equal(t, "emotion-echo-minio:9000", c.MinIO.Endpoint)

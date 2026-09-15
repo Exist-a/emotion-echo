@@ -44,6 +44,10 @@ func (f *fakeRegistry) Subscribe(context.Context, string, func([]shareddiscovery
 }
 func (f *fakeRegistry) Heartbeat(context.Context, shareddiscovery.Instance, time.Duration) {}
 
+// BeatHeartbeat Round 4.2 / Stage 101（PR-5）补：满足 discovery.Registry 接口。
+// Heartbeat 与 BeatHeartbeat 行为对齐：fake 都不做（resolver 走 Discover 路径不依赖它）。
+func (f *fakeRegistry) BeatHeartbeat(context.Context, shareddiscovery.Instance, time.Duration) {}
+
 var _ shareddiscovery.Registry = (*fakeRegistry)(nil)
 
 // TestNacosResolver_ResolveReturnsFirstHealthyInstance：Resolver.Resolve 取第一个实例。

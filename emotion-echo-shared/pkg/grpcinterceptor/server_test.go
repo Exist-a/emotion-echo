@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -123,8 +122,10 @@ func TestServerRecoveryInterceptor_PanicRecovered(t *testing.T) {
 	if st.Code().String() != "Internal" {
 		t.Fatalf("want code Internal, got %s", st.Code().String())
 	}
-	if !strings.Contains(st.Message(), "boom!") {
-		t.Fatalf("msg should contain panic info: %q", st.Message())
+	// Round 1 P2-18：panic info 不再透出到 status.Message（防 SQL 表名/文件路径泄露）。
+	// 改为固定文案 "internal error"，原始 panic value 在 [grpc-server] PANIC log 行。
+	if st.Message() != "internal error" {
+		t.Fatalf("msg should be 'internal error' (panic info no longer leaks to client), got %q", st.Message())
 	}
 	_ = resp
 }

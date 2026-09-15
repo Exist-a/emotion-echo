@@ -114,12 +114,13 @@ func TestMap_ContextDeadline(t *testing.T) {
 	assert.Equal(t, codes.DeadlineExceeded, c)
 }
 
-// 默认 fallback
+// 默认 fallback：Round 1 P1-28 把未知 error 的 message 脱敏成 "internal error"
+// （避免 SQL/PG/HTTP 错误含表名/列名/内部 IP 泄露给前端）。
 func TestMap_UnknownError_ReturnsInternal(t *testing.T) {
 	err := errors.New("totally unknown")
 	c, msg := grpcerr.Map(err)
 	assert.Equal(t, codes.Internal, c)
-	assert.Equal(t, "totally unknown", msg)
+	assert.Equal(t, "internal error", msg)
 }
 
 // Wrap helper 直接生成 status.Status
