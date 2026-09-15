@@ -774,6 +774,11 @@ Stage 33 P0 修复+BFF净化 █████████████████
 | 2026-09-05 | 顶层目录命名 | 大小写混用 + `Emotion-Echo-LLM` 名不符实 → **统一小写 kebab**（`emotion-echo-web` / `emotion-echo-models`） | 消除前端/BFF/LLM 辨识混乱、对齐容器与文档（决策 19） |
 | 2026-09-07 | 部署形态 | K8s 未来部署 → **维持单机多实例，K8s 不启用**（决策 3 收口） | 单机场景 k8s 收益≈0 且加重运维；Helm/kind 保留为学习资产「备好不部署」 |
 | 2026-09-12 | Helm chart 残余 5 项 | open backlog → **冻结**（学习资产不追加投入） | 决策 3 已定 K8s 不部署；对不部署的资产追加投入收益不成立（决策 23，Stage 74） |
+| 2026-09-15 | outbox sent/dead 清理 | 无清理 job → **OUTBOX_CLEANUP_ENABLED=true 启用 ticker**（Round 2.1） | Kafka D2 长期 open，触发条件 = 演示期前必做；commit `4d118f6` |
+| 2026-09-15 | Kafka 契约卫生 | 漏 switch case 静默走 default → **反射枚举护栏**（Round 2.2） | D6+D8 防"加 EventType 时漏 5 处之一"；commit `6d6c3b1` |
+| 2026-09-15 | DLQ 投递失败 | 仅 log 即丢弃 + 黑洞不可观测 → **counter + alertmanager 告警**（Round 2.3） | kafka-pipeline §P1-14；commit `0fbe2d0` + `deploy/prometheus/rules/kafka-dlq.yml` |
+| 2026-09-15 | producer ctx 取消 | sarama SendMessage 阻塞期间 Gin 卡 10s → **goroutine + select**（Round 2.4） | P2-14；commit `caa100c`，11 测试全 PASS |
+| 2026-09-15 | 多轮迭代 plan 状态 | planned → **landed**（Round 0-2 全部收口） | [stage-99-round-2-closure.md](../stages/stage-99-round-2-closure.md) 9 commits +1685/-41 行 33 测试 0 回归；Round 3-5 待启动 |
 
 ---
 

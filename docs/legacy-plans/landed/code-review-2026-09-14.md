@@ -153,12 +153,12 @@ residuals:
 
 #### Kafka
 
-| # | 标题 | 来源 | 文件 | 工作量 |
-|---|------|------|------|--------|
-| P2-11 | 分区键用 `e.ID` 而非 `conversation_id` → 失去分区局部性 | C §5 | `chat-svc/internal/events/kafka_publisher.go:70` | 1d |
+| # | 标题 | 来源 | 文件 | 工作量 | 状态 |
+|---|------|------|------|--------|------|
+| P2-11 | 分区键用 `e.ID` 而非 `conversation_id` → 失去分区局部性 | C §5 | `chat-svc/internal/events/kafka_publisher.go:70` | 1d | ✅ Round 1 §P2-11 — `kafka_publisher.go:84-92` 改用 conversation_id（Stage 94 PR-1 期间落地）|
 | P2-12 | proto + JSON 双 schema 嗅探边界（P3 章节） | C §13 | 3 svc `proto_decode.go` | 1d |
 | P2-13 | analytics-svc `maxRetries` 硬编码 3（与 ai-svc 配置不对称） | C §8 | `analytics-svc/internal/kafka/consumer.go:64` | 0.5d |
-| P2-14 | chat-svc producer `SendMessage` 同步阻塞 + 无 ctx 取消 | C §19 | `chat-svc/internal/events/kafka_publisher.go` | 1d |
+| P2-14 | chat-svc producer `SendMessage` 同步阻塞 + 无 ctx 取消 | C §19 | `chat-svc/internal/events/kafka_publisher.go` | 1d | ✅ Round 2.4 commit `caa100c` — goroutine + select 包裹 SendMessage + 2 ctx cancel 测试 |
 | P2-15 | prod topic 未显式配置（compose.prod.yml 空壳） | C §9 | `deploy/compose.prod.yml` | 3d |
 
 #### 中间件

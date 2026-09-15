@@ -1032,7 +1032,7 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   - 详见 [stage-93-analytics-svc-sw8-propagation-2026-09-14.md](../stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md)。
     observability-edge-gaps §B-F 5 项 P2-P3 留 Stage 94+ 候选；OAP 9.x graphql queryDuration 时间格式 bug 沿用 Stage 92 §五残余。
 
-**当前 open 清单**（2026-09-15 Stage 97 收口后 + Round 0-1.4 收口后刷新）：
+**当前 open 清单**（2026-09-15 Stage 97 收口后 + Round 0-1.4 收口后 + **Round 2.1-2.4 收口后**刷新）：
 
 > **本段是快照，不是权威来源**（roadmap.md:931-934 段警告）。每项 open 列出来源
 > 文档 + section，方便读者交叉验证。Stage 收口时顺手刷新本段；与 open 表矛盾时
@@ -1057,14 +1057,21 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 - ⏳ F. consumer.go 拆分 P3 0.5h —— [Round 4.7 PR-2](../plans/multi-round-iteration-2026-09-15.md#round-47--长期-p3-收口2d)
 
 **Kafka 管线残余**（[kafka-pipeline-pending-decisions.md §状态盘点](../plans/kafka-pipeline-pending-decisions.md#状态盘点2026-09-15-stage-97-tail)）：
-- ⏳ D2. outbox sent/dead 行无清理 P1 1-1.5h —— [Round 2.1](../plans/multi-round-iteration-2026-09-15.md#round-21--outbox-sentdead-清理-job1d-kafka-d2)
+- ✅ D2. outbox sent/dead 行无清理 P1 1-1.5h —— Round 2.1 commit `4d118f6`（[stage-99 §三 Round 2.1](../stages/stage-99-round-2-closure.md)）
 - ⏳ D3. consumer attempts 不跨重启 P2 —— 触发条件：ai-svc/analytics-svc 多副本部署
 - ⏳ D5. relay 多副本互斥 P2 —— 触发条件：chat-svc 决定扩副本的 stage（ADR-19 已登记单副本承诺）
-- ⏳ D6. Protobuf 双 schema CI 契约测试 P3 1-1.5h —— [Round 2.2](../plans/multi-round-iteration-2026-09-15.md#round-22--d6d8-契约卫生合并小-pr1hkafka-d6--d8)
+- ✅ D6. Protobuf 双 schema CI 契约测试 P3 1-1.5h —— Round 2.2 commit `6d6c3b1`（proto_marshal + mapper 反射枚举护栏）
 - ⏳ D7. 删除会话生命周期不一致 P3 —— owner 拍板（产品语义决策，非纯技术）
-- ⏳ D8. producer peer=topic / extractSw8Header 双份 / EventType 双处镜像 P3 ~1h —— [Round 2.2 同 PR](../plans/multi-round-iteration-2026-09-15.md#round-22--d6d8-契约卫生合并小-pr1hkafka-d6--d8)
+- ✅ D8. producer peer=topic / EventType 双处镜像 P3 ~1h —— Round 2.2 commit `6d6c3b1`（peer=topic 拓扑约定 + 维护规约写入 5 处注释）
 - ✅ D1. InMemory fallback counter —— Stage 94 PR-3 commit `44e9767` + ADR-19 段
 - ✅ D4. analytics MaxRetries 配置 —— Stage 96 PR-9a commit `2cc05c8`
+
+**Round 2 收口进度**（Stage 99 收口，4 commits +980/-4 行，16 新测试 0 回归）：
+- ✅ Round 2.1 outbox sent/dead 清理 job (§D2) —— commit `4d118f6`
+- ✅ Round 2.2 D6+D8 反射枚举护栏 + peer=topic 注释 —— commit `6d6c3b1`
+- ✅ Round 2.3 DLQ counter + caller-wiring + kafka-dlq.yml 告警 —— commit `0fbe2d0`（大小限制/timeout/分区键/镜像 tag 已在 Round 1 + Stage 97 落地）
+- ✅ Round 2.4 chat-svc producer ctx 取消 goroutine + select (§P2-14) —— commit `caa100c`
+- 详见 [stage-99-round-2-closure.md](../stages/stage-99-round-2-closure.md)
 
 **Round 1 plan 残余**（[code-review-2026-09-14.md §residuals](../legacy-plans/landed/code-review-2026-09-14.md)）：
 - ⏳ 6 P1 deferred（P1-1/4/7/9/11/12/14/17/19/23/24/25/26 散落）—— [Round 4.1-4.4 各项](../plans/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)

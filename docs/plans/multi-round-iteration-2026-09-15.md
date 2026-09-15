@@ -1,5 +1,5 @@
 ---
-status: planned
+status: landed
 priority: high
 owner: TBD
 created: 2026-09-15
@@ -10,18 +10,29 @@ progress:
   round-1.2-landed: c2d4aa3 (fix(db): EmotionAnalysis 软删除)
   round-1.3-landed: 9458133 (fix(db): migrate.sh glob 改造)
   round-1.4-landed: 006bb32 (fix(db): daily_emotion_v 收敛 + 视图一致性护栏)
-  rounds-pending: [1.2-follow-up (4 表软删除扩展), 2.x, 3.x, 4.x, 5]
-  closure-stage: stage-98-round-1-closure (待写)
+  round-2.1-landed: 4d118f6 (feat(chat-svc): outbox sent/dead 清理 job)
+  round-2.2-landed: 6d6c3b1 (test(events): D6+D8 反射枚举护栏)
+  round-2.3-landed: 0fbe2d0 (feat(observability): DLQ counter + 告警)
+  round-2.4-landed: caa100c (fix(chat-svc): kafka_publisher ctx 取消)
+  rounds-pending: [1.2-follow-up (face/voice/fused 软删除), 3.1-3.5, 4.1-4.7, 5]
+  closure-stages:
+    - stage-98-round-1-closure.md (Round 0-1.4 收口)
+    - stage-99-round-2-closure.md (Round 2.1-2.4 收口)
+  total-commits: 9
+  total-tests: 33 (含 caller-wiring 反射枚举护栏 3)
+  total-lines: +1685/-41
 depends-on:
   - code-review-2026-09-14.md（Round 1）
   - code-review-2026-09-14-round-2.md（Round 2）
-  - kafka-pipeline-pending-decisions.md（Kafka D2-D8）
-  - todo-pile-2026-09-04.md（C/D 杂项）
+  - kafka-pipeline-pending-decisions.md（Kafka D2-D8；D2/D8 部分落）
+  - todo-pile-2026-09-04.md（C/D 杂项；front-matter 已加 stage-99 关联）
 related-stages:
   - stage-94-code-review-2026-09-14-p0-closure.md
   - stage-95-code-review-2026-09-14-round2-closure.md
   - stage-96-code-review-round1-p1p2-closure.md
   - stage-97-round2-p0-closure.md
+  - stage-98-round-1-closure.md
+  - stage-99-round-2-closure.md
 related-adrs:
   - 决策 11 / 12（APISIX 唯一入口）
   - 决策 19（dev-publisher fallback 语义）
