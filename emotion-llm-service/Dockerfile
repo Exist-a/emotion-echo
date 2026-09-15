@@ -64,7 +64,9 @@ ENV TZ=Asia/Shanghai \
 # P1-R2-14: 加 SHA256 校验——ADD https:// 默认不校验二进制完整性，
 # tini 仓库若被攻陷 → 后门注入到所有 llm-service 容器。
 ARG TINI_VERSION=v0.19.0
-ARG TINI_SHA256=93dccd091001205fb6bd1edfaf66f50bc6b054b5b8212ddc6aa4633c12e4c0bb
+# 权威 SHA：emotion-echo/llm-service:v0.1.2 镜像 /usr/local/bin/tini 真值（2026-09-16 验证）
+# 修复历史：原 93dccd091001... 是字符级抄写错误，前 6 位匹配但后续完全不同
+ARG TINI_SHA256=93dcc18adc78c65a028a84799ecf8ad40c936fdfc5f2a57b1acda5a8117fa82c
 ADD --chmod=755 https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /usr/local/bin/tini
 # 校验：失败则中断构建（防止恶意二进制被 RUN 阶段加载）
 RUN echo "${TINI_SHA256}  /usr/local/bin/tini" | sha256sum -c - || \
