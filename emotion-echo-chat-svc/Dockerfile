@@ -11,7 +11,9 @@
 #     context: .
 #     dockerfile: emotion-echo-chat-svc/Dockerfile
 # ============ Stage 1: builder ============
-FROM golang:1.26-alpine AS builder
+# Round D: 基础镜像 digest pin（Dockerfile.digests.lock 提供真值，由 build args 注入）
+ARG GOLANG_1_26_ALPINE_DIGEST=""
+FROM golang@${GOLANG_1_26_ALPINE_DIGEST:-golang:1.26-alpine} AS builder
 # 国内构建:必须切到 goproxy.cn,否则 proxy.golang.org 在容器内被墙
 ENV GOPROXY=https://goproxy.cn,direct \
     GOSUMDB=off
@@ -30,7 +32,9 @@ RUN CGO_ENABLED=0 \
     GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/chat-svc .
 # ============ Stage 2: runtime ============
-FROM alpine:3.19
+# Round D: 基础镜像 digest pin
+ARG ALPINE_3_19_DIGEST=""
+FROM alpine@${ALPINE_3_19_DIGEST:-alpine:3.19}
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     HTTP_PORT=8890

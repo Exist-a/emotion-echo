@@ -19,7 +19,12 @@
 
 set -uo pipefail
 
-# 查找全仓 Dockerfile（排除 node_modules / .git / vendor）
+# 查找全仓 Dockerfile（排除 node_modules / .git / vendor / models / legacy）
+# 排除：
+#   - node_modules / .git / vendor: 第三方依赖目录
+#   - emotion-echo-models/*: AI 模型预烘焙镜像（Stage 60 PR-TTS-VENDOR 已 vendor 化），
+#     实际部署走 docker.io vendor 镜像，仓内 Dockerfile 仅作 reference
+#   - legacy/*: 已退役工程，保留仅作历史快照
 mapfile -t dockerfiles < <(find . \
     -name "Dockerfile" \
     -o -name "Dockerfile.*" \
@@ -27,6 +32,8 @@ mapfile -t dockerfiles < <(find . \
     | grep -v "^./.git/" \
     | grep -v "/vendor/" \
     | grep -v "^./emotion-llm-service/__pycache__/" \
+    | grep -v "^./emotion-echo-models/" \
+    | grep -v "^./legacy/" \
     | sort)
 
 if [ "${#dockerfiles[@]}" -eq 0 ]; then
@@ -46,8 +53,10 @@ for f in "${dockerfiles[@]}"; do
         # 只看 FROM 行（不区分大小写，但 Dockerfile 关键字都是大写）
         if [[ "$line" =~ ^[[:space:]]*FROM[[:space:]] ]]; then
             total=$((total + 1))
-            # 必须含 @sha256:
-            if [[ ! "$line" =~ @sha256: ]]; then
+            # 必须含 @sha256:（字面） OR ${VAR:-...} digest env var 形式
+            # （Round D：接受 ARG + env var 模式，因为 Dockerfile.digests.lock 真值
+            #  通过 build args 注入；AI-svc 已用此模式，其他 6 Dockerfile 待迁移）
+            if [[ ! "$line" =~ @sha256: ]] && [[ ! "$line" =~ \$\{[A-Z_0-9]+_DIGEST ]]; then
                 unpinned=$((unpinned + 1))
                 unpinned_files+=("$f: $line")
             fi

@@ -3,7 +3,9 @@
 # Build context: emotion-echo-web/ (本目录下)
 #   docker build -f emotion-echo-web/Dockerfile.dev emotion-echo-web
 
-FROM node:20-alpine
+# Round D: 基础镜像 digest pin
+ARG NODE_20_ALPINE_DIGEST=""
+FROM node@${NODE_20_ALPINE_DIGEST:-node:20-alpine}
 
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8

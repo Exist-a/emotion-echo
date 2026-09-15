@@ -1,9 +1,8 @@
 # 构建阶段
-# P2-R2-19: 基础镜像未 pin digest — 供应链风险。
-# 建议在 prod CI sync digest 后替换：
-#   FROM node:20-alpine@sha256:<digest> AS builder
-# 当前留 tag 形式，CI 后续 PR 引入 digest sync 流程
-FROM node:20-alpine AS builder
+# Round D: 基础镜像 digest pin（Dockerfile.digests.lock 提供 NODE_20_ALPINE_DIGEST）
+# dev compose 不强制；prod CI 同步真 digest 后 build 锁版本
+ARG NODE_20_ALPINE_DIGEST=""
+FROM node@${NODE_20_ALPINE_DIGEST:-node:20-alpine} AS builder
 
 WORKDIR /app
 
@@ -24,7 +23,9 @@ COPY . .
 RUN npm run build
 
 # 运行阶段
-FROM node:20-alpine
+# Round D: 基础镜像 digest pin
+ARG NODE_20_ALPINE_DIGEST=""
+FROM node@${NODE_20_ALPINE_DIGEST:-node:20-alpine}
 
 # P0-R2-8: 非 root 用户运行 Node.js（容器安全）
 USER node

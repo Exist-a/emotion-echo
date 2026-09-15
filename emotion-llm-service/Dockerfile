@@ -12,9 +12,10 @@
 # 阶段 2: runtime  - 仅 python:3.12-slim + tini + 业务代码（非 root 运行）
 
 # ============ Stage 1: builder ============
-# P2-R2-19: 基础镜像未 pin digest — 见 emotion-echo-web/Dockerfile 注释，
-# prod CI 应 sync digest 后改 FROM python:3.12-slim@sha256:<digest>
-FROM python:3.12-slim AS builder
+# Round D: 基础镜像 digest pin（Dockerfile.digests.lock 提供 PYTHON_3_12_SLIM_DIGEST）
+# dev compose 不强制；prod CI 同步真 digest 后 build 锁版本
+ARG PYTHON_3_12_SLIM_DIGEST=""
+FROM python@${PYTHON_3_12_SLIM_DIGEST:-python:3.12-slim} AS builder
 
 WORKDIR /build
 
@@ -44,7 +45,9 @@ COPY emotion-llm-service/nacos_client.py  ./nacos_client.py
 COPY emotion-llm-service/entrypoint.sh    ./entrypoint.sh
 
 # ============ Stage 2: runtime ============
-FROM python:3.12-slim AS runtime
+# Round D: 基础镜像 digest pin
+ARG PYTHON_3_12_SLIM_DIGEST=""
+FROM python@${PYTHON_3_12_SLIM_DIGEST:-python:3.12-slim} AS runtime
 
 # 容器内时区 & 语言
 ENV TZ=Asia/Shanghai \

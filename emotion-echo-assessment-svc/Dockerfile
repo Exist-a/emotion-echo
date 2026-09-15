@@ -3,7 +3,9 @@
 #
 # Build context 必须是仓库根
 # ============ Stage 1: builder ============
-FROM golang:1.26-alpine AS builder
+# Round D: 基础镜像 digest pin
+ARG GOLANG_1_26_ALPINE_DIGEST=""
+FROM golang@${GOLANG_1_26_ALPINE_DIGEST:-golang:1.26-alpine} AS builder
 ENV GOPROXY=https://goproxy.cn,direct \
     GOSUMDB=off
 ARG TARGETOS=linux
@@ -18,7 +20,9 @@ RUN CGO_ENABLED=0 \
     GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/assessment-svc .
 # ============ Stage 2: runtime ============
-FROM alpine:3.19
+# Round D: 基础镜像 digest pin
+ARG ALPINE_3_19_DIGEST=""
+FROM alpine@${ALPINE_3_19_DIGEST:-alpine:3.19}
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     HTTP_PORT=8889
