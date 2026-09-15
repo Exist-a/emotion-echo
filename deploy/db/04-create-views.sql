@@ -24,20 +24,13 @@
 -- 该脚本会 fail 提醒收敛。
 -- （删除原 CREATE OR REPLACE VIEW emotion_echo_ai.daily_emotion_v AS ... 块）
 
--- emotion_echo_assessment: assessment_v 定义仍在 deploy/db 04（评估数据由 dev
--- compose init 链建立，analytics 暂无对应运行时 migration 接管）。
--- 若未来 analytics 引入 a00X_create_assessment_v.sql，本注释更新并迁移。
-CREATE OR REPLACE VIEW emotion_echo_assessment.assessment_v AS
-SELECT
-    id,
-    user_id,
-    assessment_type,
-    period_start,
-    period_end,
-    overall_score,
-    dimensions,
-    created_at
-FROM emotion_echo_assessment.mental_health_assessments;
+-- emotion_echo_assessment: assessment_v 定义已迁至 emotion-echo-analytics-svc/migrations/a001
+-- Round A: 此处不再创建 assessment_v（消除双 owner 漂移点，与 msg_summary_v / daily_emotion_v 同模式）。
+-- 权威源在 emotion-echo-analytics-svc/migrations/a001_create_views.sql（运行时迁移），
+-- 单一 owner 避免未来某文件改了 SELECT 字段另文件没改的口径漂移。
+-- scripts/check_view_consistency.py 锁死契约：未来若再新增 assessment_v 定义，
+-- 该脚本会 fail 提醒收敛。
+-- （删除原 CREATE OR REPLACE VIEW emotion_echo_assessment.assessment_v AS ... 块）
 
 -- migrations/004_create_analytics_reader_role.sql
 --
