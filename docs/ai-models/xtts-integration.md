@@ -1,8 +1,11 @@
-# XTTS 接云端 TTS API 实施指南
+# XTTS 接云端 TTS API 实施指南 — ⚠️ Deprecated
 
 **日期**：2026-07-17
-**目的**：替换本地 XTTS 容器，改为调云端 TTS API
-**预计工作量**：1 小时（实现 + 测试）
+**状态**：❌ **Deprecated**（2026-09-15 确认云 API 路径彻底废弃）
+**当前方案**：vendor `ai4all/coqui:latest` 本地容器（[`emotion-echo-models/README.md`](../emotion-echo-models/README.md) §四）
+
+> ⚠️ **本文档已 deprecated。** 云 API（阿里云/OpenAI）从未写过代码，vendor Coqui 是唯一 TTS 推理路径。
+> 本文档保留仅作历史参考，**不应作为实施依据**。
 
 ---
 

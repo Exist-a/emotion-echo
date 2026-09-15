@@ -1,7 +1,7 @@
-# ADR-001 v2 · XTTS 推理路径最终结论（2026-09-10）
+# ADR-001 v2 · XTTS 推理路径最终结论（2026-09-10 / 2026-09-15 简化）
 
-> **状态**：✅ **Accepted**（重审结论，替代 v1）
-> **v1 状态**：❌ **Retired**（决策与现状长期失真 4 个月）
+> **状态**：✅ **Accepted**（重审结论，替代 v1；2026-09-15 删除云 API fallback 路径）
+> **v1 状态**：❌ **Retired**（阿里云/OpenAI 云 API 路径彻底废弃）
 > **关联**：原 ADR-001 `docs/ai-models/xtts-decision.md`（2026-07-17）·
 > [`stage-60-pr-tts-vendor-landing.md`](../../stages/stage-60-pr-tts-vendor-landing.md) ·
 > [`stage-60-1-pr-tts-vendor-sv-landing.md`](../../stages/stage-60-1-pr-tts-vendor-sv-landing.md) ·
@@ -28,13 +28,13 @@
 
 ## 二、v2 决策（最终）
 
-### §A. 推理路径 = **本地容器 + vendor 双轨，dev 默认本地容器**
+### §A. 推理路径 = **vendor `ai4all/coqui:latest` 本地容器（唯一方案）**
 
 | 路径 | 角色 | 触发条件 | 当前实现 |
 |------|------|---------|---------|
-| **Primary** | 本地容器 `emotion-echo-xtts`（vendor `ai4all/coqui:latest`）| dev 默认 + 有 docker 环境的用户 | Stage 60 PR-TTS-VENDOR 落地；`deploy/docker-compose.apps.yml:549` |
-| **Fallback** | 云 API（阿里云 + OpenAI TTS）| 1) 容器镜像不可拉 / build 失败；2) prod 大规模部署成本优于自建 | v1 决策已写代码骨架（`xtts-cloud-api-integration.md`），但**未实现** |
-| **Future**（预留）| 自建 XTTS 镜像（`emotion-echo-models/XTTS/Dockerfile`）| 网络恢复 + 维护团队到位 | 仓库内代码保留作 learning asset |
+| **唯一** | 本地容器 `emotion-echo-xtts`（vendor `ai4all/coqui:latest`）| 所有环境 | Stage 60 PR-TTS-VENDOR 落地；`deploy/docker-compose.apps.yml:549` |
+
+> **2026-09-15 更新**：删除云 API fallback 路径。vendor Coqui 音色满足需求，云 API（阿里云/OpenAI）从未写过代码，不再保留为备选。
 
 ### §B. 为什么不继续走 v1（云 API 优先）
 
@@ -45,16 +45,12 @@
 | 阿里云境内稳定 + 合规 | 同上 | 当前 dev 范围内本地容器即满足"境内"需求 |
 | 月成本 20 元 | 与自建镜像维护成本（Stage 58 ~140 秒构建 + 11.3GB 磁盘）对比 | **短期 dev 用本地**，prod 规模化再评估云 |
 
-### §C. 决策触发条件（什么时候切到 v1 云 API 路径）
+### §C. ~~决策触发条件（什么时候切到 v1 云 API 路径）~~ — 已废弃
 
-满足以下**任一**才评估切云：
+> **2026-09-15**：云 API 路径彻底废弃，以下触发条件不再适用。vendor Coqui 是唯一方案。
+> 如果未来 prod 规模化需要外部 TTS 服务，应重新评估（而非沿用 v1 的阿里云/OpenAI 方案）。
 
-1. **prod 部署成本压力**：单实例 GPU/磁盘不够支撑 XTTS 推理，需要外部算力
-2. **合规/审计要求**：必须用境内备案服务（如阿里云）而不能用 Docker Hub vendor
-3. **vendor 镜像不可拉**：`ai4all/coqui:latest` 在阿里云 ACR 等镜像不可达，且本地 build 再次失败
-4. **多语种扩展**：阿里云 60+ 中文音色 vs Coqui 默认音色的实际体验差距被用户明确反馈
-
-### §D. 双轨架构不变项
+### §D. 架构不变项
 
 - **接口契约**（`emotion-echo-ai-svc/internal/aiclient/xtts.go`）：
   - `Synthesize(ctx, text) → ([]byte, int, error)`
@@ -134,11 +130,12 @@
 |---|---|---|---|
 | 2026-07-17 | 推理路径 | （未定）→ **阿里云 API + OpenAI fallback，删除本地容器**（v1）| Stage 25 反复 build 失败的临时判断 |
 | 2026-09-10 | 推理路径 | v1 → **本地 vendor 容器为主，云 API 作 fallback**（v2）| Stage 60 PR-TTS-VENDOR 验证 vendor Coqui 端到端跑通 + 4 个月决策与代码长期失真 |
+| 2026-09-15 | 推理路径 | v2 双轨 → **v2 单轨（vendor Coqui 唯一）** | 云 API 从未写代码，彻底废弃；删除 fallback 触发条件 |
 
-**v1 retire 但不删除**：`docs/ai-models/xtts-decision.md` 保留作为历史决策记录，未来若 §C 触发条件成熟可参考 v1 的代码骨架与配置样例。
+**v1 retire 但不删除**：`docs/ai-models/xtts-decision.md` 保留作为历史决策记录（已标记 retired，2026-09-15 确认云 API 彻底废弃）。
 
 ---
 
-> 最后更新：2026-09-10 by PR-B（本会话）
-> 用途：正式 retire ADR-001 v1，记录 v2 最终结论（本地 vendor + 云 API 双轨）；登记决策 18 #12 失真类型 2+5 自报告复合成因
-> 后续：等待 PR-C（决策 9 vs 11/12 字面冲突正式收口）落地后一并 commit
+> 最后更新：2026-09-15 — 删除云 API fallback，简化为单轨（vendor Coqui 唯一方案）
+> 用途：正式 retire ADR-001 v1，记录 v2 最终结论（vendor Coqui 本地容器为唯一 TTS 推理路径）
+> 2026-09-15 变更：§A 双轨→单轨；§C 触发条件废弃；§D 标题简化；变更记录新增行

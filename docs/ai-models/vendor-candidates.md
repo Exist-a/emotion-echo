@@ -1,7 +1,7 @@
 # AI Profile Vendor 镜像候选清单（Stage 58 调研）
 
-> **状态**：🟡 **调研完成，待尝试**
-> **调研日期**：2026-09-09
+> **状态**：✅ **调研完成，已落地**（3 模型全部 vendor/本地化，云 API 彻底废弃）
+> **调研日期**：2026-09-09 · **最后更新**：2026-09-15
 > **关联决策**：[Stage 58 §三 ADR-001 重审](../architecture/decisions.md) + [todo-pile §A1 TTS 缺口](../../plans/todo-pile-2026-09-04.md) + [stage-58-ai-image-build-blocked.md](../../stages/stage-58-ai-image-build-blocked.md)
 
 ---
@@ -43,13 +43,13 @@ Stage 36-B5 自建 3 个 AI 模型镜像（FER / SenseVoice / XTTS）路径在 d
 
 |候选 | 描述 | 预估大小 | API 形态 | 风险 |
 |---|---|---|---|---|
-| **`ai4all/coqui`** | Docker Hub 0 stars，Coqui TTS API server | ~1.5GB | REST API（TTS） | 高：stars=0 风险无维护；可能 API 与 emotion-echo XTTS 不一致 |
-| **`ghcr.io/coqui-ai/coqui-tts-cpu`** | Coqui 官方 CPU 镜像 | ~1.5GB | REST API | 中：需 `ghcr.io` registry 可达 |
-| **阿里云智能语音 RESTful API** | 云端调用，无镜像 | 0（API 调用）| REST API + WebSocket 流式 | 低：成熟服务，已 ADR-001 决策 |
-| **OpenAI TTS API** | 境外 fallback | 0（API 调用）| REST API | 低：仅备选 |
-| 自建（保留现有）| `emotion-echo-models/XTTS/Dockerfile` Stage 36 v0.1.0 5.3GB | 5.3GB | `/tts` `/tts_stream` | 高：vendor Coqui 已弃，本地 build 失败率高 |
+| **`ai4all/coqui`** ✅ | Docker Hub vendor，Coqui TTS API server | ~1.5GB（vendor 提供） | REST API（TTS） | **已落地**：Stage 60 PR-TTS-VENDOR 端到端调通（133KB WAV） |
+| **`ghcr.io/coqui-ai/coqui-tts-cpu`** | Coqui 官方 CPU 镜像 | ~1.5GB | REST API | 备选：`ai4all/coqui` 不可达时 |
+| ~~阿里云智能语音 RESTful API~~ | ~~云端调用~~ | ~~0~~ | ~~REST API~~ | ❌ **已废弃**：2026-09-15 确认不再需要 |
+| ~~OpenAI TTS API~~ | ~~境外 fallback~~ | ~~0~~ | ~~REST API~~ | ❌ **已废弃**：同上 |
+| 自建（保留现有）| `emotion-echo-models/XTTS/Dockerfile` Stage 36 v0.1.0 5.3GB | 5.3GB | `/tts` `/tts_stream` | 低：保留作 learning asset |
 
-**建议优先级**：**A 候选云 API（阿里云 primary + OpenAI fallback）**——ADR-001 已决策，零镜像下载成本。
+**最终方案**：**vendor `ai4all/coqui:latest`**——唯一 TTS 推理路径（ADR-001 v2，2026-09-15 简化为单轨）。
 
 ---
 
@@ -98,7 +98,7 @@ Stage 36-B5 自建 3 个 AI 模型镜像（FER / SenseVoice / XTTS）路径在 d
 |---|---|---|---|
 | **PR-TTS-VENDOR-1** | `docker pull serengil/deepface` 跑通 + 写 adapter（ai-svc FER client 接 vendor）| 半天 | 网络通 |
 | **PR-TTS-VENDOR-2** | `docker pull yiminger/sensevoice` 跑通 + adapter | 半天 | 同上 |
-| **PR-TTS-VENDOR-3** | XTTS 接阿里云 API（ADR-001 落地）| 1 天 | 阿里云账号 + key |
+| ~~**PR-TTS-VENDOR-3**~~ | ~~XTTS 接阿里云 API~~ | ~~1 天~~ | ❌ **已废弃**：vendor Coqui 唯一方案，不需要云 API |
 | **PR-TTS-VENDOR-4** | 更新 emotion-echo-models/ 为 deprecated 状态 + 保留 git 历史 | 1 小时 | 1-3 完成后 |
 
 ### 4.3 阶段准入/退出条件
@@ -125,7 +125,7 @@ Stage 36-B5 自建 3 个 AI 模型镜像（FER / SenseVoice / XTTS）路径在 d
 | 旧结论（§五 截至 2026-09-09） | 新结论（Stage 60/60.1） | 原因 |
 |---|---|---|
 | "Vendor 镜像 0 张完整 pull 成功" | ✅ 3 张 vendor/本地实现可拉/可 build | 开启 Clash TUN 模式后境外资源可达（stage-59 §十）|
-| "XTTS 走云 API（ADR-001）" | ✅ 改走 vendor `ai4all/coqui`（docker.io aliyun 加速拉取） | vendor 镜像端到端调通（133KB WAV 输出）；云 API 仍保留为 future fallback（`docs/ai-models/xtts-decision.md`） |
+| "XTTS 走云 API（ADR-001）" | ✅ 改走 vendor `ai4all/coqui`（docker.io aliyun 加速拉取） | vendor 镜像端到端调通（133KB WAV 输出）；**云 API 彻底废弃**（2026-09-15 确认） |
 | "FER 自建卡死 + 重 30+ 分钟" | ✅ tflite 备选路径，build < 1min | 原型实测验证后正式落地为 `FER-tflite/` 独立目录（镜像 538MB disk） |
 | "SenseVoice 走 yiminger vendor" | ✅ 改走仓内本地实现（`SV-fastbuild/`） | yiminger 镜像挂错标签，仓内 `sensevoice-small/` 已完整可用；funasr+wheels预下+TUN 实现 |
 
