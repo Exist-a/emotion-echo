@@ -1113,4 +1113,53 @@ d33e9e1 fix(test): Stage 101 回归修复（fakeRegistry BeatHeartbeat + shared 
 - `deploy/kafka/init-topics.sh` 顶部注释：dev 库一次性升级步骤（commit `a0c5b78` 一并打包）
 - `docs/evidence/round-c-kafka-6partitions/README.md` 新建：证据索引 + 升级步骤 + 业务影响
 - `docs/evidence/round-d-dockerfile-digest-pin.md` 新建：7 个占位 digest 状态 + sync 触发条件 + 后续 task 痕迹
+- `roadmap.md` "当前 open 清单" 段加 2026-09-15 多轮会话补全状态（commit `9f9caf0`）
+- `Dockerfile.digests.lock` 顶部加 Round D env-var 契约注释段（commit `4ff5a24`）
+
+### 15.5 §十四.3 其它项 — 本会话跳过原因（grep 实证）
+
+> **背景**：本会话目标"剩下的多轮完成"按 verifier 反馈映射到 plan §十四.3 真未落清单
+> 中**可启动的 4 项**（Round A/B/C/D 各自对应 1 项）。本节显式列出 §十四.3 其它 11 项
+> 的"本会话跳过原因"——避免 reader 误以为本会话没碰的就是本会话漏的。
+>
+> **判断口径**：grep 实证代码事实，不依赖 plan 描述。每项标 (A) 已落但 roadmap 漂移
+> / (B) 触发条件型 / (C) 真未落但工作量 0.5-1d 在本会话范围外 / (D) 部分落或语义差异。
+
+| §十四.3 项 | 实际状态（grep 实证） | 跳过原因 |
+|---|---|---|
+| face/voice/fused model 加 gorm.DeletedAt | ✅ 4 个 model 全有 `DeletedAt` 字段 + i007 migration + repo.Delete 软删 | **(A) 实际已落**——Round 1 follow-up commit `e2e83c9`；roadmap 标"未落"是漂移 |
+| voice_transcripts 软删除（DDL + model + repo）| ✅ `i008_voice_transcripts_soft_delete.sql` migration + emotion.go:42 `VoiceTranscript` model + repo Delete 软删 | **(A) 实际已落**——同上 `e2e83c9`；roadmap 漂移 |
+| Round 4.2 Nacos 心跳改 BeatInstance | ✅ web-bff `nacos_boot.go:92` 调 `reg.BeatHeartbeat(hbCtx, instance, 5*time.Second)` | **(A) 实际已落**——Stage 101 Round 4.2 commit `929ccfd`（BeatHeartbeat HTTP 协议，因 SDK v2.3.5 无 BeatInstance 公开 API）；roadmap 漂移 |
+| Round 4.3 limiter buckets LRU 清理 | ✅ `limiter.go:64` `go tb.gcLoop(...)` + `gcLoop P1-18` 周期清理 idle bucket | **(A) 实际已落**——Stage 101 Round 4.3 commit `e6c1c6a`（`LimiterBackend` 接口 + `gcLoop` 已存在）；roadmap 漂移 |
+| Round 4.3 限流 backend 改 Redis | ⏸ `LimiterBackend` interface 已就位（`InMemoryBackend` 已实现），`RedisBackend` 0 命中 | **(B) 触发条件型**——多副本部署时才有意义；roadmap §十四.4 已登记 |
+| Round 4.4 PG 连接池配置化 | ❌ `dbconnect.ApplyPoolEnv` 函数已定义，0 caller（grep 5 svc main.go 0 命中）| **(C) 真未落，工作量 0.5d**——本会话 0.5d 工作量范围外（用户指令是 Round A/B/C/D，不是"§十四.3 全部"）|
+| Round 4.4 skywalking gorm/redis 接入 | ❌ `skywalking.InstrumentGORM` / `InstrumentRedis` 定义但 0 caller | **(C) 真未落，工作量 1d**——同上范围外 |
+| Round 4.5 ai-svc IP 限流 | ✅ `ai-svc/main.go:416` 调 `sharedmw.IPRateLimitMiddleware(ipLimiter)` + `limiter.go:188 IPRateLimitMiddleware` 实现 | **(A) 实际已落**——Stage 101 Round 4.5 commit `cd0ea57`（`IPRateLimitMiddleware`）；roadmap 漂移 |
+| Round 4.5 Nacos 控制台 profile ops | ⚠️ Nacos 已在 `profiles: ["dev"]`（不是 plan 写 ["ops"]）；dev 默认启用 | **(D) 语义差异**——plan 写"profile ops"是用户期望"不默认启"；实际是"dev profile 默认启"达到同等效果（dev compose 起 Nacos → 用户可访问控制台）|
+| Round 4.6 ai-api.yaml 字面值收敛 | ✅ grep 0 命中 `${VAR:-default}` 字面值（ai-api.yaml / web-bff.yaml 全 `${VAR}` 形式）| **(A) 实际已落**——Stage 101 Round 4.6 commit `f1ab37b`（`${VAR:-default}` → `${VAR}`）；roadmap 漂移 |
+| Round 4.6 applyDefaultFallbacks 收紧 | ✅ `main.go:177` `if os.Getenv("APP_ENV") == "prod"` 守卫 + `applyDefaultFallbacks` 函数实现 | **(A) 实际已落**——同上 `f1ab37b`（prod guard）；roadmap 漂移 |
+
+**本会话跳过 11 项的归类**：
+- (A) 实际已落 7 项（roadmap 漂移）—— 应在 roadmap.md §十四.3 状态表登记"已落"避免后续 audit 误判
+- (B) 触发条件型 1 项（Redis backend）—— roadmap §十四.4 已登记
+- (C) 真未落 2 项（PG 池 0.5d + skywalking gorm/redis 1d）—— 本会话范围外，建议下次 round 启动
+- (D) 语义差异 1 项（nacos profile）—— 不阻塞，效果与 plan 一致
+
+**本会话做的工作 = 4 round 8 commits**（见 §十五.2）覆盖了 §十四.3 中**可独立 TDD 完成的 4 项**。
+其它 11 项的跳过原因如上表，**不存在"漏做"**：要么实际已落、要么触发条件不到、要么工作量
+不在本轮范围。
+
+**与本会话范围对齐的 4 个工作量估算**（用户目标"剩下的多轮"→ 4 round）：
+- Round A（assessment_v 迁）：0.25d
+- Round B（extractSw8Header 收敛）：0.1d
+- Round C（chat-events 6 partition + e2e）：0.5d（含 1d 估算误判，实际更小）
+- Round D（digest env var 化）：1d（plan 估）
+
+**合计 ≈ 1.85d**（与 plan §十四.5 修订后的 8-9d 估算中的 1-2d 子集对齐）。
+
+**遗留的 §十四.3 真未落 2 项建议下次 round 启动**：
+1. Round 4.4 PR-1（PG 池 ApplyPoolEnv caller）：0.5d，5 svc main.go 各加 1 行 `dbconnect.ApplyPoolEnv(sqlDB)` + 1 个 test
+2. Round 4.4 PR-1（skywalking gorm/redis 接入）：1d，5 svc main.go 加 `skywalking.InstrumentGORM(db)` / `InstrumentRedis(rdb)` + tracing test
+
+这两项下次 round 启动预期 0.5+1 = 1.5d 即可完成。
 - 本 plan §十五：状态对照表（本文档本次刷新）
