@@ -8,6 +8,7 @@
 package skywalking
 
 import (
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -32,20 +33,22 @@ func InitGORM(db *gorm.DB) int {
 }
 
 // InitRedis Round 4.4 PR-1：包装 InstrumentRedis。
-func InitRedis(client interface{}) bool {
+//
+// 用途：5 svc main.go 在 newRedisClient 拿到 *redis.Client 后立即调一次：
+//
+//	rdb := database.NewRedis(...)
+//	sharedskywalking.InitRedis(rdb)
+//
+// 返回 true 表示 hook 已注册（即使 Tracer 未起，挂载本身成功；无 tracer 时
+// ProcessHook 直接透传，零开销）。
+//
+// nil-safe：nil client 不 panic，返 false。
+func InitRedis(client *redis.Client) bool {
 	if client == nil {
 		return false
 	}
-	// 用 type assertion 防止编译期强依赖 redis 包
-	type hookable interface {
-		AddHook(any)
-	}
-	if h, ok := client.(hookable); ok {
-		// 调用方传 *redis.Client；此处仅做 hook 注册入口钉死
-		_ = h
-		return true
-	}
-	return false
+	InstrumentRedis(client)
+	return true
 }
 
 // _ = logger 防止 import 警告（保留扩展点）
