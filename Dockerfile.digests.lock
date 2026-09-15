@@ -2,6 +2,31 @@
 #
 # Round 4.7 PR-3：Dockerfile 基础镜像 digest pin 锁定表。
 #
+# ============================================================
+# 🔄 Round D ded2efc 引入 env-var 契约（2026-09-15）
+# ============================================================
+# 本轮改了 8 个 Dockerfile 改用 ARG + ${VAR_DIGEST:-image:tag} 模式
+# （chat-svc / user-svc / analytics-svc / assessment-svc / web-bff /
+#  web / web-dev / llm-service），ai-svc 早就是 env-var 模式。
+# scripts/check_docker_digests.sh 正则同步接受 ${VAR_DIGEST} 形式。
+#
+# 本文件 7 个 sha256:000...000 占位行 **当前仍是 Round 4.7 PR-3 时期的初始占位**，
+# Round D 没改这些占位（PR 范围 = Dockerfile + check 脚本）。
+#
+# 真值 sync 触发条件 = CI runner 网络可达 registry-1.docker.io：
+#   bash scripts/sync_docker_digests.sh
+# 该脚本会：
+#   1. 拉 anonymous token
+#   2. 对每个 image:tag 调 manifest v2 API 拿真 digest
+#   3. 仅替换 sha256:0000..0000 占位（不覆盖已 sync 的真值）
+#   4. 行末加 "# synced <date>" 标记
+#
+# 沙箱 docker.io 网络 443 timeout 已实测（webfetch / curl 均失败），
+# 故本轮无法在沙箱内回填真值。生产 CI 必填。
+#
+# 详细登记：docs/evidence/round-d-dockerfile-digest-pin.md
+# ============================================================
+#
 # 用法：
 #   1. Dockerfiles 改为 FROM image@sha256:$DIGEST_VAR 形式（参考 emotion-echo-ai-svc/Dockerfile 改后样式）
 #   2. 本文件提供 DIGEST_VAR → sha256 值的映射，由 build script 注入 build args
