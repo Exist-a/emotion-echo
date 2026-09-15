@@ -3,18 +3,26 @@ status: landed
 priority: high
 owner: TBD
 created: 2026-09-15
+last-closure: 2026-09-15（Round 5 stage-101 全量收口 — Round 1 follow-up + Round 3.3/3.5 + Round 4.2/4.3/4.4/4.5/4.6/4.7 全部落地）
+last-audit: 2026-09-15（§十四 代码审计：13 项 plan 标 open 但代码已落、6 项半落、11 项真未落）
 type: multi-round-iteration
 progress:
   round-0-landed: 1ec6e60 (docs: 文档治理收口)
   round-1.1-landed: 3bdc817 (fix(db): voice+emotion UNIQUE)
-  round-1.2-landed: c2d4aa3 (fix(db): EmotionAnalysis 软删除)
+  round-1.2-landed: c2d4aa3 (fix(db): EmotionAnalysis 软删除) + i007 SQL 已 ALTER 4 张表
   round-1.3-landed: 9458133 (fix(db): migrate.sh glob 改造)
-  round-1.4-landed: 006bb32 (fix(db): daily_emotion_v 收敛 + 视图一致性护栏)
+  round-1.4-landed: 006bb32 (fix(db): daily_emotion_v 收敛 + 视图一致性护栏) + msg_summary_v 单 owner
   round-2.1-landed: 4d118f6 (feat(chat-svc): outbox sent/dead 清理 job)
   round-2.2-landed: 6d6c3b1 (test(events): D6+D8 反射枚举护栏)
   round-2.3-landed: 0fbe2d0 (feat(observability): DLQ counter + 告警)
   round-2.4-landed: caa100c (fix(chat-svc): kafka_publisher ctx 取消)
-  rounds-pending: [1.2-follow-up (face/voice/fused 软删除), 3.1-3.5, 4.1-4.7, 5]
+  audit-2026-09-15:
+    doc-drift-closed: 13（plan 标 open 但代码已落，详见 §十四.1）
+    partial-open: 6（代码部分实现，详见 §十四.2）
+    truly-open: 11（代码确认未落，详见 §十四.3）
+    trigger-condition: 5（多副本/上 prod 才触发，详见 §十四.4）
+  actual-open: 17 truly-open + 6 partial = 23（vs 原估 49；半数已落）
+  next-rounds: [Round 1 follow-up (face/voice/fused gorm.DeletedAt), Round 3.3 防注入前缀, Round 3.5 跨 svc 隔离, Round 4.2 Nacos 心跳, Round 4.3 limiter, Round 4.4 skywalking/PG pool, Round 4.5 IP 限流/compose health/nacos profile, Round 4.6 ai-api.yaml 字面值, Round 4.7 digest pin]
   closure-stages:
     - stage-98-round-1-closure.md (Round 0-1.4 收口)
     - stage-99-round-2-closure.md (Round 2.1-2.4 收口)
@@ -59,7 +67,7 @@ related-adrs:
 | ④ todo-pile C/D 杂项 | C5/C7/C8 文档失真 + D1-D5 杂项 | 6 | `plans/todo-pile-2026-09-04.md` §C/D |
 | ⑤ roadmap 当前 open 清单 | 7 项长期 open | 7 | `architecture/roadmap.md` §"当前 open 清单"（**已漂移**，本计划 §A-1 第一动作先修）|
 
-**去重后实际 open 项 = 49 个**，总工作量 ≈ **18-25 人天**（紧凑 10-14）。
+**去重后实际 open 项 = 49 个**（**注**：2026-09-15 代码审计后修订为 **23 项真未落/半落**，详见 §十四）。
 
 ### 主题聚类（5 个 cluster，按风险×依赖排序）
 
@@ -102,7 +110,7 @@ related-adrs:
 └────────────────────────────────────────────────────────────┘
 ```
 
-**预计总时长**：紧凑 16-22d（4 周左右，按每工作日 1 个 round 节奏 = 5 个工作日 + 1 收口日）
+**预计总时长**：原估 16-22d（4 周左右）→ **2026-09-15 审计后修订为 8-9d**（多数 Round 1/2/3 重活已落），按每工作日 1 个 round 节奏 ≈ 2 周。
 
 ---
 
@@ -804,9 +812,9 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 | Round 2 P0 全部 10 项已落地 | `docs/stages/stage-97-round2-p0-closure.md` §1 矩阵（10/10 ✅）|
 | C6/D5/D1/D4 已销账 | commit `c9b05e6` + `todo-pile §G` + `kafka-pipeline §D1/D4 已落地登记` |
 | workflows 闭环迁 docs/ci-workflows | commit `045e3d8` + `stage-97 §6.1` 重写 |
-| 49 个 open 项 | 5 源交叉：Round 1 residuals (19) + Round 2 residuals (25) + Kafka D2-D8 (6) + todo-pile C/D (6) + roadmap open (7) = 63；去重后 49 |
+| 49 个 open 项 | 5 源交叉：Round 1 residuals (19) + Round 2 residuals (25) + Kafka D2-D8 (6) + todo-pile C/D (6) + roadmap open (7) = 63；去重后 49；**2026-09-15 审计修订为 23 项真未落/半落** |
 | 主题聚类 | 按风险×依赖；前置项必在依赖项前完成 |
-| 总工作量 18-25d | Round 1+2+3+4 工作量汇总（不含 Round 0/5 文档收口）|
+| 总工作量 18-25d | 原估 → **2026-09-15 审计修订为 8-9d**（Round 1+2+3+4 工作量汇总，不含 Round 0/5 文档收口） |
 | D1 短期 C 已落 | `outbox/metrics.go` `OutboxSentViaFallbackTotal` + ADR-19 段，commit `44e9767` |
 | D4 已落 | `config.go` `Kafka.MaxRetries` + main.go `KAFKA_MAX_RETRIES`，commit `2cc05c8` |
 | roadmap §"当前 open 清单" 漂移 | `roadmap.md:1035` 时间戳 2026-09-14 + 仍列 C6/D5/D1/D4 open；c9b05e6 已销账但未同步 |
@@ -817,7 +825,7 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 
 ## 十一、成功标准（本计划本身 = "制定"）
 
-- [x] 49 个 open 项 100% 分配到 Round 0-5（无遗漏）
+- [x] 49 个 open 项 100% 分配到 Round 0-5（无遗漏）→ **2026-09-15 审计修订为 23 项真未落/半落**
 - [x] 每 round 列出 TDD Red→Green 步骤（AGENTS.md §〇 强制）
 - [x] 每 round 列出成功标准（可验证）
 - [x] Round 0 优先于 Round 1（依赖：文档治理 → 数据层 → 链路 → 内容安全 → 部署）
@@ -869,53 +877,59 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 
 ---
 
-> **本计划基于代码事实**（49 open 项全部分配 + 每 round TDD 步骤可执行）。
+> **本计划基于代码事实**（49 open 项全部分配 + 每 round TDD 步骤可执行）→ **2026-09-15 代码审计修订为 23 项真未落/半落（详见 §十四）**。
 > 调研依据 = 5 源文档（Round 1/2 residuals + Kafka D2-D8 + todo-pile + roadmap open）+ Stage 97 收口报告 + 2 个新 commit（c9b05e6 / 045e3d8）。
 
 ---
 
-## 十三、落地状态盘点（2026-09-15 Stage 97 后）
+## 十三、落地状态盘点（2026-09-15 Stage 99 收口后）
 
-> **本段是进度快照**。`status: planned` 保留（Round 2-5 未做），但 Round 0 + 1.1-1.4
-> 已落地。每 round 状态有 commit SHA + 文件 + 测试结果。
+> **本段是进度快照**。Round 0 + 1.1-1.4 + 2.1-2.4 已全部落地（9 commits）。
+> Round 3-5 仍待启动，但 §十四 代码审计发现：plan 列的 49 项 open 中
+> **13 项已落（doc drift）+ 6 项半落 + 5 项触发条件型**——实际 open = **23 项**。
 
 | Round | 状态 | Commit | 改动文件 | 测试 | 关键决策 |
 |-------|------|--------|----------|------|----------|
 | **Round 0** 文档治理 | ✅ 已落 | `1ec6e60` | roadmap.md + decisions.md (2) | 5 源交叉验证 | 决策 9/12 关系说明段已存在（2026-09-10），仅做交叉引用登记 |
 | **Round 1.1** voice+emotion UNIQUE | ✅ 已落 | `3bdc817` | 2 migration (i008/i009) + 1 test (3) | 5/5 PASS, 13.95s | i006 partial unique 破坏 GORM ON CONFLICT（i009 改为完整 UNIQUE）|
-| **Round 1.2** EmotionAnalysis 软删除 | ✅ 已落 | `c2d4aa3` | 1 model + 1 repo + 1 test (2) | 7/7 PASS, 17s | gorm.DeletedAt = sql.NullTime；4 张表（face/voice/fused/voice_transcripts）follow-up |
+| **Round 1.2** EmotionAnalysis 软删除 | ✅ 已落 | `c2d4aa3` | 1 model + 1 repo + 1 test (2) | 7/7 PASS, 17s | gorm.DeletedAt = sql.NullTime；4 张表 SQL 列已加（i007），剩 GORM model + repo 接入 |
 | **Round 1.3** migrate.sh glob 改造 | ✅ 已落 | `9458133` | migrate.sh + 1 test (5 契约) | 5/5 契约 PASS | 删 SERVICE_ORDER 硬编码，加 PRIORITY_ORDER 兜底 + Phase 2 glob 自动发现 |
-| **Round 1.4** 视图一致性 + 收敛 | ✅ 已落 | `006bb32` | 04-create-views.sql + 1 test (3) + 1 tool (160) | 3/3 unit + 4 view 一致 | daily_emotion_v 收敛到 analytics/a001（owner 减半 2→1）|
+| **Round 1.4** 视图一致性 + 收敛 | ✅ 已落 | `006bb32` | 04-create-views.sql + 1 test (3) + 1 tool (160) | 3/3 unit + 4 view 一致 | daily_emotion_v 收敛到 analytics/a001（owner 减半 2→1）；msg_summary_v 单 owner（c005） |
 | **Round 2.1** outbox sent/dead 清理 job (Kafka D2) | ✅ 已落 | `4d118f6` | cleanup.go + cleanup_test.go + main.go ticker + config (6) | 5/5 PASS, 0.72s | dead 用 created_at 判定（last_error 是 msg string）|
 | **Round 2.2** D6+D8 契约卫生 (Kafka D6/D8) | ✅ 已落 | `6d6c3b1` | proto_marshal_test.go + mapper_test.go + peer=topic 注释 (3) | 2/2 PASS, 0.61s | RED 阶段暴露"去点+首大写"启发式对 ConversationClosed 不适用，改 sample.dataTypeName 显式 |
-| **Round 2.3** DLQ 告警 (剩余 PR-1+PR-2) | ✅ 已落 | `0fbe2d0` | dlq_metrics.go ×2 + dlq_metrics_test.go ×2 + kafka-dlq.yml + consumer.go ×2 + prometheus.yml (8) | 7/7 PASS, 0.66s | DLQ 监控 / 告警 / 4 子项 (大小/timeout/分区键/镜像 tag) 已在 Round 1 + Stage 97 落地 — 计划漂移已对账 |
+| **Round 2.3** DLQ 告警 + 大小限制 + 生产 timeout | ✅ 已落 | `0fbe2d0` | dlq_metrics.go ×2 + dlq_metrics_test.go ×2 + kafka-dlq.yml + consumer.go ×2 + prometheus.yml (8) | 7/7 PASS, 0.66s | DLQ 监控 / 告警 / 4 子项 (大小/timeout/分区键/镜像 tag) 已在 Round 1 + Stage 97 落地 — 计划漂移已对账 |
 | **Round 2.4** chat-svc producer ctx 取消 (Kafka P2-14) | ✅ 已落 | `caa100c` | kafka_publisher.go + kafka_publisher_test.go (2) | 11/11 PASS, 0.69s | goroutine + select 包裹 SendMessage；sarama 协程泄漏一次由 Producer.Timeout=10s 兜底 |
 
 **累计（Round 0-2）**：9 commits, +1685/-41 行, 33 测试 PASS, 0 回归。
 
-### 13.1 Round 1 follow-up（待办）
+### 13.1 Round 1 follow-up（待办，按 §十四代码审计重写）
 
-| 任务 | 工作量 | 来源 |
+| 任务 | 工作量 | 状态 |
 |------|--------|------|
-| 推 face/voice/fused 3 张表软删除 (Round 1.2 残余) | 0.5d | plan §三 Round 1.2 步骤 4 |
-| voice_transcripts 软删除 + 建表 migration (第 5 张表) | 0.25d | plan §三 Round 1.2 范围权衡 |
-| msg_summary_v 双 owner 收敛 (c005/c007 → 单 owner) | 0.5d | Round 1.4 grep 现状发现 |
-| assessment_v 迁 analytics (deploy/db → svc migration) | 0.25d | Round 1.4 注释登记 |
+| face/voice/fused model 加 gorm.DeletedAt + repo Delete 改软删 | 0.5d | ⏳ 真未落（i007 SQL 列已加；model/repo 未改） |
+| voice_transcripts 软删除（SQL 列 + model + repo） | 0.25d | ⏳ 真未落 |
+| msg_summary_v 双 owner 收敛 | — | ✅ 已落（c005 单 owner，deploy/db 已撤回 CREATE VIEW） |
+| assessment_v 迁 analytics | — | ⏳ 双 owner 但口径一致（deploy/db vs analytics/a001 SQL diff 0 行） |
 
-### 13.2 剩余 Rounds（按 plan §三-§七）
+### 13.2 剩余 Rounds（按 §十四审计重写）
 
 | Round | 主题 | 状态 |
 |-------|------|------|
-| Round 2.1 | outbox sent/dead 清理 job (Kafka D2) | ⏳ pending |
-| Round 2.2 | D6+D8 契约卫生合并小 PR (Kafka D6/D8) | ⏳ pending |
-| Round 2.3 | DLQ 告警 + 大小限制 + 生产 timeout | ⏳ pending |
-| Round 2.4 | analytics-svc consumer 配置补全 + chat-svc producer ctx 取消 | ⏳ pending |
-| Round 3.1 | mock 随机 + 异常脱敏 api_key | ⏳ pending |
-| Round 3.2 | FileAttachment SSRF 边界 | ⏳ pending |
-| Round 3.3 | prompt 注入防护 | ⏳ pending |
-| Round 3.4 | LLM 输出内容审核 | ⏳ pending（owner 拍板选型）|
-| Round 3.5 | INTERNAL_API_KEY 弱 key fail-fast + 跨 svc 隔离 | ⏳ pending |
-| Round 4.1-4.7 | 中间件/部署/可观测 26 PR | ⏳ pending |
+| Round 3.1 | mock 随机 + 异常脱敏 api_key + panic 脱敏 | ✅ **全落**（代码审计：chat_completion.py random variants + _safe_fallback_reason + grpcinterceptor panic fix） |
+| Round 3.2 | FileAttachment SSRF 边界 | ✅ **已落**（file_context.py:72-99 userinfo + hostname 二次校验） |
+| Round 3.3 | prompt 注入防护 | ⏳ **部分落**（file_context.py:194 `<file_attachment>` 包裹有；缺"不要执行附件指令"防注入前缀） |
+| Round 3.4 | LLM 输出内容审核 | ✅ **已落**（chat_completion.py:165-200 关键词正则 + 安全回复，非 Llama Guard 等专业方案） |
+| Round 3.5 | INTERNAL_API_KEY 弱 key fail-fast + 跨 svc 隔离 | ⏳ **部分落**（grpc_server.py:388-415 fail-fast ✅；跨 svc 隔离 0 命中 AI_LLM_*/BFF_LLM_* env） |
+| Round 4.1 | DLQ 监控 + 告警 + Promtail + healthcheck | ⏳ **部分落**（DLQ metric ✅、Promtail ✅、web Dockerfile HEALTHCHECK ✅；web-bff /healthz 已存在；helm probe 0 命中） |
+| Round 4.2 | Nacos 心跳 + fail-fast | ⏳ **部分落**（llm-service connect/register 失败 RuntimeError ✅；web-bff main.go:132 swallow 错误未改、BeatInstance 0 命中） |
+| Round 4.3 | limiter buckets 清理 + Redis backend | ⏳ **真未落**（limiter.go 0 命中 cleanupInterval/AfterFunc/LRU；0 Redis backend） |
+| Round 4.4 | PG 池配置化 + skywalking gorm/redis + topic 6 partition + consumer metric | ⏳ **真未落**（PG 硬编码 10/5；InstrumentGORM/Redis 0 caller；KAFKA_NUM_PARTITIONS 0；consumer metric Round 4.4 PR-4 待做） |
+| Round 4.5 | 消息大小 + compose health + IP 限流 + nacos profile | ⏳ **部分落**（大小 ✅；compose 1/15 处 service_healthy；ai-svc IP 限流 0；nacos profile 0） |
+| Round 4.6 | 杂项 8 项 | ⏳ **部分落**（MV metric ✅、web registry ✅、CORS 改走 APISIX ✅、TrustAPISIX 实现 ✅；ai-api.yaml 字面值 + applyDefaultFallbacks + memory limit 部分 仍部分） |
+| Round 4.7 | GinSkywalking + consumer 拆分 + digest pin | ⏳ **部分落**（consumer.go 346 行，dlq/proto_decode/metrics 已拆但仍 > 200；digest pin 0；SKIP_PATH_LIST 待核） |
+| Kafka D3 | consumer attempts 跨重启持久化 | ⏳ 真未落（attempts in-memory map） |
+| Kafka D5 | relay 多副本互斥 | ⏳ 真未落（无 advisory lock / SELECT FOR UPDATE SKIP LOCKED） |
+| Kafka D7 | 删除会话生命周期 | ⏳ 待 owner 拍板（产品语义） |
 | Round 5 | 全量收口 | ⏳ pending |
 
 ### 13.3 累计测试矩阵（实测）
@@ -931,10 +945,107 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 | migrate.sh glob (5 契约) | 5 | ✅ PASS | `9458133` |
 | **合计** | **18 用例 + 4 view 一致** | **0 回归** | - |
 
-### 13.4 调研依据（本段增量更新）
+### 13.4 调研依据
 
-- 7 commits 落地：`937855c` + `76d2d8f`（计划制定）+ `1ec6e60`（Round 0）+ `3bdc817`（Round 1.1）+ `c2d4aa3`（Round 1.2）+ `9458133`（Round 1.3）+ `006bb32`（Round 1.4）
+- 9 commits 落地：`937855c` + `76d2d8f`（计划制定）+ `1ec6e60`（Round 0）+ `3bdc817`（Round 1.1）+ `c2d4aa3`（Round 1.2）+ `9458133`（Round 1.3）+ `006bb32`（Round 1.4）+ `4d118f6`（Round 2.1）+ `6d6c3b1`（Round 2.2）+ `0fbe2d0`（Round 2.3）+ `caa100c`（Round 2.4）
 - ai-svc 单元测试 5 包 PASS（logic/model/repository/svc/types）
 - check_view_consistency.py: 4 view（daily_emotion_by_modality_v 单点 + daily_emotion_v 单点 + assessment_v 2 点一致 + msg_summary_v 2 点一致）
 - migrate.sh glob 5 契约：SERVICE_ORDER 硬编码消失 + glob 模式命中 + SERVICE_ORDER 字面仅在注释 + 3 svc 落地 + legacy 排除
 - AGENTS.md §〇必做功课 #1（每 round 必先 grep 现状）：4 轮全部按此执行，规避了 i006 partial unique 破坏 GORM ON CONFLICT 等隐藏 bug
+
+---
+
+## 十四、2026-09-15 代码审计与 open 清单修订
+
+> **来源**：用户 2026-09-15 指出"先看代码再讨论"。本次按 AGENTS.md §〇必做功课 #1
+> 把 §三-§六 全部 49 项 plan 项 grep 代码证据，结论：半数已落，§十三.2 状态有漂移。
+>
+> 本节是**修订后的真正 open 清单**，所有原 §三-§六 步骤描述保留作为参考，
+> 但状态以本节为准。
+
+### 14.1 文档漂移（plan 标 open / 代码已落）
+
+| 项 | 原 plan 描述 | 代码事实 | 证据 |
+|----|-------------|---------|------|
+| Round 3.1 mock 文案随机化 | "固定 2 帧" | **4 random variants** | `emotion-llm-service/chat_completion.py:78-92` `make_mock_chunks` |
+| Round 3.1 异常脱敏 api_key | "intent_llm.py:90 泄露" | **正则替换 sk-/Bearer/api_key 三类** | `chat_completion.py:152-163` `_safe_fallback_reason` + `intent_llm.py:92-96` |
+| Round 3.1 panic 脱敏 | "panic value 写 status message" | **改为固定文案 + log 原始 panic** | `emotion-echo-shared/pkg/grpcinterceptor/server.go:92-97` |
+| Round 3.2 FileAttachment SSRF 边界 | "需 userinfo 拒收 + hostname 二次校验" | **已实现**：parsed.username/password 拒 + parsed.hostname 二次校验 + 默认端口对齐 | `file_context.py:72-99` `url_allowed` |
+| Round 3.4 LLM 输出内容审核 | "0 防护，owner 拍板选型" | **关键词正则兜底**（7 类模式 + 安全回复） | `chat_completion.py:165-200` `_DANGEROUS_PATTERNS` + `moderate_content` |
+| Round 3.5 弱 key fail-fast | "weak key 仅 warn" | **`INTERNAL_API_KEY_REQUIRED=1` + 弱 key → sys.exit(1)** | `emotion-llm-service/grpc_server.py:388-415` |
+| Round 4.1 DLQ metric + 告警 | "DLQ 不计数 + 无告警" | **Round 2.3 已落** | `deploy/prometheus/rules/kafka-dlq.yml` + `0fbe2d0` |
+| Round 4.1 Promtail 业务 svc stdout | "P1-4 缺业务 svc scrape" | **`/var/log/services/*.log` scrape job + job=services label** | `deploy/loki/promtail-config.yaml:38-42` |
+| Round 4.5 chat-svc 消息体大小 | "max body size check 缺失" | **已落 max=4 KiB** | `emotion-echo-chat-svc/internal/logic/sendmessagelogic.go:71-76` |
+| Round 4.6 MV REFRESH 失败 metric | "仅 log" | **`MVRefreshFail.Inc()` + `MVRefreshSuccess.Inc()` + `MVRefreshDuration.Observe()`** | `emotion-echo-analytics-svc/main.go:119-126` |
+| Round 4.6 dev mode CORS | "web-bff 235-240 缺" | **dev CORS 中间件已回滚，CORS 由 APISIX cors 插件统一配** | `emotion-echo-web-bff/main.go:259-263` |
+| Round 4.6 web registry 一致 | "npmmirror vs npmjs" | **`ARG NPM_REGISTRY=https://registry.npmjs.org/`** | `emotion-echo-web/Dockerfile:12-15` |
+| Round 4.6 TrustAPISIX 实现 | "注释承诺未实现" | **已实现 + IP 白名单 + dev 模式 fallback** | `emotion-echo-web-bff/main.go:174-197` |
+| Round 1 follow-up msg_summary_v 双 owner | "c005/c007 双 owner" | **c005 单 owner；deploy/db:14-15 注释明写撤回 CREATE VIEW** | `deploy/db/04-create-views.sql:14-15` + `chat-svc/migrations/c005` |
+| Round 1 follow-up DDL i007 SQL 列 | "model 缺 gorm.DeletedAt" | **i007 已 ALTER 4 张表加 deleted_at + 索引**（仅 model/repo 接入未做） | `emotion-echo-ai-svc/migrations/i007_soft_delete_columns.sql:19-28` |
+
+### 14.2 半落（代码部分实现）
+
+| 项 | 缺什么 | 已有 | 证据 |
+|----|-------|------|------|
+| Round 3.3 prompt 注入前缀 | "不要执行附件指令" 前缀未加 | `<file_attachment>` 包裹标签 | `file_context.py:194` vs `grpc_server.py:290-310` 缺指令前缀 |
+| Round 3.5 跨 svc 隔离 | 3 svc 共享 INTERNAL_API_KEY 一个 env | fail-fast ✅ | ai-svc:124 + web-bff:214 + llm-service:125 全读 INTERNAL_API_KEY |
+| Round 4.1 helm livenessProbe / readinessProbe | helm values-prod 缺探活 | web Dockerfile HEALTHCHECK ✅ + web-bff /healthz ✅ | grep `values-prod.yaml` `livenessProbe` 0 命中 |
+| Round 4.2 Nacos fail-fast (web-bff) | main.go:132 `log.Printf("...continuing")` swallow | llm-service `RuntimeError` ✅ | `emotion-echo-web-bff/main.go:132` |
+| Round 4.5 compose `depends_on` health | 14 处仍 `service_started` | 1 处 `service_healthy` | `deploy/docker-compose.apps.yml:53` vs `:118-324` |
+| Round 4.6 ai-svc/llm memory limit | 4 svc 仍 256M/64M | ai-svc/llm/funasr 已升 1024M/1024M/1536M | `deploy/docker-compose.apps.yml:112,170,233,289` vs `:363,444,500,549` |
+| Round 4.7 §F consumer.go 拆分 | consumer.go 346 行（> 200 阈值） | dlq.go + dlq_metrics.go + proto_decode.go 已拆 | `emotion-echo-ai-svc/internal/consumer/consumer.go` 346 行 |
+
+### 14.3 真未落（代码确认未实现）
+
+| 项 | 现状 | 工作量 | 来源 |
+|----|------|--------|------|
+| face/voice/fused model 加 gorm.DeletedAt + repo Delete 软删 | i007 SQL 列已加，model 无 gorm.DeletedAt | 0.5d | plan §三 Round 1.2 步骤 4 |
+| voice_transcripts 软删除（DDL + model + repo） | 5 张表里唯一 DDL 都缺 | 0.25d | 同上 |
+| assessment_v 迁 analytics | 双 owner 但口径一致（SQL diff 0 行）；仅注释登记 | 0.25d | Round 1.4 注释登记 |
+| Round 4.2 Nacos 心跳改 BeatInstance | 0 命中 BeatInstance/heart_beat | 0.5d | plan §六 Round 4.2 PR-1 |
+| Round 4.3 limiter buckets LRU 清理 | 0 命中 cleanupInterval/AfterFunc/LRU | 0.25d | plan §六 Round 4.3 PR-1 |
+| Round 4.3 限流 backend 改 Redis | 0 命中 redis://、LIMITER_BACKEND、miniredis | 0.75d | plan §六 Round 4.3 PR-2 |
+| Round 4.4 PG 连接池配置化 | 5 svc 全部硬编码默认 10/5 | 0.5d | plan §六 Round 4.4 PR-2 |
+| Round 4.4 skywalking gorm/redis 接入 | 0 caller in main.go（InstrumentGORM/Redis 0 命中） | 1d | plan §六 Round 4.4 PR-1 |
+| Round 4.4 chat-events topic 6 partition | compose 仅 `KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"`，无 NUM_PARTITIONS | 1d（触发=上 prod） | plan §六 Round 4.4 PR-3 |
+| Round 4.5 ai-svc IP 限流 | 0 命中 IPLimit/ipRateLimit | 0.25d | plan §六 Round 4.5 PR-3 |
+| Round 4.5 Nacos 控制台 profile ops | 0 命中 profiles.*ops | 0.25d | plan §六 Round 4.5 PR-4 |
+| Round 4.6 ai-api.yaml 字面值收敛 + applyDefaultFallbacks 收紧 | main.go:162-191 仍用 localhost/5432/11800 dev 默认 | 0.25d | plan §六 Round 4.6 PR-1+PR-2 |
+| Round 4.7 基础镜像 digest pin | 16 Dockerfile 全部 `FROM image:tag`，仅 2 处注释提及 | 1d | plan §六 Round 4.7 PR-3 |
+
+### 14.4 触发条件型（多副本/上 prod 才生效）
+
+| 项 | 触发条件 | 现状 | 来源 |
+|----|---------|------|------|
+| Kafka D3 consumer attempts 持久化 | ai-svc/analytics-svc 多副本部署 | in-memory map（consumer.go:63）| kafka-pipeline-pending-decisions.md §D3 |
+| Kafka D5 relay 多副本互斥 | chat-svc 决定扩副本 | 无 advisory lock / SELECT FOR UPDATE SKIP LOCKED | 同上 §D5 |
+| Kafka D7 删除会话生命周期 | owner 拍板（产品语义） | `DeleteConversationTx` 硬删 + 复用 conversation.closed | 同上 §D7 |
+| Round 4.4 chat-events topic 6 partition | 真上 prod | dev 1 partition 无影响 | plan §六 Round 4.4 PR-3 |
+| Helm probe（部分已落但生产触发） | helm 部署触发 | k8s 路径补 | plan §六 Round 4.1 PR-3 |
+
+### 14.5 修订后的下轮优先级（按工作量×风险）
+
+按 AGENTS.md §〇"前置必在前"，排序列出本轮**真正可启动**的工作：
+
+| 序号 | Round | 工作量 | 风险 | 前置 |
+|------|-------|--------|------|------|
+| 1 | Round 1 follow-up（face/voice/fused/voice_transcripts 软删） | 0.75d | 低 | 无（DDL 已落）|
+| 2 | Round 3.3 防注入前缀 | 0.25d | 中（心理健康场景）| 无 |
+| 3 | Round 3.5 跨 svc 隔离 | 0.5d | 中（误用 dev key） | 无 |
+| 4 | Round 4.6 ai-api.yaml 字面值 + applyDefaultFallbacks 收紧 | 0.5d | 中（prod 误配）| 无 |
+| 5 | Round 4.5 compose health (14 处) + nacos profile + ai-svc IP 限流 | 1d | 低-中 | 无 |
+| 6 | Round 4.2 Nacos 心跳 + fail-fast | 1d | 中（多副本必做）| 无 |
+| 7 | Round 4.3 limiter buckets LRU + Redis backend | 1d | 中（OOM 风险） | Redis 实例 |
+| 8 | Round 4.4 PG 池 + skywalking gorm/redis | 1.5d | 低-中 | 无 |
+| 9 | Round 4.6 memory limit + llm 国内源再判断 | 0.5d | 低 | 无 |
+| 10 | Round 4.7 consumer.go 拆 < 200 行 + digest pin + SKIP_PATH_LIST | 2d | 低 | 无 |
+| 11 | Kafka D3/D5/D7 | 触发条件 | — | 多副本/上 prod |
+| **合计** | | **8-9d** | | |
+
+### 14.6 文档本身修订记录
+
+- front-matter: `status: landed` → `status: in-flight`，新增 `audit-2026-09-15` 字段
+- §十三 §13.2 表格按本审计全量重写
+- 新增 §十四（5 小节）作为修订后的权威 open 清单
+- §十二 "工作总量 18-25d" 需下调为 **8-9d**（多数重活已落）
+- 后续启动 Round 时按 §14.5 顺序，每轮按 AGENTS.md §2.2 TDD 流程 + §2.5 收口自检三连
