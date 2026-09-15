@@ -303,7 +303,11 @@ func (h *chatEventHandler) handleFailure(sess sarama.ConsumerGroupSession, msg *
 			Headers:       dlqHeaders,
 		}
 		if dlqErr := h.dlq.Publish(sess.Context(), dlqEntry); dlqErr != nil {
+			// Round 2.3 §PR-1: analytics-svc DLQ 投递失败计数（kafka-pipeline-pending-decisions.md §P1-14）。
+			IncDLQPublishResult(false)
 			log.Printf("[kafka-consumer] DLQ publish failed (dropping msg): %v", dlqErr)
+		} else {
+			IncDLQPublishResult(true)
 		}
 	}
 	log.Printf("[kafka-consumer] handle %s failed after %d retries → DLQ: %v",

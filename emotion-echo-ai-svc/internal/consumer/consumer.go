@@ -216,7 +216,12 @@ func (h *ConsumerGroupHandler) handleFailure(
 			Headers:       dlqHeaders,
 		}
 		if dlqErr := h.DLQ.Publish(sess.Context(), dlqEntry); dlqErr != nil {
+			// Round 2.3 §PR-1：DLQ 投递失败计数（kafka-pipeline-pending-decisions.md §P1-14）。
+			// 业务消息已 MarkMessage 也无法挽回——属于"业务 + DLQ 双失败"黑洞，本 counter 让黑洞可见。
+			IncDLQPublishResult(false)
 			slog.ErrorContext(sess.Context(), "consumer DLQ publish failed (dropping msg)", "err", dlqErr)
+		} else {
+			IncDLQPublishResult(true)
 		}
 	}
 	slog.ErrorContext(sess.Context(), "consumer handler err after retries → DLQ",

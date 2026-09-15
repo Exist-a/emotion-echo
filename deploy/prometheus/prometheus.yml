@@ -66,7 +66,7 @@ scrape_configs:
         labels:
           component: "kafka"
 
-# === PR-OBS-7: alert rules (Kafka consumer lag 高负载告警) ===
+# === PR-OBS-7 + Round 2.3: alert rules (kafka-lag + outbox-dead + kafka-dlq) ===
 rule_files:
   - "/etc/prometheus/rules/*.yml"
 

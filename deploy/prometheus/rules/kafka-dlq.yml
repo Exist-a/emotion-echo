@@ -1,0 +1,50 @@
+# Round 2.3 §PR-1: DLQ 投递失败告警
+#
+# 指标:
+#   emotion_echo_dlq_publish_total{result="success|failure"} (ai-svc /metrics)
+#   emotion_echo_analytics_dlq_publish_total{result="success|failure"} (analytics-svc /metrics)
+#
+# 含义（kafka-pipeline-pending-decisions.md §P1-14）：
+#   ai-svc / analytics-svc consumer 调 DLQ.Publish 发到 chat-events-dlq 时失败
+#   （broker 不可达 / sarama 超时）。此时业务消息已 MarkMessage 也无法挽回——
+#   属于"业务 + DLQ 双失败"黑洞，failure rate 非 0 时值班需立即排查。
+#
+# 阈值: rate over 5m > 0.1（即 5 分钟内每分钟至少 0.1 次失败）→ severity=critical
+#
+# 注意: 与 outbox-dead.yml 不同，DLQ 失败不意味"事件丢失"（sarama 已 retry + 业务 MarkMessage），
+# 但意味"毒消息 + 失败原因"都进不了 DLQ topic —— 排查时无法用 DLQ replay。
+#
+# 处置:
+#   1. psql 查 emotion_echo_chat.outbox_events WHERE status='dead' (ai-svc 失败的原始事件)
+#   2. docker logs ai-svc | grep "DLQ publish failed" 找 sarama 错误
+#   3. 修 broker / sarama config 后手工 replay (调 outbox_events WHERE event_id IN (...) UPDATE status='pending')
+
+groups:
+  - name: kafka-dlq
+    interval: 30s
+    rules:
+      - alert: AIDLQPublishFailure
+        expr: rate(emotion_echo_dlq_publish_total{result="failure"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: ai-svc
+        annotations:
+          summary: "ai-svc DLQ publish failure rate > 0.1/s over 5m"
+          description: |
+            ai-svc DLQ.Publish 失败率 = {{ $value }}/s。
+            业务消息 + DLQ 双失败：sarama 已 retry 但仍失败，事件已 MarkMessage 也无法挽回。
+            查 ai-svc 日志 "consumer DLQ publish failed (dropping msg)" 找 broker 错误。
+
+      - alert: AnalyticsDLQPublishFailure
+        expr: rate(emotion_echo_analytics_dlq_publish_total{result="failure"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: analytics-svc
+        annotations:
+          summary: "analytics-svc DLQ publish failure rate > 0.1/s over 5m"
+          description: |
+            analytics-svc DLQ.Publish 失败率 = {{ $value }}/s。
+            user_behavior_events 落库失败的毒消息 + DLQ 双失败。
+            查 analytics-svc 日志 "DLQ publish failed (dropping msg)" 找 broker 错误。
