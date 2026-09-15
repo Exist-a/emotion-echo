@@ -60,6 +60,7 @@ deploy/
 |---|---|---|
 | `BFF_DEV_RETURN_CODE` | `1` | dev 验证码回显（forget-pwd e2e）。**prod 必须 0** |
 | `BFF_TRUST_APISIX` | `true` | dev 默认信任 APISIX 注入的 X-User-Id；prod 由 APISIX 强制注入 |
+| `BFF_LLM_INTERNAL_API_KEY` | *(空)* | Round 3.5 跨 svc 隔离：web-bff 优先读此 key → fallback `INTERNAL_API_KEY`。prod 推荐设不同 key 与 ai-svc 隔离 |
 | `BFF_LLM_API_KEY` | *(空)* | 真实 LLM key。**写 deploy/env/.env.local（git ignore），不要 commit** |
 | `BFF_LLM_BASE_URL` | `https://api.deepseek.com` | LLM API base（DeepSeek/OpenAI 兼容） |
 | `BFF_LLM_MODEL` | `deepseek-chat` | LLM 模型名 |
@@ -108,6 +109,7 @@ services:
     environment:
       BFF_DEV_RETURN_CODE: ${BFF_DEV_RETURN_CODE:-1}
       BFF_TRUST_APISIX: ${BFF_TRUST_APISIX:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}            # dev 看调试日志
     ports: ["8894:8894"]              # dev 调试直连
 
   emotion-echo-web:
@@ -115,10 +117,39 @@ services:
       NUXT_PUBLIC_API_BASE_URL: http://localhost:19080/api/v1
     ports: ["3000:3000"]              # dev 看 UI
 
-  emotion-echo-{chat,user,ai,analytics,assessment}-svc:
+  # 5 业务 svc CORS：dev 默认允许 Nuxt 本地端口 :3000；prod 应改域名白名单
+  emotion-echo-chat-svc:
     environment:
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+  emotion-echo-user-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+  emotion-echo-ai-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+  emotion-echo-analytics-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+  emotion-echo-assessment-svc:
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+
+  # emotion-llm-service 同样覆盖 LOG_LEVEL=DEBUG（Python 端 trace 需要）
+  emotion-llm-service:
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
 ```
+
+**实际行为说明**：
+- `CORS_ALLOW_ORIGINS` 默认 `http://localhost:3000`（Nuxt dev server）；可在 `.env.local` 设其它值覆盖（如多前端场景）
+- `LOG_LEVEL` 默认 `DEBUG`（dev 看调试日志）；prod 取消覆盖即回到 apps.yml 的 `INFO` 默认
+- BFF 的 `BFF_DEV_RETURN_CODE=1` 让验证码明文回显，便于 forget-pwd e2e 走通
+- BFF 的 `BFF_TRUST_APISIX=true` 允许直连 BFF 调试（APISIX :19080 入口仍正常工作）
 
 ---
 
