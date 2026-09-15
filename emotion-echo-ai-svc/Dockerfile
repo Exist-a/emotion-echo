@@ -18,8 +18,9 @@
 # Dockerfile.digests.lock 提供 GOLANG_1_26_ALPINE_DIGEST / ALPINE_3_19_DIGEST 等值，
 # 由 docker-compose build args 注入。开发期离线可设置 DIGEST_OFFLINE_FALLBACK=true
 # 跳过 digest 校验（仅 dev compose 用，生产 CI 强制）。
-ARG GOLANG_1_26_ALPINE_DIGEST=""
-FROM golang@${GOLANG_1_26_ALPINE_DIGEST:-golang:1.26-alpine} AS builder
+ARG GOLANG_1_26_ALPINE_IMAGE
+ARG GOLANG_1_26_ALPINE_DIGEST
+FROM ${GOLANG_1_26_ALPINE_IMAGE:-golang:1.26-alpine}${GOLANG_1_26_ALPINE_DIGEST:+@${GOLANG_1_26_ALPINE_DIGEST}} AS builder
 # 国内构建：必须切到 goproxy.cn，否则 proxy.golang.org 在容器内被墙
 ENV GOPROXY=https://goproxy.cn,direct \
     GOSUMDB=off
@@ -47,8 +48,9 @@ RUN CGO_ENABLED=0 \
     GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/ai-svc .
 # ============ Stage 2: runtime ============
-ARG ALPINE_3_19_DIGEST=""
-FROM alpine@${ALPINE_3_19_DIGEST:-alpine:3.19}
+ARG ALPINE_3_19_IMAGE
+ARG ALPINE_3_19_DIGEST
+FROM ${ALPINE_3_19_IMAGE:-alpine:3.19}${ALPINE_3_19_DIGEST:+@${ALPINE_3_19_DIGEST}}
 # 容器内时区
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \

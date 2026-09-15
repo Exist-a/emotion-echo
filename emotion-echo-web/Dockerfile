@@ -1,8 +1,9 @@
 # 构建阶段
 # Round D: 基础镜像 digest pin（Dockerfile.digests.lock 提供 NODE_20_ALPINE_DIGEST）
 # dev compose 不强制；prod CI 同步真 digest 后 build 锁版本
-ARG NODE_20_ALPINE_DIGEST=""
-FROM node@${NODE_20_ALPINE_DIGEST:-node:20-alpine} AS builder
+ARG NODE_20_ALPINE_IMAGE
+ARG NODE_20_ALPINE_DIGEST
+FROM ${NODE_20_ALPINE_IMAGE:-node:20-alpine}${NODE_20_ALPINE_DIGEST:+@${NODE_20_ALPINE_DIGEST}} AS builder
 
 WORKDIR /app
 
@@ -24,8 +25,9 @@ RUN npm run build
 
 # 运行阶段
 # Round D: 基础镜像 digest pin
-ARG NODE_20_ALPINE_DIGEST=""
-FROM node@${NODE_20_ALPINE_DIGEST:-node:20-alpine}
+ARG NODE_20_ALPINE_IMAGE
+ARG NODE_20_ALPINE_DIGEST
+FROM ${NODE_20_ALPINE_IMAGE:-node:20-alpine}${NODE_20_ALPINE_DIGEST:+@${NODE_20_ALPINE_DIGEST}}
 
 # P0-R2-8: 非 root 用户运行 Node.js（容器安全）
 USER node

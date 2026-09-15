@@ -14,8 +14,9 @@
 # ============ Stage 1: builder ============
 # Round D: 基础镜像 digest pin（Dockerfile.digests.lock 提供 PYTHON_3_12_SLIM_DIGEST）
 # dev compose 不强制；prod CI 同步真 digest 后 build 锁版本
-ARG PYTHON_3_12_SLIM_DIGEST=""
-FROM python@${PYTHON_3_12_SLIM_DIGEST:-python:3.12-slim} AS builder
+ARG PYTHON_3_12_SLIM_IMAGE
+ARG PYTHON_3_12_SLIM_DIGEST
+FROM ${PYTHON_3_12_SLIM_IMAGE:-python:3.12-slim}${PYTHON_3_12_SLIM_DIGEST:+@${PYTHON_3_12_SLIM_DIGEST}} AS builder
 
 WORKDIR /build
 
@@ -46,8 +47,9 @@ COPY emotion-llm-service/entrypoint.sh    ./entrypoint.sh
 
 # ============ Stage 2: runtime ============
 # Round D: 基础镜像 digest pin
-ARG PYTHON_3_12_SLIM_DIGEST=""
-FROM python@${PYTHON_3_12_SLIM_DIGEST:-python:3.12-slim} AS runtime
+ARG PYTHON_3_12_SLIM_IMAGE
+ARG PYTHON_3_12_SLIM_DIGEST
+FROM ${PYTHON_3_12_SLIM_IMAGE:-python:3.12-slim}${PYTHON_3_12_SLIM_DIGEST:+@${PYTHON_3_12_SLIM_DIGEST}} AS runtime
 
 # 容器内时区 & 语言
 ENV TZ=Asia/Shanghai \
