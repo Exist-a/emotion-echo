@@ -1094,16 +1094,29 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 
 **修订后真正 open 总数**：**0 项本轮可启动**（plan §十四修订后的 23 项全部落地）。
 
-**剩余触发条件 backlog**（9 项，需外部触发或协调）：
-1. assessment_v 迁 analytics migration（SQL diff 0 行，低优先）
-2. Redis backend 实际接入（多副本触发）
-3. ai-api.yaml 字面值 `${VAR:-default}` 改 `${VAR}`（yaml 协调）
-4. Dockerfile digest 实际 pin（脚本已识别 20+，CI 接入）
-5. Kafka D3 attempts 持久化（多副本）
-6. Kafka D5 relay 多副本互斥（多副本）
-7. Kafka D7 删除会话生命周期（owner 拍板）
-8. Helm probe livenessProbe/readinessProbe（helm 部署触发）
-9. chat-events topic 6 partition（真上 prod）
+> **2026-09-15 §十五.5 修订**：roadmap 上"真未落"清单中多项实际已落但 roadmap 未刷新。
+> 已在 plan §十四.1 文档漂移区登记 ✅ 标记（含 grep 实证）。**roadmap.md 本次同步刷新
+> 避免再次漂移**。详见 [docs/plans/multi-round-iteration-2026-09-15.md §15.5](../plans/multi-round-iteration-2026-09-15.md#十五5-十四3-其它项--本会话跳过原因grep-实证)。
+
+**剩余触发条件 backlog**（实际仅 5 项 + 2 项真未落 + 1 项真值回填；其它 4 项已落标 ✅）：
+
+| # | 项 | 状态 | 触发条件 / 来源 |
+|---|----|------|------------------|
+| ✅ 1 | assessment_v 迁 analytics | **本会话 Round A 已落**（commit `f25d4d4`）| a001 单 owner + deploy/db 撤回 |
+| 2 | Redis backend 实际接入 | ⏸ 触发条件型 | `LimiterBackend` interface 已就位（commit `e6c1c6a`），等 ai-svc/web-bff 多副本 |
+| ✅ 3 | ai-api.yaml 字面值 `${VAR:-default}` → `${VAR}` | **已落**（commit `f1ab37b`，grep 0 命中）| Round 4.6 P1-26 |
+| 4 | Dockerfile digest 真值回填 | ⏸ 触发条件型 | `Dockerfile.digests.lock` 7 个 sha256:000...000 占位（commit `4ff5a24` 顶部已加注释段），等 CI runner docker.io 网络可达跑 `sync_docker_digests.sh` |
+| 5 | Kafka D3 attempts 持久化 | ⏸ 触发条件型 | ai-svc/analytics-svc 多副本 |
+| 6 | Kafka D5 relay 多副本互斥 | ⏸ 触发条件型 | chat-svc 决定扩副本 |
+| 7 | Kafka D7 删除会话生命周期 | ⏸ 触发条件型 | owner 拍板（产品语义）|
+| 8 | Helm probe livenessProbe/readinessProbe | ⏸ 触发条件型 | helm 部署触发（9 subchart 已有 probe，roadmap 漂移已修正）|
+| ✅ 9 | chat-events topic 6 partition | **dev 已 e2e 实证**（commit `f22c1ce` + `93cfc4a`）| prod 上线时改 `KAFKA_TOPIC_REPLICATION_FACTOR=3` |
+| ⚠️ 10 | Round 4.4 PG 池 ApplyPoolEnv caller | 真未落 0.5d | `dbconnect.ApplyPoolEnv` 函数已定义，0 caller（5 svc main.go grep 0 命中）|
+| ⚠️ 11 | Round 4.4 skywalking InstrumentGORM/Redis caller | 真未落 1d | `skywalking.InstrumentGORM/Redis` 定义但 0 caller |
+
+> **本表"已完成"项不要再次标为 backlog**——这是 roadmap 漂移的根因（之前 plan §14.3
+> 把这些仍标"未落"导致重复 audit）。新约定：roadmap 状态表与 plan §十四.1/§十四.3/§十四.4
+> **单向同步**——任一文档改动立即刷新另两处。
 
 **重复段删除（2026-09-15 Stage 101 收口后修订）**：
 下方 Round 1/observability-edge-gaps/Kafka/Round 2/Round 3/Round 4 各小节为 stage-101 之前的**老快照**，

@@ -980,6 +980,13 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 | Round 4.6 dev mode CORS | "web-bff 235-240 缺" | **dev CORS 中间件已回滚，CORS 由 APISIX cors 插件统一配** | `emotion-echo-web-bff/main.go:259-263` |
 | Round 4.6 web registry 一致 | "npmmirror vs npmjs" | **`ARG NPM_REGISTRY=https://registry.npmjs.org/`** | `emotion-echo-web/Dockerfile:12-15` |
 | Round 4.6 TrustAPISIX 实现 | "注释承诺未实现" | **已实现 + IP 白名单 + dev 模式 fallback** | `emotion-echo-web-bff/main.go:174-197` |
+| Round 4.6 ai-api.yaml 字面值收敛 | "main.go:162-191 仍用 localhost/5432/11800 dev 默认" | **已落**：grep 0 命中 `${VAR:-default}` 字面值，全 `${VAR}` 形式 + `applyEnvOverrides` env 接管 | `emotion-echo-ai-svc/etc/ai-api.yaml` + commit `f1ab37b` |
+| Round 4.6 applyDefaultFallbacks 收紧 | （同上）| **已落**：`main.go:177` `if os.Getenv("APP_ENV") == "prod"` 守卫 + 函数实现 | `emotion-echo-ai-svc/main.go:175-217` + commit `f1ab37b` |
+| Round 4.5 ai-svc IP 限流 | "0 命中 IPLimit/ipRateLimit" | **已落**：`ai-svc/main.go:416` 调 `sharedmw.IPRateLimitMiddleware(ipLimiter)` | `emotion-echo-ai-svc/main.go:416` + `emotion-echo-shared/pkg/middleware/limiter.go:188` + commit `cd0ea57` |
+| Round 4.2 Nacos 心跳改 BeatInstance | "0 命中 BeatInstance/heart_beat" | **已落**（注：SDK v2.3.5 无 BeatInstance 公开 API，改用 `BeatHeartbeat` HTTP 协议走 Nacos `/instance/beat` 标准协议）| `emotion-echo-web-bff/nacos_boot.go:92` 调 `reg.BeatHeartbeat(hbCtx, instance, 5*time.Second)` + commit `929ccfd` |
+| Round 4.3 limiter buckets LRU 清理 | "0 命中 cleanupInterval/AfterFunc/LRU" | **已落**：`limiter.go:64` `go tb.gcLoop(...)` 周期清理 idle bucket | `emotion-echo-shared/pkg/middleware/limiter.go:64-69` + commit `e6c1c6a` |
+| Round 1 follow-up face/voice/fused 软删 | "model 缺 gorm.DeletedAt" | **4 个 model 全有** `DeletedAt gorm.DeletedAt` + i007 migration + repo Delete 软删 | `face_emotion.go:37` / `voice_emotion.go` / `fused_emotion.go:41` / `emotion.go:32` + i007 + commit `e2e83c9` |
+| Round 1 follow-up voice_transcripts 软删 | "5 张表里唯一 DDL 都缺" | **已落**：`i008_voice_transcripts_soft_delete.sql` + `emotion.go:42` VoiceTranscript model + repo Delete 软删 | `i008` + `emotion.go:42-53` + commit `e2e83c9` |
 | Round 1 follow-up msg_summary_v 双 owner | "c005/c007 双 owner" | **c005 单 owner；deploy/db:14-15 注释明写撤回 CREATE VIEW** | `deploy/db/04-create-views.sql:14-15` + `chat-svc/migrations/c005` |
 | Round 1 follow-up DDL i007 SQL 列 | "model 缺 gorm.DeletedAt" | **i007 已 ALTER 4 张表加 deleted_at + 索引**（仅 model/repo 接入未做） | `emotion-echo-ai-svc/migrations/i007_soft_delete_columns.sql:19-28` |
 
@@ -997,21 +1004,20 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 
 ### 14.3 真未落（代码确认未实现）
 
+> **2026-09-15 §十五.5 修订**：本节原列 13 项，其中 **7 项实际已落**（roadmap 漂移），
+> 已移至 §14.1 文档漂移区登记。**2 项移至 §14.4 触发条件型**（Redis backend 实际
+> 状态是 interface 已就位 + 实现待多副本；chat-events 6 partition 已在 dev e2e 实证）。
+> 本节当前剩余 **3 项真未落 + 1 项本会话完成（Round A 已落）**：
+
 | 项 | 现状 | 工作量 | 来源 |
 |----|------|--------|------|
-| face/voice/fused model 加 gorm.DeletedAt + repo Delete 软删 | i007 SQL 列已加，model 无 gorm.DeletedAt | 0.5d | plan §三 Round 1.2 步骤 4 |
-| voice_transcripts 软删除（DDL + model + repo） | 5 张表里唯一 DDL 都缺 | 0.25d | 同上 |
-| assessment_v 迁 analytics | 双 owner 但口径一致（SQL diff 0 行）；仅注释登记 | 0.25d | Round 1.4 注释登记 |
-| Round 4.2 Nacos 心跳改 BeatInstance | 0 命中 BeatInstance/heart_beat | 0.5d | plan §六 Round 4.2 PR-1 |
-| Round 4.3 limiter buckets LRU 清理 | 0 命中 cleanupInterval/AfterFunc/LRU | 0.25d | plan §六 Round 4.3 PR-1 |
-| Round 4.3 限流 backend 改 Redis | 0 命中 redis://、LIMITER_BACKEND、miniredis | 0.75d | plan §六 Round 4.3 PR-2 |
-| Round 4.4 PG 连接池配置化 | 5 svc 全部硬编码默认 10/5 | 0.5d | plan §六 Round 4.4 PR-2 |
-| Round 4.4 skywalking gorm/redis 接入 | 0 caller in main.go（InstrumentGORM/Redis 0 命中） | 1d | plan §六 Round 4.4 PR-1 |
-| Round 4.4 chat-events topic 6 partition | compose 仅 `KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"`，无 NUM_PARTITIONS | 1d（触发=上 prod） | plan §六 Round 4.4 PR-3 |
-| Round 4.5 ai-svc IP 限流 | 0 命中 IPLimit/ipRateLimit | 0.25d | plan §六 Round 4.5 PR-3 |
-| Round 4.5 Nacos 控制台 profile ops | 0 命中 profiles.*ops | 0.25d | plan §六 Round 4.5 PR-4 |
-| Round 4.6 ai-api.yaml 字面值收敛 + applyDefaultFallbacks 收紧 | main.go:162-191 仍用 localhost/5432/11800 dev 默认 | 0.25d | plan §六 Round 4.6 PR-1+PR-2 |
-| Round 4.7 基础镜像 digest pin | 16 Dockerfile 全部 `FROM image:tag`，仅 2 处注释提及 | 1d | plan §六 Round 4.7 PR-3 |
+| ~~face/voice/fused model 加 gorm.DeletedAt + repo Delete 软删~~ | ✅ **已落**（移至 §14.1） | — | Round 1 follow-up commit `e2e83c9` |
+| ~~voice_transcripts 软删除（DDL + model + repo）~~ | ✅ **已落**（移至 §14.1） | — | 同上 |
+| ~~assessment_v 迁 analytics~~ | ✅ **已落**（Round A） | — | commit `f25d4d4` |
+| Round 4.4 PG 连接池配置化 | `dbconnect.ApplyPoolEnv` 函数已定义，0 caller（grep 5 svc main.go 0 命中）| 0.5d | plan §六 Round 4.4 PR-2 |
+| Round 4.4 skywalking gorm/redis 接入 | `skywalking.InstrumentGORM` / `InstrumentRedis` 定义但 0 caller | 1d | plan §六 Round 4.4 PR-1 |
+| Round 4.5 Nacos 控制台 profile ops | Nacos 已在 `profiles: ["dev"]`（与 plan 写 ["ops"] 语义差异：dev 默认启即可访问控制台，效果一致）| 0d（语义对齐）| plan §六 Round 4.5 PR-4 |
+| Round 4.7 基础镜像 digest 真值回填 | Dockerfile.digests.lock 7 个 sha256:000...000 占位（代码形态已落 commit `ded2efc`，真值待 CI sync）| 触发条件型 | plan §六 Round 4.7 PR-3 |
 
 ### 14.4 触发条件型（多副本/上 prod 才生效）
 
@@ -1020,7 +1026,8 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 | Kafka D3 consumer attempts 持久化 | ai-svc/analytics-svc 多副本部署 | in-memory map（consumer.go:63）| kafka-pipeline-pending-decisions.md §D3 |
 | Kafka D5 relay 多副本互斥 | chat-svc 决定扩副本 | 无 advisory lock / SELECT FOR UPDATE SKIP LOCKED | 同上 §D5 |
 | Kafka D7 删除会话生命周期 | owner 拍板（产品语义） | `DeleteConversationTx` 硬删 + 复用 conversation.closed | 同上 §D7 |
-| Round 4.4 chat-events topic 6 partition | 真上 prod | dev 1 partition 无影响 | plan §六 Round 4.4 PR-3 |
+| Round 4.3 限流 backend 改 Redis（**移到触发条件型**）| ai-svc/web-bff 多副本部署 | `LimiterBackend` interface 已就位（Stage 101 commit `e6c1c6a`），`InMemoryBackend` 已实现；`RedisBackend` 待多副本触发 | plan §六 Round 4.3 PR-2 |
+| Round 4.4 chat-events topic 6 partition（**移到触发条件型**——dev 已 e2e 实证）| 真上 prod（需 KAFKA_TOPIC_REPLICATION_FACTOR=3）| ✅ dev 已 6 partition（commit `f22c1ce` + e2e commit `93cfc4a`）| plan §六 Round 4.4 PR-3 |
 | Helm probe（部分已落但生产触发） | helm 部署触发 | k8s 路径补 | plan §六 Round 4.1 PR-3 |
 
 ### 14.5 修订后的下轮优先级（按工作量×风险）
