@@ -25,9 +25,42 @@
 BEGIN;
 
 -- 新分区表（结构与原表一致 + PARTITION BY RANGE）
+-- 注意：PG 拒绝 `LIKE ... INCLUDING ALL` 后跟 `PARTITION BY` —— INCLUDING ALL
+-- 会把原表的 PRIMARY KEY (id BIGSERIAL) 复制过来，但分区表 PK 必须包含分区键
+-- occurred_at。改用显式列定义，绕开 LIKE ALL。
+--
+-- 列定义与 deploy/db/02-create-tables-in-schemas.sql:215 对齐（10 列）：
+-- id / user_id / event_type / target / properties / session_id / ip / user_agent /
+-- occurred_at / event_id。event_id 由 a006 ADD COLUMN 加，老分区表数据复制时
+-- 若 NULL 走 ON CONFLICT DO NOTHING。
 CREATE TABLE IF NOT EXISTS emotion_echo_analytics.user_behavior_events_partitioned (
-    LIKE emotion_echo_analytics.user_behavior_events INCLUDING ALL
+    id          BIGSERIAL,
+    user_id     BIGINT NOT NULL,
+    event_type  VARCHAR(64) NOT NULL,
+    target      VARCHAR(255),
+    properties  JSONB DEFAULT '{}',
+    session_id  VARCHAR(64),
+    ip          INET,
+    user_agent  TEXT,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    event_id    VARCHAR(64)
 ) PARTITION BY RANGE (occurred_at);
+
+-- 分区表 PK 必须包含分区键 occurred_at。
+ALTER TABLE emotion_echo_analytics.user_behavior_events_partitioned
+    ADD PRIMARY KEY (id, occurred_at);
+
+-- event_id 唯一性也需要包含分区键（PG 对分区表 UNIQUE 约束同样强制）
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'uq_user_behavior_events_partitioned_event_id'
+    ) THEN
+        ALTER TABLE emotion_echo_analytics.user_behavior_events_partitioned
+            ADD CONSTRAINT uq_user_behavior_events_partitioned_event_id UNIQUE (event_id, occurred_at);
+    END IF;
+END$$;
 
 -- 创建月度分区（2026-01 到 2026-06 + 默认分区）
 CREATE TABLE IF NOT EXISTS emotion_echo_analytics.ube_2026_01 PARTITION OF emotion_echo_analytics.user_behavior_events_partitioned
@@ -44,9 +77,11 @@ CREATE TABLE IF NOT EXISTS emotion_echo_analytics.ube_2026_06 PARTITION OF emoti
     FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
 CREATE TABLE IF NOT EXISTS emotion_echo_analytics.ube_default PARTITION OF emotion_echo_analytics.user_behavior_events_partitioned DEFAULT;
 
--- 复制已有数据
+-- 复制已有数据（显式列名避免顺序漂移触发不匹配）
 INSERT INTO emotion_echo_analytics.user_behavior_events_partitioned
-SELECT * FROM emotion_echo_analytics.user_behavior_events
+    (id, user_id, event_type, target, properties, session_id, ip, user_agent, occurred_at, event_id)
+SELECT id, user_id, event_type, target, properties, session_id, ip, user_agent, occurred_at, event_id
+FROM emotion_echo_analytics.user_behavior_events
 ON CONFLICT DO NOTHING;
 
 -- 原子表名交换（事务内）
