@@ -34,8 +34,10 @@ package middleware
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/emotion-echo/shared/pkg/logging"
@@ -58,9 +60,10 @@ import (
 // nil tracer 安全: 与之前版本一致,直接 c.Next() 不挂 span(测试 PR-OBS-12 5 case 验证)。
 func GinSkywalkingMiddleware(tracer grpcinterceptor.Tracer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 跳过 health 和 internal(避免 /health scrape 制造无意义 span)
+		// Round 4.7 §D: SKIP_PATH_LIST env 控制跳过路径（取代硬编码 /health + /internal/）。
+		// 缺省 fallback 到历史行为（向后兼容）。
 		path := c.Request.URL.Path
-		if path == "/health" || strings.HasPrefix(path, "/internal/") {
+		if shouldSkipPath(path) {
 			c.Next()
 			return
 		}
@@ -143,4 +146,49 @@ func buildSpanError(c *gin.Context) error {
 	}
 	// 3. 4xx / 200 + 无 c.Error → 不视为 err
 	return nil
+}
+// shouldSkipPath Round 4.7 §D：env 驱动的跳过路径判定。
+//
+// env SKIP_PATH_LIST（逗号分隔），如：
+//   SKIP_PATH_LIST="/health,/metrics,/internal/"
+// 缺省 fallback："/health,/metrics,/internal/"（与原硬编码行为对齐，
+// 但增加了 /metrics 跳过——Prometheus scrape 制造的无意义 span 也算）。
+//
+// 缓存：env 只在启动时读一次（sync.Once），避免每次请求都读 env。
+var (
+	skipPathOnce  sync.Once
+	skipPathExact map[string]struct{}
+	skipPathPfx   []string // 任一前缀命中即 skip
+)
+
+func shouldSkipPath(path string) bool {
+	skipPathOnce.Do(initSkipPathList)
+	if _, ok := skipPathExact[path]; ok {
+		return true
+	}
+	for _, pfx := range skipPathPfx {
+		if strings.HasPrefix(path, pfx) {
+			return true
+		}
+	}
+	return false
+}
+
+func initSkipPathList() {
+	raw := os.Getenv("SKIP_PATH_LIST")
+	if raw == "" {
+		raw = "/health,/metrics,/internal/"
+	}
+	skipPathExact = make(map[string]struct{})
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		skipPathExact[p] = struct{}{}
+		// 以 "/" 结尾的视为前缀（兼容 "/internal/"）
+		if strings.HasSuffix(p, "/") {
+			skipPathPfx = append(skipPathPfx, p)
+		}
+	}
 }

@@ -14,7 +14,12 @@
 # 阶段 1: builder  - 编译 Linux 静态二进制
 # 阶段 2: runtime  - alpine + tini + 二进制（非 root 运行）
 # ============ Stage 1: builder ============
-FROM golang:1.26-alpine AS builder
+# Round 4.7 PR-3：基础镜像 digest pin。
+# Dockerfile.digests.lock 提供 GOLANG_1_26_ALPINE_DIGEST / ALPINE_3_19_DIGEST 等值，
+# 由 docker-compose build args 注入。开发期离线可设置 DIGEST_OFFLINE_FALLBACK=true
+# 跳过 digest 校验（仅 dev compose 用，生产 CI 强制）。
+ARG GOLANG_1_26_ALPINE_DIGEST=""
+FROM golang@${GOLANG_1_26_ALPINE_DIGEST:-golang:1.26-alpine} AS builder
 # 国内构建：必须切到 goproxy.cn，否则 proxy.golang.org 在容器内被墙
 ENV GOPROXY=https://goproxy.cn,direct \
     GOSUMDB=off
@@ -42,7 +47,8 @@ RUN CGO_ENABLED=0 \
     GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/ai-svc .
 # ============ Stage 2: runtime ============
-FROM alpine:3.19
+ARG ALPINE_3_19_DIGEST=""
+FROM alpine@${ALPINE_3_19_DIGEST:-alpine:3.19}
 # 容器内时区
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \

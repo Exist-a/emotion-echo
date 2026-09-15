@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
 
 	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestGinSkywalkingMiddleware_SetsTracerOnContext 业务路径应把 tracer 挂到 gin ctx
@@ -734,4 +736,39 @@ func TestGinSkywalkingMiddleware_EndSpanNil_OnStatus200(t *testing.T) {
 	if span.endErr != nil {
 		t.Errorf("expected span.EndSpan(nil) on 200 + 无 c.Error, got endErr=%v", span.endErr)
 	}
+}
+
+// TestShouldSkipPath_DefaultFallback env 缺省时按 /health,/metrics,/internal/ 判定
+func TestShouldSkipPath_DefaultFallback(t *testing.T) {
+	skipPathOnce = sync.Once{}
+	skipPathExact = nil
+	skipPathPfx = nil
+	t.Setenv("SKIP_PATH_LIST", "")
+
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"/health", true},
+		{"/metrics", true},
+		{"/internal/probe", true},
+		{"/api/v1/conversations", false},
+		{"/healthcheck", false},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, shouldSkipPath(tc.path),
+			"path=%q want=%v", tc.path, tc.want)
+	}
+}
+
+// TestShouldSkipPath_EnvOverride SKIP_PATH_LIST 自定义后优先
+func TestShouldSkipPath_EnvOverride(t *testing.T) {
+	skipPathOnce = sync.Once{}
+	skipPathExact = nil
+	skipPathPfx = nil
+	t.Setenv("SKIP_PATH_LIST", "/custom-skip,/foo/")
+
+	assert.True(t, shouldSkipPath("/custom-skip"))
+	assert.True(t, shouldSkipPath("/foo/bar"))
+	assert.False(t, shouldSkipPath("/health"))
 }

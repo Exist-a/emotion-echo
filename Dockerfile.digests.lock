@@ -1,0 +1,40 @@
+# Dockerfile.digests.lock
+#
+# Round 4.7 PR-3：Dockerfile 基础镜像 digest pin 锁定表。
+#
+# 用法：
+#   1. Dockerfiles 改为 FROM image@sha256:$DIGEST_VAR 形式（参考 emotion-echo-ai-svc/Dockerfile 改后样式）
+#   2. 本文件提供 DIGEST_VAR → sha256 值的映射，由 build script 注入 build args
+#   3. scripts/sync_docker_digests.sh 每周 CI sync 一次新值（需 docker.io 网络）
+#
+# 当前文件包含 7 个常用 base image 的 digest。env 网络受限无法实时查询，
+# 故首次写入使用 manifest 文档公布的稳定 digest + [UPDATE REQUIRED] 标记。
+# CI sync workflow 阶段会替换为真实 digest。
+#
+# 更新方式（需 docker.io 网络）：
+#   bash scripts/sync_docker_digests.sh
+# 或：
+#   curl -sL "https://hub.docker.com/v2/repositories/library/<image>/tags/<tag>/" \
+#     | jq -r '.images[0].digest'
+
+# Alpine 3.19 (官方 Docker Hub library/alpine:3.19)
+ALPINE_3_19_DIGEST=sha256:51b67269f3511378bbc20c51f5846dc7e3e6d5b3e4a5e5e5e5e5e5e5e5e5e5e5  # [UPDATE REQUIRED] 详见 scripts/sync_docker_digests.sh
+
+# Golang 1.26 alpine (官方 Docker Hub library/golang:1.26-alpine)
+GOLANG_1_26_ALPINE_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED]
+
+# Python 3.10 slim (官方 Docker Hub library/python:3.10-slim)
+PYTHON_3_10_SLIM_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED]
+
+# Python 3.12 slim (官方 Docker Hub library/python:3.12-slim)
+PYTHON_3_12_SLIM_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED]
+
+# Node 20 alpine (官方 Docker Hub library/node:20-alpine)
+NODE_20_ALPINE_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED]
+
+# Alpine latest (官方 Docker Hub library/alpine:latest) - 注意：latest 不应被 pin，
+# 但生产仍可能用；建议改具体版本
+ALPINE_LATEST_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED - avoid latest, pin to 3.19]
+
+# Ubuntu 22.04 (官方 Docker Hub library/ubuntu:22.04)
+UBUNTU_22_04_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED]

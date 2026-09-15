@@ -79,13 +79,17 @@ func TestIncDLQPublishResult_BooleanMapping(t *testing.T) {
 //   - caller 接线是契约问题，不是逻辑问题；grep 比 e2e 更精准
 //   - 已在 Round 1 §P0-5 / P0-6 用类似风格（kafka_publisher_test.go:343-394 用 mock 锁 span.EndSpan 契约）
 func TestDLQMetrics_CallerWiring(t *testing.T) {
-	source, err := os.ReadFile("consumer.go")
+	// Round 4.7 §F：handleFailure 迁到 consumer_failure.go；DLQ.Publish 调用也在那。
+	// 钉死 caller 接线必须在 consumer 包下任何文件存在。
+	consumerSrc, err := os.ReadFile("consumer.go")
 	require.NoError(t, err)
-	src := string(source)
+	failureSrc, err := os.ReadFile("consumer_failure.go")
+	require.NoError(t, err)
+	combined := string(consumerSrc) + "\n" + string(failureSrc)
 
 	// 钉死：h.DLQ.Publish 之后必须调 IncDLQPublishResult
-	require.Contains(t, src, "h.DLQ.Publish",
-		"consumer.go 必须存在 h.DLQ.Publish 调用点（caller 接线源头）")
-	require.Contains(t, src, "IncDLQPublishResult",
-		"consumer.go 必须存在 IncDLQPublishResult 调用（caller 埋点），否则 DLQ 失败黑洞不可观测")
+	require.Contains(t, combined, "h.DLQ.Publish",
+		"consumer 包（consumer.go 或 consumer_failure.go）必须存在 h.DLQ.Publish 调用点（caller 接线源头）")
+	require.Contains(t, combined, "IncDLQPublishResult",
+		"consumer 包必须存在 IncDLQPublishResult 调用（caller 埋点），否则 DLQ 失败黑洞不可观测")
 }
