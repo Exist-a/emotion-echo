@@ -129,6 +129,13 @@ func main() {
 	nacosDeps.opsLimiter = opsLimiter
 	nacosRuntime, err := BootNacos(bootCtx, &c, nacosDeps)
 	if err != nil {
+		// Round 4.2 P1-9: Nacos 启动失败必须 fail-fast，否则 svc 静默启动但
+		// 服务发现不可用 → BFF→svc 全 502 但监控/告警无感。
+		// dev 模式（STARTUP_STRICT_DEPS 未设）保留 swallow 行为兼容现有 e2e。
+		if sharedbootstrap.ShouldFailFast() {
+			log.Printf("[nacos] boot failed (strict mode, refusing to start): %v", err)
+			os.Exit(1)
+		}
 		log.Printf("[nacos] boot failed (continuing): %v", err)
 	}
 	defer func() {
@@ -211,7 +218,8 @@ func main() {
 			ClientCertPath: envOr("TLS_CLIENT_CERT", "/app/etc/tls/ai-client.crt"),
 			ClientKeyPath:  envOr("TLS_CLIENT_KEY", "/app/etc/tls/ai-client.key"),
 			TLSServerName:  envOr("TLS_SERVER_NAME", "emotion-llm-service"),
-			InternalAPIKey: os.Getenv("INTERNAL_API_KEY"),
+			// Round 3.5: 优先读 BFF_LLM_INTERNAL_API_KEY（per-svc 隔离），fallback INTERNAL_API_KEY
+			InternalAPIKey: envOr("BFF_LLM_INTERNAL_API_KEY", os.Getenv("INTERNAL_API_KEY")),
 		})
 		if err != nil {
 			// 降级链兜底在 handler（mock / HTTP 直连），这里只告警不阻断启动

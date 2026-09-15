@@ -121,7 +121,10 @@ func applyEnvOverrides(c *config.Config) {
 		c.LLM.GRPCAddr = v
 	}
 	// P0-R2-5: 统一 env 名 INTERNAL_API_KEY（与 llm-service / web-bff 一致）
-	if v := os.Getenv("INTERNAL_API_KEY"); v != "" {
+	// Round 3.5: 优先读 AI_LLM_INTERNAL_API_KEY（per-svc 隔离），fallback INTERNAL_API_KEY（向后兼容）
+	if v := os.Getenv("AI_LLM_INTERNAL_API_KEY"); v != "" {
+		c.LLM.InternalAPIKey = v
+	} else if v := os.Getenv("INTERNAL_API_KEY"); v != "" {
 		c.LLM.InternalAPIKey = v
 	}
 	if v := os.Getenv("FER_BASE_URL"); v != "" {
@@ -160,25 +163,40 @@ func applyEnvOverrides(c *config.Config) {
 }
 
 // applyDefaultFallbacks fills in safe defaults when both yaml and env are empty.
-// This happens for fields that ai-api.yaml expresses via ${VAR:-default}
-// (which go-zero ignores). Without fallbacks the service would crash on
-// startup when running outside compose.
-func applyDefaultFallbacks(c *config.Config) {
+//
+// Round 4.6 P2-25 收紧：
+//   - APP_ENV=prod 时全部字段不应用 localhost 默认（prod 误配 silent fallback 是黑洞）
+//   - 业务依赖字段（LLM.BaseURL/GRPCAddr/SkyWalking.OAPAddr）即使 dev 也不静默 localhost fallback
+//     ——这些必须由 yaml/env 显式给值，否则启动 fail-fast（防止"在 dev 拼通的 prod 配置"）
+//   - 基础设施默认值（Postgres.DSN/Kafka.BrokersCSV）dev 模式仍保留 localhost 兜底，
+//     因为 dev docker-compose 部署时这些是基础设施 host（dev 必备）
+//
+// 设计动机：避免"业务依赖 silent localhost fallback"在 prod 误用导致请求打到 dev mock。
+func applyDefaultFallbacks(c *config.Config) error {
+	// Round 4.6 prod 模式：禁用全部 silent localhost fallback
+	if os.Getenv("APP_ENV") == "prod" {
+		return nil
+	}
+
+	// 业务依赖字段：即使 dev 模式也要求显式配置——避免 prod 误用 dev mock
+	if c.LLM.BaseURL == "" {
+		return fmt.Errorf("LLM.BaseURL must be set in yaml or env (silent localhost fallback would mask prod→dev routing)")
+	}
+	if c.LLM.GRPCAddr == "" {
+		return fmt.Errorf("LLM.GRPCAddr must be set in yaml or env (silent localhost fallback would mask prod→dev routing)")
+	}
+	if c.SkyWalking.OAPAddr == "" {
+		return fmt.Errorf("SkyWalking.OAPAddr must be set in yaml or env (silent localhost fallback would mask prod→dev routing)")
+	}
+
+	// 基础设施默认值：dev 模式保留 localhost 兜底（dev docker-compose 部署必备）
 	if c.Postgres.DSN == "" {
 		c.Postgres.DSN = "host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_ai"
 	}
 	if c.Kafka.BrokersCSV == "" {
 		c.Kafka.BrokersCSV = "localhost:9092"
 	}
-	if c.SkyWalking.OAPAddr == "" {
-		c.SkyWalking.OAPAddr = "localhost:11800"
-	}
-	if c.LLM.BaseURL == "" {
-		c.LLM.BaseURL = "http://localhost:8000"
-	}
-	if c.LLM.GRPCAddr == "" {
-		c.LLM.GRPCAddr = "localhost:50051"
-	}
+	return nil
 }
 
 func main() {
@@ -196,7 +214,12 @@ func main() {
 
 	// Stage 22-B: env override + default fallbacks (see doc comments above).
 	applyEnvOverrides(&c)
-	applyDefaultFallbacks(&c)
+	if err := applyDefaultFallbacks(&c); err != nil {
+		// Round 4.6 收紧：业务依赖字段缺失必须 fail-fast（不允许 silent localhost fallback）
+		// 否则 prod 误配会让 LLM 请求打到 dev mock，调试极难定位。
+		logging.Printf("[startup] config fallback failed: %v", err)
+		os.Exit(1)
+	}
 
 	// BrokersCSV -> []string once.
 	kafkaBrokersList := kafkaBrokers(c.Kafka.BrokersCSV)
@@ -386,6 +409,11 @@ func main() {
 		}
 		return v
 	}))
+	// Round 4.5 PR-3: per-IP 限流（20 req/s, burst 40）防匿名 DoS
+	// 必须先于 UserRateLimitMiddleware 注册——同 IP 多用户场景下 UserRateLimit
+	// 按 user_id 分桶可能漏掉匿名 + 同 IP 高频攻击。IP 限流更早拦截。
+	ipLimiter := sharedmw.NewTokenBucket(20, 40)
+	r.Use(sharedmw.IPRateLimitMiddleware(ipLimiter))
 
 	// 6. routes
 	r.GET("/health", handler.HealthHandler(svcCtx))
