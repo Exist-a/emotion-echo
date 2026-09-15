@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"emotion-echo-ai-svc/internal/model"
 
@@ -24,6 +25,8 @@ type VoiceEmotionRepo interface {
 	Create(ctx context.Context, v *model.VoiceEmotionResult) error
 	GetByUploadID(ctx context.Context, uploadID string) (*model.VoiceEmotionResult, error)
 	GetLatestByMessageID(ctx context.Context, messageID int64) (*model.VoiceEmotionResult, error)
+	// Delete 软删除（Round 1 follow-up）：与 FaceEmotionRepo.Delete 同语义
+	Delete(ctx context.Context, id int64) error
 	Ping(ctx context.Context) error
 }
 
@@ -85,7 +88,7 @@ func (r *InMemoryVoiceEmotionRepo) GetByUploadID(ctx context.Context, uploadID s
 	if !ok {
 		return nil, nil
 	}
-	if v, hit := r.byID[id]; hit {
+	if v, hit := r.byID[id]; hit && !v.DeletedAt.Valid {
 		return v, nil
 	}
 	return nil, nil
@@ -95,17 +98,33 @@ func (r *InMemoryVoiceEmotionRepo) GetLatestByMessageID(ctx context.Context, mes
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	ids := r.byMessageIndex[messageID]
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	latestID := ids[len(ids)-1]
-	if v, hit := r.byID[latestID]; hit {
-		return v, nil
+	// 反向遍历找第一个未软删的（Round 1 follow-up）
+	for i := len(ids) - 1; i >= 0; i-- {
+		v, hit := r.byID[ids[i]]
+		if hit && !v.DeletedAt.Valid {
+			return v, nil
+		}
 	}
 	return nil, nil
 }
 
 func (r *InMemoryVoiceEmotionRepo) Ping(ctx context.Context) error { return nil }
+
+// Delete 软删除：设置 DeletedAt.Valid=true；与 FaceEmotionRepo.Delete 同模式
+// （emotion_repository.go:142 EmotionRepo.Delete 软删语义对齐）。
+func (r *InMemoryVoiceEmotionRepo) Delete(ctx context.Context, id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.byID[id]
+	if !ok {
+		return nil
+	}
+	if v.DeletedAt.Valid {
+		return nil
+	}
+	v.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+	return nil
+}
 
 // =====================================================
 // PostgresVoiceEmotionRepo（生产实现）
@@ -175,4 +194,9 @@ func (r *PostgresVoiceEmotionRepo) Ping(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.PingContext(ctx)
+}
+
+// Delete 软删除：model 含 gorm.DeletedAt → UPDATE SET deleted_at = NOW()
+func (r *PostgresVoiceEmotionRepo) Delete(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Delete(&model.VoiceEmotionResult{}, id).Error
 }

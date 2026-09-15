@@ -89,5 +89,31 @@ func TestFusedEmotionRepo_InterfaceConformance(t *testing.T) {
 	var _ FusedEmotionRepo = (*InMemoryFusedEmotionRepo)(nil)
 }
 
+// TestFusedEmotionRepo_InMemory_Delete_SoftDelete 软删除后查询返 nil（Round 1 follow-up）
+func TestFusedEmotionRepo_InMemory_Delete_SoftDelete(t *testing.T) {
+	t.Parallel()
+	repo := NewInMemoryFusedEmotionRepo()
+	require.NoError(t, repo.Upsert(context.Background(), &model.FusedEmotion{
+		MessageID:           400,
+		UserID:              7,
+		ConversationID:      50,
+		PrimaryEmotion:      "happy",
+		FusionMethod:        "late_fusion_weighted",
+		AvailableModalities: model.AvailableModalitiesFromSlice([]string{"text", "voice"}),
+		CreatedAt:           time.Now(),
+	}))
+
+	got, err := repo.GetByMessageID(context.Background(), 400)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	id := got.ID
+
+	require.NoError(t, repo.Delete(context.Background(), id))
+
+	got2, err := repo.GetByMessageID(context.Background(), 400)
+	require.NoError(t, err)
+	assert.Nil(t, got2, "软删除后 GetByMessageID 应返 nil")
+}
+
 // _ = time.Now 防 unused import 警告
 var _ = time.Now

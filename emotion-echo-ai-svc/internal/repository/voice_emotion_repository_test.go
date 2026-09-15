@@ -104,3 +104,26 @@ func TestVoiceEmotionRepo_InterfaceConformance(t *testing.T) {
 	t.Parallel()
 	var _ VoiceEmotionRepo = (*InMemoryVoiceEmotionRepo)(nil)
 }
+
+// TestVoiceEmotionRepo_InMemory_Delete_SoftDelete 软删除后查询返 nil（Round 1 follow-up）
+func TestVoiceEmotionRepo_InMemory_Delete_SoftDelete(t *testing.T) {
+	t.Parallel()
+	repo := NewInMemoryVoiceEmotionRepo()
+	require.NoError(t, repo.Create(context.Background(), &model.VoiceEmotionResult{
+		UploadID:       "v-nonce-del",
+		MessageID:      300,
+		PrimaryEmotion: "calm",
+		CreatedAt:      time.Now(),
+	}))
+
+	got, err := repo.GetByUploadID(context.Background(), "v-nonce-del")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	id := got.ID
+
+	require.NoError(t, repo.Delete(context.Background(), id))
+
+	got2, err := repo.GetByUploadID(context.Background(), "v-nonce-del")
+	require.NoError(t, err)
+	assert.Nil(t, got2, "软删除后 GetByUploadID 应返 nil")
+}

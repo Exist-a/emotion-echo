@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"emotion-echo-ai-svc/internal/model"
 
@@ -26,6 +27,9 @@ type FusedEmotionRepo interface {
 
 	// GetByMessageID 查某消息的当前融合结果（无则 nil）
 	GetByMessageID(ctx context.Context, messageID int64) (*model.FusedEmotion, error)
+
+	// Delete 软删除（Round 1 follow-up）：与 Face/VoiceEmotionRepo.Delete 同语义
+	Delete(ctx context.Context, id int64) error
 
 	// ListPending 列出需要 Worker 重新尝试融合的 message_id 候选。
 	//
@@ -90,7 +94,7 @@ func (r *InMemoryFusedEmotionRepo) GetByMessageID(ctx context.Context, messageID
 	if !ok {
 		return nil, nil
 	}
-	if f, hit := r.byID[id]; hit {
+	if f, hit := r.byID[id]; hit && !f.DeletedAt.Valid {
 		return f, nil
 	}
 	return nil, nil
@@ -109,6 +113,21 @@ func (r *InMemoryFusedEmotionRepo) ListPending(ctx context.Context, ttlSeconds i
 }
 
 func (r *InMemoryFusedEmotionRepo) Ping(ctx context.Context) error { return nil }
+
+// Delete 软删除：与 Face/VoiceEmotionRepo.Delete 同模式
+func (r *InMemoryFusedEmotionRepo) Delete(ctx context.Context, id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	f, ok := r.byID[id]
+	if !ok {
+		return nil
+	}
+	if f.DeletedAt.Valid {
+		return nil
+	}
+	f.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+	return nil
+}
 
 // =====================================================
 // PostgresFusedEmotionRepo（生产实现）
@@ -195,4 +214,9 @@ func (r *PostgresFusedEmotionRepo) Ping(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.PingContext(ctx)
+}
+
+// Delete 软删除：model 含 gorm.DeletedAt → UPDATE SET deleted_at = NOW()
+func (r *PostgresFusedEmotionRepo) Delete(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Delete(&model.FusedEmotion{}, id).Error
 }

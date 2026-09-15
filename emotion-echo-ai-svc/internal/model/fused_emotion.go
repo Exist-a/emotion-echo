@@ -36,8 +36,9 @@ type FusedEmotion struct {
 	ModalityContrib     string    `gorm:"column:modality_contrib;type:jsonb;default:'{}'"`
 	Reasoning           string    `gorm:"column:reasoning;type:text"`
 	FusionMethod        string    `gorm:"column:fusion_method;size:32"`
-	AvailableModalities string    `gorm:"column:available_modalities;type:jsonb;default:'[]'"`
-	CreatedAt           time.Time `gorm:"column:created_at;autoCreateTime"`
+	AvailableModalities string          `gorm:"column:available_modalities;type:jsonb;default:'[]'"`
+	CreatedAt           time.Time       `gorm:"column:created_at;autoCreateTime"`
+	DeletedAt           gorm.DeletedAt  `gorm:"column:deleted_at;index"`
 }
 
 // TableName 显式指向 emotion_echo_ai schema。

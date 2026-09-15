@@ -110,3 +110,35 @@ func TestFaceEmotionRepo_InterfaceConformance(t *testing.T) {
 	t.Parallel()
 	var _ FaceEmotionRepo = (*InMemoryFaceEmotionRepo)(nil)
 }
+
+// TestFaceEmotionRepo_InMemory_Delete_SoftDelete 软删除后查询返回 nil（Round 1 follow-up）
+func TestFaceEmotionRepo_InMemory_Delete_SoftDelete(t *testing.T) {
+	t.Parallel()
+	repo := NewInMemoryFaceEmotionRepo()
+	require.NoError(t, repo.Create(context.Background(), &model.FaceEmotionResult{
+		UploadID:       "nonce-del-1",
+		MessageID:      200,
+		PrimaryEmotion: "happy",
+		CreatedAt:      time.Now(),
+	}))
+
+	got, err := repo.GetByUploadID(context.Background(), "nonce-del-1")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	id := got.ID
+
+	require.NoError(t, repo.Delete(context.Background(), id))
+
+	got2, err := repo.GetByUploadID(context.Background(), "nonce-del-1")
+	require.NoError(t, err)
+	assert.Nil(t, got2, "软删除后 GetByUploadID 应返 nil（被 scope 过滤）")
+
+	assert.NoError(t, repo.Delete(context.Background(), id), "重复 Delete 不抛错")
+}
+
+// TestFaceEmotionRepo_InMemory_Delete_NotFound 不存在的 ID 删除不抛错。
+func TestFaceEmotionRepo_InMemory_Delete_NotFound(t *testing.T) {
+	t.Parallel()
+	repo := NewInMemoryFaceEmotionRepo()
+	assert.NoError(t, repo.Delete(context.Background(), 99999))
+}

@@ -34,15 +34,20 @@ type EmotionAnalysis struct {
 
 func (EmotionAnalysis) TableName() string { return "emotion_echo_ai.emotion_analysis" }
 
-// VoiceTranscript 语音转写
+// VoiceTranscript 语音转写。
+//
+// DeletedAt 软删除字段（Round 1 follow-up）：与 face/voice/fused 同模式。
+// SQL 列在 i008 migration 新增（deploy/db/02-create-tables-in-schemas.sql 已建表，
+// i008 加 ALTER TABLE ADD COLUMN deleted_at TIMESTAMPTZ + 索引）。
 type VoiceTranscript struct {
-	ID         int64     `gorm:"column:id;primaryKey;autoIncrement"`
-	UserID     int64     `gorm:"column:user_id"`
-	Transcript string    `gorm:"column:transcript"`
-	Language   string    `gorm:"column:language;size:16"`
-	Model      string    `gorm:"column:model;size:64"`
-	Confidence float64   `gorm:"column:confidence"`
-	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime"`
+	ID         int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	UserID     int64          `gorm:"column:user_id"`
+	Transcript string         `gorm:"column:transcript"`
+	Language   string         `gorm:"column:language;size:16"`
+	Model      string         `gorm:"column:model;size:64"`
+	Confidence float64        `gorm:"column:confidence"`
+	CreatedAt  time.Time      `gorm:"column:created_at;autoCreateTime"`
+	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;index"`
 }
 
 func (VoiceTranscript) TableName() string { return "emotion_echo_ai.voice_transcripts" }

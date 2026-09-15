@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"emotion-echo-ai-svc/internal/model"
 
@@ -37,6 +38,11 @@ type FaceEmotionRepo interface {
 	// GetLatestByMessageID 同一 message 多次上传时取最新一条（按 created_at desc）
 	// 用途：Fusion Worker 拼装 modality snapshot 时调用
 	GetLatestByMessageID(ctx context.Context, messageID int64) (*model.FaceEmotionResult, error)
+
+	// Delete 软删除（Round 1 follow-up）：model 含 gorm.DeletedAt →
+	// InMemory 设置 DeletedAt.Valid=true 且查询过滤；Postgres 走 UPDATE SET deleted_at = NOW()。
+	// 软删除后 GetByUploadID/GetLatestByMessageID 视为不存在（GORM scope 自动 WHERE deleted_at IS NULL）。
+	Delete(ctx context.Context, id int64) error
 
 	// Ping 健康检查
 	Ping(ctx context.Context) error
@@ -107,7 +113,7 @@ func (r *InMemoryFaceEmotionRepo) GetByUploadID(ctx context.Context, uploadID st
 	if !ok {
 		return nil, nil
 	}
-	if e, hit := r.byID[id]; hit {
+	if e, hit := r.byID[id]; hit && !e.DeletedAt.Valid {
 		return e, nil
 	}
 	return nil, nil
@@ -117,22 +123,38 @@ func (r *InMemoryFaceEmotionRepo) GetByUploadID(ctx context.Context, uploadID st
 //
 // 注意：内存版按插入顺序近似 created_at desc（InMemoryEmotionRepo 同模式）。
 // 生产 Postgres 版用 ORDER BY created_at DESC LIMIT 1。
+// Round 1 follow-up：过滤 DeletedAt.Valid 行（与 EmotionRepo 同模式）。
 func (r *InMemoryFaceEmotionRepo) GetLatestByMessageID(ctx context.Context, messageID int64) (*model.FaceEmotionResult, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	ids := r.byMessageIndex[messageID]
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	// 取最后插入的（最新）。生产 SQL 用 ORDER BY created_at DESC LIMIT 1。
-	latestID := ids[len(ids)-1]
-	if e, hit := r.byID[latestID]; hit {
-		return e, nil
+	// 反向遍历找第一个未软删的（最新插入且未删除）
+	for i := len(ids) - 1; i >= 0; i-- {
+		e, hit := r.byID[ids[i]]
+		if hit && !e.DeletedAt.Valid {
+			return e, nil
+		}
 	}
 	return nil, nil
 }
 
 func (r *InMemoryFaceEmotionRepo) Ping(ctx context.Context) error { return nil }
+
+// Delete 软删除：设置 DeletedAt.Valid=true；后续 GetByUploadID/GetLatestByMessageID
+// 因 f.DeletedAt.Valid 判定返回 nil（与 EmotionAnalysis 同模式，emotion_repository.go:142）。
+func (r *InMemoryFaceEmotionRepo) Delete(ctx context.Context, id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	f, ok := r.byID[id]
+	if !ok {
+		return nil // 与 EmotionRepo 同语义：不存在不抛错
+	}
+	if f.DeletedAt.Valid {
+		return nil // 重复删除幂等
+	}
+	f.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+	return nil
+}
 
 // =====================================================
 // PostgresFaceEmotionRepo（生产实现 — 真 SQL 留 PR-3+）
@@ -214,4 +236,10 @@ func (r *PostgresFaceEmotionRepo) Ping(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.PingContext(ctx)
+}
+
+// Delete 软删除：model 含 gorm.DeletedAt → db.Delete 走 UPDATE SET deleted_at = NOW()
+// 而非物理 DELETE（与 EmotionRepository.Delete 同模式）。
+func (r *PostgresFaceEmotionRepo) Delete(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Delete(&model.FaceEmotionResult{}, id).Error
 }
