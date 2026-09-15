@@ -1098,7 +1098,7 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 > 已在 plan §十四.1 文档漂移区登记 ✅ 标记（含 grep 实证）。**roadmap.md 本次同步刷新
 > 避免再次漂移**。详见 [docs/plans/multi-round-iteration-2026-09-15.md §15.5](../plans/multi-round-iteration-2026-09-15.md#十五5-十四3-其它项--本会话跳过原因grep-实证)。
 
-**剩余触发条件 backlog**（实际仅 5 项 + 2 项真未落 + 1 项真值回填；其它 4 项已落标 ✅）：
+**剩余触发条件 backlog**（实际仅 7 项触发条件型，全部标 ⏸；其它 4 项已落标 ✅）：
 
 | # | 项 | 状态 | 触发条件 / 来源 |
 |---|----|------|------------------|
@@ -1111,8 +1111,8 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 | 7 | Kafka D7 删除会话生命周期 | ⏸ 触发条件型 | owner 拍板（产品语义）|
 | 8 | Helm probe livenessProbe/readinessProbe | ⏸ 触发条件型 | helm 部署触发（9 subchart 已有 probe，roadmap 漂移已修正）|
 | ✅ 9 | chat-events topic 6 partition | **dev 已 e2e 实证**（commit `f22c1ce` + `93cfc4a`）| prod 上线时改 `KAFKA_TOPIC_REPLICATION_FACTOR=3` |
-| ⚠️ 10 | Round 4.4 PG 池 ApplyPoolEnv caller | 真未落 0.5d | `dbconnect.ApplyPoolEnv` 函数已定义，0 caller（5 svc main.go grep 0 命中）|
-| ⚠️ 11 | Round 4.4 skywalking InstrumentGORM/Redis caller | 真未落 1d | `skywalking.InstrumentGORM/Redis` 定义但 0 caller |
+| ✅ 10 | Round 4.4 PG 池 ApplyPoolEnv caller | **本会话收口**（commits `ce0d7d1` + `d6884b5`）| 5 svc main.go 全部接入，env 覆盖 yaml |
+| ✅ 11 | Round 4.4 skywalking InitGORM/InitRedis caller | **本会话收口**（commits `168e1f5` + `d6884b5`）| InitGORM 5 svc 接入 + InitRedis 修隐性 bug (type assertion 错)，InitRedis 仍待多副本/Redis 接入触发 |
 
 > **本表"已完成"项不要再次标为 backlog**——这是 roadmap 漂移的根因（之前 plan §14.3
 > 把这些仍标"未落"导致重复 audit）。新约定：roadmap 状态表与 plan §十四.1/§十四.3/§十四.4

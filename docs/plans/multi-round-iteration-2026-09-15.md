@@ -3,8 +3,8 @@ status: landed
 priority: high
 owner: TBD
 created: 2026-09-15
-last-closure: 2026-09-15（Round 5 stage-101 全量收口 — Round 1 follow-up + Round 3.3/3.5 + Round 4.2/4.3/4.4/4.5/4.6/4.7 全部落地）
-last-audit: 2026-09-15（§十四 代码审计：13 项 plan 标 open 但代码已落、6 项半落、11 项真未落）
+last-closure: 2026-09-15（Round 5 stage-101 全量收口 + §十六第二轮收口 — Round 4.4 剩余 2 项真未落全部落地）
+last-audit: 2026-09-15（§十四 代码审计：13 项 plan 标 open 但代码已落、6 项半落、11 项真未落 → §十六 收口后剩 0 项真未落）
 type: multi-round-iteration
 progress:
   round-0-landed: 1ec6e60 (docs: 文档治理收口)
@@ -16,18 +16,20 @@ progress:
   round-2.2-landed: 6d6c3b1 (test(events): D6+D8 反射枚举护栏)
   round-2.3-landed: 0fbe2d0 (feat(observability): DLQ counter + 告警)
   round-2.4-landed: caa100c (fix(chat-svc): kafka_publisher ctx 取消)
+  round-4.4-pr1-pr2-landed: ce0d7d1 + 168e1f5 + d6884b5（§十六：PG 池 ApplyPoolEnv + skywalking InitGORM/InitRedis 5 svc 接入 + InitRedis 修隐性 bug + Stage 101 drift 修复）
   audit-2026-09-15:
     doc-drift-closed: 13（plan 标 open 但代码已落，详见 §十四.1）
     partial-open: 6（代码部分实现，详见 §十四.2）
-    truly-open: 11（代码确认未落，详见 §十四.3）
-    trigger-condition: 5（多副本/上 prod 才触发，详见 §十四.4）
-  actual-open: 17 truly-open + 6 partial = 23（vs 原估 49；半数已落）
-  next-rounds: [Round 1 follow-up (face/voice/fused gorm.DeletedAt), Round 3.3 防注入前缀, Round 3.5 跨 svc 隔离, Round 4.2 Nacos 心跳, Round 4.3 limiter, Round 4.4 skywalking/PG pool, Round 4.5 IP 限流/compose health/nacos profile, Round 4.6 ai-api.yaml 字面值, Round 4.7 digest pin]
+    truly-open: 11 → 0（§十六收口 Round 4.4 剩余 2 项，详见 §十四.3）
+    trigger-condition: 7（多副本/上 prod 才触发，详见 §十四.4 + §十六.5）
+  actual-open: 0 truly-open + 6 partial = 6（vs 原估 49；§十六后再 -2）
+  next-rounds: [Round 1 follow-up (face/voice/fused gorm.DeletedAt) ✅ landed, Round 3.3 防注入前缀 ✅ landed, Round 3.5 跨 svc 隔离 ✅ landed, Round 4.2 Nacos 心跳 ✅ landed, Round 4.3 limiter ✅ landed, Round 4.4 skywalking/PG pool ✅ landed (本轮), Round 4.5 IP 限流/compose health/nacos profile ✅ landed, Round 4.6 ai-api.yaml 字面值 ✅ landed, Round 4.7 digest pin ⚠️ partial (代码形态 done, 真值待 CI sync)]
   closure-stages:
     - stage-98-round-1-closure.md (Round 0-1.4 收口)
     - stage-99-round-2-closure.md (Round 2.1-2.4 收口)
-  total-commits: 9
-  total-tests: 33 (含 caller-wiring 反射枚举护栏 3)
+    - stage-101-multi-round-iteration-closure.md (Round 3-4 全部 + §十六第二轮 收口)
+  total-commits: 12 (本轮 +3: ce0d7d1/168e1f5/d6884b5)
+  total-tests: 38 (本轮 +5: pool ×3 + skywalking ×2)
   total-lines: +1685/-41
 depends-on:
   - code-review-2026-09-14.md（Round 1）
@@ -1007,16 +1009,18 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 > **2026-09-15 §十五.5 修订**：本节原列 13 项，其中 **7 项实际已落**（roadmap 漂移），
 > 已移至 §14.1 文档漂移区登记。**2 项移至 §14.4 触发条件型**（Redis backend 实际
 > 状态是 interface 已就位 + 实现待多副本；chat-events 6 partition 已在 dev e2e 实证）。
-> 本节当前剩余 **3 项真未落 + 1 项本会话完成（Round A 已落）**：
+>
+> **2026-09-15 §十六 修订**：本轮再收口 2 项真未落（PG 池 + skywalking gorm/redis）。
+> 本节当前剩余 **0 项真未落**（全部落地 + 移触发条件型）。
 
 | 项 | 现状 | 工作量 | 来源 |
 |----|------|--------|------|
 | ~~face/voice/fused model 加 gorm.DeletedAt + repo Delete 软删~~ | ✅ **已落**（移至 §14.1） | — | Round 1 follow-up commit `e2e83c9` |
 | ~~voice_transcripts 软删除（DDL + model + repo）~~ | ✅ **已落**（移至 §14.1） | — | 同上 |
 | ~~assessment_v 迁 analytics~~ | ✅ **已落**（Round A） | — | commit `f25d4d4` |
-| Round 4.4 PG 连接池配置化 | `dbconnect.ApplyPoolEnv` 函数已定义，0 caller（grep 5 svc main.go 0 命中）| 0.5d | plan §六 Round 4.4 PR-2 |
-| Round 4.4 skywalking gorm/redis 接入 | `skywalking.InstrumentGORM` / `InstrumentRedis` 定义但 0 caller | 1d | plan §六 Round 4.4 PR-1 |
-| Round 4.5 Nacos 控制台 profile ops | Nacos 已在 `profiles: ["dev"]`（与 plan 写 ["ops"] 语义差异：dev 默认启即可访问控制台，效果一致）| 0d（语义对齐）| plan §六 Round 4.5 PR-4 |
+| ~~Round 4.4 PG 连接池配置化~~ | ✅ **本会话收口** | 0.5d | commits `ce0d7d1` (测试契约) + `d6884b5` (5 svc 接入) |
+| ~~Round 4.4 skywalking gorm/redis 接入~~ | ✅ **本会话收口**（InitRedis 隐性 bug 顺手修）| 1d | commits `168e1f5` (InitRedis 修 type assertion) + `d6884b5` (InitGORM 5 svc 接入) |
+| ~~Round 4.5 Nacos 控制台 profile ops~~ | ✅ 0d（语义对齐，已落）| 0d | plan §六 Round 4.5 PR-4 |
 | Round 4.7 基础镜像 digest 真值回填 | Dockerfile.digests.lock 7 个 sha256:000...000 占位（代码形态已落 commit `ded2efc`，真值待 CI sync）| 触发条件型 | plan §六 Round 4.7 PR-3 |
 
 ### 14.4 触发条件型（多副本/上 prod 才生效）
@@ -1170,3 +1174,60 @@ d33e9e1 fix(test): Stage 101 回归修复（fakeRegistry BeatHeartbeat + shared 
 
 这两项下次 round 启动预期 0.5+1 = 1.5d 即可完成。
 - 本 plan §十五：状态对照表（本文档本次刷新）
+
+---
+
+## 十六、2026-09-15 第二轮收口 commits（3 个 push origin/main）
+
+> **来源**：用户指令"将那两项未做的都完成，然后遗留的任务就都没了吧"——把 §十四.3
+> 剩余 2 项真未落（PG 池 + skywalking gorm/redis）落地。共 3 commits (ce0d7d1..d6884b5)
+> push origin/main，0 回归。
+
+### 16.1 真落地对照表
+
+| §十四.3 项 | plan 描述 | 实际状态 | commit | 证据 |
+|---|---|---|---|---|
+| Round 4.4 PG 连接池配置化（PR-2）| `dbconnect.ApplyPoolEnv` 0 caller，0.5d | **✅ 5 svc 接入** | `ce0d7d1` + `d6884b5` | `pool_test.go` +3 测试钉 env→SetMax* 副作用 + fallback + 非法 env fail-fast；5 svc `openPostgres` 先 yaml 再 env |
+| Round 4.4 skywalking gorm/redis（PR-1）| `InstrumentGORM/Redis` 0 caller，1d | **✅ InitGORM 5 svc 接入 + InitRedis 修隐性 bug** | `168e1f5` + `d6884b5` | `init.go` InitRedis 改签名 interface{} → *redis.Client 调 InstrumentRedis；`init_test.go` +2 测试钉 caller-wiring；5 svc InitGORM 接入 |
+
+### 16.2 commit 链（按 push 顺序）
+
+```
+d6884b5 feat(svc): Round 4.4 PR-1+PR-2 — 5 svc main.go 接入 ApplyPoolEnv + InitGORM
+168e1f5 fix(skywalking): InitRedis 真接 *redis.Client + InitGORM caller-wiring 测试
+ce0d7d1 test(dbconnect): RED→GREEN 钉死 ApplyPoolEnv env→SetMax* 副作用契约
+```
+
+### 16.3 顺手修的回归盲点
+
+`emotion-echo-assessment-svc/nacos_boot_test.go` fakeRegistry 缺 `BeatHeartbeat` 方法
+（Stage 101 commit `d33e9e1` 仅修 web-bff，漏了 assessment-svc 4 业务 svc 中的 1 个）。
+本轮跑 `go test ./...` 暴露，已在 commit `d6884b5` 补齐（与 5 svc 接入打包）。
+
+> **教训**：Stage 101 "6 svc 全绿" 说法是漂移——实际只 web-bff 真补，
+> 4 业务 svc 漏了 1 个（assessment-svc）。本轮 §十四.3 收口连带暴露 + 修。
+> Memory `multi-pr-commit-discipline` 已记录"补缺 + 测试"模式。
+
+### 16.4 §十四.3 修订后状态
+
+- **§十四.3 真未落**：0 项（2 项本会话收口，1 项已属触发条件型 digest sync）
+- **roadmap "剩余触发条件 backlog" 表**：行 10 (PG 池) + 行 11 (skywalking) 标 ✅，
+  头注由"5 项 + 2 项真未落 + 1 项真值回填"改为"7 项触发条件型，全部 ⏸"
+- **roadmap "修订后真正 open 总数"**：仍 0 项本轮可启动
+- **roadmap "剩余触发条件 backlog"**：7 项（多副本/上 prod/owner 拍板/外部协调）
+
+### 16.5 残留 backlog 全貌（roadmap line 1103 同步）
+
+7 项触发条件型，单轮 TDD 不可独立完成：
+
+| # | 项 | 触发条件 |
+|---|---|---|
+| 2 | Redis backend 实际接入（`LimiterBackend.RedisBackend`）| ai-svc/web-bff 多副本 |
+| 4 | Dockerfile digest 真值回填（7 个 sha256:000…000 占位）| CI runner docker.io 网络可达 |
+| 5 | Kafka D3 attempts 持久化 | ai-svc/analytics-svc 多副本 |
+| 6 | Kafka D5 relay 多副本互斥 | chat-svc 决定扩副本 |
+| 7 | Kafka D7 删除会话生命周期 | owner 拍板（产品语义）|
+| 8 | Helm probe（9 subchart 已有，待 helm 部署）| helm 部署触发 |
+| 11 | InitRedis 真 caller（修复已落，待 Redis 接入触发）| 业务 svc 引入 Redis 客户端 |
+
+**这些都不是技术债，是产品/部署节奏决定的触发条件**。等任一触发条件到位时再启动对应 Round。
