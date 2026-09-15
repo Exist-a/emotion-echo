@@ -1032,12 +1032,20 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   - 详见 [stage-93-analytics-svc-sw8-propagation-2026-09-14.md](../stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md)。
     observability-edge-gaps §B-F 5 项 P2-P3 留 Stage 94+ 候选；OAP 9.x graphql queryDuration 时间格式 bug 沿用 Stage 92 §五残余。
 
-**当前 open 清单**（2026-09-15 Stage 97 收口后 + Round 0.1 文档治理收口后刷新）：
+**当前 open 清单**（2026-09-15 Stage 97 收口后 + Round 0-1.4 收口后刷新）：
 
 > **本段是快照，不是权威来源**（roadmap.md:931-934 段警告）。每项 open 列出来源
 > 文档 + section，方便读者交叉验证。Stage 收口时顺手刷新本段；与 open 表矛盾时
-> 以 [`docs/plans/multi-round-iteration-2026-09-15.md`](../plans/multi-round-iteration-2026-09-15.md)
-> 状态盘点为准。
+> 以 [`docs/plans/multi-round-iteration-2026-09-15.md §十三 落地状态盘点](../plans/multi-round-iteration-2026-09-15.md#十三落地状态盘点2026-09-15-stage-97-后)
+> 为准。
+
+**Round 1 收口进度**（Round 1.1/1.2/1.3/1.4 全部 ✅ 已落，共 5 commits +705/-37 行，18/18 测试 0 回归）：
+- ✅ Round 1.1 voice+emotion UNIQUE（§P1-R2-8/9）—— commit `3bdc817`（i008 partial + i009 完整 ON CONFLICT 修复）
+- ✅ Round 1.2 EmotionAnalysis 软删除（§P2-R2-7 第 1 张表）—— commit `c2d4aa3`（gorm.DeletedAt + repo.Delete）
+- ⏳ Round 1.2 follow-up：face/voice/fused 3 张表 + voice_transcripts 第 5 张表软删除
+- ✅ Round 1.3 migrate.sh glob 改造（§P2-12）—— commit `9458133`（删 SERVICE_ORDER 硬编码 + Phase 2 glob）
+- ✅ Round 1.4 视图一致性 + 收敛（§P2-R2-10）—— commit `006bb32`（daily_emotion_v 收敛 + check_view_consistency.py CI 护栏）
+- ⏳ Round 1.4 follow-up：msg_summary_v 双 owner 收敛 + assessment_v 迁 analytics
 
 **observability-edge-gaps 收口进度**（Stage 92 + 93 + Round 5 + Stage 97 完成 5/7 项）：
 - ✅ A. Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN

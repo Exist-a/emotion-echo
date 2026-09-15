@@ -4,6 +4,14 @@ priority: high
 owner: TBD
 created: 2026-09-15
 type: multi-round-iteration
+progress:
+  round-0-landed: 1ec6e60 (docs: 文档治理收口)
+  round-1.1-landed: 3bdc817 (fix(db): voice+emotion UNIQUE)
+  round-1.2-landed: c2d4aa3 (fix(db): EmotionAnalysis 软删除)
+  round-1.3-landed: 9458133 (fix(db): migrate.sh glob 改造)
+  round-1.4-landed: 006bb32 (fix(db): daily_emotion_v 收敛 + 视图一致性护栏)
+  rounds-pending: [1.2-follow-up (4 表软删除扩展), 2.x, 3.x, 4.x, 5]
+  closure-stage: stage-98-round-1-closure (待写)
 depends-on:
   - code-review-2026-09-14.md（Round 1）
   - code-review-2026-09-14-round-2.md（Round 2）
@@ -852,3 +860,66 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 
 > **本计划基于代码事实**（49 open 项全部分配 + 每 round TDD 步骤可执行）。
 > 调研依据 = 5 源文档（Round 1/2 residuals + Kafka D2-D8 + todo-pile + roadmap open）+ Stage 97 收口报告 + 2 个新 commit（c9b05e6 / 045e3d8）。
+
+---
+
+## 十三、落地状态盘点（2026-09-15 Stage 97 后）
+
+> **本段是进度快照**。`status: planned` 保留（Round 2-5 未做），但 Round 0 + 1.1-1.4
+> 已落地。每 round 状态有 commit SHA + 文件 + 测试结果。
+
+| Round | 状态 | Commit | 改动文件 | 测试 | 关键决策 |
+|-------|------|--------|----------|------|----------|
+| **Round 0** 文档治理 | ✅ 已落 | `1ec6e60` | roadmap.md + decisions.md (2) | 5 源交叉验证 | 决策 9/12 关系说明段已存在（2026-09-10），仅做交叉引用登记 |
+| **Round 1.1** voice+emotion UNIQUE | ✅ 已落 | `3bdc817` | 2 migration (i008/i009) + 1 test (3) | 5/5 PASS, 13.95s | i006 partial unique 破坏 GORM ON CONFLICT（i009 改为完整 UNIQUE）|
+| **Round 1.2** EmotionAnalysis 软删除 | ✅ 已落 | `c2d4aa3` | 1 model + 1 repo + 1 test (2) | 7/7 PASS, 17s | gorm.DeletedAt = sql.NullTime；4 张表（face/voice/fused/voice_transcripts）follow-up |
+| **Round 1.3** migrate.sh glob 改造 | ✅ 已落 | `9458133` | migrate.sh + 1 test (5 契约) | 5/5 契约 PASS | 删 SERVICE_ORDER 硬编码，加 PRIORITY_ORDER 兜底 + Phase 2 glob 自动发现 |
+| **Round 1.4** 视图一致性 + 收敛 | ✅ 已落 | `006bb32` | 04-create-views.sql + 1 test (3) + 1 tool (160) | 3/3 unit + 4 view 一致 | daily_emotion_v 收敛到 analytics/a001（owner 减半 2→1）|
+
+**累计**：5 commits, +705/-37 行, 18/18 测试 PASS, 0 回归。
+
+### 13.1 Round 1 follow-up（待办）
+
+| 任务 | 工作量 | 来源 |
+|------|--------|------|
+| 推 face/voice/fused 3 张表软删除 (Round 1.2 残余) | 0.5d | plan §三 Round 1.2 步骤 4 |
+| voice_transcripts 软删除 + 建表 migration (第 5 张表) | 0.25d | plan §三 Round 1.2 范围权衡 |
+| msg_summary_v 双 owner 收敛 (c005/c007 → 单 owner) | 0.5d | Round 1.4 grep 现状发现 |
+| assessment_v 迁 analytics (deploy/db → svc migration) | 0.25d | Round 1.4 注释登记 |
+
+### 13.2 剩余 Rounds（按 plan §三-§七）
+
+| Round | 主题 | 状态 |
+|-------|------|------|
+| Round 2.1 | outbox sent/dead 清理 job (Kafka D2) | ⏳ pending |
+| Round 2.2 | D6+D8 契约卫生合并小 PR (Kafka D6/D8) | ⏳ pending |
+| Round 2.3 | DLQ 告警 + 大小限制 + 生产 timeout | ⏳ pending |
+| Round 2.4 | analytics-svc consumer 配置补全 + chat-svc producer ctx 取消 | ⏳ pending |
+| Round 3.1 | mock 随机 + 异常脱敏 api_key | ⏳ pending |
+| Round 3.2 | FileAttachment SSRF 边界 | ⏳ pending |
+| Round 3.3 | prompt 注入防护 | ⏳ pending |
+| Round 3.4 | LLM 输出内容审核 | ⏳ pending（owner 拍板选型）|
+| Round 3.5 | INTERNAL_API_KEY 弱 key fail-fast + 跨 svc 隔离 | ⏳ pending |
+| Round 4.1-4.7 | 中间件/部署/可观测 26 PR | ⏳ pending |
+| Round 5 | 全量收口 | ⏳ pending |
+
+### 13.3 累计测试矩阵（实测）
+
+| 测试范围 | 用例 | 状态 | commit |
+|----------|------|------|--------|
+| ai-svc emotion 幂等 | 2 | ✅ PASS | Round 1.0 既有 |
+| ai-svc voice UNIQUE | 3 | ✅ PASS | `3bdc817` |
+| ai-svc soft delete | 2 | ✅ PASS | `c2d4aa3` |
+| ai-svc 单元测试 -short 5 包 | - | ✅ PASS | - |
+| check_view_consistency | 3 | ✅ PASS | `006bb32` |
+| check_view_consistency (全仓) | 4 view | ✅ 一致 | `006bb32` |
+| migrate.sh glob (5 契约) | 5 | ✅ PASS | `9458133` |
+| **合计** | **18 用例 + 4 view 一致** | **0 回归** | - |
+
+### 13.4 调研依据（本段增量更新）
+
+- 7 commits 落地：`937855c` + `76d2d8f`（计划制定）+ `1ec6e60`（Round 0）+ `3bdc817`（Round 1.1）+ `c2d4aa3`（Round 1.2）+ `9458133`（Round 1.3）+ `006bb32`（Round 1.4）
+- ai-svc 单元测试 5 包 PASS（logic/model/repository/svc/types）
+- check_view_consistency.py: 4 view（daily_emotion_by_modality_v 单点 + daily_emotion_v 单点 + assessment_v 2 点一致 + msg_summary_v 2 点一致）
+- migrate.sh glob 5 契约：SERVICE_ORDER 硬编码消失 + glob 模式命中 + SERVICE_ORDER 字面仅在注释 + 3 svc 落地 + legacy 排除
+- AGENTS.md §〇必做功课 #1（每 round 必先 grep 现状）：4 轮全部按此执行，规避了 i006 partial unique 破坏 GORM ON CONFLICT 等隐藏 bug
