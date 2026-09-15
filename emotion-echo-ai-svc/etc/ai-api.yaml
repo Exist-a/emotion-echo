@@ -16,7 +16,7 @@ Port: 8891
 #   LLM_MODEL          — 模型名
 #   LLM_TIMEOUT        — 超时秒数
 #   LLM_GRPC_ADDR      — 形如 emotion-llm-service:50051
-#   INTERNAL_API_KEY — gRPC auth key（P0-R2-5: 统一 env 名）
+#   INTERNAL_API_KEY — gRPC auth key（P0-R2-5: 统一 env 名；Round 3.5：AI_LLM_INTERNAL_API_KEY 优先）
 #   LLM_BREAKER_FAIL_THRESHOLD — 连续失败次数
 #   LLM_BREAKER_OPEN_SECONDS   — Open 持续秒数
 #   NACOS_ENABLED      — "true"/"false"
@@ -25,23 +25,24 @@ Port: 8891
 #   NACOS_HOT_RELOAD   — "true"/"false"
 #   WORKER_TICK_INTERVAL — FusionWorker tick 秒数
 #
-# Stage 35 PR-7：所有 ${VAR:-default} 占位符恢复（Stage 34 smoke 临时硬编码的 false 已回滚）。
-# 占位符由 main.go applyEnvOverrides 替换（go-zero conf 不解析 bash 风格 ${...:-...}）。
-# 本地开发：env 不设 → 用默认 localhost / dev 配置
+# Round 4.6 P1-26 收紧：所有 ${VAR:-default} 字面默认值已移除 → ${VAR} 形式。
+# 缺省值由 main.go applyEnvOverrides（env） + applyDefaultFallbacks（infra only，
+# 不再包含业务依赖字段 silent localhost fallback）控制。
+# 本地开发：必须显式 export env；否则 applyDefaultFallbacks 启动 fail-fast
+# （修复"dev 拼通的 prod 配置"漂移风险）。
 
 SkyWalking:
-  OAPAddr:     ${SKYWALKING_OAP_ADDR:-localhost:11800}
+  OAPAddr:     ${SKYWALKING_OAP_ADDR}
   ServiceName: emotion-echo-ai-svc
   # Enabled: 省略 → 走 Config struct tag `json:",default=false"`；env 注入由 main.go applyEnvOverrides
-  # （go-zero conf 不解析 ${VAR:-default} 字面量；yaml 显式 false 会和 env 冲突）
 
 Postgres:
-  DSN:          ${POSTGRES_DSN:-"host=localhost port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_ai"}
+  DSN:          ${POSTGRES_DSN}
   MaxOpenConns: 10
   MaxIdleConns: 5
 
 Kafka:
-  BrokersCSV: ${KAFKA_BROKERS:-localhost:9092}
+  BrokersCSV: ${KAFKA_BROKERS}
   GroupID:    ai-svc
   # Enabled: 省略 → Config default=true
   Topics:     ["chat-events"]
@@ -49,10 +50,10 @@ Kafka:
   MaxRetries: 3
 
 LLM:
-  BaseURL:        ${LLM_BASE_URL:-http://localhost:8000}
-  GRPCAddr:       ${LLM_GRPC_ADDR:-localhost:50051}
-  InternalAPIKey: ${INTERNAL_API_KEY:-}
-  Model:          ${LLM_MODEL:-deepseek-chat}
+  BaseURL:        ${LLM_BASE_URL}
+  GRPCAddr:       ${LLM_GRPC_ADDR}
+  InternalAPIKey: ${INTERNAL_API_KEY}
+  Model:          ${LLM_MODEL}
   Enabled:        true
   # Timeout: 省略 → Config struct tag default=3；env LLM_TIMEOUT 由 main.go applyEnvOverrides 注入
   Timeout:        3
@@ -64,8 +65,8 @@ GRPC:
 # Stage 22-A: 多模态 AI 模型服务（可选）
 # BaseURL 留空 = 不调用，由 analyzer / consumer 走降级路径（仅文本 LLM）。
 # 启用 AI profile 后，compose 文件会注入容器 DNS 名（emotion-echo-fer:8004 等）。
-# Stage 35 PR-7：BaseURL 显式空（dev 默认），env 注入由 main.go applyEnvOverrides 负责
-# （go-zero conf 不解析 ${VAR:-default}，字面 ${FER_BASE_URL:-} 会被当成 URL 报 parse 错）。
+# Round 4.6 收紧：BaseURL 仍可空（可选服务），由 main.go applyDefaultFallbacks 检查
+# （dev 必须显式 export FER_BASE_URL 等，否则报错，避免 silent localhost fallback）。
 FER:
   BaseURL: ""
   Timeout: 10
@@ -83,7 +84,7 @@ XTTS:
 # Stage 31 PR-09: Nacos 注册中心 + 配置中心
 Nacos:
   # Enabled: 省略 → Config default=true
-  Addr:      ${NACOS_ADDR:-emotion-echo-nacos:8848}
-  Namespace: ${NACOS_NAMESPACE:-emotion-echo-dev}
+  Addr:      ${NACOS_ADDR}
+  Namespace: ${NACOS_NAMESPACE}
   GroupName: DEFAULT_GROUP
   # HotReload: 省略 → Config default=false

@@ -109,21 +109,21 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 1024M
         reservations:
           cpus: "0.1"
           memory: 64M
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
       skywalking-oap:
-        condition: service_started
+        condition: service_healthy
 
       nacos:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8888/health || exit 1"]
       interval: 30s
@@ -167,23 +167,23 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 1024M
         reservations:
           cpus: "0.1"
           memory: 64M
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
       kafka:
-        condition: service_started
+        condition: service_healthy
       skywalking-oap:
-        condition: service_started
+        condition: service_healthy
 
       nacos:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8890/health || exit 1"]
       interval: 30s
@@ -230,21 +230,21 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 1024M
         reservations:
           cpus: "0.1"
           memory: 64M
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
       skywalking-oap:
-        condition: service_started
+        condition: service_healthy
 
       nacos:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8893/health || exit 1"]
       interval: 30s
@@ -286,21 +286,21 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 1024M
         reservations:
           cpus: "0.1"
           memory: 64M
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
       skywalking-oap:
-        condition: service_started
+        condition: service_healthy
 
       nacos:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8889/health || exit 1"]
       interval: 30s
@@ -321,7 +321,7 @@ services:
     env_file: *env-file
     depends_on:
       nacos:
-        condition: service_started
+        condition: service_healthy
     environment:
       <<: *logging-env
       # Stage 31 PR-11: Nacos 注册中心 + 配置中心
@@ -363,7 +363,7 @@ services:
           memory: 1024M
         reservations:
           cpus: "0.2"
-          memory: 256M
+          memory: 1024M
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)\""]
       interval: 15s
@@ -444,22 +444,22 @@ services:
           memory: 1024M
         reservations:
           cpus: "0.2"
-          memory: 256M
+          memory: 1024M
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       # 2026-09-04: 表结构必须先就位，否则启动即写不存在的列（发消息 500）
       emotion-echo-db-migrate:
         condition: service_completed_successfully
       kafka:
-        condition: service_started
+        condition: service_healthy
       skywalking-oap:
-        condition: service_started
+        condition: service_healthy
       emotion-llm-service:
         condition: service_healthy
 
       nacos:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8891/health || exit 1"]
       interval: 30s
@@ -500,7 +500,7 @@ services:
           memory: 1024M
         reservations:
           cpus: "0.2"
-          memory: 256M
+          memory: 1024M
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health', timeout=2)\""]
       interval: 30s
@@ -690,7 +690,7 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 1024M
         reservations:
           cpus: "0.1"
           memory: 64M
@@ -797,7 +797,7 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 1024M
         reservations:
           cpus: "0.1"
           memory: 64M
