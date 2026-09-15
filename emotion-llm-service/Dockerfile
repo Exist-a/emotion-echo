@@ -20,14 +20,17 @@ FROM ${PYTHON_3_12_SLIM_IMAGE:-python:3.12-slim}${PYTHON_3_12_SLIM_DIGEST:+@${PY
 
 WORKDIR /build
 
-# 配置 pip 国内镜像源（PyPI 在容器内被墙，必须换源）
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
-    && pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
+# 配置 pip 镜像源（默认清华 tuna；可由 build-arg PIP_INDEX_URL 覆盖为阿里云 / pypi.org）
+# 2026-09-16: 默认 timeout + retries 拉大, 避免大文件（grpcio 7.2MB）在 build context 网络下 read timeout
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+RUN pip config set global.index-url ${PIP_INDEX_URL} \
+    && pip config set global.trusted-host ${PIP_TRUSTED_HOST}
 
 # 复制并安装 Python 依赖（注意：所有路径相对 build context 根）
 # grpcio>=1.60.0 官方提供 manylinux wheel，不需要 C 编译，省去 build-essential
 COPY emotion-llm-service/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=120 --retries 5 --prefix=/install -r requirements.txt
 
 # 复制 proto 生成代码（grpc_server.py 强依赖）
 COPY emotion-llm-service/emotion_llm_pb2.py      ./emotion_llm_pb2.py
