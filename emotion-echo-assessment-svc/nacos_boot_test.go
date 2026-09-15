@@ -46,6 +46,16 @@ func (f *fakeRegistry) Heartbeat(ctx context.Context, _ shareddiscovery.Instance
 	go func() { <-ctx.Done() }()
 }
 
+// BeatHeartbeat Round 4.2 / Stage 101（PR-5）补：满足 discovery.Registry 接口。
+// 与 web-bff nacos_boot_test.go:44-50 同模式；Stage 101 commit d33e9e1 仅补了
+// web-bff 的 fakeRegistry，4 业务 svc 漏补，本轮一并补齐。
+func (f *fakeRegistry) BeatHeartbeat(ctx context.Context, _ shareddiscovery.Instance, _ time.Duration) {
+	f.mu.Lock()
+	f.heartbeatsStarted++
+	f.mu.Unlock()
+	go func() { <-ctx.Done() }()
+}
+
 type fakeConfigCenter struct {
 	mu          sync.Mutex
 	getCalls    []getCall

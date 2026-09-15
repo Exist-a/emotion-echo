@@ -27,6 +27,7 @@ import (
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	sharedskywalking "github.com/emotion-echo/shared/pkg/skywalking"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -172,9 +173,16 @@ func openPostgres(dsn string, maxOpen, maxIdle int) (repository.SurveyRepo, erro
 		return nil, err
 	}
 	sqlDB, _ := db.DB()
+	// 第一步：按 yaml 配置设默认值（向后兼容 Stage 50 行为）。
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetMaxIdleConns(maxIdle)
 	sqlDB.SetConnMaxLifetime(time.Hour)
+	// 第二步：Round 4.4 PR-2 — env 覆盖 yaml。非法 env 立即 fail-fast。
+	if err := dbconnect.ApplyPoolEnv(sqlDB); err != nil {
+		return nil, fmt.Errorf("apply pool env failed: %w", err)
+	}
+	// Round 4.4 PR-1：SkyWalking GORM trace 接入。
+	sharedskywalking.InitGORM(db)
 	if err := sqlDB.Ping(); err != nil {
 		return nil, fmt.Errorf("db ping failed: %w", err)
 	}

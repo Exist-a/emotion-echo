@@ -35,6 +35,7 @@ import (
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	sharedskywalking "github.com/emotion-echo/shared/pkg/skywalking"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -384,9 +385,20 @@ func openPostgres(dsn string, maxOpen, maxIdle int) (repository.ConversationRepo
 		return nil, nil, fmt.Errorf("db open failed: %w", err)
 	}
 	sqlDB, _ := db.DB()
+	// 第一步：先按 yaml 配置设默认值（向后兼容 Stage 50 行为）。
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetMaxIdleConns(maxIdle)
 	sqlDB.SetConnMaxLifetime(time.Hour)
+	// 第二步：Round 4.4 PR-2 — PG 连接池 env 化。
+	// env 设置时（PG_MAX_CONNS / PG_MIN_IDLE_CONNS / PG_MAX_LIFETIME_SECONDS）
+	// 覆盖 yaml；env 缺失时 ApplyPoolEnv 返默认值（10/5/1h），与上一步的
+	// yaml 一致或更保守，无副作用。非法 env 立即 fail-fast（冒泡 error）。
+	if err := dbconnect.ApplyPoolEnv(sqlDB); err != nil {
+		return nil, nil, fmt.Errorf("apply pool env failed: %w", err)
+	}
+	// Round 4.4 PR-1：SkyWalking GORM trace 接入。
+	// Tracer 未起时回调直接透传，零开销；nil DB 时返 0 不 panic。
+	sharedskywalking.InitGORM(db)
 	if err := sqlDB.Ping(); err != nil {
 		return nil, nil, fmt.Errorf("db ping failed: %w", err)
 	}
