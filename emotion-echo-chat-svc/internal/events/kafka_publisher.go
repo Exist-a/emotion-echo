@@ -123,6 +123,12 @@ func (p *KafkaEventPublisher) Publish(ctx context.Context, topic string, e *Even
 		}
 		// Stage 94 PR-1 §P0-6：保留 span 返回值，SendMessage 之后 EndSpan(sendErr)
 		// go2sky 可能返 nil span (noop receiver / adapter 退化)；nil 守卫保护
+		//
+		// Round 2.2 §D8 拓扑约定：peer 参数用 topic 名（"chat-events"），
+		// 让 OAP 拓扑图按 topic 划分对端节点。代价：同一 broker 的不同 topic 在
+		// OAP 看起来像不同对端，与"一个 Kafka broker = 一个对端"的直觉相反。
+		// 当前选择 = topic（细化拓扑，便于排查"哪个 topic 慢"）。
+		// 若日后想"一个 Kafka broker = 一个对端"，改 peer="kafka:9092" 即可。
 		_, span, err = p.tracer.CreateExitSpan(ctx, "kafka-publish", topic, injector)
 		if err != nil {
 			// CreateExitSpan 失败不阻塞 publish —— 与 Stage 92 注释承诺一致

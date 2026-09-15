@@ -279,6 +279,47 @@ func TestMapEventToUserBehaviorRow_TableDriven(t *testing.T) {
 	}
 }
 
+// Round 2.2 §D8 GREEN：枚举 eventrow.EventType* 三个常量，断言每个能被 classifyEventType
+// 正确分类（message / conversation），且 MapEventToUserBehaviorRow 不返 ErrUnknownEventType。
+//
+// 目的：新增 EventType 常量但漏 classifyEventType switch 分支 → CI 立刻挂。
+//
+// 与 chat-svc 端 TestMarshalChatEvent_AllEventTypesCovered 对称：两端常量为镜像
+// （eventrow.mapper.go:38-42 注释明写"任何变更必须同时改两处"），但分类逻辑独立。
+// 维护规约（mapper.go 注释）：加 EventType 时同步在 eventrow.mapper.go const block +
+// classifyEventType switch + chat-svc/internal/events/events.go const block +
+// proto_marshal.go switch case + UnmarshalChatEventJSON switch case 五处。
+func TestClassifyEventType_AllEventrowConstantsCovered(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		eventType string
+		wantClass eventClass
+	}{
+		{EventTypeMessageCreated, eventClassMessage},
+		{EventTypeConversationCreated, eventClassConversation},
+		{EventTypeConversationClosed, eventClassConversation},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.eventType, func(t *testing.T) {
+			t.Parallel()
+			got := classifyEventType(tc.eventType)
+			assert.Equal(t, tc.wantClass, got,
+				"classifyEventType(%q) = %v, want %v（漏 switch 分支会回 eventClassUnknown）",
+				tc.eventType, got, tc.wantClass)
+
+			// 进一步：完整走 MapEventToUserBehaviorRow 不返 ErrUnknownEventType
+			data := DataShape{ConversationID: 1, UserID: 1}
+			if tc.wantClass == eventClassMessage {
+				data.MessageID = 1
+			}
+			_, err := MapEventToUserBehaviorRow("evt-"+tc.eventType, tc.eventType, data, fixedOccurred)
+			require.NoError(t, err,
+				"MapEventToUserBehaviorRow 对 eventrow.EventType* 常量必须可处理，got ErrUnknownEventType")
+		})
+	}
+}
+
 // itoaInt64 避免 import strconv 引入额外依赖
 func itoaInt64(v int64) string {
 	if v == 0 {

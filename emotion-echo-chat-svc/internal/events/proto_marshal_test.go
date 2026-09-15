@@ -10,6 +10,7 @@
 package events
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -92,4 +93,61 @@ func TestMarshalChatEvent_ProtobufBinaryNotJSON(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, raw)
 	assert.NotEqual(t, byte('{'), raw[0], "Protobuf 二进制不应以 '{' 开头（JSON 嗅探兼容依据）")
+}
+
+// Round 2.2 §D6 GREEN：枚举本包所有 EventType* 常量 + 对应 typed Data，
+// 调 MarshalChatEvent 断言 (a) 不返错 (b) oneof Data 非 nil。
+//
+// 目的：新增 EventType 时若忘加 switch case（旧实现 default 报错），CI 立刻挂。
+//
+// 反射交叉验证：sample.data 的 reflect.Type.Name 必须 = sample.dataTypeName 字段
+// （防 sample 用错类型 — RED 阶段已暴露"去点+首大写"启发式对 ConversationClosed 不适用）。
+//
+// 维护规约（写入 events.go 注释）：加 EventType 时同步在此表 + proto_marshal.go
+// switch case + eventrow/mapper.go classifyEventType 三处加对应。
+func TestMarshalChatEvent_AllEventTypesCovered(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 9, 15, 8, 0, 0, 0, time.UTC)
+
+	type sample struct {
+		eventType    string // EventType* 常量字面值（Kafka 消息流通的字符串）
+		data         any    // 对应 typed Data
+		dataTypeName string // reflect.Type.Name 的期望值（防御性自检：防止 sample.data 类型写错）
+	}
+	samples := []sample{
+		{
+			eventType:    EventTypeMessageCreated,
+			data:         MessageCreatedData{MessageID: 1, ConversationID: 2, UserID: 3, Role: "user", Content: "hi", CreatedAt: at.UnixMilli()},
+			dataTypeName: "MessageCreatedData",
+		},
+		{
+			eventType:    EventTypeConversationCreated,
+			data:         ConversationCreatedData{ConversationID: 2, UserID: 3, Title: "t", CreatedAt: at.UnixMilli()},
+			dataTypeName: "ConversationCreatedData",
+		},
+		{
+			eventType:    EventTypeConversationClosed,
+			data:         ConversationClosedData{ConversationID: 2, UserID: 3, ClosedAt: at.UnixMilli()},
+			dataTypeName: "ConversationClosedData",
+		},
+	}
+
+	for _, s := range samples {
+		t.Run(s.eventType, func(t *testing.T) {
+			// (a) 反射验证 sample.data 类型名 = sample.dataTypeName（防 sample 用错类型）
+			gotTypeName := reflect.TypeOf(s.data).Name()
+			assert.Equal(t, s.dataTypeName, gotTypeName,
+				"sample.Data 类型 %q 与声明 %q 不一致", gotTypeName, s.dataTypeName)
+
+			// (b) MarshalChatEvent 不返错 + (c) envelope.Data 非 nil（漏 switch case → default 路径会报错）
+			e := &Event{ID: "evt-" + s.eventType, Type: s.eventType, Source: "chat-svc", Time: at, Data: s.data}
+			raw, err := MarshalChatEvent(e)
+			require.NoError(t, err, "MarshalChatEvent 对 %s 应成功", s.eventType)
+
+			var env chatevents.ChatEventEnvelope
+			require.NoError(t, proto.Unmarshal(raw, &env))
+			assert.Equal(t, s.eventType, env.Type, "envelope.Type 应回填")
+			assert.NotNil(t, env.Data, "oneof Data 必须非 nil — 漏 switch case 会导致 default 路径")
+		})
+	}
 }
