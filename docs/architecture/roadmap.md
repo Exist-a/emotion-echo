@@ -1038,6 +1038,12 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 > 把 audit 修订后的 23 项真未落/半落**全部 10 Round 落地**。详见
 > [`docs/stages/stage-101-multi-round-iteration-closure.md`](../stages/stage-101-multi-round-iteration-closure.md)。
 > 剩余 open 仅 9 项触发条件型（多副本/上 prod/owner 拍板/外部协调），单轮 TDD 不可独立完成。
+>
+> **2026-09-15 多轮会话补全**（"剩下的多轮完成"指令落地）：
+> 8 commits (d33e9e1..4ff5a24) 真落地 Round A/B/C/D + e2e 实证 chat-events 6 partition。
+> 7 commits 中 4 个为代码 (`f25d4d4` Round A / `50b9e3e` Round B / `f22c1ce` Round C / `ded2efc` Round D) +
+> 3 个为 docs/evidence/plan (`93cfc4a` Round C e2e / `a0c5b78` 后续 task 痕迹 / `4ff5a24` Round D lockfile 痕迹 / `07a0305` §十五 + kafka-init 注释)。
+> 详见 [`docs/plans/multi-round-iteration-2026-09-15.md` §十五](../plans/multi-round-iteration-2026-09-15.md#十五2026-09-15-本会话真落地-commits6-个-push-originmain)。
 
 **Round 1 收口进度**（Round 1.1/1.2/1.3/1.4 + Stage 101 follow-up 全部 ✅ 已落，5 commits +705/-37 行 + 4 模型 + 4 测试，0 回归）：
 - ✅ Round 1.1 voice+emotion UNIQUE（§P1-R2-8/9）—— commit `3bdc817`
