@@ -1,0 +1,71 @@
+Round C e2e 实证：chat-events 业务 topic 6 partition 验证
+================================================================
+
+执行环境：dev compose (deploy/docker-compose.infra.yml)
+执行日期：2026-09-15
+执行命令：
+  docker compose -f deploy/docker-compose.infra.yml up -d kafka kafka-init
+  # 等 kafka healthy 后自动触发 kafka-init (depends_on: service_healthy)
+  docker exec emotion-echo-kafka bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic chat-events"
+
+清理旧 topic 步骤（dev 库历史残留 chat-events partition=1）：
+  docker exec emotion-echo-kafka bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic chat-events"
+  # 删除后 kafka-init 重跑（IF NOT EXISTS 命中会跳过 — 删后才会真建 6 partition）
+
+
+=== 第一次跑：topic 不存在 → 创建 ===
+
+[init-topics] brokers=emotion-echo-kafka:9092 topic=chat-events partitions=6 replication=1
+Created topic chat-events.
+[init-topics] topic 'chat-events' created successfully:
+Topic: chat-events	TopicId: OCOXRgc4SDSfDm7HjAjqDA	PartitionCount: 6	ReplicationFactor: 1	Configs: compression.type=producer,retention.ms=604800000
+	Topic: chat-events	Partition: 0	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 1	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 2	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 3	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 4	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 5	Leader: 1	Replicas: 1	Isr: 1
+
+emotion-echo-kafka-init exited with code 0
+
+【结论】✅ chat-events 实际创建为 6 partition（0-5 全部 Leader 1）
+【关键】Config retention.ms=604800000（7 天） + compression.type=producer — 与 init-topics.sh 设计一致
+
+
+=== 第二次跑：topic 已存在 → IF NOT EXISTS 跳过 ===
+
+[init-topics] topic 'chat-events' already exists, skipping
+Topic: chat-events	TopicId: OCOXRgc4SDSfDm7HjAjqDA	PartitionCount: 6	ReplicationFactor: 1	Configs: compression.type=producer,retention.ms=604800000
+	Topic: chat-events	Partition: 0	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 1	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 2	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 3	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 4	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 5	Leader: 1	Replicas: 1	Isr: 1
+
+emotion-echo-kafka-init exited with code 0
+
+【结论】✅ 幂等路径 e2e 实证（kafka-init 重跑不破坏现有 6 partition，skip + describe）
+
+
+=== 独立复核：docker exec emotion-echo-kafka --describe ===
+
+$ docker exec emotion-echo-kafka bash -c "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic chat-events"
+Topic: chat-events	TopicId: OCOXRgc4SDSfDm7HjAjqDA	PartitionCount: 6	ReplicationFactor: 1	Configs: compression.type=producer,retention.ms=604800000
+	Topic: chat-events	Partition: 0	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 1	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 2	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 3	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 4	Leader: 1	Replicas: 1	Isr: 1
+	Topic: chat-events	Partition: 5	Leader: 1	Replicas: 1	Isr: 1
+
+【结论】✅ 独立 e2e 复核：PartitionCount: 6 + 6 partition 0-5 全部 Leader 1
+
+
+=== 业务影响 ===
+
+旧 1 partition 限制：ai-svc + analytics-svc 2 consumer 共享 group，1 个 active 1 个 idle。
+新 6 partition：2 consumer 各自 1 partition（均衡）；6 个 ai-svc 副本可全并行（chat-svc producer
+按 conversation_id 哈希分区 → 同会话消息保证顺序性，跨会话可并行）。
+
+上 prod 路径：env 改 KAFKA_TOPIC_REPLICATION_FACTOR=3 即可（init-topics.sh 已支持 override）。
