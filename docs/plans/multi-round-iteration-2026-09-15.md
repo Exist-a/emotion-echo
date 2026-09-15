@@ -875,8 +875,12 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 | **Round 1.2** EmotionAnalysis 软删除 | ✅ 已落 | `c2d4aa3` | 1 model + 1 repo + 1 test (2) | 7/7 PASS, 17s | gorm.DeletedAt = sql.NullTime；4 张表（face/voice/fused/voice_transcripts）follow-up |
 | **Round 1.3** migrate.sh glob 改造 | ✅ 已落 | `9458133` | migrate.sh + 1 test (5 契约) | 5/5 契约 PASS | 删 SERVICE_ORDER 硬编码，加 PRIORITY_ORDER 兜底 + Phase 2 glob 自动发现 |
 | **Round 1.4** 视图一致性 + 收敛 | ✅ 已落 | `006bb32` | 04-create-views.sql + 1 test (3) + 1 tool (160) | 3/3 unit + 4 view 一致 | daily_emotion_v 收敛到 analytics/a001（owner 减半 2→1）|
+| **Round 2.1** outbox sent/dead 清理 job (Kafka D2) | ✅ 已落 | `4d118f6` | cleanup.go + cleanup_test.go + main.go ticker + config (6) | 5/5 PASS, 0.72s | dead 用 created_at 判定（last_error 是 msg string）|
+| **Round 2.2** D6+D8 契约卫生 (Kafka D6/D8) | ✅ 已落 | `6d6c3b1` | proto_marshal_test.go + mapper_test.go + peer=topic 注释 (3) | 2/2 PASS, 0.61s | RED 阶段暴露"去点+首大写"启发式对 ConversationClosed 不适用，改 sample.dataTypeName 显式 |
+| **Round 2.3** DLQ 告警 (剩余 PR-1+PR-2) | ✅ 已落 | `0fbe2d0` | dlq_metrics.go ×2 + dlq_metrics_test.go ×2 + kafka-dlq.yml + consumer.go ×2 + prometheus.yml (8) | 7/7 PASS, 0.66s | DLQ 监控 / 告警 / 4 子项 (大小/timeout/分区键/镜像 tag) 已在 Round 1 + Stage 97 落地 — 计划漂移已对账 |
+| **Round 2.4** chat-svc producer ctx 取消 (Kafka P2-14) | ✅ 已落 | `caa100c` | kafka_publisher.go + kafka_publisher_test.go (2) | 11/11 PASS, 0.69s | goroutine + select 包裹 SendMessage；sarama 协程泄漏一次由 Producer.Timeout=10s 兜底 |
 
-**累计**：5 commits, +705/-37 行, 18/18 测试 PASS, 0 回归。
+**累计（Round 0-2）**：9 commits, +1685/-41 行, 33 测试 PASS, 0 回归。
 
 ### 13.1 Round 1 follow-up（待办）
 
