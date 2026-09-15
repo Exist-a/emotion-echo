@@ -17,6 +17,24 @@
 #
 # Round C 触发条件：dev 启动后第一次即可生效（无外部依赖）。
 # 上 prod 同样跑本脚本（替换 KAFKA_BROKERS 为 prod broker 地址）。
+#
+# ====================================================================
+# ⚠️ 一次性 dev 库升级提示（仅历史残留 chat-events 库需要做一次）：
+# ====================================================================
+# 旧 dev 库历史残留 chat-events topic 已被 KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+# 在 producer 首次发消息时以 partition=1 创建（Kafka default）。本脚本的 IF NOT EXISTS
+# 分支会命中跳过 → 误以为已建 6 partition 实际仍是 1。
+#
+# 一次性的升级步骤（dev 库做完即可，prod 库无残留直接 init 即可生效）：
+#
+#   docker exec emotion-echo-kafka bash -c \
+#     "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+#      --delete --topic chat-events"
+#   docker compose -f deploy/docker-compose.infra.yml up kafka-init
+#
+# 之后 chat-events 即 6 partition，本脚本再跑命中 IF NOT EXISTS skip 即可。
+# e2e 实证：docs/evidence/round-c-kafka-6partitions/describe-after-init.txt
+# ====================================================================
 
 set -euo pipefail
 
