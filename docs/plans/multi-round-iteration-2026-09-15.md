@@ -1049,3 +1049,68 @@ grep -nE "SERVICE_ORDER|migrations/" deploy/db/migrate.sh
 - 新增 §十四（5 小节）作为修订后的权威 open 清单
 - §十二 "工作总量 18-25d" 需下调为 **8-9d**（多数重活已落）
 - 后续启动 Round 时按 §14.5 顺序，每轮按 AGENTS.md §2.2 TDD 流程 + §2.5 收口自检三连
+
+---
+
+## 十五、2026-09-15 本会话真落地 commits（6 个 push origin/main）
+
+> **来源**：会话执行"剩下的多轮完成"指令后实际落地的 6 个 commit（d33e9e1..a0c5b78）。
+> 与 §十四.3 真未落清单对比：本会话把 §十四.3 中可启动的 4 项（Round A/B/C/D）全部
+> 真落地 + 2 个 docs commit 归档证据。剩余 9 项仍属 §十四.4 触发条件型或 roadmap 漂移。
+
+### 15.1 本会话真落地对照表
+
+| 项（来自 §十四.3） | plan 描述 | 实际状态 | commit | 证据 |
+|---|---|---|---|---|
+| assessment_v 迁 analytics | 双 owner，SQL diff 0 行（未迁） | **✅ 迁** | `f25d4d4` | `deploy/db/04-create-views.sql` 删重复定义 + a001 单 owner；check_view_consistency 4/4 PASS |
+| Round 3.x messaging D8-2 extractSw8Header 双份 | ai/analytics 各 1 份 | **✅ 收敛到 shared** | `50b9e3e` | `shared/pkg/messaging/sw8_header.go` + 7/7 单测 PASS + ai/analytics import 改 |
+| Round 4.4 chat-events topic 6 partition | "1d（触发=上 prod）" | **✅ 落地**（实际非 1d） | `f22c1ce` | `deploy/kafka/init-topics.sh` 幂等契约 + kafka-init 服务 + **e2e 实证 PartitionCount: 6**（commit `93cfc4a`）|
+| Round 4.7 基础镜像 digest pin | "16 Dockerfile 全部字面 tag" | **⚠️ 代码形态完成 / 真值待 CI sync** | `ded2efc` | 8 Dockerfile 改 ARG + `${VAR:-tag}` 模式；check 17/17 PASS；lockfile 7 个 `sha256:000..000` 占位 |
+| Stage 101 回归修复 | fakeRegistry 缺 BeatHeartbeat / shared 5 case / 前端 13 case | **✅ 全部修** | `d33e9e1` | 11 文件 +94/-26；6 svc + 24 包 + 281 vitest + 201 pytest 全绿 |
+| Round C e2e 证据归档 | 仅 mock 契约验证 | **✅ e2e 真起 + describe** | `93cfc4a` | `docs/evidence/round-c-kafka-6partitions/describe-after-init.txt` + README 索引 |
+| Round C/D 后续 task 痕迹 | dev 库升级步骤 + 真值 sync 触发条件 | **✅ 3 处登记** | `a0c5b78` | `deploy/kafka/init-topics.sh` 顶部 + `deploy/docker-compose.infra.yml` kafka-init 注释 + `docs/evidence/round-d-dockerfile-digest-pin.md` |
+
+### 15.2 commit 链（按 push 顺序）
+
+```
+a0c5b78 docs(evidence): Round C/D 后续 task 痕迹登记
+93cfc4a docs(evidence): Round C e2e 实证 chat-events 6 partition
+ded2efc feat(docker): Round D — 业务 7 Dockerfile + web dev 全部 digest env var 化
+f22c1ce feat(kafka): Round C — chat-events 业务 topic 显式建 6 partition
+50b9e3e refactor(messaging): Round B — extractSw8Header 收敛到 shared/pkg/messaging
+f25d4d4 fix(db): Round A — assessment_v 单 owner 收敛到 analytics a001
+d33e9e1 fix(test): Stage 101 回归修复（fakeRegistry BeatHeartbeat + shared 5 case + 前端 13 case）
+```
+
+> 注：d33e9e1 来自上一轮"修所有的修复项"目标；f25d4d4..a0c5b78 来自本轮"剩下的多轮完成"目标。
+
+### 15.3 仍 open（本会话未触及）
+
+**触发条件型**（roadmap 登记，需外部信号才做）：
+
+| 项 | 触发条件 |
+|---|---|
+| Redis backend 真接（Round 4.3 PR-2）| 多副本部署 |
+| Kafka D3 attempts 持久化 | ai-svc/analytics-svc 多副本 |
+| Kafka D5 relay 多副本互斥 | chat-svc 决定扩副本 |
+| Kafka D7 删除会话生命周期 | owner 拍板（产品语义）|
+| Helm probe（livenessProbe / readinessProbe）| helm 部署触发 |
+| chat-events 6 partition 真正上 prod | 真上 prod（dev 已 e2e 实证）|
+| Dockerfile digest 真值回填 | CI runner docker.io 网络可达（沙箱受限 443 timeout 已实测）|
+
+**roadmap 漂移修正**（实测发现已落但 roadmap 未登记）：
+
+| 项 | 实际状态 |
+|---|---|
+| Helm probe | 9 subchart 全有 `livenessProbe` + `readinessProbe`（grep 全命中，roadmap 写"未落"是漂移）|
+| ai-api.yaml `${VAR:-default}` 字面值 | grep 0 命中（Round 4.6 P1-26 已收紧，roadmap 写"未落"是漂移）|
+| Nacos Subscribe / OAP graphql bug / web typecheck 96 处 | 长期 open，需外部协调 |
+
+### 15.4 文档同步记录
+
+本会话同时落地的非 commit 改动：
+- `deploy/docker-compose.infra.yml` kafka-init 服务注释段：标注 (1) 一次性 init 不 restart (2) dev 库先 `--delete` 再 `up`（commit `a0c5b78` 一并打包）
+- `deploy/kafka/init-topics.sh` 顶部注释：dev 库一次性升级步骤（commit `a0c5b78` 一并打包）
+- `docs/evidence/round-c-kafka-6partitions/README.md` 新建：证据索引 + 升级步骤 + 业务影响
+- `docs/evidence/round-d-dockerfile-digest-pin.md` 新建：7 个占位 digest 状态 + sync 触发条件 + 后续 task 痕迹
+- 本 plan §十五：状态对照表（本文档本次刷新）

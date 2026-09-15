@@ -101,8 +101,29 @@ services:
 
   # =====================================================
   # Kafka topic init (Round C): 显式建 chat-events 6 partition
-  # 单次 init 服务：等 kafka healthy 后跑 init-topics.sh（幂等）
-  # 不加 restart，dev compose down/up 时不会重跑（topic 已存在会 skip）
+  # ---------------------------------------------------------------
+  # (1) 一次性 init 服务：等 kafka healthy 后跑 init-topics.sh（幂等）。
+  #     故意不加 restart 字段——dev compose down/up 时不会重跑
+  #     （topic 已存在 init-topics.sh 会走 IF NOT EXISTS skip 路径）。
+  #     不与 kafka 容器绑 same lifecycle，避免健康检查 race。
+  #
+  # (2) ⚠️ 一次性 dev 库升级步骤（仅历史残留 chat-events 库需要做一次）：
+  #     旧 dev 库 chat-events 已被 KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+  #     在 producer 首发消息时以 partition=1 创建（Kafka default）。
+  #     本 init 服务的 IF NOT EXISTS 分支会命中跳过 → 误以为已建 6 partition
+  #     实际仍是 1。一次性升级（dev 库做完即可，prod 库无残留直接生效）：
+  #
+  #       docker exec emotion-echo-kafka bash -c \
+  #         "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+  #          --delete --topic chat-events"
+  #       docker compose -f deploy/docker-compose.infra.yml up kafka-init
+  #
+  #     验证 PartitionCount: 6：
+  #       docker exec emotion-echo-kafka bash -c \
+  #         "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+  #          --describe --topic chat-events"
+  #
+  # e2e 实证：docs/evidence/round-c-kafka-6partitions/describe-after-init.txt
   # =====================================================
   kafka-init:
     image: apache/kafka:3.7.0
