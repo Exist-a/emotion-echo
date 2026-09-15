@@ -41,6 +41,14 @@ func (f *fakeRegistry) Heartbeat(ctx context.Context, _ shareddiscovery.Instance
 	go func() { <-ctx.Done() }()
 }
 
+// BeatHeartbeat Round 4.2 / Stage 101（PR-5）补：满足 discovery.Registry 接口。
+func (f *fakeRegistry) BeatHeartbeat(ctx context.Context, _ shareddiscovery.Instance, _ time.Duration) {
+	f.mu.Lock()
+	f.heartbeatsStarted++
+	f.mu.Unlock()
+	go func() { <-ctx.Done() }()
+}
+
 type fakeConfigCenter struct {
 	mu       sync.Mutex
 	getCalls []getCall

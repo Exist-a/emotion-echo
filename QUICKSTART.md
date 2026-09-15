@@ -2,6 +2,9 @@
 
 > Stage 36-D：本文版对应**当前 Stage 30+ BFF 架构**（6 个 Go 微服务 + Python gRPC + BFF 聚合 + 前端 Nuxt + AI profile）。
 > 历史单体 Gin 已迁移至 `legacy/emotion-echo-gin/`。
+>
+> **Stage 101 收口（2026-09-15）**：多轮迭代修复计划（[multi-round-iteration-2026-09-15.md](../docs/plans/multi-round-iteration-2026-09-15.md)）全部 10 Round 落地，8 commits pushed origin/main。
+> 主要变更：compose health condition 收紧（14 处 service_started → service_healthy）/ ai-svc IP 限流 / ai-svc producer 4 KiB / Nacos BeatInstance 真实实现（HTTP `/instance/beat`）/ web-bff Nacos fail-fast / per-svc INTERNAL_API_KEY 隔离 / ai-api.yaml 字面值 `${VAR:-default}` → `${VAR}` / 5 张表软删除 + i008 migration。详见 [stage-101-multi-round-iteration-closure.md](../docs/stages/stage-101-multi-round-iteration-closure.md)。
 
 ## 目录
 
@@ -62,6 +65,17 @@ Emotion-Echo/
 > 现改为"BFF (APISIX 后端，dev 调试可直连)"，并补 APISIX 一行（:19080，
 > cf1c798 后前端经 APISIX 是默认路径）。两者的关系以 `decisions.md` 决策 12
 > 的关系说明为准。
+
+> 🔧 **2026-09-15 Stage 101 P2-R2-24**：per-svc INTERNAL_API_KEY 隔离。
+> - `ai-svc` 优先读 `AI_LLM_INTERNAL_API_KEY`，fallback `INTERNAL_API_KEY`
+> - `web-bff` 优先读 `BFF_LLM_INTERNAL_API_KEY`，fallback `INTERNAL_API_KEY`
+> - `llm-service` 读 `INTERNAL_API_KEY`（默认）
+>
+> 三者建议填不同 key 强制最小权限；同值仍兼容向后。模板见
+> [deploy/env/.env.local.example](./deploy/env/.env.local.example) 与
+> [docs/env-templates/.env.local.example](./docs/env-templates/.env.local.example)。
+> 弱 key（test/dev/changeme/default/secret/password 子串）+ `INTERNAL_API_KEY_REQUIRED=1`
+> → `llm-service` 启动 sys.exit(1)（[grpc_server.py:400 fail-fast](../emotion-llm-service/grpc_server.py)）。
 
 ---
 

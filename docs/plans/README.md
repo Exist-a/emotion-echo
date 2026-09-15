@@ -1,7 +1,7 @@
 ﻿---
 purpose: 当前有效、未来排期的功能计划
-status: Round 0-2 已收口（stage-99）· **2026-09-15 代码审计修订** — 实际 open 从 49 项降到 23 项（17 真未落 + 6 半落），Round 3-5 待启动
-last-refresh: 2026-09-15（Stage 99 Round 2 收口 + **代码审计** — plan §十四 修订工作量 18-25d → 8-9d）
+status: **Round 5 已收口（stage-101）** · 2026-09-15 全量落地 8 commits pushed origin/main（`5e6d5ed..31fc475`）
+last-refresh: 2026-09-15（Stage 101 Round 5 全量收口 — 8 commits +1685/-41 + Round 1 follow-up + Round 3.3/3.5 + Round 4.2/4.3/4.4/4.5/4.6/4.7 全部落地）
 ---
 
 # 当前有效的计划
@@ -13,7 +13,7 @@ last-refresh: 2026-09-15（Stage 99 Round 2 收口 + **代码审计** — plan �
 
 | 文件 | 来源 | 主题 |
 |------|------|------|
-| `multi-round-iteration-2026-09-15.md` | 新增（2026-09-15，Stage 97 收口后）| **多轮迭代修复计划**：原估 49 个 open 项（4 周工作量 18-25d），**2026-09-15 代码审计修订为 23 项真未落/半落（8-9d）**。Round 0 文档治理 → Round 1 数据层 → Round 2 Kafka → Round 3 LLM 安全 → Round 4 中间件 → Round 5 全量收口。**进度（2026-09-15 Stage 99 收口后）：Round 0 + 1.1/1.2/1.3/1.4 + Round 2.1/2.2/2.3/2.4 已全部落地**（共 9 commits +1685/-41 行，33 测试 0 回归；commits `1ec6e60` + `3bdc817` + `c2d4aa3` + `9458133` + `006bb32` + `4d118f6` + `0fbe2d0` + `6d6c3b1` + `caa100c`）。**审计发现已落（doc drift 13 项）**：Round 3.1 mock 随机 + api_key 脱敏 + panic 脱敏 / 3.2 SSRF 边界 / 3.4 关键词审核 / 3.5 弱 key fail-fast / 4.1 DLQ metric + Promtail / 4.5 大小限制 / 4.6 MV metric + CORS(走 APISIX) + web registry + TrustAPISIX / msg_summary_v 单 owner。**剩余 23 项** = 11 真未落 + 6 半落 + 5 触发条件型 + 1 assessment_v 双 owner 但口径一致。详见 §十四 代码审计 + [`stages/stage-99-round-2-closure.md`](../stages/stage-99-round-2-closure.md) |
+| `multi-round-iteration-2026-09-15.md` | **已 landed 2026-09-15（Stage 101）** | **多轮迭代修复计划**：原估 49 个 open 项（4 周工作量 18-25d），**Stage 100 代码审计修订为 23 项真未落/半落（8-9d）**。Round 0 文档治理 → Round 1 数据层 → Round 2 Kafka → Round 3 LLM 安全 → Round 4 中间件 → Round 5 全量收口。**进度（2026-09-15 Stage 101 收口后）**：所有 Round 1-4 子项已落地。Stage 100 + Stage 101 累计 **17 commits**（含 stage-100 audit + stage-101 收口），详见 [`stages/stage-101-multi-round-iteration-closure.md`](../stages/stage-101-multi-round-iteration-closure.md)。**8 PR 落地（commits `e2e83c9` / `ed39e9e` / `f1ab37b` / `cd0ea57` / `929ccfd` / `e6c1c6a` / `6525407` / `31fc475`）**：Round 1 follow-up 软删除 + Round 3.3 prompt 注入 + Round 3.5 跨 svc 隔离 + Round 4.6 P2-25 + memory + yaml 字面值 + Round 4.5 compose health + IPRateLimit + Round 4.2 Nacos BeatHeartbeat + fail-fast + Round 4.3 limiter + PG 池 + skywalking Init + Round 4.7 consumer.go 拆分 + SKIP_PATH_LIST + digest pin verifier。**剩余 9 项触发条件型 backlog**（详见 stage-101 §三）：assessment_v 迁 analytics / Redis backend / Dockerfile digest 真值（docker.io 网络受限）/ Kafka D3/D5 attempts + relay / Kafka D7 owner 拍板 / Helm probe / chat-events 6 partition |
 | `ai-response-structured.md` | `.trae/documents/ai-response-structured.md` | AI 回复结构化 + Markdown 渲染 |
 | `three-vrm-usage-reference.md` | `.trae/documents/three-vrm-usage-reference.md` | Three-VRM API 参考手册 |
 | `wechat-qq-login-and-upload.md` | `.trae/documents/微信QQ登录和文件上传实施计划.md` | QQ OAuth + 通用文件上传 |

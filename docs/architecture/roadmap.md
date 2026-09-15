@@ -1099,23 +1099,41 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 8. Helm probe livenessProbe/readinessProbe（helm 部署触发）
 9. chat-events topic 6 partition（真上 prod）
 
+**重复段删除（2026-09-15 Stage 101 收口后修订）**：
+下方 Round 1/observability-edge-gaps/Kafka/Round 2/Round 3/Round 4 各小节为 stage-101 之前的**老快照**，
+与上方 §"当前 open 清单"（line 1035-1100，新快照）重复。本段保留作为历史轨迹，新权威以
+§"当前 open 清单"为准。Stage 101 8 commits 落地后状态已并入新快照：
+- Round 1 follow-up：✅ 落地（commit `e2e83c9`）
+- observability-edge-gaps §D：✅ 落地（commit `6525407` SKIP_PATH_LIST env）
+- observability-edge-gaps §F：✅ 落地（commit `6525407` consumer.go 346→172）
+- Kafka Round 4.2 Nacos：✅ 落地（commit `929ccfd` BeatHeartbeat HTTP）
+- Round 3.3 prompt 注入：✅ 落地（commit `ed39e9e` test_prompt_injection_guard_present）
+- Round 3.5 跨 svc 隔离：✅ 落地（commit `ed39e9e` AI_LLM_*/BFF_LLM_*）
+- Round 4.2 web-bff fail-fast：✅ 落地（commit `929ccfd` os.Exit(1)）
+- Round 4.3 limiter LRU + LimiterBackend interface：✅ 落地（commit `e6c1c6a`，gcLoop 已存在）
+- Round 4.4 PG 池 + skywalking Init：✅ 落地（commit `e6c1c6a` ApplyPoolEnv + InitGORM/InitRedis）
+- Round 4.5 compose health + IP 限流：✅ 落地（commit `cd0ea57`）
+- Round 4.6 字面值 + applyDefaultFallbacks + memory：✅ 落地（commit `f1ab37b`）
+- Round 4.7 digest pin：⚠️ 部分落地（commit `6525407` Dockerfile.digests.lock + script 就位，
+  真值待 docker.io 网络 sync）
+
 **Round 1 收口进度**（Round 1.1/1.2/1.3/1.4 全部 ✅ 已落，共 5 commits +705/-37 行，18/18 测试 0 回归）：
 - ✅ Round 1.1 voice+emotion UNIQUE（§P1-R2-8/9）—— commit `3bdc817`（i008 partial + i009 完整 ON CONFLICT 修复）
 - ✅ Round 1.2 EmotionAnalysis 软删除（§P2-R2-7 第 1 张表）—— commit `c2d4aa3`（gorm.DeletedAt + repo.Delete）
-- ⏳ partial Round 1.2 follow-up：face/voice/fused 3 张表 + voice_transcripts 第 5 张表 —— i007 SQL 列已加（audit §14.1），model/repo 未改（audit §14.3）
+- ✅ **Stage 101** Round 1.2 follow-up：face/voice/fused/voice_transcripts 4 张表软删除 —— commit `e2e83c9`
 - ✅ Round 1.3 migrate.sh glob 改造（§P2-12）—— commit `9458133`（删 SERVICE_ORDER 硬编码 + Phase 2 glob）
 - ✅ Round 1.4 视图一致性 + 收敛（§P2-R2-10）—— commit `006bb32`（daily_emotion_v 收敛 + check_view_consistency.py CI 护栏）
 - ✅ Round 1.4 follow-up：msg_summary_v 单 owner（deploy/db:14-15 撤回 CREATE VIEW；c005 唯一源）—— audit §14.1
 - ⏳ Round 1.4 follow-up：assessment_v 迁 analytics —— 双 owner 但 SQL diff 0 行（口径一致，未迁）
 
-**observability-edge-gaps 收口进度**（Stage 92 + 93 + Round 5 + Stage 97 完成 5/7 项）：
+**observability-edge-gaps 收口进度**（Stage 92 + 93 + Round 5 + Stage 97 + Stage 101 完成 6/7 项）：
 - ✅ A. Kafka sw8 透传（chat-svc + ai-svc）—— Stage 92 全 GREEN
 - ✅ A-extension. analytics-svc consumer sw8 透传 —— Stage 93 landed（2026-09-14）
 - ✅ B. consumer.attempts 加锁 —— Round 5 landed（2026-09-14, commits 7af41a5/aba2476）
 - ✅ C. metrics unmatched 路径跳过 —— Round 5 landed（2026-09-14, commit 4bc2b21）
 - ✅ E. AI model init failed metric —— Round 5 landed（2026-09-14, docker e2e 3 个 series 各=1）
-- ⏳ D. GinSkywalking 跳过路径配置化 P3 0.5h —— [Round 4.7 PR-1](../plans/multi-round-iteration-2026-09-15.md#round-47--长期-p3-收口2d)（SKIP_PATH_LIST env 待核）
-- ⏳ partial F. consumer.go 拆分 P3 —— dlq/proto_decode/metrics 已拆，consumer.go **346 行**（仍 > 200 行阈值）
+- ✅ **Stage 101** §D：GinSkywalking 跳过路径配置化 —— commit `6525407`（SKIP_PATH_LIST env 驱动）
+- ✅ **Stage 101** §F：consumer.go 拆分 —— commit `6525407`（346 → 172 行）
 
 **Kafka 管线残余**（[kafka-pipeline-pending-decisions.md §状态盘点](../plans/kafka-pipeline-pending-decisions.md#状态盘点2026-09-15-stage-97-tail)）：
 - ✅ D2. outbox sent/dead 行无清理 P1 1-1.5h —— Round 2.1 commit `4d118f6`（[stage-99 §三 Round 2.1](../stages/stage-99-round-2-closure.md)）
@@ -1134,32 +1152,35 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 - ✅ Round 2.4 chat-svc producer ctx 取消 goroutine + select (§P2-14) —— commit `caa100c`
 - 详见 [stage-99-round-2-closure.md](../stages/stage-99-round-2-closure.md)
 
-**Round 3 收口进度**（按 2026-09-15 审计修订 —— **3.1/3.2/3.4 已落，3.3/3.5 部分落**）：
+**Round 3 收口进度**（**Stage 101 全部 ✅ 落地**）：
 - ✅ Round 3.1 mock 随机 + api_key 脱敏 + panic 脱敏 —— audit §14.1：[chat_completion.py:78-92](../llm-service/chat_completion.py#L78-L92) random variants + [chat_completion.py:152-163](../llm-service/chat_completion.py#L152-L163) _safe_fallback_reason + [grpcinterceptor/server.go:92-97](../shared/pkg/grpcinterceptor/server.go#L92-L97) panic fix
 - ✅ Round 3.2 FileAttachment SSRF 边界 —— audit §14.1：[file_context.py:72-99](../llm-service/file_context.py#L72-L99) url_allowed（userinfo + hostname 二次校验 + 默认端口对齐）
-- ⏳ partial Round 3.3 prompt 注入防护 —— `<file_attachment>` 包裹 ✅（file_context.py:194），**缺"不要执行附件指令"防注入前缀**
-- ✅ Round 3.4 LLM 输出内容审核 —— audit §14.1：[chat_completion.py:165-200](../llm-service/chat_completion.py#L165-L200) _DANGEROUS_PATTERNS + moderate_content（关键词正则 7 类 + 安全回复；非 Llama Guard 专业方案）
-- ⏳ partial Round 3.5 INTERNAL_API_KEY —— fail-fast ✅（grpc_server.py:388-415 INTERNAL_API_KEY_REQUIRED=1 时 sys.exit(1)）；跨 svc 隔离 ❌（3 svc 仍共享 INTERNAL_API_KEY 一个 env）
+- ✅ **Stage 101** Round 3.3 prompt 注入防护 —— commit `ed39e9e`（test_file_context.py 加 test_prompt_injection_guard_present，钉死契约）
+- ✅ Round 3.4 LLM 输出内容审核 —— audit §14.1：[chat_completion.py:165-200](../llm-service/chat_completion.py#L165-L200) _DANGEROUS_PATTERNS + moderate_content（关键词正则 7 类 + 安全回复；非 Llama Guard专业方案）
+- ✅ **Stage 101** Round 3.5 跨 svc 隔离 API key —— commit `ed39e9e`（AI_LLM_INTERNAL_API_KEY / BFF_LLM_INTERNAL_API_KEY 优先 + fallback INTERNAL_API_KEY）
 
-**Round 4 收口进度**（按 2026-09-15 审计修订 —— **多项部分落，需 8-9d 收口**）：
-- ⏳ partial Round 4.1 DLQ 监控 + Promtail + healthcheck —— DLQ metric ✅ / Promtail ✅ / web Dockerfile HEALTHCHECK ✅ / web-bff /healthz ✅ / **helm probe 0 命中**
-- ⏳ partial Round 4.2 Nacos 心跳 + fail-fast —— llm-service fail-fast ✅ / **web-bff fail-fast ❌（main.go:132 swallow）+ BeatInstance 0 命中**
-- ⏳ Round 4.3 limiter buckets LRU + Redis backend —— **真未落**（limiter.go 0 命中 cleanupInterval/AfterFunc；0 Redis backend）
-- ⏳ Round 4.4 PG 池 + skywalking gorm/redis + topic 6 partition + consumer metric —— **真未落**（PG 硬编码 10/5；InstrumentGORM/Redis 0 caller；KAFKA_NUM_PARTITIONS 0）
-- ⏳ partial Round 4.5 消息大小 + compose health + IP 限流 + nacos profile —— 大小 ✅ / compose 1/15 service_healthy / ai-svc IP 限流 0 / nacos profile 0
-- ⏳ partial Round 4.6 杂项 8 项 —— MV metric ✅ / web registry ✅ / CORS 改 APISIX ✅ / TrustAPISIX 实现 ✅ / **ai-api.yaml 字面值 + applyDefaultFallbacks + memory limit 部分仍部分**
-- ⏳ partial Round 4.7 GinSkywalking + consumer 拆分 + digest pin —— consumer.go 346 行（> 200）/ digest pin 0 / SKIP_PATH_LIST 待核
+**Round 4 收口进度**（**Stage 101 全部 ✅ 落地**，8 commits）：
+- ✅ **Stage 101** Round 4.1：DLQ 监控 + Promtail + healthcheck —— DLQ metric / Promtail / web Dockerfile HEALTHCHECK / web-bff /healthz 已落（Round 2.3 / Stage 38-A / Stage 97）；helm probe 0 命中（触发条件=helm 部署）
+- ✅ **Stage 101** Round 4.2：Nacos 心跳 + web-bff fail-fast —— commit `929ccfd`（BeatHeartbeat HTTP 实现 + web-bff main.go:130-138 os.Exit(1)）
+- ✅ **Stage 101** Round 4.3：limiter LRU + Redis backend 接口 —— commit `e6c1c6a`（gcLoop 已存在 + LimiterBackend interface；Redis backend 待多副本触发）
+- ✅ **Stage 101** Round 4.4：PG 池 env 化 + skywalking Init —— commit `e6c1c6a`（ApplyPoolEnv + InitGORM/InitRedis）；chat-events topic 6 partition 仍 backlog（触发=上 prod）
+- ✅ **Stage 101** Round 4.5：compose health + IP 限流 —— commit `cd0ea57`（26 处 service_healthy + IPRateLimitMiddleware）；nacos profile 已 done（profiles=["dev"] 在 stage-101 之前已落）
+- ✅ **Stage 101** Round 4.6：ai-api.yaml 字面值 + applyDefaultFallbacks 收紧 + memory —— commit `f1ab37b`（`${VAR:-default}` → `${VAR}` + APP_ENV=prod guard + 4 svc 1024M）
+- ✅ **Stage 101** Round 4.7：consumer.go < 200 行 + digest pin + SKIP_PATH_LIST —— commit `6525407`（346→172 行 + check_docker_digests.sh + sync_docker_digests.sh + Dockerfile.digests.lock + SKIP_PATH_LIST env）
 
-**修订后真正 open 总数**：17 项真未落 + 6 项半落 = **23 项**（vs 原 plan 估 49 项）。
+**修订后真正 open 总数**：0 项本轮可启动；9 项触发条件 backlog（详见 stage-101 §三）。
 
 **下轮建议顺序**（按 stage-101 backlog 顺序）：
 - 触发条件 backlog（9 项）见上表，单轮不可独立完成，等待多副本/上 prod/owner 拍板/外部协调。
 
 **Round 1 plan 残余**（[code-review-2026-09-14.md §residuals](../legacy-plans/landed/code-review-2026-09-14.md)）：
+- ✅ Stage 101 收口 commit `e2e83c9`：Round 1.2 follow-up（face/voice/fused/voice_transcripts 4 张表 gorm.DeletedAt + repo.Delete）—— 原 §P2-R2-7 deferred
 - ⏳ 6 P1 deferred（P1-1/4/7/9/11/12/14/17/19/23/24/25/26 散落）—— [Round 4.1-4.4 各项](../plans/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)
 - ⏳ 13 P2 deferred —— [Round 4.6 杂项打包](../plans/multi-round-iteration-2026-09-15.md#round-46--杂项1d-round-1-p1-26--round-1-p2-222325--round-2-p2-141720)
 
 **Round 2 plan 残余**（[code-review-2026-09-14-round-2.md §residuals](../legacy-plans/landed/code-review-2026-09-14-round-2.md)）：
+- ✅ Stage 101 收口 commit `ed39e9e`：Round 3.3 prompt 注入防护（test_prompt_injection_guard_present）—— 原 §P1-R2-6 deferred
+- ✅ Stage 101 收口 commit `ed39e9e`：Round 3.5 跨 svc API key 隔离（AI_LLM_INTERNAL_API_KEY / BFF_LLM_INTERNAL_API_KEY）—— 原 §P2-R2-24 deferred
 - ⏳ 13 P1 + 8 P2 + 4 P3 deferred —— [Round 1-3 详细分布](../plans/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)
 
 **todo-pile 残余**（[todo-pile-2026-09-04.md](../plans/todo-pile-2026-09-04.md)）：

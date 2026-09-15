@@ -340,23 +340,26 @@ B：1-1.5h
 
 排期建议：D1+D2 组成「Kafka 管线可靠性补完」小 sprint（半天）；D4 搭 Stage 93 顺风车；D3/D5/D7 先做文档登记等触发条件；D6+D8 合并一个契约测试 PR。
 
-## 状态盘点（2026-09-15 Stage 97 tail → Stage 99 Round 2 收口后）
+## 状态盘点（2026-09-15 Stage 101 全量收口后）
 
 | # | 严重度 | 工作量 | 状态 | 落地证据 / 触发条件 |
 |---|---|---|---|---|
 | **D1** | 🟡 P1 | 0.5h（已落）/ 1h（B 长期）| ✅ **短期 C 已落** | [emotion-echo-chat-svc/internal/outbox/metrics.go](../../emotion-echo-chat-svc/internal/outbox/metrics.go) `OutboxSentViaFallbackTotal` counter + main.go fallback 路径 `IncSentViaFallback()`；ADR-19 "D1 fallback 路径登记" 段已加。Stage 94 PR-3 commit `44e9767` |
 | **D2** | 🟡 P1 | 1-1.5h | ✅ **已落**（Round 2.1）| [emotion-echo-chat-svc/internal/outbox/cleanup.go](../../emotion-echo-chat-svc/internal/outbox/cleanup.go) `CleanupOnce()` + [OutboxRepo.DeleteOlderThan()](../../emotion-echo-chat-svc/internal/repository/outbox.go) 接口（InMemory + Postgres 两实现）+ [main.go cleanup ticker](../../emotion-echo-chat-svc/main.go) + `OutboxCleanedTotal{status=sent\|dead}` counter。Stage 99 Round 2.1 commit `4d118f6`；默认禁用 `OUTBOX_CLEANUP_ENABLED=true` 启用（与 Round 2.4 ctx cancel + Round 2.3 DLQ 监控一并发布）|
-| **D3** | 🟡 P2 | 0.25h（登记）/ 3-4h（持久化）| ⏳ **待触发** | attempts 不跨 rebalance/进程重启；触发条件 = ai-svc/analytics-svc 多副本部署。当前单副本 dev 模式无影响 |
+| **D3** | 🟡 P2 | 0.25h（登记）/ 3-4h（持久化）| ⏳ **待触发** | attempts 不跨 rebalance/进程重启；触发条件 = ai-svc/analytics-svc 多副本部署。当前单副本 dev 模式无影响。Stage 101 收口后仍未触发 |
 | **D4** | 🟡 P2 | 0.5h | ✅ **已落** | [emotion-echo-analytics-svc/internal/config/config.go](../../emotion-echo-analytics-svc/internal/config/config.go) `Kafka.MaxRetries` 字段 + main.go applyEnvOverrides 读 `KAFKA_MAX_RETRIES`。Stage 96 PR-9a commit `2cc05c8` |
 | **D5** | 🟡 P2 | 0.25h（承诺）/ 2-3h（SKIP LOCKED）| ⏳ **待触发** | relay 多副本互斥前置；触发条件 = chat-svc 决定扩副本的那个 stage。当前单副本 + ADR-19 "单副本承诺" 登记已含 |
 | **D6** | 🟢 P3 | 1-1.5h | ⏳ **未变** | outbox payload JSONB ↔ Protobuf 双 schema 转换链；Round 2.2 反射枚举护栏只覆盖"加 EventType 时漏 switch case"侧，**双 schema 转换链本身的 stage-73 备份策略仍 open**（下次动 schema 时一起收）|
-| **D7** | 🟢 P3 | 0.25h（登记）/ 3h+（改行为）| ⏳ **owner 拍板** | 删除会话生命周期不一致（消息没了情绪数据还在）；owner 从产品语义出发拍板 |
-| **D8** | 🟢 P3 | ~1h | 🟡 **部分落地（Round 2.2）** | D8-1 peer=topic 拓扑约定注释 ✅ Round 2.2 commit `6d6c3b1`（kafka_publisher.go:119 注释解释 + 切换路径）；D8-3 EventType 双处镜像反射枚举护栏 ✅ Round 2.2 commit `6d6c3b1`（chat-svc proto_marshal_test.go + eventrow mapper_test.go）；D8-2 extractSw8Header 双份 ⏳ 仍 open（ai-svc/analytics-svc 各一份，未收敛到 shared/pkg/messaging）|
+| **D7** | 🟢 P3 | 0.25h（登记）/ 3h+（改行为）| ⏳ **owner 拍板** | 删除会话生命周期不一致（消息没了情绪数据还在）；owner 从产品语义出发拍板。Stage 101 仍 backlog（语义决策非纯技术）|
+| **D8** | 🟢 P3 | ~1h | 🟡 **部分落地** | D8-1 peer=topic 拓扑约定注释 ✅ Round 2.2 commit `6d6c3b1`（kafka_publisher.go:119 注释解释 + 切换路径）；D8-3 EventType 双处镜像反射枚举护栏 ✅ Round 2.2 commit `6d6c3b1`（chat-svc proto_marshal_test.go + eventrow mapper_test.go）；D8-2 extractSw8Header 双份 ⏳ 仍 open（ai-svc/analytics-svc 各一份，未收敛到 shared/pkg/messaging）|
 
-**Round 2 收口摘要**（stage-99-round-2-closure.md）：
+**Round 2 收口摘要**（[stage-99-round-2-closure.md](../stages/stage-99-round-2-closure.md)）：
 - ✅ D2: outbox sent/dead 清理 — Round 2.1
 - 🟡 D8: peer=topic 注释 + EventType 反射枚举 — Round 2.2（部分：D8-2 extractSw8Header 双份仍 open）
-- ⏳ D6: 双 schema 转换链未变（Round 2.2 反射枚举是护栏，不是 schema 收敛）
+
+**Stage 101 收口摘要**（[stage-101-multi-round-iteration-closure.md](../stages/stage-101-multi-round-iteration-closure.md)）：
+- D3/D5/D7 仍 backlog（触发条件=多副本/上 prod/owner 拍板，单轮 TDD 不可独立完成）
+- D8-2 extractSw8Header 双份：可作 D6/D8 收口的 sub-task，下次动 schema 时一起收
 
 **Stage 97 调研结论**（代码事实）：
 - D2 现状：`emotion-echo-chat-svc/migrations/c001_create_outbox_events.sql` 仅有 `idx_outbox_pending` (partial status=pending) + `idx_outbox_attempts`；`outbox/relay.go` 仅处理 pending；无 cleanup/retention/vacuum
