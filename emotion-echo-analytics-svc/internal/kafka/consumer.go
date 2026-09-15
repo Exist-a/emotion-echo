@@ -29,6 +29,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/emotion-echo/shared/pkg/eventrow"
 	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	sharedmessaging "github.com/emotion-echo/shared/pkg/messaging"
 )
 
 // Consumer 订阅 chat-events topic 并写 User_beBehaviorEvent
@@ -255,17 +256,12 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 //
 // header 名常量与 chat-svc kafka_publisher.sw8HeaderName 一致 ("sw8")。
 // 这里不复用 shared 常量(避免 analytics-svc 引入 chat-svc 才有的传递依赖;
-// 函数体与 ai-svc internal/consumer/consumer.go:208-218 完全对称)。
+// 函数体与 ai-svc internal/consumer/consumer.go:208-218 完全对称）。
+//
+// Round B: 收敛到 shared/pkg/messaging.ExtractSw8Header（kafka-pipeline
+// D8-2 登记的"双份未收敛"项）。本处保留薄包装供本地调用方不破改动。
 func extractSw8Header(headers []*sarama.RecordHeader) string {
-	for _, hdr := range headers {
-		if hdr == nil {
-			continue
-		}
-		if string(hdr.Key) == "sw8" {
-			return string(hdr.Value)
-		}
-	}
-	return ""
+	return sharedmessaging.ExtractSw8Header(headers)
 }
 
 // handleFailure 处理 handleOne 失败（Stage 30-C A2）

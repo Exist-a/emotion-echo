@@ -16,6 +16,8 @@ import (
 	"log/slog"
 
 	"github.com/IBM/sarama"
+
+	sharedmessaging "github.com/emotion-echo/shared/pkg/messaging"
 )
 
 // handleFailure 处理 Handler 失败。
@@ -93,16 +95,8 @@ func attemptKey(msg *sarama.ConsumerMessage) string {
 // Stage 92 PR-2: chat-svc producer (PR-1) 写到 Kafka header["sw8"] 的字符串
 // 由此函数抽回 → 喂给 Tracer.CreateEntrySpan 的 extractor → go2sky 重建父 trace。
 //
-// header 名常量与 chat-svc kafka_publisher.sw8HeaderName 一致 ("sw8")；
-// 这里不复用 shared 常量（避免引入 go2sky 依赖到 ai-svc 的 consumer 包）。
+// Round B: 收敛到 shared/pkg/messaging.ExtractSw8Header（kafka-pipeline
+// D8-2 登记的"双份未收敛"项）。ai-svc 内的薄包装保留——本地调用方不用改 import。
 func extractSw8Header(headers []*sarama.RecordHeader) string {
-	for _, h := range headers {
-		if h == nil {
-			continue
-		}
-		if string(h.Key) == "sw8" {
-			return string(h.Value)
-		}
-	}
-	return ""
+	return sharedmessaging.ExtractSw8Header(headers)
 }
