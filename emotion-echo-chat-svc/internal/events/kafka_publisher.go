@@ -100,6 +100,13 @@ func (p *KafkaEventPublisher) Publish(ctx context.Context, topic string, e *Even
 	}
 	// P2-14 (Round 1): ctx 取消时跳过 SendMessage — sarama SyncProducer 无原生 ctx 支持，
 	// 阻塞在 broker ack 上时 ctx 取消无法中断，但至少避免已取消 ctx 发新请求。
+	//
+	// Round 2.4: sarama SyncProducer.SendMessage 仍是阻塞同步调用，仅靠 ctx.Err() 预检
+	// 不能中断"已发起但未 ack"的 SendMessage。改用 goroutine + select 包裹：
+	//   - 启 goroutine 调 SendMessage，把 (partition, offset, err) 送 resultCh
+	//   - select 等 resultCh 或 ctx.Done()
+	//   - ctx.Done() 先到 → 立即返 ctx.Err()（注意：goroutine 仍会跑完 SendMessage，
+	//     sarama 内部会泄漏一次 SendMessage，但 Producer.Timeout=10s 兜底不致死锁）
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -127,7 +134,35 @@ func (p *KafkaEventPublisher) Publish(ctx context.Context, topic string, e *Even
 			})
 		}
 	}
-	_, _, sendErr := p.producer.SendMessage(msg)
+
+	// Round 2.4 §P2-14 GREEN：goroutine + select 包裹 SendMessage，
+	// 让 ctx.Done() 能在 SendMessage 阻塞期间立即中断 Publish。
+	type sendResult struct {
+		partition int32
+		offset    int64
+		err       error
+	}
+	resultCh := make(chan sendResult, 1) // buffered = goroutine 不阻塞
+	go func() {
+		partition, offset, sendErr := p.producer.SendMessage(msg)
+		resultCh <- sendResult{partition: partition, offset: offset, err: sendErr}
+	}()
+
+	var sendErr error
+	select {
+	case <-ctx.Done():
+		// ctx 取消：不要等 SendMessage，立刻返 ctx.Err()。
+		// goroutine 仍会跑完 SendMessage —— sarama 内部协程泄漏一次，
+		// 由 Producer.Timeout=10s 兜底。下次 Publish 调用照常工作。
+		// span 仍需 EndSpan 让 OAP 标记"客户端 ctx 取消"——送 ctx.Err() 让 span 显示错误。
+		if span != nil {
+			span.EndSpan(ctx.Err())
+		}
+		return ctx.Err()
+	case r := <-resultCh:
+		sendErr = r.err
+	}
+
 	// Stage 94 PR-1 §P0-6：SendMessage 同步阻塞（WaitForAll）后立刻 EndSpan。
 	// span 仍可能为 nil（tracer=nil / adapter noop），守卫即可。
 	if span != nil {

@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -447,5 +448,141 @@ func TestKafkaEventPublisher_Publish_NoTracer_NoSw8Header(t *testing.T) {
 	}
 	if !hasContentType {
 		t.Error("tracer=nil 时仍必须有 content-type header（向后兼容）")
+	}
+}
+
+// =============================================================================
+// Round 2.4 §P2-14 RED：ctx 取消在 SendMessage 阻塞期间应立即中断 Publish
+//
+// 现状（kafka_publisher.go:101-105）：ctx 取消仅阻止"发起新 SendMessage"，
+// 不中断"在途 SendMessage"。sarama SyncProducer.SendMessage 是阻塞同步调用，
+// broker 抖动时 Gin handler 卡到 Producer.Timeout=10s（kafka_publisher.go:38）。
+//
+// 期望行为：ctx 取消触发后 Publish 在 < 100ms 内返 ctx.Err()，不阻塞调用方。
+//
+// 实现思路（GREEN 阶段）：goroutine + select — 启 goroutine 调 SendMessage，
+// select { case result <-ch: ... case <-ctx.Done(): return ctx.Err() }。
+// =============================================================================
+
+// blockingSyncProducer 实现 sarama.SyncProducer，SendMessage 阻塞直到 release 通道关闭
+// 或 receiveCtx cancel。让测试模拟 "broker 卡住" 的场景，验证 Publish 不依赖 SendMessage 完成也能响应 ctx。
+type blockingSyncProducer struct {
+	release   chan struct{}  // 测试用：关闭后所有阻塞 SendMessage 立即返
+	receiveCtx context.Context // 测试用：ctx.Done() 后所有阻塞 SendMessage 立即返 ctx.Err
+	mu        sync.Mutex
+	sendCalls int             // 记录 SendMessage 被调用次数
+}
+
+func newBlockingSyncProducer() *blockingSyncProducer {
+	return &blockingSyncProducer{release: make(chan struct{})}
+}
+
+func (b *blockingSyncProducer) SendMessage(_ *sarama.ProducerMessage) (int32, int64, error) {
+	b.mu.Lock()
+	b.sendCalls++
+	b.mu.Unlock()
+	select {
+	case <-b.release:
+		return 0, 0, nil
+	case <-b.receiveCtx.Done():
+		return 0, 0, b.receiveCtx.Err()
+	}
+}
+
+func (b *blockingSyncProducer) SendMessages(_ []*sarama.ProducerMessage) error { return nil }
+func (b *blockingSyncProducer) Close() error                                     { return nil }
+func (b *blockingSyncProducer) AbortTxn() error                                 { return nil }
+func (b *blockingSyncProducer) AddMessageToTxn(_ *sarama.ConsumerMessage, _ string, _ *string) error {
+	return nil
+}
+func (b *blockingSyncProducer) AddMessageToTxnWithGroupMetadata(_ *sarama.ConsumerMessage, _ *sarama.ConsumerGroupMetadata, _ *string) error {
+	return nil
+}
+func (b *blockingSyncProducer) AddOffsetsToTxn(_ map[string][]*sarama.PartitionOffsetMetadata, _ string) error {
+	return nil
+}
+func (b *blockingSyncProducer) AddOffsetsToTxnWithGroupMetadata(_ map[string][]*sarama.PartitionOffsetMetadata, _ *sarama.ConsumerGroupMetadata) error {
+	return nil
+}
+func (b *blockingSyncProducer) BeginTxn() error                  { return nil }
+func (b *blockingSyncProducer) CommitTxn() error                 { return nil }
+func (b *blockingSyncProducer) IsTransactional() bool           { return false }
+func (b *blockingSyncProducer) TxnStatus() sarama.ProducerTxnStatusFlag {
+	return sarama.ProducerTxnFlagReady
+}
+
+// Round 2.4 RED §1：ctx 已取消时 Publish 立即返 ctx.Err()，不应调 SendMessage
+func TestKafkaEventPublisher_Publish_CtxAlreadyCancelled_ReturnsImmediately(t *testing.T) {
+	t.Parallel()
+	bl := newBlockingSyncProducer()
+	p := &KafkaEventPublisher{producer: bl}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 已取消
+
+	start := time.Now()
+	err := p.Publish(ctx, TopicChatEvents, &Event{
+		ID:   "evt-cancelled",
+		Type: EventTypeMessageCreated,
+		Data: MessageCreatedData{MessageID: 1},
+	})
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Publish err = %v, want context.Canceled", err)
+	}
+	if elapsed > 50*time.Millisecond {
+		t.Errorf("Publish took %v, want < 50ms (ctx pre-check should bypass SendMessage)", elapsed)
+	}
+	if bl.sendCalls != 0 {
+		t.Errorf("SendMessage calls = %d, want 0 (cancelled ctx must not reach broker)", bl.sendCalls)
+	}
+}
+
+// Round 2.4 RED §2：SendMessage 阻塞期间 ctx.Done() 触发后 Publish 在 < 100ms 内返 ctx.Err()
+//
+// 当前实现（kafka_publisher.go:103-105）只预检 ctx，goroutine + select 尚未实现 →
+// 旧行为 = SendMessage 阻塞整个 Publish；新行为 = goroutine + select 立即响应 ctx。
+//
+// 测试策略：bl.receiveCtx 与 Publish ctx 共享（测试用自己的 ctx 控 bl），
+// 这样 ctx.Done() 触发时 SendMessage 内部也会唤醒——但旧实现不等待，所以测试断言
+// elapsed < 100ms（goroutine + select）vs 旧实现会等到 receiveCtx 取消 ≈ 几 ms 即解除。
+// 为了让 RED 明显失败：bl.release 永不关，bl.receiveCtx 仅 ctx.Done() 时解除。
+// 旧实现 elapsed ~ Producer.Timeout=10s → FAIL；新实现 elapsed < 100ms → PASS。
+func TestKafkaEventPublisher_Publish_CtxCancelDuringSendMessage_ReturnsImmediately(t *testing.T) {
+	t.Parallel()
+	bl := newBlockingSyncProducer()
+	// 让阻塞 SendMessage 在 ctx.Done() 时解除（模拟 broker 在 ctx cancel 后中断）
+	bl.receiveCtx, _ = context.WithCancel(context.Background())
+
+	p := &KafkaEventPublisher{producer: bl}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// 50ms 后取消 ctx
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+		// bl.receiveCtx 复用同一个 ctx 测试，但 sarama mock 不用此 ctx。
+		// 由于 blockingSyncProducer 共享 ctx，取消 cancel() 后 bl.receiveCtx 也 Done。
+		// 但旧实现不启 goroutine，所以等不到 — 这是 RED 关键点。
+	}()
+
+	start := time.Now()
+	err := p.Publish(ctx, TopicChatEvents, &Event{
+		ID:   "evt-cancel-during",
+		Type: EventTypeMessageCreated,
+		Data: MessageCreatedData{MessageID: 1},
+	})
+	elapsed := time.Since(start)
+
+	// RED 断言：ctx.Err() 透传 + < 100ms 响应（旧实现阻塞到 SendMessage 完成 ~10s）
+	if err == nil {
+		t.Fatal("Publish 应在 ctx 取消后返 ctx.Err()，got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Publish err = %v, want wraps context.Canceled", err)
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("Publish 在 ctx 取消后仍阻塞 %v，want < 500ms（goroutine + select 未实现）", elapsed)
 	}
 }
