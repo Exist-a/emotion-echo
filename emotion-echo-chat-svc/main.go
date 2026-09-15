@@ -227,6 +227,36 @@ func main() {
 			log.Printf("[outbox] relay started")
 			_ = relay.Run(relayCtx)
 		}()
+		// Round 2.1 §D2: cleanup ticker（默认禁用；prod 启用 OUTBOX_CLEANUP_ENABLED=true）
+		// 间隔由 OUTBOX_CLEANUP_INTERVAL_S 控制（默认 3600s = 1h）
+		// 删老 sent/dead 行；不删 pending/failed（防丢事件）
+		if c.Outbox.CleanupEnabled {
+			cleanupInterval := time.Duration(c.Outbox.CleanupIntervalS) * time.Second
+			go func() {
+				log.Printf("[outbox] cleanup ticker started: interval=%s sent_retention=%dd dead_retention=%dd",
+					cleanupInterval, c.Outbox.SentRetentionDays, c.Outbox.DeadRetentionDays)
+				ticker := time.NewTicker(cleanupInterval)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-relayCtx.Done():
+						log.Printf("[outbox] cleanup ticker stopped: %v", relayCtx.Err())
+						return
+					case <-ticker.C:
+						deleted, err := outbox.CleanupOnce(relayCtx, outboxRepo,
+							c.Outbox.SentRetentionDays, c.Outbox.DeadRetentionDays,
+							outbox.DefaultCleanupLimit)
+						if err != nil {
+							log.Printf("[outbox] cleanup err: %v", err)
+							continue
+						}
+						if deleted > 0 {
+							log.Printf("[outbox] cleanup deleted %d rows (sent + dead)", deleted)
+						}
+					}
+				}
+			}()
+		}
 		// 监听 SIGTERM/SIGINT 优雅退出
 		go func() {
 			sigCh := make(chan os.Signal, 1)

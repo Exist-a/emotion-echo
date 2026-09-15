@@ -47,3 +47,21 @@ var OutboxSentViaFallbackTotal = promauto.NewCounter(prometheus.CounterOpts{
 
 // IncSentViaFallback chat-svc main.go Kafka init 失败 fallback 时调用
 func IncSentViaFallback() { OutboxSentViaFallbackTotal.Inc() }
+
+// OutboxCleanedTotal Round 2.1 §D2 cleanup job 计数器
+//
+// label=status 取值 "sent" | "dead"。
+// 记录每次 CleanupOnce 单轮删除的行数（按 status 分桶）。
+// 运维侧：rate > 0 持续说明 cleanup job 在工作；rate = 0 持续 24h 可能是 retention 配置过宽。
+var OutboxCleanedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "emotion_echo_outbox_cleaned_total",
+	Help: "Total outbox rows deleted by CleanupOnce, labeled by sent|dead.",
+}, []string{"status"})
+
+// IncCleaned cleanup 完成后调用
+func IncCleaned(status string, n int64) {
+	if n <= 0 {
+		return
+	}
+	OutboxCleanedTotal.WithLabelValues(status).Add(float64(n))
+}

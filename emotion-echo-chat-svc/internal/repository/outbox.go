@@ -21,6 +21,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -72,6 +73,13 @@ type OutboxRepo interface {
 	// MarkDead ADR-19 PR-A6.1: 把状态置为 'dead'（attempts 超阈值后由 relay 调用）
 	// dead 行不再被 ListPending 扫描，保留供人工排查/回放。
 	MarkDead(ctx context.Context, id int64, errMsg string) error
+
+	// DeleteOlderThan Round 2.1 §D2: 删 status=X 且时间戳 < cutoff 的行。
+	//   - status="sent"  → 用 sent_at 判定
+	//   - status="dead"  → 用 created_at 判定（last_error 是 msg string 不能当时间）
+	//   - limit > 0 时单轮最多删 limit 行（防长事务）
+	// 返回删除行数。
+	DeleteOlderThan(ctx context.Context, status string, cutoff time.Time, limit int) (int64, error)
 }
 
 // =====================================================
@@ -174,6 +182,46 @@ func (r *InMemoryOutboxRepo) MarkDead(_ context.Context, id int64, errMsg string
 	return nil
 }
 
+// DeleteOlderThan Round 2.1 §D2 InMemory 实现：遍历 events map 删满足条件的行
+//
+// 判定规则（与 Postgres 实现保持一致）：
+//   - status="sent" → 用 SentAt 判定（SentAt == nil 的行视为"刚 MarkSent 未刷时间"，保留）
+//   - status="dead" → 用 CreatedAt 判定（LastError 是 msg string，不能当时间戳）
+//
+// 收集待删 id 后一次性删（不在锁内做 IO；InMemory 无 IO）。
+func (r *InMemoryOutboxRepo) DeleteOlderThan(_ context.Context, status string, cutoff time.Time, limit int) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var toDelete []int64
+	for id, e := range r.events {
+		if e.Status != status {
+			continue
+		}
+		var age time.Time
+		switch status {
+		case OutboxStatusSent:
+			if e.SentAt == nil {
+				continue
+			}
+			age = *e.SentAt
+		case OutboxStatusDead:
+			age = e.CreatedAt
+		default:
+			return 0, fmt.Errorf("outbox: DeleteOlderThan unsupported status %q", status)
+		}
+		if age.Before(cutoff) {
+			toDelete = append(toDelete, id)
+		}
+		if limit > 0 && len(toDelete) >= limit {
+			break
+		}
+	}
+	for _, id := range toDelete {
+		delete(r.events, id)
+	}
+	return int64(len(toDelete)), nil
+}
+
 // Get 直接根据 ID 查（测试断言用）
 func (r *InMemoryOutboxRepo) Get(id int64) (*OutboxEvent, error) {
 	r.mu.RLock()
@@ -244,4 +292,31 @@ func (r *PostgresOutboxRepo) MarkDead(ctx context.Context, id int64, errMsg stri
 			"status":     OutboxStatusDead,
 			"last_error": errMsg,
 		}).Error
+}
+
+// DeleteOlderThan Round 2.1 §D2 Postgres 实现
+//
+// status="sent" → WHERE status='sent' AND sent_at < $1
+// status="dead" → WHERE status='dead' AND created_at < $1
+//
+// LIMIT 在 GORM 用 .Limit()（无 limit 参数时不限）。
+func (r *PostgresOutboxRepo) DeleteOlderThan(ctx context.Context, status string, cutoff time.Time, limit int) (int64, error) {
+	tx := r.db.WithContext(ctx).
+		Where("status = ?", status)
+
+	switch status {
+	case OutboxStatusSent:
+		tx = tx.Where("sent_at IS NOT NULL AND sent_at < ?", cutoff)
+	case OutboxStatusDead:
+		tx = tx.Where("created_at < ?", cutoff)
+	default:
+		return 0, fmt.Errorf("outbox: DeleteOlderThan unsupported status %q", status)
+	}
+
+	if limit > 0 {
+		tx = tx.Limit(limit)
+	}
+
+	res := tx.Delete(&OutboxEvent{})
+	return res.RowsAffected, res.Error
 }

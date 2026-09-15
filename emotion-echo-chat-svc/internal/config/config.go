@@ -61,9 +61,13 @@ type Config struct {
 	GRPC GRPCServer
 }
 
-// Outbox relay dead 状态机配置（Stage 86）
+// Outbox relay dead 状态机配置（Stage 86）+ Round 2.1 §D2 cleanup
 type Outbox struct {
-	MaxAttempts int
+	MaxAttempts      int // 重试超阈值 → dead（0 关闭 dead 状态机）
+	CleanupEnabled    bool // Round 2.1: 是否启 cleanup ticker（false 时永不清理—— dev 单测场景）
+	CleanupIntervalS int  // cleanup ticker 间隔秒数（0 → 默认 3600 = 1h）
+	SentRetentionDays  int // sent 行保留天数（0 → 默认 7）
+	DeadRetentionDays  int // dead 行保留天数（0 → 默认 30）
 }
 
 // AIService ai-svc 客户端配置（Stage 36-A3.2）
@@ -109,6 +113,17 @@ func SetDefaults(c *Config) {
 	// Stage 86：outbox dead 阈值默认 100（与 Stage 43 NewRelay 原硬编码值一致）
 	if c.Outbox.MaxAttempts == 0 {
 		c.Outbox.MaxAttempts = 100
+	}
+	// Round 2.1 §D2: cleanup ticker 默认值（dev 不启用 — dev 库无百万行；prod 启用 1h 间隔）
+	// CleanupEnabled 默认 false（向后兼容 — 单测/dev 不能悄悄启 ticker）；prod profile 显式 yaml true 或 env OUTBOX_CLEANUP_ENABLED=true 启用
+	if c.Outbox.CleanupIntervalS == 0 {
+		c.Outbox.CleanupIntervalS = 3600 // 1h
+	}
+	if c.Outbox.SentRetentionDays == 0 {
+		c.Outbox.SentRetentionDays = 7
+	}
+	if c.Outbox.DeadRetentionDays == 0 {
+		c.Outbox.DeadRetentionDays = 30
 	}
 	if c.Nacos.Addr == "" {
 		c.Nacos.Addr = "emotion-echo-nacos:8848"
