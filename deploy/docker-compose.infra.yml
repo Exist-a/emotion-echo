@@ -100,6 +100,29 @@ services:
       - app-network
 
   # =====================================================
+  # Kafka topic init (Round C): 显式建 chat-events 6 partition
+  # 单次 init 服务：等 kafka healthy 后跑 init-topics.sh（幂等）
+  # 不加 restart，dev compose down/up 时不会重跑（topic 已存在会 skip）
+  # =====================================================
+  kafka-init:
+    image: apache/kafka:3.7.0
+    container_name: emotion-echo-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: emotion-echo-kafka:9092
+      KAFKA_TOPIC: chat-events
+      KAFKA_TOPIC_PARTITIONS: "6"
+      KAFKA_TOPIC_REPLICATION_FACTOR: "1"
+    entrypoint: ["/bin/bash", "/opt/init-topics.sh"]
+    volumes:
+      - ./kafka/init-topics.sh:/opt/init-topics.sh:ro
+    networks:
+      - app-network
+    profiles: ["dev", "obs", "full"]
+
+  # =====================================================
   # SkyWalking OAP (后端)
   # =====================================================
   skywalking-oap:
