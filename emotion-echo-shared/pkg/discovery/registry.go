@@ -55,4 +55,9 @@ type Registry interface {
 	// Heartbeat 启动后台心跳 goroutine，按 interval 周期续约；
 	// ctx.Done() 时退出 goroutine 并关闭底层连接。
 	Heartbeat(ctx context.Context, ins Instance, interval time.Duration)
+
+	// BeatHeartbeat Round 4.2 P1-7：走 Nacos /instance/beat 标准协议（HTTP POST，
+	// 与 Java 客户端一致）。nacos-sdk-go v2.3.5 无公开 BeatInstance API，
+	// 本实现直接调 HTTP 端点，失败 fallback SDK UpdateInstance。
+	BeatHeartbeat(ctx context.Context, ins Instance, initialInterval time.Duration)
 }

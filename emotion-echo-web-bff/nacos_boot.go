@@ -86,7 +86,10 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 	}
 	log.Printf("[nacos] registered %s at %s:%d", instance.ServiceName, instance.Host, instance.Port)
 	hbCtx, hbCancel := context.WithCancel(context.Background())
-	reg.Heartbeat(hbCtx, instance, 5*time.Second)
+	// Round 4.2 P1-7: BeatHeartbeat 走 Nacos /instance/beat 标准协议（HTTP POST），
+	// 替代 SDK UpdateInstance 退化方式。原 SDK v2.3.5 无公开 BeatInstance API，
+	// 本实现直接调 HTTP 端点（与 Java 客户端一致），失败 fallback SDK UpdateInstance。
+	reg.BeatHeartbeat(hbCtx, instance, 5*time.Second)
 	cc, err := deps.configFactory(ctx, addr, namespace, group)
 	if err != nil {
 		hbCancel()

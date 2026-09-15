@@ -103,6 +103,28 @@ func (f *fakeRegistry) Heartbeat(ctx context.Context, _ Instance, interval time.
 	}()
 }
 
+// BeatHeartbeat fake 实现：与 Heartbeat 行为对齐（启动 ticker 维持循环）。
+func (f *fakeRegistry) BeatHeartbeat(ctx context.Context, _ Instance, initialInterval time.Duration) {
+	f.mu.Lock()
+	f.heartbeatStarted++
+	f.mu.Unlock()
+	if initialInterval <= 0 {
+		initialInterval = time.Millisecond
+	}
+	go func() {
+		defer close(f.heartbeatStopped)
+		ticker := time.NewTicker(initialInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+}
+
 // 编译期断言：fakeRegistry 必须实现 Registry interface。
 var _ Registry = (*fakeRegistry)(nil)
 
