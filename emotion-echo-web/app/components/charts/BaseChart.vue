@@ -15,11 +15,12 @@
         style="width: 100%; height: 100%"
       />
     </div>
-    <div class="ee-empty">暂无数据</div>
+    <div v-else class="ee-empty">暂无数据</div>
   </ClientOnly>
 </template>
 
 <script setup lang="ts">
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import type { EChartsOption } from "echarts";
 
 interface Props {
@@ -66,40 +67,30 @@ onMounted(() => {
     attributeFilter: ["class"],
   });
 
-  // 初始化时 resize
-  if (vChartRef.value && containerRef.value) {
-    const { width, height } = containerRef.value.getBoundingClientRect();
-    vChartRef.value.resize({ width, height });
+  // 初始化时 resize (echarts 实例可能尚未挂载或 SSR 上下文, 静默兜底)
+  if (vChartRef.value && containerRef.value && typeof vChartRef.value.resize === 'function') {
+    try {
+      const { width, height } = containerRef.value.getBoundingClientRect();
+      vChartRef.value.resize({ width, height });
+    } catch {
+      /* noop: 测试环境或 SSR 下无真实 echarts 实例, 跳过 resize */
+    }
   }
 });
 
 // 检查是否有数据
 const hasData = computed(() => {
-  console.log('[BaseChart] props.option:', JSON.stringify(props.option, null, 2))
-  if (!props.option) {
-    console.log('[BaseChart] option is null/undefined')
-    return false
-  }
+  if (!props.option) return false;
   const opt = props.option as any;
 
-  // 如果 series 不存在或为空数组，视为无数据
+  // series 不存在或为空数组 → 无数据
   if (!opt.series || (Array.isArray(opt.series) && opt.series.length === 0)) {
-    console.log('[BaseChart] series is empty or not exist')
     return false;
   }
 
-  // 检查 series 是否有数据
+  // 任意一条 series 含非空 data 数组即视为有数据
   const series = Array.isArray(opt.series) ? opt.series : [opt.series];
-  console.log('[BaseChart] series length:', series.length)
-  const result = series.some((s: any) => {
-    if (s.data && Array.isArray(s.data)) {
-      console.log('[BaseChart] series item data length:', s.data.length)
-      return s.data.length > 0;
-    }
-    return false;
-  });
-  console.log('[BaseChart] hasData result:', result)
-  return result;
+  return series.some((s: any) => Array.isArray(s?.data) && s.data.length > 0);
 });
 
 // 直接使用原始 option，ECharts dark 主题会自动处理
@@ -111,12 +102,20 @@ const mergedOption = computed(() => {
 watch(
   () => props.height,
   () => {
-    if (vChartRef.value && containerRef.value) {
-      const { width } = containerRef.value.getBoundingClientRect();
-      vChartRef.value.resize({ width, height: props.height });
+    if (vChartRef.value && containerRef.value && typeof vChartRef.value.resize === 'function') {
+      try {
+        const { width } = containerRef.value.getBoundingClientRect();
+        vChartRef.value.resize({ width, height: props.height });
+      } catch {
+        /* noop: 同 onMounted */
+      }
     }
   }
 );
+
+onBeforeUnmount(() => {
+  // vChart 实例随父组件销毁;此处仅保留 hook 占位防止未来内存泄漏
+});
 </script>
 
 <style scoped>
