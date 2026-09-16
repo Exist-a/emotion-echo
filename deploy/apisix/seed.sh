@@ -288,7 +288,7 @@ OBSERVABILITY_PLUGINS_JSON='
       "resp_time": "$request_time",
       "upstream": "$upstream_addr",
       "upstream_time": "$upstream_response_time",
-      "trace_id": "$http_x_request_id",
+      "trace_id": "$http_x_request_id"
     }
   }'
 
