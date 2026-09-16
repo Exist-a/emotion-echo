@@ -110,13 +110,13 @@ const currentColumns = computed(() => {
 
   // 调整断点：最小宽度更大
   if (width < 992) return gridConfig.value.breakpoints.xs; // 1列（992px以下）
-  if (width < 1600) return gridConfig.value.breakpoints.sm; // 2列（992px-1600px）
+  if (width < 1600) return gridConfig.value.breakpoints.sm; // 2列（992-1600px）
   return gridConfig.value.breakpoints.md; // 3列（1600px以上）
 });
 
 // 计算网格样式
 const gridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${currentColumns.value}, 1fr)`,
+  gridTemplateColumns: `repeat(${currentColumns.value}, minmax(0, 1fr))`,
   gap: gridConfig.value.gap,
 }));
 
@@ -166,192 +166,88 @@ defineExpose({
 <style scoped lang="scss">
 .charts-card-container {
   width: 100%;
-  background-color: #fff;
-  border-radius: $radius-lg;
-  padding: 24px; // 增加内边距
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-lg);
+  padding: 24px;
   box-sizing: border-box;
-  margin-top: 40px;
+  margin-top: 24px;
 
-  // 响应式调整
-  @media (max-width: 1200px) {
-    padding: 20px;
-  }
-
-  @media (max-width: 992px) {
-    padding: 16px;
-  }
-
-  @media (max-width: 768px) {
-    padding: 12px;
-  }
+  @media (max-width: 1200px) { padding: 20px; }
+  @media (max-width: 992px) { padding: 16px; }
+  @media (max-width: 768px) { padding: 12px; }
 }
 
 .charts-grid {
   display: grid;
   transition: grid-template-columns 0.3s ease;
 
-  // 中屏设备（992px以下）强制1列
-  @media (max-width: 992px) {
-    grid-template-columns: 1fr !important;
-  }
-
-  // 间距响应式调整
-  @media (max-width: 1600px) {
-    gap: 20px;
-  }
-
-  @media (max-width: 1200px) {
-    gap: 16px;
-  }
-
-  @media (max-width: 992px) {
-    gap: 20px;
-  }
-
-  @media (max-width: 768px) {
-    gap: 16px;
-  }
-
-  @media (max-width: 576px) {
-    gap: 12px;
-  }
+  // 中屏设备（992px以下）单列由 JS currentColumns + gridStyle 接管, CSS 不重复
+  @media (max-width: 992px) { gap: 20px; }
+  @media (max-width: 768px) { gap: 16px; }
+  @media (max-width: 576px) { gap: 12px; }
 }
 
 .chart-item {
-  background: #ffffff;
-  border-radius: $radius-lg;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); // 增加阴影强度
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-lg);
+  box-shadow: var(--ee-shadow-soft);
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
   padding: 20px;
-  // 设置最小宽度，确保每个图表有足够空间
-  min-width: 0; // 防止内容溢出
+  min-width: 0;
 
   &:hover {
-    transform: translateY(-6px); // 增加悬停上移距离
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15); // 增强悬停阴影
+    transform: translateY(-4px);
+    box-shadow: var(--ee-shadow-soft);
 
-    // 移动端禁用悬停效果
-    @media (max-width: 768px) {
-      transform: none;
-    }
+    @media (max-width: 768px) { transform: none; }
   }
 
-  // 图表类型特定样式
   :deep(.chart-header) {
-    padding: 20px 24px; // 增加内边距
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
+    padding: 16px 20px;
+    background: var(--ee-surface-muted);
+    border-bottom: 1px solid var(--ee-border);
 
     h3 {
       margin: 0;
-      font-size: 18px; // 增大字体
+      font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--ee-text);
     }
   }
 
-  // 图表内容区域
   :deep(.chart-content) {
-    padding: 20px; // 增加内边距
+    padding: 16px;
 
-    @media (max-width: 992px) {
-      padding: 16px;
-    }
+    @media (max-width: 992px) { padding: 12px; }
   }
 
-  // 中屏设备优化
   @media (max-width: 992px) {
-    margin-bottom: 20px;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
-  }
-
-  // 移动端优化
-  @media (max-width: 768px) {
     margin-bottom: 16px;
+    &:last-child { margin-bottom: 0; }
   }
+  @media (max-width: 768px) { margin-bottom: 12px; }
 }
 
-// 空状态占位符
 .chart-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 300px; // 增加最小高度
-  background: #f8f9fa;
-  border-radius: $radius-lg;
+  min-height: 300px;
+  background: var(--ee-surface-muted);
+  border-radius: var(--ee-radius-lg);
 
-  @media (max-width: 992px) {
-    min-height: 250px;
-  }
-
-  @media (max-width: 768px) {
-    min-height: 200px;
-  }
+  @media (max-width: 992px) { min-height: 250px; }
+  @media (max-width: 768px) { min-height: 200px; }
 }
 
-// 动画效果
 .fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.5s ease;
-}
-
+.fade-leave-active { transition: opacity 0.5s ease; }
 .fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
+.fade-leave-to { opacity: 0; }
 
-// 当只有1-2个图表时的特殊布局
-.charts-card-container:has(.chart-item:only-child),
-.charts-card-container:has(.chart-item:first-child:nth-last-child(2)),
-.charts-card-container:has(
-    .chart-item:first-child:nth-last-child(2) ~ .chart-item
-  ) {
-  .charts-grid {
-    // 在大屏幕上，当只有1-2个图表时，可以考虑更灵活的布局
-    @media (min-width: 1600px) {
-      &.chart-count-1 {
-        grid-template-columns: repeat(1, minmax(400px, 1fr));
-        justify-content: center;
-      }
-
-      &.chart-count-2 {
-        grid-template-columns: repeat(2, minmax(400px, 1fr));
-        justify-content: center;
-      }
-    }
-  }
-}
-
-// 暗黑模式适配（由 html.dark 类触发）
-html.dark {
-  .charts-card-container {
-    background-color: #1a1a1a;
-  }
-
-  .chart-item {
-    background: #242424;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-
-    &:hover {
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-    }
-  }
-
-  .chart-placeholder {
-    background: #242424;
-  }
-
-  :deep(.chart-header) {
-    background: #2d2d2d;
-    border-bottom-color: #374151;
-
-    h3 {
-      color: #e5e7eb;
-    }
-  }
-}
+// 单/双图表时大屏居中布局由 chartsCard.vue script 的 countClass 动态加类
+// 暗色模式由 html.dark 下 global.scss 重定义 --ee-* token 接管,此处不重复
 </style>
