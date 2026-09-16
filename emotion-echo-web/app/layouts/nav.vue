@@ -93,7 +93,8 @@ watch(() => route.path, closeSidebar)
 <style scoped lang="scss">
 .app-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   background: var(--ee-bg);
 }
 
@@ -149,13 +150,13 @@ watch(() => route.path, closeSidebar)
 .sidebar-footer { gap: 8px; margin: auto 12px 0; color: var(--ee-text-muted); font-size: 12px; }
 .status-dot { width: 7px; height: 7px; background: var(--ee-primary); border-radius: 50%; box-shadow: 0 0 0 4px var(--ee-primary-soft); }
 
-.app-content { width: calc(100% - 248px); min-height: 100vh; margin-left: 248px; }
+.app-content { width: calc(100% - 248px); height: 100vh; height: 100dvh; margin-left: 248px; }
 .app-header { min-height: 88px; justify-content: space-between; padding: 22px clamp(24px, 4vw, 64px) 12px; }
 .header-context h1 { margin-top: 2px; font-size: clamp(20px, 2vw, 26px); font-weight: 600; letter-spacing: -0.03em; }
 .eyebrow { color: var(--ee-primary); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; }
 .avatar-link { display: grid; width: 36px; height: 36px; place-items: center; background: var(--ee-primary-soft); border-radius: 50%; }
 .avatar-initial { color: var(--ee-primary); font-size: 13px; font-weight: 700; }
-.page-content { min-height: calc(100vh - 88px); padding: 12px clamp(24px, 4vw, 64px) 40px; }
+.page-content { height: calc(100dvh - 88px); padding: 12px clamp(24px, 4vw, 64px) 40px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .icon-button { display: grid; width: 36px; height: 36px; place-items: center; color: var(--ee-text-muted); background: transparent; border: 1px solid var(--ee-border); border-radius: var(--ee-radius-md); }
 .icon-button:hover { color: var(--ee-primary); border-color: var(--ee-primary); }
 .mobile-only { display: none; }
@@ -165,10 +166,10 @@ watch(() => route.path, closeSidebar)
   .app-sidebar { width: min(82vw, 300px); transform: translateX(-100%); transition: transform var(--ee-transition); box-shadow: var(--ee-shadow-soft); }
   .app-sidebar.is-open { transform: translateX(0); }
   .sidebar-backdrop { position: fixed; inset: 0; z-index: 19; background: rgba(20, 27, 23, 0.38); backdrop-filter: blur(2px); }
-  .app-content { width: 100%; margin-left: 0; }
+  .app-content { width: 100%; margin-left: 0; height: 100dvh; }
   .app-header { gap: 12px; min-height: 78px; padding: 16px 18px 8px; }
   .app-header .mobile-only { flex-shrink: 0; }
   .header-context { flex: 1; }
-  .page-content { min-height: calc(100vh - 78px); padding: 10px 14px 28px; }
+  .page-content { height: calc(100dvh - 78px); padding: 10px 14px 28px; }
 }
 </style>
