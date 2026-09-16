@@ -1,7 +1,7 @@
 ﻿---
 purpose: 当前有效、未来排期的功能计划
-status: **Round 4.4 剩余 2 项收口（§十六）** · 2026-09-15 第二轮 4 commits pushed origin/main（`ce0d7d1..38075eb`）
-last-refresh: 2026-09-15（Round 4.4 PR-1+PR-2 全部落地 — ApplyPoolEnv 5 svc 接入 + InitGORM/InitRedis 5 svc 接入 + InitRedis 隐性 bug 修 + Stage 101 assessment-svc drift 修 + docs 同步）
+status: **测试找问题修复阶段** · 2026-09-16 Stage 103 dev 模式首次启动（`b4f0ef0..881e674`）· 9 真 bug 修复 + 1 已知未修（聊天发消息无 AI 回复，详见 stage-103 §四）
+last-refresh: 2026-09-16（Stage 103 dev 模式首次启动 + 12 commits 修复 9 个真 bug：a008 PK / compose v5.5.1 / Dockerfile digest / tini SHA / pip timeout / lockfile 完整性 / a008 幂等守卫 / web-bff JWT secret / web depends_on。**工作模式切换**：从"分块开发"转为"测试找问题修复"。）
 ---
 
 # 当前有效的计划
@@ -14,6 +14,7 @@ last-refresh: 2026-09-15（Round 4.4 PR-1+PR-2 全部落地 — ApplyPoolEnv 5 s
 | 文件 | 来源 | 主题 |
 |------|------|------|
 | `multi-round-iteration-2026-09-15.md` | **已 landed 2026-09-15（Stage 101 + §十六第二轮收口）** | **多轮迭代修复计划**：原估 49 个 open 项（4 周工作量 18-25d），**Stage 100 代码审计修订为 23 项真未落/半落（8-9d）→ §十六收口后 0 项真未落**。Round 0 文档治理 → Round 1 数据层 → Round 2 Kafka → Round 3 LLM 安全 → Round 4 中间件 → Round 5 全量收口 → §十六第二轮 Round 4.4 剩余 2 项收口。**进度（2026-09-15 §十六收口后）**：所有 Round 1-4 子项已落地（含 Round 4.4 PR-1 PR-2）。Stage 100 + Stage 101 + §十六累计 **21 commits**，详见 [`stages/stage-101-multi-round-iteration-closure.md`](../stages/stage-101-multi-round-iteration-closure.md) + [`stages/stage-102-round-4.4-closure.md`](../stages/stage-102-round-4.4-closure.md) + [`plans/multi-round-iteration-2026-09-15.md §十六`](../plans/multi-round-iteration-2026-09-15.md#十六2026-09-15-第二轮收口-commits3-个-push-originmain)。**本轮新增 4 commits（`ce0d7d1` / `168e1f5` / `d6884b5` / `38075eb`）**：ApplyPoolEnv env→SetMax* 副作用测试钉死 + InitRedis 隐性 bug 修（type assertion 永远 false）+ 5 svc main.go 接入 ApplyPoolEnv + InitGORM + Stage 101 assessment-svc fakeRegistry BeatHeartbeat 漂移修 + docs 同步。**§十四.3 真未落：0 项**。**剩余 7 项触发条件型 backlog**（详见 roadmap.md line 1103 + plan §十六.5）：Redis backend / Dockerfile digest 真值 / Kafka D3/D5 attempts + relay / Kafka D7 owner 拍板 / Helm probe / InitRedis 真 caller（Redis 接入触发） |
+| **dev 模式启动 + 测试找问题修复** | **已 landed 2026-09-16（Stage 103）** | dev 模式首次启动实测：14 容器全 healthy + PG 26/26 migration + APISIX 13 routes + browser-use 验证登录 + 聊天页渲染 OK。**12 commits 修复 9 真 bug**：a008 分区 PK（含分区键）/ compose v5.5.1 跨文件 depends_on / Dockerfile digest ARG 模式 / tini v0.19.0 SHA / pip tuna timeout / package-lock 完整性 / a008 幂等守卫 / web-bff JWT secret / web depends_on。**1 已知未修**：聊天发消息无 AI 回复（BFF 日志无 ChatCompletion 调用，session 超时未排查）。**工作模式切换**：从分块开发转为测试找问题修复（实测发现 → 写 RED → 修 → GREEN → commit push）。详见 [`stages/stage-103-dev-mode-launch-2026-09-16.md`](../stages/stage-103-dev-mode-launch-2026-09-16.md) |
 | `ai-response-structured.md` | `.trae/documents/ai-response-structured.md` | AI 回复结构化 + Markdown 渲染 |
 | `three-vrm-usage-reference.md` | `.trae/documents/three-vrm-usage-reference.md` | Three-VRM API 参考手册 |
 | `wechat-qq-login-and-upload.md` | `.trae/documents/微信QQ登录和文件上传实施计划.md` | QQ OAuth + 通用文件上传 |

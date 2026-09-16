@@ -1032,7 +1032,13 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
   - 详见 [stage-93-analytics-svc-sw8-propagation-2026-09-14.md](../stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md)。
     observability-edge-gaps §B-F 5 项 P2-P3 留 Stage 94+ 候选；OAP 9.x graphql queryDuration 时间格式 bug 沿用 Stage 92 §五残余。
 
-**当前 open 清单**（2026-09-15 Stage 99 收口 + 代码审计修订 + **Stage 101 多轮全量收口**后刷新）：
+**当前 open 清单**（2026-09-16 Stage 103 dev 模式启动后刷新）：
+
+> **📍 阶段切换：分块开发 → 测试找问题修复**。
+> Stage 101（多轮全量收口）+ Stage 102（Round 4.4 收口）+ Stage 103（dev 模式首次启动）已把
+> plan §十四修订后的 23 项 + §十六 残余 5 项全部 10 Round 落地。
+> **当前工作模式**：以 dev / prod 链路为靶子，跑实测 → 发现 bug → 写 RED → 修 → GREEN → commit push，
+> 持续到该阶段验收清单全绿。详见 [`docs/stages/stage-103-dev-mode-launch-2026-09-16.md`](../stages/stage-103-dev-mode-launch-2026-09-16.md)。
 
 > **本段是快照，不是权威来源**（roadmap.md:931-934 段警告）。2026-09-15 Stage 101 收口
 > 把 audit 修订后的 23 项真未落/半落**全部 10 Round 落地**。详见
@@ -1044,6 +1050,14 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 > 7 commits 中 4 个为代码 (`f25d4d4` Round A / `50b9e3e` Round B / `f22c1ce` Round C / `ded2efc` Round D) +
 > 3 个为 docs/evidence/plan (`93cfc4a` Round C e2e / `a0c5b78` 后续 task 痕迹 / `4ff5a24` Round D lockfile 痕迹 / `07a0305` §十五 + kafka-init 注释)。
 > 详见 [`docs/plans/multi-round-iteration-2026-09-15.md` §十五](../plans/multi-round-iteration-2026-09-15.md#十五2026-09-15-本会话真落地-commits6-个-push-originmain)。
+
+> **2026-09-16 Stage 103 dev 模式首次启动**（用户原话"启动 dev + 自己浏览器测 + 记问题修复"）：
+> 12 commits (b4f0ef0..881e674) 真落地：
+> 9 个真 bug 修复（a008 PK / compose v5.5.1 / Dockerfile digest / tini SHA / pip timeout /
+>   lockfile 完整性 / a008 幂等守卫 / web-bff JWT secret / web depends_on）
+> + 1 个已知未修（聊天发消息无 AI 回复，session 超时未排查完，4.1 节有排查建议）
+> dev 链路 14 容器全 healthy + PG 26/26 migration + APISIX 13 routes。
+> 详见 [`docs/stages/stage-103-dev-mode-launch-2026-09-16.md`](../stages/stage-103-dev-mode-launch-2026-09-16.md)。
 
 **Round 1 收口进度**（Round 1.1/1.2/1.3/1.4 + Stage 101 follow-up 全部 ✅ 已落，5 commits +705/-37 行 + 4 模型 + 4 测试，0 回归）：
 - ✅ Round 1.1 voice+emotion UNIQUE（§P1-R2-8/9）—— commit `3bdc817`
@@ -1093,6 +1107,12 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 - ✅ **Stage 101** Round 4.7：consumer.go < 200 行 + digest pin + SKIP_PATH_LIST —— 346→172 行 + check_docker_digests.sh + env 驱动 skip + 3 测试
 
 **修订后真正 open 总数**：**0 项本轮可启动**（plan §十四修订后的 23 项全部落地）。
+
+> **📍 阶段切换（2026-09-16 Stage 103）**：上述状态自 2026-09-15 Stage 101 + 102 收口后保持，
+> 但**项目工作模式从"分块开发"切换为"测试找问题修复"** —— dev 模式首次启动实测发现
+> 9 个真 bug 已修（详见 [stage-103-dev-mode-launch-2026-09-16.md](../stages/stage-103-dev-mode-launch-2026-09-16.md)），
+> 仅剩 1 个聊天发消息未修待用户接手排查。后续 sprint 不再以"补未落项"为目标，
+> 而是以"实测发现 → 修 → 验证"为驱动。
 
 > **2026-09-15 §十五.5 修订**：roadmap 上"真未落"清单中多项实际已落但 roadmap 未刷新。
 > 已在 plan §十四.1 文档漂移区登记 ✅ 标记（含 grep 实证）。**roadmap.md 本次同步刷新
@@ -1188,6 +1208,12 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 - ✅ **Stage 101** Round 4.7：consumer.go < 200 行 + digest pin + SKIP_PATH_LIST —— commit `6525407`（346→172 行 + check_docker_digests.sh + sync_docker_digests.sh + Dockerfile.digests.lock + SKIP_PATH_LIST env）
 
 **修订后真正 open 总数**：0 项本轮可启动；9 项触发条件 backlog（详见 stage-101 §三）。
+
+> **📍 阶段切换（2026-09-16 Stage 103）**：上方表为 Stage 101 收口历史快照。**项目工作模式已
+> 从"分块开发"切换为"测试找问题修复"** —— 详见
+> [stage-103-dev-mode-launch-2026-09-16.md](../stages/stage-103-dev-mode-launch-2026-09-16.md)
+> 与 roadmap.md:1035-1048 阶段切换声明。9 项触发条件 backlog 仍按原节奏等待外部条件，
+> 但本 session 起的 sprint 工作模式不再以"补未落项"为目标。
 
 **下轮建议顺序**（按 stage-101 backlog 顺序）：
 - 触发条件 backlog（9 项）见上表，单轮不可独立完成，等待多副本/上 prod/owner 拍板/外部协调。
