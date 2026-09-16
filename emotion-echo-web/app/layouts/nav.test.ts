@@ -20,10 +20,13 @@ describe('nav.vue height-chain contract (Stage 104)', () => {
     return NAV_SRC.match(re)?.[0] ?? ''
   }
 
-  it('desktop .app-content uses height (not min-height) so .chat-main can fill remaining space', () => {
+  it('desktop .app-content uses height (no min-height except 0 for flex overflow)', () => {
     const block = firstBlock('.app-content')
     expect(block).toMatch(/\bheight\s*:/)
-    expect(block).not.toMatch(/min-height/)
+    // min-height: 0 是 flex 容器允许子元素正确 overflow 的合法用法
+    const strayMinHeight = (block.match(/min-height\s*:\s*([^;]+)/g) || [])
+      .filter((m) => !/:\s*0(?:\s*!important)?\s*$/.test(m))
+    expect(strayMinHeight, `多余的 min-height: ${strayMinHeight.join(';')}`).toEqual([])
   })
 
   it('desktop .page-content uses height (no min-height except 0 for flex overflow)', () => {
@@ -35,15 +38,28 @@ describe('nav.vue height-chain contract (Stage 104)', () => {
     expect(strayMinHeight, `多余的 min-height: ${strayMinHeight.join(';')}`).toEqual([])
   })
 
-  it('mobile breakpoint (.app-content) uses height, not min-height', () => {
-    // 取 @media (max-width: 768px) {...} 完整块,搜 .app-content 子块
+  it('mobile breakpoint (.app-content) uses height, not min-height (min-height:0 excepted)', () => {
     const mobileMedia = NAV_SRC.match(/@media\s*\(max-width:\s*768px\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
     const block = mobileMedia.match(/\.app-content\s*\{([\s\S]*?)\}/)?.[0] ?? ''
     expect(block).toMatch(/\bheight\s*:/)
-    expect(block).not.toMatch(/min-height/)
+    const strayMinHeight = (block.match(/min-height\s*:\s*([^;]+)/g) || [])
+      .filter((m) => !/:\s*0(?:\s*!important)?\s*$/.test(m))
+    expect(strayMinHeight, `多余的 min-height: ${strayMinHeight.join(';')}`).toEqual([])
   })
 
   it('uses dynamic viewport unit (100dvh) so mobile address bar does not break layout', () => {
     expect(NAV_SRC).toMatch(/100dvh/)
+  })
+
+  it('.app-content is display:flex (column) so page-content can flex:1 fill (Stage 105 browser 实测)', () => {
+    // Stage 105 dev 模式浏览器实测: chat-main 高度仅 332px, pageContent 632px,
+    // conversation-page 没撑满, composer 不贴底.
+    // 根因: .app-content 是 block, 不参与 flex, 导致 app-header 不挤压 page-content
+    const block = firstBlock('.app-content')
+    expect(block, '.app-content 块未找到').not.toBe('')
+    expect(block).toMatch(/display\s*:\s*flex/)
+    expect(block).toMatch(/flex-direction\s*:\s*column/)
+    // flex 子级 (app-header/page-content) 需要 min-height:0 才能让 page-content 收缩/撑满
+    expect(block).toMatch(/min-height\s*:\s*0/)
   })
 })

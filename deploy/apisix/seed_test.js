@@ -125,6 +125,23 @@ const checks = [
     src.includes('"allow_credential": true')],
   ['Stage 74 cors 不再使用错误的 allow_credentials 复数字段',
     !src.includes('"allow_credentials"')],
+
+  // === Stage 105 RED: CORS_ALLOW_ORIGINS 默认值必须同时含 localhost:3000 与 127.0.0.1:3000 ===
+  // 背景: dev 模式下 nuxt dev server 默认监听 0.0.0.0:3000。
+  //   - 大多数用户用 http://localhost:3000 访问
+  //   - 部分浏览器 (尤其 Windows Chrome + 沙箱 IAB) 把 localhost 当作 unsafe IP,
+  //     自动重定向到 chrome-error://, 用户被迫改用 http://127.0.0.1:3000
+  //   - 这两个 host 在浏览器 Origin header 看来不同源, 缺一即整页 API 请求被 CORS 拒绝
+  //   - 旧 seed.sh 默认 allow_origins="http://localhost:3000" 单值, 导致后者访问时整页 Failed to fetch
+  //   - Stage 103 启动 dev 模式只跑 curl smoke, 不模拟浏览器 Origin header → 漏抓
+  // 修复: 默认值改为 "http://localhost:3000,http://127.0.0.1:3000"
+  // 锁死: 未来不得改回单 host, 否则 dev 模式浏览器实测立刻炸
+  (() => {
+    const defaultMatch = src.match(/CORS_ALLOW_ORIGINS="\$\{CORS_ALLOW_ORIGINS:-\s*([^}]+)\}"/);
+    const def = defaultMatch ? defaultMatch[1] : '';
+    return ['Stage 105 cors 默认 allow_origins 必须包含 localhost:3000 和 127.0.0.1:3000',
+      def.includes('localhost:3000') && def.includes('127.0.0.1:3000')];
+  })(),
 ];
 
 let passCount = 0, failCount = 0;
