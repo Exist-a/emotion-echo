@@ -23,15 +23,39 @@
         class="control-btn"
         @click="handleToggleVisible"
         :title="visible ? '隐藏数字人' : '显示数字人'"
+        :aria-label="visible ? '隐藏数字人' : '显示数字人'"
       >
-        {{ visible ? '👁' : '🙈' }}
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <template v-if="visible">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+            <circle cx="12" cy="12" r="3" />
+          </template>
+          <template v-else>
+            <path d="M3 3l18 18" />
+            <path d="M10.6 6.1A9.7 9.7 0 0 1 12 6c6.5 0 10 6 10 6a17.4 17.4 0 0 1-3.1 4.1" />
+            <path d="M6.1 6.1A17.4 17.4 0 0 0 2 12s3.5 6 10 6a9.7 9.7 0 0 0 4.4-1" />
+            <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+          </template>
+        </svg>
       </button>
       <button
         class="control-btn"
         @click="handleToggleVoice"
         :title="voiceEnabled ? '关闭语音' : '开启语音'"
+        :aria-label="voiceEnabled ? '关闭语音' : '开启语音'"
       >
-        {{ voiceEnabled ? '🔊' : '🔇' }}
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <template v-if="voiceEnabled">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+            <path d="M19 5a9 9 0 0 1 0 14" />
+          </template>
+          <template v-else>
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <line x1="22" y1="9" x2="16" y2="15" />
+            <line x1="16" y1="9" x2="22" y2="15" />
+          </template>
+        </svg>
       </button>
     </div>
   </div>
@@ -602,32 +626,30 @@ defineExpose({
 }
 
 .digital-human-container {
-  width: 200px;
-  height: 200px;
+  width: 160px;
+  height: 160px;
   border-radius: 50%;
   background: white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border: 3px solid #fff;
+  border: 2px solid var(--ee-border, #e6e6e6);
   overflow: hidden;
   position: absolute;
   top: 48px; /* 在按钮下方 */
-  left: -140px; /* 向左偏移让圆形居中 */
+  left: -120px; /* 向左偏移让圆形居中 */
 }
 
 .control-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ee-border, #e6e6e6);
   border-radius: 50%;
-  background: rgba(64, 158, 255, 0.9);
-  color: white;
-  font-size: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ee-text, #202522);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 
   &:hover {
     background: rgba(64, 158, 255, 1);
