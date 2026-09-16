@@ -81,8 +81,13 @@ const handleSubmit = async () => {
   const value = message.value.trim()
   if (!value) return
   message.value = ''
-  const newConv = await post<{ id: string }>(API_ROUTES.createConversation.path, { title: value.slice(0, 30) })
-  navigateTo({ name: 'chat-conversation-detail', params: { id: newConv.id } })
+  // Stage 105 fix: 走 conversationSender.createNewConversation,
+  // 内部按顺序: createConversation → navigateTo → switchSession → sendMessage + sendAIStream。
+  // 旧实现只建会话不发言, sendMessage / SSE stream 链路被跳过, 用户在 /new 看不到 AI 回复。
+  const result = await conversationSender.createNewConversation(value)
+  if (!result.isOk) {
+    notify('发送失败', result.msg, 'error')
+  }
 }
 
 const handleAttachment = () => {
