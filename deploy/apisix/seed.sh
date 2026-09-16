@@ -53,7 +53,11 @@ ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
 ADMIN_KEY="${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
 JWT_SECRET="${BFF_JWT_SECRET:-dev-bff-secret}"
 # 前端来源（cors allow_origins）。dev 是 Nuxt dev server；prod 由 env 覆盖。
-CORS_ALLOW_ORIGINS="${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+# Stage 105: 默认同时含 localhost:3000 与 127.0.0.1:3000 — 部分浏览器（Windows Chrome +
+# 沙箱 IAB）拒绝 localhost，自动跳 chrome-error://，用户改用 127.0.0.1。
+# 两个 host 在 Origin header 看来不同源，缺一即整页 API 被 CORS 拒绝。
+# 部署 CORS 测试（curl 加 Origin 头）无法模拟浏览器拒绝 localhost 的场景。
+CORS_ALLOW_ORIGINS="${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
 
 # 业务 svc 容器名（compose 网络 DNS）。默认值由 services.env.example 提供，
 # 此处仅保留 ${VAR:-default} 兜底（脚本被独立调用时仍能跑）。
