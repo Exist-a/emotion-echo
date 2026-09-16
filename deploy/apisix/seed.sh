@@ -484,7 +484,9 @@ EOF
 # 主入口：所有 /api/v1/* 走 web-bff（聚合层）
 # 注意：顺序很重要—— APISIX 路由按 ID 升序匹配，catch-all 放最后
 # 但 APISIX 支持 longest-prefix 优先，所以顺序无严格要求。
-put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH"]'
+# Sprint 109b: 加 OPTIONS — 浏览器 CORS preflight 走 OPTIONS 方法,
+# 不加 OPTIONS 则 preflight 被 APISIX 404, 前端 fetch 失败 ("Failed to fetch")。
+put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH","OPTIONS"]'
 
 # ---- Stage 33 PR-19b：/api/v1/auth/* 白名单（跳过 jwt-auth 插件）----
 # login/register/verification-code/refresh 端点拿不到 token，不能被 jwt-auth 拦截。

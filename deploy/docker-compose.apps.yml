@@ -573,7 +573,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.14  # Stage 94 PR-6: TrustAPISIX=true 时 APISIXCIDRs 白名单强制 (§P0-7)
+    image: emotion-echo/web-bff:v0.1.18  # Sprint 109b: LLM 路径也保存 AI 回复
     container_name: emotion-echo-web-bff
     restart: unless-stopped
     env_file: *env-file
