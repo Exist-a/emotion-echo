@@ -78,14 +78,17 @@ Auth:
   TokenTTLSeconds: 86400
 
 # Stage 32 PR-16: BFF 是否信任 APISIX 注入的 X-User-Id header
-# true（默认）：直接读 X-User-Id，不再解析 Authorization（生产路径）
-# false：本地直连 BFF 调试时回退到解析 Authorization（dev fallback）
+# true：直接读 X-User-Id，不再解析 Authorization（生产路径；必须配 APISIXCIDRs 防伪造）
+# false：本地直连 BFF 调试时回退到任何 X-User-Id 都接受（dev fallback）
 #
-# Stage 94 PR-6 §P0-7：TrustAPISIX=true 时必须配 APISIXCIDRs（k8s pod CIDR），
-# 否则 BFF 端口被外部直连时攻击者可伪造 X-User-Id header 假冒任意用户。
+# Sprint 109a：默认改 false（dev 模式默认）。Stage 94 PR-6 §P0-7 要求
+# TrustAPISIX=true 时必须配 APISIXCIDRs（k8s pod CIDR），否则 BFF 端口被外部直连
+# 时攻击者可伪造 X-User-Id header 假冒任意用户。dev 模式无 k8s pod CIDR 可配，
+# 走 TrustAPISIX=false 简化 dev 鉴权链。prod 部署必须改回 true + 配 CIDR。
+#
 # APISIXCIDRs 通过 env BFF_APISIX_CIDRS 注入（部署时按实际 k8s Network CIDR 填）。
 # dev 环境（TrustAPISIX=false）APISIXCIDRs 留空即可。
-TrustAPISIX: true
+TrustAPISIX: false
 # APISIXCIDRs: []
 
 # BFF ai_stream 调用的真实 LLM（OpenAI 兼容，如 DeepSeek / OpenAI / Kimi / Ollama）
