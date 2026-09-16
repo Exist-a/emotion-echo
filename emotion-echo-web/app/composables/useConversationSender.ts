@@ -20,7 +20,11 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
   const { sendAIStream, cancelAIStream, isStreaming } = useAIStreamHandler()
   const { playText, flushRemaining, stop, setEnabled } = useTTSManager(options)
 
-  const accumulatedDeltaText = ref('')
+  // Sprint 108 · 跨组件实例共享 TTS 拼接缓冲 (Stage 107 架构债修复)
+  // 修前 (BUG): const accumulatedDeltaText = ref('') — composable 局部 ref,
+  //            A 实例累加 delta, A 被 unmount 后状态丢失, B 实例看到空字符串.
+  // 修后 (FIX): useState 顶层单例 (Nuxt 3 SSR-safe), 跨 navigateTo / 跨组件实例共享.
+  const accumulatedDeltaText = useState<string>('conv-sender:accumulatedDeltaText', () => '')
   let ttsDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
   const flushTTS = () => {

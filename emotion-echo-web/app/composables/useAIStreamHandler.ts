@@ -43,17 +43,27 @@ interface OpenAIDeltaPayload {
 }
 
 export function useAIStreamHandler(): UseAIStreamHandlerReturn {
-  const isStreaming = ref(false)
-  const streamingContent = ref('')
+  // Sprint 108 · 跨组件实例共享状态 (Stage 107 架构债修复)
+  //
+  // Bug: new.vue handleSubmit 调 createNewConversation → await navigateTo 触发 new.vue unmount →
+  //      composable 实例销毁 → streamAbortController / isStreaming 等局部变量丢失 →
+  //      sendAIStream 的 fetch 状态不可见, SSE 流的 onDelta 回调 consumer 丢失.
+  //
+  // Fix: 响应式状态用 useState() (Nuxt 3 SSR-safe 跨实例 singleton);
+  //      非响应式 controller 用 module-scope let (Nuxt SPA 客户端模块单例).
+  const isStreaming = useState<boolean>('ai-stream:isStreaming', () => false)
+  const streamingContent = useState<string>('ai-stream:streamingContent', () => '')
 
+  // Module-scope singleton (SPA 客户端有效; SSR 每次请求独立 module 实例, 安全)
+  // 跨组件实例共享 AbortController, 避免 unmount 后无法 cancel 在飞请求
   let streamAbortController: AbortController | null = null
-  let streamCancelled = ref(false)
-  let parseErrorCount = 0
-  let finished = false
+  const streamCancelled = useState<boolean>('ai-stream:streamCancelled', () => false)
+  const parseErrorCountState = useState<number>('ai-stream:parseErrorCount', () => 0)
+  const finishedState = useState<boolean>('ai-stream:finished', () => false)
   // P1-R2-1: 跨 stream 调用累计"已发射给 UI 的内容"
   // 用法：SSE 重连（401 refresh）后，server 返回的 delta 与本变量前 N 字符
   //      相同则跳过（client 已有），仅 emit 真正新增部分
-  let emittedContent = ''
+  const emittedContentState = useState<string>('ai-stream:emittedContent', () => '')
 
   const cancelAIStream = () => {
     if (streamAbortController) {
@@ -75,10 +85,10 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     isStreaming.value = true
     streamingContent.value = ''
     streamCancelled.value = false
-    parseErrorCount = 0
-    finished = false
+    parseErrorCountState.value = 0
+    finishedState.value = false
     // P1-R2-1: 记录"已发射内容"用于 401 重连后的去重（避免重复 emit）
-    emittedContent = ''
+    emittedContentState.value = ''
 
     const runtimeConfig = useRuntimeConfig()
     // P0-R2-1: 从 cookie 读取 token（不再读 localStorage）
@@ -96,8 +106,8 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     streamAbortController = new AbortController()
 
     const triggerFinish = (extra?: { messageId?: string; emotion?: string }) => {
-      if (finished) return
-      finished = true
+      if (finishedState.value) return
+      finishedState.value = true
       callbacks.onFinish?.(extra ?? {})
     }
 
@@ -134,7 +144,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
       let fullContent = ''
 
       try {
-        while (!finished) {
+        while (!finishedState.value) {
           const { done, value } = await reader.read()
           if (done) break
 
@@ -144,7 +154,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
           buffer = lines.pop() || ''
 
           for (const line of lines) {
-            if (finished) break
+            if (finishedState.value) break
             const trimmed = line.trim()
             if (!trimmed) continue
 
@@ -161,8 +171,8 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
             try {
               payload = JSON.parse(rawData) as OpenAIDeltaPayload
             } catch {
-              parseErrorCount++
-              if (parseErrorCount >= MAX_PARSE_ERRORS) {
+              parseErrorCountState.value++
+              if (parseErrorCountState.value >= MAX_PARSE_ERRORS) {
                 callbacks.onError?.('数据解析错误过多，已停止')
                 return { isOk: false, msg: '数据解析错误' }
               }
@@ -174,13 +184,13 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
               // P1-R2-1: dedup — 401 重连后 server 整段从头推，
               // 跳过本轮已 emit 过的前缀，仅 emit 真正新增的 chunk
               let toEmit = deltaContent
-              if (emittedContent && deltaContent.startsWith(emittedContent)) {
-                toEmit = deltaContent.slice(emittedContent.length)
+              if (emittedContentState.value && deltaContent.startsWith(emittedContentState.value)) {
+                toEmit = deltaContent.slice(emittedContentState.value.length)
                 if (!toEmit) continue  // 完全重复，跳过
               }
               fullContent += toEmit
               streamingContent.value = fullContent
-              emittedContent += toEmit
+              emittedContentState.value += toEmit
               callbacks.onDelta?.(toEmit)
             }
           }
@@ -201,7 +211,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     } finally {
       isStreaming.value = false
       streamAbortController = null
-      parseErrorCount = 0
+      parseErrorCountState.value = 0
     }
   }
 
