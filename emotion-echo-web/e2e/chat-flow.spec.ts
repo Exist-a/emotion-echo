@@ -19,16 +19,25 @@ import { test, expect } from '@playwright/test'
 test.describe('chat flow · A8 SSE 流端到端', () => {
   test('happy-path-1: quick-login → 发消息 → 5s 内看到 .dialog-ai + 触发 ai-stream 请求', async ({ page }) => {
     const aiStreamRequests: string[] = []
+    const allRequests: string[] = []
     page.on('request', (req) => {
+      allRequests.push(`${req.method()} ${req.url()}`)
       if (req.method() === 'POST' && req.url().includes('/api/v1/ai/stream')) {
         aiStreamRequests.push(req.url())
       }
     })
+    page.on('console', (msg) => {
+      console.log(`[BROWSER-${msg.type().toUpperCase()}]`, msg.text())
+    })
+    page.on('pageerror', (err) => {
+      console.log(`[BROWSER-PAGEERROR]`, err.message)
+    })
 
     // 1) 登录（用演示账号快速体验）
     await page.goto('/login')
+    // 等 Nuxt dev SSR=off 客户端 hydrate（编译时间 30-60s）
     const quickBtn = page.getByRole('button', { name: /用演示账号快速体验/ })
-    await expect(quickBtn).toBeVisible({ timeout: 20_000 })
+    await expect(quickBtn).toBeVisible({ timeout: 90_000 })
     await quickBtn.click()
 
     // 2) 等跳转到聊天页
@@ -42,12 +51,17 @@ test.describe('chat flow · A8 SSE 流端到端', () => {
     await expect(textarea).toBeVisible({ timeout: 10_000 })
     await textarea.fill('你好，请用一句话介绍你自己')
 
-    // 4) 点发送（new.vue 用 aria-label="发送"，[id].vue 用 aria-label="发送消息"）
-    const sendBtn = page.getByRole('button', { name: /^发送$/ }).first()
+    // 4) 点发送：new.vue 的按钮 class 是 .send-btn（aria-label="发送"）
+    const sendBtn = page.locator('button.send-btn[type="submit"]').first()
     await expect(sendBtn).toBeVisible({ timeout: 5_000 })
+    console.log('[DEBUG-SEND-BTN] aria-label=', await sendBtn.getAttribute('aria-label'))
     await sendBtn.click()
 
     // 5) 5 秒内看到至少 1 个 .dialog-ai 元素（A8 修复成功的信号）
+    console.log('[DEBUG-ALL-REQUESTS]', allRequests.length)
+    for (const r of allRequests) console.log('  ', r)
+    console.log('[DEBUG-AI-STREAM-REQUESTS]', aiStreamRequests.length)
+
     await expect(page.locator('.dialog-ai').first()).toBeVisible({ timeout: 10_000 })
 
     // 6) fetch hook 监听到 POST /api/v1/ai/stream（A8 真根因修复）
