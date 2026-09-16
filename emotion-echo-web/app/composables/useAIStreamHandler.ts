@@ -212,6 +212,10 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
       isStreaming.value = false
       streamAbortController = null
       parseErrorCountState.value = 0
+      // Sprint 110 · A8 修复: 显式清 streamCancelled
+      // 否则上一次 cancelled=true 残留, 下次 sendAIStream catch 分支会判定为 cancelled,
+      // 返回 '已取消' 但实际 fetch 已正常返回 → UI 永远看不到 AI 回复
+      streamCancelled.value = false
     }
   }
 
