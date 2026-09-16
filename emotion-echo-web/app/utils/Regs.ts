@@ -110,9 +110,9 @@ export function validateUrl(url: string): boolean {
  * 获取验证错误信息
  * @param type 验证类型
  */
-export function getValidationError(type: "password" | "phone" | "email" | "nickname" | "code"): string {
+export function getValidationError(type: "PWD" | "phone" | "email" | "nickname" | "code"): string {
   const errorMap: Record<string, string> = {
-    password: "密码需为6-18位，且包含字母和数字",
+    PWD: "密码需为6-18位，且包含字母和数字",
     phone: "请输入有效的手机号",
     email: "请输入有效的邮箱地址",
     nickname: "昵称长度为2-12个字符，支持中英文、数字、下划线",
