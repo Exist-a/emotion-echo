@@ -22,11 +22,6 @@
           <span>{{ item.label }}</span>
         </NuxtLink>
       </nav>
-
-      <div class="sidebar-footer">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span>此刻，我在听</span>
-      </div>
     </aside>
 
     <div v-if="isSidebarOpen" class="sidebar-backdrop mobile-only" aria-hidden="true" @click="closeSidebar"></div>
@@ -36,11 +31,6 @@
         <div class="header-context">
           <span class="eyebrow">{{ pageEyebrow }}</span>
           <h1>{{ pageTitle }}</h1>
-        </div>
-        <div class="header-actions">
-          <NuxtLink to="/chat/setting" class="avatar-link" aria-label="打开设置">
-            <span class="avatar-initial">{{ userInitial }}</span>
-          </NuxtLink>
         </div>
       </header>
       <div class="page-content"><slot /></div>
@@ -78,12 +68,6 @@ const pageMeta = computed(() => {
 })
 const pageTitle = computed(() => pageMeta.value?.label || 'Emotion Echo')
 const pageEyebrow = computed(() => route.path.startsWith('/chat/conversation') ? 'CONVERSATION' : route.path.startsWith('/chat/dashboard') ? 'REFLECTION' : 'EMOTION ECHO')
-
-const userStore = useUserStore()
-const userInitial = computed(() => {
-  const name = userStore.getNickname || userStore.userInfo?.username || '我'
-  return String(name).slice(0, 1).toUpperCase()
-})
 
 const closeSidebar = () => { isSidebarOpen.value = false }
 const openSidebar = () => { isSidebarOpen.value = true }
