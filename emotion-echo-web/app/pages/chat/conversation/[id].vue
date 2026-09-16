@@ -634,9 +634,16 @@ onUnmounted(() => {
 }
 
 .voice-btn {
+  // Sprint 110 · A10 修复: 显式声明 display + 宽高, 防止父级 .composer-actions flex gap 挤压;
+  // background 加 fallback, 防止 --ee-primary-soft 未定义时回退到 --ee-primary (深绿)
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   color: var(--ee-primary);
-  background: var(--ee-primary-soft);
+  background: var(--ee-primary-soft, rgba(95, 143, 123, 0.12));
   border-color: transparent;
 }
 .voice-btn:hover {
