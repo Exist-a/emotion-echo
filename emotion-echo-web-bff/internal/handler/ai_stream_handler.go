@@ -49,6 +49,9 @@ type AIStreamHandler struct {
 	llm downstream.LLMChatStreamer
 	// files 是会话消息列表来源（Stage 89 PR-3）；nil = 不注入文件上下文
 	files fileMessageLister
+	// chat 是 chat-svc 客户端（Stage 109b 修复：SSE 流完后写 AI 回复到 chat-svc，
+	// 防止前端刷新后 AI 回复丢失 — 之前 BFF 只走 SSE 流不存库，message 表只有 user msg）
+	chat downstream.ChatClient
 }
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
@@ -67,6 +70,35 @@ func NewAIStreamHandlerWithLLM(cfg config.Config, llm downstream.LLMChatStreamer
 func NewAIStreamHandlerWithDeps(cfg config.Config, llm downstream.LLMChatStreamer, files fileMessageLister) gin.HandlerFunc {
 	h := &AIStreamHandler{cfg: cfg, llm: llm, files: files}
 	return h.ServeHTTP
+}
+
+// NewAIStreamHandlerWithDepsFull 构造带完整 deps (llm + files + chat) — Sprint 109b 修复 AI 回复入库
+func NewAIStreamHandlerWithDepsFull(cfg config.Config, llm downstream.LLMChatStreamer, files fileMessageLister, chat downstream.ChatClient) gin.HandlerFunc {
+	h := &AIStreamHandler{cfg: cfg, llm: llm, files: files, chat: chat}
+	return h.ServeHTTP
+}
+
+// saveAIMessage 在 SSE 流完成后保存 AI 回复到 chat-svc（Stage 109b 修复）。
+// 同步写（用 request ctx + session.WithRequestAuth 保留 x-user-id 注入 gRPC metadata），
+// 失败仅记日志不阻断 SSE 已发出的响应。
+func (h *AIStreamHandler) saveAIMessage(c *gin.Context, conversationID, content string) {
+	if h.chat == nil || conversationID == "" || strings.TrimSpace(content) == "" {
+		return
+	}
+	convID, err := strconv.ParseInt(conversationID, 10, 64)
+	if err != nil || convID <= 0 {
+		return
+	}
+	// 必须用 auth ctx（注入 x-user-id），否则 chat-svc gRPC 鉴权拒
+	// 见 emotion-echo-shared/pkg/middleware/grpc_userid.go
+	_, err = h.chat.SendMessage(session.WithRequestAuth(c), convID, downstream.SendMessageReq{
+		Role:    "assistant",
+		Content: content,
+	})
+	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "ai-stream save AI message failed",
+			"conversation_id", convID, "err", err)
+	}
 }
 
 // fileSourceURL 把消息里存的 MinIO 公开 URL（PublicBaseURL，面向浏览器）
@@ -200,11 +232,14 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		// llm-service 负责拉取/抽取/注入 system 上下文
 		// Stage 89 PR-6 e2e 揪出：必须用 auth ctx（注入 x-user-id），否则 chat gRPC ListMessages 鉴权拒
 		files := h.collectFileAttachments(session.WithRequestAuth(c), req.ConversationID)
+		// Sprint 109b：累计完整 AI 回复文本，stream 完后异步写库
+		var llmAccumulated strings.Builder
 		err := h.llm.StreamChat(ctx, downstream.LLMStreamRequest{
 			Model:    h.cfg.LLM.Model,
 			Messages: llmMessages,
 			Files:    files,
 		}, func(delta, model string) {
+			llmAccumulated.WriteString(delta)
 			if writeErr := writeDelta0(delta); writeErr != nil {
 				slog.ErrorContext(c.Request.Context(), "ai-stream write llm-grpc delta failed", "err", writeErr)
 				cancel()
@@ -215,6 +250,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			if flusher0 != nil {
 				flusher0.Flush()
 			}
+			h.saveAIMessage(c, req.ConversationID, llmAccumulated.String())
 			return
 		}
 		slog.ErrorContext(c.Request.Context(), "ai-stream llm-grpc upstream failed, falling back", "err", err)
@@ -260,7 +296,9 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		})
 		ctx, cancel := context.WithCancel(c.Request.Context())
 		defer cancel()
+		var llmAccumulated strings.Builder
 		err := llmClient.ChatStream(ctx, llmReq, func(content string) {
+			llmAccumulated.WriteString(content)
 			if writeErr := writeDelta(content); writeErr != nil {
 				slog.ErrorContext(c.Request.Context(), "ai-stream write LLM delta failed", "err", writeErr)
 				cancel()
@@ -274,6 +312,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		if flusher != nil {
 			flusher.Flush()
 		}
+		h.saveAIMessage(c, req.ConversationID, llmAccumulated.String())
 		return
 	}
 
@@ -300,6 +339,8 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 	if flusher != nil {
 		flusher.Flush()
 	}
+	// Sprint 109b: 异步保存 AI 回复到 chat-svc (防止刷新后丢失)
+	h.saveAIMessage(c, req.ConversationID, reply)
 }
 
 // mockEmpathyReply 按用户消息关键词生成共情回复（mock，真实 LLM 后续替换）
