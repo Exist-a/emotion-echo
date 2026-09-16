@@ -29,44 +29,16 @@
 
 <script setup lang="ts">
 import ChartCard from '~/components/report/chartsCard.vue'
-import type { ChartItem } from '~/types/charts/common'
 import type { EmotionTrend } from '~/types/api'
 import { get } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
-import { getEmotionLabel, getIntentLabel } from '~/utils'
+import { trendToChartItems } from '~/utils/trendReportCharts'
 
 const year = ref(String(new Date().getFullYear()))
 const isLoading = ref(false)
 const reportData = ref<EmotionTrend | null>(null)
 
-const chartData = computed<ChartItem[]>(() => {
-  if (!reportData.value) return []
-  const items: ChartItem[] = []
-  if (reportData.value.series?.length) {
-    items.push({
-      chartType: 'line',
-      title: '每月趋势',
-      XData: reportData.value.dates,
-      YData: reportData.value.series.flatMap((s) => s.data)
-    })
-  }
-  if (reportData.value.emotionDistribution?.length > 0) {
-    items.push({
-      chartType: 'pie',
-      title: '情绪分布',
-      data: reportData.value.emotionDistribution.map((item) => ({ ...item, name: getEmotionLabel(item.name) }))
-    })
-  }
-  // Stage 85：意图分布饼图（字段缺失隐藏，旧报表兼容）
-  if (reportData.value.intentDistribution?.length) {
-    items.push({
-      chartType: 'pie',
-      title: '意图分布',
-      data: reportData.value.intentDistribution.map((item) => ({ name: getIntentLabel(item.intent), value: item.count }))
-    })
-  }
-  return items
-})
+const chartData = computed(() => trendToChartItems(reportData.value))
 
 const fetchAnnualReport = async () => {
   if (!year.value) return
