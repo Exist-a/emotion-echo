@@ -376,7 +376,15 @@ apisix:
     keyring:
     - qeddd145sfvddff3
     - edd1c9f0985e76a2
-    enable_encrypt_fields: true
+    # Sprint 109a: 关掉字段级加密 — APISIX 3.18.0 jwt-auth 插件直接用 etcd 中
+    # consumer.auth_conf.secret 验签, consumer.lua:242 fetch_secrets 不解
+    # encrypt_fields, 导致 BFF 用 dev-bff-secret 明文签的 JWT 永远 401。
+    # 关掉后 secret 字段明文存 etcd, jwt-auth 用同一明文验签 → PASS。
+    # 安全风险 (dev secret 落 etcd 明文) 在 dev 模式可接受; prod 由 .env.local
+    # 注入真随机 secret + APISIX 部署在隔离 etcd namespace, 等 APISIX upstream
+    # 修 fetch_secrets 解 encrypt_fields 后再开回 true。
+    # 详见 docs/stages/stage-109a-apisix-jwt-401-fix-2026-09-16.md §三
+    enable_encrypt_fields: false
   worker_startup_time_threshold: 60
   enable_server_tokens: true
   show_upstream_status_in_response_header: false
