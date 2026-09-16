@@ -633,6 +633,11 @@ services:
       # 让 web-bff 与 ai-svc 用不同 key（跨 svc 隔离，prod 推荐姿势）
       BFF_LLM_INTERNAL_API_KEY: ${BFF_LLM_INTERNAL_API_KEY:-}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
+      # Stage 94 PR-5 §P0-10 修复后 web-bff 必须从 env 拿 JWT secret (config.go:290
+      # os.Getenv("BFF_JWT_SECRET")), 空字符串会 log.Fatal fail-fast。
+      # dev 默认与 apisix-seed 一致 (dev-bff-secret) 让 dev 模式能跑; prod 由
+      # .env.local 注入真随机 secret (与 APISIX jwt-auth consumer 一致)。
+      BFF_JWT_SECRET: ${BFF_JWT_SECRET:-dev-bff-secret}
     # Stage 33 PR-20: BFF 端口保留（dev 调试 / Postman 直连；prod 应仅暴露 APISIX）
     ports:
       - "8894:8894"
