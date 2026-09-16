@@ -122,67 +122,69 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
     } as MessageWithStatus
     messageStore.addMessage(tempAiMessage)
 
-    accumulatedDeltaText.value = ''
-    stopTTS()
+      accumulatedDeltaText.value = ''
+      stopTTS()
+      console.log('[A8-diag] BEFORE sendAIStream call')
 
-    const result = await sendAIStream(
-      {
-        message: content,
-        emotion,
-        conversationId,
-        messageId: userMessageId,
-        clientMsgId,
-        shouldGenerateTitle: extraParams?.shouldGenerateTitle,
-        voiceEmotion: extraParams?.voiceEmotion
-      },
-      {
-        onDelta: (delta) => {
-          accumulatedDeltaText.value += delta
-          callbacks?.onDelta?.(delta)
+      const result = await sendAIStream(
+        {
+          message: content,
+          emotion,
+          conversationId,
+          messageId: userMessageId,
+          clientMsgId,
+          shouldGenerateTitle: extraParams?.shouldGenerateTitle,
+          voiceEmotion: extraParams?.voiceEmotion
+        },
+        {
+          onDelta: (delta) => {
+            accumulatedDeltaText.value += delta
+            callbacks?.onDelta?.(delta)
 
-          if (ttsDebounceTimer) {
-            clearTimeout(ttsDebounceTimer)
-          }
-          ttsDebounceTimer = setTimeout(() => {
-            if (accumulatedDeltaText.value.trim().length > 0) {
-              playText(accumulatedDeltaText.value)
-              accumulatedDeltaText.value = ''
+            if (ttsDebounceTimer) {
+              clearTimeout(ttsDebounceTimer)
             }
-          }, 500)
+            ttsDebounceTimer = setTimeout(() => {
+              if (accumulatedDeltaText.value.trim().length > 0) {
+                playText(accumulatedDeltaText.value)
+                accumulatedDeltaText.value = ''
+              }
+            }, 500)
 
-          messageStore.updateMessage(tempAiMessage.id, {
-            content: tempAiMessage.content + delta,
-            status: 'streaming'
-          })
-          tempAiMessage.content += delta
-        },
-        onFinish: (data) => {
-          flushTTS()
+            messageStore.updateMessage(tempAiMessage.id, {
+              content: tempAiMessage.content + delta,
+              status: 'streaming'
+            })
+            tempAiMessage.content += delta
+          },
+          onFinish: (data) => {
+            flushTTS()
 
-          messageStore.updateMessage(tempAiMessage.id, {
-            id: data.messageId || tempAiMessage.id,
-            status: 'sent'
-          })
+            messageStore.updateMessage(tempAiMessage.id, {
+              id: data.messageId || tempAiMessage.id,
+              status: 'sent'
+            })
 
-          updateConversation(
-            conversationId,
-            tempAiMessage.content.slice(0, 100) || content.slice(0, 100)
-          )
+            updateConversation(
+              conversationId,
+              tempAiMessage.content.slice(0, 100) || content.slice(0, 100)
+            )
 
-          callbacks?.onFinish?.(data.messageId || '', data.emotion)
-        },
-        onError: (error) => {
-          stopTTS()
-          messageStore.updateMessage(tempAiMessage.id, {
-            status: 'failed',
-            content: error
-          })
-          callbacks?.onError?.(error)
+            callbacks?.onFinish?.(data.messageId || '', data.emotion)
+          },
+          onError: (error) => {
+            stopTTS()
+            messageStore.updateMessage(tempAiMessage.id, {
+              status: 'failed',
+              content: error
+            })
+            callbacks?.onError?.(error)
+          }
         }
-      }
-    )
+      )
 
-    return result
+      return result
+    }
   }
 
   const createNewConversation = async (
@@ -211,14 +213,11 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
     //  残留 → 下次 sendAIStream 的 isStreaming guard 卡死, SSE 永远不出栈)
     isInCreateFlow.value = true
     try {
-      // 触发路由切换 (fire-and-forget, 不 await)
-      // [id].vue 会在下一个 tick mount, 此时本函数已在同步等 switchSession + SSE
-      navigateTo({
+      await navigateTo({
         name: 'chat-conversation-detail',
         params: { id: newSessionId }
       })
 
-      // 同步把 sessionId 切到新会话 (避免 [id].vue mount 后重复请求 messages)
       await messageStore.switchSession(newSessionId)
 
       const result = await sendToExistingConversation(
