@@ -12,10 +12,19 @@ COPY package*.json ./
 # Stage 36-D Bug 9: 默认 npmjs 镜像（npmmirror.com 容器内不可达,改为可配置 BuildArg）
 # P0-R2-9: 保留 lockfile + npm ci 保证构建可复现（Stage 74 的 linux-musl 兼容问题
 # 通过 --omit=optional 解决，不再删除 lockfile）
+# Stage 105 PR-0: 加 --ignore-scripts 跳过 postinstall (nuxt prepare 在 alpine musl 上
+# 触发 oxc-parser native binding 缺报错; nuxt build 自带 prepare, 不依赖 postinstall)
 ARG NPM_REGISTRY=https://registry.npmjs.org/
 RUN npm config set registry ${NPM_REGISTRY} \
     && npm config set engine-strict false \
-    && npm ci --omit=optional --no-audit --no-fund
+    && npm ci --ignore-scripts --no-audit --no-fund \
+    # Stage 105: alpine musl 上 oxc-parser/transform/minify 三个 native binding
+    # npm ci 默认应装但 npm cli bug #4828 偶发跳过, 显式补装一次保证 binary 落地.
+    && npm install --no-save --ignore-scripts --no-audit --no-fund \
+        @oxc-parser/binding-linux-x64-musl@0.102.0 \
+        @oxc-transform/binding-linux-x64-musl@0.102.0 \
+        @oxc-minify/binding-linux-x64-musl@0.102.0 \
+        @rollup/rollup-linux-x64-musl
 
 # 复制源代码
 COPY . .
