@@ -11,36 +11,68 @@
         @keydown.enter.exact.prevent="handleSubmit"
       />
       <div class="sender-actions">
-        <div class="actions-left">
-          <button type="button" class="ee-btn ee-btn-circle action-btn" aria-label="添加附件" @click="handleAttachment">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 11.5l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />
-            </svg>
-          </button>
+        <button type="button" class="icon-btn ghost" aria-label="添加附件" @click="handleAttachment">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 11.5l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="icon-btn ghost camera-btn"
+          :class="{ active: faceEmotion.isCameraOn.value }"
+          :aria-label="faceEmotion.isCameraOn.value ? '关闭摄像头' : '开启摄像头'"
+          @click="toggleCamera"
+        >
+          <svg v-if="!faceEmotion.isCameraOn.value" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M23 7l-7 5 7 5V7z" />
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M23 7l-7 5 7 5V7z" />
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            <circle cx="8.5" cy="12" r="1.2" fill="currentColor" />
+          </svg>
+        </button>
+        <div class="spacer" />
+        <div
+          class="voice-record-btn"
+          :class="{ recording: isRecording }"
+          @click="toggleRecording"
+        >
+          <svg v-if="!isRecording" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="12" rx="3" />
+            <path d="M5 11a7 7 0 0 0 14 0" />
+            <line x1="12" y1="18" x2="12" y2="22" />
+          </svg>
+          <span v-else class="voice-center-dot"></span>
+          <span v-if="isRecording" class="voice-ring"></span>
         </div>
-        <div class="actions-right">
-          <div
-            class="voice-record-btn"
-            :class="{ recording: isRecording }"
-            @click="toggleRecording"
-          >
-            <svg v-if="!isRecording" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="9" y="3" width="6" height="12" rx="3" />
-              <path d="M5 11a7 7 0 0 0 14 0" />
-              <line x1="12" y1="18" x2="12" y2="22" />
-            </svg>
-            <span v-else class="voice-center-dot"></span>
-            <span v-if="isRecording" class="voice-ring"></span>
-          </div>
-          <hr class="ee-divider" />
-          <button type="submit" class="ee-btn ee-btn-circle ee-btn-primary send-btn" :disabled="!message.trim()" aria-label="发送">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="5" y1="12" x2="19" y2="12" />
-              <polyline points="13 5 20 12 13 19" />
-            </svg>
-          </button>
-        </div>
+        <button
+          type="submit"
+          class="send-btn"
+          :disabled="!message.trim()"
+          aria-label="发送"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="13 5  20 12 13 19" />
+          </svg>
+        </button>
       </div>
+      <video
+        v-if="faceEmotion.isCameraOn.value"
+        ref="cameraVideoRef"
+        class="camera-preview"
+        autoplay
+        muted
+        playsinline
+      />
+      <p v-if="faceEmotion.isCameraOn.value && faceEmotion.currentEmotion.value" class="camera-status">
+        当前表情识别：<strong>{{ faceEmotion.currentEmotion.value.emotion }}</strong>
+        <span v-if="faceEmotion.currentEmotion.value.confidence != null">
+          （置信度 {{ Math.round(faceEmotion.currentEmotion.value.confidence * 100) }}%）
+        </span>
+      </p>
     </form>
   </div>
 </template>
@@ -52,6 +84,7 @@ import { useDigitalHumanStore } from '~/stores/digitalHuman'
 import { useUserStore } from '~/stores/user'
 import { useMessageStore } from '~/stores/message'
 import { useConversationSender } from '~/composables/useConversationSender'
+import { useFaceEmotion } from '~/composables/useFaceEmotion'
 import { post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { notify } from '~/composables/useNotify'
@@ -65,6 +98,8 @@ const isRecording = ref(false)
 const conversationSender = useConversationSender()
 
 const digitalHumanVisible = ref(true)
+const cameraVideoRef = ref<HTMLVideoElement | null>(null)
+const faceEmotion = useFaceEmotion()
 
 const { playText, flushRemaining, stop } = useDigitalHumanTTS({
   onLipShapeChange: (shape) => digitalHumanStore.setLipShape(shape)
@@ -102,6 +137,20 @@ const toggleRecording = () => {
     notify('', '录音已停止', 'info')
   }
 }
+
+const toggleCamera = async () => {
+  try {
+    if (faceEmotion.isCameraOn.value) {
+      faceEmotion.stopCamera()
+      notify('', '摄像头已关闭', 'info')
+    } else {
+      await faceEmotion.startCamera(cameraVideoRef.value!)
+      notify('', '摄像头已开启，正在分析表情', 'success')
+    }
+  } catch (err: any) {
+    notify('摄像头开启失败', err?.message || '请检查浏览器权限', 'error')
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -128,7 +177,7 @@ const toggleRecording = () => {
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: 10px 14px 10px 14px;
+  padding: 10px 14px;
   background: var(--ee-surface);
   border: 1px solid var(--ee-border);
   border-radius: 20px;
@@ -158,15 +207,32 @@ const toggleRecording = () => {
   padding-top: 6px;
 }
 
-.actions-left, .actions-right {
-  display: flex;
+.spacer { flex: 1; }
+
+.icon-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ee-text-muted);
+  background: transparent;
+  border: 1px solid var(--ee-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color var(--ee-transition), border-color var(--ee-transition), background var(--ee-transition);
+}
+
+.icon-btn:hover,
+.icon-btn.active {
+  color: var(--ee-primary);
+  border-color: var(--ee-primary);
+  background: var(--ee-primary-soft);
 }
 
 .voice-record-btn {
   position: relative;
-  display: grid;
+  display: inline-grid;
   width: 32px;
   height: 32px;
   place-items: center;
@@ -183,11 +249,40 @@ const toggleRecording = () => {
 
 @keyframes ring-pulse { from { transform: scale(0.85); opacity: 0.85; } to { transform: scale(1.5); opacity: 0; } }
 
-.ee-divider {
-  width: 1px;
-  height: 20px;
-  margin: 0 2px;
-  background: var(--ee-border);
+.send-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: #fff;
+  background: var(--ee-primary);
   border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--ee-transition), transform var(--ee-transition);
+}
+.send-btn:hover:not(:disabled) { background: var(--ee-primary-hover); transform: translateY(-1px); }
+.send-btn:disabled { background: var(--ee-border); cursor: not-allowed; }
+
+.camera-preview {
+  width: 240px;
+  height: 180px;
+  margin: 12px auto 0;
+  border-radius: 12px;
+  background: #000;
+  object-fit: cover;
+  display: block;
+}
+
+.camera-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ee-text-muted);
+  text-align: center;
+}
+.camera-status strong {
+  color: var(--ee-primary);
+  margin: 0 4px;
 }
 </style>
