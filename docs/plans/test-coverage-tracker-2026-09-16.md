@@ -164,7 +164,7 @@ related-plans:
 | 序号 | 标题 | 文件 | 阻塞范围 | Sprint 108 状态 |
 |---|---|---|---|---|
 | ~~A1~~ | useConversationSender composable 生命周期 vs Vue 路由 unmount | `emotion-echo-web/app/composables/useConversationSender.ts:48-51` | ~~E2E-2 chat 链路全链~~ | ✅ **FIXED Sprint 108**：useState 化 7 个跨实例状态 + module-scope let 1 个。详见 `docs/stages/stage-108-sender-architecture-debt-fix-2026-09-16.md` |
-| **A7** | APISIX jwt-auth 401 (新建) | `deploy/apisix/seed.sh` jwt-auth 配置 + consumer | E2E-2 chat + X-1 outbox + X-2 sw8 + X-4 鉴权 全部 | 🔴 **新发现 Sprint 108**：token 本地验算 OK + consumer 配置 OK + route 100 配置 OK，但所有 /api/v1/* 返 401。根因未确定。详见 stage-108 §四 |
+| **A7** | APISIX jwt-auth 401 (新建) | `deploy/apisix/seed.sh` jwt-auth 配置 + consumer + BFF TrustAPISIX | E2E-2 chat + X-1 outbox + X-2 sw8 + X-4 鉴权 全部 | ✅ **FIXED Sprint 109a**：真正根因 = BFF `TrustAPISIX=true` + `APISIXCIDRs=[]`（dev 模式配置自相矛盾）+ APISIX `enable_encrypt_fields=true` 导致 jwt-auth 插件用密文验签。**修复**：dev 模式 TrustAPISIX 默认改 false + 关掉字段加密。详见 `docs/stages/stage-109a-apisix-jwt-401-fix-2026-09-16.md` |
 | A2 | assessment-svc handler/logic 无单测 | `emotion-echo-assessment-svc/internal/handler/` `internal/logic/` | E2E-3 完整覆盖 | 🟡 |
 | A3 | reports E2E 无 Playwright | `emotion-echo-web/e2e/` | E2E-4 端到端 | 🟡 |
 | A4 | chartData=[] 历史 bug 未实测复现 | `emotion-echo-web-bff/internal/handler/analytics_handler.go` | 契约 4 | 🔴 |
@@ -180,8 +180,8 @@ related-plans:
 | Sprint | 目标 | 阻塞依赖 | 状态 |
 |---|---|---|---|
 | **Sprint 108** | 修 A1：sender composable 生命周期 + 新发现 A7 (APISIX jwt-auth 401) | 无 | ✅ **FIXED Sprint 108**（sender）+ A7 留待 Sprint 109a |
-| **Sprint 109a** (下一轮) | 修 A7：APISIX jwt-auth 401 诊断 + 修复（直 curl admin 看完整 plugin 配置 / APISIX 启动日志 / 对比 Stage 107 端到端绿时 plugin 状态）| 无 | pending |
-| **Sprint 109b** | 端到端 E2E-2 chat 跑通：浏览器实测看到 AI 回复（SSE 流 + chat-svc/ai-svc 日志） | A7 | pending |
+| **Sprint 109a** | 修 A7：APISIX jwt-auth 401 诊断 + 修复（BFF TrustAPISIX + APISIX encrypt_fields） | 无 | ✅ **FIXED Sprint 109a**：`deploy/apisix/test_jwt_auth_runtime.sh` 6/6 PASS。详见 stage-109a |
+| **Sprint 109b** (下一轮) | 端到端 E2E-2 chat 跑通：浏览器实测看到 AI 回复（SSE 流 + chat-svc/ai-svc 日志） | A7 ✅ | pending |
 | **Sprint 109c** | 数据契约 §1 §2 §5 §6 smoke 全绿 | 109b | pending |
 | **Sprint 110** | 写 E2E-2 Playwright spec（chat /new → 收到 AI 回复），作为回归钉子 | 109b | pending |
 | **Sprint 111** | 写 E2E-3 assessment Playwright + 补 assessment-svc handler/logic 单测 | 无（独立） | pending |
