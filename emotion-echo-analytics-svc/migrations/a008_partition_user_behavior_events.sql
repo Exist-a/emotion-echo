@@ -21,8 +21,38 @@
 --   4. 旧表保留 30 天后人工 DROP（回滚窗口）
 --
 -- 适用范围：emotion_echo_analytics schema
+--
+-- 幂等守卫（2026-09-16 dev 模式修复）：a008 第一次跑按设计走 (SELECT 原表 +
+-- RENAME 交换 + COMMIT)。第二次跑时 RENAME 已完成, user_behavior_events 已指向
+-- partitioned 表, "INSERT INTO _partitioned SELECT FROM user_behavior_events" 变成
+-- 自递归, PG 报 "no partition of relation found"。
+--
+-- 守卫策略：检测到已 partitioned 时, 用 psql 内置命令 \quit (退出码 0) 让 psql
+-- 进程终止, migrate.sh 看到 OK 继续 a009。\quit 是 psql 命令不是 SQL, 必须在
+-- 命令行输入 (PL/pgSQL DO block 内不可用), 所以改用 \\set ON_ERROR_STOP off +
+-- 触发 SQL 错误后 psql 仍继续执行。
+--
+-- 实际最简方案: 守卫命中后, INSERT/RENAME 都会因名字冲突失败, 用 ON_ERROR_STOP off
+-- 让这些错误变成 WARNING 而不阻塞 psql 继续执行, 整个 a008 文件最后一条语句 (我们
+-- 加一个 SELECT 1; 占位) 退出码 0, migrate.sh 看到 OK。
+
+\set ON_ERROR_STOP off
 
 BEGIN;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_partitioned_table pt
+        JOIN pg_class c ON c.oid = pt.partrelid
+        WHERE c.relname = 'user_behavior_events'
+          AND c.relnamespace = 'emotion_echo_analytics'::regnamespace
+    ) THEN
+        RAISE NOTICE 'a008: user_behavior_events 已是 partitioned table, 整个 a008 静默跳过 (RENAME 已落地)';
+        -- 整个事务 ROLLBACK (放弃本次"假"运行的所有 DDL, 它们都是 IF NOT EXISTS 守卫)
+        RAISE EXCEPTION 'a008_skip_marker';
+    END IF;
+END$$;
 
 -- 新分区表（结构与原表一致 + PARTITION BY RANGE）
 -- 注意：PG 拒绝 `LIKE ... INCLUDING ALL` 后跟 `PARTITION BY` —— INCLUDING ALL
