@@ -266,6 +266,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   gap: 8px;
   margin-bottom: 14px;
   flex-shrink: 0;
+  // Sprint 110 · A9 修复: min-width:0 让 flex 子项可压缩,
+  // 否则 fold-btn + title + new-btn 在窄 sidebar 下宽度溢出
+  // 导致 fold-btn 与 title 间距不规则 (IAB 2026-09-17 实测)
+  min-width: 0;
 }
 
 .icon-btn,
@@ -305,6 +309,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 
 .sidebar-title {
   flex: 1;
+  min-width: 0;  // Sprint 110 · A9: 让 h3 在 flex 中可压缩, 防止 fold-btn 露边
   margin: 0;
   color: var(--ee-text);
   font-size: 14px;
