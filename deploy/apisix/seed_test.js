@@ -142,6 +142,24 @@ const checks = [
     return ['Stage 105 cors 默认 allow_origins 必须包含 localhost:3000 和 127.0.0.1:3000',
       def.includes('localhost:3000') && def.includes('127.0.0.1:3000')];
   })(),
+
+  // Stage 106: seed.sh file-logger log_format 不允许 trailing comma
+  // Bug: 2026-09-16 dev 重启 web 时 apisix-seed 重跑 PUT route 100 失败,
+  //   原因是 file-logger log_format 最后一个 key 带了逗号 → APISIX JSON schema 校验拒绝
+  //   → catch-all /api/v1/* 路由缺失 → 所有非 auth 业务 401 unauthorized
+  //   → 浏览器发消息无 AI 回复（叠加在 new.vue handleSubmit bug 上, 让人误判为前端 bug）
+  // 修复: 删除 trailing comma；本断言保证未来不会再次引入
+  // 扫描策略: 在 file-logger "log_format" 块内检查最后一条非空白行不以逗号结尾
+  (() => {
+    const blockMatch = src.match(/"log_format":\s*\{([\s\S]*?)\n\s*\}/);
+    if (!blockMatch) return ['file-logger log_format 块结构 (用于 trailing comma 校验)', false];
+    const block = blockMatch[1];
+    // 去掉每行空白后找最后一行
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const lastLine = lines[lines.length - 1];
+    return ['file-logger log_format 最后一行不得以 "," 结尾 (Stage 106)',
+      !lastLine.endsWith(',')];
+  })(),
 ];
 
 let passCount = 0, failCount = 0;
