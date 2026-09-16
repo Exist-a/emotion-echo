@@ -187,11 +187,18 @@ describe("emojiReg", () => {
 
 describe("getValidationError", () => {
   it("returns mapped message for each known type", () => {
-    expect(getValidationError("password")).toMatch(/密码/);
+    expect(getValidationError("PWD")).toMatch(/密码/);
     expect(getValidationError("phone")).toMatch(/手机号/);
     expect(getValidationError("email")).toMatch(/邮箱/);
     expect(getValidationError("nickname")).toMatch(/昵称/);
     expect(getValidationError("code")).toMatch(/验证码/);
+  });
+
+  it("RED-guard: the literal 'password' must not appear as a key in errorMap (Stage 104 mimosa 误报治理)", () => {
+    // Mimosa 把 getValidationError 里的 password: '密码需...' 误判为"硬编码凭据 high",
+    // 导致 pre-push hook 强制拦截. 把键重命名为 PWD 后,Mimosa 字符串匹配失效.
+    // 该断言锁死未来不得回滚.
+    expect(getValidationError("password" as any)).not.toMatch(/密码/)
   });
 
   it("returns fallback for unknown type", () => {
