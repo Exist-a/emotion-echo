@@ -273,8 +273,6 @@ const quickLogin = async () => {
 .link { color: var(--ee-primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
-.ee-btn { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 18px; background: var(--ee-surface); border: 1px solid var(--ee-border); border-radius: var(--ee-radius-md); color: var(--ee-text); cursor: pointer; font-size: 13px; font-weight: 600; transition: background var(--ee-transition), color var(--ee-transition), border-color var(--ee-transition); }
-.ee-btn:disabled { cursor: not-allowed; opacity: 0.6; }
 .ee-btn-primary { background: var(--ee-primary); color: #fff; border-color: var(--ee-primary); }
 .ee-btn-primary:hover:not(:disabled) { background: var(--ee-primary-hover); border-color: var(--ee-primary-hover); }
 .primary-btn { height: 44px; }

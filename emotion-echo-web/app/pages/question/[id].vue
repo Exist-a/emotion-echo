@@ -186,11 +186,8 @@ onMounted(() => {
 
 .submit-btn-wrap { display: flex; justify-content: center; }
 
-.ee-btn { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 18px; background: var(--ee-surface); border: 1px solid var(--ee-border); border-radius: var(--ee-radius-md); color: var(--ee-text); cursor: pointer; font-size: 13px; font-weight: 600; transition: background var(--ee-transition), color var(--ee-transition), border-color var(--ee-transition); }
 .ee-btn:hover { background: var(--ee-surface-muted); }
 .ee-btn:disabled { cursor: not-allowed; opacity: 0.6; }
-.ee-btn-primary { background: var(--ee-primary); color: #fff; border-color: var(--ee-primary); }
-.ee-btn-primary:hover { background: var(--ee-primary-hover); border-color: var(--ee-primary-hover); }
 .ee-btn-lg { height: 44px; padding: 0 28px; font-size: 14px; }
 .btn-ghost { background: transparent; color: var(--ee-text-muted); }
 

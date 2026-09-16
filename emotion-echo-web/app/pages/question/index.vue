@@ -120,11 +120,8 @@ const checkRes = async (data: TableRow) => {
 
 .action-bar { display: flex; justify-content: flex-end; margin: 0 0 16px; }
 
-.ee-btn { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 18px; background: var(--ee-surface); border: 1px solid var(--ee-border); border-radius: var(--ee-radius-md); color: var(--ee-text); cursor: pointer; font-size: 13px; font-weight: 600; transition: background var(--ee-transition), color var(--ee-transition), border-color var(--ee-transition); }
 .ee-btn:hover:not(:disabled) { background: var(--ee-surface-muted); }
 .ee-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.ee-btn-primary { background: var(--ee-primary); color: #fff; border-color: var(--ee-primary); }
-.ee-btn-primary:hover:not(:disabled) { background: var(--ee-primary-hover); border-color: var(--ee-primary-hover); }
 .btn-ghost { background: transparent; color: var(--ee-text-muted); }
 
 .loading-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }

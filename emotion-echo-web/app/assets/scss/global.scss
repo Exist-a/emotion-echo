@@ -109,6 +109,30 @@ button {
   outline-offset: 2px;
 }
 
+// ---- Stage 105 浏览器实测: 全局按钮样式 (从 login + question/* 3 处 page 提到此处) ----
+// 之前 .ee-btn 只在 3 处 page 复制粘贴 (login/index, question/index, question/[id]),
+// /chat/user 等新 page 没复制 → 按钮走浏览器默认样式 (background: #f0f0f0, 2px outset #000),
+// 视觉突兀. 提到 global 让所有 page 默认继承, 也避免未来 DRY 违反.
+.ee-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 18px;
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-md);
+  color: var(--ee-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background var(--ee-transition), color var(--ee-transition), border-color var(--ee-transition);
+}
+.ee-btn:hover:not(:disabled) { background: var(--ee-surface-muted); }
+.ee-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+.ee-btn-primary { background: var(--ee-primary); color: #fff; border-color: var(--ee-primary); }
+.ee-btn-primary:hover:not(:disabled) { background: var(--ee-primary-hover); border-color: var(--ee-primary-hover); }
+
 ::selection {
   color: var(--ee-text);
   background: var(--ee-primary-soft);
