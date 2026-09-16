@@ -74,6 +74,23 @@
               <path d="M21 11.5l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />
             </svg>
           </button>
+          <button
+            type="button"
+            class="icon-btn ghost camera-btn"
+            :class="{ active: faceEmotion.isCameraOn.value }"
+            :aria-label="faceEmotion.isCameraOn.value ? '关闭摄像头' : '开启摄像头'"
+            @click="toggleCamera"
+          >
+            <svg v-if="!faceEmotion.isCameraOn.value" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M23 7l-7 5 7 5V7z" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M23 7l-7 5 7 5V7z" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              <circle cx="8.5" cy="12" r="1.2" fill="currentColor" />
+            </svg>
+          </button>
           <div class="spacer" />
           <button
             type="button"
@@ -115,6 +132,20 @@
           </button>
         </div>
       </div>
+      <video
+        v-if="faceEmotion.isCameraOn.value"
+        ref="cameraVideoRef"
+        class="camera-preview"
+        autoplay
+        muted
+        playsinline
+      />
+      <p v-if="faceEmotion.isCameraOn.value && faceEmotion.currentEmotion.value" class="camera-status">
+        当前表情识别：<strong>{{ faceEmotion.currentEmotion.value.emotion }}</strong>
+        <span v-if="faceEmotion.currentEmotion.value.confidence != null">
+          （置信度 {{ Math.round(faceEmotion.currentEmotion.value.confidence * 100) }}%）
+        </span>
+      </p>
     </form>
 
     <div class="digital-human-wrapper">
@@ -128,6 +159,7 @@ import DigitalHuman from '~/components/digital-human/DigitalHuman.vue'
 import VoiceMessage from '~/components/voice/VoiceMessage.vue'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { useVoiceRecorder } from '~/composables/useVoiceRecorder'
+import { useFaceEmotion } from '~/composables/useFaceEmotion'
 import { useFileUpload } from '~/composables/useFileUpload'
 import { useDigitalHumanStore } from '~/stores/digitalHuman'
 import { useUserStore } from '~/stores/user'
@@ -154,11 +186,27 @@ const route = useRoute()
 const conversationStore = useConversationStore()
 const message = ref('')
 const conversationIdRef = computed(() => route.params.id as string)
+const cameraVideoRef = ref<HTMLVideoElement | null>(null)
+const faceEmotion = useFaceEmotion({
+  sessionId: conversationIdRef
+})
 
 const conversationSender = useConversationSender({
   onLipShapeChange: (shape) => digitalHumanRef.value?.setLipShape(shape),
   onEmotionChange: (emotion) => digitalHumanRef.value?.setEmotion(emotion)
 })
+
+const toggleCamera = async () => {
+  try {
+    if (faceEmotion.isCameraOn.value) {
+      faceEmotion.stopCamera()
+    } else {
+      await faceEmotion.startCamera(cameraVideoRef.value!)
+    }
+  } catch (err: any) {
+    window.alert(`摄像头开启失败：${err?.message || '请检查浏览器权限'}`)
+  }
+}
 
 const voiceRecorder = useVoiceRecorder({
   conversationId: conversationIdRef,
@@ -579,6 +627,12 @@ onUnmounted(() => {
   background: var(--ee-primary-soft);
 }
 
+.icon-btn.active {
+  color: var(--ee-primary);
+  border-color: var(--ee-primary);
+  background: var(--ee-primary-soft);
+}
+
 .voice-btn {
   position: relative;
   color: var(--ee-primary);
@@ -609,6 +663,27 @@ onUnmounted(() => {
 @keyframes ring-pulse {
   from { transform: scale(0.85); opacity: 0.85; }
   to { transform: scale(1.5); opacity: 0; }
+}
+
+.camera-preview {
+  width: 240px;
+  height: 180px;
+  margin: 12px auto 0;
+  border-radius: 12px;
+  background: #000;
+  object-fit: cover;
+  display: block;
+}
+
+.camera-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ee-text-muted);
+  text-align: center;
+}
+.camera-status strong {
+  color: var(--ee-primary);
+  margin: 0 4px;
 }
 
 .send-btn {
