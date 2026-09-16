@@ -3,7 +3,7 @@ purpose: "测试找问题修复阶段" 业务路径级测试覆盖率追踪
 status: active
 priority: high
 created: 2026-09-16
-last-refresh: 2026-09-16 (Stage 107 收口后)
+last-refresh: 2026-09-16 (Sprint 108 收口后：A1 FIXED + A7 新发现)
 owner: TBD
 type: test-coverage-tracker
 depends-on:
@@ -11,6 +11,7 @@ depends-on:
   - AGENTS.md §2.3 覆盖率底线
   - stage-26-T-test-backlog.md (历史版，本文档接替)
   - stage-107-chat-new-conversation-fix-2026-09-16.md
+  - stage-108-sender-architecture-debt-fix-2026-09-16.md
 related-stages:
   - stage-103-dev-mode-launch-2026-09-16.md (dev 模式首次启动基线)
   - stage-105-browser-e2e-2026-09-16.md (browser-use 浏览器 E2E)
@@ -68,11 +69,12 @@ related-plans:
 | Go 单测 (BFF chat_handler) | ✅ | `emotion-echo-web-bff/internal/handler/chat_handler_test.go` |
 | Go 单测 (ai-svc ChatCompletion) | ✅ | `emotion-echo-ai-svc/internal/grpcclient/ai_client_grpc_test.go` + `internal/analyzer/grpc_analyzer_test.go` |
 | Go 单测 (BFF ai_stream_handler) | ✅ 多用例 | `emotion-echo-web-bff/internal/handler/ai_stream_handler_test.go` + `ai_stream_handler_llmgrpc_test.go` |
-| 前端单测 (vitest) | ✅ 3 用例 | `emotion-echo-web/app/pages/chat/conversation/new.test.ts` (Stage 107 新建) |
+| 前端单测 (vitest) | ✅ 7 用例 | `emotion-echo-web/app/pages/chat/conversation/new.test.ts` (Stage 107 4 条 + Sprint 108 加 1 条) + `composables/useConversationSender.architecture.test.ts` (Sprint 108 加 3 条) |
 | 前端单测 (stores) | ✅ | `emotion-echo-web/app/stores/conversation.test.ts` + `__tests__/message.test.ts` |
 | E2E (Playwright) | ⚫ | 仅 `login-flow.spec.ts` 1 个，**chat /new → AI 回复无 Playwright** |
-| browser-use 实测 (端到端) | 🔴 | **Stage 107 卡在架构债**：useConversationSender composable 生命周期 vs Vue 路由 unmount，导致 sendMessage + sendAIStream 在浏览器实测未触发。详见 stage-107 §四 |
-| 数据契约 §1 (user_behavior_events 行数) | 🟡 | smoke 脚本有 (`scripts/smoke_data_layer.py`)，待端到端通后跑 |
+| sender 架构债 (Stage 107 A1) | ✅ FIXED Sprint 108 | useState 化 7 个跨实例状态。详见 `docs/stages/stage-108-sender-architecture-debt-fix-2026-09-16.md` §二 |
+| browser-use 实测 (端到端) | 🔴 | **Stage 108 sender 修完后被新阻塞 A7 (APISIX jwt-auth 401)** 阻断。token 本地验算 OK + consumer OK + route OK 但所有 /api/v1/* 返 401。详见 stage-108 §四 |
+| 数据契约 §1 (user_behavior_events 行数) | 🟡 | smoke 脚本有 (`scripts/smoke_data_layer.py`)，待 A7 修通后跑 |
 | 数据契约 §2 (event_type enum 细分) | 🟡 | 同上 |
 | 数据契约 §5 (schema 与写入端一致) | 🟡 | 同上 |
 
@@ -159,14 +161,15 @@ related-plans:
 
 ## 四、已知未修（阻塞端到端绿）
 
-| 序号 | 标题 | 文件 | 阻塞范围 |
-|---|---|---|---|
-| **A1** | useConversationSender composable 生命周期 vs Vue 路由 unmount | `emotion-echo-web/app/composables/useConversationSender.ts:48-51` | E2E-2 chat 链路全链、X-1 outbox、X-2 sw8 端到端验证 |
-| A2 | assessment-svc handler/logic 无单测 | `emotion-echo-assessment-svc/internal/handler/` `internal/logic/` | E2E-3 完整覆盖 |
-| A3 | reports E2E 无 Playwright | `emotion-echo-web/e2e/` | E2E-4 端到端 |
-| A4 | chartData=[] 历史 bug 未实测复现 | `emotion-echo-web-bff/internal/handler/analytics_handler.go` | 契约 4 |
-| A5 | OAP 9.x queryDuration bug | SkyWalking OAP | X-2 完整可视化 |
-| A6 | Stage 44 §四残余（sw-oap / Nacos / 运维 SQL） | 见 stage-44 | 多个横切 |
+| 序号 | 标题 | 文件 | 阻塞范围 | Sprint 108 状态 |
+|---|---|---|---|---|
+| ~~A1~~ | useConversationSender composable 生命周期 vs Vue 路由 unmount | `emotion-echo-web/app/composables/useConversationSender.ts:48-51` | ~~E2E-2 chat 链路全链~~ | ✅ **FIXED Sprint 108**：useState 化 7 个跨实例状态 + module-scope let 1 个。详见 `docs/stages/stage-108-sender-architecture-debt-fix-2026-09-16.md` |
+| **A7** | APISIX jwt-auth 401 (新建) | `deploy/apisix/seed.sh` jwt-auth 配置 + consumer | E2E-2 chat + X-1 outbox + X-2 sw8 + X-4 鉴权 全部 | 🔴 **新发现 Sprint 108**：token 本地验算 OK + consumer 配置 OK + route 100 配置 OK，但所有 /api/v1/* 返 401。根因未确定。详见 stage-108 §四 |
+| A2 | assessment-svc handler/logic 无单测 | `emotion-echo-assessment-svc/internal/handler/` `internal/logic/` | E2E-3 完整覆盖 | 🟡 |
+| A3 | reports E2E 无 Playwright | `emotion-echo-web/e2e/` | E2E-4 端到端 | 🟡 |
+| A4 | chartData=[] 历史 bug 未实测复现 | `emotion-echo-web-bff/internal/handler/analytics_handler.go` | 契约 4 | 🔴 |
+| A5 | OAP 9.x queryDuration bug | SkyWalking OAP | X-2 完整可视化 | 🟡 |
+| A6 | Stage 44 §四残余（sw-oap / Nacos / 运维 SQL） | 见 stage-44 | 多个横切 | 🟡 |
 
 ---
 
@@ -176,14 +179,18 @@ related-plans:
 
 | Sprint | 目标 | 阻塞依赖 | 状态 |
 |---|---|---|---|
-| **Sprint 108** (下一轮) | 修 A1：sender composable 生命周期 | 无 | pending |
-| **Sprint 109** | 修完 A1 后跑端到端：E2E-2 chat 链路 + 数据契约 §1 §2 §5 §6 全绿 | A1 | pending |
-| **Sprint 110** | 写 E2E-2 Playwright spec（chat /new → 收到 AI 回复），作为回归钉子 | A1 + Sprint 109 | pending |
+| **Sprint 108** | 修 A1：sender composable 生命周期 + 新发现 A7 (APISIX jwt-auth 401) | 无 | ✅ **FIXED Sprint 108**（sender）+ A7 留待 Sprint 109a |
+| **Sprint 109a** (下一轮) | 修 A7：APISIX jwt-auth 401 诊断 + 修复（直 curl admin 看完整 plugin 配置 / APISIX 启动日志 / 对比 Stage 107 端到端绿时 plugin 状态）| 无 | pending |
+| **Sprint 109b** | 端到端 E2E-2 chat 跑通：浏览器实测看到 AI 回复（SSE 流 + chat-svc/ai-svc 日志） | A7 | pending |
+| **Sprint 109c** | 数据契约 §1 §2 §5 §6 smoke 全绿 | 109b | pending |
+| **Sprint 110** | 写 E2E-2 Playwright spec（chat /new → 收到 AI 回复），作为回归钉子 | 109b | pending |
 | **Sprint 111** | 写 E2E-3 assessment Playwright + 补 assessment-svc handler/logic 单测 | 无（独立） | pending |
 | **Sprint 112** | 写 E2E-4 reports Playwright + 复测 chartData=[] 是否真复发 | 无（独立） | pending |
-| **Sprint 113** | 跑全量 §2.4 数据契约 smoke，6/6 全绿 | Sprint 109-112 | pending |
+| **Sprint 113** | 跑全量 §2.4 数据契约 smoke，6/6 全绿 | 109c + 110-112 | pending |
 | **Sprint 114** | E2E-1 异常路径 Playwright（JWT 过期 → refresh → 跳登录） | 无 | pending |
-| **Sprint 115** | 横切端到端验证：sw8 trace UI + Kafka outbox → ai-svc → 回流 | A1 | pending |
+| **Sprint 115** | 横切端到端验证：sw8 trace UI + Kafka outbox → ai-svc → 回流 | 109b | pending |
+
+> Sprint 109 拆分为 109a (修 A7) / 109b (端到端) / 109c (数据契约)，详见 stage-108 §九。
 
 ---
 
