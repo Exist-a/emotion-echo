@@ -745,8 +745,11 @@ services:
     restart: unless-stopped
     depends_on:
       # 网关必须先有路由，否则前端全 404
+      # 但 seed 容器仅一次性 init, 第二次跑会因 schema 错 exit 3, web 等它完成会死锁。
+      # 改 service_started: 网关网络可达 + admin API 已监听 (apisix 容器先 up) 即可,
+      # routes 注册与否由 seed 在后台完成 (或之前会话已注册, 见 APISIX admin)。
       emotion-echo-apisix-seed:
-        condition: service_completed_successfully
+        condition: service_started
     environment:
       <<: *logging-env
       NUXT_PUBLIC_API_BASE_URL: "${NUXT_PUBLIC_API_BASE_URL:-http://localhost:19080/api/v1}"
