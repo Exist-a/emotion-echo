@@ -73,7 +73,7 @@ related-plans:
 | 前端单测 (stores) | ✅ | `emotion-echo-web/app/stores/conversation.test.ts` + `__tests__/message.test.ts` |
 | E2E (Playwright) | ⚫ | 仅 `login-flow.spec.ts` 1 个，**chat /new → AI 回复无 Playwright** |
 | sender 架构债 (Stage 107 A1) | ✅ FIXED Sprint 108 | useState 化 7 个跨实例状态。详见 `docs/stages/stage-108-sender-architecture-debt-fix-2026-09-16.md` §二 |
-| browser-use 实测 (端到端) | ✅ | **Sprint 109a A7 修通 + Sprint 109b curl E2E 全链路 11/11 PASS**。APISIX jwt-auth 验签 + BFF TrustAPISIX=false 路径 + chat-svc CreateConversation/SendMessage + Kafka events + ai-svc ChatCompletion + llm-service deepseek-chat + SSE 流返回 AI 回复。浏览器截图存档（login 页 + chat 页），Vue v-model 限制无法完整 UI 自动化。详见 `docs/stages/stage-109b-end-to-end-chat-2026-09-16.md` |
+| browser-use 实测 (端到端) | 🔴 | **Sprint 109a A7 修通 + Sprint 109b BFF saveAIMessage 落地**, 但**前端 AI 回复不渲染** (A8 已知问题)。curl 后端全链路 11/11 PASS, 浏览器实测 `hasAIBubble: false`。根因: SSE 流没发起 / store addMessage 不触发响应式 / v-memo 缓存命中。详见 `docs/plans/known-issues-backlog-append-sprint-109b-2026-09-16.md` Item 8 + `docs/stages/stage-109b-ui-fixes-2026-09-16.md` |
 | 数据契约 §1 (user_behavior_events 行数) | 🟡 | smoke 脚本有 (`scripts/smoke_data_layer.py`)，待 A7 修通后跑 |
 | 数据契约 §2 (event_type enum 细分) | 🟡 | 同上 |
 | 数据契约 §5 (schema 与写入端一致) | 🟡 | 同上 |
