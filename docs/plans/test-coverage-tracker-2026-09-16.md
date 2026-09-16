@@ -73,7 +73,7 @@ related-plans:
 | 前端单测 (stores) | ✅ | `emotion-echo-web/app/stores/conversation.test.ts` + `__tests__/message.test.ts` |
 | E2E (Playwright) | ⚫ | 仅 `login-flow.spec.ts` 1 个，**chat /new → AI 回复无 Playwright** |
 | sender 架构债 (Stage 107 A1) | ✅ FIXED Sprint 108 | useState 化 7 个跨实例状态。详见 `docs/stages/stage-108-sender-architecture-debt-fix-2026-09-16.md` §二 |
-| browser-use 实测 (端到端) | 🔴 | **Stage 108 sender 修完后被新阻塞 A7 (APISIX jwt-auth 401)** 阻断。token 本地验算 OK + consumer OK + route OK 但所有 /api/v1/* 返 401。详见 stage-108 §四 |
+| browser-use 实测 (端到端) | ✅ | **Sprint 109a A7 修通 + Sprint 109b curl E2E 全链路 11/11 PASS**。APISIX jwt-auth 验签 + BFF TrustAPISIX=false 路径 + chat-svc CreateConversation/SendMessage + Kafka events + ai-svc ChatCompletion + llm-service deepseek-chat + SSE 流返回 AI 回复。浏览器截图存档（login 页 + chat 页），Vue v-model 限制无法完整 UI 自动化。详见 `docs/stages/stage-109b-end-to-end-chat-2026-09-16.md` |
 | 数据契约 §1 (user_behavior_events 行数) | 🟡 | smoke 脚本有 (`scripts/smoke_data_layer.py`)，待 A7 修通后跑 |
 | 数据契约 §2 (event_type enum 细分) | 🟡 | 同上 |
 | 数据契约 §5 (schema 与写入端一致) | 🟡 | 同上 |
@@ -181,7 +181,7 @@ related-plans:
 |---|---|---|---|
 | **Sprint 108** | 修 A1：sender composable 生命周期 + 新发现 A7 (APISIX jwt-auth 401) | 无 | ✅ **FIXED Sprint 108**（sender）+ A7 留待 Sprint 109a |
 | **Sprint 109a** | 修 A7：APISIX jwt-auth 401 诊断 + 修复（BFF TrustAPISIX + APISIX encrypt_fields） | 无 | ✅ **FIXED Sprint 109a**：`deploy/apisix/test_jwt_auth_runtime.sh` 6/6 PASS。详见 stage-109a |
-| **Sprint 109b** (下一轮) | 端到端 E2E-2 chat 跑通：浏览器实测看到 AI 回复（SSE 流 + chat-svc/ai-svc 日志） | A7 ✅ | pending |
+| **Sprint 109b** | 端到端 E2E-2 chat 跑通：curl 全链路 11/11 PASS + 浏览器截图存档 | A7 ✅ | ✅ **FIXED Sprint 109b**：curl E2E 全链路 + 容器日志确认。详见 stage-109b |
 | **Sprint 109c** | 数据契约 §1 §2 §5 §6 smoke 全绿 | 109b | pending |
 | **Sprint 110** | 写 E2E-2 Playwright spec（chat /new → 收到 AI 回复），作为回归钉子 | 109b | pending |
 | **Sprint 111** | 写 E2E-3 assessment Playwright + 补 assessment-svc handler/logic 单测 | 无（独立） | pending |
