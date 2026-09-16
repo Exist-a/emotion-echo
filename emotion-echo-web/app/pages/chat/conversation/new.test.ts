@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 // chat/conversation/new.vue · handleSubmit 合同 (static-source 断言)
 //
@@ -65,6 +66,39 @@ describe('chat/conversation/new.vue · handleSubmit 合同', () => {
     expect(
       callsBlockWithFullValue,
       'handleSubmit 必须把 value 全文作为消息透传给 sender, 不能仅截前 30 字当 title'
+    ).toBe(true)
+  })
+
+  // Sprint 108: 端到端行为契约 - handleSubmit 必须触发完整发送链路
+  //
+  // Stage 107 修后浏览器实测发现: handleSubmit 调 conversationSender.createNewConversation(value),
+  // 但 fetch hook 只看到 POST /conversations, 没有后续 POST /messages 和 POST /ai/stream。
+  //
+  // 根因: createNewConversation 内部 await navigateTo() 触发 new.vue unmount →
+  //       useConversationSender composable 实例销毁 → 闭包内 callbacks / streamAbortController
+  //       / accumulatedDeltaText 全丢 → sendAIStream 拿到的是清空状态, SSE 流即使发出去也
+  //       没回调消费。
+  //
+  // 本断言钉住 handleSubmit 链路必须真的"发消息 + 等 AI 回复"行为, 不只"创建会话"。
+  // 实现策略: createNewConversation 应使用跨实例共享的状态(useState/Pinia store/singleton),
+  //          或者改用 setTimeout 替代 await navigateTo(详见 stage-107 §四 4 个备选方案)。
+  it('handleSubmit MUST result in user message POST + AI stream POST (not only conversation POST)', () => {
+    // 钉: 调用 createNewConversation 后, 必须有后续的 messageStore.sendMessage + sendAIStream 触发点
+    //   (检查 useConversationSender.ts: createNewConversation 必须内部调 sendToExistingConversation)
+    const senderSrc = readFileSync(
+      resolve(__dirname, '../../../composables/useConversationSender.ts'),
+      'utf8'
+    )
+    // 抽 createNewConversation 函数体（从定义到 const handleSubmit 前）
+    const start = senderSrc.indexOf('const createNewConversation')
+    const endIdx = senderSrc.indexOf('\n  return {', start)
+    const block = endIdx === -1 ? senderSrc.slice(start) : senderSrc.slice(start, endIdx)
+    const callsSendToExisting = /sendToExistingConversation\s*\(/.test(block)
+    expect(
+      callsSendToExisting,
+      'createNewConversation 必须内部调用 sendToExistingConversation 才能触发完整链路\n' +
+      '(POST /messages + POST /ai/stream + SSE 流). 否则 navigateTo 之后 fetch 链路被组件\n' +
+      'unmount 钩子打断 (Stage 107 浏览器实测确认, Sprint 108 架构债修复要求)'
     ).toBe(true)
   })
 })
