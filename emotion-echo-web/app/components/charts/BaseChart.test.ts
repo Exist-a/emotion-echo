@@ -24,9 +24,9 @@ describe('BaseChart.vue', () => {
     document.documentElement.classList.remove('dark')
   })
 
-  const factory = async (props: Record<string, any>) => {
+  const factory = async (props: any) => {
     const { default: BaseChart } = await import('./BaseChart.vue')
-    return mount(BaseChart, { props, attachTo: document.body })
+    return mount(BaseChart as any, { props, attachTo: document.body })
   }
 
   it('renders title as an h3 centered above the chart', async () => {

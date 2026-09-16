@@ -27,9 +27,9 @@ describe('chartsCard.vue', () => {
     vi.unstubAllGlobals()
   })
 
-  const factory = async (props: Record<string, any>) => {
+  const factory = async (props: any) => {
     const mod = await import('./chartsCard.vue')
-    return mount(mod.default, {
+    return mount(mod.default as any, {
       props,
       attachTo: document.body,
       global: {
