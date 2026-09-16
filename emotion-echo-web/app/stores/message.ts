@@ -114,10 +114,10 @@ export const useMessageStore = defineStore('message', () => {
         }
       }
 
-      currentMessages.value.push({
+      currentMessages.value = [...currentMessages.value, {
         ...message,
         status: 'sent'
-      })
+      }]
 
       const conversationStore = useConversationStore()
       const conversation = conversationStore.conversationList.find(
@@ -154,7 +154,9 @@ export const useMessageStore = defineStore('message', () => {
   }
 
   const addMessage = (message: MessageWithStatus) => {
-    currentMessages.value.push(message)
+    // Sprint 110 · A8 修复: 用 spread 赋值触发 ref 引用变化 (保险),
+    // 比 .push() 在某些 Vue 3 reactive proxy 配置下更稳定触发响应式
+    currentMessages.value = [...currentMessages.value, message]
   }
 
   const removeMessage = (messageId: string) => {
