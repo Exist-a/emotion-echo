@@ -7,7 +7,8 @@
 
 | 文件 | 用途 |
 |------|------|
-| [roadmap.md](roadmap.md) | 23 阶段总表 + 改造讨论项 + 当前激活阶段指针 |
+| [roadmap.md](roadmap.md) | 23 阶段总表 + 改造决议状态 + 当前激活阶段指针 |
+| [decisions.md](decisions.md) | 改造项决议记录（D-01~03：选项分析 + 决议 + 影响面） |
 | [discovered-unresolved.md](discovered-unresolved.md) | 已发现未解决账本（E2E-F-xx 编号） |
 | [findings/](findings/) | 建档/阶段预探查的代码级发现全景（带文件行号证据） |
 | [stages/](stages/) | 每阶段执行记录（IAB 报告/修复清单/回归 spec/截图证据） |

@@ -158,3 +158,32 @@ type: e2e-pretest-findings
 | CORS | 统一由 APISIX cors 插件处理，BFF 已移除自有中间件 | 无 |
 | MinIO | 头像上传/下载专用（`avatars` bucket，minio-init 建桶 + 匿名下载） | 仅 avatars 一个 bucket |
 | 消息重试/DLQ | 链路成型：outbox relay（MaxAttempts 100 → dead + cleanup）；consumer 重试 N 次发 `chat-events-dlq`；3 条 Prometheus 告警 | **DLQ 无自动回放工具**（规则注释里是手工 psql UPDATE） |
+
+---
+
+## 四、补充核实：user 界面图表现状
+
+> 触发：用户 2026-09-17 提到"user 界面之前有图表记录用户对话频率等等，不确定现在有没有"。核实结论：**有，共 3 个，且都由真实 API 驱动。**
+
+### 位置与构成
+
+`emotion-echo-web/app/pages/chat/user/index.vue`（275 行），图表由 `chartData` computed 生成（L190-232），渲染 pie/line/bar 三种（L21-24）：
+
+| 图表 | 类型 | 数据源 API | 字段 |
+|------|------|-----------|------|
+| 昼夜行为分布 | pie | `API_ROUTES.userBehaviorDayNight` | `periods[]` |
+| 消息频率趋势 | line | `API_ROUTES.userBehaviorFrequency` | `dates[]` / `messageCount[]` |
+| 会话深度统计 | bar | `API_ROUTES.userBehaviorDepth` | `avgSessionRounds` / `maxConsecutiveDays` / `totalConversations` / `totalMessages` / `avgMessagesPerDay` |
+
+数据加载：L174-181 `Promise.all` 并发请求三个端点。
+
+### 关键约束（对排期的影响）
+
+1. **图表是条件渲染**：每个图表都有 `?.length > 0` / 非空判断（L194/L206/L216）——**数据为空则整块不渲染，且无空态提示**（用户看到的是页面缺一块，不是"暂无数据"）。
+2. **依赖 analytics 事件链**：三个端点都来自 analytics-svc 的 user-behavior 域，其数据源头是聊天产生的行为事件（outbox → Kafka → analytics 消费入库）。这意味着 **user 页面图表能否有数据，取决于 E2E-18（消息链）与 E2E-23（数据契约）是否健康**——与报表页 `chartData=[]` 历史问题是同一类风险（见 E2E-F-10）。
+3. **无人格/测评图表**：现无任何测评结果可视化（与 user 页现有 3 个图表是不同维度）。
+
+### 与 D-02 决议的关系
+
+用户已决议"在 user 界面添加与测评相关的图表"（见 [decisions.md](../decisions.md) D-02）。落地时应在现有 `chartData` 机制上扩展（同一 computed 追加图表项），并注意上述"条件渲染 + 无空态"的既有缺陷。
+

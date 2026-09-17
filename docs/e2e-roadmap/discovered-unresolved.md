@@ -29,9 +29,11 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-11 | 预探查(建档) | 2026-09-17 | Alertmanager 无外部通知渠道，仅 Web UI 聚合 | `alertmanager.yml` 只接 dev-ui 空 receiver（注释写明 prod 演进方向） | E2E-16 | 🔴 未解决 |
 | E2E-F-12 | 预探查(建档) | 2026-09-17 | DLQ 无自动回放工具 | 告警规则注释里的回放都是手工 psql UPDATE；`InMemoryDLQPublisher` 仅测试用 | E2E-18 | 🔴 未解决 |
 | E2E-F-13 | 预探查(建档) | 2026-09-17 | gRPC 路径的 trace_id 未注入结构化日志 | `grpcinterceptor/tracing.go` 只做 SkyWalking 上报，未调 `logging.WithTraceID`（HTTP 侧 `gin_skywalking.go:17-21` 有做） | E2E-15 / E2E-20 | 🔴 未解决 |
+| E2E-F-14 | 预探查(建档) | 2026-09-17 | user 页 3 个图表（昼夜/频率/深度）数据为空时整块不渲染且无空态提示 | `chat/user/index.vue:194,206,216` 每图均有 `?.length > 0` 守卫；数据源 `/user-behavior/*` 依赖 analytics 事件链，与报表 `chartData=[]` 同类风险 | E2E-06 | 🔴 未解决 |
+| E2E-F-15 | 预探查(建档) | 2026-09-17 | 系统无管理员/角色概念，"管理员重置密码"无现成载体 | `users` 表无 role 列（唯一 `role` 在 messages 表指 user/assistant）；全仓无 admin 页面/端点 | E2E-02（影响 D-01） | 🔴 未解决 |
 
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查的 13 项为**建档快照**，实测阶段若有新发现继续追加 E2E-F-14 起
+- 建档预探查的 15 项为**建档快照**，实测阶段若有新发现继续追加 E2E-F-16 起
