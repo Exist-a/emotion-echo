@@ -303,6 +303,30 @@ label: c.title?.trim()
 
 ---
 
+## R-16 · BFF_APISIX_CIDRS 未配置 → TrustAPISIX=true 时所有 API 请求 401 (E2E-01 已修)
+
+**现象**：E2E-01 实测登录流程：`POST /auth/login` 返回200 + token，但紧接着 `GET /user/profile` 返回 401 `{"error":"unauthorized"}`。curl 直测 APISIX（带 cookie）同样 401。
+
+**根因**：`compose.dev.yml` 设 `BFF_TRUST_APISIX=true` 但**未设 `BFF_APISIXCIDRS`**。`gin_auth.go:121` 的逻辑：
+```go
+if cidrs == nil || !cidrs.isFromTrustedAPISIX(remoteAddr) { reject }
+```
+空 CIDR 列表 → `isFromTrustedAPISIX` 永远返回 false → 所有请求被拒。
+
+**隐藏原因**：此 bug 一直存在但未被发现，因为 SPA 模式下 `useCookie` 异步写入导致 `fetchUserInfo` 401（另一个 bug），两个 bug 叠加让人以为是 cookie 问题。SSR 切换后 cookie 时序修复，才暴露 CIDR 真因。
+
+**修复**（E2E-01）：`compose.dev.yml` 新增 `BFF_APISIX_CIDRS: ${BFF_APISIX_CIDRS:-172.18.0.0/16}`（Docker bridge 网络 CIDR）。
+
+**验证**：
+```bash
+curl -s http://localhost:19080/api/v1/user/profile -b "access_token=$TOKEN"
+# {"code":0,"data":{"id":"1","username":"demo",...},"message":"ok"}
+```
+
+**优先级**：✅ FIXED（commit bc61896）
+
+---
+
 ## 排查日志
 
 - 2026-09-17 08:17 - 用户反馈"项目是一坨屎"，要求每个问题单独记录
