@@ -274,6 +274,35 @@ label: c.title?.trim()
 
 ---
 
+## R-15 · 报表页面无法滚动（内容超出视口被裁切）— 待检查
+
+**状态**：⏳ 待检查（用户 2026-09-17 Sprint 112 收口后报告，标记为待验证项，**本轮未修**）
+
+**现象**：用户反馈"点击报表页面好像滑动不了"——进入日报/周报/月报/年报页后，当内容高于视口时无法向下滚动，超出部分不可见。
+
+**初步定位（已读代码，未实测确认）**：
+- `emotion-echo-web/app/layouts/nav.vue:144`：`.page-content { height: calc(100dvh - 88px); overflow: hidden; }`
+  —— 固定高度 + `overflow: hidden`，内容超出直接被**裁掉**，且没有内部滚动容器。
+- `emotion-echo-web/app/components/report/ReportScaffold.vue:116`：`.report-scaffold { display: grid; ... }`
+  —— 无任何 `overflow` / 滚动设定；子项 `.report-charts { min-height: 240px }` 等可叠加超屏。
+- 对比：对话页（`chat/conversation/*`）有独立高度链路（`.conversation-page` → `.chat-area` → 内部 `overflow-y: auto`，Stage 104/105 修复过），所以对话页不受影响。
+
+**待检查清单**（下一轮执行）：
+1. 实测确认受影响页面范围：报表 4 页 / 我的空间 / 设置 / 心理测验（预期：所有走"下载流"的 `nav` layout 页面都受影响；对话页不受影响）
+2. 确认窗口尺寸依赖性：1366×768 等小高度视口下必现，大屏可能不明显（这解释了"好像"）
+3. 修复方向 A（推荐）：`.page-content` 改 `overflow-y: auto`（把滚动交给页面层）；必须回归对话页高度链路（Stage 104/105 契约测试 `layouts/nav.test.ts` 会挡）
+4. 修复方向 B：保留 `.page-content: hidden`，在报表页/ReportScaffold 内加 `overflow-y: auto; min-height: 0` 容器（改动局部，但要逐个页面加）
+5. 写 Playwright/vitest 契约把"报表页可滚动"钉死
+
+**优先级**：🟠 medium-high（用户可感知的 UI 缺陷，影响 4 个报表页 + 3 个辅助页；不阻塞业务链路）
+
+**影响文件**（预计）：
+- `emotion-echo-web/app/layouts/nav.vue`（方向 A）
+- `emotion-echo-web/app/components/report/ReportScaffold.vue`（方向 B）
+- `emotion-echo-web/app/layouts/nav.test.ts`（契约回归）
+
+---
+
 ## 排查日志
 
 - 2026-09-17 08:17 - 用户反馈"项目是一坨屎"，要求每个问题单独记录
@@ -281,3 +310,4 @@ label: c.title?.trim()
 - 2026-09-17 09:38 - R-09 真根因锁定 (HttpOnly cookie + useCookie() 读不到 + computed ref 不取 .value)
 - 2026-09-17 09:38 - R-12 锁定 (chat-svc title 异步生成 + 前端无 fallback)
 - 2026-09-17 09:39 - 决定 R-14 流程优化 (dev 模式优先, rebuild 仅 prod 验证用)
+- 2026-09-17 Sprint 112 收口后 - 用户报告报表页"滑动不了"→ 登记 R-15（待检查，已初步定位 `.page-content overflow:hidden` + ReportScaffold 无滚动容器；下一轮实测 + TDD 修复）
