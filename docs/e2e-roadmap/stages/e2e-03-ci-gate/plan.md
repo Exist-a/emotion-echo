@@ -28,10 +28,24 @@ related-findings: []
 | `docs/ci-workflows/llm-test.yml` | `emotion-llm-service` pytest（含 Internal-API-Key 4 用例、gRPC、Nacos bootstrap） | 同上 |
 | `docs/ci-workflows/web-test.yml` | pnpm + vitest | 同上 |
 
-2. 解除阻塞：模板无法 push 的原因是 **PAT 只有 `repo` scope**，GitHub 拒绝写入 `.github/workflows/*.yml`。需（三选一）：
-   - 给 token 加 `workflow` scope 后重推
-   - 在 GitHub 网页界面手工创建
-   - 用 GitHub App 身份推送
+2. 解除阻塞：模板无法 push 的原因是 **PAT 权限不足**。GitHub 拒绝写入 `.github/workflows/*.yml` 的报错是：
+
+   ```
+   ! [remote rejected] ... (refusing to allow a Personal Access Token
+     to create or update workflow `.github/workflows/xxx.yml` without `workflow` scope)
+   ```
+
+   **需要补的权限（二选一，取决于 token 类型）**：
+
+   | Token 类型 | 需补权限 | 说明 |
+   |-----------|---------|------|
+   | **Classic PAT**（`ghp_...`） | 勾选 **`workflow`** scope | 在 Settings → Developer settings → Personal access tokens → Tokens (classic) → 编辑该 token 勾上 `workflow`。原有的 `repo` scope 保留 |
+   | **Fine-grained PAT**（`github_pat_...`） | Repository permissions → **Workflows: Read and write** | 同时确认 **Contents: Read and write**（推送代码用）、**Metadata: Read**（必选，自动勾）。在 Settings → Developer settings → Personal access tokens → Fine-grained tokens → 编辑 |
+
+   补充说明：
+   - `workflow`（或 Workflows 写权限）是 GitHub 的**独立安全门槛**，与 `repo`/Contents 权限分开授权——这就是"能推代码但推不了 workflow"的原因
+   - 若不想动 token，也可**在 GitHub 网页界面手工创建**这 3 个文件（Actions 页签 → New workflow → 粘贴内容）
+   - 修改后可用 `git push` 重试推送 `.github/workflows/` 验证是否解除
 
 3. 拿到**首条绿 run 的证据**（截图或 run URL）
 
@@ -48,7 +62,7 @@ related-findings: []
 | 条件 | 状态 |
 |------|------|
 | E2E-02 完成（避免 CI 扫到散落文件导致假红） | ⏳ |
-| 具备写 `.github/workflows/` 的 token 权限 | ⚠️ **需用户提供**（当前 PAT 缺 `workflow` scope） |
+| 具备写 `.github/workflows/` 的 token 权限 | ⚠️ **需用户操作**（见 §2 做 2 的权限对照表） |
 | `go test ./...` 本地全绿 | 需先确认基线 |
 
 ## 4. 测试点清单

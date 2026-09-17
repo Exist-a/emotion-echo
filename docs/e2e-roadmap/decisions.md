@@ -48,21 +48,39 @@ type: e2e-transformation-decisions
 - **B 已绑定字段核验** → 要接入额外 API（注册流程需补采集 phone/email）
 - **C 密保问题** → **只需改页面 + 数据库**，成本最低且体验可接受 ✅
 
+### 细化决议（用户 2026-09-17 第二轮确认）
+
+| 决策点 | 结论 |
+|--------|------|
+| 密保可否跳过 | **不可跳过**——密保是找回密码的**唯一门禁** |
+| 注册是否必设 | **必须带上**——注册时必须设定密保 |
+| 注册 UI 形态 | **弹框**（1~2 个问题 + 答案）。原因：注册卡片空间不足（`.login-card` 为固定布局且 `overflow: hidden`，现已有 3 字段），塞不进密保字段 |
+| 用户提示 | 弹框内必须提示「此密保用于找回密码」 |
+| 注册验证码步骤 | **删除**——无投递渠道，已用不到 |
+
 ### 落地要点
 
 | 层 | 改动 |
 |----|------|
-| 数据库 | `users` 表新增密保字段（`security_question` + `security_answer_hash`，答案同 password_hash 用 bcrypt），或独立 `user_security_answers` 表支持多问题。**归属 E2E-03 数据库改造** |
-| 注册流程 | 注册时增加"设定密保问题"步骤（归属 E2E-06） |
-| 找回流程 | `verify.vue` 从"输入验证码"改为"回答问题"，`modify.vue` 保留改密；BFF 的 `verification-code` 端点改为 `verify-security-answer`。**归属 E2E-04** |
-| 后端 | `user-svc` model/repository/logic 加密保字段读写 + bcrypt 校验 |
-| 测试 | 架构测试需同步更新（`username-only-copy.architecture.test.ts` 现锁死"不得出现手机号/邮箱"字样，密保问题文案需另立断言） |
+| 数据库 | `users` 表新增密保字段：`security_question` + `security_answer_hash`（答案同 password_hash 用 bcrypt）。**支持 1~2 个问题**（建议独立 `user_security_answers` 表存多问题，或 2 组列）。**归属 E2E-06** |
+| 注册流程 | **删除验证码步骤**（含 `getVerificationCode` 按钮、`code-field`、`code-hint`、`registerInfo.verificationCode`）；新增**密保设定弹框**（不可跳过，关闭即中止注册）。**归属 E2E-09** |
+| 找回流程 | `verify.vue` 从"输入验证码"改为"回答密保问题"（1~2 题全对才放行）；`modify.vue` 保留改密；BFF 的 `verification-code` 端点改为 `verify-security-answer`。**归属 E2E-07** |
+| 后端 | `user-svc` model/repository/logic 加密保字段读写 + bcrypt 校验；`register` 接口要求密保字段必填 |
+| 测试 | 架构测试需同步更新（`username-only-copy.architecture.test.ts` 锁死"不得出现手机号/邮箱"字样，密保问题文案需另立断言）；`verificationCodeCountDown` composable 若注册流程不再用，评估是否仅保留给其他流程 |
 
-### 附带效应
+### ⚠️ 必须处理的连带后果（存量用户）
 
-用户指出"数据库本身也要改了"——本项目数据库确实需要一次改造（死字段清理 + 密保字段 + 迁移治理），已单列为 **E2E-03 数据库改造** 改造阶段，排在 E2E-04 之前（D-01 依赖它的字段）。
+**删掉 `phone`/`email`（E2E-06）+ 密保不可跳过** ⇒ **存量未设密保的用户将永久失去找回密码能力**（系统又无管理员概念，见 E2E-F-15）。
 
----
+必须补以下之一：
+
+| 候选 | 说明 |
+|------|------|
+| **A. 种子/演示账号预置密保** | 至少保证 `echo` 等预置账号可演示找回流程（**E2E-07 的前置条件**） |
+| **B. 登录后补设提醒** | 检测到用户无密保 → 登录后弹框提示补设（与注册弹框复用） |
+| **C. 接受存量用户无法找回** | 若确认为演示/教学项目、无真实存量用户，明确记录该后果即可 |
+
+**默认建议 A + C**（预置账号可演示、存量无真实用户）。此项需在 E2E-06 开工前明确，已列入该阶段风险。---
 
 ## D-02 心理测验定位与人格画像（归属 E2E-10 / E2E-11）
 

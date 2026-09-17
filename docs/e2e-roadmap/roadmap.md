@@ -216,10 +216,11 @@ type: e2e-stage-roadmap
 
 | 阻塞项 | 阻塞阶段 | 需谁决定 | 现状 |
 |--------|---------|---------|------|
-| GitHub token 缺 `workflow` scope（无法推送 `.github/workflows/*.yml`） | **E2E-03** | 用户 | 🔴 未落定 |
-| `users.status` 字段去留（零读写，可能是未实现的软禁用） | **E2E-06** | 用户 / 代码考古 | ⚠️ 待确认 |
-| 密保方案下注册的验证码步骤去留 + 密保是否允许跳过 | **E2E-09** | 用户（产品决策） | ⚠️ 待确认 |
+| GitHub token 缺 `workflow` scope / Workflows 写权限（`refusing to allow a Personal Access Token to create or update workflow`） | **E2E-03** | 用户（补 token 权限，或网页手工创建） | 🔴 未落定 |
+| 存量未设密保用户的处理（删 phone/email + 密保不可跳过 ⇒ 永久失去找回能力） | **E2E-06** | 用户（选 A 预置演示账号 / B 登录后补设 / C 接受） | ⚠️ 待确认 |
 | D-04 i18n 是否立项 | 不阻塞任何阶段 | 用户 | 🟡 候选 |
+
+**已解除**：`users.status` 字段 → 删（2026-09-17）；注册验证码步骤 → 删除（2026-09-17）；密保可否跳过 → 不可跳过、注册必设（2026-09-17）。
 
 > 详细规则见 [RUNBOOK.md](RUNBOOK.md) §9。
 

@@ -19,15 +19,17 @@ related-findings: [E2E-F-01]
 
 ### 做
 
-**改造部分**（D-01=C，见 [decisions.md](../decisions.md)）：
+**改造部分**（D-01=C + 细化决议，见 [decisions.md](../../decisions.md)）：
 
 | 层 | 现状 | 改造后 |
 |----|------|--------|
-| 数据库 | 无密保字段 | 由 E2E-06 提供 `security_question` + `security_answer_hash` |
-| `verify.vue` | 输入"6 位数字验证码"（`formInfo.verificationCode`） | 输入**密保问题答案** |
+| 数据库 | 无密保字段 | 由 E2E-06 提供（支持 **1~2 个问题**） |
+| `verify.vue` | 输入"6 位数字验证码"（`formInfo.verificationCode`） | 输入**密保问题答案**（1~2 题**全对**才放行） |
 | BFF | `POST /auth/verification-code`（仅 in-memory 存码，dev 靠 `BFF_DEV_RETURN_CODE=1` 回显） | `POST /auth/verify-security-answer` |
 | user-svc | `POST /api/v1/users/reset-password` 已有 | 复用，加答案校验前置 |
 | 架构测试 | `username-only-copy.architecture.test.ts` 锁死"不得出现手机号/邮箱字样" | **需新增**密保问题文案断言（不能直接复用现有断言） |
+
+> 🔴 **密保是找回密码的唯一门禁，不可跳过**（用户 2026-09-17 决议）——**不设计任何降级/绕过路径**。因此对未设密保的存量用户，本阶段只会给出"无法找回"的明确提示；存量补设策略见 E2E-06 的连带后果节。
 
 **验证部分**：三步向导（`index.vue` 步骤条 → `verify.vue` → `modify.vue` → `success.vue`）端到端 + 路由守卫 + localStorage 步骤持久化。
 
@@ -88,8 +90,10 @@ related-findings: [E2E-F-01]
 |------|------|
 | 密保答案的安全性弱（可猜、无投递验证） | 明确记录为**已知安全权衡**（D-01 用户已接受）；加错误次数限制；答案 bcrypt 存储 |
 | `username-only-copy.architecture.test.ts` 会拦截含"邮箱"字样文案 | 新文案避免该词；新增独立断言文件而非修改原文件语义 |
-| `BFF_DEV_RETURN_CODE=1` 移除后可能影响其他流程（注册验证码） | 先确认该开关的完整影响面（注册流程 E2E-09 仍可能需要） |
-| 密保问题在旧用户上未设置 | 定义降级路径（提示"未设置密保，请联系管理员"—注意系统**无 admin 概念**，文案需另定） |
+| `BFF_DEV_RETURN_CODE=1` 移除后可能影响其他流程 | 注册验证码步骤已删除（E2E-09 决议），需确认该开关是否还有使用方；若无则一并清理 |
+| **未设密保的存量用户无法找回** | 这是 D-01 决议的**有意后果**（唯一门禁不可跳过）。本阶段只给出明确提示；存量的补设策略由 E2E-06 连带后果节决定（建议预置演示账号密保） |
+| 答案归一化规则未定（大小写/空格/全半角） | 开工前定规则（建议 trim + 忽略大小写）并写入测试点与实现 |
+| 1~2 个问题的"全对"判定标准 | 明确为"全部问题均答对"；部分正确 = 拒绝，且提示不泄露哪题错 |
 
 ## 7. 产出物
 

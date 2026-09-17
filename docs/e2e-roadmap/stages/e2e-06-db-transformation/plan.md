@@ -6,7 +6,7 @@ status: pending
 created: 2026-09-17
 depends-on: [e2e-03]
 blocks: [e2e-07, e2e-09, e2e-19]
-gate: [users-status-field-disposition]   # 见 RUNBOOK §9，未落定不得开工
+gate: [legacy-users-security-question-backfill]   # 见下方「连带后果」，开工前需明确
 related-findings: [E2E-F-09, E2E-F-19]
 ---
 
@@ -26,14 +26,29 @@ related-findings: [E2E-F-09, E2E-F-19]
 |------|--------|--------|------|
 | `email VARCHAR(128)` | ❌ 无（仅 `user-svc/internal/model/user.go:15` tag） | ❌ 无 | **删** |
 | `phone VARCHAR(20)` | ✅ 仅 API 响应回显（`getmelogic.go:67`、`getuserbyidlogic.go:42`、`user_server.go:60`、`authlogic.go:113,136`） | ❌ **无**→恒 NULL | **删**（连带清理上述 4 处回显与 proto/DTO 字段） |
-| `status SMALLINT` | ❌ 无 | ❌ 无（仅 `model/user.go:21` `default:1`） | **待确认**：若确认无软禁用规划则删 |
+| `status SMALLINT` | ❌ 无 | ❌ 无（仅 `model/user.go:21` `default:1`） | **删**（用户 2026-09-17 已确认） |
 
 > 注意：删 `phone` 会连带影响 proto/DTO 与 BFF 响应体，需一并清理（否则留下悬空字段，是新的文档-代码漂移源）。
 
 ### 做 (b)：新增密保问题字段（供 D-01=C）
 
-- 方案：`users` 表加 `security_question VARCHAR(128)` + `security_answer_hash VARCHAR(255)`，答案用与 `password_hash` 同套 bcrypt；**或**独立 `user_security_answers` 表（支持多问题，扩展性更好）
-- 需同步改：`user-svc` model / repository / logic、BFF 端点、proto 契约
+用户 2026-09-17 细化决议：**支持 1~2 个问题**，密保**不可跳过**、注册时**必须设定**（详见 [decisions.md](../../decisions.md) D-01）。
+
+- 方案：独立 `user_security_answers` 表（`user_id` + `question_order` + `question` + `answer_hash`），支持 1~2 条；或 `users` 表加 2 组列
+- 答案用与 `password_hash` 同套 bcrypt
+- 需同步改：`user-svc` model / repository / logic（register 接口要求密保必填）、BFF 端点、proto 契约
+
+### ⚠️ 连带后果：存量用户的密保补设（本阶段开工前需明确）
+
+删 `phone`/`email` + 密保不可跳过 ⇒ **存量未设密保的用户永久失去找回密码能力**（系统无管理员概念，见 E2E-F-15）。必须在以下三选项中明确其一（详见 [decisions.md](../../decisions.md) D-01「必须处理的连带后果」）：
+
+| 候选 | 说明 |
+|------|------|
+| A. 种子/演示账号预置密保 | 至少保证 `echo` 等预置账号可演示（**E2E-07 前置**） |
+| B. 登录后补设提醒 | 无密保用户登录后弹框补设（复用注册弹框） |
+| C. 接受存量用户无法找回 | 演示/教学项目、无真实存量用户时成立 |
+
+默认建议 **A + C**。
 
 ### 做 (c)：迁移治理
 

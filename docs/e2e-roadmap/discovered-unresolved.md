@@ -18,7 +18,7 @@ type: e2e-discovered-unresolved-ledger
 
 | 编号 | 来源 | 现象 | 根因 | 归属阶段 | 状态 |
 |------|------|------|------|---------|------|
-| E2E-F-01 | 预探查 | 找回密码/注册的验证码无真实投递渠道，流程仍按手机号短信时代设计 | 项目已改用户名登录；`BFF_DEV_RETURN_CODE=1` 仅 dev 回显 | E2E-07（+E2E-06 供字段） | 🟡 方案已定（D-01=C 密保问题），待实施 |
+| E2E-F-01 | 预探查 | 找回密码/注册的验证码无真实投递渠道，流程仍按手机号短信时代设计 | 项目已改用户名登录；`BFF_DEV_RETURN_CODE=1` 仅 dev 回显 | E2E-07 / E2E-09 | 🟡 方案已定：改为**密保问题**（不可跳过、注册必设、弹框 UI、删除验证码步骤），待实施 |
 | E2E-F-02 | 预探查 | 心理测验三层契约错位：提交必 400、结果弹窗"等级"恒空、列表页取数失败报错 | 前端发 `answers` 数组 vs 后端要 `map[string]int`；前端读 `level`/`suggestion` vs 后端回 `riskLevel`；前端读 `data.list` vs 后端回 `{items,total}` | E2E-13 | 🔴 未解决 |
 | E2E-F-03 | 预探查 | 现工程量表种子数据不存在，surveys 表为空 | `deploy/db/` 无 INSERT 量表的 SQL；文档声称的 `seed-surveys.sql` 在 git 全历史中不存在 | E2E-13 | 🔴 未解决 |
 | E2E-F-04 | 预探查 | "人格测试→心理预测→AI 提示词定制"链路完全不存在 | 量表是症状自评非人格量表；评分无维度/画像；BFF system prompt 写死静态字符串；proto 无画像字段；legacy 挂点 `BuildSurveyContext` 函数体 `return ""` | E2E-14 | 🟡 方案已定（D-02），待实施 |
