@@ -65,6 +65,7 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-33 | CI 评审 | **main 无分支保护** + 仓库为 **public** ⇒ `docs/ci-workflows/README.md` 声称的"任何 test 失败 → PR 不可 merge"**不成立** | GitHub API 原为 `404 Branch not protected`；`visibility: public` | E2E-03（D1）/ E2E-05（措辞校正） | 🟡 **部分解决**（2026-09-17）：已开防强推+防删除+`enforce_admins=true`（实测强推被拒 `GH006`）；**status checks 与 PR 要求待 CI 落地后再开** |
 | E2E-F-34 | CI 评审 | LLM workflow **依赖未锁版本** ⇒ 同一 commit 可绿可红 | `emotion-llm-service/requirements.txt` 全用 `>=`（`fastapi>=0.100.0`、`openai>=1.40.0`…），无锁定文件 | E2E-03（阶段 2） | 🔴 未解决 |
 | E2E-F-35 | CI 评审 | 前端版本声明缺失 ⇒ CI 版本写死漂移风险 | `package.json` **无 `engines`、无 `packageManager`**，而 CI 写死 `node-version: '20'` / `pnpm version: 9` | E2E-03（阶段 2）/ E2E-04 | 🔴 未解决 |
+| E2E-F-36 | E2E-01 实测 | 报表、用户空间等页面**无法上下滑动**（内容溢出时无滚动条） | 待查（疑似 `overflow: hidden` 或 `height: 100vh` 无 `overflow-y: auto`） | E2E-04（全局布局修复） / E2E-11（用户空间） / E2E-15（报表） | 🔴 未解决 |
 
 ## 与 R-xx 体系衔接
 
