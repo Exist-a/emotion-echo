@@ -634,8 +634,9 @@ onUnmounted(() => {
 }
 
 .voice-btn {
-  // Sprint 110 · A10 修复: 显式声明 display + 宽高, 防止父级 .composer-actions flex gap 挤压;
-  // background 加 fallback, 防止 --ee-primary-soft 未定义时回退到 --ee-primary (深绿)
+  // Sprint 111 · A10 fix-2: 补 border-radius: 50% (Sprint 110 漏了, 父 .icon-btn 的
+  // border-radius: 50% 被 .voice-btn 自身的 background 重置覆盖 → 方形按钮).
+  // background 加 fallback 防 --ee-primary-soft 未定义时回退深绿.
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -645,6 +646,7 @@ onUnmounted(() => {
   color: var(--ee-primary);
   background: var(--ee-primary-soft, rgba(95, 143, 123, 0.12));
   border-color: transparent;
+  border-radius: 50%;
 }
 .voice-btn:hover {
   color: #fff;

@@ -3,18 +3,23 @@
     <aside class="sidebar" :class="{ 'is-folded': isMenuFolded }">
       <header class="sidebar-header">
         <button
-          v-if="!$device.isMobile"
+          v-if="!$device.isMobile && !isMenuFolded"
           class="icon-btn fold-btn"
           type="button"
           :aria-label="isMenuFolded ? '展开会话列表' : '折叠会话列表'"
           @click="foldAndUnfoldMenu"
         >
-          <span class="fold-arrow" :class="{ 'is-folded': isMenuFolded }" aria-hidden="true">‹</span>
+          <svg class="fold-arrow" :class="{ 'is-folded': isMenuFolded }" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
         </button>
-        <div v-else class="icon-btn-spacer" />
+        <div v-else-if="!$device.isMobile" class="icon-btn-spacer" />
         <h3 class="sidebar-title">最近的对话</h3>
         <button class="icon-btn new-btn" type="button" aria-label="开始新的对话" @click="startNewConversation">
-          <span aria-hidden="true">+</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
         </button>
       </header>
 
@@ -59,13 +64,15 @@
     </aside>
 
     <button
-      v-if="!$device.isMobile"
+      v-if="!$device.isMobile && isMenuFolded"
       class="sidebar-expand"
       type="button"
       aria-label="展开会话列表"
       @click="foldAndUnfoldMenu"
     >
-      <span aria-hidden="true">›</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
     </button>
 
     <main class="chat-area"><NuxtPage /></main>
@@ -297,20 +304,32 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   transition: color var(--ee-transition), border-color var(--ee-transition), background var(--ee-transition);
 }
 
+.icon-btn > svg,
+.icon-btn > .fold-arrow {
+  // Sprint 111 · A12 fix-5: SVG 替代字符, 几何中心天然居中, 不需要 span 微调
+}
+
 .icon-btn:hover {
   color: var(--ee-primary);
   border-color: var(--ee-primary);
   background: var(--ee-primary-soft);
 }
 
+// Sprint 111 · A12 fix-5: 换 SVG 图标 (chevron-left/right/plus) 替代文字字符.
+// 文字字符 (+/›/‹) 的视觉重心受字体 ascent/descent 影响, 不同字体差异大,
+// 无法纯 CSS 修到完美居中. SVG path 数据几何中心就是视觉中心.
 .fold-arrow {
-  font-size: 16px;
-  line-height: 1;
   transition: transform var(--ee-transition);
 }
 
 .fold-arrow.is-folded {
   transform: rotate(180deg);
+}
+
+// Sprint 111 · A12 修复: sidebar header 内的 fold-btn / new-btn 应该是圆形.
+// 通用 .icon-btn 用 var(--ee-radius-md) (8px), 矩形带圆角. 这里 override 成圆形.
+.sidebar-header .icon-btn {
+  border-radius: 50%;
 }
 
 .sidebar-title {
@@ -469,11 +488,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   color: var(--ee-text-muted);
   background: var(--ee-surface);
   border: 1px solid var(--ee-border);
-  border-radius: var(--ee-radius-md);
+  // Sprint 111 · A12 fix-3: sidebar-expand 必须是圆形, 与 fold-btn / new-btn 视觉一致.
+  // 之前用 var(--ee-radius-md) (矩形 8px) → 用户反馈"其中一个是方的"
+  border-radius: 50%;
   cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
   transition: color var(--ee-transition), border-color var(--ee-transition);
+}
+
+.sidebar-expand > svg {
+  // Sprint 111 · A12 fix-5: SVG 替代字符, 几何中心天然居中
 }
 
 .sidebar-expand:hover {
