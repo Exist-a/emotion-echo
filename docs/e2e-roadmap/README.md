@@ -7,11 +7,31 @@
 
 | 文件 | 用途 |
 |------|------|
-| [roadmap.md](roadmap.md) | 25 阶段总表（🔧 标记改造阶段）+ 改造决议状态 + 当前激活阶段指针 |
-| [decisions.md](decisions.md) | 改造项决议记录（D-01 密保问题 / D-02 两种量表并存 / D-03 真口型同步） |
-| [discovered-unresolved.md](discovered-unresolved.md) | 已发现未解决账本（E2E-F-01~19） |
+| [roadmap.md](roadmap.md) | 30 阶段总表（🔧 标记改造阶段）+ 改造决议状态 + 依赖声明 |
+| [decisions.md](decisions.md) | 改造项决议记录（D-01 密保问题 / D-02 两种量表并存 / D-03 真口型同步 / D-04 i18n 候选） |
+| [discovered-unresolved.md](discovered-unresolved.md) | 已发现未解决账本（E2E-F-01~29，含"不列入阶段的候选"评估表） |
 | [findings/](findings/) | 建档/阶段预探查的代码级发现全景（带文件行号证据） |
-| [stages/](stages/) | 每阶段执行记录（IAB 报告/修复清单/回归 spec/截图证据） |
+| [stages/](stages/) | 每阶段详档 `plan.md` + 执行记录 `report.md` + 截图 |
+
+## 阶段详档（just-in-time）
+
+详档写在 `stages/<e2e-NN-slug>/plan.md`，**在轮到该阶段前 1 个阶段时撰写**，不提前批量写完全部 30 份。
+原因：本项目长期受"文档与代码漂移"之害（ADR-18），提前写出的详档会随前面阶段的发现失效，反而制造新失真。
+
+| 阶段 | 详档 | 状态 |
+|------|------|------|
+| E2E-01 登录会话持久化 | [plan.md](stages/e2e-01-login-session/plan.md) | ✅ 已写 |
+| E2E-02 项目目录清理 | [plan.md](stages/e2e-02-directory-cleanup/plan.md) | ✅ 已写 |
+| E2E-03 CI/CD 门槛 | [plan.md](stages/e2e-03-ci-gate/plan.md) | ✅ 已写 |
+| E2E-04 前端工程化门槛 | [plan.md](stages/e2e-04-frontend-engineering/plan.md) | ✅ 已写 |
+| E2E-05 文档与代码一致性 | [plan.md](stages/e2e-05-doc-code-consistency/plan.md) | ✅ 已写 |
+| E2E-06 数据库改造 | [plan.md](stages/e2e-06-db-transformation/plan.md) | ✅ 已写 |
+| E2E-07 找回/重置密码 | [plan.md](stages/e2e-07-password-recovery/plan.md) | ✅ 已写 |
+| E2E-08 历史会话管理 | [plan.md](stages/e2e-08-conversation-management/plan.md) | ✅ 已写 |
+| E2E-09 注册流程 | [plan.md](stages/e2e-09-registration/plan.md) | ✅ 已写 |
+| E2E-10 ~ E2E-30 | — | ⏳ 轮到前补写 |
+
+模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)。
 
 ### 已有 findings
 
@@ -23,7 +43,8 @@
 |---------|------|
 | docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md（R-xx 编号） | 本目录账本独立追踪"E2E 阶段中发现"的问题；确认为运行时 bug 且修复落地后回填 R 系 |
 | docs/plans/test-coverage-tracker-2026-09-16.md | 业务路径覆盖追踪的前身，其 Sprint 111-115 排期已被本 roadmap 吸收对齐 |
-| AGENTS.md §2.4 数据契约 | E2E-15 收口阶段目标 = 六项契约全绿 |
+| AGENTS.md §2.4 数据契约 | E2E-30 收口阶段目标 = 六项契约全绿 |
+| ADR-18（文档失真治理） | E2E-05 是它的落地接通：10 个校验脚本接入 CI |
 | docs/stages/ | 阶段收口记录最终按现有生命周期迁移到 docs/stages/ |
 
 ## 核心纪律
@@ -32,3 +53,4 @@
 2. 范围外问题只记入账本不修，防止解决顺序混乱
 3. 每阶段收口必须写 Playwright 回归钉
 4. 修复遵循 AGENTS.md TDD 全流程（Red → Green → Refactor）
+5. 详档 just-in-time 撰写，避免制造新的文档失真

@@ -2,7 +2,7 @@
 status: active
 priority: high
 created: 2026-09-17
-last-refresh: 2026-09-17 (25 阶段：新增 E2E-02 目录清理 + E2E-03 数据库改造 两个改造阶段，D-01 定为密保问题)
+last-refresh: 2026-09-17 (30 阶段：补 5 个覆盖盲区阶段——CI/CD、前端工程化、文档一致性、多实例并发、性能基线)
 type: e2e-stage-roadmap
 ---
 
@@ -10,71 +10,81 @@ type: e2e-stage-roadmap
 
 ## 当前激活阶段
 
-**E2E-01 登录会话持久化**（status: pending 待启动）
+**E2E-01 登录会话持久化**（status: pending 待启动）→ 详档 [stages/e2e-01-login-session/plan.md](stages/e2e-01-login-session/plan.md)
 
-> 🔧 = 改造阶段（不是纯测试，含代码/schema/目录变更）
+> 🔧 = 改造阶段（不是纯测试，含代码/schema/目录/配置变更）
 
-## 排期总表（由浅入深，25 阶段）
+## 排期总表（30 阶段）
 
-### 第一批：基础改造与认证
+### 第一批：基础改造与门槛
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
 | E2E-01 | 登录会话持久化 | cookie 存储/刷新恢复/过期/登出/remember-me 全周期 | 注册、找回密码 | ⏳ pending |
-| E2E-02 🔧 | **项目目录清理** | 清理无关文件/目录、补 gitignore、归档测试证据 | 不动业务代码 | ⏳ pending |
-| E2E-03 🔧 | **数据库改造** | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加迁移版本表 + 统一软删除 + 修 db README | 连接池调优 | ⏳ pending |
-| E2E-04 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ⏳ pending |
-| E2E-05 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ⏳ pending |
-| E2E-06 | 注册流程 | 注册全流程（含验证码现状评估） | — | ⏳ pending |
+| E2E-02 🔧 | 项目目录清理 | 清理无关文件/目录、补 gitignore、归档测试证据 | 不动业务代码 | ⏳ pending |
+| E2E-03 🔧 | **CI/CD 门槛** | 落地可跑的 `.github/workflows/`（现全仓零 CI，模板从未执行） | 复杂流水线/部署自动化 | ⏳ pending |
+| E2E-04 🔧 | **前端工程化门槛** | ESLint/Prettier 引入 + typecheck 96→0 + SPA 产物 smoke + Playwright mobile/firefox project + browserslist + a11y 基线 | 全量代码重构 | ⏳ pending |
+| E2E-05 🔧 | **文档与代码一致性收口** | 10 个校验脚本接入 CI + 更正 3 处实测失真 + digest 假绿修复 | 通用文档检查器 | ⏳ pending |
 
-### 第二批：聊天与周边
-
-| 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
-|------|--------|------|--------------|------|
-| E2E-07 | 聊天核心链路 | 发送/SSE 流式/错误处理/中断重试 | 多模态 | ⏳ pending |
-| E2E-08 | 我的空间 | 资料修改/头像上传（MinIO）+ **现有 3 个对话行为图表**有数据可渲染、空态可读 | 测评图表（归 E2E-11） | ⏳ pending |
-| E2E-09 | 设置页 | 字体/主题切换与持久化 | — | ⏳ pending |
-
-### 第三批：决策支持与多模态
+### 第二批：数据库与认证
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-10 | 心理测验链路修复 | 量表列表→答题→提交→结果查看 跑通（三层契约错位见 E2E-F-02）+ 补量表种子数据（E2E-F-03）+ `/question` 页区分两类量表（D-02） | 人格量表内容设计 | ⏳ pending |
-| E2E-11 🔧 | 人格量表与 AI 提示词定制 | D-02：新增人格量表（设计+种子+维度评分器）→ 结果模型扩展 → 注入 AI prompt → user 页测评图表 | — | ⏳ pending |
-| E2E-12 | 报表 Dashboard | 数据内容正确性/日期切换/历史 chartData=[] 复查 | — | ⏳ pending |
-| E2E-13 | 多模态（语音/表情/文件上传） | 语音输入/表情识别/文件上传链路 | 数字人、TTS | ⏳ pending |
-| E2E-14 🔧 | 数字人 + TTS | D-03：**做真口型同步**（接 `/tts_with_phonemes` 时间戳）+ **排查段间播放断点** | — | ⏳ pending |
+| E2E-06 🔧 | 数据库改造 | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加 schema_migrations 版本表 + 统一软删除 + 修 db README | 连接池调优 | ⏳ pending |
+| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ⏳ pending |
+| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ⏳ pending |
+| E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | ⏳ pending |
 
-### 第四批：数据与缓存
-
-| 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
-|------|--------|------|--------------|------|
-| E2E-15 | 缓存层 | 本地缓存（ai-svc LRU）行为 + Redis 是否启用/下线的决策与验证 | — | ⏳ pending |
-| E2E-16 | 数据库层验证 | 连接池/迁移幂等重放/分区裁剪/视图可读/软删除行为（**只验证不改 schema**，变更归 E2E-03） | schema 变更 | ⏳ pending |
-
-### 第五批：可观测性
+### 第三批：聊天与周边
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-17 | 日志体系 | 结构化日志 + traceId 注入（含 gRPC 侧）+ Loki 采集链路（Go 日志现未进 Loki，见 E2E-F-07） | 日志平台选型 | ⏳ pending |
-| E2E-18 | 监控告警 | Prometheus 抓取/Grafana 面板/Alertmanager 通知渠道 | — | ⏳ pending |
-| E2E-19 | 健康检查与服务发现 | /health 与 gRPC health 语义 + Nacos 注册/配置中心/热更新 | — | ⏳ pending |
+| E2E-10 | 聊天核心链路 | 发送/SSE 流式/错误处理/中断重试 | 多模态 | ⏳ pending |
+| E2E-11 | 我的空间 | 资料修改/头像上传（MinIO）+ 现有 3 个对话行为图表有数据可渲染、空态可读 | 测评图表（归 E2E-14） | ⏳ pending |
+| E2E-12 | 设置页 | 字体/主题切换与持久化 | — | ⏳ pending |
 
-### 第六批：消息与网关
-
-| 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
-|------|--------|------|--------------|------|
-| E2E-20 | 消息链路 | outbox→Kafka→consumer→DLQ 全链 + 重试/死信/回放 | — | ⏳ pending |
-| E2E-21 | 网关 APISIX | 路由注册/JWT 插件/限流/CORS | — | ⏳ pending |
-| E2E-22 | 链路追踪 SkyWalking | sw8 传播 + OAP 查询 + UI 可视化（OAP 9.x queryDuration bug） | — | ⏳ pending |
-| E2E-23 | 对象存储 MinIO | 头像上传/下载/匿名读权限 | 其他文件类型接入 | ⏳ pending |
-
-### 第七批：安全与收口
+### 第四批：决策支持与多模态
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-24 | 横切：异常与安全 | JWT 过期刷新/IDOR/限流/CORS/越权 | 渗透测试 | ⏳ pending |
-| E2E-25 | 数据契约收口 | §2.4 六项数据契约 smoke 全绿 | — | ⏳ pending |
+| E2E-13 | 心理测验链路修复 | 列表→答题→提交→结果查看 跑通（三层契约错位见 E2E-F-02）+ 补量表种子数据 + `/question` 页区分两类量表 | 人格量表内容设计 | ⏳ pending |
+| E2E-14 🔧 | 人格量表与 AI 提示词定制 | D-02：新增人格量表（设计+种子+维度评分器）→ 结果模型扩展 → 注入 AI prompt → user 页测评图表 | — | ⏳ pending |
+| E2E-15 | 报表 Dashboard | 数据内容正确性/日期切换/历史 chartData=[] 复查 | — | ⏳ pending |
+| E2E-16 | 多模态（语音/表情/文件上传） | 语音输入/表情识别/文件上传链路 | 数字人、TTS | ⏳ pending |
+| E2E-17 🔧 | 数字人 + TTS | D-03：做真口型同步（接 `/tts_with_phonemes` 时间戳）+ 排查段间播放断点 | — | ⏳ pending |
+
+### 第五批：数据与缓存
+
+| 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
+|------|--------|------|--------------|------|
+| E2E-18 | 缓存层 | 本地缓存（ai-svc LRU）行为 + Redis 是否启用/下线的决策与验证 | — | ⏳ pending |
+| E2E-19 | 数据库层验证 | 连接池/迁移幂等重放/分区裁剪/视图可读/软删除行为 + **备份→破坏→恢复演练**（只验证不改 schema） | schema 变更 | ⏳ pending |
+| E2E-20 🔧 | **多实例并发正确性** | 修 in-memory 限流/登录锁定/验证码防枚举的多实例失效 + APISIX limit-count 跨实例 + 双实例并发验证 | 分布式事务 | ⏳ pending |
+
+### 第六批：可观测性
+
+| 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
+|------|--------|------|--------------|------|
+| E2E-21 | 日志体系 | 结构化日志 + traceId 注入（含 gRPC 侧）+ Loki 采集链路（Go 日志现未进 Loki） | 日志平台选型 | ⏳ pending |
+| E2E-22 | 监控告警 | Prometheus 抓取/Grafana 面板/Alertmanager 通知渠道 | — | ⏳ pending |
+| E2E-23 | 健康检查与服务发现 | /health 与 gRPC health 语义 + Nacos 注册/配置中心/热更新 | — | ⏳ pending |
+
+### 第七批：消息与网关
+
+| 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
+|------|--------|------|--------------|------|
+| E2E-24 | 消息链路 | outbox→Kafka→consumer→DLQ 全链 + 重试/死信/回放 | — | ⏳ pending |
+| E2E-25 | 网关 APISIX | 路由注册/JWT 插件/限流/CORS | — | ⏳ pending |
+| E2E-26 | 链路追踪 SkyWalking | sw8 传播 + OAP 查询 + UI 可视化（OAP 9.x queryDuration bug） | — | ⏳ pending |
+| E2E-27 | 对象存储 MinIO | 头像上传/下载/匿名读权限 | 其他文件类型接入 | ⏳ pending |
+
+### 第八批：质量属性与收口
+
+| 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
+|------|--------|------|--------------|------|
+| E2E-28 | **性能与延迟基线** | 首次建立基线：/analyze p50/p95、SSE TTFT、TTS 单段与段间 gap + 小规模阶梯 | 全站压测 | ⏳ pending |
+| E2E-29 | 横切：异常与安全 | JWT 过期刷新/IDOR/限流/CORS/越权 + **JWT 密钥轮换机制**（BFF+APISIX 原子性） | 渗透测试 | ⏳ pending |
+| E2E-30 | 数据契约收口 | §2.4 六项数据契约 smoke 全绿 + helm template/lint 渲染回归 | — | ⏳ pending |
 
 ## 改造项决议状态
 
@@ -82,66 +92,128 @@ type: e2e-stage-roadmap
 
 | 项 | 归属阶段 | 状态 | 决议 |
 |----|---------|------|------|
-| **D-01 找回密码方式** | E2E-04（+ E2E-03 供字段） | ✅ **已决议：密保问题** | 用户 2026-09-17 判定：**A 运维脚本体验不好、B 要接额外 API、C 只需改页面 + 数据库** → 选 **C 密保问题**。注册时设定 1-2 个安全问题 + 答案哈希，找回时校验后改密。附带：数据库本就要改，顺手清理无用字段 |
-| **D-02 心理测验定位与人格画像** | E2E-10 / E2E-11 | ✅ **已决议** | **两种量表并存**：新增人格量表（产心理画像→驱动 AI 提示词）+ 保留症状量表（PHQ-9/GAD-7 风险预警）。`/question` 页区分两类测评。**user 页新增测评相关图表** |
-| **D-03 数字人口型同步与 TTS 断点** | E2E-14 | ✅ **已决议** | **做真口型同步**（接 XTTS `/tts_with_phonemes` 字符级时间戳驱动 BlendShape，激活现有死代码映射表）+ **排查段间播放间隙** |
+| **D-01 找回密码方式** | E2E-07（+E2E-06 供字段） | ✅ **密保问题** | A 运维脚本体验不好、B 要接额外 API、C 只需改页面 + 数据库 → 选 **C** |
+| **D-02 心理测验定位与人格画像** | E2E-13 / E2E-14 | ✅ **两种量表并存** | 新增人格量表（产心理画像→驱动 AI 提示词）+ 保留症状量表（风险预警）；`/question` 页区分两类；user 页新增测评图表 |
+| **D-03 数字人口型同步与 TTS 断点** | E2E-17 | ✅ **真口型同步 + 排查断点** | 接 XTTS `/tts_with_phonemes` 字符级时间戳驱动 BlendShape + 解决段间播放间隙 |
+| **D-04 多语言支持（i18n）** | 待定（候选） | 🟡 **候选未决** | 项目完全单语硬编码（无 vue-i18n、无 locales 目录，UI 文案硬编码中文）。是否做属产品决策，暂不列为 E2E 阶段 |
 
-### 改造阶段明细
+## 改造阶段明细
 
-#### E2E-02 🔧 项目目录清理
+### E2E-02 🔧 项目目录清理
 
 **范围**：清理仓库中无关文件/目录、补 .gitignore、归档测试证据。**不动业务代码。**
-
-**已核实候选**（详见 [findings §五](findings/2026-09-17-pretest-panorama.md)）：
 
 | 对象 | 现状 | 处置建议 |
 |------|------|---------|
 | `.mimosa/`（根、deploy/apisix、emotion-echo-web 三处） | hook 运行时状态，**未被 gitignore**，持续污染 `git status` | 加入 `.gitignore` |
-| `emotion-echo-web;D` | **空目录（0 字节）**，shell 误建残留，已 gitignore | 删除 |
-| `docker-images-before.txt` | 一次性快照产物（2026-09-09），已 gitignore | 删除 |
-| `gui-test-screenshots/`（根） | **25 个文件已被 git 跟踪**，测试证据散落在根目录 | 归档到 `docs/evidence/` 或 `.gitignore`（需决策） |
+| `emotion-echo-web;D` | **空目录（0 字节）**，shell 误建残留 | 删除 |
+| `docker-images-before.txt` | 一次性快照产物（2026-09-09） | 删除 |
+| `gui-test-screenshots/`（根） | **25 个文件已被 git 跟踪** | 归档到 `docs/evidence/` |
 | `tmp/` | 已 gitignore | 确认可清空 |
-| 根 `node_modules/` | 已 gitignore | 确认是否需要（根目录无 package.json 时应删） |
+| 根 `node_modules/` | 已 gitignore，根目录无 `package.json` | 确认可删 |
 
-#### E2E-03 🔧 数据库改造
+### E2E-03 🔧 CI/CD 门槛
 
-**范围**：schema 变更 + 迁移治理。**连接池调优不在本阶段。**
+**范围**：把 `docs/ci-workflows/` 的 3 份模板落地为真实可跑的 `.github/workflows/`。
+
+| 现状 | 目标 |
+|------|------|
+| `.github/` 目录**不存在**，3 份模板（go-test/llm-test/web-test）从未执行 | `.github/workflows/` 真实注册 + 首条绿 run 证据 |
+| 285 个 Go 测试、47 个前端测试全凭自觉运行 | push/PR 自动触发 |
+| AGENTS.md §2.2 合并门槛（`go test` + `go vet` + lint + smoke）**无人机械执行** | 门槛机械化 |
+
+**阻塞原因**（已记录在 `docs/ci-workflows/README.md`）：PAT 只有 `repo` scope，GitHub 拒绝 push `.github/workflows/*.yml`，需换 token 或手工在网页创建。
+
+### E2E-04 🔧 前端工程化门槛
+
+**范围**：给前端重度阶段（E2E-01/07~17）建立机械防护。
+
+| 项 | 现状 | 目标 |
+|----|------|------|
+| ESLint | ❌ 无配置、devDependencies 无 eslint | 引入 + `lint` script + 接入 CI |
+| Prettier | ❌ 无 | 引入 + 格式化基线 |
+| typecheck | ⚠️ 脚本存在但**96 处历史错误基线** | 清零，或落"仅新增文件零错"基线并写入 CI |
+| 构建产物 | ❌ 无 `nuxt build` 后 smoke（项目是 **SPA 模式** `ssr: false`） | 产物 smoke 脚本 |
+| Playwright project | ⚠️ 仅 `chromium-headless-shell` | 加 `mobile`（Pixel 5）+ `firefox`（可选） |
+| browserslist | ❌ 无支持范围声明 | 补声明 |
+| a11y | ❌ 零工具链（仅零散手工 aria-label） | `@axe-core/playwright` 对 6 主页跑基线，只修 critical/serious |
+
+### E2E-05 🔧 文档与代码一致性收口
+
+**范围**：让 ADR-18 的防线真正生效。
+
+| 项 | 现状 | 目标 |
+|----|------|------|
+| 10 个校验脚本（路由对齐/视图一致性/env 变量/迁移契约/JWT secret 一致/digest/布局/TLS…） | 全部 CI-shaped，**全部无人在跑** | 接入 E2E-03 的 CI |
+| `check_docker_digests.sh` | **假绿**：只校验 FROM 格式，而 `Dockerfile.digests.lock` 7 个 digest 是 `sha256:000...000` 占位 | 校验 digest 非占位值 |
+| 3 处实测失真 | 见下方账本 E2E-F-20~22 | 就地更正 + 登记 ADR-18 表 |
+
+### E2E-06 🔧 数据库改造
 
 **(a) 删除死字段**（已核实使用情况）：
 
 | 字段 | 现状 | 结论 |
 |------|------|------|
 | `users.email` | 仅 model tag 声明，**无任何读写** | 死字段，可删 |
-| `users.phone` | 仅在 API 响应里回显（`getmelogic.go:67`、`getuserbyidlogic.go:42`、`user_server.go:60`），**无任何写入点** → 恒为 NULL | 死字段，可删 |
-| `users.status` | 仅 model tag（`default:1`），无逻辑读写 | 待确认（可能有软禁用意图），无使用则删 |
+| `users.phone` | 仅在 API 响应里回显（4 处），**无任何写入点** → 恒为 NULL | 死字段，可删 |
+| `users.status` | 仅 model tag，无逻辑读写 | 待确认（可能有意软禁用），无使用则删 |
 
-**(b) 新增密保问题字段**（供 D-01=C）：
-- 方案：`users` 表加 `security_question VARCHAR` + `security_answer_hash VARCHAR`（答案哈希存储，与 password_hash 同套 bcrypt），或独立 `user_security_answers` 表（支持多问题）
-- 需同步：`user-svc` model / repository / logic，BFF 端点，注册与找回页面
+**(b) 新增密保问题字段**（供 D-01=C）：`security_question` + `security_answer_hash`（bcrypt），或独立 `user_security_answers` 表支持多问题
 
-**(c) 迁移治理**：加 `schema_migrations` 版本表（现靠"幂等 + 每次重放"，无法回答"某环境跑过哪些迁移"）
+**(c) 迁移治理**：加 `schema_migrations` 版本表（现靠"幂等 + 每次重放"）
 
-**(d) 软删除统一**：chat 的 `deleteconversation` 是物理删，与 users/ai 域软删除不一致
+**(d) 软删除统一**：chat 的 `deleteconversation` 是物理删，与 users/ai 域不一致
 
 **(e) 文档修正**：`deploy/db/README.md` 仍列不存在的 `03-migrate-data.sql`
 
+### E2E-20 🔧 多实例并发正确性
+
+**范围**：修 3 处多实例下静默失效的防护（项目决策 3 是"本地 Docker 单机多实例"，故必须正确）。
+
+| 缺陷 | 位置 | 多实例后果 |
+|------|------|-----------|
+| BFF 登录失败锁定 in-memory | `auth_handler.go:14,66` | 5 次错密码锁定**可被绕过**（打不同实例） |
+| 验证码 60s 防枚举 in-memory | `auth_handler.go:15` | 防枚举**失效** |
+| APISIX 限流 `policy: local` | `seed.sh:318-325` | 每节点各自计数，**总配额放大 N 倍** |
+
+**修复路径已铺好**：`shared/pkg/middleware/limiter.go:133` 的 `LimiterBackend` 抽象接口已存在，:137-140 的 `RedisLimiterBackend: TODO` 待实现；Redis 容器现成。
+
 ## 依赖声明
 
-- E2E-04 依赖 E2E-03（密保问题字段就位）与 E2E-01（会话状态）
-- E2E-11 依赖 E2E-10（人格画像是量表链路的延伸）
-- E2E-12 依赖 E2E-07（报表数据来自聊天产生的行为事件）
-- E2E-13 / E2E-14 依赖 E2E-07（多模态与数字人入口位于聊天页）
-- E2E-20 / E2E-21 / E2E-22 建议在浅层用户流程稳定后再测（浅层问题会污染深层观测，导致误判）
+- E2E-04 建议排在所有前端阶段之前（E2E-01/07~17 全是前端重度）
+- E2E-05 强依赖 E2E-03（脚本要挂进 CI 才有意义）；E2E-05 与 E2E-03 可视为同一议题的两面
+- E2E-07 依赖 E2E-06（密保问题字段就位）与 E2E-01（会话状态）
+- E2E-14 依赖 E2E-13（人格画像是量表链路的延伸）
+- E2E-15 依赖 E2E-10（报表数据来自聊天产生的行为事件）
+- E2E-16 / E2E-17 依赖 E2E-10（多模态与数字人入口位于聊天页）
+- E2E-20 依赖 E2E-18（缓存层先决定 Redis 用不用）；两者**应串行不可并行**
+- E2E-28 依赖 E2E-10（SSE 已通）、E2E-17（TTS 改造后复测）、E2E-22（Prometheus 抓取已通）
+- E2E-24 / E2E-25 / E2E-26 建议在浅层用户流程稳定后再测（浅层问题会污染深层观测）
 
-## 每阶段标准流程
+## 每阶段标准流程与详档约定
 
-见全局 skill `e2e-stage-testing`（6 步：取阶段卡 → 环境准备 → IAB 实测 → 发现分类 → TDD 修复 → 收口回归钉）。
-改造阶段（🔧）同样走 6 步，但"实测"侧重"变更前现状确认"、"修复"即改造实施。
+**流程**：见全局 skill `e2e-stage-testing`（6 步：取阶段卡 → 环境准备 → IAB 实测 → 发现分类 → TDD 修复 → 收口回归钉）。改造阶段（🔧）同走 6 步，"实测"侧重变更前现状确认。
+
+**详档约定（just-in-time）**：每个阶段的详细规划文档写在 `stages/<e2e-NN-slug>/plan.md`，**在轮到该阶段前 1 个阶段时撰写**，不提前批量写完全部 30 份。原因：本项目长期受"文档与代码漂移"之害（ADR-18），提前写出的详档会随前面阶段的发现而失效，反而制造新的失真。已写详档：
+
+| 阶段 | 详档 |
+|------|------|
+| E2E-01 登录会话持久化 | [stages/e2e-01-login-session/plan.md](stages/e2e-01-login-session/plan.md) |
+| E2E-02 项目目录清理 | [stages/e2e-02-directory-cleanup/plan.md](stages/e2e-02-directory-cleanup/plan.md) |
+| E2E-03 CI/CD 门槛 | [stages/e2e-03-ci-gate/plan.md](stages/e2e-03-ci-gate/plan.md) |
+| E2E-04 前端工程化门槛 | [stages/e2e-04-frontend-engineering/plan.md](stages/e2e-04-frontend-engineering/plan.md) |
+| E2E-05 文档与代码一致性 | [stages/e2e-05-doc-code-consistency/plan.md](stages/e2e-05-doc-code-consistency/plan.md) |
+| E2E-06 数据库改造 | [stages/e2e-06-db-transformation/plan.md](stages/e2e-06-db-transformation/plan.md) |
+| E2E-07 找回/重置密码 | [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md) |
+| E2E-08 历史会话管理 | [stages/e2e-08-conversation-management/plan.md](stages/e2e-08-conversation-management/plan.md) |
+| E2E-09 注册流程 | [stages/e2e-09-registration/plan.md](stages/e2e-09-registration/plan.md) |
+
+模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)。批次三及以后在轮到前补写。
 
 ## 历史与背景
 
 - 前身：`docs/plans/test-coverage-tracker-2026-09-16.md`（业务路径覆盖追踪，Sprint 109-115）
-- 建档预探查：2026-09-17 对三大块（人格测试/AI 提示词链路、数字人、横切模块）做了代码级探察，发现 18 项问题已登记 `discovered-unresolved.md`，详见 [findings/2026-09-17-pretest-panorama.md](findings/2026-09-17-pretest-panorama.md)
-- 改造决议：2026-09-17 与用户对齐 D-01（密保问题）、D-02（两种量表并存 + user 页测评图表）、D-03（真口型同步 + 排查断点），详见 [decisions.md](decisions.md)
-- 改造阶段：2026-09-17 用户新增两项改造并指定排到前面——E2E-02 项目目录清理、E2E-03 数据库改造（含删无用字段）
-- 排期依据：用户指定前三顺序（登录 cookie → 密码找回 → 历史会话），并追加缓存层/数据库/日志等横切切分要求
+- 建档预探查：2026-09-17 三大块代码级探察（人格测试/AI 提示词、数字人、横切模块），发现 19 项登记 `discovered-unresolved.md`
+- 覆盖盲区排查：2026-09-17 对 12 个候选面向做覆盖性排查，发现 5 处缺口并补为阶段（CI/CD、前端工程化、文档一致性、多实例并发、性能基线）；其中 CI/CD 与文档一致性属于"治理基础设施"，是其余阶段的防退化机制
+- 改造决议：D-01 密保问题 / D-02 两种量表并存 / D-03 真口型同步，详见 [decisions.md](decisions.md)
+- 排期依据：用户指定前三顺序（登录 cookie → 密码找回 → 历史会话），改造项排到前面，并追加缓存层/数据库/日志等横切切分要求
