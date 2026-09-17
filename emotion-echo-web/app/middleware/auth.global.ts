@@ -76,9 +76,24 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   // 2. 未登录用户访问非白名单页面，重定向到登录页
+  // Sprint 112 Bug A：dev mode 下 SPA 内导航时 cookie 已恢复但 userInfo 异步 fetchUserInfo
+  // 未完成，userInfo.value?.id 为 falsy，isAuthenticated 为 false → 被踢回 /login。
+  // 修复：判定为未登录前，先 await fetchUserInfo 恢复 userInfo；若恢复后仍为 falsy 才退出。
   if (!isInWhiteList && !isAuthenticated) {
     console.log("[Auth Middleware] 未登录用户访问受保护页面:", to.path);
-    
+
+    if (import.meta.client && userStore.accessToken) {
+      // 主动恢复一次，重新判定
+      try {
+        await userStore.fetchUserInfo();
+      } catch {
+        // 静默：恢复失败就走原本的踢回 /login 逻辑
+      }
+      if (userStore.isAuthenticated) {
+        return; // 恢复成功，放行
+      }
+    }
+
     return navigateTo("/login", {
       replace: true,
     });
