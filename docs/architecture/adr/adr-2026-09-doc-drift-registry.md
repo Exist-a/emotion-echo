@@ -278,3 +278,52 @@ Stage 38 §四隐患 5 提到的"ADR-20"即本决策（当时编号为随手估�
   7 模块 `go test -count=1` + `go vet`、`pytest emotion-llm-service/tests/unit`（105 passed）、
   `docker ps`、`docker logs emotion-llm-service`、
   对 `/api/v1/{uploads/:kind, multimodal/analyze, tts/synthesize}` 的逐条 curl 探测
+
+---
+
+## 八、E2E-05 修订：引入 CI 校验（2026-09-18）
+
+### 8.1 背景
+
+E2E-05 阶段发现 §五 "不引入文档 lint / CI 校验" 的决策已不适用：
+
+1. **11 个校验脚本已全部就位**，但无人在运行（CI 不存在）
+2. **check_docker_digests.sh 存在假绿** — 7 个 sha256:000...000 占位值静默通过
+3. **lint_env_vars.sh 检出 8 个未文档化变量** — 长期 drift 积累
+
+### 8.2 修订内容
+
+**推翻 §五 第一条**："不引入文档 lint / CI 校验" → **引入 `.github/workflows/doc-drift-check.yml`**
+
+| 校验脚本 | 校验对象 | 基线结果（2026-09-18） |
+|---|---|---|
+| check_routes_alignment.sh | 前端路径 ⊆ BFF | ✅ PASS |
+| check_view_consistency.py | 视图定义跨文件一致 | ✅ PASS |
+| lint_env_vars.sh | apps.yml 变量 ⊆ .env.local.example | ❌ FAIL (8 个未文档化) |
+| yaml_lint.py | 禁止 ${VAR:-literal} 字面默认值 | ✅ PASS |
+| check_git_layout.py | 仓库布局 7 项断言 | ✅ PASS |
+| check_docker_digests.sh | FROM 行 digest pin + 非占位值 | ❌ FAIL (6 个占位 digest) |
+| test_docs_update.sh | configuration.md + QUICKSTART.md 内容 | ✅ PASS |
+| test_bff_jwt_secret.sh | BFF 与 APISIX JWT secret 一致 | ✅ PASS |
+| test_user_oauth_zero_ref.sh | oauth 零引用 | ✅ PASS |
+| test_migrations_contract.sh | migration 文件结构契约 | ⚠️ WARN (事务包装缺失) |
+| test_migrations_no_service_order.sh | 跨服务 schema 引用 | ⚠️ WARN (analytics 视图跨 schema) |
+
+### 8.3 失真登记方式变更
+
+**旧方式**：人工发现 → 手动登记到本文件 §二
+**新方式**：CI 脚本 fail → 强制登记到本文件 §二 + 修复后才能合并
+
+### 8.4 本次更正的失真
+
+| # | 出处 | 文档写的 | 实测事实 | 处置 |
+|---|------|---------|---------|------|
+| 1 | `stage-21-k8s-strategy.md:27` | Secret 泄露 · deploy/tls/*.key 提交进 git | .gitignore 已忽略 *.key/*.crt，git ls-files 为空 | ✅ 已更正 |
+| 2 | `deploy/env/.env.common` | APISIX_VERSION=3.9.0-debian | 实际 3.18.0-debian | ✅ 已更正 |
+| 3 | `deploy/env/.env.common` | GIN_BACKEND_HOST=host.docker.internal | Gin 已迁入 legacy/，compose 不引用 | ✅ 已注释 |
+
+### 8.5 调研依据
+
+- **跑过的脚本**：11 个校验脚本全部本地运行（基线盘点）
+- **读过的代码**：`scripts/check_docker_digests.sh`、`Dockerfile.digests.lock`、`deploy/env/.env.common`
+- **查过的文档**：`docs/e2e-roadmap/stages/e2e-05-doc-code-consistency/plan.md`
