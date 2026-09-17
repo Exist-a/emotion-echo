@@ -187,3 +187,38 @@ type: e2e-pretest-findings
 
 用户已决议"在 user 界面添加与测评相关的图表"（见 [decisions.md](../decisions.md) D-02）。落地时应在现有 `chartData` 机制上扩展（同一 computed 追加图表项），并注意上述"条件渲染 + 无空态"的既有缺陷。
 
+---
+
+## 五、补充核实：目录与数据库字段清理候选
+
+> 触发：用户 2026-09-17 要求把"项目目录多余文件清理"与"数据库无用字段删除"加入排期。以下为核实后的具体候选，供 E2E-02 / E2E-03 阶段卡执行。
+
+### 5.1 目录清理候选（E2E-02）
+
+| 对象 | 现状 | git 跟踪 | 处置建议 |
+|------|------|---------|---------|
+| `.mimosa/`（根、`deploy/apisix/`、`emotion-echo-web/` 三处） | hook 运行时状态（history/hook-state/hook-status/reports/finding-ledger） | **未被 gitignore** → 持续出现在 `git status` 的 `??` 列表 | 加入 `.gitignore` |
+| `emotion-echo-web;D` | **空目录（0 字节）**，shell 误建残留（`mkdir emotion-echo-web;D` 未转义分号） | 已 gitignore | 删除 |
+| `docker-images-before.txt` | 一次性镜像快照产物（2026-09-09） | 已 gitignore | 删除 |
+| `gui-test-screenshots/` | 测试证据，**25 个文件已被 git 跟踪** | **已跟踪** | 归档到 `docs/evidence/`（项目已有该目录）或移出跟踪 |
+| `tmp/` | 临时目录 | 已 gitignore | 确认可清空 |
+| 根 `node_modules/` | 根目录无 `package.json`（前端目录才有） | 已 gitignore | 确认是否需要 |
+| `.zcode/plans/` | 会话计划 md（`plan-sess_*.md`） | 已 gitignore | 保留（工具产物） |
+
+### 5.2 数据库死字段候选（E2E-03）
+
+核实方法：对 `emotion_echo_user.users` 的每列，grep 全部非测试 Go 代码的读写点。
+
+| 字段 | 读取点 | 写入点 | 结论 |
+|------|--------|--------|------|
+| `email VARCHAR(128)` | ❌ 无（仅 `model/user.go:15` tag 声明） | ❌ 无 | **死字段**，可删 |
+| `phone VARCHAR(20)` | ✅ 仅 API 响应回显（`getmelogic.go:67`、`getuserbyidlogic.go:42`、`user_server.go:60`、`authlogic.go:113,136`） | ❌ **无任何写入点** → 恒为 NULL | **死字段**，可删 |
+| `status SMALLINT` | ❌ 无（grep 命中的都是 gRPC `status` 包） | ❌ 无（仅 `model/user.go:21` `default:1`） | 无使用则删（可能有软禁用意图，需确认） |
+| `gender` | ✅ `updateprofilelogic.go:54` 校验 | ✅ `UpdateProfile` | 保留（在用） |
+| `birthday` | ✅ `UpdateProfile` | ✅ `UpdateProfile` | 保留（在用） |
+| `nickname` | ✅ `updateprofilelogic.go:49` 校验 | ✅ `UpdateProfile` | 保留（在用） |
+| `avatar_url` | ✅ | ✅ `user_repository.go:211` | 保留（在用） |
+
+**附带事实**：系统**无管理员/角色概念**——`users` 表无 `role` 列（全仓唯一的 `role` 是 messages 表的 user/assistant），也无 admin 页面或端点。故"管理员重置密码"类方案在本项目无现成载体。
+
+
