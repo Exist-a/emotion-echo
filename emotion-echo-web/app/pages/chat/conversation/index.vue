@@ -146,8 +146,14 @@ interface ConversationItem {
 
 const conversationItems = computed<ConversationItem[]>(() =>
   conversationStore.conversationList.map((c) => ({
+    // Sprint 111 · A11 修复: 后端 /conversations 返回的 title 经常为空
+    // (chat-svc 在 SSE 完后异步生成, 有时还没回写), lastMessage 也可能是 null.
+    // 之前直接显示 c.title → 21 个会话都是空标题 → sidebar 看不到内容.
+    // 修法: title 优先 → 截断 lastMessage → fallback "对话 #{id}".
     key: c.id,
-    label: c.title,
+    label: c.title?.trim()
+      || (c.lastMessage ? String(c.lastMessage).slice(0, 30) : '')
+      || `对话 #${c.id}`,
     timestamp: new Date(c.updatedAt).getTime(),
     group: getTimeGroup(c.updatedAt, c.isTop),
     isTop: c.isTop
