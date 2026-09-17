@@ -64,14 +64,60 @@ for f in "${dockerfiles[@]}"; do
     done < "$f"
 done
 
+# 检查占位值（全零 digest）
+placeholder=0
+placeholder_files=()
+
+# 从 Dockerfile.digests.lock 读取占位值
+lock_file="Dockerfile.digests.lock"
+if [ -f "$lock_file" ]; then
+    while IFS= read -r line; do
+        # 跳过空行和注释
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        # 检查 sha256:000...000 占位值
+        if [[ "$line" =~ sha256:0{10,} ]]; then
+            placeholder=$((placeholder + 1))
+            placeholder_files+=("$line")
+        fi
+    done < "$lock_file"
+fi
+
+# 也检查 Dockerfile 中的占位值
+for f in "${dockerfiles[@]}"; do
+    while IFS= read -r line; do
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        if [[ "$line" =~ ^[[:space:]]*FROM[[:space:]] ]]; then
+            if [[ "$line" =~ sha256:0{10,} ]]; then
+                placeholder=$((placeholder + 1))
+                placeholder_files+=("$f: $line")
+            fi
+        fi
+    done < "$f"
+done
+
 echo "Dockerfile digest pin check:"
 echo "  total FROM: $total"
 echo "  unpinned:   $unpinned"
+echo "  placeholder: $placeholder"
+
 if [ "$unpinned" -gt 0 ]; then
     echo ""
     echo "FAIL: 以下 FROM 行未 digest pinned（必须改成 image@sha256:...）："
     printf '  %s\n' "${unpinned_files[@]}"
     exit 1
 fi
+
+if [ "$placeholder" -gt 0 ]; then
+    echo ""
+    echo "WARN: 发现 $placeholder 个占位 digest（sha256:000...000）："
+    printf '  %s\n' "${placeholder_files[@]}"
+    echo ""
+    echo "KNOWN GAP: 这些 digest 需要通过以下命令回填真值："
+    echo "  bash scripts/sync_docker_digests.sh"
+    echo ""
+    echo "FAIL: 占位 digest 等同于未 pin（形式通过、实质为空）"
+    exit 1
+fi
+
 echo ""
-echo "OK: all $total FROM lines are digest pinned"
+echo "OK: all $total FROM lines are digest pinned (no placeholders)"
