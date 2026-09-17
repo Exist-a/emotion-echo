@@ -86,9 +86,12 @@ test.describe('chat flow · A8 SSE 流端到端', () => {
   })
 
   test('happy-path-2: AI 回复气泡包含非空文字内容', async ({ page }) => {
-    // 1) 登录
+    // 1) 登录（SSR hydration: 等 networkidle + enabled）
     await page.goto('/login')
+    await page.waitForLoadState('networkidle')
     const quickBtn = page.getByRole('button', { name: /用演示账号快速体验/ })
+    await expect(quickBtn).toBeEnabled({ timeout: 10_000 })
+    await page.waitForTimeout(500)
     await quickBtn.click()
     await page.waitForURL(/\/chat\/conversation\/(new|\d+)/, { timeout: 15_000 })
     await page.waitForLoadState('domcontentloaded')
