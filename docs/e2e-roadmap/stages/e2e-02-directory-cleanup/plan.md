@@ -6,6 +6,7 @@ status: pending
 created: 2026-09-17
 depends-on: []
 blocks: [e2e-03, e2e-05]
+gate: []
 related-findings: [E2E-F-16, E2E-F-17, E2E-F-18]
 ---
 
@@ -46,14 +47,16 @@ related-findings: [E2E-F-16, E2E-F-17, E2E-F-18]
 
 本阶段是改造，验证点是"变更后仓库仍健全"。
 
-| # | 测试点 | 验证方式 | 证据 | 结果 |
-|---|--------|---------|------|------|
-| 1 | 清理前基线记录 | `git status --short` 输出存档 | 输出文本 | ⬜ |
-| 2 | `.mimosa/` 不再出现在 `git status` | 清理后重跑 `git status --short`，断言无 `.mimosa` | 输出对比 | ⬜ |
-| 3 | 空目录与一次性产物已删 | `ls` 断言不存在 | 输出 | ⬜ |
-| 4 | `gui-test-screenshots/` 迁移后无引用断裂 | grep 全仓引用，断言无悬空路径 | grep 输出 | ⬜ |
-| 5 | 清理后测试仍全绿 | `go test ./...` + `pnpm test` + `pnpm playwright test` | 退出码 | ⬜ |
-| 6 | 清理后 dev 环境仍可启动 | compose up 后 6 服务 healthy | `docker ps` | ⬜ |
+判定标记：`[A]` 自动可判 · `[V]` 视觉判定 · `[M]` 需人工裁定（详见 [RUNBOOK.md](../../RUNBOOK.md) §4）。
+
+| # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
+|---|--------|------|---------|------|------|
+| 1 | 清理前基线记录 | [A] | `git status --short` 输出存档 | 输出文本 | ⬜ |
+| 2 | `.mimosa/` 不再出现在 `git status` | [A] | 清理后重跑 `git status --short`，断言无 `.mimosa` | 输出对比 | ⬜ |
+| 3 | 空目录与一次性产物已删 | [A] | `ls` 断言不存在 | 输出 | ⬜ |
+| 4 | `gui-test-screenshots/` 迁移后无引用断裂 | [A] | grep 全仓引用，断言无悬空路径 | grep 输出 | ⬜ |
+| 5 | 清理后测试仍全绿 | [A] | `go test ./...` + `pnpm test` + `pnpm playwright test` | 退出码 | ⬜ |
+| 6 | 清理后 dev 环境仍可启动 | [A] | compose up 后 6 服务 healthy | `docker ps` | ⬜ |
 
 ## 5. 验收标准（DoD）
 

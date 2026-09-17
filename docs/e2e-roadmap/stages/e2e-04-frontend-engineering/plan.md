@@ -6,6 +6,7 @@ status: pending
 created: 2026-09-17
 depends-on: [e2e-03]
 blocks: [e2e-07, e2e-09, e2e-10, e2e-11, e2e-12, e2e-13, e2e-14, e2e-15, e2e-16, e2e-17]
+gate: []
 related-findings: [E2E-F-14, E2E-F-20]
 ---
 
@@ -46,17 +47,19 @@ related-findings: [E2E-F-14, E2E-F-20]
 
 ## 4. 测试点清单
 
-| # | 测试点 | 验证方式 | 证据 | 结果 |
-|---|--------|---------|------|------|
-| 1 | typecheck 错误清单盘点 | 跑 `pnpm typecheck`，分类 96 处（真 bug / 类型缺失 / 第三方） | 错误清单 | ⬜ |
-| 2 | typecheck 归零（或落"新增零错"基线） | `pnpm typecheck` 退出码 0 | 输出 | ⬜ |
-| 3 | ESLint 可跑且无 error（warning 可留） | `pnpm lint` 退出码 0 | 输出 | ⬜ |
-| 4 | lint/typecheck 已接入 CI 并生效 | 故意提交违规 → CI 红 → revert | 红 run 证据 | ⬜ |
-| 5 | 构建产物 smoke 通过 | `pnpm build` + 产物断言脚本 | 输出 + 产物清单 | ⬜ |
-| 6 | mobile project 可跑 | `pnpm playwright test --project=mobile` 现有 spec 至少在移动端 viewport 不炸 | 截图 | ⬜ |
-| 7 | a11y 基线跑出结果 | axe 对 6 主页跑，记录 critical/serious 清单 | 报告 | ⬜ |
-| 8 | critical/serious 已修或记账本 | 修复项走 TDD；范围外记 `discovered-unresolved.md` | 清单 | ⬜ |
-| 9 | 现有测试无回归 | `pnpm test` + 现有 Playwright spec 全绿 | 输出 | ⬜ |
+判定标记：`[A]` 自动可判 · `[V]` 视觉判定 · `[M]` 需人工裁定（详见 [RUNBOOK.md](../../RUNBOOK.md) §4）。
+
+| # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
+|---|--------|------|---------|------|------|
+| 1 | typecheck 错误清单盘点 | [A] | 跑 `pnpm typecheck`，分类 96 处（真 bug / 类型缺失 / 第三方） | 错误清单 | ⬜ |
+| 2 | typecheck 归零（或落"新增零错"基线） | [A] | `pnpm typecheck` 退出码 0 | 输出 | ⬜ |
+| 3 | ESLint 可跑且无 error（warning 可留） | [A] | `pnpm lint` 退出码 0 | 输出 | ⬜ |
+| 4 | lint/typecheck 已接入 CI 并生效 | [A] | 故意提交违规 → CI 红 → revert | 红 run 证据 | ⬜ |
+| 5 | 构建产物 smoke 通过 | [A] | `pnpm build` + 产物断言脚本 | 输出 + 产物清单 | ⬜ |
+| 6 | mobile project 可跑 | [A]+[V] | `pnpm playwright test --project=mobile` 现有 spec 至少在移动端 viewport 不炸 | 截图 | ⬜ |
+| 7 | a11y 基线跑出结果 | [A] | axe 对 6 主页跑，记录 critical/serious 清单 | 报告 | ⬜ |
+| 8 | critical/serious 已修或记账本 | [A] | 修复项走 TDD；范围外记 `discovered-unresolved.md` | 清单 | ⬜ |
+| 9 | 现有测试无回归 | [A] | `pnpm test` + 现有 Playwright spec 全绿 | 输出 | ⬜ |
 
 ## 5. 验收标准（DoD）
 
