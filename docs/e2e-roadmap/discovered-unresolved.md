@@ -66,6 +66,8 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-34 | CI 评审 | LLM workflow **依赖未锁版本** ⇒ 同一 commit 可绿可红 | `emotion-llm-service/requirements.txt` 全用 `>=`（`fastapi>=0.100.0`、`openai>=1.40.0`…），无锁定文件 | E2E-03（阶段 2） | 🔴 未解决 |
 | E2E-F-35 | CI 评审 | 前端版本声明缺失 ⇒ CI 版本写死漂移风险 | `package.json` **无 `engines`、无 `packageManager`**，而 CI 写死 `node-version: '20'` / `pnpm version: 9` | E2E-03（阶段 2）/ E2E-04 | 🔴 未解决 |
 | E2E-F-36 | E2E-01 实测 | 报表、用户空间等页面**无法上下滑动**（内容溢出时无滚动条） | 待查（疑似 `overflow: hidden` 或 `height: 100vh` 无 `overflow-y: auto`） | E2E-04（全局布局修复） / E2E-11（用户空间） / E2E-15（报表） | 🔴 未解决 |
+| E2E-F-37 | E2E-01 实测 | SSR 模式下 **3 个 Playwright spec 因 hydration 时序失败**（dashboard-flow 2 + chat-flow happy-path-2 + login-flow 1） | SSR 渲染的按钮 `visible` 但 Vue click handler 未挂载；需 `waitForLoadState('networkidle')` + `toBeEnabled()` 等 hydration 完成 | E2E-04（Playwright 基础设施规范化） | 🟡 部分修复（login-flow + dashboard-flow 已修，chat-flow happy-path-2 未修） |
+| E2E-F-38 | E2E-01 实测 | IAB（内置浏览器）**无法通过 `document.cookie` 设置 cookie** | IAB 的 cookie jar 独立于 `document.cookie` API；`Set-Cookie` 响应头可写入但 JS 侧读写受限 | 不归属阶段（IAB 工具限制，非产品 bug） | 🟡 已知限制（E2E 测试改用 Playwright cookie API 绕过） |
 
 ## 与 R-xx 体系衔接
 
