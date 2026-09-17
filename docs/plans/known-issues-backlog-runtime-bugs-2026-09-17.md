@@ -172,3 +172,112 @@ curl -s 'http://localhost:8848/nacos/v1/ns/instance/list?serviceName=emotion-ech
 
 **优先级**：✅ FIXED
 
+
+---
+
+## R-11 · R-09 真根因 — useAIStreamHandler Authorization 头为空 (Sprint 111 已修)
+
+**现象**：Sprint 110 web 镜像 rebuild 后浏览器实测：POST /api/v1/ai/stream 触发，APISIX 返回 401 "JWT token invalid"，前端 fetch 拦截器抓到 headers 是 `{"Authorization":""}` 空字符串。BFF 日志 0 条 ai-stream 调用（BFF 未收到请求）。
+
+**真根因**：chat-svc 等业务 Set-Cookie 是 HttpOnly，浏览器 JS 读不到 document.cookie → useCookie('access_token').value 永远空。useAIStreamHandler.ts:95 直接用 `useCookie('access_token').value || ''` 拼 Authorization，永远空。但 useApi.ts:116-128 已经用 fallback 链路 `userStore.getAccessToken → cookie`，能拿到。
+
+**更深入的坑**：`user.ts:30` `const getAccessToken = computed(() => accessToken.value)` — **computed 是 ref 对象，不是字符串**！直接用 `store.getAccessToken` 拿到的是 ref，必须 `.value`。R-09 第一次修复 (PR 用 store.getAccessToken) 还是空字符串因为这个。
+
+**修复**（Sprint 111）：
+
+新建 `app/lib/clientAccessToken.ts`:
+```ts
+export function getClientAccessToken(): string {
+  if (!import.meta.client) return useCookie('access_token').value || ''
+  try {
+    const userStore = useUserStore()
+    // 注意: getAccessToken 是 computed ref 对象, 必须 .value
+    const raw = userStore?.getAccessToken
+    const storeToken = typeof raw === 'string' ? raw : (raw as any)?.value || ''
+    if (storeToken) return storeToken
+  } catch {}
+  return useCookie('access_token').value || ''
+}
+```
+
+`useAIStreamHandler.ts` / `useAIStream.ts` / `useTTSPlayer.ts` 全部改用 helper。
+
+**验证**（dev mode 2026-09-17 09:38）：
+- 浏览器 fetch 拦截器: `Authorization: Bearer eyJhbG...`
+- APISIX 200 OK
+- BFF /chat-svc / ai-svc 全链路通
+- AI 回复气泡显示正常（"嗯，我能理解你的心情..."）
+
+**优先级**：✅ FIXED
+
+---
+
+## R-12 · A11 sidebar 会话标题为空 bug (Sprint 111 已修)
+
+**现象**：浏览器实测 sidebar 21 个会话全部显示空标题，aria-label "对「」更多操作"（「」里是空）。用户找不到历史对话。
+
+**真根因**：后端 chat-svc /conversations 接口返回的 conversation title 经常为空（chat-svc 在 SSE 流完后异步用 AI 生成 title，写库前 list API 读不到）+ lastMessage 也可能是 null。前端 `pages/chat/conversation/index.vue:150` `label: c.title` 直接用，没 fallback。
+
+**curl 验证**：
+```bash
+curl http://localhost:19080/api/v1/conversations?limit=3
+# {"id":"125", "title":"", "lastMessage":null, ...}
+```
+
+**修复**（Sprint 111）：3 级 fallback chain：
+```ts
+label: c.title?.trim()
+  || (c.lastMessage ? String(c.lastMessage).slice(0, 30) : '')
+  || `对话 #${c.id}`,
+```
+
+**验证**：浏览器实测 21 个会话全部显示 "对话 #125" 等可识别标签，新建会话有 AI 回复时显示 lastMessage 前 30 字作为 label。
+
+**优先级**：✅ FIXED
+
+---
+
+## R-13 · chat-svc title 异步生成时机问题 (后端，建议 Sprint 112)
+
+**现象**：R-12 修复前端 fallback 后能显示 "对话 #125"，但用户期望的 "今天聊了xxx" / 自动 AI 摘要 仍然不可见。Sprint 109b 提到 chat-svc 在 SSE 完后调 AI 生成 title，但 list API 读不到。
+
+**根因候选**：
+- chat-svc generateTitle 异步任务排队但 list API 没等它
+- 或 title 生成了但写库后没 invalidate cache
+- 或 title 生成失败 fallback 一直是空
+
+**修复路径（待定）**：
+- 排查 chat-svc generateTitle 流程
+- 列出当前已生成 vs 未生成的会话比例
+- 决定是改 list API 还是前端 polling
+
+**影响**：用户体验 — 新建会话要等几秒才有 AI 摘要标题；前端 fallback 是 workaround 不是根本修复。
+
+**优先级**：🟢 low（R-12 已用 fallback 缓解，建议 Sprint 112 排期后端修复）
+
+---
+
+## R-14 · 重建 web 镜像 → 容器跑生产模式源码不生效 (dev 体验)
+
+**现象**：每次改 web 前端代码后必须 `docker build --no-cache emotion-echo-web` (~1 min) + `docker compose up -d` 才生效。APISIX 还有 503 等不稳定因素叠加，单次修复常常要 rebuild 多次。
+
+**根因**：`emotion-echo-web/Dockerfile` 跑的是 `node .output/server/index.mjs` 生产 build，源码改动需重新 build 镜像。
+
+**修复路径**：
+- Sprint 111 起约定: dev 模式验证用 `pnpm dev` 本地启动 (3000 端口), 修改实时生效 (HMR)
+- prod 验证才 rebuild 镜像
+- 详见 docs/AGENTS.md §2.5
+
+**影响**：开发体验 — 用户多次提醒"先本地启动再 build"。
+
+**优先级**：🟡 medium（流程优化，非阻塞）
+
+---
+
+## 排查日志
+
+- 2026-09-17 08:17 - 用户反馈"项目是一坨屎"，要求每个问题单独记录
+- R-01 / R-02 排查路径：APISIX 503 → admin routes 查 → upstream 6 discovery_type nacos → nacos instance list hosts=[] → BFF 未注册
+- 2026-09-17 09:38 - R-09 真根因锁定 (HttpOnly cookie + useCookie() 读不到 + computed ref 不取 .value)
+- 2026-09-17 09:38 - R-12 锁定 (chat-svc title 异步生成 + 前端无 fallback)
+- 2026-09-17 09:39 - 决定 R-14 流程优化 (dev 模式优先, rebuild 仅 prod 验证用)
