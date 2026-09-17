@@ -106,7 +106,7 @@ const answerMap = ref<Record<number, number>>({})
 const getQuestionDetail = async (id: string | number) => {
   isLoading.value = true
   try {
-    const data = await get<SurveyDetail>(API_ROUTES.surveyById.path.replace(':id', id))
+    const data = await get<SurveyDetail>(API_ROUTES.surveyById.path.replace(':id', String(id)))
     survey.value = data
     answerMap.value = {}
     data.questions.forEach((q) => (answerMap.value[q.id] = 0))
@@ -134,7 +134,7 @@ const handleSubmit = async () => {
     .map(([questionId, optionId]) => ({ questionId: Number(questionId), optionId }))
   isSubmitting.value = true
   try {
-    const result = await post<SurveyResult>(API_ROUTES.submitSurvey.path.replace(':id', survey.value.id), { answers })
+    const result = await post<SurveyResult>(API_ROUTES.submitSurvey.path.replace(':id', String(survey.value.id)), { answers })
     submitResult.value = result
     resultDialogVisible.value = true
   } catch (err: any) {

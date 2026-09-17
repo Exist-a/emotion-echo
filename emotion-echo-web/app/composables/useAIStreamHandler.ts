@@ -15,6 +15,8 @@ export interface AIStreamParams {
   message: string
   emotion: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
   conversationId?: string
+  messageId?: string
+  clientMsgId?: string
   shouldGenerateTitle?: boolean
   voiceEmotion?: string
 }
@@ -101,7 +103,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     try {
       streamUrl = `${getApiBaseUrl(runtimeConfig)}${API_ROUTES.aiStream.path}`
     } catch (e: any) {
-      callbacks.onError?.(e?.message || 'API_BASE_URL 未配置')
+      callbacks?.onError?.(e?.message || 'API_BASE_URL 未配置')
       return { isOk: false, msg: e?.message || 'API_BASE_URL 未配置' }
     }
 
@@ -110,7 +112,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     const triggerFinish = (extra?: { messageId?: string; emotion?: string }) => {
       if (finishedState.value) return
       finishedState.value = true
-      callbacks.onFinish?.(extra ?? {})
+      callbacks?.onFinish?.(extra ?? {})
     }
 
     try {
@@ -175,7 +177,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
             } catch {
               parseErrorCountState.value++
               if (parseErrorCountState.value >= MAX_PARSE_ERRORS) {
-                callbacks.onError?.('数据解析错误过多，已停止')
+                callbacks?.onError?.('数据解析错误过多，已停止')
                 return { isOk: false, msg: '数据解析错误' }
               }
               continue
@@ -193,7 +195,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
               fullContent += toEmit
               streamingContent.value = fullContent
               emittedContentState.value += toEmit
-              callbacks.onDelta?.(toEmit)
+              callbacks?.onDelta?.(toEmit)
             }
           }
         }

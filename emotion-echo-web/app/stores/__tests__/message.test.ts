@@ -41,7 +41,7 @@ describe('message store sendMessage contentType 透传（Stage 79）', () => {
     store.currentSessionId = 'c1'
     await store.sendMessage('hello')
     expect(postMock).toHaveBeenCalledTimes(1)
-    const [, body] = postMock.mock.calls[0]
+    const [, body] = postMock.mock.calls[0]!
     expect(body.contentType).toBe('text')
   })
 
@@ -49,7 +49,7 @@ describe('message store sendMessage contentType 透传（Stage 79）', () => {
     const store = useMessageStore()
     store.currentSessionId = 'c1'
     await store.sendMessage('https://minio/x.png', undefined, undefined, 'image')
-    const [, body] = postMock.mock.calls[0]
+    const [, body] = postMock.mock.calls[0]!
     expect(body.contentType).toBe('image')
   })
 
@@ -57,7 +57,7 @@ describe('message store sendMessage contentType 透传（Stage 79）', () => {
     const store = useMessageStore()
     store.currentSessionId = 'c1'
     await store.sendMessage('https://minio/x.pdf', undefined, undefined, 'file')
-    const [, body] = postMock.mock.calls[0]
+    const [, body] = postMock.mock.calls[0]!
     expect(body.contentType).toBe('file')
   })
 })
@@ -73,7 +73,7 @@ describe('message store sendMessage fileName 透传（Stage 89 PR-5 RED）', () 
     const store = useMessageStore()
     store.currentSessionId = 'c1'
     await store.sendMessage('https://minio/x.pdf', undefined, undefined, 'file', '季度报告.pdf')
-    const [, body] = postMock.mock.calls[0]
+    const [, body] = postMock.mock.calls[0]!
     expect(body.fileName).toBe('季度报告.pdf')
   })
 
@@ -81,7 +81,7 @@ describe('message store sendMessage fileName 透传（Stage 89 PR-5 RED）', () 
     const store = useMessageStore()
     store.currentSessionId = 'c1'
     await store.sendMessage('纯文字')
-    const [, body] = postMock.mock.calls[0]
+    const [, body] = postMock.mock.calls[0]!
     expect(body.fileName).toBeUndefined()
   })
 })

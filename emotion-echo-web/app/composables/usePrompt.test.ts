@@ -57,29 +57,27 @@ describe("buildRCTPrompt", () => {
 
   it("includes length constraint in task", () => {
     const p = buildRCTPrompt("happy", "x");
-    assert.match(p.task, /200字/);
+    expect(p.task).toMatch(/200字/);
   });
 
   it("includes no-fabrication rule in task", () => {
     const p = buildRCTPrompt("sad", "x");
-    assert.match(p.task, /禁止编造/);
+    expect(p.task).toMatch(/禁止编造/);
   });
 
   it("preserves original emotion field", () => {
-    // buildRCTPrompt 不直接返回 emotion 字段（不破坏 RCTPromptType），
-    // 但 task 字段里含有 emotion 字符串。
     const p = buildRCTPrompt("anxious", "x");
-    assert.match(p.task, /anxious|舒缓/);
+    expect(p.task).toMatch(/anxious|舒缓/);
   });
 
   it("preserves context from base prompts", () => {
     const p = buildRCTPrompt("happy", "x");
-    assert.match(p.context, /开心|愉悦/);
+    expect(p.context).toMatch(/开心|愉悦/);
   });
 
   it("preserves user input verbatim in task", () => {
     const p = buildRCTPrompt("happy", "今天天气真好");
-    assert.match(p.task, /今天天气真好/);
+    expect(p.task).toMatch(/今天天气真好/);
   });
 });
 
@@ -88,10 +86,10 @@ function assertPrompt(
   p: ReturnType<typeof buildRCTPrompt>,
   expectations: { role_includes: string; tone: string; input_quote: string },
 ) {
-  assert.include(p.role, expectations.role_includes);
-  assert.match(p.task, new RegExp(expectations.tone));
-  assert.match(p.task, new RegExp(`"${expectations.input_quote}"`));
+  expect(p.role).toContain(expectations.role_includes);
+  expect(p.task).toMatch(new RegExp(expectations.tone));
+  expect(p.task).toMatch(new RegExp(`"${expectations.input_quote}"`));
   // Length + no-fabrication rules are universal.
-  assert.match(p.task, /200字/);
-  assert.match(p.task, /禁止编造/);
+  expect(p.task).toMatch(/200字/);
+  expect(p.task).toMatch(/禁止编造/);
 }

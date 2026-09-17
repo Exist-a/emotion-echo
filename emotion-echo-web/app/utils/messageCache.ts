@@ -1,9 +1,9 @@
 // utils/messageCache.ts - 消息本地缓存管理
 import type {
   StoredMessage,
+  MessageStatus,
   conversationMessageType,
 } from "~/types/conversation/conversationMessagesType";
-import type { MessageStatus } from "~/stores/message";
 import { getDb } from "./db";
 
 // Lazy Dexie key constants (accessed after getDb() initializes Dexie)
@@ -217,7 +217,7 @@ export async function trimSessionMessages(
     .limit(count - maxCount)
     .toArray();
 
-  const idsToDelete = toDelete.map((msg) => msg.id);
+  const idsToDelete = toDelete.map((msg: StoredMessage) => msg.id);
   await db.messages.bulkDelete(idsToDelete);
 
   return idsToDelete.length;

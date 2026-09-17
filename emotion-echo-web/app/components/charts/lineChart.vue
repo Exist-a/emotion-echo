@@ -20,6 +20,6 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const chartOption = computed(() =>
-  lineChartOption(props.XData, props.YData, props.title, props.seriesData)
+  lineChartOption(props.XData, props.YData, props.title, props.seriesData) as any
 );
 </script>

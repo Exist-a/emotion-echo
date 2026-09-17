@@ -26,7 +26,7 @@ describe('user store default avatar fallback contract (Stage 112 bug C)', () => 
     const fallback = extractFallbackPath(USER_STORE_SRC)
     expect(fallback, 'user store 应有 avatar fallback 路径').toBeTypeOf('string')
     const publicRoot = resolve(__dirname, '../../public')
-    const assetPath = join(publicRoot, fallback.replace(/^\//, ''))
+    const assetPath = join(publicRoot, fallback!.replace(/^\//, ''))
     expect(existsSync(assetPath), `${fallback} 文件不存在 → 头像破图`).toBe(true)
     const stat = statSync(assetPath)
     expect(stat.size, `${fallback} 不能是 0 字节占位`).toBeGreaterThan(0)

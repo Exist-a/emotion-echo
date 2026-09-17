@@ -19,6 +19,6 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const chartOption = computed(() =>
-  radarChartOption(props.indicators, props.data, props.title)
+  radarChartOption(props.indicators, props.data, props.title) as any
 );
 </script>

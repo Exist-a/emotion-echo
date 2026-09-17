@@ -36,7 +36,7 @@ describe('auth.global.ts middleware token-presence-only contract (Stage 112 v2)'
     // 找到 !isInWhiteList && !hasAccessToken 守卫块（unauth guard）
     const guardBlocks = [...MIDDLEWARE_SRC.matchAll(/if\s*\(!isInWhiteList\s*&&\s*!hasAccessToken\)/g)]
     expect(guardBlocks.length, '必须存在 !isInWhiteList && !hasAccessToken 守卫块').toBeGreaterThan(0)
-    const guardIdx = guardBlocks[0].index
+    const guardIdx = guardBlocks[0]!.index
     const afterGuard = MIDDLEWARE_SRC.slice(guardIdx, guardIdx + 500)
     expect(afterGuard).toMatch(/navigateTo\(["']\/login["']/)
   })

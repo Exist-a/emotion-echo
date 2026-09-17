@@ -39,8 +39,8 @@ describe('useConversationGrouper', () => {
       make({ id: 'today', updatedAt: '2026-07-17T08:00:00' })
     ])
     const { groupedConversations } = useConversationGrouper(list)
-    expect(groupedConversations.value[0].label).toBe('置顶')
-    expect(groupedConversations.value[0].data.map((d) => d.id)).toEqual(['old'])
+    expect(groupedConversations.value[0]!.label).toBe('置顶')
+    expect(groupedConversations.value[0]!.data.map((d) => d.id)).toEqual(['old'])
     expect(groupedConversations.value.find((g) => g.label === '今天')?.data.map((d) => d.id)).toEqual(['today'])
   })
 

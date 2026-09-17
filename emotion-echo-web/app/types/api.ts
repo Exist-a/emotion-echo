@@ -178,7 +178,7 @@ export interface MessageItem {
  * 带状态的消息
  */
 export interface MessageWithStatus extends MessageItem {
-  status?: 'sending' | 'sent' | 'streaming'
+  status?: 'sending' | 'sent' | 'streaming' | 'failed' | 'truncated'
 }
 
 /**

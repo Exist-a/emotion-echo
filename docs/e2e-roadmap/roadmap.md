@@ -10,7 +10,7 @@ type: e2e-stage-roadmap
 
 ## 当前激活阶段
 
-**E2E-04 前端工程化门槛**（status: pending 待启动）→ 详档 [stages/e2e-04-frontend-engineering/plan.md](stages/e2e-04-frontend-engineering/plan.md)
+**E2E-04 前端工程化门槛**（status: in-progress）→ 详档 [stages/e2e-04-frontend-engineering/plan.md](stages/e2e-04-frontend-engineering/plan.md)
 
 > E2E-03 已完成 → 报告 [stages/e2e-03-ci-gate/report.md](stages/e2e-03-ci-gate/report.md)
 
@@ -25,7 +25,7 @@ type: e2e-stage-roadmap
 | E2E-01 | 登录会话持久化 | cookie 存储/刷新恢复/过期/登出/remember-me 全周期 | 注册、找回密码 | ✅ done |
 | E2E-02 🔧 | 项目目录清理 | 清理无关文件/目录、补 gitignore、归档测试证据 | 不动业务代码 | ✅ done |
 | E2E-03 🔧 | **CI/CD 门槛** | 落地可跑的 `.github/workflows/`（现全仓零 CI，模板从未执行） | 复杂流水线/部署自动化 | ✅ done |
-| E2E-04 🔧 | **前端工程化门槛** | ESLint/Prettier 引入 + typecheck 96→0 + SPA 产物 smoke + Playwright mobile/firefox project + browserslist + a11y 基线 | 全量代码重构 | ⏳ pending |
+| E2E-04 🔧 | **前端工程化门槛** | ESLint/Prettier 引入 + typecheck 96→0 + SPA 产物 smoke + Playwright mobile/firefox project + browserslist + a11y 基线 | 全量代码重构 | 🔄 in-progress |
 | E2E-05 🔧 | **文档与代码一致性收口** | 10 个校验脚本接入 CI + 更正 3 处实测失真 + digest 假绿修复 | 通用文档检查器 | ⏳ pending |
 
 ### 第二批：数据库与认证

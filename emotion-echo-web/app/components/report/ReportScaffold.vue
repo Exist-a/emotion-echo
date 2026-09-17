@@ -14,7 +14,7 @@
             :max="dateEnd"
             :disabled="loading"
             class="date-input"
-            @change="emitRange($event.target.value, dateEnd)"
+            @change="emitRange(($event.target as HTMLInputElement)?.value ?? '', dateEnd)"
           />
           <span class="date-sep" aria-hidden="true">至</span>
           <input
@@ -23,7 +23,7 @@
             :min="dateStart"
             :disabled="loading"
             class="date-input"
-            @change="emitRange(dateStart, $event.target.value)"
+            @change="emitRange(dateStart, ($event.target as HTMLInputElement)?.value ?? '')"
           />
         </label>
         <input
@@ -35,7 +35,7 @@
           :min="pickerType === 'year' ? '1970' : undefined"
           :max="maxDate"
           class="date-input"
-          @change="emitSingle($event.target.value)"
+          @change="emitSingle(($event.target as HTMLInputElement)?.value ?? '')"
         />
       </div>
     </header>

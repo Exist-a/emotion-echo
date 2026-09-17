@@ -331,7 +331,7 @@ export const useUserStore = defineStore('user', () => {
 
       // 从 JWT payload 解析过期时间
       try {
-        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+        const base64 = parts[1]!.replace(/-/g, '+').replace(/_/g, '/')
         const payload = JSON.parse(atob(base64))
         if (payload.exp) {
           const expiryMs = payload.exp * 1000

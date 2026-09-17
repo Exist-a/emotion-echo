@@ -149,7 +149,10 @@ export const useMessageStore = defineStore('message', () => {
   const updateMessage = (messageId: string, updates: Partial<MessageWithStatus>) => {
     const idx = currentMessages.value.findIndex((m) => m.id === messageId)
     if (idx !== -1) {
-      currentMessages.value[idx] = { ...currentMessages.value[idx], ...updates }
+      const existing = currentMessages.value[idx]
+      if (existing) {
+        currentMessages.value[idx] = { ...existing, ...updates }
+      }
     }
   }
 

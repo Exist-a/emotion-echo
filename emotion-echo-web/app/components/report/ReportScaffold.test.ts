@@ -18,7 +18,7 @@ describe('ReportScaffold.vue', () => {
 
   const factory = async (props: Record<string, any>, slots: Record<string, string> = {}) => {
     const { default: ReportScaffold } = await import('./ReportScaffold.vue')
-    return mount(ReportScaffold, { props, slots, attachTo: document.body })
+    return mount(ReportScaffold as any, { props, slots, attachTo: document.body })
   }
 
   it('renders title and description in the header', async () => {
@@ -34,7 +34,7 @@ describe('ReportScaffold.vue', () => {
     await input.setValue('2026-07-02')
     const events = wrapper.emitted('change')
     expect(events).toBeTruthy()
-    expect(events![0][0]).toBe('2026-07-02')
+    expect(events![0]![0]).toBe('2026-07-02')
     wrapper.unmount()
   })
 
@@ -45,10 +45,10 @@ describe('ReportScaffold.vue', () => {
       pickerType: 'daterange'
     })
     const inputs = wrapper.findAll('input.date-input')
-    await inputs[1].setValue('2026-07-14')
+    await inputs[1]!.setValue('2026-07-14')
     const events = wrapper.emitted('change')
     expect(events).toBeTruthy()
-    expect(events![0][0]).toEqual(['2026-07-01', '2026-07-14'])
+    expect(events![0]![0]).toEqual(['2026-07-01', '2026-07-14'])
     wrapper.unmount()
   })
 
@@ -59,7 +59,7 @@ describe('ReportScaffold.vue', () => {
     // GREEN 阶段会新增 update:date emit;RED 阶段缺少该 emit 时此断言失败
     const updateEvents = wrapper.emitted('update:date')
     expect(updateEvents).toBeTruthy()
-    expect(updateEvents![0][0]).toBe('2026-07-02')
+    expect(updateEvents![0]![0]).toBe('2026-07-02')
     wrapper.unmount()
   })
 

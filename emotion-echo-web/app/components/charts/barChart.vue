@@ -17,5 +17,5 @@ const props = withDefaults(defineProps<Props>(), {
   height: 300,
 });
 
-const chartOption = computed(() => barChartOption(props.XData, props.YData, props.title));
+const chartOption = computed(() => barChartOption(props.XData, props.YData, props.title) as any);
 </script>

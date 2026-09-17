@@ -99,13 +99,13 @@ const lipShapes: LipShape[] = ['aa', 'ee', 'ih', 'oh', 'ou'];
 
 const startRandomLipAnimation = (callback?: LipSyncCallback) => {
   stopLipAnimation();
-  lipSyncCallback = callback;
+  lipSyncCallback = callback ?? null;
 
   let shapeIndex = 0;
   const interval = 150;
 
   lipAnimationInterval = setInterval(() => {
-    const shape = lipShapes[shapeIndex % lipShapes.length];
+    const shape = lipShapes[shapeIndex % lipShapes.length]!;
     callback?.(shape, 1);
     shapeIndex++;
   }, interval);
@@ -123,9 +123,10 @@ const stop = () => {
   clearLipSyncInterval();
   stopLipAnimation();
 
-  if (audioElement) {
-    audioElement.pause();
-    audioElement.currentTime = 0;
+  const el = audioElement as HTMLAudioElement | null;
+  if (el) {
+    el.pause();
+    el.currentTime = 0;
   }
 
   if (pcmPlayer) {
@@ -288,7 +289,8 @@ const playStream = async (
 };
 
 const playStreamChunks = (chunks: Uint8Array[]) => {
-  if (!audioContext) return;
+  const ctx = audioContext as AudioContext | null;
+  if (!ctx) return;
 
   const allBytes = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
   let offset = 0;
@@ -297,25 +299,27 @@ const playStreamChunks = (chunks: Uint8Array[]) => {
     offset += chunk.length;
   }
 
-  audioContext.decodeAudioData(allBytes.buffer, (buffer) => {
-    const source = audioContext!.createBufferSource();
+  ctx.decodeAudioData(allBytes.buffer, (buffer: AudioBuffer) => {
+    const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(audioContext!.destination);
+    source.connect(ctx.destination);
     source.start();
-  }, (e) => {
+  }, (e: DOMException) => {
     console.error("[TTS Stream] Decode error:", e);
   });
 };
 
 const pause = () => {
-  if (audioElement && isPlaying.value) {
-    audioElement.pause();
+  const el = audioElement as HTMLAudioElement | null;
+  if (el && isPlaying.value) {
+    el.pause();
   }
 };
 
 const resume = () => {
-  if (audioElement && !isPlaying.value && currentTime.value > 0) {
-    audioElement.play();
+  const el = audioElement as HTMLAudioElement | null;
+  if (el && !isPlaying.value && currentTime.value > 0) {
+    el.play();
   }
 };
 

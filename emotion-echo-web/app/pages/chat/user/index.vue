@@ -99,9 +99,9 @@ const validateInfo = () => {
   return true;
 };
 
-const handleAvatarSuccess: UploadProps["onSuccess"] = (
-  response,
-  uploadFile
+const handleAvatarSuccess = (
+  _response: any,
+  uploadFile: any
 ) => {
   // TODO: 实际上传头像到服务器
   // 目前使用本地预览URL
@@ -130,7 +130,7 @@ const handleUploadAvatar = async (file: File) => {
   }
 };
 
-const beforeAvatarUpload: UploadProps["beforeUpload"] = (rawFile) => {
+const beforeAvatarUpload = (rawFile: any) => {
   if (rawFile.size / 1024 / 1024 > 2) {
     notify('', 'Avatar picture size can not exceed 2MB!', 'error', 3000);
     return false;

@@ -17,5 +17,5 @@ const props = withDefaults(defineProps<Props>(), {
   height: 300,
 });
 
-const chartOption = computed(() => pieChartOption(props.data, props.title));
+const chartOption = computed(() => pieChartOption(props.data, props.title) as any);
 </script>

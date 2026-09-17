@@ -26,7 +26,7 @@ import { describe, it, expect } from 'vitest'
 import fg from 'fast-glob'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { API_ROUTES } from './apiRoutes'
+import { API_ROUTES, type ApiRoute } from './apiRoutes'
 
 const ROOT = path.resolve(__dirname, '..', '..')
 const APP_DIR = path.join(ROOT, 'app')
@@ -62,6 +62,7 @@ describe('API routes contract', () => {
       PATH_REGEX.lastIndex = 0
       while ((m = PATH_REGEX.exec(src)) !== null) {
         const p = m[1]
+        if (!p) continue
         // 只关心"业务 API 路径"——以业务前缀起
         if (
           p.startsWith('/auth') ||
@@ -95,7 +96,7 @@ describe('API routes contract', () => {
       const sortedFiles = Object.keys(perFileHits).sort()
       // 仅打印前 30 行避免淹没测试输出
       const lines = sortedFiles.slice(0, 30).map(
-        (f) => `  ${f}: ${perFileHits[f].join(', ')}`,
+        (f) => `  ${f}: ${perFileHits[f]!.join(', ')}`,
       )
       if (sortedFiles.length > 30) lines.push(`  ... (${sortedFiles.length - 30} more)`)
       console.log('Scanned paths by file:\n' + lines.join('\n'))

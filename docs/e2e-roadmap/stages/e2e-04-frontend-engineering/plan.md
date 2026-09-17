@@ -2,7 +2,7 @@
 stage: e2e-04
 title: 前端工程化门槛
 type: transformation
-status: pending
+status: in-progress
 created: 2026-09-17
 depends-on: [e2e-03]
 blocks: [e2e-07, e2e-09, e2e-10, e2e-11, e2e-12, e2e-13, e2e-14, e2e-15, e2e-16, e2e-17]

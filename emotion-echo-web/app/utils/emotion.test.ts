@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { getEmotionLabel, EmotionLabel, EMOTION_LABEL_MAP } from './emotion'
+import { getEmotionLabel, type EmotionLabel, EMOTION_LABEL_MAP } from './emotion'
 
 describe('emotion utils', () => {
   it('maps known emotions to friendly Chinese labels', () => {
@@ -12,8 +12,7 @@ describe('emotion utils', () => {
   })
 
   it('falls back to the original value when label is unknown', () => {
-    // @ts-expect-error testing runtime guard
-    expect(getEmotionLabel('sleepy')).toBe('sleepy')
+    expect(getEmotionLabel('sleepy' as any)).toBe('sleepy')
   })
 
   it('exposes a complete map of all EmotionLabel members', () => {

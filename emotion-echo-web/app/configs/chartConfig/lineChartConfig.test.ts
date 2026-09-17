@@ -28,8 +28,8 @@ describe('lineChartConfig', () => {
     expect(opt.series.length).toBe(3)
     for (let i = 0; i < seriesData.length; i++) {
       expect(opt.series[i].type).toBe('line')
-      expect(opt.series[i].name).toBe(seriesData[i].name)
-      expect(opt.series[i].data).toEqual(seriesData[i].data)
+      expect(opt.series[i].name).toBe(seriesData[i]!.name)
+      expect(opt.series[i].data).toEqual(seriesData[i]!.data)
     }
     // legend.data 必须覆盖所有 series.name (图例/曲线对应)
     expect(opt.legend?.data).toEqual(['开心', '难过', '平静'])

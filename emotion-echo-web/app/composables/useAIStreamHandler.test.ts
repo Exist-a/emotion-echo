@@ -240,6 +240,6 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
     // fetch 必须从未被调用（fail-fast 在调 fetch 之前抛错）
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError.mock.calls[0][0]).toMatch(/API_BASE_URL.*未配置|NUXT_PUBLIC_API_BASE_URL/i)
+    expect(onError.mock.calls[0]![0]).toMatch(/API_BASE_URL.*未配置|NUXT_PUBLIC_API_BASE_URL/i)
   })
 })

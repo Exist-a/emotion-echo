@@ -30,7 +30,7 @@ describe('useFileUpload API routes alignment (Stage 58 PR-UP-2)', () => {
   })
 
   it('knownOrphans 已不含 uploadImage/Video/File 孤儿路径（PR-UP-2 转正后）', () => {
-    const orphanPaths = Object.values(API_ROUTES.knownOrphans).map((r) => r.path)
+    const orphanPaths = Object.values(API_ROUTES.knownOrphans).map((r: any) => r.path)
     expect(orphanPaths).not.toContain('/upload/image')
     expect(orphanPaths).not.toContain('/upload/video')
     expect(orphanPaths).not.toContain('/upload/file')

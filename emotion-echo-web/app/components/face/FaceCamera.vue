@@ -92,12 +92,13 @@ const triggerVideoReady = () => {
 const startDrag = (e: MouseEvent | TouchEvent) => {
   isDragging.value = true
   
-  const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-  const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-  
+  const touch = 'touches' in e ? e.touches[0] : undefined
+  const clientX = touch?.clientX ?? (e as MouseEvent).clientX
+  const clientY = touch?.clientY ?? (e as MouseEvent).clientY
+
   dragStart.value = { x: clientX, y: clientY }
   elementStart.value = { ...position.value }
-  
+
   document.addEventListener('mousemove', onDrag)
   document.addEventListener('mouseup', stopDrag)
   document.addEventListener('touchmove', onDrag)
@@ -106,9 +107,10 @@ const startDrag = (e: MouseEvent | TouchEvent) => {
 
 const onDrag = (e: MouseEvent | TouchEvent) => {
   if (!isDragging.value) return
-  
-  const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-  const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+
+  const touch = 'touches' in e ? e.touches[0] : undefined
+  const clientX = touch?.clientX ?? (e as MouseEvent).clientX
+  const clientY = touch?.clientY ?? (e as MouseEvent).clientY
   
   const deltaX = clientX - dragStart.value.x
   const deltaY = clientY - dragStart.value.y

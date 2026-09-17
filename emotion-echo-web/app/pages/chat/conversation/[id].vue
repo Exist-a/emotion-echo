@@ -374,9 +374,8 @@ const getHtmlContent = (content: string) => {
         // html token → 转义后输出（不是真的 HTML）
         renderer.html = (token: any) => {
           const raw = typeof token === 'string' ? token : (token?.text || '')
-          return origHtml(raw.replace(/[&<>"']/g, (c) =>
-            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string)
-          ))
+          const escapeMap: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+          return origHtml(raw.replace(/[&<>"']/g, (c: string) => escapeMap[c] ?? c))
         }
         return renderer
       })(),

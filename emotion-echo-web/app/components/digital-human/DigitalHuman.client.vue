@@ -356,7 +356,7 @@ const loadVRM = async () => {
   }
 
   const loader = new GLTFLoader()
-  loader.register((parser) => new VRMLoaderPlugin(parser))
+  loader.register((parser: any) => new VRMLoaderPlugin(parser))
 
   try {
     loadAttempts++

@@ -14,7 +14,7 @@ export async function getDb() {
   if (!_initPromise) {
     _initPromise = (async () => {
       const { default: Dexie } = await import("dexie");
-      const db = new Dexie('EmotionEcho') as Dexie & {
+      const db = new Dexie('EmotionEcho') as InstanceType<typeof Dexie> & {
         messages: EntityTable<StoredMessage, 'id'>;
       };
       db.version(1).stores({
