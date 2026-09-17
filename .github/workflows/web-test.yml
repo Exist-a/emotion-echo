@@ -35,6 +35,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
+          cache-dependency-path: 'emotion-echo-web/pnpm-lock.yaml'
       - name: Install deps
         run: pnpm install --frozen-lockfile
       - name: vitest
