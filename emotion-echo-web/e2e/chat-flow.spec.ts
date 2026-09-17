@@ -103,11 +103,14 @@ test.describe('chat flow · A8 SSE 流端到端', () => {
     const sendBtn = page.getByRole('button', { name: /^发送$/ }).first()
     await sendBtn.click()
 
-    // 3) 等 .dialog-ai 出现 + 文字非空
+    // 3) 等 .dialog-ai 出现 + 文字非空（SSE 流需要时间，等内容填充）
     const aiBubble = page.locator('.dialog-ai .bubble-ai').first()
     await expect(aiBubble).toBeVisible({ timeout: 10_000 })
     // dev 模式 mockEmpathyReply 至少返回 2 字符，真实 LLM 至少 1 字符
-    const text = (await aiBubble.textContent())?.trim() ?? ''
-    expect(text.length, 'AI 回复气泡必须包含非空文字').toBeGreaterThan(0)
+    // SSE 流式返回，需要等待文字填充完成（最长 15s）
+    await expect(async () => {
+      const text = (await aiBubble.textContent())?.trim() ?? ''
+      expect(text.length, 'AI 回复气泡必须包含非空文字').toBeGreaterThan(0)
+    }).toPass({ timeout: 15_000 })
   })
 })
