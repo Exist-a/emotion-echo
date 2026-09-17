@@ -41,6 +41,7 @@
   "devDependencies": {
     "@nuxt/eslint": "^1.0.0",
     "@nuxt/eslint-config": "^1.0.0",
+    "@axe-core/playwright": "^4.10.0",
     "@playwright/test": "^1.61.1",
     "@types/node": "^24.10.4",
     "eslint": "^9.0.0",
