@@ -129,7 +129,7 @@ export const useMessageStore = defineStore('message', () => {
         conversation.updatedAt = new Date().toISOString()
       }
 
-      return { isOk: true, msg: '发送成功' }
+      return { isOk: true, msg: '发送成功', data: message }
     } catch (error: any) {
       return { isOk: false, msg: error.message || '发送失败' }
     } finally {

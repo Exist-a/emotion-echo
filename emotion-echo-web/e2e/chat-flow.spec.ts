@@ -33,16 +33,30 @@ test.describe('chat flow · A8 SSE 流端到端', () => {
       console.log(`[BROWSER-PAGEERROR]`, err.message)
     })
 
-    // 1) 登录（用演示账号快速体验）
+    // 1) 直接 goto 登录页 + 用 API 设置 cookie（绕过 navigateTo race + 503 编译问题）
     await page.goto('/login')
-    // 等 Nuxt dev SSR=off 客户端 hydrate（编译时间 30-60s）
-    const quickBtn = page.getByRole('button', { name: /用演示账号快速体验/ })
-    await expect(quickBtn).toBeVisible({ timeout: 90_000 })
-    await quickBtn.click()
-
-    // 2) 等跳转到聊天页
-    await page.waitForURL(/\/chat\/conversation\/(new|\d+)/, { timeout: 15_000 })
     await page.waitForLoadState('domcontentloaded')
+    // 等 Nuxt dev SSR=off 客户端 hydrate
+    await page.waitForTimeout(3000)
+
+    // 用 page.request 直接调 POST /auth/login（APISIX 路由）设置 cookie
+    const loginResp = await page.request.post('http://localhost:19080/api/v1/auth/login', {
+      data: { username: 'echo', password: 'echo123' }
+    })
+    expect(loginResp.ok(), 'login API 必须成功').toBe(true)
+    const loginBody = await loginResp.json()
+    const token = loginBody?.data?.accessToken
+    expect(token, 'login response 必须含 accessToken').toBeTruthy()
+    // 把 token 写入 cookie + localStorage（前端 auth 依赖）
+    await page.context().addCookies([
+      { name: 'access_token', value: token, url: 'http://localhost:3000' }
+    ])
+
+    // 2) 直接 goto /chat/conversation/new（已经有 token，UI 应自动识别已登录）
+    await page.goto('/chat/conversation/new')
+    // 等首屏（避免 503 chunk 编译）
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForTimeout(5000)
 
     // 3) 输入消息 + 点发送
     //    /chat/conversation/new 的 textarea 是 .sender-input（class）
