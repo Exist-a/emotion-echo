@@ -2,7 +2,7 @@
 stage: e2e-01
 title: 登录会话持久化
 type: verification
-status: in-progress
+status: done
 created: 2026-09-17
 depends-on: []
 blocks: [e2e-07]

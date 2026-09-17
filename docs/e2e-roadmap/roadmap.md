@@ -10,7 +10,7 @@ type: e2e-stage-roadmap
 
 ## 当前激活阶段
 
-**E2E-01 登录会话持久化**（status: pending 待启动）→ 详档 [stages/e2e-01-login-session/plan.md](stages/e2e-01-login-session/plan.md)
+**E2E-02 项目目录清理**（status: pending 待启动）→ 详档 [stages/e2e-02-directory-cleanup/plan.md](stages/e2e-02-directory-cleanup/plan.md)
 
 > 🔧 = 改造阶段（不是纯测试，含代码/schema/目录/配置变更）
 
@@ -20,7 +20,7 @@ type: e2e-stage-roadmap
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-01 | 登录会话持久化 | cookie 存储/刷新恢复/过期/登出/remember-me 全周期 | 注册、找回密码 | ⏳ pending |
+| E2E-01 | 登录会话持久化 | cookie 存储/刷新恢复/过期/登出/remember-me 全周期 | 注册、找回密码 | ✅ done |
 | E2E-02 🔧 | 项目目录清理 | 清理无关文件/目录、补 gitignore、归档测试证据 | 不动业务代码 | ⏳ pending |
 | E2E-03 🔧 | **CI/CD 门槛** | 落地可跑的 `.github/workflows/`（现全仓零 CI，模板从未执行） | 复杂流水线/部署自动化 | ⏳ pending |
 | E2E-04 🔧 | **前端工程化门槛** | ESLint/Prettier 引入 + typecheck 96→0 + SPA 产物 smoke + Playwright mobile/firefox project + browserslist + a11y 基线 | 全量代码重构 | ⏳ pending |
