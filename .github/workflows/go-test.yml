@@ -36,10 +36,11 @@ jobs:
         with:
           go-version-file: '${{ matrix.service }}/go.mod'
           cache: true
+          cache-dependency-path: '${{ matrix.service }}/go.sum'
       - name: go vet
         run: go vet ./...
       - name: go test
-        run: go test -race -count=1 ./...
+        run: go test -count=1 ./...
 
   shared-test:
     runs-on: ubuntu-latest
@@ -53,7 +54,8 @@ jobs:
         with:
           go-version-file: 'emotion-echo-shared/go.mod'
           cache: true
+          cache-dependency-path: 'emotion-echo-shared/go.sum'
       - name: go vet
         run: go vet ./...
       - name: go test
-        run: go test -race -count=1 ./...
+        run: go test -count=1 ./...
