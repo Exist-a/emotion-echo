@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 /**
  * E2E: chat flow · A8 端到端回归钉子 (Sprint 110)
  *
- * IAB 实测 2026-09-17 复现 (gui-test-screenshots/a8-02-after-send.png):
+ * IAB 实测 2026-09-17 复现 (docs/evidence/gui-test-screenshots/a8-02-after-send.png):
  *   - 浏览器点发送, URL 跳到 /chat/conversation/N ✓
  *   - POST /conversations + GET /messages + POST /messages ✓
  *   - POST /api/v1/ai/stream 缺席 ✗ (SSE 流被 abort)

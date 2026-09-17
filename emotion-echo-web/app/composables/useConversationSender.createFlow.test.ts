@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 
 // Sprint 110 · createNewConversation 跨实例 SSE race 修复 (static-source)
 //
-// IAB 实测 2026-09-17 复现 (gui-test-screenshots/a8-02-after-send.png):
+// IAB 实测 2026-09-17 复现 (docs/evidence/gui-test-screenshots/a8-02-after-send.png):
 //   - 浏览器点发送, URL 跳到 /chat/conversation/78 ✓
 //   - fetch hook: POST /conversations + GET /messages + POST /messages ✓
 //   - fetch hook: POST /api/v1/ai/stream 缺席 ✗

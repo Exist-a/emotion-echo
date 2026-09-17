@@ -73,7 +73,7 @@ related-stages:
 ### 浏览器端到端（IAB，dev mode）
 - 第一轮 6 链接（日报/周报/月报/年报/我的空间/设置）→ **6/6 不被踢回**
 - 第二轮 3 链接复测 → **3/3 稳定**
-- 截图：`gui-test-screenshots/stage-112-section-scan-2026-09-17/20-fixed-chat-user-no-kick.png`
+- 截图：`docs/evidence/gui-test-screenshots/stage-112-section-scan-2026-09-17/20-fixed-chat-user-no-kick.png`
 
 ---
 

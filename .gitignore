@@ -144,6 +144,8 @@ artifacts/
 # ---------- Agent / 编辑器状态 ----------
 # ZCode agent session plans (transient)
 .zcode/
+# Mimosa hook runtime state (transient)
+.mimosa/
 
 # ---------- Windows quirks ----------
 # mv/rename 失败时残留的 "Duplicate name" 影子目录（如 emotion-echo-shared;D）

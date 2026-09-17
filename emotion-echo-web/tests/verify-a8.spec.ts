@@ -28,7 +28,7 @@ test('A8 真修复截图存证', async ({ page }) => {
   // 截图存证
   const fs = await import('node:fs')
   const buf = await page.screenshot()
-  fs.writeFileSync('D:/源码/Emotion-Echo/gui-test-screenshots/a8-fixed-final.png', buf)
+  fs.writeFileSync('D:/源码/Emotion-Echo/docs/evidence/gui-test-screenshots/a8-fixed-final.png', buf)
 
   // 断言
   await expect(page.locator('.dialog-ai').first()).toBeVisible({ timeout: 5000 })
