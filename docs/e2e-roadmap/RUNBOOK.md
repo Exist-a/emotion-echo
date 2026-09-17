@@ -48,7 +48,7 @@ pending ──(开工)──> in-progress ──(DoD 全过)──> done
 
 ## 2. 环境准备（固定动作）
 
-### 2.1 启动 dev 模式
+### 2.1 启动后端容器
 
 ```bash
 cd deploy && docker compose \
@@ -58,16 +58,39 @@ cd deploy && docker compose \
 
 > 🔴 **`--env-file .env.local` 不可省略**。该文件是 LLM key 唯一存放点（gitignored），不带它容器会静默降级 mock。**严禁删除/清空/覆盖 `.env.local`**（AGENTS.md §四红线）。
 
+### 2.1b 启动前端 dev server（本地优先）
+
+**E2E 测试阶段使用本地 `pnpm dev` 而非 Docker 容器内的预构建产物。** 原因：
+- 改代码后无需 rebuild 镜像（`npm run build` 耗时 2-3 分钟）
+- dev server 支持 HMR，改完即生效
+- SSR 配置变更等需要重新构建的改动可即时验证
+
+```bash
+# 1. 停止 Docker 内的前端容器（释放 3000 端口）
+docker stop emotion-echo-web 2>/dev/null || true
+
+# 2. 启动本地 dev server
+cd emotion-echo-web && pnpm dev --port 3000
+```
+
+> ⚠️ **端口冲突**：如果 Docker 的 `emotion-echo-web` 容器仍在运行，本地 dev server 会因 3000 端口被占用而启动失败。必须先 `docker stop emotion-echo-web`。
+>
+> ⚠️ **API 地址**：本地 dev server 默认读 `nuxt.config.ts` 中的 `NUXT_PUBLIC_API_BASE_URL`（`http://localhost:19080/api/v1`），与 Docker 容器内一致，无需额外配置。
+
 ### 2.2 健康检查（必须全绿才继续）
 
 ```bash
+# 后端容器健康检查
 docker ps -a --filter "name=emotion-echo" --format "table {{.Names}}\t{{.Status}}"
 docker inspect emotion-echo-db-migrate --format '{{.State.ExitCode}}'   # 期望 0
+
+# 前端可达性检查（本地 dev server 或 Docker 容器均可）
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/   # 期望 200 或 301
 ```
 
-期望：6 个应用服务（user/chat/analytics/assessment/ai/web-bff）+ web **全部 healthy**；`db-migrate` / `apisix-seed` / `minio-init` 为 `Exited (0)`（一次性容器，退出码 0 即正常）。
+期望：后端 6 个应用服务（user/chat/analytics/assessment/ai/web-bff）全部 healthy；`db-migrate` / `apisix-seed` / `minio-init` 为 `Exited (0)`。前端 `http://localhost:3000` 可达。
 
-> 容器数 < 14 或存在 `unhealthy` → 停止执行，先诊断环境（属环境问题而非被测 bug）。
+> 后端容器数不足或存在 `unhealthy` → 停止执行，先诊断环境。前端不可达 → 检查 dev server 是否启动或 Docker web 容器是否运行。
 
 ### 2.3 前端与网关可达性
 

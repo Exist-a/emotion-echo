@@ -5,7 +5,7 @@ export default defineNuxtConfig({
       // hashMode: true,
     },
   },
-  ssr: false,
+  ssr: true,
   
   runtimeConfig: {
     public: {

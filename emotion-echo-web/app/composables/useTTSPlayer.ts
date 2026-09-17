@@ -1,9 +1,18 @@
 import { ref, onUnmounted } from "vue";
 import { stripMarkdown, extractReadableText } from "~/utils/stripMarkdown";
-import PcmPlayer from "pcm-player";
 import { API_ROUTES } from "~/lib/apiRoutes";
 import { getApiBaseUrl } from "../lib/apiBaseUrl";
 import { getClientAccessToken } from "~/lib/clientAccessToken";
+
+// Lazy import: pcm-player accesses AudioContext at import time, will crash SSR.
+let _PcmPlayer: any = null;
+async function getPcmPlayer() {
+  if (!_PcmPlayer) {
+    const mod = await import("pcm-player");
+    _PcmPlayer = mod.default ?? mod;
+  }
+  return _PcmPlayer;
+}
 
 export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral';
 
@@ -200,6 +209,7 @@ const playStream = async (
       throw new Error("No response body");
     }
 
+    const PcmPlayer = await getPcmPlayer();
     const player = new PcmPlayer({
       inputCodec: 'Int16',
       channels: 1,

@@ -149,13 +149,14 @@
     </form>
 
     <div class="digital-human-wrapper">
-      <DigitalHuman ref="digitalHumanRef" :visible="digitalHumanVisible" :draggable="true" :model-path="'/3d-models/digital-human.vrm'" @voice-toggle="handleVoiceToggle" />
+      <ClientOnly>
+        <DigitalHuman ref="digitalHumanRef" :visible="digitalHumanVisible" :draggable="true" :model-path="'/3d-models/digital-human.vrm'" @voice-toggle="handleVoiceToggle" />
+      </ClientOnly>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import DigitalHuman from '~/components/digital-human/DigitalHuman.vue'
 import VoiceMessage from '~/components/voice/VoiceMessage.vue'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { useVoiceRecorder } from '~/composables/useVoiceRecorder'
@@ -164,6 +165,11 @@ import { useFileUpload } from '~/composables/useFileUpload'
 import { useDigitalHumanStore } from '~/stores/digitalHuman'
 import { useUserStore } from '~/stores/user'
 import { marked } from 'marked'
+
+// DigitalHuman uses Three.js (WebGL) — client-only, wrapped in <ClientOnly> in template
+const DigitalHuman = import.meta.client
+  ? defineAsyncComponent(() => import('~/components/digital-human/DigitalHuman.client.vue'))
+  : (null as any)
 
 const userStore = useUserStore()
 const userConfig = ref(userStore.getUserConfig())
