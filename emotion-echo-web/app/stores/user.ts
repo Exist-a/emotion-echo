@@ -24,7 +24,7 @@ export const useUserStore = defineStore('user', () => {
   const isAuthenticated = computed(() => !!accessToken.value && !!userInfo.value?.id)
 
   const getNickname = computed(() => userInfo.value?.nickname || '用户')
-  const getAvatarPath = computed(() => userInfo.value?.avatar || '/imgs/default-avatar.webp')
+  const getAvatarPath = computed(() => userInfo.value?.avatar || '/imgs/default-avatar.webp') // Sprint 112 Bug C：见 public/imgs/default-avatar.webp，资源随 user.ts 一同维护
   const getId = computed(() => userInfo.value?.id || '')
   const getAge = computed(() => userInfo.value?.age || 18)
   const getAccessToken = computed(() => accessToken.value)
