@@ -1,0 +1,96 @@
+name: doc-drift-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  routes-alignment:
+    name: 路径对齐（前端 ⊆ BFF）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check routes alignment
+        run: bash scripts/check_routes_alignment.sh
+
+  view-consistency:
+    name: 视图定义一致性
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check view consistency
+        run: python scripts/check_view_consistency.py
+
+  env-vars-lint:
+    name: 环境变量 lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint env vars
+        run: bash scripts/lint_env_vars.sh
+
+  yaml-lint:
+    name: YAML 字面值收紧
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: YAML lint
+        run: python scripts/yaml_lint.py
+
+  git-layout:
+    name: 仓库布局自检
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check git layout
+        run: python scripts/check_git_layout.py --strict
+
+  docker-digests:
+    name: Dockerfile digest pin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Dockerfile digests
+        run: bash scripts/check_docker_digests.sh
+
+  docs-update:
+    name: 文档更新验证
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test docs update
+        run: bash scripts/test_docs_update.sh
+
+  bff-jwt-secret:
+    name: BFF JWT secret 一致性
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check BFF JWT secret
+        run: bash scripts/test_bff_jwt_secret.sh
+
+  user-oauth-zero-ref:
+    name: user_oauth 零引用
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check user_oauth zero ref
+        run: bash scripts/test_user_oauth_zero_ref.sh
+
+  migrations-contract:
+    name: Migration 契约
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test migrations contract
+        run: bash scripts/test_migrations_contract.sh
+
+  migrations-no-service-order:
+    name: Migration 服务顺序独立性
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test migrations no service order
+        run: bash scripts/test_migrations_no_service_order.sh
