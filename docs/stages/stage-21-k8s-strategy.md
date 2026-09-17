@@ -24,7 +24,7 @@
 | **跨主机** | 想把 postgres 放到另一台机器 | 跨主机网络难配置 | K8s CNI 网络（Pod 可跨节点通信） |
 | **服务发现** | 容器名只在同一 compose 网络内有效 | 改 host 就得改所有 yaml | K8s Service + DNS 自动发现 |
 | **配置管理** | 不同环境用不同 yaml 文件 | 配置改动需要重新 build image | ConfigMap + Secret + envFrom |
-| **Secret 泄露** | `deploy/tls/*.key` 提交进 git | 私密性差 | SealedSecret / KMS 加密 |
+| **Secret 管理** | `deploy/tls/*.key` 未提交（.gitignore 已忽略 *.key/*.crt） | 本地开发无 TLS | SealedSecret / KMS 加密 |
 
 **结论**：Stage 20 是"本地能跑"，Stage 21 是"生产稳定"。
 
@@ -250,8 +250,8 @@ emotion-echo/
 
 ### 7.1 痛点
 
-- 当前 `deploy/tls/*.key` 直接 commit 进 git
-- 任何人 clone 都能拿到私钥 → **生产事故级风险**
+- 当前 `deploy/tls/*.key` 未提交（.gitignore 已忽略 *.key/*.crt，2026-09-18 实测 git ls-files 为空）
+- 本地开发无 TLS 证书，需在 K8s 部署时由 SealedSecret/KMS 管理
 - K8s Secret 默认是 base64 编码（**不是加密**），etcd 里明文存
 
 ### 7.2 候选方案（按推荐度）
