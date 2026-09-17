@@ -16,10 +16,11 @@ export default defineConfig({
       { find: /^@(?=\/)/, replacement: path.join(ROOT, 'app') },
       { find: /^#app(?=\/)/, replacement: path.join(ROOT, 'app') },
       { find: /^#imports(?=\/)/, replacement: path.join(ROOT, 'app') },
-      // 兜底：~ / @ / #app 单独出现（不带 /）时 alias 到 app
+      // 兜底：~ / @ 单独出现（不带 /）时 alias 到 app
       { find: '~', replacement: path.join(ROOT, 'app') },
       { find: '@', replacement: path.join(ROOT, 'app') },
-      { find: '#app', replacement: path.join(ROOT, 'app') }
+      // E2E-F-39: #app 精确匹配走 mock 模块 (提供 useCookie / useRuntimeConfig 等 Nuxt auto-import)
+      { find: '#app', replacement: path.join(ROOT, 'tests-app-mock.ts') }
     ]
   },
   test: {

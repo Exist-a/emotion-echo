@@ -41,3 +41,9 @@ function fakeUseCookie<T = string>(name: string) {
   return cookieRef
 }
 ;(globalThis as any).useCookie = fakeUseCookie
+
+// E2E-F-39: useState 是 Nuxt auto-import, useAIStreamHandler / useConversationSender
+// 等模块顶层直接调用 useState() 而不显式 import.
+// 从 #app mock 模块取 useState 实现并挂到 globalThis.
+import { useState as __useState } from '#app'
+;(globalThis as any).useState = __useState
