@@ -2,7 +2,7 @@
 stage: e2e-02
 title: 项目目录清理
 type: transformation
-status: pending
+status: done
 created: 2026-09-17
 depends-on: []
 blocks: [e2e-03, e2e-05]

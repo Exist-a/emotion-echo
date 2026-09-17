@@ -33,9 +33,9 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-13 | 预探查 | gRPC 路径的 trace_id 未注入结构化日志 | `grpcinterceptor/tracing.go` 只做 SkyWalking 上报，未调 `logging.WithTraceID`（HTTP 侧有做） | E2E-21 / E2E-26 | 🔴 未解决 |
 | E2E-F-14 | 预探查 | user 页 3 个图表（昼夜/频率/深度）数据为空时整块不渲染且无空态提示 | `chat/user/index.vue:194,206,216` 每图均有 `?.length > 0` 守卫；数据源依赖 analytics 事件链 | E2E-11 | 🔴 未解决 |
 | E2E-F-15 | 预探查 | 系统无管理员/角色概念 | `users` 表无 role 列；全仓无 admin 页面/端点 | E2E-06 / E2E-07 | 🟡 已通过 D-01=C 规避 |
-| E2E-F-16 | 预探查 | `.mimosa/`（三处）未被 gitignore，持续污染 `git status` | hook 运行时状态目录，`.gitignore` 未覆盖 | E2E-02 | 🔴 未解决 |
-| E2E-F-17 | 预探查 | `gui-test-screenshots/` 25 个测试截图散落根目录且已被 git 跟踪 | 历次 GUI 测试直接落盘根目录，未归档到 `docs/evidence/` | E2E-02 | 🔴 未解决 |
-| E2E-F-18 | 预探查 | 残留空目录与一次性产物：`emotion-echo-web;D`（0 字节，shell 分号误建）、`docker-images-before.txt` | shell 未转义分号建目录；一次性快照未清理 | E2E-02 | 🔴 未解决 |
+| E2E-F-16 | 预探查 | `.mimosa/`（三处）未被 gitignore，持续污染 `git status` | hook 运行时状态目录，`.gitignore` 未覆盖 | E2E-02 | ✅ **已解决**（2026-09-17，commit a44ee4a） |
+| E2E-F-17 | 预探查 | `gui-test-screenshots/` 25 个测试截图散落根目录且已被 git 跟踪 | 历次 GUI 测试直接落盘根目录，未归档到 `docs/evidence/` | E2E-02 | ✅ **已解决**（2026-09-17，commit a44ee4a，git mv + 7 处引用更新） |
+| E2E-F-18 | 预探查 | 残留空目录与一次性产物：`emotion-echo-web;D`（0 字节，shell 分号误建）、`docker-images-before.txt` | shell 未转义分号建目录；一次性快照未清理 | E2E-02 | ✅ **已解决**（2026-09-17，commit a44ee4a） |
 | E2E-F-19 | 预探查 | `users` 表 3 个死字段：`email`（零读写）、`phone`（仅响应回显、零写入→恒 NULL）、`status`（零读写） | `deploy/db/02-create-tables-in-schemas.sql:10-11,17`；详见 [findings §5.2](findings/2026-09-17-pretest-panorama.md) | E2E-06 | 🔴 未解决 |
 
 ### B. 覆盖盲区排查（2026-09-17，E2E-F-20~29）
@@ -66,14 +66,15 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-34 | CI 评审 | LLM workflow **依赖未锁版本** ⇒ 同一 commit 可绿可红 | `emotion-llm-service/requirements.txt` 全用 `>=`（`fastapi>=0.100.0`、`openai>=1.40.0`…），无锁定文件 | E2E-03（阶段 2） | 🔴 未解决 |
 | E2E-F-35 | CI 评审 | 前端版本声明缺失 ⇒ CI 版本写死漂移风险 | `package.json` **无 `engines`、无 `packageManager`**，而 CI 写死 `node-version: '20'` / `pnpm version: 9` | E2E-03（阶段 2）/ E2E-04 | 🔴 未解决 |
 | E2E-F-36 | E2E-01 实测 | 报表、用户空间等页面**无法上下滑动**（内容溢出时无滚动条） | 待查（疑似 `overflow: hidden` 或 `height: 100vh` 无 `overflow-y: auto`） | E2E-04（全局布局修复） / E2E-11（用户空间） / E2E-15（报表） | 🔴 未解决 |
-| E2E-F-37 | E2E-01 实测 | SSR 模式下 **3 个 Playwright spec 因 hydration 时序失败**（dashboard-flow 2 + chat-flow happy-path-2 + login-flow 1） | SSR 渲染的按钮 `visible` 但 Vue click handler 未挂载；需 `waitForLoadState('networkidle')` + `toBeEnabled()` 等 hydration 完成 | E2E-04（Playwright 基础设施规范化） | 🟡 部分修复（login-flow + dashboard-flow 已修，chat-flow happy-path-2 未修） |
+| E2E-F-37 | E2E-01 实测 | SSR 模式下 **3 个 Playwright spec 因 hydration 时序失败**（dashboard-flow 2 + chat-flow happy-path-2 + login-flow 1） | SSR 渲染的按钮 `visible` 但 Vue click handler 未挂载；需 `waitForLoadState('networkidle')` + `toBeEnabled()` 等 hydration 完成 | E2E-04（Playwright 基础设施规范化） | ✅ **全部修复**（2026-09-17，commits 8100c5f + 03a4361 + 59190a8） |
 | E2E-F-38 | E2E-01 实测 | IAB（内置浏览器）**无法通过 `document.cookie` 设置 cookie** | IAB 的 cookie jar 独立于 `document.cookie` API；`Set-Cookie` 响应头可写入但 JS 侧读写受限 | 不归属阶段（IAB 工具限制，非产品 bug） | 🟡 已知限制（E2E 测试改用 Playwright cookie API 绕过） |
+| E2E-F-39 | E2E-02 实测 | vitest `useAIStreamHandler.test.ts` **预存失败**：`#app` import 无法解析 | `clientAccessToken.ts:2` 引用 `import { useCookie } from "#app"`，vitest 无 Nuxt `#app` alias 配置 | E2E-04（前端工程化门槛） | 🔴 未解决 |
 
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 = **35 项建档快照**；实测阶段若有新发现继续追加 E2E-F-36 起
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 4 项 = **39 项**；实测阶段若有新发现继续追加
 
 ## 不列入 E2E 阶段的候选（已评估）
 
