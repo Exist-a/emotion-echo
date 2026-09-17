@@ -145,9 +145,12 @@ func (c *analyticsGRPCClient) DayNightPattern(ctx context.Context, userID int64,
 }
 
 // InteractionDepth gRPC
+// Stage 112 修复（Bug E）：补 withUserID(ctx) 注入 x-user-id metadata；
+// 漏包时 analytics-svc gRPC 拦截器返 unauthenticated → BFF 透传 401 →
+// 前端 useApi clearAuth + 跳 /login（"我的空间"页被踢回的直接原因）。
 func (c *analyticsGRPCClient) InteractionDepth(ctx context.Context, userID int64, startDate, endDate string) (*InteractionDepth, error) {
 	cli := emotionanalytics.NewAnalyticsServiceClient(c.conn)
-	resp, err := cli.UserBehaviorDepth(ctx, &emotionanalytics.UserBehaviorRequest{
+	resp, err := cli.UserBehaviorDepth(withUserID(ctx), &emotionanalytics.UserBehaviorRequest{
 		UserId: userID,
 		DateRange: &emotionanalytics.DateRange{
 			StartDate: parseDate(startDate),
@@ -168,9 +171,10 @@ func (c *analyticsGRPCClient) InteractionDepth(ctx context.Context, userID int64
 }
 
 // FrequencyTrend gRPC
+// Stage 112 修复（Bug E）：补 withUserID(ctx)（同上）。
 func (c *analyticsGRPCClient) FrequencyTrend(ctx context.Context, userID int64, startDate, endDate string) ([]DailyCount, error) {
 	cli := emotionanalytics.NewAnalyticsServiceClient(c.conn)
-	resp, err := cli.UserBehaviorFrequency(ctx, &emotionanalytics.UserBehaviorRequest{
+	resp, err := cli.UserBehaviorFrequency(withUserID(ctx), &emotionanalytics.UserBehaviorRequest{
 		UserId: userID,
 		DateRange: &emotionanalytics.DateRange{
 			StartDate: parseDate(startDate),
@@ -193,7 +197,7 @@ func (c *analyticsGRPCClient) FrequencyTrend(ctx context.Context, userID int64, 
 // MentalAssessment gRPC
 func (c *analyticsGRPCClient) MentalAssessment(ctx context.Context, userID int64, assessmentType string) (*MentalAssessment, error) {
 	cli := emotionanalytics.NewAnalyticsServiceClient(c.conn)
-	resp, err := cli.MentalHealthAssessment(ctx, &emotionanalytics.MentalHealthAssessmentRequest{
+	resp, err := cli.MentalHealthAssessment(withUserID(ctx), &emotionanalytics.MentalHealthAssessmentRequest{
 		UserId: userID,
 		Date:   0,
 	})

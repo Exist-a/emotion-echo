@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -33,7 +34,7 @@ func (m *mockAnalyticsServer) ReportsTrend(_ context.Context, _ *emotionanalytic
 	return m.trendResp, nil
 }
 
-func startMockAnalyticsBufConn(t *testing.T, mock *mockAnalyticsServer) (*grpc.ClientConn, func()) {
+func startMockAnalyticsBufConn(t *testing.T, mock emotionanalytics.AnalyticsServiceServer) (*grpc.ClientConn, func()) {
 	t.Helper()
 	lis := bufconn.Listen(1024 * 1024)
 	srv := grpc.NewServer()
@@ -99,4 +100,81 @@ func TestAnalyticsGRPCClient_TrendReport_NilIntentDistribution(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, report)
 	assert.Empty(t, report.IntentCounts)
+}
+
+// =====================================================
+// Stage 112 修复（Bug E）：user-behavior / mental-health 三个 RPC 必须注入
+// x-user-id metadata
+//
+// 背景：analytics-svc 的 gRPC 拦截器要求所有 RPC 带 x-user-id metadata。
+// BFF downstream 的 InteractionDepth / FrequencyTrend / MentalAssessment
+// 三个方法漏包 withUserID(ctx) → analytics 返 "unauthenticated: missing
+// x-user-id metadata" → BFF 透传 401 → 前端 useApi clearAuth + 跳 /login。
+// 浏览器实测："我的空间"页（onMounted 调 3 个 user-behavior 端点）被踢回 /login。
+// =====================================================
+
+// metadataCapturingServer 记录收到的 x-user-id metadata
+type metadataCapturingServer struct {
+	emotionanalytics.UnimplementedAnalyticsServiceServer
+	gotUserID string
+}
+
+func (m *metadataCapturingServer) capture(ctx context.Context) {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if v := md.Get("x-user-id"); len(v) > 0 {
+			m.gotUserID = v[0]
+		}
+	}
+}
+
+func (m *metadataCapturingServer) UserBehaviorDepth(ctx context.Context, _ *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorDepthResponse, error) {
+	m.capture(ctx)
+	return &emotionanalytics.UserBehaviorDepthResponse{}, nil
+}
+
+func (m *metadataCapturingServer) UserBehaviorFrequency(ctx context.Context, _ *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorFrequencyResponse, error) {
+	m.capture(ctx)
+	return &emotionanalytics.UserBehaviorFrequencyResponse{}, nil
+}
+
+func (m *metadataCapturingServer) MentalHealthAssessment(ctx context.Context, _ *emotionanalytics.MentalHealthAssessmentRequest) (*emotionanalytics.MentalHealthAssessmentResponse, error) {
+	m.capture(ctx)
+	return &emotionanalytics.MentalHealthAssessmentResponse{}, nil
+}
+
+func TestAnalyticsGRPCClient_InteractionDepth_InjectsUserIDMetadata(t *testing.T) {
+	mock := &metadataCapturingServer{}
+	conn, cleanup := startMockAnalyticsBufConn(t, mock)
+	defer cleanup()
+
+	client := NewAnalyticsGRPCClient(conn)
+	// 模拟 handler 传入的 ctx：session.WithRequestAuth 已注入 user_id
+	ctx := WithUserID(context.Background(), 7)
+	_, err := client.InteractionDepth(ctx, 7, "2026-09-01", "2026-09-07")
+	require.NoError(t, err)
+	assert.Equal(t, "7", mock.gotUserID, "InteractionDepth 必须注入 x-user-id metadata（否则 analytics-svc 401）")
+}
+
+func TestAnalyticsGRPCClient_FrequencyTrend_InjectsUserIDMetadata(t *testing.T) {
+	mock := &metadataCapturingServer{}
+	conn, cleanup := startMockAnalyticsBufConn(t, mock)
+	defer cleanup()
+
+	client := NewAnalyticsGRPCClient(conn)
+	ctx := WithUserID(context.Background(), 7)
+	_, err := client.FrequencyTrend(ctx, 7, "2026-09-01", "2026-09-07")
+	require.NoError(t, err)
+	assert.Equal(t, "7", mock.gotUserID, "FrequencyTrend 必须注入 x-user-id metadata")
+}
+
+func TestAnalyticsGRPCClient_MentalAssessment_InjectsUserIDMetadata(t *testing.T) {
+	mock := &metadataCapturingServer{}
+	conn, cleanup := startMockAnalyticsBufConn(t, mock)
+	defer cleanup()
+
+	client := NewAnalyticsGRPCClient(conn)
+	ctx := WithUserID(context.Background(), 7)
+	_, err := client.MentalAssessment(ctx, 7, "phq9")
+	require.NoError(t, err)
+	assert.Equal(t, "7", mock.gotUserID, "MentalAssessment 必须注入 x-user-id metadata")
 }

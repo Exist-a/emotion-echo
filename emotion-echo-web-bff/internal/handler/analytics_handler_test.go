@@ -385,3 +385,81 @@ func TestEmotionQueryHandler_InvalidID_Returns400(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+// =====================================================
+// Stage 112 修复（Bug A 第二层）：user_id 从认证身份兜底
+//
+// 背景：前端 dashboard（dailyReport/weekly/monthly/annual）调
+// GET /api/v1/reports/{daily,trend} 时**不带 user_id query**（见
+// emotion-echo-web/app/pages/chat/dashboard/*.vue 的 get(...) 调用），
+// 而 BFF userIDQuery 强制要求 → 400 → 4 个报表页全部"加载失败"。
+//
+// 修复语义：APISIX jwt-auth 注入的 X-User-Id 是权威身份来源；
+//   - 无 query user_id + 有 X-User-Id → 用认证身份（修复前端调用）
+//   - 有 query user_id 且与 X-User-Id 不一致 → 403（防 IDOR 越权查他人报表）
+//   - 有 query user_id 且一致 → 200（向后兼容）
+//   - 两者都无 → 400（保留原契约错误）
+// =====================================================
+
+func TestUserIDQuery_FallbackToAuthedUser_WhenQueryMissing(t *testing.T) {
+	// RED: 前端实际调用方式（无 user_id query）+ APISIX 注入的 X-User-Id
+	fc := &fakeAnalyticsClient{report: &downstream.DailyReport{UserID: 7, Date: "2026-09-17"}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?date=2026-09-17", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "无 user_id query 时应回退到认证身份，不再 400")
+	assert.Equal(t, int64(7), fc.gotUID, "下游应收到认证用户的 uid")
+}
+
+func TestUserIDQuery_MismatchAuthedUser_Returns403(t *testing.T) {
+	// 防 IDOR：query user_id 与认证身份不一致 → 拒绝
+	fc := &fakeAnalyticsClient{report: &downstream.DailyReport{UserID: 42, Date: "2026-09-17"}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?date=2026-09-17&user_id=42", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code, "query user_id 与认证身份不一致应 403")
+	assert.NotEqual(t, int64(42), fc.gotUID, "不应把他人 uid 透传给下游")
+}
+
+func TestUserIDQuery_MatchAuthedUser_Returns200(t *testing.T) {
+	// 向后兼容：query user_id 与认证身份一致 → 200
+	fc := &fakeAnalyticsClient{report: &downstream.DailyReport{UserID: 7, Date: "2026-09-17"}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?date=2026-09-17&user_id=7", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, int64(7), fc.gotUID)
+}
+
+func TestUserIDQuery_NoAuthNoQuery_Returns400(t *testing.T) {
+	// 无认证 + 无 query → 保留原 400 契约
+	fc := &fakeAnalyticsClient{report: &downstream.DailyReport{UserID: 42, Date: "2026-09-17"}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?date=2026-09-17", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestUserIDQuery_TrendReport_FallbackToAuthedUser(t *testing.T) {
+	// 同样覆盖 /reports/trend（周/月/年报共用同一端点）
+	fc := &fakeAnalyticsClient{trend: &downstream.TrendReport{}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/trend?type=weekly&start=2026-09-11&end=2026-09-17", nil)
+	req.Header.Set("X-User-Id", "9")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "trend 端点同样应回退到认证身份")
+	assert.Equal(t, int64(9), fc.gotUID)
+}

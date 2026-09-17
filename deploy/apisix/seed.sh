@@ -563,4 +563,18 @@ else
   die "failed to PUT apisix self-health route" 3
 fi
 
+# ---- Step 4.5: 清理已知历史漂移路由 ----
+# Stage 112 修复：route 116 曾由手工 admin API 创建（不在本 seed 白名单），
+# 其 uri=/api/v1/reports/daily 比 route 100 (/api/v1/*) 更具体 → APISIX 优先匹配它；
+# 而它的 jwt-auth 配置从未随 seed 更新（默认 header 解析，区别于 route 100 的 cookie+
+# header 配置），导致前端 4 个 dashboard 全 401 → 被踢回 /login（Bug A）。
+# 教训：任何路由都必须经 seed.sh 幂等 PUT，禁止手工 admin API 建路由（会产生漂移）。
+# 这里显式删除已知漂移 id；不存在的 id DELETE 返 404 被 -f 静默跳过。
+for drift_id in 116; do
+  if curl -sf -X DELETE -H "X-API-KEY: $ADMIN_KEY" \
+    "$ADMIN_URL/apisix/admin/routes/$drift_id" >/dev/null 2>&1; then
+    log "  cleaned drift route: $drift_id"
+  fi
+done
+
 log "seed complete: 6 upstreams + 12 routes (1 catch-all + 5 health + 5 auth-whitelist + 1 self-health)"

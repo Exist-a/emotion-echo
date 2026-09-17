@@ -44,12 +44,32 @@ func (h *AnalyticsHandler) Register(r *gin.Engine) {
 	r.GET("/api/v1/mental-health/assessment", h.mentalAssessment)
 }
 
-// userIDQuery 解析必填 user_id；缺失/非法时写 400 并返回 false
+// userIDQuery 解析请求的 user_id。
+//
+// Stage 112 修复（Bug A 第二层）：APISIX jwt-auth 注入的 X-User-Id 是权威身份来源。
+//   - 无 query user_id + 有 X-User-Id → 用认证身份（前端 dashboard 不传 user_id，
+//     原实现直接 400 导致 4 个报表页全部"加载失败"）
+//   - 有 query user_id 且与 X-User-Id 不一致 → 403（防 IDOR 越权查他人报表）
+//   - 有 query user_id 且一致 / 无认证头（单测直连）→ 200（向后兼容）
+//   - 两者都无 → 400（保留原契约错误）
 func userIDQuery(c *gin.Context) (int64, bool) {
+	authedUID, hasAuth := downstream.UserIDFromContext(session.WithRequestAuth(c))
+
 	v := c.Query("user_id")
+	if v == "" {
+		if hasAuth && authedUID > 0 {
+			return authedUID, true
+		}
+		Fail(c, http.StatusBadRequest, 1, "validation: user_id is required")
+		return 0, false
+	}
 	id, err := strconv.ParseInt(v, 10, 64)
 	if err != nil || id <= 0 {
 		Fail(c, http.StatusBadRequest, 1, "validation: user_id is required")
+		return 0, false
+	}
+	if hasAuth && authedUID > 0 && id != authedUID {
+		Fail(c, http.StatusForbidden, 1, "forbidden: user_id mismatch with authenticated user")
 		return 0, false
 	}
 	return id, true
