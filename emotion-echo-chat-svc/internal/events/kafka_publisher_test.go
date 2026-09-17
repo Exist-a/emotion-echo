@@ -469,6 +469,7 @@ func TestKafkaEventPublisher_Publish_NoTracer_NoSw8Header(t *testing.T) {
 type blockingSyncProducer struct {
 	release   chan struct{}  // 测试用：关闭后所有阻塞 SendMessage 立即返
 	receiveCtx context.Context // 测试用：ctx.Done() 后所有阻塞 SendMessage 立即返 ctx.Err
+	receiveCtxCancel context.CancelFunc // 避免 go vet "context.WithCancel cancel discarded" 警告
 	mu        sync.Mutex
 	sendCalls int             // 记录 SendMessage 被调用次数
 }
@@ -553,7 +554,7 @@ func TestKafkaEventPublisher_Publish_CtxCancelDuringSendMessage_ReturnsImmediate
 	t.Parallel()
 	bl := newBlockingSyncProducer()
 	// 让阻塞 SendMessage 在 ctx.Done() 时解除（模拟 broker 在 ctx cancel 后中断）
-	bl.receiveCtx, _ = context.WithCancel(context.Background())
+	bl.receiveCtx, bl.receiveCtxCancel = context.WithCancel(context.Background())
 
 	p := &KafkaEventPublisher{producer: bl}
 	ctx, cancel := context.WithCancel(context.Background())

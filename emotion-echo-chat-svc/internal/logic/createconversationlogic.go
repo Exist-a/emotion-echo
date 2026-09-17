@@ -110,7 +110,7 @@ func (l *CreateConversationLogic) persistWithOutbox(uid int64, conv *model.Conve
 
 	// 路径 1 + 2：DB 齐备 → 事务化
 	if l.svcCtx.DB != nil {
-		return l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+		if err := l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
 			// 业务写（事务内）
 			if err := l.svcCtx.ConversationRepo.CreateConversationTx(tx, l.ctx, conv); err != nil {
 				return err
@@ -135,7 +135,9 @@ func (l *CreateConversationLogic) persistWithOutbox(uid int64, conv *model.Conve
 			// OutboxRepo nil（prod 不该出现）→ 事务提交后 best-effort Publish
 			// 事务内调 Publish 会阻塞事务,不当
 			return nil
-		})
+		}); err != nil {
+			return err
+		}
 		// 事务外 best-effort Publish（仅 OutboxRepo nil 时）
 		if l.svcCtx.OutboxRepo == nil {
 			if err := l.svcCtx.EventPublisher.Publish(l.ctx, events.TopicChatEvents, evt); err != nil {
