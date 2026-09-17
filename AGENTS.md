@@ -332,3 +332,4 @@ PR review 时若发现违反 TDD：
 - **架构决策** → `docs/architecture/adr/adr-YYYY-MM-<topic>.md` + 在 `docs/architecture/decisions.md` 索引登记
 - **演进记录** → `docs/stages/stage-XX-<topic>.md`
 - **计划落地后** → 从 `docs/plans/` 迁入 `docs/legacy-plans/landed/` 加 front-matter
+- **长期 E2E 测试路线图**（2026-09-17 起生效）→ [`docs/e2e-roadmap/`](docs/e2e-roadmap/)：阶段排期总表 `roadmap.md`、已发现未解决账本 `discovered-unresolved.md`（E2E-F-xx 编号）、每阶段执行记录 `stages/`。每阶段流程遵循全局 skill `e2e-stage-testing`（6 步：取阶段卡 → 环境准备 → IAB 内置浏览器实测先行 → 发现分类记账 → TDD 修复 → Playwright 回归钉收口）。纪律：范围外问题只记账不修；每阶段收口必须写 Playwright 回归钉；阶段记录收口后迁移到 `docs/stages/`

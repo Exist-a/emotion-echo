@@ -21,6 +21,8 @@ related-plans:
 
 # 测试覆盖追踪 · 业务路径级（"测试找问题修复"阶段）
 
+> **⚠️ 2026-09-17 指引更新**：本文档的 Sprint 111-115 排期（assessment Playwright、reports 重验、数据契约 smoke、登录异常路径、横切端到端）已被 [`docs/e2e-roadmap/roadmap.md`](../e2e-roadmap/roadmap.md) 的 15 阶段长期路线图吸收并对齐（E2E-01~E2E-15）。后续 E2E 排期与推进状态以 e2e-roadmap 为准，本文档保留作为"业务路径 × 测试维度"的现状快照，仅随阶段收口更新状态标记。
+>
 > **本文档定位**：业务路径级覆盖率追踪——按用户可感知的业务路径（auth / chat / assessment / reports / outbox / SkyWalking 等）划分，每条路径独立列出"已测 / 未测 / 测了未跑 / 端到端是否跑通"状态。
 >
 > **本文不替代**：
