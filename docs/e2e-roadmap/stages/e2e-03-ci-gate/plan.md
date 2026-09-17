@@ -87,10 +87,34 @@ related-findings: [E2E-F-20, E2E-F-30, E2E-F-31, E2E-F-32, E2E-F-33, E2E-F-34, E
 
 | # | 缺陷 | 证据 | 具体怎么做 |
 |---|------|------|-----------|
-| D1 | **main 无分支保护** | GitHub API `GET /branches/main/protection` → `404 Branch not protected` | 在仓库 Settings → Branches 为 `main` 建保护规则：① Require status checks to pass（勾选本阶段新增的 job）② Require a pull request before merging（可选，若单人开发可放宽）③ Do not allow bypassing |
-| D2 | **README 的声称不成立** | `docs/ci-workflows/README.md` 写"任何 test 失败 → PR 不可 merge"——但 D1 未配置，该效果**不存在** | D1 落地后该声称才成立；同时校正 README 措辞（属 E2E-05 的失真更正范畴） |
+| D1 | **main 无分支保护** | GitHub API `GET /branches/main/protection` → `404 Branch not protected`。**2026-09-17 已修复部分**（见下方 §2.3.1） | **已开**（安全子集）：`allow_force_pushes=false` + `allow_deletions=false` + `enforce_admins=true`。**待开**（阶段 2，CI 落地后）：`required_status_checks` 指向本阶段 job；`required_pull_request_reviews`（单人项目可选，开了会失去直推自由） |
+| D2 | **README 的声称不成立** | `docs/ci-workflows/README.md` 写"任何 test 失败 → PR 不可 merge"——但 D1 未配置完整，该效果**不存在** | 待 D1 的 status checks 落地后该声称才成立；同时校正 README 措辞（属 E2E-05 的失真更正范畴） |
 | D3 | 仓库为 **public** | API 返回 `visibility: public` | 仅作记录：public 仓库的 Actions 额度更宽松，但**任何误提交的密钥会立即公开**。与 AGENTS.md §四"密钥不进版本库"红线叠加，建议在 E2E-05 加 secret 扫描（如 gitleaks）到 CI |
 | D4 | 其它 4 套测试零覆盖 | `scripts/test_*.py`（4）、`k8s/tests/*_test.go`（6）、`deploy/*.test.js`（1）、`legacy/`（1）| `scripts/` 与 `deploy/` 的应接入（成本低）；`k8s/tests` 需 `helm` 二进制 + build tag，可单独 job；`legacy/` 明确排除并记录理由 |
+
+#### 2.3.1 D1 实施记录（2026-09-17）
+
+**已应用到 `main`**（经 GitHub REST API，`admin: True` 权限）：
+
+```json
+{"required_status_checks":null, "enforce_admins":true,
+ "required_pull_request_reviews":null, "restrictions":null,
+ "allow_force_pushes":false, "allow_deletions":false}
+```
+
+**关键经验（踩过的坑）**：
+
+| 观测 | 含义 |
+|------|------|
+| 首次以 `enforce_admins: false` 应用后，**强制推送仍成功** | 仓库管理员默认**绕过所有规则**；单人项目里唯一的用户就是管理员 ⇒ `enforce_admins: false` 等于**没有保护** |
+| 改为 `enforce_admins: true` 后重测，强制推送被拒：`GH006: Protected branch update failed ... Cannot force-push to this branch` | ✅ 保护真正生效 |
+| 一次 API 调用返回 `HTTP 000 / SSL_ERROR_SYSCALL` | **api.github.com 从本机间歇性不可达**（5 次复测均 <2s 正常）。这也可能是 **github-mcp 30s 超时的主因之一**（MCP 服务器启动时会调 api.github.com 验 token） |
+
+**测试方法（可复现）**：建临时分支 → 给临时分支打同样规则 → rewind 后重新提交制造非快进 → `git push --force` 断言被拒 → 移除临时保护 + 删分支。**全程不触碰 main**。
+
+**副作用验证**：`enforce_admins: true` 且 status checks / PR 要求均为 `null` 时，**正常快进推送不受影响**（仅强推与删除被拦）——已确认 `git push origin main` 正常。
+
+**⚠️ 阶段 2 注意**：一旦添加 `required_status_checks`，`enforce_admins: true` 会连管理员也拦住；若 check 因故不上报会**卡死无法合并**。届时要么确认 check 稳定上报，要么阶段性放宽 `enforce_admins`。
 
 ### 2.4 不做（边界）
 
