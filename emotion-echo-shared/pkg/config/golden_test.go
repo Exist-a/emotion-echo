@@ -199,7 +199,7 @@ func TestGolden_BFF(t *testing.T) {
 	assert.Equal(t, "http://localhost:8891", c.AIService.HTTPAddr)
 	assert.Equal(t, "", c.Auth.JWTSecret, "Stage 94 PR-5 §P0-10：JWTSecret 移除 dev-bff-secret 默认值（避免 dev 密钥进生产）")
 	assert.Equal(t, 86400, c.Auth.TokenTTLSeconds)
-	assert.True(t, c.TrustAPISIX)
+	assert.False(t, c.TrustAPISIX, "dev 环境 TrustAPISIX=false；prod 部署改回 true + 配 CIDR")
 	assert.Equal(t, "emotion-echo-minio:9000", c.MinIO.Endpoint)
 	assert.Equal(t, "avatars", c.MinIO.Bucket)
 	assert.False(t, c.MinIO.UseSSL)
