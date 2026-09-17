@@ -3,11 +3,11 @@
     <header>
       <span class="eyebrow">STEP 1</span>
       <h2>先确认一下这是你的账户</h2>
-      <p>输入手机号或邮箱，收到验证码后我们继续。</p>
+      <p>输入你注册时使用的用户名，我们会发一封验证码到这里。</p>
     </header>
     <form class="form">
-      <label class="ee-field" data-label="账号">
-        <input type="text" class="ee-input input" placeholder="手机号或邮箱" autocomplete="username" v-model="formInfo.username">
+      <label class="ee-field" data-label="用户名">
+        <input type="text" class="ee-input input" placeholder="用户名" autocomplete="username" v-model="formInfo.username">
       </label>
       <label class="ee-field" data-label="验证码">
         <div class="code-row">
@@ -25,15 +25,16 @@
 <script setup lang="ts">
 import { useForgetPwdState } from '~/composables/forgetPwdState'
 import { verificationCodeCountDown } from '~/composables/verificationCodeCountDown'
-import { phoneOrEmailReg } from '~/utils/Regs'
 
+// Sprint 112：项目登录、注册、重置全用 username；UI 文案与现状对齐，不再误称"手机号或邮箱"。
 const emits = defineEmits(['changeActive'])
 const formRef = ref()
 const formInfo = ref({ username: '', verificationCode: '' })
 const rules = ref({
   username: [
-    { required: true, message: '请输入手机号或邮箱', trigger: 'blur' },
-    { pattern: phoneOrEmailReg, message: '请输入有效的手机号或邮箱', trigger: 'blur' }
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    // 用户名规则：字母/数字/下划线/点/中划线，2-32 字符（与 user-svc 入库 schema 对齐）
+    { pattern: /^[a-zA-Z0-9._-]{2,32}$/, message: '请输入 2-32 位的字母、数字、点、下划线或中划线', trigger: 'blur' }
   ],
   verificationCode: [
     { required: true, message: '请输入验证码', trigger: 'blur' },
@@ -48,7 +49,7 @@ const { updateStep, userAccount, verificationCode } = useForgetPwdState()
 const getVerificationCode = () => {
   formRef.value?.validateField('username', async (isValid: boolean) => {
     if (!isValid) {
-      notify('无法获取验证码', '请填写正确的账户', 'error', 3000)
+      notify('无法获取验证码', '请填写正确的用户名', 'error', 3000)
       return
     }
     const res = await userStore.sendVerificationCode({ username: formInfo.value.username, type: 'reset' })
