@@ -10,6 +10,7 @@
  */
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { getApiBaseUrl } from '../lib/apiBaseUrl'
+import { getClientAccessToken } from '~/lib/clientAccessToken'
 export interface AIStreamParams {
   message: string
   emotion: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
@@ -91,8 +92,9 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     emittedContentState.value = ''
 
     const runtimeConfig = useRuntimeConfig()
-    // P0-R2-1: 从 cookie 读取 token（不再读 localStorage）
-    const token = useCookie('access_token').value || ''
+    // Sprint 111 · R-09 修复: HttpOnly cookie 浏览器 JS 读不到, 必须用 helper
+    // (userStore → cookie fallback). 之前 useCookie().value 永远空 → 401.
+    const token = getClientAccessToken()
     // PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8894
     // 计算 streamUrl 时若 API_BASE_URL 漏配 → 抛错 → 进 catch 返回 isOk=false
     let streamUrl: string

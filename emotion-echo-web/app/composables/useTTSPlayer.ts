@@ -3,6 +3,7 @@ import { stripMarkdown, extractReadableText } from "~/utils/stripMarkdown";
 import PcmPlayer from "pcm-player";
 import { API_ROUTES } from "~/lib/apiRoutes";
 import { getApiBaseUrl } from "../lib/apiBaseUrl";
+import { getClientAccessToken } from "~/lib/clientAccessToken";
 
 export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral';
 
@@ -174,8 +175,8 @@ const playStream = async (
     abortController = new AbortController();
     // PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8894
     const base = getApiBaseUrl(useRuntimeConfig());
-    // P0-R2-1: 从 cookie 读取 token（不再读 localStorage）
-    const token = useCookie('access_token').value || '';
+    // Sprint 111 · R-09 修复: 同 useAIStreamHandler — HttpOnly cookie 读不到
+    const token = getClientAccessToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

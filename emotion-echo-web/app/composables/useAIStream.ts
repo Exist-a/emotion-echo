@@ -1,6 +1,7 @@
 // composables/useAIStream.ts
 import { ref, onUnmounted } from "vue";
 import { useRuntimeConfig } from "#app";
+import { getClientAccessToken } from "~/lib/clientAccessToken";
 
 /**
  * AI 流式对话核心 Hook
@@ -44,7 +45,9 @@ export function useAIStream() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${useCookie('access_token').value || ""}`,
+            // Sprint 111 · R-09 修复: 同 useAIStreamHandler — HttpOnly cookie
+            // 浏览器读不到, 优先 userStore. (AGENTS.md §〇 doc-not-code bug 教训)
+            Authorization: `Bearer ${getClientAccessToken()}`,
           },
           body: {
             model: runtimeConfig.public.LLM_MODEL,
