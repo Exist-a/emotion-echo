@@ -1,0 +1,41 @@
+name: web-test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'emotion-echo-web/**'
+      - '.github/workflows/web-test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'emotion-echo-web/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: emotion-echo-web
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: vitest
+        run: pnpm vitest run
