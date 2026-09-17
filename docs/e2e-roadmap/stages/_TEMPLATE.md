@@ -2,17 +2,19 @@
 stage: e2e-NN
 title: <阶段名称>
 type: verification | transformation
-status: pending | in-progress | done
+status: pending | in-progress | done | blocked
 created: 2026-09-17
 depends-on: []
 blocks: []
+gate: []            # 阻塞本阶段的未决决策（见 RUNBOOK §9），非空则不得开工
 related-findings: []
 ---
 
 # E2E-NN <阶段名称>
 
 > 详档模板。撰写时机：该阶段启动前 1 个阶段时（见 [roadmap.md](../roadmap.md) §详档约定）。
-> 执行完成后，在同一目录追加 `report.md` 记录实测结果、修复清单、截图证据。
+> 执行协议见 [RUNBOOK.md](../RUNBOOK.md)——执行前必读，本文件只描述"这个阶段测什么"。
+> 执行完成后，在同一目录按 [_REPORT_TEMPLATE.md](_REPORT_TEMPLATE.md) 写 `report.md`。
 
 ## 1. 阶段目标
 
@@ -45,11 +47,13 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 
 ## 4. 测试点清单
 
-每个测试点必须有**代码验证**（只读 DOM/接口）与**视觉验证**（截图并被查看）双重证据。
+判定标记：`[A]` 自动可判（断言/退出码/DB 查询）· `[V]` 视觉判定（需截图并被查看）· `[M]` 需人工/设计裁定（必须升级给用户）。详见 [RUNBOOK.md](../RUNBOOK.md) §4。
 
-| # | 测试点 | 验证方式 | 证据 | 结果 |
-|---|--------|---------|------|------|
-| 1 | | | 截图 + 断言 | ⬜ |
+每个测试点必须有**代码验证**（只读断言）与**视觉验证**（截图并被查看）双重证据。
+
+| # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
+|---|--------|------|---------|------|------|
+| 1 | | [A] | | | ⬜ |
 
 ## 5. 验收标准（DoD）
 

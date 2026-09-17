@@ -6,6 +6,7 @@ status: pending
 created: 2026-09-17
 depends-on: [e2e-02]
 blocks: [e2e-04, e2e-05]
+gate: [github-token-workflow-scope]   # 见 RUNBOOK §9，未落定不得开工
 related-findings: []
 ---
 

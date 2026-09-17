@@ -6,6 +6,7 @@ status: pending
 created: 2026-09-17
 depends-on: []
 blocks: [e2e-07]
+gate: []
 related-findings: []
 ---
 
@@ -54,25 +55,29 @@ related-findings: []
 
 ## 4. 测试点清单
 
-| # | 测试点 | 验证方式 | 证据 | 结果 |
-|---|--------|---------|------|------|
-| 1 | 登录成功响应设置 cookie | Playwright `context.cookies()` 断言存在 token cookie；IAB 截图 DevTools Application→Cookies | 断言 + 截图 | ⬜ |
-| 2 | cookie 是 HttpOnly | 断言 cookie 对象 `httpOnly === true`；`document.cookie` 读不到该 token | 断言输出 | ⬜ |
-| 3 | 刷新页面会话保持 | 登录后 `page.reload()`，断言未被重定向到 `/login`，用户信息仍在（头像/昵称可见） | 截图 before/after | ⬜ |
-| 4 | 直接访问受保护页（冷启动） | 新 context 登录 → 直接导航 `/chat/conversation/new`，断言不跳登录页 | 截图 | ⬜ |
-| 5 | 未登录访问受保护页 | 无 cookie 上下文导航 `/chat/user`，断言重定向 `/login` | 断言 URL + 截图 | ⬜ |
-| 6 | 已登录访问 `/login` | 断言被重定向回应用内 | 断言 URL | ⬜ |
-| 7 | 登出清除会话 | 点退出登录，断言 cookie 被清除 + 跳 `/login`；返回键再次访问受保护页仍被拒 | 断言 + 截图 | ⬜ |
-| 8 | remember-me 不落 localStorage | 勾选"记住我"登录后，读 `localStorage`，断言**无 token 类键**（允许用户名） | `page.evaluate` 输出 | ⬜ |
-| 9 | JWT 过期行为 | 用过期/篡改 token 注入 cookie，断言被判定未登录并跳 `/login`，且给出合理提示 | 断言 + 截图 | ⬜ |
-| 10 | 会话恢复不发散（SPA 时序） | 刷新后快速导航，断言不出现"先跳登录页又弹回"的闪烁（观察 2s 内 URL 不变） | 录制 URL 序列 | ⬜ |
+判定标记：`[A]` 自动可判 · `[V]` 视觉判定 · `[M]` 需人工裁定（详见 [RUNBOOK.md](../../RUNBOOK.md) §4）。
+
+| # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
+|---|--------|------|---------|------|------|
+| 1 | 登录成功响应设置 cookie | [A] | Playwright `context.cookies()` 断言 token cookie 存在 | 断言输出 | ⬜ |
+| 2 | cookie 是 HttpOnly | [A] | 断言 `httpOnly === true`；`document.cookie` 读不到该 token | 断言输出（双断言） | ⬜ |
+| 3 | 刷新页面会话保持 | [A]+[V] | `page.reload()` 后断言未跳 `/login`；截图确认用户信息仍显示 | 断言 + 截图 | ⬜ |
+| 4 | 直接访问受保护页（冷启动） | [A] | 新 context 登录 → 直接导航 `/chat/conversation/new`，断言 URL 不变 | 断言 URL | ⬜ |
+| 5 | 未登录访问受保护页 | [A] | 无 cookie 上下文导航 `/chat/user`，断言重定向 `/login` | 断言 URL | ⬜ |
+| 6 | 已登录访问 `/login` | [A] | 断言被重定向回应用内 | 断言 URL | ⬜ |
+| 7 | 登出清除会话 | [A]+[V] | 断言 cookie 被清除 + 跳 `/login`；返回键访问受保护页仍被拒 | 断言 + 截图 | ⬜ |
+| 8 | remember-me 不落 localStorage | [A] | `page.evaluate` 读 localStorage，断言**无 token 类键**（允许用户名） | `evaluate` 输出 | ⬜ |
+| 9 | JWT 过期行为 | [A] | 构造过期 token（用 `BFF_JWT_SECRET` 签一个 `exp` 已过的 JWT，或篡改签名）注入 cookie，断言判未登录并跳 `/login` | 断言 + 截图 | ⬜ |
+| 10 | 会话恢复不发散（SPA 时序） | [A]+[V] | 刷新后录制 2s 内 URL 序列，断言不出现"先跳登录页又弹回"的闪烁 | URL 序列 + 截图 | ⬜ |
+| 11 | dev 覆盖项声明 | [M] | 明确记录本阶段验证的是 dev 配置（`BFF_DEV_RETURN_CODE=1` 等），prod 差异归 E2E-25/29 | report.md 声明 | ⬜ |
 
 ## 5. 验收标准（DoD）
 
-- [ ] 10 个测试点有结果（通过 or 已分类）
+- [ ] 11 个测试点有结果（PASS/FAIL/BLOCKED/N/A，均为合法取值且 BLOCKED 不超过 1/3）
 - [ ] 范围内 bug 按 TDD 修复
-- [ ] 回归钉写入 `emotion-echo-web/e2e/login-flow.spec.ts`（扩展现有 2 条用例）
+- [ ] 回归钉写入 `emotion-echo-web/e2e/login-flow.spec.ts`（扩展现有 2 条用例）并跑过且绿
 - [ ] 范围外发现只记入 `discovered-unresolved.md`，不修
+- [ ] 按 [RUNBOOK.md](../../RUNBOOK.md) §7 收口契约完成 8 项 + 自检三连
 
 ## 6. 已知风险
 

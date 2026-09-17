@@ -6,6 +6,7 @@ status: pending
 created: 2026-09-17
 depends-on: [e2e-03]
 blocks: [e2e-07, e2e-09, e2e-19]
+gate: [users-status-field-disposition]   # 见 RUNBOOK §9，未落定不得开工
 related-findings: [E2E-F-09, E2E-F-19]
 ---
 

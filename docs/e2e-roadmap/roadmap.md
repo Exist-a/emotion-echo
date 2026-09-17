@@ -192,7 +192,9 @@ type: e2e-stage-roadmap
 
 ## 每阶段标准流程与详档约定
 
-**流程**：见全局 skill `e2e-stage-testing`（6 步：取阶段卡 → 环境准备 → IAB 实测 → 发现分类 → TDD 修复 → 收口回归钉）。改造阶段（🔧）同走 6 步，"实测"侧重变更前现状确认。
+**执行协议**：**开工前必读 [RUNBOOK.md](RUNBOOK.md)** —— 状态机、环境准备（含 `--env-file .env.local` 红线）、执行循环、测试点判定分级（`[A]`自动/`[V]`视觉/`[M]`需裁定）、账本写入契约、收口契约（8 项必做）、阻塞与升级协议、report 模板、迭代护栏、命令速查。
+
+**方法论**：全局 skill `e2e-stage-testing`（为什么这么做）；RUNBOOK 是项目内的可执行版本，不依赖 skill 是否加载。
 
 **详档约定（just-in-time）**：每个阶段的详细规划文档写在 `stages/<e2e-NN-slug>/plan.md`，**在轮到该阶段前 1 个阶段时撰写**，不提前批量写完全部 30 份。原因：本项目长期受"文档与代码漂移"之害（ADR-18），提前写出的详档会随前面阶段的发现而失效，反而制造新的失真。已写详档：
 
@@ -208,7 +210,18 @@ type: e2e-stage-roadmap
 | E2E-08 历史会话管理 | [stages/e2e-08-conversation-management/plan.md](stages/e2e-08-conversation-management/plan.md) |
 | E2E-09 注册流程 | [stages/e2e-09-registration/plan.md](stages/e2e-09-registration/plan.md) |
 
-模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)。批次三及以后在轮到前补写。
+模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)，执行记录模板见 [stages/_REPORT_TEMPLATE.md](stages/_REPORT_TEMPLATE.md)。批次三及以后在轮到前补写。E2E-01 已按判定分级标注，其余已写详档在启动前补齐标记。
+
+## 决策门（开工前核对，未落定不得开工）
+
+| 阻塞项 | 阻塞阶段 | 需谁决定 | 现状 |
+|--------|---------|---------|------|
+| GitHub token 缺 `workflow` scope（无法推送 `.github/workflows/*.yml`） | **E2E-03** | 用户 | 🔴 未落定 |
+| `users.status` 字段去留（零读写，可能是未实现的软禁用） | **E2E-06** | 用户 / 代码考古 | ⚠️ 待确认 |
+| 密保方案下注册的验证码步骤去留 + 密保是否允许跳过 | **E2E-09** | 用户（产品决策） | ⚠️ 待确认 |
+| D-04 i18n 是否立项 | 不阻塞任何阶段 | 用户 | 🟡 候选 |
+
+> 详细规则见 [RUNBOOK.md](RUNBOOK.md) §9。
 
 ## 历史与背景
 

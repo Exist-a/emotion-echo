@@ -6,6 +6,7 @@ status: pending
 created: 2026-09-17
 depends-on: [e2e-06, e2e-07, e2e-04]
 blocks: []
+gate: [register-verification-code-disposition]   # 见 RUNBOOK §9，未落定不得开工
 related-findings: [E2E-F-01]
 ---
 

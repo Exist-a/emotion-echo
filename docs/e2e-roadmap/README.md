@@ -7,11 +7,21 @@
 
 | 文件 | 用途 |
 |------|------|
-| [roadmap.md](roadmap.md) | 30 阶段总表（🔧 标记改造阶段）+ 改造决议状态 + 依赖声明 |
+| [RUNBOOK.md](RUNBOOK.md) | **执行协议（执行层单一事实源）**：状态机/环境准备/执行循环/判定分级/账本契约/收口契约/升级协议/report 模板/护栏/命令速查 |
+| [roadmap.md](roadmap.md) | 30 阶段总表（🔧 标记改造阶段）+ 改造决议状态 + 依赖声明 + 决策门 |
 | [decisions.md](decisions.md) | 改造项决议记录（D-01 密保问题 / D-02 两种量表并存 / D-03 真口型同步 / D-04 i18n 候选） |
 | [discovered-unresolved.md](discovered-unresolved.md) | 已发现未解决账本（E2E-F-01~29，含"不列入阶段的候选"评估表） |
 | [findings/](findings/) | 建档/阶段预探查的代码级发现全景（带文件行号证据） |
 | [stages/](stages/) | 每阶段详档 `plan.md` + 执行记录 `report.md` + 截图 |
+
+## 给执行者（大模型或人）的入口顺序
+
+1. 读 [RUNBOOK.md](RUNBOOK.md)（执行协议，必读）
+2. 读 [roadmap.md](roadmap.md) 顶部「当前激活阶段」与「决策门」
+3. 读该阶段 `stages/<e2e-NN-slug>/plan.md`
+4. 按 RUNBOOK §1 三项目开工前置检查 → §2 起环境 → §3 六步循环 → §7 收口契约
+
+**验收口径**：每个测试点必须给出 `PASS` / `FAIL` / `BLOCKED` / `N/A` 四种合法结果之一并附证据（`[A]` 断言输出、`[V]` 截图、`[M]` 升级给用户）。`BLOCKED` 超过 1/3 不得判 done。禁止用 `N/A`/`BLOCKED` 掩盖未做的工作。
 
 ## 阶段详档（just-in-time）
 
