@@ -1,9 +1,9 @@
 <template>
   <ReportScaffold
+    v-model:date="year"
     title="这一年"
     description="让一整年的情绪，被温柔地看见。"
     :loading="isLoading"
-    v-model:date="year"
     picker-type="year"
     @change="fetchAnnualReport"
   >

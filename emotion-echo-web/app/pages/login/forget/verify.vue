@@ -7,11 +7,11 @@
     </header>
     <form class="form">
       <label class="ee-field" data-label="用户名">
-        <input type="text" class="ee-input input" placeholder="用户名" autocomplete="username" v-model="formInfo.username">
+        <input v-model="formInfo.username" type="text" class="ee-input input" placeholder="用户名" autocomplete="username">
       </label>
       <label class="ee-field" data-label="验证码">
         <div class="code-row">
-          <input type="text" class="ee-input input" placeholder="6 位数字验证码" maxlength="6" v-model="formInfo.verificationCode">
+          <input v-model="formInfo.verificationCode" type="text" class="ee-input input" placeholder="6 位数字验证码" maxlength="6">
           <button type="button" class="ee-btn code-btn ee-btn-primary" @click="getVerificationCode">
             {{ isGetVerificationCode ? `${lastSeconds}s` : '获取验证码' }}
           </button>
@@ -34,7 +34,7 @@ const rules = ref({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     // 用户名规则：字母/数字/下划线/点/中划线，2-32 字符（与 user-svc 入库 schema 对齐）
-    { pattern: /^[a-zA-Z0-9._-]{2,32}$/, message: '请输入 2-32 位的字母、数字、点、下划线或中划线', trigger: 'blur' }
+    { pattern: /^[\w.-]{2,32}$/, message: '请输入 2-32 位的字母、数字、点、下划线或中划线', trigger: 'blur' }
   ],
   verificationCode: [
     { required: true, message: '请输入验证码', trigger: 'blur' },

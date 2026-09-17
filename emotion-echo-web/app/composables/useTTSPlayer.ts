@@ -84,11 +84,11 @@ const CONSONANT_CLOSE: Record<string, LipShape> = {
 };
 
 // 单例模式的变量
-let audioContext: AudioContext | null = null;
-let audioElement: HTMLAudioElement | null = null;
-let currentTime = ref(0);
-let isPlaying = ref(false);
-let currentVolume = ref(2.0);
+const audioContext: AudioContext | null = null;
+const audioElement: HTMLAudioElement | null = null;
+const currentTime = ref(0);
+const isPlaying = ref(false);
+const currentVolume = ref(2.0);
 let pcmPlayer: any = null;
 let lipAnimationInterval: ReturnType<typeof setInterval> | null = null;
 let lipSyncCallback: LipSyncCallback | null = null;

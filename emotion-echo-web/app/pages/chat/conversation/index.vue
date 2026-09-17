@@ -10,15 +10,15 @@
           @click="foldAndUnfoldMenu"
         >
           <svg class="fold-arrow" :class="{ 'is-folded': isMenuFolded }" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="15 18 9 12 15 6"></polyline>
+            <polyline points="15 18 9 12 15 6"/>
           </svg>
         </button>
         <div v-else-if="!$device.isMobile" class="icon-btn-spacer" />
         <h3 class="sidebar-title">最近的对话</h3>
         <button class="icon-btn new-btn" type="button" aria-label="开始新的对话" @click="startNewConversation">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         </button>
       </header>
@@ -45,7 +45,7 @@
               <div class="more-wrap" @click.stop>
                 <button class="icon-btn more-btn" type="button" :aria-label="`对「${item.label}」更多操作`" @click.stop="toggleMore(item.key)">
                   <span class="more-dots" aria-hidden="true">
-                    <span></span><span></span><span></span>
+                    <span/><span/><span/>
                   </span>
                 </button>
                 <ul v-if="openMoreKey === item.key" class="more-menu" role="menu">
@@ -71,7 +71,7 @@
       @click="foldAndUnfoldMenu"
     >
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <polyline points="9 18 15 12 9 6"></polyline>
+        <polyline points="9 18 15 12 9 6"/>
       </svg>
     </button>
 
@@ -88,7 +88,7 @@
             placeholder="给这段对话一个名字"
             maxlength="50"
             @keyup.enter="submitRename"
-          />
+          >
           <div class="modal-meta"><span>{{ renameValue.length }}/50</span></div>
           <div class="modal-actions">
             <button class="btn btn-ghost" type="button" @click="renameDialogVisible = false">取消</button>

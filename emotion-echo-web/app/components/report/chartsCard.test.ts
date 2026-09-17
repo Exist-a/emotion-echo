@@ -97,7 +97,7 @@ describe('chartsCard.vue', () => {
 
   it('does not hardcode non-white hex colors in <style> (Stage 104 token alignment)', () => {
     const style = CHARTS_CARD_SRC.match(/<style[\s\S]*?<\/style>/)?.[0] ?? ''
-    const hexRegex = /#[0-9a-fA-F]{3,8}\b/g
+    const hexRegex = /#[0-9a-f]{3,8}\b/gi
     const hits = style.match(hexRegex) || []
     const offToken = hits.filter((h) => h.toLowerCase() !== '#fff' && h.toLowerCase() !== '#ffffff')
     expect(offToken, `硬编码色: ${offToken.join(',')} 应改为 var(--ee-*)`).toEqual([])

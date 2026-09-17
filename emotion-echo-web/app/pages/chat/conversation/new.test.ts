@@ -62,7 +62,7 @@ describe('chat/conversation/new.vue · handleSubmit 合同', () => {
     // 新实现: createNewConversation(value, ...) —— value 全文作为消息内容透传
     const callsBlockWithFullValue =
       /createNewConversation\(\s*value\b/.test(block) ||
-      /sendToExistingConversation\(\s*[^,]*,\s*value\b/.test(block)
+      /sendToExistingConversation\([^,]*,\s*value\b/.test(block)
     expect(
       callsBlockWithFullValue,
       'handleSubmit 必须把 value 全文作为消息透传给 sender, 不能仅截前 30 字当 title'

@@ -1,6 +1,6 @@
 <template>
   <article class="success-card">
-    <span class="quiet-pulse success-mark" aria-hidden="true"></span>
+    <span class="quiet-pulse success-mark" aria-hidden="true"/>
     <span class="eyebrow">DONE</span>
     <h2>密码已更新</h2>
     <p>用新密码回到登录页，继续与情绪对话。</p>

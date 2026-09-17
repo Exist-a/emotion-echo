@@ -7,10 +7,10 @@
     </header>
     <form class="form">
       <label class="ee-field" data-label="新密码">
-        <input type="password" class="ee-input input" placeholder="至少 6 位" autocomplete="new-password" v-model="formInfo.newPassword" :show-password="true">
+        <input v-model="formInfo.newPassword" type="password" class="ee-input input" placeholder="至少 6 位" autocomplete="new-password" :show-password="true">
       </label>
       <label class="ee-field" data-label="再次输入">
-        <input type="password" class="ee-input input" placeholder="再输入一次" autocomplete="new-password" v-model="formInfo.confirmNewPassword" :show-password="true">
+        <input v-model="formInfo.confirmNewPassword" type="password" class="ee-input input" placeholder="再输入一次" autocomplete="new-password" :show-password="true">
       </label>
     </form>
     <button type="button" class="ee-btn primary-btn ee-btn-primary" @click="gotoSuccess">保存新密码</button>
@@ -26,7 +26,7 @@ definePageMeta({ middleware: 'forget-pwd' })
 const emits = defineEmits(['changeActive'])
 const formRef = ref()
 const { updateStep, userAccount, verificationCode } = useForgetPwdState()
-const passwordReg = /^(?=.*[a-zA-Z])(?=.*\d).{6,18}$/
+const passwordReg = /^(?=.*[a-z])(?=.*\d).{6,18}$/i
 
 const formInfo = ref({ newPassword: '', confirmNewPassword: '' })
 const rules = ref({

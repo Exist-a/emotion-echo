@@ -32,7 +32,7 @@ const ROOT = path.resolve(__dirname, '..', '..')
 const APP_DIR = path.join(ROOT, 'app')
 
 // 从单引号 / 双引号 / 反引号字符串字面量里提取形如 /api/v1/... 的路径
-const PATH_REGEX = /['"`](?:\/api\/v1)?(\/[a-z][a-z0-9_\-/{}:]+)['"`]/gi
+const PATH_REGEX = /['"`](?:\/api\/v1)?(\/[a-z][\w\-/{}:]+)['"`]/gi
 
 // 排除文件：apiRoutes 自身 + 本测试文件 + 文档字符串
 function shouldSkip(filePath: string): boolean {

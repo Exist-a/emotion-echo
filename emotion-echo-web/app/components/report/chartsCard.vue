@@ -8,8 +8,8 @@
       >
         <!-- 饼图 -->
         <component
-          v-if="item.chartType === 'pie'"
           :is="pieChart"
+          v-if="item.chartType === 'pie'"
           :data="(item as pieChartItem).data"
           :height="300"
           :title="item.title"
@@ -17,19 +17,19 @@
 
         <!-- 折线图 -->
         <component
-          v-else-if="item.chartType === 'line'"
           :is="lineChart"
+          v-else-if="item.chartType === 'line'"
           :height="300"
           :XData="(item as lineChartItem).XData"
           :YData="(item as lineChartItem).YData"
-          :seriesData="(item as lineChartItem).seriesData"
+          :series-data="(item as lineChartItem).seriesData"
           :title="item.title"
         />
 
         <!-- 柱状图 -->
         <component
-          v-else-if="item.chartType === 'bar'"
           :is="barChart"
+          v-else-if="item.chartType === 'bar'"
           :height="300"
           :XData="(item as barChartItem).XData"
           :YData="(item as barChartItem).YData"
@@ -38,8 +38,8 @@
 
         <!-- 雷达图 -->
         <component
-          v-else-if="item.chartType === 'radar'"
           :is="radarChart"
+          v-else-if="item.chartType === 'radar'"
           :height="300"
           :indicators="(item as RadarChartItem).indicators"
           :data="(item as RadarChartItem).data"

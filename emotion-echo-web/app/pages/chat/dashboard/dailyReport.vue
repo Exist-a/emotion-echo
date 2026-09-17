@@ -1,9 +1,9 @@
 <template>
   <ReportScaffold
+    v-model:date="date"
     title="今日的回声"
     description="你今天的对话被轻轻记录在这里。"
     :loading="isLoading"
-    v-model:date="date"
     @change="fetchDailyReport"
   >
     <template v-if="reportData" #summary>

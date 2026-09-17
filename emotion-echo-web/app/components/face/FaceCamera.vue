@@ -13,10 +13,10 @@
         autoplay
         playsinline
         muted
-      ></video>
-      <div class="camera-frame"></div>
+      />
+      <div class="camera-frame"/>
       <div class="camera-indicator" :class="{ active: isActive }">
-        <span class="indicator-dot"></span>
+        <span class="indicator-dot"/>
         <span class="indicator-text">{{ isActive ? '面部识别中' : '等待中' }}</span>
       </div>
       <button class="close-btn" @click.stop="handleClose">

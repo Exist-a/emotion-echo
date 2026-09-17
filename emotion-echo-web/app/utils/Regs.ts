@@ -4,7 +4,7 @@
  * 密码正则
  * 要求：6-18位，包含字母和数字
  */
-export const passwordReg = /^(?=.*[a-zA-Z])(?=.*\d).{6,18}$/;
+export const passwordReg = /^(?=.*[a-z])(?=.*\d).{6,18}$/i;
 
 /**
  * 手机号正则
@@ -14,12 +14,12 @@ export const phoneReg = /^1[3-9]\d{9}$/;
 /**
  * 邮箱正则
  */
-export const emailReg = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+export const emailReg = /^[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
 
 /**
  * 手机号或邮箱正则
  */
-export const phoneOrEmailReg = /^(?:1[3-9]\d{9}|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/;
+export const phoneOrEmailReg = /^(?:1[3-9]\d{9}|[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,})$/i;
 
 /**
  * 验证码正则（6位数字）
@@ -31,12 +31,12 @@ export const verificationCodeReg = /^\d{6}$/;
  * 允许：中英文（含繁体）、数字（全角/半角）、下划线、横线、中文间隔号 ·
  * 长度：2-12个字符
  */
-export const nicknameReg = /^[a-zA-Z0-9_\u4e00-\u9fa5\u3400-\u4dbf\u{20000}-\u{2a6df}\u{2a700}-\u{2b73f}\u{2b740}-\u{2b81f}\u{2b820}-\u{2ceaf}\u{2ceb0}-\u{2ebef}\u{30000}-\u{3134f}\uff00-\uffef·-]{2,12}$/u;
+export const nicknameReg = /^[\w\u4E00-\u9FA5\u3400-\u4DBF\u{20000}-\u{2A6DF}\u{2A700}-\u{2B73F}\u{2B740}-\u{2B81F}\u{2B820}-\u{2CEAF}\u{2CEB0}-\u{2EBEF}\u{30000}-\u{3134F}\uFF00-\uFFEF·-]{2,12}$/u;
 
 /**
  * URL 正则
  */
-export const urlReg = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
+export const urlReg = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*$/;
 
 /**
  * 身份证号正则（简化版）
@@ -46,7 +46,7 @@ export const idCardReg = /^\d{15}|\d{18}$/;
 /**
  * Emoji 表情正则
  */
-export const emojiReg = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu;
+export const emojiReg = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
 
 // ==================== 验证函数 ====================
 

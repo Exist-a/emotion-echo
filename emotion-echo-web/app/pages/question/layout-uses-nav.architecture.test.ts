@@ -22,7 +22,7 @@ const NAV_LINKS = [
 // 本测试钉死契约：question 页必须用 layout: 'nav'，且侧边栏入口必须可达。
 describe('question page layout contract (Stage 112 bug B)', () => {
   it('question/index.vue 使用 layout: "nav"（不是 default），让 sidebar 在心理测验页可见', () => {
-    expect(QUESTION_SRC).toMatch(/definePageMeta\(\s*\{[^}]*layout\s*:\s*['"]nav['"]/s)
+    expect(QUESTION_SRC).toMatch(/definePageMeta\(\s*\{[^}]*layout\s*:\s*['"]nav['"]/)
     // 反向断言：不能误用 default
     expect(QUESTION_SRC).not.toMatch(/layout\s*:\s*['"]default['"]/)
   })

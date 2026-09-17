@@ -15,7 +15,7 @@
             :disabled="loading"
             class="date-input"
             @change="emitRange(($event.target as HTMLInputElement)?.value ?? '', dateEnd)"
-          />
+          >
           <span class="date-sep" aria-hidden="true">至</span>
           <input
             type="date"
@@ -24,7 +24,7 @@
             :disabled="loading"
             class="date-input"
             @change="emitRange(dateStart, ($event.target as HTMLInputElement)?.value ?? '')"
-          />
+          >
         </label>
         <input
           v-else
@@ -36,14 +36,14 @@
           :max="maxDate"
           class="date-input"
           @change="emitSingle(($event.target as HTMLInputElement)?.value ?? '')"
-        />
+        >
       </div>
     </header>
 
     <div v-if="loading" class="loading-state">
-      <div class="ee-skeleton" style="height: 22px; width: 60%; margin-bottom: 12px"></div>
-      <div class="ee-skeleton" style="height: 80px; margin-bottom: 14px"></div>
-      <div class="ee-skeleton" style="height: 240px"></div>
+      <div class="ee-skeleton" style="height: 22px; width: 60%; margin-bottom: 12px"/>
+      <div class="ee-skeleton" style="height: 80px; margin-bottom: 14px"/>
+      <div class="ee-skeleton" style="height: 240px"/>
     </div>
     <template v-else>
       <section v-if="$slots.summary" class="report-summary card">

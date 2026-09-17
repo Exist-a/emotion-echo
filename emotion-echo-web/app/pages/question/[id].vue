@@ -6,11 +6,11 @@
     </header>
 
     <div v-if="isLoading" class="loading-container">
-      <div class="ee-skeleton" style="height: 32px; width: 60%; margin-bottom: 16px"></div>
-      <div class="ee-skeleton" style="height: 16px; width: 80%; margin-bottom: 32px"></div>
-      <div class="ee-skeleton" style="height: 64px; margin-bottom: 12px"></div>
-      <div class="ee-skeleton" style="height: 64px; margin-bottom: 12px"></div>
-      <div class="ee-skeleton" style="height: 64px; margin-bottom: 12px"></div>
+      <div class="ee-skeleton" style="height: 32px; width: 60%; margin-bottom: 16px"/>
+      <div class="ee-skeleton" style="height: 16px; width: 80%; margin-bottom: 32px"/>
+      <div class="ee-skeleton" style="height: 64px; margin-bottom: 12px"/>
+      <div class="ee-skeleton" style="height: 64px; margin-bottom: 12px"/>
+      <div class="ee-skeleton" style="height: 64px; margin-bottom: 12px"/>
     </div>
 
     <div v-else-if="!survey.id" class="empty-state">
@@ -43,7 +43,7 @@
               :value="option.id"
               :checked="answerMap[question.id] === option.id"
               @change="answerMap[question.id] = option.id"
-            />
+            >
             <span>{{ option.text }}</span>
           </label>
         </div>

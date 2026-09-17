@@ -30,7 +30,7 @@ const streamSrc = readFileSync('./app/composables/useAIStreamHandler.ts', 'utf8'
 describe('useConversationSender · createFlow 跨实例 SSE race (Sprint 110)', () => {
   // 1) isInCreateFlow 必须作为 useState 共享 flag (跨实例可见)
   it('isInCreateFlow MUST be declared via useState (Nuxt 3 SSR-safe singleton)', () => {
-    const usesUseState = /useState\s*(?:<[^>]*>)?\s*\(\s*['"`][^'"`]*isInCreateFlow/i.test(senderSrc)
+    const usesUseState = /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*isInCreateFlow/i.test(senderSrc)
     expect(
       usesUseState,
       'useConversationSender 必须新增 isInCreateFlow = useState<boolean>("conv-sender:isInCreateFlow", () => false), ' +

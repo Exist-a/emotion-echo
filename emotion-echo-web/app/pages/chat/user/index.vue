@@ -18,13 +18,13 @@
       <p>这些记录帮助你看见最近的节奏，不是评判。</p>
     </div>
     <div class="user-data-card card">
-      <div class="chart-item" v-for="item in chartData" :key="item.title">
+      <div v-for="item in chartData" :key="item.title" class="chart-item">
         <pieChart v-if="item.chartType === 'pie'" :data="item.data" :height="chartItemHeight" :title="item.title" />
         <lineChart v-if="item.chartType === 'line'" :height="chartItemHeight" :XData="item.XData" :YData="item.YData" :title="item.title" />
         <barChart v-if="item.chartType === 'bar'" :height="chartItemHeight" :XData="item.XData" :YData="item.YData" :title="item.title" />
       </div>
       <div class="ee-empty">暂无数据</div>
-      <div class="ee-skeleton"></div>
+      <div class="ee-skeleton"/>
     </div>
   </section>
 
@@ -32,12 +32,12 @@
     <form class="profile-form">
       <label class="ee-field" data-label="头像">
         <el-upload class="avatar-uploader" action="" :show-file-list="false" :on-success="handleAvatarSuccess" :before-upload="beforeAvatarUpload">
-          <img v-if="form.avatarPath" :src="form.avatarPath" class="avatar" alt="头像预览" />
+          <img v-if="form.avatarPath" :src="form.avatarPath" class="avatar" alt="头像预览" >
           <span class="ee-icon" aria-hidden="true"><Plus /></span>
         </el-upload>
       </label>
-      <label class="ee-field" data-label="昵称"><input type="text" class="ee-input" autocomplete="off" v-model="form.nickname"></label>
-      <label class="ee-field" data-label="年龄"><input type="number" class="ee-input" autocomplete="off" v-model="form.age"></label>
+      <label class="ee-field" data-label="昵称"><input v-model="form.nickname" type="text" class="ee-input" autocomplete="off"></label>
+      <label class="ee-field" data-label="年龄"><input v-model="form.age" type="number" class="ee-input" autocomplete="off"></label>
     </form>
     <template #footer>
       <button type="button" class="ee-btn" @click="dialogFormVisible = false">取消</button>

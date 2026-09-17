@@ -7,7 +7,7 @@
       </li>
     </ol>
     <main class="forget-main">
-      <NuxtPage @changeActive="changeActive" />
+      <NuxtPage @change-active="changeActive" />
     </main>
   </section>
 </template>

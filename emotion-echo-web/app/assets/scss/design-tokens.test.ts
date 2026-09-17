@@ -7,11 +7,11 @@ const variables = readFileSync(resolve(process.cwd(), 'app/assets/scss/variables
 
 describe('Quiet Companion design tokens', () => {
   it('exposes light and dark token sets in global.scss', () => {
-    expect(tokens).toMatch(/:root\s*{/)
+    expect(tokens).toMatch(/:root\s*\{/)
     expect(tokens).toMatch(/--ee-bg:\s*#f7f8f7/i)
     expect(tokens).toMatch(/--ee-primary:\s*#5f8f7b/i)
     expect(tokens).toMatch(/--ee-text:\s*#202522/i)
-    expect(tokens).toMatch(/html\.dark\s*{/)
+    expect(tokens).toMatch(/html\.dark\s*\{/)
     expect(tokens).toMatch(/color-scheme:\s*dark/)
   })
 

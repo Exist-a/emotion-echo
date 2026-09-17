@@ -12,7 +12,7 @@
     </span>
 
     <div v-if="isRecording" class="recording-status">
-      <span class="recording-dot"></span>
+      <span class="recording-dot"/>
       <span class="recording-time">{{ formatTime(recordingTime) }}</span>
     </div>
 

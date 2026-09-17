@@ -49,7 +49,7 @@ export function stripMarkdown(text: string, options?: StripMarkdownOptions): str
 
   if (opts.removeUrls) {
     // Match http(s) URLs that aren't followed by a Chinese character.
-    result = result.replace(/https?:\/\/[^\s\u4e00-\u9fa5]+/gi, '')
+    result = result.replace(/https?:\/\/[^\s\u4E00-\u9FA5]+/gi, '')
   }
 
   if (opts.collapseWhitespace) {
@@ -66,7 +66,7 @@ export function isMostlyCode(text: string): boolean {
     /```/,
     /`[^`]+`/,
     /\b(function|const|let|var|if|else|for|while|return|import|export|class|def|async|await)\b/,
-    /[{}\[\]();]/,
+    /[{}[\]();]/,
   ]
 
   let matchCount = 0

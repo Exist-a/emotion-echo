@@ -6,10 +6,10 @@
     :style="{ left: position.x ? position.x + 'px' : '', top: position.y ? position.y + 'px' : '' }"
     @mousedown="handleMouseDown"
   >
-    <div id="digital-human-container" class="digital-human-container" v-show="visible">
-      <canvas ref="canvasRef" class="digital-human-canvas"></canvas>
+    <div v-show="visible" id="digital-human-container" class="digital-human-container">
+      <canvas ref="canvasRef" class="digital-human-canvas"/>
       <div v-if="loading" class="loading-overlay">
-        <div class="loading-spinner"></div>
+        <div class="loading-spinner"/>
         <span class="loading-text">加载数字人模型中...</span>
       </div>
       <div v-else-if="loadFailed" class="loading-overlay">
@@ -21,9 +21,9 @@
     <div class="control-buttons">
       <button
         class="control-btn"
-        @click="handleToggleVisible"
         :title="visible ? '隐藏数字人' : '显示数字人'"
         :aria-label="visible ? '隐藏数字人' : '显示数字人'"
+        @click="handleToggleVisible"
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <template v-if="visible">
@@ -40,9 +40,9 @@
       </button>
       <button
         class="control-btn"
-        @click="handleToggleVoice"
         :title="voiceEnabled ? '关闭语音' : '开启语音'"
         :aria-label="voiceEnabled ? '关闭语音' : '开启语音'"
+        @click="handleToggleVoice"
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <template v-if="voiceEnabled">
@@ -138,12 +138,12 @@ const BLINK_INTERVAL = 5
 
 let loadAttempts = 0
 const MAX_LOAD_ATTEMPTS = 3
-let loadFailed = ref(false)
+const loadFailed = ref(false)
 
 let currentEmotion: string = 'neutral'
 let currentLipShape: LipShape = 'neutral'
 let emotionTransitionTime = 0
-let lipShapeTransitionTime = 0
+const lipShapeTransitionTime = 0
 const EMOTION_DURATION = 5.0
 const LIP_TRANSITION_SPEED = 20.0
 
@@ -323,10 +323,10 @@ const initScene = () => {
   camera.position.set(0, 1.14, 0.7)
   camera.lookAt(0, 1.0, 0)
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1)
+  const ambientLight = new THREE.AmbientLight(0xFFFFFF, 1)
   scene.add(ambientLight)
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
+  const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1)
   directionalLight.position.set(1, 1, 1)
   scene.add(directionalLight)
 

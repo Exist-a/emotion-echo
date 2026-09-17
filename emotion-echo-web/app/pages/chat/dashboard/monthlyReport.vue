@@ -1,9 +1,9 @@
 <template>
   <ReportScaffold
+    v-model:date="month"
     title="这个月"
     description="把过去三十天的节奏轻轻展开。"
     :loading="isLoading"
-    v-model:date="month"
     picker-type="month"
     @change="fetchMonthlyReport"
   >

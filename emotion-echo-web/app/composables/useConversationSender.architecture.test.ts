@@ -36,7 +36,7 @@ describe('useConversationSender · 架构债 (Stage 107 → Sprint 108)', () => 
     // 必须用 useState() / Pinia store 才能跨实例共享
     // (注: streamAbortController 是非响应式 AbortController, 实际方案是 module-scope let)
     const isComponentLocal = /export function useAIStreamHandler[^{]*\{[\s\S]*?let streamAbortController[\s\S]*?\n\}/
-    const usesUseState = /useState\s*(?:<[^>]*>)?\s*\(\s*['"`][^'"`]*stream/i.test(streamSrc)
+    const usesUseState = /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*stream/i.test(streamSrc)
 
     // 不应同时是"组件实例局部"且"没用 useState"
     const isBug = isComponentLocal.test(streamSrc) && !usesUseState
@@ -54,8 +54,8 @@ describe('useConversationSender · 架构债 (Stage 107 → Sprint 108)', () => 
     // 当前 (BUG): useConversationSender.ts:23 const accumulatedDeltaText = ref('')
     // 期望 (FIX): useState('accumulatedDeltaText', () => '') 或 Pinia store
     const isComponentLocal = /const accumulatedDeltaText\s*=\s*ref\(/.test(senderSrc)
-    const usesSharedState = /useState\s*(?:<[^>]*>)?\s*\(\s*['"`][^'"`]*accumulatedDeltaText/i.test(senderSrc) ||
-                            /useState\s*(?:<[^>]*>)?\s*\(\s*['"`][^'"`]*tts/i.test(senderSrc)
+    const usesSharedState = /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*accumulatedDeltaText/i.test(senderSrc) ||
+                            /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*tts/i.test(senderSrc)
 
     const isBug = isComponentLocal && !usesSharedState
     expect(

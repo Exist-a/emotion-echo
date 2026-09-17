@@ -31,16 +31,16 @@
           />
           <div
             v-else-if="item.content"
+            v-dompurify-html="getHtmlContent(item.content)"
             class="bubble"
             :class="item.sender === 'user' ? 'bubble-user' : 'bubble-ai'"
             :style="{ fontSize: userConfig.fontSize }"
-            v-dompurify-html="getHtmlContent(item.content)"
-          ></div>
+          />
           <div v-else-if="item.sender === 'ai' && item.status === 'streaming'" class="bubble bubble-ai loading-bubble">
-            <span class="quiet-pulse" aria-label="正在回复"></span>
+            <span class="quiet-pulse" aria-label="正在回复"/>
           </div>
         </article>
-        <div v-if="conversationSender.isStreaming.value" class="breath-line" aria-hidden="true"><span></span></div>
+        <div v-if="conversationSender.isStreaming.value" class="breath-line" aria-hidden="true"><span/></div>
       </div>
     </main>
 
@@ -68,8 +68,8 @@
             aria-hidden="true"
             tabindex="-1"
             @change="onFilePicked"
-          />
-          <button type="button" class="icon-btn ghost" aria-label="添加附件" @click="handleAttachment" :disabled="fileUpload.isUploading.value">
+          >
+          <button type="button" class="icon-btn ghost" aria-label="添加附件" :disabled="fileUpload.isUploading.value" @click="handleAttachment">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 11.5l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />
             </svg>

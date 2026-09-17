@@ -44,7 +44,7 @@ describe('quick-login 契约（C6 todo-pile）', () => {
     // 不得"绕过"业务层直接调不存在的 /auth/quick-login 端点。
     // 注释可以提"无 /auth/quick-login"作为事实记录，但代码不能含 fetch(...quickLogin...)
     // 或 axios.post(.../auth/quick-login...) 字面量。
-    const quickLoginBlock = src.match(/const quickLogin = async[^{]*{([\s\S]*?)\n  }/)?.[1] ?? ''
+    const quickLoginBlock = src.match(/const quickLogin = async[^{]*\{([\s\S]*?)\n {2}\}/)?.[1] ?? ''
     // 抽出非注释行（去 -- // 后的内容）
     const codeOnly = quickLoginBlock
       .split('\n')

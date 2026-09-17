@@ -6,7 +6,7 @@
         <span v-else>⏸</span>
       </button>
       <div class="waveform">
-        <span v-for="i in 10" :key="i" class="wave" :style="{ height: waveHeights[i - 1] + '%' }"></span>
+        <span v-for="i in 10" :key="i" class="wave" :style="{ height: waveHeights[i - 1] + '%' }"/>
       </div>
       <span class="duration">{{ formatTime(duration) }}</span>
     </div>
@@ -15,7 +15,7 @@
       {{ transcript }}
     </div>
 
-    <audio ref="audioRef" :src="audioUrl" @ended="onEnded" @timeupdate="onTimeUpdate"></audio>
+    <audio ref="audioRef" :src="audioUrl" @ended="onEnded" @timeupdate="onTimeUpdate"/>
   </div>
 </template>
 

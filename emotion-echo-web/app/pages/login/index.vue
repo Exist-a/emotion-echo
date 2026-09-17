@@ -3,9 +3,9 @@
     <div class="login-card" :class="{ 'is-register': !isLogin }">
       <aside class="brand-panel">
         <span class="eyebrow">情绪回音</span>
-        <h1>想说的时候，<br />有人在听。</h1>
+        <h1>想说的时候，<br >有人在听。</h1>
         <p>一个安静记录情绪的地方，不用打分，也不会评判。</p>
-        <div class="breath-line" aria-hidden="true"><span></span></div>
+        <div class="breath-line" aria-hidden="true"><span/></div>
       </aside>
 
       <section class="form-panel">
@@ -21,15 +21,15 @@
         <form v-if="isLogin" class="auth-form" @submit.prevent="loginHandler">
           <label class="auth-field">
             <span class="input-icon" aria-hidden="true">@</span>
-            <input v-model="loginInfo.username" class="ee-input" placeholder="用户名" autocomplete="username" />
+            <input v-model="loginInfo.username" class="ee-input" placeholder="用户名" autocomplete="username" >
           </label>
           <label class="auth-field">
             <span class="input-icon" aria-hidden="true">●</span>
-            <input v-model="loginInfo.password" type="password" class="ee-input" placeholder="密码" autocomplete="current-password" />
+            <input v-model="loginInfo.password" type="password" class="ee-input" placeholder="密码" autocomplete="current-password" >
           </label>
           <div class="form-extras">
             <label class="ee-checkbox">
-              <input v-model="isRemember" type="checkbox" />
+              <input v-model="isRemember" type="checkbox" >
               <span>记住我</span>
             </label>
             <NuxtLink to="/login/forget/verify" class="link">忘记密码</NuxtLink>
@@ -48,14 +48,14 @@
         <form v-else class="auth-form" @submit.prevent="registerHandler">
           <label class="auth-field">
             <span class="input-icon" aria-hidden="true">@</span>
-            <input v-model="registerInfo.username" class="ee-input" placeholder="用户名" autocomplete="username" />
+            <input v-model="registerInfo.username" class="ee-input" placeholder="用户名" autocomplete="username" >
           </label>
           <label class="auth-field">
             <span class="input-icon" aria-hidden="true">●</span>
-            <input v-model="registerInfo.password" type="password" class="ee-input" placeholder="密码（6-18 位字母+数字）" autocomplete="new-password" />
+            <input v-model="registerInfo.password" type="password" class="ee-input" placeholder="密码（6-18 位字母+数字）" autocomplete="new-password" >
           </label>
           <div class="auth-field code-field">
-            <input v-model="registerInfo.verificationCode" class="ee-input" placeholder="验证码" maxlength="6" />
+            <input v-model="registerInfo.verificationCode" class="ee-input" placeholder="验证码" maxlength="6" >
             <button type="button" class="ee-btn code-btn" :disabled="isGetVerificationCode" @click="getVerificationCode">
               {{ isGetVerificationCode ? `${lastSeconds}s 后重发` : '获取验证码' }}
             </button>

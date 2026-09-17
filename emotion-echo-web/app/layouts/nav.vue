@@ -24,7 +24,7 @@
       </nav>
     </aside>
 
-    <div v-if="isSidebarOpen" class="sidebar-backdrop mobile-only" aria-hidden="true" @click="closeSidebar"></div>
+    <div v-if="isSidebarOpen" class="sidebar-backdrop mobile-only" aria-hidden="true" @click="closeSidebar"/>
     <main class="app-content">
       <header class="app-header">
         <button class="icon-button mobile-only" type="button" aria-label="打开导航" @click="openSidebar">☰</button>

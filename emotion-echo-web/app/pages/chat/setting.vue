@@ -42,7 +42,7 @@
               :value="opt.value"
               :checked="userConfig.theme === opt.value"
               @change="handleThemeChange(opt.value)"
-            />
+            >
             <span>{{ opt.label }}</span>
           </label>
         </div>

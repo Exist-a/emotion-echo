@@ -2,7 +2,7 @@
   <div class="chat-file" @click="handleClick">
     <!-- 图片消息 -->
     <div v-if="contentType === 'image'" class="chat-image">
-      <img :src="getFullUrl(content)" :alt="filename" @error="handleImageError" />
+      <img :src="getFullUrl(content)" :alt="filename" @error="handleImageError" >
     </div>
 
     <!-- 视频消息 -->
@@ -85,7 +85,7 @@ const formatSize = computed(() => {
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
 })
 
 /**

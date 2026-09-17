@@ -8,6 +8,8 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
+    "lint": "eslint app/",
+    "lint:fix": "eslint app/ --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "postinstall": "nuxt prepare",
@@ -35,8 +37,11 @@
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
+    "@nuxt/eslint": "^1.0.0",
+    "@nuxt/eslint-config": "^1.0.0",
     "@playwright/test": "^1.61.1",
     "@types/node": "^24.10.4",
+    "eslint": "^9.0.0",
     "@vue/test-utils": "^2",
     "fast-glob": "^3.3.3",
     "gh-pages": "^6.3.0",

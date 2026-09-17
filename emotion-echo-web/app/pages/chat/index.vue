@@ -1,5 +1,5 @@
 <template>
-  <NuxtPage></NuxtPage>
+  <NuxtPage/>
   <!-- chat -->
 </template>
 

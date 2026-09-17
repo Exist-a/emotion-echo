@@ -102,7 +102,7 @@ export async function getMessagesBySession(
 ): Promise<MessageWithStatus[]> {
   const db = await getDb();
   const { minKey, maxKey } = await getDexieKeys();
-  let query = db.messages
+  const query = db.messages
     .where("[sessionId+sendTime]")
     .between(
       [sessionId, minKey],

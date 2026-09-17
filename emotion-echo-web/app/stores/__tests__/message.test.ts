@@ -7,6 +7,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
+import { useMessageStore } from '~/stores/message'
+
 const postMock = vi.fn()
 
 vi.mock('~/composables/useApi', () => ({
@@ -16,8 +18,6 @@ vi.mock('~/composables/useApi', () => ({
   patch: vi.fn(),
   del: vi.fn()
 }))
-
-import { useMessageStore } from '~/stores/message'
 
 const okMessage = {
   id: 'm1',

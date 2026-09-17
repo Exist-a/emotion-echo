@@ -44,8 +44,8 @@
             <path d="M5 11a7 7 0 0 0 14 0" />
             <line x1="12" y1="18" x2="12" y2="22" />
           </svg>
-          <span v-else class="voice-center-dot"></span>
-          <span v-if="isRecording" class="voice-ring"></span>
+          <span v-else class="voice-center-dot"/>
+          <span v-if="isRecording" class="voice-ring"/>
         </div>
         <button
           type="submit"
