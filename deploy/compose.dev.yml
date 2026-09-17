@@ -31,6 +31,8 @@ services:
       BFF_DEV_RETURN_CODE: ${BFF_DEV_RETURN_CODE:-1}
       # dev 默认 true（直连 BFF 调试）；prod 设 false（强制走 APISIX X-User-Id 注入）
       BFF_TRUST_APISIX: ${BFF_TRUST_APISIX:-true}
+      # dev Docker 网络 CIDR（APISIX 容器 IP 所在网段，TrustAPISIX=true 时必填）
+      BFF_APISIX_CIDRS: ${BFF_APISIX_CIDRS:-172.18.0.0/16}
       # dev 默认 DEBUG（看调试日志）；prod 设 INFO（apps.yml 默认值）
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
     ports:
