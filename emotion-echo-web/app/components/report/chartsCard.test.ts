@@ -37,9 +37,9 @@ describe('chartsCard.vue', () => {
           pieChart: { template: '<div class="pie-stub" />' },
           lineChart: { template: '<div class="line-stub" />' },
           barChart: { template: '<div class="bar-stub" />' },
-          RadarChart: { template: '<div class="radar-stub" />' }
-        }
-      }
+          RadarChart: { template: '<div class="radar-stub" />' },
+        },
+      },
     })
   }
 
@@ -60,8 +60,8 @@ describe('chartsCard.vue', () => {
       data: [
         { chartType: 'pie', title: 'A', data: [{ name: 'x', value: 1 }] },
         { chartType: 'line', title: 'B', XData: ['a'], YData: [1] },
-        { chartType: 'bar', title: 'C', XData: ['a'], YData: [1] }
-      ]
+        { chartType: 'bar', title: 'C', XData: ['a'], YData: [1] },
+      ],
     })
     await nextTick()
     expect(wrapper.findAll('.chart-item').length).toBe(3)
@@ -70,7 +70,7 @@ describe('chartsCard.vue', () => {
 
   it('falls back to chart-placeholder for unknown chartType', async () => {
     const wrapper = await factory({
-      data: [{ chartType: 'unknown' as any, title: 'X' }]
+      data: [{ chartType: 'unknown' as any, title: 'X' }],
     })
     await nextTick()
     expect(wrapper.find('.chart-placeholder').exists()).toBe(true)
@@ -79,7 +79,9 @@ describe('chartsCard.vue', () => {
 
   it('renders 1 column on narrow viewports (< 992px)', async () => {
     setInnerWidth(800)
-    const wrapper = await factory({ data: [{ chartType: 'pie', title: 'A', data: [{ name: 'x', value: 1 }] }] })
+    const wrapper = await factory({
+      data: [{ chartType: 'pie', title: 'A', data: [{ name: 'x', value: 1 }] }],
+    })
     await nextTick()
     const grid = wrapper.find('.charts-grid')
     expect(grid.attributes('style') || '').toMatch(/grid-template-columns:\s*repeat\(1,/)
@@ -88,7 +90,9 @@ describe('chartsCard.vue', () => {
 
   it('renders 3 columns on wide viewports (>= 1600px)', async () => {
     setInnerWidth(1920)
-    const wrapper = await factory({ data: [{ chartType: 'pie', title: 'A', data: [{ name: 'x', value: 1 }] }] })
+    const wrapper = await factory({
+      data: [{ chartType: 'pie', title: 'A', data: [{ name: 'x', value: 1 }] }],
+    })
     await nextTick()
     const grid = wrapper.find('.charts-grid')
     expect(grid.attributes('style') || '').toMatch(/grid-template-columns:\s*repeat\(3,/)

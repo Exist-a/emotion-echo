@@ -24,10 +24,7 @@ import { resolve } from 'node:path'
  */
 
 describe('useFaceEmotion · P0-R2-2 字面量契约', () => {
-  const src = readFileSync(
-    resolve(__dirname, './useFaceEmotion.ts'),
-    'utf8'
-  )
+  const src = readFileSync(resolve(__dirname, './useFaceEmotion.ts'), 'utf8')
 
   it('不含 orphan 路径 /face/emotion', () => {
     expect(src).not.toContain('/face/emotion')

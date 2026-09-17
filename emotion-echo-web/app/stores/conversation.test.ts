@@ -6,7 +6,6 @@ import { readFileSync } from 'node:fs'
 // vitest 把 import.meta.url 暴露为 file:// URL;直接用 ROOT-relative path。
 const src = readFileSync('./app/stores/conversation.ts', 'utf8')
 
-
 // 抽出 togglePinConversation 块的源码
 function togglePinBlock(): string {
   const start = src.indexOf('const togglePinConversation')
@@ -28,7 +27,9 @@ describe('useConversationStore · notify 文案合同(static-source)', () => {
     expect(notifyCalls.length).toBeGreaterThanOrEqual(1)
     // 任意一行 notify 调用都不能是 notify('','','success',3000) 这种双重空
     const allCalls = notifyCalls.join('\n')
-    expect(allCalls).not.toMatch(/notify\(\s*['"`]\s*['"`]\s*,\s*['"`]\s*['"`]\s*,\s*['"`](?:success|info|error|warning)['"`]/)
+    expect(allCalls).not.toMatch(
+      /notify\(\s*['"`]\s*['"`]\s*,\s*['"`]\s*['"`]\s*,\s*['"`](?:success|info|error|warning)['"`]/,
+    )
     // success 分支内 message 应出现"置顶"或"取消置顶" 字眼
     expect(allCalls).toMatch(/置顶|取消置顶/)
   })
@@ -36,7 +37,7 @@ describe('useConversationStore · notify 文案合同(static-source)', () => {
   it('togglePinConversation 的 title 字段不应为空字符串', () => {
     const block = togglePinBlock()
     const notifyCalls = block.match(/notify\([^)]*\)/g) ?? []
-    const bad = notifyCalls.find(c => /notify\(\s*['"`]\s*['"`]\s*,/.test(c))
+    const bad = notifyCalls.find((c) => /notify\(\s*['"`]\s*['"`]\s*,/.test(c))
     expect(bad).toBeUndefined()
   })
 
@@ -45,14 +46,16 @@ describe('useConversationStore · notify 文案合同(static-source)', () => {
     const notifyCalls = block.match(/notify\([^)]*\)/g) ?? []
     expect(notifyCalls.length).toBeGreaterThanOrEqual(1)
     const allCalls = notifyCalls.join('\n')
-    expect(allCalls).not.toMatch(/notify\(\s*['"`]\s*['"`]\s*,\s*['"`]\s*['"`]\s*,\s*['"`](?:success|info|error|warning)['"`]/)
+    expect(allCalls).not.toMatch(
+      /notify\(\s*['"`]\s*['"`]\s*,\s*['"`]\s*['"`]\s*,\s*['"`](?:success|info|error|warning)['"`]/,
+    )
     expect(allCalls).toMatch(/删除/)
   })
 
   it('deleteConversation 的 title 字段不应为空字符串', () => {
     const block = deleteBlock()
     const notifyCalls = block.match(/notify\([^)]*\)/g) ?? []
-    const bad = notifyCalls.find(c => /notify\(\s*['"`]\s*['"`]\s*,/.test(c))
+    const bad = notifyCalls.find((c) => /notify\(\s*['"`]\s*['"`]\s*,/.test(c))
     expect(bad).toBeUndefined()
   })
 })

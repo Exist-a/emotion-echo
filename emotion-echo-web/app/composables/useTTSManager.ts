@@ -30,10 +30,10 @@ export function useTTSManager(options: UseTTSManagerOptions = {}): UseTTSManager
     playText: originalPlayText,
     flushRemaining,
     stop,
-    setVoiceEnabled
+    setVoiceEnabled,
   } = useDigitalHumanTTS({
     onLipShapeChange: options.onLipShapeChange,
-    onEmotionChange: options.onEmotionChange
+    onEmotionChange: options.onEmotionChange,
   })
 
   const playText = (text: string) => {
@@ -91,6 +91,6 @@ export function useTTSManager(options: UseTTSManagerOptions = {}): UseTTSManager
     playText,
     flushRemaining: flushRemainingText,
     stop: stopAll,
-    setEnabled
+    setEnabled,
   }
 }

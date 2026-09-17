@@ -1,196 +1,203 @@
-import { ref, onUnmounted } from "vue";
-import { stripMarkdown, extractReadableText } from "~/utils/stripMarkdown";
-import { API_ROUTES } from "~/lib/apiRoutes";
-import { getApiBaseUrl } from "../lib/apiBaseUrl";
-import { getClientAccessToken } from "~/lib/clientAccessToken";
+import { ref, onUnmounted } from 'vue'
+import { stripMarkdown, extractReadableText } from '~/utils/stripMarkdown'
+import { API_ROUTES } from '~/lib/apiRoutes'
+import { getApiBaseUrl } from '../lib/apiBaseUrl'
+import { getClientAccessToken } from '~/lib/clientAccessToken'
 
 // Lazy import: pcm-player accesses AudioContext at import time, will crash SSR.
-let _PcmPlayer: any = null;
+let _PcmPlayer: any = null
 async function getPcmPlayer() {
   if (!_PcmPlayer) {
-    const mod = await import("pcm-player");
-    _PcmPlayer = mod.default ?? mod;
+    const mod = await import('pcm-player')
+    _PcmPlayer = mod.default ?? mod
   }
-  return _PcmPlayer;
+  return _PcmPlayer
 }
 
-export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral';
+export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral'
 
 export interface Phoneme {
-  char: string;
-  start: number;
-  duration: number;
+  char: string
+  start: number
+  duration: number
 }
 
 export interface TTSRequest {
-  text: string;
-  language?: string;
+  text: string
+  language?: string
 }
 
 export interface TTSResponse {
-  audio: string;
-  sample_rate: number;
-  text?: string;
-  phonemes?: Phoneme[];
-  duration?: number;
+  audio: string
+  sample_rate: number
+  text?: string
+  phonemes?: Phoneme[]
+  duration?: number
 }
 
 export interface LipSyncItem {
-  text: string;
-  phonemes: Phoneme[];
-  audio: HTMLAudioElement;
-  startTime: number;
+  text: string
+  phonemes: Phoneme[]
+  audio: HTMLAudioElement
+  startTime: number
 }
 
-type LipSyncCallback = (shape: LipShape, progress: number) => void;
+type LipSyncCallback = (shape: LipShape, progress: number) => void
 
 const VOWEL_TO_LIP: Record<string, LipShape> = {
-  'a': 'aa',
-  'o': 'oh',
-  'e': 'ee',
-  'i': 'ih',
-  'u': 'ou',
-  'ü': 'ee',
-  'v': 'ih',
-  'n': 'ih',
-  'm': 'ih',
-};
+  a: 'aa',
+  o: 'oh',
+  e: 'ee',
+  i: 'ih',
+  u: 'ou',
+  ü: 'ee',
+  v: 'ih',
+  n: 'ih',
+  m: 'ih',
+}
 
 const CONSONANT_CLOSE: Record<string, LipShape> = {
-  'b': 'aa',
-  'p': 'aa',
-  'm': 'aa',
-  'f': 'oh',
-  'v': 'oh',
-  'w': 'ou',
-  'd': 'ih',
-  't': 'ih',
-  'n': 'ih',
-  'l': 'ih',
-  'z': 'ih',
-  'c': 'ih',
-  's': 'ih',
-  'zh': 'ih',
-  'ch': 'ih',
-  'sh': 'ih',
-  'r': 'ih',
-  'j': 'ih',
-  'q': 'ih',
-  'x': 'ih',
-  'y': 'ih',
-  'g': 'ih',
-  'k': 'ih',
-  'h': 'ih',
-};
+  b: 'aa',
+  p: 'aa',
+  m: 'aa',
+  f: 'oh',
+  v: 'oh',
+  w: 'ou',
+  d: 'ih',
+  t: 'ih',
+  n: 'ih',
+  l: 'ih',
+  z: 'ih',
+  c: 'ih',
+  s: 'ih',
+  zh: 'ih',
+  ch: 'ih',
+  sh: 'ih',
+  r: 'ih',
+  j: 'ih',
+  q: 'ih',
+  x: 'ih',
+  y: 'ih',
+  g: 'ih',
+  k: 'ih',
+  h: 'ih',
+}
 
 // 单例模式的变量
-const audioContext: AudioContext | null = null;
-const audioElement: HTMLAudioElement | null = null;
-const currentTime = ref(0);
-const isPlaying = ref(false);
-const currentVolume = ref(2.0);
-let pcmPlayer: any = null;
-let lipAnimationInterval: ReturnType<typeof setInterval> | null = null;
-let lipSyncCallback: LipSyncCallback | null = null;
-let abortController: AbortController | null = null;
-let chunksBuffer: Uint8Array[] = [];
+const audioContext: AudioContext | null = null
+const audioElement: HTMLAudioElement | null = null
+const currentTime = ref(0)
+const isPlaying = ref(false)
+const currentVolume = ref(2.0)
+let pcmPlayer: any = null
+let lipAnimationInterval: ReturnType<typeof setInterval> | null = null
+let lipSyncCallback: LipSyncCallback | null = null
+let abortController: AbortController | null = null
+let chunksBuffer: Uint8Array[] = []
 
-const lipShapes: LipShape[] = ['aa', 'ee', 'ih', 'oh', 'ou'];
+const lipShapes: LipShape[] = ['aa', 'ee', 'ih', 'oh', 'ou']
 
 const startRandomLipAnimation = (callback?: LipSyncCallback) => {
-  stopLipAnimation();
-  lipSyncCallback = callback ?? null;
+  stopLipAnimation()
+  lipSyncCallback = callback ?? null
 
-  let shapeIndex = 0;
-  const interval = 150;
+  let shapeIndex = 0
+  const interval = 150
 
   lipAnimationInterval = setInterval(() => {
-    const shape = lipShapes[shapeIndex % lipShapes.length]!;
-    callback?.(shape, 1);
-    shapeIndex++;
-  }, interval);
-};
+    const shape = lipShapes[shapeIndex % lipShapes.length]!
+    callback?.(shape, 1)
+    shapeIndex++
+  }, interval)
+}
 
 const stopLipAnimation = () => {
   if (lipAnimationInterval) {
-    clearInterval(lipAnimationInterval);
-    lipAnimationInterval = null;
-    lipSyncCallback?.('neutral', 0);
+    clearInterval(lipAnimationInterval)
+    lipAnimationInterval = null
+    lipSyncCallback?.('neutral', 0)
   }
-};
+}
 
 const stop = () => {
-  clearLipSyncInterval();
-  stopLipAnimation();
+  clearLipSyncInterval()
+  stopLipAnimation()
 
-  const el = audioElement as HTMLAudioElement | null;
+  const el = audioElement as HTMLAudioElement | null
   if (el) {
-    el.pause();
-    el.currentTime = 0;
+    el.pause()
+    el.currentTime = 0
   }
 
   if (pcmPlayer) {
     if (typeof pcmPlayer.stop === 'function') {
-      pcmPlayer.stop();
+      pcmPlayer.stop()
     }
     if (typeof pcmPlayer.destroy === 'function') {
-      pcmPlayer.destroy();
+      pcmPlayer.destroy()
     }
-    pcmPlayer = null;
+    pcmPlayer = null
   }
 
   if (abortController) {
-    abortController.abort();
-    abortController = null;
+    abortController.abort()
+    abortController = null
   }
 
-  chunksBuffer = [];
-  isPlaying.value = false;
-};
+  chunksBuffer = []
+  isPlaying.value = false
+}
 
 const clearLipSyncInterval = () => {
   if (lipAnimationInterval) {
-    clearInterval(lipAnimationInterval);
-    lipAnimationInterval = null;
+    clearInterval(lipAnimationInterval)
+    lipAnimationInterval = null
   }
-};
+}
 
 const setVolume = (volume: number) => {
-  console.log('[TTS] setVolume called:', volume, 'pcmPlayer exists:', !!pcmPlayer, 'currentVolume:', currentVolume.value);
-  currentVolume.value = volume;
+  console.log(
+    '[TTS] setVolume called:',
+    volume,
+    'pcmPlayer exists:',
+    !!pcmPlayer,
+    'currentVolume:',
+    currentVolume.value,
+  )
+  currentVolume.value = volume
   if (pcmPlayer) {
-    pcmPlayer.volume = volume;
-    console.log('[TTS] pcmPlayer.volume set to:', pcmPlayer.volume);
+    pcmPlayer.volume = volume
+    console.log('[TTS] pcmPlayer.volume set to:', pcmPlayer.volume)
   }
-};
+}
 
 const playStream = async (
   text: string,
   onLipSync: LipSyncCallback,
   speed: number = 0.75,
-  volume: number = 2.0
+  volume: number = 2.0,
 ) => {
-  const cleanText = stripMarkdown(text).trim();
-  if (!cleanText) return;
+  const cleanText = stripMarkdown(text).trim()
+  if (!cleanText) return
 
-  const readableText = extractReadableText(cleanText);
-  if (!readableText) return;
+  const readableText = extractReadableText(cleanText)
+  if (!readableText) return
 
-  console.log('[TTS Stream] Playing:', readableText.substring(0, 50));
-  console.log('[TTS Stream] Starting new TTS stream, stopping previous...');
-  
-  stop();
+  console.log('[TTS Stream] Playing:', readableText.substring(0, 50))
+  console.log('[TTS Stream] Starting new TTS stream, stopping previous...')
+
+  stop()
 
   try {
-    abortController = new AbortController();
+    abortController = new AbortController()
     // PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8894
-    const base = getApiBaseUrl(useRuntimeConfig());
+    const base = getApiBaseUrl(useRuntimeConfig())
     // Sprint 111 · R-09 修复: 同 useAIStreamHandler — HttpOnly cookie 读不到
-    const token = getClientAccessToken();
+    const token = getClientAccessToken()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (token) headers['Authorization'] = `Bearer ${token}`
     const response = await fetch(`${base}${API_ROUTES.ttsStream.path}`, {
       method: 'POST',
       headers,
@@ -200,141 +207,148 @@ const playStream = async (
         volume: volume,
       }),
       signal: abortController.signal,
-    });
+    })
 
     if (!response.ok) {
-      throw new Error(`TTS stream request failed: ${response.status}`);
+      throw new Error(`TTS stream request failed: ${response.status}`)
     }
 
     if (!response.body) {
-      throw new Error("No response body");
+      throw new Error('No response body')
     }
 
-    const PcmPlayer = await getPcmPlayer();
+    const PcmPlayer = await getPcmPlayer()
     const player = new PcmPlayer({
       inputCodec: 'Int16',
       channels: 1,
       sampleRate: 24000,
       flushTime: 100,
-    });
+    })
 
-    player.volume = currentVolume.value;
-    pcmPlayer = player;
-    console.log("[TTS Stream] PCM Player created with volume:", currentVolume.value);
+    player.volume = currentVolume.value
+    pcmPlayer = player
+    console.log('[TTS Stream] PCM Player created with volume:', currentVolume.value)
 
-    isPlaying.value = true;
-    let lipAnimationStarted = false;
+    isPlaying.value = true
+    let lipAnimationStarted = false
 
-    const reader = response.body.getReader();
+    const reader = response.body.getReader()
 
-    let chunkCount = 0;
-    let totalBytes = 0;
-    const startTime = Date.now();
-    let lastLogTime = startTime;
+    let chunkCount = 0
+    let totalBytes = 0
+    const startTime = Date.now()
+    let lastLogTime = startTime
 
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      const { done, value } = await reader.read()
+      if (done) break
 
       if (abortController?.signal.aborted) {
-        console.log("[TTS Stream] Aborted");
-        break;
+        console.log('[TTS Stream] Aborted')
+        break
       }
 
       if (value && value.length > 0) {
-        const now = Date.now();
-        chunkCount++;
-        totalBytes += value.length;
+        const now = Date.now()
+        chunkCount++
+        totalBytes += value.length
 
         if (now - lastLogTime >= 500) {
-          console.log(`[TTS Stream] Chunk #${chunkCount}, ${value.length} bytes, total: ${totalBytes} bytes, elapsed: ${(now - startTime) / 1000}s`);
-          lastLogTime = now;
+          console.log(
+            `[TTS Stream] Chunk #${chunkCount}, ${value.length} bytes, total: ${totalBytes} bytes, elapsed: ${(now - startTime) / 1000}s`,
+          )
+          lastLogTime = now
         }
 
         if (!lipAnimationStarted && chunkCount === 1) {
-          console.log("[TTS Stream] First audio chunk received, starting lip animation...");
-          startRandomLipAnimation(onLipSync);
-          lipAnimationStarted = true;
+          console.log('[TTS Stream] First audio chunk received, starting lip animation...')
+          startRandomLipAnimation(onLipSync)
+          lipAnimationStarted = true
         }
 
         try {
-          let dataToUse = value;
+          let dataToUse = value
           // 如果是奇数长度，去掉最后一个字节保证对齐
           if (value.length % 2 !== 0) {
-            const newLength = value.length - 1;
-            dataToUse = new Uint8Array(newLength);
-            dataToUse.set(value.subarray(0, newLength));
+            const newLength = value.length - 1
+            dataToUse = new Uint8Array(newLength)
+            dataToUse.set(value.subarray(0, newLength))
           }
-          const int16Data = new Int16Array(dataToUse.buffer);
-          player.feed(int16Data);
+          const int16Data = new Int16Array(dataToUse.buffer)
+          player.feed(int16Data)
         } catch (e) {
-          console.error("[TTS Stream] Error feeding data to PCM player:", e);
+          console.error('[TTS Stream] Error feeding data to PCM player:', e)
         }
       }
     }
 
-    console.log(`[TTS Stream] Stream completed, total chunks: ${chunkCount}, total bytes: ${totalBytes}, total time: ${(Date.now() - startTime) / 1000}s`);
-    isPlaying.value = false;
-    stopLipAnimation();
-
+    console.log(
+      `[TTS Stream] Stream completed, total chunks: ${chunkCount}, total bytes: ${totalBytes}, total time: ${(Date.now() - startTime) / 1000}s`,
+    )
+    isPlaying.value = false
+    stopLipAnimation()
   } catch (e: any) {
     if (e.name === 'AbortError') {
-      console.log("[TTS Stream] Request cancelled");
+      console.log('[TTS Stream] Request cancelled')
     } else {
-      console.error("[TTS Stream] Error:", e);
-      stopLipAnimation();
-      throw e;
+      console.error('[TTS Stream] Error:', e)
+      stopLipAnimation()
+      throw e
     }
   }
-};
+}
 
 const playStreamChunks = (chunks: Uint8Array[]) => {
-  const ctx = audioContext as AudioContext | null;
-  if (!ctx) return;
+  const ctx = audioContext as AudioContext | null
+  if (!ctx) return
 
-  const allBytes = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
-  let offset = 0;
+  const allBytes = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0))
+  let offset = 0
   for (const chunk of chunks) {
-    allBytes.set(chunk, offset);
-    offset += chunk.length;
+    allBytes.set(chunk, offset)
+    offset += chunk.length
   }
 
-  ctx.decodeAudioData(allBytes.buffer, (buffer: AudioBuffer) => {
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start();
-  }, (e: DOMException) => {
-    console.error("[TTS Stream] Decode error:", e);
-  });
-};
+  ctx.decodeAudioData(
+    allBytes.buffer,
+    (buffer: AudioBuffer) => {
+      const source = ctx.createBufferSource()
+      source.buffer = buffer
+      source.connect(ctx.destination)
+      source.start()
+    },
+    (e: DOMException) => {
+      console.error('[TTS Stream] Decode error:', e)
+    },
+  )
+}
 
 const pause = () => {
-  const el = audioElement as HTMLAudioElement | null;
+  const el = audioElement as HTMLAudioElement | null
   if (el && isPlaying.value) {
-    el.pause();
+    el.pause()
   }
-};
+}
 
 const resume = () => {
-  const el = audioElement as HTMLAudioElement | null;
+  const el = audioElement as HTMLAudioElement | null
   if (el && !isPlaying.value && currentTime.value > 0) {
-    el.play();
+    el.play()
   }
-};
+}
 
 const flushBuffer = async (onLipSync: LipSyncCallback) => {
   if (chunksBuffer.length > 0) {
-    console.log(`[TTS] Flushing buffer: ${chunksBuffer.length} chunks`);
-    playStreamChunks([...chunksBuffer]);
-    chunksBuffer = [];
+    console.log(`[TTS] Flushing buffer: ${chunksBuffer.length} chunks`)
+    playStreamChunks([...chunksBuffer])
+    chunksBuffer = []
   }
-};
+}
 
 export function useTTSPlayer() {
   onUnmounted(() => {
     // 组件卸载时不停止播放器，因为是单例
-  });
+  })
 
   return {
     currentTime,
@@ -346,5 +360,5 @@ export function useTTSPlayer() {
     flushBuffer,
     setVolume,
     clearLipSyncInterval,
-  };
+  }
 }

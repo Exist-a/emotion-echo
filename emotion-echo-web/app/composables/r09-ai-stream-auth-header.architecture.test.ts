@@ -33,8 +33,8 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
     expect(
       usesGetClientAccessToken,
       'useAIStreamHandler 必须通过 getClientAccessToken() 读 token, ' +
-      '不能直接 useCookie(\'access_token\').value (Sprint 111 浏览器实测: ' +
-      'Authorization 空 → APISIX jwt-auth 401).'
+        "不能直接 useCookie('access_token').value (Sprint 111 浏览器实测: " +
+        'Authorization 空 → APISIX jwt-auth 401).',
     ).toBe(true)
   })
 
@@ -43,7 +43,7 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
     expect(
       usesGetClientAccessToken,
       'useAIStream 必须通过 getClientAccessToken() 读 token. ' +
-      'Sprint 111 浏览器实测确认 R-09 在此文件同根因.'
+        'Sprint 111 浏览器实测确认 R-09 在此文件同根因.',
     ).toBe(true)
   })
 
@@ -52,7 +52,7 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
     expect(
       usesGetClientAccessToken,
       'useTTSPlayer 必须通过 getClientAccessToken() 读 token. ' +
-      'Sprint 111 浏览器实测确认 R-09 在此文件同根因.'
+        'Sprint 111 浏览器实测确认 R-09 在此文件同根因.',
     ).toBe(true)
   })
 
@@ -61,7 +61,7 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
     expect(
       exportsHelper,
       'app/lib/clientAccessToken.ts 必须导出 getClientAccessToken. ' +
-      'R-09 修复核心 helper, 所有 ai-stream/TTS 统一通过它读 token.'
+        'R-09 修复核心 helper, 所有 ai-stream/TTS 统一通过它读 token.',
     ).toBe(true)
   })
 
@@ -72,7 +72,7 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
     expect(
       hasCsrBranch && readsStore,
       'helper 必须 (1) 区分 CSR / SSR, (2) CSR 优先 userStore.getAccessToken. ' +
-      '否则继续读不到 token, 401 复发.'
+        '否则继续读不到 token, 401 复发.',
     ).toBe(true)
   })
 
@@ -80,24 +80,25 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
     const callsUseCookie = /useCookie\s*\(/.test(helperSrc)
     expect(
       callsUseCookie,
-      'helper 必须保留 useCookie fallback (SSR 渲染 / store 未初始化场景).'
+      'helper 必须保留 useCookie fallback (SSR 渲染 / store 未初始化场景).',
     ).toBe(true)
   })
 
-  it('R-09 修复前 (回归保护): 三个调用点禁止再单独 useCookie(\'access_token\').value 拼 Authorization', () => {
+  it("R-09 修复前 (回归保护): 三个调用点禁止再单独 useCookie('access_token').value 拼 Authorization", () => {
     // 反向钉死: 不准再用 useCookie('access_token').value 作为 Authorization header 唯一来源
     const badPatterns = [
       { name: 'useAIStreamHandler', src: handlerSrc },
       { name: 'useAIStream', src: streamSrc },
-      { name: 'useTTSPlayer', src: ttsSrc }
+      { name: 'useTTSPlayer', src: ttsSrc },
     ]
     for (const { name, src } of badPatterns) {
       // 匹配 useCookie('access_token').value 直接拼 Authorization (无 store fallback)
-      const directCookieAsAuth = /Authorization.*useCookie\s*\(\s*['"]access_token['"]\s*\)\.value/s.test(src)
+      const directCookieAsAuth =
+        /Authorization.*useCookie\s*\(\s*['"]access_token['"]\s*\)\.value/s.test(src)
       expect(
         !directCookieAsAuth,
         `${name} 不能直接用 useCookie('access_token').value 拼 Authorization (Sprint 111 浏览器实测 401 根因). ` +
-        '必须改用 getClientAccessToken().'
+          '必须改用 getClientAccessToken().',
       ).toBe(true)
     }
   })

@@ -35,7 +35,8 @@ describe('useConversationSender · 架构债 (Stage 107 → Sprint 108)', () => 
     // 在 composable 函数体内声明的 'let streamAbortController' 是组件实例局部
     // 必须用 useState() / Pinia store 才能跨实例共享
     // (注: streamAbortController 是非响应式 AbortController, 实际方案是 module-scope let)
-    const isComponentLocal = /export function useAIStreamHandler[^{]*\{[\s\S]*?let streamAbortController[\s\S]*?\n\}/
+    const isComponentLocal =
+      /export function useAIStreamHandler[^{]*\{[\s\S]*?let streamAbortController[\s\S]*?\n\}/
     const usesUseState = /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*stream/i.test(streamSrc)
 
     // 不应同时是"组件实例局部"且"没用 useState"
@@ -43,8 +44,8 @@ describe('useConversationSender · 架构债 (Stage 107 → Sprint 108)', () => 
     expect(
       !isBug,
       'streamAbortController 不能仅作为 composable 局部变量 (Stage 107 浏览器实测确认: ' +
-      'navigateTo 后 unmount → AbortController 引用丢失, fetch 状态不可控). ' +
-      '必须改 useState() / module scope.'
+        'navigateTo 后 unmount → AbortController 引用丢失, fetch 状态不可控). ' +
+        '必须改 useState() / module scope.',
     ).toBe(true)
   })
 
@@ -54,15 +55,16 @@ describe('useConversationSender · 架构债 (Stage 107 → Sprint 108)', () => 
     // 当前 (BUG): useConversationSender.ts:23 const accumulatedDeltaText = ref('')
     // 期望 (FIX): useState('accumulatedDeltaText', () => '') 或 Pinia store
     const isComponentLocal = /const accumulatedDeltaText\s*=\s*ref\(/.test(senderSrc)
-    const usesSharedState = /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*accumulatedDeltaText/i.test(senderSrc) ||
-                            /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*tts/i.test(senderSrc)
+    const usesSharedState =
+      /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*accumulatedDeltaText/i.test(senderSrc) ||
+      /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*tts/i.test(senderSrc)
 
     const isBug = isComponentLocal && !usesSharedState
     expect(
       !isBug,
       'accumulatedDeltaText 不能仅作为 composable 局部 ref (Stage 107 浏览器实测: ' +
-      'A 实例 sendAIStream 中累加 delta, 但 A 被 unmount 后状态丢失, B 实例看到空字符串). ' +
-      '必须改 useState() / Pinia store.'
+        'A 实例 sendAIStream 中累加 delta, 但 A 被 unmount 后状态丢失, B 实例看到空字符串). ' +
+        '必须改 useState() / Pinia store.',
     ).toBe(true)
   })
 
@@ -77,7 +79,7 @@ describe('useConversationSender · 架构债 (Stage 107 → Sprint 108)', () => 
 
     expect(
       /sendToExistingConversation\s*\(/.test(block),
-      'createNewConversation 必须内部调用 sendToExistingConversation 才能触发完整链路 (Stage 107 修后已满足, 钉住未来)'
+      'createNewConversation 必须内部调用 sendToExistingConversation 才能触发完整链路 (Stage 107 修后已满足, 钉住未来)',
     ).toBe(true)
   })
 })

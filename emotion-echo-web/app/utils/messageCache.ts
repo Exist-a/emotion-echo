@@ -3,19 +3,19 @@ import type {
   StoredMessage,
   MessageStatus,
   conversationMessageType,
-} from "~/types/conversation/conversationMessagesType";
-import { getDb } from "./db";
+} from '~/types/conversation/conversationMessagesType'
+import { getDb } from './db'
 
 // Lazy Dexie key constants (accessed after getDb() initializes Dexie)
 async function getDexieKeys() {
-  const { default: Dexie } = await import("dexie");
-  return { minKey: Dexie.minKey, maxKey: Dexie.maxKey };
+  const { default: Dexie } = await import('dexie')
+  return { minKey: Dexie.minKey, maxKey: Dexie.maxKey }
 }
 
 // 带状态的消息类型
 interface MessageWithStatus extends StoredMessage {
-  status?: MessageStatus;
-  retryCount?: number;
+  status?: MessageStatus
+  retryCount?: number
 }
 
 // ==================== 基础CRUD操作 ====================
@@ -27,16 +27,16 @@ interface MessageWithStatus extends StoredMessage {
  */
 export async function saveMessage(
   sessionId: string,
-  message: conversationMessageType & { status?: MessageStatus; retryCount?: number }
+  message: conversationMessageType & { status?: MessageStatus; retryCount?: number },
 ): Promise<void> {
-  const db = await getDb();
+  const db = await getDb()
   const stored: MessageWithStatus = {
     ...message,
     sessionId,
-    status: message.status || "sent",
+    status: message.status || 'sent',
     retryCount: message.retryCount || 0,
-  };
-  await db.messages.put(stored);
+  }
+  await db.messages.put(stored)
 }
 
 /**
@@ -46,16 +46,16 @@ export async function saveMessage(
  */
 export async function saveMessages(
   sessionId: string,
-  messages: (conversationMessageType & { status?: MessageStatus })[]
+  messages: (conversationMessageType & { status?: MessageStatus })[],
 ): Promise<void> {
-  const db = await getDb();
+  const db = await getDb()
   const stored = messages.map((msg) => ({
     ...msg,
     sessionId,
-    status: msg.status || "sent",
+    status: msg.status || 'sent',
     retryCount: 0,
-  }));
-  await db.messages.bulkPut(stored);
+  }))
+  await db.messages.bulkPut(stored)
 }
 
 /**
@@ -65,10 +65,10 @@ export async function saveMessages(
  */
 export async function updateMessageStatus(
   messageId: string | number,
-  status: MessageStatus
+  status: MessageStatus,
 ): Promise<void> {
-  const db = await getDb();
-  await db.messages.update(messageId, { status });
+  const db = await getDb()
+  await db.messages.update(messageId, { status })
 }
 
 /**
@@ -78,12 +78,10 @@ export async function updateMessageStatus(
  */
 export async function batchUpdateMessageStatus(
   messageIds: (string | number)[],
-  status: MessageStatus
+  status: MessageStatus,
 ): Promise<void> {
-  const db = await getDb();
-  await db.messages.bulkUpdate(
-    messageIds.map((id) => ({ key: id, changes: { status } }))
-  );
+  const db = await getDb()
+  await db.messages.bulkUpdate(messageIds.map((id) => ({ key: id, changes: { status } })))
 }
 
 // ==================== 查询操作 ====================
@@ -98,23 +96,17 @@ export async function batchUpdateMessageStatus(
 export async function getMessagesBySession(
   sessionId: string,
   pageSize: number,
-  beforeSendTime?: number
+  beforeSendTime?: number,
 ): Promise<MessageWithStatus[]> {
-  const db = await getDb();
-  const { minKey, maxKey } = await getDexieKeys();
+  const db = await getDb()
+  const { minKey, maxKey } = await getDexieKeys()
   const query = db.messages
-    .where("[sessionId+sendTime]")
-    .between(
-      [sessionId, minKey],
-      [sessionId, beforeSendTime ?? maxKey]
-    );
+    .where('[sessionId+sendTime]')
+    .between([sessionId, minKey], [sessionId, beforeSendTime ?? maxKey])
 
-  const messages = await query
-    .reverse()
-    .limit(pageSize)
-    .toArray();
+  const messages = await query.reverse().limit(pageSize).toArray()
 
-  return messages;
+  return messages
 }
 
 /**
@@ -125,15 +117,10 @@ export async function getMessagesBySession(
  */
 export async function getLatestMessages(
   sessionId: string,
-  limit = 50
+  limit = 50,
 ): Promise<MessageWithStatus[]> {
-  const db = await getDb();
-  return db.messages
-    .where("sessionId")
-    .equals(sessionId)
-    .reverse()
-    .limit(limit)
-    .toArray();
+  const db = await getDb()
+  return db.messages.where('sessionId').equals(sessionId).reverse().limit(limit).toArray()
 }
 
 /**
@@ -141,36 +128,28 @@ export async function getLatestMessages(
  * @param messageId 消息ID
  */
 export async function getMessageById(
-  messageId: string | number
+  messageId: string | number,
 ): Promise<MessageWithStatus | undefined> {
-  const db = await getDb();
-  return db.messages.get(messageId);
+  const db = await getDb()
+  return db.messages.get(messageId)
 }
 
 /**
  * 获取发送中的消息（用于断网重连后重试）
  * @param sessionId 会话ID
  */
-export async function getPendingMessages(
-  sessionId: string
-): Promise<MessageWithStatus[]> {
-  const db = await getDb();
-  return db.messages
-    .where({ sessionId, status: "sending" })
-    .toArray();
+export async function getPendingMessages(sessionId: string): Promise<MessageWithStatus[]> {
+  const db = await getDb()
+  return db.messages.where({ sessionId, status: 'sending' }).toArray()
 }
 
 /**
  * 获取发送失败的消息
  * @param sessionId 会话ID
  */
-export async function getFailedMessages(
-  sessionId: string
-): Promise<MessageWithStatus[]> {
-  const db = await getDb();
-  return db.messages
-    .where({ sessionId, status: "failed" })
-    .toArray();
+export async function getFailedMessages(sessionId: string): Promise<MessageWithStatus[]> {
+  const db = await getDb()
+  return db.messages.where({ sessionId, status: 'failed' }).toArray()
 }
 
 // ==================== 删除和清理操作 ====================
@@ -179,11 +158,9 @@ export async function getFailedMessages(
  * 删除单条消息
  * @param messageId 消息ID
  */
-export async function deleteMessage(
-  messageId: string | number
-): Promise<void> {
-  const db = await getDb();
-  await db.messages.delete(messageId);
+export async function deleteMessage(messageId: string | number): Promise<void> {
+  const db = await getDb()
+  await db.messages.delete(messageId)
 }
 
 /**
@@ -191,8 +168,8 @@ export async function deleteMessage(
  * @param sessionId 会话ID
  */
 export async function clearSessionMessages(sessionId: string): Promise<void> {
-  const db = await getDb();
-  await db.messages.where("sessionId").equals(sessionId).delete();
+  const db = await getDb()
+  await db.messages.where('sessionId').equals(sessionId).delete()
 }
 
 /**
@@ -200,27 +177,24 @@ export async function clearSessionMessages(sessionId: string): Promise<void> {
  * @param sessionId 会话ID
  * @param maxCount 最大保留数量
  */
-export async function trimSessionMessages(
-  sessionId: string,
-  maxCount = 500
-): Promise<number> {
-  const db = await getDb();
-  const { minKey, maxKey } = await getDexieKeys();
-  const count = await db.messages.where("sessionId").equals(sessionId).count();
+export async function trimSessionMessages(sessionId: string, maxCount = 500): Promise<number> {
+  const db = await getDb()
+  const { minKey, maxKey } = await getDexieKeys()
+  const count = await db.messages.where('sessionId').equals(sessionId).count()
 
-  if (count <= maxCount) return 0;
+  if (count <= maxCount) return 0
 
   // 获取需要删除的最旧消息
   const toDelete = await db.messages
-    .where("[sessionId+sendTime]")
+    .where('[sessionId+sendTime]')
     .between([sessionId, minKey], [sessionId, maxKey])
     .limit(count - maxCount)
-    .toArray();
+    .toArray()
 
-  const idsToDelete = toDelete.map((msg: StoredMessage) => msg.id);
-  await db.messages.bulkDelete(idsToDelete);
+  const idsToDelete = toDelete.map((msg: StoredMessage) => msg.id)
+  await db.messages.bulkDelete(idsToDelete)
 
-  return idsToDelete.length;
+  return idsToDelete.length
 }
 
 /**
@@ -228,19 +202,19 @@ export async function trimSessionMessages(
  * @param keepDays 保留天数
  */
 export async function trimOldMessages(keepDays = 30): Promise<number> {
-  const db = await getDb();
-  const cutoffTime = Date.now() - keepDays * 24 * 60 * 60 * 1000;
-  
+  const db = await getDb()
+  const cutoffTime = Date.now() - keepDays * 24 * 60 * 60 * 1000
+
   const oldMessages = await db.messages
-    .where("sendTime")
+    .where('sendTime')
     .below(cutoffTime)
-    .and((msg: any) => msg.status === "sent") // 只删除已发送的
-    .toArray();
+    .and((msg: any) => msg.status === 'sent') // 只删除已发送的
+    .toArray()
 
-  const idsToDelete = oldMessages.map((msg: any) => msg.id);
-  await db.messages.bulkDelete(idsToDelete);
+  const idsToDelete = oldMessages.map((msg: any) => msg.id)
+  await db.messages.bulkDelete(idsToDelete)
 
-  return idsToDelete.length;
+  return idsToDelete.length
 }
 
 // ==================== 统计和诊断 ====================
@@ -249,35 +223,30 @@ export async function trimOldMessages(keepDays = 30): Promise<number> {
  * 获取缓存统计信息
  */
 export async function getCacheStats(): Promise<{
-  totalMessages: number;
-  totalSessions: number;
-  sendingCount: number;
-  failedCount: number;
+  totalMessages: number
+  totalSessions: number
+  sendingCount: number
+  failedCount: number
 }> {
-  const db = await getDb();
-  const allMessages = await db.messages.toArray();
-  const sessionIds = new Set(allMessages.map((m: any) => m.sessionId));
+  const db = await getDb()
+  const allMessages = await db.messages.toArray()
+  const sessionIds = new Set(allMessages.map((m: any) => m.sessionId))
 
   return {
     totalMessages: allMessages.length,
     totalSessions: sessionIds.size,
-    sendingCount: allMessages.filter((m: any) => m.status === "sending").length,
-    failedCount: allMessages.filter((m: any) => m.status === "failed").length,
-  };
+    sendingCount: allMessages.filter((m: any) => m.status === 'sending').length,
+    failedCount: allMessages.filter((m: any) => m.status === 'failed').length,
+  }
 }
 
 /**
  * 导出某个会话的所有消息（用于备份或迁移）
  * @param sessionId 会话ID
  */
-export async function exportSessionMessages(
-  sessionId: string
-): Promise<MessageWithStatus[]> {
-  const db = await getDb();
-  return db.messages
-    .where("sessionId")
-    .equals(sessionId)
-    .sortBy("sendTime");
+export async function exportSessionMessages(sessionId: string): Promise<MessageWithStatus[]> {
+  const db = await getDb()
+  return db.messages.where('sessionId').equals(sessionId).sortBy('sendTime')
 }
 
 /**
@@ -287,12 +256,12 @@ export async function exportSessionMessages(
  */
 export async function importSessionMessages(
   sessionId: string,
-  messages: MessageWithStatus[]
+  messages: MessageWithStatus[],
 ): Promise<void> {
-  const db = await getDb();
+  const db = await getDb()
   const messagesWithSession = messages.map((m) => ({
     ...m,
     sessionId,
-  }));
-  await db.messages.bulkPut(messagesWithSession);
+  }))
+  await db.messages.bulkPut(messagesWithSession)
 }

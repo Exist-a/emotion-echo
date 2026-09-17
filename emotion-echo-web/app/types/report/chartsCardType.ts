@@ -1,5 +1,5 @@
-import type { ChartItem } from "../charts/common";
+import type { ChartItem } from '../charts/common'
 
 export interface chartsCardPropType {
-  data: ChartItem[];
+  data: ChartItem[]
 }

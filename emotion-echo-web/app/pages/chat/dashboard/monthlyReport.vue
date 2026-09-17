@@ -48,7 +48,10 @@ const fetchMonthlyReport = async () => {
   if (!month.value) return
   isLoading.value = true
   try {
-    const data = await get<EmotionTrend>(API_ROUTES.reportsTrend.path, { type: 'monthly', month: month.value })
+    const data = await get<EmotionTrend>(API_ROUTES.reportsTrend.path, {
+      type: 'monthly',
+      month: month.value,
+    })
     reportData.value = data
   } catch (error: any) {
     notify('加载失败', error?.message || '月报告生成失败,请稍后重试', 'error', 3000)

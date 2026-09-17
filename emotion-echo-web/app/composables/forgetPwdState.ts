@@ -53,6 +53,6 @@ export const useForgetPwdState = () => {
     userAccount,
     verificationCode,
     updateStep,
-    resetState
+    resetState,
   }
 }

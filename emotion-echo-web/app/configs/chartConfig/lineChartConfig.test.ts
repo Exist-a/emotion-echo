@@ -24,7 +24,7 @@ describe('lineChartConfig', () => {
       { name: '难过', data: [4, 5, 6] },
       { name: '平静', data: [7, 8, 9] },
     ]
-    const opt = lineChartOption(['Mon','Tue','Wed'], [], '情绪趋势', seriesData) as any
+    const opt = lineChartOption(['Mon', 'Tue', 'Wed'], [], '情绪趋势', seriesData) as any
     expect(opt.series.length).toBe(3)
     for (let i = 0; i < seriesData.length; i++) {
       expect(opt.series[i].type).toBe('line')
@@ -37,7 +37,7 @@ describe('lineChartConfig', () => {
 
   it('ignores YData when seriesData is provided (prevents data loss)', () => {
     const seriesData = [{ name: '开心', data: [1, 2] }]
-    const opt = lineChartOption(['a','b'], [99, 99], 't', seriesData) as any
+    const opt = lineChartOption(['a', 'b'], [99, 99], 't', seriesData) as any
     expect(opt.series.length).toBe(1)
     expect(opt.series[0].data).toEqual([1, 2]) // 不是 [99, 99]
   })
@@ -51,13 +51,13 @@ describe('lineChartConfig', () => {
     ]
     // 错误写法 (历史 bug): flatMap 把多 series 拍平成一维
     const wrongY = trendLike.flatMap((s) => s.data)
-    const wrongOpt = lineChartOption(['Mon','Tue','Wed'], wrongY, 't', undefined) as any
+    const wrongOpt = lineChartOption(['Mon', 'Tue', 'Wed'], wrongY, 't', undefined) as any
     // 单 series 长度为 6,图例只有 1 个 't',与 2 条实际曲线对不上
     expect(wrongOpt.series.length).toBe(1)
     expect(wrongOpt.series[0].data.length).toBe(6)
 
     // 正确写法: seriesData=trend.series
-    const rightOpt = lineChartOption(['Mon','Tue','Wed'], [], 't', trendLike) as any
+    const rightOpt = lineChartOption(['Mon', 'Tue', 'Wed'], [], 't', trendLike) as any
     expect(rightOpt.series.length).toBe(2)
     expect(rightOpt.legend?.data).toEqual(['开心', '难过'])
   })

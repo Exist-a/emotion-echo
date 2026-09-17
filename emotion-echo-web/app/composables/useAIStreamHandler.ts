@@ -30,7 +30,10 @@ export interface AIStreamCallbacks {
 export interface UseAIStreamHandlerReturn {
   isStreaming: Ref<boolean>
   streamingContent: Ref<string>
-  sendAIStream: (params: AIStreamParams, callbacks?: AIStreamCallbacks) => Promise<{ isOk: boolean; msg: string }>
+  sendAIStream: (
+    params: AIStreamParams,
+    callbacks?: AIStreamCallbacks,
+  ) => Promise<{ isOk: boolean; msg: string }>
   cancelAIStream: () => void
 }
 
@@ -79,7 +82,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
 
   const sendAIStream = async (
     params: AIStreamParams,
-    callbacks?: AIStreamCallbacks
+    callbacks?: AIStreamCallbacks,
   ): Promise<{ isOk: boolean; msg: string }> => {
     if (isStreaming.value) {
       return { isOk: false, msg: '正在对话中' }
@@ -120,11 +123,11 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: token ? `Bearer ${token}` : ''
+          Authorization: token ? `Bearer ${token}` : '',
         },
         body: JSON.stringify(params),
         credentials: 'include',
-        signal: streamAbortController.signal
+        signal: streamAbortController.signal,
       })
 
       if (!response.ok) {
@@ -190,7 +193,7 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
               let toEmit = deltaContent
               if (emittedContentState.value && deltaContent.startsWith(emittedContentState.value)) {
                 toEmit = deltaContent.slice(emittedContentState.value.length)
-                if (!toEmit) continue  // 完全重复，跳过
+                if (!toEmit) continue // 完全重复，跳过
               }
               fullContent += toEmit
               streamingContent.value = fullContent
@@ -227,6 +230,6 @@ export function useAIStreamHandler(): UseAIStreamHandlerReturn {
     isStreaming,
     streamingContent,
     sendAIStream,
-    cancelAIStream
+    cancelAIStream,
   }
 }

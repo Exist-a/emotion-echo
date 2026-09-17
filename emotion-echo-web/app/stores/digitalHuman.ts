@@ -47,6 +47,6 @@ export const useDigitalHumanStore = defineStore('digitalHuman', () => {
     toggleVoice,
     setVisible,
     setLipShape,
-    setVolume
+    setVolume,
   }
 })

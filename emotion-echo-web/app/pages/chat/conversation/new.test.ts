@@ -41,7 +41,7 @@ describe('chat/conversation/new.vue · handleSubmit 合同', () => {
       /conversationSender[\s\S]*sendToExistingConversation/.test(block)
     expect(
       usesSender,
-      'new.vue handleSubmit 必须调用 conversationSender.createNewConversation 或 sendToExistingConversation (Stage 105 未修 bug)'
+      'new.vue handleSubmit 必须调用 conversationSender.createNewConversation 或 sendToExistingConversation (Stage 105 未修 bug)',
     ).toBe(true)
   })
 
@@ -53,7 +53,7 @@ describe('chat/conversation/new.vue · handleSubmit 合同', () => {
       !/conversationSender/.test(block)
     expect(
       usesBareCreate,
-      'handleSubmit 不应再走 "只创建会话 + navigateTo" 路径, 必须经过 conversationSender 触发 sendMessage + sendAIStream'
+      'handleSubmit 不应再走 "只创建会话 + navigateTo" 路径, 必须经过 conversationSender 触发 sendMessage + sendAIStream',
     ).toBe(false)
   })
 
@@ -65,7 +65,7 @@ describe('chat/conversation/new.vue · handleSubmit 合同', () => {
       /sendToExistingConversation\([^,]*,\s*value\b/.test(block)
     expect(
       callsBlockWithFullValue,
-      'handleSubmit 必须把 value 全文作为消息透传给 sender, 不能仅截前 30 字当 title'
+      'handleSubmit 必须把 value 全文作为消息透传给 sender, 不能仅截前 30 字当 title',
     ).toBe(true)
   })
 
@@ -87,7 +87,7 @@ describe('chat/conversation/new.vue · handleSubmit 合同', () => {
     //   (检查 useConversationSender.ts: createNewConversation 必须内部调 sendToExistingConversation)
     const senderSrc = readFileSync(
       resolve(__dirname, '../../../composables/useConversationSender.ts'),
-      'utf8'
+      'utf8',
     )
     // 抽 createNewConversation 函数体（从定义到 const handleSubmit 前）
     const start = senderSrc.indexOf('const createNewConversation')
@@ -97,8 +97,8 @@ describe('chat/conversation/new.vue · handleSubmit 合同', () => {
     expect(
       callsSendToExisting,
       'createNewConversation 必须内部调用 sendToExistingConversation 才能触发完整链路\n' +
-      '(POST /messages + POST /ai/stream + SSE 流). 否则 navigateTo 之后 fetch 链路被组件\n' +
-      'unmount 钩子打断 (Stage 107 浏览器实测确认, Sprint 108 架构债修复要求)'
+        '(POST /messages + POST /ai/stream + SSE 流). 否则 navigateTo 之后 fetch 链路被组件\n' +
+        'unmount 钩子打断 (Stage 107 浏览器实测确认, Sprint 108 架构债修复要求)',
     ).toBe(true)
   })
 })

@@ -78,7 +78,7 @@ export const useMessageStore = defineStore('message', () => {
     // Stage 79: 文件消息（image/file/video）透传；缺省 text 保持向后兼容
     contentType?: SendMessageParams['contentType'],
     // Stage 89 PR-5: 文件消息原始文件名（contentType=file 时透传 chat-svc file_name）
-    fileName?: string
+    fileName?: string,
   ): Promise<returnMsgType> => {
     if (!currentSessionId.value || isSending.value) {
       return { isOk: false, msg: '无法发送消息' }
@@ -89,7 +89,7 @@ export const useMessageStore = defineStore('message', () => {
     try {
       const params: SendMessageParams = {
         content,
-        contentType: contentType || 'text'
+        contentType: contentType || 'text',
       }
       if (emotionTag) params.emotionTag = emotionTag
       if (clientMsgId) params.clientMsgId = clientMsgId
@@ -97,31 +97,34 @@ export const useMessageStore = defineStore('message', () => {
 
       const message = await post<MessageWithStatus>(
         API_ROUTES.sendMessage.path.replace(':id', currentSessionId.value || ''),
-        params
+        params,
       )
 
       // 幂等保护：若该 clientMsgId 已有消息，update 而非 push
       if (clientMsgId) {
         const existingIndex = currentMessages.value.findIndex(
-          (m) => m.id === clientMsgId || (m as any).clientMsgId === clientMsgId
+          (m) => m.id === clientMsgId || (m as any).clientMsgId === clientMsgId,
         )
         if (existingIndex >= 0) {
           currentMessages.value[existingIndex] = {
             ...message,
-            status: 'sent'
+            status: 'sent',
           }
           return { isOk: true, msg: '已存在', data: message }
         }
       }
 
-      currentMessages.value = [...currentMessages.value, {
-        ...message,
-        status: 'sent'
-      }]
+      currentMessages.value = [
+        ...currentMessages.value,
+        {
+          ...message,
+          status: 'sent',
+        },
+      ]
 
       const conversationStore = useConversationStore()
       const conversation = conversationStore.conversationList.find(
-        (c) => c.id === currentSessionId.value
+        (c) => c.id === currentSessionId.value,
       )
       if (conversation) {
         conversation.lastMessage = content.slice(0, 100)
@@ -182,6 +185,6 @@ export const useMessageStore = defineStore('message', () => {
     reset,
     updateMessage,
     addMessage,
-    removeMessage
+    removeMessage,
   }
 })

@@ -37,7 +37,7 @@ export function getApiBaseUrl(config?: RuntimeConfig): string {
       '[apiBaseUrl] NUXT_PUBLIC_API_BASE_URL 未配置 — ' +
         '请设置 .env / .env.example 里的 NUXT_PUBLIC_API_BASE_URL=http://localhost:19080/api/v1 ' +
         '（决策 11/12：APISIX 是唯一业务入口）。' +
-        '决策 18 doc-drift-registry.md #24。'
+        '决策 18 doc-drift-registry.md #24。',
     )
   }
   return url

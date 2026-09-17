@@ -95,9 +95,7 @@ describe('API routes contract', () => {
     if (Object.keys(perFileHits).length > 0) {
       const sortedFiles = Object.keys(perFileHits).sort()
       // 仅打印前 30 行避免淹没测试输出
-      const lines = sortedFiles.slice(0, 30).map(
-        (f) => `  ${f}: ${perFileHits[f]!.join(', ')}`,
-      )
+      const lines = sortedFiles.slice(0, 30).map((f) => `  ${f}: ${perFileHits[f]!.join(', ')}`)
       if (sortedFiles.length > 30) lines.push(`  ... (${sortedFiles.length - 30} more)`)
       console.log('Scanned paths by file:\n' + lines.join('\n'))
     }

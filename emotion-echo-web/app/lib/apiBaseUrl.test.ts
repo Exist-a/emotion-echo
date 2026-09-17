@@ -21,18 +21,19 @@ describe('getApiBaseUrl · PR-A fail-fast (decision 18 #24)', () => {
   })
 
   it('happy path：API_BASE_URL 已配 → 直接返回', () => {
-    expect(getApiBaseUrl({ public: { API_BASE_URL: 'http://localhost:19080/api/v1' } } as any))
-      .toBe('http://localhost:19080/api/v1')
+    expect(
+      getApiBaseUrl({ public: { API_BASE_URL: 'http://localhost:19080/api/v1' } } as any),
+    ).toBe('http://localhost:19080/api/v1')
   })
 
   it('PR-A · API_BASE_URL 未配（空串） → 抛错，提示 NUXT_PUBLIC_API_BASE_URL', () => {
-    expect(() => getApiBaseUrl({ public: { API_BASE_URL: '' } } as any))
-      .toThrow(/NUXT_PUBLIC_API_BASE_URL 未配置/)
+    expect(() => getApiBaseUrl({ public: { API_BASE_URL: '' } } as any)).toThrow(
+      /NUXT_PUBLIC_API_BASE_URL 未配置/,
+    )
   })
 
   it('PR-A · public.API_BASE_URL 字段缺失 → 抛错，不静默回退', () => {
-    expect(() => getApiBaseUrl({ public: {} } as any))
-      .toThrow(/NUXT_PUBLIC_API_BASE_URL 未配置/)
+    expect(() => getApiBaseUrl({ public: {} } as any)).toThrow(/NUXT_PUBLIC_API_BASE_URL 未配置/)
   })
 
   it('PR-A · config 不传且 useRuntimeConfig 不可用 → 抛错', () => {
@@ -41,7 +42,9 @@ describe('getApiBaseUrl · PR-A fail-fast (decision 18 #24)', () => {
   })
 
   it('PR-A · useRuntimeConfig 抛错（无 Nuxt 上下文） → 抛错，不静默回退', () => {
-    ;(globalThis as any).useRuntimeConfig = () => { throw new Error('no Nuxt') }
+    ;(globalThis as any).useRuntimeConfig = () => {
+      throw new Error('no Nuxt')
+    }
     expect(() => getApiBaseUrl()).toThrow(/NUXT_PUBLIC_API_BASE_URL 未配置/)
   })
 

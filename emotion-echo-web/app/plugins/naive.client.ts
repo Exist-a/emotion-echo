@@ -23,15 +23,33 @@ import {
   NTooltip,
   NPopover,
   NDropdown,
-  NSpin
+  NSpin,
 } from 'naive-ui'
 
 const naive = create({
   components: [
-    NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvider, NLoadingBarProvider,
-    NButton, NInput, NIcon, NCard, NCheckbox, NForm, NFormItem, NSpace, NSkeleton, NEmpty,
-    NDivider, NAvatar, NTooltip, NPopover, NDropdown, NSpin
-  ]
+    NConfigProvider,
+    NMessageProvider,
+    NDialogProvider,
+    NNotificationProvider,
+    NLoadingBarProvider,
+    NButton,
+    NInput,
+    NIcon,
+    NCard,
+    NCheckbox,
+    NForm,
+    NFormItem,
+    NSpace,
+    NSkeleton,
+    NEmpty,
+    NDivider,
+    NAvatar,
+    NTooltip,
+    NPopover,
+    NDropdown,
+    NSpin,
+  ],
 })
 
 export default defineNuxtPlugin((nuxtApp) => {

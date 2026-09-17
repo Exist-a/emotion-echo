@@ -24,7 +24,11 @@
           <!-- Stage 79: 文件消息（image/file/video）走 ChatFile 渲染（组件 Stage 58 已备，
                此前未挂载——stage-78 核查残余） -->
           <ChatFile
-            v-else-if="item.contentType === 'image' || item.contentType === 'video' || (item.contentType === 'file' && item.content)"
+            v-else-if="
+              item.contentType === 'image' ||
+              item.contentType === 'video' ||
+              (item.contentType === 'file' && item.content)
+            "
             :content="item.content"
             :content-type="item.contentType as 'image' | 'file' | 'video'"
             :filename="item.fileName"
@@ -36,11 +40,16 @@
             :class="item.sender === 'user' ? 'bubble-user' : 'bubble-ai'"
             :style="{ fontSize: userConfig.fontSize }"
           />
-          <div v-else-if="item.sender === 'ai' && item.status === 'streaming'" class="bubble bubble-ai loading-bubble">
-            <span class="quiet-pulse" aria-label="正在回复"/>
+          <div
+            v-else-if="item.sender === 'ai' && item.status === 'streaming'"
+            class="bubble bubble-ai loading-bubble"
+          >
+            <span class="quiet-pulse" aria-label="正在回复" />
           </div>
         </article>
-        <div v-if="conversationSender.isStreaming.value" class="breath-line" aria-hidden="true"><span/></div>
+        <div v-if="conversationSender.isStreaming.value" class="breath-line" aria-hidden="true">
+          <span />
+        </div>
       </div>
     </main>
 
@@ -49,7 +58,14 @@
       <div v-if="pendingAttachment" class="attachment-chip">
         <span class="attachment-name">📎 {{ pendingAttachment.name }}</span>
         <span v-if="fileUpload.isUploading.value" class="attachment-status">上传中…</span>
-        <button type="button" class="attachment-remove" aria-label="移除附件" @click="pendingAttachment = null">×</button>
+        <button
+          type="button"
+          class="attachment-remove"
+          aria-label="移除附件"
+          @click="pendingAttachment = null"
+        >
+          ×
+        </button>
       </div>
       <div class="composer-shell">
         <textarea
@@ -68,9 +84,25 @@
             aria-hidden="true"
             tabindex="-1"
             @change="onFilePicked"
+          />
+          <button
+            type="button"
+            class="icon-btn ghost"
+            aria-label="添加附件"
+            :disabled="fileUpload.isUploading.value"
+            @click="handleAttachment"
           >
-          <button type="button" class="icon-btn ghost" aria-label="添加附件" :disabled="fileUpload.isUploading.value" @click="handleAttachment">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path d="M21 11.5l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />
             </svg>
           </button>
@@ -81,11 +113,33 @@
             :aria-label="faceEmotion.isCameraOn.value ? '关闭摄像头' : '开启摄像头'"
             @click="toggleCamera"
           >
-            <svg v-if="!faceEmotion.isCameraOn.value" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              v-if="!faceEmotion.isCameraOn.value"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path d="M23 7l-7 5 7 5V7z" />
               <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
             </svg>
-            <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              v-else
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path d="M23 7l-7 5 7 5V7z" />
               <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
               <circle cx="8.5" cy="12" r="1.2" fill="currentColor" />
@@ -99,7 +153,18 @@
             :aria-label="voiceRecorder.isRecording.value ? '停止录音' : '开始录音'"
             @click="toggleRecording"
           >
-            <svg v-if="!voiceRecorder.isRecording.value" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              v-if="!voiceRecorder.isRecording.value"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <rect x="9" y="3" width="6" height="12" rx="3" />
               <path d="M5 11a7 7 0 0 0 14 0" />
               <line x1="12" y1="18" x2="12" y2="22" />
@@ -114,7 +179,17 @@
             :disabled="!message.trim()"
             aria-label="发送消息"
           >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <line x1="5" y1="12" x2="19" y2="12" />
               <polyline points="13 5 20 12 13 19" />
             </svg>
@@ -140,7 +215,10 @@
         muted
         playsinline
       />
-      <p v-if="faceEmotion.isCameraOn.value && faceEmotion.currentEmotion.value" class="camera-status">
+      <p
+        v-if="faceEmotion.isCameraOn.value && faceEmotion.currentEmotion.value"
+        class="camera-status"
+      >
         当前表情识别：<strong>{{ faceEmotion.currentEmotion.value.emotion }}</strong>
         <span v-if="faceEmotion.currentEmotion.value.confidence != null">
           （置信度 {{ Math.round(faceEmotion.currentEmotion.value.confidence * 100) }}%）
@@ -150,7 +228,13 @@
 
     <div class="digital-human-wrapper">
       <ClientOnly>
-        <DigitalHuman ref="digitalHumanRef" :visible="digitalHumanVisible" :draggable="true" :model-path="'/3d-models/digital-human.vrm'" @voice-toggle="handleVoiceToggle" />
+        <DigitalHuman
+          ref="digitalHumanRef"
+          :visible="digitalHumanVisible"
+          :draggable="true"
+          :model-path="'/3d-models/digital-human.vrm'"
+          @voice-toggle="handleVoiceToggle"
+        />
       </ClientOnly>
     </div>
   </div>
@@ -185,7 +269,7 @@ watch(
   () => digitalHumanStore.voiceEnabled,
   (newVal) => {
     if (!newVal) conversationSender.stopTTS()
-  }
+  },
 )
 
 const route = useRoute()
@@ -194,12 +278,12 @@ const message = ref('')
 const conversationIdRef = computed(() => route.params.id as string)
 const cameraVideoRef = ref<HTMLVideoElement | null>(null)
 const faceEmotion = useFaceEmotion({
-  sessionId: conversationIdRef
+  sessionId: conversationIdRef,
 })
 
 const conversationSender = useConversationSender({
   onLipShapeChange: (shape) => digitalHumanRef.value?.setLipShape(shape),
-  onEmotionChange: (emotion) => digitalHumanRef.value?.setEmotion(emotion)
+  onEmotionChange: (emotion) => digitalHumanRef.value?.setEmotion(emotion),
 })
 
 const toggleCamera = async () => {
@@ -224,7 +308,7 @@ const voiceRecorder = useVoiceRecorder({
   },
   onUploadError: (error) => {
     window.alert(`语音上传失败：${error}`)
-  }
+  },
 })
 
 const handleVoiceStreamResponse = async (transcript: string, voiceEmotion: string) => {
@@ -240,9 +324,9 @@ const handleVoiceStreamResponse = async (transcript: string, voiceEmotion: strin
       },
       onError: (error) => {
         window.alert(`AI 回复失败：${error}`)
-      }
+      },
     },
-    { shouldGenerateTitle: false, voiceEmotion, skipUserMessage: true }
+    { shouldGenerateTitle: false, voiceEmotion, skipUserMessage: true },
   )
 }
 
@@ -255,7 +339,7 @@ const handleSubmit = async () => {
   const value = message.value.trim()
   // Stage 89 PR-5：文件+提问一起发——附件无文字时用默认 prompt 触发 AI 读文件
   if (pendingAttachment.value && !value) {
-    if (!await sendAttachmentMessage()) return
+    if (!(await sendAttachmentMessage())) return
     await conversationSender.sendToExistingConversation(
       conversationIdRef.value,
       '请帮我看看这个文件，用中文简短说明它的内容要点。',
@@ -267,14 +351,14 @@ const handleSubmit = async () => {
         },
         onError: (error) => {
           window.alert(`AI 回复失败：${error}`)
-        }
-      }
+        },
+      },
     )
     return
   }
   if (!value) return
   message.value = ''
-  if (pendingAttachment.value && !await sendAttachmentMessage()) return
+  if (pendingAttachment.value && !(await sendAttachmentMessage())) return
   await conversationSender.sendToExistingConversation(conversationIdRef.value, value, 'neutral', {
     onFinish: (messageId, aiEmotion) => {
       if (aiEmotion) digitalHumanRef.value?.setEmotion(aiEmotion)
@@ -282,7 +366,7 @@ const handleSubmit = async () => {
     },
     onError: (error) => {
       window.alert(`AI 回复失败：${error}`)
-    }
+    },
   })
 }
 
@@ -330,7 +414,7 @@ const sendAttachmentMessage = async (): Promise<boolean> => {
     undefined,
     typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-f`,
     att.type,
-    att.name
+    att.name,
   )
   if (!persist.isOk) {
     window.alert(`文件消息发送失败：${persist.msg}`)
@@ -373,8 +457,14 @@ const getHtmlContent = (content: string) => {
         const origHtml = renderer.html.bind(renderer)
         // html token → 转义后输出（不是真的 HTML）
         renderer.html = (token: any) => {
-          const raw = typeof token === 'string' ? token : (token?.text || '')
-          const escapeMap: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+          const raw = typeof token === 'string' ? token : token?.text || ''
+          const escapeMap: Record<string, string> = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          }
           return origHtml(raw.replace(/[&<>"']/g, (c: string) => escapeMap[c] ?? c))
         }
         return renderer
@@ -395,7 +485,11 @@ const scrollToBottom = () => {
   })
 }
 
-watch(() => messageStore.currentMessages.length, () => scrollToBottom(), { flush: 'post' })
+watch(
+  () => messageStore.currentMessages.length,
+  () => scrollToBottom(),
+  { flush: 'post' },
+)
 
 onMounted(async () => {
   if (!route.params.id) {
@@ -450,8 +544,12 @@ onUnmounted(() => {
   animation: ee-fade-in 220ms var(--ease-quiet, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
-.dialog-user { justify-content: flex-end; }
-.dialog-ai { justify-content: flex-start; }
+.dialog-user {
+  justify-content: flex-end;
+}
+.dialog-ai {
+  justify-content: flex-start;
+}
 
 .bubble {
   display: inline-block;
@@ -467,10 +565,18 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-.bubble p { margin: 0.5em 0; }
-.bubble p:first-child { margin-top: 0; }
-.bubble p:last-child { margin-bottom: 0; }
-.bubble strong { font-weight: 600; }
+.bubble p {
+  margin: 0.5em 0;
+}
+.bubble p:first-child {
+  margin-top: 0;
+}
+.bubble p:last-child {
+  margin-bottom: 0;
+}
+.bubble strong {
+  font-weight: 600;
+}
 .bubble code {
   padding: 0.15em 0.4em;
   background: var(--ee-surface-muted);
@@ -485,17 +591,37 @@ onUnmounted(() => {
   background: var(--ee-surface-muted);
   border-radius: 8px;
 }
-.bubble pre code { padding: 0; background: transparent; }
-.bubble ul, .bubble ol { margin: 0.5em 0; padding-left: 1.5em; }
-.bubble li { margin: 0.25em 0; }
+.bubble pre code {
+  padding: 0;
+  background: transparent;
+}
+.bubble ul,
+.bubble ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.bubble li {
+  margin: 0.25em 0;
+}
 .bubble blockquote {
   margin: 0.5em 0;
   padding-left: 0.8em;
   color: var(--ee-text-muted);
   border-left: 3px solid var(--ee-primary);
 }
-.bubble h1, .bubble h2, .bubble h3, .bubble h4, .bubble h5, .bubble h6 { margin: 0.6em 0 0.3em; font-weight: 600; }
-.bubble a { color: var(--ee-primary); text-decoration: underline; }
+.bubble h1,
+.bubble h2,
+.bubble h3,
+.bubble h4,
+.bubble h5,
+.bubble h6 {
+  margin: 0.6em 0 0.3em;
+  font-weight: 600;
+}
+.bubble a {
+  color: var(--ee-primary);
+  text-decoration: underline;
+}
 
 .bubble-user {
   color: #fff;
@@ -515,7 +641,11 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 6px;
 }
-.voice-no-url { color: rgba(255, 255, 255, 0.85); font-size: 12px; text-align: center; }
+.voice-no-url {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  text-align: center;
+}
 
 .loading-bubble {
   min-width: 70px;
@@ -534,7 +664,11 @@ onUnmounted(() => {
   animation: ee-quiet-pulse 1.6s ease-in-out infinite;
 }
 
-.breath-line { display: flex; justify-content: flex-start; padding: 4px 0 8px 22px; }
+.breath-line {
+  display: flex;
+  justify-content: flex-start;
+  padding: 4px 0 8px 22px;
+}
 .breath-line span {
   display: block;
   width: 48px;
@@ -555,11 +689,21 @@ onUnmounted(() => {
   background: var(--color-surface-muted, rgba(0, 0, 0, 0.04));
   font-size: 13px;
 }
-.attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.attachment-status { color: var(--color-text-secondary, #888); }
+.attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-status {
+  color: var(--color-text-secondary, #888);
+}
 .attachment-remove {
-  border: none; background: none; cursor: pointer;
-  font-size: 16px; line-height: 1; color: var(--color-text-secondary, #888);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-text-secondary, #888);
 }
 
 .composer {
@@ -593,7 +737,9 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-.composer-input::placeholder { color: var(--ee-text-muted); }
+.composer-input::placeholder {
+  color: var(--ee-text-muted);
+}
 
 .composer-actions {
   display: flex;
@@ -602,7 +748,9 @@ onUnmounted(() => {
   padding-top: 6px;
 }
 
-.spacer { flex: 1; }
+.spacer {
+  flex: 1;
+}
 
 .visually-hidden-input {
   position: absolute;
@@ -623,7 +771,10 @@ onUnmounted(() => {
   border: 1px solid var(--ee-border);
   border-radius: 50%;
   cursor: pointer;
-  transition: color var(--ee-transition), border-color var(--ee-transition), background var(--ee-transition);
+  transition:
+    color var(--ee-transition),
+    border-color var(--ee-transition),
+    background var(--ee-transition);
 }
 
 .icon-btn:hover {
@@ -675,8 +826,14 @@ onUnmounted(() => {
 }
 
 @keyframes ring-pulse {
-  from { transform: scale(0.85); opacity: 0.85; }
-  to { transform: scale(1.5); opacity: 0; }
+  from {
+    transform: scale(0.85);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1.5);
+    opacity: 0;
+  }
 }
 
 .camera-preview {
@@ -711,13 +868,25 @@ onUnmounted(() => {
   border: 0;
   border-radius: 50%;
   cursor: pointer;
-  transition: background var(--ee-transition), transform var(--ee-transition);
+  transition:
+    background var(--ee-transition),
+    transform var(--ee-transition);
 }
 
-.send-btn:hover:not(:disabled) { background: var(--ee-primary-hover); transform: translateY(-1px); }
-.send-btn:disabled { background: var(--ee-border); cursor: not-allowed; }
-.send-btn.stop { background: var(--ee-accent); }
-.send-btn.stop:hover { background: var(--ee-accent); }
+.send-btn:hover:not(:disabled) {
+  background: var(--ee-primary-hover);
+  transform: translateY(-1px);
+}
+.send-btn:disabled {
+  background: var(--ee-border);
+  cursor: not-allowed;
+}
+.send-btn.stop {
+  background: var(--ee-accent);
+}
+.send-btn.stop:hover {
+  background: var(--ee-accent);
+}
 
 .digital-human-wrapper {
   position: fixed;
@@ -730,9 +899,20 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .dialog-list { padding: 14px 10px 8px; }
-  .bubble { max-width: 86%; }
-  .composer { padding: 8px 10px 12px; }
-  .digital-human-wrapper { right: 10px; bottom: 84px; transform: scale(0.8); transform-origin: bottom right; }
+  .dialog-list {
+    padding: 14px 10px 8px;
+  }
+  .bubble {
+    max-width: 86%;
+  }
+  .composer {
+    padding: 8px 10px 12px;
+  }
+  .digital-human-wrapper {
+    right: 10px;
+    bottom: 84px;
+    transform: scale(0.8);
+    transform-origin: bottom right;
+  }
 }
 </style>

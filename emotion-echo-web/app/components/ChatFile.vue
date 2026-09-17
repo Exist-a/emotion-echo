@@ -2,7 +2,7 @@
   <div class="chat-file" @click="handleClick">
     <!-- 图片消息 -->
     <div v-if="contentType === 'image'" class="chat-image">
-      <img :src="getFullUrl(content)" :alt="filename" @error="handleImageError" >
+      <img :src="getFullUrl(content)" :alt="filename" @error="handleImageError" />
     </div>
 
     <!-- 视频消息 -->
@@ -13,7 +13,13 @@
     <!-- 通用文件消息 -->
     <div v-else class="chat-file-box">
       <div class="file-icon">
-        <svg v-if="contentType === 'file'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          v-if="contentType === 'file'"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
           <polyline points="13 2 13 9 20 9" />
         </svg>

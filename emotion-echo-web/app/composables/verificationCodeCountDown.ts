@@ -38,6 +38,6 @@ export const verificationCodeCountDown = () => {
     lastSeconds,
     verificationCodeText,
     startCountdown,
-    stopCountdown
+    stopCountdown,
   }
 }

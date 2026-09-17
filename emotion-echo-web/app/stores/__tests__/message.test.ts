@@ -16,7 +16,7 @@ vi.mock('~/composables/useApi', () => ({
   get: vi.fn(),
   put: vi.fn(),
   patch: vi.fn(),
-  del: vi.fn()
+  del: vi.fn(),
 }))
 
 const okMessage = {
@@ -26,7 +26,7 @@ const okMessage = {
   content: 'hello',
   contentType: 'text',
   sendTime: Date.now(),
-  createdAt: Date.now()
+  createdAt: Date.now(),
 }
 
 describe('message store sendMessage contentType 透传（Stage 79）', () => {

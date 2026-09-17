@@ -34,7 +34,12 @@ export function getClientAccessToken(): string {
     const raw = userStore?.getAccessToken
     const storeToken = typeof raw === 'string' ? raw : (raw as any)?.value || ''
     if (DEBUG_BUILD) {
-      console.log('[R-09 debug] useUserStore ok, raw type=', typeof raw, ', token=', storeToken ? storeToken.substring(0, 20) + '...' : '(empty)')
+      console.log(
+        '[R-09 debug] useUserStore ok, raw type=',
+        typeof raw,
+        ', token=',
+        storeToken ? storeToken.substring(0, 20) + '...' : '(empty)',
+      )
     }
     if (storeToken) return storeToken
   } catch (e: any) {
@@ -45,7 +50,10 @@ export function getClientAccessToken(): string {
   // Fallback: cookie
   const cookieToken = useCookie('access_token').value || ''
   if (DEBUG_BUILD) {
-    console.log('[R-09 debug] cookie fallback, token=', cookieToken ? cookieToken.substring(0, 20) + '...' : '(empty)')
+    console.log(
+      '[R-09 debug] cookie fallback, token=',
+      cookieToken ? cookieToken.substring(0, 20) + '...' : '(empty)',
+    )
   }
   return cookieToken
 }

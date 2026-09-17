@@ -44,7 +44,10 @@ const fetchAnnualReport = async () => {
   if (!year.value) return
   isLoading.value = true
   try {
-    const data = await get<EmotionTrend>(API_ROUTES.reportsTrend.path, { type: 'yearly', year: year.value })
+    const data = await get<EmotionTrend>(API_ROUTES.reportsTrend.path, {
+      type: 'yearly',
+      year: year.value,
+    })
     reportData.value = data
   } catch (error: any) {
     notify('加载失败', error?.message || '年度报告生成失败,请稍后重试', 'error', 3000)

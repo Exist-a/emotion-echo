@@ -24,8 +24,9 @@ describe('nav.vue height-chain contract (Stage 104)', () => {
     const block = firstBlock('.app-content')
     expect(block).toMatch(/\bheight\s*:/)
     // min-height: 0 是 flex 容器允许子元素正确 overflow 的合法用法
-    const strayMinHeight = (block.match(/min-height\s*:\s*([^;]+)/g) || [])
-      .filter((m) => !/:\s*0(?:\s*!important)?\s*$/.test(m))
+    const strayMinHeight = (block.match(/min-height\s*:\s*([^;]+)/g) || []).filter(
+      (m) => !/:\s*0(?:\s*!important)?\s*$/.test(m),
+    )
     expect(strayMinHeight, `多余的 min-height: ${strayMinHeight.join(';')}`).toEqual([])
   })
 
@@ -33,17 +34,20 @@ describe('nav.vue height-chain contract (Stage 104)', () => {
     const block = firstBlock('.page-content')
     expect(block).toMatch(/\bheight\s*:/)
     // min-height: 0 是 flex 容器允许子元素正确 overflow 的合法用法
-    const strayMinHeight = (block.match(/min-height\s*:\s*([^;]+)/g) || [])
-      .filter((m) => !/:\s*0(?:\s*!important)?\s*$/.test(m))
+    const strayMinHeight = (block.match(/min-height\s*:\s*([^;]+)/g) || []).filter(
+      (m) => !/:\s*0(?:\s*!important)?\s*$/.test(m),
+    )
     expect(strayMinHeight, `多余的 min-height: ${strayMinHeight.join(';')}`).toEqual([])
   })
 
   it('mobile breakpoint (.app-content) uses height, not min-height (min-height:0 excepted)', () => {
-    const mobileMedia = NAV_SRC.match(/@media\s*\(max-width:\s*768px\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
+    const mobileMedia =
+      NAV_SRC.match(/@media\s*\(max-width:\s*768px\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
     const block = mobileMedia.match(/\.app-content\s*\{([\s\S]*?)\}/)?.[0] ?? ''
     expect(block).toMatch(/\bheight\s*:/)
-    const strayMinHeight = (block.match(/min-height\s*:\s*([^;]+)/g) || [])
-      .filter((m) => !/:\s*0(?:\s*!important)?\s*$/.test(m))
+    const strayMinHeight = (block.match(/min-height\s*:\s*([^;]+)/g) || []).filter(
+      (m) => !/:\s*0(?:\s*!important)?\s*$/.test(m),
+    )
     expect(strayMinHeight, `多余的 min-height: ${strayMinHeight.join(';')}`).toEqual([])
   })
 

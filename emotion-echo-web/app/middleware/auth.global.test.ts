@@ -11,8 +11,7 @@ const whiteListPrefix = ['/login/forget']
 
 function isInWhiteList(path: string): boolean {
   return (
-    whiteListExact.has(path) ||
-    whiteListPrefix.some((p) => path === p || path.startsWith(p + '/'))
+    whiteListExact.has(path) || whiteListPrefix.some((p) => path === p || path.startsWith(p + '/'))
   )
 }
 

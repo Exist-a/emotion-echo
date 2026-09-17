@@ -20,12 +20,12 @@ describe('messageStore · A8 响应式修复 (Sprint 110)', () => {
     const end = messageStoreSrc.indexOf('\n  const ', start + 1)
     const block = messageStoreSrc.slice(start, end === -1 ? messageStoreSrc.length : end)
 
-    const usesSpread = /currentMessages\.value\s*=\s*\[\.\.\.currentMessages\.value/.test(block)
+    const usesSpread = /currentMessages\.value\s*=\s*\[[\s\S]*?\.\.\.currentMessages\.value/.test(block)
     const usesPush = /currentMessages\.value\.push\(/.test(block)
     expect(
       usesSpread && !usesPush,
       'addMessage 必须用 spread 赋值 (currentMessages.value = [...currentMessages.value, msg]) ' +
-      '而不是 .push() —— 后者在 Nuxt 3 + pinia + 跨组件实例下偶发不触发响应式, 导致 AI 回复不渲染.'
+        '而不是 .push() —— 后者在 Nuxt 3 + pinia + 跨组件实例下偶发不触发响应式, 导致 AI 回复不渲染.',
     ).toBe(true)
   })
 
@@ -36,11 +36,11 @@ describe('messageStore · A8 响应式修复 (Sprint 110)', () => {
     const end = messageStoreSrc.indexOf('\n  const ', start + 1)
     const block = messageStoreSrc.slice(start, end === -1 ? messageStoreSrc.length : end)
 
-    const usesSpread = /currentMessages\.value\s*=\s*\[\.\.\.currentMessages\.value/.test(block)
+    const usesSpread = /currentMessages\.value\s*=\s*\[[\s\S]*?\.\.\.currentMessages\.value/.test(block)
     const usesPush = /currentMessages\.value\.push\(/.test(block)
     expect(
       usesSpread && !usesPush,
-      'sendMessage 内 push user 消息也必须改 spread 赋值, 避免 .push() 不触发响应式导致 UI 不更新.'
+      'sendMessage 内 push user 消息也必须改 spread 赋值, 避免 .push() 不触发响应式导致 UI 不更新.',
     ).toBe(true)
   })
 })

@@ -4,7 +4,14 @@ import { getIntentLabel, INTENT_LABEL_MAP } from '~/utils/intent'
 
 describe('getIntentLabel', () => {
   it('6 类意图全部有中文名', () => {
-    const intents = ['emotional_support', 'study_help', 'tech_help', 'career_help', 'lifestyle', 'other']
+    const intents = [
+      'emotional_support',
+      'study_help',
+      'tech_help',
+      'career_help',
+      'lifestyle',
+      'other',
+    ]
     for (const intent of intents) {
       const label = getIntentLabel(intent)
       expect(label).toBeTruthy()
@@ -19,8 +26,14 @@ describe('getIntentLabel', () => {
 
   it('与后端白名单键一致（漂移防护）', () => {
     // chat-svc allowedIntents / llm intent.INTENTS 同键集
-    expect(Object.keys(INTENT_LABEL_MAP).sort()).toEqual(
-      ['career_help', 'emotional_support', 'lifestyle', 'other', 'study_help', 'tech_help', 'unk']
-    )
+    expect(Object.keys(INTENT_LABEL_MAP).sort()).toEqual([
+      'career_help',
+      'emotional_support',
+      'lifestyle',
+      'other',
+      'study_help',
+      'tech_help',
+      'unk',
+    ])
   })
 })

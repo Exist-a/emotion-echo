@@ -15,7 +15,7 @@
             :disabled="loading"
             class="date-input"
             @change="emitRange(($event.target as HTMLInputElement)?.value ?? '', dateEnd)"
-          >
+          />
           <span class="date-sep" aria-hidden="true">至</span>
           <input
             type="date"
@@ -24,7 +24,7 @@
             :disabled="loading"
             class="date-input"
             @change="emitRange(dateStart, ($event.target as HTMLInputElement)?.value ?? '')"
-          >
+          />
         </label>
         <input
           v-else
@@ -36,14 +36,14 @@
           :max="maxDate"
           class="date-input"
           @change="emitSingle(($event.target as HTMLInputElement)?.value ?? '')"
-        >
+        />
       </div>
     </header>
 
     <div v-if="loading" class="loading-state">
-      <div class="ee-skeleton" style="height: 22px; width: 60%; margin-bottom: 12px"/>
-      <div class="ee-skeleton" style="height: 80px; margin-bottom: 14px"/>
-      <div class="ee-skeleton" style="height: 240px"/>
+      <div class="ee-skeleton" style="height: 22px; width: 60%; margin-bottom: 12px" />
+      <div class="ee-skeleton" style="height: 80px; margin-bottom: 14px" />
+      <div class="ee-skeleton" style="height: 240px" />
     </div>
     <template v-else>
       <section v-if="$slots.summary" class="report-summary card">
@@ -79,10 +79,12 @@ const emit = defineEmits<{
   (e: 'update:date', value: any): void
 }>()
 
-const placeholder = computed(() => props.placeholder || (props.pickerType === 'daterange' ? '选择一段日期' : '选择一个时间'))
+const placeholder = computed(
+  () => props.placeholder || (props.pickerType === 'daterange' ? '选择一段日期' : '选择一个时间'),
+)
 
-const dateStart = computed(() => Array.isArray(props.date) ? props.date[0] : '')
-const dateEnd = computed(() => Array.isArray(props.date) ? props.date[1] : '')
+const dateStart = computed(() => (Array.isArray(props.date) ? props.date[0] : ''))
+const dateEnd = computed(() => (Array.isArray(props.date) ? props.date[1] : ''))
 
 const todayKey = computed(() => {
   const t = new Date()
@@ -113,14 +115,46 @@ const emitRange = (start: string, end: string) => {
 </script>
 
 <style scoped lang="scss">
-.report-scaffold { display: grid; gap: 18px; width: min(1080px, 100%); margin: 0 auto; }
-.report-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px; }
-.header-copy { display: grid; gap: 6px; }
-.eyebrow { color: var(--ee-primary); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; }
-.header-copy h2 { margin: 0; font-size: clamp(22px, 2.5vw, 28px); font-weight: 600; letter-spacing: -0.02em; }
-.description { margin: 0; color: var(--ee-text-muted); font-size: 14px; }
+.report-scaffold {
+  display: grid;
+  gap: 18px;
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+.report-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+.header-copy {
+  display: grid;
+  gap: 6px;
+}
+.eyebrow {
+  color: var(--ee-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.header-copy h2 {
+  margin: 0;
+  font-size: clamp(22px, 2.5vw, 28px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.description {
+  margin: 0;
+  color: var(--ee-text-muted);
+  font-size: 14px;
+}
 
-.header-control .date-range { display: inline-flex; align-items: center; gap: 6px; }
+.header-control .date-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .header-control .date-input {
   min-width: 150px;
   height: 36px;
@@ -133,24 +167,81 @@ const emitRange = (start: string, end: string) => {
   outline: none;
   transition: border-color var(--ee-transition);
 }
-.header-control .date-input:focus { border-color: var(--ee-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ee-primary) 25%, transparent); }
-.header-control .date-sep { color: var(--ee-text-muted); font-size: 12px; }
+.header-control .date-input:focus {
+  border-color: var(--ee-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ee-primary) 25%, transparent);
+}
+.header-control .date-sep {
+  color: var(--ee-text-muted);
+  font-size: 12px;
+}
 
-.card { background: var(--ee-surface); border: 1px solid var(--ee-border); border-radius: var(--ee-radius-lg); padding: 18px 20px; }
-.report-summary { display: grid; gap: 16px; }
-.report-charts { min-height: 240px; }
+.card {
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-lg);
+  padding: 18px 20px;
+}
+.report-summary {
+  display: grid;
+  gap: 16px;
+}
+.report-charts {
+  min-height: 240px;
+}
 
-.loading-state { display: grid; gap: 12px; }
-.ee-skeleton { background: linear-gradient(90deg, var(--ee-surface-muted) 25%, color-mix(in srgb, var(--ee-surface-muted) 50%, var(--ee-surface)) 50%, var(--ee-surface-muted) 75%); background-size: 200% 100%; animation: skeleton-shimmer 1.4s ease-in-out infinite; border-radius: var(--ee-radius-sm, 6px); }
-@keyframes skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.loading-state {
+  display: grid;
+  gap: 12px;
+}
+.ee-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--ee-surface-muted) 25%,
+    color-mix(in srgb, var(--ee-surface-muted) 50%, var(--ee-surface)) 50%,
+    var(--ee-surface-muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--ee-radius-sm, 6px);
+}
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
 
-.empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 8px; color: var(--ee-text-muted); }
-.empty-mark { font-size: 28px; opacity: 0.6; }
-.empty-state p { margin: 0; font-size: 13px; }
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 8px;
+  color: var(--ee-text-muted);
+}
+.empty-mark {
+  font-size: 28px;
+  opacity: 0.6;
+}
+.empty-state p {
+  margin: 0;
+  font-size: 13px;
+}
 
 @media (max-width: 600px) {
-  .report-header { align-items: stretch; flex-direction: column; }
-  .header-control .date-input { width: 100%; min-width: 0; }
-  .header-control .date-range { flex-wrap: wrap; }
+  .report-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .header-control .date-input {
+    width: 100%;
+    min-width: 0;
+  }
+  .header-control .date-range {
+    flex-wrap: wrap;
+  }
 }
 </style>

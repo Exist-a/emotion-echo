@@ -51,7 +51,11 @@ const fetchWeeklyReport = async () => {
   if (!dateRange.value || dateRange.value.length !== 2) return
   isLoading.value = true
   try {
-    const data = await get<EmotionTrend>(API_ROUTES.reportsTrend.path, { type: 'weekly', start: dateRange.value[0], end: dateRange.value[1] })
+    const data = await get<EmotionTrend>(API_ROUTES.reportsTrend.path, {
+      type: 'weekly',
+      start: dateRange.value[0],
+      end: dateRange.value[1],
+    })
     reportData.value = data
   } catch (error: any) {
     notify('加载失败', error?.message || '周报告生成失败,请稍后重试', 'error', 3000)

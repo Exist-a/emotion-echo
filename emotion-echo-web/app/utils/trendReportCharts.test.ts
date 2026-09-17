@@ -17,7 +17,10 @@ describe('trendToChartItems', () => {
       { name: '难过', data: [0, 1, 1] },
     ],
     summary: 's',
-    emotionDistribution: [{ name: 'happy', value: 10 }, { name: 'sad', value: 5 }],
+    emotionDistribution: [
+      { name: 'happy', value: 10 },
+      { name: 'sad', value: 5 },
+    ],
     conversationCount: 7,
     messageCount: 42,
   }
@@ -51,7 +54,10 @@ describe('trendToChartItems', () => {
   it('emits a pie chart for intentDistribution when present', () => {
     const trend: EmotionTrend = {
       ...baseTrend,
-      intentDistribution: [{ intent: 'vent', count: 3 }, { intent: 'advice', count: 2 }],
+      intentDistribution: [
+        { intent: 'vent', count: 3 },
+        { intent: 'advice', count: 2 },
+      ],
     }
     const items = trendToChartItems(trend)
     const intentPie = items.find((i: any) => i.title === '意图分布') as any

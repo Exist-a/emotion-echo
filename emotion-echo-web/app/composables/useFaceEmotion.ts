@@ -16,17 +16,17 @@ export interface UseFaceEmotionOptions {
 export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
   const { post } = useApi()
   const userStore = useUserStore()
-  
+
   const isCameraOn = ref(false)
   // 存储形态恒带 timestamp（capture 成功后 spread 赋值），比接口多一个必填字段
   const currentEmotion = ref<(FaceEmotionResult & { timestamp: number }) | null>(null)
   const lastCaptureTime = ref(0)
-  
+
   let stream: MediaStream | null = null
   let videoElement: HTMLVideoElement | null = null
   let captureTimer: ReturnType<typeof setInterval> | null = null
   let canvas: HTMLCanvasElement | null = null
-  
+
   const captureInterval = options.captureInterval || 2000
 
   /**
@@ -35,36 +35,36 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
   const startCamera = async (videoRef: HTMLVideoElement) => {
     try {
       videoElement = videoRef
-      
+
       // 请求摄像头权限
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
           width: { ideal: 320 },
-          height: { ideal: 240 }
-        }
+          height: { ideal: 240 },
+        },
       })
-      
+
       videoElement.srcObject = stream
       await videoElement.play()
-      
+
       isCameraOn.value = true
-      
+
       // 创建 canvas 用于截图
       if (!canvas) {
         canvas = document.createElement('canvas')
         canvas.width = 320
         canvas.height = 240
       }
-      
+
       // 立即捕获一次
       await captureAndAnalyze()
-      
+
       // 开始定时捕获
       captureTimer = setInterval(async () => {
         await captureAndAnalyze()
       }, captureInterval)
-      
+
       return true
     } catch (error) {
       console.error('[useFaceEmotion] 无法开启摄像头:', error)
@@ -77,19 +77,19 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
    */
   const stopCamera = () => {
     if (stream) {
-      stream.getTracks().forEach(track => track.stop())
+      stream.getTracks().forEach((track) => track.stop())
       stream = null
     }
-    
+
     if (videoElement) {
       videoElement.srcObject = null
     }
-    
+
     if (captureTimer) {
       clearInterval(captureTimer)
       captureTimer = null
     }
-    
+
     isCameraOn.value = false
     currentEmotion.value = null
     lastCaptureTime.value = 0
@@ -100,25 +100,26 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
    */
   const captureAndAnalyze = async () => {
     if (!videoElement || !canvas || !isCameraOn.value) return
-    
+
     try {
       const ctx = canvas.getContext('2d')
       if (!ctx) return
-      
+
       // 捕获当前帧
       ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
-      
+
       // 转换为 base64
       const imageBase64 = canvas.toDataURL('image/jpeg', 0.7)
-      
+
       // 获取用户ID
       const userId = userStore.userInfo?.id || ''
-      
+
       // 获取 sessionId（处理可能的 ComputedRef）
-      const sessionId = typeof options.sessionId === 'object' && 'value' in options.sessionId 
-        ? options.sessionId.value 
-        : options.sessionId
-      
+      const sessionId =
+        typeof options.sessionId === 'object' && 'value' in options.sessionId
+          ? options.sessionId.value
+          : options.sessionId
+
       // P0-R2-2: 改用 /multimodal/analyze（修复前调 orphan 路径无 handler）
       const formData = new FormData()
       formData.append('kind', 'image')
@@ -132,16 +133,17 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
       if (sessionId) formData.append('text', sessionId)
 
       const result = await post<FaceEmotionResult>(API_ROUTES.multimodalAnalyze.path, formData)
-      
+
       currentEmotion.value = {
         ...result,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
       lastCaptureTime.value = Date.now()
-      
+
       // 打印情绪分析结果
-      console.log(`[面部情绪] 检测结果: ${result.emotion} (置信度: ${(result.confidence * 100).toFixed(1)}%)`)
-      
+      console.log(
+        `[面部情绪] 检测结果: ${result.emotion} (置信度: ${(result.confidence * 100).toFixed(1)}%)`,
+      )
     } catch (error) {
       console.error('[面部情绪] 分析失败:', error)
     }
@@ -193,6 +195,6 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
     stopCamera,
     triggerCapture,
     getRecentEmotion,
-    toggleCamera
+    toggleCamera,
   }
 }

@@ -18,7 +18,7 @@ const TEMPLATE_AND_SCRIPT = (() => {
   const tmpl = VERIFY_SRC.match(/<template>([\s\S]*?)<\/template>/)?.[1] ?? ''
   const script = VERIFY_SRC.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1] ?? ''
   // 进一步把注释去掉
-  const stripped = (script.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, ''))
+  const stripped = script.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
   return tmpl + '\n' + stripped
 })()
 

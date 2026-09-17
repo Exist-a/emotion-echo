@@ -7,16 +7,10 @@
     @touchstart="startDrag"
   >
     <div class="camera-container">
-      <video
-        ref="videoRef"
-        class="camera-video"
-        autoplay
-        playsinline
-        muted
-      />
-      <div class="camera-frame"/>
+      <video ref="videoRef" class="camera-video" autoplay playsinline muted />
+      <div class="camera-frame" />
       <div class="camera-indicator" :class="{ active: isActive }">
-        <span class="indicator-dot"/>
+        <span class="indicator-dot" />
         <span class="indicator-text">{{ isActive ? '面部识别中' : '等待中' }}</span>
       </div>
       <button class="close-btn" @click.stop="handleClose">
@@ -36,7 +30,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  isActive: false
+  isActive: false,
 })
 
 const emit = defineEmits<{
@@ -60,15 +54,18 @@ const wrapperStyle = computed(() => ({
   left: `${position.value.x}px`,
   top: `${position.value.y}px`,
   width: `${containerSize.value.width}px`,
-  height: `${containerSize.value.height}px`
+  height: `${containerSize.value.height}px`,
 }))
 
 // 监听 visible 变化
-watch(() => props.visible, (newVal) => {
-  if (newVal) {
-    triggerVideoReady()
-  }
-})
+watch(
+  () => props.visible,
+  (newVal) => {
+    if (newVal) {
+      triggerVideoReady()
+    }
+  },
+)
 
 onMounted(() => {
   if (props.visible) {
@@ -91,7 +88,7 @@ const triggerVideoReady = () => {
 // 拖拽相关
 const startDrag = (e: MouseEvent | TouchEvent) => {
   isDragging.value = true
-  
+
   const touch = 'touches' in e ? e.touches[0] : undefined
   const clientX = touch?.clientX ?? (e as MouseEvent).clientX
   const clientY = touch?.clientY ?? (e as MouseEvent).clientY
@@ -111,17 +108,17 @@ const onDrag = (e: MouseEvent | TouchEvent) => {
   const touch = 'touches' in e ? e.touches[0] : undefined
   const clientX = touch?.clientX ?? (e as MouseEvent).clientX
   const clientY = touch?.clientY ?? (e as MouseEvent).clientY
-  
+
   const deltaX = clientX - dragStart.value.x
   const deltaY = clientY - dragStart.value.y
-  
+
   // 限制在可视区域内
   const maxX = window.innerWidth - containerSize.value.width - 10
   const maxY = window.innerHeight - containerSize.value.height - 10
-  
+
   position.value = {
     x: Math.max(10, Math.min(maxX, elementStart.value.x + deltaX)),
-    y: Math.max(10, Math.min(maxY, elementStart.value.y + deltaY))
+    y: Math.max(10, Math.min(maxY, elementStart.value.y + deltaY)),
   }
 }
 
@@ -213,7 +210,8 @@ onUnmounted(() => {
 }
 
 @keyframes blink {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -241,11 +239,11 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 14px;
   transition: background 0.2s;
-  
+
   &:hover {
     background: rgba(0, 0, 0, 0.7);
   }
-  
+
   :deep(.el-icon) {
     width: 16px;
     height: 16px;

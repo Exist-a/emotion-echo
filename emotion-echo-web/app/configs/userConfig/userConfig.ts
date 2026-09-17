@@ -1,6 +1,6 @@
-import type { userConfigType } from "~/types/userConfig/userConfigType";
+import type { userConfigType } from '~/types/userConfig/userConfigType'
 
-const userConfig:userConfigType = {
-    fontSize:'16px'
+const userConfig: userConfigType = {
+  fontSize: '16px',
 }
-export default userConfig;
+export default userConfig

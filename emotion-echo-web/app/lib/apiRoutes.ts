@@ -23,61 +23,61 @@ export interface ApiRoute {
 
 export const API_ROUTES = {
   // ============ Auth (BFF: POST /api/v1/auth/:action, switch case 5 个) ============
-  authLogin:              { method: 'POST', path: '/auth/login' } as ApiRoute,
-  authRegister:           { method: 'POST', path: '/auth/register' } as ApiRoute,
-  authLogout:             { method: 'POST', path: '/auth/logout' } as ApiRoute,
-  authRefresh:            { method: 'POST', path: '/auth/refresh' } as ApiRoute,
-  authVerificationCode:   { method: 'POST', path: '/auth/verification-code' } as ApiRoute,
+  authLogin: { method: 'POST', path: '/auth/login' } as ApiRoute,
+  authRegister: { method: 'POST', path: '/auth/register' } as ApiRoute,
+  authLogout: { method: 'POST', path: '/auth/logout' } as ApiRoute,
+  authRefresh: { method: 'POST', path: '/auth/refresh' } as ApiRoute,
+  authVerificationCode: { method: 'POST', path: '/auth/verification-code' } as ApiRoute,
   // PR-4 落地：authResetPassword + BFF auth_handler case "reset-password" + user-svc /users/reset-password
-  authResetPassword:      { method: 'POST', path: '/auth/reset-password' } as ApiRoute,
+  authResetPassword: { method: 'POST', path: '/auth/reset-password' } as ApiRoute,
 
   // ============ User (BFF: user_handler.go + PR-4 avatar) ============
   // Stage 71 PR-C8: userUpdateProfile 改为 PATCH /users/me 与 BFF user_handler.go:63 对齐。
   // 修复前: PUT /user/profile 调 BFF → 404（user_handler 只注册 PATCH /users/me）
-  userProfile:            { method: 'GET',  path: '/user/profile' } as ApiRoute,
-  userUpdateProfile:      { method: 'PATCH', path: '/users/me' } as ApiRoute,
+  userProfile: { method: 'GET', path: '/user/profile' } as ApiRoute,
+  userUpdateProfile: { method: 'PATCH', path: '/users/me' } as ApiRoute,
   // PR-4 落地：BFF avatar_handler + MinIO + user-svc avatar_url
-  userAvatar:             { method: 'POST', path: '/user/avatar' } as ApiRoute,
+  userAvatar: { method: 'POST', path: '/user/avatar' } as ApiRoute,
 
   // ============ Conversations (BFF: chat_handler.go) ============
-  conversations:          { method: 'GET',    path: '/conversations' } as ApiRoute,
-  createConversation:     { method: 'POST',   path: '/conversations' } as ApiRoute,
+  conversations: { method: 'GET', path: '/conversations' } as ApiRoute,
+  createConversation: { method: 'POST', path: '/conversations' } as ApiRoute,
   // Stage 72: conversationById PATCH + conversationPin POST 转正
   // （chat-svc UpdateConversation / PinConversation RPC 已落地，决策 4 ADR §八 收口；
   //   BFF chat_handler PATCH /:id + POST /:id/pin 已注册）
-  conversationById:       { method: 'PATCH',  path: '/conversations/:id' } as ApiRoute,
-  conversationPin:        { method: 'POST',   path: '/conversations/:id/pin' } as ApiRoute,
-  deleteConversation:     { method: 'DELETE', path: '/conversations/:id' } as ApiRoute,
-  messagesByConv:         { method: 'GET',    path: '/conversations/:id/messages' } as ApiRoute,
-  sendMessage:            { method: 'POST',   path: '/conversations/:id/messages' } as ApiRoute,
+  conversationById: { method: 'PATCH', path: '/conversations/:id' } as ApiRoute,
+  conversationPin: { method: 'POST', path: '/conversations/:id/pin' } as ApiRoute,
+  deleteConversation: { method: 'DELETE', path: '/conversations/:id' } as ApiRoute,
+  messagesByConv: { method: 'GET', path: '/conversations/:id/messages' } as ApiRoute,
+  sendMessage: { method: 'POST', path: '/conversations/:id/messages' } as ApiRoute,
 
   // ============ Reports / user-behavior / mental-health (BFF: analytics_handler.go) ============
-  reportsDaily:           { method: 'GET', path: '/reports/daily' } as ApiRoute,
-  reportsTrend:           { method: 'GET', path: '/reports/trend' } as ApiRoute,
-  userBehaviorDayNight:   { method: 'GET', path: '/user-behavior/day-night' } as ApiRoute,
-  userBehaviorDepth:      { method: 'GET', path: '/user-behavior/depth' } as ApiRoute,
-  userBehaviorFrequency:  { method: 'GET', path: '/user-behavior/frequency' } as ApiRoute,
+  reportsDaily: { method: 'GET', path: '/reports/daily' } as ApiRoute,
+  reportsTrend: { method: 'GET', path: '/reports/trend' } as ApiRoute,
+  userBehaviorDayNight: { method: 'GET', path: '/user-behavior/day-night' } as ApiRoute,
+  userBehaviorDepth: { method: 'GET', path: '/user-behavior/depth' } as ApiRoute,
+  userBehaviorFrequency: { method: 'GET', path: '/user-behavior/frequency' } as ApiRoute,
 
   // ============ Surveys (BFF: survey_handler.go) ============
-  surveys:                { method: 'GET',  path: '/surveys' } as ApiRoute,
-  surveyById:             { method: 'GET',  path: '/surveys/:id' } as ApiRoute,
-  submitSurvey:           { method: 'POST', path: '/surveys/:id/submit' } as ApiRoute,
+  surveys: { method: 'GET', path: '/surveys' } as ApiRoute,
+  surveyById: { method: 'GET', path: '/surveys/:id' } as ApiRoute,
+  submitSurvey: { method: 'POST', path: '/surveys/:id/submit' } as ApiRoute,
 
   // ============ Multimodal / TTS / AI stream (BFF: multimodal/tts/ai_stream handlers) ============
-  multimodalAnalyze:      { method: 'POST', path: '/multimodal/analyze' } as ApiRoute,
-  ttsStream:              { method: 'POST', path: '/tts/stream' } as ApiRoute,
-  aiStream:               { method: 'POST', path: '/ai/stream' } as ApiRoute,
+  multimodalAnalyze: { method: 'POST', path: '/multimodal/analyze' } as ApiRoute,
+  ttsStream: { method: 'POST', path: '/tts/stream' } as ApiRoute,
+  aiStream: { method: 'POST', path: '/ai/stream' } as ApiRoute,
 
   // PR-4 落地：BFF voice_handler + ai-svc multimodal kind=audio
-  voiceUpload:            { method: 'POST', path: '/voice/upload' } as ApiRoute,
+  voiceUpload: { method: 'POST', path: '/voice/upload' } as ApiRoute,
 
   // ============ Uploads（Stage 58 PR-UP-1/2：通用上传）============
   // BFF: POST /api/v1/uploads/:kind（kind ∈ image|video|file）
   // Sprint 1 PR-2 时本路径是 orphan（前端 /upload/* 单数 + BFF /uploads/* 复数错位），
   // Stage 58 PR-UP-1 BFF 真实现 + PR-UP-2 前端转正
-  uploadImage:            { method: 'POST', path: '/uploads/image' } as ApiRoute,
-  uploadVideo:            { method: 'POST', path: '/uploads/video' } as ApiRoute,
-  uploadFile:             { method: 'POST', path: '/uploads/file' } as ApiRoute,
+  uploadImage: { method: 'POST', path: '/uploads/image' } as ApiRoute,
+  uploadVideo: { method: 'POST', path: '/uploads/video' } as ApiRoute,
+  uploadFile: { method: 'POST', path: '/uploads/file' } as ApiRoute,
 
   // ============ knownOrphans ============
   // 前端已调用但 BFF 端未注册（或 BFF 路径错位）。PR-4 落地后这些孤儿应转入主路径或加 handler。

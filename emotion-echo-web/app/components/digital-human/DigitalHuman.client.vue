@@ -7,9 +7,9 @@
     @mousedown="handleMouseDown"
   >
     <div v-show="visible" id="digital-human-container" class="digital-human-container">
-      <canvas ref="canvasRef" class="digital-human-canvas"/>
+      <canvas ref="canvasRef" class="digital-human-canvas" />
       <div v-if="loading" class="loading-overlay">
-        <div class="loading-spinner"/>
+        <div class="loading-spinner" />
         <span class="loading-text">加载数字人模型中...</span>
       </div>
       <div v-else-if="loadFailed" class="loading-overlay">
@@ -25,7 +25,17 @@
         :aria-label="visible ? '隐藏数字人' : '显示数字人'"
         @click="handleToggleVisible"
       >
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <template v-if="visible">
             <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
             <circle cx="12" cy="12" r="3" />
@@ -44,7 +54,17 @@
         :aria-label="voiceEnabled ? '关闭语音' : '开启语音'"
         @click="handleToggleVoice"
       >
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <template v-if="voiceEnabled">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
             <path d="M15.5 8.5a5 5 0 0 1 0 7" />
@@ -78,7 +98,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   modelPath: '/3d-models/digital-human.vrm',
   visible: true,
-  draggable: true
+  draggable: true,
 })
 
 interface Position {
@@ -107,14 +127,14 @@ watch(
   () => digitalHumanStore.voiceEnabled,
   (newVal) => {
     voiceEnabled.value = newVal
-  }
+  },
 )
 
 watch(
   () => digitalHumanStore.visible,
   (newVal) => {
     visible.value = newVal
-  }
+  },
 )
 
 watch(
@@ -123,7 +143,7 @@ watch(
     if (newShape && newShape !== 'neutral') {
       setLipShape(newShape as LipShape)
     }
-  }
+  },
 )
 
 let scene: THREE.Scene | null = null
@@ -154,7 +174,7 @@ const EMOTION_MAP: Record<string, string> = {
   anxious: 'neutral',
   neutral: 'neutral',
   unk: 'neutral',
-  unknown: 'neutral'
+  unknown: 'neutral',
 }
 
 const LIP_EMOTION_MAP: Record<LipShape, string> = {
@@ -163,7 +183,7 @@ const LIP_EMOTION_MAP: Record<LipShape, string> = {
   ih: 'neutral',
   oh: 'neutral',
   ou: 'neutral',
-  neutral: 'neutral'
+  neutral: 'neutral',
 }
 
 const setInitialPose = () => {
@@ -307,7 +327,7 @@ const initScene = () => {
   renderer = new THREE.WebGLRenderer({
     canvas: canvasRef.value,
     alpha: true,
-    antialias: true
+    antialias: true,
   })
   renderer.setPixelRatio(window.devicePixelRatio)
   renderer.setSize(canvasRef.value.clientWidth, canvasRef.value.clientHeight)
@@ -318,15 +338,15 @@ const initScene = () => {
     45,
     canvasRef.value.clientWidth / canvasRef.value.clientHeight,
     0.1,
-    1000
+    1000,
   )
   camera.position.set(0, 1.14, 0.7)
   camera.lookAt(0, 1.0, 0)
 
-  const ambientLight = new THREE.AmbientLight(0xFFFFFF, 1)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1)
   scene.add(ambientLight)
 
-  const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1)
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
   directionalLight.position.set(1, 1, 1)
   scene.add(directionalLight)
 
@@ -512,7 +532,7 @@ onUnmounted(() => {
 defineExpose({
   setEmotion,
   setLipShape,
-  resetLipShape
+  resetLipShape,
 })
 </script>
 

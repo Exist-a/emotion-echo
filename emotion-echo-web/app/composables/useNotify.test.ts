@@ -21,7 +21,8 @@ describe('useNotify.ts · source 合同', () => {
   })
 
   it('push 函数形态: (title, message, type default info, duration default 3000)', () => {
-    const re = /function push\([\s\S]*?title: string[\s\S]*?message: string[\s\S]*?type[\s\S]*?duration[\s\S]*?3000/
+    const re =
+      /function push\([\s\S]*?title: string[\s\S]*?message: string[\s\S]*?type[\s\S]*?duration[\s\S]*?3000/
     expect(src).toMatch(re)
   })
 

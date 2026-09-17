@@ -4,49 +4,51 @@
  * 密码正则
  * 要求：6-18位，包含字母和数字
  */
-export const passwordReg = /^(?=.*[a-z])(?=.*\d).{6,18}$/i;
+export const passwordReg = /^(?=.*[a-z])(?=.*\d).{6,18}$/i
 
 /**
  * 手机号正则
  */
-export const phoneReg = /^1[3-9]\d{9}$/;
+export const phoneReg = /^1[3-9]\d{9}$/
 
 /**
  * 邮箱正则
  */
-export const emailReg = /^[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+export const emailReg = /^[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i
 
 /**
  * 手机号或邮箱正则
  */
-export const phoneOrEmailReg = /^(?:1[3-9]\d{9}|[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,})$/i;
+export const phoneOrEmailReg = /^(?:1[3-9]\d{9}|[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,})$/i
 
 /**
  * 验证码正则（6位数字）
  */
-export const verificationCodeReg = /^\d{6}$/;
+export const verificationCodeReg = /^\d{6}$/
 
 /**
  * 昵称正则
  * 允许：中英文（含繁体）、数字（全角/半角）、下划线、横线、中文间隔号 ·
  * 长度：2-12个字符
  */
-export const nicknameReg = /^[\w\u4E00-\u9FA5\u3400-\u4DBF\u{20000}-\u{2A6DF}\u{2A700}-\u{2B73F}\u{2B740}-\u{2B81F}\u{2B820}-\u{2CEAF}\u{2CEB0}-\u{2EBEF}\u{30000}-\u{3134F}\uFF00-\uFFEF·-]{2,12}$/u;
+export const nicknameReg =
+  /^[\w\u4E00-\u9FA5\u3400-\u4DBF\u{20000}-\u{2A6DF}\u{2A700}-\u{2B73F}\u{2B740}-\u{2B81F}\u{2B820}-\u{2CEAF}\u{2CEB0}-\u{2EBEF}\u{30000}-\u{3134F}\uFF00-\uFFEF·-]{2,12}$/u
 
 /**
  * URL 正则
  */
-export const urlReg = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*$/;
+export const urlReg = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*$/
 
 /**
  * 身份证号正则（简化版）
  */
-export const idCardReg = /^\d{15}|\d{18}$/;
+export const idCardReg = /^\d{15}|\d{18}$/
 
 /**
  * Emoji 表情正则
  */
-export const emojiReg = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
+export const emojiReg =
+  /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu
 
 // ==================== 验证函数 ====================
 
@@ -55,7 +57,7 @@ export const emojiReg = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6
  * @param password 密码
  */
 export function validatePassword(password: string): boolean {
-  return passwordReg.test(password);
+  return passwordReg.test(password)
 }
 
 /**
@@ -63,7 +65,7 @@ export function validatePassword(password: string): boolean {
  * @param phone 手机号
  */
 export function validatePhone(phone: string): boolean {
-  return phoneReg.test(phone);
+  return phoneReg.test(phone)
 }
 
 /**
@@ -71,7 +73,7 @@ export function validatePhone(phone: string): boolean {
  * @param email 邮箱
  */
 export function validateEmail(email: string): boolean {
-  return emailReg.test(email);
+  return emailReg.test(email)
 }
 
 /**
@@ -79,7 +81,7 @@ export function validateEmail(email: string): boolean {
  * @param value 值
  */
 export function validatePhoneOrEmail(value: string): boolean {
-  return phoneOrEmailReg.test(value);
+  return phoneOrEmailReg.test(value)
 }
 
 /**
@@ -87,7 +89,7 @@ export function validatePhoneOrEmail(value: string): boolean {
  * @param code 验证码
  */
 export function validateVerificationCode(code: string): boolean {
-  return verificationCodeReg.test(code);
+  return verificationCodeReg.test(code)
 }
 
 /**
@@ -95,7 +97,7 @@ export function validateVerificationCode(code: string): boolean {
  * @param nickname 昵称
  */
 export function validateNickname(nickname: string): boolean {
-  return nicknameReg.test(nickname);
+  return nicknameReg.test(nickname)
 }
 
 /**
@@ -103,20 +105,20 @@ export function validateNickname(nickname: string): boolean {
  * @param url URL
  */
 export function validateUrl(url: string): boolean {
-  return urlReg.test(url);
+  return urlReg.test(url)
 }
 
 /**
  * 获取验证错误信息
  * @param type 验证类型
  */
-export function getValidationError(type: "PWD" | "phone" | "email" | "nickname" | "code"): string {
+export function getValidationError(type: 'PWD' | 'phone' | 'email' | 'nickname' | 'code'): string {
   const errorMap: Record<string, string> = {
-    PWD: "密码需为6-18位，且包含字母和数字",
-    phone: "请输入有效的手机号",
-    email: "请输入有效的邮箱地址",
-    nickname: "昵称长度为2-12个字符，支持中英文、数字、下划线",
-    code: "验证码为6位数字",
-  };
-  return errorMap[type] || "格式错误";
+    PWD: '密码需为6-18位，且包含字母和数字',
+    phone: '请输入有效的手机号',
+    email: '请输入有效的邮箱地址',
+    nickname: '昵称长度为2-12个字符，支持中英文、数字、下划线',
+    code: '验证码为6位数字',
+  }
+  return errorMap[type] || '格式错误'
 }

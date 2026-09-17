@@ -5,7 +5,7 @@ import type {
   RegisterParams,
   UserInfo,
   UpdateProfileParams,
-  SendVerificationCodeParams
+  SendVerificationCodeParams,
 } from '~/types/api'
 import { get, post, put, patch } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
@@ -36,12 +36,12 @@ export const useUserStore = defineStore('user', () => {
   const fontSizeToPx: Record<string, string> = {
     small: '14px',
     medium: '16px',
-    large: '18px'
+    large: '18px',
   }
   const pxToFontSize: Record<string, string> = {
     '14px': 'small',
     '16px': 'medium',
-    '18px': 'large'
+    '18px': 'large',
   }
 
   const getUserConfig = () => {
@@ -50,7 +50,7 @@ export const useUserStore = defineStore('user', () => {
     const fontSize = config?.fontSize ? pxToFontSize[config.fontSize] || config.fontSize : 'medium'
     return {
       fontSize,
-      theme: config?.theme || 'light'
+      theme: config?.theme || 'light',
     }
   }
 
@@ -68,8 +68,8 @@ export const useUserStore = defineStore('user', () => {
     const result = await updateProfile({
       config: {
         ...userInfo.value.config,
-        fontSize: pxSize as any
-      }
+        fontSize: pxSize as any,
+      },
     })
     if (!result.isOk) return
 
@@ -86,8 +86,8 @@ export const useUserStore = defineStore('user', () => {
     const result = await updateProfile({
       config: {
         ...userInfo.value.config,
-        theme
-      }
+        theme,
+      },
     })
     if (!result.isOk) return
 
@@ -129,7 +129,7 @@ export const useUserStore = defineStore('user', () => {
     const tokenCookie = useCookie('access_token', {
       maxAge: expiresIn,
       sameSite: 'lax',
-      path: '/'
+      path: '/',
     })
     tokenCookie.value = token
   }
@@ -151,7 +151,7 @@ export const useUserStore = defineStore('user', () => {
     const tokenCookie = useCookie('access_token', {
       maxAge: -1,
       sameSite: 'lax',
-      path: '/'
+      path: '/',
     })
     tokenCookie.value = null
   }
@@ -168,7 +168,7 @@ export const useUserStore = defineStore('user', () => {
    * 发送验证码
    */
   const sendVerificationCode = async (
-    params: SendVerificationCodeParams
+    params: SendVerificationCodeParams,
   ): Promise<returnMsgType> => {
     try {
       await post(API_ROUTES.authVerificationCode.path, params)
@@ -389,6 +389,6 @@ export const useUserStore = defineStore('user', () => {
     editNickname,
     editAge,
     logout,
-    init
+    init,
   }
 })

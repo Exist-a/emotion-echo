@@ -34,9 +34,9 @@ describe('stripMarkdown', () => {
 
   it('strips markdown links BEFORE bare URLs so trailing parens are not consumed', () => {
     // 旧顺序(URL 先于 link)会把 `](https://a.com)https://b.com` 的括号当作 URL 的一部分吞掉
-    expect(
-      stripMarkdown('see [the docs](https://example.com) and https://b.com today')
-    ).toBe('see the docs and today')
+    expect(stripMarkdown('see [the docs](https://example.com) and https://b.com today')).toBe(
+      'see the docs and today',
+    )
   })
 
   it('preserves Chinese parentheses inside image alt text', () => {
@@ -54,8 +54,11 @@ describe('stripMarkdown', () => {
   it('does not eat text after an unpaired fence', () => {
     // 改动后:未闭合 ``` 不再吞到行/文末
     expect(
-      stripMarkdown('A\n```js\ncode\nB',
-        { removeCodeBlocks: true, removeMarkdownSyntax: false, removeInlineCode: false })
+      stripMarkdown('A\n```js\ncode\nB', {
+        removeCodeBlocks: true,
+        removeMarkdownSyntax: false,
+        removeInlineCode: false,
+      }),
     ).toContain('B')
   })
 

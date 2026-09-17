@@ -52,7 +52,10 @@ const chartData = computed<ChartItem[]>(() => {
     items.push({
       chartType: 'pie',
       title: '情绪分布',
-      data: reportData.value.emotionDistribution.map((item) => ({ ...item, name: getEmotionLabel(item.name) }))
+      data: reportData.value.emotionDistribution.map((item) => ({
+        ...item,
+        name: getEmotionLabel(item.name),
+      })),
     })
   }
   // Stage 82 PR-3b：消息意图分布饼图（6 类；字段缺失/为空时隐藏——旧报表兼容）
@@ -60,7 +63,10 @@ const chartData = computed<ChartItem[]>(() => {
     items.push({
       chartType: 'pie',
       title: '消息意图分布',
-      data: reportData.value.intentDistribution.map((item) => ({ name: getIntentLabel(item.intent), value: item.count }))
+      data: reportData.value.intentDistribution.map((item) => ({
+        name: getIntentLabel(item.intent),
+        value: item.count,
+      })),
     })
   }
   return items

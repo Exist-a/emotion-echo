@@ -42,7 +42,7 @@ describe('ReportScaffold.vue', () => {
     const wrapper = await factory({
       title: '周',
       date: ['2026-07-01', '2026-07-07'],
-      pickerType: 'daterange'
+      pickerType: 'daterange',
     })
     const inputs = wrapper.findAll('input.date-input')
     await inputs[1]!.setValue('2026-07-14')
@@ -79,7 +79,7 @@ describe('ReportScaffold.vue', () => {
   it('renders summary / charts slot content when provided', async () => {
     const wrapper = await factory(
       { title: '日', date: '2026-07-01' },
-      { summary: '<p class="sum">S</p>', charts: '<p class="ch">C</p>' }
+      { summary: '<p class="sum">S</p>', charts: '<p class="ch">C</p>' },
     )
     expect(wrapper.find('.report-summary').html()).toContain('S')
     expect(wrapper.find('.report-charts').html()).toContain('C')
@@ -91,7 +91,7 @@ describe('ReportScaffold.vue', () => {
       title: '月',
       date: '2026-01',
       pickerType: 'month',
-      disableFuture: true
+      disableFuture: true,
     })
     const input = wrapper.find('input.date-input')
     const today = new Date()

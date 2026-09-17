@@ -6,7 +6,7 @@
         <span v-else>⏸</span>
       </button>
       <div class="waveform">
-        <span v-for="i in 10" :key="i" class="wave" :style="{ height: waveHeights[i - 1] + '%' }"/>
+        <span v-for="i in 10" :key="i" class="wave" :style="{ height: waveHeights[i - 1] + '%' }" />
       </div>
       <span class="duration">{{ formatTime(duration) }}</span>
     </div>
@@ -15,62 +15,62 @@
       {{ transcript }}
     </div>
 
-    <audio ref="audioRef" :src="audioUrl" @ended="onEnded" @timeupdate="onTimeUpdate"/>
+    <audio ref="audioRef" :src="audioUrl" @ended="onEnded" @timeupdate="onTimeUpdate" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue'
 
 interface Props {
-  audioUrl: string;
-  duration?: number;
-  transcript?: string;
+  audioUrl: string
+  duration?: number
+  transcript?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   duration: 0,
   transcript: '',
-});
+})
 
-const audioRef = ref<HTMLAudioElement | null>(null);
-const isPlaying = ref(false);
-const currentTime = ref(0);
+const audioRef = ref<HTMLAudioElement | null>(null)
+const isPlaying = ref(false)
+const currentTime = ref(0)
 
-const waveHeights = ref<number[]>([]);
+const waveHeights = ref<number[]>([])
 
 onMounted(() => {
-  waveHeights.value = Array.from({ length: 10 }, () => Math.random() * 60 + 20);
-});
+  waveHeights.value = Array.from({ length: 10 }, () => Math.random() * 60 + 20)
+})
 
 const togglePlay = () => {
-  if (!audioRef.value) return;
+  if (!audioRef.value) return
 
   if (isPlaying.value) {
-    audioRef.value.pause();
-    isPlaying.value = false;
+    audioRef.value.pause()
+    isPlaying.value = false
   } else {
-    audioRef.value.play();
-    isPlaying.value = true;
+    audioRef.value.play()
+    isPlaying.value = true
   }
-};
+}
 
 const onEnded = () => {
-  isPlaying.value = false;
-  currentTime.value = 0;
-};
+  isPlaying.value = false
+  currentTime.value = 0
+}
 
 const onTimeUpdate = () => {
   if (audioRef.value) {
-    currentTime.value = audioRef.value.currentTime;
+    currentTime.value = audioRef.value.currentTime
   }
-};
+}
 
 const formatTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
 </script>
 
 <style scoped lang="scss">

@@ -22,7 +22,13 @@ function renderSafeMd(content: string): string {
   // 再次 escape token.text（双重 escape 等价于"任何 < 都被转义"）。
   renderer.html = (token: Tokens.HTML | Tokens.Tag) => {
     const raw = (token as any)?.text ?? ''
-    const escapeMap: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+    const escapeMap: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }
     return raw.replace(/[&<>"']/g, (c: string) => escapeMap[c] ?? c)
   }
   const result = marked.parse(content, {

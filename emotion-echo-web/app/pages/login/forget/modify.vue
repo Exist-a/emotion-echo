@@ -7,13 +7,29 @@
     </header>
     <form class="form">
       <label class="ee-field" data-label="新密码">
-        <input v-model="formInfo.newPassword" type="password" class="ee-input input" placeholder="至少 6 位" autocomplete="new-password" :show-password="true">
+        <input
+          v-model="formInfo.newPassword"
+          type="password"
+          class="ee-input input"
+          placeholder="至少 6 位"
+          autocomplete="new-password"
+          :show-password="true"
+        />
       </label>
       <label class="ee-field" data-label="再次输入">
-        <input v-model="formInfo.confirmNewPassword" type="password" class="ee-input input" placeholder="再输入一次" autocomplete="new-password" :show-password="true">
+        <input
+          v-model="formInfo.confirmNewPassword"
+          type="password"
+          class="ee-input input"
+          placeholder="再输入一次"
+          autocomplete="new-password"
+          :show-password="true"
+        />
       </label>
     </form>
-    <button type="button" class="ee-btn primary-btn ee-btn-primary" @click="gotoSuccess">保存新密码</button>
+    <button type="button" class="ee-btn primary-btn ee-btn-primary" @click="gotoSuccess">
+      保存新密码
+    </button>
   </article>
 </template>
 
@@ -32,7 +48,7 @@ const formInfo = ref({ newPassword: '', confirmNewPassword: '' })
 const rules = ref({
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { pattern: passwordReg, message: '密码需为 6-18 位，包含字母和数字', trigger: 'blur' }
+    { pattern: passwordReg, message: '密码需为 6-18 位，包含字母和数字', trigger: 'blur' },
   ],
   confirmNewPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
@@ -41,9 +57,9 @@ const rules = ref({
         if (value !== formInfo.value.newPassword) callback(new Error('两次输入的密码不一致'))
         else callback()
       },
-      trigger: 'blur'
-    }
-  ]
+      trigger: 'blur',
+    },
+  ],
 })
 
 const gotoSuccess = async () => {
@@ -56,7 +72,11 @@ const gotoSuccess = async () => {
   try {
     // Sprint 1 PR-4d: 改明文 (Stage 33 净化后 user-svc bcrypt 入库，不再做链式哈希)
     // emotion-echo-shared/pkg/password.go 注释明示"不做 bcrypt(sha256) 等价于 bcrypt 明文但削弱 bcrypt"
-    await post(API_ROUTES.authResetPassword.path, { username: userAccount.value, verificationCode: verificationCode.value, newPassword: formInfo.value.newPassword })
+    await post(API_ROUTES.authResetPassword.path, {
+      username: userAccount.value,
+      verificationCode: verificationCode.value,
+      newPassword: formInfo.value.newPassword,
+    })
     notify('密码已更新', '请用新密码登录', 'success', 3000)
     updateStep(2)
     emits('changeActive')
@@ -67,11 +87,38 @@ const gotoSuccess = async () => {
 </script>
 
 <style scoped lang="scss">
-.forget-card { display: grid; gap: 18px; padding: clamp(20px, 3vw, 28px); background: var(--ee-surface); border: 1px solid var(--ee-border); border-radius: var(--ee-radius-lg); }
-.forget-card header { display: grid; gap: 6px; }
-.eyebrow { color: var(--ee-primary); font-size: 10px; font-weight: 700; letter-spacing: .16em; }
-.forget-card h2 { font-size: clamp(20px, 2.5vw, 24px); letter-spacing: -.03em; }
-.forget-card p { color: var(--ee-text-muted); font-size: 13px; }
-.input { height: 42px; }
-.primary-btn { width: 100%; height: 42px; border-radius: var(--ee-radius-md); }
+.forget-card {
+  display: grid;
+  gap: 18px;
+  padding: clamp(20px, 3vw, 28px);
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-lg);
+}
+.forget-card header {
+  display: grid;
+  gap: 6px;
+}
+.eyebrow {
+  color: var(--ee-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.forget-card h2 {
+  font-size: clamp(20px, 2.5vw, 24px);
+  letter-spacing: -0.03em;
+}
+.forget-card p {
+  color: var(--ee-text-muted);
+  font-size: 13px;
+}
+.input {
+  height: 42px;
+}
+.primary-btn {
+  width: 100%;
+  height: 42px;
+  border-radius: var(--ee-radius-md);
+}
 </style>

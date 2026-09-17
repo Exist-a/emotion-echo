@@ -87,7 +87,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
       shouldGenerateTitle?: boolean
       voiceEmotion?: string
       skipUserMessage?: boolean
-    }
+    },
   ) => {
     if (messageStore.currentSessionId !== conversationId) {
       await messageStore.switchSession(conversationId)
@@ -118,7 +118,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
       contentType: 'text',
       sendTime: Date.now(),
       createdAt: Math.floor(Date.now() / 1000),
-      status: 'streaming'
+      status: 'streaming',
     } as MessageWithStatus
     messageStore.addMessage(tempAiMessage)
 
@@ -133,7 +133,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
         messageId: userMessageId,
         clientMsgId,
         shouldGenerateTitle: extraParams?.shouldGenerateTitle,
-        voiceEmotion: extraParams?.voiceEmotion
+        voiceEmotion: extraParams?.voiceEmotion,
       },
       {
         onDelta: (delta) => {
@@ -152,7 +152,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
 
           messageStore.updateMessage(tempAiMessage.id, {
             content: tempAiMessage.content + delta,
-            status: 'streaming'
+            status: 'streaming',
           })
           tempAiMessage.content += delta
         },
@@ -161,12 +161,12 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
 
           messageStore.updateMessage(tempAiMessage.id, {
             id: data.messageId || tempAiMessage.id,
-            status: 'sent'
+            status: 'sent',
           })
 
           updateConversation(
             conversationId,
-            tempAiMessage.content.slice(0, 100) || content.slice(0, 100)
+            tempAiMessage.content.slice(0, 100) || content.slice(0, 100),
           )
 
           callbacks?.onFinish?.(data.messageId || '', data.emotion)
@@ -175,11 +175,11 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
           stopTTS()
           messageStore.updateMessage(tempAiMessage.id, {
             status: 'failed',
-            content: error
+            content: error,
           })
           callbacks?.onError?.(error)
-        }
-      }
+        },
+      },
     )
 
     return result
@@ -193,7 +193,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
       onDelta?: (content: string) => void
       onFinish?: () => void
       onError?: (error: string) => void
-    }
+    },
   ) => {
     const createResult = await conversationStore.createConversation()
 
@@ -211,7 +211,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
     try {
       await navigateTo({
         name: 'chat-conversation-detail',
-        params: { id: newSessionId }
+        params: { id: newSessionId },
       })
 
       await messageStore.switchSession(newSessionId)
@@ -223,11 +223,11 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
         {
           onDelta: options?.onDelta,
           onFinish: options?.onFinish,
-          onError: options?.onError
+          onError: options?.onError,
         },
         {
-          shouldGenerateTitle: options?.shouldGenerateTitle
-        }
+          shouldGenerateTitle: options?.shouldGenerateTitle,
+        },
       )
 
       return { isOk: result.isOk, msg: result.msg, id: newSessionId }
@@ -244,6 +244,6 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
     cancelAIStream,
     stopTTS,
     flushTTS,
-    setTTSEnabled: setEnabled
+    setTTSEnabled: setEnabled,
   }
 }

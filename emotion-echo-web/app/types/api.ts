@@ -208,7 +208,7 @@ export interface SendMessageParams {
 export interface AIStreamParams {
   conversationId?: string
   message: string
-  emotion?: "happy" | "sad" | "angry" | "anxious" | "neutral"
+  emotion?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
   model?: string
   /** Stage 33 PR-18: 落库后 chat-svc 返回的真实 message id */
   messageId?: string

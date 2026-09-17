@@ -24,7 +24,9 @@ describe('global.scss EE button hygiene (Stage 105)', () => {
   it('必须定义 .ee-btn-primary 变体 (主操作按钮)', () => {
     expect(GLOBAL_SCSS).toMatch(/\.ee-btn-primary\s*\{[^}]*background:\s*var\(--ee-primary\)/)
     expect(GLOBAL_SCSS).toMatch(/\.ee-btn-primary\s*\{[^}]*color:\s*#fff/)
-    expect(GLOBAL_SCSS).toMatch(/\.ee-btn-primary:hover:not\(:disabled\)\s*\{[^}]*background:\s*var\(--ee-primary-hover\)/)
+    expect(GLOBAL_SCSS).toMatch(
+      /\.ee-btn-primary:hover:not\(:disabled\)\s*\{[^}]*background:\s*var\(--ee-primary-hover\)/,
+    )
   })
 
   it('必须定义 .ee-btn 禁用 + hover 状态 (Stage 104 chat 一致)', () => {

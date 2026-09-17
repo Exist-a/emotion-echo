@@ -18,8 +18,12 @@ describe('auth.global.ts middleware token-presence-only contract (Stage 112 v2)'
   it('守卫块 !isInWhiteList && !isAuthenticated 必须改为 !isInWhiteList && !hasAccessToken', () => {
     // 之前的判定是 !isInWhiteList && !isAuthenticated（依赖 userInfo），导致 dev mode 抖
     // 现在的判定应是 !isInWhiteList && !hasAccessToken（仅依赖 accessToken）
-    expect(MIDDLEWARE_SRC, '不能用 !isInWhiteList && !isAuthenticated 复合判定').not.toMatch(/if\s*\(!isInWhiteList\s*&&\s*!isAuthenticated\)/)
-    expect(MIDDLEWARE_SRC, '必须用 !isInWhiteList && !hasAccessToken').toMatch(/if\s*\(!isInWhiteList\s*&&\s*!hasAccessToken\)/)
+    expect(MIDDLEWARE_SRC, '不能用 !isInWhiteList && !isAuthenticated 复合判定').not.toMatch(
+      /if\s*\(!isInWhiteList\s*&&\s*!isAuthenticated\)/,
+    )
+    expect(MIDDLEWARE_SRC, '必须用 !isInWhiteList && !hasAccessToken').toMatch(
+      /if\s*\(!isInWhiteList\s*&&\s*!hasAccessToken\)/,
+    )
   })
 
   it('hasAccessToken 变量必须被声明（cookie 优先 + store.accessToken fallback）', () => {
@@ -34,8 +38,12 @@ describe('auth.global.ts middleware token-presence-only contract (Stage 112 v2)'
 
   it('hasAccessToken true 时（不论 userInfo）必须 return 放行，不再踢回 /login', () => {
     // 找到 !isInWhiteList && !hasAccessToken 守卫块（unauth guard）
-    const guardBlocks = [...MIDDLEWARE_SRC.matchAll(/if\s*\(!isInWhiteList\s*&&\s*!hasAccessToken\)/g)]
-    expect(guardBlocks.length, '必须存在 !isInWhiteList && !hasAccessToken 守卫块').toBeGreaterThan(0)
+    const guardBlocks = [
+      ...MIDDLEWARE_SRC.matchAll(/if\s*\(!isInWhiteList\s*&&\s*!hasAccessToken\)/g),
+    ]
+    expect(guardBlocks.length, '必须存在 !isInWhiteList && !hasAccessToken 守卫块').toBeGreaterThan(
+      0,
+    )
     const guardIdx = guardBlocks[0]!.index
     const afterGuard = MIDDLEWARE_SRC.slice(guardIdx, guardIdx + 500)
     expect(afterGuard).toMatch(/navigateTo\(["']\/login["']/)

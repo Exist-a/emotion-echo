@@ -30,11 +30,13 @@ const streamSrc = readFileSync('./app/composables/useAIStreamHandler.ts', 'utf8'
 describe('useConversationSender · createFlow 跨实例 SSE race (Sprint 110)', () => {
   // 1) isInCreateFlow 必须作为 useState 共享 flag (跨实例可见)
   it('isInCreateFlow MUST be declared via useState (Nuxt 3 SSR-safe singleton)', () => {
-    const usesUseState = /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*isInCreateFlow/i.test(senderSrc)
+    const usesUseState = /useState\s*(?:<[^>]*>\s*)?\(\s*['"`][^'"`]*isInCreateFlow/i.test(
+      senderSrc,
+    )
     expect(
       usesUseState,
       'useConversationSender 必须新增 isInCreateFlow = useState<boolean>("conv-sender:isInCreateFlow", () => false), ' +
-      '这样 new.vue / [id].vue 跨实例都能读到同一 flag, unmount guard 才能正确跳过 cancel.'
+        '这样 new.vue / [id].vue 跨实例都能读到同一 flag, unmount guard 才能正确跳过 cancel.',
     ).toBe(true)
   })
 
@@ -52,8 +54,8 @@ describe('useConversationSender · createFlow 跨实例 SSE race (Sprint 110)', 
     expect(
       flagIdx > -1 && navIdx > -1 && flagIdx < navIdx,
       'createNewConversation 内, isInCreateFlow.value=true 必须出现在 navigateTo({ 之前. ' +
-      'IAB 实测 2026-09-17: new.vue 的 onUnmounted 在 navigateTo 期间同步触发, ' +
-      '若 flag 未提前置 true → cancelAIStream 把 SSE abort → POST /api/v1/ai/stream 永远不出栈.'
+        'IAB 实测 2026-09-17: new.vue 的 onUnmounted 在 navigateTo 期间同步触发, ' +
+        '若 flag 未提前置 true → cancelAIStream 把 SSE abort → POST /api/v1/ai/stream 永远不出栈.',
     ).toBe(true)
   })
 
@@ -68,8 +70,8 @@ describe('useConversationSender · createFlow 跨实例 SSE race (Sprint 110)', 
     expect(
       hasFinally,
       'createNewConversation 必须有 try/finally 结构, finally 块复位 isInCreateFlow=false. ' +
-      '否则某次创建异常后 flag 永久卡 true, 所有 [id].vue 的 onUnmounted 都不 cancel → 下次 sendAIStream ' +
-      '的 isStreaming guard 失效风险累积.'
+        '否则某次创建异常后 flag 永久卡 true, 所有 [id].vue 的 onUnmounted 都不 cancel → 下次 sendAIStream ' +
+        '的 isStreaming guard 失效风险累积.',
     ).toBe(true)
   })
 
@@ -85,8 +87,8 @@ describe('useConversationSender · createFlow 跨实例 SSE race (Sprint 110)', 
     expect(
       guardPattern.test(block),
       'onUnmounted 内 cancelAIStream 必须被 if (!isInCreateFlow.value) guard. ' +
-      '否则 new.vue unmount 时即使 isInCreateFlow=true (创建流中) 也会 abort SSE, ' +
-      '前端看到 POST /ai/stream 永远缺席 (A8 现象).'
+        '否则 new.vue unmount 时即使 isInCreateFlow=true (创建流中) 也会 abort SSE, ' +
+        '前端看到 POST /ai/stream 永远缺席 (A8 现象).',
     ).toBe(true)
   })
 
@@ -102,8 +104,8 @@ describe('useConversationSender · createFlow 跨实例 SSE race (Sprint 110)', 
     expect(
       hasReset,
       'useAIStreamHandler sendAIStream 的 finally 块必须显式 streamCancelled.value=false. ' +
-      '否则上一次 cancelled=true 残留, 下次 sendAIStream 的 catch 分支 (line 205-207) ' +
-      '会判定为 cancelled → 返回 "已取消" 但实际 fetch 已正常返回, UI 永远看不到 AI 回复.'
+        '否则上一次 cancelled=true 残留, 下次 sendAIStream 的 catch 分支 (line 205-207) ' +
+        '会判定为 cancelled → 返回 "已取消" 但实际 fetch 已正常返回, UI 永远看不到 AI 回复.',
     ).toBe(true)
   })
 })

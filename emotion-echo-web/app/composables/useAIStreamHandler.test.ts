@@ -30,10 +30,10 @@ function makeSSEStream(chunks: string[]) {
           },
           releaseLock() {
             /* noop */
-          }
+          },
         }
-      }
-    }
+      },
+    },
   } as unknown as Response
 }
 
@@ -41,7 +41,7 @@ function makeErrorResponse(status: number, message: string) {
   return {
     ok: false,
     status,
-    json: async () => ({ message })
+    json: async () => ({ message }),
   } as unknown as Response
 }
 
@@ -52,10 +52,10 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
     fetchSpy = vi.fn()
     ;(globalThis as any).fetch = fetchSpy
     ;(globalThis as any).localStorage = {
-      getItem: vi.fn().mockReturnValue('')
+      getItem: vi.fn().mockReturnValue(''),
     }
     ;(globalThis as any).useRuntimeConfig = () => ({
-      public: { API_BASE_URL: 'http://test.local/api/v1' }
+      public: { API_BASE_URL: 'http://test.local/api/v1' },
     })
   })
 
@@ -68,8 +68,8 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
       makeSSEStream([
         'data: {"choices":[{"delta":{"content":"你好"}}]}\n\n',
         'data: {"choices":[{"delta":{"content":"，hello"}}]}\n\n',
-        'data: [DONE]\n\n'
-      ])
+        'data: [DONE]\n\n',
+      ]),
     )
 
     const { sendAIStream, isStreaming } = useAIStreamHandler()
@@ -78,7 +78,7 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
 
     const result = await sendAIStream(
       { message: 'test', emotion: 'neutral' },
-      { onDelta, onFinish }
+      { onDelta, onFinish },
     )
 
     expect(result).toEqual({ isOk: true, msg: '对话完成' })
@@ -94,8 +94,8 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
       makeSSEStream([
         'data: {"choices":[]}\n\n',
         'data: {"object":"chat.completion","choices":[]}\n\n',
-        'data: [DONE]\n\n'
-      ])
+        'data: [DONE]\n\n',
+      ]),
     )
 
     const { sendAIStream } = useAIStreamHandler()
@@ -110,11 +110,7 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
 
   it('非 JSON 行累计 parseErrorCount 但不触发 onError；DONE 仍触发 onFinish', async () => {
     fetchSpy.mockResolvedValue(
-      makeSSEStream([
-        'data: not-a-json\n\n',
-        'data: also-bad-{json\n\n',
-        'data: [DONE]\n\n'
-      ])
+      makeSSEStream(['data: not-a-json\n\n', 'data: also-bad-{json\n\n', 'data: [DONE]\n\n']),
     )
 
     const { sendAIStream } = useAIStreamHandler()
@@ -152,7 +148,10 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
     const onError = vi.fn()
     const onFinish = vi.fn()
 
-    const result = await sendAIStream({ message: 'test', emotion: 'neutral' }, { onError, onFinish })
+    const result = await sendAIStream(
+      { message: 'test', emotion: 'neutral' },
+      { onError, onFinish },
+    )
 
     expect(result.isOk).toBe(false)
     expect(result.msg).toContain('boom')
@@ -166,8 +165,8 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
       makeSSEStream([
         'data: {"choices":[{"delta":{"conte',
         'nt":"你好"}}]}\n\ndata: {"choices":[{"delta":{"content":"，hi"}}]}\n\n',
-        'data: [DONE]\n\n'
-      ])
+        'data: [DONE]\n\n',
+      ]),
     )
 
     const { sendAIStream } = useAIStreamHandler()
@@ -187,8 +186,8 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
       makeSSEStream([
         'data: {"choices":[{"delta":{"content":"a"}}]}\n\n',
         'data: [DONE]\n\n',
-        'data: [DONE]\n\n'
-      ])
+        'data: [DONE]\n\n',
+      ]),
     )
 
     const { sendAIStream } = useAIStreamHandler()
@@ -205,7 +204,7 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
       () =>
         new Promise((resolve) => {
           resolveFirst = resolve
-        })
+        }),
     )
 
     const { sendAIStream } = useAIStreamHandler()
@@ -225,11 +224,11 @@ describe('useAIStreamHandler · OpenAI 兼容 SSE 解析', () => {
   // fetch 不应静默打到 8894，必须报错（让 dev 立刻发现 .env 缺失）。
   it('PR-A · API_BASE_URL 漏配：fetch 不应静默打到 8894，必须报错', async () => {
     ;(globalThis as any).useRuntimeConfig = () => ({
-      public: { API_BASE_URL: '' } // 漏配
+      public: { API_BASE_URL: '' }, // 漏配
     })
 
     fetchSpy.mockResolvedValue(
-      makeSSEStream(['data: {"choices":[{"delta":{"content":"x"}}]}\n\n', 'data: [DONE]\n\n'])
+      makeSSEStream(['data: {"choices":[{"delta":{"content":"x"}}]}\n\n', 'data: [DONE]\n\n']),
     )
 
     const { sendAIStream } = useAIStreamHandler()

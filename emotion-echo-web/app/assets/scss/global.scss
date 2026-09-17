@@ -1,6 +1,6 @@
 @font-face {
-  font-family: "maskTitle";
-  src: url("/fonts/LuoGuoChengMaoBiXiaoXingJianTi-2.ttf") format("truetype");
+  font-family: 'maskTitle';
+  src: url('/fonts/LuoGuoChengMaoBiXiaoXingJianTi-2.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -54,7 +54,13 @@ html,
 body,
 #__nuxt {
   min-height: 100%;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
   font-size: 16px;
   font-weight: 400;
   line-height: 1.7;
@@ -63,7 +69,9 @@ body,
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: color var(--ee-transition), background-color var(--ee-transition);
+  transition:
+    color var(--ee-transition),
+    background-color var(--ee-transition);
 }
 
 body {
@@ -126,12 +134,27 @@ button {
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  transition: background var(--ee-transition), color var(--ee-transition), border-color var(--ee-transition);
+  transition:
+    background var(--ee-transition),
+    color var(--ee-transition),
+    border-color var(--ee-transition);
 }
-.ee-btn:hover:not(:disabled) { background: var(--ee-surface-muted); }
-.ee-btn:disabled { cursor: not-allowed; opacity: 0.6; }
-.ee-btn-primary { background: var(--ee-primary); color: #fff; border-color: var(--ee-primary); }
-.ee-btn-primary:hover:not(:disabled) { background: var(--ee-primary-hover); border-color: var(--ee-primary-hover); }
+.ee-btn:hover:not(:disabled) {
+  background: var(--ee-surface-muted);
+}
+.ee-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.ee-btn-primary {
+  background: var(--ee-primary);
+  color: #fff;
+  border-color: var(--ee-primary);
+}
+.ee-btn-primary:hover:not(:disabled) {
+  background: var(--ee-primary-hover);
+  border-color: var(--ee-primary-hover);
+}
 
 ::selection {
   color: var(--ee-text);
@@ -176,13 +199,26 @@ button {
 }
 
 @keyframes ee-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes ee-quiet-pulse {
-  0%, 100% { opacity: 0.38; transform: scaleX(0.82); }
-  50% { opacity: 0.9; transform: scaleX(1); }
+  0%,
+  100% {
+    opacity: 0.38;
+    transform: scaleX(0.82);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scaleX(1);
+  }
 }
 
 .animate-fade-in {

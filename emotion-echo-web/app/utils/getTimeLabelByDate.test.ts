@@ -3,8 +3,14 @@ import { getTimeLabelByDate } from './getTimeLabelByDate'
 
 describe('getTimeLabelByDate', () => {
   let now: number
-  beforeEach(() => { now = Date.now(); vi.useFakeTimers(); vi.setSystemTime(now) })
-  afterEach(() => { vi.useRealTimers() })
+  beforeEach(() => {
+    now = Date.now()
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 
   it('classifies today as "今天"', () => {
     const target = new Date(now)

@@ -55,8 +55,17 @@ function markFor(t: string) {
   animation: notify-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.notify-card strong { display: block; font-size: 13px; font-weight: 600; }
-.notify-card p { margin: 2px 0 0; color: var(--ee-text-muted); font-size: 12px; line-height: 1.5; }
+.notify-card strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.notify-card p {
+  margin: 2px 0 0;
+  color: var(--ee-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 
 .notify-mark {
   display: grid;
@@ -70,13 +79,27 @@ function markFor(t: string) {
   color: #fff;
 }
 
-.notify-card.is-success .notify-mark { background: var(--ee-primary); }
-.notify-card.is-error .notify-mark { background: var(--ee-accent); }
-.notify-card.is-warning .notify-mark { background: #d9a042; }
-.notify-card.is-info .notify-mark { background: var(--ee-text-muted); }
+.notify-card.is-success .notify-mark {
+  background: var(--ee-primary);
+}
+.notify-card.is-error .notify-mark {
+  background: var(--ee-accent);
+}
+.notify-card.is-warning .notify-mark {
+  background: #d9a042;
+}
+.notify-card.is-info .notify-mark {
+  background: var(--ee-text-muted);
+}
 
 @keyframes notify-in {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

@@ -1,5 +1,8 @@
 <template>
-  <div class="conversation-page" :class="{ 'is-mobile': $device.isMobile, 'is-folded': isMenuFolded }">
+  <div
+    class="conversation-page"
+    :class="{ 'is-mobile': $device.isMobile, 'is-folded': isMenuFolded }"
+  >
     <aside class="sidebar" :class="{ 'is-folded': isMenuFolded }">
       <header class="sidebar-header">
         <button
@@ -9,23 +12,55 @@
           :aria-label="isMenuFolded ? '展开会话列表' : '折叠会话列表'"
           @click="foldAndUnfoldMenu"
         >
-          <svg class="fold-arrow" :class="{ 'is-folded': isMenuFolded }" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="15 18 9 12 15 6"/>
+          <svg
+            class="fold-arrow"
+            :class="{ 'is-folded': isMenuFolded }"
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
         <div v-else-if="!$device.isMobile" class="icon-btn-spacer" />
         <h3 class="sidebar-title">最近的对话</h3>
-        <button class="icon-btn new-btn" type="button" aria-label="开始新的对话" @click="startNewConversation">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
+        <button
+          class="icon-btn new-btn"
+          type="button"
+          aria-label="开始新的对话"
+          @click="startNewConversation"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
         </button>
       </header>
 
       <div class="sidebar-body">
         <div v-if="isLoading" class="loading-state">
-          <div v-for="i in 6" :key="i" class="skeleton-row" :style="{ width: 60 + Math.random() * 30 + '%' }" />
+          <div
+            v-for="i in 6"
+            :key="i"
+            class="skeleton-row"
+            :style="{ width: 60 + Math.random() * 30 + '%' }"
+          />
         </div>
         <div v-else-if="!isLoading && conversationItems.length === 0" class="empty-state">
           <span class="empty-mark">○</span>
@@ -43,10 +78,13 @@
             >
               <span class="item-label">{{ item.label }}</span>
               <div class="more-wrap" @click.stop>
-                <button class="icon-btn more-btn" type="button" :aria-label="`对「${item.label}」更多操作`" @click.stop="toggleMore(item.key)">
-                  <span class="more-dots" aria-hidden="true">
-                    <span/><span/><span/>
-                  </span>
+                <button
+                  class="icon-btn more-btn"
+                  type="button"
+                  :aria-label="`对「${item.label}」更多操作`"
+                  @click.stop="toggleMore(item.key)"
+                >
+                  <span class="more-dots" aria-hidden="true"> <span /><span /><span /> </span>
                 </button>
                 <ul v-if="openMoreKey === item.key" class="more-menu" role="menu">
                   <li role="menuitem" @click="onMenuCommand('pin', item)">
@@ -54,7 +92,9 @@
                     {{ item.isTop ? '取消置顶' : '置顶' }}
                   </li>
                   <li role="menuitem" @click="onMenuCommand('rename', item)">重命名</li>
-                  <li role="menuitem" class="danger" @click="onMenuCommand('delete', item)">删除</li>
+                  <li role="menuitem" class="danger" @click="onMenuCommand('delete', item)">
+                    删除
+                  </li>
                 </ul>
               </div>
             </div>
@@ -70,8 +110,18 @@
       aria-label="展开会话列表"
       @click="foldAndUnfoldMenu"
     >
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <polyline points="9 18 15 12 9 6"/>
+      <svg
+        viewBox="0 0 24 24"
+        width="16"
+        height="16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <polyline points="9 18 15 12 9 6" />
       </svg>
     </button>
 
@@ -88,11 +138,22 @@
             placeholder="给这段对话一个名字"
             maxlength="50"
             @keyup.enter="submitRename"
-          >
-          <div class="modal-meta"><span>{{ renameValue.length }}/50</span></div>
+          />
+          <div class="modal-meta">
+            <span>{{ renameValue.length }}/50</span>
+          </div>
           <div class="modal-actions">
-            <button class="btn btn-ghost" type="button" @click="renameDialogVisible = false">取消</button>
-            <button class="btn btn-primary" type="button" :disabled="!renameValue.trim()" @click="submitRename">保存名称</button>
+            <button class="btn btn-ghost" type="button" @click="renameDialogVisible = false">
+              取消
+            </button>
+            <button
+              class="btn btn-primary"
+              type="button"
+              :disabled="!renameValue.trim()"
+              @click="submitRename"
+            >
+              保存名称
+            </button>
           </div>
         </div>
       </div>
@@ -158,13 +219,14 @@ const conversationItems = computed<ConversationItem[]>(() =>
     // 之前直接显示 c.title → 21 个会话都是空标题 → sidebar 看不到内容.
     // 修法: title 优先 → 截断 lastMessage → fallback "对话 #{id}".
     key: c.id,
-    label: c.title?.trim()
-      || (c.lastMessage ? String(c.lastMessage).slice(0, 30) : '')
-      || `对话 #${c.id}`,
+    label:
+      c.title?.trim() ||
+      (c.lastMessage ? String(c.lastMessage).slice(0, 30) : '') ||
+      `对话 #${c.id}`,
     timestamp: new Date(c.updatedAt).getTime(),
     group: getTimeGroup(c.updatedAt, c.isTop),
-    isTop: c.isTop
-  }))
+    isTop: c.isTop,
+  })),
 )
 
 const groupOrder = ['置顶', '今天', '昨日', '一周内', '三十天内', '更早']
@@ -231,13 +293,18 @@ const submitRename = async () => {
     alert('标题不能为空')
     return
   }
-  await conversationStore.updateConversationTitle(renameConversationId.value, renameValue.value.trim())
+  await conversationStore.updateConversationTitle(
+    renameConversationId.value,
+    renameValue.value.trim(),
+  )
   renameDialogVisible.value = false
 }
 
 // 点击外部区域关闭更多菜单：handler 已经通过 document listener 监听；
 // Esc 关闭
-const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') openMoreKey.value = null }
+const onKey = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') openMoreKey.value = null
+}
 onMounted(() => document.addEventListener('keydown', onKey))
 onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 </script>
@@ -262,7 +329,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   padding: 16px 12px 12px;
   background: var(--ee-surface);
   border-right: 1px solid var(--ee-border);
-  transition: width var(--ee-transition), padding var(--ee-transition), border-color var(--ee-transition);
+  transition:
+    width var(--ee-transition),
+    padding var(--ee-transition),
+    border-color var(--ee-transition);
   overflow: hidden;
 }
 
@@ -301,7 +371,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   border: 1px solid var(--ee-border);
   border-radius: var(--ee-radius-md);
   cursor: pointer;
-  transition: color var(--ee-transition), border-color var(--ee-transition), background var(--ee-transition);
+  transition:
+    color var(--ee-transition),
+    border-color var(--ee-transition),
+    background var(--ee-transition);
 }
 
 .icon-btn > svg,
@@ -334,7 +407,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 
 .sidebar-title {
   flex: 1;
-  min-width: 0;  // Sprint 110 · A9: 让 h3 在 flex 中可压缩, 防止 fold-btn 露边
+  min-width: 0; // Sprint 110 · A9: 让 h3 在 flex 中可压缩, 防止 fold-btn 露边
   margin: 0;
   color: var(--ee-text);
   font-size: 14px;
@@ -364,8 +437,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   overflow-y: auto;
 }
 
-.loading-state { display: flex; flex-direction: column; gap: 10px; padding: 4px; }
-.skeleton-row { height: 30px; background: var(--ee-surface-muted); border-radius: var(--ee-radius-sm, 6px); }
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+}
+.skeleton-row {
+  height: 30px;
+  background: var(--ee-surface-muted);
+  border-radius: var(--ee-radius-sm, 6px);
+}
 
 .empty-state {
   display: flex;
@@ -375,11 +457,22 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   padding: 36px 8px;
   color: var(--ee-text-muted);
 }
-.empty-mark { font-size: 28px; opacity: 0.6; }
-.empty-state p { margin: 0; font-size: 12px; }
+.empty-mark {
+  font-size: 28px;
+  opacity: 0.6;
+}
+.empty-state p {
+  margin: 0;
+  font-size: 12px;
+}
 
-.conversation-list { display: flex; flex-direction: column; }
-.conversation-group { margin-bottom: 14px; }
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+}
+.conversation-group {
+  margin-bottom: 14px;
+}
 .group-title {
   margin: 0 6px 6px;
   color: var(--ee-text-muted);
@@ -396,10 +489,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   color: var(--ee-text-muted);
   border-radius: var(--ee-radius-md);
   cursor: pointer;
-  transition: color var(--ee-transition), background var(--ee-transition);
+  transition:
+    color var(--ee-transition),
+    background var(--ee-transition);
 }
 
-.conversation-item:hover { color: var(--ee-text); background: var(--ee-surface-muted); }
+.conversation-item:hover {
+  color: var(--ee-text);
+  background: var(--ee-surface-muted);
+}
 .conversation-item.active {
   color: var(--ee-primary);
   background: var(--ee-primary-soft);
@@ -414,7 +512,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   font-size: 13px;
 }
 
-.more-wrap { position: relative; }
+.more-wrap {
+  position: relative;
+}
 
 .more-btn {
   opacity: 0;
@@ -427,7 +527,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 }
 
 .conversation-item:hover .more-btn,
-.conversation-item:focus-within .more-btn { opacity: 1; }
+.conversation-item:focus-within .more-btn {
+  opacity: 1;
+}
 
 .more-dots {
   display: inline-flex;
@@ -471,9 +573,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   transition: background var(--ee-transition);
 }
 
-.more-menu li:hover { background: var(--ee-surface-muted); }
-.more-menu li.danger { color: var(--ee-accent); }
-.more-menu-icon { color: var(--ee-text-muted); }
+.more-menu li:hover {
+  background: var(--ee-surface-muted);
+}
+.more-menu li.danger {
+  color: var(--ee-accent);
+}
+.more-menu-icon {
+  color: var(--ee-text-muted);
+}
 
 .sidebar-expand {
   position: absolute;
@@ -492,7 +600,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   // 之前用 var(--ee-radius-md) (矩形 8px) → 用户反馈"其中一个是方的"
   border-radius: 50%;
   cursor: pointer;
-  transition: color var(--ee-transition), border-color var(--ee-transition);
+  transition:
+    color var(--ee-transition),
+    border-color var(--ee-transition);
 }
 
 .sidebar-expand > svg {
@@ -533,7 +643,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   box-shadow: 0 12px 36px rgba(32, 37, 34, 0.15);
 }
 
-.modal-card h3 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+.modal-card h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
 
 .modal-input {
   width: 100%;
@@ -544,7 +658,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   border-radius: var(--ee-radius-md);
   font-size: 14px;
   outline: none;
-  transition: border-color var(--ee-transition), box-shadow var(--ee-transition);
+  transition:
+    border-color var(--ee-transition),
+    box-shadow var(--ee-transition);
 }
 
 .modal-input:focus {
@@ -552,8 +668,19 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ee-primary) 25%, transparent);
 }
 
-.modal-meta { display: flex; justify-content: flex-end; margin-top: 4px; color: var(--ee-text-muted); font-size: 11px; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.modal-meta {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+  color: var(--ee-text-muted);
+  font-size: 11px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
 
 .btn {
   display: inline-flex;
@@ -566,18 +693,44 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   border-radius: var(--ee-radius-md);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background var(--ee-transition), color var(--ee-transition), border-color var(--ee-transition);
+  transition:
+    background var(--ee-transition),
+    color var(--ee-transition),
+    border-color var(--ee-transition);
 }
 
-.btn-primary { background: var(--ee-primary); color: #fff; border-color: var(--ee-primary); }
-.btn-primary:hover { background: var(--ee-primary-hover); border-color: var(--ee-primary-hover); }
-.btn-primary:disabled { background: var(--ee-border); border-color: var(--ee-border); cursor: not-allowed; }
+.btn-primary {
+  background: var(--ee-primary);
+  color: #fff;
+  border-color: var(--ee-primary);
+}
+.btn-primary:hover {
+  background: var(--ee-primary-hover);
+  border-color: var(--ee-primary-hover);
+}
+.btn-primary:disabled {
+  background: var(--ee-border);
+  border-color: var(--ee-border);
+  cursor: not-allowed;
+}
 
-.btn-ghost { background: transparent; color: var(--ee-text-muted); border-color: var(--ee-border); }
-.btn-ghost:hover { color: var(--ee-text); border-color: var(--ee-border); background: var(--ee-surface-muted); }
+.btn-ghost {
+  background: transparent;
+  color: var(--ee-text-muted);
+  border-color: var(--ee-border);
+}
+.btn-ghost:hover {
+  color: var(--ee-text);
+  border-color: var(--ee-border);
+  background: var(--ee-surface-muted);
+}
 
 @media (max-width: 768px) {
-  .conversation-page { min-height: calc(100vh - 118px); border: 0; border-radius: 0; }
+  .conversation-page {
+    min-height: calc(100vh - 118px);
+    border: 0;
+    border-radius: 0;
+  }
   .sidebar {
     position: fixed;
     top: 78px;
@@ -589,7 +742,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
     border-radius: var(--ee-radius-lg);
     box-shadow: var(--ee-shadow-soft);
   }
-  .sidebar.is-folded { display: none; }
-  .sidebar-expand { top: 88px; left: 12px; }
+  .sidebar.is-folded {
+    display: none;
+  }
+  .sidebar-expand {
+    top: 88px;
+    left: 12px;
+  }
 }
 </style>

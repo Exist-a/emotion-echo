@@ -7,14 +7,14 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const QUESTION_SRC = readFileSync(resolve(__dirname, 'index.vue'), 'utf8')
 const NAV_LINKS = [
-  '/chat/conversation',          // 对话
-  '/question',                   // 心理测验
+  '/chat/conversation', // 对话
+  '/question', // 心理测验
   '/chat/dashboard/dailyReport', // 日报
   '/chat/dashboard/weeklyReport',
   '/chat/dashboard/monthlyReport',
   '/chat/dashboard/annualReport',
-  '/chat/user',                  // 我的空间
-  '/chat/setting',               // 设置
+  '/chat/user', // 我的空间
+  '/chat/setting', // 设置
 ]
 
 // Stage 112 修复：question 页之前用 layout: 'default'，导致 sidebar 不可见，

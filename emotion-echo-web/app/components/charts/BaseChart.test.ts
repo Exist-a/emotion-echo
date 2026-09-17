@@ -30,7 +30,11 @@ describe('BaseChart.vue', () => {
   }
 
   it('renders title as an h3 centered above the chart', async () => {
-    const wrapper = await factory({ option: { series: [{ type: 'pie', data: [{ name: 'A', value: 1 }] }] }, title: '情绪分布', height: 280 })
+    const wrapper = await factory({
+      option: { series: [{ type: 'pie', data: [{ name: 'A', value: 1 }] }] },
+      title: '情绪分布',
+      height: 280,
+    })
     await nextTick()
     const h3 = wrapper.find('h3')
     expect(h3.exists()).toBe(true)
@@ -59,7 +63,7 @@ describe('BaseChart.vue', () => {
     const wrapper = await factory({
       option: { series: [{ type: 'pie', data: [{ name: 'A', value: 1 }] }] },
       title: 'ok',
-      height: 320
+      height: 320,
     })
     await nextTick()
     const container = wrapper.find('.chart-container')
@@ -69,7 +73,11 @@ describe('BaseChart.vue', () => {
   })
 
   it('does not log debug messages from hasData / mergedOption (Stage 103 cleanup)', async () => {
-    await factory({ option: { series: [{ type: 'pie', data: [{ name: 'A', value: 1 }] }] }, title: '静默', height: 300 })
+    await factory({
+      option: { series: [{ type: 'pie', data: [{ name: 'A', value: 1 }] }] },
+      title: '静默',
+      height: 300,
+    })
     await nextTick()
     const calls = logSpy.mock.calls.flat().map(String)
     // 不允许再出现 [BaseChart] 调试前缀
@@ -81,7 +89,7 @@ describe('BaseChart.vue', () => {
     const wrapper = await factory({
       option: { series: [{ type: 'pie', data: [{ name: 'A', value: 1 }] }] },
       title: 'dark',
-      height: 300
+      height: 300,
     })
     await nextTick()
     // VChartFull 接收 theme="dark" (这里只验证无报错; 真实主题生效是 echarts 行为)

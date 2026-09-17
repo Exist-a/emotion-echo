@@ -29,12 +29,18 @@ export function useNotify() {
     warning: (title: string, message = '') => push(title, message, 'warning'),
     info: (title: string, message = '') => push(title, message, 'info'),
     // 兼容之前 ElNotification(title, message, type) 风格
-    show: (title: string, message: string, type: Toast['type'] = 'info', duration = 3000) => push(title, message, type, duration),
-    push
+    show: (title: string, message: string, type: Toast['type'] = 'info', duration = 3000) =>
+      push(title, message, type, duration),
+    push,
   }
 }
 
 // 全局短调用：在 <script setup> 之外也能用
-export function notify(title: string, message: string, type: Toast['type'] = 'info', duration = 3000) {
+export function notify(
+  title: string,
+  message: string,
+  type: Toast['type'] = 'info',
+  duration = 3000,
+) {
   push(title, message, type, duration)
 }

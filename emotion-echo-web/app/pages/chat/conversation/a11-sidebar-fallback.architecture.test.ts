@@ -18,10 +18,7 @@ import { readFileSync } from 'node:fs'
 //   1) conversationItems computed 必须有 3 级 fallback
 //   2) fallback 顺序: title → lastMessage → "对话 #{id}"
 
-const indexSrc = readFileSync(
-  './app/pages/chat/conversation/index.vue',
-  'utf8'
-)
+const indexSrc = readFileSync('./app/pages/chat/conversation/index.vue', 'utf8')
 
 describe('Sprint 111 · A11 sidebar 会话标题 fallback (空 title 时不能显示空)', () => {
   it('conversationItems computed 必须用 c.title (而非 c.label)', () => {
@@ -38,7 +35,7 @@ describe('Sprint 111 · A11 sidebar 会话标题 fallback (空 title 时不能�
     expect(
       hasLastMessageFallback,
       'Sprint 111 · A11 修复要求 conversationItems computed 在 title 为空时, ' +
-      'fallback 用 lastMessage.slice(0, 30). 否则 sidebar 标题永远空.'
+        'fallback 用 lastMessage.slice(0, 30). 否则 sidebar 标题永远空.',
     ).toBe(true)
   })
 
@@ -49,7 +46,7 @@ describe('Sprint 111 · A11 sidebar 会话标题 fallback (空 title 时不能�
     expect(
       hasIdFallback,
       'Sprint 111 · A11 修复兜底: title 和 lastMessage 都空时, ' +
-      '显示 `对话 #{c.id}`. 否则 sidebar 全空白用户找不到任何会话.'
+        '显示 `对话 #{c.id}`. 否则 sidebar 全空白用户找不到任何会话.',
     ).toBe(true)
   })
 
@@ -68,8 +65,8 @@ describe('Sprint 111 · A11 sidebar 会话标题 fallback (空 title 时不能�
     expect(
       hasFallbackOnSameLine || hasFallbackAcrossLines,
       'Sprint 111 · A11 反向钉死: conversationItems computed 的 label 必须含 || ' +
-      'fallback chain (title → lastMessage → 对话 #id). ' +
-      'Sprint 110 浏览器实测 21 个会话全空白即此 bug.'
+        'fallback chain (title → lastMessage → 对话 #id). ' +
+        'Sprint 110 浏览器实测 21 个会话全空白即此 bug.',
     ).toBe(true)
   })
 })

@@ -11,8 +11,23 @@
         @keydown.enter.exact.prevent="handleSubmit"
       />
       <div class="sender-actions">
-        <button type="button" class="icon-btn ghost" aria-label="添加附件" @click="handleAttachment">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <button
+          type="button"
+          class="icon-btn ghost"
+          aria-label="添加附件"
+          @click="handleAttachment"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M21 11.5l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />
           </svg>
         </button>
@@ -23,37 +38,71 @@
           :aria-label="faceEmotion.isCameraOn.value ? '关闭摄像头' : '开启摄像头'"
           @click="toggleCamera"
         >
-          <svg v-if="!faceEmotion.isCameraOn.value" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            v-if="!faceEmotion.isCameraOn.value"
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M23 7l-7 5 7 5V7z" />
             <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
           </svg>
-          <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            v-else
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M23 7l-7 5 7 5V7z" />
             <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
             <circle cx="8.5" cy="12" r="1.2" fill="currentColor" />
           </svg>
         </button>
         <div class="spacer" />
-        <div
-          class="voice-record-btn"
-          :class="{ recording: isRecording }"
-          @click="toggleRecording"
-        >
-          <svg v-if="!isRecording" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <div class="voice-record-btn" :class="{ recording: isRecording }" @click="toggleRecording">
+          <svg
+            v-if="!isRecording"
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <rect x="9" y="3" width="6" height="12" rx="3" />
             <path d="M5 11a7 7 0 0 0 14 0" />
             <line x1="12" y1="18" x2="12" y2="22" />
           </svg>
-          <span v-else class="voice-center-dot"/>
-          <span v-if="isRecording" class="voice-ring"/>
+          <span v-else class="voice-center-dot" />
+          <span v-if="isRecording" class="voice-ring" />
         </div>
-        <button
-          type="submit"
-          class="send-btn"
-          :disabled="!message.trim()"
-          aria-label="发送"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <button type="submit" class="send-btn" :disabled="!message.trim()" aria-label="发送">
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <line x1="5" y1="12" x2="19" y2="12" />
             <polyline points="13 5  20 12 13 19" />
           </svg>
@@ -67,7 +116,10 @@
         muted
         playsinline
       />
-      <p v-if="faceEmotion.isCameraOn.value && faceEmotion.currentEmotion.value" class="camera-status">
+      <p
+        v-if="faceEmotion.isCameraOn.value && faceEmotion.currentEmotion.value"
+        class="camera-status"
+      >
         当前表情识别：<strong>{{ faceEmotion.currentEmotion.value.emotion }}</strong>
         <span v-if="faceEmotion.currentEmotion.value.confidence != null">
           （置信度 {{ Math.round(faceEmotion.currentEmotion.value.confidence * 100) }}%）
@@ -102,14 +154,14 @@ const cameraVideoRef = ref<HTMLVideoElement | null>(null)
 const faceEmotion = useFaceEmotion()
 
 const { playText, flushRemaining, stop } = useDigitalHumanTTS({
-  onLipShapeChange: (shape) => digitalHumanStore.setLipShape(shape)
+  onLipShapeChange: (shape) => digitalHumanStore.setLipShape(shape),
 })
 
 watch(
   () => digitalHumanStore.voiceEnabled,
   (newVal) => {
     if (!newVal) stop()
-  }
+  },
 )
 
 const handleSubmit = async () => {
@@ -198,7 +250,9 @@ const toggleCamera = async () => {
   min-height: 64px;
 }
 
-.ee-textarea::placeholder { color: var(--ee-text-muted); }
+.ee-textarea::placeholder {
+  color: var(--ee-text-muted);
+}
 
 .sender-actions {
   display: flex;
@@ -207,7 +261,9 @@ const toggleCamera = async () => {
   padding-top: 6px;
 }
 
-.spacer { flex: 1; }
+.spacer {
+  flex: 1;
+}
 
 .icon-btn {
   display: inline-flex;
@@ -220,7 +276,10 @@ const toggleCamera = async () => {
   border: 1px solid var(--ee-border);
   border-radius: 50%;
   cursor: pointer;
-  transition: color var(--ee-transition), border-color var(--ee-transition), background var(--ee-transition);
+  transition:
+    color var(--ee-transition),
+    border-color var(--ee-transition),
+    background var(--ee-transition);
 }
 
 .icon-btn:hover,
@@ -240,14 +299,42 @@ const toggleCamera = async () => {
   background: var(--ee-primary-soft);
   border-radius: 50%;
   cursor: pointer;
-  transition: transform var(--ee-transition), background var(--ee-transition);
+  transition:
+    transform var(--ee-transition),
+    background var(--ee-transition);
 }
-.voice-record-btn:hover { background: var(--ee-primary); color: #fff; }
-.voice-record-btn.recording { background: var(--ee-accent); color: #fff; }
-.voice-center-dot { width: 12px; height: 12px; background: #fff; border-radius: 50%; }
-.voice-ring { position: absolute; inset: 0; border: 2px solid #fff; border-radius: 50%; animation: ring-pulse 1.5s ease-out infinite; }
+.voice-record-btn:hover {
+  background: var(--ee-primary);
+  color: #fff;
+}
+.voice-record-btn.recording {
+  background: var(--ee-accent);
+  color: #fff;
+}
+.voice-center-dot {
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+}
+.voice-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  animation: ring-pulse 1.5s ease-out infinite;
+}
 
-@keyframes ring-pulse { from { transform: scale(0.85); opacity: 0.85; } to { transform: scale(1.5); opacity: 0; } }
+@keyframes ring-pulse {
+  from {
+    transform: scale(0.85);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
 
 .send-btn {
   display: inline-flex;
@@ -260,10 +347,18 @@ const toggleCamera = async () => {
   border: 0;
   border-radius: 50%;
   cursor: pointer;
-  transition: background var(--ee-transition), transform var(--ee-transition);
+  transition:
+    background var(--ee-transition),
+    transform var(--ee-transition);
 }
-.send-btn:hover:not(:disabled) { background: var(--ee-primary-hover); transform: translateY(-1px); }
-.send-btn:disabled { background: var(--ee-border); cursor: not-allowed; }
+.send-btn:hover:not(:disabled) {
+  background: var(--ee-primary-hover);
+  transform: translateY(-1px);
+}
+.send-btn:disabled {
+  background: var(--ee-border);
+  cursor: not-allowed;
+}
 
 .camera-preview {
   width: 240px;

@@ -76,7 +76,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       audioChunks = []
       isStopped = false
       mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: 'audio/webm;codecs=opus',
       })
 
       mediaRecorder.ondataavailable = (event) => {
@@ -158,7 +158,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           audioDuration: recordedDuration,
           emotionTag: emotion,
           status: 'sent',
-          sendTime: Date.now()
+          sendTime: Date.now(),
         }
 
         if (messageStore.currentSessionId !== currentConversationId) {
@@ -167,7 +167,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
         messageStore.currentMessages.push(userMessage)
 
-        const conversation = conversationStore.conversationList.find((c) => c.id === currentConversationId)
+        const conversation = conversationStore.conversationList.find(
+          (c) => c.id === currentConversationId,
+        )
         if (conversation) {
           conversation.lastMessage = (transcript || '').slice(0, 100)
           conversation.lastMessageTime = Date.now()
@@ -207,6 +209,6 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     duration,
     startRecording,
     stopRecording,
-    getConversationId
+    getConversationId,
   }
 }
