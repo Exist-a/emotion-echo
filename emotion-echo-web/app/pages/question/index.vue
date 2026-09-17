@@ -61,7 +61,7 @@ import { get } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { useNotify } from '~/composables/useNotify'
 
-definePageMeta({ layout: 'default' })
+definePageMeta({ layout: 'nav' })
 
 const { error: notifyError } = useNotify()
 const dialogVisible = ref(false)
