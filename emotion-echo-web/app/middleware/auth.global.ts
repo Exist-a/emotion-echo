@@ -76,21 +76,41 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   // 2. 未登录用户访问非白名单页面，重定向到登录页
-  // Sprint 112 Bug A：dev mode 下 SPA 内导航时 cookie 已恢复但 userInfo 异步 fetchUserInfo
-  // 未完成，userInfo.value?.id 为 falsy，isAuthenticated 为 false → 被踢回 /login。
-  // 修复：判定为未登录前，先 await fetchUserInfo 恢复 userInfo；若恢复后仍为 falsy 才退出。
+  // Sprint 112 Bug A：dev mode 下 SPA 内导航触发 SSR 重渲染目标页时，
+  // 服务端 cookie 重新读不到（Nuxt dev mode cookie jar 跨请求不同步），
+  // userStore.userInfo 在 SSR 上下文为空 → isAuthenticated=false → 踢回 /login。
+  // 修复（双重保险）：
+  //   (a) SSR 段：cookie 再次强制读取 + 注入 store.accessToken；
+  //   (b) Client 段：accessToken 存在时主动 await fetchUserInfo 恢复 userInfo；
+  //   两段恢复后仍 isAuthenticated=false 才 navigateTo("/login")。
   if (!isInWhiteList && !isAuthenticated) {
     console.log("[Auth Middleware] 未登录用户访问受保护页面:", to.path);
 
+    // (a) SSR：直接以 cookie 值覆盖 store.accessToken，给服务端 userInfo fetch 一次机会
+    if (import.meta.server) {
+      const tokenCookie = useCookie("access_token");
+      if (tokenCookie.value) {
+        userStore.accessToken = tokenCookie.value;
+        try {
+          await userStore.fetchUserInfo();
+        } catch {
+          // 静默：失败走原本踢回逻辑
+        }
+        if (userStore.isAuthenticated) {
+          return;
+        }
+      }
+    }
+
+    // (b) Client：accessToken 在 store 里（dev mode 恢复后），等待 userInfo 落地
     if (import.meta.client && userStore.accessToken) {
-      // 主动恢复一次，重新判定
       try {
         await userStore.fetchUserInfo();
       } catch {
-        // 静默：恢复失败就走原本的踢回 /login 逻辑
+        // 静默
       }
       if (userStore.isAuthenticated) {
-        return; // 恢复成功，放行
+        return;
       }
     }
 

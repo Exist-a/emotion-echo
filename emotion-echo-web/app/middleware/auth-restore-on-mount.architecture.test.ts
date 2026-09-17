@@ -13,29 +13,38 @@ const MIDDLEWARE_SRC = readFileSync(resolve(__dirname, 'auth.global.ts'), 'utf8'
 //      SPA 内导航触发中间件时，如果 access_token cookie 已恢复但 userInfo
 //      还在 fetchUserInfo 的 promise 中（async），userInfo.value?.id 为 falsy，
 //      中间件判定 !isAuthenticated，navigateTo('/login')。
-// 修复策略：中间件判定前，如果 cookie 有但 userInfo 缺失，必须 trigger fetchUserInfo 并 await。
-describe('auth.global.ts middleware client-side restore (Stage 112 bug A)', () => {
-  it('当 access_token 已恢复但 userInfo 仍为空时，中间件必须主动恢复 userInfo（不再放过 false 判定）', () => {
-    // 不能简单"放过"——必须存在主动恢复逻辑
-    // 形态：fetchUserInfo 调用 + 等待 userInfo.value?.id 落地
+// 修复策略：中间件判定前，client-side 必须 await fetchUserInfo。
+// 进一步（SSR）：dev mode SSR 重渲染时 userStore.accessToken 可能为空，
+//      必须显式把 cookie 中的 token 注入 store，再触发 fetchUserInfo。
+describe('auth.global.ts middleware restore contract (Stage 112 bug A)', () => {
+  it('中间件必须主动调用 fetchUserInfo（client 段）', () => {
     expect(MIDDLEWARE_SRC).toMatch(/fetchUserInfo/)
-    // 之前 line 64-68 已有 client 端兜底（isTokenExpired 分支），现在需要更激进：
-    // 即使 token 没过期，只要 userInfo.id 缺失，就必须 await fetchUserInfo
-    expect(MIDDLEWARE_SRC).toMatch(/!isAuthenticated\s*&&\s*userStore\.accessToken/)
-    // 必须有 await 等待 userInfo 落地的机制（避免再放过 false 判定）
+    expect(MIDDLEWARE_SRC).toMatch(/import\.meta\.client\s*&&\s*userStore\.accessToken/)
     expect(MIDDLEWARE_SRC).toMatch(/await\s+userStore\.fetchUserInfo/)
   })
 
-  it('中间件不应在 !isAuthenticated && !isInWhiteList 时立即 navigateTo(\"/login\")，必须先尝试恢复', () => {
-    // 现在的代码：
-    //   if (!isInWhiteList && !isAuthenticated) return navigateTo("/login", { replace: true })
-    // 修复后：在 navigateTo("/login") 之前，必须先尝试 token+userInfo 恢复
+  it('中间件不应在 !isAuthenticated && !isInWhiteList 时立即 navigateTo("/login")，必须先尝试恢复', () => {
     const protectedBlock = MIDDLEWARE_SRC.match(
       /if\s*\(!isInWhiteList\s*&&\s*!isAuthenticated\)\s*\{([\s\S]*?)\n\s*\}/,
     )
     expect(protectedBlock, '必须存在 !isInWhiteList && !isAuthenticated 守卫块').not.toBeNull()
-    // 该块内应包含 fetchUserInfo 主动恢复逻辑（不是单纯 navigateTo 退出）
     expect(protectedBlock?.[1]).toMatch(/fetchUserInfo/)
     expect(protectedBlock?.[1]).toMatch(/await/)
+  })
+
+  it('中间件整体必须包含 SSR 段：cookie 注入 store + await fetchUserInfo + client 段也 fetchUserInfo', () => {
+    // 简化版：直接断言源码字面量，不依赖 regex 块定位
+    expect(MIDDLEWARE_SRC).toMatch(/import\.meta\.server/)
+    expect(MIDDLEWARE_SRC).toMatch(/import\.meta\.client/)
+    // 找最末尾的 !isInWhiteList && !isAuthenticated 守卫块起始位置（含 SSR 段）
+    const guardIdx = MIDDLEWARE_SRC.lastIndexOf('if (!isInWhiteList && !isAuthenticated)')
+    expect(guardIdx, '必须存在 !isInWhiteList && !isAuthenticated 守卫块').toBeGreaterThan(-1)
+    // 从该守卫开始到下个 console.warn 或 navigateTo，定位 SSR 段 + Client 段
+    const guardSlice = MIDDLEWARE_SRC.slice(guardIdx, guardIdx + 1200)
+    expect(guardSlice).toMatch(/useCookie\(\s*['"]access_token['"]\s*\)/)
+    expect(guardSlice).toMatch(/userStore\.accessToken\s*=\s*tokenCookie\.value/)
+    expect(guardSlice).toMatch(/await\s+userStore\.fetchUserInfo/)
+    // Client 段：accessToken 存在时主动恢复
+    expect(guardSlice).toMatch(/import\.meta\.client\s*&&\s*userStore\.accessToken/)
   })
 })
