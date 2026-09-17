@@ -216,13 +216,13 @@ type: e2e-stage-roadmap
 
 | 阻塞项 | 阻塞阶段 | 需谁决定 | 现状 |
 |--------|---------|---------|------|
-| GitHub token 缺 `workflow` scope / Workflows 写权限（`refusing to allow a Personal Access Token to create or update workflow`） | **E2E-03** | 用户（补 token 权限，或网页手工创建） | 🔴 未落定 |
-| 存量未设密保用户的处理（删 phone/email + 密保不可跳过 ⇒ 永久失去找回能力） | **E2E-06** | 用户（选 A 预置演示账号 / B 登录后补设 / C 接受） | ⚠️ 待确认 |
+| 存量未设密保用户的处理（删 phone/email + 密保不可跳过 ⇒ 永久失去找回能力） | **E2E-06** | 用户（A 预置演示账号 / B 登录后补设 / C 接受） | ⚠️ 待确认 |
+| GitHub 仓库 Settings：为 `main` 建分支保护规则（E2E-03 阶段 2 的 D1） | **E2E-03** | 用户（需仓库 Settings 权限） | ⚠️ 待确认 |
 | D-04 i18n 是否立项 | 不阻塞任何阶段 | 用户 | 🟡 候选 |
 
-**已解除**：`users.status` 字段 → 删（2026-09-17）；注册验证码步骤 → 删除（2026-09-17）；密保可否跳过 → 不可跳过、注册必设（2026-09-17）。
+**已解除**：`users.status` → 删（2026-09-17）；注册验证码步骤 → 删（2026-09-17）；密保可否跳过 → 不可跳过、注册必设（2026-09-17）；**GitHub token `workflow` scope → 已具备**（2026-09-17 实测：临时分支真实 push `.github/workflows/` 成功）。
 
-> 详细规则见 [RUNBOOK.md](RUNBOOK.md) §9。
+> E2E-03 已拆为两段：**阶段 1 落地**（模板 → 真 CI）+ **阶段 2 严格化**（18 处缺陷逐条加固，清单见 [E2E-03 plan](stages/e2e-03-ci-gate/plan.md) §2.3）。详细规则见 [RUNBOOK.md](RUNBOOK.md) §9。
 
 ## 历史与背景
 

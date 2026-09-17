@@ -53,11 +53,24 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-28 | 盲区排查 | JWT 密钥无轮换机制 | `BFF_JWT_SECRET` 在 `apps.yml:645,709` 与 `seed.sh:61` 用同一默认值 `dev-bff-secret`；轮换需 BFF 与 APISIX **原子一致**否则全部 token 失效。`test_bff_jwt_secret.sh` 是一致性检查而非轮换机制 | E2E-29 | 🔴 未解决 |
 | E2E-F-29 | 盲区排查 | 国际化（i18n）完全不存在 | 无 vue-i18n、无 `locales/` 目录，UI 文案硬编码中文；`playwright.config.ts` 写死 `locale: 'zh-CN'`。属产品决策 | **D-04 候选**（不列 E2E 阶段） | 🟡 候选未决 |
 
+### C. CI 模板严格性评审（2026-09-17，E2E-F-30~35）
+
+> 触发：用户要求评审 `docs/ci-workflows/` 的 3 份模板"测试是否严谨"。结论：**不严谨，有 18 处缺陷**。逐条做法已写入 [E2E-03 plan](stages/e2e-03-ci-gate/plan.md) §2.3。
+
+| 编号 | 来源 | 现象 | 根因/证据 | 归属阶段 | 状态 |
+|------|------|------|----------|---------|------|
+| E2E-F-30 | CI 评审 | Go workflow 不严谨：**Go 版本不匹配**（CI 写死 `1.22`，全部 7 个 `go.mod` 为 `go 1.26.1`）、无 `-race`、无覆盖率强制（AGENTS.md §2.3 底线不可执行）、`GOFLAGS: -mod=mod` 削弱可重现性、无格式检查、无 `timeout-minutes`/`concurrency`/`permissions` | `docs/ci-workflows/go-test.yml`；`go.mod` 实测 1.26.1 × 7 | E2E-03（阶段 2） | 🔴 未解决 |
+| E2E-F-31 | CI 评审 | **23 个集成测试永不执行** | `*_integration_test.go` 挂 `//go:build integration`，CI 只跑 `go test ./...`（无 `-tags integration`）；且这些测试需真实 PG/Kafka | E2E-03（阶段 2） | 🔴 未解决 |
+| E2E-F-32 | CI 评审 | 4 套测试套件 CI 零覆盖：`emotion-echo-models` **20 个项目 pytest 文件**、`scripts/test_*.py`（4）、`k8s/tests/*_test.go`（6）、`deploy/*.test.js`（1） | 3 份模板均未涉及这些目录 | E2E-03（阶段 2） | 🔴 未解决 |
+| E2E-F-33 | CI 评审 | **main 无分支保护** + 仓库为 **public** ⇒ `docs/ci-workflows/README.md` 声称的"任何 test 失败 → PR 不可 merge"**不成立** | GitHub API `GET /repos/.../branches/main/protection` → **404 Branch not protected**；`GET /repos/...` → `visibility: public` | E2E-03（D1）/ E2E-05（措辞校正） | 🔴 未解决 |
+| E2E-F-34 | CI 评审 | LLM workflow **依赖未锁版本** ⇒ 同一 commit 可绿可红 | `emotion-llm-service/requirements.txt` 全用 `>=`（`fastapi>=0.100.0`、`openai>=1.40.0`…），无锁定文件 | E2E-03（阶段 2） | 🔴 未解决 |
+| E2E-F-35 | CI 评审 | 前端版本声明缺失 ⇒ CI 版本写死漂移风险 | `package.json` **无 `engines`、无 `packageManager`**，而 CI 写死 `node-version: '20'` / `pnpm version: 9` | E2E-03（阶段 2）/ E2E-04 | 🔴 未解决 |
+
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 = **29 项建档快照**；实测阶段若有新发现继续追加 E2E-F-30 起
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 = **35 项建档快照**；实测阶段若有新发现继续追加 E2E-F-36 起
 
 ## 不列入 E2E 阶段的候选（已评估）
 
