@@ -2,7 +2,7 @@
 status: active
 priority: high
 created: 2026-09-17
-last-refresh: 2026-09-17 (29 项；含覆盖盲区排查新增的 10 项)
+last-refresh: 2026-09-17 (40 项；E2E-F-39 已解决 + E2E-F-40 新增)
 type: e2e-discovered-unresolved-ledger
 ---
 
@@ -68,13 +68,14 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-36 | E2E-01 实测 | 报表、用户空间等页面**无法上下滑动**（内容溢出时无滚动条） | 待查（疑似 `overflow: hidden` 或 `height: 100vh` 无 `overflow-y: auto`） | E2E-04（全局布局修复） / E2E-11（用户空间） / E2E-15（报表） | 🔴 未解决 |
 | E2E-F-37 | E2E-01 实测 | SSR 模式下 **3 个 Playwright spec 因 hydration 时序失败**（dashboard-flow 2 + chat-flow happy-path-2 + login-flow 1） | SSR 渲染的按钮 `visible` 但 Vue click handler 未挂载；需 `waitForLoadState('networkidle')` + `toBeEnabled()` 等 hydration 完成 | E2E-04（Playwright 基础设施规范化） | ✅ **全部修复**（2026-09-17，commits 8100c5f + 03a4361 + 59190a8） |
 | E2E-F-38 | E2E-01 实测 | IAB（内置浏览器）**无法通过 `document.cookie` 设置 cookie** | IAB 的 cookie jar 独立于 `document.cookie` API；`Set-Cookie` 响应头可写入但 JS 侧读写受限 | 不归属阶段（IAB 工具限制，非产品 bug） | 🟡 已知限制（E2E 测试改用 Playwright cookie API 绕过） |
-| E2E-F-39 | E2E-02 实测 | vitest `useAIStreamHandler.test.ts` **预存失败**：`#app` import 无法解析 | `clientAccessToken.ts:2` 引用 `import { useCookie } from "#app"`，vitest 无 Nuxt `#app` alias 配置 | E2E-04（前端工程化门槛） | 🔴 未解决 |
+| E2E-F-39 | E2E-02 实测 | vitest `useAIStreamHandler.test.ts` **预存失败**：`#app` import 无法解析 | `clientAccessToken.ts:2` 引用 `import { useCookie } from "#app"`，vitest 无 Nuxt `#app` alias 配置 | E2E-03 | ✅ **已解决**（2026-09-17，commit b9ddc85：`tests-app-mock.ts` + vitest alias 修复，47/366 全绿） |
+| E2E-F-40 | E2E-03 CI | **Go CI 全部 7 模块测试失败**（go-test #3，3m51s）：`go vet` 报 unreachable code + context.WithCancel leak；`go test` 有既有 FAIL | 首次接入 CI 即暴露的既有代码质量问题，非 CI 配置问题 | E2E-03 follow-up | 🔴 未解决（记账本，不顺手修） |
 
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 4 项 = **39 项**；实测阶段若有新发现继续追加
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 = **40 项**；实测阶段若有新发现继续追加
 
 ## 不列入 E2E 阶段的候选（已评估）
 
