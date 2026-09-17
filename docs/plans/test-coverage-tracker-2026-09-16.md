@@ -3,7 +3,7 @@ purpose: "测试找问题修复阶段" 业务路径级测试覆盖率追踪
 status: active
 priority: high
 created: 2026-09-16
-last-refresh: 2026-09-16 (Sprint 108 收口后：A1 FIXED + A7 新发现)
+last-refresh: 2026-09-17 (Sprint 110 收口：A8 部分修复 + A9/A10 CSS + chat/dashboard Playwright spec)
 owner: TBD
 type: test-coverage-tracker
 depends-on:
@@ -71,9 +71,9 @@ related-plans:
 | Go 单测 (BFF ai_stream_handler) | ✅ 多用例 | `emotion-echo-web-bff/internal/handler/ai_stream_handler_test.go` + `ai_stream_handler_llmgrpc_test.go` |
 | 前端单测 (vitest) | ✅ 7 用例 | `emotion-echo-web/app/pages/chat/conversation/new.test.ts` (Stage 107 4 条 + Sprint 108 加 1 条) + `composables/useConversationSender.architecture.test.ts` (Sprint 108 加 3 条) |
 | 前端单测 (stores) | ✅ | `emotion-echo-web/app/stores/conversation.test.ts` + `__tests__/message.test.ts` |
-| E2E (Playwright) | ⚫ | 仅 `login-flow.spec.ts` 1 个，**chat /new → AI 回复无 Playwright** |
+| E2E (Playwright) | 🟡 | `login-flow.spec.ts` + `chat-flow.spec.ts` (Sprint 110 新增 2 用例) + `dashboard-flow.spec.ts` (Sprint 110 新增 2 用例) |
 | sender 架构债 (Stage 107 A1) | ✅ FIXED Sprint 108 | useState 化 7 个跨实例状态。详见 `docs/stages/stage-108-sender-architecture-debt-fix-2026-09-16.md` §二 |
-| browser-use 实测 (端到端) | 🔴 | **Sprint 109a A7 修通 + Sprint 109b BFF saveAIMessage 落地**, 但**前端 AI 回复不渲染** (A8 已知问题)。curl 后端全链路 11/11 PASS, 浏览器实测 `hasAIBubble: false`。根因: SSE 流没发起 / store addMessage 不触发响应式 / v-memo 缓存命中。详见 `docs/plans/known-issues-backlog-append-sprint-109b-2026-09-16.md` Item 8 + `docs/stages/stage-109b-ui-fixes-2026-09-16.md` |
+| browser-use 实测 (端到端) | 🟠 | **Sprint 110 架构债修复**: isInCreateFlow guard (useConversationSender) + streamCancelled finally reset (useAIStreamHandler) + addMessage/sendMessage spread 赋值 (message store)。**完整浏览器 E2E 验收仍待 Sprint 111 跟进**: sendMessage 之后 sendAIStream 未被调用的真根因（Playwright chromium headless 调试日志断点）尚未定位。详见 `docs/stages/stage-110-a8-a9-a10-fix-2026-09-17.md` §四 |
 | 数据契约 §1 (user_behavior_events 行数) | 🟡 | smoke 脚本有 (`scripts/smoke_data_layer.py`)，待 A7 修通后跑 |
 | 数据契约 §2 (event_type enum 细分) | 🟡 | 同上 |
 | 数据契约 §5 (schema 与写入端一致) | 🟡 | 同上 |
@@ -166,7 +166,7 @@ related-plans:
 | ~~A1~~ | useConversationSender composable 生命周期 vs Vue 路由 unmount | `emotion-echo-web/app/composables/useConversationSender.ts:48-51` | ~~E2E-2 chat 链路全链~~ | ✅ **FIXED Sprint 108**：useState 化 7 个跨实例状态 + module-scope let 1 个。详见 `docs/stages/stage-108-sender-architecture-debt-fix-2026-09-16.md` |
 | **A7** | APISIX jwt-auth 401 (新建) | `deploy/apisix/seed.sh` jwt-auth 配置 + consumer + BFF TrustAPISIX | E2E-2 chat + X-1 outbox + X-2 sw8 + X-4 鉴权 全部 | ✅ **FIXED Sprint 109a**：真正根因 = BFF `TrustAPISIX=true` + `APISIXCIDRs=[]`（dev 模式配置自相矛盾）+ APISIX `enable_encrypt_fields=true` 导致 jwt-auth 插件用密文验签。**修复**：dev 模式 TrustAPISIX 默认改 false + 关掉字段加密。详见 `docs/stages/stage-109a-apisix-jwt-401-fix-2026-09-16.md` |
 | A2 | assessment-svc handler/logic 无单测 | `emotion-echo-assessment-svc/internal/handler/` `internal/logic/` | E2E-3 完整覆盖 | 🟡 |
-| A3 | reports E2E 无 Playwright | `emotion-echo-web/e2e/` | E2E-4 端到端 | 🟡 |
+| A3 | reports E2E 无 Playwright | `emotion-echo-web/e2e/` | E2E-4 端到端 | 🟡 | Sprint 110 写 `dashboard-flow.spec.ts` (2 用例: dailyReport 渲染 + 4 dashboard 页面 chart 容器可见) |
 | A4 | chartData=[] 历史 bug 未实测复现 | `emotion-echo-web-bff/internal/handler/analytics_handler.go` | 契约 4 | 🔴 |
 | A5 | OAP 9.x queryDuration bug | SkyWalking OAP | X-2 完整可视化 | 🟡 |
 | A6 | Stage 44 §四残余（sw-oap / Nacos / 运维 SQL） | 见 stage-44 | 多个横切 | 🟡 |
@@ -182,6 +182,7 @@ related-plans:
 | **Sprint 108** | 修 A1：sender composable 生命周期 + 新发现 A7 (APISIX jwt-auth 401) | 无 | ✅ **FIXED Sprint 108**（sender）+ A7 留待 Sprint 109a |
 | **Sprint 109a** | 修 A7：APISIX jwt-auth 401 诊断 + 修复（BFF TrustAPISIX + APISIX encrypt_fields） | 无 | ✅ **FIXED Sprint 109a**：`deploy/apisix/test_jwt_auth_runtime.sh` 6/6 PASS。详见 stage-109a |
 | **Sprint 109b** | 端到端 E2E-2 chat 跑通：curl 全链路 11/11 PASS + 浏览器截图存档 | A7 ✅ | ✅ **FIXED Sprint 109b**：curl E2E 全链路 + 容器日志确认。详见 stage-109b |
+| **Sprint 110** | 修 A8 (useConversationSender isInCreateFlow + useAIStreamHandler streamCancelled finally + message store spread) + A9/A10 CSS + 写 chat-flow/dashboard-flow Playwright spec | A8 部分 | 🟠 A8 架构债修复完成（5/5 + 2/2 vitest GREEN），完整浏览器 E2E 验收待 Sprint 111 跟进（sendMessage 后 sendAIStream 未调用的真根因） |
 | **Sprint 109c** | 数据契约 §1 §2 §5 §6 smoke 全绿 | 109b | pending |
 | **Sprint 110** | 写 E2E-2 Playwright spec（chat /new → 收到 AI 回复），作为回归钉子 | 109b | pending |
 | **Sprint 111** | 写 E2E-3 assessment Playwright + 补 assessment-svc handler/logic 单测 | 无（独立） | pending |
