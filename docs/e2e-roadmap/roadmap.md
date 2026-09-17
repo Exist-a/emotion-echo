@@ -10,11 +10,11 @@ type: e2e-stage-roadmap
 
 ## 当前激活阶段
 
-**E2E-05 文档与代码一致性收口**（status: pending 待启动）→ 详档 [stages/e2e-05-doc-code-consistency/plan.md](stages/e2e-05-doc-code-consistency/plan.md)
+**E2E-06 数据库改造**（status: pending 待启动）→ 详档 [stages/e2e-06-db-transformation/plan.md](stages/e2e-06-db-transformation/plan.md)
+
+> E2E-05 已完成 → 报告 [stages/e2e-05-doc-code-consistency/report.md](stages/e2e-05-doc-code-consistency/report.md)
 
 > E2E-04 已完成 → 报告 [stages/e2e-04-frontend-engineering/report.md](stages/e2e-04-frontend-engineering/report.md)
-
-> E2E-03 已完成 → 报告 [stages/e2e-03-ci-gate/report.md](stages/e2e-03-ci-gate/report.md)
 
 > 🔧 = 改造阶段（不是纯测试，含代码/schema/目录/配置变更）
 
@@ -28,7 +28,7 @@ type: e2e-stage-roadmap
 | E2E-02 🔧 | 项目目录清理 | 清理无关文件/目录、补 gitignore、归档测试证据 | 不动业务代码 | ✅ done |
 | E2E-03 🔧 | **CI/CD 门槛** | 落地可跑的 `.github/workflows/`（现全仓零 CI，模板从未执行） | 复杂流水线/部署自动化 | ✅ done |
 | E2E-04 🔧 | **前端工程化门槛** | ESLint/Prettier 引入 + typecheck 103→0 + SPA 产物 smoke + Playwright mobile project + browserslist + a11y 基线 | 全量代码重构 | ✅ done |
-| E2E-05 🔧 | **文档与代码一致性收口** | 10 个校验脚本接入 CI + 更正 3 处实测失真 + digest 假绿修复 | 通用文档检查器 | ⏳ pending |
+| E2E-05 🔧 | **文档与代码一致性收口** | 11 个校验脚本接入 CI + 更正 3 处实测失真 + digest 假绿修复 + 2 个 migration 脚本 | 通用文档检查器 | ✅ done |
 
 ### 第二批：数据库与认证
 
