@@ -45,82 +45,45 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     whiteListPrefix.some((p) => to.path === p || to.path.startsWith(p + "/"));
 
   // ==================== 获取用户登录状态 ====================
-  // SSR 时通过 cookie 判断，CSR 时通过 Pinia store 判断
+  // Sprint 112 v2：判定只看 accessToken 存在性，不依赖 userInfo。
+  // 原因：dev mode 下 SPA 跳转触发 SSR 重渲染时，userStore.userInfo 异步 fetchUserInfo
+  //       还没完成（userInfo.value?.id 为 falsy），旧版用 isAuthenticated（复合状态）
+  //       判定会把已登录用户踢回 /login。改用 hasAccessToken（仅 accessToken 存在性），
+  //       即便 userInfo 缺失也视为已登录——userInfo 是页面元数据，由各页面 onMounted
+  //       自取（fetchUserInfo），token 失效由 401 兜底重定向，不在中间件判。
   const userStore = useUserStore();
-  let isAuthenticated = userStore.isAuthenticated;
-  
-  // SSR 环境：从 cookie 判断登录状态（简化方案，不做自动刷新）
-  // access_token cookie 有效期已延长到 1 小时（记住我）或 Session（不记住我）
-  if (import.meta.server && !isAuthenticated) {
+  let hasAccessToken = !!userStore.accessToken;
+
+  // SSR 段：cookie 中的 access_token 也视为已登录（dev mode 下 useCookie CSR 写入
+  //        与 SSR 读取可能跨上下文不同步，但 SSR 的 request headers 一定带 cookie）
+  if (import.meta.server) {
     const tokenCookie = useCookie("access_token");
     if (tokenCookie.value) {
-      // 有 access_token，认为已登录（即使可能已过期，让 API 调用时处理）
-      isAuthenticated = true;
+      // 把 SSR 段读到的 token 同步到 store，让后续 SSR 渲染时 store.accessToken 也可用
+      userStore.accessToken = tokenCookie.value;
+      hasAccessToken = true;
     }
-    // 注意：不尝试读取 refreshToken（HttpOnly + Path 限制，SSR 无法可靠获取）
-    // Token 刷新完全交给客户端处理
-  }
-  
-  // CSR 环境兜底：accessToken 已恢复但 userInfo 可能还在加载中，避免误判未登录
-  if (import.meta.client && !isAuthenticated && userStore.accessToken) {
-    console.log("[Auth Middleware] accessToken 存在但 userInfo 未恢复，视为已登录");
-    isAuthenticated = true;
   }
 
   // ==================== 路由拦截逻辑 ====================
-  
+
   // 1. 已登录用户访问登录相关页面，重定向到首页
-  if (isInWhiteList && isAuthenticated) {
+  if (isInWhiteList && hasAccessToken) {
     console.log("[Auth Middleware] 已登录用户访问登录页，重定向到首页");
     return navigateTo("/chat/conversation", { replace: true });
   }
 
   // 2. 未登录用户访问非白名单页面，重定向到登录页
-  // Sprint 112 Bug A：dev mode 下 SPA 内导航触发 SSR 重渲染目标页时，
-  // 服务端 cookie 重新读不到（Nuxt dev mode cookie jar 跨请求不同步），
-  // userStore.userInfo 在 SSR 上下文为空 → isAuthenticated=false → 踢回 /login。
-  // 修复（双重保险）：
-  //   (a) SSR 段：cookie 再次强制读取 + 注入 store.accessToken；
-  //   (b) Client 段：accessToken 存在时主动 await fetchUserInfo 恢复 userInfo；
-  //   两段恢复后仍 isAuthenticated=false 才 navigateTo("/login")。
-  if (!isInWhiteList && !isAuthenticated) {
+  // v2：判定只用 accessToken 存在性。userInfo 缺失不算未登录，由各页面 fetchUserInfo 兜底。
+  if (!isInWhiteList && !hasAccessToken) {
     console.log("[Auth Middleware] 未登录用户访问受保护页面:", to.path);
-
-    // (a) SSR：直接以 cookie 值覆盖 store.accessToken，给服务端 userInfo fetch 一次机会
-    if (import.meta.server) {
-      const tokenCookie = useCookie("access_token");
-      if (tokenCookie.value) {
-        userStore.accessToken = tokenCookie.value;
-        try {
-          await userStore.fetchUserInfo();
-        } catch {
-          // 静默：失败走原本踢回逻辑
-        }
-        if (userStore.isAuthenticated) {
-          return;
-        }
-      }
-    }
-
-    // (b) Client：accessToken 在 store 里（dev mode 恢复后），等待 userInfo 落地
-    if (import.meta.client && userStore.accessToken) {
-      try {
-        await userStore.fetchUserInfo();
-      } catch {
-        // 静默
-      }
-      if (userStore.isAuthenticated) {
-        return;
-      }
-    }
-
     return navigateTo("/login", {
       replace: true,
     });
   }
 
   // 3. 检查 Token 是否即将过期（仅在客户端执行）
-  if (!isInWhiteList && isAuthenticated && import.meta.client && userStore.isTokenExpired()) {
+  if (!isInWhiteList && hasAccessToken && import.meta.client && userStore.isTokenExpired()) {
     console.warn("[Auth Middleware] Token 即将过期，自动刷新中...");
     userStore.fetchUserInfo().catch(() => {
       // 静默处理，失败时不阻断导航

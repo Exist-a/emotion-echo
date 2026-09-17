@@ -31,6 +31,13 @@ set -eu
 # ---- Sprint 1 PR-3: services.env 单点真理 ----
 # 优先级：用户传入 env > $(dirname "$0")/services.env > $(dirname "$0")/services.env.example
 # services.env (git ignore) 用于 prod 覆盖；services.env.example 是 dev 默认。
+# Stage 112 修复：把 log/die 函数定义前移到脚本顶部，_load_services 内部能调用
+# log 否则脚本直接 source 时 `_load_services` 在 line 51 调用、log 在 line 80 才定义，
+# bash 默认不预解析函数定义 → `log: command not found` 错误。
+# 同时：当前用户用 `bash` 跑不会触发（bash 解析函数后定义已就位），但如果有人用 `sh`
+# 跑（或 apisix-seed 容器用 sh 而非 bash），会因函数未定义直接 fail。
+log()  { echo "[seed] $*" >&2; }
+die()  { echo "[seed] FATAL: $*" >&2; exit "${2:-1}"; }
 _load_services() {
   local env_file
   env_file="$(dirname "$0")/services.env"
@@ -75,10 +82,6 @@ ASSESSMENT_SVC_PORT="${ASSESSMENT_SVC_PORT:-8889}"
 ANALYTICS_SVC_PORT="${ANALYTICS_SVC_PORT:-8893}"
 AI_SVC_PORT="${AI_SVC_PORT:-8891}"
 WEB_BFF_PORT="${WEB_BFF_PORT:-8894}"
-
-# ---- 工具 ----
-log()  { echo "[seed] $*" >&2; }
-die()  { echo "[seed] FATAL: $*" >&2; exit "${2:-1}"; }
 
 # ---- Step 1: 前置 health check ----
 log "Step 1/4: waiting for APISIX admin API at $ADMIN_URL"
@@ -303,7 +306,14 @@ OBSERVABILITY_PLUGINS_JSON='
 PLUGINS_JSON=$(cat <<EOF
 {
   "jwt-auth": {
-    "cookie": "access_token"
+    # Stage 112 修复：之前只配 cookie=BFF Set-Cookie 名；前端 useApi.ts 默认发
+    # Authorization: Bearer <token> header + credentials:include cookie。jwt-auth 单读
+    # cookie 时，前端 header-only fetch（如 dashboard 调 /reports/*）必 401。
+    # 加 header/query/key_claim_name 三路兜底，并明确 key_claim_name="user" 匹配 consumer key=user。
+    "header": "authorization",
+    "cookie": "access_token",
+    "query": "jwt",
+    "key_claim_name": "user"
   },
   "limit-count": {
     "count": 60,
