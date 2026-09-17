@@ -1,0 +1,8 @@
+# Browserslist config for Emotion-Echo-Web
+# https://github.com/browserslist/browserslist
+#
+# Matches Nuxt 4 defaults + modern browsers
+> 0.5%
+last 2 versions
+not dead
+not ie 11

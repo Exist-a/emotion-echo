@@ -37,6 +37,11 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'], channel: 'chromium-headless-shell' },
     },
+    {
+      // Mobile viewport — Pixel 5 for responsive testing
+      name: 'mobile',
+      use: { ...devices['Pixel 5'] },
+    },
   ],
   webServer: process.env.BASE_URL
     ? undefined
