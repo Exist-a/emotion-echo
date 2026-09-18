@@ -290,3 +290,28 @@ internal\handler\user_handler_test.go:95:3: unknown field Phone in struct litera
 | 机制建设（R-03） | 本文每条"硬规则"都是可执行校验的需求输入，实现为 `scripts/e2e_stage_audit.py` 的检查项 |
 
 > 本文与 [ADR-18 文档失真治理](../architecture/adr/adr-2026-09-doc-drift-registry.md) 的关系：ADR-18 定义了**失真分类**（根因臆断 / 陈旧结论 / 未复跑即记录 / 探测方法错误）；本文是**这四类在 E2E 执行层的具体表现形态 + 可机械检查的硬规则**。ADR-18 管"文档说什么"，本文管"执行时怎么做假"。
+
+---
+
+## 机械化状态（R-03 回填）
+
+> 2026-09-18 R-03 回填：每条反例标注"已机械化 / 仍靠人工 + 理由"。
+
+| 反例 | 机械化状态 | 检查工具 | 说明 |
+|------|-----------|---------|------|
+| AP-01 假 PASS | ✅ 已机械化 | `e2e_stage_audit.py` A4/A4b | 证据列含存在性措辞或只有文件路径 → FAIL |
+| AP-02 报告与代码相反 | ✅ 已机械化 | `e2e_stage_audit.py` A3 | plan 测试点编号 ⊆ report 编号 → FAIL |
+| AP-03 用 N/A 掩盖未做 | 🟡 部分机械化 | `e2e_stage_audit.py` A11 | 四值合法基值检查；但"N/A 是否语义适用"仍靠人工 |
+| AP-04 账本与 roadmap 脱钩 | ✅ 已机械化 | `e2e_stage_audit.py` A5 | done 阶段有未解决账本 → FAIL |
+| AP-05 用删除需求关闭缺陷 | 🟡 仍靠人工 | — | 需人工判断"是否真的删除了需求" |
+| AP-06 根因臆断 | 🟡 仍靠人工 | — | 需人工判断"根因是否有证据" |
+| AP-07 偏离计划不记录 | ✅ 已机械化 | `e2e_stage_audit.py` A3/A9 | plan/report 编号不一致 + status 不一致 → FAIL |
+| AP-08 架构改动无 ADR | ✅ 已机械化 | `check_adr_gate.sh` | 架构关键词命中但无 ADR → FAIL |
+| AP-09 TDD 倒置 | ✅ 已机械化 | `check_tdd_gate.sh` | 生产代码改动无测试文件 → FAIL |
+| AP-10 孤儿产出物 | ✅ 已机械化 | `check_orphan_outputs.sh` | scripts/workflows 未被引用 → FAIL |
+| AP-11 门禁只报不拦 | 🟡 待 CI 接通 | — | 门禁脚本已就绪，待接入 GitHub required_status_checks |
+| AP-12 收口自检流于形式 | ✅ 已机械化 | `e2e_stage_audit.py` A1/A2/A6 | 缺必填章节/占位符/自检项含"待"字 → FAIL |
+| AP-13 脚本安全缺陷 | 🟡 部分机械化 | `test_migrate_checksum.sh` | checksum 负向测试已写；但"所有脚本都有负向测试"仍靠人工 |
+| AP-14 状态与数字不一致 | ✅ 已机械化 | `e2e_stage_audit.py` A9/A10/A11 + `check_residual.sh` | 三处 status 一致 + 链接可达 + 残留物扫描 → FAIL |
+
+**统计**：14 条反例中，**10 条已机械化**，**4 条部分机械化或仍靠人工**。
