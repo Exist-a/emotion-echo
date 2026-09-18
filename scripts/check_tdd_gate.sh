@@ -151,8 +151,33 @@ for commit in $(git rev-list "$COMMIT_RANGE" 2>/dev/null); do
 done
 
 echo ""
+# E2E-F-66：把"覆盖范围"讲清楚，并枚举范围外的缺口。
+# 原输出是"所有 N 个 commit 满足 TDD 要求"，但 EXCLUDE_PATTERNS 含 `scripts/`，
+# 即 scripts/*.sh 与 scripts/*.py 一律不参与判定 —— 于是这句话是**范围外绿灯**，
+# 会让人误以为脚本类产出也受 TDD 门禁保护（那正是 AP-13 的高发区）。
+# 此处①限定措辞②把缺口显式列出来（暂不强制：48 个脚本中约半数无负向测试，
+# 直接硬性要求会制造大面积假红，属 R-03 #7 的收尾范围）。
+untested_scripts=0
+untested_list=""
+for s in scripts/*.sh scripts/*.py; do
+    [ -f "$s" ] || continue
+    base=$(basename "$s")
+    case "$base" in test_*) continue ;; esac
+    stem="${base%.*}"
+    if [ ! -f "scripts/test_${stem}.sh" ] && [ ! -f "scripts/test_${stem}.py" ]; then
+        untested_scripts=$((untested_scripts + 1))
+        untested_list="$untested_list $base"
+    fi
+done
+
 if [ $violations -eq 0 ]; then
-    echo -e "${GREEN}GREEN: 所有 $total_commits 个 commit 满足 TDD 要求${NC}"
+    echo -e "${GREEN}GREEN: 已判定范围内 $total_commits 个 commit 均满足 TDD${NC}"
+    echo "  判定范围：.go / .vue / .ts / .py（**不含** scripts/ 目录，见 EXCLUDE_PATTERNS）"
+    if [ "$untested_scripts" -gt 0 ]; then
+        echo -e "${YELLOW}WARN: scripts/ 下 $untested_scripts 个脚本无同名负向测试（未强制，R-03 #7 待办）${NC}"
+        echo "      ${untested_list}" | head -c 400
+        echo ""
+    fi
     exit 0
 else
     echo -e "${RED}RED: $violations/$total_commits 个 commit 违反 TDD${NC}"

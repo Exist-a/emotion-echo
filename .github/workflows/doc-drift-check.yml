@@ -94,3 +94,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test migrations no service order
         run: bash scripts/test_migrations_no_service_order.sh
+
+  soft-assert-scan:
+    name: soft-assert 扫描（被注释的断言）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for soft asserts
+        run: bash scripts/check_soft_asserts.sh
+      - name: Self-test the scanner (负向用例)
+        run: bash scripts/test_check_soft_asserts.sh

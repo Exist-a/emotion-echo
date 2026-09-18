@@ -2,7 +2,7 @@
 stage: e2e-05
 title: 文档与代码一致性收口
 executed: 2026-09-18
-status: done
+status: partial
 environment: dev 模式（Docker 后端容器 + 本地 pnpm dev 前端）
 ---
 

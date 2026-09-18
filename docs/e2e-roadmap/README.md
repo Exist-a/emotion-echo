@@ -45,22 +45,26 @@ python scripts/e2e_stage_audit.py --selftest         # 校验审计器本身可�
 
 **执行者不得自行宣布阶段 `done`** —— 必须审计器无 FAIL，且（过渡期）由第二方按 §13.3 核对。
 
-## 交接说明（2026-09-18 第二方核对后更新，给下一个执行 agent）
+## 交接说明（2026-09-18 修复轮后，给下一个执行 agent）
 
-**当前状态**：R-00 ✅ 完成且自校验通过；**R-01 未完成**（6/7 项实测为真，**#2 不可达**）；R-02 / R-03 为**部分完成**（非"基本完成"）。工作区**干净**（`git status --porcelain` 为空），但 `main` 已 ahead 2 个 commit 且**推不上去**（见下）。
+**当前状态**：R-00 ✅、**R-01 ✅ 完成**（7/7；#2 经三层根因修复并端到端实测）、R-02 🟡（剩 #1~#3）、R-03 🟡（剩 #7/#10）。**E2E-07 已解阻塞**。工作区干净，`main` 与 `origin/main` 一致。
 
-**⚠️ 第 0 步（不解决则任何产出都无法落地）：解除 `main` 的写保护自锁死**。
-实测 `required_pull_request_reviews.required_approving_review_count = 1` + `enforce_admins = true` + 仓库**只有一个协作者** ⇒ 直推被拒、PR 又凑不到 approve（GitHub 不允许自我 approve）。`48ac75b` 与 `3662fae` 因此滞留本地。建议（单人维护的常见做法）：保留 PR 流程但把 `required_approving_review_count` 设为 **0**，并按 D-08 只把**无 `paths` 过滤**的 job 加入 required checks；若要保留真实评审，则增加第二个账号。详见 E2E-F-68。
+**本轮已解决的阻断项**（证据见 [remediation.md](remediation.md) 与账本 `E2E-F-60~74`）：
 
-**随后必须修的三件（均在 [remediation.md](remediation.md) 标出，账本编号 E2E-F-60~67）**：
+1. **main 写保护自锁死**已解：`required_approving_review_count` 1→0；并接通 **18 个 required checks**（仅纳入无 `paths` 过滤的 job，符合 D-08），**红线实测能拦**（失败 check → `mergeStateStatus=BLOCKED`）。
+2. **找回密码链路**已通（三层根因）：APISIX 白名单路由 117 + proto 新增 `VerifySecurityAnswerByUsername` 与两端实现 + user-svc 拦截器匿名清单补配。端到端实测：错答案 401 / 正确答案 200 / 未知用户 401。
+3. **`-race` 结论已推翻**：D-06 调查证明**不是环境问题而是真实数据竞争**（5 模块同源的 `listener` 无同步），已修复并恢复 CI `-race`。
 
-1. **补 APISIX 白名单路由**（阻断级）：`deploy/apisix/seed.sh` 增加 `put_auth_route 116 "/api/v1/auth/verify-security-answer"`，同时把它从 Step 4.5 的 `for drift_id in 116` 漂移清理里移除，并更正 578 行的 route 计数文案。改完重跑 `seed.sh`，再用 curl 实测**未登录 200 / 错答案 401** 两条路径。
-2. **补 BFF 层密保负向测试**：负向测试目前只在 user-svc logic 层，原缺陷所在的 `bff/.../auth_handler.go` 一层零测试。
-3. **回填账本**：`E2E-F-46/47/48/49/58/59` 磁盘上已修复但账本仍标"未解决" ⇒ 会让审计器 A5 产生假 FAIL（这正是 AP-04 复发）。
+**接手时请注意两条"会验错对象"的坑**（新登记 `E2E-F-70`）：
 
-**其余待收尾（不阻塞 #1）**：R-02 的 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）与 **SSR 的 ADR + `decisions.md` 登记**（`docs/architecture/adr/` 现存 15 个 ADR 无一条涉及渲染模式）；`-race` 须按 **D-06 的 3 步可复现调查**重做（现结论基于本地 Windows 证据，而 CI 是 Linux，D-06 已明文判定该证据链不成立）；R-03 的 #5 门禁接通（实测 `required_status_checks` 为空集）、#7 脚本负向用例、#10 CI 严格化。**修审计器 A4 的误报再信它的结论**（见 E2E-F-64）。
+- **验收前先确认被验镜像/进程包含你的改动**：本轮曾出现"代码已修、curl 仍是旧行为"，原因是容器跑的是修改前构建的镜像（容器 Up 6h vs 修复提交在其后）。改完 Go 代码必须重建镜像并重启容器再验收（`bash scripts/build_dev_images.sh <svc>` + `docker compose ... --env-file deploy/.env.local up -d <svc>`）。
+- **本地改 proto 必须用可复现的生成方式**：`protoc 32.1` + `protoc-gen-go v1.36.11` + `protoc-gen-go-grpc v1.6.2`，且**以文件名 `user.proto`**（非 `proto/user.proto`）调用，否则生成的符号名整体变化。改前先"不加改动重生成并与仓库逐字节比对"，一致了再改。
 
-**不要做的事**：不要跳过上述 #1 直接做 E2E-07 —— 注册虽已恢复可用，但**找回密码链路在网关层仍 401**，E2E-07 正是"密保找回"流程，开工即建在断路上。
+**仍未完成（不要误以为已清账）**：
+
+- **R-02 #1~#3**：E2E-03/06 的 report 未模板化、`[V]` 截图 0 张、账本对账未做完。审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这些必须**重跑测试点或补真实证据**，改文档消不掉。
+- **R-03 #7/#10**：`scripts/` 下 48 个脚本尚无同名负向测试（TDD 门禁已把该缺口显式列出但未强制）；CI 严格化剩余项。
+- **E2E-F-69（安全）**：`deploy/apisix/seed.sh:60` 与 `docker-compose.apps.yml:712` 在**公开仓库**里硬编码了 APISIX 管理员密钥默认值。
 
 ## 阶段详档（just-in-time）
 

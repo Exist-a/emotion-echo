@@ -580,9 +580,12 @@ def audit_stage(stage: str, states: dict[str, str], ledger: list[dict[str, str]]
 # 跑不出这些 = 审计器无效（RUNBOOK §13.4）。
 # 注：R-02 修复后部分缺口已消除，更新期望值。
 SELFTEST_EXPECT = {
-    "e2e-03": ["A2", "A3"],        # 无汇总行；21 点中 13 点无结果
-    "e2e-04": ["A2", "A5"],        # E2E-F-21/35/36 未解决而标 done；汇总计数不符
-    "e2e-05": ["A4", "A5"],        # 仍有"脚本已创建"式证据（行结果为 PASS）+ 未解决账本
+    # 2026-09-18 状态对齐后更新：E2E-03/04/05/06 由 done 改为 partial
+    # ⇒ A5（"标 done 却有未解决账本条目"）不再触发 —— 这是**修复后的正确行为**，
+    # 故期望值同步下调。剩余项均为真实未还的契约欠账（R-02 #1~#3）。
+    "e2e-03": ["A1", "A2", "A3"],  # report 非模板（缺「收口自检」）；无汇总行；21 点中 13 点无结果
+    "e2e-04": ["A2", "A6"],        # 汇总计数与表行数不符；收口自检项 "[x] …（待 push）"
+    "e2e-05": ["A4"],              # 3 个测试点的证据只有文件路径、无执行信号（RUNBOOK §4.1）
 }
 
 # 反误报样本：最接近合规的阶段，不应触发 A1~A5
@@ -773,7 +776,9 @@ def main() -> int:
 
         n_fail = sum(1 for r in results if r.failed)
         print(f"\n合计：{len(results)} 个阶段，{n_fail} 个存在 FAIL")
-        print("提示：审计器覆盖 11 条断言（A1~A11）；TDD/ADR 门禁归 R-03 #3/#4")
+        print("提示：审计器覆盖 11 条断言（A1~A11）。其余：soft-assert→check_soft_asserts.sh；"
+              "TDD→check_tdd_gate.sh；孤儿→check_orphan_outputs.sh；ADR→check_adr_gate.sh；"
+              "残留→check_residual.sh；分支保护→check_required_checks.py（需管理员 token）")
 
     return 1 if any(r.failed for r in results) else 0
 

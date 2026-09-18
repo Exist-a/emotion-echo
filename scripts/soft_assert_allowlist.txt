@@ -1,0 +1,11 @@
+# scripts/soft_assert_allowlist.txt —— soft-assert（被注释掉的断言）已知缺口白名单
+#
+# 用途：scripts/check_soft_asserts.sh 的豁免表。仅在"确认暂不强制"时登记，
+#       且必须写明理由 + 账本编号；恢复断言后应删除本行。
+#
+# 格式：<相对路径>:<行号>   # 理由 / 账本编号
+#       —— 用"路径:行号"而非仅路径，避免同文件新增的 soft-assert 被顺带放过。
+#
+# 本文件由 scripts/check_soft_asserts.sh 解析：只取每行第一个字段做键。
+
+emotion-echo-web/e2e/a11y-baseline.spec.ts:51   # E2E-F-51：a11y 基线在 E2E-04 阶段从未真正强制（`expect(critical).toEqual([])` 被注释）。恢复该断言需要先把 critical/serious 违规清零，属 E2E-04 阶段 2 的范围；此处显式登记，使其"可见"而非静默。

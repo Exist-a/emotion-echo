@@ -78,7 +78,7 @@ type: e2e-remediation-plan
 
 ## R-01 🔴 阻断项修复（最高优先）
 
-**状态：⛔ 未完成（2026-09-18 第二方核对）** —— 6/7 项实测为真，但 **#2 未通**（链路仍不可达），#5 为降级。**不得据此解除 E2E-07 阻塞。**
+**状态：✅ 完成（2026-09-18 修复轮复核）** —— 7/7 项已落实：#2 经**三层**根因修复（APISIX 白名单路由 + proto 新增 RPC 与两端 gRPC 实现 + 拦截器匿名跳过清单）并**端到端实测**（错答案 401 / 正确答案 200 / 用户不存在 401，均经真实网关）；#5 为降级（Register 仍非事务，已登记 E2E-F-44）。**E2E-07 阻塞解除。**
 
 > 本节原记"✅ 基本完成"，由**非执行者的第二方核对**（[RUNBOOK](RUNBOOK.md) §7 #10）推翻。这是 AP-01/AP-14 在补救文档内部的复发——记录下来作为"执行者自证不可信"的又一实例。
 
@@ -87,7 +87,7 @@ type: e2e-remediation-plan
 | # | 声称 | 核对方式 | 结果 |
 |---|------|---------|------|
 | 1 | BFF 密保 fail-open 已修 | 读 `bff/.../auth_handler.go:458-497` | ✅ **为真**：不再用 `Login(username,"dummy")` 探测，改调 `VerifySecurityAnswerByUsername`，失败统一 401 |
-| 2 | 找回密码端点已补 | 读 `user-svc/main.go:158` + `deploy/apisix/seed.sh:540-546` | ⛔ **未通**：两端已实现，但 **APISIX 白名单只有 110~115**；`/api/v1/auth/verify-security-answer` 落到 route 100（`/api/v1/*`，含 jwt-auth）⇒ 未登录调用必 401。前端经 `:19080`（=APISIX）调用，链路不可达 |
+| 2 | 找回密码端点已补 | 读 `user-svc/main.go:158` + `deploy/apisix/seed.sh:540-546` | ✅ **已修复（复核确认）**：补 `put_auth_route 117`；且发现并修掉另外两层（BFF gRPC 桩、拦截器漏配）。实测：错答案 401 / 正确答案 200 / 未知用户 401 |
 | 3 | 注册链路已恢复（D-05） | 读 `authlogic.go:96-104`、`bff/.../auth_handler.go:160-195` | ✅ **为真**：密保改为可选（`>2` 才拒）；BFF 不再强校验验证码。遗留：SPA 仍强制填写验证码输入框（E2E-09 范围） |
 | 4 | 测试可编译 | `go vet ./...` × 7 模块 | ✅ **为真**：7/7 通过 |
 | 5 | Register 非事务 | 读 `authlogic.go:124-148` | 🟡 **降级**：仍 `Create` 后 `Save` 无事务；文档如实记为降级 |
@@ -205,7 +205,7 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 ## R-02 🔧 收口补账（契约补齐）
 
-**状态：🟡 部分完成（2026-09-18 第二方核对修正）** —— 10/15 项实测为真；#1~#3 未做；**#4 不实**、**#6 缺 ADR**、**#15 的处置违背 D-06**。
+**状态：🟡 部分完成（2026-09-18 修复轮更新）** —— 本轮补齐三项：#4 **状态三处对齐已修正**（E2E-03/04/05/06 的 plan/report/roadmap 统一为 `partial`）；**#6 已补齐 ADR**（新增 `docs/architecture/adr/adr-2026-09-nuxt-ssr-mode.md` + `decisions.md` 决策 24）；**#15 已按 D-06 重做并推翻原降级结论**（查明是**真实数据竞争**，已修 5 模块并恢复 CI `-race`）。**剩余 #1~#3 是真实未还欠账**（report 模板化 / `[V]` 截图 / 账本对账）：审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6，这些必须重跑或补真实证据，不能靠改文档消除。
 
 **目标**：让 E2E-01~06 的状态**诚实**——要么补齐契约，要么把状态降为 `partial`。
 
@@ -258,7 +258,7 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 ## R-03 🔧 约束机制收尾（防复发）
 
-**状态：🟡 部分完成（2026-09-18 第二方核对修正）** —— #1/#3/#4/#6/#8/#9 实测为真；**#5 未接通**（`required_status_checks` 实测为**空集** ⇒ AP-11「门禁只报不拦」仍然成立）；#7/#10 未做。另有两项**工具自身缺陷**见下。
+**状态：🟡 部分完成（2026-09-18 修复轮更新）** —— **#5 已接通**：18 个 required checks（严格只纳入**无 paths 过滤**的 job，符合 D-08），且**红线实测能拦**（PR #5 让「路径对齐（前端 ⊆ BFF）」FAILURE → `mergeStateStatus=BLOCKED`，其余 17 项全 pass）；**#8/#16 两条缺失断言已实现**（`check_soft_asserts.sh` 含负向测试、`check_required_checks.py`）；**审计器 A4 误报已修**（`row_claims_pass` + `SELFTEST_MUSTNOT` + 合成样本）。**#7（脚本负向用例补齐）/ #10（CI 严格化 14 项）未做。**
 
 ### 第二方核对明细（2026-09-18）
 
