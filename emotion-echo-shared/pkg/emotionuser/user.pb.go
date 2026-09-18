@@ -762,6 +762,115 @@ func (x *VerifySecurityAnswerResponse) GetSuccess() bool {
 	return false
 }
 
+// VerifySecurityAnswerByUsernameRequest 按用户名验证密保答案请求（R-01 #2）
+type VerifySecurityAnswerByUsernameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	QuestionOrder int32                  `protobuf:"varint,2,opt,name=question_order,json=questionOrder,proto3" json:"question_order,omitempty"` // 1 或 2
+	Answer        string                 `protobuf:"bytes,3,opt,name=answer,proto3" json:"answer,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifySecurityAnswerByUsernameRequest) Reset() {
+	*x = VerifySecurityAnswerByUsernameRequest{}
+	mi := &file_user_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifySecurityAnswerByUsernameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifySecurityAnswerByUsernameRequest) ProtoMessage() {}
+
+func (x *VerifySecurityAnswerByUsernameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifySecurityAnswerByUsernameRequest.ProtoReflect.Descriptor instead.
+func (*VerifySecurityAnswerByUsernameRequest) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *VerifySecurityAnswerByUsernameRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *VerifySecurityAnswerByUsernameRequest) GetQuestionOrder() int32 {
+	if x != nil {
+		return x.QuestionOrder
+	}
+	return 0
+}
+
+func (x *VerifySecurityAnswerByUsernameRequest) GetAnswer() string {
+	if x != nil {
+		return x.Answer
+	}
+	return ""
+}
+
+// VerifySecurityAnswerByUsernameResponse 按用户名验证密保答案响应
+//
+// 用户不存在与答案错误返回同一种 gRPC 错误（Unauthenticated），
+// 防用户名枚举；成功时 success=true。
+type VerifySecurityAnswerByUsernameResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifySecurityAnswerByUsernameResponse) Reset() {
+	*x = VerifySecurityAnswerByUsernameResponse{}
+	mi := &file_user_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifySecurityAnswerByUsernameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifySecurityAnswerByUsernameResponse) ProtoMessage() {}
+
+func (x *VerifySecurityAnswerByUsernameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifySecurityAnswerByUsernameResponse.ProtoReflect.Descriptor instead.
+func (*VerifySecurityAnswerByUsernameResponse) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *VerifySecurityAnswerByUsernameResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 // UserInfo 用户信息视图
 //
 // 字段命名遵循 emotion_query.proto 已确立的 snake_case
@@ -780,7 +889,7 @@ type UserInfo struct {
 
 func (x *UserInfo) Reset() {
 	*x = UserInfo{}
-	mi := &file_user_proto_msgTypes[14]
+	mi := &file_user_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -792,7 +901,7 @@ func (x *UserInfo) String() string {
 func (*UserInfo) ProtoMessage() {}
 
 func (x *UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_user_proto_msgTypes[14]
+	mi := &file_user_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -805,7 +914,7 @@ func (x *UserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
 func (*UserInfo) Descriptor() ([]byte, []int) {
-	return file_user_proto_rawDescGZIP(), []int{14}
+	return file_user_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UserInfo) GetId() int64 {
@@ -906,6 +1015,12 @@ const file_user_proto_rawDesc = "" +
 	"\x0equestion_order\x18\x02 \x01(\x05R\rquestionOrder\x12\x16\n" +
 	"\x06answer\x18\x03 \x01(\tR\x06answer\"8\n" +
 	"\x1cVerifySecurityAnswerResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x82\x01\n" +
+	"%VerifySecurityAnswerByUsernameRequest\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\x12%\n" +
+	"\x0equestion_order\x18\x02 \x01(\x05R\rquestionOrder\x12\x16\n" +
+	"\x06answer\x18\x03 \x01(\tR\x06answer\"B\n" +
+	"&VerifySecurityAnswerByUsernameResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xd3\x01\n" +
 	"\bUserInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
@@ -917,7 +1032,7 @@ const file_user_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\x03R\tupdatedAtJ\x04\b\x06\x10\aJ\x04\b\a\x10\b2\xab\x05\n" +
+	"updated_at\x18\t \x01(\x03R\tupdatedAtJ\x04\b\x06\x10\aJ\x04\b\a\x10\b2\xbf\x06\n" +
 	"\vUserService\x12A\n" +
 	"\x05GetMe\x12\x1d.emotion_user.v1.GetMeRequest\x1a\x19.emotion_user.v1.UserInfo\x12Q\n" +
 	"\rUpdateProfile\x12%.emotion_user.v1.UpdateProfileRequest\x1a\x19.emotion_user.v1.UserInfo\x12M\n" +
@@ -926,7 +1041,8 @@ const file_user_proto_rawDesc = "" +
 	"\bRegister\x12 .emotion_user.v1.RegisterRequest\x1a!.emotion_user.v1.RegisterResponse\x12^\n" +
 	"\rResetPassword\x12%.emotion_user.v1.ResetPasswordRequest\x1a&.emotion_user.v1.ResetPasswordResponse\x12I\n" +
 	"\x06Logout\x12\x1e.emotion_user.v1.LogoutRequest\x1a\x1f.emotion_user.v1.LogoutResponse\x12s\n" +
-	"\x14VerifySecurityAnswer\x12,.emotion_user.v1.VerifySecurityAnswerRequest\x1a-.emotion_user.v1.VerifySecurityAnswerResponseB0Z.github.com/emotion-echo/shared/pkg/emotionuserb\x06proto3"
+	"\x14VerifySecurityAnswer\x12,.emotion_user.v1.VerifySecurityAnswerRequest\x1a-.emotion_user.v1.VerifySecurityAnswerResponse\x12\x91\x01\n" +
+	"\x1eVerifySecurityAnswerByUsername\x126.emotion_user.v1.VerifySecurityAnswerByUsernameRequest\x1a7.emotion_user.v1.VerifySecurityAnswerByUsernameResponseB0Z.github.com/emotion-echo/shared/pkg/emotionuserb\x06proto3"
 
 var (
 	file_user_proto_rawDescOnce sync.Once
@@ -940,29 +1056,31 @@ func file_user_proto_rawDescGZIP() []byte {
 	return file_user_proto_rawDescData
 }
 
-var file_user_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_user_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_user_proto_goTypes = []any{
-	(*GetMeRequest)(nil),                 // 0: emotion_user.v1.GetMeRequest
-	(*UpdateProfileRequest)(nil),         // 1: emotion_user.v1.UpdateProfileRequest
-	(*GetUserByIdRequest)(nil),           // 2: emotion_user.v1.GetUserByIdRequest
-	(*LoginRequest)(nil),                 // 3: emotion_user.v1.LoginRequest
-	(*LoginResponse)(nil),                // 4: emotion_user.v1.LoginResponse
-	(*SecurityQuestion)(nil),             // 5: emotion_user.v1.SecurityQuestion
-	(*RegisterRequest)(nil),              // 6: emotion_user.v1.RegisterRequest
-	(*RegisterResponse)(nil),             // 7: emotion_user.v1.RegisterResponse
-	(*ResetPasswordRequest)(nil),         // 8: emotion_user.v1.ResetPasswordRequest
-	(*ResetPasswordResponse)(nil),        // 9: emotion_user.v1.ResetPasswordResponse
-	(*LogoutRequest)(nil),                // 10: emotion_user.v1.LogoutRequest
-	(*LogoutResponse)(nil),               // 11: emotion_user.v1.LogoutResponse
-	(*VerifySecurityAnswerRequest)(nil),  // 12: emotion_user.v1.VerifySecurityAnswerRequest
-	(*VerifySecurityAnswerResponse)(nil), // 13: emotion_user.v1.VerifySecurityAnswerResponse
-	(*UserInfo)(nil),                     // 14: emotion_user.v1.UserInfo
+	(*GetMeRequest)(nil),                           // 0: emotion_user.v1.GetMeRequest
+	(*UpdateProfileRequest)(nil),                   // 1: emotion_user.v1.UpdateProfileRequest
+	(*GetUserByIdRequest)(nil),                     // 2: emotion_user.v1.GetUserByIdRequest
+	(*LoginRequest)(nil),                           // 3: emotion_user.v1.LoginRequest
+	(*LoginResponse)(nil),                          // 4: emotion_user.v1.LoginResponse
+	(*SecurityQuestion)(nil),                       // 5: emotion_user.v1.SecurityQuestion
+	(*RegisterRequest)(nil),                        // 6: emotion_user.v1.RegisterRequest
+	(*RegisterResponse)(nil),                       // 7: emotion_user.v1.RegisterResponse
+	(*ResetPasswordRequest)(nil),                   // 8: emotion_user.v1.ResetPasswordRequest
+	(*ResetPasswordResponse)(nil),                  // 9: emotion_user.v1.ResetPasswordResponse
+	(*LogoutRequest)(nil),                          // 10: emotion_user.v1.LogoutRequest
+	(*LogoutResponse)(nil),                         // 11: emotion_user.v1.LogoutResponse
+	(*VerifySecurityAnswerRequest)(nil),            // 12: emotion_user.v1.VerifySecurityAnswerRequest
+	(*VerifySecurityAnswerResponse)(nil),           // 13: emotion_user.v1.VerifySecurityAnswerResponse
+	(*VerifySecurityAnswerByUsernameRequest)(nil),  // 14: emotion_user.v1.VerifySecurityAnswerByUsernameRequest
+	(*VerifySecurityAnswerByUsernameResponse)(nil), // 15: emotion_user.v1.VerifySecurityAnswerByUsernameResponse
+	(*UserInfo)(nil),                               // 16: emotion_user.v1.UserInfo
 }
 var file_user_proto_depIdxs = []int32{
-	14, // 0: emotion_user.v1.LoginResponse.user:type_name -> emotion_user.v1.UserInfo
+	16, // 0: emotion_user.v1.LoginResponse.user:type_name -> emotion_user.v1.UserInfo
 	5,  // 1: emotion_user.v1.RegisterRequest.security_questions:type_name -> emotion_user.v1.SecurityQuestion
-	14, // 2: emotion_user.v1.RegisterResponse.user:type_name -> emotion_user.v1.UserInfo
-	14, // 3: emotion_user.v1.ResetPasswordResponse.user:type_name -> emotion_user.v1.UserInfo
+	16, // 2: emotion_user.v1.RegisterResponse.user:type_name -> emotion_user.v1.UserInfo
+	16, // 3: emotion_user.v1.ResetPasswordResponse.user:type_name -> emotion_user.v1.UserInfo
 	0,  // 4: emotion_user.v1.UserService.GetMe:input_type -> emotion_user.v1.GetMeRequest
 	1,  // 5: emotion_user.v1.UserService.UpdateProfile:input_type -> emotion_user.v1.UpdateProfileRequest
 	2,  // 6: emotion_user.v1.UserService.GetUserById:input_type -> emotion_user.v1.GetUserByIdRequest
@@ -971,16 +1089,18 @@ var file_user_proto_depIdxs = []int32{
 	8,  // 9: emotion_user.v1.UserService.ResetPassword:input_type -> emotion_user.v1.ResetPasswordRequest
 	10, // 10: emotion_user.v1.UserService.Logout:input_type -> emotion_user.v1.LogoutRequest
 	12, // 11: emotion_user.v1.UserService.VerifySecurityAnswer:input_type -> emotion_user.v1.VerifySecurityAnswerRequest
-	14, // 12: emotion_user.v1.UserService.GetMe:output_type -> emotion_user.v1.UserInfo
-	14, // 13: emotion_user.v1.UserService.UpdateProfile:output_type -> emotion_user.v1.UserInfo
-	14, // 14: emotion_user.v1.UserService.GetUserById:output_type -> emotion_user.v1.UserInfo
-	4,  // 15: emotion_user.v1.UserService.Login:output_type -> emotion_user.v1.LoginResponse
-	7,  // 16: emotion_user.v1.UserService.Register:output_type -> emotion_user.v1.RegisterResponse
-	9,  // 17: emotion_user.v1.UserService.ResetPassword:output_type -> emotion_user.v1.ResetPasswordResponse
-	11, // 18: emotion_user.v1.UserService.Logout:output_type -> emotion_user.v1.LogoutResponse
-	13, // 19: emotion_user.v1.UserService.VerifySecurityAnswer:output_type -> emotion_user.v1.VerifySecurityAnswerResponse
-	12, // [12:20] is the sub-list for method output_type
-	4,  // [4:12] is the sub-list for method input_type
+	14, // 12: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:input_type -> emotion_user.v1.VerifySecurityAnswerByUsernameRequest
+	16, // 13: emotion_user.v1.UserService.GetMe:output_type -> emotion_user.v1.UserInfo
+	16, // 14: emotion_user.v1.UserService.UpdateProfile:output_type -> emotion_user.v1.UserInfo
+	16, // 15: emotion_user.v1.UserService.GetUserById:output_type -> emotion_user.v1.UserInfo
+	4,  // 16: emotion_user.v1.UserService.Login:output_type -> emotion_user.v1.LoginResponse
+	7,  // 17: emotion_user.v1.UserService.Register:output_type -> emotion_user.v1.RegisterResponse
+	9,  // 18: emotion_user.v1.UserService.ResetPassword:output_type -> emotion_user.v1.ResetPasswordResponse
+	11, // 19: emotion_user.v1.UserService.Logout:output_type -> emotion_user.v1.LogoutResponse
+	13, // 20: emotion_user.v1.UserService.VerifySecurityAnswer:output_type -> emotion_user.v1.VerifySecurityAnswerResponse
+	15, // 21: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:output_type -> emotion_user.v1.VerifySecurityAnswerByUsernameResponse
+	13, // [13:22] is the sub-list for method output_type
+	4,  // [4:13] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
 	4,  // [4:4] is the sub-list for extension extendee
 	0,  // [0:4] is the sub-list for field type_name
@@ -999,7 +1119,7 @@ func file_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_proto_rawDesc), len(file_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

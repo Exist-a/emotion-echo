@@ -77,6 +77,18 @@ service UserService {
   //
   // 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
   rpc VerifySecurityAnswer (VerifySecurityAnswerRequest) returns (VerifySecurityAnswerResponse);
+
+  // VerifySecurityAnswerByUsername 按用户名验证密保答案（R-01 #2 真修通）
+  //
+  // 为什么需要：找回密码发起时用户尚未登录，前端只有用户名、没有 user_id，
+  // 故走不了上面的 VerifySecurityAnswer。HTTP transport 侧的
+  // POST /api/v1/users/verify-security-answer 早已支持按用户名校验，
+  // 但 gRPC 侧此前是"未实现"桩，而 BFF 默认走 gRPC
+  // ⇒ 找回密码在 dev/默认配置下恒 401（端点可达但功能不通）。
+  // 本 RPC 让两种 transport 行为对齐。
+  //
+  // 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
+  rpc VerifySecurityAnswerByUsername (VerifySecurityAnswerByUsernameRequest) returns (VerifySecurityAnswerByUsernameResponse);
 }
 
 // ============== Requests / Responses ==============
@@ -168,6 +180,21 @@ message VerifySecurityAnswerRequest {
 
 // VerifySecurityAnswerResponse 验证密保答案响应
 message VerifySecurityAnswerResponse {
+  bool success = 1;
+}
+
+// VerifySecurityAnswerByUsernameRequest 按用户名验证密保答案请求（R-01 #2）
+message VerifySecurityAnswerByUsernameRequest {
+  string username = 1;
+  int32 question_order = 2;  // 1 或 2
+  string answer = 3;
+}
+
+// VerifySecurityAnswerByUsernameResponse 按用户名验证密保答案响应
+//
+// 用户不存在与答案错误返回同一种 gRPC 错误（Unauthenticated），
+// 防用户名枚举；成功时 success=true。
+message VerifySecurityAnswerByUsernameResponse {
   bool success = 1;
 }
 
