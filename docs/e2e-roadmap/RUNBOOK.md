@@ -430,7 +430,7 @@ python scripts/e2e_stage_audit.py --selftest
 - **不得误报**：对最接近合规的 E2E-02 不产生 FAIL；对 19 个未开工阶段（无详档，符合 just-in-time 约定）不产生 FAIL
 - **状态判定不得靠全文关键词**：状态单元格描述瑕疵时会**提到** `BLOCKED` 等词，故按优先级 + 限定措辞判定
 
-**覆盖现状（2026-09-18 R-03 收尾后）**：17 条里 **13 条已机械化**——①~⑦、⑨~⑫ 由 `scripts/e2e_stage_audit.py`（A1~A11）覆盖；⑧ 由 `check_soft_asserts.sh`；⑬ 由 `check_tdd_gate.sh`；⑭ 由 `check_orphan_outputs.sh`；⑮ 由 `check_adr_gate.sh`；⑰ 由 `check_residual.sh`。⑯ 已实现但需管理员 token，列为收口时的第二方核对命令。
+**覆盖现状（2026-09-18 R-03 收尾后）**：17 条里 **13 条已机械化**——①~⑦、⑨~⑫ 由 `scripts/e2e_stage_audit.py`（A1~A11）覆盖；⑧ 由 `check_soft_asserts.sh`；⑬ 由 `check_tdd_gate.sh`；⑭ 由 `check_orphan_outputs.sh`；⑮ 由 `check_adr_gate.sh`；⑰ 由 `check_residual.sh`。⑯ 已实现（`scripts/check_required_checks.py`）但**无法在 CI 内执行**——GitHub 未提供"读分支保护"的可授予权限给 `GITHUB_TOKEN`（实测 403），故刻意不放进 CI（只会失败或永远 skip 的 job 是噪声，会训练人忽略 CI）；改为**收口时的人工命令**：`GH_TOKEN=<admin PAT> python scripts/check_required_checks.py`。
 
 **在自动化完全接管前**：人工核对仍按 §13.3 清单执行；**执行者不得自行宣布 `done`**。
 
