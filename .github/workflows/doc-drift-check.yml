@@ -126,6 +126,18 @@ jobs:
       - name: Self-test the scanner (负向用例)
         run: bash scripts/test_check_soft_asserts.sh
 
+  apisix-seed-structure:
+    name: APISIX seed 结构断言
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # deploy/apisix/seed_test.js 是可运行的离线结构断言（node，无依赖），
+      # 但此前**从未接入 CI** —— 2026-09-18 改 seed.sh 的默认值时把它弄红了，
+      # 却因为没人跑而无人发现（测试不接 CI 等于没有测试）。
+      - name: seed.sh structural assertions
+        run: node deploy/apisix/seed_test.js
+
   secrets-scan:
     name: 明文密钥扫描
     runs-on: ubuntu-latest
