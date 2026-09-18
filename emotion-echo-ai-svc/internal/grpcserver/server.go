@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 
 	"emotion-echo-ai-svc/internal/aiclient"
 	"emotion-echo-ai-svc/internal/logging"
@@ -26,9 +27,9 @@ import (
 	"emotion-echo-ai-svc/internal/repository"
 	"emotion-echo-ai-svc/internal/svc"
 
-	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	grpcerr "github.com/emotion-echo/shared/pkg/grpcerr"
+	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/emotion-echo/shared/pkg/skywalking"
 
 	"google.golang.org/grpc"
@@ -39,7 +40,7 @@ import (
 )
 
 // healthServiceFullName 是 grpc.health.v1.Health 服务的 FullMethod 前缀
-//（gRPC FullMethod 形如 "/grpc.health.v1.Health/Check"，因此前缀带前导 /）
+// （gRPC FullMethod 形如 "/grpc.health.v1.Health/Check"，因此前缀带前导 /）
 const healthServiceFullName = "/grpc.health.v1.Health"
 
 // newServiceAwareUserIDInterceptor 包一层：根据 FullMethod service name 决定是否走 user id 校验
@@ -59,6 +60,10 @@ func newServiceAwareUserIDInterceptor(skipServiceFullName string) grpc.UnaryServ
 
 // Server ai-svc 的 gRPC server
 type Server struct {
+	// mu 保护 listener：Start() 在后台 goroutine 里写入，Addr() 会被
+	// 调用方（含测试的轮询）并发读取 —— 无同步即为真实数据竞争
+	// （CI/dev 用 -race 实测到 WARNING: DATA RACE）。
+	mu         sync.RWMutex
 	grpcServer *grpc.Server
 	listener   net.Listener
 	port       int
@@ -90,9 +95,9 @@ func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRe
 
 	// 注册 service
 	emotionquery.RegisterEmotionQueryServiceServer(gs, &emotionQueryServer{
-		repo:              repo,
-		fusedEmotionRepo:  fusedEmotionRepo,
-		svcCtx:            svcCtx,
+		repo:             repo,
+		fusedEmotionRepo: fusedEmotionRepo,
+		svcCtx:           svcCtx,
 	})
 
 	// 注册 health check（不带 user id 要求）
@@ -113,7 +118,9 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen :%d: %w", s.port, err)
 	}
+	s.mu.Lock()
 	s.listener = lis
+	s.mu.Unlock()
 	logging.Printf("[grpc] ai-svc gRPC server listening on :%d", s.port)
 	logging.Printf("[grpc] services: EmotionQueryService (user id required)")
 
@@ -128,6 +135,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Addr 返回监听地址（用于 e2e 测试）
 func (s *Server) Addr() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.listener == nil {
 		return fmt.Sprintf(":%d", s.port)
 	}
@@ -280,8 +289,8 @@ func (s *emotionQueryServer) UpsertNeutralEmotion(ctx context.Context, req *emot
 //   - 复用 logic.NewMultiModalAnalyzeLogic（与 HTTP handler 同源，零行为变化）
 //   - proto file_bytes (bytes) → logic.Analyze(kind, fileBytes, filename, text)
 //   - 错误映射：
-//     - aiclient.ErrNotConfigured / XTTSUnavailable → codes.Unavailable
-//     - 其他 → codes.Internal
+//   - aiclient.ErrNotConfigured / XTTSUnavailable → codes.Unavailable
+//   - 其他 → codes.Internal
 //
 // 注意：本 RPC 当前只覆盖 persist=false 路径（与 chat 路径一致；persist=true
 // 走 PersistMultiModalAnalyzeLogic，需要 svcCtx.Repo，本次 sprint 不扩）。

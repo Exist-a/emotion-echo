@@ -23,6 +23,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 
 	"emotion-echo-chat-svc/internal/svc"
 
@@ -38,7 +39,7 @@ import (
 const healthServiceFullName = "/grpc.health.v1.Health"
 
 // newServiceAwareUserIDInterceptor 跳过 health probe 的 user id 检查
-//（k8s probe 不带 x-user-id metadata）
+// （k8s probe 不带 x-user-id metadata）
 func newServiceAwareUserIDInterceptor(skipServiceFullName string) grpc.UnaryServerInterceptor {
 	inner := grpcinterceptor.NewServerUserIDInterceptor()
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -53,6 +54,10 @@ func newServiceAwareUserIDInterceptor(skipServiceFullName string) grpc.UnaryServ
 
 // Server chat-svc 的 gRPC server
 type Server struct {
+	// mu 保护 listener：Start() 在后台 goroutine 里写入，Addr() 会被
+	// 调用方（含测试的轮询）并发读取 —— 无同步即为真实数据竞争
+	// （CI/dev 用 -race 实测到 WARNING: DATA RACE）。
+	mu         sync.RWMutex
 	grpcServer *grpc.Server
 	listener   net.Listener
 	port       int
@@ -95,7 +100,9 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen :%d: %w", s.port, err)
 	}
+	s.mu.Lock()
 	s.listener = lis
+	s.mu.Unlock()
 	log.Printf("[grpc] chat-svc gRPC server listening on :%d", s.port)
 	log.Printf("[grpc] services: ChatService (user id required)")
 
@@ -110,6 +117,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Addr 返回监听地址
 func (s *Server) Addr() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.listener == nil {
 		return fmt.Sprintf(":%d", s.port)
 	}

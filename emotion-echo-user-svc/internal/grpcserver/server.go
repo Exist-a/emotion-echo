@@ -21,6 +21,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 
 	"emotion-echo-user-svc/internal/svc"
 
@@ -64,6 +65,10 @@ func newServiceAwareUserIDInterceptor(skipServiceFullName string, anonMethods ..
 
 // Server user-svc 的 gRPC server
 type Server struct {
+	// mu 保护 listener：Start() 在后台 goroutine 里写入，Addr() 会被
+	// 调用方（含测试的轮询）并发读取 —— 无同步即为真实数据竞争
+	// （CI/dev 用 -race 实测到 WARNING: DATA RACE）。
+	mu         sync.RWMutex
 	grpcServer *grpc.Server
 	listener   net.Listener
 	port       int
@@ -118,7 +123,9 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen :%d: %w", s.port, err)
 	}
+	s.mu.Lock()
 	s.listener = lis
+	s.mu.Unlock()
 	log.Printf("[grpc] user-svc gRPC server listening on :%d", s.port)
 	log.Printf("[grpc] services: UserService (user id required)")
 
@@ -133,6 +140,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Addr 返回监听地址
 func (s *Server) Addr() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.listener == nil {
 		return fmt.Sprintf(":%d", s.port)
 	}
