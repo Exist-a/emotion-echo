@@ -28,6 +28,10 @@ export default defineConfig({
     include: ['app/**/*.{test,spec}.ts'],
     setupFiles: [path.join(ROOT, 'tests-setup.ts')],
     globals: true,
-    css: false
+    css: false,
+    // R-01: 增加 testTimeout 解决并发模式下 happy-dom 初始化慢导致的超时
+    // 单独运行全绿，并发时 happy-dom 环境初始化竞争导致 5s 超时
+    testTimeout: 15000,
+    hookTimeout: 15000
   }
 })
