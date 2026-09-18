@@ -26,6 +26,8 @@ export const API_ROUTES = {
   authLogin: { method: 'POST', path: '/auth/login' } as ApiRoute,
   authRegister: { method: 'POST', path: '/auth/register' } as ApiRoute,
   authLogout: { method: 'POST', path: '/auth/logout' } as ApiRoute,
+  // [红线实验] 故意造一条 BFF 不存在的路由，用于实测 required_status_checks 能否拦住
+  gateRedlineProbe: { method: 'POST', path: '/gate-redline-probe' } as ApiRoute,
   authRefresh: { method: 'POST', path: '/auth/refresh' } as ApiRoute,
   authVerificationCode: { method: 'POST', path: '/auth/verification-code' } as ApiRoute,
   // PR-4 落地：authResetPassword + BFF auth_handler case "reset-password" + user-svc /users/reset-password
