@@ -60,10 +60,15 @@ const cfg = fs.readFileSync(CONFIG_YAML, 'utf8');
 const checks = [
   ['seed.sh executable', isExecutable(SEED_SH)],
   ['set -euo pipefail', src.includes('set -euo pipefail')],
-  ['ADMIN_KEY default matches seed.sh (Stage 39 后的实际值)',
-    src.includes('APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj')],
-  ['JWT secret from BFF_JWT_SECRET (Stage 32 过渡)',
-    src.includes('BFF_JWT_SECRET:-dev-bff-secret')],
+  // E2E-F-69（2026-09-18）：原断言把**真实密钥**写进了测试文件 ⇒ 等于换个地方
+  // 继续留在公开仓库里（测试文件也是仓库的一部分）。改为断言"安全性质"：
+  // 默认值必须是非密钥占位符，且 seed.sh 不得内联任何长十六进制字面量。
+  ['ADMIN_KEY 默认值为非密钥占位符（E2E-F-69）',
+    /APISIX_ADMIN_KEY:-[a-z0-9-]*local-only/.test(src)],
+  ['JWT_SECRET 默认值为非密钥占位符（E2E-F-69）',
+    /BFF_JWT_SECRET:-[a-z0-9-]*local-only/.test(src)],
+  ['seed.sh 不得内联真实密钥（E2E-F-69）',
+    !/(APISIX_ADMIN_KEY|BFF_JWT_SECRET)[:=]\s*"?[0-9a-f]{32,}/i.test(src)],
   ['catch-all route /api/v1/* → web-bff (upstream 6)',
     src.includes('put_route 100 "/api/v1/*" 6')],
   ['upstream id 1 user-svc (Nacos discovery, Stage 39 后)',
