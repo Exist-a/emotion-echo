@@ -25,7 +25,7 @@ related-findings: [E2E-F-14, E2E-F-20]
 | 1 | ESLint | ❌ 无配置；`devDependencies` **无 eslint**；`package.json` **无 `lint` script**（AGENTS.md §2.2 的"合并前 `npm run lint`"是空条款） | 引入 + 配置 + `lint` script + 接入 E2E-03 CI |
 | 2 | Prettier | ❌ 无配置、无 `.editorconfig`、无 stylelint | 引入 + 格式化基线（**独立 commit**，避免与逻辑改动混在一起） |
 | 3 | typecheck | ⚠️ 脚本存在（`nuxt typecheck` → vue-tsc），但仓库有 **96 处历史错误基线**（见 `docs/stages/stage-85-*.md:51,79`） | 清零；若无法一次清零，落"仅新增文件零错"基线并写入 CI |
-| 4 | 构建产物 smoke | ❌ 无。项目是 **SPA 模式**（`nuxt.config.ts` `ssr: false`） | `nuxt build` 后跑产物 smoke（关键静态资源存在、index.html 可加载） |
+| 4 | 构建产物 smoke | ❌ 无。项目是 **SSR 模式**（`nuxt.config.ts` `ssr: true`） | `nuxt build` 后跑产物 smoke（关键静态资源存在、index.html 可加载） |
 | 5 | Playwright project | ⚠️ 仅 `chromium-headless-shell` 一个 project | 加 `mobile`（`devices['Pixel 5']`）+ `firefox`（可选回归，默认仍走 chromium） |
 | 6 | browserslist | ❌ 无支持范围声明（仅 package-lock 里的 transitive） | 补声明（1 行决策） |
 | 7 | a11y 基线 | ❌ 零工具链；仅约 8 个文件有零散手工 `aria-label` | 引入 `@axe-core/playwright`，对 6 个主页面跑基线，**只修 critical/serious** |
@@ -35,7 +35,7 @@ related-findings: [E2E-F-14, E2E-F-20]
 - 不重写业务逻辑（格式化基线除外，且独立 commit）
 - 不追 100% a11y 合规（只做基线 + critical/serious）
 - 不做跨浏览器全矩阵（firefox 作为可选回归即可）
-- 不引入 SSR（项目是 SPA 模式的有意决策，见 B-A 系列修复史）
+- ~~不引入 SSR~~（项目已切换到 SSR 模式，见 commit 6c91525）
 
 ## 3. 前置条件
 

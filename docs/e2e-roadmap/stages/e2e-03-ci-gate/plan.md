@@ -70,7 +70,7 @@ related-findings: [E2E-F-20, E2E-F-30, E2E-F-31, E2E-F-32, E2E-F-33, E2E-F-34, E
 | B1 | **lint 步骤是装饰** | 该步骤自带守卫 `grep -q '"lint"' package.json`，而 `package.json` **无 lint script** → 永远走 `echo "lint script not configured — skipping"` | 由 **E2E-04** 引入 ESLint 后删除守卫，改为硬执行 `pnpm lint`（失败即 fail） |
 | B2 | **typecheck 不跑** | `scripts.typecheck` 存在（`nuxt typecheck`），但 CI 无该步骤；仓库有 96 处历史错误 | 由 **E2E-04** 清错后接入 `pnpm typecheck` |
 | B3 | **无 Playwright E2E** | 整条 E2E 路线图的回归钉都写在 `e2e/*.spec.ts`，CI 不跑 → **钉了也不生效** | 增 E2E job：起 dev 依赖（compose）或用 `playwright.config.ts` 的 webServer，跑 `pnpm playwright test`；上传 `playwright-report/` 为 artifact。⚠️ 依赖后端，成本高——可先只跑不依赖后端的 spec |
-| B4 | **无构建验证** | 项目是 SPA（`ssr: false`），`nuxt build` 从未在 CI 验证 | 增 `pnpm build` 步骤（E2E-04 的产物 smoke 可挂此处） |
+| B4 | **无构建验证** | 项目是 SSR（`ssr: true`），`nuxt build` 从未在 CI 验证 | 增 `pnpm build` 步骤（E2E-04 的产物 smoke 可挂此处） |
 | B5 | 版本声明缺失 | CI 写死 `node-version: '20'` / `pnpm version: 9`，而 `package.json` **无 `engines`、无 `packageManager`** | 补 `packageManager: "pnpm@9.x"` 与 `engines.node`，CI 改用 `node-version-file`/`corepack` 自动对齐 |
 | B6 | 无 `timeout-minutes` / `concurrency` / `permissions` | 同 A7-A9 | 同 A7-A9 |
 

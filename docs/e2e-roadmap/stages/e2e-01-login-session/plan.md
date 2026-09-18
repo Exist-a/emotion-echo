@@ -26,7 +26,7 @@ related-findings: []
 - remember-me 行为（token **不得**落 localStorage，P0-R2-1 约定）
 - 未登录访问受保护页 → 跳 `/login`；已登录访问 `/login` → 跳回
 - JWT 过期后的重定向行为
-- SPA 模式下的会话恢复时序（项目 `ssr: false`，`auth.global.ts` 在客户端执行）
+- SSR 模式下的会话恢复时序（项目 `ssr: true`，`auth.global.ts` 在服务端和客户端都执行）
 
 涉及文件：
 
