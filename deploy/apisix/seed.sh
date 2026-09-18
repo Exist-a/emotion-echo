@@ -544,6 +544,14 @@ put_auth_route 113 "/api/v1/auth/refresh"
 put_auth_route 114 "/api/v1/auth/logout"
 # Sprint 1 PR-4c-4: reset-password 同样无登录态可调用，纳入白名单（fix bug #2）
 put_auth_route 115 "/api/v1/auth/reset-password"
+# R-01 #2 修复（E2E-F-60）：找回密码第一步「验证密保答案」也在未登录态调用。
+# BFF 侧 authPathBypass 放行整个 /api/v1/auth/ 前缀（main.go:257），但 APISIX 只放行
+# 白名单，其余 /api/v1/* 走 jwt-auth ⇒ 缺此条会让该端点恒 401（D-01=C 找回密码不可用）。
+# 注意：这里用 **117** 而非 116 —— 116 是历史误建的 /api/v1/reports/daily 漂移路由，
+# 必须在 Step 4.5 继续删除以修复 Bug A（前端 4 个 dashboard 被 401 踢回登录）；
+# 若占用 116 就得撤掉该清理，等于放走旧污染。二者不可复用同一 id。
+# 契约守护：scripts/check_routes_alignment.sh 契约 3 会断言此处覆盖 BFF 全部 auth action。
+put_auth_route 117 "/api/v1/auth/verify-security-answer"
 
 # 健康探针（直接打到下游 svc，绕开 BFF 聚合）
 put_route_health 200 "/user-health"          1
@@ -570,6 +578,8 @@ fi
 # header 配置），导致前端 4 个 dashboard 全 401 → 被踢回 /login（Bug A）。
 # 教训：任何路由都必须经 seed.sh 幂等 PUT，禁止手工 admin API 建路由（会产生漂移）。
 # 这里显式删除已知漂移 id；不存在的 id DELETE 返 404 被 -f 静默跳过。
+# 注意：id 116 **不可**被新路由复用（R-01 #2 的新白名单路由改用 117），
+# 否则本段会把刚 PUT 的路由删掉，且旧漂移路由会留在脏环境里继续制造 401。
 for drift_id in 116; do
   if curl -sf -X DELETE -H "X-API-KEY: $ADMIN_KEY" \
     "$ADMIN_URL/apisix/admin/routes/$drift_id" >/dev/null 2>&1; then
@@ -577,4 +587,10 @@ for drift_id in 116; do
   fi
 done
 
-log "seed complete: 6 upstreams + 12 routes (1 catch-all + 5 health + 5 auth-whitelist + 1 self-health)"
+# E2E-F-67 修复：计数改自维护（原先写死"12 routes / 5 auth-whitelist"，
+# 与实际不符且每次加路由都要手改，属"数字漂移"高发点）。改为数本文件里的
+# put_auth_route / put_route_health 调用行，路由增减时自动跟上。
+LOCAL_AUTH_COUNT=$(grep -c '^put_auth_route ' "$0" 2>/dev/null || echo 0)
+LOCAL_HEALTH_COUNT=$(grep -c '^put_route_health ' "$0" 2>/dev/null || echo 0)
+LOCAL_TOTAL_COUNT=$((1 + LOCAL_HEALTH_COUNT + LOCAL_AUTH_COUNT + 1))
+log "seed complete: 6 upstreams + ${LOCAL_TOTAL_COUNT} routes (1 catch-all + ${LOCAL_HEALTH_COUNT} health + ${LOCAL_AUTH_COUNT} auth-whitelist + 1 self-health)"
