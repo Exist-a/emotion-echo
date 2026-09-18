@@ -21,7 +21,7 @@
 set -euo pipefail
 
 ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
-ADMIN_KEY="${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
+ADMIN_KEY="${APISIX_ADMIN_KEY:-dev-admin-key-local-only}"
 NACOS_NAMESPACE="${NACOS_NAMESPACE:-emotion-echo-dev}"
 NACOS_GROUP="${NACOS_GROUP:-DEFAULT_GROUP}"
 

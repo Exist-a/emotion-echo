@@ -6,10 +6,20 @@ on:
   pull_request:
     branches: [main]
 
+# E2E-F-56：本 workflow 原先缺 timeout-minutes/concurrency/permissions
+#（另 3 个 workflow 早已具备）。补最小权限，避免默认 token 权限过宽。
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   routes-alignment:
     name: 路径对齐（前端 ⊆ BFF）
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Check routes alignment
@@ -18,6 +28,7 @@ jobs:
   view-consistency:
     name: 视图定义一致性
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Check view consistency
@@ -26,6 +37,7 @@ jobs:
   env-vars-lint:
     name: 环境变量 lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Lint env vars
@@ -34,6 +46,7 @@ jobs:
   yaml-lint:
     name: YAML 字面值收紧
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: YAML lint
@@ -42,6 +55,7 @@ jobs:
   git-layout:
     name: 仓库布局自检
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Check git layout
@@ -50,6 +64,7 @@ jobs:
   docker-digests:
     name: Dockerfile digest pin
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Check Dockerfile digests
@@ -58,6 +73,7 @@ jobs:
   docs-update:
     name: 文档更新验证
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Test docs update
@@ -66,6 +82,7 @@ jobs:
   bff-jwt-secret:
     name: BFF JWT secret 一致性
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Check BFF JWT secret
@@ -74,6 +91,7 @@ jobs:
   user-oauth-zero-ref:
     name: user_oauth 零引用
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Check user_oauth zero ref
@@ -82,6 +100,7 @@ jobs:
   migrations-contract:
     name: Migration 契约
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Test migrations contract
@@ -90,6 +109,7 @@ jobs:
   migrations-no-service-order:
     name: Migration 服务顺序独立性
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Test migrations no service order
@@ -98,9 +118,21 @@ jobs:
   soft-assert-scan:
     name: soft-assert 扫描（被注释的断言）
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Scan for soft asserts
         run: bash scripts/check_soft_asserts.sh
       - name: Self-test the scanner (负向用例)
         run: bash scripts/test_check_soft_asserts.sh
+
+  secrets-scan:
+    name: 明文密钥扫描
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for plaintext secrets
+        run: bash scripts/check_secrets.sh
+      - name: Self-test the scanner (负向用例)
+        run: bash scripts/test_check_secrets.sh

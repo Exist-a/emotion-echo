@@ -646,7 +646,10 @@ services:
       # os.Getenv("BFF_JWT_SECRET")), 空字符串会 log.Fatal fail-fast。
       # dev 默认与 apisix-seed 一致 (dev-bff-secret) 让 dev 模式能跑; prod 由
       # .env.local 注入真随机 secret (与 APISIX jwt-auth consumer 一致)。
-      BFF_JWT_SECRET: ${BFF_JWT_SECRET:-dev-bff-secret}
+      # E2E-F-69：不再内联可用默认值（仓库为 public）。真值来自 deploy/.env.local。
+      # 注意 BFF 侧代码本身已是 fail-closed（无默认密钥），此处占位符只影响
+      # dev 组合：缺失时 APISIX consumer 与 BFF 签名不一致 → 立刻 401，而非静默用弱密钥。
+      BFF_JWT_SECRET: ${BFF_JWT_SECRET:-dev-jwt-secret-local-only}
     # Stage 33 PR-20: BFF 端口保留（dev 调试 / Postman 直连；prod 应仅暴露 APISIX）
     ports:
       - "8894:8894"
@@ -709,8 +712,8 @@ services:
     environment:
       # 容器内走服务名 + 容器端口（宿主机的 19080/9180 映射在这里不适用）
       APISIX_ADMIN_URL: "http://apisix:9180"
-      APISIX_ADMIN_KEY: "${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
-      BFF_JWT_SECRET: "${BFF_JWT_SECRET:-dev-bff-secret}"
+      APISIX_ADMIN_KEY: "${APISIX_ADMIN_KEY:-dev-admin-key-local-only}"
+      BFF_JWT_SECRET: "${BFF_JWT_SECRET:-dev-jwt-secret-local-only}"
       NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
       NACOS_GROUP: "${NACOS_GROUP:-DEFAULT_GROUP}"
       # 浏览器侧来源：容器化前端仍从宿主机 :3000 访问

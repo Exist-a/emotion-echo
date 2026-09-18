@@ -327,6 +327,10 @@ services:
       # Stage 74: 先清残留 worker_events.sock —— docker restart 保留可写层，
       # 旧 socket 导致 openresty bind EADDRINUSE 崩溃循环（stage-74 实测）
       - "rm -f /usr/local/apisix/logs/*.sock; /usr/bin/apisix init 2>&1 || true; /usr/bin/apisix init_etcd 2>&1 || true; exec /usr/local/openresty/bin/openresty -p /usr/local/apisix -g 'daemon off;'"
+    environment:
+      # E2E-F-69：管理员密钥经 env 注入（config.yaml 用 $ENV://APISIX_ADMIN_KEY）。
+      # 默认值是**非密钥占位符**；非本机使用必须以 --env-file 覆盖成真值。
+      APISIX_ADMIN_KEY: "${APISIX_ADMIN_KEY:-dev-admin-key-local-only}"
     volumes:
       - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml
       # PR-OBS-5: APISIX file-logger (PR-OBS-1 89b0117) 落盘 /tmp/apisix-access.log
@@ -341,7 +345,9 @@ services:
       # Stage 36-C1: 把 Admin API 9180 暴露到宿主机，让浏览器可访问内置 Dashboard UI（/ui/）。
       # 详见 docs/stage-32-apisix-reintroduction.md；原 apache/apisix-dashboard:3.18.0-alpine 镜像
       # 不存在（项目 2025-07 停止独立发版），APISIX 3.x 已内置 Dashboard UI 在 :9180/ui/。
-      - "9180:9180"   # Admin API + 内置 Dashboard UI (host 9180 → container 9180)
+      # E2E-F-69：Admin API 绑定回环而非 0.0.0.0 —— admin key 一旦泄露即可
+      # 完全接管网关，故限制为仅本机可达（Dashboard UI 仍可用 http://localhost:9180/ui/）。
+      - "127.0.0.1:9180:9180"   # Admin API + Dashboard UI（仅本机）
     expose:
       - "9091"         # Prometheus exporter
     networks:

@@ -57,8 +57,11 @@ _load_services
 
 # ---- 配置 ----
 ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
-ADMIN_KEY="${APISIX_ADMIN_KEY:-WhZEPlrGviCSXlKFfALZlQWinluoGAbj}"
-JWT_SECRET="${BFF_JWT_SECRET:-dev-bff-secret}"
+# E2E-F-69：不再内联真实密钥。默认值为非密钥占位符，真值来自 deploy/.env.local
+#（compose 的 --env-file 注入）。缺省即不匹配 APISIX 侧 ⇒ 立刻 401，不会静默用错 key。
+ADMIN_KEY="${APISIX_ADMIN_KEY:-dev-admin-key-local-only}"
+# 同上：JWT 签名密钥也不得内联真实值（泄露即可伪造任意用户身份）。
+JWT_SECRET="${BFF_JWT_SECRET:-dev-jwt-secret-local-only}"
 # 前端来源（cors allow_origins）。dev 是 Nuxt dev server；prod 由 env 覆盖。
 # Stage 105: 默认同时含 localhost:3000 与 127.0.0.1:3000 — 部分浏览器（Windows Chrome +
 # 沙箱 IAB）拒绝 localhost，自动跳 chrome-error://，用户改用 127.0.0.1。
