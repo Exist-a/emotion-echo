@@ -5,12 +5,18 @@
 依据：docs/e2e-roadmap/RUNBOOK.md §13「收口审计」+
       docs/e2e-roadmap/anti-patterns.md（14 类已真实发生的失真反例）
 
-MVA 只实现 5 条最关键、最易造假的断言（对应 DOCS/e2e-roadmap/remediation.md §R-00）：
+MVA 实现 11 条断言（对应 docs/e2e-roadmap/remediation.md §R-00 + §R-03 #1）：
   A1  report.md 存在且含必填章节                     (AP-12)
   A2  汇总行非占位符，且计数 == 测试点表行数          (AP-12)
   A3  plan 的测试点编号集合 ⊆ report 的编号集合       (AP-07)
   A4  证据列不含"存在性措辞"（已创建/已新增/...）      (AP-01/02)
   A5  属本阶段且未解决的 E2E-F-xx 存在时，状态不得 done (AP-04)
+  A6  收口自检项无 [x]+"待…"                          (AP-06)
+  A7  [V] 点有截图证据                                (AP-01)
+  A8  账本编号连续                                    (AP-14)
+  A9  plan/roadmap/report 三处 status 一致            (AP-07)
+  A10 相对链接可达                                    (AP-12)
+  A11 四值合法基值（PASS/FAIL/BLOCKED/N/A）           (AP-12)
 
 设计约束（RUNBOOK §13.4）：
   - 必须能复现已知缺口（--selftest 用 E2E-03/04/05 做回归样本）
@@ -341,6 +347,153 @@ def check_a5(stage: str, state_kind: str, ledger: list[dict[str, str]], res: Sta
         )
 
 
+def check_a6(text: str, res: StageResult) -> None:
+    """A6: 收口自检项不能勾选但留"待"字（[x] + 待 = 假完成）"""
+    section = section_lines(text, "收口自检")
+    if not section:
+        return
+    for line in section.splitlines():
+        s = line.strip()
+        if re.match(r"-\s*\[x\]", s) and "待" in s:
+            res.findings.append(
+                Finding("A6", "FAIL", f"收口自检项已勾选但含「待」字：{s[:60]}")
+            )
+
+
+def check_a7(text: str, stage_dir: Path, res: StageResult) -> None:
+    """A7: [V] 视觉测试点必须有截图证据"""
+    block = section_lines(text, "测试点结果") or section_lines(text, "测试点")
+    rows = table_rows(block, first_col_is_int=True)
+    header = find_header(block, "测试点")
+    if not header:
+        return
+
+    # 找判定列和证据列
+    judge_idx = col_index(header, "判定")
+    evidence_idx = col_index(header, "证据")
+    if judge_idx is None or evidence_idx is None:
+        return
+
+    # 检查截图目录
+    screenshots_dir = stage_dir / "screenshots"
+    has_screenshots = screenshots_dir.exists() and any(screenshots_dir.iterdir())
+
+    for r in rows:
+        if judge_idx >= len(r) or evidence_idx >= len(r):
+            continue
+        if "[V]" in r[judge_idx]:
+            # 视觉测试点需要截图证据
+            if not has_screenshots and "截图" not in r[evidence_idx].lower():
+                res.findings.append(
+                    Finding(
+                        "A7", "WARN",
+                        f"#{r[0]} 含 [V] 判定但无截图证据（screenshots/ 目录为空或不存在）",
+                    )
+                )
+
+
+def check_a8(ledger: list[dict[str, str]], res: StageResult) -> None:
+    """A8: 账本编号连续（E2E-F-xx 不能跳号）"""
+    ids = []
+    for e in ledger:
+        m = re.match(r"E2E-F-(\d+)", e["id"])
+        if m:
+            ids.append(int(m.group(1)))
+    if not ids:
+        return
+    ids.sort()
+    expected = set(range(ids[0], ids[-1] + 1))
+    missing = sorted(expected - set(ids))
+    if missing:
+        res.findings.append(
+            Finding(
+                "A8", "WARN",
+                f"账本编号不连续，缺失：{','.join(str(n) for n in missing[:10])}",
+            )
+        )
+
+
+def check_a9(stage: str, stage_dir: Path, states: dict[str, str], res: StageResult) -> None:
+    """A9: plan/roadmap/report 三处 status 一致"""
+    roadmap_kind = roadmap_state_kind(states.get(stage, "pending"))
+
+    # 读 plan status
+    plan_path = stage_dir / "plan.md"
+    plan_status = "pending"
+    if plan_path.exists():
+        plan_text = read(plan_path)
+        m = re.search(r"status:\s*(\w+)", plan_text)
+        if m:
+            plan_status = m.group(1).lower()
+
+    # 读 report status
+    report_path = stage_dir / "report.md"
+    report_status = "pending"
+    if report_path.exists():
+        report_text = read(report_path)
+        m = re.search(r"status:\s*(\w+)", report_text)
+        if m:
+            report_status = m.group(1).lower()
+
+    # 比较三处状态
+    statuses = {"roadmap": roadmap_kind, "plan": plan_status, "report": report_status}
+    unique = set(statuses.values())
+    if len(unique) > 1:
+        # 允许 pending 和 partial 混合（未开工阶段）
+        if not (unique <= {"pending", "partial"}):
+            res.findings.append(
+                Finding(
+                    "A9", "FAIL",
+                    f"三处 status 不一致：{statuses}",
+                )
+            )
+
+
+def check_a10(stage_dir: Path, res: StageResult) -> None:
+    """A10: report 中的相对链接可达"""
+    report_path = stage_dir / "report.md"
+    if not report_path.exists():
+        return
+    report_text = read(report_path)
+    # 匹配相对链接 [text](path)
+    for m in re.finditer(r"\[([^\]]*)\]\(([^)]+)\)", report_text):
+        link = m.group(2)
+        # 跳过绝对链接和锚点
+        if link.startswith("http") or link.startswith("#"):
+            continue
+        # 解析相对路径
+        target = (stage_dir / link).resolve()
+        if not target.exists():
+            res.findings.append(
+                Finding("A10", "WARN", f"report 链接不可达：{link}")
+            )
+
+
+def check_a11(rows: list[list[str]], header: list[str] | None, res: StageResult) -> None:
+    """A11: 测试点结果列必须是合法基值（PASS/FAIL/BLOCKED/N/A）"""
+    if not header:
+        return
+    result_idx = col_index(header, "结果")
+    if result_idx is None:
+        return
+
+    VALID_RESULTS = {"PASS", "FAIL", "BLOCKED", "N/A", "⚠️"}
+    for r in rows:
+        if result_idx >= len(r):
+            continue
+        val = r[result_idx].strip()
+        if val and val not in VALID_RESULTS:
+            # 允许带表情符号的变体
+            clean = re.sub(r"[⚠️❌✅]", "", val).strip()
+            if clean and clean not in VALID_RESULTS:
+                res.findings.append(
+                    Finding(
+                        "A11", "WARN",
+                        f"#{r[0]} 结果列值不合法：「{val}」（合法基值：PASS/FAIL/BLOCKED/N/A）",
+                    )
+                )
+
+
 # ---------------------------------------------------------------- 主流程
 
 
@@ -382,6 +535,12 @@ def audit_stage(stage: str, states: dict[str, str], ledger: list[dict[str, str]]
     check_a3(plan, nums, res)
     check_a4(rows, header, res)
     check_a5(stage, kind, ledger, res)
+    check_a6(report, res)
+    check_a7(report, d, res)
+    check_a8(ledger, res)
+    check_a9(stage, d, states, res)
+    check_a10(d, res)
+    check_a11(rows, header, res)
     return res
 
 
@@ -389,10 +548,11 @@ def audit_stage(stage: str, states: dict[str, str], ledger: list[dict[str, str]]
 
 # 回归样本：本次审查（2026-09-18）实测出的已知缺口。
 # 跑不出这些 = 审计器无效（RUNBOOK §13.4）。
+# 注：R-02 修复后部分缺口已消除，更新期望值。
 SELFTEST_EXPECT = {
     "e2e-03": ["A2", "A3"],        # 无汇总行；21 点中 13 点无结果
     "e2e-04": ["A4", "A5"],        # "脚本已创建"/"配置已新增"；E2E-F-21 等未解决而 done
-    "e2e-05": ["A2", "A4", "A5"],  # 占位符 PASS x；"spec 已创建"；E2E-F-22/23/24 未解决而 done
+    "e2e-05": ["A4", "A5"],        # R-02 修复了占位符，但仍有存在性措辞 + 未解决账本
 }
 
 # 反误报样本：最接近合规的阶段，不应触发 A1~A5
@@ -488,7 +648,7 @@ def main() -> int:
 
         n_fail = sum(1 for r in results if r.failed)
         print(f"\n合计：{len(results)} 个阶段，{n_fail} 个存在 FAIL")
-        print("提示：MVA 只覆盖 5 条断言；截图/坏链/TDD/ADR/孤儿产出物等归 R-03（RUNBOOK §13.3）")
+        print("提示：审计器覆盖 11 条断言（A1~A11）；TDD/ADR 门禁归 R-03 #3/#4")
 
     return 1 if any(r.failed for r in results) else 0
 
