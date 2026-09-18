@@ -2,7 +2,7 @@
 status: active
 priority: high
 created: 2026-09-17
-last-refresh: 2026-09-17
+last-refresh: 2026-09-18 (新增 D-05~D-08：补救期技术决策，参考业界常见做法定案)
 type: e2e-transformation-decisions
 ---
 
@@ -10,6 +10,8 @@ type: e2e-transformation-decisions
 
 > 建档预探查发现 3 个"设计意图与实现不符"的改造项。此类必须**实测前先对齐方向**，否则会修错方向。
 > 每项记录：现状 → 候选方案 → 决议 → 影响面。
+>
+> **D-05~D-08（2026-09-18 新增）**：补救期技术决策，由用户授权"参考常见做法自行定案"。每项写明**依据的通用实践**，便于日后复核该依据是否仍成立。
 
 ---
 
@@ -60,9 +62,9 @@ type: e2e-transformation-decisions
 
 ### 落地要点
 
-| 层 | 改动 |
-|----|------|
-| 数据库 | `users` 表新增密保字段：`security_question` + `security_answer_hash`（答案同 password_hash 用 bcrypt）。**支持 1~2 个问题**（建议独立 `user_security_answers` 表存多问题，或 2 组列）。**归属 E2E-06** |
+| 层 | 改动 | 状态 |
+|----|------|------|
+| 数据库 | `users` 表新增密保字段：`security_question` + `security_answer_hash`（答案同 password_hash 用 bcrypt）。**支持 1~2 个问题**（建议独立 `user_security_answers` 表存多问题，或 2 组列）。**归属 E2E-06** | ✅ **已落地**（2026-09-18，E2E-06：`user_security_answers` 表 + model/repository/logic/gRPC 全链路） |
 | 注册流程 | **删除验证码步骤**（含 `getVerificationCode` 按钮、`code-field`、`code-hint`、`registerInfo.verificationCode`）；新增**密保设定弹框**（不可跳过，关闭即中止注册）。**归属 E2E-09** |
 | 找回流程 | `verify.vue` 从"输入验证码"改为"回答密保问题"（1~2 题全对才放行）；`modify.vue` 保留改密；BFF 的 `verification-code` 端点改为 `verify-security-answer`。**归属 E2E-07** |
 | 后端 | `user-svc` model/repository/logic 加密保字段读写 + bcrypt 校验；`register` 接口要求密保字段必填 |
@@ -134,3 +136,111 @@ type: e2e-transformation-decisions
 | BFF | 需新增/改造转发端点（现 `/tts/stream` 走裸 PCM 流，无时间戳通道） |
 | 前端播放 | `useTTSPlayer.ts` 播放层需从"按 chunk 喂 PCM"改为"按时间戳对齐口型"；`useConversationSender` 的 500ms debounce 与文本分段策略需重审 |
 | 数字人 | `DigitalHuman.vue` 的 `setLipShape`/BlendShape 驱动逻辑复用，映射表激活 |
+
+---
+
+## D-05 注册链路断裂的修法（归属 R-01）
+
+### 现状
+
+后端在 E2E-06 中**强制要求 1~2 个密保**（`auth_handler.go:172-180`、`authlogic.go:96-102`），而前端注册表单仍只发 `{username, password, verificationCode}`（`login/index.vue:147`）⇒ **产品唯一的注册入口 100% 返回 400**。
+
+### 候选方案
+
+| 方案 | 做法 | 评价 |
+|------|------|------|
+| A. R-01 内补前端密保录入（弹框） | 按已决议设计做弹框 | 把"修 bug"扩成"做功能"，R-01 范围膨胀；但一次到位 |
+| **B. 后端先回退为"密保可选"（推荐）** | 临时去掉强制校验（字段与写入能力保留），注册恢复可用；前端录入 UI 归 E2E-09，E2E-09 收口时**重新打开强制** | 最小风险、符合"先向后兼容再迁移" |
+| C. 双端同时改 | 前后端同批改 | 单批改动面大，不好定位问题 |
+
+### 决议：**选 B**
+
+**依据的通用实践**：**Expand → Migrate → Contract（扩展-迁移-收缩）**，也叫向后兼容式契约变更。当服务端开始强制一个客户端还无法提供的字段时，标准顺序是——先让服务端**接受并记录**新字段（可选），等客户端具备发送能力后，再打开强制。反过来（先强制、后补客户端）等于制造一次自伤式中断。
+
+**落地要点**：
+
+| 项 | 内容 |
+|----|------|
+| R-01 | 后端强制校验临时降级为"可选"（保留 `security_questions` 字段解析与持久化）；补**回归测试**断言"不带密保也能注册成功" |
+| E2E-09 | 补前端密保录入 UI（弹框，按 D-01）+ **重新打开强制校验** + 补"不带密保注册必失败"的负向测试 |
+| 追踪 | 本临时状态登记为待复位的显式任务，**不得**只留代码注释——E2E-09 的 plan 必须包含"复位强制校验"一项 |
+| 风险 | 降级期间注册的账号无密保 ⇒ 无法走找回密码。**当前库内全是测试数据、未上线（D-01 连带后果已按 C 处理）**，故风险可接受 |
+
+---
+
+## D-06 `-race` 的最终处置（归属 R-01 调查 / R-02 结论）
+
+### 现状
+
+E2E-03 plan 的 A3 要求加 `-race`；`0e29444` 把它删了，理由是"**疑似** Go 工具链 race detector 不可用"，report 进一步断言"CI Go 1.26.1 中不可用（本地 Windows 同样 0xc0000139）"。这是**用 Windows DLL 加载错误解释 Linux CI 的 exit 1**，证据链不成立；7 个模块**全部** exit 1 更符合"真实数据竞争"或"构建环境缺 C 工具链"的形态。账本 E2E-F-40 已被改判为「🟡 降级并记录」。
+
+### 决议：**先查明再定，禁止直接降级收口**
+
+**依据的通用实践**：① Go 官方文档明确 `-race` 需要 **CGO_ENABLED=1** 与可用的 C 工具链——若 CI 环境不满足，表现正是**全模块统一失败**；② 而当存在真实数据竞争时，`-race` 会让**特定包**失败并打印 `DATA RACE` 报告，**不会是 7 个模块整齐 exit 1**；③ 工程通则是"**先把失败原因定性，再决定手段**"，不得以"疑似"为由移除质量门禁（对应 AP-06 根因臆断、AP-05 删除需求）。
+
+**R-01 的具体调查动作**（可复现，非推测）：
+
+| 步 | 动作 | 判据 |
+|----|------|------|
+| 1 | 在 Linux 容器复现：`docker run --rm -v $PWD:/w -w /w/<svc> golang:1.26 go test -race -count=1 ./...` | 若能跑且通过 ⇒ CI 环境问题；若打印 `DATA RACE` ⇒ 真实竞争 |
+| 2 | 单独用空测试验证 `-race` 可用性：`go test -race -run TestNothing ./...` 或不存在的包 | 若空跑也 exit 1 ⇒ 环境/工具链问题 |
+| 3 | 检查 CI 日志中 `-race` 失败时的**首条错误行**（是 `DATA RACE` 还是 `gcc: not found` / 下载失败） | 二分定性 |
+
+**结论分支**：① 环境问题 ⇒ 修 CI（装工具链/设 `CGO_ENABLED=1`）后**加回** `-race`；② 真实竞争 ⇒ 修竞争后加回；③ 确实不可用且有铁证 ⇒ 写经批准的降级记录（含残留风险），**不得**标"已解决"。
+
+---
+
+## D-07 `doc-drift-check` 当前红态的处置（归属 R-01 / R-03）
+
+### 现状
+
+main 上 `doc-drift-check` 连续红（`2cb9e58`、`0644988`），3 个 job 失败：① env 变量 lint（8 个未文档化）② Dockerfile digest（6 个占位）③ migration 服务顺序（Fail 13）。
+
+### 决议：**分类处置——可修的先修，不可修的用"带理由的已知缺口"表达，不使用 `continue-on-error`**
+
+**依据的通用实践**：主分支 CI 红 = broken build，行业标准是 **fix-forward 或 revert**，而不是抑制（suppress）。但本项目存在**客观上无法在本地修复**的一项（digest 需访问 docker.io 回填，沙箱网络不可达）。对此的标准做法是 **known-debt allowlist**：显式列出已知缺口 + 原因 + 复检条件，**而非**全局 `continue-on-error`（那会让该 workflow 永久失去信号）。
+
+| # | job | 处置 |
+|---|-----|------|
+| 1 | env 变量 lint（8 项未文档化） | **R-01 直接修**：把 8 个变量补进 `.env.local.example`（低风险、纯文档） |
+| 2 | docker digest 占位 | **改为显式 WARN + 缺口声明**：脚本输出"已知缺口：N 个占位 digest，原因=需 registry 可达环境回填，复检条件=网络可达时跑 `sync_docker_digests.sh`"，**非静默通过**，且退出码为 0 但**打印醒目警告**；同时登记为已知缺口条目 |
+| 3 | migration 服务顺序 Fail 13 | **R-01 定性**：查明是脚本 bug 还是真实顺序依赖问题，再修 |
+| — | `continue-on-error` | **不使用**（会掩盖真实漂移，属 AP-11 变体） |
+
+---
+
+## D-08 `enforce_admins` 与 `required_status_checks` 的取舍（归属 R-03）
+
+### 现状
+
+分支保护目前 `enforce_admins: true` + 防强推/防删除，但**无 `required_status_checks`** ⇒ CI 红了不拦（AP-11）。若直接加 required checks，在 `enforce_admins: true` 下**一旦 check 因故不上报，连管理员也会被锁死无法合并**。
+
+### 决议：**保持 `enforce_admins: true`；只把"每次必跑"的 job 设为 required**
+
+**依据的通用实践**：required status checks 的**锁死风险只来自"被设为 required 却不会在每次 push 时上报的 check"**。GitHub 官方对 path 过滤 workflow 的行为说明即指出：带 `paths` 过滤的 workflow **在路径不匹配时不会运行**，从而不产生 check run —— 若被设为 required，会一直停在 "Expected — Waiting for status to be reported"。因此标准做法是：
+
+| 规则 | 落地 |
+|------|------|
+| 只有**无 `paths` 过滤、每次 push 必跑**的 job 才可设为 required | `go-test.yml`（无 paths 过滤）→ **可设 required** |
+| 带 `paths` 过滤的 workflow **不设为 required** | `web-test.yml`、`llm-test.yml`（均有 paths 过滤）→ 仅报告 |
+| 新 workflow 若也要 required，先去 `paths` 过滤 | `doc-drift-check.yml`（无 paths 过滤）→ 修好红态后可设 required |
+| `strict`（要求分支 up-to-date）保持 `false` | 单人开发模式无需强制 rebase，减少无谓摩擦 |
+| 过渡期 | 先用 `go-test` 一个 required check 试跑，确认不会卡住后再扩 |
+| 保险丝 | 保留"紧急时可在 Settings 临时移除 required"的操作记录习惯（写进 report） |
+
+**收益**：门禁对管理员**真实生效**（AP-11 解决），同时通过"只 required 必跑 job"消除锁死风险。
+
+---
+
+## 决策索引
+
+| 编号 | 主题 | 归属 | 状态 |
+|------|------|------|------|
+| D-01 | 找回密码方式 = 密保问题 | E2E-07 | ✅ 已决议（细化见 D-05） |
+| D-02 | 心理测验 = 两种量表并存 + user 页测评图表 | E2E-13 / E2E-14 | ✅ 已决议 |
+| D-03 | 数字人 = 真口型同步 + 排查断点 | E2E-17 | ✅ 已决议 |
+| D-04 | i18n 是否立项 | 不阻塞阶段 | 🟡 候选未决 |
+| **D-05** | 注册链路断裂修法 = 后端先回退为可选 | **R-01** | ✅ 已定案 |
+| **D-06** | `-race` = 先查明再定，禁止直接降级收口 | **R-01 / R-02** | ✅ 已定案 |
+| **D-07** | `doc-drift-check` 红态 = 分类处置，不用 `continue-on-error` | **R-01 / R-03** | ✅ 已定案 |
+| **D-08** | 分支保护 = 保持 `enforce_admins`，只 required 必跑 job | **R-03** | ✅ 已定案 |

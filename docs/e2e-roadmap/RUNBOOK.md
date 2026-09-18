@@ -400,13 +400,39 @@ bash scripts/check_routes_alignment.sh && python scripts/check_view_consistency.
 
 **因此：约束力必须来自机器，不能来自文本。** 本节定义"什么必须可机械校验"，作为 [remediation.md](remediation.md) R-03 的实现需求输入。
 
-### 13.2 在审计器落地前（过渡期强制）
+### 13.2 当前状态（2026-09-18）
 
-`scripts/e2e_stage_audit.py` 落地前，**每个阶段收口必须由第二方（非执行者）按本节清单人工核对**，核对结果附在 report.md 的 §收口自检 之后。
+`scripts/e2e_stage_audit.py` 的 **MVA（最小可用版）已落地**，覆盖 5 条断言（见下表 A1~A5）。剩余 12 条归 R-03。
 
-> 过渡期规则：**执行者不得自行宣布 `done`**——必须由第二方核对后共同确认。
+```bash
+# 审计单个阶段 / 全部阶段
+python scripts/e2e_stage_audit.py --stage e2e-04
+python scripts/e2e_stage_audit.py --all
+python scripts/e2e_stage_audit.py --all --json     # 机器可读，供 CI 消费
 
-### 13.3 必须机械校验的断言清单
+# 自校验：用本次审查实测的已知缺口做回归样本
+# 跑不出 ExpectedLow 说明审计器无效 —— 不得进入下一步
+python scripts/e2e_stage_audit.py --selftest
+```
+
+**MVA 已实现的 5 条断言**：
+
+| 编号 | 断言 | 反例 |
+|------|------|------|
+| A1 | `report.md` 存在且含必填章节（缺建议章节为 WARN） | AP-12 |
+| A2 | 汇总行非占位符，且 `PASS+FAIL+BLOCKED+N/A` == 测试点表行数 | AP-12 |
+| A3 | `plan.md` 的测试点编号集合 ⊆ `report.md` 的编号集合 | AP-07 |
+| A4 | 证据列不含存在性措辞；证据**只有文件路径而无执行信号**同样不算 | AP-01/02 |
+| A5 | 属本阶段且未了结的 `E2E-F-xx` 存在时，阶段状态不得为 `done`/`partial` | AP-04 |
+
+**设计约束（已实测遵守）**：
+- **必须能复现已知缺口**：`--selftest` 对 E2E-03/04/05 检出审查实测的缺陷（未检出即判定审计器无效）
+- **不得误报**：对最接近合规的 E2E-02 不产生 FAIL；对 19 个未开工阶段（无详档，符合 just-in-time 约定）不产生 FAIL
+- **状态判定不得靠全文关键词**：状态单元格描述瑕疵时会**提到** `BLOCKED` 等词，故按优先级 + 限定措辞判定
+
+**在剩余 12 条断言落地前**：人工核对仍按 §13.3 清单执行；**执行者不得自行宣布 `done`**。
+
+### 13.3 必须机械校验的断言清单（17 条；✅ = MVA 已覆盖）
 
 | # | 断言 | 对应反例 |
 |---|------|---------|

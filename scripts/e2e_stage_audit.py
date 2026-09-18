@@ -1,0 +1,497 @@
+#!/usr/bin/env python3
+"""E2E 阶段收口审计器（MVA —— 最小可用版）
+
+用途：机械校验 E2E 阶段是否真的满足收口契约，替代"执行者自己宣布完成"。
+依据：docs/e2e-roadmap/RUNBOOK.md §13「收口审计」+
+      docs/e2e-roadmap/anti-patterns.md（14 类已真实发生的失真反例）
+
+MVA 只实现 5 条最关键、最易造假的断言（对应 DOCS/e2e-roadmap/remediation.md §R-00）：
+  A1  report.md 存在且含必填章节                     (AP-12)
+  A2  汇总行非占位符，且计数 == 测试点表行数          (AP-12)
+  A3  plan 的测试点编号集合 ⊆ report 的编号集合       (AP-07)
+  A4  证据列不含"存在性措辞"（已创建/已新增/...）      (AP-01/02)
+  A5  属本阶段且未解决的 E2E-F-xx 存在时，状态不得 done (AP-04)
+
+设计约束（RUNBOOK §13.4）：
+  - 必须能复现已知缺口（--selftest 用 E2E-03/04/05 做回归样本）
+  - 不得"只会喊狼来了"（对最接近合规的 E2E-02 不应误报）
+  - 输出机器可读（--json），退出码可被 CI 消费
+
+用法：
+  python scripts/e2e_stage_audit.py --stage e2e-04
+  python scripts/e2e_stage_audit.py --all
+  python scripts/e2e_stage_audit.py --selftest
+  python scripts/e2e_stage_audit.py --all --json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+ROADMAP = ROOT / "docs/e2e-roadmap/roadmap.md"
+LEDGER = ROOT / "docs/e2e-roadmap/discovered-unresolved.md"
+STAGES_DIR = ROOT / "docs/e2e-roadmap/stages"
+
+# A1：report.md 的必填章节（硬性）与建议章节（软性/警告）
+REQUIRED_SECTIONS = ["测试点", "收口自检"]
+RECOMMENDED_SECTIONS = ["环境基线", "发现", "修复清单", "回归钉", "待决策"]
+
+# A4：存在性措辞 —— 只证明"文件存在"，未证明"行为正确"
+EXISTENCE_PHRASES = [
+    "已创建", "已新增", "已完成创建", "已配置", "已实现", "已落地",
+    "已添加", "已接入完成",
+]
+
+# A4b：证据若"只有文件路径、没有任何执行信号"，同样不算有效证据（RUNBOOK §4.1）
+# 执行信号：出现任一即视为"记录了执行结果"
+EXECUTION_SIGNALS = [
+    "输出", "退出码", "断言", "日志", "→", "->", "PASS", "FAIL", "结果",
+    "数", "stdout", "查询", "截图", "对比", "diff", "HTTP",
+]
+EXECUTION_SIGNALS_LOWER = [s.lower() for s in EXECUTION_SIGNALS]
+PATH_TOKEN_RE = re.compile(r"`[^`]*\.(?:sh|py|yml|yaml|md|ts|js|vue|go|sql|json)`")
+
+# 账本中表示"已了结"的状态关键词（不含"待修复""部分解决"——那些仍算未了结）
+RESOLVED_MARKERS = [
+    "已解决", "已修复", "全部修复", "降级并记录", "已知限制", "不归属阶段",
+]
+
+# 汇总行里的占位符（未填实数的证据）
+PLACEHOLDER_RE = re.compile(r"PASS\s+(?!\d)(\w+)", re.IGNORECASE)
+
+
+@dataclass
+class Finding:
+    check: str
+    level: str  # FAIL | WARN
+    message: str
+
+
+@dataclass
+class StageResult:
+    stage: str
+    slug: str
+    findings: list[Finding] = field(default_factory=list)
+
+    @property
+    def failed(self) -> list[Finding]:
+        return [f for f in self.findings if f.level == "FAIL"]
+
+    @property
+    def warned(self) -> list[Finding]:
+        return [f for f in self.findings if f.level == "WARN"]
+
+
+# ---------------------------------------------------------------- 解析辅助
+
+
+def read(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def section_lines(text: str, heading_keyword: str) -> str:
+    """取 '## ...<heading_keyword>...' 到下一个 '## ' 之间的内容。"""
+    out, capturing = [], False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            capturing = heading_keyword in line
+            continue
+        if capturing:
+            out.append(line)
+    return "\n".join(out)
+
+
+def table_rows(block: str, first_col_is_int: bool = False) -> list[list[str]]:
+    """解析 markdown 表格的数据行（跳过表头与分隔行）。"""
+    rows = []
+    for line in block.splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if not cells:
+            continue
+        if set(cells[0]) <= set("-: "):  # 分隔行
+            continue
+        if first_col_is_int:
+            if not re.fullmatch(r"\d+", cells[0]):
+                continue
+        else:
+            if cells[0] in ("#", "编号", "阶段"):
+                continue
+        rows.append(cells)
+    return rows
+
+
+def col_index(header_cells: list[str], keyword: str) -> int | None:
+    for i, c in enumerate(header_cells):
+        if keyword in c:
+            return i
+    return None
+
+
+def find_header(block: str, must_contain: str) -> list[str] | None:
+    for line in block.splitlines():
+        s = line.strip()
+        if s.startswith("|") and must_contain in s:
+            return [c.strip() for c in s.strip("|").split("|")]
+    return None
+
+
+def parse_plan_testpoints(text: str) -> set[str]:
+    block = section_lines(text, "测试点清单")
+    return {r[0] for r in table_rows(block, first_col_is_int=True)}
+
+
+def parse_report_testpoints(text: str) -> tuple[set[str], list[list[str]], list[str] | None]:
+    block = section_lines(text, "测试点结果") or section_lines(text, "测试点")
+    rows = table_rows(block, first_col_is_int=True)
+    header = find_header(block, "测试点")
+    return {r[0] for r in rows}, rows, header
+
+
+def parse_roadmap_states() -> dict[str, str]:
+    """roadmap 排期总表 → {e2e-NN: 原始状态文本}
+
+    注意：必须只在「排期总表」章节内解析——文件后面的「详档约定」表也有 E2E-NN 行，
+    会把状态覆盖成 plan 路径。行首可能带标记（如 `E2E-04 🔧`），故不能 fullmatch。
+    """
+    text = read(ROADMAP)
+    start = text.find("## 排期总表")
+    end = text.find("\n## ", start + 1) if start != -1 else -1
+    scope = text[start:end] if start != -1 and end != -1 else text
+
+    states: dict[str, str] = {}
+    for line in scope.splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        m = re.match(r"E2E-(\d+)(?:\s|$)", cells[0])
+        if m and len(cells) >= 5:
+            states[f"e2e-{m.group(1)}"] = cells[-1]
+    return states
+
+
+def roadmap_state_kind(raw: str) -> str:
+    """从 roadmap 状态单元格判定状态种类。
+
+    注意：不能用"全文是否含某关键词"——状态单元格里描述瑕疵时可能**提到**这些词
+    （如 E2E-02 的 `✅ done（…唯一瑕疵：#6 可验证却标 BLOCKED）` 含 "BLOCKED"，
+    若按全文匹配会被误判为 blocked）。故按优先级 + 限定措辞判定。
+    """
+    low = raw.lower()
+    if "partial" in low:
+        return "partial"
+    if raw.lstrip().startswith("⏸") or "blocked by" in low:
+        return "blocked"
+    if low.lstrip().startswith("⏳") or re.match(r"^\s*pending", low):
+        return "pending"
+    if "done" in low:
+        return "done"
+    return "pending"
+
+
+def parse_ledger() -> list[dict[str, str]]:
+    """账本 → 条目列表（id / 归属 / 状态）"""
+    entries = []
+    for line in read(LEDGER).splitlines():
+        s = line.strip()
+        if not s.startswith("| E2E-F-"):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if len(cells) < 6:
+            continue
+        entries.append({
+            "id": cells[0],
+            "summary": cells[2] if len(cells) > 2 else "",
+            "owner": cells[-2],
+            "status": cells[-1],
+        })
+    return entries
+
+
+def stage_mentions(cell: str) -> set[str]:
+    return {f"e2e-{n}" for n in re.findall(r"E2E-(\d+)", cell)}
+
+
+# ---------------------------------------------------------------- 检查项
+
+
+def check_a1(text: str, res: StageResult) -> None:
+    headings = [l for l in text.splitlines() if l.startswith("## ")]
+    joined = "\n".join(headings)
+    for kw in REQUIRED_SECTIONS:
+        if kw not in joined:
+            res.findings.append(Finding("A1", "FAIL", f"report 缺必填章节「{kw}」"))
+    for kw in RECOMMENDED_SECTIONS:
+        if kw not in joined:
+            res.findings.append(Finding("A1", "WARN", f"report 缺建议章节「{kw}」"))
+
+
+def check_a2(text: str, rows: list[list[str]], res: StageResult) -> None:
+    m = re.search(r"汇总[：:]\s*(.+)", text)
+    if not m:
+        res.findings.append(Finding("A2", "FAIL", "report 无汇总行"))
+        return
+    line = m.group(1)
+    ph = PLACEHOLDER_RE.search(line)
+    if ph:
+        res.findings.append(
+            Finding("A2", "FAIL", f"汇总行为未填实数的占位符：{line.strip()[:70]}")
+        )
+        return
+    nums = {k: int(v) for k, v in re.findall(r"(PASS|FAIL|BLOCKED|N/A)\s*(\d+)", line)}
+    if not nums:
+        res.findings.append(Finding("A2", "FAIL", f"汇总行无法解析计数：{line.strip()[:70]}"))
+        return
+    total = sum(nums.values())
+    if total != len(rows):
+        res.findings.append(
+            Finding(
+                "A2", "FAIL",
+                f"汇总计数合计 {total} 与测试点表行数 {len(rows)} 不一致（{nums}）",
+            )
+        )
+
+
+def check_a3(plan_text: str, report_nums: set[str], res: StageResult) -> None:
+    plan_nums = parse_plan_testpoints(plan_text)
+    if not plan_nums:
+        res.findings.append(Finding("A3", "WARN", "plan 未解析到测试点编号，跳过 A3"))
+        return
+    missing = sorted(plan_nums - report_nums, key=int)
+    if missing:
+        res.findings.append(
+            Finding(
+                "A3", "FAIL",
+                f"plan 共 {len(plan_nums)} 个测试点，report 只覆盖 {len(report_nums)} 个；"
+                f"缺失编号：{','.join(missing[:15])}"
+                + ("…" if len(missing) > 15 else ""),
+            )
+        )
+
+
+def check_a4(rows: list[list[str]], header: list[str] | None, res: StageResult) -> None:
+    if not header:
+        res.findings.append(Finding("A4", "WARN", "report 测试点表无表头，跳过 A4"))
+        return
+    idx = col_index(header, "证据")
+    if idx is None:
+        res.findings.append(Finding("A4", "FAIL", "report 测试点表缺「证据」列"))
+        return
+
+    phrase_hits, path_only_hits = [], []
+    for r in rows:
+        if idx >= len(r):
+            continue
+        ev = r[idx]
+        for phrase in EXISTENCE_PHRASES:
+            if phrase in ev:
+                phrase_hits.append(f"#{r[0]}「{ev[:36]}」含「{phrase}」")
+                break
+        else:
+            # 证据里出现文件路径，却没有任何执行信号 ⇒ 只证明文件存在
+            if PATH_TOKEN_RE.search(ev) and not any(
+                sig in ev.lower() for sig in EXECUTION_SIGNALS_LOWER
+            ):
+                path_only_hits.append(f"#{r[0]}「{ev[:44]}」")
+
+    if phrase_hits:
+        res.findings.append(
+            Finding(
+                "A4", "FAIL",
+                f"{len(phrase_hits)} 个测试点的证据含存在性措辞（只证明文件存在）："
+                + "；".join(phrase_hits[:4]) + ("…" if len(phrase_hits) > 4 else ""),
+            )
+        )
+    if path_only_hits:
+        res.findings.append(
+            Finding(
+                "A4", "FAIL",
+                f"{len(path_only_hits)} 个测试点的证据只有文件路径、无执行信号"
+                f"（须补可复现命令 + 实际输出，见 RUNBOOK §4.1）："
+                + "；".join(path_only_hits[:4]) + ("…" if len(path_only_hits) > 4 else ""),
+            )
+        )
+
+
+def check_a5(stage: str, state_kind: str, ledger: list[dict[str, str]], res: StageResult) -> None:
+    if state_kind != "done":
+        return
+    conflicts = []
+    for e in ledger:
+        if any(m in e["status"] for m in RESOLVED_MARKERS):
+            continue
+        if stage in stage_mentions(e["owner"]):
+            conflicts.append(f"{e['id']}（{e['status'][:24]}）")
+    if conflicts:
+        res.findings.append(
+            Finding(
+                "A5", "FAIL",
+                f"阶段标 done，但账本有 {len(conflicts)} 条归属本阶段的未解决条目："
+                + "、".join(conflicts[:6]) + ("…" if len(conflicts) > 6 else ""),
+            )
+        )
+
+
+# ---------------------------------------------------------------- 主流程
+
+
+def resolve_stage_dir(stage: str) -> Path | None:
+    hits = [p for p in STAGES_DIR.glob(f"{stage}-*") if p.is_dir()]
+    return hits[0] if hits else None
+
+
+def audit_stage(stage: str, states: dict[str, str], ledger: list[dict[str, str]]) -> StageResult:
+    kind = roadmap_state_kind(states.get(stage, "pending"))
+    d = resolve_stage_dir(stage)
+
+    if d is None:
+        res = StageResult(stage, "?", [])
+        # 详档按 just-in-time 约定撰写：未开工阶段本就没有目录，不算缺陷。
+        # 只有已宣称完成/部分的阶段缺目录，才是真的契约缺失。
+        if kind in ("done", "partial"):
+            res.findings.append(
+                Finding("A0", "FAIL", f"阶段状态为 {kind}，但没有阶段目录/详档 {stage}-*")
+            )
+        return res
+
+    res = StageResult(stage, d.name, [])
+
+    report_path = d / "report.md"
+    if not report_path.exists():
+        if kind in ("done", "partial"):
+            res.findings.append(Finding("A1", "FAIL", "阶段已宣称完成，但 report.md 不存在（收口契约 #1）"))
+        else:
+            res.findings.append(Finding("A0", "WARN", "阶段未开工，无 report.md（符合 just-in-time 约定）"))
+        return res
+
+    report = read(report_path)
+    plan = read(d / "plan.md")
+
+    check_a1(report, res)
+    nums, rows, header = parse_report_testpoints(report)
+    check_a2(report, rows, res)
+    check_a3(plan, nums, res)
+    check_a4(rows, header, res)
+    check_a5(stage, kind, ledger, res)
+    return res
+
+
+# ---------------------------------------------------------------- 自校验
+
+# 回归样本：本次审查（2026-09-18）实测出的已知缺口。
+# 跑不出这些 = 审计器无效（RUNBOOK §13.4）。
+SELFTEST_EXPECT = {
+    "e2e-03": ["A2", "A3"],        # 无汇总行；21 点中 13 点无结果
+    "e2e-04": ["A4", "A5"],        # "脚本已创建"/"配置已新增"；E2E-F-21 等未解决而 done
+    "e2e-05": ["A2", "A4", "A5"],  # 占位符 PASS x；"spec 已创建"；E2E-F-22/23/24 未解决而 done
+}
+
+# 反误报样本：最接近合规的阶段，不应触发 A1~A5
+SELFTEST_NOFAIL = ["e2e-02"]
+
+
+def run_selftest(states, ledger) -> int:
+    print("=" * 74)
+    print("E2E 审计器自校验（--selftest）")
+    print("=" * 74)
+    ok = True
+
+    for stage, expect in SELFTEST_EXPECT.items():
+        res = audit_stage(stage, states, ledger)
+        got = sorted({f.check for f in res.failed})
+        print(f"\n[{stage}] 期望检出 {expect}")
+        print(f"         实际检出 {got}")
+        for f in res.failed:
+            print(f"           - {f.check} {f.message[:110]}")
+        missing = [c for c in expect if c not in got]
+        if missing:
+            print(f"         ❌ 未能检出期望项：{missing} → 审计器无效")
+            ok = False
+        else:
+            print("         ✅ 复现审查结论")
+
+    for stage in SELFTEST_NOFAIL:
+        res = audit_stage(stage, states, ledger)
+        got = sorted({f.check for f in res.failed})
+        print(f"\n[{stage}] 期望不误报（最接近合规）")
+        print(f"         实际检出 {got}")
+        for f in res.warned:
+            print(f"           ~ {f.check} {f.message[:110]}")
+        if got:
+            print(f"         ⚠️ 出现 FAIL：{got} → 可能误报，需人工确认")
+        else:
+            print("         ✅ 无误报")
+
+    print("\n" + "=" * 74)
+    print("自校验结果：" + ("✅ 通过（审计器可信）" if ok else "❌ 失败（审计器无效，不得进入 R-01）"))
+    print("=" * 74)
+    return 0 if ok else 1
+
+
+# ---------------------------------------------------------------- 入口
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="E2E 阶段收口审计器（MVA）")
+    ap.add_argument("--stage", help="阶段编号，如 e2e-04")
+    ap.add_argument("--all", action="store_true", help="审计 roadmap 中全部阶段")
+    ap.add_argument("--selftest", action="store_true", help="用已知缺口做回归自校验")
+    ap.add_argument("--json", action="store_true", help="输出机器可读 JSON")
+    args = ap.parse_args()
+
+    states = parse_roadmap_states()
+    ledger = parse_ledger()
+
+    if args.selftest:
+        return run_selftest(states, ledger)
+
+    targets = sorted(states) if args.all else ([args.stage] if args.stage else [])
+    if not targets:
+        ap.print_help()
+        return 2
+
+    results = [audit_stage(s, states, ledger) for s in targets]
+
+    if args.json:
+        print(json.dumps(
+            [
+                {
+                    "stage": r.stage, "slug": r.slug,
+                    "status": roadmap_state_kind(states.get(r.stage, "pending")),
+                    "fail": [{"check": f.check, "message": f.message} for f in r.failed],
+                    "warn": [{"check": f.check, "message": f.message} for f in r.warned],
+                }
+                for r in results
+            ],
+            ensure_ascii=False, indent=2,
+        ))
+    else:
+        for r in results:
+            kind = roadmap_state_kind(states.get(r.stage, "pending"))
+            mark = "✅" if not r.failed else "❌"
+            print(f"\n{mark} {r.stage} ({r.slug})  roadmap 状态: {kind}")
+            if not r.findings:
+                print("     无 A1~A5 问题")
+            for f in r.failed:
+                print(f"     [FAIL] {f.check}  {f.message}")
+            for f in r.warned:
+                print(f"     [WARN] {f.check}  {f.message}")
+
+        n_fail = sum(1 for r in results if r.failed)
+        print(f"\n合计：{len(results)} 个阶段，{n_fail} 个存在 FAIL")
+        print("提示：MVA 只覆盖 5 条断言；截图/坏链/TDD/ADR/孤儿产出物等归 R-03（RUNBOOK §13.3）")
+
+    return 1 if any(r.failed for r in results) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
