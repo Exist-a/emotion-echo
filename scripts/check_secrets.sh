@@ -54,48 +54,46 @@ EXEMPT_RE='(\$\{|local-only|change-me|changeme|placeholder|example|dummy|your-|<
 
 SCAN_EXT=(*.yml *.yaml *.sh *.py *.go *.json *.env *.example *.tf *.tpl *.conf)
 
-hits=0
-report=""
-
 collect_files() {
   for t in "${TARGETS[@]}"; do
     [ -e "$t" ] || continue
     if [ -f "$t" ]; then
-      printf '%s\n' "$t"
+      printf '%s
+' "$t"
     else
-      find "$t" -type f \( -name '*.yml' -o -name '*.yaml' -o -name '*.sh' -o -name '*.py' \
-        -o -name '*.go' -o -name '*.json' -o -name '*.example' -o -name '*.tpl' -o -name '*.conf' \) \
-        -not -path '*/node_modules/*' -not -path '*/.git/*' -not -name 'check_secrets.sh' 2>/dev/null   # 本文件须列出已知泄露值，故排除自身
+      find "$t" -type f \( -name '*.yml' -o -name '*.yaml' -o -name '*.sh' -o -name '*.py'         -o -name '*.go' -o -name '*.json' -o -name '*.example' -o -name '*.tpl' -o -name '*.conf' \)         -not -path '*/node_modules/*' -not -path '*/.git/*' -not -name 'check_secrets.sh' 2>/dev/null
     fi
   done
 }
 
-echo "=== 明文密钥扫描 ==="
-while IFS= read -r f; do
-  [ -n "$f" ] || continue
-  lineno=0
-  while IFS= read -r line; do
-    lineno=$((lineno + 1))
-    # 跳过纯注释行（历史说明允许存在，如"曾用 dev-bff-secret"）
-    stripped="${line#"${line%%[![:space:]]*}"}"
-    case "$stripped" in '#'*) continue ;; esac
+# --- 扫描核心：单次 grep 取代逐行 bash 循环 ---
+# 原实现逐行做 3 次 [[ =~ ]]（704 文件），CI 上 5 分钟未完成，会拖慢每个 PR。
+# 改为把文件列表交给 grep 一次扫完（实测 5 秒级），再统一过滤注释行与豁免标记。
+LIST="$(mktemp)"
+collect_files > "$LIST"
+if [ ! -s "$LIST" ]; then
+  echo "GREEN: 无待扫描文件"; rm -f "$LIST"; exit 0
+fi
 
-    for lit in "${KNOWN_LEAKED[@]}"; do
-      if [[ "$line" == *"$lit"* ]]; then
-        report="$report  [规则1 已知泄露字面量] $f:$lineno"$'\n'
-        hits=$((hits + 1))
-      fi
-    done
-    if printf '%s' "$line" | grep -qE "$TOKEN_RE"; then
-      report="$report  [规则2 令牌格式] $f:$lineno"$'\n'
-      hits=$((hits + 1))
-    fi
-    if printf '%s' "$line" | grep -qiE "$SECRETISH_RE" && ! printf '%s' "$line" | grep -qE "$EXEMPT_RE"; then
-      report="$report  [规则3 密钥语义变量赋长字面量] $f:$lineno"$'\n'
-      hits=$((hits + 1))
-    fi
-  done < "$f"
-done < <(collect_files)
+lit_args=()
+for lit in "${KNOWN_LEAKED[@]}"; do lit_args+=(-e "$lit"); done
+
+raw="$( {
+    xargs -a "$LIST" grep -nHF "${lit_args[@]}" 2>/dev/null
+    xargs -a "$LIST" grep -nHE "$TOKEN_RE" 2>/dev/null
+    xargs -a "$LIST" grep -niE "$SECRETISH_RE" 2>/dev/null
+  } | sort -u     | grep -vE ':[0-9]+:[[:space:]]*#'     | grep -vE "$EXEMPT_RE"     | grep -v 'check_secrets.sh:' || true )"
+rm -f "$LIST"
+
+hits=0
+report=""
+if [ -n "$raw" ]; then
+  report="$(printf '%s
+' "$raw" | sed 's/^/  /')"$'
+'
+  hits="$(printf '%s
+' "$raw" | grep -c .)"
+fi
 
 if [ "$hits" -gt 0 ]; then
   echo "$report" | head -30
