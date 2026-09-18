@@ -2,44 +2,42 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-18 (第二方核对：R-01 未完成，R-02/R-03 部分完成)
+last-refresh: 2026-09-18 (R-01 完成；R-02/R-03 收尾；E2E-07 解阻塞可开工)
 type: e2e-stage-roadmap
 ---
 
 # E2E 阶段式测试路线图（长期）
 
-## R 系列核对结论（2026-09-18 第二方核对，非执行者自证）
+## R 系列状态（2026-09-18 收尾后）
 
-> **结论：R-01 未完成，E2E-07 仍被阻塞。** 七项中 #2 实测**未通**：BFF 与 user-svc 两端都已实现 `/api/v1/auth/verify-security-answer`，但 APISIX 白名单只注册了 110~115（login / register / verification-code / refresh / logout / reset-password），该路径会落到 route 100（`/api/v1/*`，挂 jwt-auth）⇒ 未登录态的找回密码调用必然 401。前端经 APISIX `:19080` 调用，故该链路实际不可达。
->
-> **核对为真的部分**（已独立复现，非引用他人结论）：`go vet ./...` 7/7 模块通过；`pnpm test` 366/366；`pnpm typecheck` 退出码 0；`migrate.sh` checksum 负向测试通过；密保按 D-05 改为可选；演示账号与 initdb 解耦；`phone`/`email` 已移出权威 DDL。
->
-> **CI 精确表述**：main HEAD 上实际只运行了 `go-test` + `doc-drift-check`（均绿）；`web-test` 最后一次运行在 `e31f419`、`llm-test` 在 `30d6b66`（09-17），因 `paths` 过滤未覆盖 R 系列提交。故"4 workflow 全绿"在 HEAD 上**不成立**（HEAD `48ac75b` 尚未 push，无任何 CI 记录）。
->
-> **R-02 / R-03 为"部分完成"而非"基本完成"**：账本未回填（AP-04 复发）、SSR 无 ADR、E2E-05 三处 status 仍不一致。逐条证据见下方 R 表与 [remediation.md](remediation.md)。
+> **R-01 ✅ 完成；E2E-07 已解阻塞，可直接开工。** R-02 / R-03 各留少量条目（见下表），
+> **可与 E2E-07 并行**，但须先于"下一批阶段的收口"落地。
 
-**当前激活阶段：R-01 🔴 补完 #2（APISIX 路由）** → 详档 [remediation.md](remediation.md) §R-01
+### 本轮（2026-09-18 核对 + 修复）结论要点
 
-## 下一阶段（被 R-01 阻塞）
+**核对推翻的两处既有结论**（均附可复现证据）：
 
-**E2E-07 找回密码**（status: ⏳ pending，**仍阻塞**）→ 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
+1. **找回密码链路是三层同时坏的**，不是一层。① APISIX 白名单缺 `/api/v1/auth/verify-security-answer`（落到 route 100 的 jwt-auth ⇒ 恒 401）；② **BFF 的 gRPC 客户端是 `not implemented` 桩**，而 BFF 默认走 gRPC；③ user-svc 拦截器匿名跳过清单漏配。三层全修后**端到端实测**：错答案 401 / 正确答案 200 / 未知用户 401。
+2. **`-race` 不是环境问题，是真实数据竞争**：CI 上 `shared-test`/`web-bff` 在 `-race` 下通过，5 个业务模块一律报 `WARNING: DATA RACE`（根因同源：`grpcserver.(*Server).listener` 无同步）。原记"永久降级、残留风险=无"**错误**，已修 5 模块并恢复 CI `-race`。
 
-> E2E-07 正是"密保找回"流程——在 #2 的网关路由补齐前开工，等于把新阶段建在 401 的路径上。
+**同时解除的阻断项**：
 
-> 🔧 = 改造阶段（不是纯测试，含代码/schema/目录/配置变更）
+- **main 写保护自锁死**（强制 PR + 需 1 approve + 仓库仅 1 协作者 ⇒ 谁都交付不了）→ approvals 1→0，并接通 **18 个 required checks**（只纳入无 `paths` 过滤的 job，符合 D-08），**红线实测能拦**（失败 check → `mergeStateStatus=BLOCKED`）。
+- **E2E-F-69 密钥明文**（公开仓库内联 APISIX 管理员密钥与 JWT 密钥）→ 轮换 + 明文清零 + admin API 收回 `127.0.0.1` + 新增密钥扫描器（接入 CI）。
 
-## R 系列：补救与约束机制（插入前置，优先于一切新阶段）
+**仍明确"不补"的项**（理由见 [remediation.md](remediation.md)「判定记录」，判据：*现在不做会不会造成未被发现的危害*）：
+R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量脚本负向测试、R-03 #10 的覆盖率·集成测试·Playwright 进 CI 等大项。
+**代价**：审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这是**正确信号**（真实未还欠账），不是回归。
 
-> 详见 [remediation.md](remediation.md)。R 系列不占用 E2E-NN 编号，以示"欠债归还"区别于"路线图推进"。
+**当前激活阶段：E2E-07 找回密码（可开工）** → 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
 
-| 阶段 | 功能块 | 目标 | 阻塞关系 | 状态 |
-|------|--------|------|---------|------|
-| **R-01** 🔴 | **阻断项修复** | BFF 密保校验 fail-open（安全）+ 找回密码端点缺失 + 注册链路断裂 + 测试编译失败 + Register 非事务 + migrate.sh checksum 死代码 + CI 转绿 | 无依赖 → **可立即启动** | ✅ **完成**（2026-09-18 修复轮：#2 经**三层**根因修复并端到端实测 401/200/401；#5 Register 非事务为已登记降级） |
-| **R-02** 🔧 | **收口补账** | 15 项契约补齐：report 重写 / 截图 / 账本对账 / 状态三处对齐 / 撤 E2E-06 done / SSR 补 ADR + 更正 7 处失效文档 / 孤儿产出物 / 演示账号解耦 | 依赖 R-01 | 🟡 **部分完成**（修复轮：#4 状态三处对齐已修正、#6 已补 SSR ADR + 决策 24、#15 按 D-06 重做并**推翻降级结论**（真实数据竞争，已修 5 模块）；**剩 #1~#3**：report 模板化 / `[V]` 截图 / 账本对账） |
-| **R-03** 🔧 | **约束机制建设** | 把 14 类反例机械化：`e2e_stage_audit.py` 收口审计器 + 证据有效性校验 + TDD 门禁 + ADR 门禁 + 门禁真能拦 + 孤儿检测 + 脚本负向用例 + CI 严格化剩余 14 项 | 依赖 R-02 | 🟡 **部分完成**（修复轮：**#5 已接通** 18 个 required checks 且红线实测能拦；自锁死已解（approvals 1→0）；§13.3 的 **#8/#16 两条断言已实现**；审计器 A4 误报已修；TDD 门禁覆盖范围已显式化。**剩 #7/#10**） |
+## 下一阶段（已解阻塞）
 
-**执行路径（修复轮后）**：`R-01 ✅ → R-02 收尾（仅剩 #1~#3：report/截图/账本对账）→ R-03 收尾（#7 脚本负向用例、#10 CI 严格化）→ E2E-07 已解阻塞，可并行推进`。R-02/R-03 可与路线图后续阶段并行，但须先于"下一批阶段的收口"。
+**E2E-07 找回密码**（status: ⏳ pending）→ 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
 
+> 开工前置已就绪：密保校验链路（网关路由 / gRPC 两端 / 拦截器匿名清单）三层已修并端到端验证；
+> 详档已按 D-01=C（密保问题）写好。**唯一需要现场准备的**：一个"已设密保"的账号
+> —— 注册页尚未收集密保（属 E2E-09），故须用 API 造夹具用户，见 [README.md](README.md) 交接说明。
 
 ## 排期总表（30 阶段）
 
