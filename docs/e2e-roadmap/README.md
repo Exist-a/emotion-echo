@@ -47,9 +47,12 @@ python scripts/e2e_stage_audit.py --selftest         # 校验审计器本身可�
 
 ## 交接说明（2026-09-18 第二方核对后更新，给下一个执行 agent）
 
-**当前状态**：R-00 ✅ 完成且自校验通过；**R-01 未完成**（6/7 项实测为真，**#2 不可达**）；R-02 / R-03 为**部分完成**（非"基本完成"）。工作区**干净**（`git status --porcelain` 为空），但 `main` 领先 `origin/main` 1 个 commit 未 push，且 `chore/trigger-ci` 分支残留在本地与远端。
+**当前状态**：R-00 ✅ 完成且自校验通过；**R-01 未完成**（6/7 项实测为真，**#2 不可达**）；R-02 / R-03 为**部分完成**（非"基本完成"）。工作区**干净**（`git status --porcelain` 为空），但 `main` 已 ahead 2 个 commit 且**推不上去**（见下）。
 
-**开工前必须先修的三件（均已在 [remediation.md](remediation.md) 标出，账本编号 E2E-F-60~67）**：
+**⚠️ 第 0 步（不解决则任何产出都无法落地）：解除 `main` 的写保护自锁死**。
+实测 `required_pull_request_reviews.required_approving_review_count = 1` + `enforce_admins = true` + 仓库**只有一个协作者** ⇒ 直推被拒、PR 又凑不到 approve（GitHub 不允许自我 approve）。`48ac75b` 与 `3662fae` 因此滞留本地。建议（单人维护的常见做法）：保留 PR 流程但把 `required_approving_review_count` 设为 **0**，并按 D-08 只把**无 `paths` 过滤**的 job 加入 required checks；若要保留真实评审，则增加第二个账号。详见 E2E-F-68。
+
+**随后必须修的三件（均在 [remediation.md](remediation.md) 标出，账本编号 E2E-F-60~67）**：
 
 1. **补 APISIX 白名单路由**（阻断级）：`deploy/apisix/seed.sh` 增加 `put_auth_route 116 "/api/v1/auth/verify-security-answer"`，同时把它从 Step 4.5 的 `for drift_id in 116` 漂移清理里移除，并更正 578 行的 route 计数文案。改完重跑 `seed.sh`，再用 curl 实测**未登录 200 / 错答案 401** 两条路径。
 2. **补 BFF 层密保负向测试**：负向测试目前只在 user-svc logic 层，原缺陷所在的 `bff/.../auth_handler.go` 一层零测试。

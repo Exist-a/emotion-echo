@@ -264,7 +264,9 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 **核对为真**：`e2e_stage_audit.py --selftest` 通过（新增 A6~A11 后仍复现 E2E-03/04/05 结论、对 E2E-02 无误报）；`check_tdd_gate.sh` / `check_adr_gate.sh` / `check_orphan_outputs.sh` / `check_residual.sh` 本地均绿；`anti-patterns.md` 回填表存在且口径诚实（10 条已机械化 / 4 条部分或人工）。
 
-**#5 未接通（实测证据）**：`gh api /branches/main/protection` → `required_status_checks.contexts = []`、`checks = []`；`enforce_admins=true`、`allow_force_pushes=false`。即为"CI 红也不拦"。另：为注册 status check 而建的 `chore/trigger-ci` 分支**仍在本地与远端且未并入 main**（违反 AGENTS.md §2.5），而目标（required checks）并未达成 ⇒ 遗留分支 + 空门禁 = 双输。
+**#5 未接通（实测证据）**：`gh api /branches/main/protection` → `required_status_checks.contexts = []`、`checks = []`，即**没有任何 CI job 被要求** ⇒ CI 红不影响 PR 合并（AP-11 仍成立）。另：为注册 status check 而建的 `chore/trigger-ci` 分支**仍在本地与远端且未并入 main**（违反 AGENTS.md §2.5），而目标（required checks）并未达成 ⇒ 遗留分支 + 空门禁 = 双输。
+
+**⚠️ 但更要紧的是：branch protection 已自锁死（见 E2E-F-68）**。实测 `required_pull_request_reviews.required_approving_review_count = 1` + `enforce_admins = true` + 仓库**仅 1 个协作者** ⇒ 直推被拒（`remote rejected ... Changes must be made through a pull request`），而 PR 又无法凑够 1 个 approve（GitHub 不允许自我 approve）。**当前后果：`main` 完全不可写**，`48ac75b` 与 `3662fae` 两个 commit 无法交付。D-08 只评估了 `required_status_checks` 的锁死风险，未覆盖"强制 PR + 1 approve + 单协作者"这一更强形态。**建议**（常见做法）：单人维护仓库保留 PR 流程但把 `required_approving_review_count` 设为 0，并按 D-08 只把**无 `paths` 过滤**的 job（`go-test`、`doc-drift-check` 各 job）加入 required checks；如需真实评审则增加第二个账号（机器人账号亦可）。**此项须先解，否则任何 agent 的产出都无法落地。**
 
 **两项工具自身缺陷（会削弱审计器可信度，须先修工具再信结论）**：
 1. **A4 会对"诚实陈述缺口"误报**。E2E-04 报告行 #4~#7 现已如实写"❌ 假 PASS / ⚠️ 未验证"，证据列形如"脚本已创建**但** `.output/public/index.html` 不存在"、"配置已新增，**但未实际运行**"——A4 按关键词命中即判 FAIL，无法区分"用存在性当完成证据"与"报告一个缺口"。更严重的是 `SELFTEST_EXPECT["e2e-04"]` 把这些命中**写成了期望值**，等于把误报固化进回归基线。修法建议：结果列为 `FAIL`/`未验证`/`N/A` 或证据含转折词（但/未/不/需/尚）时不再触发 A4。**当前后果**：E2E-04 的两个 FAIL（A4 + A5）均为**工具/账本假象**，非真实缺口。

@@ -105,12 +105,13 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-65 | 🟡 | **§13.3 有 2 条断言既无实现也无人工理由**：#8（soft-assert 检测）与 #16（`required_status_checks` 非空）全仓无实现——`grep -rn "soft.assert\|required_status_checks" scripts/ .github/` 零命中。其中 #16 正是仍然存活的 AP-11（实测 `contexts=[]`/`checks=[]`），属最该机械化的那条 | `RUNBOOK.md` §13.3、GitHub API `/branches/main/protection` | **R-03** | 🔴 未解决 |
 | E2E-F-66 | 🟡 | **TDD 门禁范围漏洞 + 措辞过度**：`check_tdd_gate.sh` 的 `PROD_PATTERNS` 仅含 `\.go$`/`\.vue$`/`\.ts$`，不含 `\.sh$`/`\.py$` ⇒ 新增脚本（`check_residual.sh`、`e2e_stage_audit.py`）一律免检，而脚本类产出正是 AP-13 高发区；绿字却称"所有 5 个 commit 满足 TDD 要求"，实为范围外绿灯 | `scripts/check_tdd_gate.sh:32-37` | **R-03** | 🔴 未解决 |
 | E2E-F-67 | 🟢 | **`seed.sh` 路由计数文案漂移**：`deploy/apisix/seed.sh:578` 打印"12 routes (1 catch-all + 5 health + 5 auth-whitelist + 1 self-health)"，实为 6 条 auth 白名单（110~115）⇒ 总数应为 13。补 116 号路由时须一并更正 | `deploy/apisix/seed.sh:578` | **R-01** | 🔴 未解决 |
+| E2E-F-68 | 🔴 **阻断** | **main 写保护自锁死——任何人（含管理员）都无法写入**：分支保护实测 `enforce_admins=true` + `required_pull_request_reviews.required_approving_review_count=1` + `allow_force_pushes=false` + `allow_deletions=false`，而仓库**只有一个协作者**（`Exist-a`，唯一 admin）。GitHub 不允许自我 approve ⇒ **直推被拒**（实测 `git push` 返回 `remote rejected ... Changes must be made through a pull request`）**且 PR 也无法满足 review 要求**。后果：`48ac75b`（R 系列落地文档）与 `3662fae`（第二方核对修正）两个 commit **无法交付**；D-08 只讨论了 `required_status_checks` 的锁死风险，未覆盖"强制 PR + 1 approve + 单协作者"这一更强的锁死形态 | `gh api /branches/main/protection`（`enforce_admins.enabled=true`、`required_approving_review_count=1`）、`gh api /repos/.../collaborators`（仅 1 人）、`git push origin main` 实测 | **R-03** | 🔴 未解决 |
 
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 8 项（E2E-F-60~67）** = **67 项**；实测阶段若有新发现继续追加 `E2E-F-68` 起
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** = **68 项**；实测阶段若有新发现继续追加 `E2E-F-69` 起
 - 严重度图例：🔴 阻断/安全 · 🟡 契约缺口 · 🟢 清理项
 
 ## 不列入 E2E 阶段的候选（已评估）
