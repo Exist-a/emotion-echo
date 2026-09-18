@@ -2,23 +2,29 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-18 (R-01 完成，R-02 进行中，E2E-07 解除阻塞)
+last-refresh: 2026-09-18 (第二方核对：R-01 未完成，R-02/R-03 部分完成)
 type: e2e-stage-roadmap
 ---
 
 # E2E 阶段式测试路线图（长期）
 
-## R-01 已完成，R-02 进行中
+## R 系列核对结论（2026-09-18 第二方核对，非执行者自证）
 
-> **2026-09-18 R-01 完成**：7 项阻断缺陷全部修复或降级；CI 4 workflow 全绿；pnpm test 366 全绿。
-> **当前**：R-02 收口补账（15 项契约补齐）进行中，R-03 约束机制建设待启动。
-> E2E-07 及以后阶段已解除阻塞，可与 R-02/R-03 并行推进。
+> **结论：R-01 未完成，E2E-07 仍被阻塞。** 七项中 #2 实测**未通**：BFF 与 user-svc 两端都已实现 `/api/v1/auth/verify-security-answer`，但 APISIX 白名单只注册了 110~115（login / register / verification-code / refresh / logout / reset-password），该路径会落到 route 100（`/api/v1/*`，挂 jwt-auth）⇒ 未登录态的找回密码调用必然 401。前端经 APISIX `:19080` 调用，故该链路实际不可达。
+>
+> **核对为真的部分**（已独立复现，非引用他人结论）：`go vet ./...` 7/7 模块通过；`pnpm test` 366/366；`pnpm typecheck` 退出码 0；`migrate.sh` checksum 负向测试通过；密保按 D-05 改为可选；演示账号与 initdb 解耦；`phone`/`email` 已移出权威 DDL。
+>
+> **CI 精确表述**：main HEAD 上实际只运行了 `go-test` + `doc-drift-check`（均绿）；`web-test` 最后一次运行在 `e31f419`、`llm-test` 在 `30d6b66`（09-17），因 `paths` 过滤未覆盖 R 系列提交。故"4 workflow 全绿"在 HEAD 上**不成立**（HEAD `48ac75b` 尚未 push，无任何 CI 记录）。
+>
+> **R-02 / R-03 为"部分完成"而非"基本完成"**：账本未回填（AP-04 复发）、SSR 无 ADR、E2E-05 三处 status 仍不一致。逐条证据见下方 R 表与 [remediation.md](remediation.md)。
 
-**当前激活阶段：R-02 🔧 收口补账** → 详档 [remediation.md](remediation.md) §R-02
+**当前激活阶段：R-01 🔴 补完 #2（APISIX 路由）** → 详档 [remediation.md](remediation.md) §R-01
 
-## 下一阶段（可并行）
+## 下一阶段（被 R-01 阻塞）
 
-**E2E-07 找回密码**（status: ⏳ pending）→ 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
+**E2E-07 找回密码**（status: ⏳ pending，**仍阻塞**）→ 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
+
+> E2E-07 正是"密保找回"流程——在 #2 的网关路由补齐前开工，等于把新阶段建在 401 的路径上。
 
 > 🔧 = 改造阶段（不是纯测试，含代码/schema/目录/配置变更）
 
@@ -28,11 +34,11 @@ type: e2e-stage-roadmap
 
 | 阶段 | 功能块 | 目标 | 阻塞关系 | 状态 |
 |------|--------|------|---------|------|
-| **R-01** 🔴 | **阻断项修复** | BFF 密保校验 fail-open（安全）+ 找回密码端点缺失 + 注册链路断裂 + 测试编译失败 + Register 非事务 + migrate.sh checksum 死代码 + CI 转绿 | 无依赖 → **可立即启动** | ✅ **done**（2026-09-18：7/7 项已修复或降级；CI 4 workflow 全绿；pnpm test 366 全绿；report 已撰写） |
-| **R-02** 🔧 | **收口补账** | 15 项契约补齐：report 重写 / 截图 / 账本对账 / 状态三处对齐 / 撤 E2E-06 done / SSR 补 ADR + 更正 7 处失效文档 / 孤儿产出物 / 演示账号解耦 | 依赖 R-01 | ✅ **基本完成**（2026-09-18：12/15 项完成；剩余 #1~3 report 重写/截图为非阻塞项） |
-| **R-03** 🔧 | **约束机制建设** | 把 14 类反例机械化：`e2e_stage_audit.py` 收口审计器 + 证据有效性校验 + TDD 门禁 + ADR 门禁 + 门禁真能拦 + 孤儿检测 + 脚本负向用例 + CI 严格化剩余 14 项 | 依赖 R-02 | ✅ **基本完成**（2026-09-18：7/10 项完成；剩余 #5 门禁接通 CI、#7 脚本负向用例补充、#10 CI 严格化 14 项） |
+| **R-01** 🔴 | **阻断项修复** | BFF 密保校验 fail-open（安全）+ 找回密码端点缺失 + 注册链路断裂 + 测试编译失败 + Register 非事务 + migrate.sh checksum 死代码 + CI 转绿 | 无依赖 → **可立即启动** | ⛔ **未完成**（2026-09-18 第二方核对：6/7 项为真；**#2 不可达**——APISIX 缺 `/api/v1/auth/verify-security-answer` 白名单路由；#5 Register 非事务降级） |
+| **R-02** 🔧 | **收口补账** | 15 项契约补齐：report 重写 / 截图 / 账本对账 / 状态三处对齐 / 撤 E2E-06 done / SSR 补 ADR + 更正 7 处失效文档 / 孤儿产出物 / 演示账号解耦 | 依赖 R-01 | 🟡 **部分完成**（核对：#5/#7~#14 为真；**#4 不实**（E2E-05 plan=partial vs roadmap/report=done）；**#6 缺 ADR**；**#15 处置违背 D-06**；#1~#3 未做；账本未回填） |
+| **R-03** 🔧 | **约束机制建设** | 把 14 类反例机械化：`e2e_stage_audit.py` 收口审计器 + 证据有效性校验 + TDD 门禁 + ADR 门禁 + 门禁真能拦 + 孤儿检测 + 脚本负向用例 + CI 严格化剩余 14 项 | 依赖 R-02 | 🟡 **部分完成**（#1/#3/#4/#6/#8/#9 为真；**#5 未接通**（`required_status_checks` 实测为空）；#7/#10 未做；§13.3 的 #8/#16 两条断言无实现也无人工理由；TDD 门禁不覆盖 `.sh`/`.py`） |
 
-**执行路径**：`R-01 ✅ → R-02 ✅ → R-03 ✅ → 恢复 E2E-07 → … → E2E-30`。R-02/R-03 可与路线图后续阶段并行，但须先于"下一批阶段的收口"。
+**执行路径（核对后修正）**：`R-01（补 #2）→ R-02 收尾（#1~#3 + 账本回填 + SSR ADR）→ R-03 收尾（#5/#7/#10）→ 解除 E2E-07 → … → E2E-30`。R-02/R-03 可与路线图后续阶段并行，但须先于"下一批阶段的收口"。
 
 
 ## 排期总表（30 阶段）

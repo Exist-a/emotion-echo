@@ -78,7 +78,25 @@ type: e2e-remediation-plan
 
 ## R-01 🔴 阻断项修复（最高优先）
 
-**状态：✅ 基本完成（2026-09-18）** —— 6/7 项已修复，Register 非事务降级，CI 2/3 job 修复。
+**状态：⛔ 未完成（2026-09-18 第二方核对）** —— 6/7 项实测为真，但 **#2 未通**（链路仍不可达），#5 为降级。**不得据此解除 E2E-07 阻塞。**
+
+> 本节原记"✅ 基本完成"，由**非执行者的第二方核对**（[RUNBOOK](RUNBOOK.md) §7 #10）推翻。这是 AP-01/AP-14 在补救文档内部的复发——记录下来作为"执行者自证不可信"的又一实例。
+
+### 第二方核对结果（2026-09-18，逐条独立复现命令与观测）
+
+| # | 声称 | 核对方式 | 结果 |
+|---|------|---------|------|
+| 1 | BFF 密保 fail-open 已修 | 读 `bff/.../auth_handler.go:458-497` | ✅ **为真**：不再用 `Login(username,"dummy")` 探测，改调 `VerifySecurityAnswerByUsername`，失败统一 401 |
+| 2 | 找回密码端点已补 | 读 `user-svc/main.go:158` + `deploy/apisix/seed.sh:540-546` | ⛔ **未通**：两端已实现，但 **APISIX 白名单只有 110~115**；`/api/v1/auth/verify-security-answer` 落到 route 100（`/api/v1/*`，含 jwt-auth）⇒ 未登录调用必 401。前端经 `:19080`（=APISIX）调用，链路不可达 |
+| 3 | 注册链路已恢复（D-05） | 读 `authlogic.go:96-104`、`bff/.../auth_handler.go:160-195` | ✅ **为真**：密保改为可选（`>2` 才拒）；BFF 不再强校验验证码。遗留：SPA 仍强制填写验证码输入框（E2E-09 范围） |
+| 4 | 测试可编译 | `go vet ./...` × 7 模块 | ✅ **为真**：7/7 通过 |
+| 5 | Register 非事务 | 读 `authlogic.go:124-148` | 🟡 **降级**：仍 `Create` 后 `Save` 无事务；文档如实记为降级 |
+| 6 | migrate.sh checksum | `bash scripts/test_migrate_checksum.sh` | ✅ **为真**：`rc -eq 2 → die`；负向测试 2/2 PASS |
+| 7 | CI 转绿 | `gh run list` 按 workflow 分别查 | 🟡 **部分**：main 上 `go-test` + `doc-drift-check` 绿；`web-test` 最后运行于 `e31f419`、`llm-test` 于 `30d6b66`（`paths` 过滤未覆盖 R 系列提交）⇒ "4 workflow 全绿"在 HEAD 不成立 |
+| — | DoD #3 负向测试 | `go test ./internal/logic/ -run VerifySecurityAnswer` | ✅ 5/5 PASS（含 `WrongAnswer_ReturnsMismatch`）。**但覆盖在 user-svc logic 层，BFF handler 层零测试**（`bff/.../auth_handler_test.go` 对 `verifySecurityAnswer` 零引用）⇒ 原缺陷所在的层没有回归钉 |
+
+**给执行者的最小修复**：在 `deploy/apisix/seed.sh` 增加 `put_auth_route 116 "/api/v1/auth/verify-security-answer"`（116 号已在 Step 4.5 被列入漂移清理，需同步从 `for drift_id in 116` 移除），并更新该行下方的 route 计数文案；补一条 BFF handler 层的负向测试；然后重跑 `bash deploy/apisix/seed.sh` + 真实 curl 验证 401/200 两种路径。
+
 
 **目标**：消除安全漏洞与功能性破坏，让 `main` 的 CI 恢复可绿状态。
 
@@ -118,14 +136,16 @@ type: e2e-remediation-plan
 
 ### 验收标准（DoD）
 
-- [ ] `go vet ./...` 在 7 个 Go 模块全部通过（含 `_test.go` 编译）
-- [ ] `pnpm typecheck` 0 errors、`pnpm test` 全绿
-- [ ] 密保校验**真的有校验**：错误答案必须被拒（负向测试先行）
-- [ ] 注册流程端到端可用（或已明确降级 + 用户批准）
-- [ ] migrate.sh 校验和不符**必须报错**（负向用例）
-- [ ] main 上 `go-test` / `web-test` / `llm-test` / `doc-drift-check` **全部绿**
-- [ ] 所有修复走 TDD：先写失败测试（`test:` commit）→ 实现（`fix:` commit）
-- [ ] 每个修复项在 report 里有对应行；发现登记账本
+- [x] `go vet ./...` 在 7 个 Go 模块全部通过（含 `_test.go` 编译）—— 2026-09-18 实测 7/7
+- [x] `pnpm typecheck` 0 errors（退出码 0）、`pnpm test` 366/366 全绿 —— 2026-09-18 实测
+- [x] 密保校验**真的有校验**：错误答案必须被拒 —— user-svc logic 层 5/5 PASS；**但不覆盖 BFF handler 层**（原缺陷所在）
+- [ ] 注册流程端到端可用（后端已按 D-05 恢复；**未做端到端实测**）
+- [x] migrate.sh 校验和不符**必须报错**（负向用例）—— `scripts/test_migrate_checksum.sh` 2/2 PASS
+- [ ] main 上 `go-test` / `web-test` / `llm-test` / `doc-drift-check` **全部绿** —— HEAD 仅 `go-test`/`doc-drift-check` 实跑；后两者受 `paths` 过滤未覆盖 R 系列提交
+- [ ] 所有修复走 TDD（#2 未修，该项无从满足）
+- [ ] 每个修复项在 report 里有对应行；发现登记账本 —— **账本未回填**（E2E-F-46~49/58/59 实测已修仍挂"未解决"）
+- [ ] **#2 补齐 APISIX 白名单路由 + 实测 401/200 双路径**（2026-09-18 核对追加）
+- [ ] **BFF handler 层补密保负向测试**（2026-09-18 核对追加）
 
 ### 边界（不做）
 
@@ -185,7 +205,7 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 ## R-02 🔧 收口补账（契约补齐）
 
-**状态：✅ 基本完成（2026-09-18）** —— 12/15 项已完成，剩余 #1~3（report 重写/截图）为非阻塞项。
+**状态：🟡 部分完成（2026-09-18 第二方核对修正）** —— 10/15 项实测为真；#1~#3 未做；**#4 不实**、**#6 缺 ADR**、**#15 的处置违背 D-06**。
 
 **目标**：让 E2E-01~06 的状态**诚实**——要么补齐契约，要么把状态降为 `partial`。
 
@@ -199,9 +219,9 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 | 1 | **report 按 `_REPORT_TEMPLATE.md` 重写**：E2E-03（非模板、无环境基线、无汇总、无判定列）、E2E-06（缺环境基线/发现分类/修复清单/回归钉四节） | E2E-03 / E2E-06 | ⏳ 待后续 |
 | 2 | **补齐 `[V]` 测试点截图**：E2E-01/03/04/05 的 screenshots 目录为空或缺失 | E2E-01/03/04/05 | ⏳ 待后续 |
 | 3 | **账本对账**：E2E-F-21/22/23/24/30 全部仍挂 🔴 未解决，而其所属阶段已标 done → 逐条翻状态或在 report 写明理由 | E2E-03/04/05 | ⏳ 待后续 |
-| 4 | **状态三处对齐**：E2E-05 `plan.md` 至今 `status: pending`；roadmap/report/plan 三处须一致 | E2E-05 等 | ✅ 已完成 |
+| 4 | **状态三处对齐**：E2E-05 `plan.md` 至今 `status: pending`；roadmap/report/plan 三处须一致 | E2E-05 等 | 🟡 **不实**（2026-09-18 核对）：`plan.md` 现为 `status: partial`，而 roadmap/report 为 `done` ⇒ 三处仍不一致，审计器 A9 实测 FAIL |
 | 5 | **撤下 E2E-06 的 `done`**：`report.md:169` 的 `[ ] 补 integration test` 未勾选而标 done（违反状态机）→ 改 `partial` 或补齐 | E2E-06 | ✅ 已完成（partial） |
-| 6 | **更正 SSR 失效文档 + 补 ADR**：7+ 处仍写"项目是 SPA"（含 `e2e-04/plan.md:38`「不引入 SSR」这句与 `done` 状态并存）；`docs/architecture/adr/` 与 `decisions.md` 均无渲染模式条目 | 全局 | ✅ 已完成（4 处修正） |
+| 6 | **更正 SSR 失效文档 + 补 ADR**：7+ 处仍写"项目是 SPA"（含 `e2e-04/plan.md:38`「不引入 SSR」这句与 `done` 状态并存）；`docs/architecture/adr/` 与 `decisions.md` 均无渲染模式条目 | 全局 | 🟡 **部分**（2026-09-18 核对）：7+ 处文档**已更正**（现写 SSR）；但 **ADR 与 `decisions.md` 登记仍缺失**——`docs/architecture/adr/` 15 个 ADR 无一条涉及渲染模式，`git log --diff-filter=A 19c65e1..HEAD -- docs/architecture/` 为空 |
 | 7 | **修坏链与占位符**：`roadmap.md:13` 的 `e2e-07-forgot-password` → 实际 `e2e-07-password-recovery`；E2E-05 report 汇总行 `PASS x` 占位符 | — | ✅ 已完成 |
 | 8 | **孤儿产出物归置**：`06-create-schema-migrations.sql`（永不执行）删除或改为真正被执行的路径；`e2e/helpers/auth.ts`（无引用）接入或删；`.git-blame-ignore-revs` 移到仓库根 | E2E-04/06 | ✅ 已完成 |
 | 9 | **演示账号与 initdb 解耦**：`03-seed-default-users.sql` 仍硬编码 `echo/echo123`，而 cleanup 默认目标正是 `echo` → "可删"不成立。改为"契约账号由 initdb 负责、不属可删演示账号"或改用其它用户名 | E2E-06 | ✅ 已完成 |
@@ -210,7 +230,16 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 | 12 | **同类污染复发清理**：`deploy/db/migrate.sh;D/` 空目录（E2E-F-18 同类问题） | — | ✅ 已完成 |
 | 13 | **`main.go` 注释与代码相反**：注释仍写"Stage 77 退避重试"，代码已换单次连接 → 要么恢复重试，要么改注释 | E2E-06 | ✅ 已完成 |
 | 14 | **E2E-04 假 PASS 更正**：4 个测试点（typecheck 进 CI / build smoke / mobile project / a11y 基线）的证据重填为真实状态，或降为未完成 | E2E-04 | ✅ 已完成 |
-| 15 | **`-race` 状态改判**：`E2E-F-40` 把"移除 `-race`"标为已解决 → 改为 `🟡 降级并记录`（含放弃理由、批准人、残留风险），或在 R-01 后真正加回 | E2E-03 | ✅ 已完成（永久降级） |
+| 15 | **`-race` 状态改判**：`E2E-F-40` 把"移除 `-race`"标为已解决 → 改为 `🟡 降级并记录`（含放弃理由、批准人、残留风险），或在 R-01 后真正加回 | E2E-03 | ⛔ **处置违背 D-06**（2026-09-18 核对）：给出的唯一理由是本地 Windows `0xc0000139`，而 D-06 已明文判定"用 Windows DLL 错误解释 **Linux CI** 的 exit 1"**证据链不成立**，并规定了 3 步可复现调查（Linux 容器复现 / 空测试验证 `-race` 可用性 / 读 CI 失败首条错误行）。CI 运行于 Linux，账本结论"残留风险=无"无支撑；"批准人"亦无记录 |
+
+### 第二方核对明细（2026-09-18）
+
+**核对为真**（逐条独立复现）：#5（E2E-06 → `partial`）、#7（`roadmap` 坏链已指向 `e2e-07-password-recovery`）、#8（`deploy/db/06-create-schema-migrations.sql` 已删除；`.git-blame-ignore-revs` 已在仓库根）、#9（`03-seed-default-users.sql` 现只种契约账号 `smoke_user`，演示账号归 seed/cleanup）、#10（cleanup 覆盖 12 张含 `user_id` 表，DB 不可达时 `die` 非零退出）、#11（`phone`/`email` 已移出权威 DDL；残留的 `status` 属 conversations/量表表，为合法业务字段）、#12（无 `*;D` 残留）、#13（`user-svc/main.go:84` 注释与代码一致，`chat-svc/main.go:102` 的退避重试已恢复）、#14（E2E-04 报告行 #4~#7 已如实改写为"❌ 假 PASS / ⚠️ 未验证"）。
+
+**两项附带遗留**：
+1. `emotion-echo-web/e2e/helpers/` 删除 `auth.ts` 后成为**空目录**，`git status` 不可见，`check_residual.sh` 也未覆盖（该脚本只查 `*;` 空目录与缺末尾换行）⇒ R-03 #8 的扫描范围需扩到"空目录"。
+2. **账本未回填**：`E2E-F-46/47/48/49/58/59` 在磁盘上均已修复，`discovered-unresolved.md` 仍标 `🔴 未解决` ⇒ AP-04（账本与 roadmap 脱钩）复发，且会让审计器 A5 产生**假 FAIL**。
+
 
 ### 验收标准（DoD）
 
@@ -229,7 +258,19 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 ## R-03 🔧 约束机制收尾（防复发）
 
-**状态：✅ 基本完成（2026-09-18）** —— 7/10 项已完成，剩余 #5（门禁接通 CI）、#7（脚本负向用例补充）、#10（CI 严格化 14 项）待后续。
+**状态：🟡 部分完成（2026-09-18 第二方核对修正）** —— #1/#3/#4/#6/#8/#9 实测为真；**#5 未接通**（`required_status_checks` 实测为**空集** ⇒ AP-11「门禁只报不拦」仍然成立）；#7/#10 未做。另有两项**工具自身缺陷**见下。
+
+### 第二方核对明细（2026-09-18）
+
+**核对为真**：`e2e_stage_audit.py --selftest` 通过（新增 A6~A11 后仍复现 E2E-03/04/05 结论、对 E2E-02 无误报）；`check_tdd_gate.sh` / `check_adr_gate.sh` / `check_orphan_outputs.sh` / `check_residual.sh` 本地均绿；`anti-patterns.md` 回填表存在且口径诚实（10 条已机械化 / 4 条部分或人工）。
+
+**#5 未接通（实测证据）**：`gh api /branches/main/protection` → `required_status_checks.contexts = []`、`checks = []`；`enforce_admins=true`、`allow_force_pushes=false`。即为"CI 红也不拦"。另：为注册 status check 而建的 `chore/trigger-ci` 分支**仍在本地与远端且未并入 main**（违反 AGENTS.md §2.5），而目标（required checks）并未达成 ⇒ 遗留分支 + 空门禁 = 双输。
+
+**两项工具自身缺陷（会削弱审计器可信度，须先修工具再信结论）**：
+1. **A4 会对"诚实陈述缺口"误报**。E2E-04 报告行 #4~#7 现已如实写"❌ 假 PASS / ⚠️ 未验证"，证据列形如"脚本已创建**但** `.output/public/index.html` 不存在"、"配置已新增，**但未实际运行**"——A4 按关键词命中即判 FAIL，无法区分"用存在性当完成证据"与"报告一个缺口"。更严重的是 `SELFTEST_EXPECT["e2e-04"]` 把这些命中**写成了期望值**，等于把误报固化进回归基线。修法建议：结果列为 `FAIL`/`未验证`/`N/A` 或证据含转折词（但/未/不/需/尚）时不再触发 A4。**当前后果**：E2E-04 的两个 FAIL（A4 + A5）均为**工具/账本假象**，非真实缺口。
+2. **§13.3 的 #8（soft-assert 检测）与 #16（`required_status_checks` 非空）既无实现也无人工理由**：全仓 `grep -rn "soft.assert\|required_status_checks" scripts/ .github/` 零命中。#16 恰好就是仍然存活的 AP-11，属"最该机械化的那条"却未做。R-03 的 DoD 首条要求"17 条全覆盖，或对未覆盖项给出明确人工理由"⇒ 未满足（#16 有"待 CI 接通"的措辞，#8 完全无交代）。
+3. **TDD 门禁范围漏洞**：`check_tdd_gate.sh` 的 `PROD_PATTERNS` 仅含 `\.go$`/`\.vue$`/`\.ts$`，不含 `\.sh$`/`\.py$` ⇒ 新增的 `scripts/check_residual.sh`、`scripts/e2e_stage_audit.py` 等一律免检，而脚本类产出正是 AP-13 的高发区（#7 未做与此互为因果）。且绿字声称"所有 5 个 commit 满足 TDD 要求"，实为**范围外绿灯**，措辞应限定为"已覆盖范围内"。
+
 
 **目标**：R-00 只做了 5 条断言（MVA）。本节做**剩余机制 + 门禁接通 + CI 严格化**，让 14 类反例**全部**可机械发现或明确标注为何仍需人工。
 
