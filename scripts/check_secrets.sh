@@ -50,7 +50,16 @@ TOKEN_RE='(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]
 # 大小写不敏感由 grep -iE 承担（曾因 (?i) 导致本规则从未生效，负向测试用例 ③ 抓出）。
 SECRETISH_RE='(secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|token)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9/+_-]{20,}'
 # 规则 3 的豁免标记（占位符）与 env 兜底
-EXEMPT_RE='(\$\{|local-only|change-me|changeme|placeholder|example|dummy|your-|<.*>)'
+# 豁免标记（大小写不敏感，由 grep -i 承担）：
+#   ${...}              env 兜底默认值
+#   占位符类             local-only / change-me / placeholder / example / dummy / your-
+#   **测试夹具类**       test / fake / sample / min / padding / xxx
+#     ↑ 2026-09-18 实测补入：CI 抓出 3 处假阳性，全部是测试夹具
+#       （main_test.go 的 "test-jwt-secret-32chars-min-padding"、
+#        llm 单测的 "secret32chars_min_prod_key"）。真实密钥是高熵
+#       （hex/base64）不含这些词，故不会漏报；而假阳性会让人开始忽略门禁
+#       —— 那比没有门禁更糟（见 anti-patterns AP-11）。
+EXEMPT_RE='(\$\{|local-only|change-me|changeme|placeholder|example|dummy|your-|<.*>|test|fake|sample|min|padding|xxx)'
 
 SCAN_EXT=(*.yml *.yaml *.sh *.py *.go *.json *.env *.example *.tf *.tpl *.conf)
 
