@@ -40,3 +40,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: vitest
         run: pnpm vitest run
+      # E2E-04 #4 原为假 PASS（声称 typecheck 已接入 CI，实际没有）。
+      # 此处接入使其成真；本 workflow 有 paths 过滤，故不列入 required checks（D-08）。
+      - name: Typecheck
+        run: pnpm typecheck

@@ -326,13 +326,27 @@ deployment:
       ip: 0.0.0.0
       port: 9180
     admin_key:
+    # E2E-F-69：原先此处硬编码真实密钥（仓库为 public）⇒ 任何人可读仓库 +
+    # 可达 9180 即可 PUT/DELETE 任意 route/upstream。现改为 env 注入：
+    # 真值存 deploy/.env.local（gitignored），由 compose 的 --env-file 传入。
     - name: admin
-      key: WhZEPlrGviCSXlKFfALZlQWinluoGAbj
+      # dev 专用**非密钥**占位符。E2E-F-69 说明：
+      #   ① 原先此处是真实密钥且仓库为 public ⇒ 任何人可读仓库 + 可达 9180 即可接管网关；
+      #   ② 已实测 APISIX 3.18 的 admin_key 处**不支持** $ENV:// 替换（会当字面量），
+      #      故不走 env 注入；改为占位符 + 端口层封堵（compose 把 9180 绑定 127.0.0.1）。
+      #   ③ 非本机部署（生产）必须在部署时替换本值，并同步 deploy/.env.local 的
+      #      APISIX_ADMIN_KEY（seed 侧读 env），二者必须一致。
+      key: dev-admin-key-local-only
       role: admin
     enable_admin_ui: true
+    # E2E-F-69：原先放行 0.0.0.0/0 ⇒ admin API 从局域网任意 IP 可达。
+    # 现仅放行回环与 Docker 网段：
+    #   - 172.16.0.0/12 覆盖 app-network（seed 容器 + 宿主机经 docker-proxy 的源 IP）
+    #   - 真正的"外网不可达"由 compose 把 9180 绑定到 127.0.0.1 实现（端口层），
+    #     而不是靠这里——否则 seed 容器（源 IP 172.18.x.x）会被误伤。
     allow_admin:
     - 127.0.0.1/32
-    - 0.0.0.0/0
+    - 172.16.0.0/12
   etcd:
     prefix: /apisix
     host:
