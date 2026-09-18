@@ -264,4 +264,4 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 
 ## License
 
-[MIT](LICENSE) © 2026 Emotion-Echo Contributors
+[MIT](LICENSE) © 2026 Emotion-Echo Contributors# trigger CI
