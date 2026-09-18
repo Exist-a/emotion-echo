@@ -185,6 +185,8 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 ## R-02 🔧 收口补账（契约补齐）
 
+**状态：✅ 基本完成（2026-09-18）** —— 12/15 项已完成，剩余 #1~3（report 重写/截图）为非阻塞项。
+
 **目标**：让 E2E-01~06 的状态**诚实**——要么补齐契约，要么把状态降为 `partial`。
 
 **依赖**：R-01（补账要基于事实，而事实现在是错的）
@@ -192,23 +194,23 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 ### 范围
 
-| # | 项 | 涉及阶段 | 账本 |
+| # | 项 | 涉及阶段 | 状态 |
 |---|----|---------|------|
-| 1 | **report 按 `_REPORT_TEMPLATE.md` 重写**：E2E-03（非模板、无环境基线、无汇总、无判定列）、E2E-06（缺环境基线/发现分类/修复清单/回归钉四节） | E2E-03 / E2E-06 | E2E-F-53 |
-| 2 | **补齐 `[V]` 测试点截图**：E2E-01/03/04/05 的 screenshots 目录为空或缺失 | E2E-01/03/04/05 | E2E-F-53 |
-| 3 | **账本对账**：E2E-F-21/22/23/24/30 全部仍挂 🔴 未解决，而其所属阶段已标 done → 逐条翻状态或在 report 写明理由 | E2E-03/04/05 | E2E-F-54 |
-| 4 | **状态三处对齐**：E2E-05 `plan.md` 至今 `status: pending`；roadmap/report/plan 三处须一致 | E2E-05 等 | E2E-F-57 |
-| 5 | **撤下 E2E-06 的 `done`**：`report.md:169` 的 `[ ] 补 integration test` 未勾选而标 done（违反状态机）→ 改 `partial` 或补齐 | E2E-06 | E2E-F-53 |
-| 6 | **更正 SSR 失效文档 + 补 ADR**：7+ 处仍写"项目是 SPA"（含 `e2e-04/plan.md:38`「不引入 SSR」这句与 `done` 状态并存）；`docs/architecture/adr/` 与 `decisions.md` 均无渲染模式条目 | 全局 | E2E-F-52 |
-| 7 | **修坏链与占位符**：`roadmap.md:13` 的 `e2e-07-forgot-password` → 实际 `e2e-07-password-recovery`；E2E-05 report 汇总行 `PASS x` 占位符 | — | E2E-F-57 |
-| 8 | **孤儿产出物归置**：`06-create-schema-migrations.sql`（永不执行）删除或改为真正被执行的路径；`e2e/helpers/auth.ts`（无引用）接入或删；`.git-blame-ignore-revs` 移到仓库根 | E2E-04/06 | E2E-F-48 / E2E-F-58 |
-| 9 | **演示账号与 initdb 解耦**：`03-seed-default-users.sql` 仍硬编码 `echo/echo123`，而 cleanup 默认目标正是 `echo` → "可删"不成立。改为"契约账号由 initdb 负责、不属可删演示账号"或改用其它用户名 | E2E-06 | E2E-F-47 |
-| 10 | **清理脚本补全**：`cleanup-demo-account.sh` 漏 6 张含 `user_id` 的表；DB 不可达时须非零退出（现伪装成功） | E2E-06 | E2E-F-47 |
-| 11 | **死字段从权威 DDL 移除**：`02-create-tables-in-schemas.sql:10,11,17` 仍有 `phone`/`email`/`status`，与 `chat-svc/migrations/008_p0r27_ddl_drift_test.go` 的"表定义唯一源=02"契约冲突 | E2E-06 | E2E-F-46 |
-| 12 | **同类污染复发清理**：`deploy/db/migrate.sh;D/` 空目录（E2E-F-18 同类问题） | — | E2E-F-59 |
-| 13 | **`main.go` 注释与代码相反**：注释仍写"Stage 77 退避重试"，代码已换单次连接 → 要么恢复重试，要么改注释 | E2E-06 | E2E-F-49 |
-| 14 | **E2E-04 假 PASS 更正**：4 个测试点（typecheck 进 CI / build smoke / mobile project / a11y 基线）的证据重填为真实状态，或降为未完成 | E2E-04 | E2E-F-51 |
-| 15 | **`-race` 状态改判**：`E2E-F-40` 把"移除 `-race`"标为已解决 → 改为 `🟡 降级并记录`（含放弃理由、批准人、残留风险），或在 R-01 后真正加回 | E2E-03 | E2E-F-55 |
+| 1 | **report 按 `_REPORT_TEMPLATE.md` 重写**：E2E-03（非模板、无环境基线、无汇总、无判定列）、E2E-06（缺环境基线/发现分类/修复清单/回归钉四节） | E2E-03 / E2E-06 | ⏳ 待后续 |
+| 2 | **补齐 `[V]` 测试点截图**：E2E-01/03/04/05 的 screenshots 目录为空或缺失 | E2E-01/03/04/05 | ⏳ 待后续 |
+| 3 | **账本对账**：E2E-F-21/22/23/24/30 全部仍挂 🔴 未解决，而其所属阶段已标 done → 逐条翻状态或在 report 写明理由 | E2E-03/04/05 | ⏳ 待后续 |
+| 4 | **状态三处对齐**：E2E-05 `plan.md` 至今 `status: pending`；roadmap/report/plan 三处须一致 | E2E-05 等 | ✅ 已完成 |
+| 5 | **撤下 E2E-06 的 `done`**：`report.md:169` 的 `[ ] 补 integration test` 未勾选而标 done（违反状态机）→ 改 `partial` 或补齐 | E2E-06 | ✅ 已完成（partial） |
+| 6 | **更正 SSR 失效文档 + 补 ADR**：7+ 处仍写"项目是 SPA"（含 `e2e-04/plan.md:38`「不引入 SSR」这句与 `done` 状态并存）；`docs/architecture/adr/` 与 `decisions.md` 均无渲染模式条目 | 全局 | ✅ 已完成（4 处修正） |
+| 7 | **修坏链与占位符**：`roadmap.md:13` 的 `e2e-07-forgot-password` → 实际 `e2e-07-password-recovery`；E2E-05 report 汇总行 `PASS x` 占位符 | — | ✅ 已完成 |
+| 8 | **孤儿产出物归置**：`06-create-schema-migrations.sql`（永不执行）删除或改为真正被执行的路径；`e2e/helpers/auth.ts`（无引用）接入或删；`.git-blame-ignore-revs` 移到仓库根 | E2E-04/06 | ✅ 已完成 |
+| 9 | **演示账号与 initdb 解耦**：`03-seed-default-users.sql` 仍硬编码 `echo/echo123`，而 cleanup 默认目标正是 `echo` → "可删"不成立。改为"契约账号由 initdb 负责、不属可删演示账号"或改用其它用户名 | E2E-06 | ✅ 已完成 |
+| 10 | **清理脚本补全**：`cleanup-demo-account.sh` 漏 6 张含 `user_id` 的表；DB 不可达时须非零退出（现伪装成功） | E2E-06 | ✅ 已完成 |
+| 11 | **死字段从权威 DDL 移除**：`02-create-tables-in-schemas.sql:10,11,17` 仍有 `phone`/`email`/`status`，与 `chat-svc/migrations/008_p0r27_ddl_drift_test.go` 的"表定义唯一源=02"契约冲突 | E2E-06 | ✅ 已完成 |
+| 12 | **同类污染复发清理**：`deploy/db/migrate.sh;D/` 空目录（E2E-F-18 同类问题） | — | ✅ 已完成 |
+| 13 | **`main.go` 注释与代码相反**：注释仍写"Stage 77 退避重试"，代码已换单次连接 → 要么恢复重试，要么改注释 | E2E-06 | ✅ 已完成 |
+| 14 | **E2E-04 假 PASS 更正**：4 个测试点（typecheck 进 CI / build smoke / mobile project / a11y 基线）的证据重填为真实状态，或降为未完成 | E2E-04 | ✅ 已完成 |
+| 15 | **`-race` 状态改判**：`E2E-F-40` 把"移除 `-race`"标为已解决 → 改为 `🟡 降级并记录`（含放弃理由、批准人、残留风险），或在 R-01 后真正加回 | E2E-03 | ✅ 已完成（永久降级） |
 
 ### 验收标准（DoD）
 
@@ -227,6 +229,8 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 ## R-03 🔧 约束机制收尾（防复发）
 
+**状态：✅ 基本完成（2026-09-18）** —— 7/10 项已完成，剩余 #5（门禁接通 CI）、#7（脚本负向用例补充）、#10（CI 严格化 14 项）待后续。
+
 **目标**：R-00 只做了 5 条断言（MVA）。本节做**剩余机制 + 门禁接通 + CI 严格化**，让 14 类反例**全部**可机械发现或明确标注为何仍需人工。
 
 **依赖**：R-00（审计器骨架）+ R-02（先补账，才知道基线在哪）
@@ -234,18 +238,18 @@ FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql /
 
 ### 范围
 
-| # | 机制 | 反例 | 具体做法 | R-00 是否已覆盖 |
-|---|------|------|---------|---------------|
-| 1 | 收口审计器（**补齐剩余 12 条断言**） | 全部 | 在 R-00 的 A1~A5 基础上补：自检项无 `[x]+"待…"`；`[V]` 点有截图；账本编号连续；plan/roadmap/report 三处 status 一致；相对链接可达；四值合法基值 | 部分（A1~A5 已完成） |
-| 2 | **证据有效性校验（强化）** | AP-01/02 | 检出 `soft-assert`（被注释的断言被当作 `[A]` 证据）；要求 `[A]` 项含可复现命令或输出片段 | A4 已覆盖关键词，强化项待补 |
-| 3 | **TDD 门禁** | AP-09 | 校验"改动含生产代码路径时同批 commit 含 `_test.go`/`*.spec.ts`"；CI 增加 `go vet ./...`（会编译测试）**替代**仅 `go build` | ❌ |
-| 4 | **ADR 门禁** | AP-08 | 维护架构关键词清单（渲染模式/框架/存储/协议/认证）；命中时校验 commit 含 ADR 文件 + `decisions.md` 变更 | ❌ |
-| 5 | **门禁真的能拦** | AP-11 | 按 **D-08** 落地：审计 job 设为 `required_status_checks`；**只 required"无 paths 过滤、每次必跑"的 job**（`go-test.yml`、`doc-drift-check.yml`），带 paths 过滤的 `web-test`/`llm-test` 仅报告；`strict: false`；**实测一次"红线被拒"** | ❌ |
-| 6 | **孤儿产出物检测** | AP-10 | 新增 `scripts/*` 与 `.github/workflows/*` 必须被引用；新增 helper 必须有调用方 | ❌ |
-| 7 | **脚本负向用例要求** | AP-13 | 迁移/清理/种子类脚本必须附负向测试（校验和不符报错 / 依赖不可达非零退出 / 清理范围以"所有含 `user_id` 表"为下限自动核对） | ❌ |
-| 8 | **残留物扫描** | AP-14 | 扫 `*;D` 类空目录、无末尾换行文件、`git status` 之外的未跟踪残留 | ❌ |
-| 9 | **反例集回填** | 全部 | 把 [anti-patterns.md](anti-patterns.md) 每条标注"已机械化 / 仍靠人工 + 理由"，形成活文档闭环 | ❌ |
-| 10 | **CI 严格化剩余 14 项** | E2E-F-30/31/32/34/35/55/56 | A3(`-race`，依 D-06 结论)/A4(覆盖率)/A5(集成测试)/A6(格式)/B2(typecheck)/B3(Playwright 进 CI)/B4(构建验证)/B5(engines+packageManager)/C1(锁版本)/C2(models pytest)/C3(pytest 覆盖率)/D2(README 措辞)/D3(secret 扫描)/D4(其余套件)；并给 `doc-drift-check.yml` 补 `timeout-minutes`/`concurrency`/`permissions` | ❌ |
+| # | 机制 | 反例 | 具体做法 | 状态 |
+|---|------|------|---------|------|
+| 1 | 收口审计器（**补齐剩余 6 条断言**） | 全部 | 在 R-00 的 A1~A5 基础上补：A6 自检项无 `[x]+"待…"`；A7 `[V]` 点有截图；A8 账本编号连续；A9 plan/roadmap/report 三处 status 一致；A10 相对链接可达；A11 四值合法基值 | ✅ 已完成 |
+| 2 | **证据有效性校验（强化）** | AP-01/02 | 检出 `soft-assert`（被注释的断言被当作 `[A]` 证据）；要求 `[A]` 项含可复现命令或输出片段 | ✅ A4/A7 已覆盖 |
+| 3 | **TDD 门禁** | AP-09 | 校验"改动含生产代码路径时同批 commit 含 `_test.go`/`*.spec.ts`"；CI 增加 `go vet ./...`（会编译测试）**替代**仅 `go build` | ✅ `check_tdd_gate.sh` |
+| 4 | **ADR 门禁** | AP-08 | 维护架构关键词清单（渲染模式/框架/存储/协议/认证）；命中时校验 commit 含 ADR 文件 + `decisions.md` 变更 | ✅ `check_adr_gate.sh` |
+| 5 | **门禁真的能拦** | AP-11 | 按 **D-08** 落地：审计 job 设为 `required_status_checks`；**只 required"无 paths 过滤、每次必跑"的 job**（`go-test.yml`、`doc-drift-check.yml`），带 paths 过滤的 `web-test`/`llm-test` 仅报告；`strict: false`；**实测一次"红线被拒"** | 🟡 PR 要求已生效，status checks 待手动配置 |
+| 6 | **孤儿产出物检测** | AP-10 | 新增 `scripts/*` 与 `.github/workflows/*` 必须被引用；新增 helper 必须有调用方 | ✅ `check_orphan_outputs.sh` |
+| 7 | **脚本负向用例要求** | AP-13 | 迁移/清理/种子类脚本必须附负向测试（校验和不符报错 / 依赖不可达非零退出 / 清理范围以"所有含 `user_id` 表"为下限自动核对） | 🟡 `test_migrate_checksum.sh` 已写 |
+| 8 | **残留物扫描** | AP-14 | 扫 `*;D` 类空目录、无末尾换行文件、`git status` 之外的未跟踪残留 | ✅ `check_residual.sh` |
+| 9 | **反例集回填** | 全部 | 把 [anti-patterns.md](anti-patterns.md) 每条标注"已机械化 / 仍靠人工 + 理由"，形成活文档闭环 | ✅ 14 条标注完成 |
+| 10 | **CI 严格化剩余 14 项** | E2E-F-30/31/32/34/35/55/56 | A3(`-race`，依 D-06 结论)/A4(覆盖率)/A5(集成测试)/A6(格式)/B2(typecheck)/B3(Playwright 进 CI)/B4(构建验证)/B5(engines+packageManager)/C1(锁版本)/C2(models pytest)/C3(pytest 覆盖率)/D2(README 措辞)/D3(secret 扫描)/D4(其余套件)；并给 `doc-drift-check.yml` 补 `timeout-minutes`/`concurrency`/`permissions` | ⏳ 待后续 |
 
 ### 验收标准（DoD）
 
