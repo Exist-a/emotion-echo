@@ -22,6 +22,14 @@ func newTestAuthLogic(repo repository.UserRepo) *AuthLogic {
 	return NewAuthLogic(context.Background(), &svc.ServiceContext{UserRepo: repo})
 }
 
+// R-01 TDD: 带 SecurityAnswerRepo 的测试辅助函数
+func newTestAuthLogicWithSecurity(repo repository.UserRepo, secRepo repository.SecurityAnswerRepo) *AuthLogic {
+	return NewAuthLogic(context.Background(), &svc.ServiceContext{
+		UserRepo:           repo,
+		SecurityAnswerRepo: secRepo,
+	})
+}
+
 // =============================================================================
 // Login tests
 // =============================================================================
@@ -301,4 +309,85 @@ func TestAuthLogic_ResetPassword_UserNotFound_ReturnsInvalidCredentials(t *testi
 		NewPassword:      "new-password-789",
 	})
 	assert.ErrorIs(t, err, ErrInvalidCredentials, "不存在的用户名应合并返 ErrInvalidCredentials 防枚举")
+}
+
+// =============================================================================
+// R-01 TDD: VerifySecurityAnswer 负向测试
+// =============================================================================
+
+func TestAuthLogic_VerifySecurityAnswer_WrongAnswer_ReturnsMismatch(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	// 创建用户
+	hash, _ := password.Hash("password")
+	require.NoError(t, repo.Create(context.Background(), &model.User{
+		ID:           1,
+		Username:     "alice",
+		PasswordHash: &hash,
+	}))
+
+	// 保存密保问题
+	answerHash, _ := password.Hash("correct-answer")
+	require.NoError(t, secRepo.Save(context.Background(), []*model.SecurityAnswer{
+		{UserID: 1, QuestionOrder: 1, Question: "What is your pet's name?", AnswerHash: answerHash},
+	}))
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	// 错误答案应返回 ErrSecurityAnswerMismatch
+	err := l.VerifySecurityAnswer(1, 1, "wrong-answer")
+	assert.ErrorIs(t, err, ErrSecurityAnswerMismatch, "错误答案应返回 ErrSecurityAnswerMismatch")
+}
+
+func TestAuthLogic_VerifySecurityAnswer_UserNotFound_ReturnsNotFound(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	// 不存在的用户应返回 ErrNotFound
+	err := l.VerifySecurityAnswer(999, 1, "any-answer")
+	assert.ErrorIs(t, err, repository.ErrNotFound, "不存在的用户应返回 ErrNotFound")
+}
+
+func TestAuthLogic_VerifySecurityAnswer_InvalidOrder_ReturnsValidation(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	// 无效的 questionOrder 应返回 ErrValidation
+	err := l.VerifySecurityAnswer(1, 0, "answer")
+	assert.ErrorIs(t, err, ErrValidation, "questionOrder=0 应返回 ErrValidation")
+
+	err = l.VerifySecurityAnswer(1, 3, "answer")
+	assert.ErrorIs(t, err, ErrValidation, "questionOrder=3 应返回 ErrValidation")
+}
+
+func TestAuthLogic_VerifySecurityAnswerByUsername_UserNotFound_ReturnsNotFound(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	// 不存在的用户名应返回 ErrNotFound
+	err := l.VerifySecurityAnswerByUsername("nonexistent", 1, "any-answer")
+	assert.ErrorIs(t, err, repository.ErrNotFound, "不存在的用户名应返回 ErrNotFound")
+}
+
+func TestAuthLogic_VerifySecurityAnswerByUsername_EmptyUsername_ReturnsValidation(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	// 空用户名应返回 ErrValidation
+	err := l.VerifySecurityAnswerByUsername("", 1, "any-answer")
+	assert.ErrorIs(t, err, ErrValidation, "空用户名应返回 ErrValidation")
 }
