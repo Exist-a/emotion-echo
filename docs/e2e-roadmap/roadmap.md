@@ -1,22 +1,39 @@
 ---
 status: active
-priority: high
+priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-17 (30 阶段：补 5 个覆盖盲区阶段——CI/CD、前端工程化、文档一致性、多实例并发、性能基线)
+last-refresh: 2026-09-18 (审查发现 E2E-01~06 收口契约系统性未满足 ⇒ 插入 R 系列补救，激活阶段改指 R-01，E2E-07 暂缓)
 type: e2e-stage-roadmap
 ---
 
 # E2E 阶段式测试路线图（长期）
 
-## 当前激活阶段
+## ⚠️ 当前被阻断：先执行 R 系列
 
-**E2E-06 数据库改造**（status: pending 待启动）→ 详档 [stages/e2e-06-db-transformation/plan.md](stages/e2e-06-db-transformation/plan.md)
+> **2026-09-18 独立审查结论**：五个已标 `done` 的阶段（E2E-01~05）**无一完整满足 [RUNBOOK.md](RUNBOOK.md) §7 收口契约**；E2E-06 有 1 个**安全级缺陷**、2 个功能性破坏、测试无法编译，且工作区改动未提交。
+> 根因不是个别疏忽，而是**规范只在"应当"层、缺少"强制"层**——错误模式高度重复，已固化为 [anti-patterns.md](anti-patterns.md)（14 类反例，带证据）。
+> **E2E-07 及以后全部阶段暂缓**，直至 R-01 完成。
 
-> E2E-05 已完成 → 报告 [stages/e2e-05-doc-code-consistency/report.md](stages/e2e-05-doc-code-consistency/report.md)
+**当前激活阶段：R-01 🔴 阻断项修复** → 详档 [remediation.md](remediation.md) §R-01
 
-> E2E-04 已完成 → 报告 [stages/e2e-04-frontend-engineering/report.md](stages/e2e-04-frontend-engineering/report.md)
+## 当前激活阶段（暂缓）
+
+**E2E-07 找回密码**（status: ⏸ blocked by R-01）→ 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
 
 > 🔧 = 改造阶段（不是纯测试，含代码/schema/目录/配置变更）
+
+## R 系列：补救与约束机制（插入前置，优先于一切新阶段）
+
+> 详见 [remediation.md](remediation.md)。R 系列不占用 E2E-NN 编号，以示"欠债归还"区别于"路线图推进"。
+
+| 阶段 | 功能块 | 目标 | 阻塞关系 | 状态 |
+|------|--------|------|---------|------|
+| **R-01** 🔴 | **阻断项修复** | BFF 密保校验 fail-open（安全）+ 找回密码端点缺失 + 注册链路断裂 + 测试编译失败 + Register 非事务 + migrate.sh checksum 死代码 + CI 转绿 | 无依赖 → **可立即启动** | ⏳ pending |
+| **R-02** 🔧 | **收口补账** | 15 项契约补齐：report 重写 / 截图 / 账本对账 / 状态三处对齐 / 撤 E2E-06 done / SSR 补 ADR + 更正 7 处失效文档 / 孤儿产出物 / 演示账号解耦 | 依赖 R-01 | ⏳ pending |
+| **R-03** 🔧 | **约束机制建设** | 把 14 类反例机械化：`e2e_stage_audit.py` 收口审计器 + 证据有效性校验 + TDD 门禁 + ADR 门禁 + 门禁真能拦 + 孤儿检测 + 脚本负向用例 + CI 严格化剩余 14 项 | 依赖 R-02 | ⏳ pending |
+
+**执行路径**：`R-01 → R-02 → R-03 → 恢复 E2E-07 → … → E2E-30`。R-02/R-03 可与路线图后续阶段并行，但须先于"下一批阶段的收口"。
+
 
 ## 排期总表（30 阶段）
 
@@ -24,20 +41,20 @@ type: e2e-stage-roadmap
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-01 | 登录会话持久化 | cookie 存储/刷新恢复/过期/登出/remember-me 全周期 | 注册、找回密码 | ✅ done |
-| E2E-02 🔧 | 项目目录清理 | 清理无关文件/目录、补 gitignore、归档测试证据 | 不动业务代码 | ✅ done |
-| E2E-03 🔧 | **CI/CD 门槛** | 落地可跑的 `.github/workflows/`（现全仓零 CI，模板从未执行） | 复杂流水线/部署自动化 | ✅ done |
-| E2E-04 🔧 | **前端工程化门槛** | ESLint/Prettier 引入 + typecheck 103→0 + SPA 产物 smoke + Playwright mobile project + browserslist + a11y 基线 | 全量代码重构 | ✅ done |
-| E2E-05 🔧 | **文档与代码一致性收口** | 11 个校验脚本接入 CI + 更正 3 处实测失真 + digest 假绿修复 + 2 个 migration 脚本 | 通用文档检查器 | ✅ done |
+| E2E-01 | 登录会话持久化 | cookie 存储/刷新恢复/过期/登出/remember-me 全周期 | 注册、找回密码 | ⚠️ done**（契约欠账）**：`[V]` 截图 0 张、测试点 #10 无实质证据、report 误引账本编号（写 F-23 实为 F-38）→ [R-02](remediation.md) |
+| E2E-02 🔧 | 项目目录清理 | 清理无关文件/目录、补 gitignore、归档测试证据 | 不动业务代码 | ✅ done（最接近合规；唯一瑕疵：#6 可验证却标 BLOCKED） |
+| E2E-03 🔧 | **CI/CD 门槛** | 落地可跑的 `.github/workflows/`（现全仓零 CI，模板从未执行） | 复杂流水线/部署自动化 | ⚠️ done**（契约欠账）**：report 非模板、**21 点中 13 点无结果**、无汇总行、账本未闭环、`-race` 被降级当已解决 → [R-02](remediation.md) / [R-03](remediation.md) |
+| E2E-04 🔧 | **前端工程化门槛** | ESLint/Prettier 引入 + typecheck 103→0 + SPA 产物 smoke + Playwright mobile project + browserslist + a11y 基线 | 全量代码重构 | ⚠️ done**（契约欠账）**：**4 个测试点假 PASS**（其中 #4 与代码事实相反）、账本一行未改、回归钉从未运行 → [R-02](remediation.md) |
+| E2E-05 🔧 | **文档与代码一致性收口** | 11 个校验脚本接入 CI + 更正 3 处实测失真 + digest 假绿修复 + 2 个 migration 脚本 | 通用文档检查器 | ⚠️ done**（契约欠账）**：`plan.md` 至今 `status: pending`、汇总行留占位符 `PASS x`、账本未更新、**其接入的 `doc-drift-check` 在 main 上持续红** → [R-02](remediation.md) |
 
 ### 第二批：数据库与认证
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-06 🔧 | 数据库改造 | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加 schema_migrations 版本表 + 统一软删除 + 修 db README | 连接池调优 | ⏳ pending |
-| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ⏳ pending |
-| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ⏳ pending |
-| E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | ⏳ pending |
+| E2E-06 🔧 | 数据库改造 | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加 schema_migrations 版本表 + 统一软删除 + 修 db README | 连接池调优 | 🔴 **partial（需回退 done）**：BFF 密保校验 fail-open（安全）、注册链路断裂、测试编译失败、改动**未提交未推送** → [R-01](remediation.md) |
+| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ⏸ **blocked by R-01** |
+| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ⏸ blocked by R-01 |
+| E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | ⏸ blocked by R-01（另：注册页密保录入的归属需决策，见 [remediation.md](remediation.md) §待用户决策） |
 
 ### 第三批：聊天与周边
 

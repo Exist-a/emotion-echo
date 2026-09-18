@@ -2,7 +2,7 @@
 status: active
 priority: high
 created: 2026-09-17
-last-refresh: 2026-09-17 (40 项；E2E-F-39 已解决 + E2E-F-40 新增)
+last-refresh: 2026-09-18 (E2E-06 解决 E2E-F-09 + E2E-F-19；40 项中 8 项已解决)
 type: e2e-discovered-unresolved-ledger
 ---
 
@@ -26,7 +26,7 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-06 | 预探查 | TTS 流式播放段间存在必然断点 | 500ms debounce 聚合文本；每段新文本先 `stop()` 再重发 HTTP；XTTS 每段一次 `inference_stream` 冷启动 | E2E-17 / E2E-28 | 🟡 方案已定（D-03），待实施 |
 | E2E-F-07 | 预探查 | Go 服务结构化日志实际未进 Loki，只有 APISIX access log 被采集 | `promtail-config.yaml` 的 services job 指向 `/var/log/services/*.log`，但 compose 无 volume 挂载，也未用 docker-sd 采 stdout | E2E-21 | 🔴 未解决 |
 | E2E-F-08 | 预探查 | Redis 容器空转未使用；分布式限流/登录锁定 Redis 后端是 TODO | `docker-compose.infra.yml` 注释"项目当前未使用 Redis"；`limiter.go:137-140` `RedisLimiterBackend: TODO`；BFF 登录失败锁定 in-memory 单实例 | E2E-18 | 🔴 未解决 |
-| E2E-F-09 | 预探查 | 数据库无 schema_migrations 版本表；软删除覆盖不完整；db README 过时 | 迁移靠"幂等 + 每次重放"；软删除仅 users/ai 域，chat 的 deleteconversation 是物理删；README 仍列不存在的 `03-migrate-data.sql` | E2E-06 | 🔴 未解决 |
+| E2E-F-09 | 预探查 | 数据库无 schema_migrations 版本表；软删除覆盖不完整；db README 过时 | 迁移靠"幂等 + 每次重放"；软删除仅 users/ai 域，chat 的 deleteconversation 是物理删；README 仍列不存在的 `03-migrate-data.sql` | E2E-06 | ✅ **已解决**（2026-09-18，E2E-06：schema_migrations 表 + migrate.sh 版本追踪 + conversations/messages 软删除 + README 全面更新） |
 | E2E-F-10 | 预探查 | analytics mental-health 报表读一张永远为空的表 | `mental_health_assessments` 无任何生产写入方（INSERT 仅出现在测试）；trigger runner 只读已有记录后 marshal 入队 | E2E-15 | 🔴 未解决 |
 | E2E-F-11 | 预探查 | Alertmanager 无外部通知渠道，仅 Web UI 聚合 | `alertmanager.yml` 只接 dev-ui 空 receiver | E2E-22 | 🔴 未解决 |
 | E2E-F-12 | 预探查 | DLQ 无自动回放工具 | 告警规则注释里的回放都是手工 psql UPDATE；`InMemoryDLQPublisher` 仅测试用 | E2E-24 | 🔴 未解决 |
@@ -36,7 +36,7 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-16 | 预探查 | `.mimosa/`（三处）未被 gitignore，持续污染 `git status` | hook 运行时状态目录，`.gitignore` 未覆盖 | E2E-02 | ✅ **已解决**（2026-09-17，commit a44ee4a） |
 | E2E-F-17 | 预探查 | `gui-test-screenshots/` 25 个测试截图散落根目录且已被 git 跟踪 | 历次 GUI 测试直接落盘根目录，未归档到 `docs/evidence/` | E2E-02 | ✅ **已解决**（2026-09-17，commit a44ee4a，git mv + 7 处引用更新） |
 | E2E-F-18 | 预探查 | 残留空目录与一次性产物：`emotion-echo-web;D`（0 字节，shell 分号误建）、`docker-images-before.txt` | shell 未转义分号建目录；一次性快照未清理 | E2E-02 | ✅ **已解决**（2026-09-17，commit a44ee4a） |
-| E2E-F-19 | 预探查 | `users` 表 3 个死字段：`email`（零读写）、`phone`（仅响应回显、零写入→恒 NULL）、`status`（零读写） | `deploy/db/02-create-tables-in-schemas.sql:10-11,17`；详见 [findings §5.2](findings/2026-09-17-pretest-panorama.md) | E2E-06 | 🔴 未解决 |
+| E2E-F-19 | 预探查 | `users` 表 3 个死字段：`email`（零读写）、`phone`（仅响应回显、零写入→恒 NULL）、`status`（零读写） | `deploy/db/02-create-tables-in-schemas.sql:10-11,17`；详见 [findings §5.2](findings/2026-09-17-pretest-panorama.md) | E2E-06 | ✅ **已解决**（2026-09-18，E2E-06：u001_drop_dead_fields.sql + proto/model/types/logic/grpcserver/BFF 全链路清理） |
 
 ### B. 覆盖盲区排查（2026-09-17，E2E-F-20~29）
 
@@ -69,13 +69,41 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-37 | E2E-01 实测 | SSR 模式下 **3 个 Playwright spec 因 hydration 时序失败**（dashboard-flow 2 + chat-flow happy-path-2 + login-flow 1） | SSR 渲染的按钮 `visible` 但 Vue click handler 未挂载；需 `waitForLoadState('networkidle')` + `toBeEnabled()` 等 hydration 完成 | E2E-04（Playwright 基础设施规范化） | ✅ **全部修复**（2026-09-17，commits 8100c5f + 03a4361 + 59190a8） |
 | E2E-F-38 | E2E-01 实测 | IAB（内置浏览器）**无法通过 `document.cookie` 设置 cookie** | IAB 的 cookie jar 独立于 `document.cookie` API；`Set-Cookie` 响应头可写入但 JS 侧读写受限 | 不归属阶段（IAB 工具限制，非产品 bug） | 🟡 已知限制（E2E 测试改用 Playwright cookie API 绕过） |
 | E2E-F-39 | E2E-02 实测 | vitest `useAIStreamHandler.test.ts` **预存失败**：`#app` import 无法解析 | `clientAccessToken.ts:2` 引用 `import { useCookie } from "#app"`，vitest 无 Nuxt `#app` alias 配置 | E2E-03 | ✅ **已解决**（2026-09-17，commit b9ddc85：`tests-app-mock.ts` + vitest alias 修复，47/366 全绿） |
-| E2E-F-40 | E2E-03 CI | **Go CI 全部 7 模块测试失败**（go-test #3~7）：`go vet` 报 unreachable code + context.WithCancel leak；`-race` flag 在 CI Go 1.26.1 不可用导致全模块 exit code 1 | 3 个真实代码 bug 已修（1148ae0 + a5cd698）；`-race` 去掉后 go-test #8 全绿 | E2E-03 | ✅ **已解决**（2026-09-17，commits 1148ae0 + a5cd698 + 0e29444） |
+| E2E-F-40 | E2E-03 CI | **Go CI 全部 7 模块测试失败**（go-test #3~7）：`go vet` 报 unreachable code + context.WithCancel leak；`-race` flag 在 CI Go 1.26.1 不可用导致全模块 exit code 1 | 3 个真实代码 bug 已修（1148ae0 + a5cd698）；`-race` 去掉后 go-test #8 全绿 | E2E-03 | 🟡 **降级并记录**（2026-09-18 改判：原标"已解决"属 AP-05「用删除需求关闭缺陷」。"工具链不可用"的根因未验证——用 Windows DLL 错解释 Linux CI 的 exit 1，且 7 模块全 exit 1 更符合真实数据竞争形态。待 [remediation.md](remediation.md) R-02 #15 决定加回或批准永久降级） |
+
+### D. E2E-01~06 独立审查发现（2026-09-18，E2E-F-41~59）
+
+> 触发：用户要求"查看推进的代码和文档，看是否合规"。审查结论：**五个已标 done 的阶段无一完整满足 [RUNBOOK.md](RUNBOOK.md) §7 收口契约**，另有 1 个安全级缺陷、2 个功能性破坏、1 个持续红的 CI。
+> 错误模式已固化为 [anti-patterns.md](anti-patterns.md)（14 类），补救排期见 [remediation.md](remediation.md)（R-01/R-02/R-03）。
+
+| 编号 | 严重度 | 现象 | 根因/证据 | 归属 | 状态 |
+|------|--------|------|----------|------|------|
+| E2E-F-41 | 🔴 **安全** | **BFF 密保校验 fail-open**：`Login(username,"dummy")` 当用户存在性探测，真实用户密码非 dummy ⇒ 恒走 `err != nil` ⇒ **恒返回 `success:true`，答案从不校验**。且 BFF 调 `/api/v1/users/verify-security-answer` 而 user-svc 无此路由（HTTP 路径 404） | `bff/internal/handler/auth_handler.go:478-481`、`bff/internal/downstream/user.go:214`、`user-svc/main.go:152-168` | **R-01** | 🔴 未解决 |
+| E2E-F-42 | 🔴 **功能** | **注册链路断裂**：后端强制 1~2 个密保，前端仍只发 `{username,password,verificationCode}`，全仓 grep `securityQuestions` 零命中 ⇒ 唯一注册入口 100% 返回 400 | `bff/.../auth_handler.go:172-180`、`user-svc/.../authlogic.go:96-102`、`web/app/pages/login/index.vue:147` | **R-01** | 🔴 未解决 |
+| E2E-F-43 | 🔴 **阻断** | **测试未同步 → 编译失败**：26 个改动文件零 `_test.go` 变更；`go vet ./...` 实测报 4 个 `unknown field Phone`（model/repository/logic/handler 四处）；BFF avatar 测试的 fake 不满足新 `UserClient` 接口 | `user-svc/internal/{model,repository,logic,handler}/*_test.go`、`bff/internal/handler/avatar_handler_test.go:59`。report 却称"编译验证全通过"——`go build` 不编译测试文件（AP-09） | **R-01** | 🔴 未解决 |
+| E2E-F-44 | 🟡 | **Register 非事务**：先建用户再存密保，后者失败则用户行已落库 ⇒ 库中留下"无密保用户"，与"密保不可跳过"相悖 | `user-svc/internal/logic/authlogic.go:119-146` | **R-01** | 🔴 未解决 |
+| E2E-F-45 | 🟡 | **迁移 checksum 校验是死代码**：返回码 2 被 `if` 吞掉，`record_migration` 用 `ON CONFLICT DO UPDATE SET checksum=...` 覆盖新校验和 ⇒ "迁移文件被改动"被静默放行，与 `deploy/db/README.md` 行为表直接矛盾 | `deploy/db/migrate.sh:164-173` | **R-01** | 🔴 未解决 |
+| E2E-F-46 | 🟡 | **死字段仍在权威 DDL**：`02-create-tables-in-schemas.sql:10,11,17` 仍有 `phone`/`email`/`status`，与 `chat-svc/migrations/008_p0r27_ddl_drift_test.go` 的"表定义唯一源=02"契约冲突 ⇒ 新引入的漂移源 | 同左 | **R-02** | 🔴 未解决 |
+| E2E-F-47 | 🟡 | **演示账号"可删"不成立**：`03-seed-default-users.sql:18-21` 仍硬编码 `echo/echo123` 于 initdb.d（plan:54 明确禁止），而 `cleanup-demo-account.sh:18` 默认清理目标正是 `echo` ⇒ 删了→空卷重建→复活。另：cleanup 漏 6 张含 `user_id` 的表（`ai.emotion_analysis`/`voice_transcripts`/`face_detections`、`assessment.survey_results`/`mental_health_assessments`/`reports`）；DB 不可达时打印 "nothing to clean up" 并 `exit 0`（把连接失败伪装成成功） | 同左 | **R-01 / R-02** | 🔴 未解决 |
+| E2E-F-48 | 🟡 | **孤儿产出物**：`deploy/db/06-create-schema-migrations.sql` 永不执行（initdb.d 只挂 01~05；migrate.sh 发现逻辑是 `*/migrations`，而 `deploy-db/` 下无该子目录），却被 README 与 report 列为交付物 | `deploy/docker-compose.infra.yml:28-33`、`deploy/db/migrate.sh` 发现逻辑 | **R-02** | 🔴 未解决 |
+| E2E-F-49 | 🟡 | **`main.go` 注释与代码相反**：注释仍写"Stage 77：失败按 500ms×10 退避重试"，代码已换成单次 `openPostgresDB` ⇒ 在与"数据库改造"无关的维度上做了行为回退 | `user-svc/main.go:84-93` | **R-02** | 🔴 未解决 |
+| E2E-F-50 | 🔴 | **CI 在 main 持续红且拦不住**：`doc-drift-check` 在 `2cb9e58`/`0644988` 连续红（3 job fail：env 变量 8 项未文档化、6 个占位 digest、migration 顺序 Fail 13）。分支保护 API 实测**无 `required_status_checks` 与 `required_pull_request_reviews` 键**；22 次 run 全 `push`、零 PR ⇒ `docs/ci-workflows/README.md:51`「任何 test 失败 → PR 不可 merge」与 ADR-18 §8.3「修复后才能合并」**均不成立** | GitHub API `/branches/main/protection`、`/actions/runs` | **R-01 / R-03** | 🔴 未解决 |
+| E2E-F-51 | 🔴 | **E2E-04 四个测试点假 PASS**：#4 声称"web-test 已含 typecheck 步骤"——实测该文件只有 `Install deps` + `vitest`（**与代码事实相反**）；#5 build smoke 只"脚本已创建"（断言 `.output/public/index.html` 而该文件不存在）；#6 mobile project 只"配置已新增"未跑过；#7 a11y spec 末段断言被注释掉（永不失败的 soft-assert） | `stages/e2e-04-frontend-engineering/report.md:16,17,26,27`、`.github/workflows/web-test.yml` 全文 | **R-02** | 🔴 未解决 |
+| E2E-F-52 | 🔴 | **SSR 切换无决策记录 + 文档大面积失效**：`6c91525`（8 文件 +113/-28）把 `ssr:false→true`，但 `docs/architecture/adr/` 15 个 ADR 无一条涉及渲染模式、`decisions.md` 决策表与变更记录均无条目（违反 AGENTS.md:332）；**7+ 处文档仍写"项目是 SPA"**，最刺眼的是 `e2e-04/plan.md:38`「**不引入 SSR**」与已标 done 并存；切换引入的真实回归（3 个 spec hydration 失败）被归到"Playwright 基础设施规范化"（产品回归按测试问题归档） | 同左 + `docs/architecture/decisions.md` | **R-02** | 🔴 未解决 |
+| E2E-F-53 | 🔴 | **收口契约系统性缺口**：E2E-03 report 非模板（无环境基线/汇总/判定列，21 点中 13 点无结果）；E2E-06 report 缺 4 节且 `[ ] 补 integration test` 未勾选却标 `done`；E2E-01/03/04/05 的 `[V]` 测试点**截图 0 张** | 各 `stages/*/report.md` | **R-02 / R-03** | 🔴 未解决 |
+| E2E-F-54 | 🔴 | **账本与 roadmap 状态脱钩**：`E2E-F-21/22/23/24/30` 全部仍挂 🔴 未解决，而其所属 E2E-03/04/05 已标 ✅ done ⇒ 账本失去"单一事实源"作用 | `discovered-unresolved.md` vs `roadmap.md` | **R-02 / R-03** | 🔴 未解决 |
+| E2E-F-55 | 🟡 | **偏离计划无记录**：E2E-03 plan §2.3 的 A4（覆盖率，AGENTS.md §2.3 的 80/90/70 底线）/A5（23 个集成测试）/A6（格式检查）三项在 report 的严格化表里**三行都没有**；且 plan 实列 **23 条**而账本写"18 处"（漏算 5 条）。实测已修 7 条（30%）、未修 14 条（61%） | `stages/e2e-03-ci-gate/report.md` §二、`.github/workflows/*` 实测 | **R-03** | 🔴 未解决 |
+| E2E-F-56 | 🟡 | **新增 workflow 回退既有加固标准**：`.github/workflows/doc-drift-check.yml` 的 11 个 job **全部缺 `timeout-minutes`/`concurrency`/`permissions`**——正是 E2E-03 的 A7/A8/A9 且已应用到另外 3 个 workflow | 同左 | **R-03** | 🔴 未解决 |
+| E2E-F-57 | 🟡 | **状态与数字多处不一致**：E2E-05 `plan.md` 至今 `status: pending`（roadmap ✅ done / report done）；`roadmap.md:13` 坏链指向 `e2e-07-forgot-password`（实际 `e2e-07-password-recovery`）；E2E-05 report 汇总行留占位符 `PASS x`；同一事实三种结论（`test_migrations_no_service_order.sh`：CI FAIL / ADR-18 记 WARN / report 记 PASS）；计数矛盾（失真"3 处/2 处/4 处"）；typecheck `96` vs `103` 未解释 | 同左 | **R-02 / R-03** | 🔴 未解决 |
+| E2E-F-58 | 🟢 | **孤儿代码**：`emotion-echo-web/e2e/helpers/auth.ts` 无任何 spec 引用（grep 零命中），而 E2E-06 测试点 14「spec 依赖已处理」标 PASS；`emotion-echo-web/.git-blame-ignore-revs` 位置错误（放子目录，而文件自身注释按仓库根解析）⇒ 登记不生效 | 同左 | **R-02** | 🔴 未解决 |
+| E2E-F-59 | 🟢 | **同类污染复发**：`deploy/db/migrate.sh;D/` 空目录（shell 分号误建），正是 `E2E-F-18` 已"解决"过的同类问题；空目录不出现在 `git status`，收口自检发现不了 | `deploy/db/` | **R-02 / R-03** | 🔴 未解决 |
 
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 = **40 项**；实测阶段若有新发现继续追加
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** = **59 项**；实测阶段若有新发现继续追加 `E2E-F-60` 起
+- 严重度图例：🔴 阻断/安全 · 🟡 契约缺口 · 🟢 清理项
 
 ## 不列入 E2E 阶段的候选（已评估）
 

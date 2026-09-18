@@ -333,7 +333,8 @@ PR review 时若发现违反 TDD：
 - **演进记录** → `docs/stages/stage-XX-<topic>.md`
 - **计划落地后** → 从 `docs/plans/` 迁入 `docs/legacy-plans/landed/` 加 front-matter
 - **长期 E2E 测试路线图**（2026-09-17 起生效）→ [`docs/e2e-roadmap/`](docs/e2e-roadmap/)：
-  - **执行前必读 [RUNBOOK.md](docs/e2e-roadmap/RUNBOOK.md)** —— 执行层单一事实源（状态机 / 环境准备含 `--env-file .env.local` 红线 / 执行六步循环 / 测试点判定分级 `[A]`自动·`[V]`视觉·`[M]`需裁定 / 账本写入契约 / 收口契约 8 项 / 阻塞与升级协议 / 迭代护栏 / 命令速查）。**本文件不依赖外部 skill 是否加载**。
-  - 阶段排期总表 [`roadmap.md`](docs/e2e-roadmap/roadmap.md)（30 阶段 + 决策门）、改造决议 [`decisions.md`](docs/e2e-roadmap/decisions.md)、已发现未解决账本 [`discovered-unresolved.md`](docs/e2e-roadmap/discovered-unresolved.md)（E2E-F-xx 编号）、每阶段详档与记录 [`stages/`](docs/e2e-roadmap/stages/)
-  - 成果以 `PASS`/`FAIL`/`BLOCKED`/`N/A` 四值记录并附证据；`BLOCKED` 超 1/3 不得判 done；禁止用 `N/A` 掩盖未做的工作
-  - 纪律：范围外问题只记账不修；每阶段收口必须写 Playwright 回归钉；阶段记录收口后迁移到 `docs/stages/`
+  - **执行前必读 [RUNBOOK.md](docs/e2e-roadmap/RUNBOOK.md)** —— 执行层单一事实源（状态机 / 环境准备含 `--env-file .env.local` 红线 / 执行六步循环 / 测试点判定分级 `[A]`自动·`[V]`视觉·`[M]`需裁定 / **§4.1 证据有效性** / 账本写入契约 / 收口契约 11 项 / 阻塞与升级协议 / **§13 收口审计（机器校验）** / 迭代护栏 / 命令速查）。**本文件不依赖外部 skill 是否加载**。
+  - **收口前必读 [anti-patterns.md](docs/e2e-roadmap/anti-patterns.md)** —— 14 类**已真实发生**的失真反例（假 PASS / 报告与代码相反 / 用 N-A 掩盖未做 / 账本与状态脱钩 / 根因臆断 / 架构改动无 ADR / TDD 倒置 / 孤儿产出物 / 门禁只报不拦 …），每条附可机械检查的硬规则。**执行者不得自行宣布阶段 done**。
+  - 阶段排期 [`roadmap.md`](docs/e2e-roadmap/roadmap.md)（30 阶段 + R 系列补救 + 决策门）、补救排期 [`remediation.md`](docs/e2e-roadmap/remediation.md)、改造决议 [`decisions.md`](docs/e2e-roadmap/decisions.md)、已发现未解决账本 [`discovered-unresolved.md`](docs/e2e-roadmap/discovered-unresolved.md)（E2E-F-xx 编号）、每阶段详档与记录 [`stages/`](docs/e2e-roadmap/stages/)
+  - 成果以 `PASS`/`FAIL`/`BLOCKED`/`N/A` 四值记录并附证据（**"已创建/已新增"不算证据**）；`BLOCKED` 超 1/3 不得判 done；禁止用 `N/A` 掩盖未做的工作
+  - 纪律：范围外问题只记账不修；每阶段收口必须写 Playwright 回归钉；**账本对账**（属本阶段未解决的 `E2E-F-xx` 存在时阶段只能标 `partial`）；阶段记录收口后迁移到 `docs/stages/`

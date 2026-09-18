@@ -7,12 +7,20 @@
 
 | 文件 | 用途 |
 |------|------|
-| [RUNBOOK.md](RUNBOOK.md) | **执行协议（执行层单一事实源）**：状态机/环境准备/执行循环/判定分级/账本契约/收口契约/升级协议/report 模板/护栏/命令速查 |
-| [roadmap.md](roadmap.md) | 30 阶段总表（🔧 标记改造阶段）+ 改造决议状态 + 依赖声明 + 决策门 |
+| [RUNBOOK.md](RUNBOOK.md) | **执行协议（执行层单一事实源）**：状态机/环境准备/执行循环/判定分级+**证据有效性**/账本契约/收口契约/升级协议/report 模板/护栏/命令速查/**§13 收口审计（机器校验）** |
+| [anti-patterns.md](anti-patterns.md) | **反例集（警告）**：14 类已真实发生的失真模式，附证据与可机械检查的硬规则。**收口前必读** |
+| [remediation.md](remediation.md) | **补救排期**：R-01 阻断修复 / R-02 收口补账 / R-03 约束机制。当前激活 |
+| [roadmap.md](roadmap.md) | 30 阶段总表（🔧 改造阶段）+ R 系列 + 改造决议状态 + 依赖声明 + 决策门 |
 | [decisions.md](decisions.md) | 改造项决议记录（D-01 密保问题 / D-02 两种量表并存 / D-03 真口型同步 / D-04 i18n 候选） |
-| [discovered-unresolved.md](discovered-unresolved.md) | 已发现未解决账本（E2E-F-01~29，含"不列入阶段的候选"评估表） |
+| [discovered-unresolved.md](discovered-unresolved.md) | 已发现未解决账本（E2E-F-01~59，含"不列入阶段的候选"评估表） |
 | [findings/](findings/) | 建档/阶段预探查的代码级发现全景（带文件行号证据） |
 | [stages/](stages/) | 每阶段详档 `plan.md` + 执行记录 `report.md` + 截图 |
+
+## ⚠️ 2026-09-18 状态：路线图被 R 系列阻断
+
+对 E2E-01~06 的独立审查发现**五个已标 `done` 的阶段无一完整满足收口契约**，另有 1 个安全级缺陷（BFF 密保校验 fail-open）+ 2 个功能性破坏 + CI 在 main 持续红却拦不住。
+**E2E-07 及以后全部暂缓**，先执行 [remediation.md](remediation.md) 的 R-01 → R-02 → R-03。
+根因诊断：**规范只在"应当"层（文本 + 人工闸门），缺少"强制"层（可执行校验 + 真实门禁）**。
 
 ## 给执行者（大模型或人）的入口顺序
 
