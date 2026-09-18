@@ -1,33 +1,21 @@
 -- =====================================================
---  Stage 38-A: 默认测试用户种子（username+password 登录）
+--  契约账号种子（initdb.d 自动执行）
 --  路径：deploy/db/03-seed-default-users.sql
 --  挂载：deploy/docker-compose.infra.yml postgres volumes
 --
--- P1-R2-11: "echo123" 在 .sql 注释中是明文，QUICKSTART.md 也明文出现。
--- 真实凭据是 **bcrypt hash**（下方 $2a$10$... 字符串），明文仅作注释说明用途。
--- 哈希验证：python -c "import bcrypt; bcrypt.checkpw(b'echo123', b'<hash>')"
+--  ⚠️ 本文件只创建"契约账号"（smoke_user），不可删除。
+--  演示账号（echo）由 deploy/db/seed-demo-account.sh 负责创建，
+--  可通过 deploy/db/cleanup-demo-account.sh 清理。
 --
--- dev / staging 混淆风险：
---   若 staging 直接 cp 这份 seed 而忘记改 hash，会留下 dev 弱密码。
---   Stage 36-D Bug 4 教训：dev 数据"原样上 prod"是反复栽跟头的源头。
---   建议：staging 改用随机生成密码 + 启动期注入，不复用 dev seed。
+--  为什么分开：
+--    - initdb.d 的 SQL 在每次空卷重建时自动执行
+--    - 演示账号需要"可删除 + 可重建"，不应在 initdb.d 硬编码
+--    - 契约账号（smoke_user）是 smoke 脚本依赖的基础设施，必须始终存在
 -- =====================================================
 
--- 默认测试账号（dev only）：echo / echo123
--- bcrypt(cost=10) hash of "echo123"
-INSERT INTO emotion_echo_user.users (
-    username, password_hash, nickname, created_at, updated_at
-) VALUES (
-    'echo',
-    '$2a$10$x/oarv7WP0HJBNTiJGJBSeBMCvqIS.jMndnYasMS.O2SLzm7pqQnC',
-    'Echo User',
-    NOW(),
-    NOW()
-)
-ON CONFLICT (username) DO NOTHING;
-
--- 可选：smoke_user / echo123 (Stage 37 数据契约 smoke 用)
+-- 契约账号：smoke_user / echo123 (Stage 37 数据契约 smoke 用)
 -- 注意：smoke 脚本（scripts/smoke_data_layer.py）依赖此账号存在
+-- bcrypt(cost=10) hash of "echo123"
 INSERT INTO emotion_echo_user.users (
     username, password_hash, nickname, created_at, updated_at
 ) VALUES (

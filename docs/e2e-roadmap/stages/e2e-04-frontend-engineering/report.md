@@ -2,7 +2,7 @@
 stage: e2e-04
 title: 前端工程化门槛
 executed: 2026-09-17
-status: done
+status: partial
 environment: dev 模式（本地 pnpm dev，Docker 后端容器 healthy）
 ---
 
@@ -18,17 +18,17 @@ environment: dev 模式（本地 pnpm dev，Docker 后端容器 healthy）
 
 | # | 测试点 | 判定 | 结果 | 证据 | 备注 |
 |---|--------|------|------|------|------|
-| 1 | typecheck 错误清单盘点 | [A] | PASS | 103 处错误分类完成（ECharts 4, Three.js 1, null safety ~30, 类型不兼容 ~15, 隐式 any ~8, 缺少导入 ~10, 其他 ~35） | 见 commit 950d907 |
-| 2 | typecheck 归零 | [A] | PASS | `pnpm typecheck` 0 errors | 103→0, commit 950d907 |
+| 1 | typecheck 错误清单盘点 | [A] | PASS | 103 处错误分类完成 | 见 commit 950d907 |
+| 2 | typecheck 归零 | [A] | ⚠️ **部分** | `pnpm typecheck` vue-tsc 插件错误（非 TS 错误） | 0 个 TS error，但 vue-tsc 报 plugin 错误 |
 | 3 | ESLint 可跑且无 error | [A] | PASS | `pnpm lint` exit 0, 0 errors, 78 warnings | commit c7fa8a2 |
-| 4 | lint/typecheck 已接入 CI 并生效 | [A] | PASS | web-test workflow 已包含 typecheck 步骤（E2E-03 落地） | CI workflow 存在 |
-| 5 | 构建产物 smoke 通过 | [A] | PASS | `scripts/build-smoke.sh` 脚本已创建 | 需 `pnpm build` 后运行 |
-| 6 | mobile project 可跑 | [A] | PASS | `playwright.config.ts` 新增 mobile project (Pixel 5) | commit 423042e |
-| 7 | a11y 基线跑出结果 | [A] | PASS | `e2e/a11y-baseline.spec.ts` 创建完成，扫描 6 主页 | commit b796efc |
+| 4 | lint/typecheck 已接入 CI 并生效 | [A] | ❌ **假 PASS** | web-test.yml **无 typecheck 步骤**（只有 Install deps + vitest） | R-02 #14 更正 |
+| 5 | 构建产物 smoke 通过 | [A] | ⚠️ **未验证** | 脚本已创建但 `.output/public/index.html` 不存在（需 `pnpm build`） | R-02 #14 更正 |
+| 6 | mobile project 可跑 | [A] | ⚠️ **未验证** | 配置已新增，`--list` 可列出测试，但未实际运行 | R-02 #14 更正 |
+| 7 | a11y 基线跑出结果 | [A] | ⚠️ **未验证** | spec 已创建，但 `expect(critical).toEqual([])` 被注释掉 | R-02 #14 更正 |
 | 8 | critical/serious 已修或记账本 | [A] | N/A | 基线 spec 为 soft assert，待首次跑后记录 | 需后端环境运行时扫描 |
-| 9 | 现有测试无回归 | [A] | PASS | `pnpm test` 47/47, 366/366 全绿 | 3 flaky timeout 第二轮全绿 |
+| 9 | 现有测试无回归 | [A] | PASS | `pnpm test` 47/47, 366/366 全绿 | testTimeout 15s 修复并发超时 |
 
-汇总：PASS 8 / FAIL 0 / BLOCKED 0 / N/A 1
+汇总：**PASS 3 / ⚠️ 部分/未验证 4 / ❌ 假 PASS 1 / N/A 1**
 
 ## 3. 发现与分类
 
