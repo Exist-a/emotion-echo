@@ -20,7 +20,6 @@ package downstream
 
 import (
 	"context"
-	"fmt"
 
 	emotionuser "github.com/emotion-echo/shared/pkg/emotionuser"
 
@@ -167,10 +166,22 @@ func (c *userGRPCClient) VerifySecurityAnswer(ctx context.Context, userID int64,
 	return nil
 }
 
-// R-01 #1: VerifySecurityAnswerByUsername gRPC 实现
-// 找回密码流程走 HTTP，gRPC 端返回未实现错误
+// VerifySecurityAnswerByUsername 按用户名验证密保答案（R-01 #2 真修通）
+//
+// 原先这里是 `return fmt.Errorf("... not implemented for gRPC transport, use HTTP")`
+// 的桩，而 BFF 默认 transport 就是 gRPC ⇒ 找回密码在默认配置下恒 401。
+// 现改为真实 RPC 调用，与 HTTP transport 行为对齐。
 func (c *userGRPCClient) VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error {
-	return fmt.Errorf("VerifySecurityAnswerByUsername not implemented for gRPC transport, use HTTP")
+	cli := emotionuser.NewUserServiceClient(c.conn)
+	_, err := cli.VerifySecurityAnswerByUsername(ctx, &emotionuser.VerifySecurityAnswerByUsernameRequest{
+		Username:      username,
+		QuestionOrder: int32(questionOrder),
+		Answer:        answer,
+	})
+	if err != nil {
+		return wrapGRPCError(err, "user verifySecurityAnswerByUsername")
+	}
+	return nil
 }
 
 // ============ proto → types 转换 ============

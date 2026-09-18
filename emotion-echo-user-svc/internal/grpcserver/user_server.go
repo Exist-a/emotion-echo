@@ -117,9 +117,9 @@ func (s *userServer) GetUserById(ctx context.Context, req *emotionuser.GetUserBy
 // 行为契约：
 //   - 复用 logic.NewAuthLogic.Login（与 HTTP handler 同源）
 //   - 错误映射：
-//     - ErrInvalidCredentials → codes.Unauthenticated（与 HTTP 401 对齐）
-//     - ErrValidation → codes.InvalidArgument
-//     - 其他 → codes.Internal
+//   - ErrInvalidCredentials → codes.Unauthenticated（与 HTTP 401 对齐）
+//   - ErrValidation → codes.InvalidArgument
+//   - 其他 → codes.Internal
 //   - accessToken 不在此 RPC 返回——由 BFF 收到 UserInfo 后用 jwt.Manager 签发
 func (s *userServer) Login(ctx context.Context, req *emotionuser.LoginRequest) (*emotionuser.LoginResponse, error) {
 	if err := s.ensureRepo(); err != nil {
@@ -225,6 +225,44 @@ func (s *userServer) VerifySecurityAnswer(ctx context.Context, req *emotionuser.
 		return nil, grpcerr.MapToError(err, "verifySecurityAnswer")
 	}
 	return &emotionuser.VerifySecurityAnswerResponse{Success: true}, nil
+}
+
+// VerifySecurityAnswerByUsername 实现 VerifySecurityAnswerByUsername RPC（R-01 #2）
+//
+// 为什么需要：找回密码发起时用户尚未登录，前端只有用户名、没有 user_id，
+// 故走不了上面的 VerifySecurityAnswer。HTTP transport 侧的
+// POST /api/v1/users/verify-security-answer 早已支持按用户名校验，
+// 此 RPC 让 gRPC 侧行为对齐（BFF 默认走 gRPC，否则找回密码恒 401）。
+//
+// 错误映射：
+//   - ErrValidation → codes.InvalidArgument（questionOrder 不合法 / username 为空）
+//   - ErrNotFound → codes.PermissionDenied（用户不存在或无密保）
+//   - ErrSecurityAnswerMismatch → codes.PermissionDenied（答案错误）
+//
+// 注意「用户不存在」刻意**不**映射为 NotFound：否则调用方可据返回码判断
+// 用户名是否存在（用户名枚举）。与 HTTP 端「统一 401」的防枚举策略一致。
+func (s *userServer) VerifySecurityAnswerByUsername(ctx context.Context, req *emotionuser.VerifySecurityAnswerByUsernameRequest) (*emotionuser.VerifySecurityAnswerByUsernameResponse, error) {
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
+	}
+	if s.svcCtx.SecurityAnswerRepo == nil {
+		return nil, status.Error(codes.Unavailable, "user-svc security answer repository not initialized (degraded start)")
+	}
+	err := logic.NewAuthLogic(ctx, s.svcCtx).VerifySecurityAnswerByUsername(
+		req.GetUsername(),
+		int(req.GetQuestionOrder()),
+		req.GetAnswer(),
+	)
+	if err != nil {
+		if errors.Is(err, logic.ErrValidation) {
+			return nil, status.Error(codes.InvalidArgument, "invalid question order or username")
+		}
+		if errors.Is(err, repository.ErrNotFound) || errors.Is(err, logic.ErrSecurityAnswerMismatch) {
+			return nil, status.Error(codes.PermissionDenied, "security answer verification failed")
+		}
+		return nil, grpcerr.MapToError(err, "verifySecurityAnswerByUsername")
+	}
+	return &emotionuser.VerifySecurityAnswerByUsernameResponse{Success: true}, nil
 }
 
 // mapAuthError 把 logic.AuthLogic 错误映射到 gRPC status code

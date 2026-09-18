@@ -72,7 +72,7 @@ type Server struct {
 // New 创建并配置 gRPC server（未启动）
 //
 // svcCtx 传 nil 时 logic 层会触发 nil 指针 — PR-3.2 阶段允许"裸启动"
-//（用于验证 gRPC 链路通；PR-3.3 阶段 BFF 真实接入后再考虑注入 svcCtx）。
+// （用于验证 gRPC 链路通；PR-3.3 阶段 BFF 真实接入后再考虑注入 svcCtx）。
 func New(svcCtx *svc.ServiceContext, port int) *Server {
 	tracer := skywalking.Tracer()
 	opts := []grpc.ServerOption{
@@ -82,6 +82,13 @@ func New(svcCtx *svc.ServiceContext, port int) *Server {
 				emotionuser.UserService_Login_FullMethodName,
 				emotionuser.UserService_Register_FullMethodName,
 				emotionuser.UserService_ResetPassword_FullMethodName,
+				// R-01 #2：密保校验是找回密码的入口，调用者尚未登录、只有用户名，
+				// 故 proto（user.proto:「鉴权：匿名调用（同 Login/Register）」）与
+				// HTTP 端（user-svc/main.go 的 noAuth.POST）都把它定义为匿名。
+				// 此前这里漏配 ⇒ 不带 x-user-id 调用被拦截器以 Unauthenticated 拒掉，
+				// 即"契约说匿名、实现要求带身份"，密保校验在 gRPC 路径上实际不可用。
+				emotionuser.UserService_VerifySecurityAnswer_FullMethodName,
+				emotionuser.UserService_VerifySecurityAnswerByUsername_FullMethodName,
 			),
 			grpcinterceptor.NewServerTracingInterceptor(grpcinterceptor.NewGo2SkyTracer(tracer)),
 			grpcinterceptor.ServerLoggingInterceptor(),
