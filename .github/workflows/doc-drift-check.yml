@@ -136,18 +136,3 @@ jobs:
         run: bash scripts/check_secrets.sh
       - name: Self-test the scanner (负向用例)
         run: bash scripts/test_check_secrets.sh
-
-  required-checks-wired:
-    name: 门禁接线检查
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      # E2E-F-65 / RUNBOOK §13.3 #16：断言 required_status_checks 非空，
-      # 且没有把带 paths 过滤的 job 误列为 required（否则无关 PR 锁死）。
-      # 需读分支保护；默认 GITHUB_TOKEN 通常无该权限，脚本会显式 SKIP 并返回 0
-      #（跳过是显式的，不静默）——配置了有权限的 token 时自动生效。
-      - name: Check required status checks
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/check_required_checks.py

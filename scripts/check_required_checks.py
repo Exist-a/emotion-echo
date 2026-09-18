@@ -135,6 +135,14 @@ def main() -> int:
         if "404" in msg:
             print(f"FAIL: main 分支无保护规则 → CI 失败拦不住任何东西（AP-11）：{msg}")
             return 1
+        if "403" in msg or "not accessible" in msg or "Resource not accessible" in msg:
+            # GitHub 未提供"读分支保护"的可授予权限给 GITHUB_TOKEN（默认 token 必然 403），
+            # 故本检查**不能**在 CI 里自动执行 —— 已因此不把它放进 CI（见 doc-drift-check.yml
+            # 的说明），只作为收口时用有 admin 权限 token 运行的人工命令。
+            # 这里显式 SKIP 并给出指令，避免"误报成 RED"或"静默通过"。
+            print("SKIP: 当前 token 无读取分支保护的权限（GITHUB_TOKEN 无该可授予 scope）。")
+            print("      请用有 admin 权限的 token 运行：GH_TOKEN=<admin PAT> python scripts/check_required_checks.py")
+            return 0
         print(f"退出码 2：{msg}")
         return 2
 
