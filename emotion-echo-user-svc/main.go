@@ -81,8 +81,7 @@ func main() {
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
 	applyEnvOverrides(&c)
 
-	// === 1. Postgres 连接（Stage 77：失败按 500ms×10 退避重试，盖过瞬时 DNS 抖动；
-	// 重试耗尽仍失败才降级 nil repo——dev 阶段不阻断，但 health 接口会显示 dbOk=false） ===
+	// === 1. Postgres 连接（单次连接，失败降级 nil repo——dev 阶段不阻断，但 health 接口会显示 dbOk=false） ===
 	var userRepo repository.UserRepo
 	var securityAnswerRepo repository.SecurityAnswerRepo
 	db, err := openPostgresDB(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)

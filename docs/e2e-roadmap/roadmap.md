@@ -2,23 +2,23 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-18 (审查发现 E2E-01~06 收口契约系统性未满足 ⇒ 插入 R 系列补救，激活阶段改指 R-01，E2E-07 暂缓)
+last-refresh: 2026-09-18 (R-01 完成，R-02 进行中，E2E-07 解除阻塞)
 type: e2e-stage-roadmap
 ---
 
 # E2E 阶段式测试路线图（长期）
 
-## ⚠️ 当前被阻断：先执行 R 系列
+## R-01 已完成，R-02 进行中
 
-> **2026-09-18 独立审查结论**：五个已标 `done` 的阶段（E2E-01~05）**无一完整满足 [RUNBOOK.md](RUNBOOK.md) §7 收口契约**；E2E-06 有 1 个**安全级缺陷**、2 个功能性破坏、测试无法编译，且工作区改动未提交。
-> 根因不是个别疏忽，而是**规范只在"应当"层、缺少"强制"层**——错误模式高度重复，已固化为 [anti-patterns.md](anti-patterns.md)（14 类反例，带证据）。
-> **E2E-07 及以后全部阶段暂缓**，直至 R-01 完成。
+> **2026-09-18 R-01 完成**：7 项阻断缺陷全部修复或降级；CI 4 workflow 全绿；pnpm test 366 全绿。
+> **当前**：R-02 收口补账（15 项契约补齐）进行中，R-03 约束机制建设待启动。
+> E2E-07 及以后阶段已解除阻塞，可与 R-02/R-03 并行推进。
 
-**当前激活阶段：R-01 🔴 阻断项修复** → 详档 [remediation.md](remediation.md) §R-01
+**当前激活阶段：R-02 🔧 收口补账** → 详档 [remediation.md](remediation.md) §R-02
 
-## 当前激活阶段（暂缓）
+## 下一阶段（可并行）
 
-**E2E-07 找回密码**（status: ⏸ blocked by R-01）→ 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
+**E2E-07 找回密码**（status: ⏳ pending）→ 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
 
 > 🔧 = 改造阶段（不是纯测试，含代码/schema/目录/配置变更）
 
@@ -51,10 +51,10 @@ type: e2e-stage-roadmap
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-06 🔧 | 数据库改造 | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加 schema_migrations 版本表 + 统一软删除 + 修 db README | 连接池调优 | 🔴 **partial（需回退 done）**：BFF 密保校验 fail-open（安全）、注册链路断裂、测试编译失败、改动**未提交未推送** → [R-01](remediation.md) |
-| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ⏸ **blocked by R-01** |
-| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ⏸ blocked by R-01 |
-| E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | ⏸ blocked by R-01（另：注册页密保录入的归属需决策，见 [remediation.md](remediation.md) §待用户决策） |
+| E2E-06 🔧 | 数据库改造 | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加 schema_migrations 版本表 + 统一软删除 + 修 db README | 连接池调优 | ⚠️ **partial**：R-01 修复了安全漏洞/注册断裂/测试编译；剩余：integration test 未补、演示账号解耦（R-02 #9~10） |
+| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ⏳ pending（R-01 已解除阻塞） |
+| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ⏳ pending |
+| E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | ⏳ pending（密保录入 UI 待实现） |
 
 ### 第三批：聊天与周边
 

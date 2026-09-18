@@ -26,7 +26,7 @@ environment: dev 模式（Docker 后端容器 + 本地 pnpm dev 前端）
 | 5 | 3 处失真已更正 | [A]+[V] | PASS | git diff | stage-21 + .env.common |
 | 6 | 更正的失真已登记 ADR-18 表 | [A] | PASS | `adr-2026-09-doc-drift-registry.md` §八 | |
 
-汇总：**PASS x / FAIL 0 / BLOCKED 0 / N/A 0**
+汇总：**PASS 6 / FAIL 0 / BLOCKED 0 / N/A 0**
 
 ## 3. 发现与分类
 

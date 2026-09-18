@@ -7,14 +7,11 @@
 CREATE TABLE IF NOT EXISTS emotion_echo_user.users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(64) UNIQUE NOT NULL,
-    phone VARCHAR(20) UNIQUE,
-    email VARCHAR(128) UNIQUE,
     password_hash VARCHAR(255),
     nickname VARCHAR(64),
     avatar_url TEXT,
     gender SMALLINT DEFAULT 0,
     birthday DATE,
-    status SMALLINT DEFAULT 1,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ

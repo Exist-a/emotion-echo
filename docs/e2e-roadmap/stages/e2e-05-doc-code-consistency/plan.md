@@ -2,7 +2,7 @@
 stage: e2e-05
 title: 文档与代码一致性收口
 type: transformation
-status: pending
+status: partial
 created: 2026-09-17
 depends-on: [e2e-02, e2e-03]
 blocks: [e2e-30]
