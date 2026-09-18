@@ -284,6 +284,33 @@ def check_a3(plan_text: str, report_nums: set[str], res: StageResult) -> None:
         )
 
 
+def row_claims_pass(row: list[str], header: list[str]) -> bool:
+    """该行是否在「结果」列**声称通过**。
+
+    A4 的判定前提是"该行声称成功、但证据只证明了文件存在"。若该行结果本身
+    就是 FAIL / 未验证 / BLOCKED / N/A，那证据里的存在性措辞（如"脚本已创建
+    **但**产物不存在"）是在**诚实陈述缺口**，不是假 PASS。
+
+    不加这条前提，审计器会反过来惩罚诚实的报告（E2E-F-64：E2E-04 的报告已被
+    R-02 如实改写为"❌ 假 PASS / ⚠️ 未验证"，却仍被 A4 按关键词判 FAIL，
+    且该误报还被写进了 SELFTEST_EXPECT 固化下来）。
+
+    取不到「结果」列时保守返回 True（宁可报，不可漏）。
+    """
+    idx = col_index(header, "结果")
+    if idx is None or idx >= len(row):
+        return True
+    cell = row[idx].strip()
+    low = cell.lower()
+    NEGATIVE_MARKERS = (
+        "fail", "未验证", "未做", "未运行", "未执行", "未补",
+        "假 pass", "blocked", "n/a", "❌", "⚠️",
+    )
+    if any(m in low for m in NEGATIVE_MARKERS):
+        return False
+    return "pass" in low or "通过" in cell
+
+
 def check_a4(rows: list[list[str]], header: list[str] | None, res: StageResult) -> None:
     if not header:
         res.findings.append(Finding("A4", "WARN", "report 测试点表无表头，跳过 A4"))
@@ -296,6 +323,9 @@ def check_a4(rows: list[list[str]], header: list[str] | None, res: StageResult) 
     phrase_hits, path_only_hits = [], []
     for r in rows:
         if idx >= len(r):
+            continue
+        # 只审"声称通过"的行：非通过行里的存在性措辞是在陈述缺口（见 row_claims_pass）
+        if not row_claims_pass(r, header):
             continue
         ev = r[idx]
         for phrase in EXISTENCE_PHRASES:
@@ -550,13 +580,94 @@ def audit_stage(stage: str, states: dict[str, str], ledger: list[dict[str, str]]
 # 跑不出这些 = 审计器无效（RUNBOOK §13.4）。
 # 注：R-02 修复后部分缺口已消除，更新期望值。
 SELFTEST_EXPECT = {
-    "e2e-03": ["A2", "A3"],        # 无汇总行；21 点中 13 点无结果
-    "e2e-04": ["A4", "A5"],        # "脚本已创建"/"配置已新增"；E2E-F-21 等未解决而 done
-    "e2e-05": ["A4", "A5"],        # R-02 修复了占位符，但仍有存在性措辞 + 未解决账本
+    # 2026-09-18 状态对齐后更新：E2E-03/04/05/06 由 done 改为 partial
+    # ⇒ A5（"标 done 却有未解决账本条目"）不再触发 —— 这是**修复后的正确行为**，
+    # 故期望值同步下调。剩余项均为真实未还的契约欠账（R-02 #1~#3）。
+    "e2e-03": ["A1", "A2", "A3"],  # report 非模板（缺「收口自检」）；无汇总行；21 点中 13 点无结果
+    "e2e-04": ["A2", "A6"],        # 汇总计数与表行数不符；收口自检项 "[x] …（待 push）"
+    "e2e-05": ["A4"],              # 3 个测试点的证据只有文件路径、无执行信号（RUNBOOK §4.1）
 }
 
 # 反误报样本：最接近合规的阶段，不应触发 A1~A5
 SELFTEST_NOFAIL = ["e2e-02"]
+
+# 不得误报的断言（E2E-F-64）：
+#   A4 的前提是"该行声称 PASS 但证据只证明存在"。E2E-04 的报告行 #4~#7 已被 R-02
+#   如实改写为"❌ 假 PASS / ⚠️ 未验证"，其证据里的"已创建/已新增"是在**陈述缺口**。
+#   修 A4 前这些行被误判为假 PASS，且误报被写进了本期望表固化。
+#   在此显式登记"不得触发"，防止误报再次被当成"复现结论"通过。
+SELFTEST_MUSTNOT = {
+    "e2e-04": ["A4"],
+}
+
+# 合成样本：直接喂给 row_claims_pass / check_a4，验证"诚实陈述缺口"不被误报。
+# 不依赖任何真实文档，故文档怎么改都不会让这条回归失效。
+A4_FIXTURE_HEADER = ["编号", "测试点", "判定", "结果", "证据"]
+A4_FIXTURE_ROWS = [
+    # 声称 PASS + 只证明存在 ⇒ 必须触发（真缺口）
+    ["1", "构建产物 smoke 通过", "[A]", "PASS", "脚本已创建"],
+    # 声称 PASS + 只有路径、无执行信号 ⇒ 必须触发（真缺口）
+    ["2", "校验脚本接入 CI", "[A]", "PASS", "`scripts/foo.sh`"],
+    # 如上但证据含执行信号 ⇒ 不得触发
+    ["3", "端到端跑通", "[A]", "PASS", "curl → HTTP 200，退出码 0"],
+    # 如实陈述缺口 ⇒ 不得触发（修 A4 的目标）
+    ["4", "构建产物 smoke 通过", "[A]", "⚠️ **未验证**", "脚本已创建但 `.output/public/index.html` 不存在"],
+    ["5", "lint 接入 CI", "[A]", "❌ **假 PASS**", "web-test.yml 无 typecheck 步骤"],
+    ["6", "mobile project 可跑", "[A]", "FAIL", "配置已新增，但未实际运行"],
+]
+
+
+def run_a4_fixture() -> bool:
+    """A4 合成样本回归（含正例与反例，故既防漏报也防误报）。"""
+    header = A4_FIXTURE_HEADER
+    rows = A4_FIXTURE_ROWS
+    res = StageResult(stage="fixture", slug="fixture")
+    check_a4(rows, header, res)
+    fired = sorted({f.check for f in res.failed})
+
+    # 逐行核对：编号 1/2 应触发，3/4/5/6 不应触发
+    hit_ids = set()
+    for f in res.failed:
+        for m in re.finditer(r"#(\d+)", f.message):
+            hit_ids.add(m.group(1))
+
+    ok = True
+    print("\n[A4 合成样本] 正例（应触发）编号 1,2；反例（不得触发）编号 3,4,5,6")
+    print(f"              实际触发编号：{sorted(hit_ids, key=int) or '无'} (findings={fired})")
+    if not {"1", "2"} <= hit_ids:
+        print("         ❌ 漏报：声称 PASS 且证据只证明存在的行未被判红 → A4 失效")
+        ok = False
+    bad = hit_ids & {"3", "4", "5", "6"}
+    if bad:
+        print(f"         ❌ 误报：编号 {sorted(bad, key=int)} 未声称通过，却被 A4 判红")
+        ok = False
+    if ok:
+        print("         ✅ 既不漏报也不误报")
+    return ok
+
+
+def row_claims_pass_fixture() -> bool:
+    """直接对 row_claims_pass 做表驱动断言（更贴近单元测试）。"""
+    cases = [
+        ("PASS", True),
+        ("PASS（附退出码 0）", True),
+        ("⚠️ **未验证**", False),
+        ("❌ **假 PASS**", False),
+        ("FAIL", False),
+        ("BLOCKED", False),
+        ("N/A", False),
+        ("未运行", False),
+    ]
+    ok = True
+    print("\n[row_claims_pass 表驱动]")
+    for cell, want in cases:
+        row = ["1", "x", "[A]", cell, "证据"]
+        got = row_claims_pass(row, A4_FIXTURE_HEADER)
+        flag = "✅" if got == want else "❌"
+        if got != want:
+            ok = False
+        print(f"         {flag} 结果列「{cell}」→ claims_pass={got}（期望 {want}）")
+    return ok
 
 
 def run_selftest(states, ledger) -> int:
@@ -590,6 +701,23 @@ def run_selftest(states, ledger) -> int:
             print(f"         ⚠️ 出现 FAIL：{got} → 可能误报，需人工确认")
         else:
             print("         ✅ 无误报")
+
+    for stage, mustnot in SELFTEST_MUSTNOT.items():
+        res = audit_stage(stage, states, ledger)
+        got = sorted({f.check for f in res.failed})
+        print(f"\n[{stage}] 不得误报 {mustnot}")
+        print(f"         实际检出 {got}")
+        bad = [c for c in mustnot if c in got]
+        if bad:
+            print(f"         ❌ 出现已知误报：{bad}（见 SELFTEST_MUSTNOT 注释）")
+            ok = False
+        else:
+            print("         ✅ 未误报")
+
+    if not run_a4_fixture():
+        ok = False
+    if not row_claims_pass_fixture():
+        ok = False
 
     print("\n" + "=" * 74)
     print("自校验结果：" + ("✅ 通过（审计器可信）" if ok else "❌ 失败（审计器无效，不得进入 R-01）"))
@@ -648,7 +776,9 @@ def main() -> int:
 
         n_fail = sum(1 for r in results if r.failed)
         print(f"\n合计：{len(results)} 个阶段，{n_fail} 个存在 FAIL")
-        print("提示：审计器覆盖 11 条断言（A1~A11）；TDD/ADR 门禁归 R-03 #3/#4")
+        print("提示：审计器覆盖 11 条断言（A1~A11）。其余：soft-assert→check_soft_asserts.sh；"
+              "TDD→check_tdd_gate.sh；孤儿→check_orphan_outputs.sh；ADR→check_adr_gate.sh；"
+              "残留→check_residual.sh；分支保护→check_required_checks.py（需管理员 token）")
 
     return 1 if any(r.failed for r in results) else 0
 

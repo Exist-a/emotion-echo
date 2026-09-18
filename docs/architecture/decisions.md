@@ -519,6 +519,22 @@
 >
 > **重启条件**：多机迁移正式启动时，按上述清单逆序重建（先 values-prod 与 namespace 约定，再补三个一次性 Job chart，最后接 APISIX 入口），以当时 compose 基线为唯一事实源。
 
+### 决策 24：Nuxt 渲染模式 = **SSR（`ssr: true`）**（2026-09-17 实施 / 2026-09-18 追认补档）
+
+> ✅ Accepted。**本文档性质：追认记录** —— 切换实际发生在 E2E-01 阶段（commit `6c91525`，8 文件 +113/-28），当时**未写任何决策记录**（ADR 目录 15 个文件无一条涉及渲染模式、本文件亦无条目），该缺口由 2026-09-18 独立审查发现并登记为 `E2E-F-52`，`R-02 #6` 要求补齐。本决策不改变实现，只补记录。
+>
+> **完整论证见 [ADR · 2026-09 · Nuxt 渲染模式切换到 SSR](adr/adr-2026-09-nuxt-ssr-mode.md)**。要点：
+>
+> **触发**：SPA 模式下 `useCookie` 异步写入与 `fetchUserInfo` 之间存在时序窗口 ⇒ 登录成功后立刻被踢回 /login、刷新页面闪现登录页。根因是服务端不参与首屏鉴权判定。
+>
+> **决策**：改用 SSR，由服务端在首屏渲染前读 cookie 判定鉴权状态（`nuxt.config.ts:8` `ssr: true`；`app/middleware/auth.global.ts:57` 的 `import.meta.server` 分支承担该职责）。
+>
+> **伴随约束（新增代码必须遵守）**：① 依赖浏览器专属 API 的代码必须做 SSR 隔离——Dexie/IndexedDB、`AudioContext`、WebGL 一律走懒初始化 / 懒 import / `ClientOnly` / `.client.vue`；② Playwright 必须等"可交互"而非仅 `visible`（SSR 下元素可见 ≠ 处理器就绪，E2E-01 有 3 个 spec 曾因此失败）；③ `pnpm build` 产出含 `index.html`。
+>
+> **备选被否理由**：保持 SPA 只改"登录后等待"能修第一条路径，但**刷新页面**时服务端仍不参与，首屏闪烁无法消除。
+>
+> **登记意义**：渲染模式属"架构关键词"，此后该类改动由 `scripts/check_adr_gate.sh` 检查是否附带 ADR + 本文件变更（R-03 #4）。
+
 > **🔧 2026-09-10 Stage 62 PR-2 微调**：下方 `## 🏗 当前架构全景` 已对齐决策 11/12
 > 关系说明（APISIX = 唯一业务入口；BFF = 聚合层 / APISIX upstream）。
 > 早期决策 18 #24 登记时基于"作者推断"误以为全景图含 '唯一前端入口' 措辞——实测全景图本身合规。

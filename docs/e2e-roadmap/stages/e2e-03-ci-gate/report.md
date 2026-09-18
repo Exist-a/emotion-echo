@@ -1,7 +1,7 @@
 ---
 stage: e2e-03
 title: CI/CD 门槛（落地 + 严格化）
-status: done
+status: partial
 created: 2026-09-17
 completed: 2026-09-17
 ---

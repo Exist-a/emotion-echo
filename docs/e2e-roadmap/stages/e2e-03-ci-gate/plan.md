@@ -2,7 +2,7 @@
 stage: e2e-03
 title: CI/CD 门槛（落地 + 严格化）
 type: transformation
-status: done
+status: partial
 created: 2026-09-17
 last-refresh: 2026-09-17 (补阶段 2「严格化」——现有 3 份模板不严谨，实测缺陷清单见 §2.5)
 depends-on: [e2e-02]

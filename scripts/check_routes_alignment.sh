@@ -175,6 +175,82 @@ if [ -n "$ORPHANED" ]; then
   # WARN 不计入 FAIL — 仅提醒
 fi
 
+# ============================================================
+# 契约 3（2026-09-18 新增，E2E-F-60 根因防复发）：
+#   APISIX auth 白名单 ⊇ BFF 支持的 auth action 集
+#
+# 为什么需要：BFF 用 authPathBypass 让**整个 `/api/v1/auth/` 前缀**跳过鉴权
+# （main.go:257 `strings.HasPrefix(..., "/api/v1/auth/")`），而 APISIX 只对
+# put_auth_route 注册的白名单放行、其余 `/api/v1/*` 一律走 jwt-auth。
+# 于是"BFF 已支持但 APISIX 未白名单"的 auth action 会在**网关层**被 401 ——
+# BFF 单测看不见（它不经过 APISIX），本脚本原有断言也看不见（原文写
+# "APISIX 用通配符 /api/v1/*，不需对齐"，恰好是盲区）。
+# 实例：`verify-security-answer`（D-01=C 找回密码）落此坑，R-01 #2 因此未通。
+#
+# 断言方向：BFF action 集 ⊆ APISIX 白名单（缺一即 FAIL）
+# 反向（白名单有但 BFF 无对应 action）只 WARN，提示可清理的死路由。
+# ============================================================
+AUTH_HANDLER="$REPO_ROOT/emotion-echo-web-bff/internal/handler/auth_handler.go"
+SEED_SH="$REPO_ROOT/deploy/apisix/seed.sh"
+
+echo ""
+echo "[check] 契约 3：APISIX auth 白名单 ⊇ BFF auth action 集 ..."
+
+if [ ! -f "$AUTH_HANDLER" ] || [ ! -f "$SEED_SH" ]; then
+  echo "[FAIL] 契约 3 前置失败：缺 $AUTH_HANDLER 或 $SEED_SH" >&2
+  FAIL=$((FAIL+1))
+else
+  # 从 BFF 的 switch c.Param("action") 块提取 action 名
+  AUTH_ACTIONS=$(awk '
+    /switch c\.Param\("action"\)/ { inblock=1; next }
+    inblock && /default:/        { inblock=0; next }
+    inblock && /case "/ {
+      if (match($0, /case "([a-z0-9-]+)"/, m)) print m[1]
+    }
+  ' "$AUTH_HANDLER" | sort -u)
+
+  # 从 seed.sh 提取 put_auth_route 注册的 /api/v1/auth/* URI
+  APISIX_AUTH_URIS=$(grep -oE 'put_auth_route[[:space:]]+[0-9]+[[:space:]]+"/api/v1/auth/[^"]+"' "$SEED_SH" \
+    | sed -E 's/.*"([^"]+)"/\1/' | sort -u || true)
+
+  AUTH_ACTION_COUNT=$(printf '%s\n' "$AUTH_ACTIONS" | grep -c . || true)
+  APISIX_WHITELIST_COUNT=$(printf '%s\n' "$APISIX_AUTH_URIS" | grep -c . || true)
+  echo "[check]   BFF auth action 数: $AUTH_ACTION_COUNT | APISIX auth 白名单数: $APISIX_WHITELIST_COUNT"
+
+  if [ "$AUTH_ACTION_COUNT" -eq 0 ]; then
+    echo "[FAIL] 契约 3 解析失败：未从 auth_handler.go 提取到任何 auth action" >&2
+    FAIL=$((FAIL+1))
+  else
+    MISSING_AUTH=""
+    while IFS= read -r action; do
+      [ -z "$action" ] && continue
+      want="/api/v1/auth/$action"
+      if ! printf '%s\n' "$APISIX_AUTH_URIS" | grep -qxF "$want"; then
+        MISSING_AUTH="$MISSING_AUTH  $want"$'\n'
+      fi
+    done <<< "$AUTH_ACTIONS"
+
+    if [ -z "$MISSING_AUTH" ]; then
+      echo "[PASS] BFF 的 $AUTH_ACTION_COUNT 个 auth action 全部在 APISIX 白名单内"
+      PASS=$((PASS+1))
+    else
+      echo "[FAIL] 以下 BFF auth action 未在 APISIX 白名单注册（网关层将 401，用户不可达）："
+      printf '%s' "$MISSING_AUTH"
+      echo "       修法：deploy/apisix/seed.sh 增加 put_auth_route <新 id> \"<uri>\"（并确认该 id 不在 Step 4.5 漂移清理列表）"
+      FAIL=$((FAIL+1))
+    fi
+
+    # 反向 WARN：白名单有但 BFF 无对应 action
+    while IFS= read -r uri; do
+      [ -z "$uri" ] && continue
+      action="${uri##*/}"
+      if ! printf '%s\n' "$AUTH_ACTIONS" | grep -qxF "$action"; then
+        echo "[WARN] APISIX 白名单 $uri 在 BFF 无对应 auth action（死路由，可清理）"
+      fi
+    done <<< "$APISIX_AUTH_URIS"
+  fi
+fi
+
 echo ""
 echo "==========="
 echo "PASS=$PASS FAIL=$FAIL"

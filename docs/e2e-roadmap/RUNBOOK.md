@@ -430,7 +430,9 @@ python scripts/e2e_stage_audit.py --selftest
 - **不得误报**：对最接近合规的 E2E-02 不产生 FAIL；对 19 个未开工阶段（无详档，符合 just-in-time 约定）不产生 FAIL
 - **状态判定不得靠全文关键词**：状态单元格描述瑕疵时会**提到** `BLOCKED` 等词，故按优先级 + 限定措辞判定
 
-**在剩余 12 条断言落地前**：人工核对仍按 §13.3 清单执行；**执行者不得自行宣布 `done`**。
+**覆盖现状（2026-09-18 R-03 收尾后）**：17 条里 **13 条已机械化**——①~⑦、⑨~⑫ 由 `scripts/e2e_stage_audit.py`（A1~A11）覆盖；⑧ 由 `check_soft_asserts.sh`；⑬ 由 `check_tdd_gate.sh`；⑭ 由 `check_orphan_outputs.sh`；⑮ 由 `check_adr_gate.sh`；⑰ 由 `check_residual.sh`。⑯ 已实现但需管理员 token，列为收口时的第二方核对命令。
+
+**在自动化完全接管前**：人工核对仍按 §13.3 清单执行；**执行者不得自行宣布 `done`**。
 
 ### 13.3 必须机械校验的断言清单（17 条；✅ = MVA 已覆盖）
 
@@ -443,7 +445,7 @@ python scripts/e2e_stage_audit.py --selftest
 | 5 | plan 里出现的**全部编号项**（测试点 #N、缺陷 AN/BN/CN/DN）在 report 里**一一有结论**（集合包含关系） | AP-07 |
 | 6 | 证据列**不含**"已创建/已新增/已配置/已实现/已落地"等存在性措辞 | AP-01 |
 | 7 | 全部 `plan` 测试点中判定含 `[V]` 的，`screenshots/` 里**有对应截图**且文件非空 | AP-01 |
-| 8 | 不存在被注释掉的断言文件被当作 `[A]` 证据（soft-assert 检测） | AP-01 |
+| 8 | 不存在被注释掉的断言文件被当作 `[A]` 证据（soft-assert 检测） | AP-01 | ✅ **已机械化**：`scripts/check_soft_asserts.sh`（含负向测试 `test_check_soft_asserts.sh`，5/5 用例；已接入 CI）。已知 1 处登记在 `scripts/soft_assert_allowlist.txt`（E2E-F-51） |
 | 9 | 阶段相关每条 `E2E-F-xx` 的状态与 roadmap 的 done 状态**无冲突**（未解决条目所属阶段不得为 done） | AP-04 |
 | 10 | `plan.md` / `roadmap.md` / `report.md` 三处的 `status` **一致** | AP-14 |
 | 11 | 账本编号**连续无跳号无重复** | §5 |
@@ -451,7 +453,7 @@ python scripts/e2e_stage_audit.py --selftest
 | 13 | 改动含生产代码时，同批 commit 含 `_test.go` / `*.spec.ts` 变更 | AP-09 |
 | 14 | 新增 `scripts/*` 与 `.github/workflows/*` **被引用**；新增 helper **有调用方** | AP-10 |
 | 15 | 命中架构关键词（渲染模式/框架/存储/协议/认证）的改动，commit 含 **ADR 文件 + `decisions.md` 变更** | AP-08 |
-| 16 | 报告中引用"CI 会拦/不可 merge"时，`required_status_checks` **非空**（API 可查） | AP-11 |
+| 16 | 报告中引用"CI 会拦/不可 merge"时，`required_status_checks` **非空**（API 可查） | AP-11 | ✅ **已实现**：`scripts/check_required_checks.py`（断言非空 + **不得**把带 `paths` 过滤的 job 列为 required，否则锁死）。**但不在 CI 内自动执行**：读分支保护需管理员权限，默认 `GITHUB_TOKEN` 无权（403）⇒ 列为**收口时第二方核对的必跑命令**（人工理由已明示） |
 | 17 | 残留扫描：`*;D` 类空目录、无末尾换行文件、`git status` 之外的未跟踪残留 | AP-14 |
 
 ### 13.4 审计器的设计约束

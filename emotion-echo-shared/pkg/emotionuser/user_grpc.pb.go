@@ -45,14 +45,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	UserService_GetMe_FullMethodName                = "/emotion_user.v1.UserService/GetMe"
-	UserService_UpdateProfile_FullMethodName        = "/emotion_user.v1.UserService/UpdateProfile"
-	UserService_GetUserById_FullMethodName          = "/emotion_user.v1.UserService/GetUserById"
-	UserService_Login_FullMethodName                = "/emotion_user.v1.UserService/Login"
-	UserService_Register_FullMethodName             = "/emotion_user.v1.UserService/Register"
-	UserService_ResetPassword_FullMethodName        = "/emotion_user.v1.UserService/ResetPassword"
-	UserService_Logout_FullMethodName               = "/emotion_user.v1.UserService/Logout"
-	UserService_VerifySecurityAnswer_FullMethodName = "/emotion_user.v1.UserService/VerifySecurityAnswer"
+	UserService_GetMe_FullMethodName                          = "/emotion_user.v1.UserService/GetMe"
+	UserService_UpdateProfile_FullMethodName                  = "/emotion_user.v1.UserService/UpdateProfile"
+	UserService_GetUserById_FullMethodName                    = "/emotion_user.v1.UserService/GetUserById"
+	UserService_Login_FullMethodName                          = "/emotion_user.v1.UserService/Login"
+	UserService_Register_FullMethodName                       = "/emotion_user.v1.UserService/Register"
+	UserService_ResetPassword_FullMethodName                  = "/emotion_user.v1.UserService/ResetPassword"
+	UserService_Logout_FullMethodName                         = "/emotion_user.v1.UserService/Logout"
+	UserService_VerifySecurityAnswer_FullMethodName           = "/emotion_user.v1.UserService/VerifySecurityAnswer"
+	UserService_VerifySecurityAnswerByUsername_FullMethodName = "/emotion_user.v1.UserService/VerifySecurityAnswerByUsername"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -99,6 +100,17 @@ type UserServiceClient interface {
 	//
 	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
 	VerifySecurityAnswer(ctx context.Context, in *VerifySecurityAnswerRequest, opts ...grpc.CallOption) (*VerifySecurityAnswerResponse, error)
+	// VerifySecurityAnswerByUsername 按用户名验证密保答案（R-01 #2 真修通）
+	//
+	// 为什么需要：找回密码发起时用户尚未登录，前端只有用户名、没有 user_id，
+	// 故走不了上面的 VerifySecurityAnswer。HTTP transport 侧的
+	// POST /api/v1/users/verify-security-answer 早已支持按用户名校验，
+	// 但 gRPC 侧此前是"未实现"桩，而 BFF 默认走 gRPC
+	// ⇒ 找回密码在 dev/默认配置下恒 401（端点可达但功能不通）。
+	// 本 RPC 让两种 transport 行为对齐。
+	//
+	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
+	VerifySecurityAnswerByUsername(ctx context.Context, in *VerifySecurityAnswerByUsernameRequest, opts ...grpc.CallOption) (*VerifySecurityAnswerByUsernameResponse, error)
 }
 
 type userServiceClient struct {
@@ -189,6 +201,16 @@ func (c *userServiceClient) VerifySecurityAnswer(ctx context.Context, in *Verify
 	return out, nil
 }
 
+func (c *userServiceClient) VerifySecurityAnswerByUsername(ctx context.Context, in *VerifySecurityAnswerByUsernameRequest, opts ...grpc.CallOption) (*VerifySecurityAnswerByUsernameResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifySecurityAnswerByUsernameResponse)
+	err := c.cc.Invoke(ctx, UserService_VerifySecurityAnswerByUsername_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
@@ -233,6 +255,17 @@ type UserServiceServer interface {
 	//
 	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
 	VerifySecurityAnswer(context.Context, *VerifySecurityAnswerRequest) (*VerifySecurityAnswerResponse, error)
+	// VerifySecurityAnswerByUsername 按用户名验证密保答案（R-01 #2 真修通）
+	//
+	// 为什么需要：找回密码发起时用户尚未登录，前端只有用户名、没有 user_id，
+	// 故走不了上面的 VerifySecurityAnswer。HTTP transport 侧的
+	// POST /api/v1/users/verify-security-answer 早已支持按用户名校验，
+	// 但 gRPC 侧此前是"未实现"桩，而 BFF 默认走 gRPC
+	// ⇒ 找回密码在 dev/默认配置下恒 401（端点可达但功能不通）。
+	// 本 RPC 让两种 transport 行为对齐。
+	//
+	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
+	VerifySecurityAnswerByUsername(context.Context, *VerifySecurityAnswerByUsernameRequest) (*VerifySecurityAnswerByUsernameResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -266,6 +299,9 @@ func (UnimplementedUserServiceServer) Logout(context.Context, *LogoutRequest) (*
 }
 func (UnimplementedUserServiceServer) VerifySecurityAnswer(context.Context, *VerifySecurityAnswerRequest) (*VerifySecurityAnswerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifySecurityAnswer not implemented")
+}
+func (UnimplementedUserServiceServer) VerifySecurityAnswerByUsername(context.Context, *VerifySecurityAnswerByUsernameRequest) (*VerifySecurityAnswerByUsernameResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifySecurityAnswerByUsername not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -432,6 +468,24 @@ func _UserService_VerifySecurityAnswer_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_VerifySecurityAnswerByUsername_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifySecurityAnswerByUsernameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).VerifySecurityAnswerByUsername(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_VerifySecurityAnswerByUsername_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).VerifySecurityAnswerByUsername(ctx, req.(*VerifySecurityAnswerByUsernameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -470,6 +524,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifySecurityAnswer",
 			Handler:    _UserService_VerifySecurityAnswer_Handler,
+		},
+		{
+			MethodName: "VerifySecurityAnswerByUsername",
+			Handler:    _UserService_VerifySecurityAnswerByUsername_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
