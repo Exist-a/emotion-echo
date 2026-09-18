@@ -92,7 +92,6 @@ func TestGetMeHandler_HappyPath_Returns200(t *testing.T) {
 	repo.Create(context.Background(), &model.User{
 		ID:       7,
 		Username: "alice",
-		Phone:    strPtr("+8613800000007"),
 		Nickname: strPtr("Alice"),
 	})
 	r := gin.New()

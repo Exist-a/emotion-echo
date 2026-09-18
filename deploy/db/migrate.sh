@@ -161,15 +161,13 @@ run_tracked_sql_file() {
   ensure_migrations_table
 
   # 检查是否已应用
-  if check_migration "$version" "$checksum"; then
+  check_migration "$version" "$checksum"
+  rc=$?
+  if [ $rc -eq 0 ]; then
     log "  SKIP $name（已应用，checksum 一致）"
     return 0
-  fi
-
-  # 检查 checksum 不一致的情况
-  if ! check_migration "$version" ""; then
-    # 已应用但 checksum 不一致（通过返回码 2 判断）
-    : # 下面的 check_migration 会返回 2
+  elif [ $rc -eq 2 ]; then
+    die "迁移文件被修改：$name（checksum 不一致，expected=$checksum）"
   fi
 
   # 执行迁移

@@ -23,7 +23,7 @@ func TestUserClient_GetMe_Success(t *testing.T) {
 		assert.Equal(t, "7", r.Header.Get(XUserIDHeader))
 		assert.Empty(t, r.Header.Get("Authorization"), "不再透传 Authorization")
 		_ = json.NewEncoder(w).Encode(userWrapper{User: &UserInfo{
-			UserID: 7, Account: "alice", Phone: "13800000000", Nickname: "Alice",
+			UserID: 7, Account: "alice", Nickname: "Alice",
 		}})
 	}))
 	defer srv.Close()

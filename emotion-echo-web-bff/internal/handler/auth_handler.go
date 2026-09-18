@@ -169,9 +169,10 @@ func (h *AuthHandler) register(c *gin.Context) {
 		return
 	}
 
-	// E2E-06: 密保问题必填（1~2 个）
-	if len(req.SecurityQuestions) < 1 || len(req.SecurityQuestions) > 2 {
-		Fail(c, http.StatusBadRequest, 1, "validation: 1-2 security questions are required")
+	// D-05: 密保问题暂时可选（后端回退），前端录入 UI 归 E2E-09
+	// 若提供则校验格式（1~2 个，非空）
+	if len(req.SecurityQuestions) > 2 {
+		Fail(c, http.StatusBadRequest, 1, "validation: at most 2 security questions allowed")
 		return
 	}
 	for _, sq := range req.SecurityQuestions {
@@ -474,16 +475,12 @@ func (h *AuthHandler) verifySecurityAnswer(c *gin.Context) {
 		return
 	}
 
-	// 先查用户 ID（用 Login 获取，仅验证用户存在）
-	info, err := h.user.Login(c.Request.Context(), req.Username, "dummy")
-	if err != nil || info == nil {
-		// 防枚举：不区分用户是否存在
-		OK(c, gin.H{"success": true})
-		return
-	}
-
-	err = h.user.VerifySecurityAnswer(c.Request.Context(), info.UserID, req.QuestionOrder, req.Answer)
+	// R-01 #1 修复：不再用 Login(username, "dummy") 探测用户存在性
+	// 直接用 user-svc 的 VerifySecurityAnswerByUsername 端点
+	// user-svc 会自行处理用户不存在的情况（返回 ErrNotFound → 401 防枚举）
+	err := h.user.VerifySecurityAnswerByUsername(c.Request.Context(), req.Username, req.QuestionOrder, req.Answer)
 	if err != nil {
+		// 防枚举：不区分"用户不存在"和"答案错误"，统一返回 401
 		Fail(c, http.StatusUnauthorized, 1, "security answer verification failed")
 		return
 	}

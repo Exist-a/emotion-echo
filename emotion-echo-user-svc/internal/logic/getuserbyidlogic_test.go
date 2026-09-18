@@ -52,7 +52,6 @@ func TestGetUserByIdLogic_HappyPath_MapsUserInfo(t *testing.T) {
 	repo.Create(context.Background(), &model.User{
 		ID:       42,
 		Username: "alice",
-		Phone:    strPtr("+8613800000001"),
 		Nickname: strPtr("Alice"),
 	})
 
@@ -62,21 +61,19 @@ func TestGetUserByIdLogic_HappyPath_MapsUserInfo(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, int64(42), resp.User.UserId)
 	assert.Equal(t, "alice", resp.User.Account)
-	assert.Equal(t, "+8613800000001", resp.User.Phone)
 	assert.Equal(t, "Alice", resp.User.Nickname)
 }
 
-func TestGetUserByIdLogic_NilPhoneAndNickname_ReturnsEmptyStrings(t *testing.T) {
+func TestGetUserByIdLogic_NilNickname_ReturnsEmptyString(t *testing.T) {
 	t.Parallel()
 	repo := repository.NewInMemoryUserRepo()
-	repo.Create(context.Background(), &model.User{ID: 7, Username: "bob"}) // Phone, Nickname == nil
+	repo.Create(context.Background(), &model.User{ID: 7, Username: "bob"}) // Nickname == nil
 
 	l := NewGetUserByIdLogic(context.Background(), newGetUserByIdSvcCtx(repo))
 	resp, err := l.GetUserById(&types.GetUserByIdReq{Id: 7})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, "bob", resp.User.Account)
-	assert.Equal(t, "", resp.User.Phone)
 	assert.Equal(t, "", resp.User.Nickname)
 }
 

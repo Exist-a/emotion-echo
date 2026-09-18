@@ -52,7 +52,7 @@ func (f *fakeUserClient) Login(_ context.Context, _, _ string) (*downstream.User
 	}
 	return f.login, nil
 }
-func (f *fakeUserClient) Register(_ context.Context, _, _, _ string) (*downstream.UserInfo, error) {
+func (f *fakeUserClient) Register(_ context.Context, _, _, _ string, _ []downstream.SecurityQuestion) (*downstream.UserInfo, error) {
 	if f.regErr != nil {
 		return nil, f.regErr
 	}
@@ -65,6 +65,16 @@ func (f *fakeUserClient) ResetPassword(_ context.Context, _ downstream.ResetPass
 		return nil, f.err
 	}
 	return f.me, nil
+}
+
+// E2E-06: fake VerifySecurityAnswer
+func (f *fakeUserClient) VerifySecurityAnswer(_ context.Context, _ int64, _ int, _ string) error {
+	return f.err
+}
+
+// R-01 #1: fake VerifySecurityAnswerByUsername
+func (f *fakeUserClient) VerifySecurityAnswerByUsername(_ context.Context, _ string, _ int, _ string) error {
+	return f.err
 }
 
 func newUserRouter(client downstream.UserClient) *gin.Engine {

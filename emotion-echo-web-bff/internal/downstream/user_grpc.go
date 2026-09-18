@@ -20,6 +20,7 @@ package downstream
 
 import (
 	"context"
+	"fmt"
 
 	emotionuser "github.com/emotion-echo/shared/pkg/emotionuser"
 
@@ -164,6 +165,12 @@ func (c *userGRPCClient) VerifySecurityAnswer(ctx context.Context, userID int64,
 		return wrapGRPCError(err, "user verifySecurityAnswer")
 	}
 	return nil
+}
+
+// R-01 #1: VerifySecurityAnswerByUsername gRPC 实现
+// 找回密码流程走 HTTP，gRPC 端返回未实现错误
+func (c *userGRPCClient) VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error {
+	return fmt.Errorf("VerifySecurityAnswerByUsername not implemented for gRPC transport, use HTTP")
 }
 
 // ============ proto → types 转换 ============

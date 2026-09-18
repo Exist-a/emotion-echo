@@ -21,7 +21,6 @@ func TestUserRepo_InMemory_GetByID_Existing_ReturnsUser(t *testing.T) {
 	require.NoError(t, repo.Create(context.Background(), &model.User{
 		ID:       1,
 		Username: "alice",
-		Phone:    strPtr("13800138000"),
 		Nickname: strPtr("Alice"),
 	}))
 
@@ -30,8 +29,8 @@ func TestUserRepo_InMemory_GetByID_Existing_ReturnsUser(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, int64(1), got.ID)
 	assert.Equal(t, "alice", got.Username)
-	require.NotNil(t, got.Phone)
-	assert.Equal(t, "13800138000", *got.Phone)
+	require.NotNil(t, got.Nickname)
+	assert.Equal(t, "Alice", *got.Nickname)
 }
 
 func TestUserRepo_InMemory_GetByID_NotFound_ReturnsNil(t *testing.T) {
@@ -56,21 +55,6 @@ func TestUserRepo_InMemory_GetByUsername_Existing(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, int64(42), got.ID)
-}
-
-func TestUserRepo_InMemory_GetByPhone_Existing(t *testing.T) {
-	t.Parallel()
-
-	repo := NewInMemoryUserRepo()
-	require.NoError(t, repo.Create(context.Background(), &model.User{
-		ID:    7,
-		Phone: strPtr("13900139000"),
-	}))
-
-	got, err := repo.GetByPhone(context.Background(), "13900139000")
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, int64(7), got.ID)
 }
 
 func TestUserRepo_InMemory_Ping_OK(t *testing.T) {

@@ -155,6 +155,8 @@ func main() {
 		noAuth.POST("/register", handler.RegisterHandler(svcCtx))
 		// Sprint 1 PR-4c-3: 密码重置（BFF 校验 verification-code 后调）
 		noAuth.POST("/reset-password", handler.ResetPasswordHandler(svcCtx))
+		// R-01 #1: 密保答案验证（供 BFF 找回密码流程）
+		noAuth.POST("/verify-security-answer", handler.VerifySecurityAnswerHandler(svcCtx))
 	}
 
 	r.Use(sharedmw.GinAuthMiddleware())

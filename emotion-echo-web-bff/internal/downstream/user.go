@@ -79,6 +79,8 @@ type UserClient interface {
 	Register(ctx context.Context, username, password, verificationCode string, securityQuestions []SecurityQuestion) (*UserInfo, error)
 	// E2E-06: 验证密保答案（供 D-01=C 找回密码）
 	VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error
+	// R-01 #1: 按用户名验证密保答案（不需要先获取 userID）
+	VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error
 }
 
 // UserClientOptions 构造选项
@@ -219,6 +221,29 @@ func (c *userHTTPClient) VerifySecurityAnswer(ctx context.Context, userID int64,
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("downstream: verify security answer: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return readError(resp)
+	}
+	return nil
+}
+
+// R-01 #1: VerifySecurityAnswerByUsername 按用户名验证密保答案
+func (c *userHTTPClient) VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error {
+	body, _ := json.Marshal(map[string]any{
+		"username":     username,
+		"questionOrder": questionOrder,
+		"answer":       answer,
+	})
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/users/verify-security-answer", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("downstream: verify security answer by username: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {

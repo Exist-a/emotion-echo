@@ -185,28 +185,25 @@ func TestAuthLogic_Register_TooShortPassword_ReturnsValidation(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrValidation))
 }
 
-func TestAuthLogic_Register_WithPhoneAndNickname_PersistsOptionalFields(t *testing.T) {
+func TestAuthLogic_Register_WithNickname_PersistsOptionalFields(t *testing.T) {
 	t.Parallel()
 
 	repo := repository.NewInMemoryUserRepo()
 	l := newTestAuthLogic(repo)
 
-	phone := "13800000001"
 	nick := "Nick"
 	resp, err := l.Register(&types.RegisterReq{
-		Username: "phoneuser",
+		Username: "newuser",
 		Password: "valid-password",
-		Phone:    &phone,
 		Nickname: &nick,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, phone, resp.User.Phone)
 	assert.Equal(t, nick, resp.User.Nickname)
 
-	stored, _ := repo.GetByUsername(context.Background(), "phoneuser")
+	stored, _ := repo.GetByUsername(context.Background(), "newuser")
 	require.NotNil(t, stored)
-	require.NotNil(t, stored.Phone)
-	assert.Equal(t, phone, *stored.Phone)
+	require.NotNil(t, stored.Nickname)
+	assert.Equal(t, nick, *stored.Nickname)
 }
 
 // =============================================================================

@@ -56,13 +56,23 @@ func (f *fakeAvatarUserClient) UsernameExists(ctx context.Context, username stri
 func (f *fakeAvatarUserClient) Login(ctx context.Context, username, password string) (*downstream.UserInfo, error) {
 	return nil, nil
 }
-func (f *fakeAvatarUserClient) Register(ctx context.Context, username, password, code string) (*downstream.UserInfo, error) {
+func (f *fakeAvatarUserClient) Register(ctx context.Context, username, password, code string, questions []downstream.SecurityQuestion) (*downstream.UserInfo, error) {
 	return nil, nil
 }
 
 // Sprint 1 PR-4c-3: fake ResetPassword
 func (f *fakeAvatarUserClient) ResetPassword(ctx context.Context, req downstream.ResetPasswordReq) (*downstream.UserInfo, error) {
 	return nil, nil
+}
+
+// E2E-06: fake VerifySecurityAnswer
+func (f *fakeAvatarUserClient) VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error {
+	return nil
+}
+
+// R-01 #1: fake VerifySecurityAnswerByUsername
+func (f *fakeAvatarUserClient) VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error {
+	return nil
 }
 
 // fakeStorage 模拟 StorageClient

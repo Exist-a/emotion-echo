@@ -33,7 +33,6 @@ func TestGetMeLogic_ExistingUser_ReturnsUserInfo(t *testing.T) {
 	require.NoError(t, repo.Create(context.Background(), &model.User{
 		ID:       5,
 		Username: "alice",
-		Phone:    sp("13800"),
 		Nickname: sp("Alice"),
 	}))
 

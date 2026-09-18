@@ -93,8 +93,9 @@ func (l *AuthLogic) Register(req *types.RegisterReq) (*types.RegisterResp, error
 	if len(req.Password) < 6 {
 		return nil, ErrValidation
 	}
-	// E2E-06: 密保问题必填（1~2 个）
-	if len(req.SecurityQuestions) < 1 || len(req.SecurityQuestions) > 2 {
+	// D-05: 密保问题暂时可选（后端回退），前端录入 UI 归 E2E-09
+	// 若提供则校验格式（1~2 个，非空）
+	if len(req.SecurityQuestions) > 2 {
 		return nil, ErrValidation
 	}
 	for _, sq := range req.SecurityQuestions {
@@ -125,22 +126,24 @@ func (l *AuthLogic) Register(req *types.RegisterReq) (*types.RegisterResp, error
 		return nil, err
 	}
 
-	// E2E-06: 保存密保问题
-	answers := make([]*model.SecurityAnswer, len(req.SecurityQuestions))
-	for i, sq := range req.SecurityQuestions {
-		answerHash, err := password.Hash(sq.Answer)
-		if err != nil {
+	// D-05: 密保问题可选——若提供则保存
+	if len(req.SecurityQuestions) > 0 {
+		answers := make([]*model.SecurityAnswer, len(req.SecurityQuestions))
+		for i, sq := range req.SecurityQuestions {
+			answerHash, err := password.Hash(sq.Answer)
+			if err != nil {
+				return nil, err
+			}
+			answers[i] = &model.SecurityAnswer{
+				UserID:        u.ID,
+				QuestionOrder: int16(i + 1),
+				Question:      sq.Question,
+				AnswerHash:    answerHash,
+			}
+		}
+		if err := l.svcCtx.SecurityAnswerRepo.Save(l.ctx, answers); err != nil {
 			return nil, err
 		}
-		answers[i] = &model.SecurityAnswer{
-			UserID:        u.ID,
-			QuestionOrder: int16(i + 1),
-			Question:      sq.Question,
-			AnswerHash:    answerHash,
-		}
-	}
-	if err := l.svcCtx.SecurityAnswerRepo.Save(l.ctx, answers); err != nil {
-		return nil, err
 	}
 
 	return &types.RegisterResp{User: toUserInfo(u)}, nil
@@ -180,6 +183,31 @@ func (l *AuthLogic) VerifySecurityAnswer(userID int64, questionOrder int, answer
 		}
 	}
 	return repository.ErrNotFound
+}
+
+// R-01 #1: VerifySecurityAnswerByUsername 按用户名验证密保答案
+// 供 BFF 找回密码流程使用（不需要先获取 userID）
+//
+// 流程：
+//  1. 按 username 查询用户
+//  2. 调用 VerifySecurityAnswer 验证答案
+//
+// 错误语义：
+//  - ErrNotFound：用户不存在或无密保问题
+//  - ErrValidation：questionOrder 不合法
+//  - ErrSecurityAnswerMismatch：答案错误
+func (l *AuthLogic) VerifySecurityAnswerByUsername(username string, questionOrder int, answer string) error {
+	if username == "" {
+		return ErrValidation
+	}
+	user, err := l.svcCtx.UserRepo.GetByUsername(l.ctx, username)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return repository.ErrNotFound
+	}
+	return l.VerifySecurityAnswer(user.ID, questionOrder, answer)
 }
 
 // toUserInfo model.User → types.UserInfo（不暴露 PasswordHash）
