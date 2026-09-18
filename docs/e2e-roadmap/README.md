@@ -12,7 +12,7 @@
 | [remediation.md](remediation.md) | **补救排期**：R-01 阻断修复 / R-02 收口补账 / R-03 约束机制。当前激活 |
 | [roadmap.md](roadmap.md) | 30 阶段总表（🔧 改造阶段）+ R 系列 + 改造决议状态 + 依赖声明 + 决策门 |
 | [decisions.md](decisions.md) | 改造项决议记录（D-01 密保问题 / D-02 两种量表并存 / D-03 真口型同步 / D-04 i18n 候选） |
-| [discovered-unresolved.md](discovered-unresolved.md) | 已发现未解决账本（E2E-F-01~59，含"不列入阶段的候选"评估表） |
+| [discovered-unresolved.md](discovered-unresolved.md) | 已发现未解决账本（E2E-F-01~67，含"不列入阶段的候选"评估表） |
 | [findings/](findings/) | 建档/阶段预探查的代码级发现全景（带文件行号证据） |
 | [stages/](stages/) | 每阶段详档 `plan.md` + 执行记录 `report.md` + 截图 |
 
@@ -29,7 +29,7 @@
 1. 读 [RUNBOOK.md](RUNBOOK.md)（执行协议，必读；含 §4.1 证据有效性、§7 收口契约 11 项、§13 收口审计）
 2. 读 [anti-patterns.md](anti-patterns.md)（**14 类已真实发生的失真反例，收口前必读**）
 3. 读 [roadmap.md](roadmap.md) 顶部「⚠️ 当前被阻断」+「R 系列」+「决策门」
-4. 读 [remediation.md](remediation.md) 确认当前该做哪一步（R-00 ✅ → R-01 待做 → R-02 → R-03）
+4. 读 [remediation.md](remediation.md) 确认当前该做哪一步（R-00 ✅ → **R-01 未完成（#2 网关路由）** → R-02 收尾 → R-03 收尾）
 5. 读目标阶段的 `stages/<e2e-NN-slug>/plan.md`
 6. 按 RUNBOOK §1 开工前置检查 → §2 起环境 → §3 六步循环 → §7 收口契约 → **§13 审计**
 
@@ -45,18 +45,22 @@ python scripts/e2e_stage_audit.py --selftest         # 校验审计器本身可�
 
 **执行者不得自行宣布阶段 `done`** —— 必须审计器无 FAIL，且（过渡期）由第二方按 §13.3 核对。
 
-## 交接说明（2026-09-18，给下一个执行 agent）
+## 交接说明（2026-09-18 第二方核对后更新，给下一个执行 agent）
 
-**当前状态**：R-00（审计器 MVA）已完成并通过自校验；**R-01 阻断修复尚未开始**。
+**当前状态**：R-00 ✅ 完成且自校验通过；**R-01 未完成**（6/7 项实测为真，**#2 不可达**）；R-02 / R-03 为**部分完成**（非"基本完成"）。工作区**干净**（`git status --porcelain` 为空），但 `main` 已 ahead 2 个 commit 且**推不上去**（见下）。
 
-**接手前必须先确认**：工作区有 **34 个未提交文件**（E2E-06 的代码/schema/proto 改动 + 其自有文档）。这些改动里包含 R-01 要修的对象（如 `bff/internal/handler/auth_handler.go` 的 fail-open）。**必须先与用户确认这批 WIP 的去留**（提交为基线 / 用户自行处理 / 部分丢弃），再开工 R-01。
+**⚠️ 第 0 步（不解决则任何产出都无法落地）：解除 `main` 的写保护自锁死**。
+实测 `required_pull_request_reviews.required_approving_review_count = 1` + `enforce_admins = true` + 仓库**只有一个协作者** ⇒ 直推被拒、PR 又凑不到 approve（GitHub 不允许自我 approve）。`48ac75b` 与 `3662fae` 因此滞留本地。建议（单人维护的常见做法）：保留 PR 流程但把 `required_approving_review_count` 设为 **0**，并按 D-08 只把**无 `paths` 过滤**的 job 加入 required checks；若要保留真实评审，则增加第二个账号。详见 E2E-F-68。
 
-**R-01 的三件必须先做的事**（详见 [remediation.md](remediation.md) §R-01）：
-1. **先跑基线**：`go vet ./...`（会编译测试文件）应在 user-svc 报 4 个 `unknown field Phone` —— 这是已知的待修项，不是新问题
-2. **按 D-05 回退注册强制校验**，让注册恢复可用（前端 UI 归 E2E-09）
-3. **按 R-01 §CI 红态精确诊断**处置 `doc-drift-check` 的 3 个失败 job（**禁止用 `continue-on-error`**）
+**随后必须修的三件（均在 [remediation.md](remediation.md) 标出，账本编号 E2E-F-60~67）**：
 
-**不要做的事**：不要跳过 R-01 直接做 E2E-07 —— 当前注册入口 100% 失败、密保校验 fail-open，E2E-07（找回密码）会建立在一个"永远说对"的原语上。
+1. **补 APISIX 白名单路由**（阻断级）：`deploy/apisix/seed.sh` 增加 `put_auth_route 116 "/api/v1/auth/verify-security-answer"`，同时把它从 Step 4.5 的 `for drift_id in 116` 漂移清理里移除，并更正 578 行的 route 计数文案。改完重跑 `seed.sh`，再用 curl 实测**未登录 200 / 错答案 401** 两条路径。
+2. **补 BFF 层密保负向测试**：负向测试目前只在 user-svc logic 层，原缺陷所在的 `bff/.../auth_handler.go` 一层零测试。
+3. **回填账本**：`E2E-F-46/47/48/49/58/59` 磁盘上已修复但账本仍标"未解决" ⇒ 会让审计器 A5 产生假 FAIL（这正是 AP-04 复发）。
+
+**其余待收尾（不阻塞 #1）**：R-02 的 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）与 **SSR 的 ADR + `decisions.md` 登记**（`docs/architecture/adr/` 现存 15 个 ADR 无一条涉及渲染模式）；`-race` 须按 **D-06 的 3 步可复现调查**重做（现结论基于本地 Windows 证据，而 CI 是 Linux，D-06 已明文判定该证据链不成立）；R-03 的 #5 门禁接通（实测 `required_status_checks` 为空集）、#7 脚本负向用例、#10 CI 严格化。**修审计器 A4 的误报再信它的结论**（见 E2E-F-64）。
+
+**不要做的事**：不要跳过上述 #1 直接做 E2E-07 —— 注册虽已恢复可用，但**找回密码链路在网关层仍 401**，E2E-07 正是"密保找回"流程，开工即建在断路上。
 
 ## 阶段详档（just-in-time）
 
