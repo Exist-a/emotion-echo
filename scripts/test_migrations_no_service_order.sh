@@ -41,6 +41,29 @@ declare -A SERVICE_SCHEMA=(
 # 所有 schema 列表
 ALL_SCHEMAS=("emotion_echo_user" "emotion_echo_chat" "emotion_echo_ai" "emotion_echo_analytics" "emotion_echo_assessment")
 
+# R-01 #7: 跨 schema 引用豁免表
+# 格式: "服务名:允许引用的schema:理由"
+# 只豁免架构上必须跨域的服务（如 analytics-svc 是跨域聚合器）
+CROSS_SCHEMA_ALLOWED=(
+    "emotion-echo-analytics-svc:emotion_echo_ai:跨域聚合器，analytics_reader 视图必须读 ai 域"
+    "emotion-echo-analytics-svc:emotion_echo_chat:跨域聚合器，analytics_reader 视图必须读 chat 域"
+    "emotion-echo-analytics-svc:emotion_echo_assessment:跨域聚合器，analytics_reader 视图必须读 assessment 域"
+    "emotion-echo-analytics-svc:emotion_echo_user:跨域聚合器，analytics_reader 视图必须读 user 域"
+)
+
+# 检查是否在豁免列表中
+is_cross_schema_allowed() {
+    local service="$1"
+    local target_schema="$2"
+    for entry in "${CROSS_SCHEMA_ALLOWED[@]}"; do
+        IFS=':' read -r allowed_service allowed_schema _ <<< "$entry"
+        if [ "$service" = "$allowed_service" ] && [ "$target_schema" = "$allowed_schema" ]; then
+            return 0  # 允许
+        fi
+    done
+    return 1  # 不允许
+}
+
 echo "=== Migration 服务顺序独立性检查 ==="
 
 # 查找所有 migration 文件
@@ -68,21 +91,32 @@ for f in $migration_files; do
         if [ "$schema" != "$expected_schema" ]; then
             # 检查是否引用了其他 schema 的表
             if grep -qi "FROM $schema\.\|JOIN $schema\.\|INTO $schema\.\|UPDATE $schema\.\|DELETE FROM $schema\." "$f"; then
-                echo -e "${RED}FAIL: $f - 引用了其他服务的 schema ($schema)${NC}"
-                fail=$((fail + 1))
+                # R-01 #7: 检查是否在豁免列表中
+                if is_cross_schema_allowed "$service_dir" "$schema"; then
+                    echo -e "${YELLOW}WARN: $f - 引用了其他服务的 schema ($schema) [豁免: 跨域聚合器]${NC}"
+                    warnings=$((warnings + 1))
+                else
+                    echo -e "${RED}FAIL: $f - 引用了其他服务的 schema ($schema)${NC}"
+                    fail=$((fail + 1))
+                fi
             fi
         fi
     done
 
     # 检查是否使用了其他服务的表（无 schema 前缀）
-    # 这需要更复杂的分析，暂时只检查明显的跨服务引用
     if grep -qi "emotion_echo_user\.\|emotion_echo_chat\.\|emotion_echo_ai\.\|emotion_echo_analytics\.\|emotion_echo_assessment\." "$f"; then
         # 检查是否引用了非本服务的 schema
         for schema in "${ALL_SCHEMAS[@]}"; do
             if [ "$schema" != "$expected_schema" ]; then
                 if grep -q "$schema\." "$f"; then
-                    echo -e "${RED}FAIL: $f - 引用了其他服务的 schema ($schema)${NC}"
-                    fail=$((fail + 1))
+                    # R-01 #7: 检查是否在豁免列表中
+                    if is_cross_schema_allowed "$service_dir" "$schema"; then
+                        echo -e "${YELLOW}WARN: $f - 引用了其他服务的 schema ($schema) [豁免: 跨域聚合器]${NC}"
+                        warnings=$((warnings + 1))
+                    else
+                        echo -e "${RED}FAIL: $f - 引用了其他服务的 schema ($schema)${NC}"
+                        fail=$((fail + 1))
+                    fi
                 fi
             fi
         done
