@@ -132,6 +132,53 @@ type: e2e-remediation-plan
 - 不补历史阶段的报告（归 R-02）
 - 不顺带重构 user-svc 其它模块
 
+### CI 红态精确诊断（2026-09-18 实测，供执行者直接照做）
+
+`doc-drift-check` **每次 push 都红**（连续 4 次：`0644988` / `2cb9e58` / `69eda7c` / `9039475`），其余 workflow 绿。11 个 job 中 **3 个失败**：
+
+#### ① Dockerfile digest pin —— **客观上无法本地修复**（D-07 第 2 项）
+
+```
+WARN: 发现 6 个占位 digest（sha256:000...000）:
+  GOLANG_1_26_ALPINE_DIGEST / PYTHON_3_10_SLIM_DIGEST / PYTHON_3_12_SLIM_DIGEST
+  NODE_20_ALPINE_DIGEST / ALPINE_LATEST_DIGEST / UBUNTU_22_04_DIGEST
+FAIL: 占位 digest 等同于未 pin（形式通过、实质为空）
+```
+
+**实测确认不可回填**：`curl https://registry-1.docker.io/v2/` → `HTTP 000`（21 秒超时）；`docker manifest inspect golang:1.26-alpine` → 连接失败。故 `scripts/sync_docker_digests.sh` 在本环境跑不通。
+
+**按 D-07 处置**：改为**显式已知缺口声明**——脚本打印醒目警告（含"原因：需 registry 可达环境回填"+ "复检条件：网络可达时跑 `sync_docker_digests.sh`"），退出码为 0。**不是静默通过**，也**不加 `continue-on-error`**。
+
+#### ② 环境变量 lint —— **可直接修，低风险**
+
+```
+[FAIL] Vars used in apps.yml but not in .env.local.example:
+  APISIX_ADMIN_KEY / BFF_DEV_RETURN_CODE / BFF_JWT_SECRET / CORS_ALLOW_ORIGINS
+  NACOS_GROUP / NUXT_PUBLIC_API_BASE_URL / SKYWALKING_ENABLED / XTTS_MODEL_PATH
+```
+
+**修法**：把上述 8 个变量补进 `deploy/env/.env.local.example`（及 `docs/env-templates/.env.local.example` 副本，注意 `lint_env_vars.sh` 会同时校验两者）。**不得**写入真实值——只写占位与说明。
+
+#### ③ Migration 服务顺序独立性 —— **规则与其自述目的不符，需修规则而非加豁免**
+
+```
+FAIL: ./emotion-echo-analytics-svc/migrations/a001_create_views.sql - 引用了其他服务的 schema (emotion_echo_ai / _assessment / _chat)
+FAIL: a003_create_mv_daily_emotion.sql / a004_create_analytics_reader_role.sql / a007 / a009 同类
+（其余服务 0 失败；另有 1 条 legacy 的 WARN）
+```
+
+**根因分析**：脚本自述目的是「不依赖**服务启动顺序**」（`test_migrations_no_service_order.sh:1-8`），但实现成的是绝对规则「**migration 不得引用其他服务的 schema**」（`:66-102`，且**无任何豁免机制**）。
+
+而 `analytics-svc` **在架构上就是跨域聚合器**——它的 `analytics_reader` 视图必须读 `emotion_echo_ai` / `_chat` / `_assessment` 才能出报表。且顺序有保证：`migrate.sh` 的 `PRIORITY_ORDER` 是 chat → ai → analytics，analytics 排最后。**ADR-18 §8.2 也把它记为「⚠️ WARN（analytics 视图跨 schema）」**，即一直被视为已知且可接受。
+
+**结论：这是一个"按设计必然失败"的检查项**——它不会发现真问题，只会让 CI 永久变红，进而训练所有人忽略 CI（比没有检查更糟）。
+
+**修法（二选一，推荐 A）**：
+- **A（推荐）**：把规则收敛回它的自述目的——只检查"是否依赖**启动顺序**"，允许声明式豁免：在脚本里加一张 `CROSS_SCHEMA_ALLOWED` 表，登记 `analytics-svc`（附理由：跨域聚合器 + `PRIORITY_ORDER` 保证顺序），其余服务仍严格禁止
+- **B**：若认为 analytics 的跨 schema 引用本身要改（改为运行时 JOIN 而非视图），那是**架构改动**，需先出 ADR，不应由本检查项驱动
+
+**禁止**：直接给该 job 加 `continue-on-error` 或把 13 条 FAIL 改判为 WARN 而不修规则——那是 AP-11 变体（假装门禁存在）。
+
 ---
 
 ## R-02 🔧 收口补账（契约补齐）

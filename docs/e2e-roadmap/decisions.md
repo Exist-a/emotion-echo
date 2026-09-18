@@ -198,14 +198,19 @@ main 上 `doc-drift-check` 连续红（`2cb9e58`、`0644988`），3 个 job 失�
 
 ### 决议：**分类处置——可修的先修，不可修的用"带理由的已知缺口"表达，不使用 `continue-on-error`**
 
-**依据的通用实践**：主分支 CI 红 = broken build，行业标准是 **fix-forward 或 revert**，而不是抑制（suppress）。但本项目存在**客观上无法在本地修复**的一项（digest 需访问 docker.io 回填，沙箱网络不可达）。对此的标准做法是 **known-debt allowlist**：显式列出已知缺口 + 原因 + 复检条件，**而非**全局 `continue-on-error`（那会让该 workflow 永久失去信号）。
+**依据的通用实践**：主分支 CI 红 = broken build，行业标准是 **fix-forward 或 revert**，而不是抑制（suppress）。但本项目存在**客观上无法在本地修复**的一项（digest 需访问 docker.io 回填，实测网络不可达）。对此的标准做法是 **known-debt allowlist**：显式列出已知缺口 + 原因 + 复检条件，**而非**全局 `continue-on-error`（那会让该 workflow 永久失去信号）。
 
-| # | job | 处置 |
-|---|-----|------|
-| 1 | env 变量 lint（8 项未文档化） | **R-01 直接修**：把 8 个变量补进 `.env.local.example`（低风险、纯文档） |
-| 2 | docker digest 占位 | **改为显式 WARN + 缺口声明**：脚本输出"已知缺口：N 个占位 digest，原因=需 registry 可达环境回填，复检条件=网络可达时跑 `sync_docker_digests.sh`"，**非静默通过**，且退出码为 0 但**打印醒目警告**；同时登记为已知缺口条目 |
-| 3 | migration 服务顺序 Fail 13 | **R-01 定性**：查明是脚本 bug 还是真实顺序依赖问题，再修 |
-| — | `continue-on-error` | **不使用**（会掩盖真实漂移，属 AP-11 变体） |
+**2026-09-18 实测的 3 个失败 job 与逐项处置**（完整证据见 [remediation.md](remediation.md) §R-01「CI 红态精确诊断」）：
+
+| # | job | 实测结论 | 处置 |
+|---|-----|---------|------|
+| 1 | Dockerfile digest pin（6 个占位） | **确认不可本地修复**：`curl registry-1.docker.io` → `HTTP 000`（21s 超时）、`docker manifest inspect` 亦失败 ⇒ `sync_docker_digests.sh` 跑不通 | 改为**显式已知缺口声明**：打印醒目警告（原因 + 复检条件），退出码 0。**非静默通过**，**不加 `continue-on-error`** |
+| 2 | 环境变量 lint（8 项未文档化：`APISIX_ADMIN_KEY`/`BFF_DEV_RETURN_CODE`/`BFF_JWT_SECRET`/`CORS_ALLOW_ORIGINS`/`NACOS_GROUP`/`NUXT_PUBLIC_API_BASE_URL`/`SKYWALKING_ENABLED`/`XTTS_MODEL_PATH`） | 可直接修 | **补进 `.env.local.example`（两处副本）+ 只写占位与说明，不写真实值** |
+| 3 | Migration 服务顺序独立性（Fail 13，全部在 `analytics-svc`） | **规则与其自述目的不符**：脚本自述「不依赖**启动顺序**」，实现却是绝对规则「migration 不得引用其他服务 schema」且**无豁免机制**。而 `analytics-svc` 架构上就是**跨域聚合器**（视图必须读 ai/chat/assessment schema），顺序由 `migrate.sh` 的 `PRIORITY_ORDER`（chat→ai→analytics）保证；ADR-18 §8.2 亦记为「⚠️ WARN」= 一直已知且可接受 | **修规则而非加豁免**：把规则收敛回"是否依赖启动顺序"，加声明式 `CROSS_SCHEMA_ALLOWED` 表登记 `analytics-svc`（附理由），其余服务仍严格禁止。若认为该架构本身要改，须先出 ADR，不由检查项驱动 |
+
+**关键判断**：第 3 项是一个**"按设计必然失败"的检查项**——它不会发现真问题，只会让 CI 永久变红，进而**训练所有人忽略 CI**（比没有检查更糟）。这类"只会喊狼来了"的检查必须修规则或删除，不能靠抑制。
+
+**统一禁止**：不得用 `continue-on-error`、不得把 FAIL 改判 WARN 而不修规则、不得删除检查项——这些都是 AP-11（门禁只报不拦）的变体。
 
 ---
 

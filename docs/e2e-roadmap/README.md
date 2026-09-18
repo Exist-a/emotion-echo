@@ -24,12 +24,39 @@
 
 ## 给执行者（大模型或人）的入口顺序
 
-1. 读 [RUNBOOK.md](RUNBOOK.md)（执行协议，必读）
-2. 读 [roadmap.md](roadmap.md) 顶部「当前激活阶段」与「决策门」
-3. 读该阶段 `stages/<e2e-NN-slug>/plan.md`
-4. 按 RUNBOOK §1 三项目开工前置检查 → §2 起环境 → §3 六步循环 → §7 收口契约
+> **⚠️ 2026-09-18：当前不能直接执行 E2E-07 及以后阶段。** 路线图被 R 系列阻断，见下节「交接说明」。
 
-**验收口径**：每个测试点必须给出 `PASS` / `FAIL` / `BLOCKED` / `N/A` 四种合法结果之一并附证据（`[A]` 断言输出、`[V]` 截图、`[M]` 升级给用户）。`BLOCKED` 超过 1/3 不得判 done。禁止用 `N/A`/`BLOCKED` 掩盖未做的工作。
+1. 读 [RUNBOOK.md](RUNBOOK.md)（执行协议，必读；含 §4.1 证据有效性、§7 收口契约 11 项、§13 收口审计）
+2. 读 [anti-patterns.md](anti-patterns.md)（**14 类已真实发生的失真反例，收口前必读**）
+3. 读 [roadmap.md](roadmap.md) 顶部「⚠️ 当前被阻断」+「R 系列」+「决策门」
+4. 读 [remediation.md](remediation.md) 确认当前该做哪一步（R-00 ✅ → R-01 待做 → R-02 → R-03）
+5. 读目标阶段的 `stages/<e2e-NN-slug>/plan.md`
+6. 按 RUNBOOK §1 开工前置检查 → §2 起环境 → §3 六步循环 → §7 收口契约 → **§13 审计**
+
+**验收口径**：每个测试点必须给出 `PASS` / `FAIL` / `BLOCKED` / `N/A` 四种合法结果之一并附证据。**证据必须是执行输出（命令+输出/退出码/截图），"已创建/已新增/已配置"不算证据，只给文件路径也不算**（RUNBOOK §4.1）。`BLOCKED` 超过 1/3 不得判 done。禁止用 `N/A`/`BLOCKED` 掩盖未做的工作。
+
+**收口前必须跑审计器**（这是"完成"的判定者，不是执行者自己）：
+
+```bash
+python scripts/e2e_stage_audit.py --stage <阶段号>   # 单阶段
+python scripts/e2e_stage_audit.py --all              # 全部
+python scripts/e2e_stage_audit.py --selftest         # 校验审计器本身可信
+```
+
+**执行者不得自行宣布阶段 `done`** —— 必须审计器无 FAIL，且（过渡期）由第二方按 §13.3 核对。
+
+## 交接说明（2026-09-18，给下一个执行 agent）
+
+**当前状态**：R-00（审计器 MVA）已完成并通过自校验；**R-01 阻断修复尚未开始**。
+
+**接手前必须先确认**：工作区有 **34 个未提交文件**（E2E-06 的代码/schema/proto 改动 + 其自有文档）。这些改动里包含 R-01 要修的对象（如 `bff/internal/handler/auth_handler.go` 的 fail-open）。**必须先与用户确认这批 WIP 的去留**（提交为基线 / 用户自行处理 / 部分丢弃），再开工 R-01。
+
+**R-01 的三件必须先做的事**（详见 [remediation.md](remediation.md) §R-01）：
+1. **先跑基线**：`go vet ./...`（会编译测试文件）应在 user-svc 报 4 个 `unknown field Phone` —— 这是已知的待修项，不是新问题
+2. **按 D-05 回退注册强制校验**，让注册恢复可用（前端 UI 归 E2E-09）
+3. **按 R-01 §CI 红态精确诊断**处置 `doc-drift-check` 的 3 个失败 job（**禁止用 `continue-on-error`**）
+
+**不要做的事**：不要跳过 R-01 直接做 E2E-07 —— 当前注册入口 100% 失败、密保校验 fail-open，E2E-07（找回密码）会建立在一个"永远说对"的原语上。
 
 ## 阶段详档（just-in-time）
 
