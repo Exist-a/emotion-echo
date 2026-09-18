@@ -83,14 +83,14 @@ func main() {
 
 	// === 1. Postgres 连接（Stage 77：失败按 500ms×10 退避重试，盖过瞬时 DNS 抖动；
 	// 重试耗尽仍失败才降级 nil repo——dev 阶段不阻断，但 health 接口会显示 dbOk=false） ===
-	userRepo, err := dbconnect.ConnectWithRetry(func() (repository.UserRepo, error) {
-		return openPostgres(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
-	}, dbconnect.DefaultAttempts, dbconnect.DefaultBackoff, time.Sleep)
+	var userRepo repository.UserRepo
+	var securityAnswerRepo repository.SecurityAnswerRepo
+	db, err := openPostgresDB(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
 	if err != nil {
-		log.Printf("[postgres] connect failed after %d attempts: %v", dbconnect.DefaultAttempts, err)
-		// dev 阶段不阻断：让 svc 起，gRPC 端点对 nil repo 返 Unavailable（ensureRepo）
-	}
-	if userRepo != nil {
+		log.Printf("[postgres] connect failed: %v", err)
+	} else {
+		userRepo = repository.NewPostgresUserRepo(db)
+		securityAnswerRepo = repository.NewPostgresSecurityAnswerRepo(db)
 		log.Printf("[postgres] connected, dsn=%s", maskDSN(c.Postgres.DSN))
 	}
 
@@ -115,7 +115,7 @@ func main() {
 	}
 
 	// === 3. ServiceContext（依赖注入容器） ===
-	svcCtx := svc.NewServiceContext(c, userRepo)
+	svcCtx := svc.NewServiceContext(c, userRepo, securityAnswerRepo)
 
 	// === 3.5 Nacos 注册中心 + 配置中心（Stage 31 PR-07） ===
 	bootCtx, bootCancel := context.WithCancel(context.Background())
@@ -202,7 +202,7 @@ func main() {
 	}
 }
 
-func openPostgres(dsn string, maxOpen, maxIdle int) (repository.UserRepo, error) {
+func openPostgresDB(dsn string, maxOpen, maxIdle int) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 	})
@@ -226,7 +226,7 @@ func openPostgres(dsn string, maxOpen, maxIdle int) (repository.UserRepo, error)
 	if err := sqlDB.Ping(); err != nil {
 		return nil, fmt.Errorf("db ping failed: %w", err)
 	}
-	return repository.NewPostgresUserRepo(db), nil
+	return db, nil
 }
 
 func maskDSN(dsn string) string {

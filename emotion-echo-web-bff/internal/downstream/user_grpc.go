@@ -122,7 +122,8 @@ func (c *userGRPCClient) Login(ctx context.Context, username, password string) (
 // Register gRPC RPC（Sprint E 2026-09-11）
 //
 // 同 Login：匿名调用，不传 x-user-id metadata。
-func (c *userGRPCClient) Register(ctx context.Context, username, password, verificationCode string) (*UserInfo, error) {
+// E2E-06: 新增 securityQuestions 参数
+func (c *userGRPCClient) Register(ctx context.Context, username, password, verificationCode string, securityQuestions []SecurityQuestion) (*UserInfo, error) {
 	cli := emotionuser.NewUserServiceClient(c.conn)
 	req := &emotionuser.RegisterRequest{
 		Username: username,
@@ -133,11 +134,36 @@ func (c *userGRPCClient) Register(ctx context.Context, username, password, verif
 		vc := verificationCode
 		req.VerificationCode = &vc
 	}
+	// E2E-06: 转换密保问题
+	if len(securityQuestions) > 0 {
+		sqs := make([]*emotionuser.SecurityQuestion, len(securityQuestions))
+		for i, sq := range securityQuestions {
+			sqs[i] = &emotionuser.SecurityQuestion{
+				Question: sq.Question,
+				Answer:   sq.Answer,
+			}
+		}
+		req.SecurityQuestions = sqs
+	}
 	resp, err := cli.Register(ctx, req)
 	if err != nil {
 		return nil, wrapGRPCError(err, "user register")
 	}
 	return fromProtoUserInfo(resp.GetUser()), nil
+}
+
+// VerifySecurityAnswer gRPC RPC（E2E-06，供 D-01=C 找回密码）
+func (c *userGRPCClient) VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error {
+	cli := emotionuser.NewUserServiceClient(c.conn)
+	_, err := cli.VerifySecurityAnswer(ctx, &emotionuser.VerifySecurityAnswerRequest{
+		UserId:        userID,
+		QuestionOrder: int32(questionOrder),
+		Answer:        answer,
+	})
+	if err != nil {
+		return wrapGRPCError(err, "user verifySecurityAnswer")
+	}
+	return nil
 }
 
 // ============ proto → types 转换 ============
@@ -150,7 +176,6 @@ func fromProtoUserInfo(u *emotionuser.UserInfo) *UserInfo {
 		UserID:   u.Id,
 		Account:  u.Username,
 		Nickname: u.Nickname,
-		Phone:    u.Phone,
 	}
 }
 

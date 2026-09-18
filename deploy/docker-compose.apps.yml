@@ -61,6 +61,10 @@ services:
       - ../emotion-echo-chat-svc/migrations:/migrations/emotion-echo-chat-svc/migrations:ro
       - ../emotion-echo-ai-svc/migrations:/migrations/emotion-echo-ai-svc/migrations:ro
       - ../emotion-echo-analytics-svc/migrations:/migrations/emotion-echo-analytics-svc/migrations:ro
+      # E2E-06: 新增 user-svc migrations（密保表 + 死字段删除）
+      - ../emotion-echo-user-svc/migrations:/migrations/emotion-echo-user-svc/migrations:ro
+      # E2E-06: deploy/db 目录下的公共迁移（schema_migrations 表）
+      - ./db:/migrations/deploy-db:ro
     entrypoint: ["sh", "/migrate.sh"]
     networks:
       - app-network

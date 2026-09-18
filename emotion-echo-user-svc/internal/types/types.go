@@ -27,7 +27,6 @@ type HealthResp struct {
 type UserInfo struct {
 	UserId   int64  `json:"userId"`
 	Account  string `json:"account"`
-	Phone    string `json:"phone"`
 	Nickname string `json:"nickname"`
 }
 
@@ -58,16 +57,23 @@ type LoginResp struct {
 	User UserInfo `json:"user"`
 }
 
+// SecurityQuestion 密保问题（E2E-06，供 D-01=C 找回密码）
+type SecurityQuestion struct {
+	Question string `json:"question"`
+	Answer   string `json:"answer"`
+}
+
 // RegisterReq POST /api/v1/users/register
 //
 // Stage 33 PR-19a：user-svc 注册。username 唯一；password 明文入库前
 // 由 handler 调 password.Hash bcrypt 哈希。
+// E2E-06: 新增 SecurityQuestions 必填（1~2 个密保问题）
 type RegisterReq struct {
-	Username         string  `json:"username"`
-	Password         string  `json:"password"`
-	VerificationCode string  `json:"verificationCode,optional"`
-	Phone            *string `json:"phone,optional"`
-	Nickname         *string `json:"nickname,optional"`
+	Username           string             `json:"username"`
+	Password           string             `json:"password"`
+	VerificationCode   string             `json:"verificationCode,optional"`
+	Nickname           *string            `json:"nickname,optional"`
+	SecurityQuestions  []SecurityQuestion `json:"securityQuestions"`
 }
 
 // RegisterResp 注册成功响应

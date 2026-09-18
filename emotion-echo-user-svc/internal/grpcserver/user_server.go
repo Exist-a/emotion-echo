@@ -57,7 +57,6 @@ func toProtoUser(u types.UserInfo) *emotionuser.UserInfo {
 		Id:       u.UserId,
 		Username: u.Account,
 		Nickname: u.Nickname,
-		Phone:    u.Phone,
 	}
 }
 
@@ -146,13 +145,21 @@ func (s *userServer) Register(ctx context.Context, req *emotionuser.RegisterRequ
 	if err := s.ensureRepo(); err != nil {
 		return nil, err
 	}
+	// E2E-06: 转换密保问题
+	securityQuestions := make([]types.SecurityQuestion, len(req.GetSecurityQuestions()))
+	for i, sq := range req.GetSecurityQuestions() {
+		securityQuestions[i] = types.SecurityQuestion{
+			Question: sq.GetQuestion(),
+			Answer:   sq.GetAnswer(),
+		}
+	}
 	resp, err := logic.NewAuthLogic(ctx, s.svcCtx).Register(&types.RegisterReq{
 		Username: req.GetUsername(),
 		Password: req.GetPassword(),
 		// proto optional string → types string：空字符串 = 无验证码
-		VerificationCode: req.GetVerificationCode(),
-		Phone:            req.Phone,
-		Nickname:         req.Nickname,
+		VerificationCode:  req.GetVerificationCode(),
+		Nickname:          req.Nickname,
+		SecurityQuestions: securityQuestions,
 	})
 	if err != nil {
 		return nil, mapAuthError(err)
@@ -191,6 +198,33 @@ func (s *userServer) Logout(ctx context.Context, req *emotionuser.LogoutRequest)
 	}
 	// 鉴权拦截器已从 ctx 注入 user_id，这里无需再读（mock 模式不做服务端黑名单）
 	return &emotionuser.LogoutResponse{Success: true}, nil
+}
+
+// VerifySecurityAnswer 实现 VerifySecurityAnswer RPC（E2E-06，供 D-01=C 找回密码）
+//
+// 错误映射：
+//   - ErrNotFound → codes.NotFound（用户无密保问题）
+//   - ErrValidation → codes.InvalidArgument（questionOrder 不合法）
+//   - ErrSecurityAnswerMismatch → codes.PermissionDenied（答案错误）
+func (s *userServer) VerifySecurityAnswer(ctx context.Context, req *emotionuser.VerifySecurityAnswerRequest) (*emotionuser.VerifySecurityAnswerResponse, error) {
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
+	}
+	err := logic.NewAuthLogic(ctx, s.svcCtx).VerifySecurityAnswer(
+		req.GetUserId(),
+		int(req.GetQuestionOrder()),
+		req.GetAnswer(),
+	)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "security answers not found")
+		}
+		if errors.Is(err, logic.ErrSecurityAnswerMismatch) {
+			return nil, status.Error(codes.PermissionDenied, "security answer mismatch")
+		}
+		return nil, grpcerr.MapToError(err, "verifySecurityAnswer")
+	}
+	return &emotionuser.VerifySecurityAnswerResponse{Success: true}, nil
 }
 
 // mapAuthError 把 logic.AuthLogic 错误映射到 gRPC status code

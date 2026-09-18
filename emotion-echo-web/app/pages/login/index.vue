@@ -248,11 +248,14 @@ const quickLogin = async () => {
   if (isQuickLoading.value) return
   isQuickLoading.value = true
   try {
-    // PR-4: 体验模式 = 标准登录 + demo 账号 echo/echo123（seed 默认用户）
-    // 后端无 /auth/quick-login 端点；历史 demo@emotion-echo.com / Demo12345 已停用
+    // PR-4: 体验模式 = 标准登录 + demo 账号（seed 默认用户）
+    // E2E-06: 支持环境变量注入凭据（NUXT_PUBLIC_DEMO_USERNAME / NUXT_PUBLIC_DEMO_PASSWORD）
+    const config = useRuntimeConfig()
+    const username = (config.public as any).demoUsername ?? 'echo'
+    const password = (config.public as any).demoPassword ?? 'echo123'
     const result = await userStore.login({
-      username: 'echo',
-      password: 'echo123',
+      username,
+      password,
       rememberMe: true,
     })
     if (result.isOk) {

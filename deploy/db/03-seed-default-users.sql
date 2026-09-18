@@ -16,12 +16,11 @@
 -- 默认测试账号（dev only）：echo / echo123
 -- bcrypt(cost=10) hash of "echo123"
 INSERT INTO emotion_echo_user.users (
-    username, password_hash, nickname, status, created_at, updated_at
+    username, password_hash, nickname, created_at, updated_at
 ) VALUES (
     'echo',
     '$2a$10$x/oarv7WP0HJBNTiJGJBSeBMCvqIS.jMndnYasMS.O2SLzm7pqQnC',
     'Echo User',
-    1,
     NOW(),
     NOW()
 )
@@ -30,12 +29,11 @@ ON CONFLICT (username) DO NOTHING;
 -- 可选：smoke_user / echo123 (Stage 37 数据契约 smoke 用)
 -- 注意：smoke 脚本（scripts/smoke_data_layer.py）依赖此账号存在
 INSERT INTO emotion_echo_user.users (
-    username, password_hash, nickname, status, created_at, updated_at
+    username, password_hash, nickname, created_at, updated_at
 ) VALUES (
     'smoke_user',
     '$2a$10$x/oarv7WP0HJBNTiJGJBSeBMCvqIS.jMndnYasMS.O2SLzm7pqQnC',
     'Smoke User',
-    1,
     NOW(),
     NOW()
 )

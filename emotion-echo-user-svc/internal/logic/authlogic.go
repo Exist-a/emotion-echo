@@ -82,7 +82,7 @@ func (l *AuthLogic) Login(req *types.LoginReq) (*types.LoginResp, error) {
 // Register 新建用户并 bcrypt 哈希密码
 //
 // 错误语义：
-//   - ErrValidation：username/password 长度不合法
+//   - ErrValidation：username/password 长度不合法，或密保问题数量不对
 //   - ErrUsernameTaken：username 已存在
 //   - 其他 error：底层 DB / 哈希错误
 func (l *AuthLogic) Register(req *types.RegisterReq) (*types.RegisterResp, error) {
@@ -92,6 +92,15 @@ func (l *AuthLogic) Register(req *types.RegisterReq) (*types.RegisterResp, error
 	// 最小长度校验（与 bcrypt 最小接受 1 字节对齐；这里取 6 字节防爆破）
 	if len(req.Password) < 6 {
 		return nil, ErrValidation
+	}
+	// E2E-06: 密保问题必填（1~2 个）
+	if len(req.SecurityQuestions) < 1 || len(req.SecurityQuestions) > 2 {
+		return nil, ErrValidation
+	}
+	for _, sq := range req.SecurityQuestions {
+		if sq.Question == "" || sq.Answer == "" {
+			return nil, ErrValidation
+		}
 	}
 
 	exists, err := l.svcCtx.UserRepo.UsernameExists(l.ctx, req.Username)
@@ -110,22 +119,71 @@ func (l *AuthLogic) Register(req *types.RegisterReq) (*types.RegisterResp, error
 	u := &model.User{
 		Username:     req.Username,
 		PasswordHash: &hash,
-		Phone:        req.Phone,
 		Nickname:     req.Nickname,
 	}
 	if err := l.svcCtx.UserRepo.Create(l.ctx, u); err != nil {
 		return nil, err
 	}
 
+	// E2E-06: 保存密保问题
+	answers := make([]*model.SecurityAnswer, len(req.SecurityQuestions))
+	for i, sq := range req.SecurityQuestions {
+		answerHash, err := password.Hash(sq.Answer)
+		if err != nil {
+			return nil, err
+		}
+		answers[i] = &model.SecurityAnswer{
+			UserID:        u.ID,
+			QuestionOrder: int16(i + 1),
+			Question:      sq.Question,
+			AnswerHash:    answerHash,
+		}
+	}
+	if err := l.svcCtx.SecurityAnswerRepo.Save(l.ctx, answers); err != nil {
+		return nil, err
+	}
+
 	return &types.RegisterResp{User: toUserInfo(u)}, nil
+}
+
+// ErrSecurityAnswerMismatch 密保答案错误
+var ErrSecurityAnswerMismatch = errors.New("security answer mismatch")
+
+// VerifySecurityAnswer 验证密保答案（供 E2E-07 找回密码用）
+//
+// 流程：
+//  1. 查询用户的密保问题
+//  2. 匹配 question_order
+//  3. bcrypt 校验答案
+//
+// 错误语义：
+//  - ErrNotFound：用户无密保问题
+//  - ErrValidation：questionOrder 不合法
+//  - ErrSecurityAnswerMismatch：答案错误
+func (l *AuthLogic) VerifySecurityAnswer(userID int64, questionOrder int, answer string) error {
+	if questionOrder < 1 || questionOrder > 2 {
+		return ErrValidation
+	}
+	answers, err := l.svcCtx.SecurityAnswerRepo.GetByUserID(l.ctx, userID)
+	if err != nil {
+		return err
+	}
+	if len(answers) == 0 {
+		return repository.ErrNotFound
+	}
+	for _, a := range answers {
+		if int(a.QuestionOrder) == questionOrder {
+			if !password.Verify(answer, a.AnswerHash) {
+				return ErrSecurityAnswerMismatch
+			}
+			return nil
+		}
+	}
+	return repository.ErrNotFound
 }
 
 // toUserInfo model.User → types.UserInfo（不暴露 PasswordHash）
 func toUserInfo(u *model.User) types.UserInfo {
-	phone := ""
-	if u.Phone != nil {
-		phone = *u.Phone
-	}
 	nick := ""
 	if u.Nickname != nil {
 		nick = *u.Nickname
@@ -133,7 +191,6 @@ func toUserInfo(u *model.User) types.UserInfo {
 	return types.UserInfo{
 		UserId:   u.ID,
 		Account:  u.Username,
-		Phone:    phone,
 		Nickname: nick,
 	}
 }

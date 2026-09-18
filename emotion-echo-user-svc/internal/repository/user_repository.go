@@ -22,7 +22,6 @@ import (
 type UserRepo interface {
 	GetByID(ctx context.Context, id int64) (*model.User, error)
 	GetByUsername(ctx context.Context, username string) (*model.User, error)
-	GetByPhone(ctx context.Context, phone string) (*model.User, error)
 	Create(ctx context.Context, u *model.User) error
 	// UpdateProfile 修改用户可编辑字段（昵称/性别/生日/头像）
 	// 传 nil 表示该字段不动，传 *string 设置/覆盖值
@@ -66,17 +65,6 @@ func (r *InMemoryUserRepo) GetByUsername(ctx context.Context, username string) (
 	defer r.mu.RUnlock()
 	for _, u := range r.users {
 		if u.Username == username {
-			return u, nil
-		}
-	}
-	return nil, nil
-}
-
-func (r *InMemoryUserRepo) GetByPhone(ctx context.Context, phone string) (*model.User, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for _, u := range r.users {
-		if u.Phone != nil && *u.Phone == phone {
 			return u, nil
 		}
 	}
@@ -171,18 +159,6 @@ func (r *PostgresUserRepo) GetByID(ctx context.Context, id int64) (*model.User, 
 func (r *PostgresUserRepo) GetByUsername(ctx context.Context, username string) (*model.User, error) {
 	var u model.User
 	err := r.db.WithContext(ctx).Where("username = ?", username).First(&u).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &u, nil
-}
-
-func (r *PostgresUserRepo) GetByPhone(ctx context.Context, phone string) (*model.User, error) {
-	var u model.User
-	err := r.db.WithContext(ctx).Where("phone = ?", phone).First(&u).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

@@ -27,7 +27,6 @@ import (
 type UserInfo struct {
 	UserID   int64  `json:"userId"`
 	Account  string `json:"account"`
-	Phone    string `json:"phone"`
 	Nickname string `json:"nickname"`
 }
 
@@ -52,6 +51,12 @@ type ResetPasswordReq struct {
 	NewPassword      string `json:"newPassword"`
 }
 
+// SecurityQuestion 密保问题（E2E-06，供 D-01=C 找回密码）
+type SecurityQuestion struct {
+	Question string `json:"question"`
+	Answer   string `json:"answer"`
+}
+
 // UserClient BFF → user-svc HTTP 客户端
 type UserClient interface {
 	// ResetPassword 重置密码（forget-pwd 流程；Sprint 1 PR-4c-3）
@@ -70,7 +75,10 @@ type UserClient interface {
 	// 返回 user-svc 校验后的 UserInfo；user-svc 返 401 时回 ErrInvalidCredentials
 	Login(ctx context.Context, username, password string) (*UserInfo, error)
 	// Stage 33 PR-19b: 真实注册（POST /api/v1/users/register）
-	Register(ctx context.Context, username, password, verificationCode string) (*UserInfo, error)
+	// E2E-06: 新增 securityQuestions 参数（必填，1~2 个密保问题）
+	Register(ctx context.Context, username, password, verificationCode string, securityQuestions []SecurityQuestion) (*UserInfo, error)
+	// E2E-06: 验证密保答案（供 D-01=C 找回密码）
+	VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error
 }
 
 // UserClientOptions 构造选项
@@ -180,11 +188,13 @@ func (c *userHTTPClient) Login(ctx context.Context, username, password string) (
 }
 
 // Stage 33 PR-19b: register（不走 ctx X-User-Id）
-func (c *userHTTPClient) Register(ctx context.Context, username, password, verificationCode string) (*UserInfo, error) {
-	body, _ := json.Marshal(map[string]string{
-		"username":         username,
-		"password":         password,
-		"verificationCode": verificationCode,
+// E2E-06: 新增 securityQuestions 参数
+func (c *userHTTPClient) Register(ctx context.Context, username, password, verificationCode string, securityQuestions []SecurityQuestion) (*UserInfo, error) {
+	body, _ := json.Marshal(map[string]any{
+		"username":          username,
+		"password":          password,
+		"verificationCode":  verificationCode,
+		"securityQuestions": securityQuestions,
 	})
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/users/register", bytes.NewReader(body))
 	if err != nil {
@@ -192,6 +202,29 @@ func (c *userHTTPClient) Register(ctx context.Context, username, password, verif
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	return c.doUserRequest(httpReq)
+}
+
+// E2E-06: VerifySecurityAnswer 验证密保答案
+func (c *userHTTPClient) VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error {
+	body, _ := json.Marshal(map[string]any{
+		"userId":       userID,
+		"questionOrder": questionOrder,
+		"answer":       answer,
+	})
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/users/verify-security-answer", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("downstream: verify security answer: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return readError(resp)
+	}
+	return nil
 }
 
 // Sprint 1 PR-4c-3: ResetPassword HTTP 实现

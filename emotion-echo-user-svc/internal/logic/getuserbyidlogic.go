@@ -39,7 +39,6 @@ func (l *GetUserByIdLogic) GetUserById(req *types.GetUserByIdReq) (resp *types.G
 	return &types.GetUserByIdResp{User: types.UserInfo{
 		UserId:   u.ID,
 		Account:  u.Username,
-		Phone:    derefString(u.Phone),
 		Nickname: derefString(u.Nickname),
 	}}, nil
 }

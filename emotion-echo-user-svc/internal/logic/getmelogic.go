@@ -52,10 +52,6 @@ func (l *GetMeLogic) GetMe(req *types.GetMeReq) (resp *types.GetMeResp, err erro
 }
 
 func toGetMeResp(u *model.User) *types.GetMeResp {
-	phone := ""
-	if u.Phone != nil {
-		phone = *u.Phone
-	}
 	nick := ""
 	if u.Nickname != nil {
 		nick = *u.Nickname
@@ -64,7 +60,6 @@ func toGetMeResp(u *model.User) *types.GetMeResp {
 		User: types.UserInfo{
 			UserId:   u.ID,
 			Account:  u.Username,
-			Phone:    phone,
 			Nickname: nick,
 		},
 	}

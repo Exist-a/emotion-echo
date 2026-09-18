@@ -7,13 +7,15 @@ import (
 )
 
 type ServiceContext struct {
-	Config  config.Config
-	UserRepo repository.UserRepo
+	Config            config.Config
+	UserRepo          repository.UserRepo
+	SecurityAnswerRepo repository.SecurityAnswerRepo
 }
 
-func NewServiceContext(c config.Config, userRepo repository.UserRepo) *ServiceContext {
+func NewServiceContext(c config.Config, userRepo repository.UserRepo, securityAnswerRepo repository.SecurityAnswerRepo) *ServiceContext {
 	return &ServiceContext{
-		Config:   c,
-		UserRepo: userRepo,
+		Config:            c,
+		UserRepo:          userRepo,
+		SecurityAnswerRepo: securityAnswerRepo,
 	}
 }

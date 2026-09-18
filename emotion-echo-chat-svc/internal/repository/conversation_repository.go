@@ -272,7 +272,9 @@ func (r *PostgresConversationRepo) CreateConversation(ctx context.Context, c *mo
 
 func (r *PostgresConversationRepo) GetConversationByID(ctx context.Context, id int64) (*model.Conversation, error) {
 	var c model.Conversation
-	err := r.db.WithContext(ctx).First(&c, id).Error
+	err := r.db.WithContext(ctx).
+		Where("deleted_at IS NULL").
+		First(&c, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -303,7 +305,7 @@ func (r *PostgresConversationRepo) ListMessages(ctx context.Context, conversatio
 	}
 	var out []model.Message
 	err := r.db.WithContext(ctx).
-		Where("conversation_id = ?", conversationID).
+		Where("conversation_id = ? AND deleted_at IS NULL", conversationID).
 		Order("id ASC").
 		Limit(limit).
 		Find(&out).Error
@@ -325,13 +327,20 @@ func (r *PostgresConversationRepo) GetMessageByClientMsgID(ctx context.Context, 
 	return &m, nil
 }
 
-// DeleteConversation 事务删除会话 + 其消息（不存在的 id 为 no-op）
+// DeleteConversation 软删除会话 + 其消息（E2E-06：物理 DELETE → UPDATE deleted_at）
 func (r *PostgresConversationRepo) DeleteConversation(ctx context.Context, id int64) error {
+	now := time.Now()
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("conversation_id = ?", id).Delete(&model.Message{}).Error; err != nil {
+		// 软删除消息
+		if err := tx.Model(&model.Message{}).
+			Where("conversation_id = ? AND deleted_at IS NULL", id).
+			Update("deleted_at", now).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&model.Conversation{}, id).Error
+		// 软删除会话
+		return tx.Model(&model.Conversation{}).
+			Where("id = ? AND deleted_at IS NULL", id).
+			Update("deleted_at", now).Error
 	})
 }
 
@@ -345,6 +354,7 @@ func (r *PostgresConversationRepo) Ping(ctx context.Context) error {
 
 // ListConversations Stage 36-A2.1：Postgres 版按 user_id 过滤 + updated_at desc + id desc 兜底。
 // limit<=0 → 20；offset<0 → 0。schema 限定 emotion_echo_chat.conversations。
+// E2E-06: 过滤已软删除的会话
 func (r *PostgresConversationRepo) ListConversations(ctx context.Context, userID int64, limit, offset int) ([]model.Conversation, error) {
 	if limit <= 0 {
 		limit = 20
@@ -354,7 +364,7 @@ func (r *PostgresConversationRepo) ListConversations(ctx context.Context, userID
 	}
 	var out []model.Conversation
 	err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
+		Where("user_id = ? AND deleted_at IS NULL", userID).
 		Order("updated_at DESC, id DESC").
 		Limit(limit).
 		Offset(offset).
@@ -412,10 +422,17 @@ func (r *PostgresConversationRepo) DeleteConversationTx(tx *gorm.DB, ctx context
 	if tx == nil {
 		return r.DeleteConversation(ctx, id)
 	}
+	now := time.Now()
 	return tx.WithContext(ctx).Transaction(func(sub *gorm.DB) error {
-		if err := sub.Where("conversation_id = ?", id).Delete(&model.Message{}).Error; err != nil {
+		// 软删除消息
+		if err := sub.Model(&model.Message{}).
+			Where("conversation_id = ? AND deleted_at IS NULL", id).
+			Update("deleted_at", now).Error; err != nil {
 			return err
 		}
-		return sub.Delete(&model.Conversation{}, id).Error
+		// 软删除会话
+		return sub.Model(&model.Conversation{}).
+			Where("id = ? AND deleted_at IS NULL", id).
+			Update("deleted_at", now).Error
 	})
 }

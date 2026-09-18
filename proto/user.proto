@@ -72,6 +72,11 @@ service UserService {
   //
   // 鉴权：需要 metadata x-user-id（userid 拦截器不跳过此 RPC）。
   rpc Logout (LogoutRequest) returns (LogoutResponse);
+
+  // VerifySecurityAnswer 验证密保答案（E2E-06，供 D-01=C 找回密码）
+  //
+  // 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
+  rpc VerifySecurityAnswer (VerifySecurityAnswerRequest) returns (VerifySecurityAnswerResponse);
 }
 
 // ============== Requests / Responses ==============
@@ -88,8 +93,8 @@ message UpdateProfileRequest {
   optional string nickname = 1;
   optional string avatar_url = 2;
   optional int32 gender = 3;          // 0=未设置 1=男 2=女
-  optional string phone = 4;
-  optional string email = 5;
+  // E2E-06: phone/email 已从 users 表删除（死字段，业务不使用）
+  reserved 4, 5;
 }
 
 // GetUserByIdRequest 查询用户请求
@@ -108,14 +113,23 @@ message LoginResponse {
   UserInfo user = 1;
 }
 
+// SecurityQuestion 密保问题（E2E-06，供 D-01=C 找回密码）
+message SecurityQuestion {
+  string question = 1;
+  string answer = 2;
+}
+
 // RegisterRequest 注册请求
 message RegisterRequest {
   string username = 1;
   string password = 2;
   // verificationCode 可选：dev mode 不强制验证码（生产由 BFF 校验）
   optional string verification_code = 3;
-  optional string phone = 4;
+  // E2E-06: phone 已从 users 表删除（死字段，业务不使用）
+  reserved 4;
   optional string nickname = 5;
+  // E2E-06: 密保问题（必填，1~2 个）
+  repeated SecurityQuestion security_questions = 6;
 }
 
 // RegisterResponse 注册响应
@@ -145,6 +159,18 @@ message LogoutResponse {
   bool success = 1;
 }
 
+// VerifySecurityAnswerRequest 验证密保答案请求（E2E-06，供 D-01=C 找回密码）
+message VerifySecurityAnswerRequest {
+  int64 user_id = 1;
+  int32 question_order = 2;  // 1 或 2
+  string answer = 3;
+}
+
+// VerifySecurityAnswerResponse 验证密保答案响应
+message VerifySecurityAnswerResponse {
+  bool success = 1;
+}
+
 // UserInfo 用户信息视图
 //
 // 字段命名遵循 emotion_query.proto 已确立的 snake_case
@@ -154,8 +180,8 @@ message UserInfo {
   string nickname = 3;
   string avatar_url = 4;
   int32 gender = 5;                   // 0=未设置 1=男 2=女
-  string phone = 6;
-  string email = 7;
+  // E2E-06: phone/email 已从 users 表删除（死字段，业务不使用）
+  reserved 6, 7;
   int64 created_at = 8;               // unix seconds
   int64 updated_at = 9;
 }

@@ -107,6 +107,8 @@ func NewAuthHandler(mgr *auth.Manager, userClient downstream.UserClient) gin.Han
 			h.verificationCode(c)
 		case "reset-password":
 			h.resetPassword(c)
+		case "verify-security-answer":
+			h.verifySecurityAnswer(c)
 		default:
 			Fail(c, http.StatusNotFound, 1, "auth endpoint not found")
 		}
@@ -157,13 +159,26 @@ func (h *AuthHandler) login(c *gin.Context) {
 
 func (h *AuthHandler) register(c *gin.Context) {
 	var req struct {
-		Username         string `json:"username"`
-		Password         string `json:"password"`
-		VerificationCode string `json:"verificationCode"`
+		Username           string                      `json:"username"`
+		Password           string                      `json:"password"`
+		VerificationCode   string                      `json:"verificationCode"`
+		SecurityQuestions  []downstream.SecurityQuestion `json:"securityQuestions"`
 	}
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || req.Username == "" || req.Password == "" {
 		Fail(c, http.StatusBadRequest, 1, "validation: username and password are required")
 		return
+	}
+
+	// E2E-06: 密保问题必填（1~2 个）
+	if len(req.SecurityQuestions) < 1 || len(req.SecurityQuestions) > 2 {
+		Fail(c, http.StatusBadRequest, 1, "validation: 1-2 security questions are required")
+		return
+	}
+	for _, sq := range req.SecurityQuestions {
+		if sq.Question == "" || sq.Answer == "" {
+			Fail(c, http.StatusBadRequest, 1, "validation: security question and answer cannot be empty")
+			return
+		}
 	}
 
 	// 验证码校验（仅当 username 已有验证码缓存时）
@@ -172,7 +187,7 @@ func (h *AuthHandler) register(c *gin.Context) {
 		// 这里不强校验，保留向后兼容；强校验可在后续 PR 加严
 	}
 
-	info, err := h.user.Register(c.Request.Context(), req.Username, req.Password, req.VerificationCode)
+	info, err := h.user.Register(c.Request.Context(), req.Username, req.Password, req.VerificationCode, req.SecurityQuestions)
 	if err != nil {
 		statusCode := http.StatusBadGateway
 		if apiErr, ok := err.(*downstream.APIError); ok {
@@ -434,6 +449,42 @@ func (h *AuthHandler) resetPassword(c *gin.Context) {
 			return
 		}
 		Fail(c, http.StatusInternalServerError, 1, "reset password: "+err.Error())
+		return
+	}
+	OK(c, gin.H{"success": true})
+}
+
+// verifySecurityAnswer 处理 POST /api/v1/auth/verify-security-answer（E2E-06，供 D-01=C 找回密码）
+func (h *AuthHandler) verifySecurityAnswer(c *gin.Context) {
+	var req struct {
+		Username      string `json:"username"`
+		QuestionOrder int    `json:"questionOrder"`
+		Answer        string `json:"answer"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
+		return
+	}
+	if req.Username == "" || req.Answer == "" {
+		Fail(c, http.StatusBadRequest, 1, "validation: username and answer are required")
+		return
+	}
+	if req.QuestionOrder < 1 || req.QuestionOrder > 2 {
+		Fail(c, http.StatusBadRequest, 1, "validation: questionOrder must be 1 or 2")
+		return
+	}
+
+	// 先查用户 ID（用 Login 获取，仅验证用户存在）
+	info, err := h.user.Login(c.Request.Context(), req.Username, "dummy")
+	if err != nil || info == nil {
+		// 防枚举：不区分用户是否存在
+		OK(c, gin.H{"success": true})
+		return
+	}
+
+	err = h.user.VerifySecurityAnswer(c.Request.Context(), info.UserID, req.QuestionOrder, req.Answer)
+	if err != nil {
+		Fail(c, http.StatusUnauthorized, 1, "security answer verification failed")
 		return
 	}
 	OK(c, gin.H{"success": true})

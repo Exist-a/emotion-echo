@@ -2,12 +2,16 @@
 stage: e2e-06
 title: 数据库改造
 type: transformation
-status: pending
+status: done
 created: 2026-09-17
+completed: 2026-09-18
 depends-on: [e2e-03]
 blocks: [e2e-07, e2e-09, e2e-19]
 gate: []   # 存量用户处理已决议（选 C，见 §2「连带后果」）
 related-findings: [E2E-F-09, E2E-F-19]
+related-docs:
+  - report.md           # 执行报告（含测试点验证）
+  - detailed-record.md  # 详细执行记录（供学习参考）
 ---
 
 # E2E-06 🔧 数据库改造
