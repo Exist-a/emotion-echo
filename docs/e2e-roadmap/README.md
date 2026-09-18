@@ -45,26 +45,49 @@ python scripts/e2e_stage_audit.py --selftest         # 校验审计器本身可�
 
 **执行者不得自行宣布阶段 `done`** —— 必须审计器无 FAIL，且（过渡期）由第二方按 §13.3 核对。
 
-## 交接说明（2026-09-18 修复轮后，给下一个执行 agent）
+## 交接说明（2026-09-18 收尾后，给下一个执行 agent）
 
-**当前状态**：R-00 ✅、**R-01 ✅ 完成**（7/7；#2 经三层根因修复并端到端实测）、R-02 🟡（剩 #1~#3）、R-03 🟡（剩 #7/#10）。**E2E-07 已解阻塞**。工作区干净，`main` 与 `origin/main` 一致。
+**结论：可以直接从 E2E-07 开始。** R-01 已完成（7/7，含三层根因修复与端到端实测），
+E2E-07 的阻塞已解除；R-02/R-03 各余少量条目，**可与 E2E-07 并行**（见下「仍未完成」）。
+工作区干净，`main` 与 `origin/main` 一致，远端仅 `main` 分支，main 上 CI 全绿（`go-test` 带 `-race`）。
 
-**本轮已解决的阻断项**（证据见 [remediation.md](remediation.md) 与账本 `E2E-F-60~74`）：
+### 开工 E2E-07 需要现场准备的一件事
 
-1. **main 写保护自锁死**已解：`required_approving_review_count` 1→0；并接通 **18 个 required checks**（仅纳入无 `paths` 过滤的 job，符合 D-08），**红线实测能拦**（失败 check → `mergeStateStatus=BLOCKED`）。
-2. **找回密码链路**已通（三层根因）：APISIX 白名单路由 117 + proto 新增 `VerifySecurityAnswerByUsername` 与两端实现 + user-svc 拦截器匿名清单补配。端到端实测：错答案 401 / 正确答案 200 / 未知用户 401。
-3. **`-race` 结论已推翻**：D-06 调查证明**不是环境问题而是真实数据竞争**（5 模块同源的 `listener` 无同步），已修复并恢复 CI `-race`。
+**一个"已设密保"的账号。** 注册页目前**不收集**密保（录入 UI 属 E2E-09），所以密保只能经 API 设置。
+用网关造一个夹具用户（`questionOrder` 1~2、`answer` 会被 bcrypt 存储）：
 
-**接手时请注意两条"会验错对象"的坑**（新登记 `E2E-F-70`）：
+```bash
+U="e2e07_fixture_$(date +%s)"
+curl -s -X POST http://localhost:19080/api/v1/auth/register   -H 'Content-Type: application/json'   -d "{\"username\":\"$U\",\"password\":\"Passw0rd!\",\"securityQuestions\":[{\"question\":\"first pet\",\"answer\":\"blue\"}]}"
+# 校验（应为 401 → 200）：
+curl -s -X POST http://localhost:19080/api/v1/auth/verify-security-answer   -H 'Content-Type: application/json'   -d "{\"username\":\"$U\",\"questionOrder\":1,\"answer\":\"WRONG\"}"   # 期望 401
+curl -s -X POST http://localhost:19080/api/v1/auth/verify-security-answer   -H 'Content-Type: application/json'   -d "{\"username\":\"$U\",\"questionOrder\":1,\"answer\":\"blue\"}"    # 期望 200
+```
 
-- **验收前先确认被验镜像/进程包含你的改动**：本轮曾出现"代码已修、curl 仍是旧行为"，原因是容器跑的是修改前构建的镜像（容器 Up 6h vs 修复提交在其后）。改完 Go 代码必须重建镜像并重启容器再验收（`bash scripts/build_dev_images.sh <svc>` + `docker compose ... --env-file deploy/.env.local up -d <svc>`）。
-- **本地改 proto 必须用可复现的生成方式**：`protoc 32.1` + `protoc-gen-go v1.36.11` + `protoc-gen-go-grpc v1.6.2`，且**以文件名 `user.proto`**（非 `proto/user.proto`）调用，否则生成的符号名整体变化。改前先"不加改动重生成并与仓库逐字节比对"，一致了再改。
+> ⚠️ **用中文题干时不要在 Git Bash 里直接 curl**：Windows 控制台会把 UTF-8 中文按 GBK 发出，
+> 落库即成乱码（实测题干存入 14 字符/36 字节）。要么用 ASCII 题干，要么用文件体 `-d @file.json`。
 
-**仍未完成（不要误以为已清账）**：
+> 本轮验收时已在 dev 库里留了一个夹具用户 `r01verify_1789719260` / `Passw0rd!`（答案 `blue`，user_id 43），
+> 可直接复用；但它是**手工造的、不在任何 seed 脚本里**，库卷重建即消失。
 
-- **R-02 #1~#3**：E2E-03/06 的 report 未模板化、`[V]` 截图 0 张、账本对账未做完。审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这些必须**重跑测试点或补真实证据**，改文档消不掉。
-- **R-03 #7/#10**：`scripts/` 下 48 个脚本尚无同名负向测试（TDD 门禁已把该缺口显式列出但未强制）；CI 严格化剩余项。
-- **E2E-F-69（安全）**：`deploy/apisix/seed.sh:60` 与 `docker-compose.apps.yml:712` 在**公开仓库**里硬编码了 APISIX 管理员密钥默认值。
+### 两条"会验错对象"的坑（本轮实际踩到，已写进记忆）
+
+1. **改完 Go 代码必须重建镜像再验收**：本轮出现过"代码已修好、curl 仍是旧行为"，因为容器跑的是修改前构建的镜像。
+   `bash scripts/build_dev_images.sh <svc>` → `docker compose -f deploy/docker-compose.apps.yml -f deploy/docker-compose.infra.yml --env-file deploy/.env.local up -d <svc>`。
+   **验收前先 `docker inspect <svc>` 看镜像 Created 时间是否晚于你的提交。**
+2. **改 seed/路由后要重跑 seed，且要在 BFF 起来之后再跑**：APISIX 的 upstream 节点是 seed 时经 Nacos 解析的静态列表；
+   BFF 容器重建后 IP 变了，不重跑 seed 就会 502（本轮踩到）。
+   `docker compose ... run --rm --no-deps emotion-echo-apisix-seed`
+
+3. **本地改 proto 必须复现原生成方式**：`protoc 32.1` + `protoc-gen-go v1.36.11` + `protoc-gen-go-grpc v1.6.2`，
+   且**以文件名 `user.proto`**（非 `proto/user.proto`）调用，否则生成的符号名整体变化。改前先"不加改动重生成并逐字节 diff"。
+
+### 仍未完成（不要误以为已清账）
+
+- **R-02 #1~#3**：E2E-03/06 的 report 未模板化、`[V]` 截图 0 张、账本对账未做完。
+  审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— **这是正确信号**（真实未还欠账），需重跑或补真实证据，改文档消不掉。
+- **R-03 #7/#10**：`scripts/` 下仍有约半数脚本无同名负向测试（TDD 门禁已显式枚举该缺口但未强制）；CI 严格化剩余大项（覆盖率 / 集成测试 / Playwright 进 CI / 构建验证）已判定为**不补**，理由见 [remediation.md](remediation.md)「判定记录」。
+- **`charts/` 的 `dev-bff-secret` 默认值**：决策 23 已冻结 Helm 且从不部署，未处理（真实 JWT 密钥已轮换，该值本身是公开的 dev 默认值）。
 
 ## 阶段详档（just-in-time）
 
