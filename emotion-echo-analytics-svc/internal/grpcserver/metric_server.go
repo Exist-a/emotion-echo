@@ -174,41 +174,93 @@ func (s *analyticsServer) ReportsTrend(ctx context.Context, req *emotionanalytic
 
 // UserBehaviorDayNight 实现 UserBehaviorDayNight RPC
 //
-// PR-3.3 阶段：简化为日级聚合（实际 repo 提供 hour-level bucket；proto
-// ChartDataPoint timestamp 当作 hour slot）
+// E2E-11: 对接 logic 层，返回 24 小时桶（ActiveHours）。
 func (s *analyticsServer) UserBehaviorDayNight(ctx context.Context, req *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorDayNightResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
-	// PR-3.3: behavior logic 未对接（PR-3.4 阶段补）
-	// 当前返空响应 + 注释
-	_ = req
+	startDate := unixToDateProto(req.GetDateRange().GetStartDate())
+	endDate := unixToDateProto(req.GetDateRange().GetEndDate())
+	resp, err := logic.NewUserBehaviorDayNightLogic(ctx, s.svcCtx).GetDayNightPattern(&types.GetDayNightPatternReq{
+		UserID:    req.UserId,
+		StartDate: startDate,
+		EndDate:   endDate,
+	})
+	if err != nil {
+		return nil, grpcerr.MapToError(err, "userBehaviorDayNight")
+	}
+	active := make([]*emotionanalytics.ChartDataPoint, 0, len(resp.Pattern))
+	for h := 0; h < 24; h++ {
+		if cnt := resp.Pattern[h]; cnt > 0 {
+			active = append(active, &emotionanalytics.ChartDataPoint{
+				Timestamp: int64(h) * 3600,
+				Value:     float64(cnt),
+			})
+		}
+	}
 	return &emotionanalytics.UserBehaviorDayNightResponse{
-		ActiveHours:  nil,
+		ActiveHours:  active,
 		MessageHours: nil,
 	}, nil
 }
 
 // UserBehaviorDepth 实现 UserBehaviorDepth RPC
+//
+// E2E-11: 对接 logic 层，返回交互深度指标。
 func (s *analyticsServer) UserBehaviorDepth(ctx context.Context, req *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorDepthResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
-	_ = req
+	startDate := unixToDateProto(req.GetDateRange().GetStartDate())
+	endDate := unixToDateProto(req.GetDateRange().GetEndDate())
+	resp, err := logic.NewUserBehaviorDepthLogic(ctx, s.svcCtx).GetInteractionDepth(&types.GetInteractionDepthReq{
+		UserID:    req.UserId,
+		StartDate: startDate,
+		EndDate:   endDate,
+	})
+	if err != nil {
+		return nil, grpcerr.MapToError(err, "userBehaviorDepth")
+	}
+	d := resp.Depth
+	buckets := []*emotionanalytics.ChartDataPoint{
+		{Timestamp: 1, Value: float64(d.TotalMessages), Label: "totalMessages"},
+		{Timestamp: 2, Value: float64(d.TotalConversations), Label: "totalConversations"},
+		{Timestamp: 3, Value: d.AvgMessagesPerConv, Label: "avgMessagesPerConv"},
+		{Timestamp: 4, Value: float64(d.LongestConversationMs), Label: "longestConversationMs"},
+	}
 	return &emotionanalytics.UserBehaviorDepthResponse{
-		Buckets:       nil,
-		AverageLength: 0,
+		Buckets:       buckets,
+		AverageLength: d.AvgMessagesPerConv,
 	}, nil
 }
 
 // UserBehaviorFrequency 实现 UserBehaviorFrequency RPC
+//
+// E2E-11: 对接 logic 层，返回每日活跃频次。
 func (s *analyticsServer) UserBehaviorFrequency(ctx context.Context, req *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorFrequencyResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
-	_ = req
+	startDate := unixToDateProto(req.GetDateRange().GetStartDate())
+	endDate := unixToDateProto(req.GetDateRange().GetEndDate())
+	resp, err := logic.NewUserBehaviorFrequencyLogic(ctx, s.svcCtx).GetFrequencyTrend(&types.GetFrequencyTrendReq{
+		UserID:    req.UserId,
+		StartDate: startDate,
+		EndDate:   endDate,
+	})
+	if err != nil {
+		return nil, grpcerr.MapToError(err, "userBehaviorFrequency")
+	}
+	daily := make([]*emotionanalytics.ChartDataPoint, 0, len(resp.Counts))
+	for _, c := range resp.Counts {
+		daily = append(daily, &emotionanalytics.ChartDataPoint{
+			Timestamp: parseDateProto(c.Date),
+			Value:     float64(c.Count),
+			Label:     c.Date,
+		})
+	}
 	return &emotionanalytics.UserBehaviorFrequencyResponse{
-		DailyActive: nil,
+		DailyActive: daily,
 		StreakDays:  0,
 	}, nil
 }

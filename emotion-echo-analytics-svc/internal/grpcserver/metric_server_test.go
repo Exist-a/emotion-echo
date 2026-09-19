@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"emotion-echo-analytics-svc/internal/config"
+	"emotion-echo-analytics-svc/internal/model"
 	"emotion-echo-analytics-svc/internal/repository"
 	"emotion-echo-analytics-svc/internal/svc"
 )
@@ -209,4 +210,90 @@ func TestAnalyticsServer_MessageTypesExist(t *testing.T) {
 	assert.NotNil(t, &emotionanalytics.ReportsDailyResponse{})
 	assert.NotNil(t, &emotionanalytics.UserBehaviorRequest{})
 	assert.NotNil(t, &emotionanalytics.MentalHealthTrendResponse{})
+}
+
+// ============ E2E-11: UserBehavior gRPC stubs 对接 logic 层 ============
+
+// seedEvents 向 InMemoryEventRepo 注入测试事件
+func seedEvents(t *testing.T, repo *repository.InMemoryEventRepo, events []*model.UserBehaviorEvent) {
+	t.Helper()
+	for _, e := range events {
+		require.NoError(t, repo.Create(context.Background(), e))
+	}
+}
+
+func TestAnalyticsServer_UserBehaviorDayNight_ReturnsData(t *testing.T) {
+	eventRepo := repository.NewInMemoryEventRepo()
+	seedEvents(t, eventRepo, []*model.UserBehaviorEvent{
+		{UserID: 7, EventType: "message", SessionID: "s1", OccurredAt: time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s1", OccurredAt: time.Date(2026, 9, 19, 10, 30, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s2", OccurredAt: time.Date(2026, 9, 19, 22, 0, 0, 0, time.UTC)},
+		{UserID: 99, EventType: "message", SessionID: "s3", OccurredAt: time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)}, // 不同用户
+	})
+	svcCtx := svc.NewServiceContextWithReports(config.Config{}, eventRepo, repository.NewInMemoryReportRepo())
+	_, conn, cleanup := startAnalyticsTestServer(t, svcCtx)
+	defer cleanup()
+
+	client := emotionanalytics.NewAnalyticsServiceClient(conn)
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-user-id", "7"))
+	resp, err := client.UserBehaviorDayNight(ctx, &emotionanalytics.UserBehaviorRequest{
+		UserId: 7,
+		DateRange: &emotionanalytics.DateRange{
+			StartDate: parseDateProto("2026-09-01"),
+			EndDate:   parseDateProto("2026-09-30"),
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.NotEmpty(t, resp.ActiveHours, "ActiveHours 应有数据（非空 stub）")
+}
+
+func TestAnalyticsServer_UserBehaviorDepth_ReturnsData(t *testing.T) {
+	eventRepo := repository.NewInMemoryEventRepo()
+	seedEvents(t, eventRepo, []*model.UserBehaviorEvent{
+		{UserID: 7, EventType: "message", SessionID: "s1", OccurredAt: time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s1", OccurredAt: time.Date(2026, 9, 19, 10, 5, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s2", OccurredAt: time.Date(2026, 9, 19, 14, 0, 0, 0, time.UTC)},
+	})
+	svcCtx := svc.NewServiceContextWithReports(config.Config{}, eventRepo, repository.NewInMemoryReportRepo())
+	_, conn, cleanup := startAnalyticsTestServer(t, svcCtx)
+	defer cleanup()
+
+	client := emotionanalytics.NewAnalyticsServiceClient(conn)
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-user-id", "7"))
+	resp, err := client.UserBehaviorDepth(ctx, &emotionanalytics.UserBehaviorRequest{
+		UserId: 7,
+		DateRange: &emotionanalytics.DateRange{
+			StartDate: parseDateProto("2026-09-01"),
+			EndDate:   parseDateProto("2026-09-30"),
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.NotEmpty(t, resp.Buckets, "Buckets 应有数据（非空 stub）")
+}
+
+func TestAnalyticsServer_UserBehaviorFrequency_ReturnsData(t *testing.T) {
+	eventRepo := repository.NewInMemoryEventRepo()
+	seedEvents(t, eventRepo, []*model.UserBehaviorEvent{
+		{UserID: 7, EventType: "message", SessionID: "s1", OccurredAt: time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s1", OccurredAt: time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s2", OccurredAt: time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)},
+	})
+	svcCtx := svc.NewServiceContextWithReports(config.Config{}, eventRepo, repository.NewInMemoryReportRepo())
+	_, conn, cleanup := startAnalyticsTestServer(t, svcCtx)
+	defer cleanup()
+
+	client := emotionanalytics.NewAnalyticsServiceClient(conn)
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-user-id", "7"))
+	resp, err := client.UserBehaviorFrequency(ctx, &emotionanalytics.UserBehaviorRequest{
+		UserId: 7,
+		DateRange: &emotionanalytics.DateRange{
+			StartDate: parseDateProto("2026-09-01"),
+			EndDate:   parseDateProto("2026-09-30"),
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.NotEmpty(t, resp.DailyActive, "DailyActive 应有数据（非空 stub）")
 }
