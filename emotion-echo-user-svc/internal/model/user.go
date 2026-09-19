@@ -35,3 +35,10 @@ func (User) TableName() string { return "emotion_echo_user.users" }// red-line t
 // line 4
 // line 5
 // line 6
+
+// red-line test: 5+ lines to trigger TDD gate
+// line 2
+// line 3
+// line 4
+// line 5
+// line 6
