@@ -248,6 +248,58 @@ func TestAnalyticsServer_UserBehaviorDayNight_ReturnsData(t *testing.T) {
 	assert.NotEmpty(t, resp.ActiveHours, "ActiveHours 应有数据（非空 stub）")
 }
 
+// TestAnalyticsServer_UserBehaviorDayNight_HourSlotEncoding 锁定 proto 的
+// hour slot 编码契约（E2E-11 实测发现的回归）。
+//
+// 契约：`ChartDataPoint.timestamp` 承载 **hour slot（0-23）本身**，不是 unix 秒。
+// 依据：BFF gRPC 客户端按 `int(p.Timestamp) % 24` 还原小时
+// （emotion-echo-web-bff/internal/downstream/analytics_grpc.go:DayNightPattern），
+// 且 metric_server.go 原注释即写 "proto ChartDataPoint timestamp 当作 hour slot"。
+//
+// 反例（2026-09-19 dev 实测）：实现曾用 `int64(h) * 3600`。因 3600 是 24 的整数倍，
+// `(h*3600) % 24` 恒等于 0 ⇒ 24 个桶全部塌缩到 hour 0，且逐个覆盖后只剩
+// **最后写入的桶**。实测 DB 有 116 条事件（14 个小时桶），API 却只返回
+// `{"periods":[{"label":"凌晨","value":14}]}`——14 恰是 hour 23 的计数。
+func TestAnalyticsServer_UserBehaviorDayNight_HourSlotEncoding(t *testing.T) {
+	eventRepo := repository.NewInMemoryEventRepo()
+	seedEvents(t, eventRepo, []*model.UserBehaviorEvent{
+		{UserID: 7, EventType: "message", SessionID: "s1", OccurredAt: time.Date(2026, 9, 19, 2, 0, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s1", OccurredAt: time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s2", OccurredAt: time.Date(2026, 9, 19, 10, 30, 0, 0, time.UTC)},
+		{UserID: 7, EventType: "message", SessionID: "s2", OccurredAt: time.Date(2026, 9, 19, 23, 0, 0, 0, time.UTC)},
+	})
+	svcCtx := svc.NewServiceContextWithReports(config.Config{}, eventRepo, repository.NewInMemoryReportRepo())
+	_, conn, cleanup := startAnalyticsTestServer(t, svcCtx)
+	defer cleanup()
+
+	client := emotionanalytics.NewAnalyticsServiceClient(conn)
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-user-id", "7"))
+	resp, err := client.UserBehaviorDayNight(ctx, &emotionanalytics.UserBehaviorRequest{
+		UserId: 7,
+		DateRange: &emotionanalytics.DateRange{
+			StartDate: parseDateProto("2026-09-01"),
+			EndDate:   parseDateProto("2026-09-30"),
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	// 还原成 hour → count（BFF 侧的同一算法）
+	hours := map[int]float64{}
+	for _, p := range resp.ActiveHours {
+		hours[int(p.Timestamp)%24] = p.Value
+	}
+
+	assert.Contains(t, hours, 2, "hour 2 的桶必须能还原（timestamp 应承载 hour slot 本身）")
+	assert.Contains(t, hours, 10, "hour 10 的桶必须能还原")
+	assert.Contains(t, hours, 23, "hour 23 的桶必须能还原")
+	assert.Equal(t, float64(1), hours[2], "hour 2 有 1 条事件")
+	assert.Equal(t, float64(2), hours[10], "hour 10 有 2 条事件")
+	assert.Equal(t, float64(1), hours[23], "hour 23 有 1 条事件")
+	// 4 条事件落在 3 个不同小时（hour 10 占 2 条）⇒ 3 个非空桶
+	assert.Len(t, resp.ActiveHours, 3, "3 个非空 hour 桶（塌缩回归时会变成 1）")
+}
+
 func TestAnalyticsServer_UserBehaviorDepth_ReturnsData(t *testing.T) {
 	eventRepo := repository.NewInMemoryEventRepo()
 	seedEvents(t, eventRepo, []*model.UserBehaviorEvent{

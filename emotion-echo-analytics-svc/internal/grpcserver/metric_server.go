@@ -193,7 +193,10 @@ func (s *analyticsServer) UserBehaviorDayNight(ctx context.Context, req *emotion
 	for h := 0; h < 24; h++ {
 		if cnt := resp.Pattern[h]; cnt > 0 {
 			active = append(active, &emotionanalytics.ChartDataPoint{
-				Timestamp: int64(h) * 3600,
+				// timestamp 承载 hour slot（0-23）本身，不是 unix 秒。
+				// BFF 按 `int(Timestamp) % 24` 还原小时；若编码为 h*3600，
+				// 因 3600 % 24 == 0，24 个桶会全部塌缩到 hour 0。
+				Timestamp: int64(h),
 				Value:     float64(cnt),
 			})
 		}

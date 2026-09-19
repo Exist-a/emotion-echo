@@ -163,11 +163,24 @@ func (c *analyticsGRPCClient) InteractionDepth(ctx context.Context, userID int64
 	if resp == nil {
 		return nil, nil
 	}
-	// InteractionDepth 已有 TotalMessages/TotalConversations/AvgMessagesPerConv 字段
-	// proto UserBehaviorDepthResponse 暂未对齐 → 留 PR-3.4 阶段补
-	return &InteractionDepth{
-		AvgMessagesPerConv: resp.AverageLength,
-	}, nil
+	// E2E-11：proto UserBehaviorDepthResponse 只有 buckets + average_length，
+	// 承载不下 4 个指标。analytics-svc 把指标编码进 buckets 的 Label
+	// （见 analytics-svc/internal/grpcserver/metric_server.go:UserBehaviorDepth），
+	// 这里按 Label 还原；AverageLength 作为 avgMessagesPerConv 的兜底。
+	out := &InteractionDepth{AvgMessagesPerConv: resp.AverageLength}
+	for _, b := range resp.Buckets {
+		switch b.Label {
+		case "totalMessages":
+			out.TotalMessages = int64(b.Value)
+		case "totalConversations":
+			out.TotalConversations = int64(b.Value)
+		case "avgMessagesPerConv":
+			out.AvgMessagesPerConv = b.Value
+		case "longestConversationMs":
+			out.LongestConversationMs = int64(b.Value)
+		}
+	}
+	return out, nil
 }
 
 // FrequencyTrend gRPC
