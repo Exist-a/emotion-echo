@@ -44,8 +44,8 @@
           :title="item.title"
         />
       </div>
-      <div class="ee-empty">暂无数据</div>
-      <div class="ee-skeleton" />
+      <div v-if="isLoadingBehavior" class="ee-skeleton" />
+      <div v-else-if="chartData.length === 0" class="ee-empty">暂无数据</div>
     </div>
   </section>
 
@@ -54,13 +54,26 @@
       <label class="ee-field" data-label="头像">
         <el-upload
           class="avatar-uploader"
-          action=""
           :show-file-list="false"
-          :on-success="handleAvatarSuccess"
+          :http-request="handleAvatarUpload"
           :before-upload="beforeAvatarUpload"
         >
           <img v-if="form.avatarPath" :src="form.avatarPath" class="avatar" alt="头像预览" />
-          <span class="ee-icon" aria-hidden="true"><Plus /></span>
+          <span class="ee-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </span>
         </el-upload>
       </label>
       <label class="ee-field" data-label="昵称"
@@ -97,9 +110,7 @@ import type { ChartItem } from '~/types/charts/common'
 import { ref, onMounted } from 'vue'
 import { get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
-import { useNotify } from '~/composables/useNotify'
-
-const { success: notifySuccess, error: notifyError } = useNotify()
+import { notify } from '~/composables/useNotify'
 
 const userStore = useUserStore()
 const nickname = userStore.getNickname // computed ref
@@ -115,9 +126,9 @@ const form = ref<{
   avatarPath: string
   age: number
 }>({
-  nickname: nickname as unknown as string,
-  avatarPath: avatarPath as unknown as string,
-  age: age as unknown as number,
+  nickname: '',
+  avatarPath: '',
+  age: 18,
 })
 
 const validateInfo = () => {
@@ -139,31 +150,31 @@ const validateInfo = () => {
   return true
 }
 
-const handleAvatarSuccess = (_response: any, uploadFile: any) => {
-  // TODO: 实际上传头像到服务器
-  // 目前使用本地预览URL
-  form.value.avatarPath = URL.createObjectURL(uploadFile.raw!)
-  handleUploadAvatar(uploadFile.raw!)
-}
-
 /**
  * 上传头像到服务器
- * @param file 头像文件
+ *
+ * el-upload 的 :http-request 回调签名：收到 { file, onSuccess, onError, ... }。
+ * 自行发请求（BFF POST /api/v1/user/avatar → MinIO → user-svc 落库），
+ * 不再依赖 el-upload 内置 XHR（原 action="" 会 POST 到当前页地址）。
  */
-const handleUploadAvatar = async (file: File) => {
+const handleAvatarUpload = async (options: any) => {
+  const file: File | undefined = options?.file ?? options
+  if (!(file instanceof File)) return
+
+  // 先本地预览，上传成功后替换为服务端返回的公开 URL
+  form.value.avatarPath = URL.createObjectURL(file)
   try {
     const formData = new FormData()
     formData.append('avatar', file)
     const res = await post<{ avatar: string }>(API_ROUTES.userAvatar.path, formData)
-    // 更新本地头像显示
     form.value.avatarPath = res.avatar
-    // 同步更新 store
+    // 同步更新 store（页面顶部头像）
     if (userStore.userInfo) {
       userStore.userInfo.avatar = res.avatar
     }
     notify('', '头像上传成功', 'success', 3000)
   } catch (error: any) {
-    notify('', '', 'error', 3000)
+    notify('', error?.message || '头像上传失败，请重试', 'error', 3000)
   }
 }
 
@@ -176,6 +187,10 @@ const beforeAvatarUpload = (rawFile: any) => {
 }
 
 const editInfo = () => {
+  // 打开时用当前值回填，避免上次未保存的编辑残留
+  form.value.nickname = nickname.value as string
+  form.value.avatarPath = avatarPath.value as string
+  form.value.age = age.value as number
   dialogFormVisible.value = true
 }
 
@@ -188,7 +203,7 @@ const saveInfo = async () => {
   ])
 
   if (!nickRes.isOk || !ageRes.isOk) {
-    notify('', '', 'error', 3000)
+    notify('', nickRes.msg || ageRes.msg || '保存失败，请重试', 'error', 3000)
     return
   }
 
@@ -217,7 +232,7 @@ const fetchBehaviorData = async () => {
     behaviorData.value.depth = depth
     behaviorData.value.frequency = frequency
   } catch (error: any) {
-    notify('', '获取行为数据失败: ', 'warning', 3000)
+    notify('', error?.message || '获取行为数据失败', 'warning', 3000)
   } finally {
     isLoadingBehavior.value = false
   }
