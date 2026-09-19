@@ -29,21 +29,24 @@ type: e2e-stage-roadmap
 R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量脚本负向测试、R-03 #10 的覆盖率·集成测试·Playwright 进 CI 等大项。
 **代价**：审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这是**正确信号**（真实未还欠账），不是回归。
 
-**当前激活阶段：E2E-12 设置页（待开工）** → 详档待写
+**当前激活阶段：E2E-12 设置页（待开工）** → 详档已撰写（[plan.md](stages/e2e-12-settings/plan.md)，PR #19）；D-09 已决议 = 服务端持久化
 
-> **E2E-10 ✅ done**（2026-09-19）：12/12 测试点全绿 + Playwright 回归钉。详档 [stages/e2e-10-chat-core/report.md](stages/e2e-10-chat-core/report.md)
+> **2026-09-19 治理轮（07~10 收口审计）**：对 E2E-07/08/09/10 跑 `scripts/e2e_stage_audit.py` 发现四个阶段**全部 FAIL**（E2E-11 是唯一干净的近期阶段），错误模式与 R-02 判定过的完全同型：`screenshots/` 全为 0 张、report 非 §10 模板（缺「收口自检」/无汇总行）、plan 与 roadmap 状态未同步。用户决议 = **轻量补账 + 四阶段降 `partial`**（取证补拍另排一轮，账本 E2E-F-90）。
+> 即：**R 系列补救只回填了 E2E-01~06，07 之后的收口仍在复发同一模式** —— 这正是"执行者自证的完成不可信"的再次验证。
 
-> **E2E-09 ✅ done**（2026-09-19）：12/14 测试点 PASS + 密保弹框 + 验证码删除 + Playwright 回归钉 + bcrypt 契约。PR #11 已合并。#12/#13 留账。
+> **E2E-10 ⚠️ partial**（2026-09-19 由 done 降级）：12/12 测试点的**结论未变**，降级原因是收口证据不完整（0 张截图 ⇒ 3 个 `[V]` 点无视觉证据、汇总行格式不合规、缺「收口自检」章节）。详档 [stages/e2e-10-chat-core/report.md](stages/e2e-10-chat-core/report.md) §7~§10
 
-> **E2E-09 ✅ done**（2026-09-19）：12/14 测试点 PASS + 密保弹框实现 + 验证码删除 + Playwright 回归钉 + bcrypt 契约测试。#12/#13 留账（需 dev 环境 DB 访问）。PR #11 已合并。
+> **E2E-09 ⚠️ partial**（2026-09-19 由 done 降级）：12/14 测试点结论未变（密保弹框 + 验证码删除 + bcrypt 契约，本轮实跑 23 条契约 + 全量 410 条前端测试通过）；降级原因是 0 张截图、#12/#13 未执行、缺模板章节。#12/#13 留账 E2E-F-77/78。PR #11 已合并。
 
-> **E2E-08 ✅ done**（2026-09-19）：12/12 测试点全绿 + 4 bug TDD 修复 + Playwright 回归钉。详档 [stages/e2e-08-conversation-management/report.md](stages/e2e-08-conversation-management/report.md)
+> **E2E-08 ⚠️ partial**（2026-09-19 由 done 降级）：12/12 测试点结论未变（软删除 6 条用例本轮实跑 6/6 PASS）；降级原因是 0 张截图、缺模板章节。详档 [stages/e2e-08-conversation-management/report.md](stages/e2e-08-conversation-management/report.md) §7~§9
+
+> **E2E-07 ⚠️ partial**（2026-09-19 由 done 降级）：密保问题流程功能可用，但原报告**未按 plan 的 13 个测试点逐点记录结果** ⇒ 补账后 7 PASS / 6 BLOCKED（BLOCKED = 证据未记录，非功能坏）、0 张截图、回归钉只记"编写"未记运行。详档 [stages/e2e-07-password-recovery/report.md](stages/e2e-07-password-recovery/report.md) §七~§十一
 
 ## 下一阶段（进行中）
 
-**E2E-12 设置页**（status: ⏳ pending）→ 详档待写（按 RUNBOOK "前 1 阶段撰写"规则）
+**E2E-12 设置页**（status: ⏳ pending）→ 详档已撰写（[plan.md](stages/e2e-12-settings/plan.md)；12 个测试点，D-09 已决议）
 
-> E2E-11 测试点 12/12 全 PASS 但状态 partial（留账 2 条，见上表）。E2E-10 已完成（2026-09-19）：聊天核心链路 12/12 全绿。E2E-09 已完成（2026-09-19）：注册流程 12/14 测试点。E2E-08 已完成（2026-09-19）：历史会话管理 12/12 测试点。
+> E2E-11 测试点 12/12 全 PASS 但状态 partial（留账 2 条，见上表）。E2E-10 / E2E-09 / E2E-08 / E2E-07 于 2026-09-19 治理轮由 done 降为 partial（取证缺口，见上方治理轮说明）。
 
 ## 排期总表（30 阶段）
 
@@ -62,15 +65,15 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
 | E2E-06 🔧 | 数据库改造 | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加 schema_migrations 版本表 + 统一软删除 + 修 db README | 连接池调优 | ⚠️ **partial**：R-01 修复了安全漏洞/注册断裂/测试编译；剩余：integration test 未补、演示账号解耦（R-02 #9~10） |
-| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ✅ **done**（2026-09-19：全链路实现 + 浏览器 E2E 实测 + 数据库落库验证） |
-| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ✅ **done**（2026-09-19：12/12 测试点全绿 + 4 bug TDD 修复 + Playwright 回归钉） |
-| E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | ✅ **done**（2026-09-19：12/14 PASS + 密保弹框 + 验证码删除 + Playwright 回归钉 + bcrypt 契约；#12/#13 留账） |
+| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | 🟡 **partial**（2026-09-19 由 done 降级）：功能可用（API 层实测 + DB 落库），但**原报告未按 13 个测试点逐点记录** ⇒ 补账后 7 PASS / 6 BLOCKED（=证据未记录）、0 张截图、回归钉只记"编写"未记运行 → [report §七](stages/e2e-07-password-recovery/report.md) |
+| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | 🟡 **partial**（2026-09-19 由 done 降级）：12/12 结论未变（软删除 6 条用例本轮实跑 6/6 PASS），降级因 0 张截图（4 个 `[V]` 点无视觉证据）+ report 缺模板章节 → [report §7](stages/e2e-08-conversation-management/report.md) |
+| E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | 🟡 **partial**（2026-09-19 由 done 降级）：12/14 结论未变（密保弹框 + 验证码删除 + bcrypt 契约，本轮实跑 23 契约 + 全量 410 前端测试通过），降级因 0 张截图 + #12/#13 未执行（E2E-F-77/78 留账）+ 缺模板章节 |
 
 ### 第三批：聊天与周边
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-10 | 聊天核心链路 | 发送/SSE 流式/错误处理/中断重试 | 多模态 | ✅ **done**（2026-09-19：12/12 全绿 + Playwright 回归钉） |
+| E2E-10 | 聊天核心链路 | 发送/SSE 流式/错误处理/中断重试 | 多模态 | 🟡 **partial**（2026-09-19 由 done 降级）：12/12 结论未变（含 E2E-F-79 LLM key 修复实测），降级因 0 张截图（3 个 `[V]` 点无视觉证据）+ 汇总行格式不合规 + 缺「收口自检」章节 → [report §7](stages/e2e-10-chat-core/report.md) |
 | E2E-11 | 我的空间 | 资料修改/头像上传（MinIO）+ 现有 3 个对话行为图表有数据可渲染、空态可读 | 测评图表（归 E2E-14） | 🟡 **partial**（2026-09-19：**12/12 测试点全 PASS**；首轮 8 commit 修 4 组代码现状缺陷 + 3 组浏览器实测缺陷 + 头像链路 3 层丢弃点；**复查轮再修 5 项**：GetUserById/Login/Register 三处映射漂移收敛、maxConsecutiveDays 恒 0、E2E-F-36 内容裁剪、头像服务端 2MB 上限失效、InMemory 替身保真度。**判 partial 而非 done**：账本仍有 2 条归属本阶段未解决（E2E-F-80 年龄不落库、E2E-F-81 深度指标 NULL session 语义）。回归钉：Playwright 10 用例 + 静态契约钉 21+1 项 + Go 侧新增 25 条。详档 [stages/e2e-11-my-space/report.md](stages/e2e-11-my-space/report.md) §8 复查记录） |
 | E2E-12 | 设置页 | 字体/主题切换与持久化 | — | ⏳ pending |
 

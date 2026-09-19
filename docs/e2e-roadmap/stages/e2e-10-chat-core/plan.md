@@ -2,7 +2,7 @@
 stage: e2e-10
 title: 聊天核心链路
 type: verification
-status: pending
+status: partial
 created: 2026-09-19
 depends-on: [e2e-01, e2e-08]
 blocks: [e2e-15, e2e-16, e2e-17]
