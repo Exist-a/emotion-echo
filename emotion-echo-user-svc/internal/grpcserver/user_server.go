@@ -54,9 +54,11 @@ func (s *userServer) ensureRepo() error {
 // toProtoUser 把 types.UserInfo 转 proto UserInfo
 func toProtoUser(u types.UserInfo) *emotionuser.UserInfo {
 	return &emotionuser.UserInfo{
-		Id:       u.UserId,
-		Username: u.Account,
-		Nickname: u.Nickname,
+		Id:        u.UserId,
+		Username:  u.Account,
+		Nickname:  u.Nickname,
+		AvatarUrl: u.AvatarURL,
+		CreatedAt: u.CreatedAt,
 	}
 }
 

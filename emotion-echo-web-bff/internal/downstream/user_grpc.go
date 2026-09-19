@@ -210,9 +210,11 @@ func fromProtoUserInfo(u *emotionuser.UserInfo) *UserInfo {
 		return nil
 	}
 	return &UserInfo{
-		UserID:   u.Id,
-		Account:  u.Username,
-		Nickname: u.Nickname,
+		UserID:    u.Id,
+		Account:   u.Username,
+		Nickname:  u.Nickname,
+		AvatarURL: u.AvatarUrl,
+		CreatedAt: u.CreatedAt,
 	}
 }
 

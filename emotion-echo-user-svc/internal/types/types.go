@@ -25,9 +25,11 @@ type HealthResp struct {
 }
 
 type UserInfo struct {
-	UserId   int64  `json:"userId"`
-	Account  string `json:"account"`
-	Nickname string `json:"nickname"`
+	UserId    int64  `json:"userId"`
+	Account   string `json:"account"`
+	Nickname  string `json:"nickname"`
+	AvatarURL string `json:"avatarUrl,omitempty"`
+	CreatedAt int64  `json:"createdAt,omitempty"`
 }
 
 // UpdateProfileReq PATCH /api/v1/users/me 的请求体
