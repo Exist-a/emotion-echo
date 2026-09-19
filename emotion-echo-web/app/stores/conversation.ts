@@ -38,22 +38,6 @@ export const useConversationStore = defineStore('conversation', () => {
 
     const now = new Date()
 
-    // 计算本地时区今天0点的时间戳
-    const todayStartLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-
-    // 将UTC的0点转换为本地时区，再转为时间戳
-    const todayUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
-    const todayStartUTC = todayUTC.getTime()
-
-    console.log(
-      '[Conversation] 开始分组，当前时间:',
-      now,
-      '今天0点(本地):',
-      todayStartLocal,
-      '今天0点(UTC):',
-      todayStartUTC,
-    )
-
     conversationList.value.forEach((item) => {
       if (item.isTop) {
         getGroup('置顶').push(item)
@@ -62,10 +46,6 @@ export const useConversationStore = defineStore('conversation', () => {
 
       const itemDate = new Date(item.updatedAt)
       const itemTime = itemDate.getTime()
-
-      console.log(
-        `[Conversation] 会话 ${item.id}(${item.title}): updatedAt=${item.updatedAt}, itemTime=${itemTime}`,
-      )
 
       // 将时间转换为本地日期进行比较
       const itemYear = itemDate.getFullYear()
@@ -125,17 +105,6 @@ export const useConversationStore = defineStore('conversation', () => {
         const data = await get<{ list: ConversationItem[]; hasMore: boolean }>(
           API_ROUTES.conversations.path,
           params,
-        )
-
-        console.log(
-          '[Conversation] 从后端获取的会话列表:',
-          data.list.map((item) => ({
-            id: item.id,
-            title: item.title,
-            updatedAt: item.updatedAt,
-            updatedAtType: typeof item.updatedAt,
-            parsedTime: new Date(item.updatedAt).getTime(),
-          })),
         )
 
         if (cursor.value) {

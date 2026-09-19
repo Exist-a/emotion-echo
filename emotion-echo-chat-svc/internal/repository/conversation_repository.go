@@ -103,8 +103,8 @@ func (r *InMemoryConversationRepo) GetConversationByID(ctx context.Context, id i
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	c, ok := r.conversations[id]
-	if !ok {
-		return nil, nil // 约定：不存在返回 nil, nil
+	if !ok || c.DeletedAt != nil {
+		return nil, nil // 约定：不存在或已软删除返回 nil, nil
 	}
 	return c, nil
 }
@@ -134,7 +134,7 @@ func (r *InMemoryConversationRepo) ListMessages(ctx context.Context, conversatio
 	defer r.mu.RUnlock()
 	out := make([]model.Message, 0)
 	for _, m := range r.messages {
-		if m.ConversationID == conversationID {
+		if m.ConversationID == conversationID && m.DeletedAt == nil {
 			out = append(out, *m)
 		}
 	}
@@ -157,22 +157,22 @@ func (r *InMemoryConversationRepo) GetMessageByClientMsgID(ctx context.Context, 
 	return nil, nil
 }
 
-// SetPinned Stage 72：内存版置顶/取消置顶（不存在的 id 为 no-op，与 DeleteConversation 约定一致）
+// SetPinned Stage 72：内存版置顶/取消置顶（不存在或已删除的 id 为 no-op）
 func (r *InMemoryConversationRepo) SetPinned(ctx context.Context, id int64, pinned bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if c, ok := r.conversations[id]; ok {
+	if c, ok := r.conversations[id]; ok && c.DeletedAt == nil {
 		c.Pinned = pinned
 		c.UpdatedAt = time.Now()
 	}
 	return nil
 }
 
-// UpdateTitle Stage 72：内存版改标题（不存在的 id 为 no-op）
+// UpdateTitle Stage 72：内存版改标题（不存在或已删除的 id 为 no-op）
 func (r *InMemoryConversationRepo) UpdateTitle(ctx context.Context, id int64, title string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if c, ok := r.conversations[id]; ok {
+	if c, ok := r.conversations[id]; ok && c.DeletedAt == nil {
 		c.Title = title
 		c.UpdatedAt = time.Now()
 	}
@@ -198,14 +198,18 @@ func (r *InMemoryConversationRepo) IncrementMessageCountTx(_ *gorm.DB, ctx conte
 	return r.IncrementMessageCount(ctx, conversationID)
 }
 
-// DeleteConversation 删除会话 + 级联删除其消息（不存在的 id 为 no-op）
+// DeleteConversation 软删除会话 + 级联软删除其消息（不存在的 id 为 no-op）。
+// 与 PostgresConversationRepo 保持一致：设 deleted_at 而非从 map 中移除。
 func (r *InMemoryConversationRepo) DeleteConversation(ctx context.Context, id int64) error {
+	now := time.Now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.conversations, id)
-	for mid, m := range r.messages {
-		if m.ConversationID == id {
-			delete(r.messages, mid)
+	if c, ok := r.conversations[id]; ok {
+		c.DeletedAt = &now
+	}
+	for _, m := range r.messages {
+		if m.ConversationID == id && m.DeletedAt == nil {
+			m.DeletedAt = &now
 		}
 	}
 	return nil
@@ -224,7 +228,7 @@ func (r *InMemoryConversationRepo) ListConversations(ctx context.Context, userID
 	defer r.mu.RUnlock()
 	out := make([]model.Conversation, 0, limit+1)
 	for _, c := range r.conversations {
-		if c.UserID != userID {
+		if c.UserID != userID || c.DeletedAt != nil {
 			continue
 		}
 		out = append(out, *c)
@@ -372,20 +376,22 @@ func (r *PostgresConversationRepo) ListConversations(ctx context.Context, userID
 	return out, err
 }
 
-// SetPinned Stage 72：Postgres 版置顶/取消置顶（同时刷新 updated_at）
+// SetPinned Stage 72：Postgres 版置顶/取消置顶（同时刷新 updated_at）。
+// 仅对未删除的会话生效（E2E-08：防止对软删除记录操作）。
 func (r *PostgresConversationRepo) SetPinned(ctx context.Context, id int64, pinned bool) error {
 	return r.db.WithContext(ctx).
 		Exec(`UPDATE emotion_echo_chat.conversations
 		      SET pinned = ?, updated_at = NOW()
-		      WHERE id = ?`, pinned, id).Error
+		      WHERE id = ? AND deleted_at IS NULL`, pinned, id).Error
 }
 
-// UpdateTitle Stage 72：Postgres 版改标题（同时刷新 updated_at）
+// UpdateTitle Stage 72：Postgres 版改标题（同时刷新 updated_at）。
+// 仅对未删除的会话生效（E2E-08：防止对软删除记录操作）。
 func (r *PostgresConversationRepo) UpdateTitle(ctx context.Context, id int64, title string) error {
 	return r.db.WithContext(ctx).
 		Exec(`UPDATE emotion_echo_chat.conversations
 		      SET title = ?, updated_at = NOW()
-		      WHERE id = ?`, title, id).Error
+		      WHERE id = ? AND deleted_at IS NULL`, title, id).Error
 }
 
 // Stage 30-C A3: 事务版本（tx == nil 退化为 r.db；非事务路径）
