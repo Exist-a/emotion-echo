@@ -29,7 +29,7 @@ type: e2e-stage-roadmap
 R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量脚本负向测试、R-03 #10 的覆盖率·集成测试·Playwright 进 CI 等大项。
 **代价**：审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这是**正确信号**（真实未还欠账），不是回归。
 
-**当前激活阶段：E2E-10 聊天核心链路（待开工）** → 详档待写
+**当前激活阶段：E2E-10 聊天核心链路（in-progress）** → 详档 [stages/e2e-10-chat-core/plan.md](stages/e2e-10-chat-core/plan.md)
 
 > **E2E-09 ✅ done**（2026-09-19）：12/14 测试点 PASS + 密保弹框 + 验证码删除 + Playwright 回归钉 + bcrypt 契约。PR #11 已合并。#12/#13 留账。
 
