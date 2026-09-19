@@ -2,7 +2,7 @@
 stage: e2e-09
 title: 注册流程
 type: verification + transformation
-status: pending
+status: partial
 created: 2026-09-17
 depends-on: [e2e-06, e2e-07, e2e-04]
 blocks: []
