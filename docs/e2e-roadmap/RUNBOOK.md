@@ -19,6 +19,8 @@ type: e2e-execution-protocol
 | [roadmap.md](roadmap.md) | 阶段总表 + 状态 + 决策门 | 每次开工前 | 阶段状态变更时 |
 | [RUNBOOK.md](RUNBOOK.md) | **执行协议（本文件）** | 每次开工前必读 | 协议演进时 |
 | [decisions.md](decisions.md) | 改造项决议 | 阶段涉改造时 | 新决议产生时 |
+| [remediation.md](remediation.md) | R 系列补救排期 + 「判定记录：哪些不补」 | 涉历史欠账时 | 判定变化时 |
+| [debt-paydown-plan.md](debt-paydown-plan.md) | **旧账清偿计划**（波次 / 出口断言 / 明确不消） | 消历史欠账前 | 波次推进时 |
 | [discovered-unresolved.md](discovered-unresolved.md) | 发现账本 | 记录范围外发现时 | 每次有新发现 |
 | `stages/<e2e-NN-slug>/plan.md` | 该阶段详档 | 开工前 | 阶段启动前 1 阶段时撰写 |
 | `stages/<e2e-NN-slug>/report.md` | 该阶段执行记录 | 收口时 | 执行过程中与收口时 |
