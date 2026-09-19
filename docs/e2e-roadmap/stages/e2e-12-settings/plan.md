@@ -6,7 +6,7 @@ status: pending
 created: 2026-09-19
 depends-on: [e2e-01, e2e-11]
 blocks: []
-gate: []            # 见 §6「待确认决策 D-09」——本计划以推荐方案 A 为默认路径，故不设阻塞门
+gate: []            # D-09 已由用户 2026-09-19 决议（A 服务端持久化，见 ../../decisions.md#d-09），无阻塞门
 related-findings: [E2E-F-82, E2E-F-36]
 ---
 
@@ -117,7 +117,7 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 - [ ] 全部 12 个测试点有结论（或发现问题已分类：范围内修复 / 范围外记账本）
 - [ ] 修复项走完 TDD（Red → Green → Refactor），每项带**先行的失败测试**证据
 - [ ] 已验证行为固化为 Playwright spec（`settings.spec.ts`）且**跑过至少一次且绿**
-- [ ] 契约扩展附带 ADR（`docs/architecture/adr/adr-2026-09-user-config-persistence.md`）+ `decisions.md` 登记（D-09）——符合 RUNBOOK §13.3 #15 与 AP-08
+- [ ] 契约扩展附带 ADR（`docs/architecture/adr/adr-2026-09-user-config-persistence.md`）——符合 RUNBOOK §13.3 #15 与 AP-08（`decisions.md` 的 D-09 已于 2026-09-19 登记，ADR 待随契约改动落地）
 - [ ] 迁移幂等性：`u003_add_user_config.sql` 可重复执行，且 `deploy/db/test_migrations_contract.sh` 通过（真相源：`02-*.sql` 与 `migrations/` 一致）
 - [ ] §2.4 §契约 5 适用（本案触及 schema）：对新增 `config` 列有断言"写入值 ∈ 合法集合"的契约测试
 - [ ] roadmap 状态更新 + 账本更新（**E2E-F-82 必须翻状态**，否则阶段只能标 `partial`；RUNBOOK §7 #9 账本对账）
@@ -137,18 +137,18 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 | R7 | 账本对账：E2E-F-82 归属本阶段 | 收口时翻状态；若因方案选择未修，须按 §4.2 标 `BLOCKED` + 升级批准，**不得**标 `N/A` 掩盖 |
 | R8 | 测试点 #1 的"正确回填"在首轮必然是 FAIL（VM 恒空 config）| 属预期内 FAIL，进修复队列；`[A]` 断言须写到"与 GET config 一致"而非"存在某个选中态"，避免弱断言放过（E2E-11 的 E2E-F-86 教训） |
 
-### 待确认决策 D-09：`config` 的存储载体
+### 决策 D-09：`config` 的存储载体 —— ✅ 已决议（用户 2026-09-19）
+
+**结论：选 A（服务端持久化：`users.config JSONB` + proto 字段 + BFF 透传）**，已登记至 [decisions.md D-09](../../decisions.md)。
 
 | 方案 | 做法 | 优点 | 缺点 | 是否改契约 |
 |------|------|------|------|-----------|
-| **A. 服务端持久化（推荐）** | `users` 加 `config JSONB` + proto 字段 + BFF 透传 | 跨会话/跨设备；与**页面既有设计意图一致**（`stores/user.ts:59-97` 早已在调 `updateProfile({config})` 写服务端）；直接关闭 E2E-F-82 | schema + proto 变更（4 层）、需迁移与 ADR | ✅ 是 |
-| B. 仅本地存储 | localStorage/cookie 镜像，删掉前端那段服务端写入 | 零后端改动、最快 | 换浏览器/清缓存即丢；等于把 E2E-F-82「已实现却失效」改为「主动降级」，**须用户批准并在账本标 🟡 降级并记录**（防 AP-05） | ❌ 否 |
+| **A. 服务端持久化（已选）** | `users` 加 `config JSONB` + proto 字段 + BFF 透传 | 跨会话/跨设备；与**页面既有设计意图一致**（`stores/user.ts:59-97` 早已在调 `updateProfile({config})` 写服务端）；直接关闭 E2E-F-82 | schema + proto 变更（4 层）、需迁移与 ADR | ✅ 是 |
+| B. 仅本地存储（未选） | localStorage/cookie 镜像，删掉前端那段服务端写入 | 零后端改动、最快 | 换浏览器/清缓存即丢；等于把 E2E-F-82「已实现却失效」改为「主动降级」，**须用户批准并在账本标 🟡 降级并记录**（防 AP-05） | ❌ 否 |
 
-**推荐 A**，理由：前端写入路径已按服务端持久化写好（`setFontSize`/`setTheme` 都先调 API 成功再更新本地，`stores/user.ts:66-77,86-95`），A 是"补齐契约让已有实现真正生效"，而不是新增设计；B 则要反过来删除既有代码，且不满足 roadmap 中本阶段标题的「持久化」。
+**选 A 的理由**：前端写入路径已按服务端持久化写好（`setFontSize`/`setTheme` 都先调 API 成功再更新本地，`stores/user.ts:66-77,86-95`），A 是"补齐契约让已有实现真正生效"，而不是新增设计；B 则要反过来删除既有代码，且不满足 roadmap 中本阶段标题的「持久化」。
 
-**方案 B 对本档的影响**（若用户选 B）：§2「做」表中的契约扩展 4 行全部删除、测试点 #4/#7 改为 `N/A`（须写明理由）、#3/#6 降级为"本地持久化"验证、R3/R4 风险消失。
-
-> 本决策**未**列入 `gate`，故不阻塞开工：执行者按推荐方案 A 推进；用户若在开工前后选择 B，按上表调整本档即可（不涉及已决议方向变更，故无需按 §8 升级）。
+**本档按方案 A 执行**，§2「做」表中的契约扩展 4 行、测试点 #4/#7 的跨会话断言均以方案 A 为前提。（若日后改选 B，需删除 §2 契约扩展、#4/#7 转 `N/A`、#3/#6 降级为本地持久化验证、R3/R4 风险消失。）
 
 ## 7. 产出物
 

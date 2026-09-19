@@ -237,6 +237,42 @@ main 上 `doc-drift-check` 连续红（`2cb9e58`、`0644988`），3 个 job 失�
 
 ---
 
+## D-09 用户配置（字号/主题）的持久化载体（归属 E2E-12）
+
+### 现状（2026-09-19 建档实测）
+
+设置页 `/chat/setting` 的字号与主题切换**在当前架构上不可能持久化**——四层契约各缺一环，任一缺失都会让 `PATCH /api/v1/users/me {"config":{…}}` 被静默丢弃（Go `json.Unmarshal` 忽略未知字段 ⇒ 前端拿到 200 并提示成功，服务端什么都没存）：
+
+| 层 | 现状 | 证据 |
+|----|------|------|
+| 数据库 | `emotion_echo_user.users` 无 config 列 | `deploy/db/02-create-tables-in-schemas.sql:7-18`；`grep -rn config deploy/db/*.sql` 零命中 |
+| proto | `UpdateProfileRequest` 无 config | `proto/user.proto:112-118` |
+| BFF 入参 | `UpdateProfileReq` 无 Config | `emotion-echo-web-bff/internal/downstream/user.go:36-41` |
+| BFF 出参 | `toProfileVM` 硬编码 `Config: map[string]any{}` | `emotion-echo-web-bff/internal/handler/viewmodel.go:106` |
+
+账本条目：[E2E-F-82](discovered-unresolved.md)（与 E2E-F-80「age 同样被丢弃」同源）。
+
+### 候选方案
+
+| 方案 | 做法 | 优点 | 缺点 | 是否改契约 |
+|------|------|------|------|-----------|
+| **A. 服务端持久化** | `users` 加 `config JSONB` + proto 字段 + BFF 透传 | 跨会话/跨设备；与页面**既有设计意图一致**（`app/stores/user.ts:59-97` 早已在调 `updateProfile({config})` 写服务端）；关闭 E2E-F-82 | schema + proto 变更（4 层）、需迁移与 ADR | ✅ 是 |
+| B. 仅本地存储 | localStorage/cookie 镜像，删除前端那段服务端写入 | 零后端改动 | 换浏览器/清缓存即丢；等于把 E2E-F-82「已实现却失效」改为「主动降级」，须按 AP-05 明确记录降级 | ❌ 否 |
+
+### 决议（用户 2026-09-19 确认）
+
+**选 A 服务端持久化。**
+
+**理由**：前端写入路径已按服务端持久化写好（`setFontSize` / `setTheme` 均先调 API 成功再更新本地），A 属于"补齐契约让已有实现真正生效"，而非新增设计；B 需反过来删除既有代码，且不满足本阶段标题中的「持久化」。
+
+### 影响面
+
+- E2E-12 按 [plan §2](stages/e2e-12-settings/plan.md) 的契约扩展范围执行（DB 列 + 迁移 `u003_add_user_config.sql` + proto + BFF 透传 + VM 映射）
+- 需配套 ADR：`docs/architecture/adr/adr-2026-09-user-config-persistence.md`（AP-08：架构/存储变更须有 ADR）
+- 若日后改选 B：plan §2 契约扩展 4 行删除、测试点 #4/#7 转 `N/A`、#3/#6 降级为本地持久化验证
+
+---
+
 ## 决策索引
 
 | 编号 | 主题 | 归属 | 状态 |
@@ -249,3 +285,4 @@ main 上 `doc-drift-check` 连续红（`2cb9e58`、`0644988`），3 个 job 失�
 | **D-06** | `-race` = 先查明再定，禁止直接降级收口 | **R-01 / R-02** | ✅ 已定案 |
 | **D-07** | `doc-drift-check` 红态 = 分类处置，不用 `continue-on-error` | **R-01 / R-03** | ✅ 已定案 |
 | **D-08** | 分支保护 = 保持 `enforce_admins`，只 required 必跑 job | **R-03** | ✅ 已定案 |
+| **D-09** | 用户配置（字号/主题）持久化 = 服务端 `users.config JSONB` | **E2E-12** | ✅ 已决议（用户 2026-09-19；备选方案 B 见上） |
