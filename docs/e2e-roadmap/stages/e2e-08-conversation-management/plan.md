@@ -2,7 +2,7 @@
 stage: e2e-08
 title: 历史会话管理
 type: verification
-status: done
+status: partial
 created: 2026-09-17
 depends-on: [e2e-01, e2e-07]
 blocks: [e2e-10]

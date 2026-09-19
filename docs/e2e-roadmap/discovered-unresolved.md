@@ -18,7 +18,7 @@ type: e2e-discovered-unresolved-ledger
 
 | 编号 | 来源 | 现象 | 根因 | 归属阶段 | 状态 |
 |------|------|------|------|---------|------|
-| E2E-F-01 | 预探查 | 找回密码/注册的验证码无真实投递渠道，流程仍按手机号短信时代设计 | 项目已改用户名登录；`BFF_DEV_RETURN_CODE=1` 仅 dev 回显 | E2E-07 / E2E-09 | 🟡 方案已定：改为**密保问题**（不可跳过、注册必设、弹框 UI、删除验证码步骤），待实施 |
+| E2E-F-01 | 预探查 | 找回密码/注册的验证码无真实投递渠道，流程仍按手机号短信时代设计 | 项目已改用户名登录；`BFF_DEV_RETURN_CODE=1` 仅 dev 回显 | E2E-07 / E2E-09 | ✅ **已解决**（2026-09-19 治理轮核对：方案 C 密保问题已由两阶段实施落地——E2E-07 完成"验证码→密保问题"三步向导改造 + `user_security_answers` 落库 + 答案 bcrypt 化；E2E-09 完成注册侧密保弹框（不可跳过、答案必填）+ 验证码字段/逻辑删除。本轮实跑证据：`SecurityQuestionDialog.test.ts` 8 passed + `registration-security-question.test.ts` 15 passed，合计 23 passed（2026-09-19）。注：两阶段的 `partial` 状态源于 E2E-F-90 的取证缺口，与本条目无关） |
 | E2E-F-02 | 预探查 | 心理测验三层契约错位：提交必 400、结果弹窗"等级"恒空、列表页取数失败报错 | 前端发 `answers` 数组 vs 后端要 `map[string]int`；前端读 `level`/`suggestion` vs 后端回 `riskLevel`；前端读 `data.list` vs 后端回 `{items,total}` | E2E-13 | 🔴 未解决 |
 | E2E-F-03 | 预探查 | 现工程量表种子数据不存在，surveys 表为空 | `deploy/db/` 无 INSERT 量表的 SQL；文档声称的 `seed-surveys.sql` 在 git 全历史中不存在 | E2E-13 | 🔴 未解决 |
 | E2E-F-04 | 预探查 | "人格测试→心理预测→AI 提示词定制"链路完全不存在 | 量表是症状自评非人格量表；评分无维度/画像；BFF system prompt 写死静态字符串；proto 无画像字段；legacy 挂点 `BuildSurveyContext` 函数体 `return ""` | E2E-14 | 🟡 方案已定（D-02），待实施 |
@@ -127,13 +127,21 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-87 | 🟢 | **资料拉取失败后无重试/无提示**：`chat/user` 页 `onMounted` 调 `userStore.fetchUserInfo().catch(() => {})` 静默吞掉错误；BFF 重启窗口内首次拉取失败后，页面会**永久**显示兜底值（"用户"/18 岁/空 ID），刷新才恢复。IAB 实测遇到过一次 | `emotion-echo-web/app/pages/chat/user/index.vue`（`onMounted`）、`app/stores/user.ts`（`fetchUserInfo`） | **E2E-11** | 🟢 留账（低优先级；修法：失败时 `notify` 提示 + 有限重试，或改用 SSR 首屏注入 userInfo） |
 | E2E-F-88 | 🟡 | **§2.4 smoke 脚本 §7 段 3 个 bug 使该检查从未生效**：① `docker_exec` 被调用但**从未定义**（5 项恒报 name not defined）；② 调用处解包顺序反了（`out, _, rc =` 而 helper 返 `(rc, stdout, stderr)`）⇒ 恒判失败且报 `curl rc=`（空）；③ 给 `sh -c` 的 URL 未加引号 ⇒ 查询串的 `&` 被当后台运算符，curl 只收到 `?serviceName=<svc>`，**namespaceId 丢失** ⇒ 查 public 命名空间恒空。后果：AGENTS.md §2.4 强制 gate 长期带 5 个假 FAIL，把"脚本坏了"伪装成"服务没注册" | `scripts/smoke_data_layer.py`（§7 段 + 缺 helper） | **E2E-11** | ✅ **已解决**（2026-09-19：补 `docker_exec` helper + 修解包顺序 + URL 加引号；实测 **16/16 PASS, exit 0**（修前 11/16 + 5 假 FAIL），5 个服务各 1 实例 ephemeral=true） |
 | E2E-F-89 | 🟡 | **5 个门禁脚本未接入 CI（只在本地手工跑）**：实测 `.github/workflows/` 中 `check_adr_gate.sh` / `check_tdd_gate.sh` / `check_residual.sh` / `check_orphan_outputs.sh` / `e2e_stage_audit.py` **引用数均为 0**，仅 `check_secrets.sh` 与 `check_soft_asserts.sh` 在 CI 内。⇒ 本阶段报告所述"门禁通过"只代表本地跑过，CI 不会拦截回归 | `.github/workflows/*.yml`（4 个文件） | **R-03（AP-11）** | 🟡 留账（AP-11 已登记"待 CI 接通"；本阶段发现其**范围比原记录更大**——原以为仅缺 required_status_checks 接线，实测连 workflow 内都未调用这些脚本） |
+| E2E-F-90 | 🔴 | **E2E-07/08/09/10 四个已标 done 的阶段收口证据系统性缺失**，`e2e_stage_audit.py` 判**全部 FAIL**（E2E-11 是唯一干净的近期阶段）：① `screenshots/` 四阶段**全为 0 张**（含 `[V]` 判定点无视觉证据）；② report 非 §10 模板（缺「收口自检」章节、无合规汇总行、E2E-09 结果列写 `⬜ 未覆盖` 非法基值）；③ plan 与 roadmap 状态未同步（E2E-07/10 plan 停在 `pending`）；④ E2E-07 **未按 plan 的 13 个测试点逐点记录结果**，其回归钉只记"编写"未记运行；⑤ E2E-09 #12/#13 未执行 | 根因：R 系列补救（R-02 #1~#3）**只回填了 E2E-01~06**，07 之后的收口沿用自创章节名、跳过截图与 status 同步 ⇒ 与 AP-01/AP-12/AP-14 同型复发。**环境非阻塞因素**：2026-09-19 实测 `docker ps` 有 8 个 emotion-echo 容器 healthy | E2E-07 / E2E-08 / E2E-09 / E2E-10 | 🟡 **部分处置**（2026-09-19 治理轮，用户决议 = 轻量补账 + 四阶段降 `partial`）：报告已按模板补账、状态三处同步为 `partial`、E2E-07 补出 13 点逐点表（7 PASS / 6 BLOCKED=证据未记录）；**取证补拍仍未做**——四阶段截图 + 全量 Playwright 重跑 + E2E-07 的 6 个 BLOCKED 点 + E2E-09 #12/#13，待独立轮次 |
+
+### E. 收口审计治理（2026-09-19）
+
+> 触发：为 E2E-12 建档时跑 `python scripts/e2e_stage_audit.py --all`，发现 8 个阶段 FAIL，其中 **E2E-07/08/09/10 四个近期收口阶段全部在列**；E2E-03/04/05/06 的 FAIL 属 R-02/R-03 已登记的欠账，不再重复立项。
+> 本轮产出：**E2E-F-90**（见上表 D 段末行）+ 四阶段 report 补账 + 状态三处同步为 `partial` + roadmap 治理轮说明。
 
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** + **E2E-10 深度验证 1 项（E2E-F-79）** + **E2E-11 首轮 2 项（E2E-F-80~81）** + **E2E-11 复查轮 8 项（E2E-F-82~89）** = **89 项**；实测阶段若有新发现继续追加 `E2E-F-90` 起
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** + **E2E-10 深度验证 1 项（E2E-F-79）** + **E2E-11 首轮 2 项（E2E-F-80~81）** + **E2E-11 复查轮 8 项（E2E-F-82~89）** + **收口审计治理 1 项（E2E-F-90）** = **90 项**；实测阶段若有新发现继续追加 `E2E-F-91` 起
 - **E2E-11 复查轮关闭 5 条既有条目**：E2E-F-14（图表空态）、E2E-F-36（页面无法滚动）、E2E-F-83（三处映射漂移）、E2E-F-84（内容被裁剪）、E2E-F-85（头像 2MB 上限失效）；另新开并当轮关闭 E2E-F-86（头像契约错位）
+- **2026-09-19 治理轮关闭 1 条**：E2E-F-01（密保问题方案已由 E2E-07/E2E-09 实施落地，见该行证据）
+- **2026-09-19 治理轮新开 1 条**：E2E-F-90（E2E-07/08/09/10 收口证据系统性缺失 → 四阶段降 `partial`；取证补拍待独立轮次）
 - 严重度图例：🔴 阻断/安全 · 🟡 契约缺口 · 🟢 清理项
 
 ## 不列入 E2E 阶段的候选（已评估）

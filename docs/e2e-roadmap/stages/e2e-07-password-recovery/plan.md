@@ -2,7 +2,7 @@
 stage: e2e-07
 title: 找回/重置密码
 type: verification + transformation
-status: pending
+status: partial
 created: 2026-09-17
 depends-on: [e2e-06, e2e-01, e2e-04]
 blocks: []

@@ -1,9 +1,10 @@
 ---
 stage: e2e-10
 title: 聊天核心链路
-status: done
+status: partial
 date: 2026-09-19
-verdict: DONE
+verdict: PARTIAL
+superseded-note: 2026-09-19 治理轮：由 done 降为 partial（0 张截图、无合规汇总行、缺「收口自检」章节）
 ---
 
 # E2E-10 聊天核心链路 — 执行报告
@@ -44,7 +45,10 @@ verdict: DONE
 | 11 | 已有对话追加消息 | [A] | PASS | Playwright: 创建会话 → 追加第二条 → AI 回复数增加 |
 | 12 | AI 回复 Markdown 渲染 | [V] | PASS | Playwright: 请求代码块回复 → AI 气泡 innerHTML 非空 |
 
-**汇总**：12/12 PASS（`[A]` 8 个 + `[V]` 4 个）
+汇总：PASS 12 / FAIL 0 / BLOCKED 0 / N/A 0
+
+> **2026-09-19 治理补账说明**：上表结论**按原报告转录**。原报告的汇总行写作 `**汇总**：12/12 PASS（…）`，因 `**` 阻断且未含 `PASS n` 计数式，审计器 A2 判定为「无汇总行」，本轮改写为合规格式（结论未变：12 点全 PASS）。
+> 真实缺口在证据形态：`screenshots/` 为 0 张 ⇒ #9/#10/#12 三个 `[V]` 测试点只有 DOM/`innerHTML` 断言、**无视觉证据**（审计器 A7 持续 WARN，是正确信号）。故阶段状态由 `done` 降为 `partial`。
 
 ## 4. 发现并修复的 bug
 
@@ -97,7 +101,7 @@ Playwright 只验证前端 UI，以下通过 Docker 日志 + 数据库 + curl �
 
 ## 7. 结论
 
-E2E-10 **done**。聊天核心链路（发送 → SSE 流式 → 持久化 → 错误处理 → 取消 → 重复防护）在 dev 模式下端到端验证通过。12/12 测试点全绿，无遗留问题。
+E2E-10 **partial**（2026-09-19 治理轮由 done 降级）。12/12 测试点的结论维持不变，聊天核心链路在 dev 模式端到端验证通过（SSE 协议、持久化、错误反馈、流式取消、重复防护均有实测证据）。降级原因：`screenshots/` 为 0 张（3 个 `[V]` 点缺视觉证据）+ 原报告汇总行格式不合规 + 缺 §10 模板必填的「收口自检」章节。取证补拍见 §9 与账本 E2E-F-90。
 
 **关键验证点**：
 - SSE 流式协议正确（Content-Type: text/event-stream）
@@ -105,3 +109,37 @@ E2E-10 **done**。聊天核心链路（发送 → SSE 流式 → 持久化 → �
 - 网络错误有明确反馈（"Failed to fetch"）
 - 流式取消正常工作（停止按钮可用）
 - 重复发送被防护（流式中只触发一次 ai/stream）
+
+## 8. 修复清单与回归钉
+
+### 8.1 修复清单（TDD 记录）
+
+| # | 缺陷 | 严重度 | 先行失败测试 | 修复锚点 |
+|---|------|--------|-------------|---------|
+| 1 | `LLM_API_KEY` 被 HOST 空值覆盖 ⇒ llm-service 永远走 mock（用户看不到真实 LLM 响应） | 🔴 高 | 无法用单测表达（配置层缺陷）；以 **docker 日志 + DeepSeek API 实测**为判据 | `deploy/docker-compose.apps.yml`（删除 llm-service / ai-svc 的 `LLM_API_KEY: ${LLM_API_KEY:-}` 覆盖行），PR `fix/llm-api-key-override`；账本 **E2E-F-79 ✅ 已解决** |
+
+未修的测试代码问题（非业务 bug，已记于 §4）：`send-btn` disabled 时 click 超时（改 `force: true`）、mock 流速过快无法捕获增量（改验证 SSE Content-Type）、`.message-failed` 不存在（改断言文本）。
+
+### 8.2 回归钉
+
+| spec | 用例数 | 原报告记录 | 本轮（2026-09-19）状态 |
+|------|--------|-----------|----------------------|
+| `emotion-echo-web/e2e/chat-core.spec.ts` | 12 | 12/12 PASS（chromium） | **未重跑**（取证轮次补跑，见 §9） |
+
+## 9. 待决策 / 升级项
+
+| # | 事项 | 处置 |
+|---|------|------|
+| 1 | 取证补拍：3 个 `[V]` 点（#9 长消息布局 / #10 空对话状态 / #12 Markdown 渲染）无截图 | 用户 2026-09-19 决议：归独立取证轮次，账本 E2E-F-90。**环境当前可用**（实测 8 容器 healthy）⇒ 属**主动推迟**而非环境阻塞 |
+| 2 | 回归钉全量重跑 | 同上，随取证轮次执行 |
+
+## 10. 收口自检
+
+- [x] report.md 存在且含 §10 模板必填章节（2026-09-19 补账后：测试点结果 ✓ / 收口自检 ✓）
+- [x] 汇总行非占位符，且计数与测试点表行数一致（PASS 12 + 0 + 0 + 0 = 12 = 表行数）
+- [x] 阶段状态三处一致：roadmap / plan / report 均为 `partial`（2026-09-19）
+- [x] 账本对账：本阶段唯一相关条目 E2E-F-79 已 ✅ 解决；新增 E2E-F-90 为四阶段共性取证缺口 ⇒ 阶段为 `partial`
+- [x] 关键修复 E2E-F-79 的验证证据可复现（llm-service 日志 HTTP 200 + DB 两条消息 + `SendMessage latency=9ms err=nil`，见 §5）
+- [ ] 截图归档 —— **未完成**：`screenshots/` 为 0 张
+- [ ] 全量 Playwright 重跑 —— **未完成**（归取证轮次）
+- [ ] §2.5 收口自检三连 —— **未执行**（阶段处于 partial）
