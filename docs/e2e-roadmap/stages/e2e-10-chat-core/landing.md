@@ -16,7 +16,7 @@ type: landing
 | 全链路验证 | ✅ BFF→chat-svc→llm-service→DeepSeek API |
 | 数据库落库 | ✅ user + assistant 消息均持久化 |
 | 发现并修复 bug | 1 个（LLM_API_KEY 覆盖，E2E-F-79） |
-| §2.4 契约 smoke | 4/6 PASS，1 FAIL（视图不存在），1 WARN（emotionDistribution 空） |
+| §2.4 契约 smoke | 5/6 PASS，1 WARN（emotionDistribution 空） |
 | 边界测试 | 3/3 PASS（空消息/超长/并发） |
 
 ## 2. 全链路验证证据
@@ -72,7 +72,7 @@ SELECT id, role, LEFT(content, 60), intent FROM emotion_echo_chat.messages WHERE
 |---|------|------|------|
 | 1 | user_behavior_events 行数 ≥ 业务事件数 | ✅ PASS | 163 行 |
 | 2 | event_type ≥ 2 种 | ✅ PASS | 7 种（message.created 70, conversation.created 58, conversation.closed 22 等） |
-| 3 | analytics_reader 能查视图 | ❌ FAIL | 视图不存在（0 个 view in emotion_echo_analytics） |
+| 3 | analytics_reader 能查视图 | ✅ PASS | 4 个视图分布在 ai/chat/assessment schema（非 analytics schema），analytics_reader 均有 SELECT 权限：daily_emotion_v(98行) + msg_summary_v(203行) + assessment_v(0行) + daily_emotion_by_modality_v |
 | 4 | 报表 summary 非空 + chartData > 0 | ⚠️ WARN | summary 非空 ✅，emotionDistribution=[] ❌（E2E-F-10 已知） |
 | 5 | schema 与写入端一致性 | ✅ PASS | content 长度校验(4096) + 空内容校验生效 |
 | 6 | KAFKA_ENABLED=false 路径不空跑 | ✅ PASS | dev 模式消息正常写入 DB（163 行事件） |
