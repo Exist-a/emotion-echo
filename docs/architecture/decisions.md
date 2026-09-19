@@ -535,6 +535,22 @@
 >
 > **登记意义**：渲染模式属"架构关键词"，此后该类改动由 `scripts/check_adr_gate.sh` 检查是否附带 ADR + 本文件变更（R-03 #4）。
 
+### 决策 25：前端 UI 组件策略 = **不引入 UI 框架，统一原生 + 设计 Token**（2026-07-17 实施 / 2026-09-19 追认补档 + 残留收口）
+
+> ✅ Accepted。**本文档性质：追认 + 收口记录** —— 该策略由 `docs/legacy-plans/landed/elementplus-to-native.md`（2026-07-17）确立并已标 `landed`，但**未完全落地**：2026-09-19 E2E-11 浏览器实测发现 `chat/user/index.vue` 仍用 `<el-dialog>` / `<el-upload>`，控制台报 `Failed to resolve component` ⇒ "弹框"被当作普通元素内联恒渲染、`<template #footer>` 命名插槽被静默丢弃 ⇒ 「保存资料 / 确认退出 / 取消 / 留下」四个按钮在 DOM 中**根本不存在**。本决策一并追认策略并清理残留。
+>
+> **完整论证见 [ADR · 2026-09 · 前端 UI 组件策略](adr/adr-2026-09-frontend-ui-component-strategy.md)**。要点：
+>
+> **触发**：Element Plus 默认风格偏中后台，与情绪陪伴类产品调性不符；`:deep(.el-*)` 覆盖难以维持设计语言；体积/tree-shaking 不稳。
+>
+> **决策**：不下任何 UI 组件框架。模态弹框用 `Teleport + v-if + role="dialog"`（参考 `SecurityQuestionDialog.vue`）；文件选择用原生 `<input type="file">`；toast 用自有 `useNotify` + `NotifyHost`；图标用内联 SVG；按钮/输入用 `.ee-btn/.ee-field/.ee-input` + CSS Token。
+>
+> **伴随约束（新增代码必须遵守）**：① 页面中不得出现 `<el-*>` 标签（契约钉：`app/pages/chat/user/e2e-11-my-space-contract.architecture.test.ts`）；② **新增 layout 必须挂 `<NotifyHost />`**，否则该 layout 下所有 `notify()` 静默（契约钉：`app/layouts/nav.test.ts`）；③ 前端拦截（如头像 2MB）不得替代服务端校验，两侧都要有。
+>
+> **遗留（已记账，未消除）**：`package.json` 仍依赖 `@element-plus/icons-vue`（`FaceCamera.vue` 在用），`nuxt.config.ts` 仍 transpile 该包；原生弹框未做 focus trap（a11y 欠账，归 E2E-04）。
+>
+> **登记意义**：UI 组件选型命中 `check_adr_gate.sh` 的架构关键词（`vue`/`Vue`），此后该类改动需附 ADR + 本文件变更。
+
 > **🔧 2026-09-10 Stage 62 PR-2 微调**：下方 `## 🏗 当前架构全景` 已对齐决策 11/12
 > 关系说明（APISIX = 唯一业务入口；BFF = 聚合层 / APISIX upstream）。
 > 早期决策 18 #24 登记时基于"作者推断"误以为全景图含 '唯一前端入口' 措辞——实测全景图本身合规。

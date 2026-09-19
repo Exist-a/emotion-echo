@@ -75,4 +75,21 @@ describe('nav.vue height-chain contract (Stage 104)', () => {
   it('nav 布局必须渲染 NotifyHost（否则聊天区所有 toast 静默）', () => {
     expect(NAV_SRC).toMatch(/<NotifyHost\s*\/>/)
   })
+
+  // E2E-F-36：内容页必须能滚动（原 overflow: hidden 静默裁剪）
+  //
+  // 浏览器实测（2026-09-19，1280×600 视口）：
+  //   .page-content clientH=496 scrollH=676 overflowY=hidden ⇒ 底部约 180px 被裁剪，
+  //   整个 DOM 无任何可滚动元素，wheel 完全无效；`.user-data-card` 底部 740px
+  //   落在 600px 视口外 → 图表底部永久不可达、不可见。
+  //   1280×900 时内容恰好装得下，所以此前截图未暴露该问题。
+  it('.page-content 必须 overflow-y: auto（内容溢出时可滚动，不能被裁剪）', () => {
+    const block = firstBlock('.page-content')
+    expect(block, '.page-content 块未找到').not.toBe('')
+    expect(
+      block,
+      'E2E-F-36: .page-content 用 overflow: hidden ⇒ 内容页（我的空间/报表）' +
+        '在小视口下被静默裁剪且无法滚动。应改为 overflow-y: auto。',
+    ).toMatch(/overflow-y\s*:\s*auto/)
+  })
 })

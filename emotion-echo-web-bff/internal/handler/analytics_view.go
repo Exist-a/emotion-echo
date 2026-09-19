@@ -16,6 +16,7 @@ package handler
 
 import (
 	"sort"
+	"time"
 
 	"emotion-echo-web-bff/internal/downstream"
 )
@@ -296,10 +297,13 @@ func toFrontendFrequency(counts []downstream.DailyCount) *FrontendFrequency {
 //
 // 字段映射：
 //   - avgSessionRounds = AvgMessagesPerConv（平均每次会话的消息轮数）
-//   - maxConsecutiveDays = 0（需从 frequency 数据计算，暂不可用）
+//   - maxConsecutiveDays = streak（由调用方从每日活跃日期算出的最长连续天数）
 //   - totalConversations / totalMessages 直传
-//   - avgMessagesPerDay = TotalMessages / 活跃天数（无天数信息时用 TotalConversations 近似）
-func toFrontendDepth(d *downstream.InteractionDepth, activeDays int) *FrontendDepth {
+//   - avgMessagesPerDay = TotalMessages / activeDays（活跃天数取自 frequency 数据）
+//
+// E2E-11 复查：原实现 maxConsecutiveDays 硬编码 0、activeDays 传 0 ⇒
+// 图表 X 轴写着"最长连续(天)"却恒 0，日均消息退化成"每会话消息数"，均属残缺指标。
+func toFrontendDepth(d *downstream.InteractionDepth, streak, activeDays int) *FrontendDepth {
 	if d == nil {
 		return &FrontendDepth{}
 	}
@@ -311,9 +315,47 @@ func toFrontendDepth(d *downstream.InteractionDepth, activeDays int) *FrontendDe
 	}
 	return &FrontendDepth{
 		AvgSessionRounds:   d.AvgMessagesPerConv,
-		MaxConsecutiveDays: 0,
+		MaxConsecutiveDays: int64(streak),
 		TotalConversations: d.TotalConversations,
 		TotalMessages:      d.TotalMessages,
 		AvgMessagesPerDay:  avgPerDay,
 	}
+}
+
+// maxConsecutiveDays 从「活跃日期列表」算最长连续天数（纯函数）。
+//
+// 输入形如 ["2026-09-01","2026-09-02","2026-09-05",...]（frequency 端点的 dates）。
+// 语义：把日期去重升序后，找最长的 +1 天连续 run。
+// 非法日期直接忽略（不 panic、不引入假连续）。
+func maxConsecutiveDays(dates []string) int {
+	const layout = "2006-01-02"
+	parsed := make([]time.Time, 0, len(dates))
+	for _, d := range dates {
+		t, err := time.Parse(layout, d)
+		if err != nil {
+			continue
+		}
+		parsed = append(parsed, t)
+	}
+	if len(parsed) == 0 {
+		return 0
+	}
+	sort.Slice(parsed, func(i, j int) bool { return parsed[i].Before(parsed[j]) })
+
+	best, cur := 1, 1
+	for i := 1; i < len(parsed); i++ {
+		diff := parsed[i].Sub(parsed[i-1])
+		switch {
+		case diff == 0:
+			// 同日重复：不增长也不重置
+		case diff == 24*time.Hour:
+			cur++
+			if cur > best {
+				best = cur
+			}
+		default:
+			cur = 1
+		}
+	}
+	return best
 }

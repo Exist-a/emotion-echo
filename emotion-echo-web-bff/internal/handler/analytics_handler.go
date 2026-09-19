@@ -151,16 +151,26 @@ func (h *AnalyticsHandler) interactionDepth(c *gin.Context) {
 	if !ok {
 		return
 	}
+	authCtx := session.WithRequestAuth(c)
 	startDate, endDate := behaviorDateWindow(c)
-	depth, err := h.analytics.InteractionDepth(session.WithRequestAuth(c), uid,
-		startDate, endDate)
+	depth, err := h.analytics.InteractionDepth(authCtx, uid, startDate, endDate)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
+	// E2E-11 复查：最长连续天数与活跃天数都来自「每日活跃」数据（frequency 端点）。
+	// 取不到时（下游抖动）退化为 0 / 0，不阻断 depth 主指标。
+	streak, activeDays := 0, 0
+	if counts, ferr := h.analytics.FrequencyTrend(authCtx, uid, startDate, endDate); ferr == nil {
+		dates := make([]string, 0, len(counts))
+		for _, c := range counts {
+			dates = append(dates, c.Date)
+		}
+		streak = maxConsecutiveDays(dates)
+		activeDays = len(counts)
+	}
 	// E2E-11: 变换为前端契约形状
-	// activeDays 暂用 frequency 端点的天数近似（depth 单独调用时无法得知）
-	OK(c, toFrontendDepth(depth, 0))
+	OK(c, toFrontendDepth(depth, streak, activeDays))
 }
 
 func (h *AnalyticsHandler) frequencyTrend(c *gin.Context) {

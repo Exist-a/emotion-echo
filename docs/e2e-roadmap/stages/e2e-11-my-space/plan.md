@@ -2,7 +2,7 @@
 stage: e2e-11
 title: 我的空间
 type: verification
-status: done
+status: partial
 created: 2026-09-19
 depends-on: [e2e-01, e2e-08, e2e-10]
 blocks: [e2e-12, e2e-14, e2e-15]

@@ -5,11 +5,29 @@ original-path: .trae/documents/frontend-refactor/elementplus-replacement.md
 original-date: 2026-07-17
 migrated-at: 2026-09-03
 round: 2-A
+completion: partial
 ---
 
 # Element Plus 全面替换为原生 —— 落地文档
 
 > 2026-07-17 · 状态：已落地
+>
+> ⚠️ **2026-09-19 更正（E2E-11 复查）**：本文件标 `landed` 与事实**不完全相符**。
+> 实测发现 `app/pages/chat/user/index.vue` 仍在使用 `<el-dialog>` / `<el-upload>`，
+> 控制台报 `Failed to resolve component` ⇒ "弹框"被当作普通自定义元素内联恒渲染，
+> `<template #footer>` 命名插槽被静默丢弃 ⇒「保存资料 / 确认退出 / 取消 / 留下」
+> 四个按钮在 DOM 中**根本不存在**（用户无法保存资料、无法从该页退出登录）。
+>
+> **残留清单**（截至 2026-09-19）：
+>
+> | 残留 | 状态 |
+> |------|------|
+> | `chat/user/index.vue` 的 `<el-dialog>` / `<el-upload>` | ✅ 已在 E2E-11 改为原生（Teleport 弹框 + `input[type=file]`） |
+> | `package.json` 的 `@element-plus/icons-vue` 依赖 | ⏸️ **仍存在**（`app/components/face/FaceCamera.vue` 仍 `import { CircleClose }`） |
+> | `nuxt.config.ts` 的 `transpile: ['@element-plus/icons-vue']` | ⏸️ 同上，依赖移除后才可删 |
+>
+> 该策略已正式登记为架构决策：**决策 25 + [ADR · 2026-09 · 前端 UI 组件策略](../../architecture/adr/adr-2026-09-frontend-ui-component-strategy.md)**。
+> 残留项的去向以该 ADR §二 表格为准。
 > 范围：`emotion-echo-web/` 前端全部页面、组件、Store
 
 ## 一、背景与决策
