@@ -167,6 +167,57 @@ func TestAnalyticsGRPCClient_FrequencyTrend_InjectsUserIDMetadata(t *testing.T) 
 	assert.Equal(t, "7", mock.gotUserID, "FrequencyTrend 必须注入 x-user-id metadata")
 }
 
+// =====================================================
+// E2E-11：UserBehaviorDepth 的 4 个指标必须从 proto Buckets 完整还原
+//
+// 背景：proto UserBehaviorDepthResponse 只有 `repeated ChartDataPoint buckets`
+// + `double average_length` 两个字段，承载不下 InteractionDepth 的 4 个指标。
+// analytics-svc 侧（metric_server.go）把 4 个指标编码进 buckets 的 Label；
+// BFF gRPC 客户端必须按 Label 还原，否则 totalMessages / totalConversations /
+// longestConversationMs 恒为 0。
+//
+// 浏览器实测（2026-09-19）：深度端点返回
+//   {"avgSessionRounds":3.41,"totalConversations":0,"totalMessages":0,...}
+// ——avgSessionRounds 有值（读的是 average_length），其余 3 项为 0（未读 buckets）。
+// =====================================================
+
+// depthBucketsServer 返回带 4 个 Label 的 buckets（与 analytics-svc 编码一致）
+type depthBucketsServer struct {
+	emotionanalytics.UnimplementedAnalyticsServiceServer
+}
+
+func (d *depthBucketsServer) UserBehaviorDepth(_ context.Context, _ *emotionanalytics.UserBehaviorRequest) (*emotionanalytics.UserBehaviorDepthResponse, error) {
+	return &emotionanalytics.UserBehaviorDepthResponse{
+		Buckets: []*emotionanalytics.ChartDataPoint{
+			{Timestamp: 1, Value: 150, Label: "totalMessages"},
+			{Timestamp: 2, Value: 12, Label: "totalConversations"},
+			{Timestamp: 3, Value: 12.5, Label: "avgMessagesPerConv"},
+			{Timestamp: 4, Value: 340000, Label: "longestConversationMs"},
+		},
+		AverageLength: 12.5,
+	}, nil
+}
+
+func TestAnalyticsGRPCClient_InteractionDepth_MapsAllMetricsFromBuckets(t *testing.T) {
+	conn, cleanup := startMockAnalyticsBufConn(t, &depthBucketsServer{})
+	defer cleanup()
+
+	client := NewAnalyticsGRPCClient(conn)
+	ctx := WithUserID(context.Background(), 7)
+	depth, err := client.InteractionDepth(ctx, 7, "2026-09-01", "2026-09-07")
+	require.NoError(t, err)
+	require.NotNil(t, depth)
+
+	assert.Equal(t, int64(150), depth.TotalMessages,
+		"E2E-11: totalMessages 必须从 buckets[label=totalMessages] 还原（否则页面柱状图恒 0）")
+	assert.Equal(t, int64(12), depth.TotalConversations,
+		"E2E-11: totalConversations 必须从 buckets 还原")
+	assert.Equal(t, 12.5, depth.AvgMessagesPerConv,
+		"E2E-11: avgMessagesPerConv 必须从 buckets/AverageLength 还原")
+	assert.Equal(t, int64(340000), depth.LongestConversationMs,
+		"E2E-11: longestConversationMs 必须从 buckets 还原")
+}
+
 func TestAnalyticsGRPCClient_MentalAssessment_InjectsUserIDMetadata(t *testing.T) {
 	mock := &metadataCapturingServer{}
 	conn, cleanup := startMockAnalyticsBufConn(t, mock)

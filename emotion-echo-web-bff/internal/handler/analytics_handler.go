@@ -105,18 +105,45 @@ func (h *AnalyticsHandler) trendReport(c *gin.Context) {
 	OK(c, toFrontendTrendReport(report))
 }
 
+// behaviorDateWindow 解析 behavior 三端点的日期窗口，缺省时补默认值。
+//
+// E2E-11：前端"我的空间"页（chat/user/index.vue:fetchBehaviorData）调
+// day-night / depth / frequency 时**不传** start_date/end_date。而
+// analytics-svc 的 parseDateWindow 对空串直接报
+// `validation: invalid start_date ""` ⇒ 三个图表全部拿不到数据。
+//
+// 默认窗口 = 近 30 天（含今日）：[today-29d, today]。
+// 显式传值原样透传（不覆盖）。
+func behaviorDateWindow(c *gin.Context) (startDate, endDate string) {
+	startDate = c.Query("start_date")
+	endDate = c.Query("end_date")
+	if startDate != "" && endDate != "" {
+		return startDate, endDate
+	}
+	today := time.Now()
+	if endDate == "" {
+		endDate = today.Format("2006-01-02")
+	}
+	if startDate == "" {
+		startDate = today.AddDate(0, 0, -29).Format("2006-01-02")
+	}
+	return startDate, endDate
+}
+
 func (h *AnalyticsHandler) dayNight(c *gin.Context) {
 	uid, ok := userIDQuery(c)
 	if !ok {
 		return
 	}
+	startDate, endDate := behaviorDateWindow(c)
 	pattern, err := h.analytics.DayNightPattern(session.WithRequestAuth(c), uid,
-		c.Query("start_date"), c.Query("end_date"))
+		startDate, endDate)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"pattern": pattern})
+	// E2E-11: 变换为前端契约形状（periods 数组）
+	OK(c, toFrontendDayNight(pattern))
 }
 
 func (h *AnalyticsHandler) interactionDepth(c *gin.Context) {
@@ -124,13 +151,16 @@ func (h *AnalyticsHandler) interactionDepth(c *gin.Context) {
 	if !ok {
 		return
 	}
+	startDate, endDate := behaviorDateWindow(c)
 	depth, err := h.analytics.InteractionDepth(session.WithRequestAuth(c), uid,
-		c.Query("start_date"), c.Query("end_date"))
+		startDate, endDate)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"depth": depth})
+	// E2E-11: 变换为前端契约形状
+	// activeDays 暂用 frequency 端点的天数近似（depth 单独调用时无法得知）
+	OK(c, toFrontendDepth(depth, 0))
 }
 
 func (h *AnalyticsHandler) frequencyTrend(c *gin.Context) {
@@ -138,13 +168,15 @@ func (h *AnalyticsHandler) frequencyTrend(c *gin.Context) {
 	if !ok {
 		return
 	}
+	startDate, endDate := behaviorDateWindow(c)
 	counts, err := h.analytics.FrequencyTrend(session.WithRequestAuth(c), uid,
-		c.Query("start_date"), c.Query("end_date"))
+		startDate, endDate)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"counts": counts})
+	// E2E-11: 变换为前端契约形状（dates + messageCount 数组）
+	OK(c, toFrontendFrequency(counts))
 }
 
 func (h *AnalyticsHandler) mentalAssessment(c *gin.Context) {

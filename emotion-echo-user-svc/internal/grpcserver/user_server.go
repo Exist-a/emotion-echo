@@ -54,9 +54,11 @@ func (s *userServer) ensureRepo() error {
 // toProtoUser 把 types.UserInfo 转 proto UserInfo
 func toProtoUser(u types.UserInfo) *emotionuser.UserInfo {
 	return &emotionuser.UserInfo{
-		Id:       u.UserId,
-		Username: u.Account,
-		Nickname: u.Nickname,
+		Id:        u.UserId,
+		Username:  u.Account,
+		Nickname:  u.Nickname,
+		AvatarUrl: u.AvatarURL,
+		CreatedAt: u.CreatedAt,
 	}
 }
 
@@ -78,8 +80,13 @@ func (s *userServer) UpdateProfile(ctx context.Context, req *emotionuser.UpdateP
 		return nil, err
 	}
 	// proto optional → types optional
+	//
+	// E2E-11：avatar_url 必须一并透传。原先只组装 Nickname + Gender，
+	// avatar_url 在 proto→types 转换里被丢掉 ⇒ 头像上传接口返 200、
+	// MinIO 对象已写入，但数据库 avatar_url 恒为 NULL。
 	profileReq := &types.UpdateProfileReq{
-		Nickname: req.Nickname,
+		Nickname:  req.Nickname,
+		AvatarURL: req.AvatarUrl,
 	}
 	if req.Gender != nil {
 		g := int16(*req.Gender)

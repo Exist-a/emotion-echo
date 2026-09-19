@@ -56,11 +56,21 @@ func toGetMeResp(u *model.User) *types.GetMeResp {
 	if u.Nickname != nil {
 		nick = *u.Nickname
 	}
+	avatar := ""
+	if u.AvatarURL != nil {
+		avatar = *u.AvatarURL
+	}
+	var createdAt int64
+	if !u.CreatedAt.IsZero() {
+		createdAt = u.CreatedAt.Unix()
+	}
 	return &types.GetMeResp{
 		User: types.UserInfo{
-			UserId:   u.ID,
-			Account:  u.Username,
-			Nickname: nick,
+			UserId:    u.ID,
+			Account:   u.Username,
+			Nickname:  nick,
+			AvatarURL: avatar,
+			CreatedAt: createdAt,
 		},
 	}
 }

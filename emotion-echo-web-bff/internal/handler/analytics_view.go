@@ -216,3 +216,104 @@ func emotionCountsToSlice(m map[string]int64) []EmotionDistributionItem {
 func emotionTotalToSlice(m map[string]int64) []EmotionDistributionItem {
 	return emotionCountsToSlice(m)
 }
+
+// ============ E2E-11: user-behavior 前端契约变换 ============
+
+// DayNightPeriod 前端昼夜饼图数据元素
+type DayNightPeriod struct {
+	Label string `json:"label"`
+	Hours string `json:"hours"`
+	Value int64  `json:"value"`
+}
+
+// FrontendDayNight 前端 dayNight 契约
+type FrontendDayNight struct {
+	Periods []DayNightPeriod `json:"periods"`
+}
+
+// FrontendFrequency 前端 frequency 契约
+type FrontendFrequency struct {
+	Dates        []string `json:"dates"`
+	MessageCount []int64  `json:"messageCount"`
+}
+
+// FrontendDepth 前端 depth 契约（我的空间柱状图）
+type FrontendDepth struct {
+	AvgSessionRounds   float64 `json:"avgSessionRounds"`
+	MaxConsecutiveDays int64   `json:"maxConsecutiveDays"`
+	TotalConversations int64   `json:"totalConversations"`
+	TotalMessages      int64   `json:"totalMessages"`
+	AvgMessagesPerDay  float64 `json:"avgMessagesPerDay"`
+}
+
+// toFrontendDayNight 把 24 桶 map → 前端 periods 数组（按时段聚合）
+//
+// 时段划分：凌晨 0-5 / 上午 6-11 / 下午 12-17 / 夜间 18-23
+func toFrontendDayNight(pattern map[int]int64) *FrontendDayNight {
+	type slot struct {
+		label string
+		hours string
+		start int
+		end   int
+	}
+	slots := []slot{
+		{"凌晨", "0:00-6:00", 0, 5},
+		{"上午", "6:00-12:00", 6, 11},
+		{"下午", "12:00-18:00", 12, 17},
+		{"夜间", "18:00-24:00", 18, 23},
+	}
+	var periods []DayNightPeriod
+	for _, s := range slots {
+		var total int64
+		for h := s.start; h <= s.end; h++ {
+			total += pattern[h]
+		}
+		if total > 0 {
+			periods = append(periods, DayNightPeriod{Label: s.label, Hours: s.hours, Value: total})
+		}
+	}
+	if periods == nil {
+		periods = []DayNightPeriod{}
+	}
+	return &FrontendDayNight{Periods: periods}
+}
+
+// toFrontendFrequency 把 []DailyCount → 前端 dates + messageCount 数组
+func toFrontendFrequency(counts []downstream.DailyCount) *FrontendFrequency {
+	if len(counts) == 0 {
+		return &FrontendFrequency{Dates: []string{}, MessageCount: []int64{}}
+	}
+	dates := make([]string, len(counts))
+	msgCounts := make([]int64, len(counts))
+	for i, c := range counts {
+		dates[i] = c.Date
+		msgCounts[i] = c.Count
+	}
+	return &FrontendFrequency{Dates: dates, MessageCount: msgCounts}
+}
+
+// toFrontendDepth 把 InteractionDepth → 前端柱状图契约
+//
+// 字段映射：
+//   - avgSessionRounds = AvgMessagesPerConv（平均每次会话的消息轮数）
+//   - maxConsecutiveDays = 0（需从 frequency 数据计算，暂不可用）
+//   - totalConversations / totalMessages 直传
+//   - avgMessagesPerDay = TotalMessages / 活跃天数（无天数信息时用 TotalConversations 近似）
+func toFrontendDepth(d *downstream.InteractionDepth, activeDays int) *FrontendDepth {
+	if d == nil {
+		return &FrontendDepth{}
+	}
+	var avgPerDay float64
+	if activeDays > 0 {
+		avgPerDay = float64(d.TotalMessages) / float64(activeDays)
+	} else if d.TotalConversations > 0 {
+		avgPerDay = float64(d.TotalMessages) / float64(d.TotalConversations)
+	}
+	return &FrontendDepth{
+		AvgSessionRounds:   d.AvgMessagesPerConv,
+		MaxConsecutiveDays: 0,
+		TotalConversations: d.TotalConversations,
+		TotalMessages:      d.TotalMessages,
+		AvgMessagesPerDay:  avgPerDay,
+	}
+}

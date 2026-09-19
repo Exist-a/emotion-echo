@@ -117,12 +117,14 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-77 | 🟡 | **注册后找回密码联动未验证**：E2E-09 #12 测试点"注册后可直接用于找回密码"未执行。注册流程已实现密保问题设定，找回密码流程（E2E-07）已实现密保问题校验，但两者联动的端到端验证缺失 | E2E-09 report.md | **E2E-09** | 🟡 留账（阻塞条件：dev 环境 DB 可访问） |
 | E2E-F-78 | 🟡 | **并发注册同名未验证**：E2E-09 #13 测试点"并发注册同名用户"未执行。数据库 UNIQUE 约束已就位，但并发场景下是否正确返回错误（而非静默成功或500）未验证 | E2E-09 report.md | **E2E-09** | 🟡 留账（阻塞条件：dev 环境可用 + 并发测试工具） |
 | E2E-F-79 | 🔴 | **LLM_API_KEY 被 HOST 空值覆盖导致 llm-service 永远走 mock**：`deploy/docker-compose.apps.yml` 中 `LLM_API_KEY: ${LLM_API_KEY:-}` 从 HOST 环境变量读取（为空），覆盖了 env_file (.env.local) 的真实 key。后果：llm-service `iter_chat_chunks()` 检测 key 为空 → 直接返回 mock → 用户永远看不到真实 LLM 响应 | deploy/docker-compose.apps.yml:303,379 | **E2E-10** | ✅ **已解决**（删除 llm-service 和 ai-svc 的 LLM_API_KEY 覆盖行；验证：修复后 DeepSeek API 200 OK + AI 回复从 mock 变为真实） |
+| E2E-F-80 | 🟡 | **「我的空间」年龄不落库**：前端 `PATCH /api/v1/users/me {age}` 被静默丢弃——BFF `downstream.UpdateProfileReq` 只有 nickname/gender/birthday/avatarUrl（无 age），proto `UpdateProfileRequest` 只有 nickname/avatar_url/gender（**无 age 也无 birthday**），user-svc 表列是 `birthday`（date）。Go `json.Unmarshal` 忽略未知字段 ⇒ `editAge()` 返回 200 但数据不变；`getAge` 兜底 18 ⇒ 页面恒显"18 岁"，刷新后编辑值丢失 | `emotion-echo-web-bff/internal/downstream/user.go:34-39`、`proto/user.proto` UpdateProfileRequest、`emotion-echo-user-svc/internal/model/user.go:21`（Birthday）、`emotion-echo-web/app/stores/user.ts:312` | **E2E-11** | 🟡 **留账**（阻塞条件：需 proto 变更 + 两端重新生成；且 age↔birthday 语义需决策——age 是派生值、birthday 是源值，直接存 age 会随时间失真）。E2E-11 测试点 #4 只断言前端校验，不断言落库 |
+| E2E-F-81 | 🟢 | **`GetInteractionDepth` 注释与实现差 1**：文档注释写 `totalConversations = DISTINCT session_id 数`，实际 SQL 是 `GROUP BY session_id` ⇒ `session_id IS NULL` 的事件也构成一组（E2E-11 实测 DB 116 条事件、DISTINCT 非空 session 33 个，API 返回 34）。非 bug（语义上"无会话事件"单独成组可辩护），但注释应写"分组数（含 NULL 组）"或代码过滤 NULL | `emotion-echo-analytics-svc/internal/repository/event_repository.go:278-283`、`deploy/db` 实测 `COUNT(DISTINCT session_id)=33` vs `COUNT(*) GROUP BY session_id=34` | **E2E-11** | 🟢 留账（低优先级文案/语义澄清） |
 
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** + **E2E-10 深度验证 1 项（E2E-F-79）** = **79 项**；实测阶段若有新发现继续追加 `E2E-F-80` 起
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** + **E2E-10 深度验证 1 项（E2E-F-79）** + **E2E-11 留账 2 项（E2E-F-80~81）** = **81 项**；实测阶段若有新发现继续追加 `E2E-F-82` 起
 - 严重度图例：🔴 阻断/安全 · 🟡 契约缺口 · 🟢 清理项
 
 ## 不列入 E2E 阶段的候选（已评估）

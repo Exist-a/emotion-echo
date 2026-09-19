@@ -34,6 +34,7 @@ import (
 // fakeAvatarUserClient 模拟 UserClient（仅 avatar handler 用到的最小实现）
 type fakeAvatarUserClient struct {
 	gotReq *downstream.UpdateProfileReq
+	gotCtx context.Context
 	err    error
 }
 
@@ -45,6 +46,7 @@ func (f *fakeAvatarUserClient) GetByID(ctx context.Context, id int64) (*downstre
 }
 func (f *fakeAvatarUserClient) UpdateMe(ctx context.Context, req downstream.UpdateProfileReq) (*downstream.UserInfo, error) {
 	f.gotReq = &req
+	f.gotCtx = ctx
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -230,4 +232,43 @@ func TestAvatarHandler_Register_PathContract(t *testing.T) {
 		assert.Equal(t, "/api/v1/user/avatar", ri.Path)
 		assert.Equal(t, http.MethodPost, ri.Method)
 	}
+}
+
+// TestAvatarHandler_PassesUserIDToDownstream 契约（E2E-11）：
+// 调 user-svc UpdateMe 的 ctx 必须携带 user_id（经 session.WithRequestAuth 注入），
+// 否则 gRPC 客户端的 withUserID(ctx) 无值 → 不带 x-user-id metadata →
+// user-svc 拦截器拒绝。
+//
+// dev 实测（2026-09-19）BFF 日志：
+//
+//	[grpc-client] method=/emotion_user.v1.UserService/UpdateProfile
+//	  latency=0ms err=rpc error: code = Unauthenticated
+//	  desc = missing x-user-id metadata
+//
+// 前端表现为头像上传 500（MinIO 对象已写入，但 user-svc 落库失败 ⇒ 孤儿对象 + 头像不生效）。
+func TestAvatarHandler_PassesUserIDToDownstream(t *testing.T) {
+	fc := &fakeAvatarUserClient{}
+	r := newAvatarRouter(fc, &fakeStorage{putURL: "http://minio/avatars/7-x.jpg"})
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, _ := mw.CreateFormFile("avatar", "me.jpg")
+	_, _ = io.WriteString(fw, "data")
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/avatar", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "上传应成功")
+	require.NotNil(t, fc.gotCtx, "UpdateMe 应被调用")
+
+	uid, ok := downstream.UserIDFromContext(fc.gotCtx)
+	assert.True(t, ok, "E2E-11: 传给 UpdateMe 的 ctx 必须能取到 user_id")
+	assert.Equal(t, int64(7), uid,
+		"E2E-11: 传给 UpdateMe 的 ctx 必须带 user_id（用 session.WithRequestAuth 包装）。"+
+			"原实现传 c.Request.Context() ⇒ gRPC 无 x-user-id metadata ⇒ "+
+			"user-svc 返 Unauthenticated ⇒ 头像上传 500。")
 }

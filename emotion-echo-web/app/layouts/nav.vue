@@ -69,6 +69,9 @@
       <div class="page-content"><slot /></div>
     </main>
   </div>
+  <!-- E2E-11：聊天区（nav 布局）此前没有 NotifyHost，所有 notify() 都渲染不出来
+       （表单校验提示 / 保存成功 / 头像上传结果 / 退出登录提示全部静默）。 -->
+  <NotifyHost />
 </template>
 
 <script setup lang="ts">

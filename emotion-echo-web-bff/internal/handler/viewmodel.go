@@ -93,13 +93,17 @@ func toMessageItemVM(m *downstream.MessageView) MessageItemVM {
 
 // toProfileVM 下游 UserInfo（user-svc 形状）→ 前端 UserInfo（profile 形状）
 func toProfileVM(u *downstream.UserInfo) ProfileVM {
+	createdAt := time.Now().Format(time.RFC3339)
+	if u.CreatedAt > 0 {
+		createdAt = time.Unix(u.CreatedAt, 0).Format(time.RFC3339)
+	}
 	return ProfileVM{
 		ID:        fmt.Sprintf("%d", u.UserID),
 		Username:  u.Account,
 		Nickname:  u.Nickname,
-		Avatar:    "",
+		Avatar:    u.AvatarURL,
 		Age:       nil,
 		Config:    map[string]any{},
-		CreatedAt: time.Now().Format(time.RFC3339),
+		CreatedAt: createdAt,
 	}
 }
