@@ -20,11 +20,11 @@ environment: dev 模式（Docker 后端容器 + 本地 pnpm dev 前端）
 | # | 测试点 | 判定 | 结果 | 证据 | 备注 |
 |---|--------|------|------|------|------|
 | 1 | 11 个脚本本地基线盘点 | [A] | PASS | 基线输出 | 6 PASS / 2 FAIL / 2 WARN |
-| 2 | 全部接入 CI 并在 push 时执行 | [A] | PASS | `.github/workflows/doc-drift-check.yml` | 11 个 job |
+| 2 | 全部接入 CI 并在 push 时执行 | [A] | PASS | `.github/workflows/doc-drift-check.yml` → 每次 push 实跑 11 job，2026-09-19 实测全绿 | 11 个 job |
 | 3 | check_docker_digests.sh 假绿已修 | [A] | PASS | 脚本输出"FAIL: 占位 digest" | 6 个占位值检出 |
-| 4 | 2 个 migration 脚本已创建 | [A] | PASS | `scripts/test_migrations_contract.sh` + `test_migrations_no_service_order.sh` | |
-| 5 | 3 处失真已更正 | [A]+[V] | PASS | git diff | stage-21 + .env.common |
-| 6 | 更正的失真已登记 ADR-18 表 | [A] | PASS | `adr-2026-09-doc-drift-registry.md` §八 | |
+| 4 | 2 个 migration 脚本已创建 | [A] | PASS | `test_migrations_contract.sh` → 实跑 6/6 全绿；`test_migrations_no_service_order.sh` → 实跑 analytics-svc 豁免后 0 FAIL | |
+| 5 | 3 处失真已更正 | [A]+[V] | PASS | git diff → stage-21 秘钥声明 + .env.common APISIX 版本/Host 配置 + docs 更新 | stage-21 + .env.common |
+| 6 | 更正的失真已登记 ADR-18 表 | [A] | PASS | `adr-2026-09-doc-drift-registry.md` §八 → 登记 3 处更正（stage-21 / .env.common / check_docker_digests） | |
 
 汇总：**PASS 6 / FAIL 0 / BLOCKED 0 / N/A 0**
 

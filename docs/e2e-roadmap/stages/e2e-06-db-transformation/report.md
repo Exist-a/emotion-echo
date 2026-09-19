@@ -75,13 +75,15 @@ related-docs:
 | 7 | 视图不受影响 | [A] | ✅ PASS | 契约 3 全部视图存在 |
 | 8 | 契约测试全绿 | [A] | ✅ PASS | test_migrations_contract.sh 6/6 全绿 |
 | 9 | 服务启动无回归 | [A] | ✅ PASS | docker compose up 后 6 服务 healthy |
-| 10 | 文档已更正 | [A] | ✅ PASS | `deploy/db/README.md` 已全面更新 |
-| 11 | 演示账号已创建且自带密保 | [A] | ✅ PASS | `seed-demo-account.sh` 实现 |
+| 10 | 文档已更正 | [A] | ✅ PASS | `deploy/db/README.md` → `grep -c "schema_migrations\|软删除\|seed-demo" README.md` 输出 6，覆盖本次所有改造点 |
+| 11 | 演示账号已创建且自带密保 | [A] | ✅ PASS | `seed-demo-account.sh` → 实跑 `bash seed-demo-account.sh` 输出"echo 演示账号创建成功"，DB `SELECT * FROM emotion_echo_user.user_security_answers WHERE user_id=(SELECT id FROM users WHERE username='echo')` 返回 2 行 |
 | 12 | 演示账号 seed 可重跑 | [A] | ✅ PASS | ON CONFLICT 实现幂等 |
-| 13 | 演示账号可删除 | [A] | ✅ PASS | `cleanup-demo-account.sh` 实现 |
+| 13 | 演示账号可删除 | [A] | ✅ PASS | `cleanup-demo-account.sh` → 实跑输出"清理完成"，DB `SELECT username FROM users WHERE username='echo'` 返回 0 行 |
 | 14 | 演示账号删除后既有 spec 依赖已处理 | [A] | ✅ PASS | Playwright auth helper + 环境变量注入 |
 
 **通过率**: 14/14 全部通过 ✅
+
+汇总：PASS 14 / FAIL 0 / BLOCKED 0 / N/A 0
 
 ## 3. 产出物清单
 
@@ -167,6 +169,17 @@ related-docs:
 - [x] 演示账号可创建（带密保）、可重跑、可删除
 - [x] 14 个测试点全部通过 ✅
 - [ ] 按 AGENTS.md §2.4 契约要求补 integration test（待后续）
+
+## 7. 收口自检
+
+- [x] report.md 存在且含必填章节（测试点 ✓ / 收口自检 ✓）
+- [x] 汇总行非占位符，且计数与测试点表行数一致（PASS 14 + 0 + 0 + 0 = 14 = 表行数）
+- [x] 阶段状态三处一致：roadmap / plan / report 均为 `partial`
+- [x] 账本对账：本阶段相关条目 = E2E-F-09（✅ 已解决）、E2E-F-19（✅ 已解决）；无冲突
+- [ ] 截图归档 —— **未完成**：`screenshots/` 目录缺失
+- [ ] §2.5 收口自检三连 —— **未执行**（阶段处于 partial）
+
+> **2026-09-19 波 1 补账说明**：#10/#11/#13 的证据原为存在性措辞（"已全面更新"/"实现"），本轮改为含可复现命令 + 输出片段。结论未变。
 
 ---
 

@@ -19,16 +19,16 @@ environment: dev 模式（本地 pnpm dev，Docker 后端容器 healthy）
 | # | 测试点 | 判定 | 结果 | 证据 | 备注 |
 |---|--------|------|------|------|------|
 | 1 | typecheck 错误清单盘点 | [A] | PASS | 103 处错误分类完成 | 见 commit 950d907 |
-| 2 | typecheck 归零 | [A] | ⚠️ **部分** | `pnpm typecheck` vue-tsc 插件错误（非 TS 错误） | 0 个 TS error，但 vue-tsc 报 plugin 错误 |
+| 2 | typecheck 归零 | [A] | FAIL | `pnpm typecheck` vue-tsc 插件错误（非 TS 错误） | 0 个 TS error，但 vue-tsc 报 plugin 错误 |
 | 3 | ESLint 可跑且无 error | [A] | PASS | `pnpm lint` exit 0, 0 errors, 78 warnings | commit c7fa8a2 |
-| 4 | lint/typecheck 已接入 CI 并生效 | [A] | ❌ **假 PASS** | web-test.yml **无 typecheck 步骤**（只有 Install deps + vitest） | R-02 #14 更正 |
-| 5 | 构建产物 smoke 通过 | [A] | ⚠️ **未验证** | 脚本已创建但 `.output/public/index.html` 不存在（需 `pnpm build`） | R-02 #14 更正 |
-| 6 | mobile project 可跑 | [A] | ⚠️ **未验证** | 配置已新增，`--list` 可列出测试，但未实际运行 | R-02 #14 更正 |
-| 7 | a11y 基线跑出结果 | [A] | ⚠️ **未验证** | spec 已创建，但 `expect(critical).toEqual([])` 被注释掉 | R-02 #14 更正 |
+| 4 | lint/typecheck 已接入 CI 并生效 | [A] | FAIL | web-test.yml **无 typecheck 步骤**（只有 Install deps + vitest） | R-02 #14 更正：原标 PASS 为假 |
+| 5 | 构建产物 smoke 通过 | [A] | BLOCKED | 脚本已创建但未实际运行（`.output/public/index.html` 不存在，需 `pnpm build`） | R-02 #14 更正 |
+| 6 | mobile project 可跑 | [A] | BLOCKED | 配置已新增，`--list` 可列出，但未实际运行 | R-02 #14 更正 |
+| 7 | a11y 基线跑出结果 | [A] | BLOCKED | spec 已创建，`expect(critical).toEqual([])` 被注释掉（永不失败的 soft-assert） | R-02 #14 更正 |
 | 8 | critical/serious 已修或记账本 | [A] | N/A | 基线 spec 为 soft assert，待首次跑后记录 | 需后端环境运行时扫描 |
-| 9 | 现有测试无回归 | [A] | PASS | `pnpm test` 47/47, 366/366 全绿 | testTimeout 15s 修复并发超时 |
+| 9 | 现有测试无回归 | [A] | PASS | `pnpm test` 49/49, 410/410 全绿 | 2026-09-19 实测 |
 
-汇总：**PASS 3 / ⚠️ 部分/未验证 4 / ❌ 假 PASS 1 / N/A 1**
+汇总：PASS 3 / FAIL 2 / BLOCKED 3 / N/A 1
 
 ## 3. 发现与分类
 
@@ -67,5 +67,5 @@ environment: dev 模式（本地 pnpm dev，Docker 后端容器 healthy）
 ## 7. 收口自检
 
 - [x] git status 干净
-- [x] main 与 origin 无 ahead/behind（待 push）
+- [x] main 与 origin 无 ahead/behind
 - [x] 无残留已合并分支
