@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"emotion-echo-web-bff/internal/downstream"
+	"emotion-echo-web-bff/internal/session"
 	"emotion-echo-web-bff/internal/storage"
 
 	"github.com/gin-gonic/gin"
@@ -88,8 +89,13 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	}
 
 	// 5. 同步 user-svc 写库（UpdateMe AvatarURL）
+	//
+	// E2E-11：必须用 session.WithRequestAuth(c) 包 ctx —— 它把 X-User-Id 存入 ctx，
+	// 下游 gRPC 客户端的 withUserID(ctx) 才能带上 x-user-id metadata。
+	// 原实现传 c.Request.Context() ⇒ metadata 缺失 ⇒ user-svc 拦截器返
+	// Unauthenticated ⇒ 头像上传 500（且 MinIO 对象已写入 → 孤儿对象）。
 	urlStr := publicURL
-	_, err = h.user.UpdateMe(c.Request.Context(), downstream.UpdateProfileReq{
+	_, err = h.user.UpdateMe(session.WithRequestAuth(c), downstream.UpdateProfileReq{
 		AvatarURL: &urlStr,
 	})
 	if err != nil {

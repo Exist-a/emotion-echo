@@ -56,6 +56,9 @@ func (c *userGRPCClient) UpdateMe(ctx context.Context, req UpdateProfileReq) (*U
 	resp, err := cli.UpdateProfile(withUserID(ctx), &emotionuser.UpdateProfileRequest{
 		Nickname: req.Nickname,
 		Gender:   genderPtrToInt32(req.Gender),
+		// E2E-11：avatar_url 必须透传，否则头像上传接口返 200 但数据库仍为 NULL
+		// （proto 已定义该字段，user-svc 侧也已落库，只是客户端漏映射）。
+		AvatarUrl: req.AvatarURL,
 	})
 	if err != nil {
 		return nil, wrapGRPCError(err, "user updateMe")
