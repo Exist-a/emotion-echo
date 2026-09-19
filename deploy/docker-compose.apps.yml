@@ -300,7 +300,7 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
       INTERNAL_API_KEY_REQUIRED: ${INTERNAL_API_KEY_REQUIRED:-0}
       # Stage 80 PR-1: 真实 LLM 对话上游（OpenAI 兼容；无 key 时 ChatCompletion 走 mock 降级）
-      LLM_API_KEY:  ${LLM_API_KEY:-}
+      # LLM_API_KEY 从 env_file (.env.local) 读取，不从 HOST 环境变量覆盖
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
       LLM_MODEL:    ${LLM_MODEL:-deepseek-chat}
       # mTLS (Stage 18)
@@ -375,8 +375,8 @@ services:
       # （main.go:419-432）；compose .env.local 覆盖，无 key 时 LLM_BASE_URL 空
       # → LLMFuser 禁用，FusionWorker 走 late_fuser_weighted fallback（Stage 34 默认行为）。
       # 留 INTERNAL_API_KEY 给内部 llm-service 鉴权（P0-R2-5: 统一 env 名）。
+      # LLM_API_KEY 从 env_file (.env.local) 读取，不从 HOST 环境变量覆盖
       LLM_BASE_URL:        ${LLM_BASE_URL:-}
-      LLM_API_KEY:         ${LLM_API_KEY:-}
       LLM_MODEL:           ${LLM_MODEL:-deepseek-chat}
       LLM_TIMEOUT:         ${LLM_TIMEOUT:-3}
       LLM_GRPC_ADDR:       "emotion-llm-service:50051"
