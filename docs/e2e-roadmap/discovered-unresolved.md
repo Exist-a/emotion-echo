@@ -2,7 +2,7 @@
 status: active
 priority: high
 created: 2026-09-17
-last-refresh: 2026-09-18 (E2E-06 解决 E2E-F-09 + E2E-F-19；40 项中 8 项已解决)
+last-refresh: 2026-09-19 (E2E-09 留账 E2E-F-77/78；总 78 项)
 type: e2e-discovered-unresolved-ledger
 ---
 
@@ -114,12 +114,14 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-74 | 🟡 | **鉴权判定口径两侧不一致（结构性风险）**：BFF 用 authPathBypass 放行**整个** /api/v1/auth/ 前缀，而 APISIX 是**逐条**白名单 ⇒ 新增 auth action 时两侧必然漂移（E2E-F-60 即此类） | bff/main.go:257 vs deploy/apisix/seed.sh:540-560 | **R-03** | ✅ **已解决（以契约测试兜住）**（check_routes_alignment.sh 契约 3：BFF auth action 集 ⊆ APISIX 白名单。根治方案是让 BFF 也改为逐条白名单，属后续重构） |
 | E2E-F-75 | 🟡 | **一个可运行的 seed.sh 结构断言从未接入 CI**：`deploy/apisix/seed_test.js`（node，无依赖，38+ 条断言）不在任何 workflow 里 ⇒ 2026-09-18 改 seed.sh 默认值时它已 FAIL（38/2）却无人发现。且其断言**内联了真实管理员密钥**（"默认值等于某个具体密钥"这种写法，等于把密钥换个地方继续留在公开仓库） | `deploy/apisix/seed_test.js`、`.github/workflows/` | **R-03** | ✅ **已解决**（两条断言改为断言**安全性质**：默认值必须是非密钥占位符 + seed.sh 不得内联长十六进制字面量；接入 CI 新增 job `apisix-seed-structure`；实测 41/0） |
 | E2E-F-76 | 🟢 | **`deploy/apisix/seed.sh` 未记录可执行位**：git 中为 `100644`，而文档与注释的用法是 `./deploy/apisix/seed.sh` ⇒ Linux 上 Permission denied。Windows 侧因 mode 位不可靠（测试里对该项有显式退化处理）长期未暴露；**接入 CI 后第一次运行即抓出** | `deploy/apisix/seed.sh`（`git ls-files -s`） | **R-03** | ✅ **已解决**（`git update-index --chmod=+x` → 100755；CI 的 APISIX seed 结构断言转绿） |
+| E2E-F-77 | 🟡 | **注册后找回密码联动未验证**：E2E-09 #12 测试点"注册后可直接用于找回密码"未执行。注册流程已实现密保问题设定，找回密码流程（E2E-07）已实现密保问题校验，但两者联动的端到端验证缺失 | E2E-09 report.md | **E2E-09** | 🟡 留账（阻塞条件：dev 环境 DB 可访问） |
+| E2E-F-78 | 🟡 | **并发注册同名未验证**：E2E-09 #13 测试点"并发注册同名用户"未执行。数据库 UNIQUE 约束已就位，但并发场景下是否正确返回错误（而非静默成功或500）未验证 | E2E-09 report.md | **E2E-09** | 🟡 留账（阻塞条件：dev 环境可用 + 并发测试工具） |
 
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** = **76 项**；实测阶段若有新发现继续追加 `E2E-F-77` 起
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** = **78 项**；实测阶段若有新发现继续追加 `E2E-F-79` 起
 - 严重度图例：🔴 阻断/安全 · 🟡 契约缺口 · 🟢 清理项
 
 ## 不列入 E2E 阶段的候选（已评估）
