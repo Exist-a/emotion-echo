@@ -184,9 +184,20 @@ test.describe('E2E-11 我的空间', () => {
     ).not.toHaveLength(0)
     expect(uploadStatuses[0], '头像上传应返回 200（MinIO 写入 + user-svc 落库）').toBe(200)
 
-    // 服务端返回的公开 URL 应回填到表单预览
+    // 服务端返回的公开 URL 应回填到表单预览。
+    //
+    // E2E-11 复查：原断言只要求 previewSrc 「truthy」——而本地预览用的是
+    // `blob:` URL，**本地 blob 也满足 truthy**，所以这个断言在"服务端 URL 从未
+    // 回填"的 bug 下依然通过（IAB 实测发现：BFF 曾把 avatar 放在顶层而非
+    // data 内 ⇒ 前端 res 为 undefined ⇒ 预览永远停在 blob，且弹"上传失败"）。
+    // 现在必须断言它是 http(s) 的 MinIO URL。
     const previewSrc = await page.locator('.avatar-uploader .avatar').getAttribute('src')
-    expect(previewSrc, 'E2E-11: 上传成功后预览应换成 MinIO 返回的 URL').toBeTruthy()
+    expect(previewSrc, 'E2E-11: 上传成功后预览应有 src').toBeTruthy()
+    expect(
+      previewSrc!.startsWith('http'),
+      `E2E-11: 预览 src 必须是服务端 URL（实测拿到：${previewSrc}）。` +
+        '若是 blob: 说明服务端返回值没回填——本地 blob 只是上传前的临时预览。',
+    ).toBe(true)
   })
 
   // ==================== #6 头像 >2MB 拦截 ====================

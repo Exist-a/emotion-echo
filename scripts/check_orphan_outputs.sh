@@ -36,7 +36,17 @@ for script in scripts/*.sh scripts/*.py; do
     esac
     
     # 检查是否被其他文件引用（检查 docs、.github 和 README）
-    if ! grep -l "$basename" scripts/README.md docs/*.md docs/**/*.md .github/workflows/*.yml 2>/dev/null | grep -v "$script" | grep -q .; then
+    #
+    # 注意：`docs/**/*.md` 在未开 globstar 的 bash 里会退化成「docs/<单层>/<文件>.md」，
+    # 于是 docs/e2e-roadmap/stages/<dir>/report.md 这类 3 层深的引用匹配不到，
+    # 有引用的脚本被误判孤儿（E2E-11 复查实测：seed_security_question.sh 被
+    # docs/e2e-roadmap/stages/e2e-07-password-recovery/report.md 引用却判孤儿）。
+    # 改用 find 做无条件递归，不依赖 shopt。
+    referenced=$(
+        grep -l "$basename" scripts/README.md .github/workflows/*.yml 2>/dev/null
+        find docs -name '*.md' -type f -exec grep -l "$basename" {} + 2>/dev/null
+    )
+    if ! echo "$referenced" | grep -v "^$script$" | grep -q .; then
         orphans+=("$script")
     fi
 done

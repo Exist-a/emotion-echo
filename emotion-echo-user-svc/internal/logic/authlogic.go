@@ -245,15 +245,33 @@ func (l *AuthLogic) GetSecurityQuestionsByUsername(username string) ([]types.Sec
 }
 
 // toUserInfo model.User → types.UserInfo（不暴露 PasswordHash）
+//
+// E2E-11 复查教训：这是本包**唯一**的 UserInfo 映射点，Login/Register/
+// ResetPassword/GetMe/GetUserById 全部走它。此前 GetMe 与 GetUserById 各自
+// 内联映射一份，修好一条路径后另一条仍丢字段——同一实体多处映射必然漂移。
+// 以后新增字段只改这里。
 func toUserInfo(u *model.User) types.UserInfo {
+	if u == nil {
+		return types.UserInfo{}
+	}
 	nick := ""
 	if u.Nickname != nil {
 		nick = *u.Nickname
 	}
+	avatar := ""
+	if u.AvatarURL != nil {
+		avatar = *u.AvatarURL
+	}
+	var createdAt int64
+	if !u.CreatedAt.IsZero() {
+		createdAt = u.CreatedAt.Unix()
+	}
 	return types.UserInfo{
-		UserId:   u.ID,
-		Account:  u.Username,
-		Nickname: nick,
+		UserId:    u.ID,
+		Account:   u.Username,
+		Nickname:  nick,
+		AvatarURL: avatar,
+		CreatedAt: createdAt,
 	}
 }
 

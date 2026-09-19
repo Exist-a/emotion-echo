@@ -263,7 +263,11 @@ watch(() => route.path, closeSidebar)
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  /* E2E-F-36：原 overflow: hidden 会把超出高度的内容静默裁剪且无法滚动
+     （1280×600 实测：内容 676px 装进 496px 容器，底部约 180px 不可达）。
+     改 auto：内容页可滚动；聊天页内容高度恰好等于容器，不会多出滚动条。 */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .icon-button {
   display: grid;

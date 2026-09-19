@@ -36,11 +36,9 @@ func (l *GetUserByIdLogic) GetUserById(req *types.GetUserByIdReq) (resp *types.G
 	if u == nil {
 		return nil, repository.ErrNotFound
 	}
-	return &types.GetUserByIdResp{User: types.UserInfo{
-		UserId:   u.ID,
-		Account:  u.Username,
-		Nickname: derefString(u.Nickname),
-	}}, nil
+	// E2E-11：统一走 toUserInfo（原先此处是独立内联映射，只填 3 个字段，
+	// 导致 GetMe 修好 avatar/createdAt 后本路径仍丢 —— 同一实体两处映射必然漂移）。
+	return &types.GetUserByIdResp{User: toUserInfo(u)}, nil
 }
 
 func derefString(s *string) string {

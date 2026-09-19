@@ -78,6 +78,15 @@ func (r *InMemoryUserRepo) Create(ctx context.Context, u *model.User) error {
 		u.ID = r.nextUserID
 		r.nextUserID++
 	}
+	// 与 GORM `autoCreateTime`/`autoUpdateTime` 对齐：真实 Postgres 插入时会填这两列，
+	// 替身若不填，任何依赖 CreatedAt 的断言都会假失败（E2E-11 踩过）。
+	now := time.Now()
+	if u.CreatedAt.IsZero() {
+		u.CreatedAt = now
+	}
+	if u.UpdatedAt.IsZero() {
+		u.UpdatedAt = now
+	}
 	r.users[u.ID] = u
 	return nil
 }

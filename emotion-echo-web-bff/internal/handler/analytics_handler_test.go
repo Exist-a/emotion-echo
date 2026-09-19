@@ -616,3 +616,70 @@ func TestAnalyticsHandler_Depth_ReturnsFrontendShape(t *testing.T) {
 	assert.Equal(t, int64(12), resp.Data.TotalConversations)
 	assert.InDelta(t, 12.5, resp.Data.AvgSessionRounds, 0.1, "avgSessionRounds 应映射自 AvgMessagesPerConv")
 }
+
+// ============ E2E-11 复查：maxConsecutiveDays 必须真算，不能恒 0 ============
+
+// TestMaxConsecutiveDays 纯函数契约：从「活跃日期列表」算最长连续天数。
+func TestMaxConsecutiveDays(t *testing.T) {
+	cases := []struct {
+		name  string
+		dates []string
+		want  int
+	}{
+		{"空列表", nil, 0},
+		{"单日", []string{"2026-09-19"}, 1},
+		{"连续三天", []string{"2026-09-17", "2026-09-18", "2026-09-19"}, 3},
+		{"两段：2 和 4", []string{"2026-09-01", "2026-09-02", "2026-09-05", "2026-09-06", "2026-09-07", "2026-09-08"}, 4},
+		{"无序输入也应正确", []string{"2026-09-19", "2026-09-17", "2026-09-18"}, 3},
+		{"跨月连续", []string{"2026-08-31", "2026-09-01"}, 2},
+		{"重复日期只算一天", []string{"2026-09-19", "2026-09-19", "2026-09-20"}, 2},
+		{"非法日期被忽略", []string{"2026-09-19", "not-a-date", "2026-09-20"}, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, maxConsecutiveDays(tc.dates))
+		})
+	}
+}
+
+// TestAnalyticsHandler_Depth_ComputesMaxConsecutiveDays 契约：
+// depth 响应的 maxConsecutiveDays 必须由 frequency 每日活跃数据算出，
+// 不能像原实现那样硬编码 0（图表 X 轴写着"最长连续(天)"却恒为 0 = 残缺指标）。
+func TestAnalyticsHandler_Depth_ComputesMaxConsecutiveDays(t *testing.T) {
+	fc := &fakeAnalyticsClient{
+		depth: &downstream.InteractionDepth{
+			TotalMessages:      150,
+			TotalConversations: 12,
+			AvgMessagesPerConv: 12.5,
+		},
+		// 2026-09-01/02 连续 2 天；09-05~09-08 连续 4 天 ⇒ 最长 4
+		counts: []downstream.DailyCount{
+			{Date: "2026-09-01", Count: 3},
+			{Date: "2026-09-02", Count: 5},
+			{Date: "2026-09-05", Count: 2},
+			{Date: "2026-09-06", Count: 7},
+			{Date: "2026-09-07", Count: 1},
+			{Date: "2026-09-08", Count: 4},
+		},
+	}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/user-behavior/depth?user_id=7", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			MaxConsecutiveDays int64   `json:"maxConsecutiveDays"`
+			AvgMessagesPerDay  float64 `json:"avgMessagesPerDay"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, int64(4), resp.Data.MaxConsecutiveDays,
+		"E2E-11: 最长连续应为 4 天（09-05~09-08）。原实现硬编码 0。")
+	// 活跃 6 天，150 条消息 ⇒ 25/天
+	assert.InDelta(t, 25.0, resp.Data.AvgMessagesPerDay, 0.01,
+		"活跃天数取自 frequency 数据后，日均消息应 = 总消息/活跃天数")
+}

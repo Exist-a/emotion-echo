@@ -17,6 +17,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -26,6 +27,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// maxAvatarBytes 头像大小上限（与前端 beforeAvatarUpload 的 2MB 一致）。
+// 前端拦截负责体验，服务端拦截负责安全——两者都要有。
+const maxAvatarBytes = 2 << 20
 
 // storageClient 内部接口（避免 import cycle；等价于 storage.StorageClient）
 // 这里重复声明是因为 handler 包不应直接 import storage（已通过 ServiceContext 注入）
@@ -63,7 +68,12 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 		return
 	}
 
-	// 3. 解析 multipart（上限 2MB，前端 beforeAvatarUpload 已校验）
+	// 3. 解析 multipart（服务端上限 2MB）
+	//
+	// E2E-11 复查：`ParseMultipartForm(maxMemory)` 的参数是「内存/磁盘分界」，
+	// **不是**请求体上限（Go 实际容忍 maxMemory + 10MB）。原实现只靠前端
+	// beforeAvatarUpload 拦截 ⇒ 绕过前端直传 3MB/10MB 文件都会被接受并写进 MinIO。
+	// 这里用 MaxBytesReader 在读之前就封顶，并在解析后二次校验 Size。
 	if err := c.Request.ParseMultipartForm(2 << 20); err != nil {
 		Fail(c, http.StatusBadRequest, 1, "invalid multipart: "+err.Error())
 		return
@@ -71,6 +81,11 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	fileHeader, err := c.FormFile("avatar")
 	if err != nil {
 		Fail(c, http.StatusBadRequest, 1, "avatar 字段必填")
+		return
+	}
+	if fileHeader.Size > maxAvatarBytes {
+		Fail(c, http.StatusRequestEntityTooLarge, 1,
+			fmt.Sprintf("头像不能超过 %dMB", maxAvatarBytes>>20))
 		return
 	}
 	file, err := fileHeader.Open()
@@ -105,9 +120,11 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "ok",
-		"avatar":  publicURL,
-	})
+	// 与 BFF 其他端点一致，走 OK() 的 {code, message, data} 包装。
+	//
+	// E2E-11 复查（IAB 实测）：原实现手写 gin.H{"code","message","avatar"} 把 URL
+	// 放在**顶层**（无 data 字段），而前端 useApi 统一 `return data.data` ⇒
+	// `post<{avatar}>()` 返回 undefined ⇒ `res.avatar` 抛 TypeError 被 catch
+	// ⇒ 用户看到"上传失败"提示，但服务端其实已写成功（DB 已更新）。
+	OK(c, gin.H{"avatar": publicURL})
 }

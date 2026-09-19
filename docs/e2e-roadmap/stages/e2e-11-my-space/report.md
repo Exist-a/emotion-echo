@@ -2,13 +2,18 @@
 stage: e2e-11
 title: 我的空间
 executed: 2026-09-19
-status: done
+status: partial
 environment: dev 模式（17 容器 healthy，docker-compose.infra.yml + docker-compose.apps.yml + compose.dev.yml + .env.local）
 ---
 
 # E2E-11 执行记录（report）
 
 > 详档 [plan.md](plan.md)。填写规则见 [RUNBOOK.md](../../RUNBOOK.md) §10。
+>
+> **状态（2026-09-19 复查后修正）**：12 个测试点全部 PASS，但账本仍有 2 条归属
+> 本阶段的未解决条目（E2E-F-80 年龄不落库、E2E-F-81 深度指标 NULL session 语义）。
+> 按 RUNBOOK「账本对账：属本阶段未解决的 E2E-F-xx 存在时阶段只能标 partial」，
+> 状态为 **partial** 而非 done —— 原报告的 done 是自查漏项，复查记录见 §8。
 
 ## 1. 环境基线
 
@@ -31,18 +36,18 @@ environment: dev 模式（17 容器 healthy，docker-compose.infra.yml + docker-
 
 | # | 测试点 | 判定 | 结果 | 证据 | 备注 |
 |---|--------|------|------|------|------|
-| 1 | `/user/profile` 返回真实用户数据（非硬编码"体验用户"） | `[A]` | **PASS** | curl：`{"id":"1","username":"echo","nickname":"Echo User","avatar":"http://localhost:9000/avatars/avatars/1-2ec01835.png","createdAt":"2026-09-04T19:38:56+08:00"}` | 修复前恒返 `"demo"/"体验用户"/avatar:""` |
-| 2 | 修改昵称成功 + 页面显示新昵称 | `[A]`+`[V]` | **PASS** | PATCH 200 + 重拉 profile 一致 + 页面 `.nickname` 断言新值 | Playwright #2 含复原步骤 |
-| 3 | 昵称格式校验（1 字符 / 13 字符被拦截，不发请求） | `[A]`+`[V]` | **PASS** | 网络监听 PATCH 计数 = 0；截图 [t03-nickname-validation.png](screenshots/t03-nickname-validation.png) | 修复前弹框按钮在 DOM 中不存在 |
-| 4 | 年龄校验（-1 / 131 被拦截，不发请求） | `[A]`+`[V]` | **PASS** | 网络监听 PATCH 计数 = 0；截图 [t04-age-validation.png](screenshots/t04-age-validation.png) | 年龄落库缺口另见 E2E-F-80 |
-| 5 | 头像上传成功 + MinIO 存储 + 页面头像更新 | `[A]`+`[V]` | **PASS** | POST /user/avatar 200；DB `avatar_url` 非 NULL；MinIO 匿名 GET 200（image/png）；截图 [t05-avatar-uploaded.png](screenshots/t05-avatar-uploaded.png)、[t05b-avatar-on-page.png](screenshots/t05b-avatar-on-page.png) | 经历 3 层修复，见 §3 发现 F5 |
-| 6 | 头像 >2MB 被前端拦截 | `[A]`+`[V]` | **PASS** | 网络监听 /user/avatar 请求计数 = 0 | |
-| 7 | 昼夜使用模式饼图有数据可渲染 | `[V]` | **PASS** | 截图 [t07-09-three-charts.png](screenshots/t07-09-three-charts.png)（4 时段 35/46/21/14=116，与 DB 逐小时桶聚合一致） | 修复前 API 400 / 塌缩成单桶 |
-| 8 | 近 30 天对话频次折线图有数据可渲染 | `[V]` | **PASS** | 同上截图；API `dates[7]`+`messageCount[4,9,15,13,62,11,2]`=116 与 DB 一致 | |
-| 9 | 互动深度指标柱状图有数据可渲染 | `[V]` | **PASS** | 同上截图；API `totalMessages=116`（DB 116）、`totalConversations=34` | SQL 语义与文档注释的 1 条偏差见 E2E-F-82 |
-| 10 | 图表空态可读（不与图表同时出现） | `[V]` | **PASS** | Playwright #10：`chartCount===0 || emptyCount===0` 且骨架屏归零 | 修复前空态恒渲染 |
-| 11 | 退出登录弹框确认 → 跳转登录页 | `[A]`+`[V]` | **PASS** | URL 断言 `/login`；截图 [t11-logout-dialog.png](screenshots/t11-logout-dialog.png) | 修复前"确认退出"按钮不存在 |
-| 12 | 侧边栏"我的空间"导航可进入 | `[V]` | **PASS** | URL `/chat/user` + `.user-info-card` 可见；截图 [t12-sidebar-nav.png](screenshots/t12-sidebar-nav.png) | |
+| 1 | `/user/profile` 返回真实用户数据（非硬编码"体验用户"） | `[A]` | PASS | curl：`{"id":"1","username":"echo","nickname":"Echo User","avatar":"http://localhost:9000/avatars/avatars/1-2ec01835.png","createdAt":"2026-09-04T19:38:56+08:00"}` | 修复前恒返 `"demo"/"体验用户"/avatar:""` |
+| 2 | 修改昵称成功 + 页面显示新昵称 | `[A]`+`[V]` | PASS | PATCH 200 + 重拉 profile 一致 + 页面 `.nickname` 断言新值 | Playwright #2 含复原步骤 |
+| 3 | 昵称格式校验（1 字符 / 13 字符被拦截，不发请求） | `[A]`+`[V]` | PASS | 网络监听 PATCH 计数 = 0；截图 [t03-nickname-validation.png](screenshots/t03-nickname-validation.png) | 修复前弹框按钮在 DOM 中不存在 |
+| 4 | 年龄校验（-1 / 131 被拦截，不发请求） | `[A]`+`[V]` | PASS | 网络监听 PATCH 计数 = 0；截图 [t04-age-validation.png](screenshots/t04-age-validation.png) | 年龄落库缺口另见 E2E-F-80 |
+| 5 | 头像上传成功 + MinIO 存储 + 页面头像更新 | `[A]`+`[V]` | PASS | POST /user/avatar 200；DB `avatar_url` 非 NULL；MinIO 匿名 GET 200（image/png）；截图 [t05-avatar-uploaded.png](screenshots/t05-avatar-uploaded.png)、[t05b-avatar-on-page.png](screenshots/t05b-avatar-on-page.png) | 经历 3 层修复，见 §3 发现 F5 |
+| 6 | 头像 >2MB 被前端拦截 | `[A]`+`[V]` | PASS | 网络监听 /user/avatar 请求计数 = 0 | |
+| 7 | 昼夜使用模式饼图有数据可渲染 | `[V]` | PASS | 截图 [t07-09-three-charts.png](screenshots/t07-09-three-charts.png)（4 时段 35/46/21/14=116，与 DB 逐小时桶聚合一致） | 修复前 API 400 / 塌缩成单桶 |
+| 8 | 近 30 天对话频次折线图有数据可渲染 | `[V]` | PASS | 同上截图；API `dates[7]`+`messageCount[4,9,15,13,62,11,2]`=116 与 DB 一致 | |
+| 9 | 互动深度指标柱状图有数据可渲染 | `[V]` | PASS | 同上截图；API `totalMessages=116`（DB 116）、`totalConversations=34` | SQL 语义与文档注释的 1 条偏差见 E2E-F-82 |
+| 10 | 图表空态可读（不与图表同时出现） | `[V]` | PASS | Playwright #10：`chartCount===0 || emptyCount===0` 且骨架屏归零 | 修复前空态恒渲染 |
+| 11 | 退出登录弹框确认 → 跳转登录页 | `[A]`+`[V]` | PASS | URL 断言 `/login`；截图 [t11-logout-dialog.png](screenshots/t11-logout-dialog.png) | 修复前"确认退出"按钮不存在 |
+| 12 | 侧边栏"我的空间"导航可进入 | `[V]` | PASS | URL `/chat/user` + `.user-info-card` 可见；截图 [t12-sidebar-nav.png](screenshots/t12-sidebar-nav.png) | |
 
 汇总：**PASS 12 / FAIL 0 / BLOCKED 0 / N/A 0**
 
@@ -105,3 +110,96 @@ Docker Desktop 在验收中途整体假死（所有 `docker` 命令空返回、b
 Desktop，容器自动恢复（restart: unless-stopped）。此后所有镜像重建/重启均正常。
 事故根因未深挖（范围外），仅记录：三服务镜像均已在本轮 rebuild 且 BUILD_EXIT=0，
 验收结论基于重建后的镜像。
+
+## 8. 复查记录（2026-09-19 第二轮，用户质询驱动）
+
+首轮报告标 done 并合并（PR #17）后，用户就"中间态是否逐跳验证 / 是否过门禁 /
+是否改文档 / 测试是否覆盖全场景"四点质询。逐项复核结论：**四点都有缺口**，
+本节如实记录，修复随 PR #18 落地。
+
+### 8.1 首轮自查的四项缺口
+
+| # | 缺口 | 证据 |
+|---|------|------|
+| G1 | **门禁未跑就合并**——AGENTS.md 禁止"跳过 §2.4 smoke 直接合并"，我在 PR 合并后才第一次跑 | §2.4 smoke 事后补跑：契约 1~4 全 PASS（§7 Nacos 段因脚本自身 `docker_exec` 未定义报 5 FAIL，与产品无关） |
+| G2 | **`e2e_stage_audit.py` FAIL**：A5（标 done 但账本有本阶段未解决条目）+ A11（结果列写 `**PASS**` 非合法基值） | 已修：状态改 partial、结果列改裸 `PASS` |
+| G3 | **`check_adr_gate.sh` RED**：squash commit 命中 `vue`/`gRPC` 关键词无 ADR | 已补 ADR（见 §9） |
+| G4 | **`check_residual.sh` + `check_orphan_outputs.sh` RED**：`scripts/seed_security_question.sh` 缺末尾换行；且 orphan 脚本 `docs/**/*.md` 未开 globstar ⇒ 退化为单层匹配，实际有引用却判孤儿 | 已修（补换行 + 引用登记 + 脚本 glob 修正） |
+
+### 8.2 复查发现的**真代码缺陷**（首轮漏网）
+
+| # | 缺陷 | 严重度 | 证据 | 处理 |
+|---|------|--------|------|------|
+| G5 | **`GetUserById` 头像/createdAt 仍丢**：`GET /api/v1/users/:id` 走自己的内联映射，与 GetMe 不是同一份代码。首轮只修了 GetMe ⇒ 兄弟路径漏网。进一步发现 `authlogic.go:toUserInfo`（Login/Register/ResetPassword 在用）是**第三份**映射，也丢 avatar ⇒ 同一实体 3 处映射 | 🔴 | `getuserbyidlogic.go:39-43` 只填 UserId/Account/Nickname | 已修：收敛为包内唯一 `toUserInfo`，5 个调用点共用 |
+| G6 | **`maxConsecutiveDays` 恒 0**：图表 X 轴写"最长连续(天)"却硬编码 0；`avgMessagesPerDay` 因 activeDays 传 0 退化成"每会话消息数" | 🟡 | `analytics_view.go:314` | 已修：新增 `maxConsecutiveDays()` 纯函数，depth handler 取 frequency 每日数据算真实连续天数与活跃天数 |
+| G7 | **E2E-F-36 真存在**（用户空间无法滚动）：1280×600 下 `.page-content` 内容 676px 装进 496px 容器且 `overflow: hidden` ⇒ 底部约 180px 内容**静默裁剪、DOM 无可滚动元素、wheel 无效**。首轮截图用 900px 高视口恰好躲过 | 🔴 | `nav.vue .page-content { overflow: hidden }`；实测 `lastCardBottom=740 > viewportH=600`、`scrollers=[]` | 已修：`overflow-y: auto`；修后滚到底 `scrollTop=180`、卡片底部 560px 可见 |
+| G8 | **头像服务端 2MB 上限形同虚设**：`ParseMultipartForm(2<<20)` 是内存/磁盘分界**不是上限**（Go 容忍 maxMemory+10MB）⇒ 绕过前端直传 3MB 被接受并写入 MinIO | 🟡 | 新增测试实测：3MB 上传返回 **200** 且调用了 user-svc | 已修：`fileHeader.Size > maxAvatarBytes` → 413 |
+| G9 | **`config`（字体/主题）与 age 同一死法**：`toProfileVM` 硬编码 `Config: {}`，BFF `UpdateProfileReq` 无 config 字段 ⇒ 前端 `setTheme/setFontSize` 静默丢弃。首轮记了 age 却漏了 config | 🟡 | `viewmodel.go:106`、`downstream/user.go:34-39` | 新登记 [E2E-F-82](../../discovered-unresolved.md) 留账 |
+| G10 | **InMemory 替身保真度**：`InMemoryUserRepo.Create` 不填 CreatedAt（GORM `autoCreateTime` 会填）⇒ 任何依赖 CreatedAt 的断言假失败 | 🟢 | 修 G5 时被该差异卡住 | 已修：替身对齐 GORM 行为 |
+
+### 8.3 测试覆盖缺口（首轮缺失，本轮补齐）
+
+| # | 缺口 | 补法 |
+|---|------|------|
+| T1 | `fromProtoUserInfo`（第 4 个丢弃点）零单测 | `user_proto_mapping_test.go` 3 条 |
+| T2 | `toFrontendDayNight/Frequency/Depth` 空态分支零覆盖 | `analytics_view_test.go` 10 条（含 nil/全零/除零） |
+| T3 | 头像服务端 2MB 上限零测试 | `TestAvatarHandler_OversizedFile_Rejected` |
+| T4 | HTTP fallback transport 零测试（gRPC 是默认路径，但 flag 可切） | `TestUserHTTPClient_{GetMe,UpdateMe}_*` 2 条 |
+| T5 | `GetUserById` 路径零测试 | `TestGetUserByIdLogic_MapsAvatarAndCreatedAt` |
+| T6 | `maxConsecutiveDays` 无实现无测试 | 表驱动 8 例 + handler 集成 1 条 |
+
+### 8.4 首轮结论的修正
+
+- **"12/12 全绿"** 仍成立（12 个测试点在本轮修复后复测仍全 PASS）。
+- **"阶段 done"** 不成立 → 改 **partial**（账本 2 条未解决）。
+- **"收口自检三连通过"** 只覆盖了 git 三连，未覆盖 RUNBOOK §13 的机器审计 ⇒ 本轮起
+  收口必须附 §13 审计输出。
+
+## 9. 复查轮次的门禁输出（收口证据，2026-09-19 实测）
+
+| 门禁 | 结果 | 说明 |
+|------|------|------|
+| `python scripts/e2e_stage_audit.py --stage e2e-11` | ✅ **0 FAIL**（原 A5+A11 FAIL） | 状态改 partial 后 A5 消解；结果列改裸 `PASS` 后 A11 消解 |
+| `bash scripts/check_tdd_gate.sh` | ✅ GREEN | 5 个 commit 均满足 |
+| `bash scripts/check_residual.sh` | ✅ GREEN | 补末尾换行后消解 |
+| `bash scripts/check_orphan_outputs.sh` | ✅ GREEN | 修脚本 globstar 缺陷后消解 |
+| `bash scripts/check_adr_gate.sh` | ⚠️ **RED（2/5）** | 见下"残留" |
+| `python scripts/smoke_data_layer.py` | ✅ **16/16 PASS, exit 0** | 见下"附带修复" |
+| `go test ./...`（BFF/user/analytics） | ✅ 9 + 7 + 11 包全绿 | `go vet` 全绿 |
+| `npx vitest run`（前端） | ✅ 410/410 | |
+| `npx playwright test e2e/my-space.spec.ts` | ✅ 10/10 | 断言收紧后仍全绿 |
+
+### 残留：ADR 门禁 2 项无法回溯修复
+
+`check_adr_gate.sh` 报 2 个 commit 命中架构关键词但无 ADR：
+
+- `b84b4cf`（E2E-11 首轮 squash commit，已并入 main）—— 命中关键词 `vue`（改动含 `.vue` 文件）
+- `fc8170d`（E2E-10 的 `LLM_API_KEY` 修复，已并入 main）—— 命中关键词 `docker`（改动含 `docker-compose.apps.yml`）
+
+**为何无法修复**：该门禁是 **commit 级**——判定依据是「同一个 commit 的改动文件列表」，
+而已合并 commit 的文件列表不可变。本轮提交 `4d6d53d` 自身含 ADR，**未被标记**（可作对照证明）。
+
+**两点如实说明**：
+
+1. 该门禁的判定面很宽：关键词表含 `vue`/`docker`/`grpc` 等，
+   意味着**任何**改动 `.vue` 文件或 `docker-compose.*.yml` 的 commit 都被要求附 ADR
+   —— `fc8170d` 只是个配置项修复，本不需要架构决策记录。属门禁策略本身的宽严问题，
+   非本阶段可单方面调整（改关键词表属政策变更）。
+2. 该门禁**未接入 CI**（实测 `.github/workflows/` 中 0 处引用），只在本地手工跑。
+   同类情况：`check_tdd_gate.sh` / `check_residual.sh` / `check_orphan_outputs.sh` /
+   `e2e_stage_audit.py` 均未接入 CI，仅 `check_secrets.sh` 与 `check_soft_asserts.sh` 在 CI 内。
+   这正是 anti-patterns.md **AP-11「门禁只报不拦」**（该项状态为"🟡 待 CI 接通"）。
+   ⇒ **本报告的"门禁通过"指本地已跑通，不等于 CI 强制拦截。**
+
+### 附带修复：`smoke_data_layer.py` §7 段的 3 个真 bug
+
+AGENTS.md §2.4 要求的这个 smoke 脚本，其 §7（Nacos 注册校验）长期是坏的，
+把"脚本自身故障"伪装成 5 个服务 FAIL：
+
+| bug | 表现 | 修法 |
+|-----|------|------|
+| `docker_exec` **从未定义** | 5 项恒报 `name 'docker_exec' is not defined` | 补 helper（对齐 `docker_psql` 的 `(rc, stdout, stderr)` 返回约定） |
+| 调用处解包顺序反了（`out, _, rc =`） | `out` 拿到 int、`rc` 拿到 stderr ⇒ 恒判失败且报 `curl rc=`（空） | 改 `rc, out, err =` |
+| URL 未给 `sh -c` 加引号 | 查询串里的 `&` 被 shell 当后台运算符 ⇒ curl 只收到 `?serviceName=<svc>`，**namespaceId 丢失** ⇒ 查的是 public 命名空间（恒空） | URL 再包一层单引号 |
+
+修复后：**16/16 PASS, exit 0**（修前 11/16 + 5 个假 FAIL）。5 个服务各 1 实例、`ephemeral=true`、healthy。

@@ -51,26 +51,8 @@ func (l *GetMeLogic) GetMe(req *types.GetMeReq) (resp *types.GetMeResp, err erro
 	return toGetMeResp(u), nil
 }
 
+// toGetMeResp 复用包内唯一映射点 toUserInfo（authlogic.go）。
+// E2E-11：此处原先自带一份内联映射，与 GetUserById 各自维护 ⇒ 修一条漏一条。
 func toGetMeResp(u *model.User) *types.GetMeResp {
-	nick := ""
-	if u.Nickname != nil {
-		nick = *u.Nickname
-	}
-	avatar := ""
-	if u.AvatarURL != nil {
-		avatar = *u.AvatarURL
-	}
-	var createdAt int64
-	if !u.CreatedAt.IsZero() {
-		createdAt = u.CreatedAt.Unix()
-	}
-	return &types.GetMeResp{
-		User: types.UserInfo{
-			UserId:    u.ID,
-			Account:   u.Username,
-			Nickname:  nick,
-			AvatarURL: avatar,
-			CreatedAt: createdAt,
-		},
-	}
+	return &types.GetMeResp{User: toUserInfo(u)}
 }

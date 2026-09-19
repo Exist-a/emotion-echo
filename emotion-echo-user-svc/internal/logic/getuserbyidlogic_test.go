@@ -77,6 +77,33 @@ func TestGetUserByIdLogic_NilNickname_ReturnsEmptyString(t *testing.T) {
 	assert.Equal(t, "", resp.User.Nickname)
 }
 
+// TestGetUserByIdLogic_MapsAvatarAndCreatedAt 契约（E2E-11 复查发现）：
+// GetUserById 走的是**自己的内联映射**，与 GetMe 的 toGetMeResp 不是同一份代码。
+// E2E-11 修 GetMe 拿头像时漏了这条兄弟路径 ⇒ GET /api/v1/users/:id 仍不返回
+// avatar / createdAt（前端拿不到头像）。本用例钉住两条路径字段一致。
+func TestGetUserByIdLogic_MapsAvatarAndCreatedAt(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	avatar := "http://localhost:9000/avatars/avatars/1-abc.png"
+	_ = repo.Create(context.Background(), &model.User{
+		ID:        42,
+		Username:  "alice",
+		Nickname:  strPtr("Alice"),
+		AvatarURL: &avatar,
+	})
+
+	l := NewGetUserByIdLogic(context.Background(), newGetUserByIdSvcCtx(repo))
+	resp, err := l.GetUserById(&types.GetUserByIdReq{Id: 42})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	assert.Equal(t, avatar, resp.User.AvatarURL,
+		"E2E-11: GetUserById 必须返回 avatarUrl（与 GetMe 路径一致）。"+
+			"原实现是独立内联映射，只填 UserId/Account/Nickname。")
+	assert.NotZero(t, resp.User.CreatedAt,
+		"E2E-11: GetUserById 必须返回 createdAt（与 GetMe 路径一致）")
+}
+
 func TestGetUserByIdLogic_ZeroID_ValidationError(t *testing.T) {
 	t.Parallel()
 	repo := repository.NewInMemoryUserRepo()

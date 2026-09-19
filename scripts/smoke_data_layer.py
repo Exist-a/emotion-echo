@@ -59,6 +59,21 @@ def docker_psql(sql: str, user: str = PG_USER) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
 
 
+def docker_exec(container: str, argv: list[str], timeout: int = 10) -> tuple[int, str, str]:
+    """在任意容器内执行命令。返回 (rc, stdout, stderr)。
+
+    2026-09-19（E2E-11 复查）：§7 Nacos 段一直调用本函数，但**它从未被定义**
+    ⇒ 该段 5 项恒报 `docker exec 失败: name 'docker_exec' is not defined`，
+    §2.4 smoke 长期带 5 个假 FAIL（把"脚本坏了"伪装成"服务没注册"）。
+    补上实现，让 §7 真正生效。
+    """
+    proc = subprocess.run(
+        ["docker", "exec", container, *argv],
+        capture_output=True, text=True, timeout=timeout,
+    )
+    return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+
+
 def http_get(path: str, headers: dict[str, str] | None = None) -> dict[str, Any]:
     req = urllib.request.Request(BFF + path)
     if headers:
@@ -349,13 +364,20 @@ NACOS_SVCS = [
 
 for svc in NACOS_SVCS:
     try:
-        out, _, rc = docker_exec(
+        # 注意：URL 必须**再包一层单引号**给 `sh -c`。否则 shell 把查询串里的 `&`
+        # 当作后台运算符，curl 只收到 `?serviceName=<svc>`，namespaceId 丢失 ⇒
+        # 查到的是 public 命名空间（永远空），把"查错地方"伪装成"服务未注册"。
+        url = (
+            "http://localhost:8848/nacos/v1/ns/instance/list"
+            f"?serviceName={svc}&groupName=DEFAULT_GROUP&namespaceId=emotion-echo-dev"
+        )
+        rc, out, err = docker_exec(
             "emotion-echo-nacos",
-            ["sh", "-c", f"curl -s http://localhost:8848/nacos/v1/ns/instance/list?serviceName={svc}&groupName=DEFAULT_GROUP&namespaceId=emotion-echo-dev"],
+            ["sh", "-c", f"curl -s '{url}'"],
             timeout=8,
         )
         if rc != 0:
-            check(f"§7 {svc} nacos API", False, f"curl rc={rc}")
+            check(f"§7 {svc} nacos API", False, f"curl rc={rc} err={err[:80]}")
             continue
         import json as _json
         try:

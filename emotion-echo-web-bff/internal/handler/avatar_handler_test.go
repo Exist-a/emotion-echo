@@ -127,9 +127,15 @@ func TestAvatarHandler_Upload_Success(t *testing.T) {
 	require.NotNil(t, user.gotReq.AvatarURL)
 	assert.Equal(t, "http://localhost:9000/avatars/avatars/7-abc.jpg", *user.gotReq.AvatarURL)
 
-	var got map[string]any
+	var got struct {
+		Data struct {
+			Avatar string `json:"avatar"`
+		} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	assert.Equal(t, "http://localhost:9000/avatars/avatars/7-abc.jpg", got["avatar"])
+	// E2E-11 复查：原断言读顶层 got["avatar"]，把"无 data 包装"这个 bug 固化了。
+	// 现按前端真实消费路径（useApi 返回 data.data）断言 data.avatar。
+	assert.Equal(t, "http://localhost:9000/avatars/avatars/7-abc.jpg", got.Data.Avatar)
 }
 
 func TestAvatarHandler_MissingXUserId_Returns401(t *testing.T) {
@@ -271,4 +277,77 @@ func TestAvatarHandler_PassesUserIDToDownstream(t *testing.T) {
 		"E2E-11: 传给 UpdateMe 的 ctx 必须带 user_id（用 session.WithRequestAuth 包装）。"+
 			"原实现传 c.Request.Context() ⇒ gRPC 无 x-user-id metadata ⇒ "+
 			"user-svc 返 Unauthenticated ⇒ 头像上传 500。")
+}
+// TestAvatarHandler_OversizedFile_Rejected 契约（E2E-11 复查）：
+// 服务端必须自己拦 >2MB 的文件，不能只依赖前端 beforeAvatarUpload。
+//
+// 原实现只调 `ParseMultipartForm(2 << 20)` —— 该参数是「内存/磁盘分界」，
+// **不是上限**（Go 实际容忍 maxMemory + 10MB 的请求体），所以绕过前端直传
+// 3MB/10MB 文件都会被接受并写入 MinIO。
+func TestAvatarHandler_OversizedFile_Rejected(t *testing.T) {
+	fc := &fakeAvatarUserClient{}
+	fs := &fakeStorage{putURL: "http://minio/should-not-be-called"}
+	r := newAvatarRouter(fc, fs)
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, _ := mw.CreateFormFile("avatar", "huge.png")
+	_, _ = io.CopyN(fw, bytes.NewReader(make([]byte, 3<<20)), 3<<20) // 3MB
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/avatar", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code,
+		"E2E-11: 超过 2MB 的头像必须被服务端拒绝（413）。"+
+			"原实现只有前端拦截，绕过前端即可写入任意大小文件到 MinIO。")
+	assert.Nil(t, fc.gotReq, "被拒绝的请求不应调 user-svc")
+}
+
+// TestAvatarHandler_ResponseUsesDataWrapper 契约（E2E-11 复查，IAB 实测发现）：
+// 响应必须是与其他所有端点一致的 {code, message, data} 包装，头像 URL 放在 data.avatar。
+//
+// 前端 `useApi.request()` 统一 `return data.data`，而本端点原实现把 avatar 放在**顶层**：
+//   {"avatar":"http://...","code":0,"message":"ok"}   ← 无 data 字段
+// ⇒ `post<{avatar:string}>()` 返回 undefined ⇒ `res.avatar` 抛 TypeError
+//   被 catch 捕获 ⇒ 用户看到"头像上传失败，请重试"的**错误提示**，
+//   但服务端其实已经写成功（DB 已更新）—— 典型"提示与实际相反"。
+//
+// 实测证据（2026-09-19 IAB，浏览器内 fetch 直读响应体）：
+//   {"avatar":"http://localhost:9000/avatars/avatars/1-60a9c298.png","code":0,"message":"ok"}
+// 同时前端预览永远停在本地 blob URL（`form.value.avatarPath` 未被服务端 URL 覆盖）。
+func TestAvatarHandler_ResponseUsesDataWrapper(t *testing.T) {
+	user := &fakeAvatarUserClient{}
+	sto := &fakeStorage{putURL: "http://localhost:9000/avatars/avatars/7-abc.jpg"}
+	r := newAvatarRouter(user, sto)
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, _ := mw.CreateFormFile("avatar", "me.jpg")
+	_, _ = io.WriteString(fw, "fake jpg bytes")
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/avatar", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var wrapped struct {
+		Code int `json:"code"`
+		Data struct {
+			Avatar string `json:"avatar"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapped))
+	assert.Equal(t, 0, wrapped.Code)
+	assert.Equal(t, "http://localhost:9000/avatars/avatars/7-abc.jpg", wrapped.Data.Avatar,
+		"E2E-11: 头像 URL 必须在 data.avatar 内（与 BFF 其他端点一致）。"+
+			"原实现在顶层返回 avatar ⇒ useApi 的 data.data 为 undefined ⇒ "+
+			"前端 res.avatar 抛错 ⇒ 上传成功却提示失败。")
 }
