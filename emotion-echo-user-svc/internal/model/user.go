@@ -27,4 +27,4 @@ type User struct {
 }
 
 // TableName 显式指定 schema + 表名
-func (User) TableName() string { return "emotion_echo_user.users" }
+func (User) TableName() string { return "emotion_echo_user.users" }// red-line test: change .go without test
