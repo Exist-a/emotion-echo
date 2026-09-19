@@ -56,12 +56,37 @@ verdict: DONE
 | 5 | mock 模式流速太快无法捕获增量 | 改为验证 SSE Content-Type 头 |
 | 6 | `.message-failed` CSS class 不存在 | 改为断言 "Failed to fetch" 文本 |
 
-## 5. 产出物
+## 5. 全链路深度验证（补充）
+
+Playwright 只验证前端 UI，以下通过 Docker 日志 + 数据库 + curl 验证后端链路：
+
+| 验证项 | 结果 | 证据 |
+|--------|------|------|
+| 真实 LLM 调用 | ✅ | llm-service 日志：`POST https://api.deepseek.com/chat/completions "HTTP/1.1 200 OK"` |
+| 消息持久化 | ✅ | DB `emotion_echo_chat.messages`：id=219(user) + id=220(assistant) |
+| SSE 协议格式 | ✅ | `data: {"choices":[{"delta":{"content":"..."}}]}` + `data: [DONE]` |
+| saveAIMessage | ✅ | BFF 日志：`SendMessage latency=9ms err=nil`（AI 回复落库） |
+| Intent 分类 | ✅ | llm-service 日志：`ClassifyIntent duration=0ms status=OK` |
+| 全链路 gRPC | ✅ | BFF→chat-svc→llm-service 所有调用 `err=nil` |
+
+### 发现并修复的隐性问题
+
+**Bug：LLM_API_KEY 在 llm-service 容器中为空**
+
+- **严重度**：🔴 高（AI 回复永远走 mock，用户看不到真实 LLM 响应）
+- **根因**：`deploy/docker-compose.apps.yml` 中 `LLM_API_KEY: ${LLM_API_KEY:-}` 从 HOST 环境变量读取（为空），覆盖了 `env_file (.env.local)` 的真实 key
+- **影响**：llm-service 的 `iter_chat_chunks()` 检测到 key 为空，直接返回 mock 回复
+- **修复**：删除 llm-service 和 ai-svc 的 `LLM_API_KEY` 覆盖行，让 env_file 生效
+- **验证**：修复后 llm-service 读到真实 key（35 字符），DeepSeek API 调用 200 OK
+- **PR**：`fix/llm-api-key-override`
+
+## 6. 产出物
 
 | 产出物 | 路径 |
 |--------|------|
 | Playwright 回归钉（12） | `emotion-echo-web/e2e/chat-core.spec.ts` |
 | 阶段详档 | `docs/e2e-roadmap/stages/e2e-10-chat-core/plan.md` |
+| LLM key 修复 | `deploy/docker-compose.apps.yml`（PR fix/llm-api-key-override） |
 | 本报告 | `docs/e2e-roadmap/stages/e2e-10-chat-core/report.md` |
 
 ## 6. 调研依据
