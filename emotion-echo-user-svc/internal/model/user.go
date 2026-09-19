@@ -27,11 +27,4 @@ type User struct {
 }
 
 // TableName 显式指定 schema + 表名
-func (User) TableName() string { return "emotion_echo_user.users" }// red-line test: change .go without test
-
-// red-line test: 5+ lines to trigger TDD gate
-// line 2
-// line 3
-// line 4
-// line 5
-// line 6
+func (User) TableName() string { return "emotion_echo_user.users" }
