@@ -54,6 +54,7 @@ const (
 	UserService_Logout_FullMethodName                         = "/emotion_user.v1.UserService/Logout"
 	UserService_VerifySecurityAnswer_FullMethodName           = "/emotion_user.v1.UserService/VerifySecurityAnswer"
 	UserService_VerifySecurityAnswerByUsername_FullMethodName = "/emotion_user.v1.UserService/VerifySecurityAnswerByUsername"
+	UserService_GetSecurityQuestionsByUsername_FullMethodName = "/emotion_user.v1.UserService/GetSecurityQuestionsByUsername"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -111,6 +112,13 @@ type UserServiceClient interface {
 	//
 	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
 	VerifySecurityAnswerByUsername(ctx context.Context, in *VerifySecurityAnswerByUsernameRequest, opts ...grpc.CallOption) (*VerifySecurityAnswerByUsernameResponse, error)
+	// GetSecurityQuestionsByUsername 按用户名获取密保问题列表（E2E-07）
+	//
+	// 返回用户的密保问题（不含答案），用于找回密码流程展示问题。
+	// 防枚举：用户不存在时返回空列表（而非错误）。
+	//
+	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
+	GetSecurityQuestionsByUsername(ctx context.Context, in *GetSecurityQuestionsByUsernameRequest, opts ...grpc.CallOption) (*GetSecurityQuestionsByUsernameResponse, error)
 }
 
 type userServiceClient struct {
@@ -211,6 +219,16 @@ func (c *userServiceClient) VerifySecurityAnswerByUsername(ctx context.Context, 
 	return out, nil
 }
 
+func (c *userServiceClient) GetSecurityQuestionsByUsername(ctx context.Context, in *GetSecurityQuestionsByUsernameRequest, opts ...grpc.CallOption) (*GetSecurityQuestionsByUsernameResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSecurityQuestionsByUsernameResponse)
+	err := c.cc.Invoke(ctx, UserService_GetSecurityQuestionsByUsername_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
@@ -266,6 +284,13 @@ type UserServiceServer interface {
 	//
 	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
 	VerifySecurityAnswerByUsername(context.Context, *VerifySecurityAnswerByUsernameRequest) (*VerifySecurityAnswerByUsernameResponse, error)
+	// GetSecurityQuestionsByUsername 按用户名获取密保问题列表（E2E-07）
+	//
+	// 返回用户的密保问题（不含答案），用于找回密码流程展示问题。
+	// 防枚举：用户不存在时返回空列表（而非错误）。
+	//
+	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
+	GetSecurityQuestionsByUsername(context.Context, *GetSecurityQuestionsByUsernameRequest) (*GetSecurityQuestionsByUsernameResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -302,6 +327,9 @@ func (UnimplementedUserServiceServer) VerifySecurityAnswer(context.Context, *Ver
 }
 func (UnimplementedUserServiceServer) VerifySecurityAnswerByUsername(context.Context, *VerifySecurityAnswerByUsernameRequest) (*VerifySecurityAnswerByUsernameResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifySecurityAnswerByUsername not implemented")
+}
+func (UnimplementedUserServiceServer) GetSecurityQuestionsByUsername(context.Context, *GetSecurityQuestionsByUsernameRequest) (*GetSecurityQuestionsByUsernameResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSecurityQuestionsByUsername not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -486,6 +514,24 @@ func _UserService_VerifySecurityAnswerByUsername_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetSecurityQuestionsByUsername_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSecurityQuestionsByUsernameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetSecurityQuestionsByUsername(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetSecurityQuestionsByUsername_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetSecurityQuestionsByUsername(ctx, req.(*GetSecurityQuestionsByUsernameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -528,6 +574,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifySecurityAnswerByUsername",
 			Handler:    _UserService_VerifySecurityAnswerByUsername_Handler,
+		},
+		{
+			MethodName: "GetSecurityQuestionsByUsername",
+			Handler:    _UserService_GetSecurityQuestionsByUsername_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -265,6 +265,33 @@ func (s *userServer) VerifySecurityAnswerByUsername(ctx context.Context, req *em
 	return &emotionuser.VerifySecurityAnswerByUsernameResponse{Success: true}, nil
 }
 
+// GetSecurityQuestionsByUsername 按用户名获取密保问题列表（E2E-07）
+//
+// 防枚举：用户不存在时返回空列表（而非错误）。
+func (s *userServer) GetSecurityQuestionsByUsername(ctx context.Context, req *emotionuser.GetSecurityQuestionsByUsernameRequest) (*emotionuser.GetSecurityQuestionsByUsernameResponse, error) {
+	if err := s.ensureRepo(); err != nil {
+		return nil, err
+	}
+	if s.svcCtx.SecurityAnswerRepo == nil {
+		return nil, status.Error(codes.Unavailable, "user-svc security answer repository not initialized (degraded start)")
+	}
+	questions, err := logic.NewAuthLogic(ctx, s.svcCtx).GetSecurityQuestionsByUsername(req.GetUsername())
+	if err != nil {
+		if errors.Is(err, logic.ErrValidation) {
+			return nil, status.Error(codes.InvalidArgument, "username is required")
+		}
+		return nil, grpcerr.MapToError(err, "getSecurityQuestionsByUsername")
+	}
+	pbQuestions := make([]*emotionuser.SecurityQuestionInfo, len(questions))
+	for i, q := range questions {
+		pbQuestions[i] = &emotionuser.SecurityQuestionInfo{
+			QuestionOrder: int32(q.QuestionOrder),
+			Question:      q.Question,
+		}
+	}
+	return &emotionuser.GetSecurityQuestionsByUsernameResponse{Questions: pbQuestions}, nil
+}
+
 // mapAuthError 把 logic.AuthLogic 错误映射到 gRPC status code
 //
 // B4：迁移到 grpcerr.Wrap，业务 sentinel errors 由 init() 注册到 grpcerr。

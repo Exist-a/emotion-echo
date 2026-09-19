@@ -109,6 +109,8 @@ func NewAuthHandler(mgr *auth.Manager, userClient downstream.UserClient) gin.Han
 			h.resetPassword(c)
 		case "verify-security-answer":
 			h.verifySecurityAnswer(c)
+		case "security-questions":
+			h.getSecurityQuestions(c)
 		default:
 			Fail(c, http.StatusNotFound, 1, "auth endpoint not found")
 		}
@@ -408,38 +410,38 @@ func generateCode() string {
 }
 
 // Sprint 1 PR-4c-3: resetPassword 处理 POST /api/v1/auth/reset-password
+// E2E-07: 改用 resetToken 替代 verificationCode（密保验证后签发的短期 token）
 // 流程：
-//   1. 解析 body {username, verificationCode, newPassword}
-//   2. 校验 verificationCode（in-memory 缓存 verifyVerificationCode）
+//   1. 解析 body {resetToken, newPassword}
+//   2. 校验 resetToken（JWT，5 分钟有效）
 //   3. 调 user-svc /api/v1/users/reset-password（user-svc bcrypt 写库）
-//   4. 成功返 {code:0}（PR-4d 修前端后 modify.vue 会调此）
 func (h *AuthHandler) resetPassword(c *gin.Context) {
 	var req struct {
-		Username         string `json:"username"`
-		VerificationCode string `json:"verificationCode"`
-		NewPassword      string `json:"newPassword"`
+		ResetToken  string `json:"resetToken"`
+		NewPassword string `json:"newPassword"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
 		return
 	}
-	if req.Username == "" || req.VerificationCode == "" || req.NewPassword == "" {
-		Fail(c, http.StatusBadRequest, 1, "validation: username, verificationCode, newPassword are required")
+	if req.ResetToken == "" || req.NewPassword == "" {
+		Fail(c, http.StatusBadRequest, 1, "validation: resetToken and newPassword are required")
 		return
 	}
 	if len(req.NewPassword) < 6 {
 		Fail(c, http.StatusBadRequest, 1, "validation: newPassword must be >= 6 chars")
 		return
 	}
-	// 校验 BFF 内部 verification-code 缓存
-	if !h.verifyVerificationCode(req.Username, req.VerificationCode) {
-		Fail(c, http.StatusUnauthorized, 1, "invalid or expired verification code")
+	// E2E-07: 校验 resetToken（JWT，5 分钟有效）
+	username, err := h.jwt.ParseResetToken(req.ResetToken)
+	if err != nil {
+		Fail(c, http.StatusUnauthorized, 1, "invalid or expired reset token")
 		return
 	}
-	// 调 user-svc
-	_, err := h.user.ResetPassword(c.Request.Context(), downstream.ResetPasswordReq{
-		Username:         req.Username,
-		VerificationCode: req.VerificationCode,
+	// 调 user-svc（verificationCode 传 "reset-token-verified" 以满足 user-svc 接口要求）
+	_, err = h.user.ResetPassword(c.Request.Context(), downstream.ResetPasswordReq{
+		Username:         username,
+		VerificationCode: "reset-token-verified",
 		NewPassword:      req.NewPassword,
 	})
 	if err != nil {
@@ -484,5 +486,30 @@ func (h *AuthHandler) verifySecurityAnswer(c *gin.Context) {
 		Fail(c, http.StatusUnauthorized, 1, "security answer verification failed")
 		return
 	}
-	OK(c, gin.H{"success": true})
+	// E2E-07: 签发短期 reset token（5 分钟有效），前端传给 reset-password
+	resetToken, err := h.jwt.SignResetToken(req.Username)
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, 1, "failed to sign reset token")
+		return
+	}
+	OK(c, gin.H{"success": true, "resetToken": resetToken})
+}
+
+// E2E-07: getSecurityQuestions POST /api/v1/auth/security-questions
+// 返回用户的密保问题列表（不含答案）。防枚举：用户不存在返回空列表。
+func (h *AuthHandler) getSecurityQuestions(c *gin.Context) {
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Username == "" {
+		Fail(c, http.StatusBadRequest, 1, "username is required")
+		return
+	}
+	questions, err := h.user.GetSecurityQuestionsByUsername(c.Request.Context(), req.Username)
+	if err != nil {
+		// 内部错误（非防枚举）
+		Fail(c, http.StatusInternalServerError, 1, "internal error")
+		return
+	}
+	OK(c, gin.H{"questions": questions})
 }

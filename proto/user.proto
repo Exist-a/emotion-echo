@@ -89,6 +89,14 @@ service UserService {
   //
   // 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
   rpc VerifySecurityAnswerByUsername (VerifySecurityAnswerByUsernameRequest) returns (VerifySecurityAnswerByUsernameResponse);
+
+  // GetSecurityQuestionsByUsername 按用户名获取密保问题列表（E2E-07）
+  //
+  // 返回用户的密保问题（不含答案），用于找回密码流程展示问题。
+  // 防枚举：用户不存在时返回空列表（而非错误）。
+  //
+  // 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
+  rpc GetSecurityQuestionsByUsername (GetSecurityQuestionsByUsernameRequest) returns (GetSecurityQuestionsByUsernameResponse);
 }
 
 // ============== Requests / Responses ==============
@@ -196,6 +204,22 @@ message VerifySecurityAnswerByUsernameRequest {
 // 防用户名枚举；成功时 success=true。
 message VerifySecurityAnswerByUsernameResponse {
   bool success = 1;
+}
+
+// SecurityQuestionInfo 返回给前端的密保问题信息（不含答案）
+message SecurityQuestionInfo {
+  int32 question_order = 1;
+  string question = 2;
+}
+
+// GetSecurityQuestionsByUsernameRequest 获取密保问题请求
+message GetSecurityQuestionsByUsernameRequest {
+  string username = 1;
+}
+
+// GetSecurityQuestionsByUsernameResponse 获取密保问题响应
+message GetSecurityQuestionsByUsernameResponse {
+  repeated SecurityQuestionInfo questions = 1;
 }
 
 // UserInfo 用户信息视图

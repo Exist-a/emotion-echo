@@ -98,3 +98,42 @@ func (m *Manager) Parse(tokenStr string) (int64, error) {
 
 // TTL 返回 token 有效期（供 handler 计算 expiresIn）
 func (m *Manager) TTL() time.Duration { return m.ttl }
+
+// ResetTokenTTL 密保验证 token 有效期（5 分钟）
+const ResetTokenTTL = 5 * time.Minute
+
+// SignResetToken 签发密保验证短期 token（E2E-07）
+//
+// 用途：verify-security-answer 成功后签发，前端传给 reset-password 校验。
+// 有效期 5 分钟，只含 username（不含 user_id，因为找回密码时用户未登录）。
+func (m *Manager) SignResetToken(username string) (string, error) {
+	now := time.Now()
+	claims := Claims{
+		Username: username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ResetTokenTTL)),
+			Subject:   "reset-password",
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(m.secret)
+}
+
+// ParseResetToken 解析密保验证 token（返回 username）
+func (m *Manager) ParseResetToken(tokenStr string) (string, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("%w: unexpected signing method %v", ErrInvalidToken, t.Header["alg"])
+		}
+		return m.secret, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInvalidToken, err)
+	}
+	if !token.Valid || claims.Username == "" || claims.Subject != "reset-password" {
+		return "", ErrInvalidToken
+	}
+	return claims.Username, nil
+}

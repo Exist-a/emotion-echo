@@ -391,3 +391,85 @@ func TestAuthLogic_VerifySecurityAnswerByUsername_EmptyUsername_ReturnsValidatio
 	err := l.VerifySecurityAnswerByUsername("", 1, "any-answer")
 	assert.ErrorIs(t, err, ErrValidation, "空用户名应返回 ErrValidation")
 }
+
+// =============================================================================
+// E2E-07 TDD: GetSecurityQuestionsByUsername 测试
+// =============================================================================
+
+func TestAuthLogic_GetSecurityQuestionsByUsername_HasQuestions_ReturnsList(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	// 创建用户
+	hash, _ := password.Hash("password")
+	require.NoError(t, repo.Create(context.Background(), &model.User{
+		ID:           1,
+		Username:     "alice",
+		PasswordHash: &hash,
+	}))
+
+	// 保存 2 个密保问题
+	answerHash, _ := password.Hash("answer")
+	require.NoError(t, secRepo.Save(context.Background(), []*model.SecurityAnswer{
+		{UserID: 1, QuestionOrder: 1, Question: "你的第一只宠物叫什么？", AnswerHash: answerHash},
+		{UserID: 1, QuestionOrder: 2, Question: "你的出生城市是哪里？", AnswerHash: answerHash},
+	}))
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	questions, err := l.GetSecurityQuestionsByUsername("alice")
+	require.NoError(t, err)
+	assert.Len(t, questions, 2, "应返回 2 个问题")
+	assert.Equal(t, "你的第一只宠物叫什么？", questions[0].Question)
+	assert.Equal(t, int16(1), questions[0].QuestionOrder)
+	assert.Equal(t, "你的出生城市是哪里？", questions[1].Question)
+	assert.Equal(t, int16(2), questions[1].QuestionOrder)
+	// SecurityQuestionInfo 类型不含 AnswerHash 字段（编译期保证不泄露答案）
+}
+
+func TestAuthLogic_GetSecurityQuestionsByUsername_UserNotFound_ReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	// 不存在的用户名应返回空列表（防枚举）
+	questions, err := l.GetSecurityQuestionsByUsername("nonexistent")
+	require.NoError(t, err)
+	assert.Empty(t, questions, "不存在的用户应返回空列表")
+}
+
+func TestAuthLogic_GetSecurityQuestionsByUsername_EmptyUsername_ReturnsValidation(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	// 空用户名应返回 ErrValidation
+	_, err := l.GetSecurityQuestionsByUsername("")
+	assert.ErrorIs(t, err, ErrValidation, "空用户名应返回 ErrValidation")
+}
+
+func TestAuthLogic_GetSecurityQuestionsByUsername_NoQuestions_ReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryUserRepo()
+	secRepo := repository.NewInMemorySecurityAnswerRepo()
+
+	// 创建用户但不设密保
+	hash, _ := password.Hash("password")
+	require.NoError(t, repo.Create(context.Background(), &model.User{
+		ID:           1,
+		Username:     "alice",
+		PasswordHash: &hash,
+	}))
+
+	l := newTestAuthLogicWithSecurity(repo, secRepo)
+
+	// 无密保问题应返回空列表
+	questions, err := l.GetSecurityQuestionsByUsername("alice")
+	require.NoError(t, err)
+	assert.Empty(t, questions, "无密保问题应返回空列表")
+}

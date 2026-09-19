@@ -77,6 +77,14 @@ func (f *fakeUserClient) VerifySecurityAnswerByUsername(_ context.Context, _ str
 	return f.err
 }
 
+// E2E-07: fake GetSecurityQuestionsByUsername
+func (f *fakeUserClient) GetSecurityQuestionsByUsername(_ context.Context, _ string) ([]downstream.SecurityQuestionInfo, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return nil, nil
+}
+
 func newUserRouter(client downstream.UserClient) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

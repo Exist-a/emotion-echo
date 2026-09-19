@@ -13,7 +13,6 @@
           class="ee-input input"
           placeholder="至少 6 位"
           autocomplete="new-password"
-          :show-password="true"
         />
       </label>
       <label class="ee-field" data-label="再次输入">
@@ -23,7 +22,6 @@
           class="ee-input input"
           placeholder="再输入一次"
           autocomplete="new-password"
-          :show-password="true"
         />
       </label>
     </form>
@@ -40,41 +38,26 @@ import { API_ROUTES } from '~/lib/apiRoutes'
 
 definePageMeta({ middleware: 'forget-pwd' })
 const emits = defineEmits(['changeActive'])
-const formRef = ref()
-const { updateStep, userAccount, verificationCode } = useForgetPwdState()
-const passwordReg = /^(?=.*[a-z])(?=.*\d).{6,18}$/i
+const { updateStep, securityVerified, resetToken } = useForgetPwdState()
 
 const formInfo = ref({ newPassword: '', confirmNewPassword: '' })
-const rules = ref({
-  newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { pattern: passwordReg, message: '密码需为 6-18 位，包含字母和数字', trigger: 'blur' },
-  ],
-  confirmNewPassword: [
-    { required: true, message: '请再次输入密码', trigger: 'blur' },
-    {
-      validator: (_: any, value: string, callback: (err?: Error) => void) => {
-        if (value !== formInfo.value.newPassword) callback(new Error('两次输入的密码不一致'))
-        else callback()
-      },
-      trigger: 'blur',
-    },
-  ],
-})
 
 const gotoSuccess = async () => {
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
-  if (!userAccount.value || !verificationCode.value) {
-    notify('密码修改失败', '请返回上一步重新验证', 'error', 3000)
+  if (!formInfo.value.newPassword || formInfo.value.newPassword.length < 6) {
+    notify('密码不符合要求', '密码需为 6-18 位，包含字母和数字', 'error', 3000)
+    return
+  }
+  if (formInfo.value.newPassword !== formInfo.value.confirmNewPassword) {
+    notify('两次输入的密码不一致', '', 'error', 3000)
+    return
+  }
+  if (!securityVerified.value || !resetToken.value) {
+    notify('密码修改失败', '请返回上一步完成密保验证', 'error', 3000)
     return
   }
   try {
-    // Sprint 1 PR-4d: 改明文 (Stage 33 净化后 user-svc bcrypt 入库，不再做链式哈希)
-    // emotion-echo-shared/pkg/password.go 注释明示"不做 bcrypt(sha256) 等价于 bcrypt 明文但削弱 bcrypt"
     await post(API_ROUTES.authResetPassword.path, {
-      username: userAccount.value,
-      verificationCode: verificationCode.value,
+      resetToken: resetToken.value,
       newPassword: formInfo.value.newPassword,
     })
     notify('密码已更新', '请用新密码登录', 'success', 3000)
@@ -114,11 +97,29 @@ const gotoSuccess = async () => {
   font-size: 13px;
 }
 .input {
-  height: 42px;
+  height: 44px;
+  padding: 0 14px;
+  border: 2px solid var(--ee-border);
+  border-radius: 10px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: var(--ee-surface);
+
+  &:focus {
+    outline: none;
+    border-color: var(--ee-primary);
+    box-shadow: 0 0 0 3px rgba(var(--ee-primary-rgb, 99, 102, 241), 0.15);
+  }
+
+  &::placeholder {
+    color: var(--ee-text-muted);
+    opacity: 0.7;
+  }
 }
 .primary-btn {
   width: 100%;
-  height: 42px;
-  border-radius: var(--ee-radius-md);
+  height: 44px;
+  border-radius: 10px;
+  font-weight: 600;
 }
 </style>

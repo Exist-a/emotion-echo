@@ -43,6 +43,13 @@ func postJSON(router *gin.Engine, path, body string) *httptest.ResponseRecorder 
 	return w
 }
 
+func doGet(router *gin.Engine, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	return w
+}
+
 // =============================================================================
 // Login tests（PR-19b）
 // =============================================================================
@@ -388,9 +395,9 @@ type fakeVerificationEntry struct {
 	expiresAt time.Time
 }
 
-func TestAuthHandler_ResetPassword_InvalidVerificationCode_Returns401(t *testing.T) {
+func TestAuthHandler_ResetPassword_InvalidResetToken_Returns401(t *testing.T) {
 	router := newAuthRouter(t, &fakeUserClient{err: nil})
-	body := `{"username":"alice","verificationCode":"WRONG","newPassword":"new-password-789"}`
+	body := `{"resetToken":"INVALID_TOKEN","newPassword":"new-password-789"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -402,9 +409,9 @@ func TestAuthHandler_ResetPassword_InvalidVerificationCode_Returns401(t *testing
 func TestAuthHandler_ResetPassword_EmptyFields_Returns400(t *testing.T) {
 	router := newAuthRouter(t, &fakeUserClient{})
 	for _, body := range []string{
-		`{"username":"","verificationCode":"1","newPassword":"x"}`,
-		`{"username":"u","verificationCode":"","newPassword":"x"}`,
-		`{"username":"u","verificationCode":"1","newPassword":""}`,
+		`{"resetToken":"","newPassword":"new-password-789"}`,
+		`{"resetToken":"some-token","newPassword":""}`,
+		`{"resetToken":"some-token","newPassword":"123"}`,
 	} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")

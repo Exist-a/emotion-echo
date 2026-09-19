@@ -94,6 +94,8 @@ func New(svcCtx *svc.ServiceContext, port int) *Server {
 				// 即"契约说匿名、实现要求带身份"，密保校验在 gRPC 路径上实际不可用。
 				emotionuser.UserService_VerifySecurityAnswer_FullMethodName,
 				emotionuser.UserService_VerifySecurityAnswerByUsername_FullMethodName,
+				// E2E-07：获取密保问题（找回密码流程，调用者未登录）
+				emotionuser.UserService_GetSecurityQuestionsByUsername_FullMethodName,
 			),
 			grpcinterceptor.NewServerTracingInterceptor(grpcinterceptor.NewGo2SkyTracer(tracer)),
 			grpcinterceptor.ServerLoggingInterceptor(),

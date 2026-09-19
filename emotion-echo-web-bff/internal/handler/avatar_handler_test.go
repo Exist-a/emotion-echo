@@ -75,6 +75,11 @@ func (f *fakeAvatarUserClient) VerifySecurityAnswerByUsername(ctx context.Contex
 	return nil
 }
 
+// E2E-07: fake GetSecurityQuestionsByUsername
+func (f *fakeAvatarUserClient) GetSecurityQuestionsByUsername(ctx context.Context, username string) ([]downstream.SecurityQuestionInfo, error) {
+	return nil, nil
+}
+
 // fakeStorage 模拟 StorageClient
 type fakeStorage struct {
 	putURL string
