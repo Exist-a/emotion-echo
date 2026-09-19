@@ -210,7 +210,7 @@ const handleSecuritySubmit = async (data: { questions: string[]; answers: string
   try {
     const securityQuestions = data.questions.map((q, i) => ({
       question: q,
-      answer: data.answers[i],
+      answer: data.answers[i] ?? '',
     }))
     const result = await userStore.register({
       username: registerInfo.username.trim(),
