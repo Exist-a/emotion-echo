@@ -30,6 +30,10 @@ export const API_ROUTES = {
   authVerificationCode: { method: 'POST', path: '/auth/verification-code' } as ApiRoute,
   // PR-4 落地：authResetPassword + BFF auth_handler case "reset-password" + user-svc /users/reset-password
   authResetPassword: { method: 'POST', path: '/auth/reset-password' } as ApiRoute,
+  // E2E-07：获取密保问题（找回密码流程）
+  authSecurityQuestions: { method: 'POST', path: '/auth/security-questions' } as ApiRoute,
+  // E2E-07：验证密保答案（找回密码流程）
+  authVerifySecurityAnswer: { method: 'POST', path: '/auth/verify-security-answer' } as ApiRoute,
 
   // ============ User (BFF: user_handler.go + PR-4 avatar) ============
   // Stage 71 PR-C8: userUpdateProfile 改为 PATCH /users/me 与 BFF user_handler.go:63 对齐。

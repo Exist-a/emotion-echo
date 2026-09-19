@@ -63,6 +63,22 @@ type SecurityQuestion struct {
 	Answer   string `json:"answer"`
 }
 
+// SecurityQuestionInfo 返回给前端的密保问题信息（不含答案）
+type SecurityQuestionInfo struct {
+	QuestionOrder int16  `json:"questionOrder"`
+	Question      string `json:"question"`
+}
+
+// GetSecurityQuestionsReq GET /api/v1/users/security-questions
+type GetSecurityQuestionsReq struct {
+	Username string `form:"username"`
+}
+
+// GetSecurityQuestionsResp 获取密保问题响应
+type GetSecurityQuestionsResp struct {
+	Questions []SecurityQuestionInfo `json:"questions"`
+}
+
 // RegisterReq POST /api/v1/users/register
 //
 // Stage 33 PR-19a：user-svc 注册。username 唯一；password 明文入库前

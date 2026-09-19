@@ -57,6 +57,12 @@ type SecurityQuestion struct {
 	Answer   string `json:"answer"`
 }
 
+// SecurityQuestionInfo 返回给前端的密保问题信息（不含答案）
+type SecurityQuestionInfo struct {
+	QuestionOrder int16  `json:"questionOrder"`
+	Question      string `json:"question"`
+}
+
 // UserClient BFF → user-svc HTTP 客户端
 type UserClient interface {
 	// ResetPassword 重置密码（forget-pwd 流程；Sprint 1 PR-4c-3）
@@ -81,6 +87,8 @@ type UserClient interface {
 	VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error
 	// R-01 #1: 按用户名验证密保答案（不需要先获取 userID）
 	VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error
+	// E2E-07: 按用户名获取密保问题列表（不含答案）
+	GetSecurityQuestionsByUsername(ctx context.Context, username string) ([]SecurityQuestionInfo, error)
 }
 
 // UserClientOptions 构造选项
@@ -250,6 +258,29 @@ func (c *userHTTPClient) VerifySecurityAnswerByUsername(ctx context.Context, use
 		return readError(resp)
 	}
 	return nil
+}
+
+// E2E-07: GetSecurityQuestionsByUsername 按用户名获取密保问题列表
+func (c *userHTTPClient) GetSecurityQuestionsByUsername(ctx context.Context, username string) ([]SecurityQuestionInfo, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/users/security-questions?username="+username, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("downstream: get security questions: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readError(resp)
+	}
+	var result struct {
+		Questions []SecurityQuestionInfo `json:"questions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("downstream: decode security questions: %w", err)
+	}
+	return result.Questions, nil
 }
 
 // Sprint 1 PR-4c-3: ResetPassword HTTP 实现

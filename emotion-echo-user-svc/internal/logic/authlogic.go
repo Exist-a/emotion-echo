@@ -12,6 +12,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"emotion-echo-user-svc/internal/model"
 	"emotion-echo-user-svc/internal/repository"
@@ -127,10 +128,12 @@ func (l *AuthLogic) Register(req *types.RegisterReq) (*types.RegisterResp, error
 	}
 
 	// D-05: 密保问题可选——若提供则保存
+	// E2E-07: 答案归一化（trim + 忽略大小写）后再 hash
 	if len(req.SecurityQuestions) > 0 {
 		answers := make([]*model.SecurityAnswer, len(req.SecurityQuestions))
 		for i, sq := range req.SecurityQuestions {
-			answerHash, err := password.Hash(sq.Answer)
+			normalized := strings.ToLower(strings.TrimSpace(sq.Answer))
+			answerHash, err := password.Hash(normalized)
 			if err != nil {
 				return nil, err
 			}
@@ -174,9 +177,11 @@ func (l *AuthLogic) VerifySecurityAnswer(userID int64, questionOrder int, answer
 	if len(answers) == 0 {
 		return repository.ErrNotFound
 	}
+	// E2E-07: 答案归一化——trim + 忽略大小写（决策 A）
+	normalized := strings.ToLower(strings.TrimSpace(answer))
 	for _, a := range answers {
 		if int(a.QuestionOrder) == questionOrder {
-			if !password.Verify(answer, a.AnswerHash) {
+			if !password.Verify(normalized, a.AnswerHash) {
 				return ErrSecurityAnswerMismatch
 			}
 			return nil
@@ -208,6 +213,35 @@ func (l *AuthLogic) VerifySecurityAnswerByUsername(username string, questionOrde
 		return repository.ErrNotFound
 	}
 	return l.VerifySecurityAnswer(user.ID, questionOrder, answer)
+}
+
+// E2E-07: GetSecurityQuestionsByUsername 按用户名获取密保问题列表（不含答案）
+//
+// 防枚举：用户不存在时返回空列表（而非 error），与 VerifySecurityAnswer 策略一致。
+func (l *AuthLogic) GetSecurityQuestionsByUsername(username string) ([]types.SecurityQuestionInfo, error) {
+	if username == "" {
+		return nil, ErrValidation
+	}
+	user, err := l.svcCtx.UserRepo.GetByUsername(l.ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		// 防枚举：用户不存在返回空列表
+		return []types.SecurityQuestionInfo{}, nil
+	}
+	answers, err := l.svcCtx.SecurityAnswerRepo.GetByUserID(l.ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	questions := make([]types.SecurityQuestionInfo, 0, len(answers))
+	for _, a := range answers {
+		questions = append(questions, types.SecurityQuestionInfo{
+			QuestionOrder: a.QuestionOrder,
+			Question:      a.Question,
+		})
+	}
+	return questions, nil
 }
 
 // toUserInfo model.User → types.UserInfo（不暴露 PasswordHash）

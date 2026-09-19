@@ -871,6 +871,149 @@ func (x *VerifySecurityAnswerByUsernameResponse) GetSuccess() bool {
 	return false
 }
 
+// SecurityQuestionInfo 返回给前端的密保问题信息（不含答案）
+type SecurityQuestionInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	QuestionOrder int32                  `protobuf:"varint,1,opt,name=question_order,json=questionOrder,proto3" json:"question_order,omitempty"`
+	Question      string                 `protobuf:"bytes,2,opt,name=question,proto3" json:"question,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecurityQuestionInfo) Reset() {
+	*x = SecurityQuestionInfo{}
+	mi := &file_user_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecurityQuestionInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecurityQuestionInfo) ProtoMessage() {}
+
+func (x *SecurityQuestionInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecurityQuestionInfo.ProtoReflect.Descriptor instead.
+func (*SecurityQuestionInfo) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *SecurityQuestionInfo) GetQuestionOrder() int32 {
+	if x != nil {
+		return x.QuestionOrder
+	}
+	return 0
+}
+
+func (x *SecurityQuestionInfo) GetQuestion() string {
+	if x != nil {
+		return x.Question
+	}
+	return ""
+}
+
+// GetSecurityQuestionsByUsernameRequest 获取密保问题请求
+type GetSecurityQuestionsByUsernameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSecurityQuestionsByUsernameRequest) Reset() {
+	*x = GetSecurityQuestionsByUsernameRequest{}
+	mi := &file_user_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSecurityQuestionsByUsernameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSecurityQuestionsByUsernameRequest) ProtoMessage() {}
+
+func (x *GetSecurityQuestionsByUsernameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSecurityQuestionsByUsernameRequest.ProtoReflect.Descriptor instead.
+func (*GetSecurityQuestionsByUsernameRequest) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetSecurityQuestionsByUsernameRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+// GetSecurityQuestionsByUsernameResponse 获取密保问题响应
+type GetSecurityQuestionsByUsernameResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Questions     []*SecurityQuestionInfo `protobuf:"bytes,1,rep,name=questions,proto3" json:"questions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSecurityQuestionsByUsernameResponse) Reset() {
+	*x = GetSecurityQuestionsByUsernameResponse{}
+	mi := &file_user_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSecurityQuestionsByUsernameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSecurityQuestionsByUsernameResponse) ProtoMessage() {}
+
+func (x *GetSecurityQuestionsByUsernameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSecurityQuestionsByUsernameResponse.ProtoReflect.Descriptor instead.
+func (*GetSecurityQuestionsByUsernameResponse) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetSecurityQuestionsByUsernameResponse) GetQuestions() []*SecurityQuestionInfo {
+	if x != nil {
+		return x.Questions
+	}
+	return nil
+}
+
 // UserInfo 用户信息视图
 //
 // 字段命名遵循 emotion_query.proto 已确立的 snake_case
@@ -889,7 +1032,7 @@ type UserInfo struct {
 
 func (x *UserInfo) Reset() {
 	*x = UserInfo{}
-	mi := &file_user_proto_msgTypes[16]
+	mi := &file_user_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -901,7 +1044,7 @@ func (x *UserInfo) String() string {
 func (*UserInfo) ProtoMessage() {}
 
 func (x *UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_user_proto_msgTypes[16]
+	mi := &file_user_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -914,7 +1057,7 @@ func (x *UserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
 func (*UserInfo) Descriptor() ([]byte, []int) {
-	return file_user_proto_rawDescGZIP(), []int{16}
+	return file_user_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *UserInfo) GetId() int64 {
@@ -1021,7 +1164,14 @@ const file_user_proto_rawDesc = "" +
 	"\x0equestion_order\x18\x02 \x01(\x05R\rquestionOrder\x12\x16\n" +
 	"\x06answer\x18\x03 \x01(\tR\x06answer\"B\n" +
 	"&VerifySecurityAnswerByUsernameResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xd3\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"Y\n" +
+	"\x14SecurityQuestionInfo\x12%\n" +
+	"\x0equestion_order\x18\x01 \x01(\x05R\rquestionOrder\x12\x1a\n" +
+	"\bquestion\x18\x02 \x01(\tR\bquestion\"C\n" +
+	"%GetSecurityQuestionsByUsernameRequest\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\"m\n" +
+	"&GetSecurityQuestionsByUsernameResponse\x12C\n" +
+	"\tquestions\x18\x01 \x03(\v2%.emotion_user.v1.SecurityQuestionInfoR\tquestions\"\xd3\x01\n" +
 	"\bUserInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
@@ -1032,7 +1182,7 @@ const file_user_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\x03R\tupdatedAtJ\x04\b\x06\x10\aJ\x04\b\a\x10\b2\xbf\x06\n" +
+	"updated_at\x18\t \x01(\x03R\tupdatedAtJ\x04\b\x06\x10\aJ\x04\b\a\x10\b2\xd3\a\n" +
 	"\vUserService\x12A\n" +
 	"\x05GetMe\x12\x1d.emotion_user.v1.GetMeRequest\x1a\x19.emotion_user.v1.UserInfo\x12Q\n" +
 	"\rUpdateProfile\x12%.emotion_user.v1.UpdateProfileRequest\x1a\x19.emotion_user.v1.UserInfo\x12M\n" +
@@ -1042,7 +1192,8 @@ const file_user_proto_rawDesc = "" +
 	"\rResetPassword\x12%.emotion_user.v1.ResetPasswordRequest\x1a&.emotion_user.v1.ResetPasswordResponse\x12I\n" +
 	"\x06Logout\x12\x1e.emotion_user.v1.LogoutRequest\x1a\x1f.emotion_user.v1.LogoutResponse\x12s\n" +
 	"\x14VerifySecurityAnswer\x12,.emotion_user.v1.VerifySecurityAnswerRequest\x1a-.emotion_user.v1.VerifySecurityAnswerResponse\x12\x91\x01\n" +
-	"\x1eVerifySecurityAnswerByUsername\x126.emotion_user.v1.VerifySecurityAnswerByUsernameRequest\x1a7.emotion_user.v1.VerifySecurityAnswerByUsernameResponseB0Z.github.com/emotion-echo/shared/pkg/emotionuserb\x06proto3"
+	"\x1eVerifySecurityAnswerByUsername\x126.emotion_user.v1.VerifySecurityAnswerByUsernameRequest\x1a7.emotion_user.v1.VerifySecurityAnswerByUsernameResponse\x12\x91\x01\n" +
+	"\x1eGetSecurityQuestionsByUsername\x126.emotion_user.v1.GetSecurityQuestionsByUsernameRequest\x1a7.emotion_user.v1.GetSecurityQuestionsByUsernameResponseB0Z.github.com/emotion-echo/shared/pkg/emotionuserb\x06proto3"
 
 var (
 	file_user_proto_rawDescOnce sync.Once
@@ -1056,7 +1207,7 @@ func file_user_proto_rawDescGZIP() []byte {
 	return file_user_proto_rawDescData
 }
 
-var file_user_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_user_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_user_proto_goTypes = []any{
 	(*GetMeRequest)(nil),                           // 0: emotion_user.v1.GetMeRequest
 	(*UpdateProfileRequest)(nil),                   // 1: emotion_user.v1.UpdateProfileRequest
@@ -1074,36 +1225,42 @@ var file_user_proto_goTypes = []any{
 	(*VerifySecurityAnswerResponse)(nil),           // 13: emotion_user.v1.VerifySecurityAnswerResponse
 	(*VerifySecurityAnswerByUsernameRequest)(nil),  // 14: emotion_user.v1.VerifySecurityAnswerByUsernameRequest
 	(*VerifySecurityAnswerByUsernameResponse)(nil), // 15: emotion_user.v1.VerifySecurityAnswerByUsernameResponse
-	(*UserInfo)(nil),                               // 16: emotion_user.v1.UserInfo
+	(*SecurityQuestionInfo)(nil),                   // 16: emotion_user.v1.SecurityQuestionInfo
+	(*GetSecurityQuestionsByUsernameRequest)(nil),  // 17: emotion_user.v1.GetSecurityQuestionsByUsernameRequest
+	(*GetSecurityQuestionsByUsernameResponse)(nil), // 18: emotion_user.v1.GetSecurityQuestionsByUsernameResponse
+	(*UserInfo)(nil),                               // 19: emotion_user.v1.UserInfo
 }
 var file_user_proto_depIdxs = []int32{
-	16, // 0: emotion_user.v1.LoginResponse.user:type_name -> emotion_user.v1.UserInfo
+	19, // 0: emotion_user.v1.LoginResponse.user:type_name -> emotion_user.v1.UserInfo
 	5,  // 1: emotion_user.v1.RegisterRequest.security_questions:type_name -> emotion_user.v1.SecurityQuestion
-	16, // 2: emotion_user.v1.RegisterResponse.user:type_name -> emotion_user.v1.UserInfo
-	16, // 3: emotion_user.v1.ResetPasswordResponse.user:type_name -> emotion_user.v1.UserInfo
-	0,  // 4: emotion_user.v1.UserService.GetMe:input_type -> emotion_user.v1.GetMeRequest
-	1,  // 5: emotion_user.v1.UserService.UpdateProfile:input_type -> emotion_user.v1.UpdateProfileRequest
-	2,  // 6: emotion_user.v1.UserService.GetUserById:input_type -> emotion_user.v1.GetUserByIdRequest
-	3,  // 7: emotion_user.v1.UserService.Login:input_type -> emotion_user.v1.LoginRequest
-	6,  // 8: emotion_user.v1.UserService.Register:input_type -> emotion_user.v1.RegisterRequest
-	8,  // 9: emotion_user.v1.UserService.ResetPassword:input_type -> emotion_user.v1.ResetPasswordRequest
-	10, // 10: emotion_user.v1.UserService.Logout:input_type -> emotion_user.v1.LogoutRequest
-	12, // 11: emotion_user.v1.UserService.VerifySecurityAnswer:input_type -> emotion_user.v1.VerifySecurityAnswerRequest
-	14, // 12: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:input_type -> emotion_user.v1.VerifySecurityAnswerByUsernameRequest
-	16, // 13: emotion_user.v1.UserService.GetMe:output_type -> emotion_user.v1.UserInfo
-	16, // 14: emotion_user.v1.UserService.UpdateProfile:output_type -> emotion_user.v1.UserInfo
-	16, // 15: emotion_user.v1.UserService.GetUserById:output_type -> emotion_user.v1.UserInfo
-	4,  // 16: emotion_user.v1.UserService.Login:output_type -> emotion_user.v1.LoginResponse
-	7,  // 17: emotion_user.v1.UserService.Register:output_type -> emotion_user.v1.RegisterResponse
-	9,  // 18: emotion_user.v1.UserService.ResetPassword:output_type -> emotion_user.v1.ResetPasswordResponse
-	11, // 19: emotion_user.v1.UserService.Logout:output_type -> emotion_user.v1.LogoutResponse
-	13, // 20: emotion_user.v1.UserService.VerifySecurityAnswer:output_type -> emotion_user.v1.VerifySecurityAnswerResponse
-	15, // 21: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:output_type -> emotion_user.v1.VerifySecurityAnswerByUsernameResponse
-	13, // [13:22] is the sub-list for method output_type
-	4,  // [4:13] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	19, // 2: emotion_user.v1.RegisterResponse.user:type_name -> emotion_user.v1.UserInfo
+	19, // 3: emotion_user.v1.ResetPasswordResponse.user:type_name -> emotion_user.v1.UserInfo
+	16, // 4: emotion_user.v1.GetSecurityQuestionsByUsernameResponse.questions:type_name -> emotion_user.v1.SecurityQuestionInfo
+	0,  // 5: emotion_user.v1.UserService.GetMe:input_type -> emotion_user.v1.GetMeRequest
+	1,  // 6: emotion_user.v1.UserService.UpdateProfile:input_type -> emotion_user.v1.UpdateProfileRequest
+	2,  // 7: emotion_user.v1.UserService.GetUserById:input_type -> emotion_user.v1.GetUserByIdRequest
+	3,  // 8: emotion_user.v1.UserService.Login:input_type -> emotion_user.v1.LoginRequest
+	6,  // 9: emotion_user.v1.UserService.Register:input_type -> emotion_user.v1.RegisterRequest
+	8,  // 10: emotion_user.v1.UserService.ResetPassword:input_type -> emotion_user.v1.ResetPasswordRequest
+	10, // 11: emotion_user.v1.UserService.Logout:input_type -> emotion_user.v1.LogoutRequest
+	12, // 12: emotion_user.v1.UserService.VerifySecurityAnswer:input_type -> emotion_user.v1.VerifySecurityAnswerRequest
+	14, // 13: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:input_type -> emotion_user.v1.VerifySecurityAnswerByUsernameRequest
+	17, // 14: emotion_user.v1.UserService.GetSecurityQuestionsByUsername:input_type -> emotion_user.v1.GetSecurityQuestionsByUsernameRequest
+	19, // 15: emotion_user.v1.UserService.GetMe:output_type -> emotion_user.v1.UserInfo
+	19, // 16: emotion_user.v1.UserService.UpdateProfile:output_type -> emotion_user.v1.UserInfo
+	19, // 17: emotion_user.v1.UserService.GetUserById:output_type -> emotion_user.v1.UserInfo
+	4,  // 18: emotion_user.v1.UserService.Login:output_type -> emotion_user.v1.LoginResponse
+	7,  // 19: emotion_user.v1.UserService.Register:output_type -> emotion_user.v1.RegisterResponse
+	9,  // 20: emotion_user.v1.UserService.ResetPassword:output_type -> emotion_user.v1.ResetPasswordResponse
+	11, // 21: emotion_user.v1.UserService.Logout:output_type -> emotion_user.v1.LogoutResponse
+	13, // 22: emotion_user.v1.UserService.VerifySecurityAnswer:output_type -> emotion_user.v1.VerifySecurityAnswerResponse
+	15, // 23: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:output_type -> emotion_user.v1.VerifySecurityAnswerByUsernameResponse
+	18, // 24: emotion_user.v1.UserService.GetSecurityQuestionsByUsername:output_type -> emotion_user.v1.GetSecurityQuestionsByUsernameResponse
+	15, // [15:25] is the sub-list for method output_type
+	5,  // [5:15] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_user_proto_init() }
@@ -1119,7 +1276,7 @@ func file_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_proto_rawDesc), len(file_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

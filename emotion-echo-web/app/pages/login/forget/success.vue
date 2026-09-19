@@ -55,7 +55,8 @@ const gotoLogin = () => {
 .success-card :deep(.el-button) {
   width: min(260px, 100%);
   margin: 6px auto 0;
-  height: 42px;
-  border-radius: var(--ee-radius-md);
+  height: 44px;
+  border-radius: 10px;
+  font-weight: 600;
 }
 </style>

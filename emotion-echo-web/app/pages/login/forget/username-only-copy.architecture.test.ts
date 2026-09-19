@@ -36,6 +36,26 @@ describe('forget-pwd/verify username-only copy contract (Stage 112 round 3)', ()
 
   it('必须引用 username-only 校验逻辑（不再 import phoneOrEmailReg）', () => {
     expect(VERIFY_SRC).not.toContain('phoneOrEmailReg')
-    expect(VERIFY_SRC).toMatch(/pattern:\s*\/[^/]+\//)
+    // E2E-07: verify.vue 改为密保问题，不再需要 pattern 校验（答案只需非空）
+  })
+})
+
+// E2E-07: 密保问题文案断言
+describe('forget-pwd/verify security question copy contract (E2E-07)', () => {
+  it('页面必须包含"密保问题"相关文案', () => {
+    expect(VERIFY_SRC).toMatch(/密保/)
+  })
+
+  it('不得包含"验证码"字样（已改为密保问题）', () => {
+    expect(VERIFY_SRC).not.toMatch(/验证码/)
+    expect(VERIFY_SRC).not.toMatch(/verificationCode/)
+  })
+
+  it('必须引用 useForgetPwdState composable', () => {
+    expect(VERIFY_SRC).toMatch(/useForgetPwdState/)
+  })
+
+  it('必须调用 getSecurityQuestions 或 verifySecurityAnswer', () => {
+    expect(VERIFY_SRC).toMatch(/getSecurityQuestions|verifySecurityAnswer/)
   })
 })

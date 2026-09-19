@@ -156,6 +156,8 @@ func main() {
 		noAuth.POST("/reset-password", handler.ResetPasswordHandler(svcCtx))
 		// R-01 #1: 密保答案验证（供 BFF 找回密码流程）
 		noAuth.POST("/verify-security-answer", handler.VerifySecurityAnswerHandler(svcCtx))
+		// E2E-07: 获取密保问题（供 BFF 找回密码流程展示问题）
+		noAuth.GET("/security-questions", handler.GetSecurityQuestionsHandler(svcCtx))
 	}
 
 	r.Use(sharedmw.GinAuthMiddleware())

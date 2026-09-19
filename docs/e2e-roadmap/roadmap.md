@@ -29,15 +29,13 @@ type: e2e-stage-roadmap
 R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量脚本负向测试、R-03 #10 的覆盖率·集成测试·Playwright 进 CI 等大项。
 **代价**：审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这是**正确信号**（真实未还欠账），不是回归。
 
-**当前激活阶段：E2E-07 找回密码（可开工）** → 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
+**当前激活阶段：E2E-08 历史会话管理（可开工）** → 详档 [stages/e2e-08-conversation-management/plan.md](stages/e2e-08-conversation-management/plan.md)
 
 ## 下一阶段（已解阻塞）
 
-**E2E-07 找回密码**（status: ⏳ pending）→ 详档 [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md)
+**E2E-08 历史会话管理**（status: ⏳ pending）→ 详档 [stages/e2e-08-conversation-management/plan.md](stages/e2e-08-conversation-management/plan.md)
 
-> 开工前置已就绪：密保校验链路（网关路由 / gRPC 两端 / 拦截器匿名清单）三层已修并端到端验证；
-> 详档已按 D-01=C（密保问题）写好。**唯一需要现场准备的**：一个"已设密保"的账号
-> —— 注册页尚未收集密保（属 E2E-09），故须用 API 造夹具用户，见 [README.md](README.md) 交接说明。
+> E2E-07 已完成（2026-09-19）：密保问题流程全链路实现 + 浏览器 E2E 实测 + 数据库落库验证。
 
 ## 排期总表（30 阶段）
 
@@ -56,7 +54,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
 | E2E-06 🔧 | 数据库改造 | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加 schema_migrations 版本表 + 统一软删除 + 修 db README | 连接池调优 | ⚠️ **partial**：R-01 修复了安全漏洞/注册断裂/测试编译；剩余：integration test 未补、演示账号解耦（R-02 #9~10） |
-| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ⏳ pending（R-01 已解除阻塞） |
+| E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ✅ **done**（2026-09-19：全链路实现 + 浏览器 E2E 实测 + 数据库落库验证） |
 | E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ⏳ pending |
 | E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | ⏳ pending（密保录入 UI 待实现） |
 

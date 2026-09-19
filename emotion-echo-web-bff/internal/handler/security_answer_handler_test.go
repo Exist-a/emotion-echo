@@ -103,3 +103,59 @@ func TestAuthHandler_VerifySecurityAnswer_QuestionOrderOutOfRange_Returns400(t *
 		assert.Equal(t, http.StatusBadRequest, w.Code, "questionOrder=%d 应 400", order)
 	}
 }
+
+// =============================================================================
+// E2E-07 TDD: GetSecurityQuestions BFF handler 测试
+// =============================================================================
+
+// securityQuestionsUserClient 专用 fake：返回预设的密保问题列表
+type securityQuestionsUserClient struct {
+	fakeUserClient
+	questions []downstream.SecurityQuestionInfo
+}
+
+func (f *securityQuestionsUserClient) GetSecurityQuestionsByUsername(_ context.Context, username string) ([]downstream.SecurityQuestionInfo, error) {
+	if username == "" {
+		return nil, &downstream.APIError{StatusCode: http.StatusBadRequest, Msg: "username is required"}
+	}
+	if len(f.questions) == 0 {
+		// 防枚举：用户不存在返回空列表
+		return []downstream.SecurityQuestionInfo{}, nil
+	}
+	return f.questions, nil
+}
+
+func TestAuthHandler_GetSecurityQuestions_HasQuestions_Returns200(t *testing.T) {
+	questions := []downstream.SecurityQuestionInfo{
+		{QuestionOrder: 1, Question: "你的第一只宠物叫什么？"},
+		{QuestionOrder: 2, Question: "你的出生城市是哪里？"},
+	}
+	router := newAuthRouter(t, &securityQuestionsUserClient{questions: questions})
+
+	w := postJSON(router, "/api/v1/auth/security-questions", `{"username":"alice"}`)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "你的第一只宠物叫什么？")
+	assert.Contains(t, w.Body.String(), "你的出生城市是哪里？")
+	// 不得泄露 answer_hash
+	assert.NotContains(t, w.Body.String(), "answer_hash")
+	assert.NotContains(t, w.Body.String(), "$2a$")
+}
+
+func TestAuthHandler_GetSecurityQuestions_UserNotFound_Returns200_EmptyList(t *testing.T) {
+	router := newAuthRouter(t, &securityQuestionsUserClient{questions: nil})
+
+	w := postJSON(router, "/api/v1/auth/security-questions", `{"username":"nonexistent"}`)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"questions":[]`)
+}
+
+func TestAuthHandler_GetSecurityQuestions_MissingUsername_Returns400(t *testing.T) {
+	router := newAuthRouter(t, &securityQuestionsUserClient{questions: nil})
+
+	w := postJSON(router, "/api/v1/auth/security-questions", `{}`)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "username is required")
+}

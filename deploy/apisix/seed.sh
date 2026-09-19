@@ -556,6 +556,10 @@ put_auth_route 115 "/api/v1/auth/reset-password"
 # 契约守护：scripts/check_routes_alignment.sh 契约 3 会断言此处覆盖 BFF 全部 auth action。
 put_auth_route 117 "/api/v1/auth/verify-security-answer"
 
+# E2E-07：找回密码「获取密保问题」在未登录态调用（POST，与 auth/:action 路由一致）。
+# 前端输入用户名后需获取该用户的密保问题展示，必须在 APISIX 白名单中。
+put_auth_route 118 "/api/v1/auth/security-questions"
+
 # 健康探针（直接打到下游 svc，绕开 BFF 聚合）
 put_route_health 200 "/user-health"          1
 put_route_health 201 "/chat-health"          2

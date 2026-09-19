@@ -179,6 +179,40 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
+   * E2E-07: 获取密保问题（找回密码流程）
+   */
+  const getSecurityQuestions = async (
+    username: string,
+  ): Promise<{ isOk: boolean; questions?: Array<{ questionOrder: number; question: string }>; msg?: string }> => {
+    try {
+      const data = await post<{ questions: Array<{ questionOrder: number; question: string }> }>(
+        API_ROUTES.authSecurityQuestions.path,
+        { username },
+      )
+      return { isOk: true, questions: data.questions }
+    } catch (error: any) {
+      return { isOk: false, msg: error.message || '获取密保问题失败' }
+    }
+  }
+
+  /**
+   * E2E-07: 验证密保答案（找回密码流程）
+   */
+  const verifySecurityAnswer = async (
+    params: { username: string; questionOrder: number; answer: string },
+  ): Promise<returnMsgType & { resetToken?: string }> => {
+    try {
+      const data = await post<{ success: boolean; resetToken?: string }>(
+        API_ROUTES.authVerifySecurityAnswer.path,
+        params,
+      )
+      return { isOk: true, msg: '验证成功', resetToken: data.resetToken }
+    } catch (error: any) {
+      return { isOk: false, msg: error.message || '验证失败' }
+    }
+  }
+
+  /**
    * 用户注册
    */
   const register = async (params: RegisterParams): Promise<returnMsgType> => {
@@ -382,6 +416,8 @@ export const useUserStore = defineStore('user', () => {
     clearToken,
     isTokenExpired,
     sendVerificationCode,
+    getSecurityQuestions,
+    verifySecurityAnswer,
     register,
     login,
     fetchUserInfo,

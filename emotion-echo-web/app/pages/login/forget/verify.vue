@@ -3,7 +3,7 @@
     <header>
       <span class="eyebrow">STEP 1</span>
       <h2>先确认一下这是你的账户</h2>
-      <p>输入你注册时使用的用户名，我们会发一封验证码到这里。</p>
+      <p>回答你注册时设置的密保问题。</p>
     </header>
     <form class="form">
       <label class="ee-field" data-label="用户名">
@@ -15,82 +15,99 @@
           autocomplete="username"
         />
       </label>
-      <label class="ee-field" data-label="验证码">
-        <div class="code-row">
+      <div v-if="questions.length > 0" class="security-questions">
+        <label
+          v-for="(q, index) in questions"
+          :key="q.questionOrder"
+          class="ee-field"
+          :data-label="`密保问题 ${index + 1}`"
+        >
+          <span class="question-text">{{ q.question }}</span>
           <input
-            v-model="formInfo.verificationCode"
+            v-model="formInfo.answers[q.questionOrder]"
             type="text"
             class="ee-input input"
-            placeholder="6 位数字验证码"
-            maxlength="6"
+            placeholder="请输入答案"
           />
-          <button type="button" class="ee-btn code-btn ee-btn-primary" @click="getVerificationCode">
-            {{ isGetVerificationCode ? `${lastSeconds}s` : '获取验证码' }}
-          </button>
-        </div>
-      </label>
+        </label>
+      </div>
     </form>
-    <button type="button" class="ee-btn primary-btn ee-btn-primary" @click="gotoModify">
-      继续
+    <button
+      v-if="questions.length === 0"
+      type="button"
+      class="ee-btn primary-btn ee-btn-primary"
+      @click="fetchQuestions"
+    >
+      获取密保问题
+    </button>
+    <button
+      v-else
+      type="button"
+      class="ee-btn primary-btn ee-btn-primary"
+      @click="verifyAnswers"
+    >
+      验证
     </button>
   </article>
 </template>
 
 <script setup lang="ts">
 import { useForgetPwdState } from '~/composables/forgetPwdState'
-import { verificationCodeCountDown } from '~/composables/verificationCodeCountDown'
 
-// Sprint 112：项目登录、注册、重置全用 username；UI 文案与现状对齐，不再误称"手机号或邮箱"。
 const emits = defineEmits(['changeActive'])
-const formRef = ref()
-const formInfo = ref({ username: '', verificationCode: '' })
-const rules = ref({
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    // 用户名规则：字母/数字/下划线/点/中划线，2-32 字符（与 user-svc 入库 schema 对齐）
-    {
-      pattern: /^[\w.-]{2,32}$/,
-      message: '请输入 2-32 位的字母、数字、点、下划线或中划线',
-      trigger: 'blur',
-    },
-  ],
-  verificationCode: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
-    { pattern: /^\d{6}$/, message: '验证码为 6 位数字', trigger: 'blur' },
-  ],
+const formInfo = ref({
+  username: '',
+  answers: {} as Record<number, string>,
 })
+const questions = ref<Array<{ questionOrder: number; question: string }>>([])
 
-const { startCountdown, isGetVerificationCode, lastSeconds } = verificationCodeCountDown()
 const userStore = useUserStore()
-const { updateStep, userAccount, verificationCode } = useForgetPwdState()
+const { updateStep, userAccount, markSecurityVerified } = useForgetPwdState()
 
-const getVerificationCode = () => {
-  formRef.value?.validateField('username', async (isValid: boolean) => {
-    if (!isValid) {
-      notify('无法获取验证码', '请填写正确的用户名', 'error', 3000)
-      return
-    }
-    const res = await userStore.sendVerificationCode({
-      username: formInfo.value.username,
-      type: 'reset',
-    })
-    if (!res.isOk) {
-      notify('验证码发送失败', '', 'error', 3000)
-      return
-    }
-    notify('验证码已发送', '请注意查收', 'success', 3000)
-    startCountdown()
-  })
+const fetchQuestions = async () => {
+  if (!formInfo.value.username) {
+    notify('请输入用户名', '', 'error', 3000)
+    return
+  }
+  const res = await userStore.getSecurityQuestions(formInfo.value.username)
+  if (!res.isOk || !res.questions) {
+    notify('获取密保问题失败', res.msg || '', 'error', 3000)
+    return
+  }
+  if (res.questions.length === 0) {
+    notify('该用户未设置密保问题', '无法找回密码', 'error', 3000)
+    return
+  }
+  questions.value = res.questions
 }
 
-const gotoModify = () => {
-  formRef.value.validate((valid: boolean) => {
-    if (!valid) return
-    userAccount.value = formInfo.value.username
-    verificationCode.value = formInfo.value.verificationCode
-    updateStep(1)
-    emits('changeActive')
-  })
+const verifyAnswers = async () => {
+  for (const q of questions.value) {
+    const answer = formInfo.value.answers[q.questionOrder]
+    if (!answer || answer.trim() === '') {
+      notify('请填写所有密保答案', '', 'error', 3000)
+      return
+    }
+  }
+  let resetToken = ''
+  for (const q of questions.value) {
+    const res = await userStore.verifySecurityAnswer({
+      username: formInfo.value.username,
+      questionOrder: q.questionOrder,
+      answer: formInfo.value.answers[q.questionOrder].trim(),
+    })
+    if (!res.isOk) {
+      notify('密保答案错误', '请重新确认', 'error', 3000)
+      return
+    }
+    if (res.resetToken) {
+      resetToken = res.resetToken
+    }
+  }
+  userAccount.value = formInfo.value.username
+  markSecurityVerified(formInfo.value.username, resetToken)
+  updateStep(1)
+  emits('changeActive')
 }
 </script>
 
@@ -121,27 +138,39 @@ const gotoModify = () => {
   color: var(--ee-text-muted);
   font-size: 13px;
 }
-.code-row {
-  display: flex;
-  gap: 8px;
+.security-questions {
+  display: grid;
+  gap: 12px;
 }
-.code-row .input {
-  flex: 1;
+.question-text {
+  font-size: 14px;
+  color: var(--ee-text);
+  margin-bottom: 4px;
 }
-.code-btn {
-  white-space: nowrap;
+.input {
+  height: 44px;
+  padding: 0 14px;
+  border: 2px solid var(--ee-border);
+  border-radius: 10px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: var(--ee-surface);
+
+  &:focus {
+    outline: none;
+    border-color: var(--ee-primary);
+    box-shadow: 0 0 0 3px rgba(var(--ee-primary-rgb, 99, 102, 241), 0.15);
+  }
+
+  &::placeholder {
+    color: var(--ee-text-muted);
+    opacity: 0.7;
+  }
 }
 .primary-btn {
   width: 100%;
-  height: 42px;
-  border-radius: var(--ee-radius-md);
-}
-@media (max-width: 480px) {
-  .code-row {
-    flex-direction: column;
-  }
-  .code-btn {
-    width: 100%;
-  }
+  height: 44px;
+  border-radius: 10px;
+  font-weight: 600;
 }
 </style>

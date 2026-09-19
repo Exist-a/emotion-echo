@@ -184,6 +184,25 @@ func (c *userGRPCClient) VerifySecurityAnswerByUsername(ctx context.Context, use
 	return nil
 }
 
+// GetSecurityQuestionsByUsername 按用户名获取密保问题列表（E2E-07）
+func (c *userGRPCClient) GetSecurityQuestionsByUsername(ctx context.Context, username string) ([]SecurityQuestionInfo, error) {
+	cli := emotionuser.NewUserServiceClient(c.conn)
+	resp, err := cli.GetSecurityQuestionsByUsername(ctx, &emotionuser.GetSecurityQuestionsByUsernameRequest{
+		Username: username,
+	})
+	if err != nil {
+		return nil, wrapGRPCError(err, "user getSecurityQuestionsByUsername")
+	}
+	questions := make([]SecurityQuestionInfo, len(resp.GetQuestions()))
+	for i, q := range resp.GetQuestions() {
+		questions[i] = SecurityQuestionInfo{
+			QuestionOrder: int16(q.GetQuestionOrder()),
+			Question:      q.GetQuestion(),
+		}
+	}
+	return questions, nil
+}
+
 // ============ proto → types 转换 ============
 
 func fromProtoUserInfo(u *emotionuser.UserInfo) *UserInfo {

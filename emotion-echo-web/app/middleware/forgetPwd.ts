@@ -22,11 +22,11 @@ export default defineNuxtRouteMiddleware(
 
     const requiredStep = stepRouteMap[currentPath as keyof typeof stepRouteMap]
 
-    const { currentStep } = useForgetPwdState()
+    const { currentStep, securityVerified } = useForgetPwdState()
 
-    // 3. 核心校验：步骤不足则跳回确认账号页（或你指定的初始页）
-    if (currentStep.value < requiredStep) {
-      return navigateTo('/login/forget/verify') // 跳回流程初始页
+    // 3. 核心校验：步骤不足或密保未验证则跳回确认账号页
+    if (currentStep.value < requiredStep || (requiredStep >= 1 && !securityVerified.value)) {
+      return navigateTo('/login/forget/verify')
     }
 
     // 4. 可选：from 辅助校验（按页面定制，仅日志提醒，不影响核心逻辑）
