@@ -66,4 +66,13 @@ describe('nav.vue height-chain contract (Stage 104)', () => {
     // flex 子级 (app-header/page-content) 需要 min-height:0 才能让 page-content 收缩/撑满
     expect(block).toMatch(/min-height\s*:\s*0/)
   })
+
+  // E2E-11：nav 布局必须挂载 NotifyHost，否则聊天区所有 notify() 都是静默的
+  //
+  // 浏览器实测（2026-09-19）：/chat/user 用 nav 布局，触发 notify()（表单校验失败、
+  // 保存成功、头像上传成功/失败、退出登录）后 DOM 里 `.notify-stack` / `.notify-card`
+  // 均为 0，页面无任何反馈。而 NotifyHost 此前只挂在 layouts/default.vue 上。
+  it('nav 布局必须渲染 NotifyHost（否则聊天区所有 toast 静默）', () => {
+    expect(NAV_SRC).toMatch(/<NotifyHost\s*\/>/)
+  })
 })

@@ -49,57 +49,82 @@
     </div>
   </section>
 
-  <el-dialog v-model="dialogFormVisible" title="修改资料" width="min(500px, calc(100vw - 32px))">
-    <form class="profile-form">
-      <label class="ee-field" data-label="头像">
-        <el-upload
-          class="avatar-uploader"
-          :show-file-list="false"
-          :http-request="handleAvatarUpload"
-          :before-upload="beforeAvatarUpload"
-        >
-          <img v-if="form.avatarPath" :src="form.avatarPath" class="avatar" alt="头像预览" />
-          <span class="ee-icon" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </span>
-        </el-upload>
-      </label>
-      <label class="ee-field" data-label="昵称"
-        ><input v-model="form.nickname" type="text" class="ee-input" autocomplete="off"
-      /></label>
-      <label class="ee-field" data-label="年龄"
-        ><input v-model="form.age" type="number" class="ee-input" autocomplete="off"
-      /></label>
-    </form>
-    <template #footer>
-      <button type="button" class="ee-btn" @click="dialogFormVisible = false">取消</button>
-      <button type="button" class="ee-btn ee-btn-primary" @click="saveInfo">保存资料</button>
-    </template>
-  </el-dialog>
+  <Teleport to="body">
+    <div v-if="dialogFormVisible" class="ms-overlay" @click.self="dialogFormVisible = false">
+      <div class="ms-dialog" role="dialog" aria-modal="true" aria-label="修改资料">
+        <header class="ms-header">
+          <h3>修改资料</h3>
+          <button type="button" class="ms-close" aria-label="关闭" @click="dialogFormVisible = false">
+            ✕
+          </button>
+        </header>
+        <form class="profile-form" @submit.prevent="saveInfo">
+          <label class="ee-field" data-label="头像">
+            <span class="avatar-uploader" @click="triggerAvatarPick">
+              <img v-if="form.avatarPath" :src="form.avatarPath" class="avatar" alt="头像预览" />
+              <span class="ee-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+              <input
+                ref="avatarInputRef"
+                class="avatar-input"
+                type="file"
+                accept="image/*"
+                @change="handleAvatarPick"
+              />
+            </span>
+          </label>
+          <label class="ee-field" data-label="昵称"
+            ><input v-model="form.nickname" type="text" class="ee-input" autocomplete="off"
+          /></label>
+          <label class="ee-field" data-label="年龄"
+            ><input v-model="form.age" type="number" class="ee-input" autocomplete="off"
+          /></label>
+          <div class="ms-actions">
+            <button type="button" class="ee-btn" @click="dialogFormVisible = false">取消</button>
+            <button type="submit" class="ee-btn ee-btn-primary">保存资料</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </Teleport>
 
-  <el-dialog
-    v-model="loginoutDialogVisible"
-    title="离开这里"
-    width="min(420px, calc(100vw - 32px))"
-  >
-    <p>确定要退出当前账号吗？</p>
-    <template #footer>
-      <button type="button" class="ee-btn" @click="loginoutDialogVisible = false">留下</button>
-      <button type="button" class="ee-btn ee-btn-primary" @click="handleLogout">确认退出</button>
-    </template>
-  </el-dialog>
+  <Teleport to="body">
+    <div v-if="loginoutDialogVisible" class="ms-overlay" @click.self="loginoutDialogVisible = false">
+      <div class="ms-dialog ms-dialog-sm" role="dialog" aria-modal="true" aria-label="离开这里">
+        <header class="ms-header">
+          <h3>离开这里</h3>
+          <button
+            type="button"
+            class="ms-close"
+            aria-label="关闭"
+            @click="loginoutDialogVisible = false"
+          >
+            ✕
+          </button>
+        </header>
+        <p class="ms-body">确定要退出当前账号吗？</p>
+        <div class="ms-actions">
+          <button type="button" class="ee-btn" @click="loginoutDialogVisible = false">留下</button>
+          <button type="button" class="ee-btn ee-btn-primary" @click="handleLogout">
+            确认退出
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -113,13 +138,18 @@ import { API_ROUTES } from '~/lib/apiRoutes'
 import { notify } from '~/composables/useNotify'
 
 const userStore = useUserStore()
-const nickname = userStore.getNickname // computed ref
-const avatarPath = userStore.getAvatarPath // computed ref
-const age = userStore.getAge // computed ref
-const id = userStore.getId // computed ref
+// E2E-11：必须包 computed —— Pinia 的 defineStore(setup) 返回值经 store 代理后
+// ref 会被解包，`const nickname = userStore.getNickname` 拿到的是**普通字符串快照**
+// （setup 时 userInfo 仍为 null ⇒ 冻结在兜底值 "用户"/18/空 ID，永不更新），
+// 且 `nickname.value` 为 undefined（导致编辑弹框回填为空）。
+const nickname = computed(() => userStore.getNickname)
+const avatarPath = computed(() => userStore.getAvatarPath)
+const age = computed(() => userStore.getAge)
+const id = computed(() => userStore.getId)
 const dialogFormVisible = ref(false)
 const chartItemHeight = ref(0)
 const loginoutDialogVisible = ref(false)
+const avatarInputRef = ref<HTMLInputElement | null>(null)
 
 const form = ref<{
   nickname: string
@@ -151,15 +181,24 @@ const validateInfo = () => {
 }
 
 /**
- * 上传头像到服务器
- *
- * el-upload 的 :http-request 回调签名：收到 { file, onSuccess, onError, ... }。
- * 自行发请求（BFF POST /api/v1/user/avatar → MinIO → user-svc 落库），
- * 不再依赖 el-upload 内置 XHR（原 action="" 会 POST 到当前页地址）。
+ * 触发原生文件选择（E2E-11：原 <el-upload> 未解析，改用原生 input[type=file]）
  */
-const handleAvatarUpload = async (options: any) => {
-  const file: File | undefined = options?.file ?? options
-  if (!(file instanceof File)) return
+const triggerAvatarPick = () => {
+  avatarInputRef.value?.click()
+}
+
+/**
+ * 处理选中的头像文件：先校验大小，再上传。
+ *
+ * 上传链路：BFF POST /api/v1/user/avatar → MinIO → user-svc 落库。
+ */
+const handleAvatarPick = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  // 允许重复选择同一文件（否则第二次不触发 change）
+  input.value = ''
+  if (!file) return
+  if (!beforeAvatarUpload(file)) return
 
   // 先本地预览，上传成功后替换为服务端返回的公开 URL
   form.value.avatarPath = URL.createObjectURL(file)
@@ -178,9 +217,9 @@ const handleAvatarUpload = async (options: any) => {
   }
 }
 
-const beforeAvatarUpload = (rawFile: any) => {
+const beforeAvatarUpload = (rawFile: File) => {
   if (rawFile.size / 1024 / 1024 > 2) {
-    notify('', 'Avatar picture size can not exceed 2MB!', 'error', 3000)
+    notify('', '头像不能超过 2MB', 'error', 3000)
     return false
   }
   return true
@@ -296,8 +335,11 @@ const handleLogout = async () => {
   }
   loginoutDialogVisible.value = false
 }
-onMounted(() => {
+onMounted(async () => {
   chartItemHeight.value = vhToPx(40)
+  // auth.global.ts 约定：userInfo 是页面元数据，由各页面 onMounted 自取。
+  // 不取会用 store 兜底值（"用户"/18 岁/空 ID），编辑弹框也会回填错误数据。
+  await userStore.fetchUserInfo().catch(() => {})
   fetchBehaviorData()
 })
 </script>
@@ -384,18 +426,130 @@ onMounted(() => {
   border: 1px solid var(--ee-border);
   border-radius: var(--ee-radius-md);
 }
+/* E2E-11：.ee-field / .ee-input 全仓无样式定义（global.scss 只定义 .ee-btn），
+   data-label 不会渲染成标签 ⇒ 这里补本地样式，让字段标签可见 */
+.profile-form .ee-field {
+  display: block;
+  margin-bottom: 14px;
+}
+.profile-form .ee-field::before {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ee-text-muted);
+  content: attr(data-label);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.profile-form .ee-input {
+  width: 100%;
+  padding: 9px 12px;
+  color: var(--ee-text);
+  background: var(--ee-surface-muted);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-md);
+  font-size: 14px;
+}
+.profile-form .ee-input:focus {
+  border-color: var(--ee-primary);
+  outline: none;
+}
 .profile-form {
   padding: 10px 20px;
 }
 .avatar-uploader {
-  width: 88px;
-  height: 88px;
-}
-.avatar-uploader .avatar {
+  position: relative;
   display: block;
   width: 88px;
   height: 88px;
+  border: 1px dashed var(--ee-border);
+  border-radius: var(--ee-radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.avatar-uploader:hover {
+  border-color: var(--ee-primary);
+}
+.avatar-uploader .avatar {
+  display: block;
+  width: 86px;
+  height: 86px;
   object-fit: cover;
+  border-radius: calc(var(--ee-radius-md) - 1px);
+}
+.avatar-uploader .ee-icon {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  color: var(--ee-on-primary, #fff);
+  background: var(--ee-primary);
+  border: 2px solid var(--ee-surface);
+  border-radius: 50%;
+}
+.avatar-input {
+  display: none;
+}
+
+/* E2E-11：原生弹框（替代未解析的 <el-dialog>，对齐 SecurityQuestionDialog.vue） */
+.ms-overlay {
+  position: fixed;
+  z-index: 2000;
+  display: grid;
+  background: rgb(0 0 0 / 45%);
+  inset: 0;
+  place-items: center;
+  padding: 16px;
+}
+.ms-dialog {
+  width: min(500px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-lg);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 22%);
+}
+.ms-dialog-sm {
+  width: min(420px, calc(100vw - 32px));
+}
+.ms-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 8px;
+}
+.ms-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.ms-close {
+  padding: 4px 8px;
+  color: var(--ee-text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--ee-radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+}
+.ms-close:hover {
+  color: var(--ee-text);
+  background: var(--ee-surface-muted);
+}
+.ms-body {
+  padding: 4px 20px 12px;
+  color: var(--ee-text-muted);
+  font-size: 14px;
+}
+.ms-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px 18px;
 }
 .avatar-uploader-icon {
   display: grid;
