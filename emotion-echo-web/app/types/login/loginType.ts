@@ -6,5 +6,4 @@ export interface loginInfo {
 export interface registerInfo {
   username: string
   password: string
-  verificationCode: string
 }

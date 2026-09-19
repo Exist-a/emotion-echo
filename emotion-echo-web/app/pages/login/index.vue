@@ -77,7 +77,7 @@
             用演示账号快速体验
           </button>
           <p class="quick-hint">
-            直接以已预置的 <code>echo</code> 登录（密码 echo123），跳过注册和验证码。
+            直接以已预置的 <code>echo</code> 登录（密码 echo123），跳过注册流程。
           </p>
         </form>
 
@@ -101,27 +101,16 @@
               autocomplete="new-password"
             />
           </label>
-          <div class="auth-field code-field">
-            <input
-              v-model="registerInfo.verificationCode"
-              class="ee-input"
-              placeholder="验证码"
-              maxlength="6"
-            />
-            <button
-              type="button"
-              class="ee-btn code-btn"
-              :disabled="isGetVerificationCode"
-              @click="getVerificationCode"
-            >
-              {{ isGetVerificationCode ? `${lastSeconds}s 后重发` : '获取验证码' }}
-            </button>
-          </div>
-          <p class="code-hint">开发模式下验证码会打印在服务端终端。</p>
           <button type="submit" class="ee-btn primary-btn" :disabled="isLoading">
             {{ isLoading ? '注册中…' : '注册并开始' }}
           </button>
         </form>
+
+        <SecurityQuestionDialog
+          v-model="showSecurityDialog"
+          :questions="securityQuestionList"
+          @submit="handleSecuritySubmit"
+        />
 
         <footer class="form-footer">
           <p>登录或注册即表示你愿意把这里当作自己的安全空间。</p>
@@ -132,8 +121,6 @@
 </template>
 
 <script setup lang="ts">
-import { sha256 } from 'js-sha256' // 仅作 import 占位（Stage 33 PR-19b 后实际未使用）
-import { verificationCodeCountDown } from '~/composables/verificationCodeCountDown'
 import { useNotify } from '~/composables/useNotify'
 
 definePageMeta({ layout: 'default' })
@@ -144,11 +131,14 @@ const isLoading = ref(false)
 const isQuickLoading = ref(false)
 const isRemember = ref<boolean>(false)
 const loginInfo = reactive<{ username: string; password: string }>({ username: '', password: '' })
-const registerInfo = reactive<{ username: string; password: string; verificationCode: string }>({
+const registerInfo = reactive<{ username: string; password: string }>({
   username: '',
   password: '',
-  verificationCode: '',
 })
+
+// 密保弹框状态
+const showSecurityDialog = ref(false)
+const securityQuestionList = ref<string[]>([])
 
 onMounted(() => {
   if (!import.meta.client) return
@@ -160,7 +150,6 @@ onMounted(() => {
   }
 })
 
-const { startCountdown, isGetVerificationCode, lastSeconds } = verificationCodeCountDown()
 const userStore = useUserStore()
 const { success, error } = useNotify()
 
@@ -195,27 +184,39 @@ const handleLogin = async (username: string, password: string) => {
   }
 }
 
+const PRESET_QUESTIONS = [
+  '你小时候最好的朋友叫什么名字？',
+  '你第一只宠物的名字是什么？',
+  '你出生的城市是哪里？',
+]
+
 const registerHandler = () => {
-  if (
-    !registerInfo.username.trim() ||
-    !registerInfo.password.trim() ||
-    !registerInfo.verificationCode.trim()
-  ) {
+  if (!registerInfo.username.trim() || !registerInfo.password.trim()) {
     error('注册失败', '请填完所有字段')
     return
   }
-  handleRegister(
-    registerInfo.username.trim(),
-    registerInfo.password.trim(),
-    registerInfo.verificationCode.trim(),
-  )
+  if (registerInfo.password.trim().length < 6) {
+    error('注册失败', '密码至少需要 6 位')
+    return
+  }
+  // 打开密保弹框（不可跳过）
+  securityQuestionList.value = PRESET_QUESTIONS.slice(0, 2)
+  showSecurityDialog.value = true
 }
 
-const handleRegister = async (username: string, password: string, verificationCode: string) => {
+const handleSecuritySubmit = async (data: { questions: string[]; answers: string[] }) => {
+  showSecurityDialog.value = false
   isLoading.value = true
   try {
-    // Stage 33 PR-19b: 不再 sha256(password) — user-svc bcrypt(明文) 入库
-    const result = await userStore.register({ username, password, verificationCode })
+    const securityQuestions = data.questions.map((q, i) => ({
+      question: q,
+      answer: data.answers[i],
+    }))
+    const result = await userStore.register({
+      username: registerInfo.username.trim(),
+      password: registerInfo.password.trim(),
+      securityQuestions,
+    })
     if (result.isOk) {
       success('已为你准备好', '欢迎，开始聊吧')
       await navigateTo('/chat/conversation')
@@ -224,23 +225,6 @@ const handleRegister = async (username: string, password: string, verificationCo
     }
   } finally {
     isLoading.value = false
-  }
-}
-
-const getVerificationCode = async () => {
-  if (!/^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(registerInfo.username)) {
-    error('无法获取验证码', '请填写正确的邮箱')
-    return
-  }
-  const result = await userStore.sendVerificationCode({
-    username: registerInfo.username,
-    type: 'register',
-  })
-  if (result.isOk) {
-    success('验证码已发送', '请到服务端终端查看')
-    startCountdown()
-  } else {
-    error('发送失败', result.msg)
   }
 }
 
@@ -489,8 +473,7 @@ const quickLogin = async () => {
 .quick-icon {
   margin-right: 6px;
 }
-.quick-hint,
-.code-hint {
+.quick-hint {
   margin: 0;
   color: var(--ee-text-muted);
   font-size: 11px;
@@ -501,27 +484,6 @@ const quickLogin = async () => {
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 10px;
-}
-
-.code-field {
-  padding-right: 4px;
-  gap: 4px;
-}
-.code-field .ee-input {
-  padding: 10px 2px;
-}
-.code-btn {
-  white-space: nowrap;
-  height: 32px;
-  padding: 0 12px;
-  background: var(--ee-primary-soft);
-  color: var(--ee-primary);
-  border: 1px solid color-mix(in srgb, var(--ee-primary) 30%, transparent);
-  border-radius: var(--ee-radius-md);
-  font-weight: 600;
-}
-.code-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ee-primary-soft) 60%, var(--ee-primary));
 }
 
 .form-footer {
