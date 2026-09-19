@@ -105,3 +105,32 @@ describe('user store register 方法扩展（E2E-09）', () => {
     expect(typesSrc).toMatch(/RegisterParams[\s\S]*securityQuestions|securityQuestions[\s\S]*RegisterParams/)
   })
 })
+
+describe('密保答案不明文落库（E2E-09 #10）', () => {
+  let authlogicSrc: string
+
+  beforeAll(() => {
+    // user-svc 注册逻辑，密保答案在此处 bcrypt 哈希后存储
+    authlogicSrc = readFileSync(
+      resolve(process.cwd(), '../emotion-echo-user-svc/internal/logic/authlogic.go'),
+      'utf8',
+    )
+  })
+
+  it('密保答案通过 password.Hash（bcrypt）哈希后存储', () => {
+    // authlogic.go:136 answerHash, err := password.Hash(normalized)
+    expect(authlogicSrc).toMatch(/password\.Hash\(/)
+  })
+
+  it('密保答案存储字段为 AnswerHash（非明文 Answer）', () => {
+    // 存入 model.SecurityAnswer 的字段应为 AnswerHash，不是 Answer
+    expect(authlogicSrc).toMatch(/AnswerHash:/)
+    // 不应出现明文赋值 Answer: answer
+    expect(authlogicSrc).not.toMatch(/Answer:\s*sq\.Answer|Answer:\s*answer[^H]/)
+  })
+
+  it('密保答案在哈希前做了标准化（trim + lowercase）', () => {
+    // authlogic.go:135 normalized := strings.ToLower(strings.TrimSpace(sq.Answer))
+    expect(authlogicSrc).toMatch(/strings\.ToLower.*TrimSpace|TrimSpace.*strings\.ToLower/)
+  })
+})

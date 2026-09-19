@@ -172,6 +172,49 @@ test.describe('registration flow (E2E-09)', () => {
     await expect(page).toHaveURL(/\/chat\/conversation/, { timeout: 10_000 })
   })
 
+  // #5: 重复用户名
+  test('#5 重复用户名应显示错误', async ({ page }) => {
+    const username = UNIQUE_USER + '_dup'
+    // 第一次注册成功
+    await page.locator('.auth-form input[placeholder="用户名"]').fill(username)
+    await page.locator('.auth-form input[type="password"]').fill(TEST_PASSWORD)
+    await page.locator('.auth-form button[type="submit"]').click()
+
+    const dialog = page.locator('.sq-overlay')
+    await expect(dialog).toBeVisible({ timeout: 5_000 })
+
+    const inputs = dialog.locator('.sq-input')
+    const count = await inputs.count()
+    for (let i = 0; i < count; i++) {
+      await inputs.nth(i).fill(`答案${i}`)
+    }
+    await dialog.locator('.sq-submit').click()
+    await expect(page).toHaveURL(/\/chat\/conversation/, { timeout: 10_000 })
+
+    // 回到注册页，用相同用户名再注册
+    await page.goto('/login')
+    await page.waitForLoadState('networkidle')
+    await page.getByRole('tab', { name: '注册' }).click()
+
+    await page.locator('.auth-form input[placeholder="用户名"]').fill(username)
+    await page.locator('.auth-form input[type="password"]').fill(TEST_PASSWORD)
+    await page.locator('.auth-form button[type="submit"]').click()
+
+    // 应弹出密保弹框（前端校验通过）
+    await expect(dialog).toBeVisible({ timeout: 5_000 })
+    // 填写密保答案后提交
+    const inputs2 = dialog.locator('.sq-input')
+    const count2 = await inputs2.count()
+    for (let i = 0; i < count2; i++) {
+      await inputs2.nth(i).fill(`答案${i}`)
+    }
+    await dialog.locator('.sq-submit').click()
+
+    // 应显示错误提示（用户名已存在），不应跳转
+    await expect(page.getByText(/已存在|已注册|已被占用/)).toBeVisible({ timeout: 5_000 })
+    await expect(page).toHaveURL(/\/login/)
+  })
+
   // #14: 卡片空间未被撑破
   test('#14 注册卡片布局正常', async ({ page }) => {
     const card = page.locator('.login-card')
