@@ -94,7 +94,7 @@ const verifyAnswers = async () => {
     const res = await userStore.verifySecurityAnswer({
       username: formInfo.value.username,
       questionOrder: q.questionOrder,
-      answer: formInfo.value.answers[q.questionOrder].trim(),
+      answer: formInfo.value.answers[q.questionOrder]?.trim() || '',
     })
     if (!res.isOk) {
       notify('密保答案错误', '请重新确认', 'error', 3000)
