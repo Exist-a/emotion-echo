@@ -51,10 +51,18 @@ export interface LoginParams {
 }
 
 /**
+ * 密保问题（注册时填写）
+ */
+export interface SecurityQuestion {
+  question: string
+  answer: string
+}
+
+/**
  * 注册请求
  */
 export interface RegisterParams extends LoginParams {
-  verificationCode: string
+  securityQuestions: SecurityQuestion[]
 }
 
 /**

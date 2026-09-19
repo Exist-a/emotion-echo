@@ -5,7 +5,6 @@ import type {
   RegisterParams,
   UserInfo,
   UpdateProfileParams,
-  SendVerificationCodeParams,
 } from '~/types/api'
 import { get, post, put, patch } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
@@ -162,20 +161,6 @@ export const useUserStore = defineStore('user', () => {
   const isTokenExpired = (): boolean => {
     if (!tokenExpiry.value) return true
     return Date.now() > tokenExpiry.value - 60000 // 提前1分钟认为过期
-  }
-
-  /**
-   * 发送验证码
-   */
-  const sendVerificationCode = async (
-    params: SendVerificationCodeParams,
-  ): Promise<returnMsgType> => {
-    try {
-      await post(API_ROUTES.authVerificationCode.path, params)
-      return { isOk: true, msg: '验证码已发送' }
-    } catch (error: any) {
-      return { isOk: false, msg: error.message || '发送失败' }
-    }
   }
 
   /**
@@ -415,7 +400,6 @@ export const useUserStore = defineStore('user', () => {
     setAccessToken,
     clearToken,
     isTokenExpired,
-    sendVerificationCode,
     getSecurityQuestions,
     verifySecurityAnswer,
     register,
