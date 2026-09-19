@@ -148,3 +148,54 @@ jobs:
         run: bash scripts/check_secrets.sh
       - name: Self-test the scanner (负向用例)
         run: bash scripts/test_check_secrets.sh
+
+  # === 波 2 新增：5 个收口门禁（debt-paydown-plan 波 2） ===
+
+  e2e-stage-audit:
+    name: E2E 收口审计
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run stage auditor
+        run: python scripts/e2e_stage_audit.py --all
+
+  tdd-gate:
+    name: TDD 门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check TDD compliance
+        run: bash scripts/check_tdd_gate.sh
+
+  adr-gate:
+    name: ADR 门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check ADR compliance
+        run: bash scripts/check_adr_gate.sh
+
+  residual-scan:
+    name: 残留物扫描
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for residual artifacts
+        run: bash scripts/check_residual.sh
+
+  orphan-outputs:
+    name: 孤儿产出物检测
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for orphan outputs
+        run: bash scripts/check_orphan_outputs.sh
