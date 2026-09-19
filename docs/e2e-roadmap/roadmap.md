@@ -29,7 +29,9 @@ type: e2e-stage-roadmap
 R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量脚本负向测试、R-03 #10 的覆盖率·集成测试·Playwright 进 CI 等大项。
 **代价**：审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这是**正确信号**（真实未还欠账），不是回归。
 
-**当前激活阶段：E2E-08 历史会话管理（可开工）** → 详档 [stages/e2e-08-conversation-management/plan.md](stages/e2e-08-conversation-management/plan.md)
+**当前激活阶段：E2E-09 注册流程（密保录入 UI 待实现，暂 blocked）** → 详档 [stages/e2e-09-registration/plan.md](stages/e2e-09-registration/plan.md)
+
+> **E2E-08 ✅ done**（2026-09-19）：12/12 测试点全绿 + 4 bug TDD 修复 + Playwright 回归钉。详档 [stages/e2e-08-conversation-management/report.md](stages/e2e-08-conversation-management/report.md)
 
 ## 下一阶段（已解阻塞）
 
@@ -55,7 +57,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 |------|--------|------|--------------|------|
 | E2E-06 🔧 | 数据库改造 | 删死字段（phone/email/status）+ 加密保问题字段（D-01）+ 加 schema_migrations 版本表 + 统一软删除 + 修 db README | 连接池调优 | ⚠️ **partial**：R-01 修复了安全漏洞/注册断裂/测试编译；剩余：integration test 未补、演示账号解耦（R-02 #9~10） |
 | E2E-07 | 找回/重置密码 | 三步向导改造为**密保问题**流程（D-01=C）+ 端到端跑通 | 短信/邮件服务 | ✅ **done**（2026-09-19：全链路实现 + 浏览器 E2E 实测 + 数据库落库验证） |
-| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ⏳ pending |
+| E2E-08 | 历史会话管理 | 会话列表/删除/pin/重命名/分组 | 消息内容同步 | ✅ **done**（2026-09-19：12/12 测试点全绿 + 4 bug TDD 修复 + Playwright 回归钉） |
 | E2E-09 | 注册流程 | 注册全流程（含密保问题设定步骤） | — | ⏳ pending（密保录入 UI 待实现） |
 
 ### 第三批：聊天与周边
