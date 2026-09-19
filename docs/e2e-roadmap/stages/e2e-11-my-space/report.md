@@ -155,15 +155,51 @@ Desktop，容器自动恢复（restart: unless-stopped）。此后所有镜像�
 - **"收口自检三连通过"** 只覆盖了 git 三连，未覆盖 RUNBOOK §13 的机器审计 ⇒ 本轮起
   收口必须附 §13 审计输出。
 
-## 9. 复查轮次的门禁输出（收口证据）
+## 9. 复查轮次的门禁输出（收口证据，2026-09-19 实测）
 
-见 PR #18 描述与本文件 §8.1/§8.2；本轮结束时重跑：
+| 门禁 | 结果 | 说明 |
+|------|------|------|
+| `python scripts/e2e_stage_audit.py --stage e2e-11` | ✅ **0 FAIL**（原 A5+A11 FAIL） | 状态改 partial 后 A5 消解；结果列改裸 `PASS` 后 A11 消解 |
+| `bash scripts/check_tdd_gate.sh` | ✅ GREEN | 5 个 commit 均满足 |
+| `bash scripts/check_residual.sh` | ✅ GREEN | 补末尾换行后消解 |
+| `bash scripts/check_orphan_outputs.sh` | ✅ GREEN | 修脚本 globstar 缺陷后消解 |
+| `bash scripts/check_adr_gate.sh` | ⚠️ **RED（2/5）** | 见下"残留" |
+| `python scripts/smoke_data_layer.py` | ✅ **16/16 PASS, exit 0** | 见下"附带修复" |
+| `go test ./...`（BFF/user/analytics） | ✅ 9 + 7 + 11 包全绿 | `go vet` 全绿 |
+| `npx vitest run`（前端） | ✅ 410/410 | |
+| `npx playwright test e2e/my-space.spec.ts` | ✅ 10/10 | 断言收紧后仍全绿 |
 
-```
-python scripts/e2e_stage_audit.py --stage e2e-11   # 期望：无 FAIL
-bash scripts/check_tdd_gate.sh                     # 期望：GREEN
-bash scripts/check_adr_gate.sh                     # 期望：GREEN
-bash scripts/check_residual.sh                     # 期望：GREEN
-bash scripts/check_orphan_outputs.sh               # 期望：GREEN
-python scripts/smoke_data_layer.py                 # 期望：§1~§4 PASS
-```
+### 残留：ADR 门禁 2 项无法回溯修复
+
+`check_adr_gate.sh` 报 2 个 commit 命中架构关键词但无 ADR：
+
+- `b84b4cf`（E2E-11 首轮 squash commit，已并入 main）—— 命中关键词 `vue`（改动含 `.vue` 文件）
+- `fc8170d`（E2E-10 的 `LLM_API_KEY` 修复，已并入 main）—— 命中关键词 `docker`（改动含 `docker-compose.apps.yml`）
+
+**为何无法修复**：该门禁是 **commit 级**——判定依据是「同一个 commit 的改动文件列表」，
+而已合并 commit 的文件列表不可变。本轮提交 `4d6d53d` 自身含 ADR，**未被标记**（可作对照证明）。
+
+**两点如实说明**：
+
+1. 该门禁的判定面很宽：关键词表含 `vue`/`docker`/`grpc` 等，
+   意味着**任何**改动 `.vue` 文件或 `docker-compose.*.yml` 的 commit 都被要求附 ADR
+   —— `fc8170d` 只是个配置项修复，本不需要架构决策记录。属门禁策略本身的宽严问题，
+   非本阶段可单方面调整（改关键词表属政策变更）。
+2. 该门禁**未接入 CI**（实测 `.github/workflows/` 中 0 处引用），只在本地手工跑。
+   同类情况：`check_tdd_gate.sh` / `check_residual.sh` / `check_orphan_outputs.sh` /
+   `e2e_stage_audit.py` 均未接入 CI，仅 `check_secrets.sh` 与 `check_soft_asserts.sh` 在 CI 内。
+   这正是 anti-patterns.md **AP-11「门禁只报不拦」**（该项状态为"🟡 待 CI 接通"）。
+   ⇒ **本报告的"门禁通过"指本地已跑通，不等于 CI 强制拦截。**
+
+### 附带修复：`smoke_data_layer.py` §7 段的 3 个真 bug
+
+AGENTS.md §2.4 要求的这个 smoke 脚本，其 §7（Nacos 注册校验）长期是坏的，
+把"脚本自身故障"伪装成 5 个服务 FAIL：
+
+| bug | 表现 | 修法 |
+|-----|------|------|
+| `docker_exec` **从未定义** | 5 项恒报 `name 'docker_exec' is not defined` | 补 helper（对齐 `docker_psql` 的 `(rc, stdout, stderr)` 返回约定） |
+| 调用处解包顺序反了（`out, _, rc =`） | `out` 拿到 int、`rc` 拿到 stderr ⇒ 恒判失败且报 `curl rc=`（空） | 改 `rc, out, err =` |
+| URL 未给 `sh -c` 加引号 | 查询串里的 `&` 被 shell 当后台运算符 ⇒ curl 只收到 `?serviceName=<svc>`，**namespaceId 丢失** ⇒ 查的是 public 命名空间（恒空） | URL 再包一层单引号 |
+
+修复后：**16/16 PASS, exit 0**（修前 11/16 + 5 个假 FAIL）。5 个服务各 1 实例、`ephemeral=true`、healthy。
