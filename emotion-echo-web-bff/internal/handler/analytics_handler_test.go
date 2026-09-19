@@ -204,7 +204,9 @@ func TestAnalyticsHandler_DayNight_Success(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), `"pattern"`)
+	// E2E-11: 响应形状改为前端契约 periods 数组（原 pattern map 已替换）
+	assert.Contains(t, w.Body.String(), `"periods"`)
+	assert.Contains(t, w.Body.String(), `"上午"`)
 }
 
 // TestAnalyticsHandler_TrendReport_ReturnsFrontendShape 契约：trendReport 响应
@@ -462,4 +464,93 @@ func TestUserIDQuery_TrendReport_FallbackToAuthedUser(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code, "trend 端点同样应回退到认证身份")
 	assert.Equal(t, int64(9), fc.gotUID)
+}
+
+// ============ E2E-11: user-behavior 前端契约对齐 ============
+
+// TestAnalyticsHandler_DayNight_ReturnsFrontendShape 契约：
+// BFF → 前端 dayNight 响应必须包含 periods 数组（前端 chartData 读 dayNight.periods）。
+func TestAnalyticsHandler_DayNight_ReturnsFrontendShape(t *testing.T) {
+	fc := &fakeAnalyticsClient{pattern: map[int]int64{0: 5, 10: 3, 22: 1}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/user-behavior/day-night?user_id=7", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Periods []struct {
+				Label string `json:"label"`
+				Hours string `json:"hours"`
+				Value int64  `json:"value"`
+			} `json:"periods"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Code)
+	require.Len(t, resp.Data.Periods, 3, "应有 3 个时段（凌晨/上午/夜间）")
+}
+
+// TestAnalyticsHandler_Frequency_ReturnsFrontendShape 契约：
+// BFF → 前端 frequency 响应必须包含 dates + messageCount 数组。
+func TestAnalyticsHandler_Frequency_ReturnsFrontendShape(t *testing.T) {
+	fc := &fakeAnalyticsClient{counts: []downstream.DailyCount{
+		{Date: "2026-09-17", Count: 5},
+		{Date: "2026-09-18", Count: 3},
+	}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/user-behavior/frequency?user_id=7", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Dates        []string `json:"dates"`
+			MessageCount []int64  `json:"messageCount"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Code)
+	assert.Equal(t, []string{"2026-09-17", "2026-09-18"}, resp.Data.Dates)
+	assert.Equal(t, []int64{5, 3}, resp.Data.MessageCount)
+}
+
+// TestAnalyticsHandler_Depth_ReturnsFrontendShape 契约：
+// BFF → 前端 depth 响应必须包含 avgSessionRounds / maxConsecutiveDays /
+// totalConversations / totalMessages / avgMessagesPerDay。
+func TestAnalyticsHandler_Depth_ReturnsFrontendShape(t *testing.T) {
+	fc := &fakeAnalyticsClient{depth: &downstream.InteractionDepth{
+		TotalMessages:         150,
+		TotalConversations:    12,
+		AvgMessagesPerConv:    12.5,
+		LongestConversationMs: 340000,
+	}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/user-behavior/depth?user_id=7", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			AvgSessionRounds    float64 `json:"avgSessionRounds"`
+			MaxConsecutiveDays  int64   `json:"maxConsecutiveDays"`
+			TotalConversations  int64   `json:"totalConversations"`
+			TotalMessages       int64   `json:"totalMessages"`
+			AvgMessagesPerDay   float64 `json:"avgMessagesPerDay"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Code)
+	assert.Equal(t, int64(150), resp.Data.TotalMessages)
+	assert.Equal(t, int64(12), resp.Data.TotalConversations)
+	assert.InDelta(t, 12.5, resp.Data.AvgSessionRounds, 0.1, "avgSessionRounds 应映射自 AvgMessagesPerConv")
 }

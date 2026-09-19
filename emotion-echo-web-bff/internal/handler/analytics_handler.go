@@ -116,7 +116,8 @@ func (h *AnalyticsHandler) dayNight(c *gin.Context) {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"pattern": pattern})
+	// E2E-11: 变换为前端契约形状（periods 数组）
+	OK(c, toFrontendDayNight(pattern))
 }
 
 func (h *AnalyticsHandler) interactionDepth(c *gin.Context) {
@@ -130,7 +131,9 @@ func (h *AnalyticsHandler) interactionDepth(c *gin.Context) {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"depth": depth})
+	// E2E-11: 变换为前端契约形状
+	// activeDays 暂用 frequency 端点的天数近似（depth 单独调用时无法得知）
+	OK(c, toFrontendDepth(depth, 0))
 }
 
 func (h *AnalyticsHandler) frequencyTrend(c *gin.Context) {
@@ -144,7 +147,8 @@ func (h *AnalyticsHandler) frequencyTrend(c *gin.Context) {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	OK(c, gin.H{"counts": counts})
+	// E2E-11: 变换为前端契约形状（dates + messageCount 数组）
+	OK(c, toFrontendFrequency(counts))
 }
 
 func (h *AnalyticsHandler) mentalAssessment(c *gin.Context) {
