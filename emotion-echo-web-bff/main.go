@@ -390,7 +390,7 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	// 业务 handler（各自 Register）
 	handler.NewUserHandler(s.User).Register(r)
 	handler.NewChatHandlerWithIntent(s.Chat, llmIntent).Register(r)
-	handler.NewSurveyHandler(s.Assessment).Register(r)
+	handler.NewSurveyHandler(s.Assessment).WithAssessmentBase(c.AssessmentService.BaseURL).Register(r)
 	handler.NewAnalyticsHandler(s.Analytics).Register(r)
 	handler.NewMultimodalHandler(s.AI).Register(r)
 	handler.NewTTSHandler(s.AI, s.XTTS).Register(r)
