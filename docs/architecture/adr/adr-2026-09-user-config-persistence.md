@@ -56,4 +56,6 @@ Go `json.Unmarshal` 忽略未知字段 ⇒ 前端拿到 200、`result.isOk` 为�
 - **schema + proto 双变更**：新增字段属契约扩展，须走 ADR（本文件）+ 迁移幂等 + `test_migrations_contract.sh` 一致。
 - **`NULL` vs `{}` 语义必须区分**：未设置用 `NULL`，不用 `{}` 默认值——否则"从未设置"与"主动清空"不可分（E2E-12 plan 风险 R4）。
 - **值域不做服务端强校验**：`config` 是开放 JSONB，服务端只保证存取往返；未知值（如 `theme: "neon"`）由前端 `getUserConfig` 的 `|| 'light'` 兜底回落，**不得崩溃**（E2E-12 测试点 #12）。
+- **§2.4 契约 5 不适用（显式判定）**：AGENTS.md §2.4 的「§契约 5」针对 **VARCHAR(32) NOT NULL 枚举列**，要求断言写入值 ∈ enum 集合。`config` 是 JSONB 开放容器、非枚举列，值域刻意不由服务端约束；值域收敛点在前端 `pxToFontSize` / `|| 'light'` 回退，已由测试点 #12 与 vitest「未知值回退」用例覆盖。**在此显式记录该判定，避免"沉默即默认满足"**。
+- **主题另需一份客户端可读镜像**：SSR 首屏要渲染正确的 `<html class>`，而 `access_token` 是 HttpOnly、SSR 不宜为首屏主题做 API 往返。因此 `applyTheme` 会把生效主题写入非 HttpOnly 的 `ee_theme` cookie 供服务端读取（`app/plugins/theme-ssr.ts`）。**服务端 `users.config.theme` 仍是唯一权威**，cookie 只是首屏兜底 —— 权威与镜像不一致时以服务端为准（`fetchUserInfo` 后立即重应用）。
 - **proto 重生成须复现原方式**：`bash proto/gen.sh user.proto`（R 系列教训：改 proto 必须复现原生成方式，不得换生成器版本）。

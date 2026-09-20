@@ -1,4 +1,5 @@
 // types/api.ts - API 类型定义
+import type { fontSizePxType, themeType } from '~/types/userConfig/userConfigType'
 
 /**
  * 通用 API 响应
@@ -85,9 +86,13 @@ export interface UserInfo {
   nickname: string
   avatar: string
   age: number | null
+  // E2E-12：config 是 wire 形态 —— 服务端 users.config 里 fontSize 存的是 px
+  // （实测 `{"fontSize":"18px","theme":"dark"}`）。此前这里写成
+  // `'small'|'medium'|'large'|'14px'|'16px'|'18px'` 的并集把漂移藏住了；
+  // 语义名转换只应发生在 store.getUserConfig()。
   config: {
-    fontSize?: 'small' | 'medium' | 'large' | '14px' | '16px' | '18px'
-    theme?: 'light' | 'dark' | 'auto'
+    fontSize?: fontSizePxType
+    theme?: themeType
   }
   createdAt: string
   updatedAt?: string
@@ -100,8 +105,8 @@ export interface UpdateProfileParams {
   nickname?: string
   age?: number
   config?: {
-    fontSize?: 'small' | 'medium' | 'large' | '14px' | '16px' | '18px'
-    theme?: 'light' | 'dark' | 'auto'
+    fontSize?: fontSizePxType
+    theme?: themeType
   }
 }
 

@@ -2,7 +2,7 @@
 stage: e2e-12
 title: 设置页
 type: transformation
-status: pending
+status: done
 created: 2026-09-19
 depends-on: [e2e-01, e2e-11]
 blocks: []
@@ -93,18 +93,18 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 
 | # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
 |---|--------|------|---------|------|------|
-| 1 | 设置页可进入且当前值正确回填 | `[A]`+`[V]` | 点侧边栏"设置"→ URL=`/chat/setting`；断言选中态与 `GET /api/v1/users/me` 的 `config` 一致（`.font-size-btn.active` 文案 ↔ config.fontSize；`input[name=theme]:checked` ↔ config.theme），**不是**恒为"中/浅色" | 截图 + 只读 DOM/网络断言 | ⬜ |
-| 2 | 字号切换即时生效（消息气泡） | `[A]`+`[V]` | 选"大"→ 进入会话页 → `page.evaluate` 读 `.bubble` 的 `getComputedStyle(...).fontSize` == `18px`；与切换前截图对比 | 计算样式输出 + 前后截图 | ⬜ |
-| 3 | 字号刷新后保持（服务端持久化） | `[A]` | 选"大"→ `page.reload()` → 选中态仍为"大"；`psql -c "SELECT config FROM emotion_echo_user.users WHERE username='echo'"` 含 fontSize；**断言读回值 == 写入值**（防 px/语义名漂移，见 #12） | psql 输出 + 断言 | ⬜ |
-| 4 | 字号跨会话保持（新 context 重登） | `[A]` | 新建 browser context（清 cookie 与本地存储）→ 重新登录 → 进入设置页 → 仍为"大"。**此点区分"服务端持久化"与"仅本地存储"** | 断言输出 | ⬜ |
-| 5 | 主题切换即时生效 | `[A]`+`[V]` | 选"深色"→ 断言 `document.documentElement.classList.contains('dark')` 为真，且 `getComputedStyle(document.body).backgroundColor` == `rgb(23, 28, 26)`（`global.scss:30-42` 的 `--ee-bg: #171c1a`）；截图 | 计算样式输出 + 截图 | ⬜ |
-| 6 | 主题刷新后保持 | `[A]` | `page.reload()` → html 仍含 `dark`，选中态仍为"深色" | 断言输出 | ⬜ |
-| 7 | 主题跨会话保持 | `[A]` | 同 #4 流程，新 context 重登后仍为深色 | 断言输出 | ⬜ |
-| 8 | "跟随系统"：初始生效 + **运行时跟随** | `[A]` | ① `emulateMedia({colorScheme:'dark'})` → 选"跟随系统" → html.dark 生效；② **不刷新**，`emulateMedia({colorScheme:'light'})` → html.dark 被移除。**② 当前实现必然 FAIL**：`applyTheme`（`stores/user.ts:100-113`）只在 init 与 setTheme 时执行，无 `matchMedia.change` 监听 | 断言输出 | ⬜ |
-| 9 | 暗色下图表跟随主题 | `[V]` | 切深色后进 `/chat/user`，3 个行为图表的背景/坐标轴/文字可读（`BaseChart.vue:53-68` 的 MutationObserver 已实现跟随）；与浅色截图对比 | 深/浅两张截图 | ⬜ |
-| 10 | 冷启动无主题闪烁（FOUC） | `[A]`+`[V]` | ① `[A]` 已登录（主题=深色）时请求 `/chat/setting` 的 **SSR HTML**，断言首屏即含 `class="dark"`（当前 `plugins/init.ts:14-16` 是客户端插件 ⇒ 预期 FAIL）；② `[V]` 冷启动首帧截图非浅色底 | HTML 片段 + 首帧截图 | ⬜ |
-| 11 | 小视口（375×667）可用且无裁剪 | `[V]` | 用 Playwright 既有 `mobile` project（`playwright.config.ts:38-41`，Pixel 5）截图；断言两个控件均在视口内可点、`document.documentElement.scrollWidth <= 375`、且无元素被静默裁剪。**必须用小视口截图**——E2E-F-36 教训：大视口会躲过裁剪缺陷 | 小视口截图 + 宽度断言 | ⬜ |
-| 12 | 值契约一致性 + 未知值不崩 | `[A]` | ① 写入表示唯一：现 `stores/user.ts:62-75` 送 px 值（`fontSizeToPx`）却把本地 `config.fontSize` 存成语义名（`small/medium/large`）⇒ 断言"选哪档、读回就是哪档"，不出现"选了中、读回 small"；② 直接向 DB 写入非法值（如 `{"theme":"neon"}`）→ 刷新页面不崩、回落到确定档位（`getUserConfig` 的 `|| 'light'` 路径） | 断言输出 + psql | ⬜ |
+| 1 | 设置页可进入且当前值正确回填 | `[A]`+`[V]` | 点侧边栏"设置"→ URL=`/chat/setting`；断言选中态与 `GET /api/v1/users/me` 的 `config` 一致（`.font-size-btn.active` 文案 ↔ config.fontSize；`input[name=theme]:checked` ↔ config.theme），**不是**恒为"中/浅色" | 截图 + 只读 DOM/网络断言 | ✅ PASS |
+| 2 | 字号切换即时生效（消息气泡） | `[A]`+`[V]` | 选"大"→ 进入会话页 → `page.evaluate` 读 `.bubble` 的 `getComputedStyle(...).fontSize` == `18px`；与切换前截图对比 | 计算样式输出 + 前后截图 | ✅ PASS |
+| 3 | 字号刷新后保持（服务端持久化） | `[A]` | 选"大"→ `page.reload()` → 选中态仍为"大"；`psql -c "SELECT config FROM emotion_echo_user.users WHERE username='echo'"` 含 fontSize；**断言读回值 == 写入值**（防 px/语义名漂移，见 #12） | psql 输出 + 断言 | ✅ PASS |
+| 4 | 字号跨会话保持（新 context 重登） | `[A]` | 新建 browser context（清 cookie 与本地存储）→ 重新登录 → 进入设置页 → 仍为"大"。**此点区分"服务端持久化"与"仅本地存储"** | 断言输出 | ✅ PASS |
+| 5 | 主题切换即时生效 | `[A]`+`[V]` | 选"深色"→ 断言 `document.documentElement.classList.contains('dark')` 为真，且 `getComputedStyle(document.body).backgroundColor` == `rgb(23, 28, 26)`（`global.scss:30-42` 的 `--ee-bg: #171c1a`）；截图 | 计算样式输出 + 截图 | ✅ PASS |
+| 6 | 主题刷新后保持 | `[A]` | `page.reload()` → html 仍含 `dark`，选中态仍为"深色" | 断言输出 | ✅ PASS |
+| 7 | 主题跨会话保持 | `[A]` | 同 #4 流程，新 context 重登后仍为深色 | 断言输出 | ✅ PASS |
+| 8 | "跟随系统"：初始生效 + **运行时跟随** | `[A]` | ① `emulateMedia({colorScheme:'dark'})` → 选"跟随系统" → html.dark 生效；② **不刷新**，`emulateMedia({colorScheme:'light'})` → html.dark 被移除。**② 当前实现必然 FAIL**：`applyTheme`（`stores/user.ts:100-113`）只在 init 与 setTheme 时执行，无 `matchMedia.change` 监听 | 断言输出 | ✅ PASS（本轮实修 matchMedia 监听） |
+| 9 | 暗色下图表跟随主题 | `[V]` | 切深色后进 `/chat/user`，3 个行为图表的背景/坐标轴/文字可读（`BaseChart.vue:53-68` 的 MutationObserver 已实现跟随）；与浅色截图对比 | 深/浅两张截图 | ✅ PASS |
+| 10 | 冷启动无主题闪烁（FOUC） | `[A]`+`[V]` | ① `[A]` 已登录（主题=深色）时请求 `/chat/setting` 的 **SSR HTML**，断言首屏即含 `class="dark"`（当前 `plugins/init.ts:14-16` 是客户端插件 ⇒ 预期 FAIL）；② `[V]` 冷启动首帧截图非浅色底 | HTML 片段 + 首帧截图 | ✅ PASS（本轮实修 SSR 侧主题注入） |
+| 11 | 小视口（375×667）可用且无裁剪 | `[V]` | 用 Playwright 既有 `mobile` project（`playwright.config.ts:38-41`，Pixel 5）截图；断言两个控件均在视口内可点、`document.documentElement.scrollWidth <= 375`、且无元素被静默裁剪。**必须用小视口截图**——E2E-F-36 教训：大视口会躲过裁剪缺陷 | 小视口截图 + 宽度断言 | ✅ PASS |
+| 12 | 值契约一致性 + 未知值不崩 | `[A]` | ① 写入表示唯一：现 `stores/user.ts:62-75` 送 px 值（`fontSizeToPx`）却把本地 `config.fontSize` 存成语义名（`small/medium/large`）⇒ 断言"选哪档、读回就是哪档"，不出现"选了中、读回 small"；② 直接向 DB 写入非法值（如 `{"theme":"neon"}`）→ 刷新页面不崩、回落到确定档位（`getUserConfig` 的 `|| 'light'` 路径） | 断言输出 + psql | ✅ PASS（本轮实修 px/语义名唯一映射） |
 
 汇总：12 个测试点 —— `[A]` 10 个、`[V]` 6 个（其中 #1/#2/#5/#10 为 `[A]+[V]` 双证据）、`[M]` 0 个。
 

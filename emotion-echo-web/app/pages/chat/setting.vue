@@ -67,7 +67,6 @@ const userConfig = computed(() => userStore.getUserConfig())
 onMounted(() => { userStore.fetchUserInfo() })
 
 const fontSizes = { small: '14px', medium: '16px', large: '18px' } as const
-const fontLabels = { small: '小', medium: '中', large: '大' } as const
 const fontSizeOptions = [
   { value: 'small' as const, label: '小' },
   { value: 'medium' as const, label: '中' },
@@ -81,9 +80,6 @@ const themeOptions: { value: 'light' | 'dark' | 'auto'; label: string }[] = [
 
 const fontSizeValue = computed(
   () => fontSizes[userConfig.value.fontSize as keyof typeof fontSizes] || '16px',
-)
-const fontSizeLabel = computed(
-  () => fontLabels[userConfig.value.fontSize as keyof typeof fontLabels] || '中',
 )
 
 const handleFontSizeChange = async (size: 'small' | 'medium' | 'large') => {
