@@ -12,6 +12,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"emotion-echo-assessment-svc/internal/config"
@@ -134,4 +135,62 @@ func TestListMyResultsLogic_OnlyReturnsOwnResults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, got.Total)
 	assert.Len(t, got.Items, 2)
+}
+
+// =====================================================
+// E2E-14：factorScores 透传
+// =====================================================
+//
+// 人格画像的消费方有两处：① 前端 user 页雷达图 ② BFF 注入 AI system prompt。
+// 两者都从"我的结果列表"里挑最新的人格量表结果（riskLevel=="dimension_profile"），
+// 因此列表项与详情都必须带 factorScores —— 否则调用方要再发一次详情请求。
+
+// TestGetSurveyResultLogic_IncludesFactorScores 详情必须回传维度分数
+func TestGetSurveyResultLogic_IncludesFactorScores(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemorySurveyRepo()
+	repo.Add(&model.Survey{ID: 1, Code: "BIG5", Status: 1})
+
+	ctx := contextWithUserID(context.Background(), 42)
+	sub := NewSubmitSurveyLogic(ctx, newGetSurveyResultSvcCtx(repo))
+	ans := map[string]int{}
+	for i := 1; i <= 30; i++ {
+		ans[fmt.Sprintf("q%d", i)] = 4
+	}
+	subResp, err := sub.SubmitSurvey(&types.SubmitSurveyReq{SurveyId: 1, Answers: ans})
+	require.NoError(t, err)
+
+	l := NewGetSurveyResultLogic(ctx, newGetSurveyResultSvcCtx(repo))
+	got, err := l.GetSurveyResult(&types.GetSurveyResultReq{ResultId: subResp.ResultID})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.NotNil(t, got.FactorScores, "结果详情必须带 factorScores")
+	assert.InDelta(t, 24.0, got.FactorScores["openness"], 0.001)
+}
+
+// TestListMyResultsLogic_IncludesFactorScores 列表项必须回传维度分数
+// （BFF 每次对话都靠列表找最新人格画像，列表不带则需二次请求）
+func TestListMyResultsLogic_IncludesFactorScores(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemorySurveyRepo()
+	repo.Add(&model.Survey{ID: 1, Code: "BIG5", Status: 1})
+
+	ctx := contextWithUserID(context.Background(), 5)
+	sub := NewSubmitSurveyLogic(ctx, newGetSurveyResultSvcCtx(repo))
+	ans := map[string]int{}
+	for i := 1; i <= 30; i++ {
+		ans[fmt.Sprintf("q%d", i)] = 2
+	}
+	_, err := sub.SubmitSurvey(&types.SubmitSurveyReq{SurveyId: 1, Answers: ans})
+	require.NoError(t, err)
+
+	l := NewGetSurveyResultLogic(ctx, newGetSurveyResultSvcCtx(repo))
+	got, err := l.ListMyResults(&types.ListMyResultsReq{Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, got.Items, 1)
+	item := got.Items[0]
+	assert.Equal(t, "dimension_profile", item.RiskLevel)
+	require.NotNil(t, item.FactorScores, "结果列表项必须带 factorScores")
+	assert.InDelta(t, 12.0, item.FactorScores["openness"], 0.001)
+	assert.Len(t, item.FactorScores, 5)
 }

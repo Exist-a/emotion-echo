@@ -66,6 +66,39 @@ func TestSurveyHandler_ListSurveys_Success(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"SDS"`)
 }
 
+// TestSurveyHandler_ListSurveys_HTTPSourceKeepsDescription
+// E2E-14 实测评量卡片描述恒为空（3 个量表全空），根因：
+// proto `SurveyItem`（agent.proto:67-75）无 description 字段，列表走 gRPC 时被静默丢弃。
+// 这是 E2E-13 已定性并 ADR 决议"survey 端点走 HTTP 绕过"时漏掉的第 5 个端点。
+// 修复：listSurveys 与其余 4 个端点一致走 HTTP（保留完整 JSON 字段）。
+func TestSurveyHandler_ListSurveys_HTTPSourceKeepsDescription(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/surveys", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"id":7,"code":"BIG5","title":"人格五因素量表","description":"评估五大人格特质","category":"personality","questionNum":30,"version":1}],"total":1}`))
+	}))
+	defer upstream.Close()
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	handler := &SurveyHandler{
+		assessment:     &fakeAssessmentClient{},
+		assessmentBase: upstream.URL,
+		assessmentHTTP: upstream.Client(),
+	}
+	handler.Register(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/surveys?limit=50", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, `"description":"评估五大人格特质"`, "描述必须透传（gRPC 路径会丢弃）")
+	assert.Contains(t, body, `"category":"personality"`)
+	assert.Contains(t, body, `"questionNum":30`)
+}
+
 func TestSurveyHandler_GetSurvey_Success(t *testing.T) {
 	r := newSurveyRouter(&fakeAssessmentClient{detail: &downstream.SurveyDetail{
 		ID: 1, Code: "SDS", Title: "抑郁量表", Category: "抑郁", Version: 1,

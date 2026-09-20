@@ -86,14 +86,34 @@
     <Teleport v-if="resultDialogVisible" to="body">
       <div class="modal-backdrop" @click.self="handleResultConfirm">
         <div class="modal-card" role="dialog" aria-modal="true">
-          <h3>你给出的答案</h3>
+          <h3>{{ isPersonality ? '你的人格画像' : '你给出的答案' }}</h3>
           <div v-if="submitResult" class="result-content">
-            <div class="result-row">
-              <span>总分</span><strong>{{ submitResult.totalScore }}</strong>
-            </div>
-            <div class="result-row">
-              <span>等级</span><strong>{{ riskLevelLabel(submitResult.riskLevel) }}</strong>
-            </div>
+            <!-- 人格量表：维度雷达图 + 逐维度分档（无"风险等级"概念） -->
+            <template v-if="isPersonality">
+              <RadarChart
+                :indicators="personalityIndicators()"
+                :data="personalityRadarData(submitResult.factorScores)"
+                :height="240"
+              />
+              <ul class="dimension-list">
+                <li v-for="dim in personalityDimensions" :key="dim.key" class="dimension-row">
+                  <span class="dimension-name">{{ dim.label }}</span>
+                  <span class="dimension-score">
+                    {{ submitResult.factorScores?.[dim.key] ?? '-' }}
+                    <em class="dimension-level">{{ levelFor(dim.key) }}</em>
+                  </span>
+                </li>
+              </ul>
+            </template>
+            <!-- 症状量表：总分 + 风险等级 -->
+            <template v-else>
+              <div class="result-row">
+                <span>总分</span><strong>{{ submitResult.totalScore }}</strong>
+              </div>
+              <div class="result-row">
+                <span>等级</span><strong>{{ riskLevelLabel(submitResult.riskLevel) }}</strong>
+              </div>
+            </template>
           </div>
           <div class="modal-actions">
             <button type="button" class="ee-btn ee-btn-primary" @click="handleResultConfirm">
@@ -110,6 +130,14 @@
 import type { SurveyDetail, SurveyResult } from '~/types/api'
 import { get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
+import RadarChart from '~/components/charts/RadarChart.vue'
+import {
+  PERSONALITY_DIMENSIONS,
+  isPersonalityResult,
+  personalityIndicators,
+  personalityLevel,
+  personalityRadarData,
+} from '~/configs/personality'
 
 definePageMeta({ layout: 'default' })
 
@@ -182,6 +210,16 @@ const riskLevelLabel = (level: string) => {
     none: '正常', mild: '轻度', moderate: '中度', severe: '重度', extreme: '极重度',
   }
   return map[level] ?? level
+}
+
+// E2E-14：人格量表结果按画像渲染（雷达图 + 维度分档），症状量表仍走总分/等级
+const personalityDimensions = PERSONALITY_DIMENSIONS
+const isPersonality = computed(
+  () => !!submitResult.value && isPersonalityResult(submitResult.value.riskLevel),
+)
+const levelFor = (key: string) => {
+  const score = submitResult.value?.factorScores?.[key]
+  return typeof score === 'number' ? personalityLevel(score) : '-'
 }
 
 const handleResultConfirm = () => {
@@ -447,6 +485,38 @@ onMounted(() => {
 }
 .result-suggestion {
   margin-top: 8px;
+}
+
+.dimension-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.dimension-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--ee-border);
+  font-size: 13px;
+}
+.dimension-name {
+  color: var(--ee-text-muted);
+}
+.dimension-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--ee-text);
+  font-weight: 600;
+}
+.dimension-level {
+  color: var(--ee-primary);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
 }
 
 @media (max-width: 600px) {

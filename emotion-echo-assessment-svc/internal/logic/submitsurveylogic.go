@@ -85,11 +85,12 @@ func (l *SubmitSurveyLogic) SubmitSurvey(req *types.SubmitSurveyReq) (resp *type
 	answered := len(req.Answers)
 
 	return &types.SubmitSurveyResp{
-		ResultID:   result.ID,
-		SurveyID:   result.SurveyID,
-		TotalScore: result.TotalScore,
-		Answered:   answered,
-		RiskLevel:  result.RiskLevel,
+		ResultID:     result.ID,
+		SurveyID:     result.SurveyID,
+		TotalScore:   result.TotalScore,
+		Answered:     answered,
+		RiskLevel:    result.RiskLevel,
+		FactorScores: scoreResult.Factors,
 	}, nil
 }
 

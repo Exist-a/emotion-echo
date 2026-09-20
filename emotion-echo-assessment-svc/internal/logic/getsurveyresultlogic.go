@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"emotion-echo-assessment-svc/internal/middleware"
+	"emotion-echo-assessment-svc/internal/model"
 	"emotion-echo-assessment-svc/internal/repository"
 	"emotion-echo-assessment-svc/internal/svc"
 	"emotion-echo-assessment-svc/internal/types"
@@ -46,15 +47,34 @@ func (l *GetSurveyResultLogic) GetSurveyResult(req *types.GetSurveyResultReq) (r
 	}
 
 	return &types.GetSurveyResultResp{
-		ResultID:    res.ID,
-		SurveyID:    res.SurveyID,
-		UserID:      res.UserID,
-		TotalScore:  res.TotalScore,
-		RiskLevel:   res.RiskLevel,
-		DurationSec: res.DurationSec,
-		Answers:     res.Answers,
-		SubmittedAt: res.SubmittedAt.UnixMilli(),
+		ResultID:     res.ID,
+		SurveyID:     res.SurveyID,
+		UserID:       res.UserID,
+		TotalScore:   res.TotalScore,
+		RiskLevel:    res.RiskLevel,
+		DurationSec:  res.DurationSec,
+		Answers:      res.Answers,
+		SubmittedAt:  res.SubmittedAt.UnixMilli(),
+		FactorScores: jsonMapToFloat64(res.FactorScores),
 	}, nil
+}
+
+// jsonMapToFloat64 model.JSONMap → map[string]float64
+// （JSONB 反序列化后数值是 float64；非数值项跳过而非报错，避免脏数据让整条结果读不出）
+func jsonMapToFloat64(m model.JSONMap) map[string]float64 {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(m))
+	for k, v := range m {
+		if f, ok := v.(float64); ok {
+			out[k] = f
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // ListMyResults 列出当前用户所有量表结果
@@ -80,11 +100,12 @@ func (l *GetSurveyResultLogic) ListMyResults(req *types.ListMyResultsReq) (resp 
 	}
 	for _, r := range results {
 		resp.Items = append(resp.Items, types.SurveyResultItem{
-			ResultID:    r.ID,
-			SurveyID:    r.SurveyID,
-			TotalScore:  r.TotalScore,
-			RiskLevel:   r.RiskLevel,
-			SubmittedAt: r.SubmittedAt.UnixMilli(),
+			ResultID:     r.ID,
+			SurveyID:     r.SurveyID,
+			TotalScore:   r.TotalScore,
+			RiskLevel:    r.RiskLevel,
+			SubmittedAt:  r.SubmittedAt.UnixMilli(),
+			FactorScores: jsonMapToFloat64(r.FactorScores),
 		})
 	}
 	return resp, nil

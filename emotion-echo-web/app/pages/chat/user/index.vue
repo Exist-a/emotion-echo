@@ -47,6 +47,38 @@
       <div v-if="isLoadingBehavior" class="ee-skeleton" />
       <div v-else-if="chartData.length === 0" class="ee-empty">暂无数据</div>
     </div>
+
+    <!-- E2E-14：人格画像（D-02：人格量表产心理画像，驱动 AI 回复针对性） -->
+    <div class="section-heading">
+      <h2>我的人格画像</h2>
+      <p>来自人格五因素量表，用于让对话更贴合你。</p>
+    </div>
+    <div class="user-data-card card personality-card">
+      <div v-if="isLoadingPersonality" class="ee-skeleton" />
+      <template v-else-if="personalityScores">
+        <RadarChart
+          :indicators="personalityIndicators()"
+          :data="personalityRadarData(personalityScores)"
+          :height="chartItemHeight || 300"
+          title="人格维度"
+        />
+        <ul class="dimension-list">
+          <li v-for="dim in personalityDimensions" :key="dim.key" class="dimension-row">
+            <span class="dimension-name">{{ dim.label }}</span>
+            <span class="dimension-score">
+              {{ personalityScores[dim.key] ?? '-' }}
+              <em class="dimension-level">{{ levelOf(dim.key) }}</em>
+            </span>
+          </li>
+        </ul>
+      </template>
+      <div v-else class="ee-empty">
+        <p>还没有人格测评结果</p>
+        <button type="button" class="ee-btn ee-btn-primary" @click="navigateTo({ name: 'question' })">
+          去测评
+        </button>
+      </div>
+    </div>
   </section>
 
   <Teleport to="body">
@@ -131,7 +163,16 @@
 import pieChart from '~/components/charts/pieChart.vue'
 import lineChart from '~/components/charts/lineChart.vue'
 import barChart from '~/components/charts/barChart.vue'
+import RadarChart from '~/components/charts/RadarChart.vue'
 import type { ChartItem } from '~/types/charts/common'
+import {
+  PERSONALITY_DIMENSIONS,
+  hasPersonalityScores,
+  isPersonalityResult,
+  personalityIndicators,
+  personalityLevel,
+  personalityRadarData,
+} from '~/configs/personality'
 import { ref, onMounted } from 'vue'
 import { get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
@@ -277,6 +318,38 @@ const fetchBehaviorData = async () => {
   }
 }
 
+// ==================== E2E-14：人格画像 ====================
+
+const personalityDimensions = PERSONALITY_DIMENSIONS
+const personalityScores = ref<Record<string, number> | null>(null)
+const isLoadingPersonality = ref(false)
+
+const levelOf = (key: string) => {
+  const score = personalityScores.value?.[key]
+  return typeof score === 'number' ? personalityLevel(score) : '-'
+}
+
+/**
+ * 取最新人格量表结果的维度分。
+ *
+ * 列表按 submittedAt 倒序（assessment-svc `ORDER BY submitted_at DESC`），
+ * 取第一条带维度分的人格结果即可；无结果不是错误 —— 页面展示引导去测评。
+ */
+const fetchPersonality = async () => {
+  isLoadingPersonality.value = true
+  try {
+    const data = await get<{ items?: Array<Record<string, any>> }>(API_ROUTES.surveyResults.path)
+    const latest = (data?.items ?? []).find(
+      (it) => isPersonalityResult(it.riskLevel) && hasPersonalityScores(it.factorScores),
+    )
+    personalityScores.value = latest?.factorScores ?? null
+  } catch (error: any) {
+    notify('', error?.message || '获取人格画像失败', 'warning', 3000)
+  } finally {
+    isLoadingPersonality.value = false
+  }
+}
+
 // 动态构建图表数据
 const chartData = computed<ChartItem[]>(() => {
   const items: ChartItem[] = []
@@ -341,6 +414,7 @@ onMounted(async () => {
   // 不取会用 store 兜底值（"用户"/18 岁/空 ID），编辑弹框也会回填错误数据。
   await userStore.fetchUserInfo().catch(() => {})
   fetchBehaviorData()
+  fetchPersonality()
 })
 </script>
 
@@ -561,6 +635,41 @@ onMounted(async () => {
   border-radius: var(--ee-radius-md);
   font-size: 22px;
 }
+.dimension-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dimension-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ee-border);
+  font-size: 13px;
+}
+.dimension-name {
+  color: var(--ee-text-muted);
+}
+.dimension-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ee-text);
+  font-weight: 600;
+}
+.dimension-level {
+  color: var(--ee-primary);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+}
+.personality-card {
+  display: block;
+}
+
 @media (max-width: 700px) {
   .user-info-card {
     align-items: flex-start;

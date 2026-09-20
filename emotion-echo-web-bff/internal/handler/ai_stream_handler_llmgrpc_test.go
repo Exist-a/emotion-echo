@@ -1,8 +1,9 @@
 // Package handler — ai_stream_handler_llmgrpc_test.go
 //
 // Stage 81 RED（llm-chat-real-pipeline PR-2）：AIStreamHandler 的上游优先级契约
-//   1. llm-service gRPC ChatCompletion 可用 → 流式透传 delta（SSE），不用 mock
-//   2. gRPC 传输失败 → 回落既有 Phase D HTTP 直连（有 key 时）或 mock
+//  1. llm-service gRPC ChatCompletion 可用 → 流式透传 delta（SSE），不用 mock
+//  2. gRPC 传输失败 → 回落既有 Phase D HTTP 直连（有 key 时）或 mock
+//
 // llm-service 自身无 key/上游失败在 PR-1 已降级为 mock chunk（fallback_reason），
 // BFF 只做透传，不复制降级逻辑。
 package handler
@@ -23,11 +24,11 @@ import (
 
 // fakeLLMStreamer 实现 downstream.LLMChatStreamer
 type fakeLLMStreamer struct {
-	deltas     []string
-	err        error
-	gotModel   string
-	gotMsgs    []downstream.Message
-	gotFiles   []downstream.FileAttachment // Stage 89 PR-3
+	deltas   []string
+	err      error
+	gotModel string
+	gotMsgs  []downstream.Message
+	gotFiles []downstream.FileAttachment // Stage 89 PR-3
 }
 
 func (f *fakeLLMStreamer) StreamChat(_ context.Context, req downstream.LLMStreamRequest, onDelta func(delta, model string)) error {
@@ -47,7 +48,7 @@ func TestAIStreamHandler_LLMGRPCUpstream_StreamsDeltas(t *testing.T) {
 	fake := &fakeLLMStreamer{deltas: []string{"真实", "LLM", "回复"}}
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithLLM(config.Config{}, fake))
+	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithDeps(config.Config{}, AIStreamDeps{LLM: fake}))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/ai/stream",
@@ -70,7 +71,7 @@ func TestAIStreamHandler_LLMGRPCError_FallsBackToMock(t *testing.T) {
 	fake := &fakeLLMStreamer{err: assert.AnError}
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithLLM(config.Config{}, fake))
+	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithDeps(config.Config{}, AIStreamDeps{LLM: fake}))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/ai/stream",

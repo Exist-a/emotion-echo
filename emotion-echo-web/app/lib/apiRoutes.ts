@@ -66,6 +66,8 @@ export const API_ROUTES = {
   surveys: { method: 'GET', path: '/surveys' } as ApiRoute,
   surveyById: { method: 'GET', path: '/surveys/:id' } as ApiRoute,
   submitSurvey: { method: 'POST', path: '/surveys/:id/submit' } as ApiRoute,
+  // E2E-14：我的量表结果列表（人格画像取自其中最新的自定义风险标记结果）
+  surveyResults: { method: 'GET', path: '/surveys/results' } as ApiRoute,
 
   // ============ Multimodal / TTS / AI stream (BFF: multimodal/tts/ai_stream handlers) ============
   multimodalAnalyze: { method: 'POST', path: '/multimodal/analyze' } as ApiRoute,

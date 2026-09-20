@@ -96,4 +96,28 @@ describe('BaseChart.vue', () => {
     expect(wrapper.exists()).toBe(true)
     wrapper.unmount()
   })
+
+  // E2E-14：图表容器宽度不得依赖父容器 display 类型。
+  //
+  // 实测：`.result-content`（人格结果弹窗）是 `display: grid`，而 chart-container 带
+  // `margin: 0 auto` —— grid 子项的 auto margin 会取消 stretch，宽度塌缩到
+  // min-content（实测 100px），画布跟着缩，雷达图轴标签「尽责性」被裁成「性」。
+  // happy-dom 无布局引擎，无法在此断言真实宽度，故钉死"必须显式声明 width"这一
+  // 修复要点；真实布局由 Playwright 用例（截图 + canvas 宽度断言）守。
+  it('chart-container 必须显式声明 width:100%，不依赖父容器 display 类型', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync('./app/components/charts/BaseChart.vue', 'utf8')
+    const block = src.match(/\.chart-container\s*\{([\s\S]*?)\}/)
+    expect(block, '未找到 .chart-container 样式块').toBeTruthy()
+    const body = block?.[1] ?? ''
+    expect(body.length, '.chart-container 样式块不得为空').toBeGreaterThan(0)
+    expect(
+      /width:\s*100%/.test(body),
+      'E2E-14: .chart-container 必须声明 width: 100%（否则在 grid/flex 父容器里宽度塌缩到 100px）',
+    ).toBe(true)
+    expect(
+      /min-width:\s*0/.test(body),
+      'E2E-14: 需同时声明 min-width: 0（flex 场景下防内容撑开/塌缩）',
+    ).toBe(true)
+  })
 })

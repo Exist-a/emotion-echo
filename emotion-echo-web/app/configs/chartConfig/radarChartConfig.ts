@@ -7,9 +7,14 @@ export const radarChartOption = (indicators: RadarIndicator[], data: number[], t
   radar: {
     indicator: indicators.map((i) => ({ name: i.name, max: i.max })),
     shape: 'polygon',
+    // 显式限制半径，为中文轴标签留出空间。
+    // 不设时 ECharts 默认取容器较小边的 ~75~80%，窄视口（Pixel 5，393px）下
+    // 「尽责性」被裁成「性」、「神经质」裁成「神」（E2E-14 实测）。
+    radius: '62%',
     splitNumber: 5,
     axisName: {
       color: '#333',
+      fontSize: 12,
     },
     splitLine: {
       lineStyle: {

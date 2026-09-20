@@ -12,6 +12,22 @@
       </button>
     </div>
 
+    <div v-if="!isLoading && tableData.length > 0" class="tab-bar" role="tablist">
+      <button
+        v-for="tab in TABS"
+        :key="tab.key"
+        type="button"
+        role="tab"
+        class="tab-btn"
+        :class="{ active: activeTab === tab.key }"
+        :aria-selected="activeTab === tab.key"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+        <span class="tab-count">{{ tabSurveys(tab.key).length }}</span>
+      </button>
+    </div>
+
     <div v-if="isLoading" class="loading-grid">
       <div v-for="i in 3" :key="i" class="card-skeleton" />
     </div>
@@ -21,15 +37,22 @@
       <p>暂未提供量表</p>
     </div>
 
+    <div v-else-if="visibleSurveys.length === 0" class="empty-state">
+      <span class="empty-mark">○</span>
+      <p>{{ activeTabLabel }}暂未开放</p>
+    </div>
+
     <div v-else class="assessment-grid">
       <article
-        v-for="item in tableData"
+        v-for="item in visibleSurveys"
         :key="item.id"
         class="assessment-card"
       >
         <header class="card-head">
           <h3>{{ item.title }}</h3>
-          <span class="badge">{{ item.category }}</span>
+          <span class="badge" :class="isPersonality(item) ? 'badge-personality' : ''">
+            {{ categoryLabel(item.category) }}
+          </span>
         </header>
         <p class="card-desc">{{ item.description }}</p>
         <dl class="card-meta">
@@ -75,6 +98,7 @@ import type { SurveyItem, SurveyResult } from '~/types/api'
 import { get } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { useNotify } from '~/composables/useNotify'
+import { PERSONALITY_RISK_LEVEL } from '~/configs/personality'
 
 definePageMeta({ layout: 'nav' })
 
@@ -85,11 +109,41 @@ const isLoading = ref(true)
 
 const tableData = ref<SurveyItem[]>([])
 
+// D-02：人格量表与症状量表分区展示（前者产心理画像驱动 AI，后者做风险预警）
+type TabKey = 'symptom' | 'personality'
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'symptom', label: '症状筛查' },
+  { key: 'personality', label: '人格画像' },
+]
+const activeTab = ref<TabKey>('symptom')
+
+const isPersonality = (item: SurveyItem) => item.category === 'personality'
+const tabSurveys = (key: TabKey) =>
+  key === 'personality' ? tableData.value.filter(isPersonality) : tableData.value.filter((i) => !isPersonality(i))
+const visibleSurveys = computed(() => tabSurveys(activeTab.value))
+const activeTabLabel = computed(
+  () => TABS.find((t) => t.key === activeTab.value)?.label ?? '',
+)
+
+const categoryLabel = (category: string) => {
+  const map: Record<string, string> = {
+    personality: '人格',
+    depression: '抑郁',
+    anxiety: '焦虑',
+    sleep: '睡眠',
+  }
+  return map[category] ?? category
+}
+
 const fetchSurveys = async () => {
   isLoading.value = true
   try {
     const data = await get<{ items: SurveyItem[] }>(API_ROUTES.surveys.path)
     tableData.value = data.items ?? []
+    // 数据到位后落到有内容的一栏，避免默认停在空栏
+    if (tabSurveys(activeTab.value).length === 0 && tableData.value.length > 0) {
+      activeTab.value = tabSurveys('personality').length > 0 ? 'personality' : 'symptom'
+    }
   } catch (err: any) {
     notifyError('获取量表列表失败', err.message)
   } finally {
@@ -152,6 +206,46 @@ const riskLevelLabel = (level: string) => {
 .btn-ghost {
   background: transparent;
   color: var(--ee-text-muted);
+}
+
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+  border-bottom: 1px solid var(--ee-border);
+}
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  color: var(--ee-text-muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  transition: color var(--ee-transition), border-color var(--ee-transition);
+}
+.tab-btn:hover {
+  color: var(--ee-text);
+}
+.tab-btn.active {
+  color: var(--ee-primary);
+  border-bottom-color: var(--ee-primary);
+  font-weight: 600;
+}
+.tab-count {
+  padding: 1px 7px;
+  color: var(--ee-text-muted);
+  background: var(--ee-surface-muted);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.tab-btn.active .tab-count {
+  color: var(--ee-primary);
+  background: var(--ee-primary-soft);
 }
 
 .loading-grid {
@@ -232,6 +326,12 @@ const riskLevelLabel = (level: string) => {
   padding: 2px 9px;
   border-radius: 999px;
   font-size: 11px;
+  color: var(--ee-text-muted);
+  background: var(--ee-surface-muted);
+}
+.badge-personality {
+  color: var(--ee-primary);
+  background: var(--ee-primary-soft);
 }
 .badge-completed {
   color: var(--ee-primary);

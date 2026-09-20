@@ -298,11 +298,15 @@ export interface SubmitSurveyParams {
 
 /**
  * 测验结果（对齐 assessment-svc SubmitSurveyResp / GetSurveyResultResp）
+ *
+ * factorScores 为分项/维度分数：人格量表（BIG5）是五维度，PSQI 是 7 个 component。
+ * riskLevel === 'dimension_profile' 时按人格画像渲染（见 configs/personality.ts）。
  */
 export interface SurveyResult {
   resultId: string
   totalScore: number
   riskLevel: string
+  factorScores?: Record<string, number>
 }
 
 // ==================== 报表模块 ====================

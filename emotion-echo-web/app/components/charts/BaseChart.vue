@@ -122,5 +122,12 @@ onBeforeUnmount(() => {
 .chart-container {
   /* 确保容器背景透明，让父容器的主题背景生效 */
   background: transparent;
+  /* 宽度不能交给父容器的 display 类型决定：
+     `margin: 0 auto` 会让 **grid/flex 子项**失去 stretch，宽度塌缩到 min-content。
+     E2E-14 实测：结果弹窗 `.result-content` 是 grid ⇒ 雷达图容器只剩 100px，
+     画布同步缩到 100px，轴标签「尽责性」「神经质」被裁成「性」「神」。
+     块级父容器（如我的空间的 .chart-item）下 width:auto 本就等于撑满，加这两行无副作用。 */
+  width: 100%;
+  min-width: 0;
 }
 </style>
