@@ -60,7 +60,11 @@
 import type { themeType } from '~/types/userConfig/userConfigType'
 
 const userStore = useUserStore()
-const userConfig = ref(userStore.getUserConfig())
+// E2E-12: computed 保持与 store 同步（fetchUserInfo 完成后自动更新选中态）
+const userConfig = computed(() => userStore.getUserConfig())
+
+// E2E-12: 确保从服务端拉取最新 config（cookie 恢复的 userInfo 可能是旧缓存）
+onMounted(() => { userStore.fetchUserInfo() })
 
 const fontSizes = { small: '14px', medium: '16px', large: '18px' } as const
 const fontLabels = { small: '小', medium: '中', large: '大' } as const
@@ -83,13 +87,11 @@ const fontSizeLabel = computed(
 )
 
 const handleFontSizeChange = async (size: 'small' | 'medium' | 'large') => {
-  userConfig.value.fontSize = size
   await userStore.setFontSize(size)
 }
 
 const handleThemeChange = async (theme: string | number | boolean | undefined) => {
   const t = (theme as themeType) || 'auto'
-  userConfig.value.theme = t
   await userStore.setTheme(t)
 }
 </script>

@@ -77,7 +77,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 |------|--------|------|--------------|------|
 | E2E-10 | 聊天核心链路 | 发送/SSE 流式/错误处理/中断重试 | 多模态 | 🟡 **partial**（2026-09-19 由 done 降级）：12/12 结论未变（含 E2E-F-79 LLM key 修复实测），降级因 0 张截图（3 个 `[V]` 点无视觉证据）+ 汇总行格式不合规 + 缺「收口自检」章节 → [report §7](stages/e2e-10-chat-core/report.md) |
 | E2E-11 | 我的空间 | 资料修改/头像上传（MinIO）+ 现有 3 个对话行为图表有数据可渲染、空态可读 | 测评图表（归 E2E-14） | 🟡 **partial**（2026-09-19：**12/12 测试点全 PASS**；首轮 8 commit 修 4 组代码现状缺陷 + 3 组浏览器实测缺陷 + 头像链路 3 层丢弃点；**复查轮再修 5 项**：GetUserById/Login/Register 三处映射漂移收敛、maxConsecutiveDays 恒 0、E2E-F-36 内容裁剪、头像服务端 2MB 上限失效、InMemory 替身保真度。**判 partial 而非 done**：账本仍有 2 条归属本阶段未解决（E2E-F-80 年龄不落库、E2E-F-81 深度指标 NULL session 语义）。回归钉：Playwright 10 用例 + 静态契约钉 21+1 项 + Go 侧新增 25 条。详档 [stages/e2e-11-my-space/report.md](stages/e2e-11-my-space/report.md) §8 复查记录） |
-| E2E-12 | 设置页 | 字体/主题切换与持久化 | — | ⏳ pending |
+| E2E-12 | 设置页 | 字体/主题切换与持久化 | — | 🟡 **partial**（2026-09-20：8/12 PASS + 4 BLOCKED=dev 环境限制；config 持久化四层契约已落地，E2E-F-82 已解决。Playwright 8/8 + vitest 6/6 + Go 8 条新测试 + IAB 浏览器验收。PR #28） |
 
 ### 第四批：决策支持与多模态
 

@@ -97,13 +97,17 @@ func toProfileVM(u *downstream.UserInfo) ProfileVM {
 	if u.CreatedAt > 0 {
 		createdAt = time.Unix(u.CreatedAt, 0).Format(time.RFC3339)
 	}
+	config := u.Config
+	if config == nil {
+		config = map[string]any{}
+	}
 	return ProfileVM{
 		ID:        fmt.Sprintf("%d", u.UserID),
 		Username:  u.Account,
 		Nickname:  u.Nickname,
 		Avatar:    u.AvatarURL,
 		Age:       nil,
-		Config:    map[string]any{},
+		Config:    config,
 		CreatedAt: createdAt,
 	}
 }

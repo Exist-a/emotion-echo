@@ -25,19 +25,21 @@ import (
 
 // UserInfo 对应 user-svc types.UserInfo
 type UserInfo struct {
-	UserID     int64  `json:"userId"`
-	Account    string `json:"account"`
-	Nickname   string `json:"nickname"`
-	AvatarURL  string `json:"avatarUrl,omitempty"`
-	CreatedAt  int64  `json:"createdAt,omitempty"`
+	UserID     int64          `json:"userId"`
+	Account    string         `json:"account"`
+	Nickname   string         `json:"nickname"`
+	AvatarURL  string         `json:"avatarUrl,omitempty"`
+	Config     map[string]any `json:"config,omitempty"`
+	CreatedAt  int64          `json:"createdAt,omitempty"`
 }
 
 // UpdateProfileReq 对应 user-svc types.UpdateProfileReq（全 optional）
 type UpdateProfileReq struct {
-	Nickname  *string `json:"nickname,omitempty"`
-	Gender    *int16  `json:"gender,omitempty"`
-	Birthday  *string `json:"birthday,omitempty"`
-	AvatarURL *string `json:"avatarUrl,omitempty"`
+	Nickname  *string        `json:"nickname,omitempty"`
+	Gender    *int16         `json:"gender,omitempty"`
+	Birthday  *string        `json:"birthday,omitempty"`
+	AvatarURL *string        `json:"avatarUrl,omitempty"`
+	Config    *map[string]any `json:"config,omitempty"`
 }
 
 // userWrapper 响应外层统一包 {"user": UserInfo}

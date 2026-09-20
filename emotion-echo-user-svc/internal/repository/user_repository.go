@@ -23,9 +23,9 @@ type UserRepo interface {
 	GetByID(ctx context.Context, id int64) (*model.User, error)
 	GetByUsername(ctx context.Context, username string) (*model.User, error)
 	Create(ctx context.Context, u *model.User) error
-	// UpdateProfile 修改用户可编辑字段（昵称/性别/生日/头像）
+	// UpdateProfile 修改用户可编辑字段（昵称/性别/生日/头像/config）
 	// 传 nil 表示该字段不动，传 *string 设置/覆盖值
-	UpdateProfile(ctx context.Context, id int64, nickname *string, gender *int16, birthday *time.Time, avatarURL *string) error
+	UpdateProfile(ctx context.Context, id int64, nickname *string, gender *int16, birthday *time.Time, avatarURL *string, config *model.JSONMap) error
 	// Stage 33 PR-19a：UsernameExists 仅用于注册时查重（不返回完整 user）
 	UsernameExists(ctx context.Context, username string) (bool, error)
 	// Sprint 1 PR-4c-3: UpdatePassword 重置密码（hash 已是 bcrypt 结果）
@@ -91,7 +91,7 @@ func (r *InMemoryUserRepo) Create(ctx context.Context, u *model.User) error {
 	return nil
 }
 
-func (r *InMemoryUserRepo) UpdateProfile(ctx context.Context, id int64, nickname *string, gender *int16, birthday *time.Time, avatarURL *string) error {
+func (r *InMemoryUserRepo) UpdateProfile(ctx context.Context, id int64, nickname *string, gender *int16, birthday *time.Time, avatarURL *string, config *model.JSONMap) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	u, ok := r.users[id]
@@ -109,6 +109,9 @@ func (r *InMemoryUserRepo) UpdateProfile(ctx context.Context, id int64, nickname
 	}
 	if avatarURL != nil {
 		u.AvatarURL = avatarURL
+	}
+	if config != nil {
+		u.Config = *config
 	}
 	u.UpdatedAt = time.Now()
 	return nil
@@ -181,7 +184,7 @@ func (r *PostgresUserRepo) Create(ctx context.Context, u *model.User) error {
 	return r.db.WithContext(ctx).Create(u).Error
 }
 
-func (r *PostgresUserRepo) UpdateProfile(ctx context.Context, id int64, nickname *string, gender *int16, birthday *time.Time, avatarURL *string) error {
+func (r *PostgresUserRepo) UpdateProfile(ctx context.Context, id int64, nickname *string, gender *int16, birthday *time.Time, avatarURL *string, config *model.JSONMap) error {
 	updates := map[string]interface{}{}
 	if nickname != nil {
 		updates["nickname"] = *nickname
@@ -194,6 +197,9 @@ func (r *PostgresUserRepo) UpdateProfile(ctx context.Context, id int64, nickname
 	}
 	if avatarURL != nil {
 		updates["avatar_url"] = *avatarURL
+	}
+	if config != nil {
+		updates["config"] = model.JSONMap(*config)
 	}
 	if len(updates) == 0 {
 		return nil // 无字段需更新

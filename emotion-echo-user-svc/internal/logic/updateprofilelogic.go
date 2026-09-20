@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"emotion-echo-user-svc/internal/middleware"
+	"emotion-echo-user-svc/internal/model"
 	"emotion-echo-user-svc/internal/repository"
 	"emotion-echo-user-svc/internal/svc"
 	"emotion-echo-user-svc/internal/types"
@@ -64,7 +65,13 @@ func (l *UpdateProfileLogic) UpdateProfile(req *types.UpdateProfileReq) (resp *t
 		birthday = &t
 	}
 
-	if err := l.svcCtx.UserRepo.UpdateProfile(l.ctx, uid, req.Nickname, req.Gender, birthday, req.AvatarURL); err != nil {
+	var config *model.JSONMap
+	if req.Config != nil {
+		cm := model.JSONMap(*req.Config)
+		config = &cm
+	}
+
+	if err := l.svcCtx.UserRepo.UpdateProfile(l.ctx, uid, req.Nickname, req.Gender, birthday, req.AvatarURL, config); err != nil {
 		return nil, err
 	}
 

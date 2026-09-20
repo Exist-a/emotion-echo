@@ -266,11 +266,16 @@ func toUserInfo(u *model.User) types.UserInfo {
 	if !u.CreatedAt.IsZero() {
 		createdAt = u.CreatedAt.Unix()
 	}
+	var config map[string]any
+	if u.Config != nil {
+		config = map[string]any(u.Config)
+	}
 	return types.UserInfo{
 		UserId:    u.ID,
 		Account:   u.Username,
 		Nickname:  nick,
 		AvatarURL: avatar,
+		Config:    config,
 		CreatedAt: createdAt,
 	}
 }

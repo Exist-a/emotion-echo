@@ -77,7 +77,7 @@ func TestUserRepo_InMemory_UpdateProfile_Existing_UpdatesFields(t *testing.T) {
 
 	gender := int16(1)
 	newNick := "New Nick"
-	require.NoError(t, repo.UpdateProfile(context.Background(), 1, &newNick, &gender, nil, nil))
+	require.NoError(t, repo.UpdateProfile(context.Background(), 1, &newNick, &gender, nil, nil, nil))
 
 	got, err := repo.GetByID(context.Background(), 1)
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestUserRepo_InMemory_UpdateProfile_NotFound_ReturnsErrNotFound(t *testing.
 	t.Parallel()
 
 	repo := NewInMemoryUserRepo()
-	err := repo.UpdateProfile(context.Background(), 999, strPtr("X"), nil, nil, nil)
+	err := repo.UpdateProfile(context.Background(), 999, strPtr("X"), nil, nil, nil, nil)
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
@@ -106,7 +106,7 @@ func TestUserRepo_InMemory_UpdateProfile_NilFields_DoesNotTouch(t *testing.T) {
 	}))
 
 	// 全部 nil 不应报错也不应改任何字段
-	require.NoError(t, repo.UpdateProfile(context.Background(), 1, nil, nil, nil, nil))
+	require.NoError(t, repo.UpdateProfile(context.Background(), 1, nil, nil, nil, nil, nil))
 
 	got, err := repo.GetByID(context.Background(), 1)
 	require.NoError(t, err)

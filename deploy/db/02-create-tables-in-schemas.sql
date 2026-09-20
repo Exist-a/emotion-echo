@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS emotion_echo_user.users (
     avatar_url TEXT,
     gender SMALLINT DEFAULT 0,
     birthday DATE,
+    config JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ

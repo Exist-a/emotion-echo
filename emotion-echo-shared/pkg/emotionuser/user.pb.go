@@ -88,10 +88,12 @@ func (*GetMeRequest) Descriptor() ([]byte, []int) {
 //
 // 全 optional 字段（用 wrapper 类型）：nil = 不修改该字段
 type UpdateProfileRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Nickname      *string                `protobuf:"bytes,1,opt,name=nickname,proto3,oneof" json:"nickname,omitempty"`
-	AvatarUrl     *string                `protobuf:"bytes,2,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
-	Gender        *int32                 `protobuf:"varint,3,opt,name=gender,proto3,oneof" json:"gender,omitempty"` // 0=未设置 1=男 2=女
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Nickname  *string                `protobuf:"bytes,1,opt,name=nickname,proto3,oneof" json:"nickname,omitempty"`
+	AvatarUrl *string                `protobuf:"bytes,2,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
+	Gender    *int32                 `protobuf:"varint,3,opt,name=gender,proto3,oneof" json:"gender,omitempty"` // 0=未设置 1=男 2=女
+	// E2E-12: 用户个性化配置（fontSize/theme 等），JSON 字符串
+	Config        *string `protobuf:"bytes,6,opt,name=config,proto3,oneof" json:"config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -145,6 +147,13 @@ func (x *UpdateProfileRequest) GetGender() int32 {
 		return *x.Gender
 	}
 	return 0
+}
+
+func (x *UpdateProfileRequest) GetConfig() string {
+	if x != nil && x.Config != nil {
+		return *x.Config
+	}
+	return ""
 }
 
 // GetUserByIdRequest 查询用户请求
@@ -1018,14 +1027,16 @@ func (x *GetSecurityQuestionsByUsernameResponse) GetQuestions() []*SecurityQuest
 //
 // 字段命名遵循 emotion_query.proto 已确立的 snake_case
 type UserInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
-	Nickname      string                 `protobuf:"bytes,3,opt,name=nickname,proto3" json:"nickname,omitempty"`
-	AvatarUrl     string                 `protobuf:"bytes,4,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
-	Gender        int32                  `protobuf:"varint,5,opt,name=gender,proto3" json:"gender,omitempty"`                        // 0=未设置 1=男 2=女
-	CreatedAt     int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix seconds
-	UpdatedAt     int64                  `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Username  string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Nickname  string                 `protobuf:"bytes,3,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	AvatarUrl string                 `protobuf:"bytes,4,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
+	Gender    int32                  `protobuf:"varint,5,opt,name=gender,proto3" json:"gender,omitempty"`                        // 0=未设置 1=男 2=女
+	CreatedAt int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix seconds
+	UpdatedAt int64                  `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// E2E-12: 用户个性化配置（fontSize/theme 等），JSON 字符串
+	Config        *string `protobuf:"bytes,10,opt,name=config,proto3,oneof" json:"config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1109,21 +1120,30 @@ func (x *UserInfo) GetUpdatedAt() int64 {
 	return 0
 }
 
+func (x *UserInfo) GetConfig() string {
+	if x != nil && x.Config != nil {
+		return *x.Config
+	}
+	return ""
+}
+
 var File_user_proto protoreflect.FileDescriptor
 
 const file_user_proto_rawDesc = "" +
 	"\n" +
 	"\n" +
 	"user.proto\x12\x0femotion_user.v1\"\x0e\n" +
-	"\fGetMeRequest\"\xab\x01\n" +
+	"\fGetMeRequest\"\xd3\x01\n" +
 	"\x14UpdateProfileRequest\x12\x1f\n" +
 	"\bnickname\x18\x01 \x01(\tH\x00R\bnickname\x88\x01\x01\x12\"\n" +
 	"\n" +
 	"avatar_url\x18\x02 \x01(\tH\x01R\tavatarUrl\x88\x01\x01\x12\x1b\n" +
-	"\x06gender\x18\x03 \x01(\x05H\x02R\x06gender\x88\x01\x01B\v\n" +
+	"\x06gender\x18\x03 \x01(\x05H\x02R\x06gender\x88\x01\x01\x12\x1b\n" +
+	"\x06config\x18\x06 \x01(\tH\x03R\x06config\x88\x01\x01B\v\n" +
 	"\t_nicknameB\r\n" +
 	"\v_avatar_urlB\t\n" +
-	"\a_genderJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06\"-\n" +
+	"\a_genderB\t\n" +
+	"\a_configJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06\"-\n" +
 	"\x12GetUserByIdRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\"F\n" +
 	"\fLoginRequest\x12\x1a\n" +
@@ -1171,7 +1191,7 @@ const file_user_proto_rawDesc = "" +
 	"%GetSecurityQuestionsByUsernameRequest\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\"m\n" +
 	"&GetSecurityQuestionsByUsernameResponse\x12C\n" +
-	"\tquestions\x18\x01 \x03(\v2%.emotion_user.v1.SecurityQuestionInfoR\tquestions\"\xd3\x01\n" +
+	"\tquestions\x18\x01 \x03(\v2%.emotion_user.v1.SecurityQuestionInfoR\tquestions\"\xfb\x01\n" +
 	"\bUserInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
@@ -1182,7 +1202,10 @@ const file_user_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\x03R\tupdatedAtJ\x04\b\x06\x10\aJ\x04\b\a\x10\b2\xd3\a\n" +
+	"updated_at\x18\t \x01(\x03R\tupdatedAt\x12\x1b\n" +
+	"\x06config\x18\n" +
+	" \x01(\tH\x00R\x06config\x88\x01\x01B\t\n" +
+	"\a_configJ\x04\b\x06\x10\aJ\x04\b\a\x10\b2\xd3\a\n" +
 	"\vUserService\x12A\n" +
 	"\x05GetMe\x12\x1d.emotion_user.v1.GetMeRequest\x1a\x19.emotion_user.v1.UserInfo\x12Q\n" +
 	"\rUpdateProfile\x12%.emotion_user.v1.UpdateProfileRequest\x1a\x19.emotion_user.v1.UserInfo\x12M\n" +
@@ -1270,6 +1293,7 @@ func file_user_proto_init() {
 	}
 	file_user_proto_msgTypes[1].OneofWrappers = []any{}
 	file_user_proto_msgTypes[6].OneofWrappers = []any{}
+	file_user_proto_msgTypes[19].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

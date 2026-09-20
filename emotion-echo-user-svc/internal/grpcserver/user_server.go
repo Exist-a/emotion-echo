@@ -11,6 +11,7 @@ package grpcserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"emotion-echo-user-svc/internal/logic"
@@ -53,13 +54,20 @@ func (s *userServer) ensureRepo() error {
 
 // toProtoUser 把 types.UserInfo 转 proto UserInfo
 func toProtoUser(u types.UserInfo) *emotionuser.UserInfo {
-	return &emotionuser.UserInfo{
+	pb := &emotionuser.UserInfo{
 		Id:        u.UserId,
 		Username:  u.Account,
 		Nickname:  u.Nickname,
 		AvatarUrl: u.AvatarURL,
 		CreatedAt: u.CreatedAt,
 	}
+	if u.Config != nil {
+		if data, err := json.Marshal(u.Config); err == nil {
+			s := string(data)
+			pb.Config = &s
+		}
+	}
+	return pb
 }
 
 // GetMe 实现 GetMe RPC（复用 logic.NewGetMeLogic）
@@ -91,6 +99,12 @@ func (s *userServer) UpdateProfile(ctx context.Context, req *emotionuser.UpdateP
 	if req.Gender != nil {
 		g := int16(*req.Gender)
 		profileReq.Gender = &g
+	}
+	if req.Config != nil {
+		var cfg map[string]any
+		if err := json.Unmarshal([]byte(*req.Config), &cfg); err == nil {
+			profileReq.Config = &cfg
+		}
 	}
 	resp, err := logic.NewUpdateProfileLogic(ctx, s.svcCtx).UpdateProfile(profileReq)
 	if err != nil {

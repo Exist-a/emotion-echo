@@ -17,13 +17,15 @@ COPY package*.json ./
 ARG NPM_REGISTRY=https://registry.npmjs.org/
 RUN npm config set registry ${NPM_REGISTRY} \
     && npm config set engine-strict false \
-    && npm ci --ignore-scripts --no-audit --no-fund \
-    # Stage 105: alpine musl 上 oxc-parser/transform/minify 三个 native binding
-    # npm ci 默认应装但 npm cli bug #4828 偶发跳过, 显式补装一次保证 binary 落地.
+    && npm install --ignore-scripts --no-audit --no-fund \
+    # Stage 105: alpine musl 上 oxc-parser/transform/minify native binding
+    # npm bug #4828 偶发跳过 optional deps，显式补装保证 binary 落地。
+    # 不钉版本——由 npm install 解析的实际版本决定。
+    && npm ls oxc-parser --parseable 2>/dev/null | head -1 \
     && npm install --no-save --ignore-scripts --no-audit --no-fund \
-        @oxc-parser/binding-linux-x64-musl@0.102.0 \
-        @oxc-transform/binding-linux-x64-musl@0.102.0 \
-        @oxc-minify/binding-linux-x64-musl@0.102.0 \
+        @oxc-parser/binding-linux-x64-musl \
+        @oxc-transform/binding-linux-x64-musl \
+        @oxc-minify/binding-linux-x64-musl \
         @rollup/rollup-linux-x64-musl
 
 # 复制源代码
