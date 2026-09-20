@@ -105,7 +105,10 @@ curl -s -X POST http://localhost:19080/api/v1/auth/verify-security-answer   -H '
 | E2E-07 找回/重置密码 | [plan.md](stages/e2e-07-password-recovery/plan.md) | ✅ 已写 |
 | E2E-08 历史会话管理 | [plan.md](stages/e2e-08-conversation-management/plan.md) | ✅ 已写 |
 | E2E-09 注册流程 | [plan.md](stages/e2e-09-registration/plan.md) | ✅ 已写 |
-| E2E-10 ~ E2E-30 | — | ⏳ 轮到前补写 |
+| E2E-12 设置页 | [plan.md](stages/e2e-12-settings/plan.md) | ✅ 已写（阶段已 done） |
+| E2E-13 心理测验链路修复 | [plan.md](stages/e2e-13-quiz/plan.md) | ✅ 已写（阶段已 done） |
+| E2E-14 人格量表与 AI 提示词定制 | [plan.md](stages/e2e-14-personality-ai-prompt/plan.md) | ✅ 已写（阶段已 done） |
+| E2E-15 ~ E2E-30 | — | ⏳ 轮到前补写 |
 
 模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)。
 
