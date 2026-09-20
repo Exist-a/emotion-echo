@@ -199,3 +199,69 @@ func TestSubmitSurveyLogic_BIG5_ReturnsFactorScores(t *testing.T) {
 	assert.InDelta(t, 18.0, resp.FactorScores["agreeableness"], 0.001)
 	assert.InDelta(t, 18.0, resp.FactorScores["neuroticism"], 0.001)
 }
+
+// TestSubmitSurveyLogic_ReportsScoreKind 响应必须自述 totalScore 的语义（E2E-F-97 ①）
+func TestSubmitSurveyLogic_ReportsScoreKind(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		code     string
+		answers  map[string]int
+		wantKind string
+	}{
+		{
+			code: "PHQ-9",
+			answers: map[string]int{"q1": 1, "q2": 1, "q3": 1, "q4": 1, "q5": 1,
+				"q6": 1, "q7": 1, "q8": 1, "q9": 1},
+			wantKind: "risk",
+		},
+		{
+			code: "BIG5",
+			answers: func() map[string]int {
+				m := map[string]int{}
+				for i := 1; i <= 30; i++ {
+					m[fmt.Sprintf("q%d", i)] = 3
+				}
+				return m
+			}(),
+			wantKind: "dimension_sum",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			repo := repository.NewInMemorySurveyRepo()
+			repo.Add(&model.Survey{ID: 1, Code: tc.code, Status: 1})
+			ctx := contextWithUserID(context.Background(), 1)
+			l := NewSubmitSurveyLogic(ctx, newSubmitSurveySvcCtx(repo))
+
+			resp, err := l.SubmitSurvey(&types.SubmitSurveyReq{SurveyId: 1, Answers: tc.answers})
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantKind, resp.ScoreKind,
+				"下游必须能不看 riskLevel 魔法值就判断 totalScore 能不能当风险分读")
+		})
+	}
+}
+
+// TestGetSurveyResultLogic_ReportsScoreKind 读回结果时同样带语义（从落库的 riskLevel 还原）
+func TestGetSurveyResultLogic_ReportsScoreKind(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemorySurveyRepo()
+	repo.Add(&model.Survey{ID: 1, Code: "BIG5", Status: 1})
+	ctx := contextWithUserID(context.Background(), 7)
+	sub := NewSubmitSurveyLogic(ctx, newGetSurveyResultSvcCtx(repo))
+	ans := map[string]int{}
+	for i := 1; i <= 30; i++ {
+		ans[fmt.Sprintf("q%d", i)] = 2
+	}
+	subResp, err := sub.SubmitSurvey(&types.SubmitSurveyReq{SurveyId: 1, Answers: ans})
+	require.NoError(t, err)
+
+	l := NewGetSurveyResultLogic(ctx, newGetSurveyResultSvcCtx(repo))
+	got, err := l.GetSurveyResult(&types.GetSurveyResultReq{ResultId: subResp.ResultID})
+	require.NoError(t, err)
+	assert.Equal(t, "dimension_sum", got.ScoreKind)
+
+	list, err := l.ListMyResults(&types.ListMyResultsReq{Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, list.Items, 1)
+	assert.Equal(t, "dimension_sum", list.Items[0].ScoreKind)
+}

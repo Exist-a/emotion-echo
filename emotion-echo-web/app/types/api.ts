@@ -307,6 +307,12 @@ export interface SurveyResult {
   totalScore: number
   riskLevel: string
   factorScores?: Record<string, number>
+  /**
+   * totalScore 的语义（E2E-F-97 ①）：
+   * 'risk' = 症状总分（有严重度语义）；'dimension_sum' = 人格五维度之和（**无严重度语义**）；
+   * 'ratio' = 按满分比例分档。不要默认 totalScore 是风险分 —— 人格量表全中立是 90。
+   */
+  scoreKind?: 'risk' | 'dimension_sum' | 'ratio'
 }
 
 // ==================== 报表模块 ====================
