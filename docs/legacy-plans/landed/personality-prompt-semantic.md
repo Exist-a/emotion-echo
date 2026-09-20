@@ -1,10 +1,22 @@
 ---
 status: landed
-priority: high
-created: 2026-09-21
-type: feature-iteration
-supersedes-part-of: docs/e2e-roadmap/stages/e2e-14-personality-ai-prompt/
-related-findings: [E2E-F-95]
+landed: 2026-09-21
+landed-stages:
+  - PR #40（feat/personality-prompt-semantic → main，2026-09-21）
+landed-evidence:
+  - emotion-echo-web-bff/internal/handler/personality_directive.go（行为规格表 + buildPersonalityGuide）
+  - docs/architecture/adr/adr-2026-09-personality-prompt-semantics.md（语义设计决策 ADR）
+  - scripts/verify_personality_prompt_diff.py（对立画像 A/B + 去标识盲判取证）
+  - 账本 E2E-F-95 已翻「已解决」；覆盖率统计由 Go 单测断言钉住（66% → 95.5%）
+residuals:
+  - 盲判判官与生成**同源**（同模型族，存在自偏好偏差），未换独立模型复验
+  - A/B 仅在**外向性/神经质**两维有差异 ⇒ 开放/尽责/宜人三条指令的效果未验证
+  - 仅测**首个回合**，多轮对话内画像是否持续生效未测
+  - 未做**真人评测** —— "用户能感受到"最终需人评，LLM 判官只是代理指标
+  - 未做画像时序演化（"最近变内向了"）与多轮内画像微调
+original-path: docs/plans/personality-prompt-semantic.md
+original-date: 2026-09-21
+migrated-at: 2026-09-21
 ---
 
 # 人格提示词语义化 —— 让画像真正改变回复

@@ -45,6 +45,7 @@ status: Round 1 占位 · Round 2 首批内容迁入
 - `nacos-enablement-dev.md`（Stage 88 落地后归档）
 - `llm-chat-real-pipeline.md`（Stage 81 落地后归档）
 - `observability-edge-gaps-from-code-review.md`（Stage 92 + 93 + Round 5 落地后归档,§A 全 2 项 + §B + §C + §E 共 5/7 项 closed;§D + §F P3 2 项留 Stage 94+ 候选）
+- `personality-prompt-semantic.md` + `personality-prompt-semantic-report.md`（PR #40 落地后归档；人格画像提示词语义化 —— 行为规格 + ipsative 分档，覆盖率 66%→95.5%；残余见该文件 `residuals:`）
 
 ### shifted/（Round 2 迁入）
 
