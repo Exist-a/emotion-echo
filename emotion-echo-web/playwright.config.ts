@@ -35,7 +35,7 @@ export default defineConfig({
       // chromium-headless-shell is the lighter variant Playwright installs
       // by default on Windows; use it because it has no GUI deps.
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: 'chromium-headless-shell' },
+      use: { ...devices['Desktop Chrome'] },
     },
     {
       // Mobile viewport — Pixel 5 for responsive testing
@@ -46,7 +46,7 @@ export default defineConfig({
   webServer: process.env.BASE_URL
     ? undefined
     : {
-        command: 'pnpm dev --port 3000',
+        command: 'npx nuxi dev --port 3000',
         url: 'http://localhost:3000',
         reuseExistingServer: true,
         timeout: 120_000,

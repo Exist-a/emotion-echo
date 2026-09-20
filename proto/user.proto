@@ -115,6 +115,8 @@ message UpdateProfileRequest {
   optional int32 gender = 3;          // 0=未设置 1=男 2=女
   // E2E-06: phone/email 已从 users 表删除（死字段，业务不使用）
   reserved 4, 5;
+  // E2E-12: 用户个性化配置（fontSize/theme 等），JSON 字符串
+  optional string config = 6;
 }
 
 // GetUserByIdRequest 查询用户请求
@@ -235,4 +237,6 @@ message UserInfo {
   reserved 6, 7;
   int64 created_at = 8;               // unix seconds
   int64 updated_at = 9;
+  // E2E-12: 用户个性化配置（fontSize/theme 等），JSON 字符串
+  optional string config = 10;
 }

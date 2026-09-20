@@ -20,6 +20,7 @@ package downstream
 
 import (
 	"context"
+	"encoding/json"
 
 	emotionuser "github.com/emotion-echo/shared/pkg/emotionuser"
 
@@ -53,13 +54,20 @@ func (c *userGRPCClient) GetMe(ctx context.Context) (*UserInfo, error) {
 // UpdateMe gRPC RPC
 func (c *userGRPCClient) UpdateMe(ctx context.Context, req UpdateProfileReq) (*UserInfo, error) {
 	cli := emotionuser.NewUserServiceClient(c.conn)
-	resp, err := cli.UpdateProfile(withUserID(ctx), &emotionuser.UpdateProfileRequest{
+	profileReq := &emotionuser.UpdateProfileRequest{
 		Nickname: req.Nickname,
 		Gender:   genderPtrToInt32(req.Gender),
 		// E2E-11：avatar_url 必须透传，否则头像上传接口返 200 但数据库仍为 NULL
 		// （proto 已定义该字段，user-svc 侧也已落库，只是客户端漏映射）。
 		AvatarUrl: req.AvatarURL,
-	})
+	}
+	if req.Config != nil {
+		if data, err := json.Marshal(*req.Config); err == nil {
+			s := string(data)
+			profileReq.Config = &s
+		}
+	}
+	resp, err := cli.UpdateProfile(withUserID(ctx), profileReq)
 	if err != nil {
 		return nil, wrapGRPCError(err, "user updateMe")
 	}
@@ -212,13 +220,20 @@ func fromProtoUserInfo(u *emotionuser.UserInfo) *UserInfo {
 	if u == nil {
 		return nil
 	}
-	return &UserInfo{
+	info := &UserInfo{
 		UserID:    u.Id,
 		Account:   u.Username,
 		Nickname:  u.Nickname,
 		AvatarURL: u.AvatarUrl,
 		CreatedAt: u.CreatedAt,
 	}
+	if u.Config != nil {
+		var cfg map[string]any
+		if err := json.Unmarshal([]byte(*u.Config), &cfg); err == nil {
+			info.Config = cfg
+		}
+	}
+	return info
 }
 
 // genderPtrToInt16 types *int16 → proto *int32（proto3 optional wrapper）

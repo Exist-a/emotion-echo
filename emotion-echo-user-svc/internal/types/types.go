@@ -25,21 +25,23 @@ type HealthResp struct {
 }
 
 type UserInfo struct {
-	UserId    int64  `json:"userId"`
-	Account   string `json:"account"`
-	Nickname  string `json:"nickname"`
-	AvatarURL string `json:"avatarUrl,omitempty"`
-	CreatedAt int64  `json:"createdAt,omitempty"`
+	UserId    int64          `json:"userId"`
+	Account   string         `json:"account"`
+	Nickname  string         `json:"nickname"`
+	AvatarURL string         `json:"avatarUrl,omitempty"`
+	Config    map[string]any `json:"config,omitempty"`
+	CreatedAt int64          `json:"createdAt,omitempty"`
 }
 
 // UpdateProfileReq PATCH /api/v1/users/me 的请求体
 //
 // 所有字段 optional：nil 表示不动；非 nil 表示覆盖/设置
 type UpdateProfileReq struct {
-	Nickname *string `json:"nickname,optional"`
-	Gender   *int16  `json:"gender,optional"`
-	Birthday *string `json:"birthday,optional"` // YYYY-MM-DD
-	AvatarURL *string `json:"avatarUrl,optional"`
+	Nickname  *string        `json:"nickname,optional"`
+	Gender    *int16         `json:"gender,optional"`
+	Birthday  *string        `json:"birthday,optional"` // YYYY-MM-DD
+	AvatarURL *string        `json:"avatarUrl,optional"`
+	Config    *map[string]any `json:"config,optional"`
 }
 
 // UpdateProfileResp 与 GetMeResp 结构完全一致（用户最新信息）

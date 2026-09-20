@@ -551,6 +551,22 @@
 >
 > **登记意义**：UI 组件选型命中 `check_adr_gate.sh` 的架构关键词（`vue`/`Vue`），此后该类改动需附 ADR + 本文件变更。
 
+### 决策 26：用户个性化配置（config）持久化 = **服务端持久化（`users.config JSONB`）**（2026-09-19 决议 D-09 / 2026-09-20 E2E-12 实施）
+
+> ✅ Accepted。**本文档性质：决策记录 + 实施回填** —— 该决议由用户于 2026-09-19 在 E2E-12 建档时作出（原编号 **D-09**），2026-09-20 随 E2E-12 实施落地。
+>
+> **完整论证见 [ADR · 2026-09 · 用户个性化配置（config）服务端持久化](adr/adr-2026-09-user-config-persistence.md)**。要点：
+>
+> **背景**：设置页字号/主题切换"操作看似成功、刷新即失效"（账本 `E2E-F-82`）。建档实测确认**四层契约各缺一环**：DB 无 `config` 列、proto `UpdateProfileRequest` 无该字段、BFF `UpdateProfileReq` 无该字段、`toProfileVM` 硬编码空 map ⇒ Go `json.Unmarshal` 忽略未知字段，接口返 200 但数据丢弃。关键事实：前端早已按服务端持久化写好（`stores/user.ts:59-95` 先调 API 成功再更新本地），缺陷在契约缺失而非前端设计。
+>
+> **决策**：选 **A. 服务端持久化** —— `emotion_echo_user.users` 新增 `config JSONB`（`NULL` = 未设置，区别 `{}` = 主动清空），经 proto（`optional string` JSON 文本）→ BFF → user-svc 全链路透传。
+>
+> **备选（未选）**：B. 仅本地存储（localStorage/cookie 镜像，删掉前端服务端写入）—— 换浏览器/清缓存即丢，且等于把「已实现却失效」主动降级为「设计如此」，与页面既有意图相反。
+>
+> **伴随约束（新增代码必须遵守）**：① `NULL` 与 `{}` 语义不得混用；② `config` 为开放 JSONB，服务端只保证存取往返，**值域不做服务端强校验**，未知值由前端 `getUserConfig` 的 `|| 'light'` 兜底回落且**不得崩溃**（E2E-12 测试点 #12）；③ proto 重生成必须复现原方式 `bash proto/gen.sh user.proto`，不得换生成器版本。
+>
+> **登记意义**：`config JSONB` 属 schema + proto 双变更，命中 `check_adr_gate.sh` 的架构关键词（`grpc`/`Postgres` 等），此后该类改动需附 ADR + 本文件变更。
+
 > **🔧 2026-09-10 Stage 62 PR-2 微调**：下方 `## 🏗 当前架构全景` 已对齐决策 11/12
 > 关系说明（APISIX = 唯一业务入口；BFF = 聚合层 / APISIX upstream）。
 > 早期决策 18 #24 登记时基于"作者推断"误以为全景图含 '唯一前端入口' 措辞——实测全景图本身合规。

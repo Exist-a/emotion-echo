@@ -12,6 +12,7 @@
 | `check_orphan_outputs.sh` | 孤儿产出物检测 | anti-patterns AP-10 |
 | `check_docker_digests.sh` | Dockerfile digest 校验 | D-07 |
 | `lint_env_vars.sh` | 环境变量 lint | ADR-18 |
+| `check_image_freshness.sh` | 被验镜像须比最新 commit 新（防「改完不重建镜像就验收」） | 账本 E2E-F-70 |
 
 ## 测试脚本
 

@@ -145,7 +145,7 @@ func TestUser_Integration_PostgresUpdateProfile(t *testing.T) {
 	gender := int16(1)
 	bday := time.Now().AddDate(-30, 0, 0)
 	avatar := "https://x.com/a.png"
-	require.NoError(t, repo.UpdateProfile(ctx, u.ID, &nick, &gender, &bday, &avatar))
+	require.NoError(t, repo.UpdateProfile(ctx, u.ID, &nick, &gender, &bday, &avatar, nil))
 
 	got, err := repo.GetByID(ctx, u.ID)
 	require.NoError(t, err)
