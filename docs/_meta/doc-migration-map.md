@@ -196,3 +196,11 @@ exit "$__zcode_status"
 | 计划 | 迁移时间 | 落地证据 |
 |---|---|---|
 | `plans/file-understanding-llm.md` → `legacy-plans/landed/` | Stage 89 收口（2026-09-13） | 6 个 PR（PR-1 proto / PR-2 chat-svc / PR-3 BFF / PR-4 llm-service / PR-5 web / PR-6 容器 e2e + 暗坑修复）；详见 `stages/stage-89-file-understanding-llm-2026-09-13.md`。**本次 e2e 顺手揪出两暗坑并销账**：① Stage 82 §契约 5 intent VARCHAR(16) 与白名单 emotional_support(18字符) 不一致（migration 007 VARCHAR(32)）② BFF ai-stream collectFileAttachments 缺 auth ctx（session.WithRequestAuth 注入 x-user-id） |
+
+---
+
+## 十二、2026-09-21 追加迁移记录（人格提示词语义化落地）
+
+| 计划 | 迁移时间 | 落地证据 |
+|---|---|---|
+| `plans/personality-prompt-semantic.md` → `legacy-plans/landed/` | PR #40 合并（2026-09-21） | 账本 E2E-F-95（画像注入语义层无效）翻「已解决」。**实现**：`emotion-echo-web-bff/internal/handler/personality_directive.go`（五维度行为规格表 + `buildPersonalityGuide`，双通道分档：绝对档 + ipsative 相对档；覆盖率随机 10000 组实测 **66% → 95.5%**，由 Go 单测统计断言钉住）；**决策**：[adr-2026-09-personality-prompt-semantics.md](../architecture/adr/adr-2026-09-personality-prompt-semantics.md)（相处说明书 ≠ AI 性格 / 可观察输出特征 / ipsative 依据 / 三句护栏）；**取证**：`scripts/verify_personality_prompt_diff.py`（两个对立画像真实账号 + 同消息新对话 + 去标识盲判 —— 特征方向 5/5 类 × 3/3 条、盲判 6/6，随机基线 50%）。**残余（见文件 `residuals:`）**：判官与生成同源未换独立模型、A/B 仅覆盖外向性/神经质两维、仅测首回合、未做真人评测 |

@@ -66,7 +66,7 @@ E2E-14 打通了「人格量表 → 评分 → 落库 → 注入 system prompt�
 ## 关联
 
 - 前置 ADR：[adr-2026-09-personality-prompt-injection](adr-2026-09-personality-prompt-injection.md)（注入落点选 BFF）
-- 详档：`docs/plans/personality-prompt-semantic.md` + `-report.md`（含证据边界自述）
+- 详档（已迁档）：`docs/legacy-plans/landed/personality-prompt-semantic.md` + `-report.md`（含证据边界自述）
 - 实现：`emotion-echo-web-bff/internal/handler/personality_directive.go`
 - 取证：`scripts/verify_personality_prompt_diff.py`
 - 账本：E2E-F-95（本 ADR 解决）

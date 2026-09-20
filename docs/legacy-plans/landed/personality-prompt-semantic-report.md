@@ -1,10 +1,10 @@
 ---
-iteration: personality-prompt-semantic
-title: 人格提示词语义化 —— 让画像真正改变回复
-executed: 2026-09-21
-status: done
-environment: dev 模式（17 容器 healthy，compose.dev.yml + .env.local）
-related-findings: [E2E-F-95, E2E-F-96]
+status: landed
+landed: 2026-09-21
+landed-with: PR #40（2026-09-21 合并进 main）
+part-of: personality-prompt-semantic（本目录同名 plan）
+original-path: docs/plans/personality-prompt-semantic-report.md
+migrated-at: 2026-09-21
 ---
 
 # 人格提示词语义化 执行记录
