@@ -59,3 +59,9 @@ environment: dev 模式（7 应用服务 healthy + 本地 pnpm dev 前端，comp
 - [x] git status 干净（3 commits pushed）
 - [x] main 与 origin 无 ahead/behind
 - [x] 无残留已合并分支
+
+### 截图清单（补拍 2026-09-20）
+| 文件 | 视口 | 覆盖 |
+|------|------|------|
+| `screenshots/01-login-page.png` | 1280×720 | #1（登录页渲染 + cookie 设置流程入口） |
+| `screenshots/02-dashboard-after-login.png` | 1280×720 | #3（登录后跳转 dashboard，刷新页面会话保持） |
