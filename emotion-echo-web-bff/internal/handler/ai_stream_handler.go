@@ -22,7 +22,6 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -55,7 +54,7 @@ const maxFileAttachments = 2
 // baseSystemPrompt 基础人设（无画像时的完整 prompt）
 const baseSystemPrompt = "你是一个温柔、共情的情绪疏导陪伴者。用中文简短回应（2-3 句话），表达理解、不评判、鼓励继续说。"
 
-// personalityDimensionLabels 五维度中文标签（顺序即画像文本顺序）
+// personalityDimensionLabels 五维度中文标签（顺序即画像摘要顺序）
 var personalityDimensionLabels = []struct {
 	Key   string
 	Label string
@@ -67,33 +66,10 @@ var personalityDimensionLabels = []struct {
 	{"neuroticism", "神经质"},
 }
 
-// formatPersonalityContext 把五维度分数格式化为可读画像文本。
-// 维度分 6-30（每维度 6 题 × 1-5 分），18 为中性：≥23 高 / 14~22 中 / ≤13 低。
-// 缺失维度跳过（不补 0 —— 补 0 会被读成"极低"，是编造画像）。空输入返回 ""。
-func formatPersonalityContext(dims map[string]float64) string {
-	if len(dims) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(personalityDimensionLabels))
-	for _, d := range personalityDimensionLabels {
-		score, ok := dims[d.Key]
-		if !ok {
-			continue
-		}
-		level := "中"
-		switch {
-		case score >= 23:
-			level = "高"
-		case score <= 13:
-			level = "低"
-		}
-		parts = append(parts, fmt.Sprintf("%s%s（%.0f/30）", d.Label, level, score))
-	}
-	return strings.Join(parts, "，")
-}
-
-// buildSystemPrompt 组装 system prompt：基础人设 + （可选）人格画像。
-// 画像来源为 nil / 报错 / 无结果时返回基础人设。
+// buildSystemPrompt 组装 system prompt：基础人设 + （可选）人格「联系方式适配」指令。
+//
+// 无画像 / 画像来源报错 / 画像平坦无信息（见 buildPersonalityGuide）时，
+// 返回与无画像时**逐字相同**的基础人设 —— 不编造、不退化。
 func (h *AIStreamHandler) buildSystemPrompt(ctx context.Context) string {
 	if h.personality == nil {
 		return baseSystemPrompt
@@ -103,13 +79,11 @@ func (h *AIStreamHandler) buildSystemPrompt(ctx context.Context) string {
 		slog.ErrorContext(ctx, "ai-stream load personality profile failed, using base prompt", "err", err)
 		return baseSystemPrompt
 	}
-	profile := formatPersonalityContext(dims)
-	if profile == "" {
+	guide := buildPersonalityGuide(dims)
+	if guide == "" {
 		return baseSystemPrompt
 	}
-	return baseSystemPrompt +
-		"\n\n用户人格画像（五因素量表，每维度 6-30 分，18 为中性）：" + profile +
-		"。请在回应风格上贴合该画像，但不要直接点破你在套用测评结果。"
+	return baseSystemPrompt + "\n\n" + guide
 }
 
 // AIStreamHandler 是 /api/v1/ai/stream 的处理逻辑
