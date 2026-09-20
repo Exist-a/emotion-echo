@@ -50,7 +50,7 @@ func TestAIStreamHandler_CollectsFileMessagesIntoFiles(t *testing.T) {
 	streamer := &fakeLLMStreamer{deltas: []string{"好的"}}
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithDeps(minioTestConfig(), streamer, lister))
+	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithDeps(minioTestConfig(), AIStreamDeps{LLM: streamer, Files: lister}))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/stream",
@@ -72,7 +72,7 @@ func TestAIStreamHandler_NoFileMessages_EmptyFiles(t *testing.T) {
 	streamer := &fakeLLMStreamer{deltas: []string{"好的"}}
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithDeps(minioTestConfig(), streamer, lister))
+	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithDeps(minioTestConfig(), AIStreamDeps{LLM: streamer, Files: lister}))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/stream",
@@ -88,7 +88,7 @@ func TestAIStreamHandler_ListerError_StillStreams(t *testing.T) {
 	streamer := &fakeLLMStreamer{deltas: []string{"好的"}}
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithDeps(minioTestConfig(), streamer, lister))
+	router.POST("/api/v1/ai/stream", NewAIStreamHandlerWithDeps(minioTestConfig(), AIStreamDeps{LLM: streamer, Files: lister}))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/stream",

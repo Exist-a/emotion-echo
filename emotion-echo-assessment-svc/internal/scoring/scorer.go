@@ -262,6 +262,83 @@ func (GenericScorer) Score(s *model.Survey, answers map[string]int) (*Result, er
 }
 
 // =====================================================
+// BIG5（NEO Five-Factor Inventory-30 人格五因素）
+// =====================================================
+//
+// 30 题，5 维度，每维度 6 题
+// Likert 5 点计分：1-5
+//
+// 维度映射：
+//   openness         : q1, q6, q11, q16, q21, q26
+//   conscientiousness: q2, q7, q12, q17, q22, q27
+//   extraversion     : q3, q8, q13, q18, q23, q28
+//   agreeableness    : q4, q9, q14, q19, q24, q29
+//   neuroticism      : q5, q10, q15, q20, q25, q30
+//
+// 反向计分题（在 scoring_rules.reverse 中声明）：
+//   q10, q15, q20, q23, q24, q25
+//   反向公式：reversed = 6 - original
+//
+// RiskLevel 固定返回 "dimension_profile"（人格量表无风险概念）
+// Factors 存储五维度原始分（反转后）
+type BigFiveScorer struct{}
+
+// dimensionMap 定义五维度→题目映射
+var dimensionMap = map[string][]string{
+	"openness":          {"q1", "q6", "q11", "q16", "q21", "q26"},
+	"conscientiousness": {"q2", "q7", "q12", "q17", "q22", "q27"},
+	"extraversion":      {"q3", "q8", "q13", "q18", "q23", "q28"},
+	"agreeableness":     {"q4", "q9", "q14", "q19", "q24", "q29"},
+	"neuroticism":       {"q5", "q10", "q15", "q20", "q25", "q30"},
+}
+
+// reverseItems 反向计分题集合
+var reverseItems = map[string]bool{
+	"q10": true, "q15": true, "q20": true,
+	"q23": true, "q24": true, "q25": true,
+}
+
+func (BigFiveScorer) Score(s *model.Survey, answers map[string]int) (*Result, error) {
+	if len(answers) != 30 {
+		return nil, fmt.Errorf("BIG5 requires exactly 30 answers, got %d", len(answers))
+	}
+
+	// 验证所有答案范围 1-5
+	for k, v := range answers {
+		if v < 1 || v > 5 {
+			return nil, fmt.Errorf("BIG5 answer %s must be 1-5, got %d", k, v)
+		}
+	}
+
+	// 计算反向计分
+	getScore := func(q string) float64 {
+		v := float64(answers[q])
+		if reverseItems[q] {
+			return 6 - v // 反转：1→5, 2→4, 3→3, 4→2, 5→1
+		}
+		return v
+	}
+
+	// 按维度聚合
+	factors := make(map[string]float64, 5)
+	var totalScore float64
+	for dim, questions := range dimensionMap {
+		var sum float64
+		for _, q := range questions {
+			sum += getScore(q)
+		}
+		factors[dim] = sum
+		totalScore += sum
+	}
+
+	return &Result{
+		TotalScore: totalScore,
+		RiskLevel:  "dimension_profile",
+		Factors:    factors,
+	}, nil
+}
+
+// =====================================================
 // 调度器（按 survey.Code 选 scorer）
 // =====================================================
 
@@ -274,6 +351,8 @@ func GetScorer(code string) Scorer {
 		return GAD7Scorer{}
 	case "PSQI":
 		return PSQIScorer{}
+	case "BIG5":
+		return BigFiveScorer{}
 	default:
 		return GenericScorer{}
 	}

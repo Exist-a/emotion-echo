@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"emotion-echo-web-bff/internal/auth"
-	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	"emotion-echo-web-bff/internal/config"
+	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/handler"
 	"emotion-echo-web-bff/internal/logging"
@@ -34,13 +34,13 @@ import (
 	"emotion-echo-web-bff/internal/svc"
 
 	"github.com/SkyAPM/go2sky"
-	"github.com/gin-gonic/gin"
+	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
+	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
-	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
-	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
-	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
+	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -186,14 +186,14 @@ func main() {
 	// Stage 32 PR-16 + Stage 94 PR-6 §P0-7：鉴权由 APISIX jwt-auth 统一处理
 	//（注入 X-User-Id header），BFF 信任 shared GinAuthMiddleware（解析
 	// X-User-Id 注入 ctx）。
-// §P0-7 修复：c.TrustAPISIX=true 时用 GinAuthMiddlewareWithOpts 加 APISIX
-// IP 白名单校验——只有可信 APISIX 来源 IP 才接受 X-User-Id，防止 svc 端口
-// 被外部直连时 header 伪造。c.TrustAPISIX=false 时（dev）跳过 IP 校验。
-//
-// 注释承诺的"TrustAPISIX=false 时 Authorization JWT 解析"路径从未实现
-//（决策 18 §2 #22 / Decision9），这里彻底删除死分支注释。
-// CORS 由 APISIX cors 插件统一配；BFF 不再回显 Origin。
-// /api/v1/auth/* 白名单：login/register/refresh 不需要 X-User-Id（用户未登录）。
+	// §P0-7 修复：c.TrustAPISIX=true 时用 GinAuthMiddlewareWithOpts 加 APISIX
+	// IP 白名单校验——只有可信 APISIX 来源 IP 才接受 X-User-Id，防止 svc 端口
+	// 被外部直连时 header 伪造。c.TrustAPISIX=false 时（dev）跳过 IP 校验。
+	//
+	// 注释承诺的"TrustAPISIX=false 时 Authorization JWT 解析"路径从未实现
+	//（决策 18 §2 #22 / Decision9），这里彻底删除死分支注释。
+	// CORS 由 APISIX cors 插件统一配；BFF 不再回显 Origin。
+	// /api/v1/auth/* 白名单：login/register/refresh 不需要 X-User-Id（用户未登录）。
 	authMW := sharedmw.GinAuthMiddlewareWithOpts(sharedmw.AuthOpts{
 		RequireAPISIXIP: c.TrustAPISIX, // true 时要求 APISIX CIDR 内 IP
 		APISIXCIDRs:     c.APISIXCIDRs,
@@ -313,7 +313,7 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	}))
 	svcCtx.SetChat(downstream.NewChatClient(downstream.ChatClientOptions{
 		BaseURL: c.ChatService.BaseURL, TimeoutMs: c.ChatService.TimeoutMs,
-		Resolver: resolver,
+		Resolver:  resolver,
 		Transport: downstream.ChatTransport(c.ChatService.Transport),
 		GRPCConn:  chatGRPCConn,
 	}))
@@ -324,13 +324,13 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	}))
 	svcCtx.SetAnalytics(downstream.NewAnalyticsClient(downstream.AnalyticsClientOptions{
 		BaseURL: c.AnalyticsService.BaseURL, TimeoutMs: c.AnalyticsService.TimeoutMs,
-		Resolver: resolver,
+		Resolver:  resolver,
 		Transport: downstream.AnalyticsTransport(c.AnalyticsService.Transport),
 		GRPCConn:  analyticsGRPCConn,
 	}))
 	svcCtx.SetAI(downstream.NewAIClient(downstream.AIClientOptions{
 		BaseURL: c.AIService.HTTPAddr, TimeoutMs: c.AIService.TimeoutMs,
-		Resolver: resolver,
+		Resolver:  resolver,
 		GRPCConn:  aiGRPCConn,
 		Transport: downstream.AITransport(c.AIService.Transport),
 	}))
@@ -350,12 +350,12 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 
 	// Sprint 1 PR-4b: MinIO 对象存储装配
 	storageCli, storageErr := storage.NewMinIOClient(storage.MinIOConfig{
-		Endpoint:       c.MinIO.Endpoint,
-		AccessKey:      c.MinIO.AccessKey,
-		SecretKey:      c.MinIO.SecretKey,
-		Bucket:         c.MinIO.Bucket,
-		UseSSL:         c.MinIO.UseSSL,
-		PublicBaseURL:  c.MinIO.PublicBaseURL,
+		Endpoint:      c.MinIO.Endpoint,
+		AccessKey:     c.MinIO.AccessKey,
+		SecretKey:     c.MinIO.SecretKey,
+		Bucket:        c.MinIO.Bucket,
+		UseSSL:        c.MinIO.UseSSL,
+		PublicBaseURL: c.MinIO.PublicBaseURL,
 	})
 	if storageErr != nil {
 		log.Printf("[minio] client init failed: %v (storage disabled, avatar upload will 500)", storageErr)
@@ -409,7 +409,14 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	// SSE 流式
 	// Stage 81 PR-2：llm-service ChatCompletion gRPC 上游优先（llmStreamer 非 nil 时）
 	// Stage 89 PR-3：chat client 作为文件消息列表来源（会话内文件持续引用）
-	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDepsFull(*c, llmStreamer, s.Chat, s.Chat))
+	// E2E-14：人格画像来源注入 system prompt（取数走 HTTP —— gRPC ListResults 未实现，
+	// 与 survey_handler 的 assessmentBase 绕过同因；缺画像时 handler 内部回落基础人设）
+	personalitySrc := downstream.NewPersonalityProfileSource(downstream.NewAssessmentClient(downstream.AssessmentClientOptions{
+		BaseURL:   c.AssessmentService.BaseURL,
+		TimeoutMs: c.AssessmentService.TimeoutMs,
+		Transport: downstream.AssessmentTransportHTTP,
+	}))
+	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, handler.AIStreamDeps{LLM: llmStreamer, Files: s.Chat, Chat: s.Chat, Personality: personalitySrc}))
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})

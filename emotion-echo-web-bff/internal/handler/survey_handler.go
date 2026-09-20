@@ -3,11 +3,12 @@
 // Stage 30 / stage-30-web-bff.md T4.42-46: survey handler（BFF → assessment-svc）
 //
 // 端点：
-//   GET   /api/v1/surveys              → {items, total}
-//   GET   /api/v1/surveys/:id          → SurveyDetail
-//   POST  /api/v1/surveys/:id/submit   → SubmitSurveyResp
-//   GET   /api/v1/surveys/results      → {items, total}
-//   GET   /api/v1/surveys/results/:resultId → SurveyResultDetail
+//
+//	GET   /api/v1/surveys              → {items, total}
+//	GET   /api/v1/surveys/:id          → SurveyDetail
+//	POST  /api/v1/surveys/:id/submit   → SubmitSurveyResp
+//	GET   /api/v1/surveys/results      → {items, total}
+//	GET   /api/v1/surveys/results/:resultId → SurveyResultDetail
 //
 // 注：gin 路由中 /surveys/results 必须先于 /surveys/:id 注册（静态段优先）。
 package handler
@@ -30,9 +31,9 @@ import (
 
 // SurveyHandler 处理 /api/v1/surveys/* 端点
 type SurveyHandler struct {
-	assessment      downstream.AssessmentClient
-	assessmentBase  string                    // assessment-svc HTTP base URL（绕过 gRPC 转换用）
-	assessmentHTTP  *http.Client
+	assessment     downstream.AssessmentClient
+	assessmentBase string // assessment-svc HTTP base URL（绕过 gRPC 转换用）
+	assessmentHTTP *http.Client
 }
 
 // NewSurveyHandler 构造
@@ -65,12 +66,49 @@ func (h *SurveyHandler) listSurveys(c *gin.Context) {
 			limit = n
 		}
 	}
+	// 优先走 HTTP：proto `SurveyItem` 无 description 字段，gRPC 路径会静默丢弃
+	// （E2E-14 实测 3 个量表描述全空；E2E-13 已就此决议 survey 端点走 HTTP，
+	//  见 adr-2026-09-survey-http-bypass.md —— 本端点是当时漏掉的第 5 个）
+	if h.assessmentBase != "" {
+		h.listSurveysHTTP(c, limit)
+		return
+	}
 	items, total, err := h.assessment.ListSurveys(session.WithRequestAuth(c), limit)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
 	OK(c, gin.H{"items": items, "total": total})
+}
+
+// listSurveysHTTP 直接调 assessment-svc HTTP 端点，保留 description 等完整字段
+func (h *SurveyHandler) listSurveysHTTP(c *gin.Context, limit int) {
+	url := fmt.Sprintf("%s/api/v1/surveys?limit=%d", h.assessmentBase, limit)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, 1, err.Error())
+		return
+	}
+	if uid, ok := downstream.UserIDFromContext(session.WithRequestAuth(c)); ok {
+		req.Header.Set("X-User-Id", strconv.FormatInt(uid, 10))
+	}
+	resp, err := h.assessmentHTTP.Do(req)
+	if err != nil {
+		Fail(c, http.StatusBadGateway, 1, fmt.Errorf("assessment-svc: %w", err).Error())
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		Fail(c, resp.StatusCode, 1, string(respBody))
+		return
+	}
+	var result map[string]any
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		Fail(c, http.StatusBadGateway, 1, err.Error())
+		return
+	}
+	OK(c, result)
 }
 
 func (h *SurveyHandler) getSurvey(c *gin.Context) {

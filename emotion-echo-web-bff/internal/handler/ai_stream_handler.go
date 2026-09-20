@@ -4,11 +4,14 @@
 //
 // 端点：POST /api/v1/ai/stream
 // 请求（OpenAI chat.completions 兼容，前端 useAIStream.ts 发送）：
-//   {"model": "...", "messages": [{"role":"user","content":"..."}], "stream": true}
+//
+//	{"model": "...", "messages": [{"role":"user","content":"..."}], "stream": true}
+//
 // 响应：SSE 流（OpenAI 格式）
-//   data: {"choices":[{"delta":{"content":"..."}}]}
-//   ...
-//   data: [DONE]
+//
+//	data: {"choices":[{"delta":{"content":"..."}}]}
+//	...
+//	data: [DONE]
 //
 // 当前为 mock 实现（无真实 LLM 对话）：按关键词给出共情回复 + 情绪标签。
 // 真实 LLM 对话流后续接 llm-service / ai-svc（保留 OpenAI 兼容格式，前端不变）。
@@ -19,10 +22,11 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
-	"strconv"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,8 +43,74 @@ type fileMessageLister interface {
 	ListMessages(ctx context.Context, conversationID int64, limit int) ([]downstream.MessageView, error)
 }
 
+// personalitySource 用户最新人格画像来源（E2E-14）。
+// 返回 nil（无结果）或 err 时，调用方回落基础人设 prompt —— 画像注入是增强不是依赖。
+type personalitySource interface {
+	LatestPersonalityProfile(ctx context.Context) (map[string]float64, error)
+}
+
 // maxFileAttachments 每次 ai/stream 注入的最新文件消息上限（控制拉取/抽取开销）
 const maxFileAttachments = 2
+
+// baseSystemPrompt 基础人设（无画像时的完整 prompt）
+const baseSystemPrompt = "你是一个温柔、共情的情绪疏导陪伴者。用中文简短回应（2-3 句话），表达理解、不评判、鼓励继续说。"
+
+// personalityDimensionLabels 五维度中文标签（顺序即画像文本顺序）
+var personalityDimensionLabels = []struct {
+	Key   string
+	Label string
+}{
+	{"openness", "开放性"},
+	{"conscientiousness", "尽责性"},
+	{"extraversion", "外向性"},
+	{"agreeableness", "宜人性"},
+	{"neuroticism", "神经质"},
+}
+
+// formatPersonalityContext 把五维度分数格式化为可读画像文本。
+// 维度分 6-30（每维度 6 题 × 1-5 分），18 为中性：≥23 高 / 14~22 中 / ≤13 低。
+// 缺失维度跳过（不补 0 —— 补 0 会被读成"极低"，是编造画像）。空输入返回 ""。
+func formatPersonalityContext(dims map[string]float64) string {
+	if len(dims) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(personalityDimensionLabels))
+	for _, d := range personalityDimensionLabels {
+		score, ok := dims[d.Key]
+		if !ok {
+			continue
+		}
+		level := "中"
+		switch {
+		case score >= 23:
+			level = "高"
+		case score <= 13:
+			level = "低"
+		}
+		parts = append(parts, fmt.Sprintf("%s%s（%.0f/30）", d.Label, level, score))
+	}
+	return strings.Join(parts, "，")
+}
+
+// buildSystemPrompt 组装 system prompt：基础人设 + （可选）人格画像。
+// 画像来源为 nil / 报错 / 无结果时返回基础人设。
+func (h *AIStreamHandler) buildSystemPrompt(ctx context.Context) string {
+	if h.personality == nil {
+		return baseSystemPrompt
+	}
+	dims, err := h.personality.LatestPersonalityProfile(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "ai-stream load personality profile failed, using base prompt", "err", err)
+		return baseSystemPrompt
+	}
+	profile := formatPersonalityContext(dims)
+	if profile == "" {
+		return baseSystemPrompt
+	}
+	return baseSystemPrompt +
+		"\n\n用户人格画像（五因素量表，每维度 6-30 分，18 为中性）：" + profile +
+		"。请在回应风格上贴合该画像，但不要直接点破你在套用测评结果。"
+}
 
 // AIStreamHandler 是 /api/v1/ai/stream 的处理逻辑
 type AIStreamHandler struct {
@@ -52,29 +122,42 @@ type AIStreamHandler struct {
 	// chat 是 chat-svc 客户端（Stage 109b 修复：SSE 流完后写 AI 回复到 chat-svc，
 	// 防止前端刷新后 AI 回复丢失 — 之前 BFF 只走 SSE 流不存库，message 表只有 user msg）
 	chat downstream.ChatClient
+	// personality 是人格画像来源（E2E-14）；nil = 不注入人格画像
+	personality personalitySource
+}
+
+// AIStreamDeps 是 AIStreamHandler 的依赖集合。
+//
+// 改用 options struct 而非逐个构造函数变体：依赖已增至 5 个，历史做法是每加一个
+// 就新增一个 NewAIStreamHandlerWithXxx 并保留旧签名（测试在用），导致 5 个变体线性增长
+// （E2E-F-92）。新增依赖现在只改本 struct + 调用点传字段，不再新增构造函数。
+// 任一字段可为 nil：nil = 该能力未装配（handler 内部逐项判空降级）。
+type AIStreamDeps struct {
+	// LLM 是 llm-service ChatCompletion gRPC 上游；nil = 走 HTTP 直连 / mock
+	LLM downstream.LLMChatStreamer
+	// Files 是会话消息列表来源（文件上下文注入）；nil = 不注入文件
+	Files fileMessageLister
+	// Chat 是 chat-svc 客户端（SSE 流完后写 AI 回复入库）；nil = 不入库
+	Chat downstream.ChatClient
+	// Personality 是人格画像来源（E2E-14）；nil = 不注入人格画像
+	Personality personalitySource
 }
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
 func NewAIStreamHandler(cfg config.Config) gin.HandlerFunc {
-	h := &AIStreamHandler{cfg: cfg}
-	return h.ServeHTTP
+	return NewAIStreamHandlerWithDeps(cfg, AIStreamDeps{})
 }
 
-// NewAIStreamHandlerWithLLM 构造带 llm-service gRPC 上游的 handler（Stage 81 PR-2）
-func NewAIStreamHandlerWithLLM(cfg config.Config, llm downstream.LLMChatStreamer) gin.HandlerFunc {
-	h := &AIStreamHandler{cfg: cfg, llm: llm}
-	return h.ServeHTTP
-}
-
-// NewAIStreamHandlerWithDeps 构造带 llm 上游 + 文件列表来源的 handler（Stage 89 PR-3）
-func NewAIStreamHandlerWithDeps(cfg config.Config, llm downstream.LLMChatStreamer, files fileMessageLister) gin.HandlerFunc {
-	h := &AIStreamHandler{cfg: cfg, llm: llm, files: files}
-	return h.ServeHTTP
-}
-
-// NewAIStreamHandlerWithDepsFull 构造带完整 deps (llm + files + chat) — Sprint 109b 修复 AI 回复入库
-func NewAIStreamHandlerWithDepsFull(cfg config.Config, llm downstream.LLMChatStreamer, files fileMessageLister, chat downstream.ChatClient) gin.HandlerFunc {
-	h := &AIStreamHandler{cfg: cfg, llm: llm, files: files, chat: chat}
+// NewAIStreamHandlerWithDeps 构造带完整依赖的 handler。
+// 零值 AIStreamDeps{} 等价于"仅 mock 回复"。
+func NewAIStreamHandlerWithDeps(cfg config.Config, deps AIStreamDeps) gin.HandlerFunc {
+	h := &AIStreamHandler{
+		cfg:         cfg,
+		llm:         deps.LLM,
+		files:       deps.Files,
+		chat:        deps.Chat,
+		personality: deps.Personality,
+	}
 	return h.ServeHTTP
 }
 
@@ -154,11 +237,11 @@ func (h *AIStreamHandler) collectFileAttachments(ctx context.Context, conversati
 }
 
 // aiStreamReq 兼容两种前端请求格式：
-//   1. OpenAI 兼容（useAIStream.ts）：{"model","messages":[{"role","content"}],"stream"}
-//   2. 发消息流程（useConversationSender）：{"message","emotion","conversationId"}
+//  1. OpenAI 兼容（useAIStream.ts）：{"model","messages":[{"role","content"}],"stream"}
+//  2. 发消息流程（useConversationSender）：{"message","emotion","conversationId"}
 type aiStreamReq struct {
-	Model          string `json:"model"`
-	Messages       []struct {
+	Model    string `json:"model"`
+	Messages []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"messages"`
@@ -223,7 +306,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 	// 既有 Phase D HTTP 直连 / mock。
 	if h.llm != nil {
 		llmMessages := []downstream.Message{
-			{Role: "system", Content: "你是一个温柔、共情的情绪疏导陪伴者。用中文简短回应（2-3 句话），表达理解、不评判、鼓励继续说。"},
+			{Role: "system", Content: h.buildSystemPrompt(session.WithRequestAuth(c))},
 			{Role: "user", Content: userContent},
 		}
 		ctx, cancel := context.WithCancel(c.Request.Context())
@@ -281,7 +364,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 	// Phase D：APIKey 非空时调真实 LLM（DeepSeek / OpenAI 兼容）
 	if h.cfg.LLM.APIKey != "" {
 		llmMessages := []downstream.Message{
-			{Role: "system", Content: "你是一个温柔、共情的情绪疏导陪伴者。用中文简短回应（2-3 句话），表达理解、不评判、鼓励继续说。"},
+			{Role: "system", Content: h.buildSystemPrompt(session.WithRequestAuth(c))},
 			{Role: "user", Content: userContent},
 		}
 		llmReq := downstream.LLMChatReq{

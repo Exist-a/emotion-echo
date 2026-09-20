@@ -3,11 +3,12 @@
 // Stage 30 / stage-30-web-bff.md T2.18-20: AssessmentClient（BFF → assessment-svc）
 //
 // assessment-svc（Gin :8889）：
-//   GET   /api/v1/surveys                → {items: [SurveyItem], total}
-//   GET   /api/v1/surveys/:id            → {id, code, title, category, version, questions}
-//   POST  /api/v1/surveys/:id/submit     → {resultId, surveyId, totalScore, answered, riskLevel}
-//   GET   /api/v1/surveys/results        → {items: [SurveyResultItem], total}
-//   GET   /api/v1/surveys/results/:resultId → {resultId, surveyId, userId, totalScore, riskLevel, durationSec, answers, submittedAt}
+//
+//	GET   /api/v1/surveys                → {items: [SurveyItem], total}
+//	GET   /api/v1/surveys/:id            → {id, code, title, category, version, questions}
+//	POST  /api/v1/surveys/:id/submit     → {resultId, surveyId, totalScore, answered, riskLevel}
+//	GET   /api/v1/surveys/results        → {items: [SurveyResultItem], total}
+//	GET   /api/v1/surveys/results/:resultId → {resultId, surveyId, userId, totalScore, riskLevel, durationSec, answers, submittedAt}
 package downstream
 
 import (
@@ -51,32 +52,35 @@ type SubmitSurveyReq struct {
 
 // SubmitSurveyResp 对应 assessment-svc types.SubmitSurveyResp
 type SubmitSurveyResp struct {
-	ResultID   uint64  `json:"resultId"`
-	SurveyID   uint64  `json:"surveyId"`
-	TotalScore float64 `json:"totalScore"`
-	Answered   int     `json:"answered"`
-	RiskLevel  string  `json:"riskLevel"`
+	ResultID     uint64             `json:"resultId"`
+	SurveyID     uint64             `json:"surveyId"`
+	TotalScore   float64            `json:"totalScore"`
+	Answered     int                `json:"answered"`
+	RiskLevel    string             `json:"riskLevel"`
+	FactorScores map[string]float64 `json:"factorScores,omitempty"`
 }
 
 // SurveyResultItem 对应 assessment-svc types.SurveyResultItem
 type SurveyResultItem struct {
-	ResultID    uint64  `json:"resultId"`
-	SurveyID    uint64  `json:"surveyId"`
-	TotalScore  float64 `json:"totalScore"`
-	RiskLevel   string  `json:"riskLevel"`
-	SubmittedAt int64   `json:"submittedAt"`
+	ResultID     uint64             `json:"resultId"`
+	SurveyID     uint64             `json:"surveyId"`
+	TotalScore   float64            `json:"totalScore"`
+	RiskLevel    string             `json:"riskLevel"`
+	SubmittedAt  int64              `json:"submittedAt"`
+	FactorScores map[string]float64 `json:"factorScores,omitempty"`
 }
 
 // SurveyResultDetail 对应 assessment-svc types.GetSurveyResultResp
 type SurveyResultDetail struct {
-	ResultID    uint64         `json:"resultId"`
-	SurveyID    uint64         `json:"surveyId"`
-	UserID      int64          `json:"userId"`
-	TotalScore  float64        `json:"totalScore"`
-	RiskLevel   string         `json:"riskLevel"`
-	DurationSec int            `json:"durationSec"`
-	Answers     map[string]any `json:"answers"`
-	SubmittedAt int64          `json:"submittedAt"`
+	ResultID     uint64             `json:"resultId"`
+	SurveyID     uint64             `json:"surveyId"`
+	UserID       int64              `json:"userId"`
+	TotalScore   float64            `json:"totalScore"`
+	RiskLevel    string             `json:"riskLevel"`
+	DurationSec  int                `json:"durationSec"`
+	Answers      map[string]any     `json:"answers"`
+	SubmittedAt  int64              `json:"submittedAt"`
+	FactorScores map[string]float64 `json:"factorScores,omitempty"`
 }
 
 // AssessmentClient BFF → assessment-svc HTTP 客户端

@@ -46,9 +46,10 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 ## 下一阶段（进行中）
 
-**E2E-14 人格量表与 AI 提示词定制**（status: ⏳ pending）→ 详档待撰写
+**E2E-15 报表 Dashboard**（status: ⏳ pending）→ 详档待撰写（依赖 E2E-10 聊天链路产生行为事件）
 
-> E2E-13 心理测验 ✅ done（2026-09-20，12/12 PASS，E2E-F-02/03 关闭）。E2E-12 设置页 ✅ done。E2E-11 partial（留账 2 条）。E2E-07~10 partial（取证缺口）。
+> E2E-14 人格量表与 AI 提示词定制 ✅ done（2026-09-20，14/14 PASS，E2E-F-04 关闭）。E2E-13 心理测验 ✅ done。E2E-12 设置页 ✅ done。E2E-11 partial（留账 2 条）。E2E-07~10 partial（取证缺口）。
+> **下一阶段开工前**：E2E-15 依赖 E2E-10 的行为事件数据链路，且账本 E2E-F-10（analytics mental-health 报表读空表）归属本阶段，详档需一并覆盖。
 
 ## 排期总表（30 阶段）
 
@@ -84,7 +85,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
 | E2E-13 | 心理测验链路修复 | 列表→答题→提交→结果查看 跑通（三层契约错位见 E2E-F-02）+ 补量表种子数据 + `/question` 页区分两类量表 | 人格量表内容设计 | ✅ **done**（2026-09-20：12/12 PASS，BLOCKED=0。6 处契约错位修复 + 种子数据 PHQ-9/GAD-7 + BFF HTTP 绕过 + ADR。Playwright 18/18 + Go 10/10 + 边界 10/10。E2E-F-02/03 关闭。详档 [report.md](stages/e2e-13-quiz/report.md)） |
-| E2E-14 🔧 | 人格量表与 AI 提示词定制 | D-02：新增人格量表（设计+种子+维度评分器）→ 结果模型扩展 → 注入 AI prompt → user 页测评图表 | — | ⏳ pending |
+| E2E-14 🔧 | 人格量表与 AI 提示词定制 | D-02：新增人格量表（设计+种子+维度评分器）→ 结果模型扩展 → 注入 AI prompt → user 页测评图表 | — | ✅ **done**（2026-09-20：14/14 PASS，BLOCKED=0。BIG5 量表 + BigFiveScorer（含反向题）+ 画像注入 BFF system prompt + `/question` 分区 tab + 结果雷达图 + 我的空间画像区块。**端到端抓包**证实注入报文（含降级路径）。途中揪出并修 3 个真实缺陷：列表 description 恒空（proto 缺字段/gRPC 丢弃）、雷达容器宽度塌缩 100px、雷达轴标签裁剪。Playwright 20/20（双 project）+ Go 19 条 + 前端 31 条。E2E-F-04 关闭。详档 [report.md](stages/e2e-14-personality-ai-prompt/report.md)） |
 | E2E-15 | 报表 Dashboard | 数据内容正确性/日期切换/历史 chartData=[] 复查 | — | ⏳ pending |
 | E2E-16 | 多模态（语音/表情/文件上传） | 语音输入/表情识别/文件上传链路 | 数字人、TTS | ⏳ pending |
 | E2E-17 🔧 | 数字人 + TTS | D-03：做真口型同步（接 `/tts_with_phonemes` 时间戳）+ 排查段间播放断点 | — | ⏳ pending |
@@ -245,6 +246,9 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | E2E-07 找回/重置密码 | [stages/e2e-07-password-recovery/plan.md](stages/e2e-07-password-recovery/plan.md) |
 | E2E-08 历史会话管理 | [stages/e2e-08-conversation-management/plan.md](stages/e2e-08-conversation-management/plan.md) |
 | E2E-09 注册流程 | [stages/e2e-09-registration/plan.md](stages/e2e-09-registration/plan.md) |
+| E2E-12 设置页 | [stages/e2e-12-settings/plan.md](stages/e2e-12-settings/plan.md) |
+| E2E-13 心理测验链路修复 | [stages/e2e-13-quiz/plan.md](stages/e2e-13-quiz/plan.md) |
+| E2E-14 人格量表与 AI 提示词定制 | [stages/e2e-14-personality-ai-prompt/plan.md](stages/e2e-14-personality-ai-prompt/plan.md) |
 
 模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)，执行记录模板见 [stages/_REPORT_TEMPLATE.md](stages/_REPORT_TEMPLATE.md)。批次三及以后在轮到前补写。E2E-01 已按判定分级标注，其余已写详档在启动前补齐标记。
 

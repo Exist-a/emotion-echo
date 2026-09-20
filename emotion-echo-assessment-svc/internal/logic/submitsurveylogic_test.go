@@ -12,6 +12,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"emotion-echo-assessment-svc/internal/config"
@@ -168,4 +169,33 @@ func TestSubmitSurveyLogic_PHQ9_ExtremeLevel_AllThrees(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "extreme", resp.RiskLevel)
 	assert.InDelta(t, 27.0, resp.TotalScore, 0.001)
+}
+
+// TestSubmitSurveyLogic_BIG5_ReturnsFactorScores 人格量表提交后必须回传五维度分数。
+// 前端结果弹窗据 riskLevel=="dimension_profile" 判断渲染雷达图，
+// 维度数据来源即此字段（E2E-14）。
+func TestSubmitSurveyLogic_BIG5_ReturnsFactorScores(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemorySurveyRepo()
+	repo.Add(&model.Survey{ID: 1, Code: "BIG5", Status: 1})
+
+	ctx := contextWithUserID(context.Background(), 7)
+	l := NewSubmitSurveyLogic(ctx, newSubmitSurveySvcCtx(repo))
+
+	ans := map[string]int{}
+	for i := 1; i <= 30; i++ {
+		ans[fmt.Sprintf("q%d", i)] = 3
+	}
+	resp, err := l.SubmitSurvey(&types.SubmitSurveyReq{SurveyId: 1, Answers: ans})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	assert.Equal(t, "dimension_profile", resp.RiskLevel)
+	require.NotNil(t, resp.FactorScores, "BIG5 提交响应必须带 factorScores")
+	assert.Len(t, resp.FactorScores, 5)
+	assert.InDelta(t, 18.0, resp.FactorScores["openness"], 0.001)
+	assert.InDelta(t, 18.0, resp.FactorScores["conscientiousness"], 0.001)
+	assert.InDelta(t, 18.0, resp.FactorScores["extraversion"], 0.001)
+	assert.InDelta(t, 18.0, resp.FactorScores["agreeableness"], 0.001)
+	assert.InDelta(t, 18.0, resp.FactorScores["neuroticism"], 0.001)
 }

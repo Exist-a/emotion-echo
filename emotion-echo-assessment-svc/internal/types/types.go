@@ -60,6 +60,9 @@ type SubmitSurveyResp struct {
 	TotalScore float64 `json:"totalScore"`
 	Answered   int     `json:"answered"`
 	RiskLevel  string  `json:"riskLevel"`
+	// FactorScores 分项/维度分数（人格量表为五维度，PSQI 为 7 个 component）。
+	// riskLevel=="dimension_profile" 时前端据此渲染雷达图。
+	FactorScores map[string]float64 `json:"factorScores,omitempty"`
 }
 
 // GetSurveyResultReq GET /api/v1/surveys/results/:resultId
@@ -74,6 +77,8 @@ type SurveyResultItem struct {
 	TotalScore float64 `json:"totalScore"`
 	RiskLevel  string  `json:"riskLevel"`
 	SubmittedAt int64  `json:"submittedAt"`
+	// FactorScores 维度分数（BFF 注入 AI 人格画像时从列表直接取，免二次请求）
+	FactorScores map[string]float64 `json:"factorScores,omitempty"`
 }
 
 // GetSurveyResultResp 单条结果详情
@@ -86,6 +91,7 @@ type GetSurveyResultResp struct {
 	DurationSec int             `json:"durationSec"`
 	Answers     map[string]any  `json:"answers"`
 	SubmittedAt int64           `json:"submittedAt"`
+	FactorScores map[string]float64 `json:"factorScores,omitempty"`
 }
 
 // ListMyResultsReq GET /api/v1/surveys/results

@@ -828,6 +828,7 @@ Stage 33 P0 修复+BFF净化 █████████████████
 | 2026-09-15 | producer ctx 取消 | sarama SendMessage 阻塞期间 Gin 卡 10s → **goroutine + select**（Round 2.4） | P2-14；commit `caa100c`，11 测试全 PASS |
 | 2026-09-15 | 多轮迭代 plan 状态 | planned → **landed**（Round 0-2 全部收口） | [stage-99-round-2-closure.md](../stages/stage-99-round-2-closure.md) 9 commits +1685/-41 行 33 测试 0 回归；Round 3-5 待启动 |
 | 2026-09-20 | assessment-svc survey 端点传输方式 | gRPC 转换丢失 JSONB → **survey 5 端点走 HTTP 绕过** | [adr-2026-09-survey-http-bypass.md](adr/adr-2026-09-survey-http-bypass.md)；E2E-13 修复心理测验链路 6 处契约错位 |
+| 2026-09-20 | 人格画像注入 AI 提示词的落点 | prompt 在两处硬编码 → **BFF 侧组装注入**（不改 proto / llm-service） | [adr-2026-09-personality-prompt-injection.md](adr/adr-2026-09-personality-prompt-injection.md)；E2E-14 落地 D-02；两条上游路径收敛为同一个 buildSystemPrompt |
 
 ---
 
