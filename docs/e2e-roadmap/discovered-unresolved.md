@@ -2,7 +2,7 @@
 status: active
 priority: high
 created: 2026-09-17
-last-refresh: 2026-09-19 (E2E-09 留账 E2E-F-77/78；总 78 项)
+last-refresh: 2026-09-20 (E2E-F-24 已解决；E2E-F-82 已解决；总 90 项)
 type: e2e-discovered-unresolved-ledger
 ---
 
@@ -46,7 +46,7 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-21 | 盲区排查 | 前端零工程化门槛：无 ESLint/Prettier 配置、`package.json` 无 `lint` script、typecheck 有 **96 处历史错误基线**、无构建产物 smoke、Playwright 仅单 chromium project、无 browserslist | AGENTS.md §2.2 的"合并前 `npm run lint`"是**空条款**（无 eslint 依赖） | E2E-04 | 🔴 未解决 |
 | E2E-F-22 | 盲区排查 | `check_docker_digests.sh` **假绿**：只校验 FROM 行格式含 `@sha256:`，而 `Dockerfile.digests.lock` 中 **7 个 digest 是 `sha256:000...000` 占位值**（文件头 `:20-22` 自述） | 检查器只验形式不验实质；沙箱网络不可达 docker.io 无法回填，但缺口被静默掩盖 | E2E-05 | 🟡 **降级并记录**（2026-09-19：按 D-07 落为显式已知缺口——`check_docker_digests.sh` 打印 6 个占位 digest 的 WARN 且 `exit=0`，非静默通过；需 registry 可达环境跑 `sync_docker_digests.sh` 回填真值）
 | E2E-F-23 | 盲区排查 | **ADR-18 防线全面失效**：10 个校验脚本（路由对齐/视图一致性/env 变量/迁移契约/JWT secret 一致/git 布局/docs 更新/digest/TLS…）全部 CI-shaped 但**全部无人在跑** | 依赖 CI 执行才生效，而 CI 不存在（E2E-F-20）。`check_view_consistency.py` 文档字符串明写"CI 阶段跑：发现 diff 即 fail"——该前提从未成立 | E2E-05 | ✅ **已解决**（2026-09-19 实测：10 个校验脚本中 9 个已在 CI——`check_routes_alignment` / `check_view_consistency` / `lint_env_vars` / `test_migrations_contract` / `test_bff_jwt_secret` / `check_git_layout` / `test_docs_update` / `check_docker_digests` / `check_secrets`；仅 `e2e_stage_audit.py` 未接，余项转 E2E-F-89）
-| E2E-F-24 | 盲区排查 | 3 处实测文档失真：① `stage-21-k8s-strategy.md:27` 称 "`deploy/tls/*.key` 提交进 git"，实际未提交（gitignore 已忽略）② `docs/ci-workflows/web-test.yml` 的 `lint` 步骤引用不存在的 script ③ `deploy/env/.env.common` 腐烂（`APISIX_VERSION=3.9.0` vs 实际 3.18.0；`GIN_BACKEND_HOST` 指向已迁 `legacy/` 的 Gin；compose 不引用） | 失真属 ADR-18 已分类的"未复跑即记录/陈旧结论"；③ 未被发现的原因是 `lint_env_vars.sh` 只校验 `.env.local.example`，不校验 `.env.common` | E2E-05 | 🔴 未解决 |
+| E2E-F-24 | 盲区排查 | 3 处实测文档失真：① `stage-21-k8s-strategy.md:27` 称 "`deploy/tls/*.key` 提交进 git"，实际未提交（gitignore 已忽略）② `docs/ci-workflows/web-test.yml` 的 `lint` 步骤引用不存在的 script ③ `deploy/env/.env.common` 腐烂（`APISIX_VERSION=3.9.0` vs 实际 3.18.0；`GIN_BACKEND_HOST` 指向已迁 `legacy/` 的 Gin；compose 不引用） | 失真属 ADR-18 已分类的"未复跑即记录/陈旧结论"；③ 未被发现的原因是 `lint_env_vars.sh` 只校验 `.env.local.example`，不校验 `.env.common` | E2E-05 | ✅ **已解决**（2026-09-20 核实：① 文档实际写的是"未提交"（E2E-F-24 描述不准确），当前状态正确；② `docs/ci-workflows/web-test.yml` 已标注为 historical template + 真实 CI 已落地；③ `.env.common` 的 `APISIX_VERSION` 已更新为 3.18.0-debian、`GIN_BACKEND_HOST` 已注释+标注过时、compose 不引用该文件） |
 | E2E-F-25 | 盲区排查 | 多实例下 3 处防护**静默失效**：BFF 登录失败锁定（5 次错密码）、验证码 60s 防枚举、APISIX 限流（`policy: local`） | 前两者 in-memory（`auth_handler.go:14,15,66` 注释自述"单实例假设；多实例留 Stage 34+ Redis"）；APISIX `seed.sh:318-325` `policy: local` 每节点各自计数。而决策 3 是"本地 Docker **单机多实例**"，故必须正确 | E2E-20 | 🔴 未解决 |
 | E2E-F-26 | 盲区排查 | **无性能/延迟基线**：无压测脚本（k6/locust/vegeta/wrk 全无）、无 p50/p95 目标、无资源预算 | 埋点已就位（fusion histogram、LLM `request_duration_seconds`、gRPC latency 日志）但**无阈值消费**。XTTS 性能图是上游 vendor 自带，非本项目实测 | E2E-28 | 🔴 未解决 |
 | E2E-F-27 | 盲区排查 | **无备份/恢复/回滚机制** | 全仓无 `pg_dump`/`pg_restore` 脚本；`migrate.sh` 是幂等重放模型，无 down 脚本；`05-drop-user-oauth.sql` 是**单向破坏性**迁移 | E2E-19 | 🔴 未解决 |

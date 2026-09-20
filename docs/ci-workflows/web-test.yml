@@ -1,5 +1,9 @@
 # docs/ci-workflows/web-test.yml
 #
+# ⚠️ HISTORICAL TEMPLATE — 本文件是 CI 落地前的设计模板，不是真实 workflow。
+# 真实 CI: .github/workflows/web-test.yml（无 lint 步骤、有 Typecheck 步骤）。
+# 保留本文件供参考；如有冲突以 .github/workflows/ 为准。
+#
 # Stage 97 PR-9e · Round 2 §P1-R2-16 · AGENTS.md §2.2
 #
 # 用途：emotion-echo-web (Nuxt + Vitest) vitest 单元测试 + lint。

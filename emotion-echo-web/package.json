@@ -2,6 +2,11 @@
   "name": "Emotion-Echo-Web",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
