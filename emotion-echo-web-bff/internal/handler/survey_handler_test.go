@@ -136,3 +136,91 @@ func TestSurveyHandler_GetSurvey_NotFound_Returns404(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), "survey not found")
 }
+
+// ==================== HTTP 绕过路径契约测试 ====================
+// E2E-13: 当 assessmentBase 被设置时，handler 走 HTTP 直取而非 gRPC
+
+// newSurveyRouterWithHTTP 创建带 HTTP 绕过的 survey handler 路由
+func newSurveyRouterWithHTTP(fakeAssessment *httptest.Server) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := NewSurveyHandler(&fakeAssessmentClient{})
+	h.WithAssessmentBase(fakeAssessment.URL)
+	h.Register(r)
+	return r
+}
+
+func TestSurveyHandler_GetSurveyHTTP_QuestionsAsArray(t *testing.T) {
+	// 模拟 assessment-svc 返回 questions 为 map（JSONB 原始格式）
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"id":1,"code":"PHQ-9","title":"PHQ-9","category":"depression","version":1,
+			"questions":{
+				"q1":{"title":"兴趣减退","type":"radio","options":[{"id":1,"text":"没有","score":0},{"id":2,"text":"有","score":1}]},
+				"q2":{"title":"心情低落","type":"radio","options":[{"id":1,"text":"没有","score":0},{"id":2,"text":"有","score":1}]}
+			}
+		}`))
+	}))
+	defer fake.Close()
+
+	r := newSurveyRouterWithHTTP(fake)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/surveys/1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	// questions 应为数组（非 map）
+	assert.Contains(t, body, `"questions":[`)
+	// 每个 question 应有 id 字段（从 map key 注入）
+	assert.Contains(t, body, `"id":"q1"`)
+	assert.Contains(t, body, `"id":"q2"`)
+	// 响应应被 BFF 包装为 {code:0, data:{...}}
+	assert.Contains(t, body, `"code":0`)
+}
+
+func TestSurveyHandler_SubmitSurveyHTTP_PreservesAnswerKeys(t *testing.T) {
+	// 模拟 assessment-svc，验证收到的 answers key 是 "q1"/"q2"（非数字）
+	var receivedBody string
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(r.Body)
+		receivedBody = buf.String()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"resultId":1,"surveyId":1,"totalScore":2,"answered":2,"riskLevel":"none"}`))
+	}))
+	defer fake.Close()
+
+	r := newSurveyRouterWithHTTP(fake)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/surveys/1/submit",
+		bytes.NewReader([]byte(`{"answers":{"q1":1,"q2":1}}`)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	// 验证转发给 assessment-svc 的 body 保留了 "q1"/"q2" key
+	assert.Contains(t, receivedBody, `"q1"`)
+	assert.Contains(t, receivedBody, `"q2"`)
+	assert.NotContains(t, receivedBody, `"1":`) // 不应有数字 key
+}
+
+func TestSurveyHandler_GetResultHTTP_ReturnsRiskLevel(t *testing.T) {
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"resultId":1,"surveyId":1,"userId":48,"totalScore":12,"riskLevel":"moderate","durationSec":60,"answers":{"q1":1},"submittedAt":1789878019}`))
+	}))
+	defer fake.Close()
+
+	r := newSurveyRouterWithHTTP(fake)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/surveys/results/1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, `"riskLevel":"moderate"`)
+	assert.Contains(t, body, `"totalScore":12`)
+	// 响应应被 BFF 包装
+	assert.Contains(t, body, `"code":0`)
+}

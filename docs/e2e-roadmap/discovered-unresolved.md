@@ -19,8 +19,8 @@ type: e2e-discovered-unresolved-ledger
 | 编号 | 来源 | 现象 | 根因 | 归属阶段 | 状态 |
 |------|------|------|------|---------|------|
 | E2E-F-01 | 预探查 | 找回密码/注册的验证码无真实投递渠道，流程仍按手机号短信时代设计 | 项目已改用户名登录；`BFF_DEV_RETURN_CODE=1` 仅 dev 回显 | E2E-07 / E2E-09 | ✅ **已解决**（2026-09-19 治理轮核对：方案 C 密保问题已由两阶段实施落地——E2E-07 完成"验证码→密保问题"三步向导改造 + `user_security_answers` 落库 + 答案 bcrypt 化；E2E-09 完成注册侧密保弹框（不可跳过、答案必填）+ 验证码字段/逻辑删除。本轮实跑证据：`SecurityQuestionDialog.test.ts` 8 passed + `registration-security-question.test.ts` 15 passed，合计 23 passed（2026-09-19）。注：两阶段的 `partial` 状态源于 E2E-F-90 的取证缺口，与本条目无关） |
-| E2E-F-02 | 预探查 | 心理测验三层契约错位：提交必 400、结果弹窗"等级"恒空、列表页取数失败报错 | 前端发 `answers` 数组 vs 后端要 `map[string]int`；前端读 `level`/`suggestion` vs 后端回 `riskLevel`；前端读 `data.list` vs 后端回 `{items,total}` | E2E-13 | 🔴 未解决 |
-| E2E-F-03 | 预探查 | 现工程量表种子数据不存在，surveys 表为空 | `deploy/db/` 无 INSERT 量表的 SQL；文档声称的 `seed-surveys.sql` 在 git 全历史中不存在 | E2E-13 | 🔴 未解决 |
+| E2E-F-02 | 预探查 | 心理测验三层契约错位：提交必 400、结果弹窗"等级"恒空、列表页取数失败报错 | 前端发 `answers` 数组 vs 后端要 `map[string]int`；前端读 `level`/`suggestion` vs 后端回 `riskLevel`；前端读 `data.list` vs 后端回 `{items,total}` | E2E-13 | ✅ **已解决**（2026-09-20 E2E-13：6 处契约错位全修——M1 answers 数组→map、M2 level/suggestion→riskLevel+中文映射、M3 data.list→data.items、M4 SurveyItem 字段对齐、M5 BFF questions map→数组转换、M6 结果 URL 单数→复数。BFF 5 端点走 HTTP 绕过 gRPC（保留 JSONB 原始格式 + answer key）。Playwright 18/18 PASS + Go 契约测试 10/10 PASS） |
+| E2E-F-03 | 预探查 | 现工程量表种子数据不存在，surveys 表为空 | `deploy/db/` 无 INSERT 量表的 SQL；文档声称的 `seed-surveys.sql` 在 git 全历史中不存在 | E2E-13 | ✅ **已解决**（2026-09-20 E2E-13：`deploy/db/06-seed-surveys.sql` 创建 PHQ-9（9题）+ GAD-7（7题），questions JSONB 匹配 scorer.go 期望格式，ON CONFLICT 幂等可重跑） |
 | E2E-F-04 | 预探查 | "人格测试→心理预测→AI 提示词定制"链路完全不存在 | 量表是症状自评非人格量表；评分无维度/画像；BFF system prompt 写死静态字符串；proto 无画像字段；legacy 挂点 `BuildSurveyContext` 函数体 `return ""` | E2E-14 | 🟡 方案已定（D-02），待实施 |
 | E2E-F-05 | 预探查 | 数字人口型是随机轮播假口型，与音频零对齐 | `useTTSPlayer.ts:91-103` 每 150ms 循环切 5 个口型；L38-75 映射表是死代码；XTTS `/tts_with_phonemes` 带时间戳但前端从未调用 | E2E-17 | 🟡 方案已定（D-03），待实施 |
 | E2E-F-06 | 预探查 | TTS 流式播放段间存在必然断点 | 500ms debounce 聚合文本；每段新文本先 `stop()` 再重发 HTTP；XTTS 每段一次 `inference_stream` 冷启动 | E2E-17 / E2E-28 | 🟡 方案已定（D-03），待实施 |
