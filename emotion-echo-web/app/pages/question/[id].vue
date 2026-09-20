@@ -92,9 +92,8 @@
               <span>总分</span><strong>{{ submitResult.totalScore }}</strong>
             </div>
             <div class="result-row">
-              <span>等级</span><strong>{{ submitResult.level }}</strong>
+              <span>等级</span><strong>{{ riskLevelLabel(submitResult.riskLevel) }}</strong>
             </div>
-            <p class="result-suggestion">{{ submitResult.suggestion }}</p>
           </div>
           <div class="modal-actions">
             <button type="button" class="ee-btn ee-btn-primary" @click="handleResultConfirm">
@@ -127,7 +126,7 @@ const survey = ref<SurveyDetail>({
 const goBackDialogVisible = ref(false)
 const resultDialogVisible = ref(false)
 const submitResult = ref<SurveyResult | null>(null)
-const answerMap = ref<Record<number, number>>({})
+const answerMap = ref<Record<string, number>>({})
 
 const getQuestionDetail = async (id: string | number) => {
   isLoading.value = true
@@ -159,9 +158,10 @@ const progressPercent = computed(() =>
 
 const handleSubmit = async () => {
   if (!hasAnsweredAll.value) return
-  const answers = Object.entries(answerMap.value)
-    .filter(([, optionId]) => optionId > 0)
-    .map(([questionId, optionId]) => ({ questionId: Number(questionId), optionId }))
+  const answers: Record<string, number> = {}
+  Object.entries(answerMap.value).forEach(([qId, optId]) => {
+    if (optId > 0) answers[qId] = optId
+  })
   isSubmitting.value = true
   try {
     const result = await post<SurveyResult>(
@@ -175,6 +175,13 @@ const handleSubmit = async () => {
   } finally {
     isSubmitting.value = false
   }
+}
+
+const riskLevelLabel = (level: string) => {
+  const map: Record<string, string> = {
+    none: '正常', mild: '轻度', moderate: '中度', severe: '重度', extreme: '极重度',
+  }
+  return map[level] ?? level
 }
 
 const handleResultConfirm = () => {

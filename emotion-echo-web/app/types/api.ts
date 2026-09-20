@@ -247,16 +247,16 @@ export interface StreamChunk {
 // ==================== 测验模块 ====================
 
 /**
- * 量表项
+ * 量表项（对齐 assessment-svc SurveyItem）
  */
 export interface SurveyItem {
   id: number
+  code: string
   title: string
   description: string
-  estimatedTime: string
-  status: 'completed' | 'not_started'
-  completedAt?: string
-  resultId?: string
+  category: string
+  questionNum: number
+  version: number
 }
 
 /**
@@ -269,10 +269,10 @@ export interface QuestionOption {
 }
 
 /**
- * 题目
+ * 题目（id 为 "q1"~"qN"，与 scorer answers key 一致）
  */
 export interface Question {
-  id: number
+  id: string
   title: string
   type: 'radio'
   options: QuestionOption[]
@@ -290,23 +290,19 @@ export interface SurveyDetail {
 }
 
 /**
- * 提交答案请求
+ * 提交答案请求（对齐 assessment-svc SubmitSurveyReq：map[string]int）
  */
 export interface SubmitSurveyParams {
-  answers: Array<{
-    questionId: number
-    optionId: number
-  }>
+  answers: Record<string, number>
 }
 
 /**
- * 测验结果
+ * 测验结果（对齐 assessment-svc SubmitSurveyResp / GetSurveyResultResp）
  */
 export interface SurveyResult {
   resultId: string
   totalScore: number
-  level: string
-  suggestion: string
+  riskLevel: string
 }
 
 // ==================== 报表模块 ====================
