@@ -2,7 +2,7 @@
 stage: e2e-13
 title: 心理测验链路修复
 type: transformation
-status: pending
+status: done
 created: 2026-09-20
 depends-on: [e2e-06]
 blocks: [e2e-14]

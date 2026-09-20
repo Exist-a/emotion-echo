@@ -224,3 +224,30 @@ func TestSurveyHandler_GetResultHTTP_ReturnsRiskLevel(t *testing.T) {
 	// 响应应被 BFF 包装
 	assert.Contains(t, body, `"code":0`)
 }
+
+func TestSurveyHandler_GetSurveyHTTP_QuestionsSortedByKey(t *testing.T) {
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"id":1,"code":"TEST","title":"Test","category":"test","version":1,
+			"questions":{
+				"q3":{"title":"C","type":"radio","options":[]},
+				"q1":{"title":"A","type":"radio","options":[]},
+				"q2":{"title":"B","type":"radio","options":[]}
+			}
+		}`))
+	}))
+	defer fake.Close()
+
+	r := newSurveyRouterWithHTTP(fake)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/surveys/1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	idx1 := bytes.Index(w.Body.Bytes(), []byte(`"id":"q1"`))
+	idx2 := bytes.Index(w.Body.Bytes(), []byte(`"id":"q2"`))
+	idx3 := bytes.Index(w.Body.Bytes(), []byte(`"id":"q3"`))
+	assert.True(t, idx1 < idx2, "q1 should come before q2")
+	assert.True(t, idx2 < idx3, "q2 should come before q3")
+}

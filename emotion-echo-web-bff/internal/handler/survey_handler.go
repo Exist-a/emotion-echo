@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -120,11 +121,16 @@ func (h *SurveyHandler) getSurveyHTTP(c *gin.Context, id uint64) {
 		Fail(c, http.StatusBadGateway, 1, err.Error())
 		return
 	}
-	// questions 从 map 转为数组，注入 id 字段
+	// questions 从 map 转为有序数组（按 key q1,q2,...,qN 排序），注入 id 字段
 	if questionsRaw, ok := raw["questions"].(map[string]any); ok {
+		keys := make([]string, 0, len(questionsRaw))
+		for k := range questionsRaw {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 		questions := make([]map[string]any, 0, len(questionsRaw))
-		for k, v := range questionsRaw {
-			if m, ok := v.(map[string]any); ok {
+		for _, k := range keys {
+			if m, ok := questionsRaw[k].(map[string]any); ok {
 				m["id"] = k
 				questions = append(questions, m)
 			}
