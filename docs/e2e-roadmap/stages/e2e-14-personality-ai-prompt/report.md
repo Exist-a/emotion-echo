@@ -189,7 +189,22 @@ $ curl 127.0.0.1:18099                     ← 无响应
 
 ## 7. 收口自检
 
-- [x] `git status` 干净（或改动是有意保留的）
+- [x] `git status` 干净（无未提交改动）
 - [x] `git status -sb` main 与 origin/main 无 ahead/behind
 - [x] `git branch --merged main` 除 main 外为空
 - [x] `python scripts/e2e_stage_audit.py --all` → 0 FAIL
+- [x] 5 个门禁脚本（orphan / tdd / adr / residual / soft-assert）5/5 PASS
+- [x] PR [#37](https://github.com/Exist-a/emotion-echo/pull/37) 已 squash 合并进 main（CI 27/27 绿）
+
+### 合并过程记录
+
+- 首轮 CI 有 1 项红：**ADR 门禁**。规则是"改动文件路径命中架构关键词的 commit 必须在**同一
+  commit 内**附带 ADR"，而关键词清单含 `vue` ⇒ 任何 `.vue` 改动都会命中。本轮 9 个提交里
+  2 个前端提交单独看没有 ADR（ADR 在另一个文档提交里）。
+- 处置：按本仓既定的 **squash-merge** 模式把分支压成单个提交（含 ADR），与 main 最终形态一致，
+  门禁转绿。**不是绕过门禁**——ADR 确实随改动落地。
+- 该规则"路径子串命中即需 ADR"偏宽（任何前端改动都被要求产出 ADR，即使无架构决策），
+  记入 `E2E-F-94`。
+- 合并后本地/远端特性分支已删除；仓库另有一个历史残留远端分支 `origin/docs/e2e-13-plan`
+  （其内容已由 PR #30 落地 main，历史重写故 git 判为"未合并"）——**非本轮创建，未擅自删除**，
+  留给用户处置。
