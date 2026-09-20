@@ -3,9 +3,9 @@
 // E2E-14：人格画像注入 AI system prompt。
 //
 // 契约（D-02）：
-//   1. 用户有人格量表结果 → system prompt 追加可读画像文本（五维度 + 高/中/低）
-//   2. 用户无人格量表结果 → 回落基础人设 prompt（绝不因此失败）
-//   3. 画像来源报错 → 同上回落 + 记日志（画像注入是增强，不是依赖）
+//  1. 用户有人格量表结果 → system prompt 追加可读画像文本（五维度 + 高/中/低）
+//  2. 用户无人格量表结果 → 回落基础人设 prompt（绝不因此失败）
+//  3. 画像来源报错 → 同上回落 + 记日志（画像注入是增强，不是依赖）
 //
 // 基底人设 prompt 在两处上游路径（gRPC / HTTP 直连）共用，注入点必须同一。
 package handler
@@ -25,9 +25,9 @@ import (
 
 // fakePersonalitySource 实现 personalitySource
 type fakePersonalitySource struct {
-	dims    map[string]float64
-	err     error
-	calls   int
+	dims  map[string]float64
+	err   error
+	calls int
 }
 
 func (f *fakePersonalitySource) LatestPersonalityProfile(context.Context) (map[string]float64, error) {
@@ -46,7 +46,11 @@ func newPersonalityRouter(streamer *fakeLLMStreamer, src personalitySource) *gin
 	return r
 }
 
-// TestAIStreamHandler_Personality_InjectedIntoSystemPrompt 有人格结果 → 注入画像文本
+// TestAIStreamHandler_Personality_InjectedIntoSystemPrompt 有人格结果 → 注入画像适配指令
+//
+// 注：注入内容的**具体措辞契约**已迁到 personality_directive_test.go
+// （语义化后不再是「形容词罗列」，而是逐条行为指令）。本用例只守
+// 「有画像 ⇒ 进 system prompt」这条通路 + 来源被查询一次。
 func TestAIStreamHandler_Personality_InjectedIntoSystemPrompt(t *testing.T) {
 	fake := &fakeLLMStreamer{deltas: []string{"hi"}}
 	src := &fakePersonalitySource{dims: map[string]float64{
@@ -66,16 +70,15 @@ func TestAIStreamHandler_Personality_InjectedIntoSystemPrompt(t *testing.T) {
 	require.NotEmpty(t, fake.gotMsgs)
 	require.Equal(t, "system", fake.gotMsgs[0].Role)
 	sys := fake.gotMsgs[0].Content
-	// 基础人设仍在
-	assert.Contains(t, sys, "情绪疏导陪伴者")
-	// 五个维度中文标签齐全
+	// 基础人设仍在，且是前缀（基底不被画像改写）
+	assert.True(t, strings.HasPrefix(sys, baseSystemPrompt), "基础人设必须原样保留在开头")
+	// 适配层进入
+	assert.Contains(t, sys, "与这位用户相处的方式")
+	// 五维数字摘要齐全（含中档维度）
 	for _, label := range []string{"开放性", "尽责性", "外向性", "宜人性", "神经质"} {
 		assert.Contains(t, sys, label, "system prompt 必须含维度标签 %s", label)
 	}
-	// 分数与等级
-	assert.Contains(t, sys, "26", "开放性 26 分应出现在画像文本")
-	assert.Contains(t, sys, "开放性高", "26/30 应为高")
-	assert.Contains(t, sys, "神经质低", "10/30 应为低")
+	assert.Contains(t, sys, "26/30", "应带五维数字摘要")
 	assert.Equal(t, 1, src.calls, "画像来源每次请求查询一次")
 }
 
@@ -92,8 +95,7 @@ func TestAIStreamHandler_NoPersonality_UsesBasePrompt(t *testing.T) {
 
 	require.NotEmpty(t, fake.gotMsgs)
 	sys := fake.gotMsgs[0].Content
-	assert.Contains(t, sys, "情绪疏导陪伴者")
-	assert.NotContains(t, sys, "人格画像", "无结果时不得出现画像段落（否则是编造画像）")
+	assert.Equal(t, baseSystemPrompt, sys, "无结果时必须与无画像时逐字相同（否则是编造画像）")
 	assert.Contains(t, w.Body.String(), "hi", "无画像也必须正常回复")
 }
 
@@ -109,9 +111,7 @@ func TestAIStreamHandler_PersonalitySourceError_FallsBackToBasePrompt(t *testing
 	router.ServeHTTP(w, req)
 
 	require.NotEmpty(t, fake.gotMsgs)
-	sys := fake.gotMsgs[0].Content
-	assert.Contains(t, sys, "情绪疏导陪伴者")
-	assert.NotContains(t, sys, "人格画像")
+	assert.Equal(t, baseSystemPrompt, fake.gotMsgs[0].Content)
 	assert.Contains(t, w.Body.String(), "hi")
 }
 
@@ -127,38 +127,9 @@ func TestAIStreamHandler_NilPersonalitySource_UsesBasePrompt(t *testing.T) {
 
 	require.NotEmpty(t, fake.gotMsgs)
 	assert.Contains(t, fake.gotMsgs[0].Content, "情绪疏导陪伴者")
-	assert.NotContains(t, fake.gotMsgs[0].Content, "人格画像")
+	assert.NotContains(t, fake.gotMsgs[0].Content, "与这位用户相处的方式")
 }
 
-// =====================================================
-// formatPersonalityContext 单测
-// =====================================================
-
-func TestFormatPersonalityContext_AllDimensionsWithLevels(t *testing.T) {
-	ctx := formatPersonalityContext(map[string]float64{
-		"openness":          30,
-		"conscientiousness": 23,
-		"extraversion":      18,
-		"agreeableness":     14,
-		"neuroticism":       6,
-	})
-	// 高（≥23）
-	assert.Contains(t, ctx, "开放性高（30/30）")
-	assert.Contains(t, ctx, "尽责性高（23/30）")
-	// 中（14~22）
-	assert.Contains(t, ctx, "外向性中（18/30）")
-	assert.Contains(t, ctx, "宜人性中（14/30）")
-	// 低（≤13）
-	assert.Contains(t, ctx, "神经质低（6/30）")
-}
-
-func TestFormatPersonalityContext_MissingDimension_Skipped(t *testing.T) {
-	ctx := formatPersonalityContext(map[string]float64{"openness": 20})
-	assert.Contains(t, ctx, "开放性中（20/30）")
-	assert.NotContains(t, ctx, "尽责性", "缺失维度不得凭空补 0")
-}
-
-func TestFormatPersonalityContext_Empty_ReturnsEmpty(t *testing.T) {
-	assert.Equal(t, "", formatPersonalityContext(nil))
-	assert.Equal(t, "", formatPersonalityContext(map[string]float64{}))
-}
+// 注：原 `formatPersonalityContext` 的三个单测已随该函数一并删除 ——
+// 它产出的是「形容词罗列」（开放性高（30/30）、…），即账本 E2E-F-95 认定语义不足的那版。
+// 替代实现在 personality_directive.go，契约测试见 personality_directive_test.go。

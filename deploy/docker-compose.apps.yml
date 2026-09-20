@@ -577,7 +577,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.21  # E2E-14: 人格画像注入 + listSurveys HTTP 修复 + AIStreamDeps options struct
+    image: emotion-echo/web-bff:v0.1.22  # E2E-F-95: 人格提示词语义化（行为规格 + ipsative 分档）
     container_name: emotion-echo-web-bff
     restart: unless-stopped
     env_file: *env-file

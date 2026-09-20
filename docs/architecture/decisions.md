@@ -829,6 +829,7 @@ Stage 33 P0 修复+BFF净化 █████████████████
 | 2026-09-15 | 多轮迭代 plan 状态 | planned → **landed**（Round 0-2 全部收口） | [stage-99-round-2-closure.md](../stages/stage-99-round-2-closure.md) 9 commits +1685/-41 行 33 测试 0 回归；Round 3-5 待启动 |
 | 2026-09-20 | assessment-svc survey 端点传输方式 | gRPC 转换丢失 JSONB → **survey 5 端点走 HTTP 绕过** | [adr-2026-09-survey-http-bypass.md](adr/adr-2026-09-survey-http-bypass.md)；E2E-13 修复心理测验链路 6 处契约错位 |
 | 2026-09-20 | 人格画像注入 AI 提示词的落点 | prompt 在两处硬编码 → **BFF 侧组装注入**（不改 proto / llm-service） | [adr-2026-09-personality-prompt-injection.md](adr/adr-2026-09-personality-prompt-injection.md)；E2E-14 落地 D-02；两条上游路径收敛为同一个 buildSystemPrompt |
+| 2026-09-21 | 人格画像的提示词语义设计 | 注入「形容词罗列」且 34% 用户拿不到任何指令 → **给相处说明书（非 AI 性格）+ 可观察行为规格 + ipsative 相对档** | [adr-2026-09-personality-prompt-semantics.md](adr/adr-2026-09-personality-prompt-semantics.md)；账本 E2E-F-95；覆盖率 66% → 95.5%，去标识盲判 6/6 |
 
 ---
 
