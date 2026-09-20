@@ -13,9 +13,13 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/session"
@@ -25,12 +29,23 @@ import (
 
 // SurveyHandler 处理 /api/v1/surveys/* 端点
 type SurveyHandler struct {
-	assessment downstream.AssessmentClient
+	assessment      downstream.AssessmentClient
+	assessmentBase  string                    // assessment-svc HTTP base URL（绕过 gRPC 转换用）
+	assessmentHTTP  *http.Client
 }
 
 // NewSurveyHandler 构造
 func NewSurveyHandler(assessment downstream.AssessmentClient) *SurveyHandler {
-	return &SurveyHandler{assessment: assessment}
+	return &SurveyHandler{
+		assessment:     assessment,
+		assessmentHTTP: &http.Client{Timeout: 5 * time.Second},
+	}
+}
+
+// WithAssessmentBase 注入 assessment-svc HTTP base URL（用于绕过 gRPC questions 转换）
+func (h *SurveyHandler) WithAssessmentBase(base string) *SurveyHandler {
+	h.assessmentBase = base
+	return h
 }
 
 // Register 注册路由（静态段优先：results 先于 :id）
@@ -63,6 +78,11 @@ func (h *SurveyHandler) getSurvey(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid survey id")
 		return
 	}
+	// 优先走 HTTP 直取（保留 JSONB 原始格式），gRPC 转换会丢失 options 结构
+	if h.assessmentBase != "" {
+		h.getSurveyHTTP(c, id)
+		return
+	}
 	s, err := h.assessment.GetSurvey(session.WithRequestAuth(c), id)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
@@ -71,10 +91,58 @@ func (h *SurveyHandler) getSurvey(c *gin.Context) {
 	OK(c, s)
 }
 
+// getSurveyHTTP 直接调 assessment-svc HTTP 端点，保留 questions JSONB 原始格式
+func (h *SurveyHandler) getSurveyHTTP(c *gin.Context, id uint64) {
+	url := fmt.Sprintf("%s/api/v1/surveys/%d", h.assessmentBase, id)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, 1, err.Error())
+		return
+	}
+	// 从 context 提取 user ID（APISIX 注入或 BFF auth middleware 设置）
+	if uid, ok := downstream.UserIDFromContext(session.WithRequestAuth(c)); ok {
+		req.Header.Set("X-User-Id", strconv.FormatInt(uid, 10))
+	}
+	resp, err := h.assessmentHTTP.Do(req)
+	if err != nil {
+		Fail(c, http.StatusBadGateway, 1, fmt.Errorf("assessment-svc: %w", err).Error())
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		Fail(c, resp.StatusCode, 1, string(body))
+		return
+	}
+	// 解包 assessment-svc 的 JSON 响应，提取 questions 并转为数组
+	var raw map[string]any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		Fail(c, http.StatusBadGateway, 1, err.Error())
+		return
+	}
+	// assessment-svc 直接返回结构体（无 code/data 包装），questions 是 map[string]any
+	if questionsRaw, ok := raw["questions"].(map[string]any); ok {
+		questions := make([]map[string]any, 0, len(questionsRaw))
+		for k, v := range questionsRaw {
+			if m, ok := v.(map[string]any); ok {
+				m["id"] = k
+				questions = append(questions, m)
+			}
+		}
+		raw["questions"] = questions
+	}
+	c.JSON(resp.StatusCode, raw)
+}
+
 func (h *SurveyHandler) submitSurvey(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid survey id")
+		return
+	}
+	// 优先走 HTTP 直传（gRPC 会把 "q1" 转成数字再转回 "1"，scorer 期望 "q1"）
+	if h.assessmentBase != "" {
+		h.submitSurveyHTTP(c, id)
 		return
 	}
 	var req downstream.SubmitSurveyReq
@@ -90,12 +158,50 @@ func (h *SurveyHandler) submitSurvey(c *gin.Context) {
 	OK(c, resp)
 }
 
+// submitSurveyHTTP 直接调 assessment-svc HTTP 端点，保留 answers key 原始格式
+func (h *SurveyHandler) submitSurveyHTTP(c *gin.Context, id uint64) {
+	body, _ := io.ReadAll(c.Request.Body)
+	url := fmt.Sprintf("%s/api/v1/surveys/%d/submit", h.assessmentBase, id)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, 1, err.Error())
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if uid, ok := downstream.UserIDFromContext(session.WithRequestAuth(c)); ok {
+		req.Header.Set("X-User-Id", strconv.FormatInt(uid, 10))
+	}
+	resp, err := h.assessmentHTTP.Do(req)
+	if err != nil {
+		Fail(c, http.StatusBadGateway, 1, fmt.Errorf("assessment-svc: %w", err).Error())
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		Fail(c, resp.StatusCode, 1, string(respBody))
+		return
+	}
+	// 透传 assessment-svc 响应
+	var result map[string]any
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		Fail(c, http.StatusBadGateway, 1, err.Error())
+		return
+	}
+	OK(c, result)
+}
+
 func (h *SurveyHandler) listResults(c *gin.Context) {
 	limit := 20
 	if v := c.Query("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			limit = n
 		}
+	}
+	// 优先走 HTTP（gRPC ListResults 未实现）
+	if h.assessmentBase != "" {
+		h.listResultsHTTP(c, limit)
+		return
 	}
 	items, total, err := h.assessment.ListResults(session.WithRequestAuth(c), limit)
 	if err != nil {
@@ -105,10 +211,45 @@ func (h *SurveyHandler) listResults(c *gin.Context) {
 	OK(c, gin.H{"items": items, "total": total})
 }
 
+// listResultsHTTP 直接调 assessment-svc HTTP 端点
+func (h *SurveyHandler) listResultsHTTP(c *gin.Context, limit int) {
+	url := fmt.Sprintf("%s/api/v1/surveys/results?limit=%d", h.assessmentBase, limit)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, 1, err.Error())
+		return
+	}
+	if uid, ok := downstream.UserIDFromContext(session.WithRequestAuth(c)); ok {
+		req.Header.Set("X-User-Id", strconv.FormatInt(uid, 10))
+	}
+	resp, err := h.assessmentHTTP.Do(req)
+	if err != nil {
+		Fail(c, http.StatusBadGateway, 1, fmt.Errorf("assessment-svc: %w", err).Error())
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		Fail(c, resp.StatusCode, 1, string(respBody))
+		return
+	}
+	var result map[string]any
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		Fail(c, http.StatusBadGateway, 1, err.Error())
+		return
+	}
+	OK(c, result)
+}
+
 func (h *SurveyHandler) getResult(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("resultId"), 10, 64)
 	if err != nil || id == 0 {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid result id")
+		return
+	}
+	// 优先走 HTTP（gRPC GetResult 未实现）
+	if h.assessmentBase != "" {
+		h.getResultHTTP(c, id)
 		return
 	}
 	r, err := h.assessment.GetResult(session.WithRequestAuth(c), id)
@@ -117,4 +258,34 @@ func (h *SurveyHandler) getResult(c *gin.Context) {
 		return
 	}
 	OK(c, r)
+}
+
+// getResultHTTP 直接调 assessment-svc HTTP 端点
+func (h *SurveyHandler) getResultHTTP(c *gin.Context, id uint64) {
+	url := fmt.Sprintf("%s/api/v1/surveys/results/%d", h.assessmentBase, id)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, 1, err.Error())
+		return
+	}
+	if uid, ok := downstream.UserIDFromContext(session.WithRequestAuth(c)); ok {
+		req.Header.Set("X-User-Id", strconv.FormatInt(uid, 10))
+	}
+	resp, err := h.assessmentHTTP.Do(req)
+	if err != nil {
+		Fail(c, http.StatusBadGateway, 1, fmt.Errorf("assessment-svc: %w", err).Error())
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		Fail(c, resp.StatusCode, 1, string(respBody))
+		return
+	}
+	var result map[string]any
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		Fail(c, http.StatusBadGateway, 1, err.Error())
+		return
+	}
+	OK(c, result)
 }

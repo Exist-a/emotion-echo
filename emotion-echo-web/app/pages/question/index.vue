@@ -26,33 +26,21 @@
         v-for="item in tableData"
         :key="item.id"
         class="assessment-card"
-        :class="`is-${item.status}`"
       >
         <header class="card-head">
           <h3>{{ item.title }}</h3>
-          <span class="badge" :class="`badge-${item.status}`">{{ item.statusText }}</span>
+          <span class="badge">{{ item.category }}</span>
         </header>
+        <p class="card-desc">{{ item.description }}</p>
         <dl class="card-meta">
           <div>
-            <dt>预计用时</dt>
-            <dd>{{ item.estimatedTime }}</dd>
-          </div>
-          <div>
-            <dt>完成时间</dt>
-            <dd>{{ item.completedAt || '—' }}</dd>
+            <dt>题目数</dt>
+            <dd>{{ item.questionNum }} 题</dd>
           </div>
         </dl>
         <footer class="card-actions">
           <button type="button" class="ee-btn ee-btn-primary" @click="doQuestion(item)">
-            {{ item.status === 'completed' ? '再做一次' : '开始答题' }}
-          </button>
-          <button
-            type="button"
-            class="ee-btn"
-            :disabled="item.status !== 'completed'"
-            @click="checkRes(item)"
-          >
-            查看结果
+            开始答题
           </button>
         </footer>
       </article>
@@ -67,9 +55,8 @@
               <span>总分</span><strong>{{ currentResult.totalScore }}</strong>
             </div>
             <div class="result-row">
-              <span>等级</span><strong>{{ currentResult.level }}</strong>
+              <span>等级</span><strong>{{ riskLevelLabel(currentResult.riskLevel) }}</strong>
             </div>
-            <p class="result-suggestion">{{ currentResult.suggestion }}</p>
           </div>
           <div v-else>加载结果中…</div>
           <div class="modal-actions">
@@ -96,20 +83,13 @@ const dialogVisible = ref(false)
 const currentResult = ref<SurveyResult | null>(null)
 const isLoading = ref(true)
 
-interface TableRow extends SurveyItem {
-  statusText: string
-}
-
-const tableData = ref<TableRow[]>([])
+const tableData = ref<SurveyItem[]>([])
 
 const fetchSurveys = async () => {
   isLoading.value = true
   try {
-    const data = await get<{ list: SurveyItem[] }>(API_ROUTES.surveys.path)
-    tableData.value = data.list.map((item) => ({
-      ...item,
-      statusText: item.status === 'completed' ? '已完成' : '未开始',
-    }))
+    const data = await get<{ items: SurveyItem[] }>(API_ROUTES.surveys.path)
+    tableData.value = data.items ?? []
   } catch (err: any) {
     notifyError('获取量表列表失败', err.message)
   } finally {
@@ -119,24 +99,14 @@ const fetchSurveys = async () => {
 
 onMounted(fetchSurveys)
 
-const doQuestion = (data: TableRow) =>
+const doQuestion = (data: SurveyItem) =>
   navigateTo({ name: 'question-detail', params: { id: data.id } })
 
-const checkRes = async (data: TableRow) => {
-  if (!data.resultId) {
-    notifyError('还没有结果', '请先完成量表')
-    return
+const riskLevelLabel = (level: string) => {
+  const map: Record<string, string> = {
+    none: '正常', mild: '轻度', moderate: '中度', severe: '重度', extreme: '极重度',
   }
-  dialogVisible.value = true
-  currentResult.value = null
-  try {
-    // TODO(BFF 路由错位): 前端 /surveys/result/:id vs BFF /surveys/results/:resultId (survey_handler.go:40)
-    // 当前前端走单数 result，BFF 注册复数 results —— 此处前端路径错，等 PR-4 同步修
-    const result = await get<SurveyResult>(`/surveys/result/${data.resultId}`)
-    currentResult.value = result
-  } catch (err: any) {
-    notifyError('获取结果失败', err.message)
-  }
+  return map[level] ?? level
 }
 </script>
 
