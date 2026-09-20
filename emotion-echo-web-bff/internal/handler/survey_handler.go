@@ -120,7 +120,7 @@ func (h *SurveyHandler) getSurveyHTTP(c *gin.Context, id uint64) {
 		Fail(c, http.StatusBadGateway, 1, err.Error())
 		return
 	}
-	// assessment-svc 直接返回结构体（无 code/data 包装），questions 是 map[string]any
+	// questions 从 map 转为数组，注入 id 字段
 	if questionsRaw, ok := raw["questions"].(map[string]any); ok {
 		questions := make([]map[string]any, 0, len(questionsRaw))
 		for k, v := range questionsRaw {
@@ -131,7 +131,7 @@ func (h *SurveyHandler) getSurveyHTTP(c *gin.Context, id uint64) {
 		}
 		raw["questions"] = questions
 	}
-	c.JSON(resp.StatusCode, raw)
+	OK(c, raw)
 }
 
 func (h *SurveyHandler) submitSurvey(c *gin.Context) {
