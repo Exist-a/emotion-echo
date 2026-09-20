@@ -6,6 +6,7 @@ import type {
   UserInfo,
   UpdateProfileParams,
 } from '~/types/api'
+import type { fontSizePxType } from '~/types/userConfig/userConfigType'
 import { get, post, put, patch } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
 
@@ -62,17 +63,20 @@ export const useUserStore = defineStore('user', () => {
       userInfo.value.config = {}
     }
 
-    // 先调 API 成功，再更新本地
+    // 先调 API 成功，再更新本地。
+    // E2E-12：本地也存 px（与写入服务端的形态一致），语义名只在
+    // getUserConfig() 对外转换 —— 此前本地存语义名、服务端存 px，
+    // 同一字段两种形态，靠 `as any` 绕过类型。
     const pxSize = fontSizeToPx[size] || size
     const result = await updateProfile({
       config: {
         ...userInfo.value.config,
-        fontSize: pxSize as any,
+        fontSize: pxSize as fontSizePxType,
       },
     })
     if (!result.isOk) return
 
-    userInfo.value.config.fontSize = size as any
+    userInfo.value.config.fontSize = pxSize as fontSizePxType
   }
 
   const setTheme = async (theme: 'light' | 'dark' | 'auto') => {
@@ -94,20 +98,40 @@ export const useUserStore = defineStore('user', () => {
     applyTheme(theme)
   }
 
+  // E2E-12 #8：auto 模式的媒体查询变更监听句柄。
+  // 模块级持有，切换主题时先解绑旧的，避免重复注册与切离 auto 后仍跟随。
+  let themeMediaListener: ((e: MediaQueryListEvent) => void) | null = null
+
   /**
    * 应用主题到 DOM
+   *
+   * E2E-12 两处补强（建档实测这两条当时都不成立）：
+   *  - #8：`theme='auto'` 时注册 `matchMedia change` 监听 —— 系统换主题页面
+   *        **运行时**跟随，而不是只在 init/setTheme 时读一次。
+   *  - #10：把生效主题镜像进 `ee_theme` cookie（非 HttpOnly），供 SSR 首屏
+   *        渲染正确的 `<html class>`，消除冷启动闪烁（FOUC）。
    */
   const applyTheme = (theme: 'light' | 'dark' | 'auto') => {
     if (!import.meta.client) return
     const html = document.documentElement
-    let effectiveTheme = theme
-    if (theme === 'auto') {
-      effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+
+    const paint = (effective: 'light' | 'dark') => {
+      html.classList.toggle('dark', effective === 'dark')
+      document.cookie = `ee_theme=${effective}; path=/; max-age=31536000; samesite=lax`
     }
-    if (effectiveTheme === 'dark') {
-      html.classList.add('dark')
-    } else {
-      html.classList.remove('dark')
+
+    // 无论切到哪个主题，先解除上一次 auto 注册的监听
+    if (themeMediaListener) {
+      mql.removeEventListener('change', themeMediaListener)
+      themeMediaListener = null
+    }
+
+    paint(theme === 'auto' ? (mql.matches ? 'dark' : 'light') : theme)
+
+    if (theme === 'auto') {
+      themeMediaListener = (e: MediaQueryListEvent) => paint(e.matches ? 'dark' : 'light')
+      mql.addEventListener('change', themeMediaListener)
     }
   }
 
@@ -269,6 +293,12 @@ export const useUserStore = defineStore('user', () => {
       try {
         const data = await get<UserInfo>(API_ROUTES.userProfile.path)
         userInfo.value = data
+        // E2E-12 #5/#9：拿到服务端 config 就立即把主题应用出去。
+        // 此前该动作只存在于 plugins/init.ts，且整块被 gated 在 isAuthenticated 上
+        // ——冷启动时 userInfo 来自 localStorage、为空，导致服务端 config 取到了
+        // 但主题从不应用（页面停在默认浅色）。放在 store 内是唯一权威点：
+        // 任何调用方 fetchUserInfo 都自动获得正确的主题。
+        applyTheme(getUserConfig().theme)
         return { isOk: true, msg: '获取成功' }
       } catch (error: any) {
         return { isOk: false, msg: error.message || '获取失败' }
