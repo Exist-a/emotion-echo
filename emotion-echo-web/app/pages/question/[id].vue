@@ -186,9 +186,19 @@ const progressPercent = computed(() =>
 
 const handleSubmit = async () => {
   if (!hasAnsweredAll.value) return
+  // 提交 **option.score**，不是 option.id（E2E-F-97）。
+  //
+  // 后端 `SubmitSurveyReq.Answers` 的契约是 `map[questionId]score`，scorer 直接按
+  // score 求和/校验。原实现提交的是选项 id —— 只有当种子数据恰好 `id == score`
+  // 时才正确（BIG5 是这样），而 PHQ-9/GAD-7 的选项是 `id 1..4 / score 0..3`
+  // （id = score + 1），于是：全选"完全没有"被算成 9 分/mild（假阳性），
+  // 选"几乎每天"(id=4) 直接 HTTP 400（4 超出 score 值域 0-3）。
   const answers: Record<string, number> = {}
-  Object.entries(answerMap.value).forEach(([qId, optId]) => {
-    if (optId > 0) answers[qId] = optId
+  survey.value.questions.forEach((q) => {
+    const selectedId = answerMap.value[q.id]
+    if (!selectedId) return
+    const opt = q.options.find((o) => o.id === selectedId)
+    if (opt) answers[q.id] = opt.score
   })
   isSubmitting.value = true
   try {

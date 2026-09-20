@@ -830,6 +830,7 @@ Stage 33 P0 修复+BFF净化 █████████████████
 | 2026-09-20 | assessment-svc survey 端点传输方式 | gRPC 转换丢失 JSONB → **survey 5 端点走 HTTP 绕过** | [adr-2026-09-survey-http-bypass.md](adr/adr-2026-09-survey-http-bypass.md)；E2E-13 修复心理测验链路 6 处契约错位 |
 | 2026-09-20 | 人格画像注入 AI 提示词的落点 | prompt 在两处硬编码 → **BFF 侧组装注入**（不改 proto / llm-service） | [adr-2026-09-personality-prompt-injection.md](adr/adr-2026-09-personality-prompt-injection.md)；E2E-14 落地 D-02；两条上游路径收敛为同一个 buildSystemPrompt |
 | 2026-09-21 | 人格画像的提示词语义设计 | 注入「形容词罗列」且 34% 用户拿不到任何指令 → **给相处说明书（非 AI 性格）+ 可观察行为规格 + ipsative 相对档** | [adr-2026-09-personality-prompt-semantics.md](adr/adr-2026-09-personality-prompt-semantics.md)；账本 E2E-F-95；覆盖率 66% → 95.5%，去标识盲判 6/6 |
+| 2026-09-21 | 验收断言口径 | 只断言形状（非空/正则/多处一致）→ **必须断言具体期望值 + 边界两端 + 覆盖真实 UI 驱动路径** | [adr-2026-09-assertion-value-not-shape.md](adr/adr-2026-09-assertion-value-not-shape.md)；触发 E2E-F-97（PHQ-9 算分错误连续逃过 E2E-13/14 两次收口）+ E2E-F-91（描述恒空） |
 
 ---
 

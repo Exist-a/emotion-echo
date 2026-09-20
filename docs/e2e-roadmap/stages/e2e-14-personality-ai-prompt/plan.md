@@ -2,7 +2,7 @@
 stage: e2e-14
 title: 人格量表与 AI 提示词定制
 type: transformation
-status: done
+status: partial
 created: 2026-09-20
 depends-on: [e2e-13]
 blocks: [e2e-15]

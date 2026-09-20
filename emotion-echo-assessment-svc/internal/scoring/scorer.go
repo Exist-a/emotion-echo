@@ -17,11 +17,27 @@ import (
 	"emotion-echo-assessment-svc/internal/model"
 )
 
+// totalScore 的语义取值（E2E-F-97 ①）
+//
+// 为什么需要它：人格量表的 TotalScore 是「五维度之和」（全中立 = 90），
+// **没有严重度语义**，却与症状量表用同名字段返回 ⇒ 下游极易误读为风险分
+// （把 90 当"极重度"）。让 Result 自述语义，响应层透出 scoreKind，
+// 消费方按字段判断而不是靠记 riskLevel 的魔法值。
+const (
+	// KindRisk 症状量表：totalScore 是症状总分，有严重度语义（PHQ-9/GAD-7/PSQI）
+	KindRisk = "risk"
+	// KindDimensionSum 人格量表：totalScore 仅为五维度之和，**无严重度语义**
+	KindDimensionSum = "dimension_sum"
+	// KindRatio 兜底：totalScore 是按满分比例的通用分档
+	KindRatio = "ratio"
+)
+
 // Result 计分结果
 type Result struct {
-	TotalScore float64            // 总分
-	RiskLevel  string             // 风险等级：none / mild / moderate / severe / extreme
-	Factors    map[string]float64 // 分项分数（如 PSQI 7 个 component）
+	TotalScore float64            // 总分（语义见 Kind）
+	RiskLevel  string             // 风险等级：none / mild / moderate / severe / extreme；人格量表为 dimension_profile
+	Factors    map[string]float64 // 分项分数（如 PSQI 7 个 component、人格五维度）
+	Kind       string             // totalScore 的语义：KindRisk / KindDimensionSum / KindRatio
 }
 
 // Scorer 计分器接口
@@ -37,11 +53,12 @@ type Scorer interface {
 // 总分范围 0-27
 //
 // 等级：
-//   0-4  : none      (无/最小)
-//   5-9  : mild      (轻度)
-//   10-14: moderate  (中度)
-//   15-19: severe    (重度)
-//   20-27: extreme   (极重度)
+//
+//	0-4  : none      (无/最小)
+//	5-9  : mild      (轻度)
+//	10-14: moderate  (中度)
+//	15-19: severe    (重度)
+//	20-27: extreme   (极重度)
 type PHQ9Scorer struct{}
 
 func (PHQ9Scorer) Score(s *model.Survey, answers map[string]int) (*Result, error) {
@@ -76,6 +93,7 @@ func (PHQ9Scorer) Score(s *model.Survey, answers map[string]int) (*Result, error
 	return &Result{
 		TotalScore: total,
 		RiskLevel:  level,
+		Kind:       KindRisk,
 		Factors: map[string]float64{
 			"q1": float64(answers["q1"]),
 			"q2": float64(answers["q2"]),
@@ -98,10 +116,11 @@ func (PHQ9Scorer) Score(s *model.Survey, answers map[string]int) (*Result, error
 // 总分范围 0-21
 //
 // 等级：
-//   0-4  : none     (无)
-//   5-9  : mild     (轻度)
-//   10-14: moderate (中度)
-//   15-21: severe   (重度)
+//
+//	0-4  : none     (无)
+//	5-9  : mild     (轻度)
+//	10-14: moderate (中度)
+//	15-21: severe   (重度)
 type GAD7Scorer struct{}
 
 func (GAD7Scorer) Score(s *model.Survey, answers map[string]int) (*Result, error) {
@@ -134,6 +153,7 @@ func (GAD7Scorer) Score(s *model.Survey, answers map[string]int) (*Result, error
 	return &Result{
 		TotalScore: total,
 		RiskLevel:  level,
+		Kind:       KindRisk,
 		Factors: map[string]float64{
 			"q1": float64(answers["q1"]),
 			"q2": float64(answers["q2"]),
@@ -163,10 +183,11 @@ func (GAD7Scorer) Score(s *model.Survey, answers map[string]int) (*Result, error
 // 总分 0-21
 //
 // 等级：
-//   0-5  : none     (好)
-//   6-10 : mild     (中)
-//   11-15: moderate (差)
-//   16-21: severe   (很差)
+//
+//	0-5  : none     (好)
+//	6-10 : mild     (中)
+//	11-15: moderate (差)
+//	16-21: severe   (很差)
 //
 // 输入：answers 是 component 字典 {C1: 0-3, ..., C7: 0-3}
 // 也可以接受 {q1: ..., q7: ...}（兼容写法）
@@ -217,6 +238,7 @@ func (PSQIScorer) Score(s *model.Survey, answers map[string]int) (*Result, error
 	return &Result{
 		TotalScore: total,
 		RiskLevel:  level,
+		Kind:       KindRisk,
 		Factors:    factors,
 	}, nil
 }
@@ -226,9 +248,10 @@ func (PSQIScorer) Score(s *model.Survey, answers map[string]int) (*Result, error
 // =====================================================
 //
 // 通用计分规则：
-//   total_score = sum(answers)
-//   answered = count(answers)
-//   level: ≥0.7 → high; ≥0.4 → medium; <0.4 → low
+//
+//	total_score = sum(answers)
+//	answered = count(answers)
+//	level: ≥0.7 → high; ≥0.4 → medium; <0.4 → low
 type GenericScorer struct{}
 
 func (GenericScorer) Score(s *model.Survey, answers map[string]int) (*Result, error) {
@@ -257,6 +280,7 @@ func (GenericScorer) Score(s *model.Survey, answers map[string]int) (*Result, er
 	return &Result{
 		TotalScore: total,
 		RiskLevel:  level,
+		Kind:       KindRatio,
 		Factors:    factors,
 	}, nil
 }
@@ -269,15 +293,17 @@ func (GenericScorer) Score(s *model.Survey, answers map[string]int) (*Result, er
 // Likert 5 点计分：1-5
 //
 // 维度映射：
-//   openness         : q1, q6, q11, q16, q21, q26
-//   conscientiousness: q2, q7, q12, q17, q22, q27
-//   extraversion     : q3, q8, q13, q18, q23, q28
-//   agreeableness    : q4, q9, q14, q19, q24, q29
-//   neuroticism      : q5, q10, q15, q20, q25, q30
+//
+//	openness         : q1, q6, q11, q16, q21, q26
+//	conscientiousness: q2, q7, q12, q17, q22, q27
+//	extraversion     : q3, q8, q13, q18, q23, q28
+//	agreeableness    : q4, q9, q14, q19, q24, q29
+//	neuroticism      : q5, q10, q15, q20, q25, q30
 //
 // 反向计分题（在 scoring_rules.reverse 中声明）：
-//   q10, q15, q20, q23, q24, q25
-//   反向公式：reversed = 6 - original
+//
+//	q10, q15, q20, q23, q24, q25
+//	反向公式：reversed = 6 - original
 //
 // RiskLevel 固定返回 "dimension_profile"（人格量表无风险概念）
 // Factors 存储五维度原始分（反转后）
@@ -334,6 +360,7 @@ func (BigFiveScorer) Score(s *model.Survey, answers map[string]int) (*Result, er
 	return &Result{
 		TotalScore: totalScore,
 		RiskLevel:  "dimension_profile",
+		Kind:       KindDimensionSum,
 		Factors:    factors,
 	}, nil
 }

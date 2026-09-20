@@ -1,6 +1,7 @@
 package scoring
 
 import (
+	"fmt"
 	"testing"
 
 	"emotion-echo-assessment-svc/internal/model"
@@ -339,4 +340,85 @@ func TestGetScorer_BIG5_Dispatches(t *testing.T) {
 	assert.NotNil(t, got)
 	_, ok := got.(BigFiveScorer)
 	assert.True(t, ok, "expected BigFiveScorer")
+}
+
+// =====================================================
+// E2E-F-97 ①：Result 必须自述其 totalScore 的语义（Kind）
+// =====================================================
+//
+// 动机：人格量表的 totalScore 是「五维度之和」，**没有严重度语义**
+// （全中立 = 90），却与症状量表用同名字段返回，下游极易误读为风险分。
+// 解决：让 Result 自述 Kind，响应里透出 scoreKind，消费方不必记魔法字符串。
+
+func TestScorers_DeclareScoreKind(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		scorer   Scorer
+		answers  map[string]int
+		wantKind string
+	}{
+		{
+			name:   "PHQ-9",
+			scorer: PHQ9Scorer{},
+			answers: map[string]int{"q1": 0, "q2": 1, "q3": 0, "q4": 1, "q5": 0,
+				"q6": 0, "q7": 1, "q8": 0, "q9": 1},
+			wantKind: "risk",
+		},
+		{
+			name:   "GAD-7",
+			scorer: GAD7Scorer{},
+			answers: map[string]int{"q1": 1, "q2": 1, "q3": 1, "q4": 0,
+				"q5": 0, "q6": 0, "q7": 0},
+			wantKind: "risk",
+		},
+		{
+			name:   "PSQI",
+			scorer: PSQIScorer{},
+			answers: map[string]int{"C1": 0, "C2": 1, "C3": 1, "C4": 0,
+				"C5": 1, "C6": 0, "C7": 0},
+			wantKind: "risk",
+		},
+		{
+			name:   "BIG5 人格量表：totalScore 无严重度语义",
+			scorer: BigFiveScorer{},
+			answers: func() map[string]int {
+				m := map[string]int{}
+				for i := 1; i <= 30; i++ {
+					m[fmt.Sprintf("q%d", i)] = 3
+				}
+				return m
+			}(),
+			wantKind: "dimension_sum",
+		},
+		{
+			name:     "未知量表兜底",
+			scorer:   GenericScorer{},
+			answers:  map[string]int{"q1": 1, "q2": 2},
+			wantKind: "ratio",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.scorer.Score(&model.Survey{Code: "X"}, tc.answers)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantKind, got.Kind,
+				"每个 scorer 必须自述 totalScore 的语义，供响应层透出 scoreKind")
+		})
+	}
+}
+
+// TestBigFive_TotalScoreIsMeaninglessForSeverity 钉住"人格量表 totalScore 不可当风险分读"
+func TestBigFive_TotalScoreIsMeaninglessForSeverity(t *testing.T) {
+	t.Parallel()
+	neutral := map[string]int{}
+	for i := 1; i <= 30; i++ {
+		neutral[fmt.Sprintf("q%d", i)] = 3
+	}
+	got, err := BigFiveScorer{}.Score(&model.Survey{Code: "BIG5"}, neutral)
+	require.NoError(t, err)
+	assert.Equal(t, "dimension_sum", got.Kind)
+	assert.Equal(t, 90.0, got.TotalScore, "全中立 = 五维度各 18 = 90；这个数没有严重度含义")
+	// 若有人拿它当 PHQ-9 那样的风险分读，会得出"90 分/极重度"的荒谬结论
+	assert.NotEqual(t, "risk", got.Kind)
 }

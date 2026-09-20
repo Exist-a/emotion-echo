@@ -58,6 +58,7 @@ type SubmitSurveyResp struct {
 	Answered     int                `json:"answered"`
 	RiskLevel    string             `json:"riskLevel"`
 	FactorScores map[string]float64 `json:"factorScores,omitempty"`
+	ScoreKind    string             `json:"scoreKind,omitempty"`
 }
 
 // SurveyResultItem 对应 assessment-svc types.SurveyResultItem
@@ -68,6 +69,7 @@ type SurveyResultItem struct {
 	RiskLevel    string             `json:"riskLevel"`
 	SubmittedAt  int64              `json:"submittedAt"`
 	FactorScores map[string]float64 `json:"factorScores,omitempty"`
+	ScoreKind    string             `json:"scoreKind,omitempty"`
 }
 
 // SurveyResultDetail 对应 assessment-svc types.GetSurveyResultResp
@@ -81,6 +83,7 @@ type SurveyResultDetail struct {
 	Answers      map[string]any     `json:"answers"`
 	SubmittedAt  int64              `json:"submittedAt"`
 	FactorScores map[string]float64 `json:"factorScores,omitempty"`
+	ScoreKind    string             `json:"scoreKind,omitempty"`
 }
 
 // AssessmentClient BFF → assessment-svc HTTP 客户端

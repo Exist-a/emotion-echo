@@ -1,4 +1,3 @@
-
 package logic
 
 import (
@@ -8,10 +7,9 @@ import (
 	"emotion-echo-assessment-svc/internal/middleware"
 	"emotion-echo-assessment-svc/internal/model"
 	"emotion-echo-assessment-svc/internal/repository"
+	"emotion-echo-assessment-svc/internal/scoring"
 	"emotion-echo-assessment-svc/internal/svc"
 	"emotion-echo-assessment-svc/internal/types"
-
-	
 )
 
 type GetSurveyResultLogic struct {
@@ -56,7 +54,19 @@ func (l *GetSurveyResultLogic) GetSurveyResult(req *types.GetSurveyResultReq) (r
 		Answers:      res.Answers,
 		SubmittedAt:  res.SubmittedAt.UnixMilli(),
 		FactorScores: jsonMapToFloat64(res.FactorScores),
+		ScoreKind:    scoreKindFromRiskLevel(res.RiskLevel),
 	}, nil
+}
+
+// scoreKindFromRiskLevel 从落库的 riskLevel 反推 totalScore 的语义（E2E-F-97 ①）。
+//
+// 读结果时 scorer 已不再参与（分数是存下来的），故用同一个判别标记还原语义：
+// 人格量表写死 "dimension_profile" ⇒ 其 totalScore 是五维度之和，无严重度语义。
+func scoreKindFromRiskLevel(riskLevel string) string {
+	if riskLevel == "dimension_profile" {
+		return scoring.KindDimensionSum
+	}
+	return scoring.KindRisk
 }
 
 // jsonMapToFloat64 model.JSONMap → map[string]float64
@@ -106,6 +116,7 @@ func (l *GetSurveyResultLogic) ListMyResults(req *types.ListMyResultsReq) (resp 
 			RiskLevel:    r.RiskLevel,
 			SubmittedAt:  r.SubmittedAt.UnixMilli(),
 			FactorScores: jsonMapToFloat64(r.FactorScores),
+			ScoreKind:    scoreKindFromRiskLevel(r.RiskLevel),
 		})
 	}
 	return resp, nil

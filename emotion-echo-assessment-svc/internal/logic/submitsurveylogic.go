@@ -1,4 +1,3 @@
-
 package logic
 
 import (
@@ -11,8 +10,6 @@ import (
 	"emotion-echo-assessment-svc/internal/scoring"
 	"emotion-echo-assessment-svc/internal/svc"
 	"emotion-echo-assessment-svc/internal/types"
-
-	
 )
 
 type SubmitSurveyLogic struct {
@@ -68,13 +65,13 @@ func (l *SubmitSurveyLogic) SubmitSurvey(req *types.SubmitSurveyReq) (resp *type
 	}
 
 	result := &model.SurveyResult{
-		UserID:      uid,
-		SurveyID:    req.SurveyId,
-		Answers:     toJSONMap(req.Answers),
+		UserID:       uid,
+		SurveyID:     req.SurveyId,
+		Answers:      toJSONMap(req.Answers),
 		FactorScores: toJSONMapFloat64(scoreResult.Factors),
-		TotalScore:  scoreResult.TotalScore,
-		RiskLevel:   scoreResult.RiskLevel,
-		DurationSec: req.DurationSec,
+		TotalScore:   scoreResult.TotalScore,
+		RiskLevel:    scoreResult.RiskLevel,
+		DurationSec:  req.DurationSec,
 	}
 
 	if err := l.svcCtx.SurveyRepo.SaveResult(l.ctx, result); err != nil {
@@ -91,6 +88,7 @@ func (l *SubmitSurveyLogic) SubmitSurvey(req *types.SubmitSurveyReq) (resp *type
 		Answered:     answered,
 		RiskLevel:    result.RiskLevel,
 		FactorScores: scoreResult.Factors,
+		ScoreKind:    scoreResult.Kind,
 	}, nil
 }
 
