@@ -46,10 +46,10 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 ## 下一阶段（进行中）
 
-**E2E-15 报表 Dashboard**（status: ⏳ pending）→ 详档待撰写（依赖 E2E-10 聊天链路产生行为事件）
+**E2E-15 报表 Dashboard** ✅ **done**（2026-09-21 落地 + 当日收口）：14/14 测试点 + 24/24 Playwright（chromium + mobile）+ 16 张截图。修 2 个真实缺陷：① E2E-F-10（mental_health_assessments 触发器补写 → trigger runner.Save + rebuild analytics-svc:v0.1.8）；② E2E-F-14 同型残留（4 dashboard 空态 div v-else-if + 静态契约钉）。详档 [stages/e2e-15-reports-dashboard/report.md](stages/e2e-15-reports-dashboard/report.md)
 
 > E2E-14 人格量表与 AI 提示词定制 ✅ **done**（2026-09-20 落地 / 2026-09-21 关账轮收口：**16/16 测试点全 PASS**，含 §8.3 新增的算分修复（E2E-F-97）+ `scoreKind` 语义化两条；用户决议暂搁 LLM-as-judge 路线，原 §8.2 报告的"降 partial"理由——账本留 E2E-F-98 判官方法——已被本轮解除，详见账本关账轮记录）。E2E-13 心理测验 ✅ done。E2E-12 设置页 ✅ done。E2E-11 partial（留账 2 条）。E2E-07~10 partial（取证缺口）。
-> **下一阶段开工前**：E2E-15 依赖 E2E-10 的行为事件数据链路，且账本 E2E-F-10（analytics mental-health 报表读空表）归属本阶段，详档需一并覆盖。
+> **下一阶段开工前**：E2E-15 ✅ 已 done（2026-09-21）。下一阶段 = E2E-16（多模态：语音/表情/文件上传）。
 
 ## 排期总表（30 阶段）
 
@@ -86,7 +86,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 |------|--------|------|--------------|------|
 | E2E-13 | 心理测验链路修复 | 列表→答题→提交→结果查看 跑通（三层契约错位见 E2E-F-02）+ 补量表种子数据 + `/question` 页区分两类量表 | 人格量表内容设计 | ✅ **done**（2026-09-20：12/12 PASS，BLOCKED=0。6 处契约错位修复 + 种子数据 PHQ-9/GAD-7 + BFF HTTP 绕过 + ADR。Playwright 18/18 + Go 10/10 + 边界 10/10。E2E-F-02/03 关闭。详档 [report.md](stages/e2e-13-quiz/report.md)） |
 | E2E-14 🔧 | 人格量表与 AI 提示词定制 | D-02：新增人格量表（设计+种子+维度评分器）→ 结果模型扩展 → 注入 AI prompt → user 页测评图表 | — | ✅ **done**（2026-09-20 落地，2026-09-21 关账轮收口）：**16/16 测试点全 PASS**（含 §8.3 新增 E2E-F-97 算分修复 + `scoreKind` 语义化两条）。BIG5 量表（NEO-FFI-30 改编，30 题 × Likert 5 点 + 6 反向题）+ `BigFiveScorer` 五维度评分 + 画像注入 BFF `system prompt`（基底人设不变、画像只调整"怎么说话"）+ 双通道分档（绝对档 + ipsative 个体内相对档，随机 10000 组覆盖率 66% → **95.5%**）+ `/question` 分区 tab + 结果雷达图 + 我的空间画像区块。**端到端抓包**证实注入报文（含降级路径：未做人格量表时不编造）。途中揪出并修 3 个真实缺陷：列表 description 恒空（proto 缺字段/gRPC 丢弃 ⇒ BFF `listSurveys` 走 HTTP 绕过）、雷达容器宽度塌缩 100px（grid 子项 stretch 丢失）、雷达轴标签裁剪（ECharts `radius` 显式 62%）。**客观证据**：对立画像 A/B 三条消息回复对照（字数/问句数/安抚词/追问推进词）方向 **5/5 类 × 3/3 条**全中（确定性文本度量，不依赖判官）。Playwright 20/20（双 project）+ Go 19 条 + 前端 31 条 + 全量 vitest 458/458、typecheck 0 错。账本 E2E-F-04/95/98 关闭（98 = 用户决议暂搁 LLM-as-judge 路线，触发复跑的条件已写入条目）。详档 [report.md](stages/e2e-14-personality-ai-prompt/report.md) |
-| E2E-15 | 报表 Dashboard | 数据内容正确性/日期切换/历史 chartData=[] 复查 | — | ⏳ pending |
+| E2E-15 | 报表 Dashboard | 数据内容正确性/日期切换/历史 chartData=[] 复查 | — | ✅ **done**（2026-09-21）：14/14 测试点 + 24/24 Playwright（chromium + mobile）+ 16 张截图。**修 2 个真实缺陷**：① E2E-F-10 mental_health_assessments 触发器补写（trigger runner.Save + PostgresMentalHealthRepo.Save + rebuild analytics-svc:v0.1.8 + 7 条 trigger 单测）；② E2E-F-14 同型残留（4 dashboard 空态 div v-else-if + 12 用例静态契约钉）。**端到端**：daily/trend/user-behavior 端点有真数据；mental-health 端点 SQL seed 后 BFF 返回非空；E2E-F-36 滚动复验 4 页面 `.page-content overflow-y` = auto。详档 [report.md](stages/e2e-15-reports-dashboard/report.md) |
 | E2E-16 | 多模态（语音/表情/文件上传） | 语音输入/表情识别/文件上传链路 | 数字人、TTS | ⏳ pending |
 | E2E-17 🔧 | 数字人 + TTS | D-03：做真口型同步（接 `/tts_with_phonemes` 时间戳）+ 排查段间播放断点 | — | ⏳ pending |
 

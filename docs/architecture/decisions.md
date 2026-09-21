@@ -572,6 +572,20 @@
 > 早期决策 18 #24 登记时基于"作者推断"误以为全景图含 '唯一前端入口' 措辞——实测全景图本身合规。
 > 本段提醒后来者：全景图含义以本收口为准，**不要再写类似'web-bff 是唯一入口'的措辞**。
 
+### 决策 27：仪表盘空态渲染模式 = **v-else-if 与图表卡片互斥**（2026-09-21 E2E-15 实施）
+
+> ✅ Accepted。**防止 E2E-F-14 同型 bug 复发**——`ee-empty` 占位必须 `v-else-if="chartData.length === 0"`，禁止裸 `v-if` 单独条件或裸 `<div>`。修 4 dashboard / E2E-15 静态契约钉 12/12 PASS。
+
+**完整论证见 [ADR · 2026-09 · 仪表盘空态渲染模式](adr/adr-2026-09-dashboard-empty-state.md)**。
+
+### 决策 28：mental_health_assessments 表写入链 = **trigger runner 末尾补 INSERT**（2026-09-21 E2E-15 实施 / 用户决议 D-10）
+
+> ✅ Accepted。修账本 E2E-F-10：`MentalHealthRunner.Run` 末尾调 `repo.Save(ctx, *MentalAssessment)`（assessment 为 nil 时写 placeholder 让表非空）；`PostgresMentalHealthRepo.Save` 实现 INSERT INTO + RETURNING id；rebuild `emotion-echo/analytics-svc:v0.1.8`。端到端：BFF mental-health 端点返回真实数据（overallScore + dimensions + riskLevel）。
+>
+> **残余（留账下一轮）**：① GetLatestAssessment SQL 未按 `assessment_type` 过滤（weekly/monthly 端点返 daily 最新一条）；② dev mode trigger HTTP JWT 401（analytics-svc secret 与 user-svc 不一致）；③ dashboard EmotionDistribution 可空（dev 没 AI 分析触发，归 §契约 4 整改）。
+
+**完整论证见 [ADR · 2026-09 · mental_health_assessments 表写入链](adr/adr-2026-09-mental-health-trigger-save.md)**。
+
 ## 🏗 当前架构全景
 
 ```
