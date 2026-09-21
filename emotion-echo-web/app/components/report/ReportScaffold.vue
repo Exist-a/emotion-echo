@@ -184,7 +184,50 @@ const emitRange = (start: string, end: string) => {
 }
 .report-summary {
   display: grid;
-  gap: 16px;
+  gap: 18px;
+
+  // 以下样式服务于 #summary slot 内容（4 个 dashboard 共用同一结构：
+  // .summary-text + .stats-row > .stat-item > .stat-value/.stat-label）。
+  // 2026-09-21 修复：此前这些 class **全仓零 CSS** ⇒ 数字与标签挤成一行
+  // "0会话数 33消息数"，视觉上只有裸文字。此处统一给出克制、与卡片体系
+  // 一致的排版（不引入新色板/渐变，只用 --ee-* token）。
+  :deep(.summary-text) {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.85;
+    color: var(--ee-text);
+  }
+
+  :deep(.stats-row) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  :deep(.stat-item) {
+    flex: 1 1 132px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 16px;
+    background: var(--ee-surface-muted);
+    border-radius: var(--ee-radius-md);
+  }
+
+  :deep(.stat-value) {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--ee-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :deep(.stat-label) {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ee-text-muted);
+    letter-spacing: 0.02em;
+  }
 }
 .report-charts {
   min-height: 240px;

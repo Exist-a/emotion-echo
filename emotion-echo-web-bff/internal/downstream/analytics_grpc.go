@@ -120,6 +120,9 @@ func (c *analyticsGRPCClient) TrendReport(ctx context.Context, userID int64, rep
 		EndDate:      endDate,
 		Points:       points,
 		IntentCounts: intentCounts,
+		// 2026-09-21 新增：区间消息数 / 会话数（proto ReportsTrendResponse 4/5 字段）
+		MessageCount:      resp.MessageCount,
+		ConversationCount: resp.ConversationCount,
 	}, nil
 }
 

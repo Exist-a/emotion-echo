@@ -100,4 +100,39 @@ describe('ReportScaffold.vue', () => {
     expect(input.attributes('max')).toBe(maxMonth)
     wrapper.unmount()
   })
+
+  // ============ summary slot 排版契约（2026-09-21 用户实测反馈） ============
+  //
+  // 用户反馈：日报/周报的 summary 卡片「排版有点简陋，只有文字排版」。
+  // 根因：`.summary-text` / `.stats-row` / `.stat-item` / `.stat-value` /
+  // `.stat-label` 这些 class 在被渲染，但**全仓零 CSS 定义** ⇒ 数字与标签
+  // 挤成一行（"0会话数 33消息数"）。本组测试钉住「这 5 个 class 必须有样式」。
+  const readScaffoldSrc = async () => {
+    const { readFileSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const { resolve, dirname } = await import('node:path')
+    return readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'ReportScaffold.vue'), 'utf8')
+  }
+
+  it('defines styles for all summary-slot classes (回归: 零 CSS ⇒ 数字标签挤行)', async () => {
+    const src = await readScaffoldSrc()
+    const style = src.match(/<style[\s\S]*?<\/style>/)?.[0] ?? ''
+    expect(style.length, 'ReportScaffold 必须有 <style> 块').toBeGreaterThan(0)
+
+    for (const cls of ['summary-text', 'stats-row', 'stat-item', 'stat-value', 'stat-label']) {
+      expect(
+        style.includes(`.${cls}`),
+        `E2E-15 FU: 必须定义 .${cls} 样式（当前缺失 ⇒ summary 卡片只有裸文字排版）`,
+      ).toBe(true)
+    }
+  })
+
+  it('uses only --ee-* design tokens in summary styles (不得硬编码色值)', async () => {
+    const src = await readScaffoldSrc()
+    const style = src.match(/<style[\s\S]*?<\/style>/)?.[0] ?? ''
+    const block = style.match(/\.report-summary\s*\{[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(block.length, '.report-summary 块应存在').toBeGreaterThan(0)
+    const hex = block.match(/#[0-9a-f]{3,8}\b/gi) || []
+    expect(hex, `summary 样式硬编码色值 ${hex.join(',')} 应改为 var(--ee-*)`).toEqual([])
+  })
 })

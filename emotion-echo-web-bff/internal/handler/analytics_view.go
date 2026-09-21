@@ -170,10 +170,20 @@ func toFrontendTrendReport(r *downstream.TrendReport) *FrontendEmotionTrend {
 		series = append(series, FrontendEmotionTrendSeries{Name: b.name, Data: full})
 	}
 
-	// 4. conversationCount / messageCount：TrendReport 没有，从 points 累计
-	var totalCount int64
-	for _, p := range r.Points {
-		totalCount += p.Count
+	// 4. conversationCount / messageCount
+	//
+	// 2026-09-21 修复：原先 messageCount 从 points 累计（情绪记录数，非消息数）、
+	// conversationCount 硬编码 0（"TrendReport 没有 conv 维度"）⇒ 周/月/年报的
+	// 「消息数 / 会话数」恒为 0 或错值。现 TrendReport 已带区间真实计数
+	// （与 DailyReport 同源 msg_summary_v），直接透传。
+	// 兼容：若下游未提供（旧字段缺失 → 0），回落 points 累计（保持旧行为）。
+	messageCount := r.MessageCount
+	if messageCount == 0 {
+		var totalCount int64
+		for _, p := range r.Points {
+			totalCount += p.Count
+		}
+		messageCount = totalCount
 	}
 
 	return &FrontendEmotionTrend{
@@ -182,8 +192,8 @@ func toFrontendTrendReport(r *downstream.TrendReport) *FrontendEmotionTrend {
 		Series:              series,
 		Summary:             BuildTrend(r),
 		EmotionDistribution: emotionTotalToSlice(emotionTotal),
-		MessageCount:        totalCount,
-		ConversationCount:   0, // TrendReport 没有 conv 维度；前端目前模板用 0 等同"未提供"
+		MessageCount:        messageCount,
+		ConversationCount:   r.ConversationCount,
 		IntentDistribution:  intentCountsToItems(r.IntentCounts),
 	}
 }

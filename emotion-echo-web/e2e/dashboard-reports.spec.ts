@@ -70,6 +70,33 @@ test.describe('E2E-15 报表 Dashboard', () => {
       ).toHaveCount(0)
     }
 
+    // 用户实测反馈修复（2026-09-21）：会话数必须与消息自洽
+    // 原 bug：conversationCount 走 user_behavior_events（该事件链 dev 停更）
+    //        ⇒ 「0 段对话 33 条消息」自相矛盾；现改 msg_summary_v 同源。
+    const apiResp = await page.request.get(`${API_BASE}/api/v1/reports/daily?date=2026-09-21`)
+    const apiData = (await apiResp.json())?.data
+    if (apiData && apiData.messageCount > 0) {
+      expect(
+        apiData.conversationCount,
+        'E2E-15 FU: 有消息（>0）时必须报告 >0 的会话数（同源 msg_summary_v）',
+      ).toBeGreaterThan(0)
+
+      // UI 上的两个数字必须与 API 一致（.stat-value 顺序：会话数、消息数）
+      const statValues = await page.locator('.stats-row .stat-value').allTextContents()
+      expect(statValues[0]?.trim(), 'UI 会话数应 = API conversationCount').toBe(
+        String(apiData.conversationCount),
+      )
+      expect(statValues[1]?.trim(), 'UI 消息数应 = API messageCount').toBe(
+        String(apiData.messageCount),
+      )
+
+      // summary 文案里的「N 段对话」必须与 conversationCount 一致（防文案与数字脱钩）
+      const summaryText = await page.locator('.summary-text').first().innerText()
+      expect(summaryText, `summary 文案应含「${apiData.conversationCount} 段对话」`).toContain(
+        `${apiData.conversationCount} 段对话`,
+      )
+    }
+
     // 截图归档（双 project 防覆盖）
     await page.screenshot({
       path: `screenshots/e2e-15-01-daily-report-${test.info().project.name}.png`,
@@ -151,6 +178,12 @@ test.describe('E2E-15 报表 Dashboard', () => {
     expect(r.ok()).toBe(true)
     const body = await r.json()
     expect(body?.data?.dates?.length).toBeGreaterThan(0, 'weekly trend dates 应非空')
+    // E2E-15 FU（2026-09-21）：区间会话数/消息数必须为真值（原 BFF 硬编码 conversationCount=0）
+    expect(
+      body?.data?.conversationCount,
+      'E2E-15 FU: weekly 区间会话数应 > 0（原硬编码 0）',
+    ).toBeGreaterThan(0)
+    expect(body?.data?.messageCount, 'weekly 区间消息数应 > 0').toBeGreaterThan(0)
   })
 
   test('#7 monthlyReport 切换 trend type 端点可访问', async ({ page }) => {
@@ -159,6 +192,7 @@ test.describe('E2E-15 报表 Dashboard', () => {
     expect(r.ok()).toBe(true)
     const body = await r.json()
     expect(body?.data?.dates?.length).toBeGreaterThan(0, 'monthly trend dates 应非空')
+    expect(body?.data?.conversationCount, 'E2E-15 FU: monthly 区间会话数应 > 0').toBeGreaterThan(0)
   })
 
   test('#8 annualReport 切换 trend type 端点可访问', async ({ page }) => {
@@ -167,6 +201,7 @@ test.describe('E2E-15 报表 Dashboard', () => {
     expect(r.ok()).toBe(true)
     const body = await r.json()
     expect(body?.data?.dates?.length).toBeGreaterThan(0, 'annual trend dates 应非空')
+    expect(body?.data?.conversationCount, 'E2E-15 FU: annual 区间会话数应 > 0').toBeGreaterThan(0)
   })
 
   // ============ #10/#11 mental-health 端点有真实数据（修 E2E-F-10 后） ============

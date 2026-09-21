@@ -60,6 +60,9 @@ type TrendReport struct {
 	Points    []TrendPoint `json:"points"`
 	// Stage 85：区间意图分布（同 DailyReport.IntentCounts，窗口为整个区间）
 	IntentCounts map[string]int64 `json:"intentCounts,omitempty"`
+	// 2026-09-21 新增：区间消息数 / 会话数（与 DailyReport 同源 msg_summary_v）
+	MessageCount      int64 `json:"messageCount"`
+	ConversationCount int64 `json:"conversationCount"`
 }
 
 // InteractionDepth 对应 analytics-svc repository.InteractionDepth

@@ -84,6 +84,11 @@ type TrendReport struct {
 	// Stage 85：区间意图分布（msg_summary_v.intent 聚合，'' 未分类不计入）。
 	// 与 DailyReport.IntentCounts 同源同义，只是聚合窗口为 [start, end]。
 	IntentCounts map[string]int64 `json:"intentCounts,omitempty"`
+	// 2026-09-21 新增：区间消息数 / 会话数（与 DailyReport 同源 msg_summary_v）。
+	// 此前 TrendReport 无此二字段，BFF 侧长期硬编码 conversationCount=0 ⇒
+	// 周/月/年报的「会话数」恒显 0（用户实测反馈）。
+	MessageCount      int64 `json:"messageCount"`
+	ConversationCount int64 `json:"conversationCount"`
 }
 
 // trendTypeBucket 趋势类型 → 桶大小
@@ -172,19 +177,23 @@ func NewPostgresReportRepo(db *gorm.DB) *PostgresReportRepo {
 //
 // 数据源（per stage-30-A §六.6.1-3）：
 //   - emotion_echo_ai.daily_emotion_v（emotion counts + avg sentiment/confidence）
-//   - emotion_echo_chat.msg_summary_v（message count）
-//   - emotion_echo_analytics.user_behavior_events（conversation count）
+//   - emotion_echo_chat.msg_summary_v（message count + **conversation count**）
 //   - emotion_echo_assessment.assessment_v（assessment count）
 //
-// 日期以 YYYY-MM-DD 字符串传入（`$n::date`），避免 timestamptz→date
-// 依赖会话时区。空数据日返回全 0 + 空 map（不返 error）。
+// **conversation_count 数据源变更**（2026-09-21，用户实测反馈驱动）：
+// 原取 `emotion_echo_analytics.user_behavior_events` 的 `event_type LIKE 'conversation%'`。
+// 该事件链在 dev 模式会滞后/停更（实测最新事件停在 2026-09-14），导致
+// 「0 段对话 33 条消息」这类自相矛盾的数字 —— 因为 message_count 来自
+// msg_summary_v（有当天数据）而 conversation_count 来自已停更的事件表。
+// 修法：改用 `msg_summary_v` 的 `COUNT(DISTINCT conversation_id)`，与
+// message_count **同源**，天然一致（"有消息的会话数"就是会话数）。
 func (r *PostgresReportRepo) GetDailyReport(ctx context.Context, userID int64, date time.Time) (*DailyReport, error) {
 	const q = `
 SELECT
     COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_chat.msg_summary_v
               WHERE user_id = $1 AND send_time::date = $2::date), 0) AS message_count,
-    COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_analytics.user_behavior_events
-              WHERE user_id = $1 AND event_type LIKE 'conversation%' AND occurred_at::date = $2::date), 0) AS conversation_count,
+    COALESCE((SELECT COUNT(DISTINCT conversation_id)::bigint FROM emotion_echo_chat.msg_summary_v
+              WHERE user_id = $1 AND send_time::date = $2::date), 0) AS conversation_count,
     COALESCE((SELECT COUNT(*)::bigint FROM emotion_echo_assessment.assessment_v
               WHERE user_id = $1 AND created_at::date = $2::date), 0) AS assessment_count,
     COALESCE((SELECT AVG(sentiment_score)::float8 FROM emotion_echo_ai.daily_emotion_v
@@ -314,13 +323,32 @@ GROUP BY 1`
 		intentCounts[c.Intent] = c.Cnt
 	}
 
+	// 2026-09-21 新增：区间消息数 / 会话数（与 DailyReport 同源 msg_summary_v）
+	const qCounts = `
+SELECT
+    COALESCE(COUNT(*)::bigint, 0) AS message_count,
+    COALESCE(COUNT(DISTINCT conversation_id)::bigint, 0) AS conversation_count
+FROM emotion_echo_chat.msg_summary_v
+WHERE user_id = $1 AND send_time::date BETWEEN $2::date AND $3::date`
+	var counts struct {
+		MessageCount      int64
+		ConversationCount int64
+	}
+	if err := r.db.WithContext(ctx).Raw(qCounts, userID,
+		start.Format("2006-01-02"), end.Format("2006-01-02"),
+	).Scan(&counts).Error; err != nil {
+		return nil, err
+	}
+
 	return &TrendReport{
-		UserID:       userID,
-		Type:         trendType,
-		StartDate:    start.Format("2006-01-02"),
-		EndDate:      end.Format("2006-01-02"),
-		Points:       buildTrendPoints(rows, bucketDays, start.Format("2006-01-02"), end.Format("2006-01-02")),
-		IntentCounts: intentCounts,
+		UserID:            userID,
+		Type:              trendType,
+		StartDate:         start.Format("2006-01-02"),
+		EndDate:           end.Format("2006-01-02"),
+		Points:            buildTrendPoints(rows, bucketDays, start.Format("2006-01-02"), end.Format("2006-01-02")),
+		IntentCounts:      intentCounts,
+		MessageCount:      counts.MessageCount,
+		ConversationCount: counts.ConversationCount,
 	}, nil
 }
 

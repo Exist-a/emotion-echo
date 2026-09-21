@@ -546,8 +546,12 @@ type ReportsTrendResponse struct {
 	// Stage 85：区间意图分布（msg_summary_v.intent 聚合，” 未分类不计入；
 	// 服务端按 6 类白名单确定性顺序输出）
 	IntentDistribution []*IntentCount `protobuf:"bytes,3,rep,name=intent_distribution,json=intentDistribution,proto3" json:"intent_distribution,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 2026-09-21 新增：区间消息数 / 会话数（与 DailyReport 同源 msg_summary_v）。
+	// 此前缺失 ⇒ BFF 硬编码 conversationCount=0 ⇒ 周/月/年报「会话数」恒 0。
+	MessageCount      int64 `protobuf:"varint,4,opt,name=message_count,json=messageCount,proto3" json:"message_count,omitempty"`
+	ConversationCount int64 `protobuf:"varint,5,opt,name=conversation_count,json=conversationCount,proto3" json:"conversation_count,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ReportsTrendResponse) Reset() {
@@ -599,6 +603,20 @@ func (x *ReportsTrendResponse) GetIntentDistribution() []*IntentCount {
 		return x.IntentDistribution
 	}
 	return nil
+}
+
+func (x *ReportsTrendResponse) GetMessageCount() int64 {
+	if x != nil {
+		return x.MessageCount
+	}
+	return 0
+}
+
+func (x *ReportsTrendResponse) GetConversationCount() int64 {
+	if x != nil {
+		return x.ConversationCount
+	}
+	return 0
 }
 
 // UserBehaviorDayNightResponse 昼夜分布响应
@@ -1261,12 +1279,14 @@ const file_metric_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12>\n" +
 	"\n" +
-	"date_range\x18\x03 \x01(\v2\x1f.emotion_analytics.v1.DateRangeR\tdateRange\"\xc5\x01\n" +
+	"date_range\x18\x03 \x01(\v2\x1f.emotion_analytics.v1.DateRangeR\tdateRange\"\x99\x02\n" +
 	"\x14ReportsTrendResponse\x12E\n" +
 	"\vdata_points\x18\x01 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\n" +
 	"dataPoints\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12R\n" +
-	"\x13intent_distribution\x18\x03 \x03(\v2!.emotion_analytics.v1.IntentCountR\x12intentDistribution\"\xb2\x01\n" +
+	"\x13intent_distribution\x18\x03 \x03(\v2!.emotion_analytics.v1.IntentCountR\x12intentDistribution\x12#\n" +
+	"\rmessage_count\x18\x04 \x01(\x03R\fmessageCount\x12-\n" +
+	"\x12conversation_count\x18\x05 \x01(\x03R\x11conversationCount\"\xb2\x01\n" +
 	"\x1cUserBehaviorDayNightResponse\x12G\n" +
 	"\factive_hours\x18\x01 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\vactiveHours\x12I\n" +
 	"\rmessage_hours\x18\x02 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\fmessageHours\"\x82\x01\n" +
