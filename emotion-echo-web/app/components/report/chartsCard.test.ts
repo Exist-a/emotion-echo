@@ -99,6 +99,40 @@ describe('chartsCard.vue', () => {
     wrapper.unmount()
   })
 
+  // E2E-15 IAB 实测发现（2026-09-21）：
+  // window.innerWidth 不是 Vue 响应式依赖 ⇒ 原 computed 只在首次渲染算一次，
+  // resize 后不重算（handleResize 是空实现且注释断言"会自动更新"是错的）。
+  // 实测：1280px 加载 → setViewportSize(800) → 仍是 2 列（应为 1 列）。
+  it('recomputes columns after window resize（E2E-15 IAB 实测回归钉）', async () => {
+    setInnerWidth(1280) // 992–1600 → 2 列
+    const wrapper = await factory({
+      data: [{ chartType: 'pie', title: 'A', data: [{ name: 'x', value: 1 }] }],
+    })
+    await nextTick()
+    const grid = wrapper.find('.charts-grid')
+    expect(grid.attributes('style') || '', '1280px 初始应 2 列').toMatch(
+      /grid-template-columns:\s*repeat\(2,/,
+    )
+
+    // 视口缩小到 800px 并派发 resize → 应重算为 1 列
+    setInnerWidth(800)
+    ;(globalThis as any).window.dispatchEvent(new Event('resize'))
+    await nextTick()
+    expect(
+      grid.attributes('style') || '',
+      'resize 到 800px 后应重算为 1 列（原实现返回 2 列 → 图表被挤压）',
+    ).toMatch(/grid-template-columns:\s*repeat\(1,/)
+
+    // 放大到 1800px → 3 列
+    setInnerWidth(1800)
+    ;(globalThis as any).window.dispatchEvent(new Event('resize'))
+    await nextTick()
+    expect(grid.attributes('style') || '', 'resize 到 1800px 后应重算为 3 列').toMatch(
+      /grid-template-columns:\s*repeat\(3,/,
+    )
+    wrapper.unmount()
+  })
+
   it('does not hardcode non-white hex colors in <style> (Stage 104 token alignment)', () => {
     const style = CHARTS_CARD_SRC.match(/<style[\s\S]*?<\/style>/)?.[0] ?? ''
     const hexRegex = /#[0-9a-f]{3,8}\b/gi

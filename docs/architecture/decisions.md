@@ -586,6 +586,18 @@
 
 **完整论证见 [ADR · 2026-09 · mental_health_assessments 表写入链](adr/adr-2026-09-mental-health-trigger-save.md)**。
 
+### 决策 29：仪表盘网格响应式断点 = **ref 追踪窗口宽度**（2026-09-21 E2E-15 合规补完轮 IAB 实测发现）
+
+> ✅ Accepted。**IAB 内置浏览器实测抓到的真实缺陷**（Playwright + 单测均未覆盖）：`chartsCard.vue` 的 `computed` 内直接读 `window.innerWidth`（非 Vue 响应式依赖）⇒ resize 后列数不重算；`handleResize` 为空实现且注释"计算属性会自动更新"是错误假设。
+>
+> **实测**：1280px 加载后缩到 800px 视口 → 网格仍 `190.5px 190.5px`（2 列，应 1 列）→ 图表被挤压。修复（TDD）后：800px → `405px`（1 列）、1800px → `313.328px ×3`（3 列）。
+>
+> **规则**：响应式布局尺寸必须经 `ref` 参与 `computed`，禁止在 `computed` 内直接读非响应式全局值；禁止空 `handleResize` + "会自动更新"式注释。
+>
+> **为何既有测试漏掉**：原 2 条列数用例都在 `mount 之前` setInnerWidth ⇒ 只覆盖首次渲染，未覆盖 resize 重算。已补用例（`recomputes columns after window resize`）钉住。
+
+**完整论证见 [ADR · 2026-09 · 仪表盘网格响应式断点](adr/adr-2026-09-dashboard-responsive-breakpoints.md)**。
+
 ## 🏗 当前架构全景
 
 ```

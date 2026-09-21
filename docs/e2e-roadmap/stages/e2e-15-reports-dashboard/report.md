@@ -166,4 +166,21 @@ superseded-note: 2026-09-21 落地 + 当日收口：触发器补写 mental_healt
 
 **E2E-15 ✅ DONE（2026-09-21）**：14/14 测试点 + 24/24 Playwright + 16 张截图 + 2 个真实缺陷修复 + 3 个 PR 合并 + 0 审计失败。
 
+## 11. 合规补完轮追加（2026-09-21，阶段 1.5）
+
+用户六项质询触发，补齐阶段 1.4 缺位的合规证据。**新增 IAB 实测 + 12 门禁本地跑 + 第二方核对**，并**抓出 1 个新的真实代码缺陷**（已 TDD 修复）。详见独立文件：
+
+| 文件 | 内容 |
+|------|------|
+| [`iab-compliance-report.md`](iab-compliance-report.md) | IAB 实测 8 项 + 12 个门禁脚本结果 + 2 个真实发现 + 回归钉补强 + IAB 截图 7 张 |
+| [`second-party-review.md`](second-party-review.md) | RUNBOOK §13.3 十七条逐条核对（16 PASS / 0 FAIL / 1 SKIP）+ §7 十一项对照 + 审计器自证 |
+
+**本轮修复的真实缺陷**（`chartsCard.vue` 响应式列数不重算）：
+- **症状**：1280px 加载后缩到 800px 视口 → 仍 2 列（应 1 列）→ 图表被挤压在 ~190px 容器
+- **根因**：`computed` 里读 `window.innerWidth`（非 Vue 响应式依赖）⇒ resize 后不重算；`handleResize` 为空实现且注释"会自动更新"是错误假设
+- **TDD**：`chartsCard.test.ts` +1 用例 → RED（1 failed / 8 passed）→ 改 `windowWidth` ref + resize 更新 → GREEN（9/9）；全量 vitest 474/474
+- **IAB 复验**：修复前 `190.5px 190.5px`（2 列）→ 修复后 `405px`（1 列），截图 `iab-05a`/`iab-05b` 对照
+
+**回归钉补强**（IAB 暴露 spec 盲区）：`dashboard-reports.spec.ts` #1 加 `.ee-empty` count=0 取值断言；#14 加列数取值断言（原仅截图无断言）。重跑 24/24 PASS。
+
 下一阶段 = E2E-16（多模态：语音/表情/文件上传）。
