@@ -36,7 +36,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 > **2026-09-19 旧账清偿计划**：[debt-paydown-plan.md](debt-paydown-plan.md) —— 90 条账本中未了结 48 条，实测分三类（陈旧行 ~8 / 真欠账 ~22 / 路线图工作 ~18）。三轮波次：**波 1 把账本说真话**（目标 `audit --all` = 0 FAIL）→ **波 2 堵漏**（5 个门禁接 CI 并设 required，**这是 07~10 复发的根治**）→ **波 3 补真证据**（取证补拍 + proto 合并变更）。波 4 明确不消项已逐条记录理由。
 
-> **E2E-10 ⚠️ partial**（2026-09-19 由 done 降级）：12/12 测试点的**结论未变**，降级原因是收口证据不完整（0 张截图 ⇒ 3 个 `[V]` 点无视觉证据、汇总行格式不合规、缺「收口自检」章节）。详档 [stages/e2e-10-chat-core/report.md](stages/e2e-10-chat-core/report.md) §7~§10
+> **E2E-10 ✅ done**（2026-09-19 落地 → 2026-09-19 由 done 降 partial → **2026-09-21 取证补拍轮恢复 done**）：12/12 测试点结论未变，回归钉 `chat-core.spec.ts` 双 project **24/24 PASS**（chromium 12/12 + mobile 12/12），3 个 `[V]` 点（#9 长消息布局 / #10 空对话状态 / #12 Markdown 渲染）补 6 张截图（`screenshots/e2e-10-{09,10,12}-{long-message,empty-state,markdown}-{chromium,mobile}.png`）。降级原因全部解决：截图 ✓ / 汇总行 ✓ / §10 收口自检 8 条全勾 ✓。详档 [stages/e2e-10-chat-core/report.md](stages/e2e-10-chat-core/report.md) §10 补账记录
 
 > **E2E-09 ⚠️ partial**（2026-09-19 由 done 降级）：12/14 测试点结论未变（密保弹框 + 验证码删除 + bcrypt 契约，本轮实跑 23 条契约 + 全量 410 条前端测试通过）；降级原因是 0 张截图、#12/#13 未执行、缺模板章节。#12/#13 留账 E2E-F-77/78。PR #11 已合并。
 
@@ -76,7 +76,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-10 | 聊天核心链路 | 发送/SSE 流式/错误处理/中断重试 | 多模态 | 🟡 **partial**（2026-09-19 由 done 降级）：12/12 结论未变（含 E2E-F-79 LLM key 修复实测），降级因 0 张截图（3 个 `[V]` 点无视觉证据）+ 汇总行格式不合规 + 缺「收口自检」章节 → [report §7](stages/e2e-10-chat-core/report.md) |
+| E2E-10 | 聊天核心链路 | 发送/SSE 流式/错误处理/中断重试 | 多模态 | ✅ **done**（2026-09-19 落地 / 2026-09-19 临时降级 / 2026-09-21 取证补拍轮恢复）：12/12 测试点结论未变。回归钉 `chat-core.spec.ts` **24/24 PASS**（chromium 12/12 + mobile 12/12），3 个 `[V]` 点补 6 张截图。降级原因全部解决。详档 [report.md](stages/e2e-10-chat-core/report.md) §10 |
 | E2E-11 | 我的空间 | 资料修改/头像上传（MinIO）+ 现有 3 个对话行为图表有数据可渲染、空态可读 | 测评图表（归 E2E-14） | 🟡 **partial**（2026-09-19：**12/12 测试点全 PASS**；首轮 8 commit 修 4 组代码现状缺陷 + 3 组浏览器实测缺陷 + 头像链路 3 层丢弃点；**复查轮再修 5 项**：GetUserById/Login/Register 三处映射漂移收敛、maxConsecutiveDays 恒 0、E2E-F-36 内容裁剪、头像服务端 2MB 上限失效、InMemory 替身保真度。**判 partial 而非 done**：账本仍有 2 条归属本阶段未解决（E2E-F-80 年龄不落库、E2E-F-81 深度指标 NULL session 语义）。回归钉：Playwright 10 用例 + 静态契约钉 21+1 项 + Go 侧新增 25 条。详档 [stages/e2e-11-my-space/report.md](stages/e2e-11-my-space/report.md) §8 复查记录） |
 | E2E-12 | 设置页 | 字体/主题切换与持久化 | — | ✅ **done**（2026-09-20：**12/12 测试点全 PASS**，BLOCKED=0。四层 config 契约 + 跟随系统运行时监听（matchMedia）+ SSR 首屏无闪烁（ee_theme 镜像 cookie）+ 契约漂移清理×3。Playwright 12/12、vitest 17 条（全量 427）、typecheck 0 错、IAB 实测 + 6 张截图。E2E-F-82 已解决。详档 [report.md](stages/e2e-12-settings/report.md)——含首轮假 BLOCKED / 挪球门的纠正记录） |
 

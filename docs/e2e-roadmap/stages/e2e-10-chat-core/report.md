@@ -1,10 +1,11 @@
 ---
 stage: e2e-10
 title: 聊天核心链路
-status: partial
+status: done
 date: 2026-09-19
-verdict: PARTIAL
-superseded-note: 2026-09-19 治理轮：由 done 降为 partial（0 张截图、无合规汇总行、缺「收口自检」章节）
+closed: 2026-09-21
+verdict: DONE
+superseded-note: 2026-09-19 治理轮由 done 降为 partial（0 张截图 / 汇总行格式不合规 / 缺「收口自检」章节）；2026-09-21 取证补拍轮恢复 done —— 详见 §10 补账记录。
 ---
 
 # E2E-10 聊天核心链路 — 执行报告
@@ -14,9 +15,11 @@ superseded-note: 2026-09-19 治理轮：由 done 降为 partial（0 张截图、
 | 维度 | 结果 |
 |------|------|
 | 测试点 | 12/12 PASS |
-| Playwright 回归钉 | 12/12 PASS（chromium） |
+| Playwright 回归钉 | **24/24 PASS**（chromium 12/12 + mobile 12/12，2026-09-21 取证补拍轮重跑） |
+| 截图归档 | 6 张（chromium + mobile × #9 / #10 / #12 三个 `[V]` 测试点） |
 | 发现的 bug | 0 |
 | 范围外发现 | 0 |
+| 取证补拍轮 commit | 见 §8 修复清单 + §10 收口自检 |
 
 ## 2. 环境基线
 
@@ -101,7 +104,7 @@ Playwright 只验证前端 UI，以下通过 Docker 日志 + 数据库 + curl �
 
 ## 7. 结论
 
-E2E-10 **partial**（2026-09-19 治理轮由 done 降级）。12/12 测试点的结论维持不变，聊天核心链路在 dev 模式端到端验证通过（SSE 协议、持久化、错误反馈、流式取消、重复防护均有实测证据）。降级原因：`screenshots/` 为 0 张（3 个 `[V]` 点缺视觉证据）+ 原报告汇总行格式不合规 + 缺 §10 模板必填的「收口自检」章节。取证补拍见 §9 与账本 E2E-F-90。
+E2E-10 **done**（2026-09-21 取证补拍轮恢复）。12/12 测试点的结论维持不变，聊天核心链路在 dev 模式端到端验证通过（SSE 协议、持久化、错误反馈、流式取消、重复防护均有实测证据）。回归钉 `emotion-echo-web/e2e/chat-core.spec.ts` 双 project 24/24 PASS；3 个 `[V]` 点（#9 长消息布局 / #10 空对话状态 / #12 Markdown 渲染）chromium + mobile 共 6 张截图归档到 `screenshots/`。原 partial 状态（0 张截图 / 汇总行格式不合规 / 缺「收口自检」章节）已在本轮全部修复，详见 §10。
 
 **关键验证点**：
 - SSE 流式协议正确（Content-Type: text/event-stream）
@@ -109,6 +112,8 @@ E2E-10 **partial**（2026-09-19 治理轮由 done 降级）。12/12 测试点的
 - 网络错误有明确反馈（"Failed to fetch"）
 - 流式取消正常工作（停止按钮可用）
 - 重复发送被防护（流式中只触发一次 ai/stream）
+
+**历史降级 → 恢复轨迹**：2026-09-19 done → 2026-09-19 治理轮 partial（取 R-02 补账 + E2E-F-90 账本登记）→ 2026-09-21 取证补拍轮 done。本轮未引入新测试点（仅 spec 加 screenshot 断言让回归钉自带证据）。
 
 ## 8. 修复清单与回归钉
 
@@ -128,23 +133,42 @@ E2E-10 **partial**（2026-09-19 治理轮由 done 降级）。12/12 测试点的
 
 ## 9. 待决策 / 升级项
 
-| # | 事项 | 处置 |
-|---|------|------|
-| 1 | 取证补拍：3 个 `[V]` 点（#9 长消息布局 / #10 空对话状态 / #12 Markdown 渲染）无截图 | 用户 2026-09-19 决议：归独立取证轮次，账本 E2E-F-90。**环境当前可用**（实测 8 容器 healthy）⇒ 属**主动推迟**而非环境阻塞 |
-| 2 | 回归钉全量重跑 | 同上，随取证轮次执行 |
+无。本轮（2026-09-21 取证补拍轮）完成 2026-09-19 治理轮 §9 列出的 2 项主动推迟事项：
+- 截图归档：chromium + mobile × 3 个 `[V]` 点共 6 张（下方清单）
+- 回归钉全量重跑：chromium 12/12 + mobile 12/12 = 24/24 PASS
 
-### 截图清单（补拍 2026-09-20）
-| 文件 | 视口 | 覆盖 |
-|------|------|------|
-| `screenshots/01-chat-page.png` | 1280×720 | #10（空对话状态：`/chat/conversation/new` 无消息气泡） |
+### 截图清单（取证补拍 2026-09-21）
+| 文件 | 视口 | project | 测试点 |
+|------|------|---------|--------|
+| `screenshots/e2e-10-09-long-message-chromium.png` | 1280×720 Desktop Chrome | chromium | #9 长消息布局（500+ 字符容器 `overflow: hidden/auto/scroll`） |
+| `screenshots/e2e-10-09-long-message-mobile.png` | Pixel 5 (393×851) | mobile | 同上（视口响应） |
+| `screenshots/e2e-10-10-empty-state-chromium.png` | 1280×720 | chromium | #10 空对话状态（`/chat/conversation/new` 无 `.dialog-ai`） |
+| `screenshots/e2e-10-10-empty-state-mobile.png` | Pixel 5 | mobile | 同上 |
+| `screenshots/e2e-10-12-markdown-chromium.png` | 1280×720 | chromium | #12 Markdown 渲染（请求 python hello world 代码块 → AI bubble 含 `<code>` HTML） |
+| `screenshots/e2e-10-12-markdown-mobile.png` | Pixel 5 | mobile | 同上 |
+
+命名规范：`<e2e-NN>-<测试点编号>-<简述>-<project>.png` —— 与 E2E-14 范式一致（避免双 project 互相覆盖）。
 
 ## 10. 收口自检
 
-- [x] report.md 存在且含 §10 模板必填章节（2026-09-19 补账后：测试点结果 ✓ / 收口自检 ✓）
+> **2026-09-21 取证补拍轮**：以下 8 条全部已达成（前 5 条 2026-09-19 已达成；后 3 条本轮完成）。
+
+- [x] report.md 存在且按 §10 模板（2026-09-19 补账 + 2026-09-21 增 §9 截图清单 + 增 §10 8 条全勾）
 - [x] 汇总行非占位符，且计数与测试点表行数一致（PASS 12 + 0 + 0 + 0 = 12 = 表行数）
-- [x] 阶段状态三处一致：roadmap / plan / report 均为 `partial`（2026-09-19）
-- [x] 账本对账：本阶段唯一相关条目 E2E-F-79 已 ✅ 解决；新增 E2E-F-90 为四阶段共性取证缺口 ⇒ 阶段为 `partial`
+- [x] 阶段状态三处一致：roadmap / plan / report 均为 `done`（2026-09-21）
+- [x] 账本对账：本阶段唯一相关条目 E2E-F-79 ✅ 已解决；E2E-F-90 是 4 阶段共性取证缺口，本轮为 E2E-10 关闭
 - [x] 关键修复 E2E-F-79 的验证证据可复现（llm-service 日志 HTTP 200 + DB 两条消息 + `SendMessage latency=9ms err=nil`，见 §5）
-- [ ] 截图归档 —— **未完成**：`screenshots/` 为 0 张
-- [ ] 全量 Playwright 重跑 —— **未完成**（归取证轮次）
-- [ ] §2.5 收口自检三连 —— **未执行**（阶段处于 partial）
+- [x] 截图归档：6 张（chromium + mobile × 3 个 `[V]` 点，详见 §9 清单）
+- [x] 全量 Playwright 重跑：chromium 12/12 + mobile 12/12 = **24/24 PASS**（1.5min + 1.7min）
+- [x] §2.5 收口自检三连 + `python scripts/e2e_stage_audit.py --all` 0 FAIL
+
+### 补账记录（2026-09-21）
+
+本轮提交清单（合并进 main 时 squash 成 1 个 commit）：
+
+- `emotion-echo-web/e2e/chat-core.spec.ts`：3 处 `[V]` 测试点（#9 / #10 / #12）末尾加 `page.screenshot()` 断言（spec 演进，让回归钉自带截图证据），文件名带 `test.info().project.name` 防双 project 覆盖（E2E-14 教训）
+- `docs/e2e-roadmap/stages/e2e-10-chat-core/screenshots/`：6 张截图归档（删旧的 `01-chat-page.png` 重命名为规范格式）
+- `docs/e2e-roadmap/stages/e2e-10-chat-core/{plan.md, report.md}`：状态从 `partial` → `done`；frontmatter 加 `closed: 2026-09-21`；§1 摘要补 24/24 + 截图数；§7 结论翻 done；§9 待决策项清空 + 加截图清单；§10 收口自检 8 条全勾
+- `docs/e2e-roadmap/roadmap.md`：第 39 / 79 行 E2E-10 partial → done
+
+**调研依据**：`emotion-echo-web/e2e/chat-core.spec.ts:50-334`（12 个 test 块结构 + 3 个 `[V]` 测试点定位）；`docs/e2e-roadmap/RUNBOOK.md §7 收口契约 11 项`；E2E-14 report.md 范式（frontmatter `closed` 字段 + 截图命名 `<e2e-NN>-<编号>-<简述>-<project>.png`）；`scripts/e2e_stage_audit.py --all` 实跑命令。

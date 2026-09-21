@@ -1,4 +1,10 @@
 import { test, expect } from '@playwright/test'
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+
+/** 截图归档目录（spec 演进：让回归钉自带截图证据）—— E2E-14 教训：带 project.name 后缀防双 project 覆盖 */
+const SCREENSHOT_DIR = join(process.cwd(), 'screenshots')
+mkdirSync(SCREENSHOT_DIR, { recursive: true })
 
 /**
  * E2E-10: 聊天核心链路 Playwright 回归钉
@@ -262,6 +268,12 @@ test.describe('E2E-10 聊天核心链路', () => {
         expect(overflow).toMatch(/hidden|auto|scroll/)
       }
     }).toPass({ timeout: 5_000 })
+
+    // [V] 视觉证据归档（E2E-10 取证补拍 #9）
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/e2e-10-09-long-message-${test.info().project.name}.png`,
+      fullPage: true,
+    })
   })
 
   test('#10 空对话状态', async ({ page }) => {
@@ -275,6 +287,12 @@ test.describe('E2E-10 聊天核心链路', () => {
 
     // textarea 应可见（允许输入）
     await expect(page.locator('textarea').first()).toBeVisible({ timeout: 10_000 })
+
+    // [V] 视觉证据归档（E2E-10 取证补拍 #10）
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/e2e-10-10-empty-state-${test.info().project.name}.png`,
+      fullPage: true,
+    })
   })
 
   test('#11 已有对话追加消息', async ({ page }) => {
@@ -330,5 +348,11 @@ test.describe('E2E-10 聊天核心链路', () => {
     // Markdown 渲染不崩溃（bubble 内应有 HTML 元素，如 <code> 或 <strong>）
     const htmlContent = await aiBubble.innerHTML()
     expect(htmlContent.length, 'AI 回复应有 HTML 渲染内容').toBeGreaterThan(0)
+
+    // [V] 视觉证据归档（E2E-10 取证补拍 #12）
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/e2e-10-12-markdown-${test.info().project.name}.png`,
+      fullPage: true,
+    })
   })
 })
