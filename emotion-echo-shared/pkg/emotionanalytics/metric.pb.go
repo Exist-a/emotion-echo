@@ -765,11 +765,13 @@ func (x *UserBehaviorFrequencyResponse) GetStreakDays() float64 {
 
 // MentalHealthAssessmentRequest 综合评估请求
 type MentalHealthAssessmentRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Date          int64                  `protobuf:"varint,2,opt,name=date,proto3" json:"date,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Date   int64                  `protobuf:"varint,2,opt,name=date,proto3" json:"date,omitempty"`
+	// E2E-15 阶段 1.4 新增：daily|weekly|comprehensive；缺省时按 date 推断（>0 → historical，否则 daily）
+	AssessmentType string `protobuf:"bytes,3,opt,name=assessment_type,json=assessmentType,proto3" json:"assessment_type,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *MentalHealthAssessmentRequest) Reset() {
@@ -814,6 +816,13 @@ func (x *MentalHealthAssessmentRequest) GetDate() int64 {
 		return x.Date
 	}
 	return 0
+}
+
+func (x *MentalHealthAssessmentRequest) GetAssessmentType() string {
+	if x != nil {
+		return x.AssessmentType
+	}
+	return ""
 }
 
 // MentalHealthAssessmentResponse 综合评估响应
@@ -1267,10 +1276,11 @@ const file_metric_proto_rawDesc = "" +
 	"\x1dUserBehaviorFrequencyResponse\x12G\n" +
 	"\fdaily_active\x18\x01 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\vdailyActive\x12\x1f\n" +
 	"\vstreak_days\x18\x02 \x01(\x01R\n" +
-	"streakDays\"L\n" +
+	"streakDays\"u\n" +
 	"\x1dMentalHealthAssessmentRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
-	"\x04date\x18\x02 \x01(\x03R\x04date\"\x81\x02\n" +
+	"\x04date\x18\x02 \x01(\x03R\x04date\x12'\n" +
+	"\x0fassessment_type\x18\x03 \x01(\tR\x0eassessmentType\"\x81\x02\n" +
 	"\x1eMentalHealthAssessmentResponse\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12\x14\n" +
 	"\x05score\x18\x02 \x01(\x01R\x05score\x12\x1d\n" +

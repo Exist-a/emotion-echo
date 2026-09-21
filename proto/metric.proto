@@ -164,6 +164,8 @@ message UserBehaviorFrequencyResponse {
 message MentalHealthAssessmentRequest {
   int64 user_id = 1;
   int64 date = 2;
+  // E2E-15 阶段 1.4 新增：daily|weekly|comprehensive；缺省时按 date 推断（>0 → historical，否则 daily）
+  string assessment_type = 3;
 }
 
 // MentalHealthAssessmentResponse 综合评估响应

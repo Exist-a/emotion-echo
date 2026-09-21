@@ -49,10 +49,11 @@ func TestPostgresMentalHealthRepo_GetLatestAssessment_DailyWindow_Integration(t 
 	defer cleanup()
 
 	now := time.Now()
-	// now-1h（daily 窗口内）score 40 → moderate；now-3d（窗口外）
-	seedAssessmentWithDims(t, db, 42, "PHQ-9", 40.0,
+	// now-1h（daily 24h 窗口内）score 40 → moderate；now-3d（窗口外）
+	// E2E-15 阶段 1.4 修复：assessment_type 用真枚举值 `daily` 而非 "PHQ-9"
+	seedAssessmentWithDims(t, db, 42, "daily", 40.0,
 		`{"depression":{"score":45,"riskLevel":"moderate","count":2}}`, now.Add(-1*time.Hour))
-	seedAssessmentWithDims(t, db, 42, "PHQ-9", 90.0, `{}`, now.Add(-72*time.Hour))
+	seedAssessmentWithDims(t, db, 42, "daily", 90.0, `{}`, now.Add(-72*time.Hour))
 
 	got, err := repo.GetLatestAssessment(ctx, 42, repository.AssessmentDaily)
 	require.NoError(t, err)
@@ -79,8 +80,8 @@ func TestPostgresMentalHealthRepo_GetLatestAssessment_DailyEmpty_NilNil_Integrat
 	defer cleanup()
 
 	now := time.Now()
-	// 只有 3 天前的行 → daily（24h 窗口）无结果 → (nil, nil)
-	seedAssessmentWithDims(t, db, 42, "PHQ-9", 90.0, `{}`, now.Add(-72*time.Hour))
+	// 只有 3 天前的 daily 行 → daily（24h 窗口）无结果 → (nil, nil)
+	seedAssessmentWithDims(t, db, 42, "daily", 90.0, `{}`, now.Add(-72*time.Hour))
 
 	got, err := repo.GetLatestAssessment(ctx, 42, repository.AssessmentDaily)
 	require.NoError(t, err)
@@ -96,18 +97,55 @@ func TestPostgresMentalHealthRepo_GetLatestAssessment_WeeklyAndComprehensive_Int
 	defer cleanup()
 
 	now := time.Now()
-	seedAssessmentWithDims(t, db, 42, "PHQ-9", 60.0, `{}`, now.Add(-72*time.Hour))  // 3d
-	seedAssessmentWithDims(t, db, 42, "GAD-7", 85.0, `{}`, now.Add(-20*24*time.Hour)) // 20d
+	// 同一用户 3d 前的 daily + 20d 前的 daily：
+	// weekly 窗口 7 天 → 应返 3d 的 daily；
+	// comprehensive 取全部 → 也返 3d 的 daily
+	seedAssessmentWithDims(t, db, 42, "daily", 60.0, `{}`, now.Add(-72*time.Hour))  // 3d
+	seedAssessmentWithDims(t, db, 42, "daily", 85.0, `{}`, now.Add(-20*24*time.Hour)) // 20d
 
 	weekly, err := repo.GetLatestAssessment(ctx, 42, repository.AssessmentWeekly)
 	require.NoError(t, err)
 	require.NotNil(t, weekly)
-	assert.Equal(t, float64(60), weekly.OverallScore, "weekly 窗口 7 天 → 取 3d 行")
+	assert.Equal(t, float64(60), weekly.OverallScore, "weekly 窗口 7 天 → 取 3d daily 行")
 
 	comprehensive, err := repo.GetLatestAssessment(ctx, 42, repository.AssessmentComprehensive)
 	require.NoError(t, err)
 	require.NotNil(t, comprehensive)
 	assert.Equal(t, float64(60), comprehensive.OverallScore, "comprehensive 取全部中的最新（3d > 20d）")
+}
+
+// TestPostgresMentalHealthRepo_GetLatestAssessment_TypeFilter_Integration（E2E-15 留账 #1 修复回归钉）
+//
+// seed 同一用户 daily + weekly 各 1 行（不同 created_at），验证：
+//   - GetLatestAssessment(daily) → 仅返 daily 那行（不受 weekly 影响）
+//   - GetLatestAssessment(weekly) → 仅返 weekly 那行（不受 daily 影响）
+//   - 原 bug：weekly 端点返 daily 最新一条（因为 desc created_at 无 type 过滤）
+func TestPostgresMentalHealthRepo_GetLatestAssessment_TypeFilter_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test skipped in short mode")
+	}
+	ctx := context.Background()
+	db, repo, cleanup := mustMentalHealthRepo(t, ctx)
+	defer cleanup()
+
+	now := time.Now()
+	// daily 1h 前 score 40；weekly 30min 前 score 80（更近）
+	// 修复前 weekly 端点 ORDER BY DESC LIMIT 1 → 返 daily=40（错误）
+	// 修复后 weekly 端点 WHERE assessment_type='weekly' → 返 weekly=80
+	seedAssessmentWithDims(t, db, 42, "daily", 40.0, `{}`, now.Add(-1*time.Hour))
+	seedAssessmentWithDims(t, db, 42, "weekly", 80.0, `{}`, now.Add(-30*time.Minute))
+
+	dailyGot, err := repo.GetLatestAssessment(ctx, 42, repository.AssessmentDaily)
+	require.NoError(t, err)
+	require.NotNil(t, dailyGot)
+	assert.Equal(t, float64(40), dailyGot.OverallScore, "daily 端点 → daily 行 score=40")
+	assert.Equal(t, "daily", dailyGot.Type)
+
+	weeklyGot, err := repo.GetLatestAssessment(ctx, 42, repository.AssessmentWeekly)
+	require.NoError(t, err)
+	require.NotNil(t, weeklyGot, "weekly 端点：7 天内有 weekly 行，应非空")
+	assert.Equal(t, float64(80), weeklyGot.OverallScore, "weekly 端点 → weekly 行 score=80（非 daily 40）")
+	assert.Equal(t, "weekly", weeklyGot.Type)
 }
 
 func TestPostgresMentalHealthRepo_ListAssessmentHistory_Pagination_Integration(t *testing.T) {
