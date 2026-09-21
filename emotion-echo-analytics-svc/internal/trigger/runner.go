@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"emotion-echo-analytics-svc/internal/repository"
 )
@@ -36,8 +37,11 @@ type JobStore interface {
 // assessmentGetter MentalHealthRunner 对评估仓库的最小依赖
 //
 // repository.MentalHealthRepo 满足此接口（编译期由 NewMentalHealthRunner 保证）。
+//
+// E2E-15 阶段 1.2 新增 Save：触发链末尾写 mental_health_assessments（修 E2E-F-10）。
 type assessmentGetter interface {
 	GetLatestAssessment(ctx context.Context, userID int64, atype repository.AssessmentType) (*repository.MentalAssessment, error)
+	Save(ctx context.Context, a *repository.MentalAssessment) error
 }
 
 // MentalHealthRunner 异步评估任务执行器
@@ -58,7 +62,13 @@ func NewMentalHealthRunner(repo assessmentGetter, jobs JobStore) *MentalHealthRu
 //
 //   - InsertJob 失败 → 直接返回（不评估）
 //   - GetLatestAssessment 失败 → FailJob + 返回错误
-//   - 成功（含无数据 nil）→ CompleteJob + result JSON；无数据时 result=null
+//   - 成功（含无数据 nil）→ Save 写 mental_health_assessments（修 E2E-F-10）：
+//     - 成功 → CompleteJob + result JSON；无数据时 result=null
+//     - 失败 → FailJob + 返回错误
+//
+// E2E-15 阶段 1.2：新增 Save 路径（写 mental_health_assessments 表）。
+// assessment 为 nil 时写 placeholder（UserID/Type/今日窗口/score=0/risk="low"），
+// 让 dev 演示账号首次 trigger 后 mental_health_assessments 不再为空。
 func (r *MentalHealthRunner) Run(ctx context.Context, req Request) error {
 	if err := r.jobs.InsertJob(ctx, req.TraceID, req.UserID, req.AssessmentType); err != nil {
 		return fmt.Errorf("insert job %s: %w", req.TraceID, err)
@@ -70,6 +80,17 @@ func (r *MentalHealthRunner) Run(ctx context.Context, req Request) error {
 		return fmt.Errorf("assess user %d: %w", req.UserID, err)
 	}
 
+	// E2E-15 新增：写 mental_health_assessments（修 E2E-F-10）
+	// assessment 为 nil 时写 placeholder（让表非空），便于 dev 演示
+	toSave := assessment
+	if toSave == nil {
+		toSave = placeholderAssessment(req.UserID, req.AssessmentType)
+	}
+	if err := r.repo.Save(ctx, toSave); err != nil {
+		_ = r.jobs.FailJob(ctx, req.TraceID, err.Error())
+		return fmt.Errorf("save assessment user %d: %w", req.UserID, err)
+	}
+
 	result, err := json.Marshal(assessment) // 无数据 assessment=nil → "null"
 	if err != nil {
 		_ = r.jobs.FailJob(ctx, req.TraceID, err.Error())
@@ -79,4 +100,25 @@ func (r *MentalHealthRunner) Run(ctx context.Context, req Request) error {
 		return fmt.Errorf("complete job %s: %w", req.TraceID, err)
 	}
 	return nil
+}
+
+// placeholderAssessment 在 GetLatestAssessment 返回 nil 时构造一条
+// 占位记录 —— 让 mental_health_assessments 表不再永远为空。
+//
+// 设计要点：
+//   - UserID / Type 透传 Request（让 evaluator 可关联）
+//   - OverallScore = 0（无数据）
+//   - RiskLevel = "low"（与 riskFromScore(<40) 一致）
+//   - WindowStart / WindowEnd = 今日日期（不依赖外部时钟：使用 time.Now() UTC）
+//   - GeneratedAt 不写（PostgresMentalHealthRepo.Save 用 DEFAULT NOW()）
+func placeholderAssessment(userID int64, assessmentType string) *repository.MentalAssessment {
+	today := time.Now().UTC().Format("2006-01-02")
+	return &repository.MentalAssessment{
+		UserID:       userID,
+		Type:         assessmentType,
+		WindowStart:  today,
+		WindowEnd:    today,
+		OverallScore: 0,
+		RiskLevel:    "low",
+	}
 }
