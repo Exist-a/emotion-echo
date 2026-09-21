@@ -2,12 +2,13 @@
 stage: e2e-14
 title: 人格量表与 AI 提示词定制
 type: transformation
-status: partial
+status: done
 created: 2026-09-20
+closed: 2026-09-21
 depends-on: [e2e-13]
 blocks: [e2e-15]
 gate: []
-related-findings: [E2E-F-04]
+related-findings: [E2E-F-04, E2E-F-95, E2E-F-98]
 ---
 
 # E2E-14 人格量表与 AI 提示词定制
