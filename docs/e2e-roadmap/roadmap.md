@@ -49,7 +49,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 **E2E-15 报表 Dashboard** ✅ **done**（2026-09-21 落地 + 当日收口）：14/14 测试点 + 24/24 Playwright（chromium + mobile）+ 16 张截图。修 2 个真实缺陷：① E2E-F-10（mental_health_assessments 触发器补写 → trigger runner.Save + rebuild analytics-svc:v0.1.8）；② E2E-F-14 同型残留（4 dashboard 空态 div v-else-if + 静态契约钉）。详档 [stages/e2e-15-reports-dashboard/report.md](stages/e2e-15-reports-dashboard/report.md)
 
 > E2E-14 人格量表与 AI 提示词定制 ✅ **done**（2026-09-20 落地 / 2026-09-21 关账轮收口：**16/16 测试点全 PASS**，含 §8.3 新增的算分修复（E2E-F-97）+ `scoreKind` 语义化两条；用户决议暂搁 LLM-as-judge 路线，原 §8.2 报告的"降 partial"理由——账本留 E2E-F-98 判官方法——已被本轮解除，详见账本关账轮记录）。E2E-13 心理测验 ✅ done。E2E-12 设置页 ✅ done。E2E-11 partial（留账 2 条）。E2E-07~10 partial（取证缺口）。
-> **下一阶段开工前**：E2E-15 ✅ 已 done（2026-09-21）。下一阶段 = **E2E-16（多模态：语音/表情/文件上传）** —— 详档已于 2026-09-22 撰写（[stages/e2e-16-multimodal/plan.md](stages/e2e-16-multimodal/plan.md)，状态 `pending`，待开工）。详档预探查已定位**三条链路卡在同一处断链**（BFF 响应缺 `data` 包装 ⇒ 前端静默丢弃），拟登记 E2E-F-103~105；3 个产品/隐私取向议题（拟 D-11~D-13）已采用默认口径定稿，不阻塞开工。
+> **下一阶段开工前**：E2E-15 ✅ 已 done（2026-09-21）。下一阶段 = **E2E-16（多模态：语音/表情/文件上传）** —— 详档已于 2026-09-22 撰写（[stages/e2e-16-multimodal/plan.md](stages/e2e-16-multimodal/plan.md)，状态 `pending`，待开工）。详档预探查已定位**三条链路卡在同一处断链**（BFF 响应缺 `data` 包装 ⇒ 前端静默丢弃），拟登记 E2E-F-103~105；4 项范围决议（D-11~D-14）已由用户 2026-09-22 裁定 —— 语音音频落 MinIO 可回放 / 表情**只发送时落一条**并经融合参与计算 / `/new` 页入口补齐 / 融合结果注入 system prompt 让 AI 回复体现。
 
 ## 排期总表（30 阶段）
 
