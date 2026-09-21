@@ -2,12 +2,13 @@
 stage: e2e-10
 title: 聊天核心链路
 type: verification
-status: partial
+status: done
 created: 2026-09-19
+closed: 2026-09-21
 depends-on: [e2e-01, e2e-08]
 blocks: [e2e-15, e2e-16, e2e-17]
 gate: []
-related-findings: []
+related-findings: [E2E-F-79, E2E-F-90]
 ---
 
 # E2E-10 聊天核心链路
