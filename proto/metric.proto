@@ -133,6 +133,10 @@ message ReportsTrendResponse {
   // Stage 85：区间意图分布（msg_summary_v.intent 聚合，'' 未分类不计入；
   // 服务端按 6 类白名单确定性顺序输出）
   repeated IntentCount intent_distribution = 3;
+  // 2026-09-21 新增：区间消息数 / 会话数（与 DailyReport 同源 msg_summary_v）。
+  // 此前缺失 ⇒ BFF 硬编码 conversationCount=0 ⇒ 周/月/年报「会话数」恒 0。
+  int64 message_count = 4;
+  int64 conversation_count = 5;
 }
 
 // ============== User Behavior ==============

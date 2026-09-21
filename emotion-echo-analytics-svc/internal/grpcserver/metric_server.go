@@ -169,6 +169,9 @@ func (s *analyticsServer) ReportsTrend(ctx context.Context, req *emotionanalytic
 		DataPoints:         toProtoChartDataPoints(resp.Report.Points),
 		Type:               resp.Report.Type,
 		IntentDistribution: intentDistToProto(resp.Report.IntentCounts),
+		// 2026-09-21 新增：区间消息数 / 会话数（与 daily 同源 msg_summary_v）
+		MessageCount:      resp.Report.MessageCount,
+		ConversationCount: resp.Report.ConversationCount,
 	}, nil
 }
 

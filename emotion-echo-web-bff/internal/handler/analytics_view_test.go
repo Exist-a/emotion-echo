@@ -113,3 +113,42 @@ func TestToFrontendDepth_StreakAndDaysPassthrough(t *testing.T) {
 	assert.InDelta(t, 25.0, out.AvgMessagesPerDay, 0.01)
 	assert.InDelta(t, 12.5, out.AvgSessionRounds, 0.01)
 }
+
+// ============ toFrontendTrendReport ============
+//
+// 2026-09-21 修复（用户实测反馈「0 段对话 33 条消息」+ 周/月/年报会话数恒 0）：
+//   - 原 conversationCount 硬编码 0（注释称 "TrendReport 没有 conv 维度"）
+//   - 原 messageCount 从 points 累计（= 情绪记录数，不是消息数）
+// 现直传 downstream 的区间真实计数（与 DailyReport 同源 msg_summary_v）。
+
+func TestToFrontendTrendReport_PassesThroughRealCounts(t *testing.T) {
+	out := toFrontendTrendReport(&downstream.TrendReport{
+		Type:              "weekly",
+		StartDate:         "2026-09-15",
+		EndDate:           "2026-09-21",
+		MessageCount:      33,
+		ConversationCount: 16,
+		Points: []downstream.TrendPoint{
+			{Date: "2026-09-15", Count: 5, PrimaryEmotion: "happy"},
+		},
+	})
+	require.NotNil(t, out)
+	assert.Equal(t, int64(33), out.MessageCount,
+		"E2E-15 FU: messageCount 应为 msg_summary_v 真值（33），而非 points 情绪记录累计")
+	assert.Equal(t, int64(16), out.ConversationCount,
+		"E2E-15 FU: conversationCount 应透传真值（16），而非硬编码 0")
+}
+
+func TestToFrontendTrendReport_FallsBackToPointsSum_WhenCountsMissing(t *testing.T) {
+	// 兼容：下游未提供区间计数（旧版本 / 字段缺失 → 0）时回落 points 累计（保持旧行为）
+	out := toFrontendTrendReport(&downstream.TrendReport{
+		Type: "weekly",
+		Points: []downstream.TrendPoint{
+			{Date: "2026-09-15", Count: 5},
+			{Date: "2026-09-22", Count: 3},
+		},
+	})
+	require.NotNil(t, out)
+	assert.Equal(t, int64(8), out.MessageCount, "缺区间计数时回落 points 累计")
+	assert.Equal(t, int64(0), out.ConversationCount, "缺区间计数时 conv 为 0（保持旧行为）")
+}

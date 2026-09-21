@@ -598,6 +598,21 @@
 
 **完整论证见 [ADR · 2026-09 · 仪表盘网格响应式断点](adr/adr-2026-09-dashboard-responsive-breakpoints.md)**。
 
+### 决策 30：报表「会话数」数据源 = **msg_summary_v 同源**（2026-09-21 用户实测反馈驱动）
+
+> ✅ Accepted。用户实测反馈日报显示「**0 段对话，33 条消息**」自相矛盾。核查出**两处独立缺陷**：
+>
+> ① **日报** `conversationCount` 取自 `user_behavior_events`（Kafka 事件链，dev 已停更在 09-14）而 `messageCount` 取自 `msg_summary_v` ⇒ 两指标数据源不同步。
+> ② **周/月/年报** `conversationCount` 在 BFF `analytics_view.go` **硬编码 0**（注释称"TrendReport 没有 conv 维度"），且 `messageCount` 从 points 累计（那是情绪记录数不是消息数）—— 根因是 `TrendReport` 结构体 + proto `ReportsTrendResponse` 都无此二字段。
+>
+> **决策**：「会话数」与「消息数」统一取自 `msg_summary_v`；`conversation_count = COUNT(DISTINCT conversation_id)`。全链路补 proto（`message_count=4` / `conversation_count=5`）+ gRPC server 填充 + BFF 透传 + view 层去硬编码。
+>
+> **实测**：日报 `0` → **`16 段对话 / 33 条消息`**（与 DB 一致）；周报区间 `123 / 195`（DB 核对一致）。
+>
+> **语义选择（有意）**：只统计**有消息**的会话；空会话（建了未发言）不计入。与 `user_behavior_events` 的 `conversation.created` 口径不同，已在 ADR 记录。
+
+**完整论证见 [ADR · 2026-09 · 报表会话数数据源](adr/adr-2026-09-dashboard-report-count-source.md)**。
+
 ## 🏗 当前架构全景
 
 ```
