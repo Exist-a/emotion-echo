@@ -21,7 +21,7 @@
     </template>
     <template #charts>
       <chartCard v-if="chartData.length > 0" :data="chartData" />
-      <div class="ee-empty">暂无数据</div>
+      <div v-else-if="chartData.length === 0" class="ee-empty">暂无数据</div>
     </template>
   </ReportScaffold>
 </template>
