@@ -76,7 +76,11 @@ type AssessmentHistoryItem struct {
 	SubmittedAt  time.Time `json:"submittedAt"`
 }
 
-// MentalHealthRepo 跨 schema 只读仓储（mental-health 聚合 + 历史）
+// MentalHealthRepo 跨 schema 仓储（mental-health 聚合 + 历史 + 写入）
+//
+// E2E-15 阶段 1.2 新增 Save：E2E-F-10 修复 —— mental_health_assessments 表
+// 生产写入方 = 0，导致 BFF mental-health 端点恒返空。修法：trigger runner 链
+// 末尾调 Save 写一条新行（详见 [docs/e2e-roadmap/stages/e2e-15-reports-dashboard/plan.md]）。
 type MentalHealthRepo interface {
 	// GetLatestAssessment 取指定用户在指定 type 下的最近评估
 	GetLatestAssessment(ctx context.Context, userID int64, atype AssessmentType) (*MentalAssessment, error)
@@ -92,6 +96,15 @@ type MentalHealthRepo interface {
 	// type: weekly | monthly
 	// points: 按时间从早到晚排序
 	GetTrendData(ctx context.Context, userID int64, trendType string, startDate, endDate time.Time) ([]TrendPoint, error)
+
+	// Save 写入一条新评估（E2E-15 新增）
+	//
+	// - 写入 emotion_echo_assessment.mental_health_assessments
+	// - 仅写入 user_id / assessment_type / period_start / period_end /
+	//   overall_score / dimensions（其他字段用 DEFAULT：summary NULL，
+	//   recommendations '[]'，created_at NOW()）
+	// - nil 入参返 error
+	Save(ctx context.Context, assessment *MentalAssessment) error
 
 	Ping(ctx context.Context) error
 }
@@ -123,6 +136,11 @@ func (r *InMemoryMentalHealthRepo) ListAssessmentHistory(_ context.Context, _ in
 // GetTrendData Round 3 GREEN 占位
 func (r *InMemoryMentalHealthRepo) GetTrendData(_ context.Context, _ int64, _ string, _, _ time.Time) ([]TrendPoint, error) {
 	return nil, errors.New("InMemoryMentalHealthRepo.GetTrendData: 占位实现，测试应注入 stub")
+}
+
+// Save Round 3 RED 占位（E2E-15 阶段 1.2 注入 stub 后由 runner_test 验证调用）
+func (r *InMemoryMentalHealthRepo) Save(_ context.Context, _ *MentalAssessment) error {
+	return errors.New("InMemoryMentalHealthRepo.Save: 占位实现，测试应注入 stub")
 }
 
 // Ping 实现 MentalHealthRepo 接口
@@ -377,6 +395,52 @@ func (r *PostgresMentalHealthRepo) Ping(ctx context.Context) error {
 		return err
 	}
 	return sqlDB.PingContext(ctx)
+}
+
+// Save Round 3 RED 占位（E2E-15 阶段 1.2 GREEN 实现见下方）
+//
+// 将在 GREEN 步骤实现 INSERT INTO emotion_echo_assessment.mental_health_assessments
+// 入参字段：user_id / assessment_type / period_start / period_end /
+// overall_score / dimensions；summary / recommendations / created_at 用 DEFAULT。
+func (r *PostgresMentalHealthRepo) Save(ctx context.Context, assessment *MentalAssessment) error {
+	if assessment == nil {
+		return errors.New("PostgresMentalHealthRepo.Save: assessment is nil")
+	}
+	// GREEN 实现见下 commit（E2E-15 阶段 1.2 主体 commit）
+	const q = `
+INSERT INTO emotion_echo_assessment.mental_health_assessments
+  (user_id, assessment_type, period_start, period_end, overall_score, dimensions)
+VALUES ($1, $2, NULLIF($3, '')::date, NULLIF($4, '')::date, $5, COALESCE($6::jsonb, '{}'::jsonb))
+RETURNING id`
+
+	var periodStart, periodEnd interface{}
+	if assessment.WindowStart != "" {
+		periodStart = assessment.WindowStart
+	}
+	if assessment.WindowEnd != "" {
+		periodEnd = assessment.WindowEnd
+	}
+	var dimensionsJSON []byte
+	if len(assessment.Dimensions) > 0 {
+		b, err := json.Marshal(assessment.Dimensions)
+		if err != nil {
+			return fmt.Errorf("marshal dimensions: %w", err)
+		}
+		dimensionsJSON = b
+	}
+
+	var newID uint64
+	if err := r.db.WithContext(ctx).Raw(q,
+		assessment.UserID,
+		assessment.Type,
+		periodStart, periodEnd,
+		assessment.OverallScore,
+		dimensionsJSON,
+	).Scan(&newID).Error; err != nil {
+		return fmt.Errorf("insert mental_health_assessment user=%d type=%s: %w",
+			assessment.UserID, assessment.Type, err)
+	}
+	return nil
 }
 
 var _ MentalHealthRepo = (*PostgresMentalHealthRepo)(nil)

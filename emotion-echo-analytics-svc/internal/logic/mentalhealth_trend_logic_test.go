@@ -179,3 +179,6 @@ func (s *mhTrendStubRepo) GetTrendData(_ context.Context, userID int64, trendTyp
 }
 
 func (s *mhTrendStubRepo) Ping(_ context.Context) error { return nil }
+
+// Save E2E-15 阶段 1.2 新增（修 E2E-F-10）：trend logic 层不直接调 Save，保留 stub
+func (s *mhTrendStubRepo) Save(_ context.Context, _ *repository.MentalAssessment) error { return nil }

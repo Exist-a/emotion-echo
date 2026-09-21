@@ -63,6 +63,9 @@ func (s *mhStubRepo2) GetTrendData(_ context.Context, _ int64, _ string, _, _ ti
 	return s.trend, s.trendErr
 }
 
+// Save E2E-15 阶段 1.2 新增（修 E2E-F-10）：handler 层不直接调 Save，保留 stub
+func (s *mhStubRepo2) Save(_ context.Context, _ *repository.MentalAssessment) error { return nil }
+
 func (s *mhStubRepo2) Ping(_ context.Context) error { return nil }
 
 // =====================================================
