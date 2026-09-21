@@ -2,8 +2,9 @@
 stage: e2e-15
 title: 报表 Dashboard
 type: transformation
-status: pending
+status: done
 created: 2026-09-21
+closed: 2026-09-21
 depends-on: [e2e-10]
 blocks: [e2e-16, e2e-17]
 gate: []
