@@ -60,6 +60,16 @@ test.describe('E2E-15 报表 Dashboard', () => {
     // summary 文本非空（不依赖 AI 分析触发）
     await expect(page.getByText(/段对话/).first(), 'summary 含「段对话」文案').toBeVisible({ timeout: 10_000 })
 
+    // E2E-15 IAB 实测补充（2026-09-21）：有图表时不得同时出现「暂无数据」
+    // （原 spec 只断言 summary 存在 ⇒ 放过 v-else-if 未生效的旧行为）
+    const chartCount = await page.locator('.chart-container').count()
+    if (chartCount > 0) {
+      await expect(
+        page.locator('.ee-empty'),
+        'E2E-15: chartData.length > 0 时「暂无数据」不得与图表同屏（v-else-if 互斥）',
+      ).toHaveCount(0)
+    }
+
     // 截图归档（双 project 防覆盖）
     await page.screenshot({
       path: `screenshots/e2e-15-01-daily-report-${test.info().project.name}.png`,
@@ -222,14 +232,30 @@ test.describe('E2E-15 报表 Dashboard', () => {
     await page.setViewportSize({ width: 800, height: 900 })
     await page.goto('/chat/dashboard/weeklyReport')
     await waitForHydration(page)
+    // E2E-15 IAB 实测补充（2026-09-21）：不只是截图，要断言列数真的重算了
+    // （原实现 window.innerWidth 非响应式 ⇒ resize 后不重算，图表被挤压）
+    const cols800 = await page
+      .locator('.charts-grid')
+      .first()
+      .evaluate((el) => getComputedStyle(el).gridTemplateColumns)
+    expect(
+      cols800.split(' ').length,
+      `E2E-15: 800px 视口应 1 列（实际 ${cols800}）`,
+    ).toBe(1)
     await page.screenshot({ path: `screenshots/e2e-15-14a-viewport-800-${test.info().project.name}.png`, fullPage: true })
 
     // ≥1600px → 3 列
     await page.setViewportSize({ width: 1800, height: 900 })
     await page.reload()
     await waitForHydration(page)
+    const cols1800 = await page
+      .locator('.charts-grid')
+      .first()
+      .evaluate((el) => getComputedStyle(el).gridTemplateColumns)
+    expect(
+      cols1800.split(' ').length,
+      `E2E-15: 1800px 视口应 3 列（实际 ${cols1800}）`,
+    ).toBe(3)
     await page.screenshot({ path: `screenshots/e2e-15-14b-viewport-1800-${test.info().project.name}.png`, fullPage: true })
-
-    await expect(page.locator('body')).toBeVisible()
   })
 })

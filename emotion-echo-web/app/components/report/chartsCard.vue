@@ -85,10 +85,16 @@ const gridConfig = ref({
 })
 
 // 计算当前列数（响应式）- 调整断点值
-const currentColumns = computed(() => {
-  if (typeof window === 'undefined') return gridConfig.value.columns
+//
+// E2E-15 IAB 实测发现（2026-09-21）：原实现直接读 window.innerWidth，
+// 而它不是 Vue 响应式依赖 ⇒ computed 只在首次渲染算一次，resize 后不重算
+// （handleResize 原为空实现 + 注释断言"会自动更新"是错误假设）。
+// 实测：1280px 加载后 setViewportSize(800) → 仍返 2 列（应 1 列）→ 图表被挤压。
+// 修法：用 ref 追踪窗口宽度，resize 监听里更新该 ref。
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1600)
 
-  const width = window.innerWidth
+const currentColumns = computed(() => {
+  const width = windowWidth.value
 
   // 调整断点：最小宽度更大
   if (width < 992) return gridConfig.value.breakpoints.xs // 1列（992px以下）
@@ -102,9 +108,11 @@ const gridStyle = computed(() => ({
   gap: gridConfig.value.gap,
 }))
 
-// 窗口大小变化处理函数
+// 窗口大小变化处理函数 —— 更新 windowWidth ref 触发 currentColumns 重算
 const handleResize = () => {
-  // currentColumns是计算属性，会自动更新
+  if (typeof window !== 'undefined') {
+    windowWidth.value = window.innerWidth
+  }
 }
 
 // 监听窗口大小变化
