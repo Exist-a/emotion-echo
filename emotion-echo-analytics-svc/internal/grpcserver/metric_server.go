@@ -269,13 +269,22 @@ func (s *analyticsServer) UserBehaviorFrequency(ctx context.Context, req *emotio
 }
 
 // MentalHealthAssessment 实现 MentalHealthAssessment RPC
+//
+// E2E-15 阶段 1.4 修复（留账 #1）：原硬编码 assessmentType = "daily"
+// 导致 weekly/monthly/comprehensive gRPC 调用也返 daily 行。
+// 修复：优先用 req.AssessmentType（proto 已加字段，见 proto/metric.proto），
+// 缺省时按 Date 判断（>0 → historical，否则 daily）。
 func (s *analyticsServer) MentalHealthAssessment(ctx context.Context, req *emotionanalytics.MentalHealthAssessmentRequest) (*emotionanalytics.MentalHealthAssessmentResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
 	}
-	assessmentType := "daily"
-	if req.Date > 0 {
-		assessmentType = "historical"
+	assessmentType := req.AssessmentType
+	if assessmentType == "" {
+		if req.Date > 0 {
+			assessmentType = "historical"
+		} else {
+			assessmentType = "daily"
+		}
 	}
 	resp, err := logic.NewMentalHealthAssessmentLogic(ctx, s.svcCtx).GetLatestAssessment(&types.GetMentalAssessmentReq{
 		UserID: req.UserId,

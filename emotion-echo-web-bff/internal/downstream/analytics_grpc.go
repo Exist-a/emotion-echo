@@ -211,8 +211,9 @@ func (c *analyticsGRPCClient) FrequencyTrend(ctx context.Context, userID int64, 
 func (c *analyticsGRPCClient) MentalAssessment(ctx context.Context, userID int64, assessmentType string) (*MentalAssessment, error) {
 	cli := emotionanalytics.NewAnalyticsServiceClient(c.conn)
 	resp, err := cli.MentalHealthAssessment(withUserID(ctx), &emotionanalytics.MentalHealthAssessmentRequest{
-		UserId: userID,
-		Date:   0,
+		UserId:         userID,
+		Date:           0,
+		AssessmentType: assessmentType, // E2E-15 阶段 1.4 修复：缺省 "" 时 gRPC server 走 "daily" 推断
 	})
 	if err != nil {
 		return nil, wrapGRPCError(err, "analytics mentalAssessment")

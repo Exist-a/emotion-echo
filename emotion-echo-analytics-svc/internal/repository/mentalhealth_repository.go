@@ -196,32 +196,46 @@ type assessmentRow struct {
 
 // GetLatestAssessment 取指定用户在指定窗口下的最近评估。
 //
-//   - daily: created_at >= now-24h
-//   - weekly: created_at >= now-7d
-//   - comprehensive: 不限制窗口（最新一条）
+//   - daily: created_at >= now-24h && assessment_type='daily'
+//   - weekly: created_at >= now-7d && assessment_type='weekly'
+//   - comprehensive: 不限制窗口 + assessment_type='comprehensive'
 //   - 无结果 → (nil, nil)（合法，不返 error）
+//
+// E2E-15 阶段 1.4 修复：原 WHERE 子句缺 assessment_type 过滤，weekly 端点
+// 会返回 daily 最新一条（因为 desc 创建顺序）。修复后 SQL 加 `($3::text = ''
+// OR assessment_type = $3)`（comprehensive 用空串 = 不过滤）。
 func (r *PostgresMentalHealthRepo) GetLatestAssessment(ctx context.Context, userID int64, atype AssessmentType) (*MentalAssessment, error) {
+	var windowStart *time.Time
+	var typeFilter string
+	switch atype {
+	case AssessmentDaily:
+		w := time.Now().Add(-24 * time.Hour)
+		windowStart = &w
+		typeFilter = string(AssessmentDaily)
+	case AssessmentWeekly:
+		w := time.Now().Add(-7 * 24 * time.Hour)
+		windowStart = &w
+		typeFilter = string(AssessmentWeekly)
+	case AssessmentComprehensive:
+		// 不限制窗口（最新一条）+ type=comprehensive
+		typeFilter = string(AssessmentComprehensive)
+	default:
+		// 未知 type 退回「不限类型 + 不限窗口」
+		typeFilter = ""
+	}
+
 	const q = `
 SELECT id, user_id, assessment_type, period_start, period_end,
        overall_score, dimensions, created_at
 FROM emotion_echo_assessment.assessment_v
 WHERE user_id = $1
   AND ($2::timestamptz IS NULL OR created_at >= $2::timestamptz)
+  AND ($3::text = '' OR assessment_type = $3)
 ORDER BY created_at DESC
 LIMIT 1`
 
-	var windowStart *time.Time
-	switch atype {
-	case AssessmentDaily:
-		w := time.Now().Add(-24 * time.Hour)
-		windowStart = &w
-	case AssessmentWeekly:
-		w := time.Now().Add(-7 * 24 * time.Hour)
-		windowStart = &w
-	}
-
 	var row assessmentRow
-	if err := r.db.WithContext(ctx).Raw(q, userID, windowStart).Scan(&row).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(q, userID, windowStart, typeFilter).Scan(&row).Error; err != nil {
 		return nil, err
 	}
 	if row.ID == 0 {
