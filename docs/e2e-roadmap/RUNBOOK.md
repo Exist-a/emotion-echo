@@ -55,10 +55,19 @@ pending ──(开工)──> in-progress ──(DoD 全过)──> done
 ```bash
 cd deploy && docker compose \
   -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml \
-  --env-file .env.local up -d
+  --env-file .env.local --profile dev up -d
 ```
 
 > 🔴 **`--env-file .env.local` 不可省略**。该文件是 LLM key 唯一存放点（gitignored），不带它容器会静默降级 mock。**严禁删除/清空/覆盖 `.env.local`**（AGENTS.md §四红线）。
+
+> 🔴 **`--profile dev` 同样不可省略**（2026-09-22 E2E-16 开工实测，E2E-F-108）：Nacos 在 `docker-compose.infra.yml:203` 声明为 `profiles: ["dev"]`，不带该 profile 时 **Nacos 容器根本不会启动** ⇒ 6 个应用服务全部注册失败（analytics-svc 直接 `[nacos] boot failed (fatal)` 崩溃循环，`up -d` 中止）。本文件此前记录的「固定动作」缺此参数，属文档漂移，已按实测更正。
+
+> ⚠️ **启动顺序陷阱**（同上实测 + E2E-F-107）：即便带上 `--profile dev`，若 BFF 先于 Nacos 就绪启动，BFF 日志出现 `[nacos] boot failed (continuing)` 后**永不重试** ⇒ Nacos `emotion-echo-dev` 命名空间里**没有 `emotion-echo-web-bff`** ⇒ APISIX upstream 6（`discovery_type: nacos`）无节点 ⇒ **网关全部 `/api/v1/*` 返回 503**（而 BFF 直连 `:8894` 正常）。
+> **验收/测试前必查**（期望 `count:6`）：
+> ```bash
+> curl -s "http://localhost:8848/nacos/v1/ns/service/list?pageNo=1&pageSize=50&namespaceId=emotion-echo-dev"
+> ```
+> 缺任何服务 → `docker restart emotion-echo-<svc>` 后复查（重启即重新注册）。**测试点结论以「注册齐全」为前提**，否则会把 503 误判成被测功能缺陷。
 
 ### 2.1b 启动前端 dev server（本地优先）
 

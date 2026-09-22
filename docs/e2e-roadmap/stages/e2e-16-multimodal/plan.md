@@ -2,7 +2,7 @@
 stage: e2e-16
 title: 多模态（语音 / 表情 / 文件上传）
 type: transformation
-status: pending
+status: in-progress
 created: 2026-09-22
 revised: 2026-09-22 (四项范围决议 D-11~D-14 由用户裁定后改稿：音频落 MinIO / 只发送时落一条 / new 页补齐 / 融合结果注入 prompt)
 depends-on: [e2e-10]
@@ -89,10 +89,10 @@ related-findings: [E2E-F-86, E2E-F-99, E2E-F-31]
 | `deploy/.env.local` 存在（LLM key 唯一存放点） | ✅ 2026-09-22 实测存在（1689 B）——**严禁删除/覆盖**（AGENTS.md §四红线） |
 | ai profile 镜像已在本地 | ✅ `emotion-echo/fer-tflite:v0.1.0`（538 MB）+ `emotion-echo/sensevoice:v0.1.0`（4.07 GB）均在本地 |
 | 冷 build 缓存下的重建能力 | ⚠️ **Build Cache = 0 B**（2026-09-22 实测），基础镜像本地已有 → 重建无需联网拉 base，但**首次构建耗时显著变长**（纪律见 §3.2） |
-| **文字情绪链路在 dev 活着**（融合的必备模态） | ⬜ **开工首步必须实测**：`FusionWorker.processOne` 在 `text == nil` 时直接 skip（`fusion/worker.go:132-136`），而文字情绪行由 **Kafka consumer** 写（`logic/consumehandler.go:89` → `emotion_echo_ai.emotion_analysis`）。若 dev 的 Kafka 链路停更（E2E-F-101 已证实邻链 `user_behavior_events` 停更在 09-14），则**融合永远没有候选** ⇒ 需先查 `emotion_analysis` 是否有当天行 + `KAFKA_ENABLED=true`。**坏则记为 BLOCKED 并升级**，不得跳过 |
+| **文字情绪链路在 dev 活着**（融合的必备模态） | ✅ **2026-09-22 实测通过**：基线 `emotion_analysis` 114 行（最新 09-21 00:00Z）→ 经网关发 1 条消息后 **115 行（最新 2026-09-22 00:55:53Z，当天）**，`fused_emotions` 同步 110 → **111 行（00:55:56Z，晚 3 s）** ⇒ Kafka → emotion_analysis → FusionWorker 整链在 dev 是活的（`fusion` worker 日志正常 tick）⇒ 融合类测试点可控 |
 | 融合 Worker 在 dev 运行 | ✅ 代码层面确认：`main.go:463` 起 `if db != nil` 即启动 goroutine（tick 5 s）；LLM fuser 需 `LLM_BASE_URL` 非空，为空则回落 `WeightedLateFuser(0.4, 0.3, 0.3)`（`main.go:470-494`） |
-| MinIO 可写 `voice/` 前缀 | ⬜ 开工首步实测：头像走 `avatars/`、通用上传走 `uploads/`（`upload_handler.go:170-181`）；音频新增 `voice/` 前缀，需确认 bucket 的匿名下载策略覆盖该前缀 |
-| ai profile 的 FER / SenseVoice 真出结果（非降级） | ⬜ 开工首步实测：断言响应 `model` 前缀（§3.3） |
+| MinIO 可写 `voice/` 前缀 | ✅ **2026-09-22 实测通过**：`/uploads/file` 返回 `http://localhost:9000/avatars/uploads/1-a4c25c3a.txt`（注意 `uploads/` 是 **`avatars` bucket 内的 key 前缀**，非独立 bucket）→ 匿名 `curl` 该 URL **200 + 内容一致** ⇒ 同 bucket 下 `voice/` 前缀同样可匿名读，回放链路可行 |
+| ai profile 的 FER / SenseVoice 真出结果（非降级） | ⚠️ **一半：FER ✅ / SenseVoice ❌**。FER：`kind=image` 实测 200 且 `model="fer:no-face"`（**真模型**，截图无脸故 neutral）→ 顺带验证测试点 17 的无脸降级语义。SenseVoice：**容器每次 `/analyze` 后重启，推理不可用** → 账本 **E2E-F-106**（torch 1.13.1 vs funasr 1.4.15 不兼容）⇒ ASR 类测试点标 `BLOCKED` |
 
 **本表全绿方可把状态改为 `in-progress`**（RUNBOOK §1 开工前置检查）。§8 的四项范围决议已由用户 2026-09-22 裁定，不再属于"待定"。
 
@@ -105,7 +105,9 @@ related-findings: [E2E-F-86, E2E-F-99, E2E-F-31]
 
 ```bash
 cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml \
-  -f compose.dev.yml --env-file .env.local up -d
+# ⚠️ --profile dev 不可省（E2E-F-108 实测）：Nacos 声明在 profiles: ["dev"] 下，
+# 缺它则 6 个应用服务全部注册失败（analytics-svc 崩溃循环 + up -d 中止）
+  -f compose.dev.yml --env-file .env.local --profile dev up -d
 ```
 
 **多模态额外要求**：本阶段必须显式启用 `ai` profile，否则 FER / SenseVoice 容器不存在：
@@ -143,7 +145,7 @@ bash scripts/build_dev_images.sh web                   # 改了前端且需要�
 
 # 2. 起容器（必须带 --env-file .env.local）
 cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml \
-  -f compose.dev.yml --env-file .env.local up -d
+  -f compose.dev.yml --env-file .env.local --profile dev up -d
 ```
 
 **🔴 硬规则：验收任何修复前，先核对镜像时间 > 修复 commit 时间。** E2E-F-99 就是因为 web 镜像 07:17:15 早于修复 commit 09:35:38，导致 PR #48 宣称的「24/24 PASS」**实际验的是修复前的旧代码**，而 spec 的弱断言把它放过了（同型已第三次复发）。

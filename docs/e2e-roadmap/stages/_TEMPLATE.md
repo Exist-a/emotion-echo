@@ -38,12 +38,15 @@ related-findings: []
 | 环境（dev 模式容器 / 特定 profile） | |
 | 数据准备（种子数据 / 测试账号） | |
 
-环境启动命令（**必须带 `--env-file .env.local`**，见 AGENTS.md §四）：
+环境启动命令（**必须带 `--env-file .env.local` 与 `--profile dev`**，见 AGENTS.md §四 / RUNBOOK §2.1）：
 
 ```bash
 cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml \
-  -f compose.dev.yml --env-file .env.local up -d
+  -f compose.dev.yml --env-file .env.local --profile dev up -d
 ```
+
+> `--profile dev` 缺不得：Nacos 声明在 `profiles: ["dev"]` 下，缺它则 6 个应用服务全部注册失败
+> （E2E-F-108 实测）。启动后按 RUNBOOK §2.1 的 Nacos 服务清单命令核对注册齐全。
 
 ## 4. 测试点清单
 
