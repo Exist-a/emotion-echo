@@ -156,11 +156,26 @@ type: e2e-discovered-unresolved-ledger
 
 **累计编号至此 102 项**（E2E-F-99~102 为本段新增 4 项，全部当轮闭环）。
 
+### G. E2E-16 多模态开工实测（2026-09-22，E2E-F-103~108）
+
+> 触发：E2E-16 开工首步按 plan §3 做前置实测（起环境 → 三项前置）。**本段按 plan 要求「先登记再修」**：103~105 为计划内预探查发现，106~108 为**开工实测新发现**。
+
+| 编号 | 来源 | 现象 | 根因 | 归属 | 状态 |
+|------|------|------|------|------|------|
+| E2E-F-103 | E2E-16 预探查 | **`/api/v1/voice/upload` 响应缺 `data` 包装 + 前端 `if (result)` 无 else** ⇒ 录音后**整条链路静默无反馈**：前端 `useApi.ts:346,353` 统一取 `data.data` 得 `undefined` → `useVoiceRecorder.ts:148` 的 `if (result)` 为假 → 成功分支（消息上屏 / AI 回复触发）被跳过且**不报错** | `voice_handler.go:85-93` 手写裸 `gin.H`（违反 `handler/resp.go` 包注释明文契约"BFF 所有 handler 用 OK/Fail 包装"） | **E2E-16** | 🟡 待修（本阶段范围内，TDD） |
+| E2E-F-104 | E2E-16 预探查 | **ASR 转写文本在 ai-svc 内部即被丢弃** ⇒ `/voice/upload` 的 `transcript` 恒为 `""`，即使修好信封也上不了屏 | `analyzer.EmotionResult`（`analyzer.go:20-25`）无 `Text` 字段 ⇒ `analyzer/multimodal.go:103-119` 拿到 `svRes.Text` 只用于算 sentiment 后丢弃；`multimodalanalyzelogic.go:74-79` 在 `kind=="audio" && textContent==""` 时直接置空 | **E2E-16** | 🟡 待修（本阶段范围内，TDD） |
+| E2E-F-105 | E2E-16 预探查 | **`/api/v1/uploads/:kind` 成功响应缺 `data` 包装** ⇒ 附件消息必然被 chat-svc 400 拒（**MinIO 里文件已真实写入**，用户看到"发送失败"）。与已修 **E2E-F-86**（头像上传）完全同型 | `upload_handler.go:156-163` 成功分支手写裸 `gin.H`（错误分支却用了 `Fail`，只有成功分支是例外） | **E2E-16** | 🟡 待修（本阶段范围内，TDD） |
+| E2E-F-106 | **E2E-16 开工实测** | 🔴 **SenseVoice 容器每次 `/analyze` 后重启，语音转写链路不可用**（阻塞 E2E-16 的 ASR 类测试点）。实测证据：① 经 BFF 调用 → `504 timeout`（ai-svc 内部 30s 超时）；② 直连容器（`docker run --network emotion-echo-app-network curlimages/curl`）→ `http=000 time=12.4s`（连接被断）；③ 调用后 `docker ps` 显示容器 `Up 4 seconds`（反复重启），日志呈「loading SenseVoice model → Loading pretrained params from /app/model/model.pt → starting SenseVoice server」循环；④ `docker inspect` → `OOMKilled=false ExitCode=0 RestartCount=3`（**非 OOM、非崩溃退出**）；⑤ 容器内实测 `python 3.10.21 / torch 1.13.1+cpu / funasr 1.4.15`，而 funasr 自身日志明写 **"Disabling PyTorch because PyTorch >= 2.1 is required but found 1.13.1+cpu"** + **"Models won't be available"** | 镜像 `sensevoice:v0.1.0` 内 **torch 与 funasr 版本漂移**：`emotion-echo-models/sensevoice-small/requirements.txt` 写 `torch>=1.13,<3.0.0`（允许 1.13）+ `funasr>=1.1.2`（**不锁上界**）⇒ 构建时解析出 funasr 1.4.15（要求 torch≥2.1）与 torch 1.13.1 的不兼容组合。compose 注释称"pull pre-built image from Aliyun ACR"（`apps.yml:474-479`）⇒ 本地 Dockerfile 未被使用，漂移固化在 ACR 镜像里 | **E2E-16 记账**（边界外：模型镜像基础设施，非本阶段代码范围；按 RUNBOOK §11「触碰边界外模块 → 记账不修」） | 🔴 **未解决**（修法方向：`requirements.txt` 显式锁 `torch>=2.1,<3` + 锁 funasr 版本 → 重建镜像 → 推 ACR；或改用 image 内已带模型权重的 ACR 变体 `sensevoice-base`。**须独立一轮**，含镜像重建 + ACR 推送 + 冒烟） |
+| E2E-F-107 | **E2E-16 开工实测** | **BFF 的 Nacos 注册失败后永不重试** ⇒ APISIX 全部 `/api/v1/*` 返 **503**（BFF 直连 8894 却正常）。实测：Nacos 未就绪时 BFF 日志 `[nacos] boot failed (continuing): WaitForNacos: context deadline exceeded`；此后即使 Nacos 就绪，`namespaceId=emotion-echo-dev` 的服务列表**只有 5 个服务、缺 `emotion-echo-web-bff`** ⇒ APISIX upstream 6（`discovery_type: nacos`）无节点 ⇒ 503。`docker restart emotion-echo-web-bff` 后列表变 6 个、网关登录恢复 200 | 同一类"降级后不自愈"缺陷（**与 E2E-F-96 user-svc 降级启动同型**）：`WaitForNacos` 有 deadline，超时后仅 `log + continue`，无后台重试/重注册 | **E2E-23**（健康检查与服务发现）/ **E2E-16 记账** | 🔴 **未解决**（修法方向：注册失败后进入后台重连循环，或纳入 compose 启动顺序约束 `depends_on: condition: service_healthy`——需注意 infra/apps 跨文件 `depends_on` 历史上引发过 v5.5.1 回归） |
+| E2E-F-108 | **E2E-16 开工实测** | **RUNBOOK §2.1「固定动作」的启动命令缺 `--profile dev`** ⇒ Nacos 容器不启动（`docker-compose.infra.yml:203` `profiles: ["dev"]`）⇒ **6 个应用服务全部注册失败**，envoy 侧表现为网关 503、analytics-svc 崩溃循环（`[nacos] boot failed (fatal)` → 重启）。实测：按 RUNBOOK 原命令启动 → analytics-svc `unhealthy` 致 `up -d` 中止；补 `--profile dev` 后全栈 healthy | RUNBOOK §2.1 的示例命令与 `docker-compose.infra.yml` 的 profile 声明不同步（文档漂移，属 ADR-18 已分类的"未复跑即记录"） | **E2E-16 范围内（文档修复）** | 🟡 待修（本阶段收口时一并改 RUNBOOK §2.1 + 记录在 report） |
+
+**累计编号至此 108 项**（E2E-F-103~108 为本段新增 6 项：3 项待修 + 1 项范围内文档修复 + 2 项记账）。
+
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** + **E2E-10 深度验证 1 项（E2E-F-79）** + **E2E-11 首轮 2 项（E2E-F-80~81）** + **E2E-11 复查轮 8 项（E2E-F-82~89）** + **收口审计治理 1 项（E2E-F-90）** + **E2E-14 验收 3 项（E2E-F-91~93）** + **E2E-14 合并 1 项（E2E-F-94）** + **E2E-14 复核 1 项（E2E-F-95）** + **续做实测 1 项（E2E-F-96）** + **复核实测 1 项（E2E-F-97）** + **方法自审 1 项（E2E-F-98）** + **E2E-15 迭代 4 项（E2E-F-99~102）** = **102 项**（累计编号至 102）；实测阶段若有新发现继续追加 `E2E-F-103` 起
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** + **E2E-10 深度验证 1 项（E2E-F-79）** + **E2E-11 首轮 2 项（E2E-F-80~81）** + **E2E-11 复查轮 8 项（E2E-F-82~89）** + **收口审计治理 1 项（E2E-F-90）** + **E2E-14 验收 3 项（E2E-F-91~93）** + **E2E-14 合并 1 项（E2E-F-94）** + **E2E-14 复核 1 项（E2E-F-95）** + **续做实测 1 项（E2E-F-96）** + **复核实测 1 项（E2E-F-97）** + **方法自审 1 项（E2E-F-98）** + **E2E-15 迭代 4 项（E2E-F-99~102）** + **E2E-16 开工实测 6 项（E2E-F-103~108）** = **108 项**（累计编号至 108）；实测阶段若有新发现继续追加 `E2E-F-109` 起
 - **E2E-11 复查轮关闭 5 条既有条目**：E2E-F-14（图表空态）、E2E-F-36（页面无法滚动）、E2E-F-83（三处映射漂移）、E2E-F-84（内容被裁剪）、E2E-F-85（头像 2MB 上限失效）；另新开并当轮关闭 E2E-F-86（头像契约错位）
 - **2026-09-19 治理轮关闭 1 条**：E2E-F-01（密保问题方案已由 E2E-07/E2E-09 实施落地，见该行证据）
 - **2026-09-19 治理轮新开 1 条**：E2E-F-90（E2E-07/08/09/10 收口证据系统性缺失 → 四阶段降 `partial`；取证补拍待独立轮次）

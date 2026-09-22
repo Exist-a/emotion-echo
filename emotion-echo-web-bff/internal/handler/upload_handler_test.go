@@ -106,12 +106,18 @@ func TestUploadHandler_Image_Success(t *testing.T) {
 
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	assert.Equal(t, "image", got["kind"])
-	assert.Equal(t, "http://localhost:9000/avatars/uploads/7-abc.jpg", got["url"])
-	assert.Equal(t, "image/jpeg", got["mime"])
+
+	// E2E-F-105：成功数据必须放在 data 内（resp.go OK() 契约）。
+	// 历史断言在顶层读 url/kind/mime，把"缺 data 包装"的错误结构固化 ⇒ 前端
+	// useApi 拿到 undefined ⇒ content 被丢 ⇒ chat-svc 400 content is required。
+	data, ok := got["data"].(map[string]any)
+	require.True(t, ok, "响应必须含 data 对象（resp.go OK() 契约），实际：%v", got)
+	assert.Equal(t, "image", data["kind"])
+	assert.Equal(t, "http://localhost:9000/avatars/uploads/7-abc.jpg", data["url"])
+	assert.Equal(t, "image/jpeg", data["mime"])
 	// multipart part 边界可能让 fileHeader.Size 比原始字符串多 1-2 字节（CRLF）
 	// 用 >= 而非精确等号
-	sizeVal, ok := got["size"].(float64)
+	sizeVal, ok := data["size"].(float64)
 	require.True(t, ok, "size 字段应为数字")
 	assert.GreaterOrEqual(t, int64(sizeVal), int64(13), "size 应至少含 'fake jpg bytes'(13) 字节")
 
@@ -135,8 +141,10 @@ func TestUploadHandler_Video_Success(t *testing.T) {
 
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	assert.Equal(t, "video", got["kind"])
-	assert.Equal(t, "video/mp4", got["mime"])
+	data, ok := got["data"].(map[string]any)
+	require.True(t, ok, "响应必须含 data 对象（resp.go OK() 契约），实际：%v", got)
+	assert.Equal(t, "video", data["kind"])
+	assert.Equal(t, "video/mp4", data["mime"])
 }
 
 func TestUploadHandler_File_Success(t *testing.T) {
@@ -155,8 +163,10 @@ func TestUploadHandler_File_Success(t *testing.T) {
 
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	assert.Equal(t, "file", got["kind"])
-	assert.Equal(t, "application/pdf", got["mime"])
+	data, ok := got["data"].(map[string]any)
+	require.True(t, ok, "响应必须含 data 对象（resp.go OK() 契约），实际：%v", got)
+	assert.Equal(t, "file", data["kind"])
+	assert.Equal(t, "application/pdf", data["mime"])
 }
 
 // ============ 校验失败 ============

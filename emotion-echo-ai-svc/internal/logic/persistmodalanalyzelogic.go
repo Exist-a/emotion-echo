@@ -85,12 +85,20 @@ func (l *PersistMultiModalAnalyzeLogic) Analyze(ctx context.Context, req Persist
 		}
 	}
 
+	// E2E-F-104：音频路径回填 ASR 文本（旧实现此结构体从不带 Transcript，
+	// 与 multimodalanalyzelogic.go 是同一处缺口，persist=true 时同样丢转写）。
+	transcript := result.Text
+	if transcript == "" {
+		transcript = req.Transcript
+	}
+
 	return &MultiModalAnalyzeResp{
 		Kind:       kind,
 		Emotion:    result.PrimaryEmotion,
 		Confidence: result.Confidence,
 		Sentiment:  result.SentimentScore,
 		Model:      result.Model,
+		Transcript: transcript,
 	}, nil
 }
 
@@ -119,12 +127,17 @@ func (l *PersistMultiModalAnalyzeLogic) persistResult(ctx context.Context, req P
 		if l.svcCtx.VoiceEmotionRepo == nil {
 			return nil
 		}
+		// E2E-F-104：落库的 transcript 也应以 ASR 结果为准（req.Transcript 是前端可选补充）
+		rowTranscript := result.Text
+		if rowTranscript == "" {
+			rowTranscript = req.Transcript
+		}
 		row := &model.VoiceEmotionResult{
 			UploadID:       req.UploadID,
 			MessageID:      req.MessageID,
 			UserID:         req.UserID,
 			ConversationID: req.ConversationID,
-			Transcript:     req.Transcript,
+			Transcript:     rowTranscript,
 			PrimaryEmotion: result.PrimaryEmotion,
 			Confidence:     result.Confidence,
 			Model:          result.Model,

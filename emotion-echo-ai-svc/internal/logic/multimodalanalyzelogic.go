@@ -70,11 +70,12 @@ func (l *MultiModalAnalyzeLogic) Analyze(ctx context.Context, kind string, fileB
 		Sentiment:  result.SentimentScore,
 		Model:      result.Model,
 	}
-	// 音频路径：把转写文本回给调用方，便于前端展示
-	if kind == "audio" && textContent == "" {
-		// fallback 路径返回空文本是正常的
-		resp.Transcript = ""
-	} else {
+	// 音频路径：把转写文本回给调用方，便于前端展示（E2E-F-104）。
+	// 修正：优先用 analyzer 回传的 ASR 文本 result.Text；请求侧 text 仅作补充。
+	// 旧实现只看 textContent（BFF 从不传 text）⇒ transcript 恒空，
+	// 即使前端修好响应消费也上不了屏。
+	resp.Transcript = result.Text
+	if resp.Transcript == "" {
 		resp.Transcript = textContent
 	}
 	return resp, nil

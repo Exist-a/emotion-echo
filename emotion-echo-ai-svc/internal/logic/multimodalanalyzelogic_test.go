@@ -177,3 +177,57 @@ func TestMultiModalAnalyzeLogic_AnalyzerError_PropagatesAsIs(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "downstream unavailable")
 }
+// TestMultiModalAnalyzeLogic_AudioTranscriptPropagated 是 E2E-F-104 的回归钉。
+//
+// 背景：analyzer.EmotionResult 原先无 Text 字段 ⇒ ASR 转写文本在 analyzer 内部
+// 被丢弃；logic 层又只回填请求侧 textContent（BFF 从不传）⇒ /voice/upload 的
+// transcript 恒空，前端即使修好响应消费也上不了屏。
+//
+// 注意（诚实标注）：本条断言是在 GREEN 实现之后补的**回归钉**，
+// 该缺陷的 RED 步骤在 analyzer 层完成 ——
+// `TestMultiModalAnalyzer_SenseVoiceSuccess` 因 `r.Text undefined` 编译失败。
+func TestMultiModalAnalyzeLogic_AudioTranscriptPropagated(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubMultimodalAnalyzer{
+		result: &analyzer.EmotionResult{
+			PrimaryEmotion: "happy",
+			Confidence:     0.95,
+			Model:          "sensevoice:sensevoice",
+			Text:           "我太开心了",
+		},
+	}
+	mma := analyzer.NewMultiModalAnalyzer(stub, nil, nil, nil)
+	svcCtx := &svc.ServiceContext{MultiModal: mma}
+
+	l := NewMultiModalAnalyzeLogic(svcCtx)
+	// 关键：请求侧 text（第 5 个参数）为空 —— 与 BFF /voice/upload 的真实调用一致
+	resp, err := l.Analyze(context.Background(), "audio", []byte("webm"), "v.webm", "")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "我太开心了", resp.Transcript,
+		"音频路径必须回传 ASR 文本（请求侧未提供 text 时更应如此）")
+}
+
+// TestMultiModalAnalyzeLogic_AudioTranscriptFallsBackToRequestText 覆盖
+// 请求侧 text 作为补充的语义：ASR 文本为空时回落到请求侧 text。
+func TestMultiModalAnalyzeLogic_AudioTranscriptFallsBackToRequestText(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubMultimodalAnalyzer{
+		result: &analyzer.EmotionResult{
+			PrimaryEmotion: "neutral",
+			Confidence:     0.5,
+			Model:          "keyword-v1",
+			Text:           "", // ASR 未给文本（降级/静音）
+		},
+	}
+	mma := analyzer.NewMultiModalAnalyzer(stub, nil, nil, nil)
+	svcCtx := &svc.ServiceContext{MultiModal: mma}
+
+	l := NewMultiModalAnalyzeLogic(svcCtx)
+	resp, err := l.Analyze(context.Background(), "audio", []byte("webm"), "v.webm", "前端补充的文本")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "前端补充的文本", resp.Transcript)
+}

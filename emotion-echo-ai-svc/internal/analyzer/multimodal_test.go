@@ -128,6 +128,11 @@ func TestMultiModalAnalyzer_SenseVoiceSuccess(t *testing.T) {
 	if r.PrimaryEmotion != "happy" || r.Confidence != 0.95 {
 		t.Errorf("audio path: %+v", r)
 	}
+	// E2E-F-104：ASR 转写文本必须随结果回传，否则上层 transcript 恒空
+	// （旧断言只看 emotion/confidence，把"转写被丢弃"放过了）。
+	if r.Text != "我太开心了" {
+		t.Errorf("audio path 必须回传 ASR 文本，got Text=%q want %q", r.Text, "我太开心了")
+	}
 }
 
 func TestMultiModalAnalyzer_SynthesizeText_NoXTTS(t *testing.T) {
