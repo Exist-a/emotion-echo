@@ -874,6 +874,7 @@ Stage 33 P0 修复+BFF净化 █████████████████
 | 2026-09-21 | 验收断言口径 | 只断言形状（非空/正则/多处一致）→ **必须断言具体期望值 + 边界两端 + 覆盖真实 UI 驱动路径** | [adr-2026-09-assertion-value-not-shape.md](adr/adr-2026-09-assertion-value-not-shape.md)；触发 E2E-F-97（PHQ-9 算分错误连续逃过 E2E-13/14 两次收口）+ E2E-F-91（描述恒空） |
 
 | 2026-09-22 | SenseVoice 模型服务的运行时约束与镜像分发 | 语音链路五个独立缺陷叠加（torch/funasr 漂移、VAD 请求期下载、无预热、healthcheck 假绿、runtime 缺 ffmpeg）+ 内存限额按旧 torch 估 → **torch/funasr 成对锁定 + 模型与 VAD 全烘焙 + 启动预热 + healthcheck 校验 model_loaded + runtime 含 ffmpeg + 限额按峰值 3072M + ACR 双层同 tag** | [adr-2026-09-sensevoice-runtime-constraints.md](adr/adr-2026-09-sensevoice-runtime-constraints.md)；账本 E2E-F-106/111/112；实测 /analyze 0.84s + 端到端 200 + IAB 语音气泡；**只有浏览器实测（真实 webm）才同时暴露五条** |
+| 2026-09-22 | 客户端对象 URL 的下发方式 | 存储 `PublicBaseURL` 绝对地址（`http://localhost:9000/...`）→ **网关相对路径 + BFF 反代 MinIO 流式输出** | [adr-2026-09-client-object-url-bff-proxy.md](adr/adr-2026-09-client-object-url-bff-proxy.md)；账本 E2E-F-113（非宿主视角 `<audio>` 永不可达）；存量 avatar/uploads 同型债 E2E-F-116 归 E2E-27 |
 
 ---
 

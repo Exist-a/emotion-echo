@@ -33,6 +33,9 @@ type StorageClient interface {
 	PutObject(ctx context.Context, objectKey string, reader io.Reader, size int64, contentType string) (publicURL string, err error)
 	// GetObjectURL 返 objectKey 的公开 URL（不含签名，依赖 bucket 设为 anonymous download）
 	GetObjectURL(objectKey string) string
+	// GetObject 流式读取对象（E2E-F-113 反代用）。返 rc + 真实 contentType + 字节数 size。
+	// audio handler 用它 io.Copy 到 Gin writer（避免暴露 minio PublicBaseURL 给浏览器）。
+	GetObject(ctx context.Context, objectKey string) (rc io.ReadCloser, contentType string, size int64, err error)
 	// RemoveObject 删除对象（头像更新场景用）
 	RemoveObject(ctx context.Context, objectKey string) error
 	// HealthCheck 连通性检查（启动期 + healthz 用）
@@ -109,6 +112,27 @@ func (m *MinIOClient) PutObject(ctx context.Context, objectKey string, reader io
 func (m *MinIOClient) GetObjectURL(objectKey string) string {
 	base := strings.TrimRight(m.cfg.PublicBaseURL, "/")
 	return fmt.Sprintf("%s/%s/%s", base, m.cfg.Bucket, objectKey)
+}
+
+// GetObject 流式读取对象（E2E-F-113 voice 反代用）。
+// 实现：先用 StatObject 拿真实 contentType / size（必要以让浏览器 <audio> seek），
+// 再 GetObject 拿流。两次 HTTP，但 StatObject 一次往返小（HEAD 即可），后续
+// audio handler io.Copy 到 Gin writer 时不阻塞。
+//
+// 错误语义：
+//   - MinIO 不存在该对象 ⇒ StatObject 返 404 类 err，向上传递；
+//     voice audio handler 据此返 404 而非 200 + 空 body（避免 <audio> readyState=0）。
+//   - 其他错误（如网络/权限）返 err，由 handler 决定 500。
+func (m *MinIOClient) GetObject(ctx context.Context, objectKey string) (io.ReadCloser, string, int64, error) {
+	info, err := m.client.StatObject(ctx, m.cfg.Bucket, objectKey, minio.StatObjectOptions{})
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("StatObject(%s): %w", objectKey, err)
+	}
+	obj, err := m.client.GetObject(ctx, m.cfg.Bucket, objectKey, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("GetObject(%s): %w", objectKey, err)
+	}
+	return obj, info.ContentType, info.Size, nil
 }
 
 // RemoveObject 删除对象
