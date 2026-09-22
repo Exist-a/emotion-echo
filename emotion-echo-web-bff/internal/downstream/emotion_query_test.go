@@ -5,12 +5,16 @@
 // 用 bufconn + 真 grpc.Server + fake EmotionQueryServiceServer，验证：
 //   - ByMessage / ByConversation 参数传递 + 响应解码
 //   - gRPC 错误（NotFound / InvalidArgument）→ error 透传
+//   - MultiModalAnalyze ctx deadline（E2E-F-115）— fake 记录最近一次 ctx.Deadline()，
+//     测试断言 BFF→ai-svc gRPC 调用带 30s deadline（防 SenseVoice 冷启动撞 5s 默认）
 package downstream
 
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
+	"time"
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/stretchr/testify/assert"
@@ -24,6 +28,44 @@ import (
 // fakeEmotionQuerySrv 实现 EmotionQueryServiceServer
 type fakeEmotionQuerySrv struct {
 	emotionquery.UnimplementedEmotionQueryServiceServer
+
+	// lastMultiModalDeadline 记录最近一次 MultiModalAnalyze 调用 ctx 的 deadline。
+	// E2E-F-115 测试断言 deadline 在 [now+25s, now+35s] 区间（即 30s）。
+	lastMultiModalDeadline time.Time
+	lastMultiModalMu       sync.Mutex
+}
+
+// MultiModalAnalyze 实现 fake —— 仅记录 ctx deadline + 返回最小响应。
+func (f *fakeEmotionQuerySrv) MultiModalAnalyze(ctx context.Context, _ *emotionquery.MultiModalAnalyzeRequest) (*emotionquery.MultiModalAnalyzeResponse, error) {
+	if dl, ok := ctx.Deadline(); ok {
+		f.lastMultiModalMu.Lock()
+		f.lastMultiModalDeadline = dl
+		f.lastMultiModalMu.Unlock()
+	}
+	return &emotionquery.MultiModalAnalyzeResponse{
+		Kind:          "image",
+		Emotion:       "neutral",
+		Confidence:    0.5,
+		SentimentScore: 0,
+		Model:         "fake-v1",
+	}, nil
+}
+
+// SynthesizeSpeech 实现 fake —— 记录 ctx deadline + 返回最小响应（E2E-F-115 测试用）。
+func (f *fakeEmotionQuerySrv) SynthesizeSpeech(ctx context.Context, _ *emotionquery.SynthesizeSpeechRequest) (*emotionquery.SynthesizeSpeechResponse, error) {
+	if dl, ok := ctx.Deadline(); ok {
+		f.lastMultiModalMu.Lock()
+		f.lastMultiModalDeadline = dl
+		f.lastMultiModalMu.Unlock()
+	}
+	return &emotionquery.SynthesizeSpeechResponse{
+		Audio:      "ZmFrZS13YXY=",
+		SampleRate: 24000,
+		Mime:       "audio/wav",
+		Bytes:      12,
+		Text:       "hi",
+		Language:   "zh-cn",
+	}, nil
 }
 
 func (f *fakeEmotionQuerySrv) GetEmotionByMessage(_ context.Context, req *emotionquery.GetEmotionByMessageRequest) (*emotionquery.Emotion, error) {
@@ -73,6 +115,27 @@ func startFakeGRPCServer(t *testing.T) *grpc.ClientConn {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 	return conn
+}
+
+// startFakeGRPCServerWithSrv 起 bufconn gRPC server 返回 conn + fake（让测试拿到 fake 实例断言副作用）。
+func startFakeGRPCServerWithSrv(t *testing.T) (*grpc.ClientConn, *fakeEmotionQuerySrv) {
+	t.Helper()
+	fake := &fakeEmotionQuerySrv{}
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	gs := grpc.NewServer()
+	emotionquery.RegisterEmotionQueryServiceServer(gs, fake)
+	go func() { _ = gs.Serve(lis) }()
+	t.Cleanup(gs.Stop)
+
+	conn, err := grpc.DialContext(context.Background(), lis.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn, fake
 }
 
 func TestEmotionQueryClient_ByMessage_Success(t *testing.T) {

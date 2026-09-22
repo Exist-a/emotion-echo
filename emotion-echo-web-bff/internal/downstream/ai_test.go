@@ -131,6 +131,18 @@ func TestAIClient_AIHealth_Success(t *testing.T) {
 	assert.Equal(t, "model not loaded", resp.XTTS.Error)
 }
 
+// TestNewAIHTTPClient_DefaultTimeoutIs30s 断言 TimeoutMs 未设时默认 30s。
+//
+// E2E-F-115：原 newAIHTTPClient 默认 5 * time.Second，dev 模式首次 SenseVoice 转写
+// （冷启动：ffmpeg 解码 + 首次张量分配 + 模型加载）≈5~15s，5s 必撞 504。
+// 修法：默认 30s —— 与 config AIService.TimeoutMs 默认值对齐（TestConfig_AIServiceDefaultTimeoutIs30s）。
+func TestNewAIHTTPClient_DefaultTimeoutIs30s(t *testing.T) {
+	c := NewAIClient(AIClientOptions{BaseURL: "http://unused:8891"}).(*aiHTTPClient)
+	require.NotNil(t, c)
+	assert.Equal(t, 30*time.Second, c.http.Timeout,
+		"newAIHTTPClient 默认 timeout 应为 30s（E2E-F-115：容纳 SenseVoice 冷启动转写）")
+}
+
 func TestAIClient_Upstream500_ReturnsError(t *testing.T) {
 	baseURL := mockAIHandler(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

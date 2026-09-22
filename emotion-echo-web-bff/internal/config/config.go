@@ -152,7 +152,10 @@ func SetDefaults(c *Config) {
 		c.AIService.GRPCAddr = "localhost:8892"
 	}
 	if c.AIService.TimeoutMs == 0 {
-		c.AIService.TimeoutMs = 5000
+		// E2E-F-115（2026-09-22）：原默认 5000ms（5s），dev 模式下首次 SenseVoice 转写
+		// （冷启动：ffmpeg 解码 + 首次张量分配）≈5~15s，5s 必撞 504 DeadlineExceeded。
+		// 改 30000ms（30s）—— 容纳冷启动，又给 image/short 留充足余量。
+		c.AIService.TimeoutMs = 30000
 	}
 	setHTTPServiceDefaults(&c.XTTS, "http://localhost:8003")
 	if c.XTTS.TimeoutMs == 0 {

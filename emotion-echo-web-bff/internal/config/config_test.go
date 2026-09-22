@@ -67,6 +67,18 @@ func TestConfig_YamlParsing_AIServiceGRPCAddr(t *testing.T) {
 	assert.Equal(t, "http://localhost:8891", c.AIService.HTTPAddr, "默认 HTTP 地址应为 localhost:8891")
 }
 
+// TestConfig_AIServiceDefaultTimeoutIs30s 断言 AIService.TimeoutMs 默认 30000。
+//
+// E2E-F-115（2026-09-22 用户浏览器实测）：dev 模式下首次语音 → /voice/upload → BFF→ai-svc 5s
+// DeadlineExceeded。原因 = ai.go:182 newAIHTTPClient 默认 5s + config.go:154-155 默认 5000。
+// SenseVoice 转写冷路径（ffmpeg 解码 + 首次张量分配）≈5~15s，5s 必撞 504。
+// 修法：默认 30000ms（30s）—— 既覆盖 ASR 冷启动、又给 image 留充足余量。
+func TestConfig_AIServiceDefaultTimeoutIs30s(t *testing.T) {
+	c := loadTestConfig(t)
+	assert.Equal(t, 30000, c.AIService.TimeoutMs,
+		"AIService.TimeoutMs 默认应为 30000ms（30s）以容纳 SenseVoice 冷启动转写（E2E-F-115）")
+}
+
 // TestConfig_ApplyEnvOverrides_OverridesDefaults T1.3 REFACTOR:
 // 容器 env 注入后应覆盖 yaml 默认值（指向容器 DNS）。
 func TestConfig_ApplyEnvOverrides_OverridesDefaults(t *testing.T) {

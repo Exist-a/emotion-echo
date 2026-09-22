@@ -71,9 +71,9 @@
           </svg>
         </button>
         <div class="spacer" />
-        <div class="voice-record-btn" :class="{ recording: isRecording }" @click="toggleRecording">
+        <div class="voice-record-btn" :class="{ recording: voiceRecorder.isRecording.value }" @click="toggleRecording">
           <svg
-            v-if="!isRecording"
+            v-if="!voiceRecorder.isRecording.value"
             viewBox="0 0 24 24"
             width="16"
             height="16"
@@ -89,7 +89,7 @@
             <line x1="12" y1="18" x2="12" y2="22" />
           </svg>
           <span v-else class="voice-center-dot" />
-          <span v-if="isRecording" class="voice-ring" />
+          <span v-if="voiceRecorder.isRecording.value" class="voice-ring" />
         </div>
         <button type="submit" class="send-btn" :disabled="!message.trim()" aria-label="发送">
           <svg
@@ -137,6 +137,7 @@ import { useUserStore } from '~/stores/user'
 import { useMessageStore } from '~/stores/message'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { useFaceEmotion } from '~/composables/useFaceEmotion'
+import { useVoiceRecorder } from '~/composables/useVoiceRecorder'
 import { post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { notify } from '~/composables/useNotify'
@@ -146,12 +147,28 @@ const messageStore = useMessageStore()
 const digitalHumanStore = useDigitalHumanStore()
 const userConfig = ref(userStore.getUserConfig())
 const message = ref('')
-const isRecording = ref(false)
 const conversationSender = useConversationSender()
 
 const digitalHumanVisible = ref(true)
 const cameraVideoRef = ref<HTMLVideoElement | null>(null)
 const faceEmotion = useFaceEmotion()
+
+// D-13（E2E-16 plan §A.5）：/new 页 voice-record-btn 接真实 useVoiceRecorder，
+// 与 /conversation/[id].vue 同模式 —— 录音→BFF /voice/upload→落库→触发 AI 回复。
+// 旧实现只 toggle isRecording 状态+toast，未真实录音上传（用户实测：录音后无任何反馈）。
+const voiceRecorder = useVoiceRecorder({
+  onUploadSuccess: (result) => {
+    const aiEmotion = result.emotion && result.emotion !== 'neutral' ? result.emotion : 'neutral'
+    const transcript = result.transcript || ''
+    // 把语音文本作为新会话首条消息（与 handleSubmit 一致路径：createNewConversation）
+    conversationSender.createNewConversation(transcript).then((r) => {
+      if (!r.isOk) notify('发送失败', r.msg, 'error')
+    }).catch((err) => notify('发送失败', err?.message || '', 'error'))
+  },
+  onUploadError: (err: string) => {
+    notify('语音上传失败', err || '语音上传失败', 'error')
+  },
+})
 
 const { playText, flushRemaining, stop } = useDigitalHumanTTS({
   onLipShapeChange: (shape) => digitalHumanStore.setLipShape(shape),
@@ -168,10 +185,15 @@ const handleSubmit = async () => {
   const value = message.value.trim()
   if (!value) return
   message.value = ''
+  // D-14（E2E-16）：face emotion 上下文（3 秒有效窗口，摄像头未开则 undefined 不污染 prompt）
+  const recentFace = faceEmotion.getRecentEmotion()
   // Stage 105 fix: 走 conversationSender.createNewConversation,
   // 内部按顺序: createConversation → navigateTo → switchSession → sendMessage + sendAIStream。
   // 旧实现只建会话不发言, sendMessage / SSE stream 链路被跳过, 用户在 /new 看不到 AI 回复。
-  const result = await conversationSender.createNewConversation(value)
+  const result = await conversationSender.createNewConversation(value, {
+    faceEmotion: recentFace?.emotion,
+    faceConfidence: recentFace?.confidence,
+  })
   if (!result.isOk) {
     notify('发送失败', result.msg, 'error')
   }
@@ -181,12 +203,15 @@ const handleAttachment = () => {
   notify('', '附件功能尚未实现', 'info')
 }
 
-const toggleRecording = () => {
-  isRecording.value = !isRecording.value
-  if (isRecording.value) {
-    notify('', '开始录音', 'info')
+const toggleRecording = async () => {
+  if (voiceRecorder.isRecording.value) {
+    voiceRecorder.stopRecording()
   } else {
-    notify('', '录音已停止', 'info')
+    try {
+      await voiceRecorder.startRecording()
+    } catch (err: any) {
+      notify('录音启动失败', err?.message || '请检查麦克风权限', 'error')
+    }
   }
 }
 
