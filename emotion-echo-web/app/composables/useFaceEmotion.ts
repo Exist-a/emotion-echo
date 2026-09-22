@@ -34,6 +34,11 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
    */
   const startCamera = async (videoRef: HTMLVideoElement) => {
     try {
+      // F-119 修：先校验 videoRef（IAB 实测撞 TypeError: Cannot set properties of null
+      // —— 因为 happy-dom / 旧 IAB 版本下 useFaceEmotion 调用方传 null 给 startCamera）
+      if (!videoRef) {
+        throw Object.assign(new Error('video element ref is null'), { name: 'TypeError' })
+      }
       videoElement = videoRef
 
       // 请求摄像头权限
@@ -45,6 +50,9 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
         },
       })
 
+      if (!stream) {
+        throw Object.assign(new Error('getUserMedia returned null'), { name: 'NotFoundError' })
+      }
       videoElement.srcObject = stream
       await videoElement.play()
 
@@ -82,6 +90,11 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
       if (name === 'NotReadableError' || name === 'TrackStartError') {
         // 设备被其他程序独占
         throw new Error('摄像头正被其他程序占用，请关闭视频会议/直播等软件后重试')
+      }
+      // F-119 修（IAB 实测撞 TypeError）：videoRef null 或 getUserMedia 返回 null
+      // 等"调用前置条件未就绪"类错误，给出可操作的指引
+      if (name === 'TypeError') {
+        throw new Error('摄像头组件未就绪，请刷新页面或稍后重试')
       }
       throw new Error(`摄像头开启失败：${error?.message || '未知错误'}`)
     }

@@ -59,4 +59,12 @@ describe('useFaceEmotion · F-119 摄像头错误分类契约', () => {
       expect(true, 'NotReadableError 未识别，跳过该断言').toBe(true)
     }
   })
+
+  // F-119 增（IAB 实测 2026-09-23 撞 TypeError: Cannot set properties of null setting srcObject）：
+  // 当 videoRef 参数为 null（happy-dom / 旧 IAB 版本 / 组件未挂载）时，startCamera
+  // 不应抛原始 JS TypeError，而应抛"组件未就绪"友好提示。
+  it('videoRef null / TypeError 分支给"组件未就绪"友好提示', () => {
+    expect(src, 'TypeError 分支必须出现（处理 videoRef null / getUserMedia 返回 null）').toMatch(/TypeError/)
+    expect(src, 'TypeError 分支必须含"组件未就绪"提示').toMatch(/组件未就绪/)
+  })
 })
