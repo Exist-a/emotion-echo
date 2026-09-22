@@ -25,6 +25,7 @@ function isExecutable(filePath) {
 const SCRIPT_DIR = __dirname;
 const SEED_SH = path.join(SCRIPT_DIR, 'seed.sh');
 const CONFIG_YAML = path.join(SCRIPT_DIR, 'config.yaml');
+const SERVICES_EXAMPLE = path.join(SCRIPT_DIR, 'services.env.example');
 
 function fail(msg) {
   console.error('  ✗ ' + msg);
@@ -165,6 +166,26 @@ const checks = [
     return ['file-logger log_format 最后一行不得以 "," 结尾 (Stage 106)',
       !lastLine.endsWith(',')];
   })(),
+
+  // === E2E-F-114 RED (2026-09-22): dev 栈 JWT/admin secret 一致性 ===
+  // 根因：HOST 直接跑 seed.sh 时环境无 BFF_JWT_SECRET，且 services.env.example
+  // 用 plain 赋值 source ⇒ 占位符覆盖一切（连显式 env / compose 注入的真值都会被
+  // 挪掉，正是"source .env.local 后重跑仍 401"的机制）⇒ consumer secret=占位符，
+  // BFF 用 deploy/.env.local 真值签发 ⇒ 所有挂 jwt-auth 路由 401。
+  ['E2E-F-114 seed.sh 自加载 ../.env.local 真值',
+    src.includes('../.env.local')],
+  ['E2E-F-114 加载时保留已有真值（env/services.env 优先于 .env.local）',
+    src.includes('_load_env_local') && src.includes('real_admin') && src.includes('real_jwt')],
+  ['E2E-F-114 JWT 仍是占位符时必须打 WARN（不许静默 401）',
+    /WARN:[^"]*jwt/i.test(src)],
+  ['E2E-F-114 services.env.example 用 ${VAR:-} 模式（plain 赋值会覆盖显式 env）',
+    (() => {
+      if (!fs.existsSync(SERVICES_EXAMPLE)) return false;
+      const ex = fs.readFileSync(SERVICES_EXAMPLE, 'utf8');
+      return ex.includes('${APISIX_ADMIN_KEY:-') &&
+             ex.includes('${BFF_JWT_SECRET:-') &&
+             ex.includes('${CORS_ALLOW_ORIGINS:-');
+    })()],
 ];
 
 let passCount = 0, failCount = 0;
