@@ -114,9 +114,18 @@ func (m *MultiModalAnalyzer) analyzeAudio(ctx context.Context, in MultiModalInpu
 			SentimentScore: avgFloat(sentimentFromEmotion(svRes.Emotion), fb.SentimentScore),
 			Confidence:     svRes.Confidence,
 			Model:          "sensevoice:" + svRes.Source,
+			Text:           svRes.Text, // E2E-F-104：转写文本随结果回传
 		}, nil
 	}
-	return m.Fallback.Analyze(ctx, svRes.Text)
+	// 音频情感不可用（空或 unk）→ 用转写文本走 fallback，但**保留转写文本**
+	fb, err := m.Fallback.Analyze(ctx, svRes.Text)
+	if err != nil {
+		return nil, err
+	}
+	if fb != nil {
+		fb.Text = svRes.Text
+	}
+	return fb, nil
 }
 
 // SynthesizeText 文本转语音（XTTS）。XTTS 未配置时返回 ErrNotConfigured

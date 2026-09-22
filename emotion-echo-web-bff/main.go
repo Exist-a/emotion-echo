@@ -395,8 +395,9 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	handler.NewMultimodalHandler(s.AI).Register(r)
 	handler.NewTTSHandler(s.AI, s.XTTS).Register(r)
 	handler.NewUploadHandler(s.Storage).Register(r)
-	// Sprint 1 PR-4c-1: voice upload (multipart → ai-svc multimodal kind=audio)
-	handler.NewVoiceHandler(s.AI).Register(r)
+	// Sprint 1 PR-4c-1 + D-11 (E2E-16): voice upload（multipart → ai-svc multimodal
+	// kind=audio → 音频落 MinIO voice/ 前缀 → 返回 audioUrl 使气泡可回放）
+	handler.NewVoiceHandler(s.AI).WithStorage(s.Storage).Register(r)
 	// Sprint 1 PR-4c-2: user avatar upload (multipart → MinIO → user-svc UpdateMe)
 	// 总是注册：handler 内部 nil 检查；缺 Storage 时 503
 	handler.NewAvatarHandler(s.User, s.Storage).Register(r)

@@ -153,13 +153,14 @@ func (h *UploadHandler) upload(c *gin.Context) {
 	}
 
 	// 7. 返 200 + 元信息
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "ok",
-		"url":     publicURL,
-		"kind":    kind,
-		"size":    fileHeader.Size,
-		"mime":    contentType,
+	// E2E-F-105：必须走 OK() 包装（错误分支本就用了 Fail）—— 前端 useApi 统一取
+	// data.data，裸顶层 gin.H 会让前端拿到 undefined ⇒ url 丢失 ⇒ 附件消息被
+	// chat-svc 以 content is required 拒绝（而 MinIO 里文件其实已写入）。
+	OK(c, gin.H{
+		"url":  publicURL,
+		"kind": kind,
+		"size": fileHeader.Size,
+		"mime": contentType,
 	})
 }
 

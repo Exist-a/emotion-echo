@@ -22,6 +22,10 @@ type EmotionResult struct {
 	SentimentScore float64 // -1.0 (负面) ~ 1.0 (正面)
 	Confidence     float64 // 0.0 ~ 1.0
 	Model          string  // 用于追溯使用了哪个模型
+	// Text 是音频路径的 ASR 转写文本（E2E-F-104），非音频路径为空。
+	// 调用方（logic 层）据此回填响应 transcript —— 历史上无此字段，
+	// 转写文本在 analyzer 内部即被丢弃，导致 /voice/upload 的 transcript 恒空。
+	Text string
 }
 
 // Analyzer 情绪分析接口
