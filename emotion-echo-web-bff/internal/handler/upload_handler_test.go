@@ -45,6 +45,12 @@ type fakeUploadStorage struct {
 	gotKey string
 	gotSize int64
 	gotCT   string
+	// E2E-F-113：GetObject mock 字段。fakeUploadStorage 原本只服务 upload 路径，
+	// voice 反代音频路径开始后也必须满足 storage.StorageClient 接口。
+	getObjBytes  []byte
+	getObjCT     string
+	getObjErr    error
+	gotGetObjKey string
 }
 
 func (f *fakeUploadStorage) PutObject(ctx context.Context, key string, r io.Reader, size int64, ct string) (string, error) {
@@ -56,7 +62,14 @@ func (f *fakeUploadStorage) PutObject(ctx context.Context, key string, r io.Read
 	}
 	return f.putURL, nil
 }
-func (f *fakeUploadStorage) GetObjectURL(key string) string                    { return "" }
+func (f *fakeUploadStorage) GetObjectURL(key string) string { return "" }
+func (f *fakeUploadStorage) GetObject(ctx context.Context, key string) (io.ReadCloser, string, int64, error) {
+	f.gotGetObjKey = key
+	if f.getObjErr != nil {
+		return nil, "", 0, f.getObjErr
+	}
+	return io.NopCloser(bytes.NewReader(f.getObjBytes)), f.getObjCT, int64(len(f.getObjBytes)), nil
+}
 func (f *fakeUploadStorage) RemoveObject(ctx context.Context, key string) error { return nil }
 func (f *fakeUploadStorage) HealthCheck(ctx context.Context) error             { return nil }
 

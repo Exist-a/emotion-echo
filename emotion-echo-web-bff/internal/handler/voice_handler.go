@@ -18,7 +18,10 @@ package handler
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/session"
@@ -28,6 +31,10 @@ import (
 )
 
 // VoiceHandler 语音上传（multipart → ai-svc multimodal kind=audio + 音频落 MinIO）
+//
+// 双路由：
+//   - POST /api/v1/voice/upload：录音 + 转写 + 落 MinIO（D-11）
+//   - GET  /api/v1/voice/audio/:key：反代 MinIO GetObject 流式输出（E2E-F-113）
 type VoiceHandler struct {
 	ai      downstream.AIClient
 	storage storageClient // 可选：D-11 起语音音频落到 MinIO（voice/ 前缀），nil = 503
@@ -44,9 +51,14 @@ func (h *VoiceHandler) WithStorage(storage storageClient) *VoiceHandler {
 	return h
 }
 
-// Register 注册路由：POST /api/v1/voice/upload
+// Register 注册路由：POST /api/v1/voice/upload + GET /api/v1/voice/audio/:filekey
+//
+// 设计要点：
+//   - :filekey 是**单段**路径（gin 路由限制），handler 内部补 "voice/" 前缀还原为 bucket 内完整 key
+//   - 不暴露 bucket prefix；不传 ""；不在 URL 里做对象探测（防御路径穿越）
 func (h *VoiceHandler) Register(r *gin.Engine) {
 	r.POST("/api/v1/voice/upload", h.upload)
+	r.GET("/api/v1/voice/audio/:filekey", h.audio)
 }
 
 // upload 处理 multipart 上传：conversationId + file → ai-svc → JSON 响应
@@ -109,7 +121,7 @@ func (h *VoiceHandler) upload(c *gin.Context) {
 		})
 		return
 	}
-	voiceKey := fmt.Sprintf("voice/%s-%s.webm", conversationID, uuid.NewString())
+	voiceKey := fmt.Sprintf("voice/%s.webm", uuid.NewString())
 	// file 已被 ai-svc 读过，可能指针已耗尽——重新打开
 	file2, err := fileHeader.Open()
 	if err != nil {
@@ -117,11 +129,20 @@ func (h *VoiceHandler) upload(c *gin.Context) {
 		return
 	}
 	defer file2.Close()
-	audioURL, err := h.storage.PutObject(authCtx, voiceKey, file2, fileHeader.Size, "audio/webm")
-	if err != nil {
+	if _, err := h.storage.PutObject(authCtx, voiceKey, file2, fileHeader.Size, "audio/webm"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "storage put: " + err.Error()})
 		return
 	}
+
+	// E2E-F-113：audioUrl 不再透传 storage.GetObjectURL（拼 http://localhost:9000…，
+	// 在非宿主机视角下 host 不可达，浏览器 <audio> 永远拉不到 metadata）。
+	// audioUrl = "/api/v1/voice/audio/<filekey>"（filekey 是 voiceKey 去掉 "voice/" 前缀），
+	// 前端 getFullAudioUrl 自动拼 apiBase → 走 APISIX → BFF audio handler →
+	// handler 内部补 "voice/" 前缀还原为 bucket 内完整 key → 反代 MinIO GetObject。
+	// 所有环境（本地宿主 / 远程协作 / 生产部署）走同一路径，无需 PublicBaseURL 切换。
+	const voicePrefix = "voice/"
+	fileKey := strings.TrimPrefix(voiceKey, voicePrefix)
+	audioPath := "/api/v1/voice/audio/" + fileKey
 
 	// E2E-F-103：必须走 OK() 包装 —— 前端 useApi 统一取 data.data，
 	// 裸顶层 gin.H 会让前端拿到 undefined（录音后整条链路静默无反馈）。
@@ -129,9 +150,70 @@ func (h *VoiceHandler) upload(c *gin.Context) {
 		"messageId":      uuid.NewString(), // 临时 ID；后续 chat-svc 持久化后替换
 		"transcript":     resp.Transcript,
 		"emotion":        resp.Emotion,
-		"audioUrl":       audioURL, // D-11：语音气泡可回放的 URL
+		"audioUrl":       audioPath, // D-11：语音气泡可回放的 URL；E2E-F-113 改内部反代路径
 		"conversationId": conversationID,
 	})
+}
+
+// audio GET /api/v1/voice/audio/:filekey —— 反代 MinIO GetObject 流式输出。
+//
+// 设计要点（E2E-F-113）：
+//   - :filekey 是单段（gin 路由限制），handler 内部补 "voice/" 前缀还原为 bucket 内完整 key
+//   - 防御性：拒含 /、含 ..、空 filekey（防 path traversal；audio 是 GET 公开端点）
+//     —— gin 路由层在缺 filekey/路径段含 / 时直接返 404；本 handler 兜底防"路径合法但 key 异常"
+//   - storage 未配置 ⇒ 503（与 upload 一致语义："语音看似成功但回放空白"的不可见失败）
+//   - 对象不存在 ⇒ 404 而非 200 返空 body（避免浏览器 <audio> readyState=0 隐性失败）
+//   - Content-Type 与 Content-Length 必须真实（前端 <audio> 才能 seek / 显示时长）
+//   - 鉴权：与 upload 一致由 APISIX jwt-auth 完成（route 100 catch-all），BFF 不重复
+func (h *VoiceHandler) audio(c *gin.Context) {
+	fileKey := c.Param("filekey")
+	if fileKey == "" || strings.Contains(fileKey, "/") || strings.Contains(fileKey, "..") {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "invalid key"})
+		return
+	}
+	if h.storage == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "object storage not configured"})
+		return
+	}
+
+	// 还原为 bucket 内完整 key
+	objectKey := "voice/" + fileKey
+	rc, contentType, size, err := h.storage.GetObject(c.Request.Context(), objectKey)
+	if err != nil {
+		// MinIO 不存在对象 ⇒ StatObject 返 err 含 "NoSuchKey"/"Not Found"；按 404 处理
+		// （不返 200 + 空 body，否则浏览器 <audio> readyState=0 时静默无报错）
+		if isStorageNotFoundErr(err) {
+			c.JSON(http.StatusNotFound, gin.H{"code": 1, "message": "audio not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "storage get: " + err.Error()})
+		return
+	}
+	defer rc.Close()
+
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Length", strconv.FormatInt(size, 10))
+	c.Status(http.StatusOK)
+	if _, copyErr := io.Copy(c.Writer, rc); copyErr != nil {
+		// 连接中途断开无法回滚已发 header，仅写日志；handler 返回后 status 不会更改
+		// （Gin 默认不二次写状态码）
+		c.Error(copyErr)
+		return
+	}
+}
+
+// isStorageNotFoundErr 判 MinIO 不存在对象的错误（上层 GetObject 包装）
+func isStorageNotFoundErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, hint := range []string{"nosuchkey", "no such key", "not found"} {
+		if strings.Contains(msg, hint) {
+			return true
+		}
+	}
+	return false
 }
 
 // isConnectionErr 简单判断网络/连接类错误（ai-svc 不可达）

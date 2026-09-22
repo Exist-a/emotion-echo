@@ -121,6 +121,11 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/   # 期望 200 或
 | uv `workers: 1` | 用例串行，慢是正常的 | 不要为提速改成并行 |
 | dev 覆盖项与 prod 不同 | `BFF_DEV_RETURN_CODE=1`、`BFF_TRUST_APISIX=true`、CORS localhost | **在 report.md 明确声明"本阶段验证的是 dev 配置"**，prod 差异归 E2E-25/29 |
 | 验证码回显 | dev 下验证码直接出现在响应里 | 测试点若断言"验证码不可见"，须标注为"prod 语义，dev 无法验证" |
+| **Docker 重启后端口转发不重注册**（2026-09-22 E2E-16 实测） | Docker Desktop 重启后 `localhost:3000 / 19080 / 8848` 全返 `000`，但容器内部 healthy、容器网络互访正常 | **不必重启 Docker Desktop** —— `docker restart emotion-echo-web emotion-echo-apisix emotion-echo-nacos` 即可恢复宿主端口 |
+| **重建任何服务后必须重跑 `apisix-seed` + 重启 BFF**（E2E-16 同型，E2E-F-107） | APISIX upstream 节点是 seed 时解析的**静态列表**；BFF 的 gRPC 连接在 Nacos 上取一次就缓存 | `docker compose ... run --rm --no-deps emotion-echo-apisix-seed && docker compose ... restart emotion-echo-web-bff` |
+| **MinIO `localhost:9000` 在 web 容器里不通**（E2E-F-113） | audioUrl 用绝对路径 `http://localhost:9000/...`，宿主的 9000 转发**仅对宿主浏览器生效**；web 容器内 `localhost` 是容器自己（连端口都没有）⇒ `<audio>` 拉不到 metadata | audioUrl 改成 BFF 反代 `/api/v1/voice/audio/:filename`；或 audioUrl 用容器内部 `emotion-echo-minio:9000`（仅 web 容器内生效） |
+
+> **为何这些坑反复出现**：上表中三类坑都是"在 docker 跨视角（宿主 vs 容器 vs web 容器 vs 浏览器）下 host/网络语义不同"导致的——之前 plan §5 测试点只断言"URL 字符串相等"，**没断言"在发起者视角 host 可达"**（E2E-F-113 同型"断言全绿 ≠ 功能可用"）。**下一轮修 D-11 时必须把"发起者视角可达"作为强断言**（见 `stages/e2e-16-multimodal/plan.md` §5 测试点 2/3/4a 的加重条款）。
 
 ---
 

@@ -56,6 +56,9 @@ var wantRoutes = gin.RoutesInfo{
 	{Method: "POST", Path: "/api/v1/ai/stream"},
 	{Method: "GET", Path: "/api/v1/ai/health"},  // Sprint F2（2026-09-11）
 
+	// ----- voice_handler.go 多 1 条（E2E-F-113 反代）-----
+	{Method: "GET", Path: "/api/v1/voice/audio/:filekey"},  // E2E-F-113：音频反代
+
 	// ----- user_handler.go (4 条) -----
 	{Method: "GET", Path: "/api/v1/user/profile"},
 	{Method: "GET", Path: "/api/v1/users/me"},
