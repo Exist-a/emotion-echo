@@ -1,5 +1,19 @@
-torch==1.13.1+cpu
-funasr>=1.1.2
+# SenseVoice minimal requirements (Stage 25-B + E2E-F-106 修复)
+#
+# 设计原则：torch + funasr 必须锁版本且 ABI 兼容，否则镜像会在每次
+# /analyze 请求后崩溃重启（funasr 1.4.x 自查 torch≥2.1，funasr 1.1.x 与 torch 1.13 ABI 兼容）。
+# 教训（E2E-F-106）：原 `torch==1.13.1+cpu` + `funasr>=1.1.2` 不锁上界 ⇒ pip 从 aliyun
+# 拉到 funasr 1.4.15 ⇒ 启动时 funasr 自报 "Disabling PyTorch because PyTorch >= 2.1 is required"
+# + "Models won't be available" ⇒ 容器每次 /analyze 都重启 ⇒ 整条 ASR 链路不可用。
+#
+# 修复：torch 与 funasr 都 pin 到 wheel 里的实际版本，并使两者 ABI 兼容。
+# 后续升级路径：先升 torch（要求 funasr 也升）→ 再升 funasr；不允许只升一方。
+#
+# 不锁上界会让 funasr 跟着 pypi 最新版本走；那会让镜像构建变成不可重现（再次
+# 触发 E2E-F-106）。**锁版本 + 锁 wheel** 才能保证复现。
+
+torch==2.1.0+cpu
+funasr==1.4.15
 # funasr 特征提取需要 fbank 后端：torchaudio 或 kaldi-native-fbank 二选一。
 # 选后者（~1MB wheel），避免再引入 torchaudio 及其与 torch 的版本绑定。
 kaldi-native-fbank>=1.18
