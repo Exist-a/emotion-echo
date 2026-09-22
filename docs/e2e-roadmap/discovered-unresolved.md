@@ -2,7 +2,7 @@
 status: active
 priority: high
 created: 2026-09-17
-last-refresh: 2026-09-20 (E2E-F-24 已解决；E2E-F-82 已解决；总 90 项)
+last-refresh: 2026-09-22 (E2E-16 全面修复轮：F-115/117/119/D-13/D-14 当轮闭环；总 119 → 122 项)
 type: e2e-discovered-unresolved-ledger
 ---
 
@@ -213,3 +213,20 @@ type: e2e-discovered-unresolved-ledger
 | 浏览器兼容 | 折入 E2E-04（补 browserslist + firefox 可选 project） |
 | 配置与密钥 | 拆入：digest 假绿→E2E-05；Nacos→E2E-23；JWT 轮换→E2E-29 |
 | i18n | 登记为 **D-04 候选**（E2E-F-29），不列阶段 |
+
+### I. E2E-16 全面修复轮（2026-09-22，PR #64，E2E-F-120~122 + 关闭 4 项）
+
+> 触发：上个会话（用户第二轮复测）按用户指示**只记账不修**，本会话把该限制解除，按用户指示"全面修"——5 项修复 + 9 个新契约测试一次落地。**详细改动见 PR #64 commit f54f4f5 + a7a9eca**。
+
+| 编号 | 来源 | 现象 | 根因 | 归属 | 状态 |
+|------|------|------|------|------|------|
+| E2E-F-120 | E2E-16 修复轮 | **D-13 /new 页多模态入口补齐**：plan §A.5 + roadmap §52 要求。`pages/chat/conversation/new.vue` 原 voice-record-btn 是 stub（`toggleRecording` 只 toggle `isRecording` ref + toast），与 `/conversation/[id].vue` 的真实 `useVoiceRecorder` 接线不一致 → 新会话首条语音**静默不录音** | 原实现缺 `import { useVoiceRecorder }`、`voiceRecorder.startRecording()/stopRecording()` 调用、模板 `:class` 仍绑局部 `isRecording` 而非 `voiceRecorder.isRecording.value` | **E2E-16** | ✅ **已解决**（2026-09-22，PR #64 commit f54f4f5）：new.vue 接 `useVoiceRecorder({ onUploadSuccess: createNewConversation(transcript), onUploadError: notify })`、模板绑定 + try/catch；[id].vue:297 `window.alert` → `notify`（与 F-119 错误分类联动）。回归钉 5 项：`new.d13.test.ts`（4 项 import/start/stop/template 契约）+ `a12-camera-notify.architecture.test.ts`（1 项 toggleCamera 内 notify 存在/无 window.alert( 调用） |
+| E2E-F-121 | E2E-16 修复轮 | **D-14 融合结果注入 system prompt**：plan §B.10 + roadmap §52 要求。face/voice 情绪上下文**从未拼到 prompt**——`aiStreamReq.Emotion` 字段虽有但 `buildSystemPrompt` 从未消费；多模态采集结果不参与情绪计算 | 原实现 `buildSystemPrompt` 只拼 `baseSystemPrompt` + （可选）personality 段；前端 `/ai/stream` 请求体无 face/voice emotion 字段 | **E2E-16** | ✅ **已解决**（2026-09-22，PR #64 commit a7a9eca）：后端 `aiStreamReq` 加 `FaceEmotion/FaceConfidence/VoiceEmotion/VoiceConfidence` 字段 + `buildSystemPromptWithEmotion(face, voice)` 新方法 + `buildEmotionContext` 中性句式"对方此刻神情看起来X，对方语气听起来Y。请让回应贴合对方此刻的状态。" + `emotionChineseLabel` 中英映射（happy→愉快 / sad→低落 / angry→烦躁 / anxious→不安 / neutral→平静）+ **三句护栏**（不点破来源：禁出现摄像头/识别/分析/检测/设备/传感器/面部识别；不贴标签：禁"你很X"式直接称呼；不过火：情绪描述保持中性、简短）。前端 `AIStreamParams` 加 `faceEmotion?/faceConfidence?/voiceConfidence?` + `useConversationSender` + `createNewConversation` 透传 + `/[id].vue` + `/new.vue` handleSubmit 取 `faceEmotion.getRecentEmotion()`（3 秒有效窗口）。无情绪上下文时返回与 base 逐字相同（不污染）。回归钉 9 项：`d14_emotion_context_test.go`（4 项 JSON round-trip / 中文标签出现 / 与 base 逐字相同 / 护栏关键词）+ `d14-ai-stream-emotion-fields.architecture.test.ts`（5 项字段 + sender 透传）。**留账 E2E-F-122**（emotionSource 高级模式） |
+| E2E-F-122 | E2E-16 修复轮 | **D-14 emotionSource 高级模式未做**：本轮最小修法 = 用前端 payload 自带 emotion（faceEmotion.getRecentEmotion()）。**emotionSource 接口（镜像 personalitySource 模式，从 DB 查最近情绪历史 + 引入 AIStreamDeps.Emotion）属独立轮次**。当前限制：① 摄像头关闭 / 用户拒绝权限时 emotion 上下文为空 → AI 不感知用户情绪；② AI 不知道该用户**历史**情绪模式（只能感知**当前会话**最近 3 秒内） | `ai_stream_handler.go` 当前只接 personalitySource，缺 emotionSource 接口与 `AIStreamDeps.Emotion` 字段；情绪历史查询需新加 repository（assessment-svc / emotion_analysis 表） | **E2E-16（独立轮次）** | 🟡 **待修**（不阻塞 E2E-16 done：本轮 emotion context 注入完成即满足 plan §B.10 当前最低要求；emotionSource 是增强项） |
+| E2E-F-115 | E2E-16 用户首拍 | **BFF→ai-svc 5s DeadlineExceeded（首语音必撞）** | 同 H 段 | **E2E-16** | ✅ **已解决**（2026-09-22，PR #64 commit f54f4f5）：HTTP 路径（`ai.go:182`）+ gRPC 路径（`ai_grpc.go` 新增 `aiGRPCDefaultDeadline=30s` + 3 RPC 加 `ctx WithTimeout`）+ config 默认（`config.go:154` + `etc/web-bff.yaml:57`）三处统一抬到 30s。回归钉 4 项：`TestConfig_AIServiceDefaultTimeoutIs30s` + `TestNewAIHTTPClient_DefaultTimeoutIs30s` + `TestAIGRPCClient_MultiModalAnalyze_Has30sDeadline`（bufconn fake 记录 ctx.Deadline）+ `TestAIGRPCClient_SynthesizeSpeech_Has30sDeadline` |
+| E2E-F-117 | E2E-16 用户复测 | **语音气泡 transcript 槽渲染 URL + 时长 0:00** | 同 H 段 | **E2E-16** | ✅ **已解决**（2026-09-22，PR #64 commit f54f4f5）：`VoiceMessage.vue` 加 `isUrlTranscript` computed（startsWith http/https//api → URL 时隐藏 transcript 槽）+ `actualDuration` ref + `onLoadedMetadata` 事件恢复真实时长（DB 无 audioDuration 字段的兜底）。回归钉 4 项字面量契约（URL 识别 / loadedmetadata 监听 / v-if 守卫 / actualDuration） |
+| E2E-F-119 | E2E-16 用户复测 | **useFaceEmotion 摄像头错误笼统提示** | 同 H 段 | **E2E-16** | ✅ **已解决**（2026-09-22，PR #64 commit f54f4f5）：`useFaceEmotion.startCamera` catch 块按 `error.name` 分支：NotAllowedError/SecurityError → "摄像头权限被拒绝，请在浏览器地址栏左侧锁形图标中放行"；NotFoundError/OverconstrainedError → "未找到可用的摄像头设备"；NotReadableError/TrackStartError → "摄像头正被其他程序占用"。回归钉 4 项字面量契约（≥2 类识别 / NotAllowedError 含'权限' / NotFoundError 含'未找到' / NotReadableError 含'占用'）。**注**：摄像头权限本身仍需用户在浏览器/OS 侧放行（本条目修的是"用户能看明白为什么失败"，不是修权限层） |
+
+**累计编号至此 122 项**（E2E-F-120~122 为本段新增 3 项：2 项已闭环 + 1 项留账 D-14 emotionSource 高级模式；E2E-F-115/117/119 当轮关闭）。
+
+**PR #64 状态**：已开，2 commits pushed 到 fix 分支（`fix/e2e-16-full-multimodal-fix`），23 项 required status checks 状态 pending — GitHub runner 临时延迟或权限问题（4 workflow 均已配 `pull_request: branches: [main]` trigger，trigger 配置无误）。**合并策略**：① 等 GitHub 端自动恢复（runner 排队超时通常 5-10 分钟）；② 若持续不启动，下一轮单独开 PR 排查 CI trigger；③ 临时 admin override（需仓库管理员在网页端操作）。本会话核心交付已完成（5 修复 + 9 测试 + 本地全绿 + typecheck + go vet/build 干净）。
