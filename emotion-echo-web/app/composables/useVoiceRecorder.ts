@@ -121,7 +121,11 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   const stopRecording = () => {
     if (!isRecording.value) return
 
-    isStopped = true
+    // E2E-F-110：**不要**在这里置 isStopped —— 该标志的语义是"onstop 已处理过一次"
+    // （防重复上传），只在 onstop 回调和 onUnmounted 里置位。
+    // 历史 bug：此处先置 isStopped = true，而 onstop 首行是 `if (isStopped) return`
+    // ⇒ 上传路径永不执行（且 ondataavailable 的 `if (!isStopped ...)` 连最后一块音频
+    // 也丢掉）⇒ 用户点"录音→停止"后**完全静默、无请求**。
     isRecording.value = false
 
     clearTimer()
