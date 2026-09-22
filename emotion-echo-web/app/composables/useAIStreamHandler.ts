@@ -19,6 +19,11 @@ export interface AIStreamParams {
   clientMsgId?: string
   shouldGenerateTitle?: boolean
   voiceEmotion?: string
+  // D-14（E2E-16 plan §B.10）：face/voice 情绪上下文（前端从 useFaceEmotion / useVoiceRecorder
+  // 携带最近一次结果，BFF buildSystemPromptWithEmotion 据此拼情绪上下文段）
+  faceEmotion?: string
+  faceConfidence?: number
+  voiceConfidence?: number
 }
 
 export interface AIStreamCallbacks {

@@ -86,6 +86,71 @@ func (h *AIStreamHandler) buildSystemPrompt(ctx context.Context) string {
 	return baseSystemPrompt + "\n\n" + guide
 }
 
+// buildSystemPromptWithEmotion 组装 system prompt：基础人设 + （可选）人格段 + （可选）情绪上下文段。
+//
+// D-14（E2E-16 plan §B.10）：前端携带 face / voice 情绪上下文（faceEmotion/voiceEmotion），
+// 拼到 system prompt 让 AI 回复贴合用户当前状态。
+// 三句护栏（与 E2E-F-95 人格画像同款约束）：
+//   - 不点破来源（不出现"摄像头/识别/分析/检测/设备/传感器/面部识别"）
+//   - 不贴标签（不当面称呼"你很happy"等）
+//   - 不过火（情绪描述保持中性、简短）
+// 无情绪上下文时 emotionSeg 为空 → 返回与原 buildSystemPrompt 逐字相同（不污染）。
+func (h *AIStreamHandler) buildSystemPromptWithEmotion(
+	ctx context.Context,
+	faceEmotion string, faceConfidence float64,
+	voiceEmotion string, voiceConfidence float64,
+) string {
+	base := h.buildSystemPrompt(ctx)
+	emotionSeg := buildEmotionContext(faceEmotion, faceConfidence, voiceEmotion, voiceConfidence)
+	if emotionSeg == "" {
+		return base
+	}
+	return base + "\n\n" + emotionSeg
+}
+
+// buildEmotionContext 拼"情绪上下文"段（face/voice 任一非空时返回非空字符串）。
+//
+// 句式："对方此刻神情看起来X，对方语气听起来Y。请让回应贴合对方此刻的状态。"
+// 中文情绪映射：happy→愉快、sad→低落、angry→烦躁、anxious→不安、neutral→平静、其他→原样保留。
+func buildEmotionContext(faceEmotion string, _ float64, voiceEmotion string, _ float64) string {
+	if faceEmotion == "" && voiceEmotion == "" {
+		return ""
+	}
+	var parts []string
+	if faceEmotion != "" {
+		parts = append(parts, "对方此刻神情看起来"+emotionChineseLabel(faceEmotion))
+	}
+	if voiceEmotion != "" {
+		parts = append(parts, "对方语气听起来"+emotionChineseLabel(voiceEmotion))
+	}
+	return "情绪上下文：" + strings.Join(parts, "，") + "。请让回应贴合对方此刻的状态。"
+}
+
+// emotionChineseLabel 把英文情绪标签映射为中文（避免在 prompt 里出现英文枚举值）。
+func emotionChineseLabel(emotion string) string {
+	switch emotion {
+	case "happy":
+		return "愉快"
+	case "sad":
+		return "低落"
+	case "angry":
+		return "烦躁"
+	case "anxious":
+		return "不安"
+	case "neutral":
+		return "平静"
+	case "surprise":
+		return "惊讶"
+	case "fear":
+		return "紧张"
+	case "disgust":
+		return "不适"
+	default:
+		// 未知情绪 → 原样返回（不会泄漏系统术语）
+		return emotion
+	}
+}
+
 // AIStreamHandler 是 /api/v1/ai/stream 的处理逻辑
 type AIStreamHandler struct {
 	cfg config.Config
@@ -213,16 +278,25 @@ func (h *AIStreamHandler) collectFileAttachments(ctx context.Context, conversati
 // aiStreamReq 兼容两种前端请求格式：
 //  1. OpenAI 兼容（useAIStream.ts）：{"model","messages":[{"role","content"}],"stream"}
 //  2. 发消息流程（useConversationSender）：{"message","emotion","conversationId"}
+//
+// D-14（E2E-16 plan §B.10）：新增 FaceEmotion / FaceConfidence / VoiceEmotion / VoiceConfidence
+// —— 前端从 useFaceEmotion / useVoiceRecorder 取出最近一次结果随请求带上，由 BFF 拼入
+// system prompt，让 AI 回复贴合用户当前情绪状态。
 type aiStreamReq struct {
 	Model    string `json:"model"`
 	Messages []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"messages"`
-	Stream         bool   `json:"stream"`
-	Message        string `json:"message"`
-	Emotion        string `json:"emotion"`
-	ConversationID string `json:"conversationId"`
+	Stream         bool    `json:"stream"`
+	Message        string  `json:"message"`
+	Emotion        string  `json:"emotion"`
+	ConversationID string  `json:"conversationId"`
+	// D-14：face/voice 情绪上下文（前端从 useFaceEmotion / useVoiceRecorder 携带）
+	FaceEmotion    string  `json:"faceEmotion"`
+	FaceConfidence float64 `json:"faceConfidence"`
+	VoiceEmotion   string  `json:"voiceEmotion"`
+	VoiceConfidence float64 `json:"voiceConfidence"`
 }
 
 // ServeHTTP 处理 AI 对话流式回复
@@ -280,7 +354,11 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 	// 既有 Phase D HTTP 直连 / mock。
 	if h.llm != nil {
 		llmMessages := []downstream.Message{
-			{Role: "system", Content: h.buildSystemPrompt(session.WithRequestAuth(c))},
+			{Role: "system", Content: h.buildSystemPromptWithEmotion(
+				session.WithRequestAuth(c),
+				req.FaceEmotion, req.FaceConfidence,
+				req.VoiceEmotion, req.VoiceConfidence,
+			)},
 			{Role: "user", Content: userContent},
 		}
 		ctx, cancel := context.WithCancel(c.Request.Context())
@@ -338,7 +416,11 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 	// Phase D：APIKey 非空时调真实 LLM（DeepSeek / OpenAI 兼容）
 	if h.cfg.LLM.APIKey != "" {
 		llmMessages := []downstream.Message{
-			{Role: "system", Content: h.buildSystemPrompt(session.WithRequestAuth(c))},
+			{Role: "system", Content: h.buildSystemPromptWithEmotion(
+				session.WithRequestAuth(c),
+				req.FaceEmotion, req.FaceConfidence,
+				req.VoiceEmotion, req.VoiceConfidence,
+			)},
 			{Role: "user", Content: userContent},
 		}
 		llmReq := downstream.LLMChatReq{
