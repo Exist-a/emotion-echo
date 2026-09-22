@@ -304,14 +304,18 @@ const voiceRecorder = useVoiceRecorder({
   onRecordingStop: () => {},
   onUploadSuccess: (result) => {
     const aiEmotion = result.emotion && result.emotion !== 'neutral' ? result.emotion : 'neutral'
-    handleVoiceStreamResponse(result.transcript || '', aiEmotion)
+    handleVoiceStreamResponse(result.transcript || '', aiEmotion, result.userMessageId)
   },
   onUploadError: (error) => {
     window.alert(`语音上传失败：${error}`)
   },
 })
 
-const handleVoiceStreamResponse = async (transcript: string, voiceEmotion: string) => {
+const handleVoiceStreamResponse = async (
+  transcript: string,
+  voiceEmotion: string,
+  userMessageId?: string,
+) => {
   conversationSender.stopTTS()
   await conversationSender.sendToExistingConversation(
     conversationIdRef.value,
@@ -326,7 +330,14 @@ const handleVoiceStreamResponse = async (transcript: string, voiceEmotion: strin
         window.alert(`AI 回复失败：${error}`)
       },
     },
-    { shouldGenerateTitle: false, voiceEmotion, skipUserMessage: true },
+    {
+      shouldGenerateTitle: false,
+      voiceEmotion,
+      // 语音消息已由 useVoiceRecorder 真落库（测试点 #5）——跳过二次写入，
+      // 但把服务端真实 id 带给 ai/stream 绑定（face/融合按 message_id 取行）。
+      skipUserMessage: true,
+      userMessageId,
+    },
   )
 }
 

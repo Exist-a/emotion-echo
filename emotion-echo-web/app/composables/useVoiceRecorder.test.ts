@@ -14,6 +14,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
  */
 
 const postMock = vi.fn()
+const sendMessageMock = vi.fn()
 
 vi.mock('~/composables/useApi', () => ({
   post: (...args: unknown[]) => postMock(...args),
@@ -25,6 +26,7 @@ vi.mock('~/stores/message', () => ({
     currentSessionId: '277',
     currentMessages: [] as unknown[],
     switchSession: vi.fn(async () => {}),
+    sendMessage: (...args: unknown[]) => sendMessageMock(...args),
   }),
 }))
 
@@ -87,6 +89,12 @@ describe('useVoiceRecorder（E2E-F-110）', () => {
       emotion: 'happy',
       audioUrl: 'http://minio/voice/x.webm',
     })
+    sendMessageMock.mockReset()
+    sendMessageMock.mockResolvedValue({
+      isOk: true,
+      msg: 'ok',
+      data: { id: 'srv-42', clientMsgId: 'any', contentType: 'audio', content: 'http://minio/voice/x.webm' },
+    })
     installBrowserStubs()
   })
 
@@ -130,5 +138,65 @@ describe('useVoiceRecorder（E2E-F-110）', () => {
     expect(onUploadSuccess).toHaveBeenCalledTimes(1)
     const successCall = onUploadSuccess.mock.calls[0]!
     expect(successCall[0]).toMatchObject({ transcript: '我太开心了' })
+  })
+
+  // ==== 语音消息落库（E2E-16 plan §2.A.4 / 测试点 #5，2026-09-22 用户实测钉出）====
+  // 缺陷：录音成功后只 messageStore.currentMessages.push 本地内存行 + ai/stream 走
+  // skipUserMessage=true ⇒ **DB 无 user 行，刷新即丢**（用户实测复现：刷新后语音气泡
+  // 消失、只剩 AI 回复）。后端能力早已就绪（SendMessageReq.ContentType/FileName，
+  // chat-svc sendmessagelogic 全套），缺的只是前端这一下真 POST。
+  it('上传成功后必须真落库：messageStore.sendMessage(content=audioUrl, contentType=audio)', async () => {
+    const { useVoiceRecorder } = await import('./useVoiceRecorder')
+    const rec = useVoiceRecorder({ conversationId: '277' })
+
+    await rec.startRecording()
+    rec.stopRecording()
+    await Promise.resolve()
+    await Promise.resolve()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(sendMessageMock, '语音上传成功后必须调 messageStore.sendMessage 真落库').toHaveBeenCalledTimes(1)
+    const [content, emotionTag, clientMsgId, contentType, fileName] = sendMessageMock.mock.calls[0]!
+    // content 必须是音频 URL（刷新后 loadMoreMessages 用 content→audioUrl 映射还原气泡）
+    expect(content).toBe('http://minio/voice/x.webm')
+    expect(contentType, 'contentType 必须为 audio（DB content_type=audio，测试点 #5）').toBe('audio')
+    expect(typeof clientMsgId).toBe('string')
+    expect((clientMsgId as string).length, 'clientMsgId 必须生成（幂等键）').toBeGreaterThan(0)
+    // fileName = 原始文件名（Stage 89 语义）
+    expect(fileName).toBe('recording.webm')
+  })
+
+  it('onUploadSuccess 必须带 userMessageId（服务端真实 id，ai/stream/融合按它绑定）', async () => {
+    const { useVoiceRecorder } = await import('./useVoiceRecorder')
+    const onUploadSuccess = vi.fn()
+    const rec = useVoiceRecorder({ conversationId: '277', onUploadSuccess })
+
+    await rec.startRecording()
+    rec.stopRecording()
+    await Promise.resolve()
+    await Promise.resolve()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(onUploadSuccess).toHaveBeenCalledTimes(1)
+    const payload = onUploadSuccess.mock.calls[0]![0] as any
+    expect(payload.userMessageId, 'userMessageId 必须 = 落库返回的服务端 id').toBe('srv-42')
+  })
+
+  it('落库失败时降级：仍推本地行 + 回调继续（不吞掉语音消息）', async () => {
+    sendMessageMock.mockResolvedValue({ isOk: false, msg: 'db down' })
+    const { useVoiceRecorder } = await import('./useVoiceRecorder')
+    const onUploadSuccess = vi.fn()
+    const rec = useVoiceRecorder({ conversationId: '277', onUploadSuccess })
+
+    await rec.startRecording()
+    rec.stopRecording()
+    await Promise.resolve()
+    await Promise.resolve()
+    await new Promise((r) => setTimeout(r, 0))
+
+    // 回调仍要带 userMessageId（降级为上传返回的临时 messageId），AI 链路不中断
+    expect(onUploadSuccess).toHaveBeenCalledTimes(1)
+    const payload = onUploadSuccess.mock.calls[0]![0] as any
+    expect(payload.userMessageId).toBe('m-1')
   })
 })

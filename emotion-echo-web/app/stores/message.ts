@@ -55,7 +55,17 @@ export const useMessageStore = defineStore('message', () => {
 
       if (data.list.length > 0) {
         const existingIds = new Set(currentMessages.value.map((m) => m.id))
-        const newMessages = data.list.filter((m) => !existingIds.has(m.id))
+        const newMessages = data.list
+          .filter((m) => !existingIds.has(m.id))
+          // 语音消息落库映射（E2E-16 测试点 #5，2026-09-22 用户实测钉出）：
+          // 后端行 content=音频URL、无 audioUrl 字段，而气泡渲染条件是 item.audioUrl
+          // （[id].vue v-if）—— 不映射的话即使落库成功，刷新后语音气泡照样消失。
+          .map((m) => {
+            const row = m as any
+            return row.contentType === 'audio' && !row.audioUrl && row.content
+              ? { ...m, audioUrl: row.content }
+              : m
+          })
         currentMessages.value = [...currentMessages.value, ...newMessages]
         messageCursor.value = data.cursor
         hasMore.value = data.hasMore

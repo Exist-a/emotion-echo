@@ -87,6 +87,10 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
       shouldGenerateTitle?: boolean
       voiceEmotion?: string
       skipUserMessage?: boolean
+      // 语音消息落库（E2E-16 §2.A.4 / 测试点 #5）：useVoiceRecorder 已真 POST 持久化，
+      // 这里携带服务端真实消息 id —— ai/stream 的 messageId 用它绑定
+      // （face_emotion_results.message_id / 融合按 message_id 取行）。
+      userMessageId?: string
     },
   ) => {
     if (messageStore.currentSessionId !== conversationId) {
@@ -108,6 +112,10 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
         return { isOk: false, msg: persistResult.msg || '消息保存失败' }
       }
       userMessageId = String(persistResult.data.id)
+    } else if (extraParams?.userMessageId) {
+      // 语音路径：消息已由 useVoiceRecorder 落库，用其服务端 id 绑 ai/stream
+      //（否则 messageId=随机 clientMsgId，face/融合按 message_id 取行会落空）
+      userMessageId = extraParams.userMessageId
     }
 
     const tempAiMessage: MessageWithStatus = {

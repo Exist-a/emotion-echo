@@ -36,3 +36,18 @@ E2E-F-113 实测（2026-09-22）：`voice_handler` 返回的 `audioUrl` 由 `sto
   绝对地址下发 ⇒ 同型存量债登记 **E2E-F-116**（归 E2E-27 对象存储阶段迁移）。
 - 验收口径升级：任何对象 URL 的测试点必须在**发起者视角**断言可达（E2E-16 plan §5 测试点 2/3/4a
   双视角 curl + `readyState ≥ 1`），仅 `curl -I 宿主` 200 不算通过（AP-01 第四次复发的根治条款）。
+
+## 增补（2026-09-22）：对象 URL 在消息中的持久化契约
+
+语音消息落库（E2E-16 测试点 #5，PR #62）把本 ADR 的决策 1 延伸到存储层：
+
+1. **消息行持久化网关相对 URL**：`messages.content = /api/v1/voice/audio/<filekey>`、
+   `content_type = 'audio'`（不存 `PublicBaseURL` 绝对地址——否则又把 host 可达性问题
+   写进数据库）。
+2. **加载契约**：`loadMoreMessages` 对 `contentType==='audio'` 行做 `audioUrl = content`
+   映射——后端行没有 `audioUrl` 字段，气泡渲染条件是 `item.audioUrl`，不映射则
+   "落库成功但刷新后气泡照样消失"（与 F-113 同族的可达性/呈现断链）。
+3. **绑定契约**：语音消息的 `ai/stream messageId` 必须用落库返回的服务端 id
+   （`face_emotion_results.message_id` / 融合按 message_id 取行，绑随机 clientMsgId 会取空）。
+
+已知外观项：会话侧栏 `lastMessage` 刷新后显示该 URL（与既有文件消息同型）。
