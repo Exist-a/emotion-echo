@@ -49,7 +49,7 @@ ENV TZ=${TZ} \
 RUN for i in 1 2 3; do \
       apt-get update && \
       apt-get install -y --no-install-recommends --fix-missing \
-        libsndfile1 ca-certificates curl tini \
+        libsndfile1 ca-certificates curl tini ffmpeg \
         && break; \
       echo "apt-get install attempt $i failed, retrying in 10s..."; \
       sleep 10; \
@@ -66,6 +66,7 @@ COPY server.py logging_setup.py metrics_setup.py ./
 
 # Stage 36-B5: 预烘焙 SenseVoiceSmall 模型（含 model.pt 893MB）
 COPY model.pt am.mvn chn_jpn_yue_eng_ko_spectok.bpe.model config.yaml configuration.json ./model/
+COPY vad_model/ ./model/vad/
 RUN mkdir -p /app/cache && chown -R app:app /app/cache /app/model
 
 ENV HF_HOME=/app/cache \
@@ -76,8 +77,10 @@ EXPOSE 8002
 
 USER app
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=5).read()" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
+    # E2E-F-106 修复 ④：healthcheck 必须校验 model_loaded —— 原实现只看 HTTP 200，
+    # 模型没加载时也报 healthy（实测踩过：容器 "Up (healthy)" 但每次 /analyze 都失败）。
+    CMD python -c "import json,urllib.request,sys; d=json.loads(urllib.request.urlopen('http://localhost:8002/health', timeout=5).read()); sys.exit(0 if d.get('model_loaded') else 1)" || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8002"]

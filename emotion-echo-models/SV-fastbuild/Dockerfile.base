@@ -45,7 +45,7 @@ ENV TZ=${TZ} \
 RUN for i in 1 2 3; do \
       apt-get update && \
       apt-get install -y --no-install-recommends --fix-missing \
-        libsndfile1 ca-certificates curl tini \
+        libsndfile1 ca-certificates curl tini ffmpeg \
         && break; \
       echo "apt-get install attempt $i failed, retrying in 10s..."; \
       sleep 10; \

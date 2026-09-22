@@ -120,6 +120,7 @@ if [ "${PUSH_APP}" = true ]; then
     docker buildx build \
       --provenance=false \
       --tag "${APP_LOCAL_TAG}" \
+      --build-arg BASE_TAG="${TAG}" \
       --output type=image,oci-mediatypes=false \
       -f "${BUILD_DIR}/Dockerfile.app" \
       "${BUILD_DIR}"
@@ -129,6 +130,7 @@ if [ "${PUSH_APP}" = true ]; then
       --provenance=false \
       --tag "${APP_LOCAL_TAG}" \
       --tag "${APP_REMOTE_TAG}" \
+      --build-arg BASE_TAG="${TAG}" \
       --output type=image,oci-mediatypes=false \
       -f "${BUILD_DIR}/Dockerfile.app" \
       "${BUILD_DIR}" \
