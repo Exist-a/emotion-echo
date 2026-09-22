@@ -152,8 +152,35 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       if (result) {
         const { messageId, transcript, emotion, audioUrl } = result as any
 
-        const userMessage: any = {
-          id: messageId,
+        if (messageStore.currentSessionId !== currentConversationId) {
+          await messageStore.switchSession(currentConversationId)
+        }
+
+        // 语音消息落库（E2E-16 plan §2.A.4 / 测试点 #5，2026-09-22 用户实测钉出）：
+        // 此前只 push 内存行 + ai/stream skipUserMessage=true ⇒ DB 无 user 行、刷新即丢。
+        // 后端能力早已就绪（SendMessageReq.ContentType/FileName）。这里真 POST：
+        //   content = 音频 URL（loadMoreMessages 映射 content→audioUrl 还原气泡的依据）
+        //   contentType = 'audio'（DB content_type=audio）；fileName = 原始文件名
+        // 落库失败降级本地行（不吞消息），userMessageId 退回上传返回的临时 id。
+        const clientMsgId = crypto.randomUUID()
+        let userMessageId = messageId
+        try {
+          const res: any = await messageStore.sendMessage(
+            audioUrl || '',
+            (emotion || 'neutral') as any,
+            clientMsgId,
+            'audio',
+            'recording.webm',
+          )
+          if (res?.isOk && res?.data?.id !== undefined) {
+            userMessageId = String(res.data.id)
+          }
+        } catch {
+          // 降级：本地行 + 临时 id，AI 链路照常
+        }
+
+        const displayRow: any = {
+          id: userMessageId,
           conversationId: currentConversationId,
           sender: 'user',
           content: transcript || '',
@@ -163,13 +190,22 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           emotionTag: emotion,
           status: 'sent',
           sendTime: Date.now(),
+          clientMsgId,
         }
 
-        if (messageStore.currentSessionId !== currentConversationId) {
-          await messageStore.switchSession(currentConversationId)
+        // 真 store.sendMessage 已把服务端行 push 进 currentMessages（按 clientMsgId/id 幂等），
+        // 该行没有 audioUrl 字段 ⇒ 就地打补丁供气泡渲染；找不到（降级路径）则推本地行。
+        const idx = messageStore.currentMessages.findIndex(
+          (m: any) => m.clientMsgId === clientMsgId || m.id === userMessageId,
+        )
+        if (idx >= 0) {
+          messageStore.currentMessages[idx] = {
+            ...messageStore.currentMessages[idx],
+            ...displayRow,
+          }
+        } else {
+          messageStore.currentMessages.push(displayRow)
         }
-
-        messageStore.currentMessages.push(userMessage)
 
         const conversation = conversationStore.conversationList.find(
           (c) => c.id === currentConversationId,
@@ -180,7 +216,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           conversation.updatedAt = new Date().toISOString()
         }
 
-        options.onUploadSuccess?.(result)
+        // userMessageId = 服务端真实消息 id：ai/stream 的 messageId 用它绑定
+        // （face_emotion_results.message_id / 融合按 message_id 取行，绑随机 clientMsgId 会取空）
+        options.onUploadSuccess?.({ ...result, userMessageId })
       }
     } catch (error: any) {
       handleError(error.message || '上传失败')

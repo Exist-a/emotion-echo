@@ -85,3 +85,43 @@ describe('message store sendMessage fileName 透传（Stage 89 PR-5 RED）', () 
     expect(body.fileName).toBeUndefined()
   })
 })
+
+// ==== 语音消息落库 · 加载映射（E2E-16 测试点 #5，2026-09-22 用户实测钉出）====
+// 后端行形态：content=音频URL、contentType=audio（无 audioUrl 字段）。
+// 前端气泡渲染条件是 item.audioUrl（[id].vue v-if="item.audioUrl"）——
+// 不做映射的话，即使落库成功，刷新后气泡照样不出来（等于白落库）。
+describe('loadMoreMessages 音频行映射（测试点 #5）', () => {
+  it('contentType=audio 的行必须把 content 映射到 audioUrl', async () => {
+    setActivePinia(createPinia())
+    const { get } = await import('~/composables/useApi')
+    vi.mocked(get).mockResolvedValue({
+      list: [
+        {
+          id: 'srv-42',
+          conversationId: 'c1',
+          sender: 'user',
+          content: 'http://localhost:19080/api/v1/voice/audio/x.webm',
+          contentType: 'audio',
+          fileName: 'recording.webm',
+          sendTime: Date.now(),
+          createdAt: Date.now(),
+        },
+      ],
+      cursor: 0,
+      hasMore: false,
+    })
+
+    const store = useMessageStore()
+    store.currentSessionId = 'c1'
+    await store.loadMoreMessages()
+
+    const row = store.currentMessages.find((m: any) => m.id === 'srv-42') as any
+    expect(row, '加载后必须有该行').toBeTruthy()
+    expect(
+      row.audioUrl,
+      'audio 行必须映射 audioUrl=content，否则 [id].vue 的 v-if="item.audioUrl" 永假、刷新后语音气泡仍消失',
+    ).toBe('http://localhost:19080/api/v1/voice/audio/x.webm')
+    // 非音频行不受影响（text 不该长出 audioUrl）
+    expect(row.contentType).toBe('audio')
+  })
+})
