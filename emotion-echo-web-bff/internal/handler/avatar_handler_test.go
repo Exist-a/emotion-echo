@@ -94,7 +94,12 @@ func (f *fakeStorage) PutObject(ctx context.Context, key string, r io.Reader, si
 	}
 	return f.putURL, nil
 }
-func (f *fakeStorage) GetObjectURL(key string) string                    { return "" }
+func (f *fakeStorage) GetObjectURL(key string) string { return "" }
+func (f *fakeStorage) GetObject(ctx context.Context, key string) (io.ReadCloser, string, int64, error) {
+	// avatar handler 不调用 GetObject；E2E-F-113 后 storage 接口扩展必须实现此方法
+	// 才能编译。若 handler 误调 ⇒ 暴露意外调用链。
+	return nil, "", 0, errors.New("fakeStorage.GetObject not implemented (avatar handler does not need it)")
+}
 func (f *fakeStorage) RemoveObject(ctx context.Context, key string) error { return nil }
 func (f *fakeStorage) HealthCheck(ctx context.Context) error             { return nil }
 

@@ -271,9 +271,10 @@ git log -1 --format='%cI' <修复的 commit>
 | # | 测试点 | 判定 | 验证方式 | 证据 |
 |---|--------|------|---------|------|
 | 1 | 语音上传经 APISIX（带 JWT）传真实 webm → 200，且 **`data.transcript` 为非空字符串**（值断言，非"存在"） | [A] | curl 真录音文件（或 Playwright fake 音频）+ 断言 `data.transcript != ""` | 命令 + 响应体 + 退出码 |
-| 2 | **音频落 MinIO 且可访问**：`data.audioUrl` 非空、前缀 `voice/`，`curl -I` 该 URL 得 200（§8-A） | [A] | curl 上传 → 取 URL → `curl -I` | 两条命令输出 |
-| 3 | 语音消息**可回放**：气泡内 `<audio>` 元素存在且 `src == data.audioUrl`，`readyState`/`duration` 可读 | [A]+[V] | Playwright 读 DOM attribute + 截图 | 属性断言输出 + 截图 ×2 |
+| 2 | **音频落 MinIO 且可访问**：`data.audioUrl` 非空、前缀 `voice/`，`curl -I` 该 URL 得 200（§8-A） | [A] | curl 上传 → 取 URL → `curl -I`（**且**在 web 容器网络内 `curl emotion-echo-minio:9000/<url>` 也得 200 —— 验 host 在发起者视角可达，避免 E2E-F-113 同型"宿主能拉但 web 容器拉不到"的盲区） | 两条命令输出 |
+| 3 | 语音消息**可回放**：气泡内 `<audio>` 元素存在且 `src == data.audioUrl`，`readyState ≥ 1`（HAVE_METADATA，`duration` 已知）、`controls` 属性存在或被 `playBtn` 绑定（避免 E2E-F-113 同型） | [A]+[V] | Playwright 读 DOM attribute + `audio.load()` 后 readyState + 截图 | 属性断言输出 + 截图 ×2 |
 | 4 | 语音消息上屏且**文本 = 测试点 1 的 API 值**（互指标一致性：UI 文本 = API 值） | [A]+[V] | Playwright 读 DOM 文本 + 与 API 响应逐字比对 | 截图 + 断言输出 |
+| 4a | **audioUrl host 在发起者视角可达**（E2E-F-113 新增）：`<audio>` 能拉到 metadata、点击播放按钮能播放（**不是**简单断言 `src` 字符串）—— 这是 plan 之前测试点 3 漏掉的维度，由 IAB 浏览器实测发现。**端到端连接**：浏览器加载 → audio.readyState ≥ 1 + duration 非 null → 点击 play → audio.duration > 0 且 currentTime 推进 | [A]+[V] | Playwright 读 DOM 后 `audio.load()`、等 readyState 变化、点击按钮查 audio 状态 + 截图 | readyState/duration 断言 + 播放中截图 ×2 |
 | 5 | 语音消息**可持久**：刷新后仍在（`skipUserMessage` 修复后），且 DB `messages` 行 `content_type=audio` + `file_name`/content 指向音频 URL | [A] | Playwright reload 断言 + `psql` 查行 | 截图 + SQL 输出 |
 | 6 | 前端不再静默失败：ai-svc 不可达时页面出现**可见错误提示**（修掉 `if (result)` 无 else） | [A] | 关停 ai-svc → 录音 → 断言错误 toast/文案 | 截图 + 断言输出 |
 | 7 | **真模型 vs 降级可区分**：`/multimodal/analyze`（audio）响应的 `model` 以 `sensevoice:` 开头；若回落关键词分析器 ⇒ 本点 FAIL | [A] | 断言 `model` 前缀（`analyzer/multimodal.go:116`） | 响应体 + 断言输出 |

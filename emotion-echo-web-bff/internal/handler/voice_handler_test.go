@@ -20,6 +20,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -76,7 +77,7 @@ func TestVoiceHandler_Upload_Success(t *testing.T) {
 			Transcript: "你好世界",
 		},
 	}
-	sto := &fakeUploadStorage{putURL: "http://localhost:9000/avatars/voice/42-rec.webm"}
+	sto := &fakeUploadStorage{} // E2E-F-113：audioUrl 改相对路径，不再依赖 putURL
 	r := newVoiceRouter(fake, sto)
 
 	body := &bytes.Buffer{}
@@ -118,10 +119,26 @@ func TestVoiceHandler_Upload_Success(t *testing.T) {
 	assert.Equal(t, "neutral", data["emotion"])
 	assert.NotEmpty(t, data["messageId"], "messageId 必须生成")
 
-	// E2E-F-103 + D-11：音频必须落 MinIO 且 audioUrl 回填（=fake sto 配置的 URL）。
-	// 历史 audioUrl 恒为 "" ⇒ [id].vue:13-22 的 VoiceMessage 分支永不可达。
-	assert.Equal(t, "http://localhost:9000/avatars/voice/42-rec.webm", data["audioUrl"],
-		"audioUrl 必须回填 MinIO URL，使前端 <audio src> 可回放")
+	// E2E-F-103 + D-11 + E2E-F-113：audioUrl 必须是**单段相对路径 /api/v1/voice/audio/<fileKey>**。
+	// 历史 audioUrl = "http://localhost:9000/..."，在非宿主浏览器视角下 host 不可达，
+	// 浏览器 <audio> 永远拉不到 metadata（readyState=0、duration=null）。
+	// 新实现：audioUrl = "/api/v1/voice/audio/<fileKey>"（fileKey 是 storage PutObject
+	// key 砍掉 "voice/" 前缀的单段形式），前端 getFullAudioUrl 拼 apiBase 走 APISIX →
+	// BFF audio handler 内部补 "voice/" 前缀后反代 MinIO GetObject。
+	audioURL, _ := data["audioUrl"].(string)
+	require.True(t, strings.HasPrefix(audioURL, "/api/v1/voice/audio/"),
+		"audioUrl 必须以 /api/v1/voice/audio/ 开头（E2E-F-113），实际：%q", audioURL)
+	// 单段 + 无 '..' 防御（handler 在 audio 路径会再次检查；这里是 upload 时直接断言）
+	audioTail := audioURL[len("/api/v1/voice/audio/"):]
+	assert.NotContains(t, audioTail, "/",
+		"audioUrl 尾段必须是单段文件键（gin 路由：:filekey 一段），实际：%s", audioTail)
+	assert.NotContains(t, audioTail, "..",
+		"audioUrl 尾段不能含 '..'（防穿越），实际：%s", audioTail)
+	// 与 storage key 关系：tail = key 去掉 "voice/" 前缀
+	const voicePrefix = "voice/"
+	expectedTail := strings.TrimPrefix(sto.gotKey, voicePrefix)
+	assert.Equal(t, expectedTail, audioTail,
+		"audioUrl 尾段必须 = storage PutObject key 去掉 voice/ 前缀（让 audio handler 还原）")
 	// storage 必须收到一次 PutObject 调用，key 以 voice/ 开头（隔离头像/通用上传）
 	assert.True(t, strings.HasPrefix(sto.gotKey, "voice/"),
 		"audio key 应以 voice/ 开头以隔离 bucket 前缀: %s", sto.gotKey)
@@ -172,18 +189,129 @@ func TestVoiceHandler_Upload_MissingFile_Returns400(t *testing.T) {
 }
 
 func TestVoiceHandler_Register_PathContract(t *testing.T) {
-	// 防御性：保证 register 注册的是 POST /api/v1/voice/upload
+	// 防御性：保证 register 注册的 2 条路由都对：
+	//   - POST /api/v1/voice/upload
+	//   - GET  /api/v1/voice/audio/:filekey（E2E-F-113 新增）
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	(&VoiceHandler{ai: &fakeAIClient{}}).Register(r)
-	assert.Equal(t, 1, len(r.Routes()), "VoiceHandler 应注册 1 条路由")
+	assert.Equal(t, 2, len(r.Routes()), "VoiceHandler 应注册 2 条路由")
+
+	wantPaths := map[string]string{
+		"/api/v1/voice/upload":                 http.MethodPost,
+		"/api/v1/voice/audio/:filekey":         http.MethodGet,
+	}
 	for _, ri := range r.Routes() {
-		assert.True(t, strings.HasPrefix(ri.Path, "/api/v1/voice/"), "path 应在 /api/v1/voice/ 下")
-		assert.Equal(t, http.MethodPost, ri.Method)
+		assert.True(t, strings.HasPrefix(ri.Path, "/api/v1/voice/"),
+			"path 应在 /api/v1/voice/ 下：%s", ri.Path)
+		want, ok := wantPaths[ri.Path]
+		assert.True(t, ok, "未知路由：%s", ri.Path)
+		assert.Equal(t, want, ri.Method, "%s 方法不对", ri.Path)
 	}
 }
+// E2E-F-113：GET /api/v1/voice/audio/:filekey 反代 MinIO StreamObject。
+//
+// 根因（2026-09-22 实测）：audioUrl 由 storage.GetObjectURL 拼成
+// http://localhost:9000/<bucket>/<key>（dev PublicBaseURL），
+// 在以下两类视角下 host 不可达：
+//   1) 浏览器不在宿主机的环境（远程协作、生产部署）；
+//   2) 任何通过 web 容器反向代理（如 Nginx / APISIX 网关）而宿主 9000 未转发的部署。
+//
+// 修法：audioUrl = "/api/v1/voice/audio/<filekey>"（单段，gin 路由限制），
+// handler 内部补 "voice/" 前缀还原为 bucket 内完整 key（"voice/<filekey>"），
+// 反代 MinIO GetObject 流式输出。所有环境走同一路径，host 与 PublicBaseURL 解耦。
+//
+// 这里钉的是：audio handler 真实从 storage 拿对象并 io.Copy 给 Gin writer，
+// Content-Length 与 Content-Type 与 storage 报的一致，body 与 storage 流的字节对齐。
+func TestVoiceHandler_Audio_Success(t *testing.T) {
+	const fileKey = "abc-rec.webm"         // path 段（无 "/"）
+	const objectKey = "voice/" + fileKey  // handler 内部拼前缀还原
+	const wantBody = "fake webm bytes from minio"
+	const wantCT = "audio/webm"
+	const wantSize = int64(len(wantBody))
+
+	sto := &fakeUploadStorage{
+		getObjBytes: []byte(wantBody),
+		getObjCT:    wantCT,
+	}
+	r := newVoiceRouter(&fakeAIClient{}, sto)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/voice/audio/"+fileKey, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "应为 200")
+	assert.Equal(t, wantCT, w.Header().Get("Content-Type"),
+		"Content-Type 必须与 storage 报的一致（否则浏览器 <audio> 类型嗅探会失败）")
+	assert.Equal(t, strconv.FormatInt(wantSize, 10), w.Header().Get("Content-Length"),
+		"Content-Length 必须 = storage 报的真实字节数（否则浏览器无法 seek）")
+	assert.Equal(t, []byte(wantBody), w.Body.Bytes(),
+		"响应 body 必须严格等于 storage GetObject 流——不能丢、不能改")
+	// 端到端契约：handler 内部补 voice/ 前缀后传给 storage
+	assert.Equal(t, objectKey, sto.gotGetObjKey,
+		"handler 应补 voice/ 前缀后传 storage GetObject（解耦 URL host 与 bucket 路径）")
+}
+
+func TestVoiceHandler_Audio_ObjectNotFound_Returns404(t *testing.T) {
+	sto := &fakeUploadStorage{getObjErr: errors.New("NoSuchKey: The specified key does not exist.")}
+	r := newVoiceRouter(&fakeAIClient{}, sto)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/voice/audio/missing.webm", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code,
+		"storage 返 NoSuchKey 必须 404——绝不能 200 返空 body（那会让 <audio> readyState=0）")
+}
+
+// 防御性：拒绝任何带 .. 的 :filekey。gin 路由层负责拦 "" 与 "/"（直接在路由
+// 树层面不 match）；本 handler 兜底防御 gin 匹配的合法 URL 但 filekey 内容异常。
+func TestVoiceHandler_Audio_PathTraversal_Returns400(t *testing.T) {
+	sto := &fakeUploadStorage{}
+	r := newVoiceRouter(&fakeAIClient{}, sto)
+
+	// 这两个 filekey 是合法 gin 路径段（不含 /），能进 handler
+	handlerLevelCases := []struct {
+		name string
+		key  string
+	}{
+		{"含 .. 段", "..vhidden"},
+		{"中段含 ..", "abc..xyz"},
+	}
+	for _, tc := range handlerLevelCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/voice/audio/"+tc.key, nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code,
+				"含 '..' 的 filekey 必须 400（防 path traversal），实际：%d", w.Code)
+		})
+	}
+
+	// gin 路由层（httprouter）直接 404；记作"路由层拒绝"，handler 不参与
+	t.Run("含 /（gin 路由层 404）", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/voice/audio/voice/foo/bar", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code,
+			"含 / 应被 gin 路由层 404")
+	})
+	t.Run("空 filekey（gin 路由层 404）", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/voice/audio/", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code,
+			"空 filekey 应被 gin 路由层 404")
+	})
+	// 任何 handler-level 进来的 case 都应被 handler 拦下，**不应**调 storage
+	assert.Empty(t, sto.gotGetObjKey,
+		"被 handler 拦截的非法 key 不应调 storage GetObject")
+}
+
 // TestVoiceHandler_Upload_StorageNotConfigured_Returns503 守住 D-11 的接口契约：
 // storage 未配置（dev 环境变量缺失 / 启动失败）时不应让请求穿透到 MinIO，否则
+// 会留下「请求成功但音频实际没存」的不可见失败（D-12 的同类教训）。（dev 环境变量缺失 / 启动失败）时不应让请求穿透到 MinIO，否则
 // 会留下「请求成功但音频实际没存」的不可见失败（D-12 的同类教训）。
 func TestVoiceHandler_Upload_StorageNotConfigured_Returns503(t *testing.T) {
 	fake := &fakeAIClient{

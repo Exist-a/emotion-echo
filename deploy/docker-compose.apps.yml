@@ -580,7 +580,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.23  # E2E-F-97: 透传 scoreKind
+    image: emotion-echo/web-bff:v0.1.24  # E2E-F-97 + E2E-F-113: audioUrl 反代（audio handler GET /api/v1/voice/audio/:filekey）
     container_name: emotion-echo-web-bff
     restart: unless-stopped
     env_file: *env-file
