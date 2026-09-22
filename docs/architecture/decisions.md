@@ -873,6 +873,8 @@ Stage 33 P0 修复+BFF净化 █████████████████
 | 2026-09-21 | 人格画像的提示词语义设计 | 注入「形容词罗列」且 34% 用户拿不到任何指令 → **给相处说明书（非 AI 性格）+ 可观察行为规格 + ipsative 相对档** | [adr-2026-09-personality-prompt-semantics.md](adr/adr-2026-09-personality-prompt-semantics.md)；账本 E2E-F-95；覆盖率 66% → 95.5%，去标识盲判 6/6 |
 | 2026-09-21 | 验收断言口径 | 只断言形状（非空/正则/多处一致）→ **必须断言具体期望值 + 边界两端 + 覆盖真实 UI 驱动路径** | [adr-2026-09-assertion-value-not-shape.md](adr/adr-2026-09-assertion-value-not-shape.md)；触发 E2E-F-97（PHQ-9 算分错误连续逃过 E2E-13/14 两次收口）+ E2E-F-91（描述恒空） |
 
+| 2026-09-22 | SenseVoice 模型服务的运行时约束与镜像分发 | 语音链路五个独立缺陷叠加（torch/funasr 漂移、VAD 请求期下载、无预热、healthcheck 假绿、runtime 缺 ffmpeg）+ 内存限额按旧 torch 估 → **torch/funasr 成对锁定 + 模型与 VAD 全烘焙 + 启动预热 + healthcheck 校验 model_loaded + runtime 含 ffmpeg + 限额按峰值 3072M + ACR 双层同 tag** | [adr-2026-09-sensevoice-runtime-constraints.md](adr/adr-2026-09-sensevoice-runtime-constraints.md)；账本 E2E-F-106/111/112；实测 /analyze 0.84s + 端到端 200 + IAB 语音气泡；**只有浏览器实测（真实 webm）才同时暴露五条** |
+
 ---
 
 **所有文档（stage-X、roadmap、decomposition-plan）的具体实施细节以本文档为最终裁决。**

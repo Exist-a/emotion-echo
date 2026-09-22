@@ -105,8 +105,11 @@ describe('useVoiceRecorder（E2E-F-110）', () => {
     await new Promise((r) => setTimeout(r, 0))
 
     expect(postMock).toHaveBeenCalledTimes(1)
-    expect(postMock.mock.calls[0][0]).toBe('/voice/upload')
-    const form = postMock.mock.calls[0][1] as FormData
+    // 显式取首调用（strict 下 mock.calls[0] 可能 undefined，用 non-null 断言表达
+    // "已断言调用次数为 1" 这一前提）
+    const firstCall = postMock.mock.calls[0]!
+    expect(firstCall[0]).toBe('/voice/upload')
+    const form = firstCall[1] as FormData
     expect(form).toBeInstanceOf(FormData)
     expect(form.get('conversationId')).toBe('277')
     const file = form.get('file') as File
@@ -125,6 +128,7 @@ describe('useVoiceRecorder（E2E-F-110）', () => {
     await new Promise((r) => setTimeout(r, 0))
 
     expect(onUploadSuccess).toHaveBeenCalledTimes(1)
-    expect(onUploadSuccess.mock.calls[0][0]).toMatchObject({ transcript: '我太开心了' })
+    const successCall = onUploadSuccess.mock.calls[0]!
+    expect(successCall[0]).toMatchObject({ transcript: '我太开心了' })
   })
 })

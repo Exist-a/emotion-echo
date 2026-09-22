@@ -472,7 +472,8 @@ services:
   # =====================================================
   emotion-echo-sensevoice:
     # PR-TTS-VENDOR Phase 6: pull pre-built image from Aliyun ACR instead of
-    # building locally. The base layer (python + torch + funasr + knf) lives at
+    # building locally. E2E-F-106/111 修复见 v0.1.1：torch 2.1.0 与 funasr 1.4.15 ABI 对齐、
+    # VAD 模型烘焙进镜像（不再请求期下载）、启动预热、healthcheck 校验 model_loaded、runtime 装 ffmpeg。 The base layer (python + torch + funasr + knf) lives at
     # sensevoice-base:v0.1.0; the app layer (code + 936MB model.pt) at
     # sensevoice:v0.1.0. Building locally requires ~140s and intermittent
     # apt/pypi failures documented in stage-58/59; pulling from ACR takes
@@ -481,7 +482,7 @@ services:
     # To switch back to local build: replace 'image:' with the build block
     # from Phase 5 (commit 8e09d03): context=../emotion-echo-models,
     # dockerfile=SV-fastbuild/Dockerfile, image=emotion-echo/sensevoice-fastbuild:v0.1.0
-    image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.0
+    image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.1
     container_name: emotion-echo-sensevoice
     restart: unless-stopped
     profiles: ["ai"]
@@ -504,7 +505,9 @@ services:
       resources:
         limits:
           cpus: "1.5"
-          memory: 1536M      # funasr + torch ~1GB + room
+          # E2E-F-112：1536M 是按 torch 1.13 估的；E2E-F-106 升到 torch 2.1.0 后
+          # 峰值超 1.5G（893MB model.pt + torch 2.1 运行时 + VAD + Python）⇒ 被 cgroup 杀。
+          memory: 3072M
         reservations:
           cpus: "0.5"
           memory: 512M
