@@ -55,13 +55,47 @@ _load_services() {
 }
 _load_services
 
+# ---- E2E-F-114 (2026-09-22): 加载 deploy/.env.local 的密钥真值 ----
+# 根因（本机实测）：HOST 直接跑本脚本时环境无 BFF_JWT_SECRET，services.env.example
+# 只给占位符 ⇒ consumer secret=占位符；而 BFF 容器经 compose --env-file 拿到
+# deploy/.env.local 真值签发 ⇒ APISIX jwt-auth 全 401（auth 白名单路由除外）。
+# 更隐蔽的一层：services.env.example 若用 plain 赋值 source，会把**显式传入的
+# 真值也覆盖成占位符**（"source .env.local 后重跑仍 401"的机制）—— 该文件已改为
+# ${VAR:-default} 模式堵住；本函数补上"host 侧无 env 时自动取 .env.local"。
+# 容器路径（emotion-echo-apisix-seed）由 compose environment 注入真值，不受影响。
+# 优先级：显式 env / services.env 真值 > .env.local > services.env.example 占位符。
+_load_env_local() {
+  local env_file real_admin real_jwt
+  env_file="$(dirname "$0")/../.env.local"
+  [ -f "$env_file" ] || return 0
+  real_admin=""
+  real_jwt=""
+  case "${APISIX_ADMIN_KEY:-}" in "" | "dev-admin-key-local-only") ;; *) real_admin="$APISIX_ADMIN_KEY" ;; esac
+  case "${BFF_JWT_SECRET:-}" in "" | "dev-jwt-secret-local-only") ;; *) real_jwt="$BFF_JWT_SECRET" ;; esac
+  # shellcheck disable=SC1090
+  if ! . "$env_file"; then
+    log "WARN: failed to source $env_file — secrets may stay placeholders"
+  fi
+  if [ -n "$real_admin" ]; then APISIX_ADMIN_KEY="$real_admin"; fi
+  if [ -n "$real_jwt" ]; then BFF_JWT_SECRET="$real_jwt"; fi
+  return 0
+}
+_load_env_local
+
 # ---- 配置 ----
 ADMIN_URL="${APISIX_ADMIN_URL:-http://localhost:9180}"
 # E2E-F-69：不再内联真实密钥。默认值为非密钥占位符，真值来自 deploy/.env.local
-#（compose 的 --env-file 注入）。缺省即不匹配 APISIX 侧 ⇒ 立刻 401，不会静默用错 key。
+#（compose 的 --env-file 注入；HOST 侧由上面 _load_env_local 自动取，E2E-F-114）。
 ADMIN_KEY="${APISIX_ADMIN_KEY:-dev-admin-key-local-only}"
 # 同上：JWT 签名密钥也不得内联真实值（泄露即可伪造任意用户身份）。
 JWT_SECRET="${BFF_JWT_SECRET:-dev-jwt-secret-local-only}"
+# E2E-F-114：到这里仍是占位符 ⇒ consumer secret 必与 BFF 签发不一致 ⇒ 所有挂
+# jwt-auth 的路由 401。必须显式告警——静默用错 secret 正是本条账单的成因。
+case "$JWT_SECRET" in
+  dev-jwt-secret-local-only)
+    log "WARN: BFF_JWT_SECRET is still the placeholder — every jwt-auth route WILL 401 (E2E-F-114). Expected real value from deploy/.env.local."
+    ;;
+esac
 # 前端来源（cors allow_origins）。dev 是 Nuxt dev server；prod 由 env 覆盖。
 # Stage 105: 默认同时含 localhost:3000 与 127.0.0.1:3000 — 部分浏览器（Windows Chrome +
 # 沙箱 IAB）拒绝 localhost，自动跳 chrome-error://，用户改用 127.0.0.1。
