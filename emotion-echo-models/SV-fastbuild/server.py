@@ -95,15 +95,28 @@ async def _get_model():
 
 
 def _load_model_sync():
-    """同步加载 funasr 模型（在线程池里跑）。"""
+    """同步加载 funasr 模型（在线程池里跑）。
+
+    E2E-F-106 修复 ①：VAD 模型改为**本地目录**（镜像已烘焙）。
+    原实现用 `vad_model="fsmn-vad"` + `hub="ms"`，把 VAD 下载放在**请求路径**里
+    （compose 注释自述"VAD 模型首次启动从 ModelScope 下载到 /app/cache"）⇒
+    首次 /analyze 要先下载再推理，必然超过 ai-svc 的 30s 超时。
+    """
     from funasr import AutoModel
     model_dir = os.getenv("FUNASR_MODEL_DIR", "/app/model")
+    vad_dir = os.getenv("FUNASR_VAD_DIR", "/app/model/vad")
+    # 本地 VAD 存在则用本地（离线可用）；否则退回 ModelScope 名称（兼容未重建的旧镜像）
+    vad_arg = vad_dir if os.path.isdir(vad_dir) else "fsmn-vad"
+    logger.info(
+        "loading funasr AutoModel",
+        extra={"model_dir": model_dir, "vad": vad_arg},
+    )
     return AutoModel(
         model=model_dir,
-        vad_model="fsmn-vad",
+        vad_model=vad_arg,
         vad_kwargs={"max_single_segment_time": 30000},
         device=_DEVICE,
-        hub="ms",  # ModelScope（国内源，速度快）
+        hub="ms",  # 仅当 vad_arg 回退为名称时才需要
         disable_update=True,
     )
 
@@ -137,10 +150,29 @@ def extract_text_only(raw_text: str) -> str:
     return EMOTION_TOKEN_RE.sub("", raw_text).strip()
 
 
+# -------- Startup warm-up (E2E-F-106 修复 ③) --------
+#
+# 原实现是纯懒加载：模型在**第一个 /analyze 请求**里才加载。server.py 自己的注释
+# 写"this may take 30-60s on first request"，而 ai-svc 的 SenseVoice 客户端超时是
+# **30s**（etc/ai-api.yaml `SenseVoice.Timeout: 30`）⇒ 冷启动的第一个请求必然超时，
+# 表现为"语音上传恒 504/503"。
+#
+# 现在在启动时预热：uvicorn 起来之前把模型加载完，/analyze 第一个请求就是热的。
+# 失败**不致命**（不 crash-loop）：记 ERROR，/health 保持 model_loaded=false，
+# 由 healthcheck 判 unhealthy（Dockerfile 已改为校验 model_loaded）。
+@app.on_event("startup")
+async def _warmup_model():
+    try:
+        await _get_model()
+        logger.info("startup warm-up done; service ready")
+    except Exception as e:  # noqa: BLE001 — 启动期任何失败都只记录，不阻断服务
+        logger.exception("startup warm-up failed; /health stays model_loaded=false", extra={"err": str(e)})
+
+
 # -------- Routes --------
 @app.get("/health")
 async def health():
-    """健康检查：检查模型是否已加载。"""
+    """健康检查：model_loaded 是**真实**就绪判据（Dockerfile healthcheck 依此判定）。"""
     model_loaded = _MODEL is not None
     return JSONResponse({
         "status": "ok" if model_loaded else "loading",
