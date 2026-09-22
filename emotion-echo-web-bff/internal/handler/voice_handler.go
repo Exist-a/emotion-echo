@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"emotion-echo-web-bff/internal/downstream"
+	"emotion-echo-web-bff/internal/session"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -74,8 +75,14 @@ func (h *VoiceHandler) upload(c *gin.Context) {
 	// conversationId 选填（前端 useVoiceRecorder 总会传，但 BFF 不强制）
 	conversationID := c.PostForm("conversationId")
 
+	// E2E-F-109：必须用 session.WithRequestAuth(c) 把 X-User-Id 注入 ctx，
+	// 否则 ai-svc gRPC 拦截器（emotion-echo-ai-svc/internal/grpcserver/server.go:85）
+	// 会以 "missing x-user-id metadata" 拒请求。BFF 主干约定（avatar_handler.go:113、
+	// chat_handler.go 全部）都是这么写的，本 handler 是 Sprint 1 新增、当时无 ai-svc 故漏。
+	authCtx := session.WithRequestAuth(c)
+
 	// 调 ai-svc multimodal kind=audio
-	resp, err := h.ai.MultiModalAnalyze(c.Request.Context(), downstream.MultiModalAnalyzeReq{
+	resp, err := h.ai.MultiModalAnalyze(authCtx, downstream.MultiModalAnalyzeReq{
 		Kind:     "audio",
 		File:     file,
 		FileName: fileHeader.Filename,
@@ -110,7 +117,7 @@ func (h *VoiceHandler) upload(c *gin.Context) {
 		return
 	}
 	defer file2.Close()
-	audioURL, err := h.storage.PutObject(c.Request.Context(), voiceKey, file2, fileHeader.Size, "audio/webm")
+	audioURL, err := h.storage.PutObject(authCtx, voiceKey, file2, fileHeader.Size, "audio/webm")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "storage put: " + err.Error()})
 		return

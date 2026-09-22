@@ -171,11 +171,21 @@ type: e2e-discovered-unresolved-ledger
 
 **累计编号至此 108 项**（E2E-F-103~108 为本段新增 6 项：3 项待修 + 1 项范围内文档修复 + 2 项记账）。
 
+### H. E2E-16 第二轮开工实测（2026-09-22，E2E-F-109）
+
+> 触发：修 E2E-F-103/104/105 + D-11 后端落地后，端到端实测 D-11 测试点 2/3：
+> 通过网关 `/api/v1/voice/upload` → BFF 收到 → gRPC call ai-svc **返 500**。
+> BFF 日志：`grpc-client method=/emotion_ai.v1.EmotionQueryService/MultiModalAnalyze
+> latency=3ms err=rpc error: code = Unauthenticated desc = missing x-user-id metadata`。
+
+| 编号 | 来源 | 现象 | 根因 | 归属 | 状态 |
+|------|------|------|------|------|------|
+| E2E-F-109 | E2E-16 第二轮 | **voice_handler 调 ai-svc gRPC 时 ctx 没带 userID** ⇒ ai-svc 拦截器（`emotion-echo-ai-svc/internal/grpcserver/server.go:85`）拒所有缺 `x-user-id` metadata 的 RPC（除 health probe 白名单）。**直接后果**：D-11 测试点 1/2/3/7/9/10/16/17 端到端无法跑（任何走 gRPC ai-svc 的链路都返 500）；BFF→ai-svc 这条主干也断 | 对照其他 handler：`avatar_handler.go:113`、`chat_handler.go` 全部用 `session.WithRequestAuth(c)`（把 X-User-Id 头存入 ctx → ai 客户端 `applyAuthHeader`/`withUserID` 注入 X-User-Id/metadata），**voice_handler.go:78 漏写** —— 用了 `c.Request.Context()` 直接传给 `h.ai.MultiModalAnalyze`，ctx 里没有 userID。BFF 主干是已建立的约定，但 voice_handler 是新写的（且 Sprint 1 PR-4c-1 时代无 ai-svc）⇒ 漏注入 | **E2E-16** | 🟡 待修（本轮） |
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
 - R-xx 体系（`docs/plans/known-issues-backlog-runtime-bugs-2026-09-17.md`）是运行时 bug 的权威编号：本账本条目修复落地后，回填 R 系并互相引用
-- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** + **E2E-10 深度验证 1 项（E2E-F-79）** + **E2E-11 首轮 2 项（E2E-F-80~81）** + **E2E-11 复查轮 8 项（E2E-F-82~89）** + **收口审计治理 1 项（E2E-F-90）** + **E2E-14 验收 3 项（E2E-F-91~93）** + **E2E-14 合并 1 项（E2E-F-94）** + **E2E-14 复核 1 项（E2E-F-95）** + **续做实测 1 项（E2E-F-96）** + **复核实测 1 项（E2E-F-97）** + **方法自审 1 项（E2E-F-98）** + **E2E-15 迭代 4 项（E2E-F-99~102）** + **E2E-16 开工实测 6 项（E2E-F-103~108）** = **108 项**（累计编号至 108）；实测阶段若有新发现继续追加 `E2E-F-109` 起
+- 建档预探查 19 项 + 覆盖盲区排查 10 项 + CI 模板评审 6 项 + E2E 实测 5 项 + **E2E-01~06 独立审查 19 项** + **R 系列第二方核对 9 项（E2E-F-60~68）** + **修复过程新发现 8 项（E2E-F-69~76）** + **E2E-09 留账 2 项（E2E-F-77~78）** + **E2E-10 深度验证 1 项（E2E-F-79）** + **E2E-11 首轮 2 项（E2E-F-80~81）** + **E2E-11 复查轮 8 项（E2E-F-82~89）** + **收口审计治理 1 项（E2E-F-90）** + **E2E-14 验收 3 项（E2E-F-91~93）** + **E2E-14 合并 1 项（E2E-F-94）** + **E2E-14 复核 1 项（E2E-F-95）** + **续做实测 1 项（E2E-F-96）** + **复核实测 1 项（E2E-F-97）** + **方法自审 1 项（E2E-F-98）** + **E2E-15 迭代 4 项（E2E-F-99~102）** + **E2E-16 开工实测 6 项（E2E-F-103~108）** + **E2E-16 第二轮开工实测 1 项（E2E-F-109）** = **109 项**（累计编号至 109）；实测阶段若有新发现继续追加 `E2E-F-109` 起
 - **E2E-11 复查轮关闭 5 条既有条目**：E2E-F-14（图表空态）、E2E-F-36（页面无法滚动）、E2E-F-83（三处映射漂移）、E2E-F-84（内容被裁剪）、E2E-F-85（头像 2MB 上限失效）；另新开并当轮关闭 E2E-F-86（头像契约错位）
 - **2026-09-19 治理轮关闭 1 条**：E2E-F-01（密保问题方案已由 E2E-07/E2E-09 实施落地，见该行证据）
 - **2026-09-19 治理轮新开 1 条**：E2E-F-90（E2E-07/08/09/10 收口证据系统性缺失 → 四阶段降 `partial`；取证补拍待独立轮次）

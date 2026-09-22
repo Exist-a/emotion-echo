@@ -37,10 +37,13 @@ type fakeAIClient struct {
 	err  error
 	// 记录调用时的 kind 用于断言
 	gotKind string
+	// E2E-F-109：记录收到 ctx，便于断言 BFF 注入了 userID
+	gotCtx context.Context
 }
 
 func (f *fakeAIClient) MultiModalAnalyze(ctx context.Context, req downstream.MultiModalAnalyzeReq) (*downstream.MultiModalAnalyzeResp, error) {
 	f.gotKind = req.Kind
+	f.gotCtx = ctx
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -86,6 +89,10 @@ func TestVoiceHandler_Upload_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/voice/upload", body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	// E2E-F-109：模拟 APISIX 注入 X-User-Id（这是 BFF 主干约定，chat_handler /
+	// avatar_handler 都已使用 session.WithRequestAuth(c) 透传到 ctx，
+	// voice_handler 是新写的，漏了这一步 ⇒ ai-svc gRPC 拦截器拒请求）。
+	req.Header.Set("X-User-Id", "42")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -93,6 +100,14 @@ func TestVoiceHandler_Upload_Success(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 	assert.Equal(t, "audio", fake.gotKind, "应传 kind=audio")
+
+	// E2E-F-109：ctx 必须带 userID（downstream.UserIDFromContext 应能取出 42）。
+	// 若 handler 用了 c.Request.Context() 直接传，ctx 里没有 userID，
+	// ai-svc gRPC 拦截器就会拒；这条断言钉住"ctx 已注入 userID"这一契约。
+	uidFromCtx, ok := downstream.UserIDFromContext(fake.gotCtx)
+	assert.True(t, ok, "ctx 必须带 userID 键（session.WithRequestAuth 注入），实际 ok=false")
+	assert.Equal(t, int64(42), uidFromCtx,
+		"ctx 必须携带 userID=42 ⇒ ai-svc gRPC metadata 不再 missing")
 
 	// E2E-F-103：成功数据必须放在 data 内（resp.go OK() 契约）。
 	// 历史断言直接在顶层读 transcript/emotion，把"缺 data 包装"的错误结构固化成
