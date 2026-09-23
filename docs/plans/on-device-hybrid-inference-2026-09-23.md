@@ -1,8 +1,13 @@
 ---
 status: planned
 priority: medium
-blocked-by: ../e2e-roadmap/roadmap.md（E2E-17~30 全部收口后方可开工；当前 E2E-17 in-progress，余 13 阶段）
-last-refresh: 2026-09-23
+related-plans: ./on-device-hybrid-inference-implementation-roadmap-2026-09-23.md（v0.3 实施长期路线图）
+blocked-by:
+  - **v1.0 封版**（v1.0 = ready to deploy 状态；部署时点不确定，端侧化与部署独立；详见 v0.3 §A.3）
+  - ../e2e-roadmap/roadmap.md（E2E-17~30 全部收口后方可开工；当前 E2E-17 in-progress，余 13 阶段）
+  - §十二 5 项决策全部拍板（见 §十二；任一项未拍板前不进阶段二/三/四；**阶段一可前置不依赖决策**，详见 v0.3 §C.1）
+  - D-26 端侧化主方案 ADR 立项（本计划批准后补立，沿用 v0.3 §B.2 模板）
+last-refresh: 2026-09-23（同步 v0.3 治理轮：v1.0 含义明确为"封版非部署"+"阶段一可前置"+"Hybrid 分支策略"）
 ---
 
 # 情绪疏导项目端侧化改造方案（v0.2 · 可行性评估合并版）
