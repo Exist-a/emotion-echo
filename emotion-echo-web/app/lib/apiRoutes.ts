@@ -72,6 +72,10 @@ export const API_ROUTES = {
   // ============ Multimodal / TTS / AI stream (BFF: multimodal/tts/ai_stream handlers) ============
   multimodalAnalyze: { method: 'POST', path: '/multimodal/analyze' } as ApiRoute,
   ttsStream: { method: 'POST', path: '/tts/stream' } as ApiRoute,
+  // E2E-17 plan §2.A.3：带字符级时间戳的 TTS（per-char 等分近似）—— 前端真口型同步
+  // 通过此通道获取 phoneme 数组 + base64 音频，HTMLAudioElement + ontimeupdate 驱动
+  // 口型。详见 stages/e2e-17-digital-human-tts/plan.md §2.A / F-127。
+  ttsPhonemes: { method: 'POST', path: '/tts/phonemes' } as ApiRoute,
   aiStream: { method: 'POST', path: '/ai/stream' } as ApiRoute,
 
   // PR-4 落地：BFF voice_handler + ai-svc multimodal kind=audio
