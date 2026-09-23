@@ -1,18 +1,25 @@
+// useTTSPlayer.ts — E2E-17 plan §6 step 3 改造后
+//
+// D-03 真口型同步：播放层从随机轮播假动画改为按 phoneme 时间戳驱动。
+//
+// 关键变化（与改造前对比）：
+//   - 删 150ms 固定节奏假动画（plan §4 #10 字面契约：源码不引用该函数）
+//   - 删 pcm-player 流式依赖（不再做流式 WAV chunk 拼接）
+//   - 删 chunksBuffer / flushBuffer / playStreamChunks（流式缓冲，phonemes 一次性返全音频）
+//   - 删 random 状态机变量（setInterval 状态机整体删除）
+//   - 删 abortController（phonemes 一次性请求，无需中止）
+//   - playStream 改为 POST /api/v1/tts/phonemes → base64 → Blob → ObjectURL → HTMLAudioElement
+//   - 口型驱动：HTMLAudioElement.ontimeupdate → findPhonemeAt(phonemes, currentTime) → charToLipShape → callback
+//   - 播放结束 / 中断 → callback('neutral', 1)（resetLipShape 防止末帧卡死）
+//   - 新增导出助手：charToLipShape / findPhonemeAt（便于 Vitest 单元测试 + 复用）
+//
+// 关联 plan：E2E-17 [stages/e2e-17-digital-human-tts/plan.md] §2.A.3 / §4 #7-#12
+
 import { ref, onUnmounted } from 'vue'
 import { stripMarkdown, extractReadableText } from '~/utils/stripMarkdown'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { getApiBaseUrl } from '../lib/apiBaseUrl'
 import { getClientAccessToken } from '~/lib/clientAccessToken'
-
-// Lazy import: pcm-player accesses AudioContext at import time, will crash SSR.
-let _PcmPlayer: any = null
-async function getPcmPlayer() {
-  if (!_PcmPlayer) {
-    const mod = await import('pcm-player')
-    _PcmPlayer = mod.default ?? mod
-  }
-  return _PcmPlayer
-}
 
 export type LipShape = 'aa' | 'ee' | 'ih' | 'oh' | 'ou' | 'neutral'
 
@@ -35,15 +42,11 @@ export interface TTSResponse {
   duration?: number
 }
 
-export interface LipSyncItem {
-  text: string
-  phonemes: Phoneme[]
-  audio: HTMLAudioElement
-  startTime: number
-}
-
 type LipSyncCallback = (shape: LipShape, progress: number) => void
 
+// VOWEL_TO_LIP 元音→口型（plan §2.A.3 复用 — 原文件字面 38-57 行死代码激活）
+// 选词逻辑：v/n/m 之所以归 ih（实际是辅音闭唇），因仓 server.py 对汉字按字符
+// 给 per-char 等分 start/duration；这些字符常出现在词尾闭嘴，归 ih 是务实简化。
 const VOWEL_TO_LIP: Record<string, LipShape> = {
   a: 'aa',
   o: 'oh',
@@ -56,6 +59,7 @@ const VOWEL_TO_LIP: Record<string, LipShape> = {
   m: 'ih',
 }
 
+// CONSONANT_CLOSE 辅音→口型（同上，原文件字面 59-84 行死代码激活）
 const CONSONANT_CLOSE: Record<string, LipShape> = {
   b: 'aa',
   p: 'aa',
@@ -83,92 +87,122 @@ const CONSONANT_CLOSE: Record<string, LipShape> = {
   h: 'ih',
 }
 
-// 单例模式的变量
-const audioContext: AudioContext | null = null
-const audioElement: HTMLAudioElement | null = null
+/**
+ * charToLipShape 单字符 → 口型（激活死代码 VOWEL_TO_LIP / CONSONANT_CLOSE）。
+ *
+ * 优先级：VOWEL > CONSONANT（v/n/m 在两边都有，按 VOWEL 优先；语义上 v/n/m
+ * 在尾音是闭嘴，ih 实际是闭嘴对位，故归元音侧更合理）。
+ *
+ * 大小写不敏感；未知字符 / 空串 → 'neutral'（graceful fallback，plan §4 #8 钉死）。
+ *
+ * 单元测试：app/composables/useTTSPlayer.phoneme.test.ts (Vitest)。
+ */
+export function charToLipShape(char: string): LipShape {
+  if (!char) return 'neutral'
+  const lower = char.toLowerCase()
+  return VOWEL_TO_LIP[lower] ?? CONSONANT_CLOSE[lower] ?? 'neutral'
+}
+
+/**
+ * findPhonemeAt 在 phonemes 数组中找覆盖 timeSec（秒）的音素。
+ *
+ * 区间判定：[start, start+duration) 半开（不包含右端点；连读时下一音从
+ * 前一音的 end_ms 起步，避免双音重叠时的闪烁）。
+ *
+ * 边界：time < first.start 或 time >= last.start+last.duration → null（区间外）；
+ * 区间间隙（两个 phoneme 之间没有交集）→ null。
+ *
+ * 单元测试：app/composables/useTTSPlayer.phoneme.test.ts (Vitest)。
+ */
+export function findPhonemeAt(phonemes: Phoneme[], timeSec: number): Phoneme | null {
+  if (!phonemes || phonemes.length === 0) return null
+  // 二分查找：phonemes 按 start 升序（仓 server.py 按字符顺序生成，天然升序）
+  let lo = 0
+  let hi = phonemes.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1
+    const p = phonemes[mid]
+    if (!p) break // noUncheckedIndexedAccess：mid 在 [0, length) 外时防御（lo<=hi 理论不发生）
+    if (timeSec < p.start) {
+      hi = mid - 1
+    } else if (timeSec >= p.start + p.duration) {
+      lo = mid + 1
+    } else {
+      return p
+    }
+  }
+  return null
+}
+
+/**
+ * base64ToWavBlob 把 BFF 返回的 base64 音频字符串解码为 WAV Blob（mime=audio/wav）。
+ * 用于 HTMLAudioElement.src = URL.createObjectURL(blob)。
+ */
+const base64ToWavBlob = (b64: string): Blob => {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new Blob([bytes], { type: 'audio/wav' })
+}
+
+// 单例/共享状态（HT 前的全局 audioElement 已被拆为 per-call local）
 const currentTime = ref(0)
 const isPlaying = ref(false)
 const currentVolume = ref(2.0)
-let pcmPlayer: any = null
-let lipAnimationInterval: ReturnType<typeof setInterval> | null = null
-let lipSyncCallback: LipSyncCallback | null = null
-let abortController: AbortController | null = null
-let chunksBuffer: Uint8Array[] = []
+let currentAudioEl: HTMLAudioElement | null = null
+let currentObjectURL: string | null = null
 
-const lipShapes: LipShape[] = ['aa', 'ee', 'ih', 'oh', 'ou']
-
-const startRandomLipAnimation = (callback?: LipSyncCallback) => {
-  stopLipAnimation()
-  lipSyncCallback = callback ?? null
-
-  let shapeIndex = 0
-  const interval = 150
-
-  lipAnimationInterval = setInterval(() => {
-    const shape = lipShapes[shapeIndex % lipShapes.length]!
-    callback?.(shape, 1)
-    shapeIndex++
-  }, interval)
-}
-
-const stopLipAnimation = () => {
-  if (lipAnimationInterval) {
-    clearInterval(lipAnimationInterval)
-    lipAnimationInterval = null
-    lipSyncCallback?.('neutral', 0)
-  }
+/**
+ * resetLipShape 通知上层把嘴闭上（防 phoneme 末帧卡死）。
+ * 由 onended / onerror / 主动 stop 触发。
+ */
+const resetLipShape = (onLipSync?: LipSyncCallback | null) => {
+  onLipSync?.('neutral', 0)
 }
 
 const stop = () => {
-  clearLipSyncInterval()
-  stopLipAnimation()
-
-  const el = audioElement as HTMLAudioElement | null
-  if (el) {
-    el.pause()
-    el.currentTime = 0
+  if (currentAudioEl) {
+    currentAudioEl.pause()
+    currentAudioEl.currentTime = 0
+    currentAudioEl = null
   }
-
-  if (pcmPlayer) {
-    if (typeof pcmPlayer.stop === 'function') {
-      pcmPlayer.stop()
-    }
-    if (typeof pcmPlayer.destroy === 'function') {
-      pcmPlayer.destroy()
-    }
-    pcmPlayer = null
+  if (currentObjectURL) {
+    URL.revokeObjectURL(currentObjectURL)
+    currentObjectURL = null
   }
-
-  if (abortController) {
-    abortController.abort()
-    abortController = null
-  }
-
-  chunksBuffer = []
   isPlaying.value = false
 }
 
-const clearLipSyncInterval = () => {
-  if (lipAnimationInterval) {
-    clearInterval(lipAnimationInterval)
-    lipAnimationInterval = null
+const setVolume = (volume: number) => {
+  currentVolume.value = volume
+  if (currentAudioEl) {
+    currentAudioEl.volume = volume
   }
 }
 
-const setVolume = (volume: number) => {
-  console.log(
-    '[TTS] setVolume called:',
-    volume,
-    'pcmPlayer exists:',
-    !!pcmPlayer,
-    'currentVolume:',
-    currentVolume.value,
-  )
-  currentVolume.value = volume
-  if (pcmPlayer) {
-    pcmPlayer.volume = volume
-    console.log('[TTS] pcmPlayer.volume set to:', pcmPlayer.volume)
+const pause = () => {
+  if (currentAudioEl && isPlaying.value) {
+    currentAudioEl.pause()
+    isPlaying.value = false
   }
+}
+
+const resume = () => {
+  if (currentAudioEl && !isPlaying.value && currentTime.value > 0) {
+    void currentAudioEl.play()
+    isPlaying.value = true
+  }
+}
+
+/**
+ * flushBuffer 兼容占位（plan §6 step 4 处理段间断点时改造 useTTSManager 移除 500ms debounce）。
+ * 当前 phonemes 路径一次性返全音频，无 chunk buffer 可 flush；保留函数签名避免
+ * useTTSManager.flushRemainingText 编译失败。语义上 no-op。
+ */
+const flushBuffer = async (_onLipSync?: LipSyncCallback): Promise<void> => {
+  /* no-op: phonemes 路径无 chunk buffer（plan §2.A.3） */
 }
 
 const playStream = async (
@@ -183,165 +217,99 @@ const playStream = async (
   const readableText = extractReadableText(cleanText)
   if (!readableText) return
 
-  console.log('[TTS Stream] Playing:', readableText.substring(0, 50))
-  console.log('[TTS Stream] Starting new TTS stream, stopping previous...')
-
+  // 先停前一次（断旧音频 + 释放 URL + 重置嘴型）
+  resetLipShape(onLipSync)
   stop()
 
-  try {
-    abortController = new AbortController()
-    // PR-A: 改用 fail-fast helper（决策 18 #24）；不再静默回退到 8894
-    const base = getApiBaseUrl(useRuntimeConfig())
-    // Sprint 111 · R-09 修复: 同 useAIStreamHandler — HttpOnly cookie 读不到
-    const token = getClientAccessToken()
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+  const base = getApiBaseUrl(useRuntimeConfig())
+  const token = getClientAccessToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json; charset=utf-8',
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const resp = await fetch(`${base}${API_ROUTES.ttsPhonemes.path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      text: readableText,
+      language: 'zh-cn',
+      speed,
+      volume,
+    }),
+  })
+
+  if (!resp.ok) {
+    throw new Error(`TTS phonemes request failed: ${resp.status}`)
+  }
+
+  const envelope = (await resp.json()) as {
+    code: number
+    message?: string
+    data?: TTSResponse
+  }
+  if (envelope.code !== 0 || !envelope.data) {
+    throw new Error(`TTS phonemes envelope error: ${envelope.message ?? 'no data'}`)
+  }
+
+  const { audio: audioB64, phonemes, duration } = envelope.data
+  if (!audioB64 || !phonemes || phonemes.length === 0 || !duration) {
+    throw new Error('TTS phonemes response missing audio/phonemes/duration')
+  }
+
+  // base64 → Blob → ObjectURL（plan §2.A.3：phonemes 一次性返全音频，非流式）
+  const blob = base64ToWavBlob(audioB64)
+  const url = URL.createObjectURL(blob)
+  const audio = new Audio(url)
+  audio.volume = volume
+  audio.playbackRate = speed  // HTMLAudioElement 用 playbackRate 控速（仓 server.py 已接收 speed）
+  audio.preload = 'auto'
+
+  currentAudioEl = audio
+  currentObjectURL = url
+  isPlaying.value = true
+
+  // 真口型同步：timeupdate 事件驱动（~250ms 一次，原 PCM 播放器无此事件订阅 —— plan 备注）
+  audio.ontimeupdate = () => {
+    currentTime.value = audio.currentTime
+    const ph = findPhonemeAt(phonemes, audio.currentTime)
+    if (ph) {
+      const shape = charToLipShape(ph.char)
+      onLipSync?.(shape, audio.currentTime / duration)
     }
-    if (token) headers['Authorization'] = `Bearer ${token}`
-    const response = await fetch(`${base}${API_ROUTES.ttsStream.path}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        text: readableText,
-        speed: speed,
-        volume: volume,
-      }),
-      signal: abortController.signal,
-    })
+  }
 
-    if (!response.ok) {
-      throw new Error(`TTS stream request failed: ${response.status}`)
+  // 结束：闭嘴 + 释放（plan §4 #12 播放结束 reset）
+  audio.onended = () => {
+    onLipSync?.('neutral', 1)
+    if (currentAudioEl === audio) currentAudioEl = null
+    if (currentObjectURL === url) {
+      URL.revokeObjectURL(url)
+      currentObjectURL = null
     }
-
-    if (!response.body) {
-      throw new Error('No response body')
-    }
-
-    const PcmPlayer = await getPcmPlayer()
-    const player = new PcmPlayer({
-      inputCodec: 'Int16',
-      channels: 1,
-      sampleRate: 24000,
-      flushTime: 100,
-    })
-
-    player.volume = currentVolume.value
-    pcmPlayer = player
-    console.log('[TTS Stream] PCM Player created with volume:', currentVolume.value)
-
-    isPlaying.value = true
-    let lipAnimationStarted = false
-
-    const reader = response.body.getReader()
-
-    let chunkCount = 0
-    let totalBytes = 0
-    const startTime = Date.now()
-    let lastLogTime = startTime
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      if (abortController?.signal.aborted) {
-        console.log('[TTS Stream] Aborted')
-        break
-      }
-
-      if (value && value.length > 0) {
-        const now = Date.now()
-        chunkCount++
-        totalBytes += value.length
-
-        if (now - lastLogTime >= 500) {
-          console.log(
-            `[TTS Stream] Chunk #${chunkCount}, ${value.length} bytes, total: ${totalBytes} bytes, elapsed: ${(now - startTime) / 1000}s`,
-          )
-          lastLogTime = now
-        }
-
-        if (!lipAnimationStarted && chunkCount === 1) {
-          console.log('[TTS Stream] First audio chunk received, starting lip animation...')
-          startRandomLipAnimation(onLipSync)
-          lipAnimationStarted = true
-        }
-
-        try {
-          let dataToUse = value
-          // 如果是奇数长度，去掉最后一个字节保证对齐
-          if (value.length % 2 !== 0) {
-            const newLength = value.length - 1
-            dataToUse = new Uint8Array(newLength)
-            dataToUse.set(value.subarray(0, newLength))
-          }
-          const int16Data = new Int16Array(dataToUse.buffer)
-          player.feed(int16Data)
-        } catch (e) {
-          console.error('[TTS Stream] Error feeding data to PCM player:', e)
-        }
-      }
-    }
-
-    console.log(
-      `[TTS Stream] Stream completed, total chunks: ${chunkCount}, total bytes: ${totalBytes}, total time: ${(Date.now() - startTime) / 1000}s`,
-    )
     isPlaying.value = false
-    stopLipAnimation()
-  } catch (e: any) {
-    if (e.name === 'AbortError') {
-      console.log('[TTS Stream] Request cancelled')
-    } else {
-      console.error('[TTS Stream] Error:', e)
-      stopLipAnimation()
-      throw e
+  }
+
+  // 错误：同样闭嘴 + 释放
+  audio.onerror = () => {
+    onLipSync?.('neutral', 1)
+    if (currentAudioEl === audio) currentAudioEl = null
+    if (currentObjectURL === url) {
+      URL.revokeObjectURL(url)
+      currentObjectURL = null
     }
-  }
-}
-
-const playStreamChunks = (chunks: Uint8Array[]) => {
-  const ctx = audioContext as AudioContext | null
-  if (!ctx) return
-
-  const allBytes = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0))
-  let offset = 0
-  for (const chunk of chunks) {
-    allBytes.set(chunk, offset)
-    offset += chunk.length
+    isPlaying.value = false
   }
 
-  ctx.decodeAudioData(
-    allBytes.buffer,
-    (buffer: AudioBuffer) => {
-      const source = ctx.createBufferSource()
-      source.buffer = buffer
-      source.connect(ctx.destination)
-      source.start()
-    },
-    (e: DOMException) => {
-      console.error('[TTS Stream] Decode error:', e)
-    },
-  )
-}
-
-const pause = () => {
-  const el = audioElement as HTMLAudioElement | null
-  if (el && isPlaying.value) {
-    el.pause()
-  }
-}
-
-const resume = () => {
-  const el = audioElement as HTMLAudioElement | null
-  if (el && !isPlaying.value && currentTime.value > 0) {
-    el.play()
-  }
-}
-
-const flushBuffer = async (onLipSync: LipSyncCallback) => {
-  if (chunksBuffer.length > 0) {
-    console.log(`[TTS] Flushing buffer: ${chunksBuffer.length} chunks`)
-    playStreamChunks([...chunksBuffer])
-    chunksBuffer = []
+  try {
+    await audio.play()
+  } catch (e) {
+    onLipSync?.('neutral', 1)
+    URL.revokeObjectURL(url)
+    currentObjectURL = null
+    currentAudioEl = null
+    isPlaying.value = false
+    throw e
   }
 }
 
@@ -359,6 +327,5 @@ export function useTTSPlayer() {
     resume,
     flushBuffer,
     setVolume,
-    clearLipSyncInterval,
   }
 }
