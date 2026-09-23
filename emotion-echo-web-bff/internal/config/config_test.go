@@ -79,6 +79,23 @@ func TestConfig_AIServiceDefaultTimeoutIs30s(t *testing.T) {
 		"AIService.TimeoutMs 默认应为 30000ms（30s）以容纳 SenseVoice 冷启动转写（E2E-F-115）")
 }
 
+// TestConfig_XTTSDefaultTimeoutIs90s 断言 XTTS.TimeoutMs 默认 90000ms（90s）。
+//
+// E2E-F-127（2026-09-23 e2e-17 step 5 收口实测）：仓 XTTS 模型 CPU 推理 4 字符 ~7s，
+// 按字符数线性放大。E2E-17 数字人 + TTS plan §2.A.3 实测：1 字 warm path ~16-20s，
+// 30s 不够 cold path + warm path 长文本。原 yaml TimeoutMs: 30000 与 config.go
+// SetDefaults 默认 90000 矛盾—— yaml 不为 0 时 SetDefaults 不覆盖，导致实际生效 30s。
+//
+// 修复目标：yaml 与 config.go 默认值保持一致；测试断言 yaml 加载后值 >= 90000，
+// 防止今后任何单方面改 yaml/config.go 又忘记另一边的漂移（code-review-2026-09-14
+// 文档漂移模式）。
+func TestConfig_XTTSDefaultTimeoutIs90s(t *testing.T) {
+	c := loadTestConfig(t)
+	assert.GreaterOrEqual(t, c.XTTS.TimeoutMs, 90000,
+		"XTTS.TimeoutMs 默认应 >= 90000ms（90s）以容纳 仓 XTTS CPU 推理 warm path 16-20s + 字符级时间戳 per-char 等分（E2E-F-127）。"+
+			"原 yaml TimeoutMs: 30000 与 config.go SetDefaults 90000 漂移 → yaml 实际生效 30s → BFF → XTTS client.Timeout 30s 撞底。")
+}
+
 // TestConfig_ApplyEnvOverrides_OverridesDefaults T1.3 REFACTOR:
 // 容器 env 注入后应覆盖 yaml 默认值（指向容器 DNS）。
 func TestConfig_ApplyEnvOverrides_OverridesDefaults(t *testing.T) {

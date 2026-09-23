@@ -2,13 +2,13 @@
 stage: e2e-17
 title: 数字人 + TTS（真口型同步 + 段间断点）
 type: transformation
-status: in-progress
+status: done
 created: 2026-09-23
-revised: 2026-09-23 (A0 完成：build 仓镜像 + 切换 compose + 健康检查 + 契约钉住 —— F-126 关闭，D-25 决议落地)
+revised: 2026-09-23 (step 5 收口完成：Playwright 双 project 6/6 PASS + 4 张 IAB 截图；E2E-F-127 yaml/config.go 漂移修复 + E2E-F-128/F-129 phoneme 驱动 + 段间断点队列化；APISIX upstream timeout 60s→180s 持久化到 seed.sh)
 depends-on: [e2e-16]
 blocks: [e2e-28]
 gate: []
-related-findings: [E2E-F-05, E2E-F-06, E2E-F-126]
+related-findings: [E2E-F-05, E2E-F-06, E2E-F-126, E2E-F-127, E2E-F-128, E2E-F-129]
 ---
 
 # E2E-17 数字人 + TTS — 详档（计划期校准版）

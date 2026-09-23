@@ -890,7 +890,37 @@ Stage 33 P0 修复+BFF净化 █████████████████
 
 | 2026-09-22 | SenseVoice 模型服务的运行时约束与镜像分发 | 语音链路五个独立缺陷叠加（torch/funasr 漂移、VAD 请求期下载、无预热、healthcheck 假绿、runtime 缺 ffmpeg）+ 内存限额按旧 torch 估 → **torch/funasr 成对锁定 + 模型与 VAD 全烘焙 + 启动预热 + healthcheck 校验 model_loaded + runtime 含 ffmpeg + 限额按峰值 3072M + ACR 双层同 tag** | [adr-2026-09-sensevoice-runtime-constraints.md](adr/adr-2026-09-sensevoice-runtime-constraints.md)；账本 E2E-F-106/111/112；实测 /analyze 0.84s + 端到端 200 + IAB 语音气泡；**只有浏览器实测（真实 webm）才同时暴露五条** |
 | 2026-09-22 | 客户端对象 URL 的下发方式 | 存储 `PublicBaseURL` 绝对地址（`http://localhost:9000/...`）→ **网关相对路径 + BFF 反代 MinIO 流式输出** | [adr-2026-09-client-object-url-bff-proxy.md](adr/adr-2026-09-client-object-url-bff-proxy.md)；账本 E2E-F-113（非宿主视角 `<audio>` 永不可达）；存量 avatar/uploads 同型债 E2E-F-116 归 E2E-27 |
+| 2026-09-23 | APISIX upstream timeout（web-bff）+ BFF XTTS timeout | APISIX upstream 6 默认 60s 撞底 + BFF yaml `TimeoutMs: 30000` 与 config.go SetDefaults 90000 漂移（E2E-F-127 真 bug，yaml 不为 0 时 SetDefaults 不覆盖）→ **APISIX upstream 6 (web-bff) timeout 180s 持久化 seed.sh + BFF yaml 改 90000 + config_test.go 钉守卫** | [adr-2026-09-apisix-upstream-timeout-web-bff.md](adr/adr-2026-09-apisix-upstream-timeout-web-bff.md)；账本 E2E-F-127；Playwright 双 project 6/6 PASS；bind-mount + docker restart 是 build 撞 daemon 时的分钟级快路径 |
 
 ---
 
 **所有文档（stage-X、roadmap、decomposition-plan）的具体实施细节以本文档为最终裁决。**
+
+---
+
+### 决策 32：APISIX upstream 6 (web-bff) timeout 180s + BFF XTTS timeout 90s = **✅ Accepted**（2026-09-23 E2E-17 step 5 收口）
+
+> **真因**：v0.1.27 commit `c7ff203` 改 BFF config.go `SetDefaults` 默认 90000ms 但 yaml `TimeoutMs: 30000` 不为 0 时 SetDefaults 不覆盖 → **实际生效 30s**（E2E-F-127 真 bug）。yaml 修 90000 后，BFF→XTTS 等到 90s（90.011s 502）触发——**APISIX upstream 默认 60s read/send timeout 先 504 撞底**。
+
+| 维度 | 选择 |
+|------|------|
+| BFF→XTTS http.Client.Timeout | **90000ms**（`emotion-echo-web-bff/etc/web-bff.yaml` XTTS.TimeoutMs，与 config.go SetDefaults 对齐） |
+| APISIX upstream 6 (web-bff) timeout | **`send: 180, read: 180, connect: 10`**（覆盖 phonemes cold path 100s+ + LLM 流式） |
+| 其它 nacos upstream (1~5) | 默认 60s 兜底（grpc 默认 5-30s 远低于此） |
+| 配置位置 | `deploy/apisix/seed.sh` `put_nacos_upstream`（id=6 case 单独给 180） |
+| BFF 镜像 | v0.1.28→v0.1.29 tag bump（**实际 bind-mount 改 yaml 即时生效，v0.1.29 mirror 重建未成功——docker daemon RPC 错误**） |
+
+**❌ 废弃**：原 yaml 30000ms（v0.1.27 commit 漏改）+ APISIX upstream 6 默认 60s timeout。
+
+**理由**（决策记录）：
+- 仓 XTTS 模型 CPU 推理 4 字符 ~7s，按字符线性放大；1 字 warm path 实测 14-30s，cold path 100s+
+- APISIX 默认 60s 撞底是 BFF→XTTS 90s timeout 之前先 504 的根因（双层 timeout 都需要 ≥ 100s 才能覆盖 cold path）
+- bind-mount 改 yaml + docker restart 是 docker daemon 资源紧张时 build 撞错的分钟级快路径（替代重建镜像）
+
+**关联 ADR**：[adr-2026-09-apisix-upstream-timeout-web-bff.md](adr/adr-2026-09-apisix-upstream-timeout-web-bff.md)
+
+**账本**：[discovered-unresolved.md](../e2e-roadmap/discovered-unresolved.md) E2E-F-127 yaml/config.go 漂移
+
+**测试**：
+- `pnpm exec playwright test e2e/digital-human-tts.spec.ts` 双 project **6/6 PASS**（3.8m）
+- `go test ./emotion-echo-web-bff/internal/config/` → `TestConfig_XTTSDefaultTimeoutIs90s` GREEN（钉 yaml/SetDefaults 对齐守卫）
