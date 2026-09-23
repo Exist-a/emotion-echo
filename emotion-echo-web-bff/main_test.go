@@ -93,9 +93,11 @@ var wantRoutes = gin.RoutesInfo{
 	// ----- multimodal_handler.go (1 条) -----
 	{Method: "POST", Path: "/api/v1/multimodal/analyze"},
 
-	// ----- tts_handler.go (2 条) -----
+	// ----- tts_handler.go (3 条) -----
 	{Method: "POST", Path: "/api/v1/tts/synthesize"},
 	{Method: "POST", Path: "/api/v1/tts/stream"},
+	// E2E-F-127：带字符级时间戳的 TTS 端点（plan §2.A / D-03 真口型同步）
+	{Method: "POST", Path: "/api/v1/tts/phonemes"},
 
 	// ----- upload_handler.go (1 条) -----
 	{Method: "POST", Path: "/api/v1/uploads/:kind"},
