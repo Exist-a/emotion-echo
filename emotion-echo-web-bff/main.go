@@ -417,7 +417,10 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 		TimeoutMs: c.AssessmentService.TimeoutMs,
 		Transport: downstream.AssessmentTransportHTTP,
 	}))
-	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, handler.AIStreamDeps{LLM: llmStreamer, Files: s.Chat, Chat: s.Chat, Personality: personalitySrc}))
+	// E2E-F-122：会话情绪历史来源（face/voice payload 空时回落注入"最近情绪模式"；
+	// s.EmotionQ nil 时 NewEmotionHistorySource 内部 no-op，行为等同 D-14 最小模式）
+	emotionSrc := downstream.NewEmotionHistorySource(s.EmotionQ)
+	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, handler.AIStreamDeps{LLM: llmStreamer, Files: s.Chat, Chat: s.Chat, Personality: personalitySrc, Emotion: emotionSrc}))
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
