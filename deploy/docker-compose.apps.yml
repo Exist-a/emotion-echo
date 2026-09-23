@@ -80,7 +80,8 @@ services:
       dockerfile: emotion-echo-user-svc/Dockerfile
     image: emotion-echo/user-svc:v0.1.4
     container_name: emotion-echo-user-svc
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     env_file: *env-file
     environment:
       <<: *logging-env
@@ -131,7 +132,8 @@ services:
     image: emotion-echo/chat-svc:v0.1.14  # Stage 94 PR-7: persistWithOutbox 退化路径重构 + 业务/outbox 同事务 (§P0-8)
     # v0.1.3: PR-2 中间件分层（/health、/metrics 免鉴权 + 业务群 auth.Use 分组）
     container_name: emotion-echo-chat-svc
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     env_file: *env-file
     environment:
       <<: *logging-env
@@ -181,7 +183,8 @@ services:
       dockerfile: emotion-echo-analytics-svc/Dockerfile
     image: emotion-echo/analytics-svc:v0.1.8  # Stage 94 PR-5: analytics_reader role 改 NOLOGIN (§P0-9)
     container_name: emotion-echo-analytics-svc
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     env_file: *env-file
     environment:
       <<: *logging-env
@@ -233,7 +236,8 @@ services:
       dockerfile: emotion-echo-assessment-svc/Dockerfile
     image: emotion-echo/assessment-svc:v0.1.4  # E2E-F-97: Result.Kind + scoreKind 语义标注
     container_name: emotion-echo-assessment-svc
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     env_file: *env-file
     environment:
       <<: *logging-env
@@ -284,7 +288,8 @@ services:
       dockerfile: emotion-llm-service/Dockerfile
     image: emotion-echo/llm-service:v0.1.2   # P0-4: pinned tag (Stage 91 PR-1 prompt 强指令性)
     container_name: emotion-llm-service
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     env_file: *env-file
     environment:
       <<: *logging-env
@@ -344,7 +349,8 @@ services:
       dockerfile: emotion-echo-ai-svc/Dockerfile
     image: emotion-echo/ai-svc:v0.1.8   # Stage 94 PR-2: ai-svc→llm-service grpc_analyzer.go 改用 ClientDialOptions helper (§P0-2 + §P0-3a)
     container_name: emotion-echo-ai-svc
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     env_file: *env-file
     environment:
       <<: *logging-env
@@ -438,7 +444,8 @@ services:
     #   context: ../emotion-echo-models
     #   dockerfile: FER-tflite/Dockerfile
     container_name: emotion-echo-fer
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     profiles: ["ai"]
     environment:
       <<: *logging-env
@@ -484,7 +491,8 @@ services:
     # dockerfile=SV-fastbuild/Dockerfile, image=emotion-echo/sensevoice-fastbuild:v0.1.0
     image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/sensevoice:v0.1.1
     container_name: emotion-echo-sensevoice
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     profiles: ["ai"]
     environment:
       <<: *logging-env
@@ -507,7 +515,7 @@ services:
           cpus: "1.5"
           # E2E-F-112：1536M 是按 torch 1.13 估的；E2E-F-106 升到 torch 2.1.0 后
           # 峰值超 1.5G（893MB model.pt + torch 2.1 运行时 + VAD + Python）⇒ 被 cgroup 杀。
-          memory: 3072M
+          memory: 6144M      # E2E-17: bump from 3GB (vendor default) to 6GB (repo XTTS model ~2GB + torch runtime peak ~3.5GB + room)
         reservations:
           cpus: "0.5"
           memory: 512M
@@ -534,13 +542,15 @@ services:
   # 验证过 133KB WAV 端到端跑通）。
   # =====================================================
   emotion-echo-xtts:
-    image: ai4all/coqui:latest
+    image: emotion-echo/xtts:v2.0.0
     container_name: emotion-echo-xtts
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     user: root
     profiles: ["ai"]
-    # ai4all/coqui 默认监听 8000，覆盖 CMD 改 8003 保持与 ai-svc XTTS_BASE_URL 兼容
-    command: ["fastapi", "run", "app.py", "--host=0.0.0.0", "--port=8003"]
+    # 仓内镜像 emotion-echo/xtts:v2.0.0（build 自 emotion-echo-models/XTTS/Dockerfile）；
+    # Dockerfile CMD 已包含 python server.py --host=0.0.0.0 --port=8003 --device cpu，
+    # 故此处不覆盖 command
     environment:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
@@ -558,13 +568,13 @@ services:
       resources:
         limits:
           cpus: "2.0"        # Coqui TTS CPU 推理吃核
-          memory: 3072M      # ~2GB 模型 + room
+          memory: 6144M      # E2E-17: bump from 3GB (vendor default) to 6GB (repo XTTS model ~2GB + torch runtime peak ~3.5GB + room)
         reservations:
           cpus: "0.5"
           memory: 1024M
     healthcheck:
-      # PR-TTS-VENDOR: ai4all/coqui 没有 /health 端点（实测 404），改用 / voice/result
-      # 探测 TCP listen 状态（wget 存在性 + 端口可达即可）。
+      # 仓内 XTTS Dockerfile 自带 HEALTHCHECK 探测 /health（返 model_loaded）；
+      # 此处覆盖为 TCP socket probe（避免 healthcheck 依赖未加载完成的 /health）。
       test: ["CMD-SHELL", "python -c \"import socket;s=socket.socket();s.settimeout(2);s.connect(('127.0.0.1',8003));s.close()\""]
       interval: 30s
       timeout: 5s
@@ -582,7 +592,8 @@ services:
       dockerfile: emotion-echo-web-bff/Dockerfile
     image: emotion-echo/web-bff:v0.1.24  # E2E-F-97 + E2E-F-113: audioUrl 反代（audio handler GET /api/v1/voice/audio/:filekey）
     container_name: emotion-echo-web-bff
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     env_file: *env-file
     depends_on:
       - emotion-echo-chat-svc
@@ -757,7 +768,8 @@ services:
         NPM_REGISTRY: https://registry.npmjs.org/
     image: emotion-echo/web:v0.1.4  # E2E-F-97: 答题提交改按 option.score 计分
     container_name: emotion-echo-web
-    restart: unless-stopped
+    restart: on-failure
+    # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     depends_on:
       # 网关必须先有路由，否则前端全 404
       # 但 seed 容器仅一次性 init, 第二次跑会因 schema 错 exit 3, web 等它完成会死锁。
