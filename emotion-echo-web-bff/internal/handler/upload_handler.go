@@ -111,12 +111,14 @@ func (h *UploadHandler) upload(c *gin.Context) {
 		return
 	}
 
-	// 4. 解析 multipart（按 kind 大小上限设上限，超限 → 413）
-	maxSize := uploadMaxSizeBytes[kind]
-	if err := c.Request.ParseMultipartForm(maxSize); err != nil {
+	// 4. 解析 multipart（ParseMultipartForm 的 maxSize 参数是 Go 内存缓存阈值，
+	//    不是请求体大小上限 —— 因此 ParseMultipartForm 不会拦截超大文件，
+	//    必须 FormFile 后用 fileHeader.Size 显式比对 kind 限额。
+	//    E2E-F-123 修复：原以为 ParseMultipartForm 会拦，实测 25MB 超 20MB file 上限返 200。
+	if err := c.Request.ParseMultipartForm(32 << 20); err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "request body too large") {
-			Fail(c, http.StatusRequestEntityTooLarge, 1, fmt.Sprintf("file exceeds %d bytes for kind=%s", maxSize, kind))
+			Fail(c, http.StatusRequestEntityTooLarge, 1, "request body too large")
 			return
 		}
 		Fail(c, http.StatusBadRequest, 1, "invalid multipart: "+errMsg)
@@ -125,6 +127,14 @@ func (h *UploadHandler) upload(c *gin.Context) {
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		Fail(c, http.StatusBadRequest, 1, "file 字段必填")
+		return
+	}
+
+	// E2E-F-123：显式按 kind 大小上限校验文件大小（不被 ParseMultipartForm 兜底）
+	maxSize := uploadMaxSizeBytes[kind]
+	if fileHeader.Size > maxSize {
+		Fail(c, http.StatusRequestEntityTooLarge, 1,
+			fmt.Sprintf("file %d bytes exceeds kind=%s limit %d bytes", fileHeader.Size, kind, maxSize))
 		return
 	}
 

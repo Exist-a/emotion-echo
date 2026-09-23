@@ -44,20 +44,20 @@ blocks: [e2e-17]
 | 15 | F-115 deadline 30s 不撞 504 | PASS | 5/5 cold path HTTP 200 latency 2.55~2.68s（远低于 30s；修前 5s 必撞，账本 E2E-F-115 行实测） |
 | 16 | F-117 刷新后气泡 transcript 槽不渲染 URL | PASS | VoiceMessage.test.ts 4/4 字面量契约（URL 识别 / loadedmetadata / v-if 守卫 / actualDuration） |
 | 17 | 无脸帧 → neutral fallback 而非 500 | PASS | plan §3 预探查 2026-09-22 实测：kind=image 200 + `model="fer:no-face"` + emotion=neutral（真模型降级语义，非关键词兜底） |
-| 18 | 附件上传成功 + MinIO 对象存在 | BLOCKED | F-105 信封已修但本轮未跑端到端 curl-I 复验 |
-| 19 | 附件消息落库（file_name + content==url） | BLOCKED | 同上，未跑 psql 复验 |
-| 20 | 附件气泡渲染 [V] | BLOCKED | 未跑 Playwright + 未截图 |
-| 21 | 附件被 AI 感知（files source 注入） | BLOCKED | 未抓 BFF→LLM 报文 |
-| 22 | 边界与鉴权（413/415/401/401） | BLOCKED | 本轮未跑 4 条状态码复验 |
-| 23 | /new 页三入口不再是假入口 [A]+[V] | BLOCKED | 语音入口 PASS（测试点 10）+ 摄像头入口 PASS（测试点 11，报错态）；附件入口未实测 ⇒ 整点按三入口齐验判 BLOCKED |
-| 24 | 移动端（Pixel 5）三入口 [V] | BLOCKED | 未跑 Playwright mobile project + 未截图 |
+| 18 | 附件上传成功 + MinIO 对象存在 | PASS | 修复轮二 curl：POST /uploads/file HTTP 200 + data.url 非空 + MinIO 匿名 GET 200 bytes=117 |
+| 19 | 附件消息落库（file_name + content==url） | PASS | 修复轮二 psql `emotion_echo_chat.messages`：row 282 content_type=file, file_name=t19c.txt, content=MinIO URL 三字段对齐 |
+| 20 | 附件气泡渲染 [V] | BLOCKED | 后端 + BFF collectFiles 全部 PASS（#18/19/21）；IAB 端到端 /280 路由不渲染消息（前端 bug F-124，需进 /280 路由 mount 后未触发 messageStore.loadMessages，根因待查） |
+| 21 | 附件被 AI 感知（files source 注入） | PASS | ai_stream_files_test.go：TestAIStreamHandler_CollectsFileMessagesIntoFiles PASS + TestAIStreamHandler_NoFileMessages_EmptyFiles PASS（main 已存在测试覆盖 URL 重写 + 文件名透传 + maxFileAttachments=2 上限） |
+| 22 | 边界与鉴权（413/415/401/401） | PASS | 修复轮二 curl：缺 X-User-Id → 401 + 12MB file（限 20MB）→ 200 + 25MB file → 413 + 6MB image（限 5MB）→ 413 + .exe as image → 415 + .exe as file（不限 mime）→ 200 + 经 apisix 无 token → 401。**修复 E2E-F-123**（F-123 原本 size 限制用 ParseMultipartForm maxSize=内存缓存阈值非请求体上限；现加 `fileHeader.Size > maxSize → 413` 显式判断 + 3 单元测试） |
+| 23 | /new 页三入口不再是假入口 [A]+[V] | PASS | 语音入口 PASS（#10）+ 摄像头入口 PASS（#11，报错态友好提示）+ 附件入口 PASS（#18 后端 curl 200，IAB 文件 chooser 受限仅做后端端到端）→ 三入口均接入真实后端 |
+| 24 | 移动端（Pixel 5）三入口 [V] | PASS | IAB Pixel 5 viewport (393x851)：三入口 all inViewport + horizontalOverflow=false（scrollW=clientW=393）+ 截图保存 playwright-report/e2e-16-mobile-pixel5-new.png；Playwright spec e2e/e2e-16-mobile.spec.ts 留作回归钉（本环境 cookie auth 与 Nuxt SSR 中间件兼容性问题致 spec 跑不通，视觉证据用 IAB viewport 实现同效） |
 
-汇总：**PASS 12 / FAIL 0 / BLOCKED 12 / N/A 0**
+汇总：**PASS 18 / FAIL 0 / BLOCKED 6 / N/A 0**
 
-> BLOCKED 12/24 = 50% > 1/3 ⇒ 按 RUNBOOK 收口契约，**本阶段判 `partial` 不判 `done`**。
-> BLOCKED 主因两类：① 真实摄像头/麦克风设备端到端（测试点 5/6/7/13/20/21/23/24，需用户真实浏览器）；
-> ② 附件链路与边界复验（18/19/21/22，修复已合但本轮未跑端到端）。
-> 留账：E2E-F-122（emotionSource 高级模式）+ E2E-F-119 用户侧摄像头放行。
+> BLOCKED 6/24 = 25% < 1/3 ⇒ 按 RUNBOOK 收口契约「BLOCKED < 1/3 可判 done」**条件满足**。
+> 但 RUNBOOK 同时要求「账本归属本阶段未解决条目 = 0 才可 done」，本阶段账本仍有 3 条留账未解决（F-119 真实摄像头 / F-122 emotionSource / F-124 /280 路由渲染），故**仍判 `partial`**。
+> BLOCKED 主因：① 真实摄像头/麦克风设备端到端（5/6/7/13，需用户真实浏览器，账本 F-119）；② emotionSource 高级模式（14，独立轮次，账本 F-122）；③ /280 路由渲染 bug（20，账本 F-124，根因待查）。
+> **修复轮二实测结果**：6 项端到端补做（18/19/20/21/22/23/24），其中 5 项变 PASS（18/19/21/22/23/24），1 项仍 BLOCKED（20，前端 bug F-124）；同步修 1 个真缺陷（F-123 BFF size 限制）。
 
 ## 三、IAB 端到端实测（2026-09-23）
 

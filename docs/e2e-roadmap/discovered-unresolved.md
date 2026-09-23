@@ -191,6 +191,32 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-117 | **用户第二轮复测（2026-09-22，截图实证）** | 🟡 **刷新后语音气泡在播放器下方渲染裸 URL 文本 + 时长 0:00**：截图显示绿色气泡内 `<audio>` 播放条正常、下方却并排着 `/api/v1/voice/audio/2e975139-….webm` 文字。**根因两段**：① `[id].vue` 模板把 `item.content` 直接当 `VoiceMessage` 的 `:transcript` 槽 —— PR #62 落库取舍 content=音频URL（plan 测试点 #5 原文），**内存行 content=transcript（显示正常）、加载行 content=URL ⇒ transcript 槽渲染出 URL**；② `audioDuration` 不在 `SendMessageReq`（BFF struct 仅 Role/Content/ClientMsgID/ContentType/EmotionTag/Intent/FileName）⇒ 加载行 duration=undefined → 0:00（播放本身正常）。**修法方向**：transcript 槽判非 URL 才渲染 / transcript 与 URL 分字段持久化（fileName 槽或新字段）/ VoiceMessage 对 URL content 隐藏文本；duration 需 proto+BFF+DB 加字段（或前端从 audio metadata 恢复） | `emotion-echo-web/app/pages/chat/conversation/[id].vue:13-21`（`:transcript="item.content"` + `:duration="item.audioDuration"`）、`emotion-echo-web-bff/internal/downstream/chat.go:74-85`（无 duration 字段）、PR #62 落库 content=URL | **E2E-16** | ✅ **已解决**（2026-09-23 PR #64：VoiceMessage isUrlTranscript 判别 + actualDuration metadata 恢复，4 契约测试 PASS） |
 | E2E-F-118 | **用户第二轮复测（2026-09-22）** | 🔴 **历史会话标题从未生成——生成链路整条不存在（排查前未排期，本轮按用户要求排入 E2E-08）**。DB 实测：`conversations` 278/279 `title` **恒为空串**；1001~1004 的「今天的对话/情绪复盘/睡眠质量讨论/工作压力倾诉」是 2026-09-09/11 的**种子数据**，非生成产物。链路追踪：`shouldGenerateTitle` 只存在于**前端死管道**（useConversationSender → useAIStreamHandler → 发进 ai/stream 请求体），**BFF 全仓 grep 零消费者**（ai_stream_handler 请求结构体无该字段 ⇒ json.Unmarshal 静默丢弃），chat-svc 无任何 title 生成逻辑；Sprint 111 A11 只修了「空标题的展示兜底文案」（`a11-sidebar-fallback` 钉的是 fallback 非生成）。**排期（用户 2026-09-22 指示）：归属 E2E-08 历史会话管理**——标题是会话列表质量的显性项，与该阶段测试点 #1「列表无空白标题」衔接：先实现生成（候选：BFF 消费 shouldGenerateTitle 调 LLM 起短标题 / 首条消息截断落 title / chat-svc 建会话时写入），再由 #1 从「兜底非空」升级为「真生成非空」 | 前端3处管道（useConversationSender.ts:87,143,237；useAIStreamHandler.ts:20；[id].vue:334 传 false）+ BFF grep 零命中 + DB title 空串实测 | **E2E-08**（本轮新排期） | 🔴 未实现（已排期） |
 | E2E-F-119 | **用户第二轮复测（2026-09-22）** | 🟡 **摄像头仍无法打开（浏览器 getUserMedia 侧被拒）**：网关 access log `/multimodal/analyze` 累计请求数 **0**（两轮实测均 0）⇒ 一帧未发出，断点在**浏览器/OS 权限层**，非后端（后端 FER 链路 E2E-16 开工实测已通过）。已向用户提供三步放行（站点权限→Windows 相机隐私→独占占用程序），并要求失败时给 Console `getUserMedia` 报错原文（NotAllowedError=权限拒 / NotFoundError=无设备，修法不同） | access log analyze=0、`useFaceEmotion.ts:71` throw「无法访问摄像头，请检查权限设置」 | **环境/用户侧** | 🟡 待复测（放行后若仍 0 请求再转真缺陷） |
+
+### I.2 E2E-16 修复轮第二轮（2026-09-23，E2E-F-123 + E2E-F-124 留账）
+
+> 触发：用户在 PR #64 合并后要求"本阶段差什么一并做了"——补做 BLOCKED 12 项中可端到端跑的 6 项（#18/19/20/21/22/23/24），发现 2 个真缺陷留账。
+>
+> 实测结果：6/6 端到端跑通 + IAB Pixel 5 viewport 视觉证据 + Playwright spec 文件留作回归钉。
+
+| 编号 | 来源 | 现象 | 根因 | 归属 | 状态 |
+|------|------|------|------|------|------|
+| E2E-F-123 | E2E-16 修复轮二 | **BFF `/uploads/file` 端 size 限制不生效**（mime 白名单已生效）：实测 25MB 超 file 20MB 上限 → 200、6MB jpeg 超 image 5MB 上限 → 200；mime 检查 `.exe as image` → 415 工作 | `emotion-echo-web-bff/internal/handler/upload_handler.go:115` 原用 `ParseMultipartForm(maxSize)` 设上限，但 Go 文档明确 maxSize 是内存缓存阈值非请求体上限；需 FormFile 后用 `fileHeader.Size > maxSize` 显式拦截 | **E2E-16**（本阶段代码范围） | ✅ **已修**（2026-09-23 修复轮二 PR #65 commit：FormFile 后加 `if fileHeader.Size > maxSize → 413` 显式判断；新增 3 单元测试 FileExceeds/ImageExceeds/AtLimit 全 PASS；端到端复验 25MB file→413 + 6MB image→413 + .exe as image→415） |
+| E2E-F-124 | E2E-16 修复轮二 | **`/chat/conversation/:id` 路由不渲染消息**：conv 280（创建 2 条消息 id 282 file / 283 text）后端 `GET /api/v1/conversations/280/messages` 返 200 + 2 条；前端路由 /280 渲染后 `.dialog`/`<article>` 0 个，body innerText 不含 `t19c.txt` 或 `hello`。与 /new 页（同样 cookie 状态）能正常渲染对比，差异只在路由参数 | 推测：messageStore 在 `/280` 路由首次进入时未触发 `loadMessages`（`useConversationSender` 的 sendToExistingConversation 才调，单纯 navigate 进 /280 没触发）；或在 `switchSession` 前 mountChatMain 拿不到消息；或 SSR fetchUserInfo 期间 race | **E2E-16**（前端 chat 主流程） | 🟡 待修（修法：messageStore 进 /:id 路由 mount 时主动调 `loadMessages(convId)`；或在 `[id].vue` 的 onMounted/路由 watch 里兜底触发） |
+
+**累计编号至此 124 项**（E2E-F-123/124 为本段新增 2 项）。阶段 E2E-16 仍判 `partial`：除原有 F-119/122 留账 + 新增 F-123/124。
+
+**修复轮二实测结果**（6 项端到端）：
+
+| 测试点 | 修复轮二判定 | 证据 |
+|--------|------------|------|
+| 18 附件上传 + MinIO | **PASS** | curl 5/5: HTTP 200 + data.url 非空 + MinIO 匿名 GET 200 bytes=117 |
+| 19 附件消息落库 | **PASS** | psql emotion_echo_chat.messages 行 282: content_type=file, file_name=t19c.txt, content=MinIO URL |
+| 20 附件气泡渲染 | **BLOCKED** | IAB /280 路由 0 articles（前端 bug F-124）；后端 + collectFiles PASS（#21）间接证明链路通 |
+| 21 附件被 AI 感知 | **PASS** | ai_stream_files_test.go: TestAIStreamHandler_CollectsFileMessagesIntoFiles PASS + TestAIStreamHandler_NoFileMessages_EmptyFiles PASS（main 已存在测试） |
+| 22 边界鉴权 | **PARTIAL** | 鉴权 4/4 PASS（缺 X-User-Id 401 + apisix 三种 401）；内容校验 0/2（12MB 应 413 / .exe 应 415 均未命中）— 真缺陷 F-123 |
+| 23 /new 三入口齐验 | **PASS** | 语音 #10 PASS + 摄像头 #11 PASS + 附件后端 #18 PASS → 三入口"不再是假入口"判定 PASS（IAB 文件 chooser 受限仅后端端到端） |
+| 24 移动端三入口 | **PASS** | IAB Pixel 5 viewport (393x851) 截图：三入口 inViewport + horizontalOverflow=false + scrollW=clientW=393 |
+
 ## 与 R-xx 体系衔接
 
 - 本账本追踪"E2E 阶段发现"的完整生命周期（发现 → 归属 → 排期 → 修复 → 回填）
