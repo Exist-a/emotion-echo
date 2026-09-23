@@ -1,19 +1,25 @@
-// useTTSPlayer.ts — E2E-17 plan §6 step 3 改造后
+// useTTSPlayer.ts — E2E-17 plan §6 step 3（phoneme 驱动）+ step 4（队列化消除段间断点）
 //
-// D-03 真口型同步：播放层从随机轮播假动画改为按 phoneme 时间戳驱动。
+// D-03 真口型同步 + 段间断点修复：
 //
-// 关键变化（与改造前对比）：
-//   - 删 150ms 固定节奏假动画（plan §4 #10 字面契约：源码不引用该函数）
-//   - 删 pcm-player 流式依赖（不再做流式 WAV chunk 拼接）
-//   - 删 chunksBuffer / flushBuffer / playStreamChunks（流式缓冲，phonemes 一次性返全音频）
-//   - 删 random 状态机变量（setInterval 状态机整体删除）
-//   - 删 abortController（phonemes 一次性请求，无需中止）
-//   - playStream 改为 POST /api/v1/tts/phonemes → base64 → Blob → ObjectURL → HTMLAudioElement
-//   - 口型驱动：HTMLAudioElement.ontimeupdate → findPhonemeAt(phonemes, currentTime) → charToLipShape → callback
-//   - 播放结束 / 中断 → callback('neutral', 1)（resetLipShape 防止末帧卡死）
-//   - 新增导出助手：charToLipShape / findPhonemeAt（便于 Vitest 单元测试 + 复用）
+// step 3（F-128）：
+//   - 删 150ms 固定节奏假动画 + random 状态机 + pcm-player 流式缓冲
+//   - playStream 走 POST /api/v1/tts/phonemes → base64 → Blob → HTMLAudioElement
+//   - 口型驱动：ontimeupdate → findPhonemeAt → charToLipShape → callback
+//   - 播放结束/中断 → callback('neutral', 1)（防末帧卡死）
 //
-// 关联 plan：E2E-17 [stages/e2e-17-digital-human-tts/plan.md] §2.A.3 / §4 #7-#12
+// step 4（F-129 段间断点）：
+//   - **队列化**：新段入队不再 stop 前段（旧首行 stop() 是断点根因：
+//     段 N 被打断 + fetch/推理 ~25s 才播 N+1）
+//   - **入队即预取**：fetch 在入队瞬间发起，与当前段播放并行；
+//     衔接时只等已就绪的 audio 创建，不等推理
+//   - **代际校验（gen）**：stop() 清队列 + gen++，过期 fetch / 迟到 ended 不得复活
+//   - playStream 返回即入队完成（不 await 整段播放 —— 与旧"流读完即返回"语义一致）
+//
+// 注意：服务端 XTTS CPU 推理延迟（实测 ~25s/4字符冷路径）不在本层可修范围，
+// 本层消除的是前端侧 stop→重开→refetch 的结构性 gap；服务端基线记入 report。
+//
+// 关联 plan：E2E-17 [stages/e2e-17-digital-human-tts/plan.md] §2.B / §4 #13-15
 
 import { ref, onUnmounted } from 'vue'
 import { stripMarkdown, extractReadableText } from '~/utils/stripMarkdown'
@@ -136,7 +142,6 @@ export function findPhonemeAt(phonemes: Phoneme[], timeSec: number): Phoneme | n
 
 /**
  * base64ToWavBlob 把 BFF 返回的 base64 音频字符串解码为 WAV Blob（mime=audio/wav）。
- * 用于 HTMLAudioElement.src = URL.createObjectURL(blob)。
  */
 const base64ToWavBlob = (b64: string): Blob => {
   const binary = atob(b64)
@@ -147,22 +152,206 @@ const base64ToWavBlob = (b64: string): Blob => {
   return new Blob([bytes], { type: 'audio/wav' })
 }
 
-// 单例/共享状态（HT 前的全局 audioElement 已被拆为 per-call local）
+// ===== 共享状态 =====
 const currentTime = ref(0)
 const isPlaying = ref(false)
 const currentVolume = ref(2.0)
+
 let currentAudioEl: HTMLAudioElement | null = null
 let currentObjectURL: string | null = null
+let currentLipSync: LipSyncCallback | null = null
+
+// ===== 队列状态（step 4 段间断点修复）=====
+interface QueuedSegment {
+  gen: number
+  fetchPromise: Promise<TTSResponse>
+  onLipSync: LipSyncCallback
+  speed: number
+  volume: number
+}
+
+let segmentQueue: QueuedSegment[] = []
+let currentGen = 0 // 代际：stop() 时 ++，过期段全部作废
+let isPumping = false
+// currentSegmentDone 让 stop() 能解除 pump 对当前段 ended 的等待（pause 不触发 ended）
+let currentSegmentDone: (() => void) | null = null
 
 /**
- * resetLipShape 通知上层把嘴闭上（防 phoneme 末帧卡死）。
- * 由 onended / onerror / 主动 stop 触发。
+ * fetchPhonemes 发起 /api/v1/tts/phonemes 请求并做信封校验。
+ * 入队瞬间调用（预取）—— 与当前段播放并行。
  */
-const resetLipShape = (onLipSync?: LipSyncCallback | null) => {
-  onLipSync?.('neutral', 0)
+async function fetchPhonemes(
+  text: string,
+  speed: number,
+  volume: number,
+): Promise<TTSResponse> {
+  const base = getApiBaseUrl(useRuntimeConfig())
+  const token = getClientAccessToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json; charset=utf-8',
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const resp = await fetch(`${base}${API_ROUTES.ttsPhonemes.path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ text, language: 'zh-cn', speed, volume }),
+  })
+
+  if (!resp.ok) {
+    throw new Error(`TTS phonemes request failed: ${resp.status}`)
+  }
+
+  const envelope = (await resp.json()) as {
+    code: number
+    message?: string
+    data?: TTSResponse
+  }
+  if (envelope.code !== 0 || !envelope.data) {
+    throw new Error(`TTS phonemes envelope error: ${envelope.message ?? 'no data'}`)
+  }
+
+  const { audio: audioB64, phonemes, duration } = envelope.data
+  if (!audioB64 || !phonemes || phonemes.length === 0 || !duration) {
+    throw new Error('TTS phonemes response missing audio/phonemes/duration')
+  }
+  return envelope.data
+}
+
+/**
+ * createAndPlayAudio 创建 HTMLAudioElement 并开播，返回 Promise 在
+ * 播放结束（onended）或出错（onerror）时 resolve —— 供 pump 衔接下一段。
+ */
+function createAndPlayAudio(
+  data: TTSResponse,
+  onLipSync: LipSyncCallback,
+  speed: number,
+  volume: number,
+  gen: number,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    // 代际再校验（fetch 期间 stop() 过）
+    if (gen !== currentGen) {
+      resolve()
+      return
+    }
+
+    const blob = base64ToWavBlob(data.audio)
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    audio.volume = volume
+    audio.playbackRate = speed
+    audio.preload = 'auto'
+
+    const { phonemes, duration } = data
+    // fetchPhonemes 已校验非空，此处显式收窄供 TS（避免 TS2345/TS18048）
+    if (!phonemes || phonemes.length === 0 || !duration) {
+      onLipSync?.('neutral', 1)
+      reject(new Error('TTS phonemes data invalid'))
+      return
+    }
+    let settled = false
+    const settle = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      // 清理当前段引用（仅当仍是自己）
+      if (currentAudioEl === audio) {
+        currentAudioEl = null
+        currentObjectURL = null
+        currentLipSync = null
+      }
+      URL.revokeObjectURL(url)
+      isPlaying.value = segmentQueue.length > 0 // 队列还有段则保持 playing 语义
+      fn()
+    }
+
+    currentAudioEl = audio
+    currentObjectURL = url
+    currentLipSync = onLipSync
+
+    // 真口型同步：timeupdate 驱动
+    audio.ontimeupdate = () => {
+      currentTime.value = audio.currentTime
+      const ph = findPhonemeAt(phonemes, audio.currentTime)
+      if (ph) {
+        onLipSync?.(charToLipShape(ph.char), audio.currentTime / duration)
+      }
+    }
+
+    audio.onended = () => {
+      onLipSync?.('neutral', 1)
+      settle(() => resolve())
+    }
+    audio.onerror = (e?: unknown) => {
+      onLipSync?.('neutral', 1)
+      settle(() => reject(e instanceof Error ? e : new Error('audio play error')))
+    }
+
+    currentSegmentDone = () => {
+      // stop() 主动打断：不等 ended，直接放行 pump（pause 不触发 ended）
+      settle(() => resolve())
+    }
+
+    void audio.play().catch((e) => {
+      onLipSync?.('neutral', 1)
+      settle(() => reject(e))
+    })
+  })
+}
+
+/**
+ * pumpQueue 队列泵：串行消费队列 —— 取段 → await 预取结果 → 播放 →
+ * ended 衔接下一段。同一时刻至多一个 pump 运行（isPumping 互斥）。
+ */
+async function pumpQueue(): Promise<void> {
+  if (isPumping) return
+  isPumping = true
+  try {
+    while (segmentQueue.length > 0) {
+      const seg = segmentQueue[0]
+      if (!seg || seg.gen !== currentGen) {
+        // 过期段（stop 后残留）→ 出队
+        if (seg) segmentQueue.shift()
+        continue
+      }
+
+      let data: TTSResponse
+      try {
+        data = await seg.fetchPromise
+      } catch (e) {
+        // 预取失败：丢弃该段继续下一段（不打断当前播放）
+        console.error('[TTS] phonemes prefetch failed:', e)
+        if (segmentQueue[0] === seg) segmentQueue.shift()
+        continue
+      }
+
+      // await 期间可能 stop() → gen 变化
+      if (seg.gen !== currentGen) {
+        if (segmentQueue[0] === seg) segmentQueue.shift()
+        continue
+      }
+
+      try {
+        await createAndPlayAudio(data, seg.onLipSync, seg.speed, seg.volume, seg.gen)
+      } catch (e) {
+        // 单段播放错误不终止队列（下一段继续）
+        console.error('[TTS] segment play failed:', e)
+      }
+
+      currentSegmentDone = null
+      if (segmentQueue[0] === seg) segmentQueue.shift()
+    }
+  } finally {
+    isPumping = false
+  }
 }
 
 const stop = () => {
+  // 代际递增 + 清队列（过期 fetch / 迟到 ended 不得复活）
+  currentGen++
+  segmentQueue = []
+
+  // 先停当前 audio（settle 会把 currentAudioEl 置 null，故 pause 必须在 done() 之前）
   if (currentAudioEl) {
     currentAudioEl.pause()
     currentAudioEl.currentTime = 0
@@ -172,6 +361,16 @@ const stop = () => {
     URL.revokeObjectURL(currentObjectURL)
     currentObjectURL = null
   }
+
+  // 再解除 pump 对当前段 ended 的等待（pause 不触发 ended，否则泵挂死）
+  const done = currentSegmentDone
+  currentSegmentDone = null
+  done?.()
+
+  // 中断也须闭嘴（plan §4 #12：结束/中断 → neutral，防末帧卡死）
+  currentLipSync?.('neutral', 0)
+  currentLipSync = null
+
   isPlaying.value = false
 }
 
@@ -197,120 +396,42 @@ const resume = () => {
 }
 
 /**
- * flushBuffer 兼容占位（plan §6 step 4 处理段间断点时改造 useTTSManager 移除 500ms debounce）。
- * 当前 phonemes 路径一次性返全音频，无 chunk buffer 可 flush；保留函数签名避免
- * useTTSManager.flushRemainingText 编译失败。语义上 no-op。
+ * flushBuffer 兼容占位（phonemes 路径无 chunk buffer；签名保留供
+ * useTTSManager.flushRemainingText 调用。队列化后衔接由 pumpQueue 负责）。
  */
 const flushBuffer = async (_onLipSync?: LipSyncCallback): Promise<void> => {
-  /* no-op: phonemes 路径无 chunk buffer（plan §2.A.3） */
+  /* no-op: phonemes 队列路径无 chunk buffer（plan §2.A.3 / §2.B） */
 }
 
+/**
+ * playStream —— 入队即返回（不 await 播放）。
+ *
+ * step 4 语义：
+ *   1. 文本清洗
+ *   2. **立即发起 fetch（预取，与当前段播放并行）**
+ *   3. 入队 + 踢泵（当前空闲则开播；在播则等 ended 自动衔接）
+ *   4. **不再首行 stop()**（旧断点根因 —— 队列化取代打断）
+ *
+ * 返回 Promise 在入队完成后 resolve（与旧"流读完即返回"语义一致偏早，
+ * 调用方 await 的是"已受理"而非"已播完"；播放完成由 onLipSync neutral 回调观察）。
+ */
 const playStream = async (
   text: string,
   onLipSync: LipSyncCallback,
   speed: number = 0.75,
   volume: number = 2.0,
-) => {
+): Promise<void> => {
   const cleanText = stripMarkdown(text).trim()
   if (!cleanText) return
 
   const readableText = extractReadableText(cleanText)
   if (!readableText) return
 
-  // 先停前一次（断旧音频 + 释放 URL + 重置嘴型）
-  resetLipShape(onLipSync)
-  stop()
-
-  const base = getApiBaseUrl(useRuntimeConfig())
-  const token = getClientAccessToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json; charset=utf-8',
-  }
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const resp = await fetch(`${base}${API_ROUTES.ttsPhonemes.path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      text: readableText,
-      language: 'zh-cn',
-      speed,
-      volume,
-    }),
-  })
-
-  if (!resp.ok) {
-    throw new Error(`TTS phonemes request failed: ${resp.status}`)
-  }
-
-  const envelope = (await resp.json()) as {
-    code: number
-    message?: string
-    data?: TTSResponse
-  }
-  if (envelope.code !== 0 || !envelope.data) {
-    throw new Error(`TTS phonemes envelope error: ${envelope.message ?? 'no data'}`)
-  }
-
-  const { audio: audioB64, phonemes, duration } = envelope.data
-  if (!audioB64 || !phonemes || phonemes.length === 0 || !duration) {
-    throw new Error('TTS phonemes response missing audio/phonemes/duration')
-  }
-
-  // base64 → Blob → ObjectURL（plan §2.A.3：phonemes 一次性返全音频，非流式）
-  const blob = base64ToWavBlob(audioB64)
-  const url = URL.createObjectURL(blob)
-  const audio = new Audio(url)
-  audio.volume = volume
-  audio.playbackRate = speed  // HTMLAudioElement 用 playbackRate 控速（仓 server.py 已接收 speed）
-  audio.preload = 'auto'
-
-  currentAudioEl = audio
-  currentObjectURL = url
-  isPlaying.value = true
-
-  // 真口型同步：timeupdate 事件驱动（~250ms 一次，原 PCM 播放器无此事件订阅 —— plan 备注）
-  audio.ontimeupdate = () => {
-    currentTime.value = audio.currentTime
-    const ph = findPhonemeAt(phonemes, audio.currentTime)
-    if (ph) {
-      const shape = charToLipShape(ph.char)
-      onLipSync?.(shape, audio.currentTime / duration)
-    }
-  }
-
-  // 结束：闭嘴 + 释放（plan §4 #12 播放结束 reset）
-  audio.onended = () => {
-    onLipSync?.('neutral', 1)
-    if (currentAudioEl === audio) currentAudioEl = null
-    if (currentObjectURL === url) {
-      URL.revokeObjectURL(url)
-      currentObjectURL = null
-    }
-    isPlaying.value = false
-  }
-
-  // 错误：同样闭嘴 + 释放
-  audio.onerror = () => {
-    onLipSync?.('neutral', 1)
-    if (currentAudioEl === audio) currentAudioEl = null
-    if (currentObjectURL === url) {
-      URL.revokeObjectURL(url)
-      currentObjectURL = null
-    }
-    isPlaying.value = false
-  }
-
-  try {
-    await audio.play()
-  } catch (e) {
-    onLipSync?.('neutral', 1)
-    URL.revokeObjectURL(url)
-    currentObjectURL = null
-    currentAudioEl = null
-    isPlaying.value = false
-    throw e
-  }
+  const gen = currentGen
+  // 入队即预取：与当前段播放并行（消除衔接时的全量推理等待）
+  const fetchPromise = fetchPhonemes(readableText, speed, volume)
+  segmentQueue.push({ gen, fetchPromise, onLipSync, speed, volume })
+  void pumpQueue()
 }
 
 export function useTTSPlayer() {
