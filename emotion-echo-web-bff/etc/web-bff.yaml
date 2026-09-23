@@ -61,7 +61,12 @@ AIService:
 
 XTTS:
   BaseURL: http://localhost:8003
-  TimeoutMs: 30000
+  # E2E-F-127（2026-09-23 e2e-17 step 5 收口实测）：仓 XTTS 模型 CPU 推理 4 字符 ~7s，
+  # 按字符数线性放大。E2E-17 数字人 + TTS plan §2.A.3 实测：1 字 warm path ~16-20s，
+  # 30s 不够 cold path + warm path 长文本。原 yaml 30000 与 config.go SetDefaults
+  # 默认 90000 漂移 → yaml 实际生效 30s → BFF→XTTS client.Timeout 30s 撞底 → 502。
+  # 修法：yaml 与 config.go 一致 90000；测试钉 config_test.go:TestConfig_XTTSDefaultTimeoutIs90s。
+  TimeoutMs: 90000
 
 # 聚合下游 health 的超时
 Health:

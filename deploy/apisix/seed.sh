@@ -209,6 +209,12 @@ EOF
 put_nacos_upstream() {
   local id="$1" name="$2" service_name="$3"
   local body
+  # E2E-17 F-127：APISIX upstream 默认 60s timeout 撞底（phonemes cold path 100s+）。
+  # 仅 web-bff（id=6）需要 180s 覆盖；其它下游 grpc 默认 5-30s 都够。
+  local upstream_timeout=60
+  case "$id" in
+    6) upstream_timeout=180 ;;
+  esac
   body=$(cat <<EOF
 {
   "name": "$name",
@@ -218,6 +224,11 @@ put_nacos_upstream() {
   "discovery_args": {
     "namespace_id": "$NACOS_NAMESPACE",
     "group_name": "$NACOS_GROUP"
+  },
+  "timeout": {
+    "connect": 10,
+    "send": $upstream_timeout,
+    "read": $upstream_timeout
   }
 }
 EOF
