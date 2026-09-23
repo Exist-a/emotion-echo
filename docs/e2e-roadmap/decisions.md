@@ -286,3 +286,5 @@ main 上 `doc-drift-check` 连续红（`2cb9e58`、`0644988`），3 个 job 失�
 | **D-07** | `doc-drift-check` 红态 = 分类处置，不用 `continue-on-error` | **R-01 / R-03** | ✅ 已定案 |
 | **D-08** | 分支保护 = 保持 `enforce_admins`，只 required 必跑 job | **R-03** | ✅ 已定案 |
 | **D-09** | 用户配置（字号/主题）持久化 = 服务端 `users.config JSONB` | **E2E-12** | ✅ 已决议（用户 2026-09-19；备选方案 B 见上） |
+| **D-10 ~ D-24** | _（编号保留，按需填入；当前无新决策）_ | | |
+| **D-25** | XTTS 镜像源 = 仓内 `emotion-echo/xtts:v2.0.0`（build 自 `emotion-echo-models/XTTS/Dockerfile`）替代 vendor `ai4all/coqui:latest` | **E2E-17** | ✅ 已决议（2026-09-23 计划期调研；详见 ADR `docs/architecture/adr/adr-2026-09-xtts-v3-repo-image.md`） |
