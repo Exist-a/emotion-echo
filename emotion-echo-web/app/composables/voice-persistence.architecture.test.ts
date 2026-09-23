@@ -35,7 +35,9 @@ describe('语音消息落库 · 接线静态契约（测试点 #5）', () => {
   it('[id].vue 的 handleVoiceStreamResponse 必须把 userMessageId 透传进 extraParams', () => {
     const fnIdx = pageSrc.indexOf('handleVoiceStreamResponse')
     expect(fnIdx, 'handleVoiceStreamResponse 必须存在').toBeGreaterThan(-1)
-    const block = pageSrc.slice(fnIdx, fnIdx + 900)
+    // 窗口须覆盖整个函数体：D-14 轮新增 faceEmotion/faceConfidence 行后 900 不够
+    //（skipUserMessage: true 被挤出窗口 ⇒ 假 FAIL，2026-09-23 CI 实测）
+    const block = pageSrc.slice(fnIdx, fnIdx + 1600)
     expect(
       /userMessageId/.test(block),
       '[id].vue 必须把 onUploadSuccess 收到的 userMessageId 传给 sendToExistingConversation 的 extraParams，' +

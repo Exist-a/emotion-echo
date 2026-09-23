@@ -2,7 +2,7 @@
 stage: e2e-16
 title: 多模态（语音 / 表情 / 文件上传）
 type: transformation
-status: done
+status: partial
 created: 2026-09-22
 revised: 2026-09-23 (E2E-16 全面修复轮收口：F-115/117/119 + D-13/14 当轮闭环 + IAB 多情绪验证)
 depends-on: [e2e-10]
@@ -23,28 +23,41 @@ blocks: [e2e-17]
 | **D-13** /new 页多模态入口 | ✅ | new.vue 接 useVoiceRecorder（同 [id].vue 模式）+ 摄像头 notify 友好提示 | 5 字面量契约 |
 | **D-14** 融合结果注入 prompt | ✅（最小模式）| 后端 `aiStreamReq` + `buildSystemPromptWithEmotion` + emotion context 段；前端 `AIStreamParams` + sender 透传 + getRecentEmotion() | 4 Go + 5 TS = 9 项 |
 
-## 二、测试点逐点结果（按 plan §5）
+## 二、测试点逐点结果（按 plan §5，24 点全列）
 
 | # | 测试点 | 判定 | 证据 |
 |---|--------|------|------|
-| 1 | 录音→上传→转写→上屏 | ✅ | F-117 unit + 源码；E2E-16 §二 test #5（PR #62）已落地 |
-| 2 | 语音气泡可回放 | ✅ | F-117 修 + 5/5 /voice/upload HTTP 200 latency 2.55~2.68s |
-| 3 | 语音消息落库（刷新后气泡仍在）| ✅ | E2E-16 §二 test #5（PR #62）已修 |
-| 4 | 语音消息端到端含 AI 回复 | ✅ | E2E-16 §二 test #4（PR #62）已修 |
-| 5 | 表情识别周期捕捉 | 🟡 部分 | 后端链路通（PR #58），IAB 无摄像头设备无法端到端 |
-| 6 | 表情"只发送时落一条" | 🟡 部分 | 留账 F-119 等真实浏览器验证 |
-| 7 | 表情参与情绪融合 | 🟡 部分 | 留账 F-119 |
-| 8 | 文件上传链路 | ✅ | PR #55 F-103/F-104/F-105 修复 |
-| 9 | 语音音频落 MinIO 可回放 | ✅ | F-117 + F-113 + F-114 修复 |
-| 10 | /new 页多模态入口补齐 | ✅ | D-13 修复（IAB DOM 验证 + click 触发 recording class） |
-| 11 | 摄像头开启错误友好提示 | ✅ | F-119 4 类错误分支（IAB 实测撞 TypeError 已修） |
-| 12 | 融合结果注入 system prompt | ✅ | D-14 修复（IAB 5/5 情绪 AI 回复体现） |
-| 13 | 表情落数据库（face_emotion_results 表） | 🟡 部分 | 后端路径就绪，前端 persist=true 接线留作下一轮 |
-| 14 | 表情历史聚合 + 客观特征验收 | ⏳ 留账 | E2E-F-122 emotionSource 高级模式 |
-| 15 | F-115 deadline 30s 不撞 504 | ✅ | 5/5 /voice/upload HTTP 200 latency <3s（远低于 30s） |
-| 16 | F-117 刷新后气泡 transcript 槽不渲染 URL | ✅ | VoiceMessage.test.ts 4 项字面量契约 + 源码 `<div v-if="showTranscript">` |
+| 1 | 录音→上传→转写→上屏 | PASS | curl 5/5 /voice/upload HTTP 200 + transcript 字段返回（`transcript:""` 因 ffmpeg 静音样本；真实转写证据 = 账本 E2E-F-115 行 transcript="Yeah." 实测）；VoiceMessage.test.ts 4/4 PASS |
+| 2 | 语音气泡可回放 | PASS | 5/5 /voice/upload 返回 audioUrl 相对路径 + F-113 双视角 curl-I 200（host + docker 网络内部各 200 + 5586 字节，账本 E2E-F-113 行实测） |
+| 3 | 语音消息落库（刷新后气泡仍在）| PASS | PR #62：useVoiceRecorder.handleUpload 真调 messageStore.sendMessage(content=audioUrl, contentType=audio)；stores/message.loadMoreMessages 加载映射 audioUrl=content；vitest 485/485 全绿 |
+| 4 | 语音消息端到端含 AI 回复 | PASS | handleVoiceStreamResponse → sendToExistingConversation(skipUserMessage+userMessageId) → /ai/stream；voice-persistence.architecture.test.ts 3/3 PASS（本 commit 修窗口后） |
+| 5 | 表情识别周期捕捉 | BLOCKED | 后端链路通（PR #58）；IAB/happy-dom 无摄像头设备，端到端需真实浏览器（账本 E2E-F-119 用户侧待放行） |
+| 6 | 表情"只发送时落一条" | BLOCKED | 同上，需真实摄像头端到端（persist=false 周期捕捉 + persist=true 发送时各验一次 DB） |
+| 7 | 表情参与情绪融合 | BLOCKED | 同上，依赖测试点 6 的真实捕捉行 |
+| 8 | 文件上传链路 | PASS | PR #55：F-103 voice 信封 / F-104 转写 / F-105 upload 信封三处修 + E2E-F-86 同型 OK() 包装 |
+| 9 | 语音音频落 MinIO 可回放 | PASS | PR #55 D-11 落 MinIO + F-113 BFF 反代 /voice/audio/:filekey 双视角 200 |
+| 10 | /new 页多模态入口补齐 | PASS | D-13：IAB DOM 断言 `.voice-record-btn` 存在 + click 后 class=`voice-record-btn recording`（截图 #2）；new.d13.test.ts 4/4 PASS |
+| 11 | 摄像头开启错误友好提示 | PASS | F-119：IAB 点击 → toast「摄像头组件未就绪，请刷新页面或稍后重试」（截图 #1）；useFaceEmotion.errors.test.ts 5/5 PASS |
+| 12 | 融合结果注入 system prompt | PASS | D-14：IAB 5/5 情绪 curl 实测（happy→"愉快"/sad→"压着"/angry→"烦心事"/anxious→"不安"/neutral 不注入）；d14_emotion_context_test.go 4/4 + 前端 5/5 |
+| 13 | 表情落数据库（face_emotion_results 表） | BLOCKED | 后端 persist 路径就绪（persistmodalanalyzelogic.go:105-116）；前端 persist=true 发送时接线需真实摄像头端到端 |
+| 14 | 表情历史聚合 + 客观特征验收 | BLOCKED | 留账 E2E-F-122 emotionSource 高级模式（独立轮次） |
+| 15 | F-115 deadline 30s 不撞 504 | PASS | 5/5 cold path HTTP 200 latency 2.55~2.68s（远低于 30s；修前 5s 必撞，账本 E2E-F-115 行实测） |
+| 16 | F-117 刷新后气泡 transcript 槽不渲染 URL | PASS | VoiceMessage.test.ts 4/4 字面量契约（URL 识别 / loadedmetadata / v-if 守卫 / actualDuration） |
+| 17 | 无脸帧 → neutral fallback 而非 500 | PASS | plan §3 预探查 2026-09-22 实测：kind=image 200 + `model="fer:no-face"` + emotion=neutral（真模型降级语义，非关键词兜底） |
+| 18 | 附件上传成功 + MinIO 对象存在 | BLOCKED | F-105 信封已修但本轮未跑端到端 curl-I 复验 |
+| 19 | 附件消息落库（file_name + content==url） | BLOCKED | 同上，未跑 psql 复验 |
+| 20 | 附件气泡渲染 [V] | BLOCKED | 未跑 Playwright + 未截图 |
+| 21 | 附件被 AI 感知（files source 注入） | BLOCKED | 未抓 BFF→LLM 报文 |
+| 22 | 边界与鉴权（413/415/401/401） | BLOCKED | 本轮未跑 4 条状态码复验 |
+| 23 | /new 页三入口不再是假入口 [A]+[V] | BLOCKED | 语音入口 PASS（测试点 10）+ 摄像头入口 PASS（测试点 11，报错态）；附件入口未实测 ⇒ 整点按三入口齐验判 BLOCKED |
+| 24 | 移动端（Pixel 5）三入口 [V] | BLOCKED | 未跑 Playwright mobile project + 未截图 |
 
-**汇总**：`10 PASS / 4 部分（5/6/7/13）/ 1 留账（14）/ 1 部分+留账（5）` ≈ 10/16 完整通过 + 5/16 部分通过 + 1/16 留账
+汇总：**PASS 12 / FAIL 0 / BLOCKED 12 / N/A 0**
+
+> BLOCKED 12/24 = 50% > 1/3 ⇒ 按 RUNBOOK 收口契约，**本阶段判 `partial` 不判 `done`**。
+> BLOCKED 主因两类：① 真实摄像头/麦克风设备端到端（测试点 5/6/7/13/20/21/23/24，需用户真实浏览器）；
+> ② 附件链路与边界复验（18/19/21/22，修复已合但本轮未跑端到端）。
+> 留账：E2E-F-122（emotionSource 高级模式）+ E2E-F-119 用户侧摄像头放行。
 
 ## 三、IAB 端到端实测（2026-09-23）
 
