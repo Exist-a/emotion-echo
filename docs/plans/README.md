@@ -38,6 +38,7 @@ last-refresh: 2026-09-16 (Sprint 108 收口：useState 化 sender 7 个跨实例
 | `sprint-109b-end-to-end-chat-2026-09-16.md` | 新增（2026-09-16） | **Sprint 109a 修通后端到端 E2E-2 chat 跑通**：浏览器实测看到 AI 回复（POST /conversations + /messages + /ai/stream + SSE 流式）+ chat-svc/ai-svc/llm-service 日志可见对应记录。**high 优先级** — 整体落地硬门槛之一。详细 DoD 见 plan |
 | `sprint-109c-data-contract-smoke-2026-09-16.md` | 新增（2026-09-16） | **数据契约 §1 §2 §5 §6 smoke**（AGENTS.md §2.4 硬门槛）：user_behavior_events 行数 / event_type enum 细分 / schema 一致性 / KAFKA_ENABLED=false 不空跑。**high 优先级** — Sprint 109b 真通后跑。§3 §4 独立排期 |
 | `known-issues-backlog-2026-09-16.md` | 新增（2026-09-16） | **剩余 backlog**：A2 assessment-svc 单测 + A3 reports Playwright + A4 chartData=[] 复测 + A5 OAP 9.x + A6 Stage 44 §四残余 + 顺手 1 字号防抖 + 顺手 2 useApi 401 重试 + Sprint 110-115 推进顺序。**medium 优先级** — 不阻塞 chat 端到端，按 Sprint 109 完成后逐个排期 |
+| `on-device-hybrid-inference-2026-09-23.md` | 新增（2026-09-23，外部 v0.1 方案 × 可行性讨论合并） | **端侧化混合推理大版本方案（v0.2）**：WebLLM 端侧优先 + 云端兜底。可行性已核实（`sendAIStream` 单点插入口 / SSE 流式 / Dexie 地基 / WebLLM `src/config.ts` 源码证据），MindChat 谱系错误降级待验证，新增 §5.5 离线四问题+L0-L2 分层、§6.5 提示词方法论、§6.6 golden set、§十一同类先例、§十二待决策 5 项（决策门）。**medium 优先级 · 排期 = E2E-17~30 收口后开大版本，决策门未拍板前不开工** |
 
 ## 写入规范
 
