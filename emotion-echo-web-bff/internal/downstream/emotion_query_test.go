@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -33,6 +34,14 @@ type fakeEmotionQuerySrv struct {
 	// E2E-F-115 测试断言 deadline 在 [now+25s, now+35s] 区间（即 30s）。
 	lastMultiModalDeadline time.Time
 	lastMultiModalMu       sync.Mutex
+
+	// E2E-F-124b：记录 GetEmotionByConversation / GetEmotionByMessage 收到的
+	// x-user-id metadata（"none" = 无该 key，"" 前初值由 getter 兜底）。
+	metaMu            sync.Mutex
+	metaConvXUserID   string
+	metaConvMetaSeen  bool
+	metaMsgXUserID    string
+	metaMsgMetaSeen   bool
 }
 
 // MultiModalAnalyze 实现 fake —— 仅记录 ctx deadline + 返回最小响应。
@@ -68,7 +77,23 @@ func (f *fakeEmotionQuerySrv) SynthesizeSpeech(ctx context.Context, _ *emotionqu
 	}, nil
 }
 
-func (f *fakeEmotionQuerySrv) GetEmotionByMessage(_ context.Context, req *emotionquery.GetEmotionByMessageRequest) (*emotionquery.Emotion, error) {
+func (f *fakeEmotionQuerySrv) GetEmotionByMessage(ctx context.Context, req *emotionquery.GetEmotionByMessageRequest) (*emotionquery.Emotion, error) {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		v := md.Get("x-user-id")
+		f.metaMu.Lock()
+		f.metaMsgMetaSeen = true
+		if len(v) > 0 {
+			f.metaMsgXUserID = v[0]
+		} else {
+			f.metaMsgXUserID = "none"
+		}
+		f.metaMu.Unlock()
+	} else {
+		f.metaMu.Lock()
+		f.metaMsgMetaSeen = true
+		f.metaMsgXUserID = "none"
+		f.metaMu.Unlock()
+	}
 	if req.MessageId == 0 {
 		return nil, status.Error(codes.InvalidArgument, "message_id required")
 	}
@@ -79,7 +104,23 @@ func (f *fakeEmotionQuerySrv) GetEmotionByMessage(_ context.Context, req *emotio
 	}, nil
 }
 
-func (f *fakeEmotionQuerySrv) GetEmotionByConversation(_ context.Context, req *emotionquery.GetEmotionByConversationRequest) (*emotionquery.EmotionList, error) {
+func (f *fakeEmotionQuerySrv) GetEmotionByConversation(ctx context.Context, req *emotionquery.GetEmotionByConversationRequest) (*emotionquery.EmotionList, error) {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		v := md.Get("x-user-id")
+		f.metaMu.Lock()
+		f.metaConvMetaSeen = true
+		if len(v) > 0 {
+			f.metaConvXUserID = v[0]
+		} else {
+			f.metaConvXUserID = "none"
+		}
+		f.metaMu.Unlock()
+	} else {
+		f.metaMu.Lock()
+		f.metaConvMetaSeen = true
+		f.metaConvXUserID = "none"
+		f.metaMu.Unlock()
+	}
 	if req.ConversationId == 0 {
 		return nil, status.Error(codes.InvalidArgument, "conversation_id required")
 	}
@@ -178,4 +219,70 @@ func TestEmotionQueryClient_ByConversation_InvalidArgument_ReturnsError(t *testi
 	_, _, err := c.ByConversation(context.Background(), 0, 10)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "conversation_id required")
+}
+
+// ==== E2E-F-124b：EmotionQueryClient gRPC 必须注入 x-user-id metadata ====
+//
+// 背景（2026-09-23 F-122 端到端实测抓到）：ai-svc 拦截器拒所有缺 x-user-id
+// metadata 的 RPC（除 health 白名单）。emotion_query.go 三个方法裸传 ctx ——
+// 与 E2E-F-109（voice_handler 同型）完全同因：BFF 侧 session.WithRequestAuth
+// 把 userID 放进 ctx，但 gRPC client 不调 withUserID(ctx) 就不会变成 metadata。
+// 实测症状：F-122 情绪历史回落 GetEmotionByConversation 恒
+// `Unauthenticated: missing x-user-id metadata` → 回落静默失效。
+//
+// 修法与 chat_grpc.go / ai_grpc.go 一致：三方法 ctx → withUserID(ctx)。
+//
+// fake 记录最近一次收到的 x-user-id metadata（按 RPC 分别记录）。
+
+// lastMetaXUserID 记录 GetEmotionByConversation 收到的 x-user-id（"none" = 无该 key）。
+func (f *fakeEmotionQuerySrv) lastMetaXUserID() string {
+	f.metaMu.Lock()
+	defer f.metaMu.Unlock()
+	if !f.metaConvMetaSeen {
+		return "none"
+	}
+	return f.metaConvXUserID
+}
+
+func (f *fakeEmotionQuerySrv) lastMetaMsgXUserID() string {
+	f.metaMu.Lock()
+	defer f.metaMu.Unlock()
+	if !f.metaMsgMetaSeen {
+		return "none"
+	}
+	return f.metaMsgXUserID
+}
+
+func TestEmotionQueryClient_ByConversation_InjectsXUserIDMetadata(t *testing.T) {
+	conn, fake := startFakeGRPCServerWithSrv(t)
+	c := NewEmotionQueryClient(conn)
+
+	ctx := WithUserID(context.Background(), 42)
+	_, _, err := c.ByConversation(ctx, 10, 3)
+	require.NoError(t, err)
+	assert.Equal(t, "42", fake.lastMetaXUserID(),
+		"ByConversation 必须注入 x-user-id metadata（ai-svc 拦截器要求，缺失恒 Unauthenticated）")
+}
+
+func TestEmotionQueryClient_ByMessage_InjectsXUserIDMetadata(t *testing.T) {
+	conn, fake := startFakeGRPCServerWithSrv(t)
+	c := NewEmotionQueryClient(conn)
+
+	ctx := WithUserID(context.Background(), 7)
+	_, err := c.ByMessage(ctx, 42)
+	require.NoError(t, err)
+	assert.Equal(t, "7", fake.lastMetaMsgXUserID(),
+		"ByMessage 必须注入 x-user-id metadata")
+}
+
+func TestEmotionQueryClient_NoUserID_NoMetadataStillSent(t *testing.T) {
+	conn, fake := startFakeGRPCServerWithSrv(t)
+	c := NewEmotionQueryClient(conn)
+
+	// 无 userID（background ctx）→ 不注入 metadata，但请求本身仍应成功
+	// （依赖 ai-svc 拦截器对无 metadata 的语义 —— 这里只断言 client 不 panic/不报错）
+	_, _, err := c.ByConversation(context.Background(), 10, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "none", fake.lastMetaXUserID(),
+		"ctx 无 userID 时不得伪造 x-user-id（交由服务端拦截器判定）")
 }

@@ -7,7 +7,13 @@
 //   GetEmotionByConversation(conversation_id, limit) → EmotionList{items, total}
 //
 // 直接复用 shared 生成的 emotionquery 类型（github.com/emotion-echo/shared/pkg/emotionquery），
-// 不重复定义 proto 模型。svc-to-svc gRPC 无鉴权（server 侧无 auth interceptor）。
+// 不重复定义 proto 模型。
+//
+// 鉴权（E2E-F-125 修复）：ai-svc 拦截器要求 x-user-id metadata（与 chat_grpc /
+// ai_grpc 一致），三个方法必须走 withUserID(ctx) 注入 —— handler 层
+// session.WithRequestAuth 只把 userID 放 ctx.Value，gRPC 侧不转 metadata 恒
+// Unauthenticated（E2E-F-109 voice_handler 同型；Stage 30 原注释"server 侧无
+// auth interceptor"已过期）。
 package downstream
 
 import (
@@ -40,7 +46,7 @@ func NewEmotionQueryClient(conn *grpc.ClientConn) EmotionQueryClient {
 
 func (c *emotionQueryClient) ByMessage(ctx context.Context, messageID int64) (*emotionquery.Emotion, error) {
 	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
-	resp, err := cli.GetEmotionByMessage(ctx, &emotionquery.GetEmotionByMessageRequest{MessageId: messageID})
+	resp, err := cli.GetEmotionByMessage(withUserID(ctx), &emotionquery.GetEmotionByMessageRequest{MessageId: messageID})
 	if err != nil {
 		return nil, fmt.Errorf("downstream: emotion query by message: %w", err)
 	}
@@ -49,7 +55,7 @@ func (c *emotionQueryClient) ByMessage(ctx context.Context, messageID int64) (*e
 
 func (c *emotionQueryClient) ByConversation(ctx context.Context, conversationID int64, limit int) ([]*emotionquery.Emotion, int32, error) {
 	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
-	resp, err := cli.GetEmotionByConversation(ctx, &emotionquery.GetEmotionByConversationRequest{
+	resp, err := cli.GetEmotionByConversation(withUserID(ctx), &emotionquery.GetEmotionByConversationRequest{
 		ConversationId: conversationID,
 		Limit:          int32(limit),
 	})
@@ -66,7 +72,7 @@ func (c *emotionQueryClient) ByConversation(ctx context.Context, conversationID 
 //   - 其他 gRPC 错误透传（caller 返 500）
 func (c *emotionQueryClient) ByFusedMessage(ctx context.Context, messageID int64) (*emotionquery.FusedEmotion, error) {
 	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
-	resp, err := cli.GetFusedEmotion(ctx, &emotionquery.GetFusedEmotionRequest{MessageId: messageID})
+	resp, err := cli.GetFusedEmotion(withUserID(ctx), &emotionquery.GetFusedEmotionRequest{MessageId: messageID})
 	if err != nil {
 		return nil, fmt.Errorf("downstream: emotion query fused by message: %w", err)
 	}
