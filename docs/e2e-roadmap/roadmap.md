@@ -2,7 +2,7 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-22 (E2E-15 done 后收口；E2E-16 详档已撰写 —— 补登 E2E-10/11/15/16 详档索引)
+last-refresh: 2026-09-23 (E2E-16 ✅ done 收口；F-115/117/119 + D-13/14 当轮闭环；IAB 5/5 情绪验证；PR #64 待 admin override 合并)
 type: e2e-stage-roadmap
 ---
 
@@ -49,7 +49,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 **E2E-15 报表 Dashboard** ✅ **done**（2026-09-21 落地 + 当日收口）：14/14 测试点 + 24/24 Playwright（chromium + mobile）+ 16 张截图。修 2 个真实缺陷：① E2E-F-10（mental_health_assessments 触发器补写 → trigger runner.Save + rebuild analytics-svc:v0.1.8）；② E2E-F-14 同型残留（4 dashboard 空态 div v-else-if + 静态契约钉）。详档 [stages/e2e-15-reports-dashboard/report.md](stages/e2e-15-reports-dashboard/report.md)
 
 > E2E-14 人格量表与 AI 提示词定制 ✅ **done**（2026-09-20 落地 / 2026-09-21 关账轮收口：**16/16 测试点全 PASS**，含 §8.3 新增的算分修复（E2E-F-97）+ `scoreKind` 语义化两条；用户决议暂搁 LLM-as-judge 路线，原 §8.2 报告的"降 partial"理由——账本留 E2E-F-98 判官方法——已被本轮解除，详见账本关账轮记录）。E2E-13 心理测验 ✅ done。E2E-12 设置页 ✅ done。E2E-11 partial（留账 2 条）。E2E-07~10 partial（取证缺口）。
-> **下一阶段开工前**：E2E-15 ✅ 已 done（2026-09-21）。下一阶段 = **E2E-16（多模态：语音/表情/文件上传）** —— 详档已于 2026-09-22 撰写（[stages/e2e-16-multimodal/plan.md](stages/e2e-16-multimodal/plan.md)，状态 `pending`，待开工）。详档预探查已定位**三条链路卡在同一处断链**（BFF 响应缺 `data` 包装 ⇒ 前端静默丢弃），拟登记 E2E-F-103~105；4 项范围决议（D-11~D-14）已由用户 2026-09-22 裁定 —— 语音音频落 MinIO 可回放 / 表情**只发送时落一条**并经融合参与计算 / `/new` 页入口补齐 / 融合结果注入 system prompt 让 AI 回复体现。
+> **下一阶段开工前**：E2E-16 🟡 **partial**（2026-09-23 收口：5 修复 + 9 测试 + 5/5 情绪 IAB 验证 + ADR `emotion-context-injection`；12/24 PASS/12 BLOCKED（真实摄像头/附件端到端缺口）⇒ partial；留账 E2E-F-119/122）。下一阶段 = **E2E-17（数字人 + TTS）** —— E2E-17 解锁（D-03 已裁定真口型同步 + 排查段间播放断点）。详档需在 E2E-17 开工前 1 阶段撰写（按"just-in-time"原则，参考 plan.md §2 详档约定）。
 
 ## 排期总表（30 阶段）
 
@@ -87,8 +87,8 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | E2E-13 | 心理测验链路修复 | 列表→答题→提交→结果查看 跑通（三层契约错位见 E2E-F-02）+ 补量表种子数据 + `/question` 页区分两类量表 | 人格量表内容设计 | ✅ **done**（2026-09-20：12/12 PASS，BLOCKED=0。6 处契约错位修复 + 种子数据 PHQ-9/GAD-7 + BFF HTTP 绕过 + ADR。Playwright 18/18 + Go 10/10 + 边界 10/10。E2E-F-02/03 关闭。详档 [report.md](stages/e2e-13-quiz/report.md)） |
 | E2E-14 🔧 | 人格量表与 AI 提示词定制 | D-02：新增人格量表（设计+种子+维度评分器）→ 结果模型扩展 → 注入 AI prompt → user 页测评图表 | — | ✅ **done**（2026-09-20 落地，2026-09-21 关账轮收口）：**16/16 测试点全 PASS**（含 §8.3 新增 E2E-F-97 算分修复 + `scoreKind` 语义化两条）。BIG5 量表（NEO-FFI-30 改编，30 题 × Likert 5 点 + 6 反向题）+ `BigFiveScorer` 五维度评分 + 画像注入 BFF `system prompt`（基底人设不变、画像只调整"怎么说话"）+ 双通道分档（绝对档 + ipsative 个体内相对档，随机 10000 组覆盖率 66% → **95.5%**）+ `/question` 分区 tab + 结果雷达图 + 我的空间画像区块。**端到端抓包**证实注入报文（含降级路径：未做人格量表时不编造）。途中揪出并修 3 个真实缺陷：列表 description 恒空（proto 缺字段/gRPC 丢弃 ⇒ BFF `listSurveys` 走 HTTP 绕过）、雷达容器宽度塌缩 100px（grid 子项 stretch 丢失）、雷达轴标签裁剪（ECharts `radius` 显式 62%）。**客观证据**：对立画像 A/B 三条消息回复对照（字数/问句数/安抚词/追问推进词）方向 **5/5 类 × 3/3 条**全中（确定性文本度量，不依赖判官）。Playwright 20/20（双 project）+ Go 19 条 + 前端 31 条 + 全量 vitest 458/458、typecheck 0 错。账本 E2E-F-04/95/98 关闭（98 = 用户决议暂搁 LLM-as-judge 路线，触发复跑的条件已写入条目）。详档 [report.md](stages/e2e-14-personality-ai-prompt/report.md) |
 | E2E-15 | 报表 Dashboard | 数据内容正确性/日期切换/历史 chartData=[] 复查 | — | ✅ **done**（2026-09-21）：14/14 测试点 + 24/24 Playwright（chromium + mobile）+ 16 张截图。**修 2 个真实缺陷**：① E2E-F-10 mental_health_assessments 触发器补写（trigger runner.Save + PostgresMentalHealthRepo.Save + rebuild analytics-svc:v0.1.8 + 7 条 trigger 单测）；② E2E-F-14 同型残留（4 dashboard 空态 div v-else-if + 12 用例静态契约钉）。**端到端**：daily/trend/user-behavior 端点有真数据；mental-health 端点 SQL seed 后 BFF 返回非空；E2E-F-36 滚动复验 4 页面 `.page-content overflow-y` = auto。详档 [report.md](stages/e2e-15-reports-dashboard/report.md) |
-| E2E-16 | 多模态（语音/表情/文件上传） | 语音输入/表情识别/文件上传链路 | 数字人、TTS | 🚧 **in-progress**（2026-09-22 开工：前置实测 3 项通过 / ASR 因 SenseVoice 镜像缺陷 E2E-F-106 标 BLOCKED） |
-| E2E-17 🔧 | 数字人 + TTS | D-03：做真口型同步（接 `/tts_with_phonemes` 时间戳）+ 排查段间播放断点 | — | ⏳ pending |
+| E2E-16 | 多模态（语音/表情/文件上传） | 语音输入/表情识别/文件上传链路 | 数字人、TTS | 🟡 **partial**（2026-09-23 收口：F-115/117/119 + D-13/14 当轮闭环 + IAB 5/5 情绪验证 + 12/24 PASS/0 FAIL/12 BLOCKED；BLOCKED>1/3 ⇒ partial；留账 E2E-F-119 真实浏览器 + E2E-F-122 emotionSource） |
+| E2E-17 🔧 | 数字人 + TTS | D-03：做真口型同步（接 `/tts_with_phonemes` 时间戳）+ 排查段间播放断点 | — | ⏳ pending（E2E-16 done 后解锁） |
 
 ### 第五批：数据与缓存
 
@@ -132,6 +132,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | **D-01 找回密码方式** | E2E-07（+E2E-06 供字段） | ✅ **密保问题** | A 运维脚本体验不好、B 要接额外 API、C 只需改页面 + 数据库 → 选 **C** |
 | **D-02 心理测验定位与人格画像** | E2E-13 / E2E-14 | ✅ **两种量表并存** | 新增人格量表（产心理画像→驱动 AI 提示词）+ 保留症状量表（风险预警）；`/question` 页区分两类；user 页新增测评图表 |
 | **D-03 数字人口型同步与 TTS 断点** | E2E-17 | ✅ **真口型同步 + 排查断点** | 接 XTTS `/tts_with_phonemes` 字符级时间戳驱动 BlendShape + 解决段间播放间隙 |
+| **D-14 融合结果注入 system prompt** | E2E-16 | ✅ **emotion context 段拼接** | 前端携带 faceEmotion/voiceEmotion → BFF `buildSystemPromptWithEmotion` 拼"情绪上下文"段 + 三句护栏（不点破来源/不贴标签/不过火）+ 中英映射（happy→愉快等）；最小模式用前端 payload，emotionSource 高级模式留账 E2E-F-122 |
 | **D-04 多语言支持（i18n）** | 待定（候选） | 🟡 **候选未决** | 项目完全单语硬编码（无 vue-i18n、无 locales 目录，UI 文案硬编码中文）。是否做属产品决策，暂不列为 E2E 阶段 |
 
 ## 改造阶段明细

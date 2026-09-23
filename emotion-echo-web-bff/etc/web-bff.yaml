@@ -54,7 +54,10 @@ AnalyticsService:
 AIService:
   HTTPAddr:  http://localhost:8891
   GRPCAddr:  localhost:8892
-  TimeoutMs: 5000
+  # E2E-F-115（2026-09-22）：原 5000（5s）在 dev 模式首语音必撞 504（SenseVoice 冷启动
+  # ffmpeg 解码 + 首次张量分配 ≈5~15s）。改 30000（30s）容纳冷启动，与 ai.go newAIHTTPClient
+  # 默认 30s + ai_grpc.go aiGRPCDefaultDeadline 对齐。
+  TimeoutMs: 30000
 
 XTTS:
   BaseURL: http://localhost:8003

@@ -294,7 +294,8 @@ const toggleCamera = async () => {
       await faceEmotion.startCamera(cameraVideoRef.value!)
     }
   } catch (err: any) {
-    window.alert(`摄像头开启失败：${err?.message || '请检查浏览器权限'}`)
+    // D-13（E2E-16）：window.alert 阻塞主线程且与全站 UI 风格不一致，改 notify
+    notify('摄像头开启失败', err?.message || '请检查浏览器权限', 'error')
   }
 }
 
@@ -317,6 +318,8 @@ const handleVoiceStreamResponse = async (
   userMessageId?: string,
 ) => {
   conversationSender.stopTTS()
+  // D-14：发送消息时取最近一次 face emotion（3 秒有效窗口），拼到 AIStreamParams
+  const recentFace = faceEmotion.getRecentEmotion()
   await conversationSender.sendToExistingConversation(
     conversationIdRef.value,
     transcript,
@@ -333,6 +336,8 @@ const handleVoiceStreamResponse = async (
     {
       shouldGenerateTitle: false,
       voiceEmotion,
+      faceEmotion: recentFace?.emotion,
+      faceConfidence: recentFace?.confidence,
       // 语音消息已由 useVoiceRecorder 真落库（测试点 #5）——跳过二次写入，
       // 但把服务端真实 id 带给 ai/stream 绑定（face/融合按 message_id 取行）。
       skipUserMessage: true,
@@ -348,6 +353,13 @@ const handleSubmit = async () => {
     return
   }
   const value = message.value.trim()
+  // D-14：取最近一次 face emotion（3 秒有效窗口），拼到 AIStreamParams；
+  // 摄像头未开/超时则字段 undefined，BFF 不污染 prompt
+  const recentFace = faceEmotion.getRecentEmotion()
+  const faceEmotionCtx = {
+    faceEmotion: recentFace?.emotion,
+    faceConfidence: recentFace?.confidence,
+  }
   // Stage 89 PR-5：文件+提问一起发——附件无文字时用默认 prompt 触发 AI 读文件
   if (pendingAttachment.value && !value) {
     if (!(await sendAttachmentMessage())) return
@@ -364,6 +376,7 @@ const handleSubmit = async () => {
           window.alert(`AI 回复失败：${error}`)
         },
       },
+      faceEmotionCtx,
     )
     return
   }
@@ -378,7 +391,7 @@ const handleSubmit = async () => {
     onError: (error) => {
       window.alert(`AI 回复失败：${error}`)
     },
-  })
+  }, faceEmotionCtx)
 }
 
 const handleCancel = () => {

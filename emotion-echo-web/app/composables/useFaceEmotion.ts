@@ -34,6 +34,11 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
    */
   const startCamera = async (videoRef: HTMLVideoElement) => {
     try {
+      // F-119 修：先校验 videoRef（IAB 实测撞 TypeError: Cannot set properties of null
+      // —— 因为 happy-dom / 旧 IAB 版本下 useFaceEmotion 调用方传 null 给 startCamera）
+      if (!videoRef) {
+        throw Object.assign(new Error('video element ref is null'), { name: 'TypeError' })
+      }
       videoElement = videoRef
 
       // 请求摄像头权限
@@ -45,6 +50,9 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
         },
       })
 
+      if (!stream) {
+        throw Object.assign(new Error('getUserMedia returned null'), { name: 'NotFoundError' })
+      }
       videoElement.srcObject = stream
       await videoElement.play()
 
@@ -66,9 +74,29 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
       }, captureInterval)
 
       return true
-    } catch (error) {
+    } catch (error: any) {
+      // F-119（2026-09-22 用户实测）：原笼统提示「无法访问摄像头，请检查权限设置」，
+      // 用户无法分辨是权限拒/无设备/被占用。按 error.name 分支抛具体提示。
       console.error('[useFaceEmotion] 无法开启摄像头:', error)
-      throw new Error('无法访问摄像头，请检查权限设置')
+      const name = error?.name || ''
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        // 浏览器策略/用户拒权限 —— 指引用户到浏览器设置放行
+        throw new Error('摄像头权限被拒绝，请在浏览器地址栏左侧锁形图标中放行摄像头权限后重试')
+      }
+      if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        // 设备不存在或约束不匹配
+        throw new Error('未找到可用的摄像头设备，请确认电脑已连接摄像头')
+      }
+      if (name === 'NotReadableError' || name === 'TrackStartError') {
+        // 设备被其他程序独占
+        throw new Error('摄像头正被其他程序占用，请关闭视频会议/直播等软件后重试')
+      }
+      // F-119 修（IAB 实测撞 TypeError）：videoRef null 或 getUserMedia 返回 null
+      // 等"调用前置条件未就绪"类错误，给出可操作的指引
+      if (name === 'TypeError') {
+        throw new Error('摄像头组件未就绪，请刷新页面或稍后重试')
+      }
+      throw new Error(`摄像头开启失败：${error?.message || '未知错误'}`)
     }
   }
 

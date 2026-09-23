@@ -179,7 +179,9 @@ func NewAIClient(opts AIClientOptions) AIClient {
 func newAIHTTPClient(opts AIClientOptions) AIClient {
 	timeout := time.Duration(opts.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
-		timeout = 5 * time.Second
+		// E2E-F-115（2026-09-22）：原默认 5 * time.Second 必撞 504（SenseVoice 冷启动），
+		// 改 30s（与 config AIService.TimeoutMs 默认对齐）。
+		timeout = 30 * time.Second
 	}
 	svcName := opts.ServiceName
 	if svcName == "" {

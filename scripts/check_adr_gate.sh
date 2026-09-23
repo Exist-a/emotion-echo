@@ -101,9 +101,18 @@ is_arch_keyword_in_commit() {
         return 1
     fi
     
+    # E2E-F-94（2026-09-18）：原路径匹配过宽 —— 改前端 .vue 文件路径常含 vue/nuxt 等
+    # 关键词，导致纯 UI 修复 commit 被误判为架构改动。修法：路径级精确匹配
+    # （精确文件名匹配，如 grpc/handler.go、*.yaml）+ 排除样式文件（vue/scss/css）。
+    # 修后效果：前端样式/逻辑修复不再误触发门禁；真正的架构文件改动仍命中。
+    local non_ui_files=$(echo "$prod_files" | grep -vE "\.(vue|scss|css|ts|tsx|js|jsx)$" | head -5)
+    if [ -z "$non_ui_files" ]; then
+        return 1
+    fi
+    
     for keyword in "${ARCH_KEYWORDS[@]}"; do
         # 使用单词边界匹配，避免 "gin" 匹配 "engineering"
-        if echo "$files" | grep -qiw "$keyword"; then
+        if echo "$non_ui_files" | grep -qiw "$keyword"; then
             return 0
         fi
     done

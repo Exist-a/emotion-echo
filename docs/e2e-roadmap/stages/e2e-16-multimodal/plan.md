@@ -2,9 +2,9 @@
 stage: e2e-16
 title: 多模态（语音 / 表情 / 文件上传）
 type: transformation
-status: in-progress
+status: partial
 created: 2026-09-22
-revised: 2026-09-22 (四项范围决议 D-11~D-14 由用户裁定后改稿：音频落 MinIO / 只发送时落一条 / new 页补齐 / 融合结果注入 prompt)
+revised: 2026-09-23 (E2E-16 全面修复轮收口：F-115/117/119 + D-13/14 当轮闭环 + IAB 多情绪验证)
 depends-on: [e2e-10]
 blocks: [e2e-17]
 gate: []

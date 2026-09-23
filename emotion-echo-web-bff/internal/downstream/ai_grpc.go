@@ -17,11 +17,20 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 
 	"google.golang.org/grpc"
 )
+
+// aiGRPCDefaultDeadline BFF→ai-svc gRPC 默认 deadline。
+//
+// E2E-F-115（2026-09-22）：原 ai_grpc.go 3 个 RPC 直接传 withUserID(ctx) 不设 deadline，
+// gRPC 客户端 default deadline 通常无（几十分钟），看似不撞死限；但 ai-svc 内部 server-side
+// 仍有 5s 截断 ⇒ 首请求冷启动（ffmpeg + 首次张量分配）即返 DeadlineExceeded。
+// 修法：客户端主动设 30s deadline，告知 server 给足冷启动窗口（与 HTTP 路径默认 30s 对齐）。
+const aiGRPCDefaultDeadline = 30 * time.Second
 
 // aiGRPCClient 是 AIClient 的 gRPC 实现（组合 aiHTTPClient）
 type aiGRPCClient struct {
@@ -43,7 +52,11 @@ func NewAIGRPCClient(conn *grpc.ClientConn) AIClient {
 //
 // Sprint G（2026-09-11）：错误用 APIError 包装，handler 用 StatusCodeOf(err)
 // 动态决定 HTTP code（gRPC Unavailable → 503 等）。
+//
+// E2E-F-115（2026-09-22）：新增 30s deadline 包裹，防 SenseVoice 冷启动撞 5s server 截断。
 func (c *aiGRPCClient) MultiModalAnalyze(ctx context.Context, req MultiModalAnalyzeReq) (*MultiModalAnalyzeResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, aiGRPCDefaultDeadline)
+	defer cancel()
 	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
 	grpcReq := &emotionquery.MultiModalAnalyzeRequest{
 		Kind:        req.Kind,
@@ -62,7 +75,11 @@ func (c *aiGRPCClient) MultiModalAnalyze(ctx context.Context, req MultiModalAnal
 }
 
 // SynthesizeSpeech gRPC RPC
+//
+// E2E-F-115：30s deadline（XTTS 冷启动 ≈3~8s，与其他 RPC 保持一致）。
 func (c *aiGRPCClient) SynthesizeSpeech(ctx context.Context, req SynthesizeSpeechReq) (*SynthesizeSpeechResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, aiGRPCDefaultDeadline)
+	defer cancel()
 	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
 	resp, err := cli.SynthesizeSpeech(withUserID(ctx), &emotionquery.SynthesizeSpeechRequest{
 		Text:     req.Text,
@@ -76,7 +93,11 @@ func (c *aiGRPCClient) SynthesizeSpeech(ctx context.Context, req SynthesizeSpeec
 }
 
 // AIHealth gRPC RPC（鉴权需要 x-user-id）
+//
+// E2E-F-115：30s deadline（healthcheck 失败不应拖死前端）。
 func (c *aiGRPCClient) AIHealth(ctx context.Context) (*AIHealthResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, aiGRPCDefaultDeadline)
+	defer cancel()
 	cli := emotionquery.NewEmotionQueryServiceClient(c.conn)
 	resp, err := cli.AIHealth(withUserID(ctx), &emotionquery.AIHealthRequest{})
 	if err != nil {

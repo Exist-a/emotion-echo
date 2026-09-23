@@ -86,6 +86,9 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
     extraParams?: {
       shouldGenerateTitle?: boolean
       voiceEmotion?: string
+      // D-14（E2E-16 plan §B.10）：face 情绪上下文（前端 useFaceEmotion.getRecentEmotion() 取）
+      faceEmotion?: string
+      faceConfidence?: number
       skipUserMessage?: boolean
       // 语音消息落库（E2E-16 §2.A.4 / 测试点 #5）：useVoiceRecorder 已真 POST 持久化，
       // 这里携带服务端真实消息 id —— ai/stream 的 messageId 用它绑定
@@ -142,6 +145,9 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
         clientMsgId,
         shouldGenerateTitle: extraParams?.shouldGenerateTitle,
         voiceEmotion: extraParams?.voiceEmotion,
+        // D-14：face 情绪上下文透传（摄像头未开/超时时字段 undefined，BFF 不污染 prompt）
+        faceEmotion: extraParams?.faceEmotion,
+        faceConfidence: extraParams?.faceConfidence,
       },
       {
         onDelta: (delta) => {
@@ -198,6 +204,9 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
     options?: {
       emotion?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral'
       shouldGenerateTitle?: boolean
+      // D-14：face emotion 上下文（/new 页 handleSubmit 从 useFaceEmotion 携带）
+      faceEmotion?: string
+      faceConfidence?: number
       onDelta?: (content: string) => void
       onFinish?: () => void
       onError?: (error: string) => void
@@ -235,6 +244,9 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
         },
         {
           shouldGenerateTitle: options?.shouldGenerateTitle,
+          // D-14：face emotion 透传到 AIStreamParams
+          faceEmotion: options?.faceEmotion,
+          faceConfidence: options?.faceConfidence,
         },
       )
 

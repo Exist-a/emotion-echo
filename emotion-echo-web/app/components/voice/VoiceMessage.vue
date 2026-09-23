@@ -8,14 +8,14 @@
       <div class="waveform">
         <span v-for="i in 10" :key="i" class="wave" :style="{ height: waveHeights[i - 1] + '%' }" />
       </div>
-      <span class="duration">{{ formatTime(duration) }}</span>
+      <span class="duration">{{ formatTime(actualDuration) }}</span>
     </div>
 
-    <div v-if="transcript" class="transcript">
+    <div v-if="showTranscript" class="transcript">
       {{ transcript }}
     </div>
 
-    <audio ref="audioRef" :src="audioUrl" @ended="onEnded" @timeupdate="onTimeUpdate" />
+    <audio ref="audioRef" :src="audioUrl" @ended="onEnded" @timeupdate="onTimeUpdate" @loadedmetadata="onLoadedMetadata" />
   </div>
 </template>
 
@@ -36,11 +36,26 @@ const props = withDefaults(defineProps<Props>(), {
 const audioRef = ref<HTMLAudioElement | null>(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
+// F-117：audioDuration 字段不在 SendMessageReq（DB 无该列），加载行 prop.duration=0/undefined
+// ⇒ 必须从 <audio>.loadedmetadata 事件恢复真实时长（prop 只是兜底，metadata 优先）
+const actualDuration = ref(props.duration)
 
 const waveHeights = ref<number[]>([])
 
 onMounted(() => {
   waveHeights.value = Array.from({ length: 10 }, () => Math.random() * 60 + 20)
+})
+
+// F-117：后端落库 content=音频 URL，刷新后 transcript 槽被错误填充为 URL。
+// 内部识别 URL 前缀（含 http/https/api path），是 URL 则不渲染 transcript 槽。
+const isUrlTranscript = computed(() => {
+  const t = (props.transcript || '').trim()
+  if (!t) return false
+  return t.startsWith('http://') || t.startsWith('https://') || t.startsWith('/api/')
+})
+
+const showTranscript = computed(() => {
+  return Boolean(props.transcript) && !isUrlTranscript.value
 })
 
 const togglePlay = () => {
@@ -63,6 +78,15 @@ const onEnded = () => {
 const onTimeUpdate = () => {
   if (audioRef.value) {
     currentTime.value = audioRef.value.currentTime
+  }
+}
+
+// F-117：从 audio metadata 恢复真实时长（prop.duration=0/undefined 时触发）。
+// 一旦 audio.duration 可用即覆盖 actualDuration；浏览器在 loadedmetadata 后必填。
+const onLoadedMetadata = () => {
+  const d = audioRef.value?.duration
+  if (typeof d === 'number' && isFinite(d) && d > 0) {
+    actualDuration.value = d
   }
 }
 
