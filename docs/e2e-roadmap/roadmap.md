@@ -49,7 +49,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 **E2E-15 报表 Dashboard** ✅ **done**（2026-09-21 落地 + 当日收口）：14/14 测试点 + 24/24 Playwright（chromium + mobile）+ 16 张截图。修 2 个真实缺陷：① E2E-F-10（mental_health_assessments 触发器补写 → trigger runner.Save + rebuild analytics-svc:v0.1.8）；② E2E-F-14 同型残留（4 dashboard 空态 div v-else-if + 静态契约钉）。详档 [stages/e2e-15-reports-dashboard/report.md](stages/e2e-15-reports-dashboard/report.md)
 
 > E2E-14 人格量表与 AI 提示词定制 ✅ **done**（2026-09-20 落地 / 2026-09-21 关账轮收口：**16/16 测试点全 PASS**，含 §8.3 新增的算分修复（E2E-F-97）+ `scoreKind` 语义化两条；用户决议暂搁 LLM-as-judge 路线，原 §8.2 报告的"降 partial"理由——账本留 E2E-F-98 判官方法——已被本轮解除，详见账本关账轮记录）。E2E-13 心理测验 ✅ done。E2E-12 设置页 ✅ done。E2E-11 partial（留账 2 条）。E2E-07~10 partial（取证缺口）。
-> **下一阶段开工前**：E2E-16 ✅ **done**（2026-09-23 收口：5 修复 + 9 测试 + 5/5 情绪 IAB 验证 + F-124 诊断关闭（真实根因 = F-114 BFF 侧连带症状）+ ADR `emotion-context-injection`；18/24 PASS/0 FAIL/6 BLOCKED（BLOCKED 均为真实摄像头端到端，非代码范围）；留账 E2E-F-119（用户浏览器实测）/F-122（emotionSource 高级模式，独立轮次））。下一阶段 = **E2E-17（数字人 + TTS）** —— E2E-17 解锁（D-03 已裁定真口型同步 + 排查段间播放断点）。详档需在 E2E-17 开工前 1 阶段撰写（按"just-in-time"原则，参考 plan.md §2 详档约定）。**F-122（D-14 emotionSource 高级模式，DB 查情绪历史 + AIStreamDeps.Emotion 依赖注入）按"本轮及之前的进入排期"原则排进 E2E-17 之前的独立 sprint**。
+> **下一阶段开工前**：E2E-16 ✅ **done**（2026-09-23 收口：5 修复 + 9 测试 + 5/5 情绪 IAB 验证 + F-124 诊断关闭（真实根因 = F-114 BFF 侧连带症状）+ **F-122 emotionSource 高级模式当轮 TDD 实现（用户裁决「本轮及之前的进入排期」）+ F-125 gRPC metadata 修复（F-122 端到端实测抓到的 F-109 同型真 bug）** + ADR `emotion-context-injection`；留账仅 F-119（用户浏览器实测摄像头权限））。下一阶段 = **E2E-17（数字人 + TTS）** —— **详档已撰写**（[stages/e2e-17-digital-human-tts/plan.md](stages/e2e-17-digital-human-tts/plan.md)，D-03 真口型同步 + F-05/F-06 段间断点；开工第一步 curl 实测 `/tts_with_phonemes` + gap 基线）。
 
 ## 排期总表（30 阶段）
 
