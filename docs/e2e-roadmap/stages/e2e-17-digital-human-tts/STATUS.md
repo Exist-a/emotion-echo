@@ -92,9 +92,21 @@
 
 **未 commit 改动要保留**：本 STATUS.md 落地后，commit spec + compose bump + STATUS.md 为一个 docs PR（不强求通过 CI 红绿——CI 不会跑 E2E docker，重跑只审计）。
 
-## 六、决策 D-26（commit 时记入）
+## 六、决策 D-26（commit 时记入）—— ✅ 2026-09-23 下轮实际落地（本节更新）
 
-- E2E-17 状态 = **partial**（不是 done）—— step 5 收口未完成
-- F-126/F-127/F-128/F-129/F-130（候选）按 ledger 已有 / 待登记处理
-- mobile #3 = 测试基础设施 BLOCKED（非产品 bug）—— record 留待下轮
-- web 镜像 / BFF 镜像 rebuild 流程缺口 = 候选 E2E-CI 改进项
+> **D-26 编号不占用**：本节原预留的四条实质均为状态更新 + 账本项，无新的用户决议；`e2e-roadmap/decisions.md` 的 **D-26 编号让位给 v0.3 计划的"端侧化主方案 ADR"**（[v0.3 §B.2](../../../../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md)，本阶段与端侧化不冲突）。
+
+原四条预留的实际落地（2026-09-23 下轮 session）：
+
+| 原预留 | 实际落地 |
+|--------|----------|
+| E2E-17 状态 = partial（step 5 收口未完成） | ✅ **done**（PR #75 merged `2c6607b`：19/19 测试点 + Playwright 双 project 6/6 + 4 张截图 + audit 全清） |
+| F-126/F-127/F-128/F-129/F-130 按 ledger 处理 | ✅ F-126~129 已修复登记；**F-130 已登记开放**（CI/CD 镜像 rebuild 编排缺口，范围外记账） |
+| mobile #3 = 测试基础设施 BLOCKED，留待下轮 | ✅ **已根除**：真因 = about:blank 跨域 fetch 触发 chromium same-origin policy（旧诊断"page.request vs chromium client 差异"是错的）；修 `page.goto('/login')` + `page.evaluate(fetch)` + retry 6×60s（XTTS 单实例串行） |
+| web 镜像 / BFF rebuild 流程缺口 = 候选 E2E-CI 改进项 | ✅ 已登记 **E2E-F-130**（候选修法 ① Actions merge-to-main job ② 版本端点自检） |
+
+**下轮新增决议**（本阶段真实修出的四层真因，全部已有 ADR/测试钉住）：
+1. **E2E-F-127 yaml/config.go 漂移** → yaml 30000→90000 + `config_test.go` 守卫（**决策 32 / adr-2026-09-apisix-upstream-timeout-web-bff.md**）
+2. **APISIX upstream 6 (web-bff) timeout 180s** → seed.sh `put_nacos_upstream` id=6 单独给 180（同 ADR）
+3. **mobile #3** → `page.goto('/login')` + `page.evaluate(fetch)`（spec 已 commit）
+4. **XTTS 单实例串行** → spec retry 6×60s + test 级 600s（spec 已 commit）
