@@ -590,7 +590,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.24  # E2E-F-97 + E2E-F-113: audioUrl 反代（audio handler GET /api/v1/voice/audio/:filekey）
+    image: emotion-echo/web-bff:v0.1.27  # E2E-F-127: XTTS config default 30s→90s (CPU 推理 phonemes 长文本)  # E2E-F-127: XTTS timeout 30s→90s (CPU 推理 phonemes 长文本)  # E2E-F-127: phonemes 端点（D-03 真口型同步）  # E2E-F-97 + E2E-F-113: audioUrl 反代（audio handler GET /api/v1/voice/audio/:filekey）
     container_name: emotion-echo-web-bff
     restart: on-failure
     # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.

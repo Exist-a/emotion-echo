@@ -62,6 +62,15 @@ func (f *fakeXTTSForTTS) Health(_ context.Context) (*downstream.XTTSHealthResp, 
 	return &downstream.XTTSHealthResp{Status: "ok", ModelLoaded: true}, nil
 }
 
+// Phonemes 实现 E2E-F-127 接口补全（XTTSClient 新增 Phonemes 方法后必须实现）。
+// 此 fake 不参与多模态上传测试，返回零值即可。
+func (f *fakeXTTSForTTS) Phonemes(_ context.Context, _ downstream.TTSPhonemesReq) (*downstream.XTTSPhonemesResp, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &downstream.XTTSPhonemesResp{}, nil
+}
+
 func TestMultimodalHandler_Text_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

@@ -159,7 +159,10 @@ func SetDefaults(c *Config) {
 	}
 	setHTTPServiceDefaults(&c.XTTS, "http://localhost:8003")
 	if c.XTTS.TimeoutMs == 0 {
-		c.XTTS.TimeoutMs = 30000
+		// E2E-F-127（2026-09-23）：原 30000ms（30s），dev CPU 上 XTTS /tts_with_phonemes
+		// 实测 4 字符 ~7s，按字符数线性放大；保守 90000ms（90s）覆盖 50+ 字符长文本。
+		// 同步覆盖 /tts/stream 路径（同一 NewXTTSClient + http.Client）。
+		c.XTTS.TimeoutMs = 90000
 	}
 	if c.Health.TimeoutMs == 0 {
 		c.Health.TimeoutMs = 2000
