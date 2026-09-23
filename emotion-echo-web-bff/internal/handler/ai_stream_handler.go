@@ -48,6 +48,12 @@ type personalitySource interface {
 	LatestPersonalityProfile(ctx context.Context) (map[string]float64, error)
 }
 
+// emotionSource 会话最近情绪模式来源（E2E-F-122 D-14 高级模式）。
+// 返回空串 / err 时调用方不注入情绪段 —— 情绪注入是增强不是依赖（与 personalitySource 同款纪律）。
+type emotionSource interface {
+	RecentEmotionPattern(ctx context.Context, conversationID int64) (string, error)
+}
+
 // maxFileAttachments 每次 ai/stream 注入的最新文件消息上限（控制拉取/抽取开销）
 const maxFileAttachments = 2
 
@@ -95,17 +101,52 @@ func (h *AIStreamHandler) buildSystemPrompt(ctx context.Context) string {
 //   - 不贴标签（不当面称呼"你很happy"等）
 //   - 不过火（情绪描述保持中性、简短）
 // 无情绪上下文时 emotionSeg 为空 → 返回与原 buildSystemPrompt 逐字相同（不污染）。
+//
+// E2E-F-122（emotionSource 高级模式）：face/voice 全空时（摄像头关闭 / 权限被拒 /
+// 3 秒窗口过期）回落 emotionSource 查会话情绪历史，注入"最近情绪模式"段。
+// 前端 payload 优先 —— 实时信号 > 历史统计，非空时不查（省一次 gRPC）。
 func (h *AIStreamHandler) buildSystemPromptWithEmotion(
 	ctx context.Context,
+	conversationID int64,
 	faceEmotion string, faceConfidence float64,
 	voiceEmotion string, voiceConfidence float64,
 ) string {
 	base := h.buildSystemPrompt(ctx)
 	emotionSeg := buildEmotionContext(faceEmotion, faceConfidence, voiceEmotion, voiceConfidence)
+	if emotionSeg == "" && h.emotion != nil && conversationID > 0 {
+		if pattern, err := h.emotion.RecentEmotionPattern(ctx, conversationID); err == nil && pattern != "" {
+			emotionSeg = buildEmotionHistoryContext(pattern)
+		}
+	}
 	if emotionSeg == "" {
 		return base
 	}
 	return base + "\n\n" + emotionSeg
+}
+
+// buildEmotionHistoryContext 拼"最近情绪模式"段（E2E-F-122 回落路径）。
+//
+// 与实时段（buildEmotionContext 的"此刻神情/语气"）刻意区分：历史统计不能冒充
+// 此刻信号（诚实性延伸自 D-14 不贴标签护栏）。句式：
+// "情绪上下文：对方最近的状态多为X。请让回应贴合对方最近的状态。"
+func buildEmotionHistoryContext(emotion string) string {
+	if emotion == "" {
+		return ""
+	}
+	return "情绪上下文：对方最近的状态多为" + emotionChineseLabel(emotion) + "。请让回应贴合对方最近的状态。"
+}
+
+// parseConversationID 把请求体的 conversationId 字符串解析为 int64。
+// 空串 / 非数字 / 非正数 → 0（调用方以 0 表示"无会话上下文，不查历史"）。
+func parseConversationID(raw string) int64 {
+	if raw == "" {
+		return 0
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		return 0
+	}
+	return id
 }
 
 // buildEmotionContext 拼"情绪上下文"段（face/voice 任一非空时返回非空字符串）。
@@ -163,6 +204,8 @@ type AIStreamHandler struct {
 	chat downstream.ChatClient
 	// personality 是人格画像来源（E2E-14）；nil = 不注入人格画像
 	personality personalitySource
+	// emotion 是会话情绪历史来源（E2E-F-122）；nil = 不回落历史情绪
+	emotion emotionSource
 }
 
 // AIStreamDeps 是 AIStreamHandler 的依赖集合。
@@ -180,6 +223,8 @@ type AIStreamDeps struct {
 	Chat downstream.ChatClient
 	// Personality 是人格画像来源（E2E-14）；nil = 不注入人格画像
 	Personality personalitySource
+	// Emotion 是会话情绪历史来源（E2E-F-122）；nil = face/voice 空时不回落历史情绪
+	Emotion emotionSource
 }
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
@@ -196,6 +241,7 @@ func NewAIStreamHandlerWithDeps(cfg config.Config, deps AIStreamDeps) gin.Handle
 		files:       deps.Files,
 		chat:        deps.Chat,
 		personality: deps.Personality,
+		emotion:     deps.Emotion,
 	}
 	return h.ServeHTTP
 }
@@ -356,6 +402,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		llmMessages := []downstream.Message{
 			{Role: "system", Content: h.buildSystemPromptWithEmotion(
 				session.WithRequestAuth(c),
+				parseConversationID(req.ConversationID),
 				req.FaceEmotion, req.FaceConfidence,
 				req.VoiceEmotion, req.VoiceConfidence,
 			)},
@@ -418,6 +465,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		llmMessages := []downstream.Message{
 			{Role: "system", Content: h.buildSystemPromptWithEmotion(
 				session.WithRequestAuth(c),
+				parseConversationID(req.ConversationID),
 				req.FaceEmotion, req.FaceConfidence,
 				req.VoiceEmotion, req.VoiceConfidence,
 			)},

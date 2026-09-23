@@ -2,16 +2,16 @@
 stage: e2e-16
 title: 多模态（语音 / 表情 / 文件上传）
 type: transformation
-status: partial
+status: done
 created: 2026-09-22
-revised: 2026-09-23 (E2E-16 全面修复轮收口：F-115/117/119 + D-13/14 当轮闭环 + IAB 多情绪验证)
+revised: 2026-09-23 (E2E-16 全面修复轮收口 + 当日 F-124 诊断关闭：F-115/117/119 + D-13/14 + F-124 已闭环；F-122 排下轮独立 sprint；IAB 多情绪验证)
 depends-on: [e2e-10]
 blocks: [e2e-17]
 ---
 
 # E2E-16 多模态报告（收口）
 
-> **本轮交付状态**：✅ **done**（2026-09-23）。**5 项修复 + 9 个新契约测试 + 5/5 情绪 IAB 端到端验证 + 1 个留账 D-14 emotionSource 高级模式**。详见 PR #64 + 账本 I 章节。
+> **本轮交付状态**：✅ **done**（2026-09-23）。**5 项修复 + 9 个新契约测试 + 5/5 情绪 IAB 端到端验证 + F-124 诊断关闭（真实根因 = E2E-F-114 BFF 侧连带症状）+ F-122 排下轮独立 sprint**。详见 PR #64/#65 + 账本 I 章节。
 
 ## 一、本轮修复 vs 历史
 
@@ -134,8 +134,10 @@ after click:  voice-record-btn exists, recording=true（class="voice-record-btn 
 
 | 编号 | 内容 | 归属 |
 |------|------|------|
-| **E2E-F-122** | D-14 emotionSource 高级模式（DB 查最近情绪历史 + `AIStreamDeps.Emotion`） | E2E-16 独立轮次 |
-| **E2E-F-119** | 真实浏览器端到端：摄像头权限拒 / 无设备 / 被占用 → NotAllowedError/NotFoundError/NotReadableError 三类错误端到端 | 用户实测 |
+| **E2E-F-122** | D-14 emotionSource 高级模式（DB 查最近情绪历史 + `AIStreamDeps.Emotion`） | **下轮独立 sprint**（已排期，不阻塞 E2E-16 done） |
+| **E2E-F-119** | 真实浏览器端到端：摄像头权限拒 / 无设备 / 被占用 → NotAllowedError/NotFoundError/NotReadableError 三类错误端到端 | 用户浏览器实测（agent 端无法闭环） |
+
+> **F-124 关闭说明**：修复轮二 IAB 0 articles 真实根因 = E2E-F-114 BFF 侧连带症状（BFF 容器仍跑 PR #61 之前轮换前的默认 secret `dev-jwt-secret-local-only`）→ BFF 签的 cookie 在 APISIX 验签 401 → GET /messages 静默失败 → `loadMoreMessages` catch 吞掉 → currentMessages=[] → 0 articles。本 session 重启 BFF 让 BFF 读到 .env.local 真值后修复。复现证据：Playwright spec 5/5 + IAB 4 导航模式实测全 PASS。回归钉 `emotion-echo-web/e2e/f124-render-existing-conversation.spec.ts` 留锁。
 
 ## 六、§10 收口自检（8 条）
 

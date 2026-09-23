@@ -47,7 +47,7 @@ func TestAIStreamReq_HasFaceEmotionField(t *testing.T) {
 func TestBuildSystemPrompt_EmotionContext_Appended_WhenFaceOrVoicePresent(t *testing.T) {
 	h := &AIStreamHandler{}
 	// 模拟带情绪上下文
-	withCtx := h.buildSystemPromptWithEmotion(testCtxNoPersonality(), "happy", 0.82, "neutral", 0)
+	withCtx := h.buildSystemPromptWithEmotion(testCtxNoPersonality(), 0, "happy", 0.82, "neutral", 0)
 	require.Contains(t, withCtx, "愉快", "face emotion 必须出现在 emotion context 段（happy→愉快）")
 	require.Contains(t, withCtx, "平静", "voice emotion 必须出现在 emotion context 段（neutral→平静）")
 	require.Contains(t, withCtx, "情绪上下文", "必须有情绪上下文段标识")
@@ -57,14 +57,14 @@ func TestBuildSystemPrompt_EmotionContext_Appended_WhenFaceOrVoicePresent(t *tes
 func TestBuildSystemPrompt_EmotionContext_Absent_ReturnsBase(t *testing.T) {
 	h := &AIStreamHandler{}
 	// 无情绪上下文（前端未带 face/voice emotion）→ 必须返回基础 prompt，不污染
-	noCtx := h.buildSystemPromptWithEmotion(testCtxNoPersonality(), "", 0, "", 0)
+	noCtx := h.buildSystemPromptWithEmotion(testCtxNoPersonality(), 0, "", 0, "", 0)
 	assert.Equal(t, baseSystemPrompt, noCtx,
 		"无情绪上下文时必须返回与原 baseSystemPrompt 逐字相同（不编造、不退化）—— E2E-F-95 教训：画像缺时不假数据")
 }
 
 func TestBuildSystemPrompt_EmotionContext_HasGuardrails(t *testing.T) {
 	h := &AIStreamHandler{}
-	prompt := h.buildSystemPromptWithEmotion(testCtxNoPersonality(), "happy", 0.82, "neutral", 0)
+	prompt := h.buildSystemPromptWithEmotion(testCtxNoPersonality(), 0, "happy", 0.82, "neutral", 0)
 	// 三句护栏关键词：
 	//   - 不点破来源：不出现"摄像头""识别""分析""检测""设备""传感器"
 	//   - 不贴标签：不当面称呼用户为"你很[emotion]"
