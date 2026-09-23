@@ -613,6 +613,21 @@
 
 **完整论证见 [ADR · 2026-09 · 报表会话数数据源](adr/adr-2026-09-dashboard-report-count-source.md)**。
 
+### 决策 31：融合结果（face/voice emotion）注入 system prompt = **emotion context 段拼接**（2026-09-23 E2E-16 D-14 实施）
+
+> ✅ Accepted。E2E-16 plan §B.10 要求多模态采集结果参与情绪计算。修法：
+>
+> - 前端 `useConversationSender` 从 `useFaceEmotion.getRecentEmotion()`（3 秒有效窗口）+ `useVoiceRecorder` 携带 `faceEmotion/faceConfidence/voiceEmotion/voiceConfidence` 字段到 `/ai/stream`
+> - 后端 `aiStreamReq` 同步新增字段 + `buildSystemPromptWithEmotion` 新方法 = base + (可选) personality 段 + (可选) emotion context 段
+> - emotion context 段中性句式 + 三句护栏（不点破来源 / 不贴标签 / 不过火）+ 中英映射（happy→愉快 等）
+> - 无情绪上下文时 prompt 与 base 逐字相同（不污染）
+>
+> **决策**：最小模式 = 前端 payload 自带 emotion（emotionSource 高级模式 = DB 查历史 + `AIStreamDeps.Emotion` 字段留账 E2E-F-122 独立轮次）。
+>
+> **IAB 端到端 5/5**：happy → "愉快的事吗" / sad → "压着些什么" / angry → "烦心事" / anxious → "不安/放不下" / neutral baseline 不注入。
+>
+> **ADR**：[`adr-2026-09-emotion-context-injection.md`](adr/adr-2026-09-emotion-context-injection.md)
+
 ## 🏗 当前架构全景
 
 ```
