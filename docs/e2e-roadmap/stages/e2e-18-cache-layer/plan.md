@@ -2,7 +2,7 @@
 stage: e2e-18
 title: 缓存层（ai-svc LRU 行为 + Redis 去留决策）
 type: verification
-status: in-progress
+status: partial
 created: 2026-09-24
 depends-on: [e2e-17]
 blocks: [e2e-20]
@@ -115,20 +115,20 @@ bash apisix/seed.sh && docker compose -f docker-compose.apps.yml --env-file .env
 
 | # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
 |---|--------|------|---------|------|------|
-| 1 | LRU 单元测试全绿（`lru_test.go` 7 用例：New/miss/hit/TTL 过期/驱逐/recency/并发） | [A] | `go test ./internal/fusion -run TestMsgIDLRU -v` | 测试输出 | ⬜ |
-| 2 | worker LRU 接线测试全绿（Touch 命中 skip / RateLimit=nil 不限流） | [A] | `go test ./internal/fusion -run TestWorker -v` | 测试输出 | ⬜ |
-| 3 | **LRU 默认值契约 RED→GREEN**：helper 三态（未设 env→启用 cap=1024 / 显式 `512`→512 / 显式 `0`→关闭）；先提交失败测试再实现 | [A] | 先红后绿两次 `go test` 输出 + commit 序列 | 测试输出 + commits | ⬜ |
-| 4 | 修后运行时启用证据：rebuild 后 ai-svc 启动日志含 `Worker LRU rate limit enabled: cap=1024 ttl=4m0s`（修前基线：无此行，见 §2.A 运行时行） | [A] | `docker logs emotion-echo-ai-svc \| grep LRU` | 日志片段 + 镜像 `Created` 时间戳晚于修复 commit | ⬜ |
-| 5 | `/metrics` 中 `worker_tick` collector 的 `skipped_lru` result 已注册（注册级；不伪造运行时触发） | [A] | `docker exec emotion-echo-ai-svc` 抓 metrics 或 `curl :8891/metrics \| grep skipped_lru` | curl/grep 输出 | ⬜ |
-| 6 | Redis 现状盘点：容器 healthy + `client list` 无业务连接（仅 healthcheck/探测自身）+ 活跃 6 svc+BFF 非测试代码 redis 运行时引用 = 0 | [A] | `docker ps` + `redis-cli client list` + `grep -rn "redis.NewClient\|InitRedis(" --include="*.go"`（排除 legacy/_test/shared 定义处） | 三段命令输出 | ⬜ |
-| 7 | 注释漂移证据固化：`limiter.go:137 RedisLimiterBackend: TODO` 与 `init.go:37`「5 svc 调一次」caller 数 = 0（grep 输出） | [A] | 同上 grep + 行号回读 | grep 输出 + `文件:行号` | ⬜ |
-| 8 | **[M] Redis 去留决策**：升级用户拍板（建议 D-27=保留闲置供 E2E-20；选项：保留 / 下线 / 立即接入） | [M] | 用户答复记录 | 决议 + decisions.md 行 | ⬜ |
-| 9 | 决策落定后登记与对账：D-27 入 `e2e decisions.md`（+ 如门禁要求：ADR + 架构决策 34）+ 账本 F-08 翻状态 + F-134/135/136 转挂 E2E-28（行内注明转移） | [A] | 回读 decisions/ADR/账本 行号 + `e2e_stage_audit.py --stage e2e-18` | 文件行号 + audit 输出 | ⬜ |
-| 10 | 回归钉：`e2e/cache-layer-smoke.spec.ts` 首跑绿（chromium + mobile 双 project） | [A] | `pnpm playwright test e2e/cache-layer-smoke.spec.ts` | playwright 输出 | ⬜ |
-| 11 | 主链路视觉证据：LRU 启用 + ai-svc rebuild 后聊天页发消息收到 AI 回复，截图正常（无布局/功能回归） | [V] | IAB 操作 + 截图并查看 | `screenshots/11-chat-smoke-after-lru.png` | ⬜ |
-| 12 | 全量回归：ai-svc+shared `go test ./...` + 前端 `pnpm vitest run` + 本 spec 复跑，全绿 | [A] | 三段命令输出 | 测试输出 | ⬜ |
+| 1 | LRU 单元测试全绿（`lru_test.go` 7 用例：New/miss/hit/TTL 过期/驱逐/recency/并发） | [A] | `go test ./internal/fusion -run TestMsgIDLRU -v` | 测试输出 | ✅ |
+| 2 | worker LRU 接线测试全绿（Touch 命中 skip / RateLimit=nil 不限流） | [A] | `go test ./internal/fusion -run TestWorker -v` | 测试输出 | ✅ |
+| 3 | **LRU 默认值契约 RED→GREEN**：helper 三态（未设 env→启用 cap=1024 / 显式 `512`→512 / 显式 `0`→关闭）；先提交失败测试再实现 | [A] | 先红后绿两次 `go test` 输出 + commit 序列 | 测试输出 + commits | ✅ |
+| 4 | 修后运行时启用证据：rebuild 后 ai-svc 启动日志含 `Worker LRU rate limit enabled: cap=1024 ttl=4m0s`（修前基线：无此行，见 §2.A 运行时行） | [A] | `docker logs emotion-echo-ai-svc \| grep LRU` | 日志片段 + 镜像 `Created` 时间戳晚于修复 commit | ✅ |
+| 5 | `/metrics` 中 `worker_tick` collector 的 `skipped_lru` result 已注册（注册级；不伪造运行时触发） | [A] | `docker exec emotion-echo-ai-svc` 抓 metrics 或 `curl :8891/metrics \| grep skipped_lru` | curl/grep 输出 | ✅ |
+| 6 | Redis 现状盘点：容器 healthy + `client list` 无业务连接（仅 healthcheck/探测自身）+ 活跃 6 svc+BFF 非测试代码 redis 运行时引用 = 0 | [A] | `docker ps` + `redis-cli client list` + `grep -rn "redis.NewClient\|InitRedis(" --include="*.go"`（排除 legacy/_test/shared 定义处） | 三段命令输出 | ✅ |
+| 7 | 注释漂移证据固化：`limiter.go:137 RedisLimiterBackend: TODO` 与 `init.go:37`「5 svc 调一次」caller 数 = 0（grep 输出） | [A] | 同上 grep + 行号回读 | grep 输出 + `文件:行号` | ✅ |
+| 8 | **[M] Redis 去留决策**：升级用户拍板（建议 D-27=保留闲置供 E2E-20；选项：保留 / 下线 / 立即接入） | [M] | 用户答复记录 | 决议 + decisions.md 行 | ✅ |
+| 9 | 决策落定后登记与对账：D-27 入 `e2e decisions.md`（+ 如门禁要求：ADR + 架构决策 34）+ 账本 F-08 翻状态 + F-134/135/136 转挂 E2E-28（行内注明转移） | [A] | 回读 decisions/ADR/账本 行号 + `e2e_stage_audit.py --stage e2e-18` | 文件行号 + audit 输出 | ✅ |
+| 10 | 回归钉：`e2e/cache-layer-smoke.spec.ts` 首跑绿（chromium + mobile 双 project） | [A] | `pnpm playwright test e2e/cache-layer-smoke.spec.ts` | playwright 输出 | ✅ |
+| 11 | 主链路视觉证据：LRU 启用 + ai-svc rebuild 后聊天页发消息收到 AI 回复，截图正常（无布局/功能回归） | [V] | IAB 操作 + 截图并查看 | `screenshots/11-chat-smoke-after-lru.png` | ✅ |
+| 12 | 全量回归：ai-svc+shared `go test ./...` + 前端 `pnpm vitest run` + 本 spec 复跑，全绿 | [A] | 三段命令输出 | 测试输出 | ✅ |
 
-汇总行（收口时填）：`PASS x / FAIL x / BLOCKED x / N/A x`
+汇总：`PASS 12 / FAIL 0 / BLOCKED 0 / N/A 0`（2026-09-24 执行收口，证据见 [report.md](report.md) §2）
 
 ---
 
