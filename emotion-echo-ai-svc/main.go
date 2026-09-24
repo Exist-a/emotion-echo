@@ -85,6 +85,14 @@ func readEnvInt(name string, fallback int) int {
 	return n
 }
 
+// lruCapacityFromEnv 读 fusion worker LRU 容量（E2E-18 测试点 #3 契约）：
+//   - 未设 WORKER_LRU_CAPACITY → 默认 1024（对齐 main.go 注释与架构决策 15「已生效」）
+//   - 显式正值 → 覆盖
+//   - 显式 0 → 关闭 LRU（逃生门；readEnvInt 对 "0" 解析成功返回 0 而非 fallback）
+func lruCapacityFromEnv() int {
+	return readEnvInt("WORKER_LRU_CAPACITY", 1024)
+}
+
 // applyEnvOverrides reads OS env vars and patches c.* fields.
 //
 // go-zero conf does NOT parse ${VAR:-default} bash-style substitution.
@@ -494,8 +502,10 @@ func main() {
 		lateFuser := fusion.NewWeightedLateFuser(0.4, 0.3, 0.3)
 
 		// Stage 35 PR-3：msgID LRU 限流（默认 cap=1024 / TTL=4min）
+		// E2E-18 #3：默认值收敛到 lruCapacityFromEnv（原 fallback=0 使 LRU
+		// 在所有未显式配置 env 的部署里从不构造，与本注释及决策 15 矛盾）。
 		var rateLimit *fusion.MsgIDLRU
-		if cap := readEnvInt("WORKER_LRU_CAPACITY", 0); cap > 0 {
+		if cap := lruCapacityFromEnv(); cap > 0 {
 			ttl := time.Duration(readEnvInt("WORKER_LRU_TTL_SECONDS", 240)) * time.Second
 			rateLimit = fusion.NewMsgIDLRU(cap, ttl)
 			logging.Printf("[fusion] Worker LRU rate limit enabled: cap=%d ttl=%v", cap, ttl)
