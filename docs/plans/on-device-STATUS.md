@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1 收口（2026-09-24）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3 收口（2026-09-24）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -70,6 +70,37 @@
 **门禁**：
 - `e2e_stage_audit.py --all` → **30 阶段 0 FAIL**（合并前后一致）
 - PR #86 CI：**27/27 check-runs 全绿**
+
+## 一.7、T2#3 已完成（2026-09-24 续接，§十二 决策 2 落地 · main=待合并）
+
+| 项 | 文件 | 验证 |
+|----|------|------|
+| **端侧主力模型选型决策材料**（10 维度决策矩阵 + License 实测 + 学术综述印证） | `docs/plans/on-device-model-selection-decision-material-2026-09-24.md` | ModelScope API + GitHub API 实测 MindChat GPL-3.0 + Qwen3 Apache 2.0 + Emo-gml 综述 |
+| **D-26.2 端侧主力模型 ADR**（status: **proposed**，用户 2026-09-24 会话口头授权"选 B 吧"） | `docs/architecture/adr/adr-2026-09-on-device-model-selection-qwen3.md` | 10 维度决策矩阵 B 优 9/10；Apache 2.0 商用须知 5 项必做清单 |
+| **两套决策索引同步** | `docs/e2e-roadmap/decisions.md` D-26.2 行 + `docs/architecture/decisions.md` 决策 34 行 | 与 D-26 主方案 + D-26.1/3/4/5 流程对齐 |
+
+**选型结论（送 §十二 决策 2 用户拍板）**：**WebLLM 预置 Qwen3-1.7B-q4f16_1-MLC（Apache 2.0）**
+
+**不选 MindChat 核心理由**（决策材料 §五）：
+1. **GPL-3.0 copyleft** = 战略层面锁定商用（GPL-3.0 §7 不可撤销；项目若未来转商用须整个代码 GPL 化）
+2. **MLC-LLM 自编译成本高**（编译环境 + 编译算力 + CDN 自部署）
+3. **学术综述印证**：Emo-gml/Awesome-Mental-Health-LLMs TAFFC 2026 综述——心理垂直 LLM 质量 = base model × instruction tuning × 强 prompt × 护栏代码（通用基座 + §6.5 方法论可达可用线）
+4. **跨项目 License 一致**：Qwen3 Apache 2.0 与项目 emotion-echo-web 默认 + 各 Go svc Apache-2.0 一致；GPL-3.0 冲突
+5. **维护活跃度**：Qwen3-2507（2025-08 最新）vs MindChat 19 个月未更新
+
+**分级加载方案**（v0.2 §二）：
+- 桌面独显：Qwen3-4B-q4f16_1（vram 3432MB）
+- 桌面集显/笔记本：Qwen3-1.7B-q4f16_1（默认，vram 2037MB）
+- 移动端：Qwen3-0.6B-q4f16_1（vram 1403MB）
+
+**协议合规**：
+- 全程零 dev mode（纯调研 + 文档）
+- 未触碰 useAIStreamHandler.ts / package.json / nuxt.config.ts / auth.global.ts / 共享文件
+- §十二 5 项决策权属用户，**本会话口头授权 = 决策材料，非正式拍板**
+- 登 D-26.2（D-NN 体系）+ 决策 34（决策 N 体系）双编号
+
+**门禁**：
+- `e2e_stage_audit.py --all` → 30 阶段 0 FAIL（待 PR 合并后验证）
 
 ## 二、环境基线（协议 §五 要求记录）
 
