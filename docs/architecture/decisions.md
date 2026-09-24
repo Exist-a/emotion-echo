@@ -944,6 +944,28 @@ Stage 33 P0 修复+BFF净化 █████████████████
 
 **关联计划**：[on-device-hybrid-inference-2026-09-23.md](../../plans/on-device-hybrid-inference-2026-09-23.md)（v0.2）/ [on-device-hybrid-inference-implementation-roadmap-2026-09-23.md](../../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md)（v0.3）
 
-**并行协议**：[parallel-tracks.md](../../_meta/parallel-tracks.md)（Lane O × Lane E 隔离规则，AGENTS §八 挂钩）
+**并行协议**：[parallel-tracks.md](../../_meta/parallel-tracks.md)（Lane O × Lane E 隔离规则，AGENTS §八挂钩）
 
 **账本**：`docs/plans/on-device-findings.md`（OND-F-xx，stage1 收口并入 E2E-F）
+
+### 决策 34：端侧主力模型 = **WebLLM 预置 Qwen3-1.7B-q4f16_1-MLC（Apache 2.0）**（2026-09-24 Lane O T2#3 立项 · D-26.2）
+
+> 🟡 **proposed** —— 转 accepted 条件：用户正式拍板 §十二 决策 2（v0.3 §B.1 决议流程）；本会话用户已口头授权"选 B 吧"，但**拍板权属用户**（AGENTS §八 规则 4），保留最终二次确认权。
+
+| 维度 | 内容 |
+|------|------|
+| **选型** | **WebLLM 预置 Qwen3-1.7B-q4f16_1-MLC**（Apache 2.0；vram 2037MB；零编译）|
+| **不选 MindChat 核心理由** | ① GPL-3.0 copyleft 锁定商用 ② MLC-LLM 自编译成本高 ③ 无 head-to-head 优势证据 ④ 与项目 Apache-2.0 默认 license 冲突 ⑤ MindChat 2024-02-06 后未更新（19 个月）|
+| **分级加载**（v0.2 §二）| 桌面独显 = Qwen3-4B（vram 3432MB）/ 桌面集显 = Qwen3-1.7B（默认）/ 移动端 = Qwen3-0.6B（vram 1403MB）|
+| **心理垂直补强**（v0.2 §6.5）| 指令扁平化 + few-shot 黄金示例对 + 护栏代码兜底（5 类）+ 强约束 system prompt + ipsative 相对档 |
+| **学术综述印证** | `Emo-gml/Awesome-Mental-Health-LLMs`（TAFFC 2026, arXiv:2609.25186）—— 通用基座 + 强 prompt + 护栏可达心理可用线 |
+| **Apache 2.0 商用须知**（必做 5 项）| LICENSE 副本 + NOTICE 致谢 + 修改明示 + 不滥用 Qwen 商标 + 端侧首次加载显示致谢 |
+| **下一步** | T2#3 云端基线跑分 → T3 WebLLM Demo 真引擎接入（dynamic import + IAB 验证）|
+
+**关联 ADR**：[adr-2026-09-on-device-model-selection-qwen3.md](adr/adr-2026-09-on-device-model-selection-qwen3.md)
+
+**关联计划 / 决策材料**：
+- [on-device-model-selection-decision-material-2026-09-24.md](../../plans/on-device-model-selection-decision-material-2026-09-24.md)（10 维度决策矩阵 + License 实测）
+- [on-device-mindchat-survey-2026-09-24.md](../../plans/on-device-mindchat-survey-2026-09-24.md)（MindChat 模型侧调研）
+
+**两套编号说明**：同一决策在 E2E 轨索引登记为 **D-26.2**（`docs/e2e-roadmap/decisions.md`）；D-NN 与决策 N 是并行编号体系（D-26 ↔ 决策 33 + D-26.2 ↔ 决策 34）。
