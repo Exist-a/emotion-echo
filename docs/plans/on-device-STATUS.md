@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1 收口（2026-09-24）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1 收口（2026-09-24）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -40,13 +40,46 @@
 - pytest `scripts/on-device-perf/` → 24/24 PASS
 - pytest `scripts/on-device-golden/` → 13/13 PASS（无回归）
 
+## 一.6、T2 #1 已完成（2026-09-24 续接，PR #86 squash 合入 main=a6c12fa）
+
+| 项 | commit | 验证 |
+|----|--------|------|
+| **WebLLM Demo 契约测试骨架 TDD**（`emotion-echo-web/app/utils/offline/`：deviceCapability + routeDecision + webllmEngine + Demo 占位页 `pages/demo/local-llm.vue`） | `f2083fb` + `582269f`（lockfile 同步） | **vitest 42/42 PASS**（4 文件）+ RED→GREEN 节奏 + 协议 §二 Lane O 独占列全守 |
+
+**关键设计点**（v0.3 §C.1 阶段一任务 1 落地）：
+- **`detectWebGPU` 异步化**（sync helper 不能 await `requestAdapter` Promise → `unsupported` 区分）
+- **路由决策优先级** = 高危 > 设备 > 超长 > 离线（v0.2 §5.1 "高危×离线"精神推广 —— **安全护栏原则**：危机响应永远第一优先级，不能因端侧条件不满足被静默忽略）
+- **`HIGH_RISK_HOTLINE_TEMPLATE` 常量** + `fallback_hotline` 路由（v0.2 §5.1 高危×离线兜底 + §6.1 热线必含）
+- **WebLLMEngine interface + Stub**（4 方法 init/chat/abort/dispose；Stub 返回固定占位字符串，T3 才接 `@mlc-ai/web-llm` dynamic import）
+- **Demo 占位页**（`<ClientOnly>` + 设备能力 + 路由决策展示 + 显式 WIP 角标，**不调真引擎**）
+
+**协议合规（最严守的一轮）**：
+- 全程零 dev mode
+- **未触碰** `useAIStreamHandler.ts` / `package.json` / `nuxt.config.ts` / `app/middleware/auth.global.ts` / `docs/e2e-roadmap/**` / `deploy/` / `.github/workflows`
+- 路由认证不引入 AuthMiddleware 共享列握手 —— Demo 设计为**无 auth**（不调 useApi/useUserStore）
+- §十二 5 项决策权属用户，未决策加码
+- 未登 D-NN / 决策 N 新号
+
+**测试覆盖**：
+- `deviceCapability.test.ts` — 5 用例（mock navigator 注入 → 3 态）
+- `routeDecision.test.ts` — 16 用例（6 决策分支 + 优先级 + 边界）
+- `webllmEngine.architecture.test.ts` — 9 用例（静态源扫描 interface + Stub 隔离）
+- `local-llm.architecture.test.ts` — 12 用例（路由 12 项契约）
+- **合计 42/42 PASS**
+
+**门禁**：
+- `e2e_stage_audit.py --all` → **30 阶段 0 FAIL**（合并前后一致）
+- PR #86 CI：**27/27 check-runs 全绿**
+
 ## 二、环境基线（协议 §五 要求记录）
 
-- `main` = `5ceb452`（PR #84 squash 后），与 origin/main 同步
-- **T0 + T1 全程零 dev mode**：`.devmode-session` 锁未创建/未占用（协议 §四 T1 设计如此）
-- 测试环境：pytest（宿主 Python），`scripts/on-device-perf/` → 24 passed · `scripts/on-device-golden/` → 13 passed
-- worktree：`D:/源码/Emotion-Echo-lane-o`（T1 临时）—— 本轮收口删除
-- 分支：`docs/on-device-t1-survey` 已 squash 合并 + 远端删除（AGENTS §2.5）
+- `main` = `a6c12fa`（PR #86 squash 后），与 origin/main 同步
+- **T0 + T1 + T2#1 全程零 dev mode**：`.devmode-session` 锁未创建/未占用
+- 测试环境：vitest（emotion-echo-web，pnpm）+ pytest（宿主 Python）
+  - vitest `app/utils/offline/` + `app/pages/demo/` → 42 passed
+  - pytest `scripts/on-device-perf/` → 24 passed · `scripts/on-device-golden/` → 13 passed
+- worktree：`D:/源码/Emotion-Echo-lane-o-t2`（T2#1 临时）—— 本轮收口删除
+- 分支：`test/on-device-webllm-demo-skeleton` 已 squash 合并 + 远端删除（AGENTS §2.5）
 
 ## 三、CI 覆盖现状（2026-09-24 实测 4 workflow）
 
@@ -62,17 +95,20 @@
 1. ~~**T1**：MindChat 双轨验证~~ ✅ T1 完成（PR #84 `a651ecf`）
 2. ~~**T1**：编译链路 + CDN 清单~~ ✅ T1 完成（PR #84 `ac269f5`；**国内可达实测拉流**留 T2）
 3. ~~**T1**：性能基线测量脚本骨架~~ ✅ T1 完成（PR #84 `7c42411`；**真机测量**留 T2）
-4. **T1/T2**：云端基线跑分（golden set 注入真实 model_fn —— 若走 BFF/dev mode **须先在协议 §四资源日历预约 + 拿锁**；纯直连 llm-service API 则零 dev mode，开工时先核实链路再定）
+4. **T1/T2**：云端基线跑分（golden set 注入真实 model_fn —— `emotion-llm-service` 是 gRPC-only port 50051，HTTP 8000 仅有 /analyze；可用 `iter_chat_chunks` + mock fallback（`LLM_API_KEY` 空时）或走 DeepSeek）
 5. **T2**：编译链路 + CDN **实测拉流**（5 候选 CDN 实测可达性 + CORS 6 项检查清单 —— 见 `on-device-compile-cdn-2026-09-24.md` §三/§五）
-6. **T2**：性能基线**真机测量**（TTFT / tokens/sec / vram / model_load_ms 注入 PerfMeasurement —— 需 WebGPU + WebLLM 引擎，IAB 或 Playwright 实测）
-7. **T2**：WebLLM 最小 Demo（`/demo/local-llm` 独立路由 + 字面量契约测试 + 生产 build 排除）
-8. **T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）
-9. **D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）
-10. **OND-F-01**（已登记）：golden set pytest 未接 CI；**新增 OND-F-02**：perf baseline 24 用例**同样未接 CI**（同一根因：`llm-test.yml` paths 不含 `scripts/`）
+6. **T2**：性能基线**真机测量**（TTFT / tokens/sec / vram / model_load_ms 注入 PerfMeasurement —— 需 WebGPU + WebLLM 引擎真机，IAB 或 Playwright 实测）
+7. ~~**T2**：WebLLM 最小 Demo 契约测试骨架~~ ✅ T2#1 完成（PR #86 `f2083fb` + `582269f`；Demo 占位页 + 4 接口 + 42/42 vitest PASS）
+8. **T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）
+9. **T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）
+10. **D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）
+11. **OND-F-01**（已登记）：golden set pytest 未接 CI
+12. **OND-F-02**（已登记）：perf baseline 24 用例**同样未接 CI**（同一根因：`llm-test.yml` paths 不含 `scripts/`）
+13. **OND-F-03**（账本回收）：WebLLM Demo vitest **已实证接 CI**（`web-test.yml` paths=`emotion-echo-web/**`，新文件 `app/utils/offline/**` 自动覆盖；PR #86 CI 27/27 绿即证据）。无需修
 
 ## 五、给下次会话的开场动作
 
 1. 读 AGENTS §八 + `parallel-tracks.md` §五 → 开工三查（fetch/status、对方 STATUS 尾 3 行、`.devmode-session` 锁）
-2. 读本文件 §四，**从第 4 项云端基线跑分**继续（T1 三任务已收口）
+2. 读本文件 §四，**从第 4 项云端基线跑分 / 第 8 项 WebLLM Demo 真引擎接入**任选一项继续（T1 三任务 + T2#1 已收口）
 3. **用户决议 §十二 决策 2**（MindChat vs Qwen3）—— 不在本轨决议权
 4. 独占列红线与编号口径（两套号都查）见协议 §二/§三.资源3
