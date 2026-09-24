@@ -3,7 +3,7 @@ purpose: 端侧化 stage1（Lane O）期间发现的问题账本（OND-F-xx 续�
 date: 2026-09-24
 status: active
 scope: docs/_meta/parallel-tracks.md §三.资源3 —— 仅 Lane O 会话写入
-last-refresh: 2026-09-24
+last-refresh: 2026-09-24（T1 收口新增 OND-F-02）
 ---
 
 # 端侧化发现账本（OND-F）
@@ -30,3 +30,4 @@ last-refresh: 2026-09-24
 | ID | 发现日期 | 阶段归属 | 描述 | 状态 | 证据 |
 |----|----------|----------|------|------|------|
 | OND-F-01 | 2026-09-24 | 阶段一（T0 收口） | `scripts/on-device-golden/` 的 13 条 pytest **不在任何 CI workflow 覆盖内**：`llm-test.yml` paths 不含 `scripts/` 且只跑 `tests/unit/`；`go-test`/`doc-drift` 虽必跑但不执行 Python 测试。golden set 回归（OC-11）当前唯一执行点 = 本地手工 pytest | open（修法候选：llm-test.yml 扩 paths + 加 `python -m pytest scripts/on-device-golden/` step——**属共享文件 `.github/workflows`，须协议 §六握手 + 与 Lane E 协调 PR 时序**，不擅动） | 4 workflow paths/grep 实测（STATUS.md §三 CI 覆盖现状表） |
+| OND-F-02 | 2026-09-24 | 阶段一（T1 收口） | `scripts/on-device-perf/` 24 条 pytest **与 OND-F-01 同型 CI 缺口**：`llm-test.yml` paths 不含 `scripts/on-device-perf/`；性能基线回归（OC-11~13）当前唯一执行点 = 本地手工 pytest。**两缺口合并修**：llm-test.yml paths 加 `scripts/on-device-*/` 后两条均解决——但 `.github/workflows` 属共享列，须协议 §六握手 | open（与 OND-F-01 同修法候选；不擅动） | pytest 24/24 本地 PASS；4 workflow paths/grep 实测（STATUS.md §三 CI 覆盖现状表） |
