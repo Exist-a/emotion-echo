@@ -338,3 +338,31 @@ PR review 时若发现违反 TDD：
   - 阶段排期 [`roadmap.md`](docs/e2e-roadmap/roadmap.md)（30 阶段 + R 系列补救 + 决策门）、补救排期 [`remediation.md`](docs/e2e-roadmap/remediation.md)、改造决议 [`decisions.md`](docs/e2e-roadmap/decisions.md)、已发现未解决账本 [`discovered-unresolved.md`](docs/e2e-roadmap/discovered-unresolved.md)（E2E-F-xx 编号）、每阶段详档与记录 [`stages/`](docs/e2e-roadmap/stages/)
   - 成果以 `PASS`/`FAIL`/`BLOCKED`/`N/A` 四值记录并附证据（**"已创建/已新增"不算证据**）；`BLOCKED` 超 1/3 不得判 done；禁止用 `N/A` 掩盖未做的工作
   - 纪律：范围外问题只记账不修；每阶段收口必须写 Playwright 回归钉；**账本对账**（属本阶段未解决的 `E2E-F-xx` 存在时阶段只能标 `partial`）；阶段记录收口后迁移到 `docs/stages/`
+
+---
+
+## 八、双轨并行约束（2026-09-24 起生效，至端侧 stage1 收口）
+
+> **背景**：E2E 主链路验证（Lane E）与端侧化 stage1（Lane O）在不同会话、不同分支并行推进时，
+> 须遵守 [`docs/_meta/parallel-tracks.md`](docs/_meta/parallel-tracks.md) 的隔离协议。
+> **两轨任何会话开工前必读该文件**；本节是它的效力来源，违反按 §六 处置。
+
+硬规则（详见协议正文）：
+
+1. **文件面硬隔离**：Lane O 禁触 `docs/e2e-roadmap/**`、TTS/数字人/发消息链路、`deploy/`、
+   `useAIStreamHandler.ts`（stage1 全程禁触）；Lane E 禁触 `docs/plans/on-device-*`、
+   端侧新建文件。触碰对方独占列 = PR 直接 reject。共享文件（`package.json` / `README.md` /
+   `decisions.md` / `AGENTS.md`）改动须在协议 §六 登握手行。
+2. **dev mode 归属锁**：启动 19 容器栈前后须管理 `deploy/.devmode-session`（gitignored）；
+   有人登记不得强占。Lane O 前 3 个 PR **禁止**启动 dev mode。启动铁律继承 §2.1 与 `.env.local` 红线。
+3. **编号分区**：E2E-F 续号仅 Lane E 写；Lane O 阶段一期登 `docs/plans/on-device-findings.md`
+   （OND-F-xx），收口并账；端侧决策 D-26/D-26.1~5，E2E 决策 D-27 起。
+4. **决策门**：v0.2 §十二 5 项决策**只有用户拍板**，两轨会话均不得擅自决议（§〇.6 文档功课 + 本节）。
+5. **PR 合并串行**：两轨 PR 合并顺序任意但同一时刻只合一个；每次合并后跑
+   `e2e_stage_audit.py --all` 确认 0 FAIL；squash + 立即删源分支（§2.5）。
+6. **收工三查**：写本轨 STATUS.md（已做/未做分列，禁美化）→ 删 `.devmode-session` →
+   §2.5 三连自检。
+
+---
+
+> 最后更新：2026-09-24（新增 §八 双轨并行约束）

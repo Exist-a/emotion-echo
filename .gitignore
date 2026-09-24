@@ -163,6 +163,10 @@ __pycache__/
 # test_seed_nacos.sh 临时响应体（Git Bash /tmp 跨 curl.exe/python.exe 不通用）
 deploy/apisix/.tmp-seedtest/
 
+# ---------- 双轨并行 dev mode 归属锁（docs/_meta/parallel-tracks.md §三.资源1）----------
+# 谁启动 19 容器栈谁写入、用完删除；纯本地协调文件，严禁进版本库
+deploy/.devmode-session
+
 # ---------- Helm ----------
 # Chart.lock 是 helm dependency build 生成的依赖锁，与 helm version 强绑定，
 # 团队成员本地 helm 版本可能不同导致锁文件差异。按需手动提交（release pipeline 时）。
