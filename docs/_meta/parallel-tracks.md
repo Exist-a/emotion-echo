@@ -155,6 +155,7 @@ T4  E2E 全收口 + §十二拍板 → Lane O 进阶段二（v0.3 四道门）
 |------|----|----------------|------|----------------|
 | 2026-09-24 | Lane O | `docs/_meta/parallel-tracks.md`、`AGENTS.md §八`、`.gitignore` | 本协议首次落地 | Lane E 下次开工必读本文件 |
 | 2026-09-24 | Lane O | `docs/e2e-roadmap/decisions.md`、`docs/architecture/decisions.md`、本文件 §三.资源3 | D-26 主方案 ADR 立项双登记（D-26 行 + 决策 33 行）；**编号口径勘误**：协议原表只写 D-NN 单系列，现补齐决策 N 并行系列（Lane O 占 33 / Lane E 从 34 起） | Lane E：决策登记时两套号都避开 26/33（资源3 表已更新） |
+| 2026-09-24 | Lane E | `docs/plans/README.md`（索引 +1 行）、本文件 §六 | 新增 `conversation-memory-pending-decision-2026-09-24.md`（会话记忆缺失待决策；用户口头反馈，非 on-device 文件，不触对方独占列） | Lane O 无需跟进；若 v0.2 §十二决策 5「摘要存储」拍板，回读该文档 §D-c |
 
 ---
 
