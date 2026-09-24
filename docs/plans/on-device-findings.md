@@ -27,4 +27,6 @@ last-refresh: 2026-09-24
 
 ## 账本
 
-（暂无 —— 端侧 stage1 未开工；本文件随第一个 Lane O 会话启用）
+| ID | 发现日期 | 阶段归属 | 描述 | 状态 | 证据 |
+|----|----------|----------|------|------|------|
+| OND-F-01 | 2026-09-24 | 阶段一（T0 收口） | `scripts/on-device-golden/` 的 13 条 pytest **不在任何 CI workflow 覆盖内**：`llm-test.yml` paths 不含 `scripts/` 且只跑 `tests/unit/`；`go-test`/`doc-drift` 虽必跑但不执行 Python 测试。golden set 回归（OC-11）当前唯一执行点 = 本地手工 pytest | open（修法候选：llm-test.yml 扩 paths + 加 `python -m pytest scripts/on-device-golden/` step——**属共享文件 `.github/workflows`，须协议 §六握手 + 与 Lane E 协调 PR 时序**，不擅动） | 4 workflow paths/grep 实测（STATUS.md §三 CI 覆盖现状表） |
