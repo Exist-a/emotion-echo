@@ -317,7 +317,13 @@ const handleVoiceStreamResponse = async (
   voiceEmotion: string,
   userMessageId?: string,
 ) => {
-  conversationSender.stopTTS()
+  // E2E-F-133（2026-09-23 IAB 用户实测「嘴动没声音」第二根因，2026-09-23）：
+  // 之前这里调 stopTTS() 会清 debounce 计时器 + 清累积 deltaText + stop()，
+  // **把 AI 流完成时正要推送/播放的 TTS 自杀**——AI 完成 ≠ 停止 TTS，
+  // 正是要 flush + 播放的时候。改用 flushTTS 推最后一波 AI 文本到 TTS 队列
+  // （不杀 debounce/累积/stop）。其他场景（切会话/onUnmounted）的 stopTTS
+  // 在函数体外不受影响。
+  conversationSender.flushTTS()
   // D-14：发送消息时取最近一次 face emotion（3 秒有效窗口），拼到 AIStreamParams
   const recentFace = faceEmotion.getRecentEmotion()
   await conversationSender.sendToExistingConversation(

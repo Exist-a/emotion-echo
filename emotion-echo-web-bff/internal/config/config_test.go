@@ -79,21 +79,21 @@ func TestConfig_AIServiceDefaultTimeoutIs30s(t *testing.T) {
 		"AIService.TimeoutMs 默认应为 30000ms（30s）以容纳 SenseVoice 冷启动转写（E2E-F-115）")
 }
 
-// TestConfig_XTTSDefaultTimeoutIs90s 断言 XTTS.TimeoutMs 默认 90000ms（90s）。
+// TestConfig_XTTSDefaultTimeoutIs180s 断言 XTTS.TimeoutMs 默认 180000ms（180s）。
 //
-// E2E-F-127（2026-09-23 e2e-17 step 5 收口实测）：仓 XTTS 模型 CPU 推理 4 字符 ~7s，
-// 按字符数线性放大。E2E-17 数字人 + TTS plan §2.A.3 实测：1 字 warm path ~16-20s，
-// 30s 不够 cold path + warm path 长文本。原 yaml TimeoutMs: 30000 与 config.go
-// SetDefaults 默认 90000 矛盾—— yaml 不为 0 时 SetDefaults 不覆盖，导致实际生效 30s。
+// E2E-F-138（2026-09-23 IAB 用户实测「嘴动没声音」判别实验）：
+// XTTS CPU 推理实测 49 字（AI 正常回复长度）= **103.6s**，线性约 2.1s/字 + 15s 基础开销；
+// 原 90000ms 只够 ~35 字 → AI 回复必撞 502 → 前端拿不到音频 → 用户永远听不到声音。
+// 之前所有 curl/测试用「你好」2 字（22s）全绿 = 测试文本长度盲区。
 //
-// 修复目标：yaml 与 config.go 默认值保持一致；测试断言 yaml 加载后值 >= 90000，
-// 防止今后任何单方面改 yaml/config.go 又忘记另一边的漂移（code-review-2026-09-14
-// 文档漂移模式）。
-func TestConfig_XTTSDefaultTimeoutIs90s(t *testing.T) {
+// 180s 覆盖 ~80 字（(180-15)/2.1）；APISIX upstream (web-bff) 已是 180s（D-32）无需改。
+// 长文本 >80 字或体验优化（首句切分/流式）留 E2E-F-134 后续。
+// **真根因 = E2E-F-132（XTTS 2 核限额）**：本字段单独不够，8 核下 49 字仅 19.9s。
+func TestConfig_XTTSDefaultTimeoutIs180s(t *testing.T) {
 	c := loadTestConfig(t)
-	assert.GreaterOrEqual(t, c.XTTS.TimeoutMs, 90000,
-		"XTTS.TimeoutMs 默认应 >= 90000ms（90s）以容纳 仓 XTTS CPU 推理 warm path 16-20s + 字符级时间戳 per-char 等分（E2E-F-127）。"+
-			"原 yaml TimeoutMs: 30000 与 config.go SetDefaults 90000 漂移 → yaml 实际生效 30s → BFF → XTTS client.Timeout 30s 撞底。")
+	assert.GreaterOrEqual(t, c.XTTS.TimeoutMs, 180000,
+		"XTTS.TimeoutMs 默认应 >= 180000ms（180s）以容纳 仓 XTTS CPU 推理 49 字实测 103.6s（E2E-F-138）。"+
+			"90000ms 只够 ~35 字，AI 正常回复必撞 502（用户侧「没声音」表层症状）。")
 }
 
 // TestConfig_ApplyEnvOverrides_OverridesDefaults T1.3 REFACTOR:

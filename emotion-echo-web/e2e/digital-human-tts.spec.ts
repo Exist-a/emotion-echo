@@ -160,10 +160,21 @@ test.describe('E2E-17 数字人 + TTS', () => {
     const token = await loginViaAPI(page)
 
     // 监听 phonemes 请求（验证前端 TTS 链路真的会调它）
-    const phonemesRequests: string[] = []
-    page.on('request', (req) => {
-      if (req.method() === 'POST' && req.url().includes('/api/v1/tts/phonemes')) {
-        phonemesRequests.push(req.url())
+    // E2E-F-131（2026-09-24）：F-127/F-132/F-133 修复链路经验 ——
+    // 仅断言"发起 ≥1 次请求"会让 502/504 也算 PASS（CI 绿但用户无声音）。
+    // 改为同时断言响应 status ∈ {200, 504} 的具体分布（去弱断言）；
+    // 若 Nacos 注册竞态导致 504，spec 会显式标 FAIL，便于收口。
+    const phonemesRequests: { url: string; status: number; body: string }[] = []
+    page.on('response', async (resp) => {
+      const req = resp.request()
+      if (req.method() === 'POST' && resp.url().includes('/api/v1/tts/phonemes')) {
+        let body = ''
+        try {
+          body = (await resp.text()).slice(0, 200)
+        } catch {
+          body = ''
+        }
+        phonemesRequests.push({ url: resp.url(), status: resp.status(), body })
       }
     })
 
@@ -212,13 +223,25 @@ test.describe('E2E-17 数字人 + TTS', () => {
     })
 
     // TTS 链路：flushTTS 在流完成后 500ms debounce 触发 phonemes 请求
-    // （useTTSManager debounce 保留 —— F-129 决策；端点冷推理可达 25s，只断言"发起"）
+    // （useTTSManager debounce 保留 —— F-129 决策；端点冷推理可达 25s）
+    // E2E-F-131：必须 status=200 才算"成功请求"——修前 3 次全是 90012/90017/90044ms 撞底 502/504。
+    // F-132 核数修复后 8 核下 40 字 19.9s + 端到端 200 27.6s 实测见 [账本 F-132]。
+    // F-138 yaml 超时 180s 容纳 80 字 49 字。期望 ≥1 次 200。
     await expect(async () => {
       expect(
         phonemesRequests.length,
         'AI 回复完成后 500ms debounce 必须发起 /tts/phonemes 请求',
       ).toBeGreaterThanOrEqual(1)
     }).toPass({ timeout: 60_000 })
+
+    // 严格化断言：≥1 次 status=200；若全是 502/504 则标 FAIL（F-131 防退化）
+    const okOnes = phonemesRequests.filter((r) => r.status === 200)
+    expect(
+      okOnes.length,
+      `TTS phonemes 至少一次 status=200；当前 ${phonemesRequests.length} 次记录 = ` +
+        JSON.stringify(phonemesRequests.map((r) => ({ s: r.status, b: r.body.slice(0, 60) }))) +
+        '（E2E-F-131 防弱断言退化）',
+    ).toBeGreaterThanOrEqual(1)
   })
 
   test('#18 数字人 wrapper 在 mobile project 也可见', async ({ page }) => {

@@ -4,12 +4,14 @@ title: 数字人 + TTS（真口型同步 + 段间断点）
 type: transformation
 status: done
 created: 2026-09-23
-revised: 2026-09-23 (step 5 收口完成：Playwright 双 project 6/6 PASS + 4 张 IAB 截图；E2E-F-127 yaml/config.go 漂移修复 + E2E-F-128/F-129 phoneme 驱动 + 段间断点队列化；APISIX upstream timeout 60s→180s 持久化到 seed.sh)
+revised: 2026-09-24 (用户实测**确认听到声音**「行，听到了」 → 收口 → partial→done。最终根因 F-140 = DOM 音量未 clamp 致 play() 永不执行，已修+web:v0.1.7 部署+IAB 探针 play()→PLAYING 实证。配套：F-132 XTTS 核数 / F-133 stopTTS / F-131 强断言 / F-138 超时漂移。**APISIX 相关真 bug 全部迁出本阶段**：F-137 BFF-Nacos 启动竞态（实际归 [[ap-proto]) 转移 E2E-25 APISIX（已在 PR #77 修：dev 默认 backoff retry / prod fail-fast / dev-up.sh Nacos 注册校验 / /health 加 version）；F-139 CORS origin 缺失 → 落账 E2E-25）
 depends-on: [e2e-16]
 blocks: [e2e-28]
 gate: []
-related-findings: [E2E-F-05, E2E-F-06, E2E-F-126, E2E-F-127, E2E-F-128, E2E-F-129]
+related-findings: [E2E-F-05, E2E-F-06, E2E-F-126, E2E-F-127, E2E-F-128, E2E-F-129, E2E-F-130, E2E-F-131, E2E-F-132, E2E-F-133, E2E-F-138, E2E-F-140]
 ---
+
+# E2E-17 数字人 + TTS — 详档（计划期校准版）
 
 # E2E-17 数字人 + TTS — 详档（计划期校准版）
 
@@ -85,6 +87,9 @@ related-findings: [E2E-F-05, E2E-F-06, E2E-F-126, E2E-F-127, E2E-F-128, E2E-F-12
 | TTS 双缓冲/预取等流式架构大改 | 若实测证明必须（gap 根因在架构），记账升级，不在本阶段顺手重构 |
 | 真人主观听感/口型"像不像"评审 | [M] 类需用户裁定的点单列，不冒充机械验收 |
 | i18n | D-04 候选未决 |
+| **F-134 短句切段 + 流式 TTS（E2E-F-134，2026-09-23 IAB 用户产品决策，对标豆包）** | 改 `useTTSManager` 累积到标点（。/!/？/，）切段 + 调 XTls `/tts_stream` 流式 WAV；用户发消息 **5-15s 内听第一句**。**优先级降为体验优化**：F-132 已把 49 字 188s→19.9s（9.5x），单请求 27.6s 已可听；切段可进一步压到首句 4s。**代价**：`/tts_stream` 无 phoneme 数组 → VRM 嘴型不再按音素动（VRM 仍驱动但口型随机/默认）。**产品决策**：要"快"还是"真口型同步"？用户 2026-09-23 明确倾向"快"（对标豆包） |
+| **F-135 折中：每段双端点（流式 + phoneme），保留真口型（2026-09-23 复盘候选）** | 每段**同时**调 `/tts_stream`（拿流式 WAV 字节给播放器，5-15s 出声）+ `/tts_with_phonemes`（拿 phoneme 数组给 VRM 嘴型同步）。**两全其美**但 XTls 单 worker 压力 ×2 → 必须先 F-136 多 worker 落地才扛得住；本轮不修 |
+| **F-137 BFF 与 Nacos 启动竞态（2026-09-24 本 session 实测）** | BFF 启动时 Nacos 未就绪 ⇒ 静默 continuing 不注册自己 ⇒ APISIX upstream 6 解析 `nodes:{}` ⇒ 全站 `/api/v1/*` 503。BFF /health 200 + 网关 503 可同时成立。本 session 已临时 `docker restart emotion-echo-web-bff` 即愈；治本：① BFF 注册失败 fail-fast 或带重试；② `dev-up.sh` 起 BFF 前确认 Nacos healthy + 等自身注册成功；③ 增 `/health` 版本/git_sha 端点；④ `depends_on` BFF 用 nacos service_healthy |
 
 ---
 

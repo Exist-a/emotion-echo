@@ -127,16 +127,46 @@ func main() {
 	opsLimiter := handler.NewHotReloadLimiter(60, 100)
 	nacosDeps := defaultBootDeps()
 	nacosDeps.opsLimiter = opsLimiter
-	nacosRuntime, err := BootNacos(bootCtx, &c, nacosDeps)
-	if err != nil {
-		// Round 4.2 P1-9: Nacos 启动失败必须 fail-fast，否则 svc 静默启动但
-		// 服务发现不可用 → BFF→svc 全 502 但监控/告警无感。
-		// dev 模式（STARTUP_STRICT_DEPS 未设）保留 swallow 行为兼容现有 e2e。
-		if sharedbootstrap.ShouldFailFast() {
-			log.Printf("[nacos] boot failed (strict mode, refusing to start): %v", err)
+
+	// E2E-F-137（2026-09-24）：Nacos 启动失败默认 swallow continuing → BFF 启动但
+	// 不注册自己 → APISIX upstream 6 解析 nodes:{} → 全站 /api/v1/* 503。
+	// **修复**：默认走 backoff retry 直到 BootNacos 成功（dev mode）；prod 由
+	// STARTUP_STRICT=true 显式覆盖为 fail-fast 单次尝试后 exit。
+	var err error
+	var nacosRuntime *NacosRuntime
+	if sharedbootstrap.ShouldFailFast() {
+		// prod：单次尝试，失败立即退出（容器编排会重启）
+		nacosRuntime, err = BootNacos(bootCtx, &c, nacosDeps)
+		if err != nil {
+			log.Printf("[nacos] boot failed (refusing to start): %v", err)
 			os.Exit(1)
 		}
-		log.Printf("[nacos] boot failed (continuing): %v", err)
+	} else {
+		// dev：backoff retry 直到成功（默认上限 10 次 / 间隔 2s 起、最大 30s）
+		// 上限兜底防止 Nacos 永远不起来的极端情况下死循环
+		maxAttempts := 10
+		backoff := 2 * time.Second
+		const maxBackoff = 30 * time.Second
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			nacosRuntime, err = BootNacos(bootCtx, &c, nacosDeps)
+			if err == nil {
+				break
+			}
+			log.Printf("[nacos] boot failed (retrying in %s, attempt %d/%d): %v",
+				backoff, attempt, maxAttempts, err)
+			if attempt == maxAttempts {
+				log.Printf("[nacos] boot failed after %d attempts, refusing to start: %v",
+					maxAttempts, err)
+				os.Exit(1)
+			}
+			time.Sleep(backoff)
+			if backoff < maxBackoff {
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+			}
+		}
 	}
 	defer func() {
 		if nacosRuntime != nil {
@@ -374,14 +404,20 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 // 调试时临时增减路由也行——但合 PR 前 main_test.go 必须绿。
 func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier) {
 	// health（聚合下游探测）— 免鉴权（GinAuthMiddleware 白名单已含 /health）
-	r.GET("/health", handler.NewHealthHandler([]handler.DownstreamTarget{
+	// E2E-F-130/F-99：响应里带 version + build_time，便于一眼判定容器跑的是不是
+	// 最新代码（防 dev 跑旧 bundle 类 bug 复发）。Version 优先取 GIT_VERSION env，
+	// 否则 fall back 到 dev-build；BuildTime 为 main 启动时刻。
+	r.GET("/health", handler.NewHealthHandlerWithBuild([]handler.DownstreamTarget{
 		{Name: "user", BaseURL: c.UserService.BaseURL},
 		{Name: "chat", BaseURL: c.ChatService.BaseURL},
 		{Name: "assessment", BaseURL: c.AssessmentService.BaseURL},
 		{Name: "analytics", BaseURL: c.AnalyticsService.BaseURL},
 		{Name: "ai", BaseURL: c.AIService.HTTPAddr},
 		{Name: "xtts", BaseURL: c.XTTS.BaseURL},
-	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond))
+	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond, handler.BuildInfo{
+		Version:   gitVersion(),
+		BuildTime: time.Now().UTC().Format(time.RFC3339),
+	}))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	// auth（Stage 33 PR-19b：真实登录，注入 UserClient）

@@ -61,12 +61,15 @@ AIService:
 
 XTTS:
   BaseURL: http://localhost:8003
-  # E2E-F-127（2026-09-23 e2e-17 step 5 收口实测）：仓 XTTS 模型 CPU 推理 4 字符 ~7s，
-  # 按字符数线性放大。E2E-17 数字人 + TTS plan §2.A.3 实测：1 字 warm path ~16-20s，
-  # 30s 不够 cold path + warm path 长文本。原 yaml 30000 与 config.go SetDefaults
-  # 默认 90000 漂移 → yaml 实际生效 30s → BFF→XTTS client.Timeout 30s 撞底 → 502。
-  # 修法：yaml 与 config.go 一致 90000；测试钉 config_test.go:TestConfig_XTTSDefaultTimeoutIs90s。
-  TimeoutMs: 90000
+  # E2E-F-138（2026-09-23 IAB 用户实测「嘴动没声音」判别实验）：
+  # XTTS CPU 推理 49 字（AI 正常回复长度）实测 103.6s ≈ 2.1s/字 + 15s 开销；
+  # 原 90000ms 只够 ~35 字 → AI 回复必撞 502 → 前端无音频 → 永远没声音。
+  # 测试/curl 都用「你好」2 字（22s）所以一直全绿 = 文本长度盲区。
+  # 180s 覆盖 ~80 字；与 config.go SetDefaults 一致（yaml 非 0 时 SetDefaults 不覆盖，
+  # 漂移即事故 —— 测试 TestConfig_XTTSDefaultTimeoutIs180s 钉守卫）。
+  # APISIX upstream (web-bff) 已 180s（D-32）；>80 字 / 首句切分优化留 E2E-F-134 后续。
+  # 真实可听性根因 = F-132（XTTS 2 核限额）：本字段单独不够，8 核下 49 字仅 19.9s。
+  TimeoutMs: 180000
 
 # 聚合下游 health 的超时
 Health:
