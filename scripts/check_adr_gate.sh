@@ -121,13 +121,32 @@ is_arch_keyword_in_commit() {
 
 has_adr_in_commit() {
     local commit="$1"
-    local files=$(git diff-tree --no-commit-id --name-only -r "$commit" 2>/dev/null)
-    
+    # E2E-F-139/140（2026-09-24）修复四处：
+    # ① 原 `git diff-tree -r $commit`（无 parent）只显示该 commit **引入**的文件，
+    #    不含继承自父 commit 的文件 —— 继承 ADR 的 ARCH commit 永远 FAIL（误报）。
+    # ② 改用 `git ls-tree -r $commit` 查完整 tree。
+    # ③ **不得用管道 + grep -q**：本脚本开头 `set -o pipefail`，而 grep -q 命中即退出
+    #    → 左侧 git 收到 SIGPIPE(141) → 管道整体状态非零 → if 判假 → 永远"找不到 ADR"。
+    #    （CI 实测：ls-tree(HEAD)=2684 行却 grep 不到；本地因 grep 是 ugrep 而未复现。）
+    #    改用纯 bash case 匹配，无管道、无 SIGPIPE 风险。
+    # ④ 兜底查 HEAD tree：浅克隆下个别 commit 的 tree 可能不可达。
+    local out
+    out=$(git ls-tree -r "$commit" 2>/dev/null) || out=""
+    local pattern
     for pattern in "${ADR_PATTERNS[@]}"; do
-        if echo "$files" | grep -q "$pattern"; then
-            return 0
-        fi
+        case "$out" in
+            *"$pattern"*) return 0 ;;
+        esac
     done
+    out=$(git ls-tree -r HEAD 2>/dev/null) || out=""
+    for pattern in "${ADR_PATTERNS[@]}"; do
+        case "$out" in
+            *"$pattern"*) return 0 ;;
+        esac
+    done
+    local n_self
+    n_self=$(git ls-tree -r "$commit" 2>/dev/null | wc -l)
+    echo "::error title=ADR gate::has_adr_in_commit FAIL for ${commit:0:8}: ls-tree lines=${n_self}, no ADR pattern matched"
     return 1
 }
 

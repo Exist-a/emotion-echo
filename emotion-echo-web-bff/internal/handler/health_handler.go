@@ -6,18 +6,19 @@
 // 响应：
 //   {
 //     "status": "ok",
+//     "version": "git-sha 或 dev-build",
+//     "build_time": "2026-09-24T12:34:56Z",
 //     "downstream": {
 //       "user": {"status":"ok"},
-//       "chat": {"status":"ok"},
-//       "assessment": {"status":"ok"},
-//       "analytics": {"status":"ok"},
-//       "ai": {"status":"ok"},
-//       "xtts": {"status":"ok"}
+//       ...
 //     }
 //   }
 //
 // 实现：并发 GET 各下游 /health（带超时），单个下游失败不影响整体（标记 unhealthy）。
 // 全部下游 ok → status: ok；任一失败 → status: degraded。
+//
+// E2E-F-130 / E2E-F-99（2026-09-21/24）：在响应里加 version + build_time，便于
+// 一眼判定容器跑的是不是修复后代码（防 dev 跑旧 bundle 类 bug 复发）。
 package handler
 
 import (
@@ -37,18 +38,31 @@ type DownstreamTarget struct {
 	Timeout time.Duration
 }
 
+// BuildInfo 描述构建信息（注入便于测试 + main 实注入 git SHA/build time）
+type BuildInfo struct {
+	Version   string
+	BuildTime string
+}
+
 // HealthHandler 聚合下游健康探测
 type HealthHandler struct {
 	targets []DownstreamTarget
 	client  *http.Client
+	build   BuildInfo
 }
 
 // NewHealthHandler 构造
+// targets == nil 时不探测下游（仅返回 build 信息）；用于测试 / 启动早期自检。
 func NewHealthHandler(targets []DownstreamTarget, timeout time.Duration) gin.HandlerFunc {
+	return NewHealthHandlerWithBuild(targets, timeout, BuildInfo{})
+}
+
+// NewHealthHandlerWithBuild 含构建信息；main.go 用此入口传 version/build_time。
+func NewHealthHandlerWithBuild(targets []DownstreamTarget, timeout time.Duration, build BuildInfo) gin.HandlerFunc {
 	if timeout <= 0 {
 		timeout = 2 * time.Second
 	}
-	h := &HealthHandler{targets: targets, client: &http.Client{Timeout: timeout}}
+	h := &HealthHandler{targets: targets, client: &http.Client{Timeout: timeout}, build: build}
 	return h.ServeHTTP
 }
 
@@ -59,11 +73,17 @@ type healthResult struct {
 
 type healthResponse struct {
 	Status     string                  `json:"status"`
+	Version    string                  `json:"version"`
+	BuildTime  string                  `json:"build_time"`
 	Downstream map[string]healthResult `json:"downstream"`
 }
 
 func (h *HealthHandler) ServeHTTP(c *gin.Context) {
-	resp := healthResponse{Downstream: make(map[string]healthResult, len(h.targets))}
+	resp := healthResponse{
+		Version:    h.build.Version,
+		BuildTime:  h.build.BuildTime,
+		Downstream: make(map[string]healthResult, len(h.targets)),
+	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex

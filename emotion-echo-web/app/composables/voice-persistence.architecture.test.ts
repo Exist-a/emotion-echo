@@ -48,4 +48,48 @@ describe('语音消息落库 · 接线静态契约（测试点 #5）', () => {
       '语音路径仍应 skipUserMessage（消息已在 useVoiceRecorder 里落库，避免双写）',
     ).toBe(true)
   })
+
+// E2E-F-133（2026-09-23 IAB 用户实测「嘴动没声音」第二根因）：
+  // handleVoiceStreamResponse 在 AI 流式**完成**时调 conversationSender.stopTTS() →
+  // 清 debounce 计时器 + 清累积 deltaText + stop()，**把正要推送的 TTS 自杀**
+  // （流完成 = 正是要 TTS 播放的时候）。修法：流完成回调应调 flushTTS（保证最后一波
+  // 推送+不杀队列），而非 stopTTS。
+  //
+  // 边界：仅约束 handleVoiceStreamResponse **函数体内**——函数体外的
+  // handleCancel/handleSubmit/onUnmounted 等合法 stopTTS 调用不受此约束。
+  // 函数体用大括号配对追踪切（避免误匹配 <style scoped> 块里的 `}`）。
+  it('[id].vue 的 handleVoiceStreamResponse 函数体内必须 flushTTS 而非 stopTTS（E2E-F-133）', () => {
+    const fnDeclIdx = pageSrc.indexOf('const handleVoiceStreamResponse = async')
+    expect(fnDeclIdx, 'handleVoiceStreamResponse 函数定义必须存在').toBeGreaterThan(-1)
+    const bodyStart = pageSrc.indexOf('=> {', fnDeclIdx) + 4
+    expect(bodyStart, 'handleVoiceStreamResponse 函数体起始 `=> {` 必须存在').toBeGreaterThan(3)
+    // 大括号配对追踪：找匹配 `=> {` 的 `}`（跳过字符串/正则字面量里的 `{`/`}`）
+    // 简化：仅统计非字符串上下文中的 `{`/`}` —— Vue SFC 模板里 `{` 都是表达式，
+    // 但 `<style scoped>` 里的 `}` 也在文件里 —— 用 `\n  }` 单行匹配先过滤 style 块的 `}`。
+    // 更稳：要求 `{` 在字符串/模板外的简单统计 + 行首 2 空格 } 收尾 —— 用栈。
+    let depth = 1 // 已计入 `=> {`
+    let bodyEnd = bodyStart
+    for (let i = bodyStart; i < pageSrc.length; i++) {
+      const c = pageSrc[i]
+      if (c === '{') depth++
+      else if (c === '}') {
+        depth--
+        if (depth === 0) { bodyEnd = i; break }
+      }
+    }
+    expect(bodyEnd > bodyStart, 'handleVoiceStreamResponse 函数体必须配对 `}` 存在').toBe(true)
+    const fnBody = pageSrc.slice(bodyStart, bodyEnd)
+    expect(
+      /conversationSender\.flushTTS\s*\(/.test(fnBody),
+      'handleVoiceStreamResponse 函数体内必须用 conversationSender.flushTTS() 推最后一波 AI 文本到 TTS，' +
+        '而不是 stopTTS()——后者会清 debounce 计时器 + 累积文本 + stop()，' +
+        '把 AI 流完成时正要播的 TTS 自杀（用户实测「没声音」根因 E2E-F-133）',
+    ).toBe(true)
+    expect(
+      !/conversationSender\.stopTTS\s*\(\s*\)/.test(fnBody),
+      'handleVoiceStreamResponse 函数体内禁止出现裸调 conversationSender.stopTTS()（语义错：' +
+        'AI 完成 ≠ 停止 TTS，正是要 flush + 播放的时候）。流中途切换/取消/卸载等其他场景的' +
+        'stopTTS 调用在函数体外不受此约束。',
+    ).toBe(true)
+  })
 })

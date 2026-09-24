@@ -111,7 +111,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
 | E2E-24 | 消息链路 | outbox→Kafka→consumer→DLQ 全链 + 重试/死信/回放 | — | ⏳ pending |
-| E2E-25 | 网关 APISIX | 路由注册/JWT 插件/限流/CORS | — | ⏳ pending |
+| E2E-25 | 网关 APISIX | 路由注册/JWT 插件/限流/CORS + **上游 nacos-discovery 健康检查/重连**（F-137 部分症状已由 E2E-17 PR #77 临时缓解：web-bff Nacos retry + /health version + dev-up.sh 注册校验） + **seed ↔ admin 持久化关系**（F-139 暴露：`apisix-seed` 重跑会覆盖 admin 手工改动，无 CI 兜底；`CORS_ALLOW_ORIGINS` compose 默认值已扩为 4 origin 持久） | — | ⏳ pending（**必须先治理这两个从 E2E-17 迁入的根因**） |
 | E2E-26 | 链路追踪 SkyWalking | sw8 传播 + OAP 查询 + UI 可视化（OAP 9.x queryDuration bug） | — | ⏳ pending |
 | E2E-27 | 对象存储 MinIO | 头像上传/下载/匿名读权限 | 其他文件类型接入 | ⏳ pending |
 

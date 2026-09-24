@@ -239,7 +239,15 @@ function createAndPlayAudio(
     const blob = base64ToWavBlob(data.audio)
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
-    audio.volume = volume
+    // E2E-F-140（2026-09-24 IAB 实测「嘴动没声音」最终根因）：
+    // `volume` 是 XTTS **服务端**的 PCM 增益参数（digitalHumanStore 默认 2.0，
+    // server.py pcm_chunk_shape(volume=2.0) 合法）。但 HTMLMediaElement.volume 的
+    // 合法范围是 [0, 1] —— 直接赋 2.0 会抛
+    // `IndexSizeError: The volume provided (2) is outside the range [0, 1]`，
+    // 导致紧随其后的 `audio.play()` **永不执行**（audio 对象已创建、却从不播放），
+    // 异常还被 Promise 链静默吞掉 ⇒ 用户侧表现为「嘴在动但没声音」。
+    // 修法：DOM 音量 clamp 到 [0,1]；请求体仍透传原始 volume（服务端语义不变）。
+    audio.volume = Math.min(1, Math.max(0, volume))
     audio.playbackRate = speed
     audio.preload = 'auto'
 

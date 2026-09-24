@@ -567,7 +567,13 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2.0"        # Coqui TTS CPU 推理吃核
+          # E2E-F-132（2026-09-24 IAB 用户实测）：XTTS 容器 cpus:2.0 + torch 8 线程
+          # 超订 4 倍 → 40 字 /tts_with_phonemes 实测 188s（超 BFF/APISIX 180s 上限），
+          # 流式 10 字首字节 21.2s。实测 `docker update --cpus=8` 对照：40 字 19.9s（**9.5x**），
+          # 流式 10 字首字节 4.0s，整句 8.8s；端到端 APISIX→BFF→XTTS 40 字 200 27.6s
+          # / 合法 RIFF WAV 323116B / 40 phoneme 帧。**docker update 仅运行时生效**，
+          # 重建即丢——故必须落到 compose（与下方 memory 注释同步）。
+          cpus: "8.0"
           memory: 6144M      # E2E-17: bump from 3GB (vendor default) to 6GB (repo XTTS model ~2GB + torch runtime peak ~3.5GB + room)
         reservations:
           cpus: "0.5"
@@ -590,7 +596,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.29  # E2E-F-127 yaml/config.go 漂移修复（e2e-17 step 5 收口 2026-09-23）：etc/web-bff.yaml XTTS TimeoutMs 30000→90000（与 config.go SetDefaults 对齐；否则 yaml 实际生效 30s → BFF→XTTS client.Timeout 30s 撞底 → 502；详见 config_test.go:TestConfig_XTTSDefaultTimeoutIs90s）。原 v0.1.28 commit 只改 config.go 默认值未改 yaml 是真 bug。E2E-F-129: /tts/phonemes 端点 + 段间断点队列化。E2E-F-127: audioUrl 反代。
+    image: emotion-echo/web-bff:v0.1.30  # E2E-F-127 yaml/config.go 漂移修复（e2e-17 step 5 收口 2026-09-23）：etc/web-bff.yaml XTTS TimeoutMs 30000→90000（与 config.go SetDefaults 对齐；否则 yaml 实际生效 30s → BFF→XTTS client.Timeout 30s 撞底 → 502；详见 config_test.go:TestConfig_XTTSDefaultTimeoutIs90s）。原 v0.1.28 commit 只改 config.go 默认值未改 yaml 是真 bug。E2E-F-129: /tts/phonemes 端点 + 段间断点队列化。E2E-F-127: audioUrl 反代。
     container_name: emotion-echo-web-bff
     restart: on-failure
     # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
@@ -731,7 +737,14 @@ services:
       NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
       NACOS_GROUP: "${NACOS_GROUP:-DEFAULT_GROUP}"
       # 浏览器侧来源：容器化前端仍从宿主机 :3000 访问
-      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
+      # E2E-F-139（2026-09-24 IAB 实测）：原默认只有 http://localhost:3000，
+      # 漏 http://127.0.0.1:3000 → 用 127.0.0.1:3000 打开的浏览器对 APISIX 的
+      # 所有 /api/v1/* 请求 preflight 无 Access-Control-Allow-Origin → 浏览器
+      # "Failed to fetch"（整页 API 不可用）。seed.sh:99 注释（Stage 105）已警告
+      # "两个 host 在 Origin header 看来不同源，缺一即整页 API 被 CORS 拒绝"，
+      # 但 compose 默认值未同步。同时补 :3001（宿主机 `pnpm dev --port 3001`
+      # 本地源码调试用，见 scripts/dev-up.sh 与本轮 IAB 验证记录）。
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}"
       # 置空 = 不起 docker 探测容器（本容器已在网络内，且无 docker socket）
       DOCKER_NETWORK: ""
     volumes:
@@ -766,7 +779,7 @@ services:
         NUXT_PUBLIC_API_BASE_URL: "${NUXT_PUBLIC_API_BASE_URL:-http://localhost:19080/api/v1}"
         # Bug 9: default to public npmjs; override via build-arg in restricted networks
         NPM_REGISTRY: https://registry.npmjs.org/
-    image: emotion-echo/web:v0.1.5  # E2E-17: F-128 phoneme 驱动 + F-129 队列化（E2E-F-99 同型：镜像须含前端修复）
+    image: emotion-echo/web:v0.1.7  # E2E-17: F-128 phoneme 驱动 + F-129 队列化（E2E-F-99 同型：镜像须含前端修复）
     container_name: emotion-echo-web
     restart: on-failure
     # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.

@@ -159,10 +159,14 @@ func SetDefaults(c *Config) {
 	}
 	setHTTPServiceDefaults(&c.XTTS, "http://localhost:8003")
 	if c.XTTS.TimeoutMs == 0 {
-		// E2E-F-127（2026-09-23）：原 30000ms（30s），dev CPU 上 XTTS /tts_with_phonemes
-		// 实测 4 字符 ~7s，按字符数线性放大；保守 90000ms（90s）覆盖 50+ 字符长文本。
-		// 同步覆盖 /tts/stream 路径（同一 NewXTTSClient + http.Client）。
-		c.XTTS.TimeoutMs = 90000
+		// E2E-F-138（2026-09-23 IAB 用户实测「嘴动没声音」判别实验）：
+		// XTTS CPU 推理 49 字（AI 正常回复长度）实测 103.6s ≈ 2.1s/字 + 15s 开销；
+		// 原 90000ms 只够 ~35 字 → AI 回复必撞 502 → 前端无音频 → 永远没声音。
+		// 180000ms（180s）覆盖 ~80 字；同步覆盖 /tts/stream 路径（同一 NewXTTSClient）。
+		// yaml 与本默认必须一致（yaml 非 0 时此处不覆盖 → 漂移即事故；
+		// 测试 TestConfig_XTTSDefaultTimeoutIs180s 钉守卫）。
+		// 真实可听性根因 = F-132（XTTS 2 核限额）：本字段单独不够，8 核下 49 字仅 19.9s。
+		c.XTTS.TimeoutMs = 180000
 	}
 	if c.Health.TimeoutMs == 0 {
 		c.Health.TimeoutMs = 2000
