@@ -924,3 +924,26 @@ Stage 33 P0 修复+BFF净化 █████████████████
 **测试**：
 - `pnpm exec playwright test e2e/digital-human-tts.spec.ts` 双 project **6/6 PASS**（3.8m）
 - `go test ./emotion-echo-web-bff/internal/config/` → `TestConfig_XTTSDefaultTimeoutIs90s` GREEN（钉 yaml/SetDefaults 对齐守卫）
+---
+
+### 决策 33：端侧化混合推理主方案 = **端侧优先 + 云端兜底（WebLLM + 云端 API 混合调度）**（2026-09-24 Lane O 阶段一开工立项 · D-26）
+
+> 🟡 **proposed** —— 转 accepted 条件：v0.2 §十二 5 项决策全部由用户拍板 + 补立分项 ADR D-26.1~5（决议流程见 ADR §一；**5 项决策不在 ADR/本表决议权**，AGENTS §八 规则 4）。
+
+| 维度 | 内容 |
+|------|------|
+| 技术选型 | WebLLM（WebGPU + OpenAI 兼容 + Worker 隔离）主力；MindChat 存在性 + license + A/B 验证后定（v0.2 §二） |
+| 阶段切分 | 阶段一（可前置，**不依赖 §十二决策**）→ 准备期 → 阶段二（四道门）→ 阶段三 → 阶段四（v0.3 §C） |
+| 单点插入口 | `useAIStreamHandler.sendAIStream`（**阶段一禁触**，阶段二改造；并行协议 §二） |
+| 阶段一五任务 | WebLLM Demo / MindChat 双轨 / 编译链路+CDN / 性能基线 / golden set 骨架+云端基线 |
+| 四道门 | v1.0 封版 + E2E-17~30 收口 + §十二 5 项拍板 + 本 ADR accepted → 才进阶段二/三/四 |
+
+**两套编号说明**（本条为决策 N 系列）：同一决策在 E2E 轨索引登记为 **D-26**（`docs/e2e-roadmap/decisions.md`，E2E-17 收口时让位）；D-NN 与决策 N 是并行编号体系（先例 D-09↔决策 26、D-14↔决策 31）。
+
+**关联 ADR**：[adr-2026-09-on-device-hybrid-main.md](adr/adr-2026-09-on-device-hybrid-main.md)
+
+**关联计划**：[on-device-hybrid-inference-2026-09-23.md](../../plans/on-device-hybrid-inference-2026-09-23.md)（v0.2）/ [on-device-hybrid-inference-implementation-roadmap-2026-09-23.md](../../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md)（v0.3）
+
+**并行协议**：[parallel-tracks.md](../../_meta/parallel-tracks.md)（Lane O × Lane E 隔离规则，AGENTS §八 挂钩）
+
+**账本**：`docs/plans/on-device-findings.md`（OND-F-xx，stage1 收口并入 E2E-F）

@@ -92,7 +92,8 @@ last-refresh: 2026-09-24
 |------|------|------|
 | E2E-F-1xx 续号 | Lane E 独占 | Lane O 发现 E2E 侧问题 → **记账不修**，登 `discovered-unresolved.md` 但行内标注 `（发现于 lane-o）` |
 | OND-F-01~ | Lane O 独占（`docs/plans/on-device-findings.md`） | stage1 期间端侧自身问题登此；**stage1 收口时并入 E2E-F 续号并删独立账本** |
-| D-25（已用）/ D-26 / D-26.1~5 | Lane O | Lane E 用 D-27 起给 E2E 阶段决策 |
+| **D-NN 系列**（`e2e-roadmap/decisions.md`） | D-26 及分项归 Lane O（2026-09-24 立项）；Lane E 用 **D-27 起** | 已用：D-25；D-10~24 保留 |
+| **决策 N 系列**（`architecture/decisions.md`） | **决策 33 归 Lane O**（D-26 主方案 ADR 同日登记）；Lane E 用 **34 起** | 已用至 32；两套编号并行（先例 D-09↔26、D-14↔31、D-26↔33），**登记时两套都要避开对方已占号** |
 | ADR 文件名 | 各自前缀（§一） | — |
 
 ### 资源 4：决策带宽——5 项决策只有用户拍板
@@ -153,6 +154,7 @@ T4  E2E 全收口 + §十二拍板 → Lane O 进阶段二（v0.3 四道门）
 | 日期 | 轨 | 改动的共享文件 | 内容 | 对方是否需跟进 |
 |------|----|----------------|------|----------------|
 | 2026-09-24 | Lane O | `docs/_meta/parallel-tracks.md`、`AGENTS.md §八`、`.gitignore` | 本协议首次落地 | Lane E 下次开工必读本文件 |
+| 2026-09-24 | Lane O | `docs/e2e-roadmap/decisions.md`、`docs/architecture/decisions.md`、本文件 §三.资源3 | D-26 主方案 ADR 立项双登记（D-26 行 + 决策 33 行）；**编号口径勘误**：协议原表只写 D-NN 单系列，现补齐决策 N 并行系列（Lane O 占 33 / Lane E 从 34 起） | Lane E：决策登记时两套号都避开 26/33（资源3 表已更新） |
 
 ---
 
