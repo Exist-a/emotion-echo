@@ -29,7 +29,7 @@ type: e2e-stage-roadmap
 R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量脚本负向测试、R-03 #10 的覆盖率·集成测试·Playwright 进 CI 等大项。
 **代价**：审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这是**正确信号**（真实未还欠账），不是回归。
 
-**当前激活阶段：E2E-12 设置页（待开工）** → 详档已撰写（[plan.md](stages/e2e-12-settings/plan.md)，PR #19）；D-09 已决议 = 服务端持久化
+**当前激活阶段：E2E-18 缓存层（in-progress）** → 详档已撰写（[plan.md](stages/e2e-18-cache-layer/plan.md)，2026-09-24）；核心 = ① ai-svc LRU 默认关闭与文档矛盾的 TDD 修复（`main.go:498` fallback=0 vs 决策 15「已生效」）② Redis 去留 **[M] D-27** 升级用户（建议保留闲置供 E2E-20）+ 账本 F-08 关账 + F-134/135/136 归属转挂 E2E-28
 
 > **2026-09-19 治理轮（07~10 收口审计）**：对 E2E-07/08/09/10 跑 `scripts/e2e_stage_audit.py` 发现四个阶段**全部 FAIL**（E2E-11 是唯一干净的近期阶段），错误模式与 R-02 判定过的完全同型：`screenshots/` 全为 0 张、report 非 §10 模板（缺「收口自检」/无汇总行）、plan 与 roadmap 状态未同步。用户决议 = **轻量补账 + 四阶段降 `partial`**（取证补拍另排一轮，账本 E2E-F-90）。
 > 即：**R 系列补救只回填了 E2E-01~06，07 之后的收口仍在复发同一模式** —— 这正是"执行者自证的完成不可信"的再次验证。
@@ -49,7 +49,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 **E2E-15 报表 Dashboard** ✅ **done**（2026-09-21 落地 + 当日收口）：14/14 测试点 + 24/24 Playwright（chromium + mobile）+ 16 张截图。修 2 个真实缺陷：① E2E-F-10（mental_health_assessments 触发器补写 → trigger runner.Save + rebuild analytics-svc:v0.1.8）；② E2E-F-14 同型残留（4 dashboard 空态 div v-else-if + 静态契约钉）。详档 [stages/e2e-15-reports-dashboard/report.md](stages/e2e-15-reports-dashboard/report.md)
 
 > E2E-14 人格量表与 AI 提示词定制 ✅ **done**（2026-09-20 落地 / 2026-09-21 关账轮收口：**16/16 测试点全 PASS**，含 §8.3 新增的算分修复（E2E-F-97）+ `scoreKind` 语义化两条；用户决议暂搁 LLM-as-judge 路线，原 §8.2 报告的"降 partial"理由——账本留 E2E-F-98 判官方法——已被本轮解除，详见账本关账轮记录）。E2E-13 心理测验 ✅ done。E2E-12 设置页 ✅ done。E2E-11 partial（留账 2 条）。E2E-07~10 partial（取证缺口）。
-> **下一阶段开工前**：E2E-16 ✅ **done**（2026-09-23 收口：5 修复 + 9 测试 + 5/5 情绪 IAB 验证 + F-124 诊断关闭（真实根因 = F-114 BFF 侧连带症状）+ **F-122 emotionSource 高级模式当轮 TDD 实现（用户裁决「本轮及之前的进入排期」）+ F-125 gRPC metadata 修复（F-122 端到端实测抓到的 F-109 同型真 bug）** + ADR `emotion-context-injection`；留账仅 F-119（用户浏览器实测摄像头权限））。下一阶段 = **E2E-17（数字人 + TTS）** —— **详档已撰写**（[stages/e2e-17-digital-human-tts/plan.md](stages/e2e-17-digital-human-tts/plan.md)，D-03 真口型同步 + F-05/F-06 段间断点；开工第一步 curl 实测 `/tts_with_phonemes` + gap 基线）。
+> **下一阶段开工前**：E2E-17 ✅ **done**（2026-09-24 最终收口，PR #77：F-140 volume clamp=「嘴动没声音」最终根因，web:v0.1.7 部署 + IAB play()→PLAYING 实证；用户签字；详档 [stages/e2e-17-digital-human-tts/report.md](stages/e2e-17-digital-human-tts/report.md)；留账 F-137/139→E2E-25、F-134/135/136→E2E-18 转挂中、F-130→E2E-03）。**当前 = E2E-18（缓存层）in-progress** —— 详档 [stages/e2e-18-cache-layer/plan.md](stages/e2e-18-cache-layer/plan.md)（12 测试点；开工第一步 = 写 dev mode 锁 + LRU 默认值 RED 测试）。
 
 ## 排期总表（30 阶段）
 
@@ -94,7 +94,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-18 | 缓存层 | 本地缓存（ai-svc LRU）行为 + Redis 是否启用/下线的决策与验证 | — | ⏳ pending |
+| E2E-18 | 缓存层 | 本地缓存（ai-svc LRU）行为 + Redis 是否启用/下线的决策与验证 | Redis 后端实现（归 E2E-20）/ LRU 调优 / 前端存储 | 🔵 **in-progress**（2026-09-24 开工：[plan.md](stages/e2e-18-cache-layer/plan.md)。计划期实测发现 LRU **所有部署默认关闭**（`main.go:498` fallback=0、deploy 零 `WORKER_LRU` env、运行日志无 enabled 行）与注释/决策 15 矛盾 → TDD 修复；Redis 去留 [M] 升级 → D-27；账本对账 F-08 + 转挂 F-134/135/136→E2E-28） |
 | E2E-19 | 数据库层验证 | 连接池/迁移幂等重放/分区裁剪/视图可读/软删除行为 + **备份→破坏→恢复演练**（只验证不改 schema） | schema 变更 | ⏳ pending |
 | E2E-20 🔧 | **多实例并发正确性** | 修 in-memory 限流/登录锁定/验证码防枚举的多实例失效 + APISIX limit-count 跨实例 + 双实例并发验证 | 分布式事务 | ⏳ pending |
 
