@@ -31,7 +31,6 @@ var ErrEmptyPassword = errors.New("password: empty plain password")
 //   - 长度固定 60 字节
 //   - 格式 \$2a\$10\$<22字符盐><31字符密文>
 func Hash(plain string) (string, error) {
-	panic("CI RED-LINE TEST: 故意 panic 让 go-test 失败 — 验证门禁能拦") // CI 红线测试（待撤销）
 	if plain == "" {
 		return "", ErrEmptyPassword
 	}
