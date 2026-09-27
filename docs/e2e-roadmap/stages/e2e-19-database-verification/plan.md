@@ -2,7 +2,7 @@
 stage: e2e-19
 title: 数据库层验证（连接池 / 迁移幂等重放 / 视图 / 软删除 / 备份→破坏→恢复）
 type: verification
-status: pending
+status: done
 created: 2026-09-27
 depends-on: [e2e-18]
 blocks: [e2e-20]
@@ -27,7 +27,7 @@ related-findings: [E2E-F-141, E2E-F-25, E2E-F-27]
 3. **视图可读性**：analytics_reader 视角能查所有 `*_v` 视图；PII（密保答案 hash 等）不外泄。
 4. **软删除行为**：7 个含 `gorm.DeletedAt` 的 model 真删/软删语义统一，跨服务调用 SELECT 默认过滤 deleted_at IS NULL。
 5. **迁移幂等重放**：db-migrate 容器重跑 0 FATAL；所有迁移 `IF NOT EXISTS` / `OR REPLACE` 守卫完整。
-6. **分区裁剪**：诚实声明——**项目无 PG 原生分区**（grep `PARTITION OF/BY` 零命中）；改为验证"日期索引覆盖度" + "WHERE 时段过滤的查询计划"。
+6. **分区裁剪**：项目实际**已用 PG 原生 RANGE 月度分区**（`emotion_echo_analytics.user_behavior_events` 按 `occurred_at` 月度分区，由 `a008_partition_user_behavior_events.sql` 建立；分区表 `ube_2026_01` ~ `ube_2026_06` + `ube_default` 兜底）。验证 EXPLAIN ANALYZE 在 WHERE 时段过滤时**只扫当月分区**（其他分区被 partition pruning 剪掉）。
 7. **备份→破坏→恢复演练**：真 `pg_dump` 全库 → 真 `DROP` 一张核心表 → 真 `pg_restore` → DB 与应用两侧验证一致（不能模拟）。
 
 ---
