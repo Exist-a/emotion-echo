@@ -3,7 +3,7 @@ purpose: 端侧化 stage1（Lane O）期间发现的问题账本（OND-F-xx 续�
 date: 2026-09-24
 status: active
 scope: docs/_meta/parallel-tracks.md §三.资源3 —— 仅 Lane O 会话写入
-last-refresh: 2026-09-27（T2#4 收口新增 OND-F-04 + OND-F-05）
+last-refresh: 2026-09-27（T2#5 收口新增 OND-F-06）
 ---
 
 # 端侧化发现账本（OND-F）
@@ -33,3 +33,4 @@ last-refresh: 2026-09-27（T2#4 收口新增 OND-F-04 + OND-F-05）
 | OND-F-02 | 2026-09-24 | 阶段一（T1 收口） | `scripts/on-device-perf/` 24 条 pytest **与 OND-F-01 同型 CI 缺口**：`llm-test.yml` paths 不含 `scripts/on-device-perf/`；性能基线回归（OC-11~13）当前唯一执行点 = 本地手工 pytest。**两缺口合并修**：llm-test.yml paths 加 `scripts/on-device-*/` 后两条均解决——但 `.github/workflows` 属共享列，须协议 §六握手 | open（与 OND-F-01 同修法候选；不擅动） | pytest 24/24 本地 PASS；4 workflow paths/grep 实测（STATUS.md §三 CI 覆盖现状表） |
 | OND-F-04 | 2026-09-27 | 阶段一（T2#4 收口） | T2#4 云端基线跑分 = `scripts/on-device-baseline/` 14 条 pytest **与 OND-F-01/02 同型 CI 缺口**：`llm-test.yml` paths 不含 `scripts/on-device-baseline/`；T2#4 baseline 回归当前唯一执行点 = 本地手工 pytest。**三缺口合并修**：llm-test.yml paths 加 `scripts/on-device-*/`（**涵盖 baseline + perf + golden**）后三条均解决——但 `.github/workflows` 属共享列，须协议 §六握手 | open（三合一修法候选 + OND-F-01/02 合并候选；不擅动） | pytest 14/14 本地 PASS；4 workflow paths/grep 实测（STATUS.md §三 CI 覆盖现状表） |
 | OND-F-05 | 2026-09-27 | 阶段一（T2#4 收口） | baseline 实跑 N=7 与 D-26.2 ADR §五 "13 用例"目标有 6 用例差距。**扩 case 不在 Lane O T2#4 决议权**（golden set 编排属另一份 TDD + 决策权属用户 §十二 决策 2 拍板后），T3+ 真机基线复核时同步扩 case | open（T3+ 真机基线复核时同步解决；不在 T2#4 决策权） | ADR D-26.2 §五"13 用例"目标 vs `golden_set.jsonl` 实际 N=7（`docs/plans/on-device-baseline-report-2026-09-24.md` §二 路径说明） |
+| OND-F-06 | 2026-09-27 | 阶段二（T2#5 收口） | `createDynamicEngine()` 仅验证 dynamic import 链路通（架构就绪），**未**真创建 MLCEngine（避免 ~1GB 权重下载）。**T3 IAB 验证时**需借 dev mode 半天窗口 + 真实 GPU：① 调用 `engine.chat.completions.create({ stream: true })` 接真引擎流式；② `pnpm build` 后 grep dist/ 验证 dynamic chunk 实际大小；③ §十二决策 1 拍板后选 worker 入口 / vite external / CDN 任一隔离策略 | open（T3 任务；不在 T2#5 决议权） | `webllmEngine.dynamicImport.test.ts` 17 用例架构契约 PASS；chat() 抛 `Real chat() not wired in T2·Lane O. T3 will wire ...` |
