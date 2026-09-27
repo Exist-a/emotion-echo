@@ -2,9 +2,9 @@
 stage: e2e-19
 title: 数据库层验证（连接池 / 迁移幂等重放 / 视图 / 软删除 / 备份→破坏→恢复）
 executed: 2026-09-27
-status: partial
+status: done
 executed: 2026-09-27
-note: 🟡 partial — 12/12 PASS + audit 0 FAIL + F-141 修复，但执行者无权自宣 done；roadmap/plan 同步 partial；§13.3 第二方核对待用户审视后转 done（详见 STATUS v2 §13.3 17 条断言表）
+note: ✅ done — 12/12 PASS + audit 0 FAIL + F-141 修复 + CI 门禁红线/绿线（PR #99）；§13.3 第二方核对 17 条断言用户 2026-09-28 审过批准（STATUS v2）
 environment: dev 模式（19 容器 healthy，infra+apps+dev compose + .env.local + --profile dev；db-migrate Exited(0) 修后状态）
 ---
 
