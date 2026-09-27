@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3 收口（2026-09-24）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4 收口（2026-09-27）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -102,15 +102,51 @@
 **门禁**：
 - `e2e_stage_audit.py --all` → 30 阶段 0 FAIL（待 PR 合并后验证）
 
+## 一.8、T2#4 已完成（2026-09-27 续接，§四 #4 云端基线跑分 · main=待合并）
+
+| 项 | 文件 | 验证 |
+|----|------|------|
+| **云端基线跑分 TDD + 实跑**（`scripts/on-device-baseline/`：model_fn 工厂 + 3 实现 + CLI + golden_bridge + 14 pytest + 实跑 N=7 baseline） | `scripts/on-device-baseline/{model_fn_factory.py,model_fns/,run_baseline.py,golden_bridge.py,test_baseline.py,baseline_report.{md,json}}` | **pytest 14/14 PASS**（≥10 任务要求达成）· cloud_grpc 实跑 N=7 → pass=0% / length=0% / guardrail=85.7%（mock fallback 路径，与 §十二决策无关） |
+| **云端基线跑分决策材料**（D-26.2 转 accepted 的实证基础 + 架构假设清单 + T3+ 行动项） | `docs/plans/on-device-baseline-report-2026-09-24.md` | §〇.6 文档功课 6 步全做 + §六 不做清单 + §六 行动项 3/3 归属拆分 |
+| **账本补登 OND-F-04 / OND-F-05**（T2#4 收口新增） | `docs/plans/on-device-findings.md` OND-F-04 + OND-F-05 行 | open + 待 T3 真机基线复核 |
+
+**实跑结果诚实标注**（决策材料 §三 §四）：
+- **本次测的是 emotion-llm-service 在 `LLM_API_KEY` 空时的 mock fallback**（`chat_completion.py:80` `make_mock_chunks` 4 变体 ~50 字固定文案）
+- mock 输出 26~38 字 → 全部 length 越界 → pass_rate = 0%（**预期结果**，不是 bug）
+- guardrail 85.7% = high_risk-01 唯一挂 hotline_missing（mock 4 变体里无热线模板，**预期**）
+- 真实 Qwen3-1.7B 基线**必须** T3 借 dev mode 窗口跑（**不在** T2#4 决议权）
+
+**关键设计点**（决策材料 §四 §六）：
+- **ReplyResult 数据类**：model_fn 不只返回 str（golden runner 的 ModelFn 契约），还带 model / fallback_reason / latency_ms 进 baseline 报告（区分"真 LLM 命中 vs mock 兜底 vs 上游失败"）
+- **golden_bridge 桥接**：on-device-golden/ 无 __init__.py（不是 Python package），baseline 用 importlib spec_from_file_location 跨目录加载；不改既有文件结构
+- **grpc_unreachable 优雅降级**：cloud_grpc 连不上 localhost:50051 时**复用 chat_completion.make_mock_chunks**（**同一** mock 路径，等价于"emotion-llm-service 在 LLM_API_KEY 空时"），保证无容器也能跑 baseline
+- **cloud_deepseek 不静默降级**：直连模式无 key 抛 ConfigurationError（让用户知道 key 状态，掩盖 key 过期是反模式）
+- **record 录播**：inner_fn 落盘 + 回放（CI 加速 + 调试复盘 + 不依赖容器复跑）
+
+**协议合规**：
+- 全程零 dev mode（无 19 容器栈 + 无 `.devmode-session` 锁）
+- **未触碰** useAIStreamHandler.ts / package.json / nuxt.config.ts / auth.global.ts / docs/e2e-roadmap/** / deploy/ / .github/workflows
+- §十二 5 项决策权属用户，**未决策加码**；D-26.2 仍 proposed
+- 未登 D-NN / 决策 N 新号（D-26 / 33 + D-26.2 / 34 仍为 Lane O 全部已占编号）
+
+**测试覆盖**：
+- `test_baseline.py` —— 14 用例（factory 3 + cloud_grpc 4 + cloud_deepseek 1 + record 3 + baseline_run 3）
+
+**门禁**：
+- `e2e_stage_audit.py --all` → 30 阶段 0 FAIL（待 PR 合并后验证；按协议 §三.资源2 合并后必跑）
+- pytest `scripts/on-device-baseline/` → 14/14 PASS
+- pytest `scripts/on-device-golden/` → 13/13 PASS（无回归）
+- pytest `scripts/on-device-perf/` → 24/24 PASS（无回归）
+
 ## 二、环境基线（协议 §五 要求记录）
 
-- `main` = `a6c12fa`（PR #86 squash 后），与 origin/main 同步
-- **T0 + T1 + T2#1 全程零 dev mode**：`.devmode-session` 锁未创建/未占用
+- `main` = `e89e155`（PR #90 squash 后，T2#3 合并），与 origin/main 同步
+- **T0 + T1 + T2#1 + T2#3 + T2#4 全程零 dev mode**：`.devmode-session` 锁未创建/未占用
 - 测试环境：vitest（emotion-echo-web，pnpm）+ pytest（宿主 Python）
   - vitest `app/utils/offline/` + `app/pages/demo/` → 42 passed
-  - pytest `scripts/on-device-perf/` → 24 passed · `scripts/on-device-golden/` → 13 passed
-- worktree：`D:/源码/Emotion-Echo-lane-o-t2`（T2#1 临时）—— 本轮收口删除
-- 分支：`test/on-device-webllm-demo-skeleton` 已 squash 合并 + 远端删除（AGENTS §2.5）
+  - pytest `scripts/on-device-perf/` → 24 passed · `scripts/on-device-golden/` → 13 passed · **`scripts/on-device-baseline/` → 14 passed（T2#4 新增）**
+- worktree：`D:/源码/Emotion-Echo-lane-o-baseline`（T2#4 临时）
+- 分支：`test/on-device-cloud-baseline` 待 PR 合并后 + 远端删除（AGENTS §2.5）
 
 ## 三、CI 覆盖现状（2026-09-24 实测 4 workflow）
 
@@ -126,7 +162,7 @@
 1. ~~**T1**：MindChat 双轨验证~~ ✅ T1 完成（PR #84 `a651ecf`）
 2. ~~**T1**：编译链路 + CDN 清单~~ ✅ T1 完成（PR #84 `ac269f5`；**国内可达实测拉流**留 T2）
 3. ~~**T1**：性能基线测量脚本骨架~~ ✅ T1 完成（PR #84 `7c42411`；**真机测量**留 T2）
-4. **T1/T2**：云端基线跑分（golden set 注入真实 model_fn —— `emotion-llm-service` 是 gRPC-only port 50051，HTTP 8000 仅有 /analyze；可用 `iter_chat_chunks` + mock fallback（`LLM_API_KEY` 空时）或走 DeepSeek）
+4. ~~**T1/T2**：云端基线跑分（golden set 注入真实 model_fn —— `emotion-llm-service` 是 gRPC-only port 50051，HTTP 8000 仅有 /analyze；可用 `iter_chat_chunks` + mock fallback（`LLM_API_KEY` 空时）或走 DeepSeek）~~ ✅ T2#4 完成（PR 待合并；详见 §一.8 + `docs/plans/on-device-baseline-report-2026-09-24.md`）
 5. **T2**：编译链路 + CDN **实测拉流**（5 候选 CDN 实测可达性 + CORS 6 项检查清单 —— 见 `on-device-compile-cdn-2026-09-24.md` §三/§五）
 6. **T2**：性能基线**真机测量**（TTFT / tokens/sec / vram / model_load_ms 注入 PerfMeasurement —— 需 WebGPU + WebLLM 引擎真机，IAB 或 Playwright 实测）
 7. ~~**T2**：WebLLM 最小 Demo 契约测试骨架~~ ✅ T2#1 完成（PR #86 `f2083fb` + `582269f`；Demo 占位页 + 4 接口 + 42/42 vitest PASS）
@@ -140,6 +176,6 @@
 ## 五、给下次会话的开场动作
 
 1. 读 AGENTS §八 + `parallel-tracks.md` §五 → 开工三查（fetch/status、对方 STATUS 尾 3 行、`.devmode-session` 锁）
-2. 读本文件 §四，**从第 4 项云端基线跑分 / 第 8 项 WebLLM Demo 真引擎接入**任选一项继续（T1 三任务 + T2#1 已收口）
+2. 读本文件 §四，**从第 8 项 WebLLM Demo 真引擎接入**继续（T0 + T1 + T2#1 + T2#3 + T2#4 已收口）
 3. **用户决议 §十二 决策 2**（MindChat vs Qwen3）—— 不在本轨决议权
 4. 独占列红线与编号口径（两套号都查）见协议 §二/§三.资源3
