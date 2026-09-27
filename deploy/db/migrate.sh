@@ -132,6 +132,8 @@ check_migration() {
 
   # 提取 checksum（去掉表头和空行）
   actual_checksum=$(echo "$result" | tr -d ' ' | grep -v '^$' | grep -v 'checksum' | grep -v '^-' | head -1)
+  # 暴露到 caller scope（POSIX sh 函数内默认同 scope），便于 rc=2 时回显
+  CHECK_MIGRATION_ACTUAL="$actual_checksum"
 
   if [ "$actual_checksum" = "$expected_checksum" ]; then
     return 0  # 已应用且一致
@@ -167,7 +169,20 @@ run_tracked_sql_file() {
     log "  SKIP $name（已应用，checksum 一致）"
     return 0
   elif [ $rc -eq 2 ]; then
-    die "迁移文件被修改：$name（checksum 不一致，expected=$checksum）"
+    # E2E-19 加固：rc=2 时同时输出 DB 侧 checksum 与 HEAD file checksum + 排查方向
+    # 区分两类根因：
+    #   A. 文件被改（DB checksum 在 git 全历史存在）→ 文件变更，评估是否破坏幂等
+    #   B. 来自脏工作区（DB checksum 在 git 全历史 NO_GIT_BLOB）→ 记录是脏工作区产物，UPDATE 对齐
+    die "迁移文件被修改：$name
+  HEAD file checksum : $checksum
+  DB record checksum : ${CHECK_MIGRATION_ACTUAL:-<unknown>}
+  排查方向：
+    1. 若 DB checksum 在 git 全历史 NO_GIT_BLOB（即来自未提交脏工作区）：
+       UPDATE emotion_echo_user.schema_migrations
+       SET checksum = '$checksum'
+       WHERE version = '$version';
+    2. 若 DB checksum 在 git 全历史存在（即迁移文件被改动）：
+       检查改动是否破坏幂等，决定 revert 或补迁移"
   fi
 
   # 执行迁移

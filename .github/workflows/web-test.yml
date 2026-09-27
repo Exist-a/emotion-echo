@@ -3,13 +3,8 @@ name: web-test
 on:
   push:
     branches: [main]
-    paths:
-      - 'emotion-echo-web/**'
-      - '.github/workflows/web-test.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'emotion-echo-web/**'
 
 permissions:
   contents: read
@@ -24,6 +19,7 @@ defaults:
 
 jobs:
   test:
+    name: web-test-frontend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -41,6 +37,6 @@ jobs:
       - name: vitest
         run: pnpm vitest run
       # E2E-04 #4 原为假 PASS（声称 typecheck 已接入 CI，实际没有）。
-      # 此处接入使其成真；本 workflow 有 paths 过滤，故不列入 required checks（D-08）。
+      # 此处接入使其成真。
       - name: Typecheck
         run: pnpm typecheck

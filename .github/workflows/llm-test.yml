@@ -3,13 +3,8 @@ name: llm-test
 on:
   push:
     branches: [main]
-    paths:
-      - 'emotion-llm-service/**'
-      - '.github/workflows/llm-test.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'emotion-llm-service/**'
 
 permissions:
   contents: read
@@ -24,6 +19,7 @@ defaults:
 
 jobs:
   test:
+    name: llm-service-pytest
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
