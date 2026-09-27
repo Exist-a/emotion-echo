@@ -95,7 +95,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
 | E2E-18 | 缓存层 | 本地缓存（ai-svc LRU）行为 + Redis 是否启用/下线的决策与验证 | Redis 后端实现（归 E2E-20）/ LRU 调优 / 前端存储 | 🟡 **partial**（2026-09-24 执行收口：**12/12 测试点 PASS、0 BLOCKED**。① LRU 默认关闭与注释/决策 15 矛盾 → TDD 修复（`lruCapacityFromEnv`：未设→1024/显式覆盖/0=逃生门；镜像 v0.1.8 运行日志 `enabled: cap=1024 ttl=4m0s` + /metrics collector 实证）；② **D-27 = Redis 保留并接入业务**（记忆系统/token/E2E-20 后端，用户拍板）；③ F-08 关账、F-134/135/136 转挂 E2E-28、新记 **F-141**（i002 checksum 漂移→E2E-19，db-migrate Exited(1) 规避中）；④ 回归钉 `cache-layer-smoke.spec.ts` 4/4 × 2 轮 + 全量 vitest 526/526 + go 35 包绿。**判 partial 唯一原因 = §13.3 第二方核对未执行**。详档 [report.md](stages/e2e-18-cache-layer/report.md)） |
-| E2E-19 | 数据库层验证 | 连接池/迁移幂等重放/分区裁剪/视图可读/软删除行为 + **备份→破坏→恢复演练**（只验证不改 schema） | schema 变更 | ⏳ pending |
+| E2E-19 | 数据库层验证 | 连接池/迁移幂等重放/分区裁剪/视图可读/软删除行为 + **备份→破坏→恢复演练**（只验证不改 schema） | schema 变更 | ✅ **done**（2026-09-27 PR #92：12/12 测试点全 PASS，F-141 根因修正+4 条 UPDATE 修复+migrate.sh 加固诊断三件套+真备份→真 DROP → pg_restore 417→417 一致；Playwright 双 project 2/2 + 2 截图 + 7 Go 模块全绿。详档 [report.md](stages/e2e-19-database-verification/report.md)） |
 | E2E-20 🔧 | **多实例并发正确性** | 修 in-memory 限流/登录锁定/验证码防枚举的多实例失效 + APISIX limit-count 跨实例 + 双实例并发验证 | 分布式事务 | ⏳ pending |
 
 ### 第六批：可观测性
