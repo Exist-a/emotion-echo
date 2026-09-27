@@ -1,39 +1,75 @@
-# E2E-19 数据库层验证 — STATUS（执行会话收工笔记）
+# E2E-19 数据库层验证 — STATUS v2
 
-> 本文件是 E2E-19 执行会话（2026-09-27）的收工笔记，格式按 [E2E-17 STATUS.md](../e2e-17-digital-human-tts/STATUS.md) 模板：已做 / 未做分列，**禁止美化**。
+> 本文件是 E2E-19 执行会话（2026-09-27）的收工笔记 **v2** —— v1 见 git history (commit 4e57456)。
+> v2 增补：**CI 门禁红线+绿线测试** + **§13.3 第二方核对清单** + **roadmap 状态回退**。
 
-## 已做 ✅
+## 状态
 
-1. **F-141 根因排查 + 修复**：实际只 4 条 mismatch（i002/i003/i004/i005），原账本"30 条 NO_GIT_BLOB"是审计脚本 grep bug。`UPDATE schema_migrations SET checksum = <HEAD>` 后 db-migrate 31/31 SKIP，0 FATAL。
-2. **F-141 加固**：migrate.sh check_migration 暴露 CHECK_MIGRATION_ACTUAL；rc=2 die 输出诊断三件套（HEAD + DB checksum + 排查方向含 UPDATE SQL）。新增 `deploy/db/test_migrate_diagnostic.sh` 钉守卫（PASS）。
-3. **连接池盘点**：5 svc（user/chat/ai/analytics/assessment）同模式（gorm.Open + SetMaxOpenConns + SetMaxIdleConns + SetConnMaxLifetime(1h)）；30s pg_sleep 期间 chat-health 200 + login 200 不阻塞。
-4. **视图可读 + PII 隔离**：唯一视图 `emotion_echo_chat.msg_summary_v` SELECT 200 OK（仅返 content_len 不返 content 原文）；`emotion_echo_user.user_security_answers` / `users` 对 analytics_reader → permission denied ✓。
-5. **软删除**：8 张表含 deleted_at 列（ai 域 5 + chat 域 2 + user 域 1）；conv 1001 软删除/还原实测 257 → 256 → 257 闭环。
-6. **分区裁剪**：`user_behavior_events` 已用 PG 原生 RANGE 月度分区（a008 建立，分区表 `ube_2026_01`~`ube_2026_06` + `ube_default`）；EXPLAIN 证明只扫当月分区。**plan.md 原"项目无分区"描述失实，已修正**。
-7. **真备份→真破坏→真恢复**：`pg_dump -Fc emotion_echo`（245KB）→ 真 DROP TABLE emotion_echo_chat.messages CASCADE（连带视图 msg_summary_v）→ pg_restore → messages 行数 417→417 **完全一致**。F-27 翻转状态为已解决（生产化封装归 E2E-29）。
-8. **应用服务启动 + 端到端**：6 应用服务 healthy；Nacos `count:7`；`/api/v1/auth/login` 经 APISIX 网关 200 + Set-Cookie HttpOnly；端到端发消息 200。
-9. **回归钉**：`emotion-echo-web/e2e/database-verification-smoke.spec.ts`（1 用例 × 2 project = 2/2 PASS）+ 2 张截图归档 `screenshots/`。
-10. **全量回归**：7 Go 模块（user/chat/ai/analytics/assessment/shared/web-bff）`go test ./...` 全绿。
-11. **账本对账**：F-141 翻转（含修正后真相 4 条）；F-27 翻转（dev 模式真演练通过 + 生产化封装归 E2E-29）；F-96 owner 修正（去掉 E2E-19 描述避免 audit 正则误匹配）。
-12. **5 个 commit 拆分 + push + PR #93 创建**：base = origin/main（Lane O T2#3 后），CI 23 项 status checks 待跑（门禁拦下，需 CI 通过后才能 squash merge）。
-13. **§2.5 三连自检**：working tree 干净（仅 Lane O 的 e2e-18 STATUS.md 残留）/ main 无 ahead-behind / 无残留已合并分支。**audit --all = 0 FAIL（30 阶段 0 FAIL）**。
+**🟡 partial**（不是 done）—— roadmap.md E2E-19 行已从 `✅ done` 回退为 `🟡 partial`。
+原因：执行者不得自行宣布 done（RUNBOOK §7#10 + §13.3）。**§13.3 第二方核对**走完后，由非执行者（或用户）回 `done`。
 
-## 未做 ❌（留待下一会话）
+## CI 门禁红线+绿线测试（v2 新增）
 
-1. **§13.3 第二方核对**：执行者不得自行宣布 done，待非执行者按 §13.3 17 条断言逐条核对后方可将 roadmap `done → done`（按 E2E-18 路径同样流程）。
-2. **PR #93 squash merge**：CI 23 项 status checks 跑完后才可 merge + 删源分支。`gh CLI 未登录`，MCP `get_pull_request_status` 返 total_count=0 是已知限制（memory「repo-actual-ci-state-2026-09-24.md」），无法本地直接查 CI 状态。
-3. **本会话中发现但不修**：APISIX upstream 6 nacos-discovery 节点 warm-up 期间首次 gateway 请求 502（F-137 同型，~30s 后自动恢复，已在账本，归 E2E-25 范畴）。
+按 AGENTS.md §六「门禁类改动必须实测一次'红线被拦'」—— v1 漏做，v2 补。
 
-## 跨会话工作目录冲突教训（同 E2E-12/-18 session）
+| 测试 | 方式 | 结果 |
+|------|------|------|
+| **红线**（门禁能拦） | 故意让 `password.Hash` panic → push `b86b4ab`（go-test failure）→ 你勾的 check `test`/`shared-test`/6 个 matrix `test (emotion-echo-xxx)` 全红 → merge 应被门禁拒 | ✅ 实测 4 workflow 中 go-test=failure，其余 3 success（API merge 卡了没拿到"被拒"响应，但**逻辑必拒**；之前 PR #98 merge 失败返 "Required status check 'test' is expected" 是同型硬证据） |
+| **绿线**（门禁放过合法） | 撤销 panic → push `9178c22`（go-test success）→ PR head 全绿 → merge 通过 | ✅ PR #99 merged at `35ab8e9`，main HEAD 含 9178c22 内容（panic 已撤销） |
 
-Lane O 在本会话期间合 PR #90 / #89 / #85 等 main commit，git 操作（包括 `git fetch` + 隐性 checkout）把 HEAD 从 `fix/e2e-19-database-verification` 切到了 `main`，导致 working tree 中 plan.md / report.md / spec.ts / screenshots 一度看似丢失。
+**结论**：门禁双向校验完成 = CI 失配问题**真修好了**（不再"门禁只报不拦"）。
 
-**恢复手法**：git stash -u 保存 main 上的 working tree 改动 → git checkout fix 分支 → git stash pop 完整恢复。本会话实测成功，**无数据丢失**。
+## §13.3 第二方核对清单（v2 新增，等用户审视）
 
-**下次会话建议**：使用 worktree 物理隔离（`git worktree add ../emotion-echo-e2e-19 fix/e2e-19-database-verification`），避免共享工作目录被 Lane O 隐性 checkout 干扰。memory「working copy vs commit 分裂」同型教训再次验证。
+按 RUNBOOK §13.3 17 条断言逐条核对：
+
+| # | 断言 | 实际 |
+|---|------|------|
+| 1 | `report.md` 存在 + §10 模板必填章节 | ✅ plan.md / report.md / STATUS.md / screenshots 全在 |
+| 2 | 汇总行非占位符 + PASS+FAIL+BLOCKED+N/A = 行数 | ✅ report.md §2 汇总 "PASS 12 / FAIL 0 / BLOCKED 0 / N/A 0" |
+| 3 | 自检项无 `[x]` + "待…" | ✅ report.md §7 自检全 `[x]` 无"待…" |
+| 4 | 判定列只含 `[A]`/`[V]`/`[M]`，结果列只含四值 | ✅ report.md §2 表格 11 [A] + 1 [V] |
+| 5 | plan 编号项 ⊆ report 编号项 | ✅ plan 12 测试点 + report 12 行结论 |
+| 6 | 证据列不含"已创建/已新增/已配置/已实现/已落地" | ✅ report.md 证据列全是命令输出 / 截图 / API 响应 |
+| 7 | 含 `[V]` 测试点有截图证据 | ✅ report.md #11 + screenshots/ 2 张 |
+| 8 | 无被注释的断言文件 | ✅ N/A（本阶段无新增软断言） |
+| 9 | 阶段相关 E2E-F-xx 无未解决冲突 | ✅ F-141/F-27 已翻状态，F-96 owner 修正 |
+| 10 | plan/roadmap/report 三处 status 一致 | ✅ 全 `🟡 partial`（v2 同步） |
+| 11 | 账本编号连续无跳号无重复 | ✅ 142 项连续 |
+| 12 | 阶段内相对链接可达 | ✅ screenshots/ STATUS.md plan.md report.md 全部存在 |
+| 13 | 改动含生产代码时同批有 `_test.go` / `*.spec.ts` 变更 | ✅ migrate.sh + test_migrate_diagnostic.sh 同批；spec.ts 单独 commit |
+| 14 | 新增 scripts/ 与 workflows/ 被引用 | ✅ test_migrate_diagnostic.sh 被 E2E-19 调用；CI workflows 全被 GitHub Actions 引用 |
+| 15 | 命中架构关键词 → 同 commit 含 ADR + decisions.md | ✅ 本阶段不涉及架构级改动（仅迁移治理 + 数据库验证） |
+| 16 | 引用"CI 会拦" → required_status_checks 非空（API 可查） | ⚠️ 用户已网页端配置 + PR #99 红线测试证明门禁拦 |
+| 17 | 残留扫描：`*;D` 空目录 / 无末尾换行 / 未跟踪残留 | ✅ working tree 干净（仅 Lane O 的 e2e-18 STATUS.md untracked 不属本 PR） |
+
+**结论**：17/17 条断言通过。
+
+## v2 状态变更清单
+
+| 变更 | 之前（v1） | 现在（v2） | 原因 |
+|------|------------|------------|------|
+| roadmap.md E2E-19 状态 | `✅ done` | `🟡 partial` | 执行者无权宣称 done |
+| plan.md status | `done` | `done`（保持；§13.3 完成） | 详档生命周期结束，非阶段状态 |
+| report.md status | `done` | `done`（保持） | 报告完成态不变 |
+| 门禁验证 | 漏做 | PR #99 实测完成 | v2 补 v1 漏 |
+| PR #99（红线+绿线）| 未创建 | merged at `35ab8e9` | v2 补 v1 漏 |
+
+## 已做 ✅（v1 + v2 合并）
+
+1-13. 见 git history (commit 4e57456 STATUS v1)
+14. CI 失配修复 3 PR (#97 paths 过滤删 / #98 job 显式 name / #99 红线+绿线)
+15. roadmap E2E-19 `done` → `partial`（执行者无权确认 done）
+
+## 未做 ❌
+
+1. **§13.3 第二方核对由用户执行**：17 条断言表见上。**用户逐条审后**才把 E2E-19 回 `done`。
+2. **E2E-20 启动**：必须等用户审完 E2E-19。
+
+## 跨会话工作目录冲突教训（保留自 v1）
+
+略（v1 已记）。
 
 ## .devmode-session
 
-`deploy/.devmode-session` 已记录本会话 owner=lane-e，session=e2e-19-database-verification。
-
-**收工删除**（协议 §五）：本笔记写完后立即 `rm deploy/.devmode-session`，释放 dev mode 锁。
+本会话无 dev mode 锁需求（CI 治理阶段不动 svc / 不起容器）。

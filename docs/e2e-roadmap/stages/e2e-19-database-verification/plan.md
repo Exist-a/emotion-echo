@@ -3,6 +3,8 @@ stage: e2e-19
 title: 数据库层验证（连接池 / 迁移幂等重放 / 视图 / 软删除 / 备份→破坏→恢复）
 type: verification
 status: done
+executed: 2026-09-27
+note: 阶段报告状态 done；roadmap 阶段状态 🟡 partial（执行者无权自宣 done，§13.3 第二方核对待用户审视后转 done）
 created: 2026-09-27
 depends-on: [e2e-18]
 blocks: [e2e-20]
