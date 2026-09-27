@@ -19,6 +19,7 @@ defaults:
 
 jobs:
   test:
+    name: web-test-frontend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
