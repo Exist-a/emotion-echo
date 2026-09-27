@@ -1,14 +1,18 @@
 <script setup lang="ts">
 /**
- * local-llm.vue — WebLLM 端侧推理 Demo 占位（Lane O · T2 · 阶段一任务 1）。
+ * local-llm.vue — WebLLM 端侧推理 Demo（Lane O · T2 → T3）。
  *
- * WIP: 当前只渲染**契约落地证明**（设备能力 + 路由决策）。T3 才接 @mlc-ai/web-llm。
+ * T2 末（当前）：渲染契约落地证明 + Dynamic engine 异步探测。
+ *   - 设备能力 + 路由决策：契约骨架（T2#1）
+ *   - Stub engine：永远可跑，UI 不崩（T2#1）
+ *   - Dynamic engine：异步 `import('@mlc-ai/web-llm')`，显示 phase 给用户；**不**真
+ *     创建 MLCEngine（避免 ~1GB 权重下载），T3 IAB 验证时 chat() 接到真引擎
  *
  * 设计约束（v0.3 §C.1 + §C.6 + 协议 §二/§八）：
  *   - 独立路由 /demo/local-llm（生产 build 排除，§C.6 阶段一）
  *   - 不依赖 useAIStreamHandler（协议 §二 stage1 禁触）
  *   - 不依赖 useUserStore / useApi（避开 auth.global.ts 共享列握手）
- *   - 不静态 import @mlc-ai/web-llm（dynamic import 留给 T3）
+ *   - 不静态 import @mlc-ai/web-llm（dynamic import 隔离；架构测试保证）
  *   - <ClientOnly> 包住所有 WebGPU 调用点（decision-24 SSR 隔离）
  *   - layout: 'default'（不用 nav layout）
  *   - ssr: false（WebGPU/Worker 客户端专用）
@@ -19,7 +23,11 @@ import {
   type RouteContext,
   type RouteDecision,
 } from '~/utils/offline/routeDecision'
-import { createStubEngine } from '~/utils/offline/webllmEngine'
+import {
+  createStubEngine,
+  createDynamicEngine,
+  type DynamicEnginePhase,
+} from '~/utils/offline/webllmEngine'
 
 definePageMeta({
   layout: 'default',
@@ -33,6 +41,12 @@ const routeDecision = ref<RouteDecision | null>(null)
 const engine = ref<ReturnType<typeof createStubEngine> | null>(null)
 const initStatus = ref<string>('not started')
 
+// Dynamic engine 状态（T2 末新增）
+const dynamicEngine = ref<ReturnType<typeof createDynamicEngine> | null>(null)
+const dynamicPhase = ref<DynamicEnginePhase>('idle')
+const dynamicError = ref<string | null>(null)
+const dynamicTriggering = ref(false)
+
 // 客户端挂载后才执行 WebGPU 检测 + stub 引擎初始化
 onMounted(async () => {
   deviceCap.value = await detectWebGPU(navigator)
@@ -44,11 +58,30 @@ onMounted(async () => {
     layer: 'daily',
   }
   routeDecision.value = decideRoute(ctx)
-  // stub 引擎初始化（真实引擎在 T3 才接）
+  // stub 引擎初始化（永远 fallback 安全）
   engine.value = createStubEngine()
   await engine.value.init({ modelId: 'Qwen3-1.7B-q4f16_1-MLC' })
-  initStatus.value = engine.value.loaded ? 'stub ready (WIP — T3 接真引擎)' : 'init failed'
+  initStatus.value = engine.value.loaded ? 'stub ready' : 'init failed'
+
+  // Dynamic engine 工厂创建（不触发 import —— 等用户点按钮才触发）
+  dynamicEngine.value = createDynamicEngine()
 })
+
+/** 用户点按钮触发 dynamic engine init —— 验证 dynamic import 链路 */
+const triggerDynamicInit = async () => {
+  if (!dynamicEngine.value || dynamicTriggering.value) return
+  dynamicTriggering.value = true
+  dynamicError.value = null
+  try {
+    await dynamicEngine.value.engine.init({ modelId: 'Qwen3-1.7B-q4f16_1-MLC' })
+  } catch (e) {
+    // 抛错落到 state.error；同时 ref 同步
+    dynamicError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    dynamicPhase.value = dynamicEngine.value.state.phase
+    dynamicTriggering.value = false
+  }
+}
 
 const reEvaluate = async () => {
   if (typeof navigator === 'undefined') return
@@ -99,6 +132,28 @@ const reEvaluate = async () => {
           <p data-testid="engine-status">init → <code>{{ initStatus }}</code></p>
           <p class="stub-note">
             Stub 引擎返回固定占位字符串 —— T3 才接真实端侧推理。
+          </p>
+        </div>
+
+        <div class="panel">
+          <h2>Dynamic engine（真引擎探测）</h2>
+          <p class="stub-note">
+            异步 <code>import('@mlc-ai/web-llm')</code> 验证模块可达；T2 末不真创建 MLCEngine
+            （避免 ~1GB 权重下载）。失败 = optional dep 未装，pnpm install 重试。
+          </p>
+          <p>
+            phase = <code data-testid="dynamic-phase">{{ dynamicPhase }}</code>
+          </p>
+          <button
+            class="demo-button"
+            :disabled="dynamicTriggering"
+            data-testid="dynamic-trigger"
+            @click="triggerDynamicInit"
+          >
+            {{ dynamicTriggering ? '加载中…' : '尝试加载 @mlc-ai/web-llm' }}
+          </button>
+          <p v-if="dynamicError" class="dynamic-error" data-testid="dynamic-error">
+            {{ dynamicError }}
           </p>
         </div>
       </section>
@@ -154,5 +209,28 @@ const reEvaluate = async () => {
   font-size: 12px;
   color: #999;
   margin: 8px 0 0;
+}
+.demo-button {
+  padding: 8px 16px;
+  font-size: 14px;
+  border: 1px solid #409eff;
+  background: #409eff;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.demo-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.dynamic-error {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fef0f0;
+  border-left: 3px solid #f56c6c;
+  font-size: 12px;
+  color: #c45656;
+  word-break: break-word;
 }
 </style>

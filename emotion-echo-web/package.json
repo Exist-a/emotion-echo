@@ -43,6 +43,9 @@
     "vue-echarts": "^8.0.1",
     "vue-router": "^4.6.3"
   },
+  "optionalDependencies": {
+    "@mlc-ai/web-llm": "^0.2.84"
+  },
   "devDependencies": {
     "@nuxt/eslint": "^1.0.0",
     "@nuxt/eslint-config": "^1.0.0",

@@ -44,7 +44,7 @@ describe('webllmEngine.ts 静态契约', () => {
   })
 
   it('必须导出 createStubEngine 工厂函数', () => {
-    expect(/export\s+(function|const)\s+createStubEngine\b/.test(ENGINE_SRC)).toBe(
+    expect(/export\s+(?:function|const)\s+createStubEngine\b/.test(ENGINE_SRC)).toBe(
       true
     )
   })
