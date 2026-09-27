@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4 收口（2026-09-27）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5 收口（2026-09-27）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -138,15 +138,60 @@
 - pytest `scripts/on-device-golden/` → 13/13 PASS（无回归）
 - pytest `scripts/on-device-perf/` → 24/24 PASS（无回归）
 
+## 一.9、T2#5 已完成（2026-09-27 续接，§四 #8 WebLLM Demo 真引擎接入架构就绪 · PR #92 已 squash 合并）
+
+| 项 | 文件 | 验证 |
+|----|------|------|
+| **`createDynamicEngine()` 工厂**（dynamic import + state 暴露 + 不静默降级） | `emotion-echo-web/app/utils/offline/webllmEngine.ts` | `await import('@mlc-ai/web-llm')` 唯一引用方式；chat() 已 init 后抛清晰错误指引 T3 |
+| **`DynamicEngineState` + `DynamicEnginePhase`** 类型导出 | `emotion-echo-web/app/utils/offline/webllmEngine.ts` | 4 态联合 idle / importing / loaded / unavailable |
+| **架构契约测试**（17 用例 TDD） | `emotion-echo-web/app/utils/offline/__tests__/webllmEngine.dynamicImport.test.ts`（新文件） | 工厂契约 5 + 错误语义 2 + 静态源架构 6 + 类型契约 2 + 静态 import 检测 2 |
+| **Demo 页加 Dynamic engine 面板**（按钮触发 + phase 显示 + 错误展示） | `emotion-echo-web/app/pages/demo/local-llm.vue` | UI 测试 ID：`dynamic-phase` / `dynamic-trigger` / `dynamic-error` |
+| **`optionalDependencies` 加 `@mlc-ai/web-llm@^0.2.84`**（§六握手列） | `emotion-echo-web/package.json` + `pnpm-lock.yaml` | `parallel-tracks.md §六` 已登 2026-09-27 握手行 |
+| **顺手修 T2#1 PR #86 遗留 lint 债** | `emotion-echo-web/app/utils/offline/__tests__/webllmEngine.architecture.test.ts:47` | `regexp/no-unused-capturing-group`（1 处正则 capturing group → 非捕获组） |
+
+**关键设计点**：
+- **`createDynamicEngine()` 工厂**：返回 `{ engine, state }` 二元组；首次 `init()` 触发 `await import('@mlc-ai/web-llm')`；**不**真创建 MLCEngine（避免 ~1GB 权重下载）；失败抛清晰错误（AGENTS §3.2 不静默降级）
+- **`DynamicEnginePhase`** 4 态联合：UI 直接显示 phase + error
+- **production bundle 隔离契约**（架构测试 17 用例强制）：
+  - `@mlc-ai/web-llm` 仅以 `await import('@mlc-ai/web-llm')` 形式出现
+  - 无任何 `import X from '@mlc-ai/web-llm'` 静态写法
+  - 真实隔离策略（worker 入口 / vite external / CDN）留 T3 IAB 验证时决
+
+**T2#5 边界**（避免范围漂移）：
+- ❌ **不**真创建 MLCEngine（避免 ~1GB 下载，需 dev mode 窗口 + 真实 GPU）
+- ❌ **不**接 chat() 到真引擎流式（依赖 §十二决策 1 拍板）
+- ✅ architecture-ready + 链路验证 + 状态对外暴露 + 17 用例架构契约
+
+**协议合规**：
+- 全程零 dev mode（dev mode 锁在 lane-e E2E-19 占用，T2#5 不需要）
+- ✅ §六握手：`package.json` 改动已在 `parallel-tracks.md §六` 登行（**一次性**注记）
+- ✅ 未触碰 useAIStreamHandler.ts / nuxt.config.ts / auth.global.ts / docs/e2e-roadmap/** / deploy/ / .github/workflows
+- §十二 5 项决策权属用户，**未决策加码**
+- 未登 D-NN / 决策 N 新号（D-26 / 33 + D-26.2 / 34 仍为 Lane O 全部已占编号）
+
+**测试覆盖**：
+- `webllmEngine.dynamicImport.test.ts` — 17 用例（工厂 5 + 错误语义 2 + 静态源架构 6 + 类型 2 + 检测 2）
+- `webllmEngine.architecture.test.ts` — 9 用例（既有 + 顺手修 1 处）
+- `deviceCapability.test.ts` — 5 用例（既有，无回归）
+- `routeDecision.test.ts` — 16 用例（既有，无回归）
+- `local-llm.architecture.test.ts` — 12 用例（既有 + 加 dynamic 测试 ID）
+- **合计 59/59 PASS**
+
+**门禁**：
+- vitest `app/utils/offline/__tests__/` → **47/47 PASS**（含新加 17 用例）
+- vitest `app/pages/demo/` → **12/12 PASS**（既有 12 用例全过）
+- npx eslint app/utils/offline/ app/pages/demo/ → **0 错 0 警告**（顺手清 1 债）
+- e2e_stage_audit.py --all → **30 阶段 0 FAIL**（Lane E 审计未被打破）
+
 ## 二、环境基线（协议 §五 要求记录）
 
-- `main` = `e89e155`（PR #90 squash 后，T2#3 合并），与 origin/main 同步
-- **T0 + T1 + T2#1 + T2#3 + T2#4 全程零 dev mode**：`.devmode-session` 锁未创建/未占用
+- `main` = `7aaac7d6`（PR #92 squash 后，T2#5 合并），与 origin/main 同步
+- **T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 全程零 dev mode**：`.devmode-session` 锁 lane-e E2E-19 占用期间 Lane O 不抢
 - 测试环境：vitest（emotion-echo-web，pnpm）+ pytest（宿主 Python）
-  - vitest `app/utils/offline/` + `app/pages/demo/` → 42 passed
-  - pytest `scripts/on-device-perf/` → 24 passed · `scripts/on-device-golden/` → 13 passed · **`scripts/on-device-baseline/` → 14 passed（T2#4 新增）**
-- worktree：`D:/源码/Emotion-Echo-lane-o-baseline`（T2#4 临时）
-- 分支：`test/on-device-cloud-baseline` 待 PR 合并后 + 远端删除（AGENTS §2.5）
+  - vitest `app/utils/offline/` + `app/pages/demo/` → **59 passed**（T2#5 +17）
+  - pytest `scripts/on-device-perf/` → 24 passed · `scripts/on-device-golden/` → 13 passed · **`scripts/on-device-baseline/` → 14 passed（T2#4）**
+- worktree：`D:/源码/Emotion-Echo-lane-o-t2-engine`（T2#5 临时，本轮收口已删）
+- 分支：`test/on-device-webllm-dynamic-import` 已 squash 合并 + 远端删除（AGENTS §2.5）
 
 ## 三、CI 覆盖现状（2026-09-24 实测 4 workflow）
 
@@ -166,7 +211,7 @@
 5. **T2**：编译链路 + CDN **实测拉流**（5 候选 CDN 实测可达性 + CORS 6 项检查清单 —— 见 `on-device-compile-cdn-2026-09-24.md` §三/§五）
 6. **T2**：性能基线**真机测量**（TTFT / tokens/sec / vram / model_load_ms 注入 PerfMeasurement —— 需 WebGPU + WebLLM 引擎真机，IAB 或 Playwright 实测）
 7. ~~**T2**：WebLLM 最小 Demo 契约测试骨架~~ ✅ T2#1 完成（PR #86 `f2083fb` + `582269f`；Demo 占位页 + 4 接口 + 42/42 vitest PASS）
-8. **T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）
+8. ~~**T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）~~ ✅ T2#5 完成（PR #92 `7aaac7d6`；架构就绪 + 17 用例契约测试 + package.json 握手；T3 IAB 才接真引擎流式）
 9. **T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）
 10. **D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）
 11. **OND-F-01**（已登记）：golden set pytest 未接 CI
