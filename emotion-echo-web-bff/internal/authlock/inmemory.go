@@ -134,5 +134,7 @@ func (s *InMemoryStore) GetVerificationCode(_ context.Context, username string) 
 	return entry.code, nil
 }
 
-// 编译期断言：InMemoryStore 实现 LoginLockStore 接口
+// 编译期断言：InMemoryStore 同时实现两个接口
+// （登录锁定可走 Redis 或 in-memory；验证码只允许 in-memory，见 store.go 裁定说明）
 var _ LoginLockStore = (*InMemoryStore)(nil)
+var _ VerificationCodeStore = (*InMemoryStore)(nil)

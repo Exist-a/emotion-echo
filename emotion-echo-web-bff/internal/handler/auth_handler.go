@@ -11,8 +11,9 @@
 //
 // 设计要点：
 //   - login 调 user-svc Login（user-svc bcrypt 校验真实密码，PR-19a）
-//   - 5 次错密码 → 锁定 5 分钟（in-memory 单实例假设；多实例 BFF 留 Stage 34+ Redis）
-//   - verification-code 同 username 60s 内只能发一次（in-memory 缓存；防枚举）
+//   - 5 次错密码 → 锁定（E2E-20：经 authlock.LoginLockStore，多实例用 redis 跨实例共享）
+//   - verification-code 同 username 60s 内只能发一次（in-memory 缓存；防枚举。
+//     E2E-20 收尾裁定：该端点是 D-01 决议下的遗留物待删 E2E-F-144，禁止 Redis 化）
 //   - refresh：保持 mock（解析现有 JWT 重签）；真实 refresh token 留 Stage 34+
 //   - BFF 不再持有"独立 mock JWT"能力（PR-19b/21 收口）
 package handler
@@ -63,22 +64,29 @@ const (
 type AuthHandler struct {
 	jwt   *auth.Manager
 	user  downstream.UserClient
-	store authlock.LoginLockStore // Round 4.3 后补：登录失败计数 + 验证码缓存存储（in-memory 或 redis）
+	store authlock.LoginLockStore // E2E-20：登录失败计数（in-memory 或 redis，跨实例共享）
+	vc    authlock.VerificationCodeStore // E2E-20 收尾拆出：验证码缓存（仅 in-memory，D-01 裁定遗留端点）
 }
 
 // NewAuthHandler 构造
 //
 // Stage 33 PR-19b：注入 UserClient 真实登录；保留 jwt.Manager 用于签发 JWT。
 // Round 4.3 后补：注入 LoginLockStore（in-memory 或 redis），多实例用 redis。
-func NewAuthHandler(mgr *auth.Manager, userClient downstream.UserClient, store authlock.LoginLockStore) gin.HandlerFunc {
+// E2E-20 收尾：验证码缓存独立注入（VerificationCodeStore，仅 in-memory）——
+// 该端点是 D-01 决议下的遗留物待删（E2E-F-144），禁止 Redis 化。
+func NewAuthHandler(mgr *auth.Manager, userClient downstream.UserClient, store authlock.LoginLockStore, vcStore authlock.VerificationCodeStore) gin.HandlerFunc {
 	if store == nil {
 		// 安全兜底：注入 nil 应 panic 提示（main.go 装配时必须传）
 		panic("authlock.LoginLockStore is required (pass authlock.NewInMemoryStore() or authlock.NewRedisStore(...))")
+	}
+	if vcStore == nil {
+		panic("authlock.VerificationCodeStore is required (pass authlock.NewInMemoryStore())")
 	}
 	h := &AuthHandler{
 		jwt:   mgr,
 		user:  userClient,
 		store: store,
+		vc:    vcStore,
 	}
 	return func(c *gin.Context) {
 		switch c.Param("action") {
@@ -240,7 +248,7 @@ func (h *AuthHandler) verificationCode(c *gin.Context) {
 
 	// 防枚举：不区分用户是否存在，都返 success
 	// 限流：同 username 60s 内只能发一次（Round 4.3 后补：通过 store 接口跨实例共享）
-	if req.Username != "" && !h.store.CanSendVerificationCode(c.Request.Context(), req.Username) {
+	if req.Username != "" && !h.vc.CanSendVerificationCode(c.Request.Context(), req.Username) {
 		// 限流命中 → 仍返 success（防枚举），但不真发
 		OK(c, gin.H{"success": true})
 		return
@@ -250,7 +258,7 @@ func (h *AuthHandler) verificationCode(c *gin.Context) {
 	var code string
 	if req.Username != "" {
 		code = generateCode()
-		_ = h.store.SaveVerificationCode(c.Request.Context(), req.Username, code, verificationTTL)
+		_ = h.vc.SaveVerificationCode(c.Request.Context(), req.Username, code, verificationTTL)
 	}
 
 	// 真发验证码的通道留空（dev mock；prod 接 SMS/Email provider）。
@@ -301,12 +309,13 @@ func (h *AuthHandler) setAccessTokenCookie(c *gin.Context, token string, maxAge 
 //   - isLocked → h.store.IsLocked(ctx, username)
 //   - recordFailure → h.store.RecordFailure(ctx, username)
 //   - clearFailures → h.store.ClearFailures(ctx, username)
-//   - canSendVerificationCode → h.store.CanSendVerificationCode(ctx, username)
-//   - storeVerificationCode → h.store.SaveVerificationCode(ctx, username, code, ttl)
-//   - verifyVerificationCode → h.store.GetVerificationCode(ctx, username)
+//   - canSendVerificationCode → h.vc.CanSendVerificationCode(ctx, username)
+//   - storeVerificationCode → h.vc.SaveVerificationCode(ctx, username, code, ttl)
+//   - verifyVerificationCode → h.vc.GetVerificationCode(ctx, username)
 //
-// in-memory 与 redis 两种实现见 authlock 子包；调用方通过
+// 登录锁定 in-memory 与 redis 两种实现见 authlock 子包；调用方通过
 // main.go 装配时根据 LOGIN_LOCK_BACKEND=inmemory|redis env 选择。
+// 验证码缓存 E2E-20 收尾拆出：仅 in-memory（D-01 裁定遗留端点，见 authlock store.go）。
 
 // verifyVerificationCode Round 4.3 后补：从 store 取验证码并匹配。
 // 行为与原方法一致：不存在/过期/不匹配都返 false。
@@ -314,7 +323,7 @@ func (h *AuthHandler) verifyVerificationCode(username, code string) bool {
 	if code == "" {
 		return false
 	}
-	saved, _ := h.store.GetVerificationCode(h.contextForStore(), username)
+	saved, _ := h.vc.GetVerificationCode(h.contextForStore(), username)
 	if saved == "" {
 		return false
 	}

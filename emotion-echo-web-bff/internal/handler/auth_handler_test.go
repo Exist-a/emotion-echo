@@ -32,8 +32,24 @@ func newAuthRouter(t *testing.T, client downstream.UserClient) *gin.Engine {
 	mgr, err := auth.NewManager("test-secret", 3600)
 	require.NoError(t, err)
 	router := gin.New()
-	router.POST("/api/v1/auth/:action", NewAuthHandler(mgr, client, authlock.NewInMemoryStore()))
+	router.POST("/api/v1/auth/:action", NewAuthHandler(mgr, client, authlock.NewInMemoryStore(), authlock.NewInMemoryStore()))
 	return router
+}
+
+// TestNewAuthHandler_NilStores_Panics E2E-20 收尾：两个 Store 都必须显式注入。
+// 验证码缓存虽是遗留端点（E2E-F-144 待删），装配期缺注入仍应 fail-fast。
+func TestNewAuthHandler_NilStores_Panics(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mgr, err := auth.NewManager("test-secret", 3600)
+	require.NoError(t, err)
+
+	assert.Panics(t, func() {
+		NewAuthHandler(mgr, &fakeUserClient{}, nil, authlock.NewInMemoryStore())
+	}, "LoginLockStore 为 nil 应 panic")
+
+	assert.Panics(t, func() {
+		NewAuthHandler(mgr, &fakeUserClient{}, authlock.NewInMemoryStore(), nil)
+	}, "VerificationCodeStore 为 nil 应 panic")
 }
 
 func postJSON(router *gin.Engine, path, body string) *httptest.ResponseRecorder {
@@ -134,7 +150,7 @@ func TestAuthHandler_Login_TokenCanBeParsed_BackToUserID(t *testing.T) {
 	router := gin.New()
 	router.POST("/api/v1/auth/:action", NewAuthHandler(mgr, &fakeUserClient{
 		login: &downstream.UserInfo{UserID: 100, Account: "carol"},
-	}, authlock.NewInMemoryStore()))
+	}, authlock.NewInMemoryStore(), authlock.NewInMemoryStore()))
 
 	w := postJSON(router, "/api/v1/auth/login", `{"username":"carol","password":"x"}`)
 	var data LoginData
@@ -349,7 +365,7 @@ func TestAuthHandler_Refresh_ReturnsNewToken(t *testing.T) {
 	router := gin.New()
 	router.POST("/api/v1/auth/:action", NewAuthHandler(mgr, &fakeUserClient{
 		login: &downstream.UserInfo{UserID: 99, Account: "u"},
-	}, authlock.NewInMemoryStore()))
+	}, authlock.NewInMemoryStore(), authlock.NewInMemoryStore()))
 
 	// 先登录拿 token
 	w := postJSON(router, "/api/v1/auth/login", `{"username":"u","password":"p"}`)

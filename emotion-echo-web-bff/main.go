@@ -273,7 +273,9 @@ func main() {
 	if closer, ok := authLockStore.(interface{ Close() error }); ok {
 		defer closer.Close() // main 退出时释放（RedisStore Close）
 	}
-	registerRoutes(r, svcCtx, &c, llmStreamer, intentClassifier, authLockStore)
+	// E2E-20 收尾拆出：验证码缓存仅 in-memory（D-01 裁定遗留端点，见 authlock store.go）
+	vcStore := authlock.NewInMemoryStore()
+	registerRoutes(r, svcCtx, &c, llmStreamer, intentClassifier, authLockStore, vcStore)
 
 	log.Printf("Starting web-bff at %s:%d...", c.Host, c.Port)
 	go func() {
@@ -412,7 +414,7 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 // 路径契约（路由清单）：main_test.go 的 wantRoutes + wantRoutesWithEmotionQ 切片。
 // 改路由必须同步更新测试文件 + 在 PR 描述里说明（决策 18 §四.1 结论须附证据）。
 // 调试时临时增减路由也行——但合 PR 前 main_test.go 必须绿。
-func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier, authLockStore authlock.LoginLockStore) {
+func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier, authLockStore authlock.LoginLockStore, vcStore authlock.VerificationCodeStore) {
 	// health（聚合下游探测）— 免鉴权（GinAuthMiddleware 白名单已含 /health）
 	// E2E-F-130/F-99：响应里带 version + build_time，便于一眼判定容器跑的是不是
 	// 最新代码（防 dev 跑旧 bundle 类 bug 复发）。Version 优先取 GIT_VERSION env，
@@ -432,7 +434,7 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 
 	// auth（Stage 33 PR-19b：真实登录，注入 UserClient）
 	// E2E-20 #6+#7：store 由 main() 装配后传入（Close 归 main defer 管理）。
-	r.POST("/api/v1/auth/:action", handler.NewAuthHandler(s.Auth, s.User, authLockStore))
+	r.POST("/api/v1/auth/:action", handler.NewAuthHandler(s.Auth, s.User, authLockStore, vcStore))
 
 	// 业务 handler（各自 Register）
 	handler.NewUserHandler(s.User).Register(r)

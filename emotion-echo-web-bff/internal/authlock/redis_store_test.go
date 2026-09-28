@@ -143,44 +143,9 @@ func TestRedisStore_CrossInstanceConsistency(t *testing.T) {
 	assert.False(t, bff1.IsLocked(ctx, "alice"), "BFF-2 清除后 BFF-1 也应未锁")
 }
 
-// TestRedisStore_VerificationCode_MinGap Round 4.3 后补：验证码 minGap 间隔。
-//
-// 验证：保存验证码后 minGap 内不可重发；minGap 过后可重发。
-// 使用可配置 MinGap 字段（默认 60s = verificationMinGap）。
-func TestRedisStore_VerificationCode_MinGap(t *testing.T) {
-	mr, err := miniredis.Run()
-	require.NoError(t, err)
-	defer mr.Close()
-
-	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
-
-	s := NewRedisStore(RedisConfig{
-		Client:  client,
-		Prefix:  "ci",
-		CodeTTL: time.Minute,
-		MinGap:  100 * time.Millisecond, // 测试用短 minGap
-	})
-	ctx := context.Background()
-
-	assert.True(t, s.CanSendVerificationCode(ctx, "alice"), "首次应可发")
-	require.NoError(t, s.SaveVerificationCode(ctx, "alice", "123456", time.Minute))
-	assert.False(t, s.CanSendVerificationCode(ctx, "alice"), "minGap 内不可重发")
-
-	time.Sleep(150 * time.Millisecond)
-	assert.True(t, s.CanSendVerificationCode(ctx, "alice"), "minGap 过后可重发")
-}
-
-// TestRedisStore_VerificationCode_RoundTrip Round 4.3 后补：Save + Get。
-func TestRedisStore_VerificationCode_RoundTrip(t *testing.T) {
-	s, _ := newTestRedisStore(t)
-	ctx := context.Background()
-
-	require.NoError(t, s.SaveVerificationCode(ctx, "alice", "654321", time.Minute))
-	code, err := s.GetVerificationCode(ctx, "alice")
-	assert.NoError(t, err)
-	assert.Equal(t, "654321", code)
-}
+// TestRedisStore_VerificationCode_* 用例已随 E2E-20 收尾裁定移除：
+// 验证码存储从 RedisStore 拆出（D-01 裁定遗留端点禁止 Redis 化，
+// 见 store.go VerificationCodeStore），in-memory 用例保留在 inmemory_test.go。
 
 // TestRedisStore_RedisDown_DegradeAllow Round 4.3 后补：Redis 不可达
 // 时降级 = 返 false（不 fail-closed）。这是 E2E-20 #5 [M] 项决议——
@@ -189,7 +154,7 @@ func TestRedisStore_VerificationCode_RoundTrip(t *testing.T) {
 // 注：与 LimiterBackend 不同，LoginLockStore 降级到 in-memory 由调用方
 // 决定（main.go 装配）。本测试只验证 RedisStore 本身的降级行为：
 // Redis 不可达 → IsLocked 返 false（不锁）；RecordFailure 返 false
-// （不计数累加）；CanSendVerificationCode 返 true（可发）。
+// （不计数累加）。
 func TestRedisStore_RedisDown_DegradeAllow(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Addr:        "127.0.0.1:1",
@@ -206,8 +171,6 @@ func TestRedisStore_RedisDown_DegradeAllow(t *testing.T) {
 	assert.False(t, s.IsLocked(ctx, "alice"))
 	// RecordFailure 返 false（不触发锁定）
 	assert.False(t, s.RecordFailure(ctx, "alice"))
-	// CanSendVerificationCode 返 true（可发验证码）
-	assert.True(t, s.CanSendVerificationCode(ctx, "alice"))
 }
 
 // TestRedisStore_InterfaceConformance Round 4.3 后补：接口契约。
@@ -219,7 +182,4 @@ func TestRedisStore_InterfaceConformance(t *testing.T) {
 	iface.RecordFailure(ctx, "u1")
 	iface.IsLocked(ctx, "u1")
 	iface.ClearFailures(ctx, "u1")
-	iface.CanSendVerificationCode(ctx, "u1")
-	iface.SaveVerificationCode(ctx, "u1", "123", time.Minute)
-	iface.GetVerificationCode(ctx, "u1")
 }
