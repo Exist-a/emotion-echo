@@ -331,6 +331,16 @@ log "Step 3/4: defining shared plugins"
 #   与 config.yaml endpoint_addr=http://emotion-echo-sw-oap:12800 配套
 # file-logger: 落盘到 /tmp/apisix-access.log(由 PR-OBS-5 volume mount),
 #   由 promtail 采集送 Loki
+# ⚠️ 下面这个片段是**纯 JSON**，一个字都不能加注释（2026-09-28 踩过：
+# 在 log_format 里加了一行 # 注释 ⇒ APISIX 报
+#   "invalid request body: Expected object key string but found invalid token"
+# ⇒ route 100 PUT 失败 ⇒ seed FATAL ⇒ 路由停留在旧配置。与 Stage 106 的
+# trailing comma 是同一类坑：JSON 片段里任何"人话"都会变成配置事故）。
+#
+# 其中 trace_id 必须取 $apisix_request_id（网关自己生成的那个，也正是被注入
+# X-Trace-Id 的同一个值），**不能**是 $http_x_request_id —— 后者是客户端传入的
+# header，浏览器/curl 根本不会带，nginx 会把空变量整条省略，于是 access log 里
+# 压根没有 trace_id 字段，"Go 日志 ↔ access log 可 join"永远不成立。
 OBSERVABILITY_PLUGINS_JSON='
   "skywalking-logger": {
     "endpoint_addr": "http://emotion-echo-sw-oap:12800",
@@ -351,8 +361,37 @@ OBSERVABILITY_PLUGINS_JSON='
       "resp_time": "$request_time",
       "upstream": "$upstream_addr",
       "upstream_time": "$upstream_response_time",
-      "trace_id": "$http_x_request_id"
+      "trace_id": "$apisix_request_id"
     }
+  }'
+
+# ---- E2E-21 / E2E-F-13：注入 X-Trace-Id（trace_id 的生产侧）----
+#
+# 背景：shared/pkg/middleware/gin_skywalking.go:73-77 一直在消费 X-Trace-Id
+# 并把它塞进 slog ctx，但**全仓没有任何一处生产这个 header** ⇒ 生产环境
+# 每条 Go 日志的 trace_id 字段恒为空，"按一次请求查全链路"根本做不到。
+#
+# 为什么放 serverless-pre-function：proxy-rewrite 的 headers.set 只能写静态值，
+# 而 trace id 必须在运行时从请求本身取（试过 nginx 变量写法不可靠）。
+# 用 phase=rewrite（最早）保证下游 BFF / 下游 svc 一律能看到。
+#
+# 为什么值用 ctx.var.request_id：config.yaml:148 已设 trace_id_source: x-request-id，
+# nginx access_log 尾部也带 $apisix_request_id（config.yaml:302）⇒
+# **网关 access log 与 Go 服务日志用的是同一个 ID，可以直接 join**。
+#
+# 覆盖式赋值：与 X-User-Id 同理，无条件覆盖客户端自带的值，避免外部伪造。
+#
+# ⚠️ 必须挂到**全部 4 组**插件变量（PLUGINS_JSON / CATCHALL_PLUGINS_JSON /
+# AUTH_WHITELIST_PLUGINS / HEALTH_PLUGINS）。本文件 :323 那句注释
+# 「全局插件链（每个 route 共享）」与事实不符：put_auth_route 用的是
+# AUTH_WHITELIST_PLUGINS、put_route_health 用的是 HEALTH_PLUGINS，
+# 两者都不含 observability 插件（实测 15 条路由里只有 route 100 有 file-logger）。
+TRACE_ID_PLUGIN='
+  "serverless-pre-function": {
+    "phase": "rewrite",
+    "functions": [
+      "return function(conf, ctx) local core = require('\''apisix.core'\''); core.request.set_header(ctx, '\''X-Trace-Id'\'', ctx.var.request_id) end"
+    ]
   }'
 
 # jwt-auth 真正验签（替换 shared jwt_auth.go 的"信任 APISIX"模型）
@@ -398,12 +437,13 @@ PLUGINS_JSON=$(cat <<EOF
   "cors": {
     "allow_origins": "$CORS_ALLOW_ORIGINS",
     "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
-    "allow_headers": "Content-Type,Authorization,X-User-Id",
-    "expose_headers": "X-User-Id",
+    "allow_headers": "Content-Type,Authorization,X-User-Id,X-Trace-Id",
+    "expose_headers": "X-User-Id,X-Trace-Id",
     "allow_credential": true,
     "max_age": 600
   },
 ${OBSERVABILITY_PLUGINS_JSON},
+${TRACE_ID_PLUGIN},
   "prometheus": {}
 }
 EOF
@@ -473,12 +513,13 @@ CATCHALL_PLUGINS_JSON=$(cat <<EOF
   "cors": {
     "allow_origins": "$CORS_ALLOW_ORIGINS",
     "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
-    "allow_headers": "Content-Type,Authorization,X-User-Id",
-    "expose_headers": "X-User-Id",
+    "allow_headers": "Content-Type,Authorization,X-User-Id,X-Trace-Id",
+    "expose_headers": "X-User-Id,X-Trace-Id",
     "allow_credential": true,
     "max_age": 600
   },
 ${OBSERVABILITY_PLUGINS_JSON},
+${TRACE_ID_PLUGIN},
   "prometheus": {}
 }
 EOF
@@ -524,12 +565,16 @@ EOF
 # 但各 svc 的 gin_auth 中间件只豁免 /health → 实测全部返
 # {"error":"unauthorized: missing or invalid X-User-Id"} 401。
 # 加 proxy-rewrite 把 /<svc>-health 重写为 /health。
-HEALTH_PLUGINS=$(cat <<'EOF'
+# 说明：健康探针**不加** file-logger/skywalking-logger —— 健康检查高频，
+# 落 access log 会把有用日志冲掉；但**要**加 X-Trace-Id（与业务路由同源）。
+# heredoc 必须用非引号形式才能引用 ${TRACE_ID_PLUGIN}；原内容不含 $ 变量，安全。
+HEALTH_PLUGINS=$(cat <<EOF
 {
   "prometheus": {},
   "proxy-rewrite": {
     "uri": "/health"
-  }
+  },
+${TRACE_ID_PLUGIN}
 }
 EOF
 )
@@ -573,7 +618,9 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH","OPTIONS"]'
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
   "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "$LIMIT_POLICY", "redis_host": "$LIMIT_REDIS_HOST", "redis_port": $LIMIT_REDIS_PORT, "redis_db": $LIMIT_REDIS_DB, "redis_password": "$LIMIT_REDIS_PASSWORD", "redis_timeout": $LIMIT_REDIS_TIMEOUT},
-  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-User-Id"}
+  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-User-Id,X-Trace-Id"},
+${OBSERVABILITY_PLUGINS_JSON},
+${TRACE_ID_PLUGIN}
 }
 EOF
 )
