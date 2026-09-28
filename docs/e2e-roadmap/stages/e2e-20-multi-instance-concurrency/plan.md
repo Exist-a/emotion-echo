@@ -2,7 +2,7 @@
 stage: e2e-20
 title: 多实例并发正确性（登录锁定 / 验证码防枚举 / 限流跨实例）
 type: transformation
-status: in-progress
+status: partial
 started: 2026-09-28
 created: 2026-09-28
 depends-on: [e2e-18]
