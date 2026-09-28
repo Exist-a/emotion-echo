@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"emotion-echo-web-bff/internal/auth"
+	"emotion-echo-web-bff/internal/authlock"
 	"emotion-echo-web-bff/internal/config"
 	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	"emotion-echo-web-bff/internal/downstream"
@@ -41,6 +42,7 @@ import (
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -421,7 +423,13 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	// auth（Stage 33 PR-19b：真实登录，注入 UserClient）
-	r.POST("/api/v1/auth/:action", handler.NewAuthHandler(s.Auth, s.User))
+	// Round 42 后补（E2E-20 #6+#7）：注入 LoginLockStore（in-memory 或 redis）。
+	// 默认 in-memory（保持原行为）；LOGIN_LOCK_BACKEND=redis 启用 Redis 跨实例共享。
+	authLockStore := buildAuthLockStore()
+	if closer, ok := authLockStore.(interface{ Close() error }); ok {
+		defer closer.Close() // RedisStore Close 释放 Redis 连接
+	}
+	r.POST("/api/v1/auth/:action", handler.NewAuthHandler(s.Auth, s.User, authLockStore))
 
 	// 业务 handler（各自 Register）
 	handler.NewUserHandler(s.User).Register(r)
@@ -461,4 +469,29 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 	})
+}
+
+// buildAuthLockStore Round 42 后补（E2E-20 #6+#7）：装配 LoginLockStore。
+//
+// 决策：LOGIN_LOCK_BACKEND=redis → RedisStore（多实例共享，跨实例失效修复）
+//      默认/其他 → InMemoryStore（保持原行为，向后兼容）。
+// 降级（plan §6 [M]）：Redis 不可达时 InMemoryStore 由 NewRedisStore 内部
+//      返 allow 实现（不 fail-closed）。
+func buildAuthLockStore() authlock.LoginLockStore {
+	switch os.Getenv("LOGIN_LOCK_BACKEND") {
+	case "redis":
+		addr := os.Getenv("REDIS_ADDR")
+		if addr == "" {
+			addr = "emotion-echo-redis:6379" // dev 默认
+		}
+		client := redis.NewClient(&redis.Options{Addr: addr})
+		log.Printf("[authlock] using RedisStore addr=%s", addr)
+		return authlock.NewRedisStore(authlock.RedisConfig{
+			Client: client,
+			Prefix: "web-bff-auth",
+		})
+	default:
+		log.Printf("[authlock] using InMemoryStore (LOGIN_LOCK_BACKEND=redis to enable Redis)")
+		return authlock.NewInMemoryStore()
+	}
 }
