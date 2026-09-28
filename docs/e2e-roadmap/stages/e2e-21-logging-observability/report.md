@@ -166,3 +166,18 @@ related-findings: [E2E-F-07, E2E-F-13, E2E-F-146, E2E-F-147, E2E-F-148]
 - [ ] **§13.3 第二方核对** —— 见下方声明
 
 > **本阶段由执行者本人完成，第二方核对未独立执行**。按 RUNBOOK §7 第 10 项与 §13.3 末句"执行者不得自行宣布 done"，本记录的状态标记需由非执行者复核后确认。
+
+---
+
+## 8. CI 运行备注
+
+本 PR 首次运行时 `llm-service-pytest` 标红，失败步骤为 **`Install deps`**（依赖安装网络失败），
+**与本次改动无关**，证据：
+
+- 本次 diff **未触及 `emotion-echo-llm-service` 任何文件**（`git diff --name-only main...HEAD | grep -i llm` 无输出）
+- 同一 job 在 main 的最近两次提交（`20c8d55`、`bdc6fbf`）均为 `success`
+- 失败发生在装依赖阶段，早于任何测试执行
+
+同类现象本轮在本地也出现过：`scripts/build_dev_images.sh` 首次构建时 `user-svc`/`analytics-svc`
+连续 3 次失败于 `apk add ... did not complete successfully: exit code: 4`（alpine 包源网络），
+重试后即成功。判定为 CI/包源瞬时故障，非产品缺陷。
