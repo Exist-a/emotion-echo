@@ -926,9 +926,9 @@ Stage 33 P0 修复+BFF净化 █████████████████
 - `go test ./emotion-echo-web-bff/internal/config/` → `TestConfig_XTTSDefaultTimeoutIs90s` GREEN（钉 yaml/SetDefaults 对齐守卫）
 ---
 
-### 决策 33：端侧化混合推理主方案 = **端侧优先 + 云端兜底（WebLLM + 云端 API 混合调度）**（2026-09-24 Lane O 阶段一开工立项 · D-26）
+### 决策 33：端侧化混合推理主方案 = **端侧优先 + 云端兜底（WebLLM + 云端 API 混合调度）**（2026-09-24 Lane O 阶段一开工立项 · D-26，2026-09-28 §十二 5 项决策全部拍板后转 accepted）
 
-> 🟡 **proposed** —— 转 accepted 条件：v0.2 §十二 5 项决策全部由用户拍板 + 补立分项 ADR D-26.1~5（决议流程见 ADR §一；**5 项决策不在 ADR/本表决议权**，AGENTS §八 规则 4）。
+> 🟢 **accepted**（2026-09-28 §十二 5 项决策全部用户拍板 + D-26.1~5 全部立 ADR accepted → 本 ADR 转 accepted；决议流程见 ADR §一）。
 
 | 维度 | 内容 |
 |------|------|
@@ -969,3 +969,19 @@ Stage 33 P0 修复+BFF净化 █████████████████
 - [on-device-mindchat-survey-2026-09-24.md](../../plans/on-device-mindchat-survey-2026-09-24.md)（MindChat 模型侧调研）
 
 **两套编号说明**：同一决策在 E2E 轨索引登记为 **D-26.2**（`docs/e2e-roadmap/decisions.md`）；D-NN 与决策 N 是并行编号体系（D-26 ↔ 决策 33 + D-26.2 ↔ 决策 34）。
+
+### 决策 35：端侧化隐私定位 = **(a) 推理本地 + 消息照常上传（两阶段拍板 = 前期 (a) + 未来 (b) 等排期）**（2026-09-28 用户拍板 · D-26.1）
+
+> 🟢 **accepted**（2026-09-28 用户拍板；详见 ADR `docs/architecture/adr/adr-2026-09-on-device-privacy-position.md`）。**两阶段拍板**：当前 (a) 管道零改动；未来 (b) 等排期（需 L2 双轨架构 + 6~8 周工作量）。
+
+### 决策 36：端侧化来源告知 = **(a) 「本地完成」角标**（2026-09-28 用户拍板 · D-26.3）
+
+> 🟢 **accepted**（2026-09-28 用户拍板；详见 ADR `docs/architecture/adr/adr-2026-09-on-device-source-disclosure.md`）。chat-svc 入库加 `reply_source` 字段（`local`/`cloud`/`hotline` 三态）。
+
+### 决策 37：端侧化离线范围 = **L0 + L1（L2 二期）**（2026-09-28 用户拍板 · D-26.4）
+
+> 🟢 **accepted**（2026-09-28 用户拍板；详见 ADR `docs/architecture/adr/adr-2026-09-on-device-offline-scope.md`）。L0+L1 必做 OC-01~OC-05；L2 二期强联动 D-26.1=(b) 未来切换。
+
+### 决策 38：端侧化记忆/摘要存储 = **随 D-26.1 联动（a）服务端生成下发**（2026-09-28 用户拍板 · D-26.5）
+
+> 🟢 **accepted**（2026-09-28 用户拍板；详见 ADR `docs/architecture/adr/adr-2026-09-on-device-memory-storage.md`）。D-26.1=(a) ⇒ 服务端；D-26.1=(b) ⇒ 本地（联动当前 D-26.1=(a) 拍板）。

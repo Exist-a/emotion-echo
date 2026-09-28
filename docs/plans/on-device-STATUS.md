@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5+T2#6+T2#7 收口（2026-09-28）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5+T2#6+T2#7+T2#8 收口（2026-09-28）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -235,15 +235,45 @@
 - ❌ **不**跑真实 Qwen3-1.7B 真机基线（T3 任务，需 §十二决策 2 拍板 + dev mode）
 - ✅ N=13 用例就绪 + baseline 占位报告 + OND-F-05 fixed
 
+## 一.12、T2#8 已完成（2026-09-28 续接，**§十二 5 项决策用户拍板** + D-26 + 5 分项 ADR 全部 accepted · main=待合并）
+
+| 项 | 文件 | 拍板结果 |
+|----|------|----------|
+| **D-26.1 隐私定位** | `docs/architecture/adr/adr-2026-09-on-device-privacy-position.md` | 🟢 **(a) 推理本地 + 消息照常上传（两阶段拍板：前期 (a) + 未来 (b) 等排期）** |
+| **D-26.2 端侧主力模型** | `docs/architecture/adr/adr-2026-09-on-device-model-selection-qwen3.md` | 🟢 **accepted = WebLLM 预置 Qwen3-1.7B-q4f16_1-MLC（Apache 2.0）** |
+| **D-26.3 来源告知** | `docs/architecture/adr/adr-2026-09-on-device-source-disclosure.md` | 🟢 **(a) 「本地完成」角标** |
+| **D-26.4 离线范围** | `docs/architecture/adr/adr-2026-09-on-device-offline-scope.md` | 🟢 **L0 + L1（L2 二期）** |
+| **D-26.5 摘要存储** | `docs/architecture/adr/adr-2026-09-on-device-memory-storage.md` | 🟢 **(a) 随 D-26.1 联动（a）服务端生成下发** |
+| **D-26 主方案 ADR** | `docs/architecture/adr/adr-2026-09-on-device-hybrid-main.md` | 🟢 **accepted**（v0.3 §B.1 决议流程）|
+| **decisions.md 双索引登记** | `docs/e2e-roadmap/decisions.md` + `docs/architecture/decisions.md` | 6 行新增/更新（D-26 / 26.1 / 26.2 / 26.3 / 26.4 / 26.5 + 决策 33~38）|
+| **v0.2 §十二 + v0.3 §B.1 同步** | `docs/plans/on-device-hybrid-inference-2026-09-23.md` + `on-device-hybrid-inference-implementation-roadmap-2026-09-23.md` | 倾向列 → 实际拍板列（5 项全 accepted）|
+| **拍板机制** | AskUserQuestion 工具（user `decided-by: user` 字段记录） | 2026-09-28 Lane O 会话一次性拍完 5 项 |
+
+**关键观察**：
+- **决策 1 是两阶段拍板**：用户原文"前期先用 a，b 等排期"——前期 (a) 立即生效；未来切 (b) 时**再开新 ADR 替换**（不自动切换）
+- **决策 5 强联动决策 1**：当前 D-26.5=(a) 服务端生成下发；D-26.1 未来切 (b) 时 D-26.5 同步切 (b) 本地
+- **阶段一收口契约满足**（v0.3 §G.1）：D-26 + 5 分项全部 accepted → **Lane O 可进 v0.3 §C.3 阶段二（混合架构开发）**
+- **强依赖确认**：E2E-21/23/29/30 仍强依赖（v0.3 §C.3 前置）；stage2 不是"现在做"，是"§十二拍板 + E2E 收口后可开工"
+
+**协议合规**：
+- ✅ docs-only + ADR-only 改动（4 新建 + 2 改 + decisions.md × 2 + v0.2/v0.3 × 2）
+- ✅ 未触碰 useAIStreamHandler.ts / package.json / nuxt.config.ts / docs/e2e-roadmap/** / deploy/ / .github/workflows
+- ✅ §十二 5 项决策权属用户，**已正式拍板**（用户 2026-09-28 通过 AskUserQuestion 工具）
+
+**门禁**：
+- e2e_stage_audit.py --all → **30 阶段 0 FAIL**
+- pytest 51 passed（无回归）
+- ADR 6 个全部 accepted 状态流转一致
+
 ## 二、环境基线（协议 §五 要求记录）
 
-- `main` = `f09bc06`（PR #104 squash 后，T2#7 合并），与 origin/main 同步
-- **T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 + T2#7 全程零 dev mode**：devmode 锁 lane-e E2E-19 补 IAB 占用（until 2026-09-28 23:00），Lane O 不抢
+- `main` = `c289db5`（PR #105 squash 后，T2#7 STATUS 补账），与 origin/main 同步
+- **T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 + T2#7 + T2#8 全程零 dev mode**：devmode 锁 lane-e E2E-19 补 IAB 占用（until 2026-09-28 23:00），Lane O 不抢
 - 测试环境：vitest（emotion-echo-web，pnpm）+ pytest（宿主 Python）
   - vitest `app/utils/offline/` + `app/pages/demo/` → **59 passed**（T2#5 +17）
   - pytest `scripts/on-device-perf/` → 24 passed · **`scripts/on-device-golden/` → 13 passed（T2#7 扩 N=13）** · **`scripts/on-device-baseline/` → 14 passed（T2#4）**
-- worktree：`D:/源码/Emotion-Echo-lane-o-n13`（T2#7 临时，本轮收口已删）
-- 分支：`test/on-device-golden-expand-n13` 已 squash 合并 + 远端删除（AGENTS §2.5）
+- worktree：`D:/源码/Emotion-Echo-lane-o-adrs`（T2#8 临时，本轮收口待删）
+- 分支：`docs/on-device-adr-proposed-1-3-4-5` 待 PR 合并后 + 远端删除（AGENTS §2.5）
 
 ## 三、CI 覆盖现状（2026-09-24 实测 4 workflow）
 
@@ -266,7 +296,7 @@
 7. ~~**T2**：WebLLM 最小 Demo 契约测试骨架~~ ✅ T2#1 完成（PR #86 `f2083fb` + `582269f`；Demo 占位页 + 4 接口 + 42/42 vitest PASS）
 8. ~~**T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）~~ ✅ T2#5 完成（PR #92 `7aaac7d6`；架构就绪 + 17 用例契约测试 + package.json 握手；T3 IAB 才接真引擎流式）
 9. ~~**T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）~~ ✅ T2#6 完成 decision-pack（PR #95 `7aa8eed`）；Demo IAB 验证仍待 dev mode 窗口（§四 #9 拆分为 T2#6 已完成 decision-pack + T3 待 IAB 验证）
-10. **D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）
+10. ~~**D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）~~ ✅ T2#8 完成（PR 待合并；§十二 5 项全部用户拍板 + D-26 + 5 分项 ADR 全部 accepted + decisions.md 双索引登记 + v0.2 §十二 + v0.3 §B.1 同步）
 11. **OND-F-01**（已登记）：golden set pytest 未接 CI
 12. **OND-F-02**（已登记）：perf baseline 24 用例**同样未接 CI**（同一根因：`llm-test.yml` paths 不含 `scripts/`）
 13. **OND-F-03**（账本回收）：WebLLM Demo vitest **已实证接 CI**（`web-test.yml` paths=`emotion-echo-web/**`，新文件 `app/utils/offline/**` 自动覆盖；PR #86 CI 27/27 绿即证据）。无需修
@@ -274,6 +304,6 @@
 ## 五、给下次会话的开场动作
 
 1. 读 AGENTS §八 + `parallel-tracks.md` §五 → 开工三查（fetch/status、对方 STATUS 尾 3 行、`.devmode-session` 锁）
-2. 读本文件 §四，**从第 8 项 WebLLM Demo 真引擎接入**继续（T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 + T2#7 已收口）
+2. 读本文件 §四，**从第 8 项 WebLLM Demo 真引擎接入**继续（T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 + T2#7 + T2#8 已收口；§十二拍板 + D-26 accepted；stage2 = 借 dev mode + E2E-21/23/29/30 收口后可开工）
 3. **用户决议 §十二 决策 2**（MindChat vs Qwen3）—— 不在本轨决议权
 4. 独占列红线与编号口径（两套号都查）见协议 §二/§三.资源3
