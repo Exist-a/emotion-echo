@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5 收口（2026-09-27）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5+T2#6 收口（2026-09-27）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -183,15 +183,35 @@
 - npx eslint app/utils/offline/ app/pages/demo/ → **0 错 0 警告**（顺手清 1 债）
 - e2e_stage_audit.py --all → **30 阶段 0 FAIL**（Lane E 审计未被打破）
 
+## 一.10、T2#6 已完成（2026-09-27 续接，§四 #9 §十二决策材料包 · PR #95 已 squash 合并）
+
+| 项 | 文件 | 验证 |
+|----|------|------|
+| **§十二 5 项决策一站式材料包**（选项 + 风险 + 推荐 + 派生契约表） | `docs/plans/on-device-decision-pack.md`（新建，301 行） | 决策 1 隐私定位 + 决策 2 模型（D-26.2 现状）+ 决策 3 角标 + 决策 4 L0+L1 + 决策 5 摘要 |
+| **§六 拍板请求**（用户一次性回模板） | 同上 §六 | 5 项可逐项选；推荐组合与 v0.2 §十二 倾向一致 |
+| **§七 给下次 Lane O 开场动作**（拍板后立即执行清单） | 同上 §七 | 4 个分项 ADR + decisions 双登记 + D-26 accepted 状态流转 |
+| **§九 给 Lane E 一次性须知**（合并后审计） | 同上 §九 | 决策 1=(a)+决策 4=L0+L1+决策 5=(a) 与现有 E2E 数据契约兼容 |
+
+**协议合规**：
+- ✅ docs-only PR（仅写 Lane O 独占列 `docs/plans/on-device-decision-pack.md`）
+- ✅ 未触碰 useAIStreamHandler.ts / package.json / nuxt.config.ts / docs/e2e-roadmap/** / deploy/
+- ✅ §十二 5 项决策权属用户，**未决策加码**；本材料只推荐 + 拍板请求
+- ✅ 未登 D-NN / 决策 N 新号（D-26.1/3/4/5 留待拍板后由 Lane O 立）
+
+**门禁**：
+- e2e_stage_audit.py --all → **30 阶段 0 FAIL**
+- 不改代码 / 不改测试 —— 纯决策材料
+- main squash merged PR #95（7aa8eed）+ 源分支已删 + worktree 已删
+
 ## 二、环境基线（协议 §五 要求记录）
 
-- `main` = `7aaac7d6`（PR #92 squash 后，T2#5 合并），与 origin/main 同步
-- **T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 全程零 dev mode**：`.devmode-session` 锁 lane-e E2E-19 占用期间 Lane O 不抢
+- `main` = `7aa8eed2`（PR #95 squash 后，T2#6 合并），与 origin/main 同步
+- **T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 全程零 dev mode**：devmode 锁 lane-e E2E-19 占用期间 Lane O 不抢，T2#6 写完时锁已释放
 - 测试环境：vitest（emotion-echo-web，pnpm）+ pytest（宿主 Python）
   - vitest `app/utils/offline/` + `app/pages/demo/` → **59 passed**（T2#5 +17）
   - pytest `scripts/on-device-perf/` → 24 passed · `scripts/on-device-golden/` → 13 passed · **`scripts/on-device-baseline/` → 14 passed（T2#4）**
-- worktree：`D:/源码/Emotion-Echo-lane-o-t2-engine`（T2#5 临时，本轮收口已删）
-- 分支：`test/on-device-webllm-dynamic-import` 已 squash 合并 + 远端删除（AGENTS §2.5）
+- worktree：`D:/源码/Emotion-Echo-lane-o-decision`（T2#6 临时，本轮收口已删）
+- 分支：`docs/on-device-decision-pack` 已 squash 合并 + 远端删除（AGENTS §2.5）
 
 ## 三、CI 覆盖现状（2026-09-24 实测 4 workflow）
 
@@ -212,7 +232,7 @@
 6. **T2**：性能基线**真机测量**（TTFT / tokens/sec / vram / model_load_ms 注入 PerfMeasurement —— 需 WebGPU + WebLLM 引擎真机，IAB 或 Playwright 实测）
 7. ~~**T2**：WebLLM 最小 Demo 契约测试骨架~~ ✅ T2#1 完成（PR #86 `f2083fb` + `582269f`；Demo 占位页 + 4 接口 + 42/42 vitest PASS）
 8. ~~**T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）~~ ✅ T2#5 完成（PR #92 `7aaac7d6`；架构就绪 + 17 用例契约测试 + package.json 握手；T3 IAB 才接真引擎流式）
-9. **T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）
+9. ~~**T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）~~ ✅ T2#6 完成 decision-pack（PR #95 `7aa8eed`）；Demo IAB 验证仍待 dev mode 窗口（§四 #9 拆分为 T2#6 已完成 decision-pack + T3 待 IAB 验证）
 10. **D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）
 11. **OND-F-01**（已登记）：golden set pytest 未接 CI
 12. **OND-F-02**（已登记）：perf baseline 24 用例**同样未接 CI**（同一根因：`llm-test.yml` paths 不含 `scripts/`）
