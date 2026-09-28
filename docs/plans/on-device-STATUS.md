@@ -71,7 +71,7 @@
 - `e2e_stage_audit.py --all` → **30 阶段 0 FAIL**（合并前后一致）
 - PR #86 CI：**27/27 check-runs 全绿**
 
-## 一.7、T2#3 已完成（2026-09-24 续接，§十二 决策 2 落地 · main=待合并）
+## 一.7、T2#3 已完成（2026-09-24 续接，§十二 决策 2 落地 · 已合入 main `e89e155` = PR #90）
 
 | 项 | 文件 | 验证 |
 |----|------|------|
@@ -102,7 +102,7 @@
 **门禁**：
 - `e2e_stage_audit.py --all` → 30 阶段 0 FAIL（待 PR 合并后验证）
 
-## 一.8、T2#4 已完成（2026-09-27 续接，§四 #4 云端基线跑分 · main=待合并）
+## 一.8、T2#4 已完成（2026-09-27 续接，§四 #4 云端基线跑分 · 已合入 main `aeb3f24`；该 squash 标题未带 PR 号，不臆测）
 
 | 项 | 文件 | 验证 |
 |----|------|------|
@@ -235,7 +235,7 @@
 - ❌ **不**跑真实 Qwen3-1.7B 真机基线（T3 任务，需 §十二决策 2 拍板 + dev mode）
 - ✅ N=13 用例就绪 + baseline 占位报告 + OND-F-05 fixed
 
-## 一.12、T2#8 已完成（2026-09-28 续接，**§十二 5 项决策用户拍板** + D-26 + 5 分项 ADR 全部 accepted · main=待合并）
+## 一.12、T2#8 已完成（2026-09-28 续接，**§十二 5 项决策用户拍板** + D-26 + 5 分项 ADR 全部 accepted · 已合入 main `4817ac0`；该 squash 标题未带 PR 号，不臆测）
 
 | 项 | 文件 | 拍板结果 |
 |----|------|----------|
@@ -265,7 +265,7 @@
 - pytest 51 passed（无回归）
 - ADR 6 个全部 accepted 状态流转一致
 
-## 一.14、mTLS 修复轮已完成（2026-09-28 续接，OND-F-09a · PR 待合并）
+## 一.14、mTLS 修复轮已完成（2026-09-28 续接，OND-F-09a · **PR #121 squash 合入 main `d50fa1c`**）
 
 | 项 | 文件 | 验证 |
 |----|------|------|
@@ -321,7 +321,7 @@
 | `web-test.yml` | paths=`emotion-echo-web/**` —— Lane O 文档/脚本 PR **不触发** |
 | `llm-test.yml` | paths=llm-service + **只跑 `tests/unit/`** —— `scripts/on-device-golden/` **不在 CI 覆盖内**（见 OND-F-01） |
 
-## 一.13、T3 已完成（2026-09-28 续接，**§四 #9 Demo IAB 验证降级** · main=待合并）
+## 一.13、T3 已完成（2026-09-28 续接，**§四 #9 Demo IAB 验证降级** · 已合入 main `6834b08`）
 
 **核心结论**：T3 借 dev mode 半天窗口实测完整跑通 **21 容器栈（17 healthy + 3 obs 未配 healthcheck）**，验证了部署链路完整 + emotion-llm-service mTLS 启用了，但**暴露两个预期外但关键的发现**：
 
@@ -357,14 +357,14 @@
 1. ~~**T1**：MindChat 双轨验证~~ ✅ T1 完成（PR #84 `a651ecf`）
 2. ~~**T1**：编译链路 + CDN 清单~~ ✅ T1 完成（PR #84 `ac269f5`；**国内可达实测拉流**留 T2）
 3. ~~**T1**：性能基线测量脚本骨架~~ ✅ T1 完成（PR #84 `7c42411`；**真机测量**留 T2）
-4. ~~**T1/T2**：云端基线跑分（golden set 注入真实 model_fn —— `emotion-llm-service` 是 gRPC-only port 50051，HTTP 8000 仅有 /analyze；可用 `iter_chat_chunks` + mock fallback（`LLM_API_KEY` 空时）或走 DeepSeek）~~ ✅ T2#4 完成（PR 待合并；详见 §一.8 + `docs/plans/on-device-baseline-report-2026-09-24.md`）
+4. ~~**T1/T2**：云端基线跑分（golden set 注入真实 model_fn —— `emotion-llm-service` 是 gRPC-only port 50051，HTTP 8000 仅有 /analyze；可用 `iter_chat_chunks` + mock fallback（`LLM_API_KEY` 空时）或走 DeepSeek）~~ ✅ T2#4 完成（main `aeb3f24`；详见 §一.8 + `docs/plans/on-device-baseline-report-2026-09-24.md`）
 5. **T2**：编译链路 + CDN **实测拉流**（5 候选 CDN 实测可达性 + CORS 6 项检查清单 —— 见 `on-device-compile-cdn-2026-09-24.md` §三/§五） |
 | 5'. ~~**T2#7**：golden set 扩 N=13（解决 OND-F-05）~~ ✅ T2#7 完成（PR #104 `f09bc06`；golden_set.jsonl 7 → 13 用例 + baseline_report 重生成 + docs/plans/on-device-golden-n13-report-2026-09-28.md） |
 6. **T2**：性能基线**真机测量**（TTFT / tokens/sec / vram / model_load_ms 注入 PerfMeasurement —— 需 WebGPU + WebLLM 引擎真机，IAB 或 Playwright 实测）
 7. ~~**T2**：WebLLM 最小 Demo 契约测试骨架~~ ✅ T2#1 完成（PR #86 `f2083fb` + `582269f`；Demo 占位页 + 4 接口 + 42/42 vitest PASS）
 8. ~~**T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）~~ ✅ T2#5 完成（PR #92 `7aaac7d6`；架构就绪 + 17 用例契约测试 + package.json 握手；T3 IAB 才接真引擎流式）
 9. ~~**T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）~~ ✅ T2#6 完成 decision-pack（PR #95 `7aa8eed`）+ T3 部分完成 IAB 验证降级（§一.13）；真机基线留 Lane O 下一轮修 baseline mTLS bug + Lane E 重建 web image |
-10. ~~**D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）~~ ✅ T2#8 完成（PR 待合并；§十二 5 项全部用户拍板 + D-26 + 5 分项 ADR 全部 accepted + decisions.md 双索引登记 + v0.2 §十二 + v0.3 §B.1 同步）
+10. ~~**D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）~~ ✅ T2#8 完成（main `4817ac0`；§十二 5 项全部用户拍板 + D-26 + 5 分项 ADR 全部 accepted + decisions.md 双索引登记 + v0.2 §十二 + v0.3 §B.1 同步）
 11. **OND-F-01 / OND-F-02 / OND-F-04**（已登记）：`scripts/on-device-golden|perf|baseline/` 共 **63** 条 pytest **未接 CI**（同一根因：`llm-test.yml` paths 不含 `scripts/`）。**三合一修法** = 该 workflow paths 加 `scripts/on-device-*/`；但 `.github/workflows` 属共享列，须走协议 §六握手 + 与 Lane E 排 PR 时序
 12. **OND-F-03**（账本回收）：WebLLM Demo vitest **已实证接 CI**（`web-test.yml` paths=`emotion-echo-web/**`，新文件 `app/utils/offline/**` 自动覆盖；PR #86 CI 27/27 绿即证据）。无需修
 13. **OND-F-08**（已登记）：决策 1 的 (b) 阶段（真·数据不离设备）等排期，不在 Lane O 决议权
