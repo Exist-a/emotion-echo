@@ -106,7 +106,9 @@ func NewRedisLimiterBackend(client *redis.Client, ratePerSec float64, burst int,
 		rate:      ratePerSec,
 		burst:     float64(burst),
 		keyPrefix: keyPrefix,
-		timeout:   100 * time.Millisecond,
+		// E2E-20 GREEN 修复：100ms 对首次 TCP 拨号 + DNS + EVAL 太短 ⇒ 静默降级。
+		// 1s 覆盖冷连接；热连接（池复用）实际 <5ms。
+		timeout: 1 * time.Second,
 	}
 }
 
