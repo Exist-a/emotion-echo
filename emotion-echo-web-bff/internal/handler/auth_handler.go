@@ -18,15 +18,16 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"emotion-echo-web-bff/internal/auth"
+	"emotion-echo-web-bff/internal/authlock"
 	"emotion-echo-web-bff/internal/downstream"
 
 	"github.com/gin-gonic/gin"
@@ -60,38 +61,24 @@ const (
 
 // AuthHandler 处理 /api/v1/auth/* 端点
 type AuthHandler struct {
-	jwt  *auth.Manager
-	user downstream.UserClient
-
-	// in-memory 限流（单实例假设；多实例 BFF 留 Stage 34+ Redis 迁移）
-	loginMu          sync.RWMutex
-	loginFailures    map[string]*loginAttempt // username → 失败计数
-	verificationMu   sync.RWMutex
-	verificationCodes map[string]*verificationEntry // username → 验证码 + 过期
-}
-
-// loginAttempt 跟踪某 username 的登录失败次数与锁定状态
-type loginAttempt struct {
-	failCount int
-	lockedAt  time.Time
-}
-
-// verificationEntry 验证码缓存（含有效时间 + 上次发送时间）
-type verificationEntry struct {
-	code        string
-	expiresAt   time.Time
-	lastSentAt  time.Time
+	jwt   *auth.Manager
+	user  downstream.UserClient
+	store authlock.LoginLockStore // Round 4.3 后补：登录失败计数 + 验证码缓存存储（in-memory 或 redis）
 }
 
 // NewAuthHandler 构造
 //
 // Stage 33 PR-19b：注入 UserClient 真实登录；保留 jwt.Manager 用于签发 JWT。
-func NewAuthHandler(mgr *auth.Manager, userClient downstream.UserClient) gin.HandlerFunc {
+// Round 4.3 后补：注入 LoginLockStore（in-memory 或 redis），多实例用 redis。
+func NewAuthHandler(mgr *auth.Manager, userClient downstream.UserClient, store authlock.LoginLockStore) gin.HandlerFunc {
+	if store == nil {
+		// 安全兜底：注入 nil 应 panic 提示（main.go 装配时必须传）
+		panic("authlock.LoginLockStore is required (pass authlock.NewInMemoryStore() or authlock.NewRedisStore(...))")
+	}
 	h := &AuthHandler{
-		jwt:               mgr,
-		user:              userClient,
-		loginFailures:     make(map[string]*loginAttempt),
-		verificationCodes: make(map[string]*verificationEntry),
+		jwt:   mgr,
+		user:  userClient,
+		store: store,
 	}
 	return func(c *gin.Context) {
 		switch c.Param("action") {
@@ -128,8 +115,8 @@ func (h *AuthHandler) login(c *gin.Context) {
 		return
 	}
 
-	// 锁定检查
-	if h.isLocked(req.Username) {
+	// 锁定检查（Round 4.3 后补：跨实例共享通过 store 接口）
+	if h.store.IsLocked(c.Request.Context(), req.Username) {
 		Fail(c, http.StatusLocked, 1, "too many failed attempts; try again later")
 		return
 	}
@@ -137,7 +124,7 @@ func (h *AuthHandler) login(c *gin.Context) {
 	info, err := h.user.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
 		// 记录失败次数（不区分错误类型，避免用户名枚举）
-		h.recordFailure(req.Username)
+		h.store.RecordFailure(c.Request.Context(), req.Username)
 		// user-svc 401 → BFF 也返 401；其他 → 502
 		statusCode := http.StatusBadGateway
 		if apiErr, ok := err.(*downstream.APIError); ok && apiErr.StatusCode == http.StatusUnauthorized {
@@ -153,7 +140,7 @@ func (h *AuthHandler) login(c *gin.Context) {
 	}
 
 	// 登录成功 → 清空失败计数
-	h.clearFailures(req.Username)
+	_ = h.store.ClearFailures(c.Request.Context(), req.Username)
 	data := h.buildLoginData(info.UserID, info.Account, info.Nickname)
 	h.setAccessTokenCookie(c, data.AccessToken, data.ExpiresIn)
 	OK(c, data)
@@ -252,17 +239,18 @@ func (h *AuthHandler) verificationCode(c *gin.Context) {
 	_ = json.NewDecoder(c.Request.Body).Decode(&req)
 
 	// 防枚举：不区分用户是否存在，都返 success
-	// 限流：同 username 60s 内只能发一次
-	if req.Username != "" && !h.canSendVerificationCode(req.Username) {
+	// 限流：同 username 60s 内只能发一次（Round 4.3 后补：通过 store 接口跨实例共享）
+	if req.Username != "" && !h.store.CanSendVerificationCode(c.Request.Context(), req.Username) {
 		// 限流命中 → 仍返 success（防枚举），但不真发
 		OK(c, gin.H{"success": true})
 		return
 	}
 
-	// 生成 6 位数字验证码，缓存 60s
+	// 生成 6 位数字验证码，缓存到 store（Round 4.3 后补）
 	var code string
 	if req.Username != "" {
-		code = h.storeVerificationCode(req.Username)
+		code = generateCode()
+		_ = h.store.SaveVerificationCode(c.Request.Context(), req.Username, code, verificationTTL)
 	}
 
 	// 真发验证码的通道留空（dev mock；prod 接 SMS/Email provider）。
@@ -306,95 +294,40 @@ func (h *AuthHandler) setAccessTokenCookie(c *gin.Context, token string, maxAge 
 }
 
 // =====================================================
-// 限流辅助函数
+// 限流辅助函数（Round 4.3 后补：委托给 store 接口）
 // =====================================================
-
-func (h *AuthHandler) isLocked(username string) bool {
-	h.loginMu.RLock()
-	defer h.loginMu.RUnlock()
-	attempt, ok := h.loginFailures[username]
-	if !ok {
-		return false
-	}
-	if time.Since(attempt.lockedAt) < loginLockWindow {
-		return true
-	}
-	// 锁定窗口已过 → 重置
-	return false
-}
-
-func (h *AuthHandler) recordFailure(username string) {
-	h.loginMu.Lock()
-	defer h.loginMu.Unlock()
-	attempt, ok := h.loginFailures[username]
-	if !ok {
-		attempt = &loginAttempt{}
-		h.loginFailures[username] = attempt
-	}
-	// 已锁定用户 → 不再累加计数（防锁定期内 failCount 叠加）
-	if !attempt.lockedAt.IsZero() && time.Since(attempt.lockedAt) < loginLockWindow {
-		return
-	}
-	attempt.failCount++
-	if attempt.failCount >= loginMaxFailures {
-		attempt.lockedAt = time.Now()
-		attempt.failCount = 0 // 重置计数，锁定期内不再叠加
-	}
-}
-
-func (h *AuthHandler) clearFailures(username string) {
-	h.loginMu.Lock()
-	defer h.loginMu.Unlock()
-	delete(h.loginFailures, username)
-}
-
-func (h *AuthHandler) canSendVerificationCode(username string) bool {
-	h.verificationMu.Lock()
-	defer h.verificationMu.Unlock()
-	entry, ok := h.verificationCodes[username]
-	if !ok {
-		return true
-	}
-	return time.Since(entry.lastSentAt) >= verificationMinGap
-}
-
-func (h *AuthHandler) storeVerificationCode(username string) string {
-	h.verificationMu.Lock()
-	defer h.verificationMu.Unlock()
-	code := generateCode()
-	h.verificationCodes[username] = &verificationEntry{
-		code:       code,
-		expiresAt:  time.Now().Add(verificationTTL),
-		lastSentAt: time.Now(),
-	}
-	return code
-}
-
-// isDevReturnCodeEnabled 由 BFF_DEV_RETURN_CODE 环境变量控制：仅 dev=true 时
-// 才在 verification-code 响应里回显 devCode。prod 永远返 false。
 //
-// Sprint 1 PR-4c-4（bug #3 修复）：commit msg 928bed2 "未做"小节承诺
-// "前端 console 显示验证码"——但前端代码从未实现，dev 模式 e2e 卡死。
-// 本开关允许 dev compose 启用、前端拿到验证码，让 e2e 跑通。
-func isDevReturnCodeEnabled() bool {
-	v := os.Getenv("BFF_DEV_RETURN_CODE")
-	return v == "1" || v == "true"
-}
+// 以下方法已迁移到 LoginLockStore 接口，由 store 字段持有实现：
+//   - isLocked → h.store.IsLocked(ctx, username)
+//   - recordFailure → h.store.RecordFailure(ctx, username)
+//   - clearFailures → h.store.ClearFailures(ctx, username)
+//   - canSendVerificationCode → h.store.CanSendVerificationCode(ctx, username)
+//   - storeVerificationCode → h.store.SaveVerificationCode(ctx, username, code, ttl)
+//   - verifyVerificationCode → h.store.GetVerificationCode(ctx, username)
+//
+// in-memory 与 redis 两种实现见 authlock 子包；调用方通过
+// main.go 装配时根据 LOGIN_LOCK_BACKEND=inmemory|redis env 选择。
 
+// verifyVerificationCode Round 4.3 后补：从 store 取验证码并匹配。
+// 行为与原方法一致：不存在/过期/不匹配都返 false。
 func (h *AuthHandler) verifyVerificationCode(username, code string) bool {
 	if code == "" {
 		return false
 	}
-	h.verificationMu.RLock()
-	defer h.verificationMu.RUnlock()
-	entry, ok := h.verificationCodes[username]
-	if !ok {
+	saved, _ := h.store.GetVerificationCode(h.contextForStore(), username)
+	if saved == "" {
 		return false
 	}
-	if time.Now().After(entry.expiresAt) {
-		return false
-	}
-	return entry.code == code
+	return saved == code
+}
+
+// contextForStore Round 4.3 后补：store 调用 ctx 占位（auth_handler 路径无独立 ctx）。
+//
+// 真实使用场景中应从 c.Request.Context() 传入；这里给 nil ctx
+// 表示"用 Background 立即执行"（适用于代码 verify 这种同步短操作）。
+// 若 store 要求 ctx，可改为 context.Background()。
+func (h *AuthHandler) contextForStore() (ctx context.Context) {
+	return context.Background()
 }
 
 // generateCode 生成 6 位数字验证码（dev mock；prod 应由 SMS/Email provider 返回）
@@ -512,4 +445,11 @@ func (h *AuthHandler) getSecurityQuestions(c *gin.Context) {
 		return
 	}
 	OK(c, gin.H{"questions": questions})
+}
+
+// isDevReturnCodeEnabled Sprint 1 PR-4c-4：dev 模式由 BFF_DEV_RETURN_CODE
+// 控制是否在响应里回显验证码。prod 永远不回显。
+func isDevReturnCodeEnabled() bool {
+	v := os.Getenv("BFF_DEV_RETURN_CODE")
+	return v == "1" || v == "true"
 }
