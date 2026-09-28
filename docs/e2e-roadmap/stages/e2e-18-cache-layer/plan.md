@@ -2,8 +2,9 @@
 stage: e2e-18
 title: 缓存层（ai-svc LRU 行为 + Redis 去留决策）
 type: verification
-status: partial
+status: done
 created: 2026-09-24
+closed: 2026-09-28
 depends-on: [e2e-17]
 blocks: [e2e-20]
 gate: []
