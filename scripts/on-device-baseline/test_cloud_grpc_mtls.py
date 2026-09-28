@@ -35,13 +35,17 @@ if str(HERE) not in sys.path:
 
 from model_fn_factory import make_model_fn  # noqa: E402
 from model_fns.cloud_grpc import (  # noqa: E402
+    DEFAULT_CA_CERT,
+    DEFAULT_CLIENT_CERT,
+    DEFAULT_CLIENT_KEY,
+    REPO_ROOT,
     TlsConfigError,
     _resolve_tls_config,
     build_channel,
 )
 
 # pb2 与 server 配套，需 emotion-llm-service/ 在 sys.path（与 cloud_grpc._import_pb 同款妥协）
-REPO_ROOT = HERE.parents[2]
+REPO_ROOT = HERE.parents[1]
 LLM_SVC_DIR = REPO_ROOT / "emotion-llm-service"
 if str(LLM_SVC_DIR) not in sys.path:
     sys.path.insert(0, str(LLM_SVC_DIR))
@@ -101,18 +105,20 @@ def certs(tmp_path_factory):
     _write_pem(out / "ca.crt", ca_cert, private=False)
     _write_pem(out / "ca.key", ca_key, private=True)
 
-    def leaf(cn: str, san_dns: list[str], filename: str):
+    def leaf(cn: str, san_dns: list[str], san_ip: list[str], filename: str):
+        from ipaddress import IPv4Address
+
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        san = [x509.DNSName(n) for n in san_dns] + [
+            x509.IPAddress(IPv4Address(ip)) for ip in san_ip
+        ]
         builder = (
             x509.CertificateBuilder()
             .subject_name(_make_name(cn)).issuer_name(ca_cert.subject)
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(now).not_valid_after(now + timedelta(days=1))
-            .add_extension(
-                x509.SubjectAlternativeName([x509.DNSName(n) for n in san_dns]),
-                critical=False,
-            )
+            .add_extension(x509.SubjectAlternativeName(san), critical=False)
             .add_extension(x509.ExtendedKeyUsage([
                 x509.oid.ExtendedKeyUsageOID.SERVER_AUTH,
                 x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH,
@@ -122,8 +128,10 @@ def certs(tmp_path_factory):
         _write_pem(out / f"{filename}.crt", cert, private=False)
         _write_pem(out / f"{filename}.key", key, private=True)
 
-    leaf("emotion-llm-service", ["localhost", "emotion-llm-service"], "server")
-    leaf("emotion-echo-baseline", ["localhost"], "client")
+    # SAN 口径对齐 scripts/generate_dev_tls.py：server 兼带 DNS + IP 127.0.0.1。
+    # 少签 IP 会让连 127.0.0.1:port 的客户端证书校验失败（实测踩过）。
+    leaf("emotion-llm-service", ["localhost", "emotion-llm-service"], ["127.0.0.1"], "server")
+    leaf("emotion-echo-baseline", ["localhost"], ["127.0.0.1"], "client")
 
     return SimpleNamespace(
         ca_crt=out / "ca.crt",
@@ -180,7 +188,7 @@ class _EchoServicer(pb2_grpc.EmotionLLMServiceServicer):
 def test_secure_channel_handshake_succeeds_against_mtls_server(certs, mtls_server):
     cfg = _resolve_tls_config(env=_tls_env(certs))
     assert cfg.enabled is True
-    channel = build_channel(mtls_server.target, cfg, timeout_s=5.0)
+    channel = build_channel(mtls_server.target, cfg)
     try:
         grpc.channel_ready_future(channel).result(timeout=5.0)
     finally:
@@ -210,12 +218,14 @@ def test_server_really_requires_client_cert(certs, mtls_server):
 
     若此用例不成立（无证书也能连），说明服务端配置没起到"要求 mTLS"的作用，
     上面的成功用例就不构成有效证据。
+
+    这里直接用 grpc 原生 API 构造"仅服务端认证"的通道，不走 _resolve_tls_config
+    —— 后者在缺客户端证书时会 fail-loud 抛错（那是配置层契约，与握手行为两回事）。
     """
-    cfg = _resolve_tls_config(env=_tls_env(
-        certs, TLS_CLIENT_CERT="", TLS_CLIENT_KEY="",
-    ))
-    assert cfg.enabled is True
-    channel = build_channel(mtls_server.target, cfg, timeout_s=3.0)
+    creds = grpc.ssl_channel_credentials(
+        root_certificates=certs.ca_crt.read_bytes(),
+    )
+    channel = grpc.secure_channel(mtls_server.target, creds)
     try:
         with pytest.raises(Exception):
             grpc.channel_ready_future(channel).result(timeout=3.0)
@@ -240,10 +250,12 @@ def test_insecure_channel_cannot_reach_mtls_server(mtls_server):
 # TLS 配置解析：显式开启 / 显式关闭 / 自动 / 缺件 fail-loud
 # ============================================================
 
-def test_tls_enabled_explicitly_requires_all_three_files(certs):
-    cfg = _resolve_tls_config(env=_tls_env(certs, TLS_CLIENT_KEY=""))
-    assert cfg.enabled is True
-    assert cfg.client_key is None
+def test_tls_env_paths_override_repo_defaults(certs):
+    """env 给了路径就用 env 的，不回落 deploy/tls（显式配置优先）。"""
+    cfg = _resolve_tls_config(env=_tls_env(certs))
+    assert cfg.ca_cert == certs.ca_crt
+    assert cfg.client_cert == certs.client_crt
+    assert cfg.client_key == certs.client_key
 
 
 def test_tls_enabled_with_missing_cert_raises_instead_of_downgrading(certs, tmp_path):
@@ -291,14 +303,25 @@ def test_tls_auto_raises_on_partial_cert_set(certs, tmp_path):
 
 
 def test_tls_paths_default_to_repo_deploy_tls(certs, monkeypatch):
-    """未设 env 时默认指向 deploy/tls/{ca,ai-client}——与 compose 挂载同名。"""
+    """未设 env 时的缺省路径 = deploy/tls/{ca,ai-client}——与 compose 挂载同名。
+
+    断言模块级缺省常量而非返回的 TlsConfig：仓库里 .crt 不入仓（gitignore:126），
+    fresh clone 上 deploy/tls 为空时自动模式会返回 enabled=False（三证书皆 None），
+    那是预期行为，不该让本用例随 clone 状态而飘。
+    """
     for k in ("TLS_ENABLED", "TLS_CA_CERT", "TLS_CLIENT_CERT", "TLS_CLIENT_KEY"):
         monkeypatch.delenv(k, raising=False)
-    cfg = _resolve_tls_config(env=None)
-    assert cfg.ca_cert is not None and cfg.ca_cert.name == "ca.crt"
-    assert cfg.client_cert is not None and cfg.client_cert.name == "ai-client.crt"
-    assert cfg.client_key is not None and cfg.client_key.name == "ai-client.key"
-    assert str(cfg.client_key).replace("\\", "/").endswith("deploy/tls/ai-client.key")
+    assert DEFAULT_CA_CERT.name == "ca.crt"
+    assert DEFAULT_CLIENT_CERT.name == "ai-client.crt"
+    assert DEFAULT_CLIENT_KEY.name == "ai-client.key"
+    for path in (DEFAULT_CA_CERT, DEFAULT_CLIENT_CERT, DEFAULT_CLIENT_KEY):
+        assert str(path).replace("\\", "/").startswith(str(REPO_ROOT).replace("\\", "/"))
+        assert str(path).replace("\\", "/").endswith("deploy/tls/" + path.name)
+
+    # 自动模式 + 证书齐全 → 走 mTLS；一个都没有 → 明文（不抛）
+    assert _resolve_tls_config(env=None).enabled == (
+        DEFAULT_CA_CERT.exists() and DEFAULT_CLIENT_CERT.exists() and DEFAULT_CLIENT_KEY.exists()
+    )
 
 
 def test_tls_true_aliases_are_accepted(certs):
