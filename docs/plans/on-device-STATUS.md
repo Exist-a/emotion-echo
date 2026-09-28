@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5+T2#6+T2#7+T2#8 收口（2026-09-28）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5+T2#6+T2#7+T2#8+T3 收口（2026-09-28）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -267,7 +267,7 @@
 
 ## 二、环境基线（协议 §五 要求记录）
 
-- `main` = `c289db5`（PR #105 squash 后，T2#7 STATUS 补账），与 origin/main 同步
+- `main` = `4817ac0`（PR #106 squash 后，T2#8 §十二拍板），与 origin/main 同步
 - **T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 + T2#7 + T2#8 全程零 dev mode**：devmode 锁 lane-e E2E-19 补 IAB 占用（until 2026-09-28 23:00），Lane O 不抢
 - 测试环境：vitest（emotion-echo-web，pnpm）+ pytest（宿主 Python）
   - vitest `app/utils/offline/` + `app/pages/demo/` → **59 passed**（T2#5 +17）
@@ -284,6 +284,37 @@
 | `web-test.yml` | paths=`emotion-echo-web/**` —— Lane O 文档/脚本 PR **不触发** |
 | `llm-test.yml` | paths=llm-service + **只跑 `tests/unit/`** —— `scripts/on-device-golden/` **不在 CI 覆盖内**（见 OND-F-01） |
 
+## 一.13、T3 已完成（2026-09-28 续接，**§四 #9 Demo IAB 验证降级** · main=待合并）
+
+**核心结论**：T3 借 dev mode 半天窗口实测完整跑通 **21 容器栈（17 healthy + 3 obs 未配 healthcheck）**，验证了部署链路完整 + emotion-llm-service mTLS 启用了，但**暴露两个预期外但关键的发现**：
+
+| 发现 | 详情 | 归属 |
+|------|------|------|
+| **1. web v0.1.7 image 时效** | 镜像 Created 2026-09-23 23:29 = 早于 Lane O 端侧 PR（PR #86 09-24+）5 天；容器内 `/app/app/utils/offline/` + `/app/app/pages/demo/local-llm.vue` 不存在 → Demo 页 IAB 验证降级 | Lane E 域（重建 web image）|
+| **2. baseline `cloud_grpc.py` 协议错配** | emotion-llm-service v0.1.2 默认启 mTLS（`TLS_ENABLED=1` + `TLS_REQUIRE_CLIENT_AUTH=1`）；baseline 用 `grpc.insecure_channel` → 握手失败 → 全部 13 用例 fallback `mock_fallback` → **T2#4 baseline 从未真跑通过真 LLM** | Lane O 域（baseline 修复）|
+
+**实测数据**（T3 §七 §四.3）：
+- baseline 容器内实测 N=13：pass=0% / length=0% / guardrail=84.62% — **与 T2#4 N=7 一致**（mock fallback 路径）
+- 13 用例 fallback_reason 全是 `grpc_unreachable:FutureTimeoutError:mock_fallback`
+- LLM_API_KEY 已设（`sk-894c...`，真 DeepSeek key），但因 mTLS 握手失败未走到真 LLM
+
+**T3 真机基线（N=13 真 LLM）验证未完成**——baseline mTLS bug 阻塞；留作下一轮 Lane O T3+ 任务。
+
+**协议合规**：
+- ✅ docs-only + 命令行实测改动（新增 IAB 报告 + STATUS 补账 + 账本新登 OND-F-09）
+- ✅ 未触碰 useAIStreamHandler.ts / package.json / nuxt.config.ts / docs/e2e-roadmap/** / deploy/ / .github/workflows
+- ✅ §十二 5 项决策权属用户，**未决策加码**
+
+**门禁**：
+- e2e_stage_audit.py --all → **30 阶段 0 FAIL**（Lane E 审计未被打破）
+- pytest 51 passed（无回归：13 golden + 14 baseline + 24 perf）
+- dev mode 启动合规（§三.资源1 铁律：`.env.local` 存在 + `--env-file .env.local --profile dev` + 镜像时间戳核对 + 状态基线）
+
+**Lane E 须知**：
+- emotion-llm-service v0.1.2 mTLS 默认开启 → **任何 gRPC 客户端**必须用 `secure_channel` + 客户端证书（`deploy/tls/client.{crt,key}` + `ca.crt`）
+- web v0.1.7 image 不含 Lane O 端代码 → 后续重建 web image 时**建议加入 Lane O PR #86+#92+#104+#106 端侧代码**
+- 详细调研依据见 `docs/plans/on-device-t3-iab-report-2026-09-28.md`
+
 ## 四、未做 ❌（按协议 §四 时间线归属）
 
 1. ~~**T1**：MindChat 双轨验证~~ ✅ T1 完成（PR #84 `a651ecf`）
@@ -295,7 +326,7 @@
 6. **T2**：性能基线**真机测量**（TTFT / tokens/sec / vram / model_load_ms 注入 PerfMeasurement —— 需 WebGPU + WebLLM 引擎真机，IAB 或 Playwright 实测）
 7. ~~**T2**：WebLLM 最小 Demo 契约测试骨架~~ ✅ T2#1 完成（PR #86 `f2083fb` + `582269f`；Demo 占位页 + 4 接口 + 42/42 vitest PASS）
 8. ~~**T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）~~ ✅ T2#5 完成（PR #92 `7aaac7d6`；架构就绪 + 17 用例契约测试 + package.json 握手；T3 IAB 才接真引擎流式）
-9. ~~**T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）~~ ✅ T2#6 完成 decision-pack（PR #95 `7aa8eed`）；Demo IAB 验证仍待 dev mode 窗口（§四 #9 拆分为 T2#6 已完成 decision-pack + T3 待 IAB 验证）
+9. ~~**T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）~~ ✅ T2#6 完成 decision-pack（PR #95 `7aa8eed`）+ T3 部分完成 IAB 验证降级（§一.13）；真机基线留 Lane O 下一轮修 baseline mTLS bug + Lane E 重建 web image |
 10. ~~**D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）~~ ✅ T2#8 完成（PR 待合并；§十二 5 项全部用户拍板 + D-26 + 5 分项 ADR 全部 accepted + decisions.md 双索引登记 + v0.2 §十二 + v0.3 §B.1 同步）
 11. **OND-F-01**（已登记）：golden set pytest 未接 CI
 12. **OND-F-02**（已登记）：perf baseline 24 用例**同样未接 CI**（同一根因：`llm-test.yml` paths 不含 `scripts/`）

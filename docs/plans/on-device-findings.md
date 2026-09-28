@@ -3,7 +3,7 @@ purpose: 端侧化 stage1（Lane O）期间发现的问题账本（OND-F-xx 续�
 date: 2026-09-24
 status: active
 scope: docs/_meta/parallel-tracks.md §三.资源3 —— 仅 Lane O 会话写入
-last-refresh: 2026-09-28（T2#8 收口 §十二全部拍板 + OND-F-07/08 fixed）
+last-refresh: 2026-09-28（T3 收口 OND-F-06 重开 + OND-F-09 新登 mTLS bug）
 ---
 
 # 端侧化发现账本（OND-F）
@@ -36,3 +36,4 @@ last-refresh: 2026-09-28（T2#8 收口 §十二全部拍板 + OND-F-07/08 fixed�
 | OND-F-06 | 2026-09-27 | 阶段二（T2#5 收口） | `createDynamicEngine()` 仅验证 dynamic import 链路通（架构就绪），**未**真创建 MLCEngine（避免 ~1GB 权重下载）。**T3 IAB 验证时**需借 dev mode 半天窗口 + 真实 GPU：① 调用 `engine.chat.completions.create({ stream: true })` 接真引擎流式；② `pnpm build` 后 grep dist/ 验证 dynamic chunk 实际大小；③ §十二决策 1 拍板后选 worker 入口 / vite external / CDN 任一隔离策略 | open（T3 任务；不在 T2#5 决议权） | `webllmEngine.dynamicImport.test.ts` 17 用例架构契约 PASS；chat() 抛 `Real chat() not wired in T2·Lane O. T3 will wire ...` |
 | OND-F-07 | 2026-09-27 | 阶段二（T2#6 收口） | §十二 5 项决策材料已交付（PR #95 7aa8eed），**但用户拍板权属用户，Lane O 不擅自决议**。**未拍板前阶段二（v0.3 §C.3 混合架构开发）不可开工**（v0.3 §A.3 + §B.1 强约束）。T3 期间：① 借 dev mode 半天窗口做 IAB 验证；② 决策拍板后 Lane O 立 D-26.1/3/4/5 ADR + D-26 accepted 状态流转；③ §十二任一项未拍板前不进阶段二 | **fixed（PR #XXX）** —— T2#8 用户 2026-09-28 通过 AskUserQuestion 工具拍板全部 5 项决策 + Lane O 立 D-26.1/3/4/5 + D-26 accepted 状态流转（v0.3 §B.1 决议流程） | 决策材料 `docs/plans/on-device-decision-pack.md` + 4 新 ADR `docs/architecture/adr/adr-2026-09-on-device-{privacy-position,source-disclosure,offline-scope,memory-storage}.md` |
 | OND-F-08 | 2026-09-28 | 阶段二（T2#8 收口） | §十二决策 1 = (a) **两阶段拍板**：当前 (a) 推理本地 + 消息上传；未来 (b) 真·数据不离设备 **等排期**（工作量 6~8 周 + L2 双轨架构）。**T2#8 拍板时一并立 ADR `adr-2026-09-on-device-privacy-position.md` 含两阶段路径**，未来切 (b) 时开新 ADR 替换（不自动切换） | open（未来排期版本 = (b)；不在 Lane O 决议权，等用户再启拍板） | `adr-2026-09-on-device-privacy-position.md` §一.1 两阶段切换路径表 |
+| OND-F-09 | 2026-09-28 | 阶段二（T3 收口） | **T3 IAB 验证发现 2 项预期外问题**：① **`scripts/on-device-baseline/model_fns/cloud_grpc.py` 协议错配**（用 `grpc.insecure_channel` 但 emotion-llm-service v0.1.2 启 mTLS `TLS_ENABLED=1`）→ T2#4 baseline 从未真跑通过真 LLM（mock_fallback 100%）；② **web v0.1.7 image 时效**（2026-09-23 早于 Lane O 端侧 PR 5 天；容器内不含 `pages/demo/local-llm.vue` + `utils/offline/*`）。**修法候选**：① Lane O 改 baseline `cloud_grpc.py` 用 `grpc.ssl_channel_credentials` + 加载 `deploy/tls/{ca.crt,client.crt,client.key}` + 加 pytest 烟测（**Lane O 决议权**）；② Lane E 重建 web image 含 Lane O PR #86+#92+#104+#106 端代码（**Lane E 域**，Lane O 触发 PR） | open（T3+ Lane O 下一轮任务） | `docs/plans/on-device-t3-iab-report-2026-09-28.md` §三 §四 §六 §七 §八 + 容器内 gRPC FutureTimeoutError 实测 |
