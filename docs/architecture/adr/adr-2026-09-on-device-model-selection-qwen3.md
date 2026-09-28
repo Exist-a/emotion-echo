@@ -1,27 +1,28 @@
 ---
-status: proposed
+status: accepted
 priority: high
 created: 2026-09-24
+accepted: 2026-09-28
+decided-by: user（2026-09-24 口头授权"选 B 吧" + 2026-09-28 正式拍板）
 related-plans:
   - ../../plans/on-device-hybrid-inference-2026-09-23.md（v0.2 §2.2 端侧模型选型）
   - ../../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md（v0.3 §B.1 决策 2 + §C.1 阶段一任务 1）
   - ../../plans/on-device-model-selection-decision-material-2026-09-24.md（决策材料全文）
   - ../../plans/on-device-mindchat-survey-2026-09-24.md（姊妹：MindChat 模型侧调研）
 related-decisions:
-  - D-26 端侧化主方案 ADR（proposed，决策 33）
+  - D-26 端侧化主方案 ADR（accepted，决策 33）
   - D-26.2 端侧主力模型（本 ADR）
 ---
 
 # ADR-2026-09 端侧主力模型选型 = WebLLM 预置 Qwen3（Apache 2.0）
 
-> **状态**：🟡 **proposed**（2026-09-24 立项；用户 2026-09-24 会话口头授权"选 B 吧"；待正式拍板后转 `accepted`）
+> **状态**：🟢 **accepted**（2026-09-28 §十二全部用户拍板；用户 2026-09-24 口头授权"选 B 吧"，2026-09-28 正式拍板转 accepted）
 >
 > **取代关系**：无（本项目首个端侧模型选型决策；v0.3 §B.1 决策 2 落地）
 >
-> **关联**：D-26 主方案 ADR（v0.3 §B.2 模板）；D-26.2 = 本 ADR
-> **拍板权属用户**（AGENTS §八规则 4）；本 ADR 标 proposed 等用户二次确认
+> **关联**：D-26 主方案 ADR（v0.3 §B.2 模板，已 accepted）；D-26.2 = 本 ADR
 >
-> **重要约束**：本 ADR 一旦转 accepted，必须整 D-26（主方案）+ 5 个分项（决策 1/2/3/4/5）全部由用户拍板后，才同步转 accepted（v0.3 §B.1 决议流程）
+> **拍板记录**：用户 2026-09-24 在 Lane O 会话中口头授权"选 B 吧"（即 Qwen3）；用户 2026-09-28 在 Lane O 会话中通过 AskUserQuestion 工具正式拍板"accepted = Qwen3-1.7B-q4f16_1-MLC"，本 ADR 转 accepted
 
 ---
 

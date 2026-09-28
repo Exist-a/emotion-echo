@@ -3,7 +3,7 @@ purpose: 端侧化 stage1（Lane O）期间发现的问题账本（OND-F-xx 续�
 date: 2026-09-24
 status: active
 scope: docs/_meta/parallel-tracks.md §三.资源3 —— 仅 Lane O 会话写入
-last-refresh: 2026-09-27（T2#6 收口新增 OND-F-07）
+last-refresh: 2026-09-28（T2#8 收口 §十二全部拍板 + OND-F-07/08 fixed）
 ---
 
 # 端侧化发现账本（OND-F）
@@ -34,4 +34,5 @@ last-refresh: 2026-09-27（T2#6 收口新增 OND-F-07）
 | OND-F-04 | 2026-09-27 | 阶段一（T2#4 收口） | T2#4 云端基线跑分 = `scripts/on-device-baseline/` 14 条 pytest **与 OND-F-01/02 同型 CI 缺口**：`llm-test.yml` paths 不含 `scripts/on-device-baseline/`；T2#4 baseline 回归当前唯一执行点 = 本地手工 pytest。**三缺口合并修**：llm-test.yml paths 加 `scripts/on-device-*/`（**涵盖 baseline + perf + golden**）后三条均解决——但 `.github/workflows` 属共享列，须协议 §六握手 | open（三合一修法候选 + OND-F-01/02 合并候选；不擅动） | pytest 14/14 本地 PASS；4 workflow paths/grep 实测（STATUS.md §三 CI 覆盖现状表） |
 | OND-F-05 | 2026-09-27 | 阶段一（T2#4 收口） | baseline 实跑 N=7 与 D-26.2 ADR §五 "13 用例"目标有 6 用例差距。**扩 case 不在 Lane O T2#4 决议权**（golden set 编排属另一份 TDD + 决策权属用户 §十二 决策 2 拍板后），T3+ 真机基线复核时同步扩 case | **fixed（PR #104 `f09bc06`）** —— T2#7 扩 6 用例 daily +1 / high_risk +1 / personality +2 / emotion +2，N=7 → N=13；用例不绑定 §十二决策方向（用户拍 §十二后真机基线直接可用） | ADR D-26.2 §五"13 用例"目标 = N=13（达成）；`docs/plans/on-device-golden-n13-report-2026-09-28.md` §四 实测 N=13 baseline |
 | OND-F-06 | 2026-09-27 | 阶段二（T2#5 收口） | `createDynamicEngine()` 仅验证 dynamic import 链路通（架构就绪），**未**真创建 MLCEngine（避免 ~1GB 权重下载）。**T3 IAB 验证时**需借 dev mode 半天窗口 + 真实 GPU：① 调用 `engine.chat.completions.create({ stream: true })` 接真引擎流式；② `pnpm build` 后 grep dist/ 验证 dynamic chunk 实际大小；③ §十二决策 1 拍板后选 worker 入口 / vite external / CDN 任一隔离策略 | open（T3 任务；不在 T2#5 决议权） | `webllmEngine.dynamicImport.test.ts` 17 用例架构契约 PASS；chat() 抛 `Real chat() not wired in T2·Lane O. T3 will wire ...` |
-| OND-F-07 | 2026-09-27 | 阶段二（T2#6 收口） | §十二 5 项决策材料已交付（PR #95 7aa8eed），**但用户拍板权属用户，Lane O 不擅自决议**。**未拍板前阶段二（v0.3 §C.3 混合架构开发）不可开工**（v0.3 §A.3 + §B.1 强约束）。T3 期间：① 借 dev mode 半天窗口做 IAB 验证；② 决策拍板后 Lane O 立 D-26.1/3/4/5 ADR + D-26 accepted 状态流转；③ §十二任一项未拍板前不进阶段二 | open（拍板权属用户；不在 Lane O 决议权） | `docs/plans/on-device-decision-pack.md` §六 拍板请求 + §七 给下次 Lane O 开场动作 |
+| OND-F-07 | 2026-09-27 | 阶段二（T2#6 收口） | §十二 5 项决策材料已交付（PR #95 7aa8eed），**但用户拍板权属用户，Lane O 不擅自决议**。**未拍板前阶段二（v0.3 §C.3 混合架构开发）不可开工**（v0.3 §A.3 + §B.1 强约束）。T3 期间：① 借 dev mode 半天窗口做 IAB 验证；② 决策拍板后 Lane O 立 D-26.1/3/4/5 ADR + D-26 accepted 状态流转；③ §十二任一项未拍板前不进阶段二 | **fixed（PR #XXX）** —— T2#8 用户 2026-09-28 通过 AskUserQuestion 工具拍板全部 5 项决策 + Lane O 立 D-26.1/3/4/5 + D-26 accepted 状态流转（v0.3 §B.1 决议流程） | 决策材料 `docs/plans/on-device-decision-pack.md` + 4 新 ADR `docs/architecture/adr/adr-2026-09-on-device-{privacy-position,source-disclosure,offline-scope,memory-storage}.md` |
+| OND-F-08 | 2026-09-28 | 阶段二（T2#8 收口） | §十二决策 1 = (a) **两阶段拍板**：当前 (a) 推理本地 + 消息上传；未来 (b) 真·数据不离设备 **等排期**（工作量 6~8 周 + L2 双轨架构）。**T2#8 拍板时一并立 ADR `adr-2026-09-on-device-privacy-position.md` 含两阶段路径**，未来切 (b) 时开新 ADR 替换（不自动切换） | open（未来排期版本 = (b)；不在 Lane O 决议权，等用户再启拍板） | `adr-2026-09-on-device-privacy-position.md` §一.1 两阶段切换路径表 |
