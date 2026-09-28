@@ -22,7 +22,9 @@ package grpcinterceptor
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"log/slog"
 	"runtime/debug"
 	"time"
 
@@ -56,14 +58,17 @@ func ServerLoggingInterceptor() grpc.UnaryServerInterceptor {
 			code = st.Code().String()
 		}
 
-		log.Printf(
+		// E2E-21 / E2E-F-13：改用带 ctx 的 slog 调用，否则下游服务的这条日志
+		// 永远没有 trace_id（enrichHandler 从 ctx 取值，log.Printf 不带 ctx），
+		// 链路就断在最后一跳。字面量保持不变（有测试与运维脚本依赖）。
+		slog.InfoContext(ctx, fmt.Sprintf(
 			"[grpc-server] method=%s peer=%s latency=%dms code=%s err=%v",
 			info.FullMethod,
 			peer,
 			latency.Milliseconds(),
 			code,
 			err,
-		)
+		))
 		return resp, err
 	}
 }

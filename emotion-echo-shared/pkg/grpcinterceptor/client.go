@@ -4,17 +4,27 @@ package grpcinterceptor
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 )
 
 // ClientLoggingInterceptor 记录每次 client RPC 调用
 //
-// 输出格式：
+// 输出格式（字面量不可改：client_test.go:170 与 deploy/apisix/test_jwt_auth_runtime.sh
+// 都依赖 "[grpc-client] method=" 这个前缀）：
 //
 //	[grpc-client] method=/emotion_llm.v1.EmotionLLMService/Analyze target=localhost:50051 latency=42ms err=<nil>
+//
+// E2E-21 / E2E-F-13：改用带 ctx 的 slog 调用。
+// 原因：logging.enrichHandler 是**从 ctx** 取 trace_id 再注入日志字段的
+// （logging.go:126-139），原先用 log.Printf（无 ctx）⇒ 即便上游把 trace_id
+// 塞进了 ctx，这行日志的 trace_id 也恒为空。实测表现为"header 已注入、日志里没有"。
 func ClientLoggingInterceptor() grpc.UnaryClientInterceptor {
 	return func(
 		ctx context.Context,
@@ -28,14 +38,55 @@ func ClientLoggingInterceptor() grpc.UnaryClientInterceptor {
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		latency := time.Since(start)
 
-		log.Printf(
+		target := ""
+		if cc != nil { // 测试会传 nil，直接取会 panic
+			target = cc.Target()
+		}
+		slog.InfoContext(ctx, fmt.Sprintf(
 			"[grpc-client] method=%s target=%s latency=%dms err=%v",
 			method,
-			cc.Target(),
+			target,
 			latency.Milliseconds(),
 			err,
-		)
+		))
 		return err
+	}
+}
+
+// ClientTraceIDInterceptor 把 ctx 里的 trace id 写进 outgoing metadata。
+//
+// E2E-21 / E2E-F-13：这是 gRPC 侧 trace 链路的**唯一生产点**。
+// HTTP 侧由 APISIX 注入 X-Trace-Id 并被 gin 中间件塞进 ctx；跨进程到下游 svc 时，
+// gRPC 不传 HTTP header ⇒ 必须借 metadata 透传，否则 BFF 有 trace_id、下游恒空。
+//
+// 与 x-user-id 透传同构（见 userid.go / NewClientTracingInterceptor 的 outgoing md 处理）。
+// 两条硬约束：
+//   - ctx 里没有 trace id 时**不注入**（不得伪造 —— 伪造出来的 ID 查不到任何链路，
+//     比恒空更危险：运维会以为链路 ID 丢了而放弃排查）
+//   - 只追加不覆盖（sw8 / x-user-id 必须原样保留）
+func ClientTraceIDInterceptor() grpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply interface{},
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
+		tid := logging.TraceIDFromCtx(ctx)
+		if tid == "" {
+			return invoker(ctx, method, req, reply, cc, opts...)
+		}
+		// FromOutgoingContext 在无 outgoing md 时返 nil，直接 Set 会 panic
+		md, ok := metadata.FromOutgoingContext(ctx)
+		if !ok {
+			md = metadata.MD{}
+		} else {
+			md = md.Copy() // 不改调用方持有的 map
+		}
+		md.Set("x-trace-id", tid)
+		ctx = metadata.NewOutgoingContext(ctx, md)
+		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 }
 
@@ -67,6 +118,7 @@ func ClientTimeoutInterceptor(defaultTimeout time.Duration) grpc.UnaryClientInte
 //   1) tracing    —— tracer 非 nil 时挂 CreateExitSpan + sw8 metadata 透传
 //   2) timeout    —— defaultTimeout > 0 时挂"无 deadline 自动加 timeout"
 //   3) logging    —— 始终挂,记录每次 RPC latency/err
+//   4) traceid    —— 始终挂（E2E-21），把 ctx 里的 trace id 透传给下游
 //
 // 返回 []grpc.DialOption 供 grpc.NewClient(addr, opts...) 链入。
 //
@@ -91,7 +143,14 @@ func ClientDialOptions(tracer Tracer, defaultTimeout time.Duration) []grpc.DialO
 		interceptors = append(interceptors, ClientTimeoutInterceptor(defaultTimeout))
 	}
 
-	// 3) logging (always)
+	// 3) traceid (always, E2E-21)
+	//
+	// 必须排在 logging **之前**：grpc 的 interceptor 链是外层先入，
+	// logging 紧贴 invoker 最先执行调用；traceid 只需在 invoker 前改好 ctx，
+	// 因此放在 logging 之前（更外层）不影响 logging 自身读到 ctx。
+	interceptors = append(interceptors, ClientTraceIDInterceptor())
+
+	// 4) logging (always)
 	interceptors = append(interceptors, ClientLoggingInterceptor())
 
 	if len(interceptors) == 0 {

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import sys
 import urllib.error
 import urllib.parse
@@ -25,6 +26,8 @@ import urllib.request
 PROMETHEUS = "http://localhost:9090"
 GRAFANA = "http://localhost:13000"  # Stage 74: 宿主 13000（让位 web 前端 :3000）
 LOKI = "http://localhost:3100"
+# Loki 查询新鲜度窗口（秒）：只认这个窗口内的日志，否则存量数据会掩盖采集中断
+FRESH_WINDOW = 300
 KAFKA_EXPORTER = "http://localhost:9308"
 ALERTMANAGER = "http://localhost:9093"  # Stage 86: alertmanager Web UI
 
@@ -416,42 +419,157 @@ def main() -> int:
     else:
         check("loki /ready returns 200", True, body.strip()[:50])
 
-    # 断言 5: loki query 返非空 (查询 apisix access.log)
-    # PR-OBS-1 已落 file-logger → /tmp/apisix-access.log → promtail → loki
-    # 但实际触发需访问 APISIX → 有 access log 才查得到;首次跑可能返空
-    # 因此本断言查 5 分钟内是否有任何 log(apisix 或 container stdout)
-    query_url = (
-        f"{LOKI}/loki/api/v1/query?query="
-        + urllib.parse.quote('{job="apisix"}')
-    )
-    status, body = http_get(query_url, timeout=10.0)
-    if status == 0:
-        check("loki query reachable", False, body)
-    elif status != 200:
-        check("loki query returns 200", False, f"HTTP {status}: {body[:100]}")
-    else:
+    # 断言 5: loki query 返非空 —— **必须非空，不再对空结果放行**
+    #
+    # E2E-21 修订：原先这里是 "result 为空也判 PASS"（SKIP 文案），
+    # 等于**一个完全没有日志的 Loki 也能全绿**——恰恰是 E2E-F-07
+    # （promtail 的 services job 指向谁也不写的 /var/log/services/*.log，
+    # 一条业务日志都采不到）长期没被发现的原因。
+    # 现在空结果一律 FAIL。
+    # 先自造流量，再断言。
+    #
+    # 为什么必须造：Loki 的 instant query 默认只看最近 1 小时，promtail→Loki 还有
+    # ~10s 推送延迟。2026-09-28 实测踩过：一段时间没跑带 file-logger 的请求，
+    # {job="apisix"} 恒 0 —— 断言失败但日志链路本身是好的。
+    # 这类"断言依赖时序"的假红必须从脚本里消除，而不是靠人记得先点一下页面。
+    #
+    # 走哪条路由很关键：health 路由（200-205）**刻意不挂 file-logger**
+    # （健康检查高频，落 access log 会把有用日志冲掉，见 seed.sh HEALTH_PLUGINS），
+    # 所以必须打 route 100（/api/v1/*）和 route 110（登录白名单）才造得出日志。
+    def _seed_loki_traffic() -> None:
+        import urllib.request as _r
+
+        def _hit(method: str, url: str, body: bytes | None = None) -> None:
+            try:
+                req = _r.Request(url, data=body, method=method)
+                if body is not None:
+                    req.add_header("Content-Type", "application/json")
+                _r.urlopen(req, timeout=5).read()
+            except Exception:
+                pass  # 4xx/5xx 同样会产出 access log，这里只关心"请求打到了网关"
+
+        gateway = os.environ.get("APISIX_GATEWAY", "http://localhost:19080")
+        _hit("GET", f"{gateway}/api/v1/users/me")                       # route 100
+        _hit("POST", f"{gateway}/api/v1/auth/login", b'{"username":"__smoke__","password":"__smoke__"}')  # route 110
+        time.sleep(12)  # 等 promtail 读文件 + 推送到 loki
+
+    _seed_loki_traffic()
+
+    def _loki_count(label, query, expect_min=1, fresh_seconds=None):
+        """查 Loki 并断言结果非空；返回 (stream 数, log 行数)。
+
+        fresh_seconds: 只看最近 N 秒的数据。**必须传**，否则是弱断言 ——
+        Loki instant query 默认回看 1 小时，采集早就断了也照样能查到存量日志。
+        实测（2026-09-28）：把 promtail 的采集过滤器改坏（采不到任何容器），
+        用默认 1 小时窗口查 {job="services"} 仍然全绿；加上新鲜度窗口后立刻变红。
+        """
+        url = f"{LOKI}/loki/api/v1/query?query=" + urllib.parse.quote(query)
+        if fresh_seconds is not None:
+            import datetime as _dt
+            since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(seconds=fresh_seconds)
+            url += "&start=" + str(int(since.timestamp() * 1e9))
+        st, bd = http_get(url, timeout=10.0)
+        if st == 0:
+            check(f"loki query reachable [{label}]", False, bd)
+            return 0, 0
+        if st != 200:
+            check(f"loki query returns 200 [{label}]", False, f"HTTP {st}: {bd[:100]}")
+            return 0, 0
         try:
-            data = json.loads(body)
-            results_arr = data.get("data", {}).get("result", [])
-            if not isinstance(results_arr, list):
-                check("loki query JSON valid", False, f"unexpected result type: {type(results_arr)}")
-            elif len(results_arr) == 0:
-                # 首次跑可能无 log(无 APISIX 触发),但 query 本身要工作
-                # 用 SKIP 标记,实际 log 出现时断言会自动变 PASS
-                check(
-                    "loki query for {job=\"apisix\"} returns results",
-                    True,
-                    "SKIP: query 端点 OK 但无数据 (需访问 APISIX 触发 access.log)",
-                )
-            else:
-                streams = sum(len(r.get("values", [])) for r in results_arr)
-                check(
-                    "loki query for {job=\"apisix\"} returns results",
-                    True,
-                    f"streams={len(results_arr)}, log_lines={streams}",
-                )
+            data = json.loads(bd)
+            loki_results = data.get("data", {}).get("result", [])
         except (json.JSONDecodeError, KeyError, TypeError) as e:
-            check("loki query JSON parseable", False, f"{type(e).__name__}: {e}")
+            check(f"loki query JSON parseable [{label}]", False, f"{type(e).__name__}: {e}")
+            return 0, 0
+        if not isinstance(loki_results, list):
+            check(f"loki query JSON valid [{label}]", False, f"unexpected type: {type(loki_results)}")
+            return 0, 0
+        lines = sum(len(r.get("values", [])) for r in loki_results)
+        check(
+            f"loki query [{label}] returns results (非空，空即 FAIL)",
+            len(loki_results) >= expect_min and lines >= expect_min,
+            f"streams={len(loki_results)}, log_lines={lines}, query={query}",
+        )
+        return len(loki_results), lines
+
+    _loki_count("job=apisix", '{job="apisix"}', fresh_seconds=FRESH_WINDOW)
+
+    # 断言 5b: 业务服务日志真的进了 Loki（E2E-F-07 的核心断言）
+    # promtail 走 docker_sd_configs 采容器 stdout，svc label 由容器名推导。
+    # 期望至少 1 个业务 svc 有日志 —— 注意不是 6 个：并非所有服务都在 smoke
+    # 运行窗口内产生日志（未起/无流量）。要确认"每个服务都通"见 E2E-21 报告。
+    svc_streams, svc_lines = _loki_count("job=services", '{job="services"}', fresh_seconds=FRESH_WINDOW)
+
+    # 断言 5c: 采到的是结构化 JSON 且带 svc 字段（不是纯文本行）
+    if svc_streams > 0:
+        import datetime as _dt
+        _since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(seconds=FRESH_WINDOW)
+        url = (f"{LOKI}/loki/api/v1/query?query=" + urllib.parse.quote('{job="services"}')
+               + "&start=" + str(int(_since.timestamp() * 1e9)))
+        st, bd = http_get(url, timeout=10.0)
+        svc_field_ok = False
+        sample = ""
+        try:
+            loki_results = json.loads(bd).get("data", {}).get("result", [])
+            for r in loki_results:
+                for _ts, line in r.get("values", [])[:20]:
+                    try:
+                        obj = json.loads(line)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    if obj.get("svc") and obj.get("level"):
+                        svc_field_ok = True
+                        sample = line[:160]
+                        break
+                if svc_field_ok:
+                    break
+        except (json.JSONDecodeError, KeyError, TypeError):
+            pass
+        check(
+            "loki 业务日志是结构化 JSON（含 svc/level 字段）",
+            svc_field_ok,
+            sample or "未找到可解析的 JSON 日志行（纯文本即 FAIL）",
+        )
+    else:
+        check(
+            "loki 业务日志是结构化 JSON（含 svc/level 字段）",
+            False,
+            "无业务日志可解析（断言 5b 已 FAIL，此处连带 FAIL）",
+        )
+
+    # 断言 5d: 采集没有把无关容器 / Loki 自身日志卷进来（回环 + 噪声）
+    #
+    # ⚠️ 不要用 /label/container/values 判这条：Loki 的 label 索引**有长记忆**
+    # （实测把 filters 去掉污染了索引后，即便立刻恢复配置，
+    #   该端点仍持续返回 postgres/kafka/loki/promtail → 假红）。
+    # 正确口径是查"新鲜窗口内实际入库的 stream 的 container 标签"。
+    import datetime as _dt5
+    _since5 = _dt5.datetime.now(_dt5.timezone.utc) - _dt5.timedelta(seconds=FRESH_WINDOW)
+    url = (f"{LOKI}/loki/api/v1/query?query=" + urllib.parse.quote('{job="services"}')
+           + "&start=" + str(int(_since5.timestamp() * 1e9)))
+    st, bd = http_get(url, timeout=10.0)
+    if st == 200:
+        try:
+            vals = sorted({
+                r.get("stream", {}).get("container")
+                for r in json.loads(bd).get("data", {}).get("result", [])
+                if r.get("stream", {}).get("container")
+            })
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            vals = []
+        noisy = [
+            v for v in vals
+            if v in ("emotion-echo-loki", "emotion-echo-promtail",
+                     "emotion-echo-postgres", "emotion-echo-kafka", "emotion-echo-redis")
+        ]
+        check(
+            "promtail 未采到 loki/promtail/中间件容器（日志回环 + 噪声）",
+            not noisy,
+            f"新鲜窗口内出现无关容器: {noisy}" if noisy
+            else f"新鲜窗口 container 标签集: {vals}",
+        )
+    else:
+        check("loki label/container/values reachable", False, f"HTTP {st}")
 
     # 断言 6: APISIX access.log 落盘文件非空 (volume mount 生效)
     # 路径: /tmp/apisix-access.log 在 APISIX 容器内,

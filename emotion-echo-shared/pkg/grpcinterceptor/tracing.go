@@ -17,7 +17,28 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 )
+
+// ctxWithTraceIDFromMetadata 从 incoming metadata 的 x-trace-id 取出 trace id
+// 并塞进 ctx，使下游 handler 里的 slog.*Context 调用自动带 trace_id 字段。
+//
+// E2E-21 / E2E-F-13：生产方是 ClientTraceIDInterceptor（shared 侧），
+// 源头是 APISIX 注入的 X-Trace-Id（HTTP 入口）。
+//
+// 无 x-trace-id 时原样返回 ctx（不写入空串）：写入空串会让日志里出现
+// "trace_id":"" 这种看着有字段、实则不可查的噪音。
+func ctxWithTraceIDFromMetadata(ctx context.Context) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ctx
+	}
+	if v := md.Get("x-trace-id"); len(v) > 0 && v[0] != "" {
+		return logging.WithTraceID(ctx, v[0])
+	}
+	return ctx
+}
 
 // OAP SpanLayer enum 值(对应 skywalking.apache.org/repo/.../SpanLayer)。
 // 与 grpcinterceptor 共享避免重复声明 — 测试可断言精确值。
@@ -124,18 +145,21 @@ type Tracer interface {
 //   - Tag(rpc.method, info.FullMethod): OpenTelemetry 风格 RPC 方法(如 /svc/Method)
 //   - Tag(user_id, <metadata x-user-id>): 用户维度(APISIX jwt-auth 注入)
 func NewServerTracingInterceptor(tracer Tracer) grpc.UnaryServerInterceptor {
-	if tracer == nil {
-		return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-			return handler(ctx, req)
-		}
-	}
-
 	return func(
 		ctx context.Context,
 		req interface{},
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (resp interface{}, err error) {
+		// E2E-21 / E2E-F-13：先取 trace_id，**放在 tracer==nil 判断之前**。
+		// SkyWalking 未启用（tracer=nil）时同样需要 trace_id 进日志，
+		// 否则会形成"APM 没开 ⇒ 日志也没 trace_id"的隐蔽耦合。
+		ctx = ctxWithTraceIDFromMetadata(ctx)
+
+		if tracer == nil {
+			return handler(ctx, req)
+		}
+
 		ctx, span := tracer.StartEntry(ctx, info.FullMethod)
 
 		// PR-OBS-19: 设置 OAP layer/component + 3 个 RPC tag

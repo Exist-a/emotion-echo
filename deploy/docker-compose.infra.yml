@@ -475,6 +475,13 @@ services:
       # PR-OBS-1 file-logger 落盘 /tmp/apisix-access.log → promtail 静态采集
       - ./tmp/apisix-access.log:/var/log/apisix-access.log:ro
       - ./loki/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      # E2E-21 / E2E-F-07：业务服务日志走容器 stdout，此前**没有任何采集入口**
+      # （services job 指向 /var/log/services/*.log，而全仓无 volume 往该路径写，
+      #   该 job 永不匹配任何文件 ⇒ 看起来配了、实际一条采不到）。
+      # 这两个 volume 正是 ADR-2026-09-loki-aggregator-dev §2.1/§2.3 早已写明的方案，
+      # 当时未实现，本次补上。
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - app-network
     depends_on:
