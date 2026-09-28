@@ -106,6 +106,13 @@ const checks = [
     src.includes('HS256') || src.includes('"algorithm"')],
   ['limit count = 60', src.includes('"count": 60')],
   ['limit time_window = 60s', src.includes('"time_window": 60')],
+  // E2E-20 #8 (Round 4.3 PR-2 后补): limit-count policy 走 Redis 避免多 APISIX 节点放大
+  ['limit-count policy env-driven (E2E-20 #8 multi-instance)',
+    /"policy":\s*"\$\{?LIMIT_POLICY\}?"/.test(src)],
+  ['limit-count redis_host env-driven (E2E-20 #8)',
+    /"redis_host":\s*"\$\{?LIMIT_REDIS_HOST\}?"/.test(src)],
+  ['LIMIT_POLICY default = redis (E2E-20 #8)',
+    /LIMIT_POLICY="\$\{LIMIT_POLICY:-redis\}"/.test(src)],
   ['api-breaker min_requests = 20', src.includes('"min_requests": 20')],
   ['api-breaker error_threshold_ratio = 0.5',
     src.includes('"error_threshold_ratio": 0.5')],
