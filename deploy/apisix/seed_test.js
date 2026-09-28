@@ -193,6 +193,93 @@ const checks = [
              ex.includes('${BFF_JWT_SECRET:-') &&
              ex.includes('${CORS_ALLOW_ORIGINS:-');
     })()],
+
+  // === E2E-21 / E2E-F-13 RED (2026-09-28): X-Trace-Id 生产侧 ===
+  // 缺陷：shared/pkg/middleware/gin_skywalking.go:73-77 消费 X-Trace-Id 塞进 slog ctx，
+  // 但全仓**零处生产该 header**（实测 2026-09-28 前后：APISIX 只注入 X-User-Id）
+  // ⇒ 生产环境每条 Go 日志的 trace_id 字段恒空，"按一次请求查全链路"做不到。
+  ['E2E-F-13 seed.sh 定义 TRACE_ID_PLUGIN 共享片段', src.includes('TRACE_ID_PLUGIN=')],
+  ['E2E-F-13 X-Trace-Id 取 ctx.var.request_id（与 access log 的 $apisix_request_id 同源）',
+    src.split('\n').some(l =>
+      l.includes('set_header(ctx,') && l.includes('X-Trace-Id') && l.includes('ctx.var.request_id'))],
+  // E2E-21 实测抓到的真缺陷：file-logger 原本取 $http_x_request_id，
+  // 那是**客户端传入的 header** —— 浏览器/curl 都不会带，nginx 直接把空变量
+  // 整条省略，access log 里因此没有 trace_id 字段，
+  // 于是"Go 日志 trace_id ↔ access log trace_id 可 join"永远不成立。
+  ['E2E-F-13 file-logger trace_id 取 $apisix_request_id（网关生成值，非客户端 header）',
+    src.includes('"trace_id": "$apisix_request_id"')],
+  ['E2E-F-13 file-logger 不再用 $http_x_request_id（客户端不传 ⇒ 字段被整条省略）',
+    !/"trace_id":\s*"\$http_x_request_id"/.test(src)],
+  ['E2E-F-13 覆盖式赋值（不信任客户端自带的 X-Trace-Id）',
+    src.split('\n').some(l =>
+      l.includes('X-Trace-Id') && l.includes('ctx.var.request_id') && l.includes('set_header'))],
+
+  // 关键：必须挂在**全部 4 组**插件变量上。
+  // 曾经的坑：seed.sh 注释写「全局插件链（每个 route 共享）」，但 put_auth_route 用的是
+  // AUTH_WHITELIST_PLUGINS、put_route_health 用的是 HEALTH_PLUGINS，两者都不含该片段
+  // ⇒ 登录/注册/健康检查等 10 条路由仍无 trace_id（E2E-21 实测：15 条路由中仅
+  // route 100 有 file-logger，其余全部没有）。
+  ['E2E-F-13 TRACE_ID_PLUGIN 挂在 PLUGINS_JSON（route 100 基座）',
+    (() => {
+      const m = src.match(/PLUGINS_JSON=\$\(cat <<EOF([\s\S]*?)\nEOF\n\)/);
+      return m ? m[1].includes('${TRACE_ID_PLUGIN}') : false;
+    })()],
+  ['E2E-F-13 TRACE_ID_PLUGIN 挂在 CATCHALL_PLUGINS_JSON（route 100 实际使用）',
+    (() => {
+      const m = src.match(/CATCHALL_PLUGINS_JSON=\$\(cat <<EOF([\s\S]*?)\nEOF\n\)/);
+      return m ? m[1].includes('${TRACE_ID_PLUGIN}') : false;
+    })()],
+  ['E2E-F-13 TRACE_ID_PLUGIN 挂在 AUTH_WHITELIST_PLUGINS（登录/注册链路）',
+    (() => {
+      const m = src.match(/AUTH_WHITELIST_PLUGINS=\$\(cat <<EOF([\s\S]*?)\nEOF\n\)/);
+      return m ? m[1].includes('${TRACE_ID_PLUGIN}') : false;
+    })()],
+  ['E2E-F-13 TRACE_ID_PLUGIN 挂在 HEALTH_PLUGINS（须用非引号 heredoc 才能引用变量）',
+    (() => {
+      const m = src.match(/HEALTH_PLUGINS=\$\(cat <<(EOF|'EOF')\n([\s\S]*?)\nEOF\n\)/);
+      if (!m) return false;
+      return m[1] === 'EOF' && m[2].includes('${TRACE_ID_PLUGIN}');
+    })()],
+
+  // 白名单路由此前连 access log 都没有（登录事件不可审计）
+  ['E2E-F-13 AUTH_WHITELIST_PLUGINS 补上 observability 插件（file-logger/skywalking）',
+    (() => {
+      const m = src.match(/AUTH_WHITELIST_PLUGINS=\$\(cat <<EOF([\s\S]*?)\nEOF\n\)/);
+      return m ? m[1].includes('${OBSERVABILITY_PLUGINS_JSON}') : false;
+    })()],
+  ['E2E-F-13 HEALTH_PLUGINS 刻意不加 file-logger（高频健康检查会冲掉有用日志）',
+    (() => {
+      const m = src.match(/HEALTH_PLUGINS=\$\(cat <<EOF\n([\s\S]*?)\nEOF\n\)/);
+      return m ? !m[1].includes('${OBSERVABILITY_PLUGINS_JSON}') : false;
+    })()],
+  ['E2E-F-13 CORS allow_headers/expose_headers 含 X-Trace-Id（浏览器端可见该 ID）',
+    src.includes('X-User-Id,X-Trace-Id')],
+
+  // 上面几条只校验**源码文本**，踩过一个真实的坑，必须再校验**展开后的实际值**：
+  // bash 的单引号字符串里根本无法嵌入单引号——写 '' 会被解析成"空串 + 重新开引号"，
+  // 单引号直接消失。于是 Lua 变成 require(apisix.core) 与 set_header(ctx, X-Trace-Id, ...)
+  // → require 收到 nil → "bad argument #1 to 'require' (string expected, got nil)"
+  // → **全站所有路由 500**（2026-09-28 实测）。正确写法是 '\'' 。单靠源码断言抓不到它。
+  ['E2E-F-13 展开后 lua 仍带单引号（防止 bash 吞掉引号导致全站 500）',
+    (() => {
+      try {
+        const start = "TRACE_ID_PLUGIN='\n";
+        const i = src.indexOf(start);
+        if (i < 0) return false;
+        const body = src.slice(i + start.length);
+        // 闭合是「缩进 + }' 」，正文中 JSON 的 } 后只会跟换行/逗号，故首个 "}'" 即闭合。
+        const end = body.indexOf("}'");
+        if (end < 0) return false;
+        // 原样包回单引号：正文里的 '\'' 已是正确的 bash 转义，再包一层反而双重转义。
+        const script = "TRACE_ID_PLUGIN='" + body.slice(0, end + 2) + "\n" +
+                       'printf %s "$TRACE_ID_PLUGIN"';
+        const out = execSync('bash -s', { input: script, encoding: 'utf8' });
+        return /require\('apisix\.core'\)/.test(out) &&
+               /set_header\(ctx, 'X-Trace-Id', ctx\.var\.request_id\)/.test(out);
+      } catch {
+        return false;
+      }
+    })()],
 ];
 
 let passCount = 0, failCount = 0;

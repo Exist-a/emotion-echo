@@ -1,13 +1,20 @@
-# PR-OBS-5: dev compose Promtail config (docker.sock 采集)
+# dev compose Promtail 配置
 #
 # 镜像: grafana/promtail:2.9.4 (与 Loki 同版本)
-# 启动方式: COMPOSE_PROFILES=obs (随 loki 一同启动)
+# 启动方式: --profile obs (随 loki 一同启动)
 #
-# 采集源:
-#   - APISIX file-logger 落盘: /tmp/apisix-access.log (PR-OBS-1 落 file-logger 插件)
-#     通过 docker-compose volume mount 暴露到 host ./tmp/apisix-access.log
-#     promtail 用 static path 采集 (而非 docker sd, 因 file 已挂到 host)
-#   - 业务 svc docker container stdout (未来扩展,本 PR-OBS-5 仅 apisix)
+# 采集源（E2E-21 实测修订，勿再改回旧注释）：
+#   - APISIX access.log：file-logger 落盘 /tmp/apisix-access.log，
+#     经 docker-compose volume mount 暴露到 host ./tmp/apisix-access.log，
+#     promtail 用 static_configs 采集。
+#   - 业务服务 stdout：**docker_sd_configs** 直接读 Docker json-file 日志
+#     （/var/lib/docker/containers/<id>/<id>-json.log）。
+#
+# 历史错误（勿重犯）：本文件此前有一个 job_name=services 的 static_configs，
+# __path__ 指向 /var/log/services/*.log —— 但**全仓没有任何 volume 往该路径写**，
+# 该 job 永不匹配任何文件（promtail 日志只出现 "Adding target"，没有 tail routine）。
+# 即"看起来配了业务日志采集、实际一条都采不到"。ADR-2026-09-loki-aggregator-dev
+# §2.1/§2.3 原本定的就是 docker.sock + docker_sd_configs，本次即补实现该决策。
 
 server:
   http_listen_port: 9080
@@ -29,12 +36,38 @@ scrape_configs:
           job: apisix
           __path__: /var/log/apisix-access.log
 
-  # P1-4: 业务 svc stdout（dev compose 阶段各 svc 日志落 /var/log/<svc>.log，
-  # 由 docker-compose volume mount 暴露到 host；promtail 通过 host path 采集）
+  # 业务服务容器 stdout（E2E-21 / E2E-F-07）
+  # filters 必须显式列出：宿主机实测有 29 个容器，不过滤会把 postgres/kafka/
+  # xtts/loki/promtail 等全部采进 Loki（Loki 还会采到自己的日志形成回环）。
   - job_name: services
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: services
-          __path__: /var/log/services/*.log
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+        filters:
+          - name: name
+            values:
+              - emotion-echo-user-svc
+              - emotion-echo-chat-svc
+              - emotion-echo-web-bff
+              - emotion-echo-ai-svc
+              - emotion-echo-analytics-svc
+              - emotion-echo-assessment-svc
+              - emotion-llm-service
+    relabel_configs:
+      # 容器名 → svc（对齐 Go 日志里的 svc 字段）：
+      #   /emotion-echo-user-svc → "user-svc"
+      #   /emotion-echo-web-bff  → "web-bff"
+      #   /emotion-llm-service   → "llm-service"（Python 服务，容器名无 echo- 段）
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/emotion-(?:echo-)?(.+)'
+        target_label: svc
+      # 保留原始容器名，便于排查
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.+)'
+        target_label: container
+      # 显式打 job label（不依赖 promtail 隐式行为，查询口径稳定）
+      - target_label: job
+        replacement: services
+      # 丢弃高基数 meta label（image/label/网络 id 等）
+      - action: labeldrop
+        regex: '__meta_docker_.*'

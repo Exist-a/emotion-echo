@@ -2,7 +2,7 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-28 (**E2E-20 ✅ done** §13.3 用户批准收口；**E2E-21 详档已建档**，详档 [plan.md](stages/e2e-21-logging-observability/plan.md) —— 计划期实测推翻"159 处 stdlib log 需迁移"的初判（Go 1.26 `slog.SetDefault` 已桥接），范围收窄为采集入口 + traceId 生产侧 + smoke 收紧)
+last-refresh: 2026-09-28 (**E2E-21 ✅ done**：13/13 测试点全 PASS + promtail docker_sd 采集打通 + traceId 全链路注入 + smoke 断言收紧与 5 组负向对照；**E2E-20 ✅ done** §13.3 用户批准收口；**E2E-21 详档已建档**，详档 [plan.md](stages/e2e-21-logging-observability/plan.md) —— 计划期实测推翻"159 处 stdlib log 需迁移"的初判（Go 1.26 `slog.SetDefault` 已桥接），范围收窄为采集入口 + traceId 生产侧 + smoke 收紧)
 type: e2e-stage-roadmap
 ---
 
@@ -31,7 +31,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 **E2E-20 多实例并发正确性 ✅ done（2026-09-28 §13.3 用户批准，PR #118 收口）** → 详档 [STATUS v4](stages/e2e-20-multi-instance-concurrency/STATUS.md)。下一阶段按 roadmap 排期推进
 
-> **当前激活**：**E2E-21 日志体系**（⏳ pending，**详档 2026-09-28 已建档** → [plan.md](stages/e2e-21-logging-observability/plan.md)）。无依赖前置、RUNBOOK §9 无阻塞决策门。计划期实测：Docker Desktop 上 `/var/lib/docker/containers`（**29 个**容器目录）与 `/var/run/docker.sock` 均可见 ⇒ [ADR-2026-09-loki-aggregator-dev](../../../architecture/adr/adr-2026-09-loki-aggregator-dev.md) §2.1/§2.3 原定的 docker_sd 采集路线可行（ADR 该决策**从未落地**）。计划期另一处修正：Go 1.26 的 `slog.SetDefault` 已把 stdlib `log` 桥接进 slog handler ⇒ **"159 处 stdlib log 需迁移"的初判被推翻**，阶段范围收窄为采集入口 + traceId 生产侧 + smoke 断言收紧。
+> **当前激活**：**E2E-21 日志体系**（🟡 partial 2026-09-28，13/13 测试点 PASS，3 条留账待清；→ [report.md](stages/e2e-21-logging-observability/report.md)）。**下一阶段 = E2E-22 监控告警**（Prometheus 抓取/Grafana 面板/Alertmanager 通知渠道），详档待其前序阶段收口后建档。无依赖前置、RUNBOOK §9 无阻塞决策门。计划期实测：Docker Desktop 上 `/var/lib/docker/containers`（**29 个**容器目录）与 `/var/run/docker.sock` 均可见 ⇒ [ADR-2026-09-loki-aggregator-dev](../../../architecture/adr/adr-2026-09-loki-aggregator-dev.md) §2.1/§2.3 原定的 docker_sd 采集路线可行（ADR 该决策**从未落地**）。计划期另一处修正：Go 1.26 的 `slog.SetDefault` 已把 stdlib `log` 桥接进 slog handler ⇒ **"159 处 stdlib log 需迁移"的初判被推翻**，阶段范围收窄为采集入口 + traceId 生产侧 + smoke 断言收紧。
 > E2E-18 缓存层（✅ done，2026-09-28 §13.3 第二方核对用户批准）：LRU 默认启用 TDD + D-27 Redis 保留决议，详档 [report.md](stages/e2e-18-cache-layer/report.md) + [STATUS v2](stages/e2e-18-cache-layer/STATUS.md)。
 
 > **2026-09-19 治理轮（07~10 收口审计）**：对 E2E-07/08/09/10 跑 `scripts/e2e_stage_audit.py` 发现四个阶段**全部 FAIL**（E2E-11 是唯一干净的近期阶段），错误模式与 R-02 判定过的完全同型：`screenshots/` 全为 0 张、report 非 §10 模板（缺「收口自检」/无汇总行）、plan 与 roadmap 状态未同步。用户决议 = **轻量补账 + 四阶段降 `partial`**（取证补拍另排一轮，账本 E2E-F-90）。
@@ -105,7 +105,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-21 | 日志体系 | 结构化日志 + traceId 注入（含 gRPC 侧）+ Loki 采集链路（Go 日志现未进 Loki） | 日志平台选型 | ⏳ pending（**详档 2026-09-28 已建档** → [plan.md](stages/e2e-21-logging-observability/plan.md)，13 个测试点；账本 E2E-F-07 / E2E-F-13 归属本阶段） |
+| E2E-21 | 日志体系 | 结构化日志 + traceId 注入（含 gRPC 侧）+ Loki 采集链路（Go 日志现未进 Loki） | 日志平台选型 | 🟡 **partial**（2026-09-28：**13/13 测试点全 PASS**，0 FAIL / 0 BLOCKED。补实现 ADR-2026-09-loki-aggregator-dev §2.1/§2.3/§四 写下但**从未落地**的 docker_sd 采集 ⇒ Go 6 服务日志进 Loki；traceId 三层断点全修（APISIX 注入 X-Trace-Id → 4 组插件变量全覆盖 / gRPC metadata 透传 / 拦截器日志改带 ctx）⇒ 一次登录的 trace_id 同时出现在 web-bff + user-svc + 网关 access log。**过程中另抓 3 个真缺陷**：bash 单引号串里 `` 被吞成空串 → **全站 500**（契约钉已补"校验 bash 展开后值"）；file-logger 取 `$http_x_request_id`（客户端不传 ⇒ 字段整条省略）改 `$apisix_request_id`；注释写进 JSON 片段致 route PUT 失败（同 Stage 106 trailing comma 一类）。5 组负向对照证明断言有约束力。**判 partial 而非 done**：本阶段自建的 E2E-F-146/147/148 三条账本尚未了结（按 RUNBOOK §7 收口契约第 9 项 + audit A5 断言）。详档 [report.md](stages/e2e-21-logging-observability/report.md)） |
 | E2E-22 | 监控告警 | Prometheus 抓取/Grafana 面板/Alertmanager 通知渠道 | — | ⏳ pending |
 | E2E-23 | 健康检查与服务发现 | /health 与 gRPC health 语义 + Nacos 注册/配置中心/热更新 | — | ⏳ pending |
 
