@@ -84,11 +84,20 @@ describe('clientErrorReporter · 去重与截断行为', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  /** 取第 n 次 fetch 调用的 body（mock.calls 元素在 strict 下可能是 undefined，故收口到一处断言） */
+  function bodyOf(n: number): any {
+    const call = fetchMock.mock.calls[n]
+    if (!call) throw new Error(`fetch 未被调用第 ${n} 次`)
+    const init = call[1] as RequestInit | undefined
+    if (!init || typeof init.body !== 'string') throw new Error('fetch 未带 string body')
+    return JSON.parse(init.body)
+  }
+
   it('超大 message / stack 被截断', async () => {
     const { reportClientError } = await freshModule()
     const huge = 'x'.repeat(50_000)
     await reportClientError('error', { message: huge, stack: huge })
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    const body = bodyOf(0)
     expect(body.msg.length).toBeLessThan(2100)
     expect(body.msg).toContain('truncated')
     expect(body.stack.length).toBeLessThan(4100)
@@ -107,7 +116,7 @@ describe('clientErrorReporter · 去重与截断行为', () => {
       line: 12,
       col: 3
     })
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    const body = bodyOf(0)
     expect(body.kind).toBe('unhandledrejection')
     expect(body.url).toBe('http://localhost:3000/dashboard')
     expect(body.line).toBe(12)
