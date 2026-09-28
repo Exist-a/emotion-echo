@@ -1,7 +1,7 @@
-# E2E-20 多实例并发正确性 — STATUS v3（收尾裁定完成，待 §13.3 签字）
+# E2E-20 多实例并发正确性 — STATUS v4（✅ done，§13.3 用户批准收口）
 
-> **阶段状态：🟡 partial —— 唯一剩余项 = §13.3 第二方核对签字。**
-> 依据 RUNBOOK §7#10：执行者不得自行宣布 done；等用户对 §13.3 核对清单签字后翻 done。
+> **阶段状态：✅ done —— 2026-09-28 §13.3 第二方核对用户批准**（11 条清单呈报后用户指示「如果检查无误，就收尾吧」）。
+> 收口前补齐运行时验收：web-bff 镜像 v0.1.31 重建 + 经网关四项实测 + 回归钉收口复跑 4/4（见 §五.1）。
 >
 > v1（开工记录）见 git history（commit `a15d855` PR #113）；v2（收尾记录，未推送）见本会话 git history。
 
@@ -11,11 +11,11 @@
 
 | 项 | 值 |
 |----|-----|
-| 阶段状态 | 🟡 **partial（待 §13.3 签字）** |
-| roadmap / plan / report 三处 status | 均为 `partial`（一致，audit A9 通过） |
-| audit `--all` | 合并前需复跑（本分支合并时跑） |
-| §13.3 第二方核对 | **未执行**（核对清单见 §五，等用户签字） |
-| 判 partial 的理由 | ① §13.3 未签字；② #4 限流跨节点放大**架构性未实测**（E2E-F-145 归 E2E-25） |
+| 阶段状态 | ✅ **done（2026-09-28 §13.3 用户批准）** |
+| roadmap / plan / report 三处 status | 均为 `done`（一致） |
+| audit `--all` | 0 FAIL（PR #118 合并前后各跑一次） |
+| §13.3 第二方核对 | ✅ 用户批准（11 条核对清单 §五 呈报 → 「如果检查无误，就收尾吧」） |
+| 运行时验收 | web-bff **v0.1.31** 重建重启 healthy + 经网关四项实测全过 + 回归钉收口复跑 4/4（§五.1） |
 
 ---
 
@@ -68,10 +68,10 @@
 
 | # | 未做项 | 原因 | 归属 / 阻塞 |
 |---|--------|------|------------|
-| 1 | **§13.3 第二方核对签字** | 无用户签字（RUNBOOK §7#10 硬性要求） | **阻塞 done**（核对清单见 §五） |
+| 1 | ~~§13.3 第二方核对签字~~ | ✅ **用户 2026-09-28 批准**（「如果检查无误，就收尾吧」） | 已解除 |
 | 2 | **#4 限流跨节点放大实测** | dev 栈单 APISIX 节点 ⇒ 无法验证跨节点语义 | **E2E-F-145** 归 E2E-25 |
 | 3 | **verification-code 端点删除** | D-01 遗留物（E2E-07 只增未删）；超出 E2E-20 范围 | **E2E-F-144** 归 E2E-07 收尾/独立小 PR |
-| 4 | **plan.md §5 DoD 未勾** | 按 §7#10 不自宣 done | 随 §13.3 签字一并 |
+| 4 | ~~plan.md §5 DoD 未勾~~ | ✅ 收口时已勾（运行时验收补齐后） | 已完成 |
 | 5 | **Lane O 的 vitest 预存失败** | `webllmEngine.dynamicImport.test.ts` 可选依赖未装（Lane O 独占列禁触） | 范围外，记录不修 |
 
 ~~worktree 清理~~：4 个 worktree 已清理（`git worktree list` 仅剩主工作区）。
@@ -109,7 +109,19 @@
 | 10 | 遗留端点删除与跨节点实测不在本阶段范围，已记账（E2E-F-144/145） | 账本 |
 | 11 | 三处 status 一致 partial；不自行翻 done | plan/report/STATUS frontmatter |
 
-**用户签字后动作**：plan §5 DoD 勾选 → 三处 status 翻 done → roadmap 主表同步 → `audit --all` 复跑 0 FAIL → §2.5 收口三查。
+### §五.1 收口运行时验收（2026-09-28，用户批准前补齐）
+
+按项目铁律「改完 Go 必须重建镜像再验收」：web-bff 镜像 **v0.1.31**（含 D-28 回退代码）`docker compose build` + 容器重启 healthy + 日志确认 `[authlock] using RedisStore addr=emotion-echo-redis:6379`。经网关 `:19080` 实测：
+
+| # | 项 | 结果 |
+|---|----|------|
+| 1 | 登录锁定：唯一用户 5×401 → 第 6 次 **423** | PASS（Redis 路径） |
+| 2 | Redis 实写非降级：`HGETALL web-bff-auth:fails:{u}` = `fails:0, locked_at:1790578378666` | PASS |
+| 3 | verification-code 端点（回退后 in-memory 路径）200 正常响应 | PASS |
+| 4 | demo 用户正常登录 200（不误伤） | PASS |
+| 5 | 回归钉收口复跑（chromium+mobile 双 project）**4/4** | PASS |
+
+**用户签字后动作（已执行）**：plan §5 DoD 勾选 → 三处 status 翻 done → roadmap 主表同步 → `audit --all` 复跑 0 FAIL → §2.5 收口三查。
 
 ---
 
