@@ -2,7 +2,8 @@
 stage: e2e-18
 title: 缓存层（ai-svc LRU 行为 + Redis 去留决策）
 executed: 2026-09-24
-status: partial
+closed: 2026-09-28
+status: done
 environment: dev 模式（应用容器 healthy，infra+apps+dev compose + .env.local；ai-svc v0.1.8 含 LRU 修复）
 ---
 
