@@ -2,7 +2,7 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-28 (**E2E-20 🟡 partial → ✅ done** §13.3 用户批准收口：D-28 裁定回退验证码 Redis 化 + PR #118 merged c821738 + 镜像 v0.1.31 运行时验收；audit 0 FAIL)
+last-refresh: 2026-09-28 (**E2E-20 ✅ done** §13.3 用户批准收口；**E2E-21 详档已建档**，详档 [plan.md](stages/e2e-21-logging-observability/plan.md) —— 计划期实测推翻"159 处 stdlib log 需迁移"的初判（Go 1.26 `slog.SetDefault` 已桥接），范围收窄为采集入口 + traceId 生产侧 + smoke 收紧)
 type: e2e-stage-roadmap
 ---
 
@@ -31,8 +31,8 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 **E2E-20 多实例并发正确性 ✅ done（2026-09-28 §13.3 用户批准，PR #118 收口）** → 详档 [STATUS v4](stages/e2e-20-multi-instance-concurrency/STATUS.md)。下一阶段按 roadmap 排期推进
 
-> **当前激活**：E2E-20 多实例并发（**🟡 in-progress** 2026-09-28 PR #111 merged at `eaa9ef9`；前置全过；待 Lane O 释放 dev mode 锁后启动 §6 六步循环；worktree `../Emotion-Echo-e2e20` 已建）。
-> E2E-18 缓存层（✅ done，2026-09-28 §13.3 第二方核对用户批准）：LRU 默认启用 TDD + D-27 Redis 保留决议，详档 [report.md](stages/e2e-18-cache-layer/report.md) + [STATUS v2](stages/e2e-18-cache-layer/STATUS.md)。**E2E-20 开工前置已满足**。
+> **当前激活**：**E2E-21 日志体系**（⏳ pending，**详档 2026-09-28 已建档** → [plan.md](stages/e2e-21-logging-observability/plan.md)）。无依赖前置、RUNBOOK §9 无阻塞决策门。计划期实测：Docker Desktop 上 `/var/lib/docker/containers`（**29 个**容器目录）与 `/var/run/docker.sock` 均可见 ⇒ [ADR-2026-09-loki-aggregator-dev](../../../architecture/adr/adr-2026-09-loki-aggregator-dev.md) §2.1/§2.3 原定的 docker_sd 采集路线可行（ADR 该决策**从未落地**）。计划期另一处修正：Go 1.26 的 `slog.SetDefault` 已把 stdlib `log` 桥接进 slog handler ⇒ **"159 处 stdlib log 需迁移"的初判被推翻**，阶段范围收窄为采集入口 + traceId 生产侧 + smoke 断言收紧。
+> E2E-18 缓存层（✅ done，2026-09-28 §13.3 第二方核对用户批准）：LRU 默认启用 TDD + D-27 Redis 保留决议，详档 [report.md](stages/e2e-18-cache-layer/report.md) + [STATUS v2](stages/e2e-18-cache-layer/STATUS.md)。
 
 > **2026-09-19 治理轮（07~10 收口审计）**：对 E2E-07/08/09/10 跑 `scripts/e2e_stage_audit.py` 发现四个阶段**全部 FAIL**（E2E-11 是唯一干净的近期阶段），错误模式与 R-02 判定过的完全同型：`screenshots/` 全为 0 张、report 非 §10 模板（缺「收口自检」/无汇总行）、plan 与 roadmap 状态未同步。用户决议 = **轻量补账 + 四阶段降 `partial`**（取证补拍另排一轮，账本 E2E-F-90）。
 > 即：**R 系列补救只回填了 E2E-01~06，07 之后的收口仍在复发同一模式** —— 这正是"执行者自证的完成不可信"的再次验证。
@@ -105,7 +105,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
-| E2E-21 | 日志体系 | 结构化日志 + traceId 注入（含 gRPC 侧）+ Loki 采集链路（Go 日志现未进 Loki） | 日志平台选型 | ⏳ pending |
+| E2E-21 | 日志体系 | 结构化日志 + traceId 注入（含 gRPC 侧）+ Loki 采集链路（Go 日志现未进 Loki） | 日志平台选型 | ⏳ pending（**详档 2026-09-28 已建档** → [plan.md](stages/e2e-21-logging-observability/plan.md)，13 个测试点；账本 E2E-F-07 / E2E-F-13 归属本阶段） |
 | E2E-22 | 监控告警 | Prometheus 抓取/Grafana 面板/Alertmanager 通知渠道 | — | ⏳ pending |
 | E2E-23 | 健康检查与服务发现 | /health 与 gRPC health 语义 + Nacos 注册/配置中心/热更新 | — | ⏳ pending |
 
@@ -258,6 +258,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | E2E-15 报表 Dashboard | [stages/e2e-15-reports-dashboard/plan.md](stages/e2e-15-reports-dashboard/plan.md) |
 | **E2E-16 多模态（语音/表情/文件上传）** | [stages/e2e-16-multimodal/plan.md](stages/e2e-16-multimodal/plan.md) |
 | **E2E-17 数字人 + TTS（真口型同步 + 段间断点）** | [stages/e2e-17-digital-human-tts/plan.md](stages/e2e-17-digital-human-tts/plan.md) |
+| **E2E-21 日志体系（结构化 + traceId + Loki 采集）** | [stages/e2e-21-logging-observability/plan.md](stages/e2e-21-logging-observability/plan.md)（2026-09-28 建档；E2E-18/19/20 的详档在各自目录，见其 STATUS/report） |
 
 模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)，执行记录模板见 [stages/_REPORT_TEMPLATE.md](stages/_REPORT_TEMPLATE.md)。批次三及以后在轮到前补写。E2E-01 已按判定分级标注，其余已写详档在启动前补齐标记。
 
