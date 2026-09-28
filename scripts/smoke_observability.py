@@ -463,11 +463,17 @@ def main() -> int:
         实测（2026-09-28）：把 promtail 的采集过滤器改坏（采不到任何容器），
         用默认 1 小时窗口查 {job="services"} 仍然全绿；加上新鲜度窗口后立刻变红。
         """
-        url = f"{LOKI}/loki/api/v1/query?query=" + urllib.parse.quote(query)
-        if fresh_seconds is not None:
-            import datetime as _dt
-            since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(seconds=fresh_seconds)
-            url += "&start=" + str(int(since.timestamp() * 1e9))
+        # ⚠️ Loki ≥ 3.0 **移除了日志查询的 instant 端点**：对日志选择器调
+        # /loki/api/v1/query 会返 400 "log queries are not supported as an
+        # instant query type, please change your query to a range query type"。
+        # 必须用 /query_range。（E2E-F-147 升级 2.9.4 → 3.2.0 时实测撞到。）
+        import datetime as _dt
+        end = _dt.datetime.now(_dt.timezone.utc)
+        start = end - _dt.timedelta(seconds=(fresh_seconds if fresh_seconds is not None else 3600))
+        url = (f"{LOKI}/loki/api/v1/query_range?query=" + urllib.parse.quote(query)
+               + "&start=" + str(int(start.timestamp() * 1e9))
+               + "&end=" + str(int(end.timestamp() * 1e9))
+               + "&limit=100&direction=backward")
         st, bd = http_get(url, timeout=10.0)
         if st == 0:
             check(f"loki query reachable [{label}]", False, bd)
@@ -503,9 +509,11 @@ def main() -> int:
     # 断言 5c: 采到的是结构化 JSON 且带 svc 字段（不是纯文本行）
     if svc_streams > 0:
         import datetime as _dt
-        _since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(seconds=FRESH_WINDOW)
-        url = (f"{LOKI}/loki/api/v1/query?query=" + urllib.parse.quote('{job="services"}')
-               + "&start=" + str(int(_since.timestamp() * 1e9)))
+        _end = _dt.datetime.now(_dt.timezone.utc)
+        _start = _end - _dt.timedelta(seconds=FRESH_WINDOW)
+        url = (f"{LOKI}/loki/api/v1/query_range?query=" + urllib.parse.quote('{job="services"}')
+               + "&start=" + str(int(_start.timestamp() * 1e9))
+               + "&end=" + str(int(_end.timestamp() * 1e9)) + "&limit=100")
         st, bd = http_get(url, timeout=10.0)
         svc_field_ok = False
         sample = ""
@@ -544,9 +552,11 @@ def main() -> int:
     #   该端点仍持续返回 postgres/kafka/loki/promtail → 假红）。
     # 正确口径是查"新鲜窗口内实际入库的 stream 的 container 标签"。
     import datetime as _dt5
-    _since5 = _dt5.datetime.now(_dt5.timezone.utc) - _dt5.timedelta(seconds=FRESH_WINDOW)
-    url = (f"{LOKI}/loki/api/v1/query?query=" + urllib.parse.quote('{job="services"}')
-           + "&start=" + str(int(_since5.timestamp() * 1e9)))
+    _end5 = _dt5.datetime.now(_dt5.timezone.utc)
+    _start5 = _end5 - _dt5.timedelta(seconds=FRESH_WINDOW)
+    url = (f"{LOKI}/loki/api/v1/query_range?query=" + urllib.parse.quote('{job="services"}')
+           + "&start=" + str(int(_start5.timestamp() * 1e9))
+           + "&end=" + str(int(_end5.timestamp() * 1e9)) + "&limit=100")
     st, bd = http_get(url, timeout=10.0)
     if st == 200:
         try:

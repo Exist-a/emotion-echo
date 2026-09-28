@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"sync"
 	"time"
 
@@ -107,14 +109,14 @@ func (c *Consumer) WithTracer(tracer grpcinterceptor.Tracer) *Consumer {
 // Run 启动 consumer；ctx 取消时退出。
 //
 // 失败语义：topic 不存在 / broker 不可达 — log warn + 继续运行
-//（不阻塞 HTTP server）。业务通过 ctx.Cancel 触发优雅退出。
+// （不阻塞 HTTP server）。业务通过 ctx.Cancel 触发优雅退出。
 func (c *Consumer) Run(ctx context.Context) error {
 	for {
 		if err := c.client.Consume(ctx, []string{c.topic}, c.consumer); err != nil {
 			if errors.Is(err, sarama.ErrClosedConsumerGroup) {
 				return nil
 			}
-			log.Printf("[kafka-consumer] consume error (will retry in 5s): %v", err)
+			logging.PrintfContext(ctx, "[kafka-consumer] consume error (will retry in 5s): %v", err)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -334,6 +336,15 @@ func attemptKey(msg *sarama.ConsumerMessage) string {
 // 由 migrations/002_create_user_behavior_events.sql 末尾的 ADR-19 数据迁移
 // SQL 段负责一次性 UPDATE。
 func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
+	// E2E-F-146：Kafka 消息没有 ctx，但 record header 里带着 sw8（chat-svc 发布时
+	// 写入，kafka_publisher.go:61-63）。解出 trace_id 塞进 ctx，**本函数及其
+	// 下游全部日志**就能和发布侧链路对上 —— 异步链路恰恰最需要 trace
+	// （"这条消息是谁发的、后来怎么了"），没有它就彻底断开。
+	ctx := context.Background()
+	if tid := traceIDFromMessage(msg); tid != "" {
+		ctx = logging.WithTraceID(ctx, tid)
+	}
+
 	// Stage 73：Protobuf 优先 + 旧 JSON fallback（双写窗口）
 	ev, err := DecodeChatEvent(msg.Value, saramaHeaders(msg))
 	if err != nil {
@@ -351,7 +362,7 @@ func (h *chatEventHandler) handleOne(msg *sarama.ConsumerMessage) error {
 	)
 	if err != nil {
 		if errors.Is(err, eventrow.ErrUnknownEventType) {
-			log.Printf("[kafka-consumer] unknown event type %q, skip", ev.Type)
+			logging.PrintfContext(ctx, "[kafka-consumer] unknown event type %q, skip", ev.Type)
 			return nil
 		}
 		return err
@@ -417,4 +428,20 @@ func remarshal(data any, target any) error {
 		return err
 	}
 	return json.Unmarshal(b, target)
+}
+
+// traceIDFromMessage 从 Kafka record header 的 sw8 解出 trace_id。
+//
+// 解不出（无 sw8 / 格式不对）时返回 ""，调用方据此不写 trace_id 字段 ——
+// 绝不返回半截 ID，半截 ID 在 Loki 里查不到任何东西，比没有更误导。
+func traceIDFromMessage(msg *sarama.ConsumerMessage) string {
+	if msg == nil {
+		return ""
+	}
+	for _, h := range msg.Headers {
+		if string(h.Key) == grpcinterceptor.SW8HeaderName {
+			return grpcinterceptor.TraceIDFromSW8(string(h.Value))
+		}
+	}
+	return ""
 }

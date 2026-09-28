@@ -211,3 +211,92 @@ func TestServerLoggingInterceptor_LogRecordCarriesTraceID(t *testing.T) {
 		t.Fatalf("日志格式被破坏: %s", got)
 	}
 }
+
+// TestStreamInterceptors_LogRecordCarriesTraceID 流式 RPC 的日志也带 trace_id
+//
+// E2E-F-146 补做：stream 拦截器的 log.Printf 在**闭包签名**里（不是外层 func），
+// 扫签名会漏掉它们，但 ss.Context() / ctx 里同样有 trace_id ⇒ 同样要能带出。
+func TestStreamInterceptors_LogRecordCarriesTraceID(t *testing.T) {
+	var buf bytes.Buffer
+	logging.InitTo(&buf)
+	t.Cleanup(func() { logging.Init() })
+
+	ctx := metadata.NewIncomingContext(context.Background(),
+		metadata.Pairs("x-trace-id", "trace-stream-1"))
+	ctx = ctxWithTraceIDFromMetadata(ctx)
+
+	// server 侧：用 Context() 伪造一个带 ctx 的 ServerStream
+	ss := &fakeServerStream{ctx: ctx}
+	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream", IsClientStream: true}
+	_ = NewServerStreamLoggingInterceptor()(nil, ss, info,
+		func(srv interface{}, stream grpc.ServerStream) error { return nil })
+
+	got := buf.String()
+	if !strings.Contains(got, "stream-start") {
+		t.Fatalf("未产生 stream-server 日志: %s", got)
+	}
+	if !strings.Contains(got, `"trace_id":"trace-stream-1"`) {
+		t.Fatalf("stream 日志缺 trace_id: %s", got)
+	}
+}
+
+// TestServerRecoveryInterceptor_PanicLogCarriesTraceID panic 日志也要能定位
+//
+// 排查线上"某个请求把进程打挂了但不知道是哪个"时，PANIC 那行是唯一线索。
+func TestServerRecoveryInterceptor_PanicLogCarriesTraceID(t *testing.T) {
+	var buf bytes.Buffer
+	logging.InitTo(&buf)
+	t.Cleanup(func() { logging.Init() })
+
+	ctx := logging.WithTraceID(context.Background(), "trace-panic-1")
+	ss := &fakeServerStream{ctx: ctx}
+	err := NewServerStreamRecoveryInterceptor()(nil, ss, &grpc.StreamServerInfo{FullMethod: "/svc/S"},
+		func(srv interface{}, stream grpc.ServerStream) error { panic("boom") })
+	if err == nil {
+		t.Fatal("panic 应被转成 error 返回")
+	}
+
+	got := buf.String()
+	if !strings.Contains(got, "PANIC") {
+		t.Fatalf("未产生 PANIC 日志: %s", got)
+	}
+	if !strings.Contains(got, `"trace_id":"trace-panic-1"`) {
+		t.Fatalf("PANIC 日志缺 trace_id: %s", got)
+	}
+}
+
+// fakeServerStream 带自定义 ctx 的 ServerStream 替身
+type fakeServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (f *fakeServerStream) Context() context.Context { return f.ctx }
+
+// TestTraceIDFromSW8 / TestTraceIDFromSW8_Edge sw8 → trace_id 提取
+//
+// Kafka 链路与 gRPC 不同：消息是异步的，没有 ctx 可言。chat-svc 发布时把 sw8
+// 写进了 record header（kafka_publisher.go:61-63），消费者侧要能把它解回 trace_id，
+// 否则"Kafka 消费侧日志查不到链路"，异步链路就断在消息边界。
+//
+// sw8 格式（SkyWalking）：sample-traceId-segmentId-spanId-parentSpanId-parentService-parentServiceInstance-parentEndpoint-address
+func TestTraceIDFromSW8(t *testing.T) {
+	tests := []struct {
+		name string
+		sw8  string
+		want string
+	}{
+		{"标准 8 段", "1-TRACEID-SEG-3-1-parent-ps-0.0.0.1:80", "TRACEID"},
+		{"单段（无分隔）", "0", ""},
+		{"段数不足", "1-A-B", ""},
+		{"空串", "", ""},
+		{"首段采样标志非 0/1", "x-A-B-1-1-p-i-a", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := TraceIDFromSW8(tt.sw8); got != tt.want {
+				t.Fatalf("TraceIDFromSW8(%q) = %q, want %q", tt.sw8, got, tt.want)
+			}
+		})
+	}
+}

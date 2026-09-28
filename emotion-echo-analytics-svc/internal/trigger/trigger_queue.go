@@ -13,7 +13,8 @@ package trigger
 import (
 	"context"
 	"errors"
-	"log"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"sync"
 )
 
@@ -155,7 +156,7 @@ func (q *TriggerQueue) Close(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		log.Printf("[trigger] close timeout: %v", ctx.Err())
+		logging.PrintfContext(ctx, "[trigger] close timeout: %v", ctx.Err())
 		return ctx.Err()
 	}
 }

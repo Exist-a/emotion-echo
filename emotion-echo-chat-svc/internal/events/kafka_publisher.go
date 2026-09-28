@@ -3,7 +3,8 @@ package events
 
 import (
 	"context"
-	"log"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"strconv"
 	"time"
 
@@ -132,7 +133,7 @@ func (p *KafkaEventPublisher) Publish(ctx context.Context, topic string, e *Even
 		_, span, err = p.tracer.CreateExitSpan(ctx, "kafka-publish", topic, injector)
 		if err != nil {
 			// CreateExitSpan 失败不阻塞 publish —— 与 Stage 92 注释承诺一致
-			log.Printf("[kafka] create exit span failed (publish without trace): %v", err)
+			logging.PrintfContext(ctx, "[kafka] create exit span failed (publish without trace): %v", err)
 		}
 		if sw8 != "" {
 			msg.Headers = append(msg.Headers, sarama.RecordHeader{
@@ -175,10 +176,10 @@ func (p *KafkaEventPublisher) Publish(ctx context.Context, topic string, e *Even
 		span.EndSpan(sendErr)
 	}
 	if sendErr != nil {
-		log.Printf("[kafka] publish failed: topic=%s err=%v", topic, sendErr)
+		logging.PrintfContext(ctx, "[kafka] publish failed: topic=%s err=%v", topic, sendErr)
 		return sendErr
 	}
-	log.Printf("[kafka] published: topic=%s id=%s type=%s", topic, e.ID, e.Type)
+	logging.PrintfContext(ctx, "[kafka] published: topic=%s id=%s type=%s", topic, e.ID, e.Type)
 	return nil
 }
 

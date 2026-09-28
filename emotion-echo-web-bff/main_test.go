@@ -94,6 +94,11 @@ var wantRoutes = gin.RoutesInfo{
 	// ----- multimodal_handler.go (1 条) -----
 	{Method: "POST", Path: "/api/v1/multimodal/analyze"},
 
+	// ----- clienterror_handler.go (1 条, E2E-F-148) -----
+	// 浏览器未捕获异常上报。经 APISIX 白名单路由 119 + BFF authPathBypass
+	// 双重放行，使"未登录就白屏"这类错误也能被记录。
+	{Method: "POST", Path: "/api/v1/client-error"},
+
 	// ----- tts_handler.go (3 条) -----
 	{Method: "POST", Path: "/api/v1/tts/synthesize"},
 	{Method: "POST", Path: "/api/v1/tts/stream"},
@@ -319,6 +324,7 @@ var knownPathPrefixes = []string{
 	"/api/v1/reports/",
 	"/api/v1/user-behavior/",
 	"/api/v1/mental-health/assessment",
+	"/api/v1/client-error", // E2E-F-148：浏览器未捕获异常上报（未登录也要能报）
 	"/api/v1/multimodal/",
 	"/api/v1/tts/",
 	"/api/v1/uploads/:kind",

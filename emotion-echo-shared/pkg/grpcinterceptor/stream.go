@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -44,17 +46,22 @@ func (w *wrappedServerStream) SendMsg(m interface{}) error {
 // NewServerStreamLoggingInterceptor 记录 server 端 stream RPC 的开始/结束 + 消息计数
 //
 // 输出格式：
-//   [stream-server] method=/.../AnalyzeBatch stream-start
-//   [stream-server] method=/.../AnalyzeBatch stream-end duration=120ms sent=3 recv=0 code=OK
+//
+//	[stream-server] method=/.../AnalyzeBatch stream-start
+//	[stream-server] method=/.../AnalyzeBatch stream-end duration=120ms sent=3 recv=0 code=OK
 func NewServerStreamLoggingInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		start := time.Now()
-		log.Printf("[stream-server] method=%s stream-start", info.FullMethod)
+		// E2E-F-146：ss.Context() 里带着上游透传的 x-trace-id（见 NewServerTracingInterceptor
+		// 把它塞进 ctx 的同一路径），所以流式日志也要走带 ctx 的调用，否则查不到链路。
+		sctx := ss.Context()
+		logging.PrintfContext(sctx, "[stream-server] method=%s stream-start", info.FullMethod)
 
 		wrapped := &wrappedServerStream{ServerStream: ss}
 		err := handler(srv, wrapped)
 
-		log.Printf(
+		logging.PrintfContext(
+			sctx,
 			"[stream-server] method=%s stream-end duration=%dms sent=%d recv=%d code=%v",
 			info.FullMethod,
 			time.Since(start).Milliseconds(),
@@ -73,7 +80,7 @@ func NewServerStreamRecoveryInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[stream-server] PANIC method=%s panic=%v", info.FullMethod, r)
+				logging.PrintfContext(ss.Context(), "[stream-server] PANIC method=%s panic=%v", info.FullMethod, r)
 				err = status.Errorf(codes.Internal, "stream handler panic: %v", r)
 			}
 		}()
@@ -96,7 +103,7 @@ func NewClientStreamLoggingInterceptor() grpc.StreamClientInterceptor {
 		opts ...grpc.CallOption,
 	) (grpc.ClientStream, error) {
 		start := time.Now()
-		log.Printf("[stream-client] method=%s stream-start desc.ServerStreams=%v",
+		logging.PrintfContext(ctx, "[stream-client] method=%s stream-start desc.ServerStreams=%v",
 			method, desc.ServerStreams)
 
 		cs, err := streamer(ctx, desc, cc, method, opts...)
@@ -113,6 +120,7 @@ func NewClientStreamLoggingInterceptor() grpc.StreamClientInterceptor {
 			ClientStream: cs,
 			method:       method,
 			start:        start,
+			ctx:          ctx,
 		}, nil
 	}
 }
@@ -143,6 +151,9 @@ type wrappedClientStream struct {
 	start  time.Time
 	sent   int
 	recvd  int
+	// ctx 保存发起 stream 时的 ctx：SendMsg/RecvMsg 是 grpc.ClientStream 的方法，
+	// 签名里没有 ctx，而结束日志要能带 trace_id，只能从这儿取（E2E-F-146）。
+	ctx context.Context
 }
 
 func (w *wrappedClientStream) SendMsg(m interface{}) error {
@@ -159,7 +170,8 @@ func (w *wrappedClientStream) RecvMsg(m interface{}) error {
 		w.recvd++
 	} else {
 		// 收到 error / EOF 时打结束日志
-		log.Printf(
+		logging.PrintfContext(
+			w.ctx,
 			"[stream-client] method=%s stream-end duration=%dms sent=%d recv=%d code=%v",
 			w.method, time.Since(w.start).Milliseconds(), w.sent, w.recvd, errCode(err),
 		)

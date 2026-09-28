@@ -1,4 +1,5 @@
 // plugins/init.ts - 应用初始化插件
+import { installClientErrorReporter } from '~/utils/clientErrorReporter'
 import { useUserStore } from '~/stores/user'
 import { useConversationStore } from '~/stores/conversation'
 import { useMessageStore } from '~/stores/message'
@@ -14,6 +15,14 @@ import { useMessageStore } from '~/stores/message'
 export default defineNuxtPlugin(async (nuxtApp) => {
   // 仅在客户端执行
   if (!import.meta.client) return
+
+  // E2E-F-148：先装错误捕获，再做初始化 —— 否则初始化阶段自己抛的错抓不到。
+  // 它内部 try/catch 且永不 reject，装失败也不影响后续初始化。
+  try {
+    installClientErrorReporter()
+  } catch (e) {
+    console.warn('[client-error] reporter install failed', e)
+  }
 
   console.log('🚀 应用初始化开始...')
 

@@ -15,7 +15,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"os"
 	"time"
 
@@ -39,7 +40,7 @@ func (r *NacosRuntime) Close(ctx context.Context, svcName, host string, port int
 	if r.Registry != nil {
 		ins := shareddiscovery.Instance{ServiceName: svcName, Host: host, Port: port}
 		if err := r.Registry.Unregister(ctx, ins); err != nil {
-			log.Printf("[nacos] unregister failed (continuing): %v", err)
+			logging.PrintfContext(ctx, "[nacos] unregister failed (continuing): %v", err)
 		}
 	}
 	if r.Cancel != nil {
@@ -97,7 +98,7 @@ func defaultBootDeps() bootDeps {
 //   - 心跳启动失败 → 记录日志但不阻断
 func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRuntime, error) {
 	if !cfg.Nacos.Enabled {
-		log.Printf("[nacos] disabled by config")
+		logging.PrintfContext(ctx, "[nacos] disabled by config")
 		return &NacosRuntime{}, nil
 	}
 
@@ -133,7 +134,7 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 	if err := reg.Register(ctx, instance); err != nil {
 		return nil, fmt.Errorf("[nacos] Register: %w", err)
 	}
-	log.Printf("[nacos] registered %s at %s:%d", instance.ServiceName, instance.Host, instance.Port)
+	logging.PrintfContext(ctx, "[nacos] registered %s at %s:%d", instance.ServiceName, instance.Host, instance.Port)
 
 	// 3. Heartbeat
 	hbCtx, hbCancel := context.WithCancel(context.Background())
@@ -149,18 +150,18 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 
 	dataId := cfg.Name + ".ops.yaml"
 	if opsYaml, err := cc.GetConfig(ctx, dataId, group); err != nil {
-		log.Printf("[nacos] GetConfig(%s/%s) failed (continuing): %v", group, dataId, err)
+		logging.PrintfContext(ctx, "[nacos] GetConfig(%s/%s) failed (continuing): %v", group, dataId, err)
 	} else {
-		log.Printf("[nacos] ops config loaded: %s/%s, %d bytes", group, dataId, len(opsYaml))
+		logging.PrintfContext(ctx, "[nacos] ops config loaded: %s/%s, %d bytes", group, dataId, len(opsYaml))
 	}
 
 	// 5. ListenConfig
 	if cfg.Nacos.HotReload {
 		if err := cc.ListenConfig(ctx, dataId, group, func(d, g, content string) error {
-			log.Printf("[nacos] [hot-reload] %s/%s changed, %d bytes", g, d, len(content))
+			logging.PrintfContext(ctx, "[nacos] [hot-reload] %s/%s changed, %d bytes", g, d, len(content))
 			return nil
 		}); err != nil {
-			log.Printf("[nacos] ListenConfig failed (continuing): %v", err)
+			logging.PrintfContext(ctx, "[nacos] ListenConfig failed (continuing): %v", err)
 		}
 	}
 

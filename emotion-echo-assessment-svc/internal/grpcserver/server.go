@@ -19,7 +19,8 @@ package grpcserver
 import (
 	"context"
 	"fmt"
-	"log"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"net"
 	"strings"
 	"sync"
@@ -98,12 +99,12 @@ func (s *Server) Start(ctx context.Context) error {
 	s.mu.Lock()
 	s.listener = lis
 	s.mu.Unlock()
-	log.Printf("[grpc] assessment-svc gRPC server listening on :%d", s.port)
-	log.Printf("[grpc] services: AssessmentService (user id required)")
+	logging.PrintfContext(ctx, "[grpc] assessment-svc gRPC server listening on :%d", s.port)
+	logging.PrintfContext(ctx, "[grpc] services: AssessmentService (user id required)")
 
 	go func() {
 		<-ctx.Done()
-		log.Printf("[grpc] shutting down...")
+		logging.PrintfContext(ctx, "[grpc] shutting down...")
 		s.grpcServer.GracefulStop()
 	}()
 

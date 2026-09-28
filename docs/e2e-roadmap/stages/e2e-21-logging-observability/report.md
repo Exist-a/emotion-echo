@@ -2,7 +2,7 @@
 stage: e2e-21
 title: 日志体系（结构化日志 + traceId 全链路注入 + Loki 采集链路打通）
 type: transformation
-status: partial
+status: done
 created: 2026-09-28
 started: 2026-09-28
 depends-on: []
@@ -181,3 +181,51 @@ related-findings: [E2E-F-07, E2E-F-13, E2E-F-146, E2E-F-147, E2E-F-148]
 同类现象本轮在本地也出现过：`scripts/build_dev_images.sh` 首次构建时 `user-svc`/`analytics-svc`
 连续 3 次失败于 `apk add ... did not complete successfully: exit code: 4`（alpine 包源网络），
 重试后即成功。判定为 CI/包源瞬时故障，非产品缺陷。
+
+---
+
+## 9. 收尾轮（2026-09-29）：三条留账闭环
+
+E2E-21 判 partial 的原因是自建的三条留账。本轮全部闭环。
+
+### 9.1 E2E-F-146（ctx 日志）——已解决
+
+| 项 | 结果 |
+|---|---|
+| shared helper | `PrintfContext` / `ErrorContext`（3 条测试） |
+| 迁移 | **68 处**：6 个 Go 服务中函数签名带 ctx 的 15 个文件 + gRPC stream 拦截器（`ss.Context()`，并给 `wrappedClientStream` 加 ctx 字段供 `RecvMsg`）+ Kafka consumer（`handleOne` 从 sw8 解析） |
+| 新增 | `TraceIDFromSW8`（5 条表驱动测试，含段数不足/采样标志非法等边界） |
+| 门禁 | `scripts/check_ctx_logging.py` + CI job `ctx-logging-gate`；负向对照：插一处带 ctx 的 `log.Printf` → 立即 RED |
+| 运行时 | 前端错误上报经网关入 BFF，日志行 `svc=web-bff` 且带 `trace_id`；gRPC client/server 拦截器日志均带同一 trace_id |
+
+剩余 92 处无 ctx 日志属 `main()` 启动路径与后台任务，**结构上拿不到 ctx**，登记在门禁的 ALLOWLIST 并逐条写明理由。
+
+### 9.2 E2E-F-147（Loki 版本 + k8s 权限）——已解决
+
+dev 升到 **3.2.0**，与 chart/ADR 三处一致。升级撞上 Loki ≥3.0 两处**硬性变更**：
+
+1. `retention_enabled: true` 必须配 `compactor.delete_request_store`，否则容器直接 `Exited(1)`（2.9 时代无此校验）
+2. `/loki/api/v1/query` **不再支持日志查询**（返 400），必须改用 `/query_range` —— E2E-21 收紧的断言第一时间抓到
+
+k8s 侧 promtail DaemonSet 去掉写死的 `runAsUser=10001`（读不到 hostPath 日志、**而 Pod 仍全绿**的静默失效），改为 `promtail.podSecurityContext` 可配、默认空。新增 `scripts/test_helm_loki_render.sh`（6/6，负向对照已验）+ CI job `helm-loki-render`。
+⚠️ k8s 侧只做了 `helm template` 渲染回归，**dev 环境无法真实验证**，生产部署时需实测一次。
+
+### 9.3 E2E-F-148（Python + 前端日志）——已解决
+
+- **Python 字段对齐**：`logging_setup.py` 补 `time` / `svc`，`ts`/`logger` 保留为兼容别名。运行时实测 JSON 行含 `{"time": ..., "svc": "llm-service", "ts": ..., "logger": ...}`（16 条测试）
+- **前端错误上报**：`clientErrorReporter.ts` → BFF `/api/v1/client-error` → 同一条结构化日志流 → Loki。**不引第三方 SDK**（新增外部数据出口 + 隐私评审冲突）。端到端实测：一次上报按 trace_id 在 Loki 查回（Go 6 条 + 前端 9 条测试）
+
+### 9.4 复验中发现并修掉的自身缺陷
+
+按 design 注册 BFF 路由后经网关一律 401 —— 踩了**两层**：
+
+1. `/api/v1/*` 落 catch-all 带 jwt-auth → 补 seed.sh 白名单路由 **119**
+2. BFF 自身 `authPathBypass` 只放行 `/api/v1/auth/` 前缀 → 补 `/api/v1/client-error`
+
+两处缺一不可，各加断言锁死（`TestNoAuthPathPrefixes_ClientErrorMustStayOpen` + seed_test 路由断言）。
+
+### 9.5 途中撞到的**既有**缺陷（记账不修）
+
+**E2E-F-149**：`user_behavior_events` 在 `a008` 被改成分区表后，唯一索引建在 `("event_id","occurred_at")`（分区表唯一索引必须含分区键），而 `event_repository.go:238` 仍写 `ON CONFLICT ("event_id")` ⇒ `SQLSTATE 42P10`。实测发 1 条消息即触发 consumer 重试 3 次、**报表数据源写不进任何行**。属数据层（E2E-15 / E2E-19），本阶段不修；两阶段按 A5 约束由 `done` 降为 `partial`。
+
+连带影响：本轮**无法端到端验证** Kafka 消费侧的 sw8 trace（消费在写库处即失败）。`TraceIDFromSW8` 有 5 条单测覆盖，其运行时价值待 E2E-F-149 修好后复验。另需注意：outbox 异步发布用的是**后台 ctx**，sw8 在发布时刻生成，因此异步链路的 trace_id 与原始请求**不是同一个**——这是架构限制，非本次改动引入。

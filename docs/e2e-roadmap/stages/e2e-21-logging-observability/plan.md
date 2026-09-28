@@ -2,7 +2,7 @@
 stage: e2e-21
 title: 日志体系（结构化日志 + traceId 全链路注入 + Loki 采集链路打通）
 type: transformation
-status: partial
+status: done
 created: 2026-09-28
 depends-on: []
 blocks: []

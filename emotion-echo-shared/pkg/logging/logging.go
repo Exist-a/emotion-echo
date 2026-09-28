@@ -185,6 +185,28 @@ func Fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
+// ===== E2E-F-146：带 ctx 的日志 helper =====
+//
+// 为什么需要（E2E-21 实测）：enrichHandler 是**从 ctx** 取 trace_id 再注入
+// 日志字段的（见 Handle），而全仓 160 处 `log.Printf` 不带 ctx ⇒ traceId
+// 链路虽然已打通，**handler 内部逐条日志仍然查不到 trace_id**。
+//
+// 用法：函数签名里有 ctx 时，一律改用这里的方法：
+//
+//	logging.PrintfContext(ctx, "[chat] publish failed: %s", topic)
+//	logging.ErrorContext(ctx, "[chat] persist failed", "err", err)
+//
+// ctx 里没有 trace_id 时照常输出（不写空字段），所以后台任务/启动代码
+// 也可以统一用，不会有副作用。
+func PrintfContext(ctx context.Context, format string, args ...any) {
+	slog.InfoContext(ctx, fmt.Sprintf(format, args...))
+}
+
+// ErrorContext 记 ERROR 级日志，err 以结构化字段传入（不要拼进 msg）。
+func ErrorContext(ctx context.Context, msg string, args ...any) {
+	slog.ErrorContext(ctx, msg, args...)
+}
+
 // emit 把消息按 [module] 前缀拆分后写到 slog。
 // 这是拆分逻辑的唯一入口，方便测试和重构。
 func emit(level slog.Level, msg string) {

@@ -1,6 +1,6 @@
 # dev compose Promtail 配置
 #
-# 镜像: grafana/promtail:2.9.4 (与 Loki 同版本)
+# 镜像: grafana/promtail:3.2.0（与 charts/loki/values.yaml + ADR-2026-09-loki-aggregator-dev §三 同一版本，E2E-F-147 对齐）
 # 启动方式: --profile obs (随 loki 一同启动)
 #
 # 采集源（E2E-21 实测修订，勿再改回旧注释）：
