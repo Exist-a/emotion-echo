@@ -1,16 +1,24 @@
 ---
-status: proposed
+status: accepted
 priority: high
 created: 2026-09-24
+accepted: 2026-09-28
+decided-by: user
 related-plans:
   - ../../plans/on-device-hybrid-inference-2026-09-23.md（v0.2 可行性评估）
   - ../../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md（v0.3 实施路线图，§B.2 为本 ADR 立项模板）
+related-decisions:
+  - D-26.1 端侧化隐私定位 = (a) 推理本地 + 消息照常上传（accepted，决策 35；用户拍板："前期先用 a，b 等排期"）
+  - D-26.2 端侧主力模型 = WebLLM 预置 Qwen3-1.7B-q4f16_1-MLC（accepted，决策 34）
+  - D-26.3 端侧化来源告知 = (a) 「本地完成」角标（accepted，决策 36）
+  - D-26.4 端侧化离线范围 = L0 + L1（L2 二期）（accepted，决策 37）
+  - D-26.5 端侧化记忆/摘要存储 = 随 D-26.1 联动（a）服务端生成下发（accepted，决策 38）
 ---
 
 # ADR-2026-09 端侧化混合推理主方案（D-26 · v0.3）
 
-> **状态**：🟡 **proposed**（2026-09-24 立项，Lane O 阶段一开工触发）
-> **转 accepted 条件**：v0.2 §十二 5 项决策全部由用户拍板 → 补立分项 ADR D-26.1~D-26.5 → 本 ADR 转 accepted（v0.3 §B.1 决议流程）。**5 项决策不在本 ADR 决议权**（AGENTS §八 规则 4）。
+> **状态**：🟢 **accepted**（2026-09-28 §十二 5 项决策全部用户拍板；Lane O 立分项 ADR D-26.1~D-26.5 → 本 ADR 转 accepted；v0.3 §B.1 决议流程）
+> **拍板时间**：2026-09-28（用户 2026-09-28 通过 AskUserQuestion 工具拍板全部 5 项决策）
 > **取代关系**：无（本项目首个端侧/离线决策，v0.3 §A.1 #1 核实）
 > **关联**：D-25（XTTS v3，独立不冲突）；E2E-17 数字人/TTS（真口型同步与本方案"显性角标"独立，v0.3 §H.3）；并行隔离协议 [parallel-tracks.md](../../../_meta/parallel-tracks.md)
 
