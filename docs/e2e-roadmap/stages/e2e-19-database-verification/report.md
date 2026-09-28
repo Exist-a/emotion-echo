@@ -3,8 +3,7 @@ stage: e2e-19
 title: 数据库层验证（连接池 / 迁移幂等重放 / 视图 / 软删除 / 备份→破坏→恢复）
 executed: 2026-09-27
 status: done
-executed: 2026-09-27
-note: ✅ done — 12/12 PASS + audit 0 FAIL + F-141 修复 + CI 门禁红线/绿线（PR #99）；§13.3 第二方核对 17 条断言用户 2026-09-28 审过批准（STATUS v2）
+note: ✅ done — 12/12 PASS + audit 0 FAIL + F-141 修复 + CI 门禁红线/绿线（PR #99）；§13.3 第二方核对 17 条断言用户 2026-09-28 审过批准（STATUS v2）；**2026-09-28 IAB 补账完成**（见 §9）
 environment: dev 模式（19 容器 healthy，infra+apps+dev compose + .env.local + --profile dev；db-migrate Exited(0) 修后状态）
 ---
 
@@ -49,6 +48,8 @@ environment: dev 模式（19 容器 healthy，infra+apps+dev compose + .env.loca
 | 项目实际有 PG 原生月度分区（a008）+ plan.md "无分区"描述错误 | 范围内 | plan.md §1 修正为"已用 RANGE 月度分区"；测试点 #7 改成 EXPLAIN 验证分区裁剪 |
 | pg_restore 14 个 warning（分区约束 inherited --clean 误判） | 范围外（pg_restore 工具行为，不影响数据） | 仅记录，不修；恢复数据完整（行数一致证明） |
 | 首次 gateway 请求 502（F-137 同型，nacos discovery 缓存 warm-up） | 范围外（E2E-25 范畴） | 已记入账本 F-137；本次实跑 ~30s 内自动恢复（第二次 200），按既有协议不再修 |
+| **E2E-F-96 三次复现**（2026-09-28 IAB 补账轮）：整栈重启后 **user-svc / chat-svc / analytics-svc 全部 degraded start**（`repository not initialized`），分别导致 login 502 / 发消息"发送失败" / 日报"加载失败"，各 restart 即愈 | 范围外（账本 F-96 = 编排健壮性，归 E2E-06/E2E-23；本阶段不动 svc 代码） | **账本 F-96 补账**：复现从"1 svc"扩大到"3 svc 同批"，坐实非偶发；本阶段只记录 |
+| **IAB 截图 surface 滞后**（新坑）：`tab.screenshot()` 输出比 DOM/URL 慢 1-2 拍（导航后截到上一页），需重复截取直到与 DOM 一致；另 IAB locator `click()` 对登录按钮超时（memory「IAB 交互模式」同型）→ CUA 坐标点击替代 | 工具层（非产品缺陷） | 记入 §9 + memory 候选；不修产品代码 |
 
 ## 4. 修复清单（TDD 记录）
 
@@ -89,3 +90,31 @@ environment: dev 模式（19 容器 healthy，infra+apps+dev compose + .env.loca
 ## 8. 执行会话备注
 
 - **跨会话工作目录冲突**：本会话中途 Lane O 合 #90 / #89 等 main commit，曾把 HEAD 从 fix/e2e-19-database-verification 切到 main（working copy 与 commit 分裂）；stash + checkout fix 分支 + stash pop 后完整恢复，无数据丢失（memory「working copy vs commit 分裂」+「多 PR 拆分纪律」同型教训再次验证）。
+## 9. IAB 补账（2026-09-28，用户质询后补做）
+
+**背景**：收口时步骤 3「IAB 实测」被 Playwright + curl + psql 替代（理由：数据库层测试点浏览器不可观测）。用户 2026-09-28 质询「不用 iab 测试？」后，按 RUNBOOK §3 补真 IAB 黑盒走查。
+
+**走查链路**（全部黑盒：真实浏览器、真实用户操作、无 JS 注入）：
+
+| 步骤 | 操作 | 观测（DOM + 截图双验） | 结果 |
+|------|------|------------------------|------|
+| 1 | IAB 打开 `127.0.0.1:3000/login`，填 smoke_user/echo123，点击登录 | 跳转 `/chat/conversation/new`，状态栏"✓ 欢迎回来" | PASS |
+| 2 | 输入"**E2E-19 IAB 补测：数据库层修复后主链路冒烟**"回车发送 | 创建会话 **#358**，用户气泡 + AI 回复「听起来你正在处理数据库修复后的验证工作…」双 article 渲染 | PASS |
+| 3 | 打开日报 `/chat/dashboard/dailyReport` | 「2026-09-28，你共有 **1 段对话，2 条消息**，主要情绪 平静（1次）」+ 1/2 数字卡片 + 情绪分布/消息意图分布双环图 —— **与步骤 2 实发数据互指标一致** | PASS |
+| 4 | 打开我的空间 `/chat/user` | Smoke User / 18 岁 · ID 2 / 互动深度指标 / 人格画像空态"还没有人格测评结果" | PASS |
+
+**途中修复（范围外发现，只记不修）**：
+- **E2E-F-96 三次复现**：user-svc（login 502）→ chat-svc（发消息失败 toast `repository not initialized (degraded start)`）→ analytics-svc（日报加载失败），各 `docker restart` 即愈。归账本 F-96（E2E-06/E2E-23），本阶段不动 svc 代码。
+- **apisix-seed 重跑 + restart BFF** 后网关 login 恢复 200（E2E-16 铁律）。
+
+**截图证据**（4 张，均已实际查看确认内容）：
+- `screenshots/iab-01-login.png` — 登录页（账号已填）
+- `screenshots/iab-04-chat-conversation-358-ai-reply.png` — 会话 #358：用户气泡 + AI 回复全文 + 会话列表
+- `screenshots/iab-02-daily-report.png` — 日报：1会话/2消息 + 双环图（数据与实发一致）
+- `screenshots/iab-03-my-space.png` — 我的空间：Smoke User + 互动深度指标
+
+**IAB 工具坑（新发现，记档）**：
+1. **截图 surface 滞后 1-2 拍**：`tab.screenshot()` 输出比当前 DOM/URL 慢（导航后截到上一页），需重复截取核对。
+2. **locator click 超时**：登录按钮 `getByRole('button').click()` 两次超时（count=1/visible/enabled 均真）→ 改 `tab.cua.click({x,y})` 坐标点击成功 —— 与 memory「IAB 交互模式」一致。
+
+**结论**：E2E-19 此前缺口（无 IAB 实测）已补，步骤 3 六步循环完整。
