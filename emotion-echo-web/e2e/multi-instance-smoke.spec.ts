@@ -11,6 +11,10 @@ import { test, expect } from '@playwright/test'
  * 覆盖测试点：
  * #11 回归钉：登录锁定语义主链路（chromium + mobile 双 project）
  *
+ * 历史用例 #11b（验证码 60s 防枚举跨实例）已随 E2E-20 收尾裁定移除
+ * （D-01 + 用户 2026-09-28：/api/v1/auth/verification-code 是遗留端点待删
+ * E2E-F-144，其存储退回 in-memory，不再有跨实例语义可钉）。
+ *
  * 前置条件：
  * - dev 环境运行中（RUNBOOK §2.1，必带 --env-file .env.local --profile dev）
  * - 双 BFF 实例（8894 + 8895）且 LOGIN_LOCK_BACKEND=redis
@@ -71,39 +75,6 @@ test.describe('E2E-20 多实例并发回归钉', () => {
       correctPwResp.status(),
       '锁定后即使密码正确也应 423（防爆破语义）',
     ).toBe(423)
-  })
-
-  test('#11b 验证码 60s 防枚举跨实例（第二发被拦但响应形状不变）', async ({
-    request,
-  }) => {
-    const username = uniqueLockUser()
-
-    // 第 1 次发码：dev 模式回显 devCode
-    const first = await request.post(`${API_BASE}/api/v1/auth/verification-code`, {
-      data: { username },
-    })
-    expect(first.ok(), '首次发码应成功').toBe(true)
-    const firstBody = await first.json()
-    expect(firstBody?.data?.success).toBe(true)
-    expect(
-      firstBody?.data?.devCode,
-      'dev 模式首次发码应回显 devCode',
-    ).toBeTruthy()
-
-    // 1s 内第 2 次发码（经网关 → 可能落到另一实例）：限流命中仍返 success
-    // 但**不得**再次回显 devCode（防枚举语义：响应形状恒定，不泄露是否限流）
-    const second = await request.post(`${API_BASE}/api/v1/auth/verification-code`, {
-      data: { username },
-    })
-    expect(second.ok(), '第二次发码 HTTP 层仍成功（防枚举不泄露限流状态）').toBe(
-      true,
-    )
-    const secondBody = await second.json()
-    expect(secondBody?.data?.success).toBe(true)
-    expect(
-      secondBody?.data?.devCode,
-      '60s 窗口内第二次发码不得回显新 devCode（跨实例防枚举生效）',
-    ).toBeFalsy()
   })
 
   test('#11c 未锁定用户正常登录不受影响（负向对照）', async ({ request }) => {

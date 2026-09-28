@@ -1,14 +1,15 @@
 // Round 4.3 后补：LoginLockStore 的 Redis 实现。
 //
-// 多 BFF 实例下共享登录失败计数 + 验证码缓存。解决 E2E-20 测试点 #2
-// （登录锁定跨实例失效）和 #3（验证码防枚举跨实例失效）。
+// 多 BFF 实例下共享登录失败计数。解决 E2E-20 测试点 #2（登录锁定跨实例失效）。
+//
+// E2E-20 收尾裁定（D-01 + 用户 2026-09-28）：验证码存储已从本实现移出
+// （遗留端点待删 E2E-F-144，禁止 Redis 化，见 store.go VerificationCodeStore）。
 //
 // Key 设计：
-//   - 失败计数：lock:fails:{username}（String，存 failCount:lockedAtUnix）
-//   - 验证码：vercode:{username}（String，存 code + expiresAt）
+//   - 失败计数：lock:fails:{username}（Hash，存 fails + locked_at_unix_ms）
 //
-// 降级（E2E-20 #5 [M]）：Redis 不可达时返 ErrStoreDown，由调用方
-// 决定 fallback（fallback 到 in-memory 实现）。
+// 降级（E2E-20 #5 [M]）：Redis 不可达时不 fail-closed（IsLocked/RecordFailure
+// 按未锁/未触发处理）。
 package authlock
 
 import (
@@ -24,22 +25,18 @@ import (
 
 // RedisStore Round 4.3 后补：Redis LoginLockStore 实现
 type RedisStore struct {
-	client    *redis.Client
-	prefix    string        // key 前缀（多业务方隔离）
-	timeout   time.Duration // 单次操作超时
-	lockTTL   time.Duration // 失败计数的 Redis TTL（默认 = lockWindow + 1min）
-	codeTTL   time.Duration // 验证码的 Redis TTL（默认 = verificationTTL）
-	minGap    time.Duration // 验证码最小间隔（默认 = verificationMinGap）
+	client  *redis.Client
+	prefix  string        // key 前缀（多业务方隔离）
+	timeout time.Duration // 单次操作超时
+	lockTTL time.Duration // 失败计数的 Redis TTL（默认 = lockWindow + 1min）
 }
 
 // RedisConfig 配置选项
 type RedisConfig struct {
 	Client  *redis.Client
 	Prefix  string        // 默认 "authlock"
-	Timeout time.Duration // 默认 100ms
+	Timeout time.Duration // 默认 1s
 	LockTTL time.Duration // 默认 = lockWindow + 1min
-	CodeTTL time.Duration // 默认 = verificationTTL
-	MinGap  time.Duration // 默认 = verificationMinGap（60s）
 }
 
 // NewRedisStore 构造 RedisStore
@@ -56,29 +53,17 @@ func NewRedisStore(cfg RedisConfig) *RedisStore {
 	if cfg.LockTTL == 0 {
 		cfg.LockTTL = loginLockWindow + time.Minute
 	}
-	if cfg.CodeTTL == 0 {
-		cfg.CodeTTL = verificationTTL
-	}
-	if cfg.MinGap == 0 {
-		cfg.MinGap = verificationMinGap
-	}
 	return &RedisStore{
 		client:  cfg.Client,
 		prefix:  cfg.Prefix,
 		timeout: cfg.Timeout,
 		lockTTL: cfg.LockTTL,
-		codeTTL: cfg.CodeTTL,
-		minGap:  cfg.MinGap,
 	}
 }
 
 // Redis 内部 key 构造
 func (s *RedisStore) failKey(username string) string {
 	return fmt.Sprintf("%s:fails:%s", s.prefix, username)
-}
-
-func (s *RedisStore) codeKey(username string) string {
-	return fmt.Sprintf("%s:vercode:%s", s.prefix, username)
 }
 
 // parseFailCount Round 4.3 后补：读 failKey 的 hash field 'fails'
@@ -161,62 +146,6 @@ func (s *RedisStore) ClearFailures(ctx context.Context, username string) error {
 	return s.client.Del(c, s.failKey(username)).Err()
 }
 
-// CanSendVerificationCode Round 4.3 后补：检查验证码 minGap 间隔
-//
-// 与 in-memory 一致：距上次发送不到 minGap → false（不可重发）
-// Redis 不可达 → true（降级允许）
-func (s *RedisStore) CanSendVerificationCode(ctx context.Context, username string) bool {
-	c, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
-	val, err := s.client.Get(c, s.codeKey(username)).Result()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return true // 无码 = 可发
-		}
-		return true // 降级 = 允许
-	}
-	parts := splitVal(val)
-	if len(parts) != 2 {
-		return true
-	}
-	lastSentMs, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil {
-		return true
-	}
-	return time.Now().UnixMilli()-lastSentMs >= s.minGap.Milliseconds()
-}
-
-// SaveVerificationCode Round 4.3 后补：保存验证码 + TTL
-func (s *RedisStore) SaveVerificationCode(ctx context.Context, username, code string, ttl time.Duration) error {
-	c, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
-	now := time.Now().UnixMilli()
-	val := code + "|" + strconv.FormatInt(now, 10)
-	// 使用传入的 ttl 而非 s.codeTTL（让调用方控制）
-	return s.client.Set(c, s.codeKey(username), val, ttl).Err()
-}
-
-// GetVerificationCode Round 4.3 后补：取验证码（不存在或过期返 ("", nil)）
-func (s *RedisStore) GetVerificationCode(ctx context.Context, username string) (string, error) {
-	c, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
-	val, err := s.client.Get(c, s.codeKey(username)).Result()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return "", nil
-		}
-		return "", err
-	}
-	parts := splitVal(val)
-	if len(parts) != 2 {
-		return "", nil
-	}
-	return parts[0], nil
-}
-
 // Close Round 4.3 后补：关闭 Redis 连接
 func (s *RedisStore) Close() error {
 	return s.client.Close()
@@ -268,15 +197,6 @@ redis.call('PEXPIRE', KEYS[1], lock_ttl_ms)
 return {triggered, fails}
 `)
 
-// splitVal 拆分 "code|lastSentMs" 格式
-func splitVal(s string) []string {
-	for j := 0; j < len(s); j++ {
-		if s[j] == '|' {
-			return []string{s[:j], s[j+1:]}
-		}
-	}
-	return []string{s}
-}
-
 // 编译期断言：RedisStore 实现 LoginLockStore 接口
+// （契约测试 TestInterfaceShrink 锁死：RedisStore 不得实现 VerificationCodeStore）
 var _ LoginLockStore = (*RedisStore)(nil)
