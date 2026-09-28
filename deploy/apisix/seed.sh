@@ -103,6 +103,18 @@ esac
 # 部署 CORS 测试（curl 加 Origin 头）无法模拟浏览器拒绝 localhost 的场景。
 CORS_ALLOW_ORIGINS="${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
 
+# E2E-20 #8（Round 4.3 PR-2 后补）：limit-count policy = redis（多 APISIX
+# 节点共享配额，避免 local policy 跨节点放大）。
+# APISIX 3.18 redis-limiter 插件配置项（policy=redis 必填 redis_host/port）。
+LIMIT_REDIS_HOST="${LIMIT_REDIS_HOST:-emotion-echo-redis}"
+LIMIT_REDIS_PORT="${LIMIT_REDIS_PORT:-6379}"
+LIMIT_REDIS_DB="${LIMIT_REDIS_DB:-0}"
+# dev 模式无密码；prod 走 ${LIMIT_REDIS_PASSWORD:-}（空字符串即无密码）
+LIMIT_REDIS_PASSWORD="${LIMIT_REDIS_PASSWORD:-}"
+LIMIT_REDIS_TIMEOUT="${LIMIT_REDIS_TIMEOUT:-1000}"
+# policy 切换：LIMIT_POLICY=redis 用 Redis；其他保持 local（向后兼容）
+LIMIT_POLICY="${LIMIT_POLICY:-redis}"
+
 # 业务 svc 容器名（compose 网络 DNS）。默认值由 services.env.example 提供，
 # 此处仅保留 ${VAR:-default} 兜底（脚本被独立调用时仍能跑）。
 USER_SVC_HOST="${USER_SVC_HOST:-emotion-echo-user-svc}"
@@ -437,7 +449,12 @@ CATCHALL_PLUGINS_JSON=$(cat <<EOF
     "count": 60,
     "time_window": 60,
     "key": "remote_addr",
-    "policy": "local",
+    "policy": "$LIMIT_POLICY",
+    "redis_host": "$LIMIT_REDIS_HOST",
+    "redis_port": $LIMIT_REDIS_PORT,
+    "redis_db": $LIMIT_REDIS_DB,
+    "redis_password": "$LIMIT_REDIS_PASSWORD",
+    "redis_timeout": $LIMIT_REDIS_TIMEOUT,
     "rejected_code": 429
   },
   "limit-req": {
@@ -555,7 +572,7 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH","OPTIONS"]'
 # allow_headers 必须显式列出（400: you can not set '*' for other option）
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
-  "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "local"},
+  "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "$LIMIT_POLICY", "redis_host": "$LIMIT_REDIS_HOST", "redis_port": $LIMIT_REDIS_PORT, "redis_db": $LIMIT_REDIS_DB, "redis_password": "$LIMIT_REDIS_PASSWORD", "redis_timeout": $LIMIT_REDIS_TIMEOUT},
   "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-User-Id"}
 }
 EOF
