@@ -138,3 +138,23 @@ func TestInMemoryStore_InterfaceConformance(t *testing.T) {
 	s.ClearFailures(ctx, "u1")
 	assert.NoError(t, s.ClearFailures(ctx, "u1"))
 }
+
+// vcStoreContract E2E-20 收尾裁定（D-01，2026-09-28 用户确认）：
+// 验证码存储与登录锁定存储必须是两个独立接口——验证码端点是 D-01 决议
+// 下的遗留物（E2E-F-144 待删），只允许 in-memory，禁止 Redis 化。
+// 这里用局部接口声明做契约断言，不依赖生产代码是否已拆出该接口。
+type vcStoreContract interface {
+	CanSendVerificationCode(ctx context.Context, username string) bool
+	SaveVerificationCode(ctx context.Context, username, code string, ttl time.Duration) error
+	GetVerificationCode(ctx context.Context, username string) (string, error)
+}
+
+// TestInterfaceShrink_VerificationCodeStore_NotRedis E2E-20 收尾：
+//   - InMemoryStore 必须实现验证码存储契约（遗留端点的唯一合法后端）
+//   - RedisStore 不得实现验证码存储契约（裁定：验证码禁止跨实例共享存储）
+func TestInterfaceShrink_VerificationCodeStore_NotRedis(t *testing.T) {
+	assert.Implements(t, (*vcStoreContract)(nil), NewInMemoryStore(),
+		"InMemoryStore 应实现验证码存储契约")
+	assert.NotImplements(t, (*vcStoreContract)(nil), NewRedisStore(RedisConfig{}),
+		"RedisStore 不得实现验证码存储契约（D-01 裁定：验证码为遗留端点，禁止 Redis 化）")
+}
