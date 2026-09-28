@@ -2,7 +2,8 @@
 stage: e2e-20
 title: 多实例并发正确性（登录锁定 / 验证码防枚举 / 限流跨实例）
 type: transformation
-status: pending
+status: in-progress
+started: 2026-09-28
 created: 2026-09-28
 depends-on: [e2e-18]
 blocks: []
@@ -83,13 +84,13 @@ related-findings: [E2E-F-25, E2E-F-96]
 
 | 条件 | 状态 |
 |------|------|
-| E2E-18 依赖（Redis 决策） | ✅ D-27 已决议 Redis 保留（2026-09-24）—— **但 e2e-18 阶段本身仍 🟡 partial（待 §13.3 核对）→ 按 RUNBOOK §1 状态机，e2e-18 转 done 后 E2E-20 才允许 in-progress** |
+| E2E-18 依赖（Redis 决策） | ✅ D-27 已决议 Redis 保留（2026-09-24）+ E2E-18 阶段本身 ✅ done（2026-09-28 §13.3 第二方核对批准，PR #110 main=d3b0fe3）→ 状态机满足 in-progress 前置 |
 | E2E-19 done（前序） | ✅ 2026-09-28 §13.3 用户批准（commit a8978df） |
 | 不在决策门阻塞（RUNBOOK §9） | ✅ 仅 D-04 不阻塞任何阶段 |
-| `audit --all` 0 FAIL | ✅ 2026-09-28 实测 |
+| `audit --all` 0 FAIL | ✅ 2026-09-28 实测（PR #110 合并后） |
 | Redis 容器 healthy | dev 栈现成（E2E-18 盘点确认） |
 | `deploy/.env.local` | ✅ 严禁删除/覆盖（AGENTS §四红线） |
-| dev mode 锁 | 开工写 `deploy/.devmode-session`（owner: lane-e），收工删 |
+| dev mode 锁 | ⚠️ **Lane O T3 IAB 锁 until=2026-09-28 12:00 仍未释放**（按协议 §三.资源1 不得强占）→ 开工前协商 Lane O 释放或等待；worktree `../Emotion-Echo-e2e20` 已建（branch=`fix/e2e-20-multi-instance-concurrency`） |
 
 环境启动（RUNBOOK §2.1，**必带 `--env-file .env.local --profile dev`**）：
 
