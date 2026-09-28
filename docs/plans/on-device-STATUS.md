@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5+T2#6 收口（2026-09-27）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5+T2#6+T2#7 收口（2026-09-28）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -203,15 +203,47 @@
 - 不改代码 / 不改测试 —— 纯决策材料
 - main squash merged PR #95（7aa8eed）+ 源分支已删 + worktree 已删
 
+## 一.11、T2#7 已完成（2026-09-28 续接，OND-F-05 fixed：golden set 扩 N=13 · PR #104 已 squash 合并）
+
+| 项 | 文件 | 验证 |
+|----|------|------|
+| **golden_set.jsonl 扩 N=7 → N=13**（daily +1 / high_risk +1 / personality +2 / emotion +2） | `scripts/on-device-golden/golden_set.jsonl` | pytest `scripts/on-device-golden/` → **13/13 PASS**（schema + 5 层覆盖） |
+| **新增 6 用例覆盖典型心理疏导场景**（不绑定 §十二决策方向） | 同上 | daily-03 升职 vs 异地父母 / high_risk-02 自残已发生 + 主动求助 / personality-02 意外怀孕 / personality-03 考公 vs 一线 / emotion-03 朋友升职（喜忧参半）/ emotion-04 母亲去世（情绪压抑） |
+| **baseline 重跑 N=13 → 84.62% guardrail** | `scripts/on-device-baseline/baseline_report.{md,json}`（重生成） | 与 T2#4 N=7 baseline 对比：pass 持平（mock fallback 预期），guardrail -1.09pp（新增 high_risk-02 mock 不含 hotline） |
+| **golden-n13 报告**（D-26.2 ADR §五验收契约前置） | `docs/plans/on-device-golden-n13-report-2026-09-28.md` | §一 调研依据 + §三 设计原则 + §四 实测 + §五 决策影响 + §七 给下次开场动作 + §十 commit 元信息 |
+
+**关键设计点**：
+- **不绑定 §十二决策**：扩 6 用例仅覆盖"场景 × 层"，不引入"端云对照/离线/本地双轨"维度（用户拍 §十二任一方向后真机基线直接可用）
+- **expect 字段沿用既有契约**：length [100,300] / must_contain: ["我理解"] / must_contain: ["400-161-9995"] / must_not_contain 触发护栏 / ends_with_question
+- **用例为原创**：未引用真实患者案例（v0.2 §六.6 心理疏导典型场景，无版权风险）
+
+**协议合规**：
+- ✅ 仅触碰 Lane O 独占列（`scripts/on-device-golden/` + `docs/plans/on-device-*`）
+- ✅ 未触碰 useAIStreamHandler.ts / package.json / nuxt.config.ts / docs/e2e-roadmap/** / deploy/
+- ✅ §十二 5 项决策权属用户，**未决策加码**
+- ✅ 未登 D-NN / 决策 N 新号
+
+**门禁**：
+- pytest `scripts/on-device-golden/` → **13/13 PASS**（含 schema + 5 层覆盖）
+- pytest `scripts/on-device-baseline/` → **14/14 PASS**（无回归）
+- pytest `scripts/on-device-perf/` → **24/24 PASS**（无回归）
+- 合计 **51/51 PASS**
+- e2e_stage_audit.py --all → **30 阶段 0 FAIL**
+
+**T2#7 边界**（避免范围漂移）：
+- ❌ **不**接 WebLLM 真引擎（T3 任务，需 dev mode + 真 GPU）
+- ❌ **不**跑真实 Qwen3-1.7B 真机基线（T3 任务，需 §十二决策 2 拍板 + dev mode）
+- ✅ N=13 用例就绪 + baseline 占位报告 + OND-F-05 fixed
+
 ## 二、环境基线（协议 §五 要求记录）
 
-- `main` = `7aa8eed2`（PR #95 squash 后，T2#6 合并），与 origin/main 同步
-- **T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 全程零 dev mode**：devmode 锁 lane-e E2E-19 占用期间 Lane O 不抢，T2#6 写完时锁已释放
+- `main` = `f09bc06`（PR #104 squash 后，T2#7 合并），与 origin/main 同步
+- **T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 + T2#7 全程零 dev mode**：devmode 锁 lane-e E2E-19 补 IAB 占用（until 2026-09-28 23:00），Lane O 不抢
 - 测试环境：vitest（emotion-echo-web，pnpm）+ pytest（宿主 Python）
   - vitest `app/utils/offline/` + `app/pages/demo/` → **59 passed**（T2#5 +17）
-  - pytest `scripts/on-device-perf/` → 24 passed · `scripts/on-device-golden/` → 13 passed · **`scripts/on-device-baseline/` → 14 passed（T2#4）**
-- worktree：`D:/源码/Emotion-Echo-lane-o-decision`（T2#6 临时，本轮收口已删）
-- 分支：`docs/on-device-decision-pack` 已 squash 合并 + 远端删除（AGENTS §2.5）
+  - pytest `scripts/on-device-perf/` → 24 passed · **`scripts/on-device-golden/` → 13 passed（T2#7 扩 N=13）** · **`scripts/on-device-baseline/` → 14 passed（T2#4）**
+- worktree：`D:/源码/Emotion-Echo-lane-o-n13`（T2#7 临时，本轮收口已删）
+- 分支：`test/on-device-golden-expand-n13` 已 squash 合并 + 远端删除（AGENTS §2.5）
 
 ## 三、CI 覆盖现状（2026-09-24 实测 4 workflow）
 
@@ -228,7 +260,8 @@
 2. ~~**T1**：编译链路 + CDN 清单~~ ✅ T1 完成（PR #84 `ac269f5`；**国内可达实测拉流**留 T2）
 3. ~~**T1**：性能基线测量脚本骨架~~ ✅ T1 完成（PR #84 `7c42411`；**真机测量**留 T2）
 4. ~~**T1/T2**：云端基线跑分（golden set 注入真实 model_fn —— `emotion-llm-service` 是 gRPC-only port 50051，HTTP 8000 仅有 /analyze；可用 `iter_chat_chunks` + mock fallback（`LLM_API_KEY` 空时）或走 DeepSeek）~~ ✅ T2#4 完成（PR 待合并；详见 §一.8 + `docs/plans/on-device-baseline-report-2026-09-24.md`）
-5. **T2**：编译链路 + CDN **实测拉流**（5 候选 CDN 实测可达性 + CORS 6 项检查清单 —— 见 `on-device-compile-cdn-2026-09-24.md` §三/§五）
+5. **T2**：编译链路 + CDN **实测拉流**（5 候选 CDN 实测可达性 + CORS 6 项检查清单 —— 见 `on-device-compile-cdn-2026-09-24.md` §三/§五） |
+| 5'. ~~**T2#7**：golden set 扩 N=13（解决 OND-F-05）~~ ✅ T2#7 完成（PR #104 `f09bc06`；golden_set.jsonl 7 → 13 用例 + baseline_report 重生成 + docs/plans/on-device-golden-n13-report-2026-09-28.md） |
 6. **T2**：性能基线**真机测量**（TTFT / tokens/sec / vram / model_load_ms 注入 PerfMeasurement —— 需 WebGPU + WebLLM 引擎真机，IAB 或 Playwright 实测）
 7. ~~**T2**：WebLLM 最小 Demo 契约测试骨架~~ ✅ T2#1 完成（PR #86 `f2083fb` + `582269f`；Demo 占位页 + 4 接口 + 42/42 vitest PASS）
 8. ~~**T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）~~ ✅ T2#5 完成（PR #92 `7aaac7d6`；架构就绪 + 17 用例契约测试 + package.json 握手；T3 IAB 才接真引擎流式）
@@ -241,6 +274,6 @@
 ## 五、给下次会话的开场动作
 
 1. 读 AGENTS §八 + `parallel-tracks.md` §五 → 开工三查（fetch/status、对方 STATUS 尾 3 行、`.devmode-session` 锁）
-2. 读本文件 §四，**从第 8 项 WebLLM Demo 真引擎接入**继续（T0 + T1 + T2#1 + T2#3 + T2#4 已收口）
+2. 读本文件 §四，**从第 8 项 WebLLM Demo 真引擎接入**继续（T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 + T2#7 已收口）
 3. **用户决议 §十二 决策 2**（MindChat vs Qwen3）—— 不在本轨决议权
 4. 独占列红线与编号口径（两套号都查）见协议 §二/§三.资源3
