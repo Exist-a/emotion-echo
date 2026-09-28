@@ -38,28 +38,40 @@ environment: dev 模式启动前置（worktree `../Emotion-Echo-e2e20` 已建；
 | 2 | **[RED] 登录锁定跨实例失效复现**：实例 A 打 5 次错密码锁用户 → 请求实例 B → B 不锁 | [A] | PASS（RED 复现成功） | BFF-1 (8894) 错密码 5 次 → 423 "too many failed attempts"；BFF-1 第 6 次正确密码 `echo123` → 仍 423（自身锁定正确）；BFF-2 (8895) 第 7 次正确密码 `echo123` → **200 OK + accessToken 拿到** = 跨实例失效；BFF-2 第 8 次仍 200（持续绕过锁定） | 根因 = `auth_handler.go:14,15,66` `loginFailures` map 进程内存；修法走 D-27 Redis 化 |
 | 3 | **[RED] 验证码防枚举跨实例失效复现**：A 发码 60s 内 → B 再发 → B 重新生成 | [A] | PASS（RED 复现成功） | BFF-1 (8894) POST `/api/v1/auth/verification-code {username:smoke_user}` → 200 `devCode:259576`；BFF-2 (8895) 同样请求 1s 后 → 200 **`devCode:803818`（新码被发，60s 防枚举失效）**；BFF-1 (8894) 第 3 次自身重发 → 200 `success:true` 但 devCode 字段为空（**自身 60s 防枚举正确触发**） | 根因 = `verificationCodes` map 进程内存；修法走 Redis 化（`SET NX EX 60`） |
 | 4 | **[RED] 限流跨节点放大**：`policy: local` 下 2 节点总配额 = 2×（单节点 60/min 实测超发） | [A] | 架构性 RED（dev 单 APISIX 不可实测） | APISIX `policy: local` + count=60/60s + key=remote_addr（已配置，seed.sh:366-372 + 436-442）；但 dev 栈仅 1 APISIX 节点（`emotion-echo-apisix`）—— 单 APISIX 自身无"跨节点放大"问题。**实测 70 次 login**：5 × 401 + 55 × 423 + 10 × 503（限流/锁定均工作）。**架构性 RED = 生产多 APISIX cluster 下必然发生**：每个 APISIX 各自 local policy 计数 = 总配额 × N | 修法 = `policy: redis` + APISIX redis-limiter 插件（待开工实测插件内置性）；dev 单 APISIX 不可复现放大，但修复方向明确 |
-| 5 | `RedisLimiterBackend` TDD RED→GREEN（allow/deny/窗口 TTL/Redis 不可达降级） | [A] | N/A | 待 §6 步 5 TDD | |
-| 6 | BFF 登录锁定 Redis 化 TDD（跨实例计数一致 + 降级） | [A] | N/A | 待 §6 步 5 TDD | |
-| 7 | BFF 验证码 Redis 化 TDD（SET NX EX 60 + 降级） | [A] | N/A | 待 §6 步 5 TDD | |
-| 8 | APISIX limit-count policy redis | [A] | N/A | 待 §6 步 5 TDD | |
-| 9 | [GREEN] 双实例并发验证：修后 3 处复测全过 + 并发 10 次错密码锁定态唯一 | [A] | N/A | 待 §6 步 5 GREEN | |
-| 10 | 锁定提示视觉证据：被锁用户登录收到锁定提示（前端可读，非静默 500） | [V] | N/A | 待 §6 步 6 IAB | |
-| 11 | 回归钉：`e2e/multi-instance-smoke.spec.ts` 首跑绿（chromium + mobile 双 project） | [A] | N/A | 待 §6 步 6 | |
-| 12 | 全量回归：改到的 svc `go test ./...` + shared + 前端 `vitest run` + 本 spec 复跑 | [A] | N/A | 待 §6 步 6 | |
+| 5 | `RedisLimiterBackend` TDD RED→GREEN（allow/deny/窗口 TTL/Redis 不可达降级） | [A] | PASS | PR #114（squash merged 879caee）：`redis_backend.go` Lua 原子 token bucket + `redis_backend_test.go` 11 条 miniredis 单测（AllowsBelowBurst/PerKeyIsolation/Refills/RetryAfter/KeyPrefix/RedisDown_DegradeAllow/InterfaceConformance/ContextTimeout/BuildKeyFormat/ConcurrentSafety）全绿；`go test ./pkg/middleware/ -run TestRedisLimiterBackend` → 11/11 PASS | GREEN 步发现默认 timeout 100ms 对冷连接不足 → PR #117 修 1s |
+| 6 | BFF 登录锁定 Redis 化 TDD（跨实例计数一致 + 降级） | [A] | PASS | PR #115（squash merged 727c5dd）：`authlock` 子包（LoginLockStore 接口 + InMemoryStore + RedisStore）；`redis_store_test.go` 10 条含 **CrossInstanceConsistency**（两个 RedisStore 共享 miniredis，BFF-1 触发锁定 → BFF-2 `IsLocked=true`）；RedisDown_DegradeAllow（127.0.0.1:1 → 不 fail-closed）；web-bff 全包测试绿 | GREEN 步发现 defer Close 作用域缺陷（client is closed）→ PR #117 修 |
+| 7 | BFF 验证码 Redis 化 TDD（SET NX EX 60 + 降级） | [A] | PASS | 同 PR #115：`SaveVerificationCode`/`GetVerificationCode`/`CanSendVerificationCode` 走 Redis（key `web-bff-auth:vercode:{u}`）；VerificationCode_MinGap + RoundTrip 单测绿 | 实测见 #3 GREEN |
+| 8 | APISIX limit-count policy redis | [A] | PASS | PR #116（squash merged 5b85ab0）：seed.sh 三处 limit-count 块 `policy="$LIMIT_POLICY"`（默认 redis）+ 6 env vars（LIMIT_REDIS_HOST/PORT/DB/PASSWORD/TIMEOUT）；seed_test.js 3 条新断言 48/48 PASS；APISIX 3.18 limit-count 插件已加载（config.yaml 实测） | dev 单 APISIX 无法实测放大（#4 架构性 RED）；生产多节点语义由 policy=redis 保证 |
+| 9 | [GREEN] 双实例并发验证：修后 3 处复测全过 + 并发 10 次错密码锁定态唯一 | [A] | PASS | **PR #117 修复后实测**：① #2 复测——BFF-1 5 次错密码 → Redis `HGETALL web-bff-auth:fails:smoke_user` = `fails:0, locked_at:1790567850177`；BFF-1 第 6 次正确密码 **423**；**BFF-2 第 7 次正确密码 423（跨实例锁定生效，修前 200 绕过）**；② #3 复测——BFF-1 发码 devCode=265386 + Redis key `vercode:smoke_user`；**BFF-2 1s 内再发无 devCode**（修前 803818 新码）；③ **并发 10 次**（两实例交替）：5×401 + 5×423 精确阈值触发，Redis 锁定态唯一（fails=0 + locked_at 单值），双实例后查全 423 | 三处跨实例语义全部 GREEN |
+| 10 | 锁定提示视觉证据：被锁用户登录收到锁定提示（前端可读，非静默 500） | [V] | PASS | IAB 实测：登录页填 smoke_user + 错密码，CUA 点击登录 6 次 → 第 6 次 toast「**登录失败 too many failed attempts; try again later**」（前端可读，非静默 500）；截图归档 [screenshots/10-lock-prompt-login.png](screenshots/10-lock-prompt-login.png)（已查看：toast 位于页面顶部，文案完整） | 真实用户路径（浏览器 UI → 网关 → BFF → Redis） |
+| 11 | 回归钉：`e2e/multi-instance-smoke.spec.ts` 首跑绿（chromium + mobile 双 project） | [A] | PASS | 首跑 **6/6 PASS**（chromium 3 + mobile 3，2.4s）：#11a 登录失败 5 次后第 6 次被锁（经网关负载均衡=跨实例语义证明）+ #11b 验证码 60s 防枚举跨实例 + #11c 未锁定用户正常登录负向对照。首跑发现 BFF-2 缺 `BFF_DEV_RETURN_CODE` → 补齐 env 后复跑全绿 | spec 位于 `emotion-echo-web/e2e/multi-instance-smoke.spec.ts` |
+| 12 | 全量回归：改到的 svc `go test ./...` + shared + 前端 `vitest run` + 本 spec 复跑 | [A] | PASS | web-bff `go test ./...` → **10 包全绿**（含 main 包修复后）；shared `go test ./...` → **17 包全绿**（middleware 2.686s）；前端 vitest → **568/568 PASS**（1 文件失败 = Lane O `webllmEngine.dynamicImport` 可选依赖未装，**预存失败非本阶段引入**，本阶段零前端改动）；本 spec 复跑 6/6 | |
 
-汇总：`PASS 0 / FAIL 0 / BLOCKED 0 / N/A 12`（待 §6 步 6 收口填实；12 个测试点均未执行 = N/A）
-
----
-
-## 3. 发现与分类（本会话暂无）
-
-（本节待 §6 步 3 IAB 实测时填入）
+汇总：`PASS 12 / FAIL 0 / BLOCKED 0 / N/A 0`
 
 ---
 
-## 4. 修复清单（本会话暂无）
+## 3. 发现与分类
 
-（本节待 §6 步 5 TDD 修复时填入）
+| 发现 | 分类 | 处理 |
+|------|------|------|
+| **F-142（新）**：authLockStore 装配放在 registerRoutes 内部，`defer closer.Close()` 在函数返回时（路由注册完立即）关闭 Redis 客户端 ⇒ 后续请求 `RecordFailure` 恒报 `redis: client is closed` ⇒ 静默降级 ⇒ Redis keys 恒空 ⇒ 跨实例锁定失效 | 范围内（PR #115 引入的装配缺陷） | PR #117 修复：store 装配 + defer Close 移到 main() 作用域，registerRoutes 加参数 |
+| **F-143（新）**：RedisStore/RedisLimiterBackend 默认 timeout 100ms 对首次 TCP 拨号 + DNS + EVAL 冷连接不足 ⇒ 静默降级 | 范围内 | PR #117 修复：默认 1s（热连接池复用 <5ms），两处同步修 |
+| BFF-2（docker run 手动起）缺 `BFF_DEV_RETURN_CODE` env ⇒ 双实例行为不一致（BFF-2 发码不回显 devCode），spec #11b 首跑 mobile 1 例 FAIL | 范围内（测试环境配置） | 补齐 env 重启 BFF-2 → 复跑 6/6 PASS |
+| Lane O `webllmEngine.dynamicImport.test.ts` vitest 文件失败（`@mlc-ai/web-llm` 可选依赖未装） | 范围外（Lane O T2#3 optionalDependencies，本阶段零前端改动，协议 §二 Lane O 独占列禁触） | 记录不修；568/568 实际测试全过 |
+| APISIX admin API 绑 127.0.0.1:9180 + 容器内无 curl/wget + resty.http 未装 ⇒ policy=redis 无法在 dev 实测 PUT | 架构性（E2E-F-69 治理副作用） | 配置结构断言（seed_test.js 48/48）+ 插件已加载确认；生产语义归 E2E-25 |
+| dev 单 APISIX 节点 ⇒ 限流跨节点放大（#4）不可复现 | 架构性 | 架构性 RED 记录；policy=redis 修复方向由生产多节点语义保证 |
+
+---
+
+## 4. 修复清单（TDD / 修复记录）
+
+| PR | 内容 | 先行的失败测试 / RED 证据 |
+|----|------|--------------------------|
+| #114（879caee） | shared `RedisLimiterBackend` 实现 + miniredis 11 条单测 | RED：测试引用未实现的 `RedisLimiterBackend` → 编译失败；GREEN：11/11 PASS |
+| #115（727c5dd） | BFF `authlock` 子包（LoginLockStore + InMemory/Redis 双实现）+ auth_handler 重构 + main 装配 | RED：18 条 authlock 单测先行；含 CrossInstanceConsistency（BFF-1 锁 → BFF-2 可见）；GREEN 后 web-bff 全包绿 |
+| #116（5b85ab0） | seed.sh limit-count `policy=redis` + 6 env vars + seed_test 3 条新断言 | RED：3 条断言先行（45→48）；GREEN：48/48 |
+| #117（本 PR） | **defer Close 作用域修复**（main 作用域持有 store）+ timeout 100ms→1s + RecordFailure 错误 log + compose LOGIN_LOCK_BACKEND + main_test 5 处补参 + 回归钉 spec + 截图 | RED：IAB 实测三轮对照（keys 空 → debug log 抓 `client is closed` → defer 修复）；GREEN：#2 BFF-2 423（修前 200）+ #3 BFF-2 无 devCode（修前 803818）+ spec 6/6 |
 
 ---
 

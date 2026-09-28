@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -47,7 +48,10 @@ func NewRedisStore(cfg RedisConfig) *RedisStore {
 		cfg.Prefix = "authlock"
 	}
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 100 * time.Millisecond
+		// E2E-20 GREEN 修复：100ms 对首次 TCP 拨号 + DNS + EVAL 太短 ⇒ 静默降级
+		// （Redis keys 恒空、RecordFailure 恒返 false 的真根因）。1s 覆盖冷连接；
+		// 热连接（池复用）实际 <5ms。
+		cfg.Timeout = 1 * time.Second
 	}
 	if cfg.LockTTL == 0 {
 		cfg.LockTTL = loginLockWindow + time.Minute
@@ -137,6 +141,9 @@ func (s *RedisStore) RecordFailure(ctx context.Context, username string) bool {
 		[]string{s.failKey(username)},
 		now, s.lockTTL.Milliseconds(), loginMaxFailures).Result()
 	if err != nil {
+		// E2E-20 GREEN 诊断：静默降级掩盖真错误（100ms→1s 修复后 keys 仍空）。
+		// 打日志让运维能定位（降级行为不变——不 fail-closed）。
+		log.Printf("[authlock] RecordFailure redis err (degraded): %v", err)
 		return false // Redis 不可达 → 降级不更糟
 	}
 	arr, ok := res.([]any)

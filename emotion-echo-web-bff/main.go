@@ -265,7 +265,15 @@ func main() {
 	}
 
 	// 4. 路由（handler 装配）
-	registerRoutes(r, svcCtx, &c, llmStreamer, intentClassifier)
+	// E2E-20 GREEN 修复：authLockStore 必须在 main 作用域持有 + defer Close。
+	// 之前放在 registerRoutes 内部 defer ⇒ registerRoutes 返回时（路由注册完
+	// 立即）Redis 客户端被关闭 ⇒ 后续请求 RecordFailure 恒 "client is closed"
+	// ⇒ 静默降级，Redis keys 恒空，跨实例锁定失效。
+	authLockStore := buildAuthLockStore()
+	if closer, ok := authLockStore.(interface{ Close() error }); ok {
+		defer closer.Close() // main 退出时释放（RedisStore Close）
+	}
+	registerRoutes(r, svcCtx, &c, llmStreamer, intentClassifier, authLockStore)
 
 	log.Printf("Starting web-bff at %s:%d...", c.Host, c.Port)
 	go func() {
@@ -404,7 +412,7 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 // 路径契约（路由清单）：main_test.go 的 wantRoutes + wantRoutesWithEmotionQ 切片。
 // 改路由必须同步更新测试文件 + 在 PR 描述里说明（决策 18 §四.1 结论须附证据）。
 // 调试时临时增减路由也行——但合 PR 前 main_test.go 必须绿。
-func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier) {
+func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier, authLockStore authlock.LoginLockStore) {
 	// health（聚合下游探测）— 免鉴权（GinAuthMiddleware 白名单已含 /health）
 	// E2E-F-130/F-99：响应里带 version + build_time，便于一眼判定容器跑的是不是
 	// 最新代码（防 dev 跑旧 bundle 类 bug 复发）。Version 优先取 GIT_VERSION env，
@@ -423,12 +431,7 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	// auth（Stage 33 PR-19b：真实登录，注入 UserClient）
-	// Round 42 后补（E2E-20 #6+#7）：注入 LoginLockStore（in-memory 或 redis）。
-	// 默认 in-memory（保持原行为）；LOGIN_LOCK_BACKEND=redis 启用 Redis 跨实例共享。
-	authLockStore := buildAuthLockStore()
-	if closer, ok := authLockStore.(interface{ Close() error }); ok {
-		defer closer.Close() // RedisStore Close 释放 Redis 连接
-	}
+	// E2E-20 #6+#7：store 由 main() 装配后传入（Close 归 main defer 管理）。
 	r.POST("/api/v1/auth/:action", handler.NewAuthHandler(s.Auth, s.User, authLockStore))
 
 	// 业务 handler（各自 Register）
