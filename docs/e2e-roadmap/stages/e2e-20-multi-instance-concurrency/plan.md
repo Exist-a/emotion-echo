@@ -2,7 +2,7 @@
 stage: e2e-20
 title: 多实例并发正确性（登录锁定 / 验证码防枚举 / 限流跨实例）
 type: transformation
-status: partial
+status: done
 started: 2026-09-28
 created: 2026-09-28
 depends-on: [e2e-18]
@@ -107,33 +107,33 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 
 | # | 测试点 | 判定 | 验证方式 | 结果 |
 |---|--------|------|---------|------|
-| 1 | **多实例前置**：双 BFF 实例起得来（第 2 容器 healthy + Nacos 两实例注册 / 或 BFF 直连两端口） | [A] | `docker ps` + Nacos 实例列表 + curl 双端口 /health | ⬜ |
-| 2 | **[RED] 登录锁定跨实例失效复现**：实例 A 打 5 次错密码锁用户 → 请求实例 B → B 不锁（仍处理登录/计数归零） | [A] | curl 双实例 5 次错密码 + B 侧第 6 次观测 | ⬜ |
-| 3 | **[RED] 验证码防枚举跨实例失效复现**：A 发码 60s 内 → B 再发 → B 重新生成（不拦） | [A] | curl 双实例 verification-code | ⬜ |
-| 4 | **[RED] 限流跨节点放大**：`policy: local` 下 2 节点总配额 = 2×（单节点 60/min 实测超发） | [A] | seed.sh 回读 + 打压观测 429 阈值 | ⬜ |
-| 5 | **`RedisLimiterBackend` TDD RED→GREEN**：allow / deny / 窗口 TTL / Redis 不可达降级（表驱动 ≥5 用例） | [A] | `go test ./pkg/middleware -run TestRedisLimiter -v` 先红后绿 + commit 序列 | ⬜ |
-| 6 | **BFF 登录锁定 Redis 化 TDD**：跨实例计数一致 + Redis 挂降级 in-memory（≥4 用例） | [A] | `go test ./internal/handler -run TestLoginLockRedis -v` + miniredis | ⬜ |
-| 7 | **BFF 验证码 Redis 化 TDD**：SET NX EX 60 语义 + 降级（≥3 用例） | [A] | `go test` 先红后绿 | ⬜ |
-| 8 | **APISIX limit-count policy redis**：seed.sh 改 `policy: redis` + 重跑 seed + preflight 429 阈值正确（不放大） | [A] | seed.sh grep + 实际打压 429 计数 | ⬜ |
-| 9 | **[GREEN] 双实例并发验证**：修后 3 处复测全过 + 双实例并发 10 次错密码锁定态唯一不漂移 | [A] | curl 双实例 + psql/redis KEYS 观测 | ⬜ |
-| 10 | **锁定提示视觉证据**：被锁用户登录收到锁定提示（前端可读，非静默 500） | [V] | IAB 操作 + 截图并查看 | ⬜ |
-| 11 | **回归钉**：`e2e/multi-instance-smoke.spec.ts` 首跑绿（chromium + mobile 双 project） | [A] | `pnpm playwright test e2e/multi-instance-smoke.spec.ts` | ⬜ |
-| 12 | **全量回归**：改到的 svc `go test ./...` + shared + 前端 `vitest run` + 本 spec 复跑 | [A] | 各段命令输出 | ⬜ |
+| 1 | **多实例前置**：双 BFF 实例起得来（第 2 容器 healthy + Nacos 两实例注册 / 或 BFF 直连两端口） | [A] | `docker ps` + Nacos 实例列表 + curl 双端口 /health | PASS |
+| 2 | **[RED] 登录锁定跨实例失效复现**：实例 A 打 5 次错密码锁用户 → 请求实例 B → B 不锁（仍处理登录/计数归零） | [A] | curl 双实例 5 次错密码 + B 侧第 6 次观测 | PASS |
+| 3 | **[RED] 验证码防枚举跨实例失效复现**：A 发码 60s 内 → B 再发 → B 重新生成（不拦） | [A] | curl 双实例 verification-code | RED 复现 PASS；2026-09-28 裁定后作废（D-28，端点为 D-01 遗留物） |
+| 4 | **[RED] 限流跨节点放大**：`policy: local` 下 2 节点总配额 = 2×（单节点 60/min 实测超发） | [A] | seed.sh 回读 + 打压观测 429 阈值 | 架构性未实测（E2E-F-145 → E2E-25） |
+| 5 | **`RedisLimiterBackend` TDD RED→GREEN**：allow / deny / 窗口 TTL / Redis 不可达降级（表驱动 ≥5 用例） | [A] | `go test ./pkg/middleware -run TestRedisLimiter -v` 先红后绿 + commit 序列 | PASS |
+| 6 | **BFF 登录锁定 Redis 化 TDD**：跨实例计数一致 + Redis 挂降级 in-memory（≥4 用例） | [A] | `go test ./internal/handler -run TestLoginLockRedis -v` + miniredis | PASS |
+| 7 | **BFF 验证码 Redis 化 TDD**：SET NX EX 60 语义 + 降级（≥3 用例） | [A] | `go test` 先红后绿 | 2026-09-28 裁定后回退作废（D-28） |
+| 8 | **APISIX limit-count policy redis**：seed.sh 改 `policy: redis` + 重跑 seed + preflight 429 阈值正确（不放大） | [A] | seed.sh grep + 实际打压 429 计数 | PASS（结构断言 48/48；跨节点运行时实测归 E2E-25） |
+| 9 | **[GREEN] 双实例并发验证**：修后 3 处复测全过 + 双实例并发 10 次错密码锁定态唯一不漂移 | [A] | curl 双实例 + psql/redis KEYS 观测 | PASS |
+| 10 | **锁定提示视觉证据**：被锁用户登录收到锁定提示（前端可读，非静默 500） | [V] | IAB 操作 + 截图并查看 | PASS |
+| 11 | **回归钉**：`e2e/multi-instance-smoke.spec.ts` 首跑绿（chromium + mobile 双 project） | [A] | `pnpm playwright test e2e/multi-instance-smoke.spec.ts` | PASS（裁定后 #11a+#11c 双 project，收口复跑 4/4） |
+| 12 | **全量回归**：改到的 svc `go test ./...` + shared + 前端 `vitest run` + 本 spec 复跑 | [A] | 各段命令输出 | PASS |
 
-汇总：12 项（11 [A] + 1 [V]）。
+汇总：12 项（11 [A] + 1 [V]）。**2026-09-28 收口**：10 PASS + 1 裁定作废（#7）+ 1 架构性留账（#4→E2E-F-145）；#3 RED 证据保留作历史。
 
 ---
 
 ## 5. 验收标准（DoD）
 
-- [ ] 12 测试点全有结论（FAIL 已分类：范围内修复 / 范围外记账）
-- [ ] #2-#4 RED 复现证据 + #5-#8 GREEN 修复先红后绿（commit 序列可查）
-- [ ] #9 双实例并发实测过（不能只单测绿——AP-01 红线）
-- [ ] 账本 F-25 关账；F-96 复现则记账
-- [ ] 回归钉 `multi-instance-smoke.spec.ts` 存在 + 首跑绿 + 收口复跑绿
-- [ ] `audit --all` 0 FAIL（合并前后都跑）
-- [ ] report.md 按 §10 模板 + 三处 status 一致 + §2.5 自检三连
-- [ ] **§13.3 第二方核对** —— 执行者不得自宣 done（E2E-19 教训：写 partial 等用户审）
+- [x] 12 测试点全有结论（#7 裁定作废 / #4 架构性留账 E2E-F-145）
+- [x] #2-#4 RED 复现证据 + #5-#8 GREEN 修复先红后绿（commit 序列可查）
+- [x] #9 双实例并发实测过（5×401 + 5×423 精确阈值，Redis keys 实写非降级）
+- [x] 账本 F-25 关账（含裁定备注）；F-96 未复现不记账（归 E2E-06/E2E-23）
+- [x] 回归钉 `multi-instance-smoke.spec.ts` 存在 + 首跑 6/6 绿 + 收口复跑 4/4 绿（v0.1.31 镜像，裁定后 #11a+#11c）
+- [x] `audit --all` 0 FAIL（合并前后都跑）
+- [x] report.md 按 §10 模板 + 三处 status 一致 + §2.5 自检三连
+- [x] **§13.3 第二方核对** —— 用户 2026-09-28 批准（核对清单 11 条呈报后用户指示「如果检查无误，就收尾吧」）
 
 ---
 

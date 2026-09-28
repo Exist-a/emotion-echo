@@ -2,7 +2,7 @@
 stage: e2e-20
 title: 多实例并发正确性（登录锁定 / 验证码防枚举 / 限流跨实例）
 executed: 2026-09-28
-status: partial
+status: done
 environment: dev 模式启动前置（worktree `../Emotion-Echo-e2e20` 已建；待 Lane O 释放 dev mode 锁）
 ---
 
@@ -36,9 +36,9 @@ environment: dev 模式启动前置（worktree `../Emotion-Echo-e2e20` 已建；
 | # | 测试点 | 判定 | 结果 | 证据 | 备注 |
 |---|--------|------|------|------|------|
 | 1 | **多实例前置**：双 BFF 实例起得来（第 2 容器 healthy + Nacos 两实例注册 / 或 BFF 直连两端口） | [A] | PASS | `docker commit + docker run` 创建第 2 实例 `emotion-echo-web-bff-2`；`docker ps --filter name=emotion-echo-web-bff` 两实例都 healthy；Nacos `instance/list` 返 2 实例（IP 172.18.0.22 + 172.18.0.7，端口都 8894——host port 不同，container port 同 BFF 默认）；`curl :8894/health` + `:8895/health` 双 200 | Nacos 注册名硬编码（config.go:119），不需改代码 |
-| 2 | **[RED] 登录锁定跨实例失效复现**：实例 A 打 5 次错密码锁用户 → 请求实例 B → B 不锁 | [A] | PASS（RED 复现成功） | BFF-1 (8894) 错密码 5 次 → 423 "too many failed attempts"；BFF-1 第 6 次正确密码 `echo123` → 仍 423（自身锁定正确）；BFF-2 (8895) 第 7 次正确密码 `echo123` → **200 OK + accessToken 拿到** = 跨实例失效；BFF-2 第 8 次仍 200（持续绕过锁定） | 根因 = `auth_handler.go:14,15,66` `loginFailures` map 进程内存；修法走 D-27 Redis 化 |
-| 3 | **[RED] 验证码防枚举跨实例失效复现**：A 发码 60s 内 → B 再发 → B 重新生成 | [A] | PASS（RED 复现成功） | BFF-1 (8894) POST `/api/v1/auth/verification-code {username:smoke_user}` → 200 `devCode:259576`；BFF-2 (8895) 同样请求 1s 后 → 200 **`devCode:803818`（新码被发，60s 防枚举失效）**；BFF-1 (8894) 第 3 次自身重发 → 200 `success:true` 但 devCode 字段为空（**自身 60s 防枚举正确触发**） | 根因 = `verificationCodes` map 进程内存；修法走 Redis 化（`SET NX EX 60`）。**2026-09-28 收尾裁定（D-28）**：该端点是 D-01 决议下的遗留物待删（E2E-F-144），其 Redis 化已回退为 in-memory——本行 RED 复现证据保留作历史记录，修复语义不再需要 |
-| 4 | **[RED] 限流跨节点放大**：`policy: local` 下 2 节点总配额 = 2×（单节点 60/min 实测超发） | [A] | 架构性 RED（dev 单 APISIX 不可实测） | APISIX `policy: local` + count=60/60s + key=remote_addr（已配置，seed.sh:366-372 + 436-442）；但 dev 栈仅 1 APISIX 节点（`emotion-echo-apisix`）—— 单 APISIX 自身无"跨节点放大"问题。**实测 70 次 login**：5 × 401 + 55 × 423 + 10 × 503（限流/锁定均工作）。**架构性 RED = 生产多 APISIX cluster 下必然发生**：每个 APISIX 各自 local policy 计数 = 总配额 × N | 修法 = `policy: redis` + APISIX redis-limiter 插件（待开工实测插件内置性）；dev 单 APISIX 不可复现放大，但修复方向明确 |
+| 2 | **[RED] 登录锁定跨实例失效复现**：实例 A 打 5 次错密码锁用户 → 请求实例 B → B 不锁 | [A] | PASS | BFF-1 (8894) 错密码 5 次（RED 复现成功） → 423 "too many failed attempts"；BFF-1 第 6 次正确密码 `echo123` → 仍 423（自身锁定正确）；BFF-2 (8895) 第 7 次正确密码 `echo123` → **200 OK + accessToken 拿到** = 跨实例失效；BFF-2 第 8 次仍 200（持续绕过锁定） | 根因 = `auth_handler.go:14,15,66` `loginFailures` map 进程内存；修法走 D-27 Redis 化 |
+| 3 | **[RED] 验证码防枚举跨实例失效复现**：A 发码 60s 内 → B 再发 → B 重新生成 | [A] | PASS | BFF-1 (8894) POST（RED 复现成功） `/api/v1/auth/verification-code {username:smoke_user}` → 200 `devCode:259576`；BFF-2 (8895) 同样请求 1s 后 → 200 **`devCode:803818`（新码被发，60s 防枚举失效）**；BFF-1 (8894) 第 3 次自身重发 → 200 `success:true` 但 devCode 字段为空（**自身 60s 防枚举正确触发**） | 根因 = `verificationCodes` map 进程内存；修法走 Redis 化（`SET NX EX 60`）。**2026-09-28 收尾裁定（D-28）**：该端点是 D-01 决议下的遗留物待删（E2E-F-144），其 Redis 化已回退为 in-memory——本行 RED 复现证据保留作历史记录，修复语义不再需要 |
+| 4 | **[RED] 限流跨节点放大**：`policy: local` 下 2 节点总配额 = 2×（单节点 60/min 实测超发） | [A] | N/A | APISIX（架构性 RED：dev 单 APISIX 不可实测，留账 E2E-F-145 归 E2E-25） `policy: local` + count=60/60s + key=remote_addr（已配置，seed.sh:366-372 + 436-442）；但 dev 栈仅 1 APISIX 节点（`emotion-echo-apisix`）—— 单 APISIX 自身无"跨节点放大"问题。**实测 70 次 login**：5 × 401 + 55 × 423 + 10 × 503（限流/锁定均工作）。**架构性 RED = 生产多 APISIX cluster 下必然发生**：每个 APISIX 各自 local policy 计数 = 总配额 × N | 修法 = `policy: redis` + APISIX redis-limiter 插件（待开工实测插件内置性）；dev 单 APISIX 不可复现放大，但修复方向明确 |
 | 5 | `RedisLimiterBackend` TDD RED→GREEN（allow/deny/窗口 TTL/Redis 不可达降级） | [A] | PASS | PR #114（squash merged 879caee）：`redis_backend.go` Lua 原子 token bucket + `redis_backend_test.go` 11 条 miniredis 单测（AllowsBelowBurst/PerKeyIsolation/Refills/RetryAfter/KeyPrefix/RedisDown_DegradeAllow/InterfaceConformance/ContextTimeout/BuildKeyFormat/ConcurrentSafety）全绿；`go test ./pkg/middleware/ -run TestRedisLimiterBackend` → 11/11 PASS | GREEN 步发现默认 timeout 100ms 对冷连接不足 → PR #117 修 1s |
 | 6 | BFF 登录锁定 Redis 化 TDD（跨实例计数一致 + 降级） | [A] | PASS | PR #115（squash merged 727c5dd）：`authlock` 子包（LoginLockStore 接口 + InMemoryStore + RedisStore）；`redis_store_test.go` 10 条含 **CrossInstanceConsistency**（两个 RedisStore 共享 miniredis，BFF-1 触发锁定 → BFF-2 `IsLocked=true`）；RedisDown_DegradeAllow（127.0.0.1:1 → 不 fail-closed）；web-bff 全包测试绿 | GREEN 步发现 defer Close 作用域缺陷（client is closed）→ PR #117 修 |
 | 7 | BFF 验证码 Redis 化 TDD（SET NX EX 60 + 降级） | [A] | PASS | 同 PR #115：`SaveVerificationCode`/`GetVerificationCode`/`CanSendVerificationCode` 走 Redis（key `web-bff-auth:vercode:{u}`）；VerificationCode_MinGap + RoundTrip 单测绿 | 实测见 #3 GREEN。**2026-09-28 收尾裁定（D-28）回退**：验证码存储退回 in-memory（VerificationCodeStore 独立接口 + 契约测试锁死禁止 Redis 化），本测试点随之作废 |
@@ -116,13 +116,18 @@ environment: dev 模式启动前置（worktree `../Emotion-Echo-e2e20` 已建；
 
 ## 8. 收口自检
 
-- [ ] git status 干净（最终收口前）
-- [ ] main 与 origin/main 无 ahead/behind
-- [ ] 无残留已合并分支
-- [ ] 账本对账：F-25 关账；F-96 不在本阶段范围
-- [ ] `e2e_stage_audit.py --all` 0 FAIL
-- [ ] 复读关键断言：12 测试点结果列、汇总行、决策行均当场回读
-- [ ] 第二方核对（§13.3）—— 执行者不得自宣 done
+- [x] git status 干净（最终收口前；PR 合并后实测）
+- [x] main 与 origin/main 无 ahead/behind
+- [x] 无残留已合并分支（PR #118 squash 后源分支已删）
+- [x] 账本对账：F-25 关账（含裁定备注）；F-96 不在本阶段范围；F-144/F-145 新登
+- [x] `e2e_stage_audit.py --all` 0 FAIL（PR #118 前后各跑一次）
+- [x] 复读关键断言：12 测试点结果列、汇总行、决策行均当场回读
+- [x] 第二方核对（§13.3）—— **用户 2026-09-28 批准**（11 条清单呈报后指示「如果检查无误，就收尾吧」）
+
+> **运行时验收补充（2026-09-28 收口轮）**：web-bff 镜像重建 **v0.1.31**（含 D-28 回退代码）+ 容器重启 healthy +
+> `[authlock] using RedisStore` 确认；经网关实测 ① 5×401 → 第 6 次 **423**；② Redis `HGETALL fails:{u}` =
+> `fails:0, locked_at:1790578378666`（实写非降级）；③ verification-code 200 正常响应（in-memory 路径无恙）；
+> ④ demo 用户正常登录 200。回归钉收口复跑 **4/4**（chromium+mobile）。
 
 > **本会话完成度**：状态机推进 + 详档就绪 + worktree 建立。§6 六步循环待 dev mode 锁协商后启动。
 

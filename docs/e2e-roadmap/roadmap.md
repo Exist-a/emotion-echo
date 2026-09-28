@@ -2,7 +2,7 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-28 (E2E-19 ✅ done §13.3 用户批准；E2E-18 🟡 partial → ✅ done §13.3 用户批准；**E2E-20 🟡 pending → 🟡 in-progress**（PR #111 merged at eaa9ef9，前置全过；dev mode 锁待 Lane O 释放或协商）)
+last-refresh: 2026-09-28 (**E2E-20 🟡 partial → ✅ done** §13.3 用户批准收口：D-28 裁定回退验证码 Redis 化 + PR #118 merged c821738 + 镜像 v0.1.31 运行时验收；audit 0 FAIL)
 type: e2e-stage-roadmap
 ---
 
@@ -29,7 +29,7 @@ type: e2e-stage-roadmap
 R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量脚本负向测试、R-03 #10 的覆盖率·集成测试·Playwright 进 CI 等大项。
 **代价**：审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— 这是**正确信号**（真实未还欠账），不是回归。
 
-**当前激活阶段：E2E-20 多实例并发正确性（🟡 in-progress，2026-09-28 PR #111）** → 详档 [plan.md](stages/e2e-20-multi-instance-concurrency/plan.md)（12 测试点；前置全过；待 Lane O 释放 dev mode 锁后启动 §6 六步循环）
+**E2E-20 多实例并发正确性 ✅ done（2026-09-28 §13.3 用户批准，PR #118 收口）** → 详档 [STATUS v4](stages/e2e-20-multi-instance-concurrency/STATUS.md)。下一阶段按 roadmap 排期推进
 
 > **当前激活**：E2E-20 多实例并发（**🟡 in-progress** 2026-09-28 PR #111 merged at `eaa9ef9`；前置全过；待 Lane O 释放 dev mode 锁后启动 §6 六步循环；worktree `../Emotion-Echo-e2e20` 已建）。
 > E2E-18 缓存层（✅ done，2026-09-28 §13.3 第二方核对用户批准）：LRU 默认启用 TDD + D-27 Redis 保留决议，详档 [report.md](stages/e2e-18-cache-layer/report.md) + [STATUS v2](stages/e2e-18-cache-layer/STATUS.md)。**E2E-20 开工前置已满足**。
@@ -99,7 +99,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 |------|--------|------|--------------|------|
 | E2E-18 | 缓存层 | 本地缓存（ai-svc LRU）行为 + Redis 是否启用/下线的决策与验证 | Redis 后端实现（归 E2E-20）/ LRU 调优 / 前端存储 | ✅ **done**（2026-09-28 §13.3 第二方核对用户批准；v2 PR 三处 status 翻 done；17/17 断言过；详档 [STATUS v2](stages/e2e-18-cache-layer/STATUS.md)）。12/12 测试点 PASS、0 BLOCKED；D-27 = Redis 保留并接入业务（E2E-20 首个接入点）；F-08 关账、F-134/135/136 转挂 E2E-28、F-141 owner 转 E2E-19（已 done）。**E2E-20 开工前置已满足**。 |
 | E2E-19 | 数据库层验证 | 连接池/迁移幂等重放/分区裁剪/视图可读/软删除行为 + **备份→破坏→恢复演练**（只验证不改 schema） | schema 变更 | ✅ **done**（2026-09-27 落地 / **2026-09-28 §13.3 第二方核对用户审过批准收口**：12/12 测试点全 PASS + audit 0 FAIL + F-141 根因修正+4 条 UPDATE 修复+migrate.sh 加固诊断三件套+真备份→真 DROP → pg_restore 417→417 一致；Playwright 双 project 2/2 + 2 截图 + 7 Go 模块全绿 + CI 门禁红线/绿线双向验证（PR #97/#98/#99 连环修 check name 失配 + paths 过滤 + 红线实测）。§13.3 17 条断言 17/17 过（详见 [STATUS v2](stages/e2e-19-database-verification/STATUS.md)）。详档 [report.md](stages/e2e-19-database-verification/report.md)） |
-| E2E-20 🔧 | **多实例并发正确性** | 修 in-memory 限流/登录锁定/验证码防枚举的多实例失效 + APISIX limit-count 跨实例 + 双实例并发验证 | 分布式事务 | 🟡 **partial**（2026-09-28 PR #111 + PR #112 + PR #113 状态机推进；前置全过；待 Lane O 释放 dev mode 锁后启动 §6 六步循环；worktree `../Emotion-Echo-e2e20` 已建；D-27 Redis 接入首站；12 测试点就绪） |
+| E2E-20 🔧 | **多实例并发正确性** | 修 in-memory 限流/登录锁定/验证码防枚举的多实例失效 + APISIX limit-count 跨实例 + 双实例并发验证 | 分布式事务 | ✅ **done**（2026-09-28 §13.3 第二方核对用户批准收口：PR #113~#117 修复轮 12 测试点 11 PASS + **D-28 收尾裁定**（用户裁定验证码为 D-01 遗留物 → 其 Redis 化回退 in-memory + 契约测试锁死，登录锁定/policy=redis 保留，PR #118）+ F-142/143 GREEN 实测真缺陷当轮闭环 + F-144/145 新登留账 + 镜像 v0.1.31 运行时验收四项全过 + 回归钉收口复跑 4/4；audit 0 FAIL；详档 [STATUS v4](stages/e2e-20-multi-instance-concurrency/STATUS.md)） |
 
 ### 第六批：可观测性
 
