@@ -1,4 +1,4 @@
-# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1+T2#3+T2#4+T2#5+T2#6+T2#7+T2#8+T3 收口（2026-09-28）
+# Lane O（端侧化 stage1）STATUS — T0+T1+T2#1~#8+T3+mTLS 修复轮 收口（2026-09-28）
 
 > **本轨进度事实源**（[parallel-tracks.md](../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**（照 E2E-17 STATUS.md 范式）。
@@ -265,6 +265,43 @@
 - pytest 51 passed（无回归）
 - ADR 6 个全部 accepted 状态流转一致
 
+## 一.14、mTLS 修复轮已完成（2026-09-28 续接，OND-F-09a · PR 待合并）
+
+| 项 | 文件 | 验证 |
+|----|------|------|
+| **baseline `cloud_grpc.py` 改 mTLS**（`grpc.secure_channel` + `ssl_channel_credentials` + 三证书加载） | `scripts/on-device-baseline/model_fns/cloud_grpc.py` | 变异检查（改回 always-insecure → 2 条核心用例转 RED）· CLI 冒烟（真 `deploy/tls` 证书加载成功） |
+| **`TlsConfigError` fail-loud**（显式 `TLS_ENABLED=1` 缺件抛 / 自动模式"只配了一半"抛；构造 model_fn 时即抛） | 同上 | 3 条 fail-loud 用例 |
+| **三证书 env 口径统一**（`TLS_CA_CERT` / `TLS_CLIENT_CERT` / `TLS_CLIENT_KEY`，与 web-bff / ai-svc / compose 同名） | 同上 | `test_tls_env_paths_override_repo_defaults` + `test_tls_paths_default_to_repo_deploy_tls` |
+| **12 条 mTLS 烟测**（真 mTLS server `require_client_auth=True` + 自签证书） | `scripts/on-device-baseline/test_cloud_grpc_mtls.py`（新文件） | **12/12 PASS**；证书自签不依赖 `deploy/tls/`（`.gitignore:126 *.crt` 不入仓） |
+
+**关键设计点**：
+- **病根不止"用错 API"**：`LLM_API_KEY 空` 与 `gRPC 握手失败` 两个不同根因**共用同一个
+  `fallback_reason=grpc_unreachable:...:mock_fallback`**，让 N=13 `pass=0%` 看起来"符合预期"。
+  故 fail-loud 是修复的**一半**——只改 `secure_channel` 而不加 fail-loud，下次配错证书会重演。
+- **自动模式语义**：`TLS_ENABLED` 未设时，三证书齐全 → mTLS；一个都没有 → 明文；
+  **部分存在 → 抛**（配了一半当成"没配"是最坏的静默降级路径）。
+- **测试期踩坑**：自签 server 证书少签 IP SAN 时，连 `127.0.0.1` 的客户端证书校验失败
+  → 握手超时。已与真实 `deploy/tls/llm-server.crt`（含 `DNS:localhost` + `IP:127.0.0.1`）对齐，
+  并写进夹具注释。
+
+**本轮明确没做（不美化）**：
+- ❌ **真机基线 N=13 未实跑** —— 需 dev mode 窗口 + 容器起 llm-service；本轮 devmode 锁被
+  lane-e（E2E-21，until 2026-09-28 20:00）占用。**D-26.2 ADR §五"真机基线 ≥ 阈值"仍未达成**，
+  OND-F-09a 的 fixed 仅指协议错配本体已修，不等于验收契约通过。
+- ❌ OND-F-10（web image 时效）**未动** —— Lane E 域，本轨不改 `deploy/**`。
+
+**协议合规**：
+- ✅ 仅触碰 Lane O 独占列 `scripts/on-device-*/` + `docs/plans/on-device-*`
+- ✅ `deploy/tls/` **只读**（不修改、不新增、不进 commit）；未触 `deploy/` 其余文件
+- ✅ 未触 `useAIStreamHandler.ts` / `docs/e2e-roadmap/**` / `.github/workflows` / `package.json`
+- ✅ §十二 5 项决策权属用户，未加码
+- ✅ 全程在独立 worktree `D:/源码/Emotion-Echo-lane-o-mtls`（主工作区有 lane-e 的 4 个未提交
+  deploy 改动，不能混进本轨 commit）
+
+**门禁**：
+- pytest `scripts/on-device-{baseline,golden,perf}/` → **63 passed**（51 既有 + 12 新）
+- e2e_stage_audit.py --all → **30 阶段 0 FAIL**（Lane E 审计未被打破）
+
 ## 二、环境基线（协议 §五 要求记录）
 
 - `main` = `4817ac0`（PR #106 squash 后，T2#8 §十二拍板），与 origin/main 同步
@@ -328,13 +365,21 @@
 8. ~~**T2**：WebLLM Demo **真引擎接入**（dynamic import `@mlc-ai/web-llm` —— 需 §六握手 + `package.json` optionalDependencies；`production bundle 不打包`契约由架构测试保证）~~ ✅ T2#5 完成（PR #92 `7aaac7d6`；架构就绪 + 17 用例契约测试 + package.json 握手；T3 IAB 才接真引擎流式）
 9. ~~**T3**：Demo IAB 验证（唯一借 dev mode 窗口）+ `docs/plans/on-device-decision-pack.md` 决策材料包（**§十二 5 项只有用户拍板**）~~ ✅ T2#6 完成 decision-pack（PR #95 `7aa8eed`）+ T3 部分完成 IAB 验证降级（§一.13）；真机基线留 Lane O 下一轮修 baseline mTLS bug + Lane E 重建 web image |
 10. ~~**D-26 转 accepted**：条件 = §十二 5 项拍板 + 分项 D-26.1~5 补立（ADR §一自载）~~ ✅ T2#8 完成（PR 待合并；§十二 5 项全部用户拍板 + D-26 + 5 分项 ADR 全部 accepted + decisions.md 双索引登记 + v0.2 §十二 + v0.3 §B.1 同步）
-11. **OND-F-01**（已登记）：golden set pytest 未接 CI
-12. **OND-F-02**（已登记）：perf baseline 24 用例**同样未接 CI**（同一根因：`llm-test.yml` paths 不含 `scripts/`）
-13. **OND-F-03**（账本回收）：WebLLM Demo vitest **已实证接 CI**（`web-test.yml` paths=`emotion-echo-web/**`，新文件 `app/utils/offline/**` 自动覆盖；PR #86 CI 27/27 绿即证据）。无需修
+11. **OND-F-01 / OND-F-02 / OND-F-04**（已登记）：`scripts/on-device-golden|perf|baseline/` 共 **63** 条 pytest **未接 CI**（同一根因：`llm-test.yml` paths 不含 `scripts/`）。**三合一修法** = 该 workflow paths 加 `scripts/on-device-*/`；但 `.github/workflows` 属共享列，须走协议 §六握手 + 与 Lane E 排 PR 时序
+12. **OND-F-03**（账本回收）：WebLLM Demo vitest **已实证接 CI**（`web-test.yml` paths=`emotion-echo-web/**`，新文件 `app/utils/offline/**` 自动覆盖；PR #86 CI 27/27 绿即证据）。无需修
+13. **OND-F-08**（已登记）：决策 1 的 (b) 阶段（真·数据不离设备）等排期，不在 Lane O 决议权
+14. **真机基线 N=13 实跑**：OND-F-09a 已修协议错配，但**实跑仍未做**（需 dev mode 窗口）→ D-26.2 ADR §五验收契约未达成
 
 ## 五、给下次会话的开场动作
 
 1. 读 AGENTS §八 + `parallel-tracks.md` §五 → 开工三查（fetch/status、对方 STATUS 尾 3 行、`.devmode-session` 锁）
-2. 读本文件 §四，**从第 8 项 WebLLM Demo 真引擎接入**继续（T0 + T1 + T2#1 + T2#3 + T2#4 + T2#5 + T2#6 + T2#7 + T2#8 已收口；§十二拍板 + D-26 accepted；stage2 = 借 dev mode + E2E-21/23/29/30 收口后可开工）
-3. **用户决议 §十二 决策 2**（MindChat vs Qwen3）—— 不在本轨决议权
-4. 独占列红线与编号口径（两套号都查）见协议 §二/§三.资源3
+2. 读本文件 §一.14 与 §四。**阶段一所有不依赖 dev mode 的子任务已收口**（T0/T1/T2#1~#8/T3/mTLS 轮）；
+   剩下的都要 dev mode 窗口或 Lane E 配合，按下述顺序取：
+   - **要 dev mode 的**：① 真机基线 N=13 实跑（D-26.2 §五验收契约的唯一缺口）② OND-F-06 真引擎流式
+     （依赖 OND-F-10 web image 重建，属 Lane E）③ 性能基线真机测量（要真 GPU）
+   - **不需 dev mode 的**：OND-F-01/02/04 CI 缺口（改 `.github/workflows` → 须 §六握手 + 与 Lane E 排时序）
+3. **阶段二仍被四道门挡着**（v0.3 §A.3）：v1.0 封版 + E2E-17~30 全部收口未满足；
+   §十二拍板 ✅ / D-26 立项 ✅ 已过。前端主战场 `useAIStreamHandler.ts` 阶段一全程禁触。
+4. **§十二 5 项决策已于 2026-09-28 全部拍板**（T2#8）—— 不再是待办；新的用户决策需求只有
+   OND-F-08 的 (b) 阶段切换
+5. 独占列红线与编号口径（两套号都查）见协议 §二/§三.资源3
