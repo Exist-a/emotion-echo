@@ -21,7 +21,8 @@ package outbox
 import (
 	"context"
 	"errors"
-	"log"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"time"
 
 	"emotion-echo-chat-svc/internal/events"
@@ -62,15 +63,15 @@ func NewRelay(repo repository.OutboxRepo, publisher events.EventPublisher, inter
 func (r *Relay) Run(ctx context.Context) error {
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
-	log.Printf("[outbox-relay] started: interval=%s batchSize=%d", r.interval, r.batchSize)
+	logging.PrintfContext(ctx, "[outbox-relay] started: interval=%s batchSize=%d", r.interval, r.batchSize)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("[outbox-relay] stopped: %v", ctx.Err())
+			logging.PrintfContext(ctx, "[outbox-relay] stopped: %v", ctx.Err())
 			return ctx.Err()
 		case <-ticker.C:
 			if err := r.FlushOnce(ctx); err != nil {
-				log.Printf("[outbox-relay] flush err: %v", err)
+				logging.PrintfContext(ctx, "[outbox-relay] flush err: %v", err)
 			}
 		}
 	}
@@ -91,24 +92,24 @@ func (r *Relay) FlushOnce(ctx context.Context) error {
 			// 再判断 attempts 是否超阈值 → MarkDead 把行置为 dead 状态
 			// 不再被 ListPending 扫描,避免永久无限重试毒消息。
 			if mfErr := r.repo.MarkFailed(ctx, e.ID, err.Error()); mfErr != nil {
-				log.Printf("[outbox-relay] MarkFailed err id=%d: %v", e.ID, mfErr)
+				logging.PrintfContext(ctx, "[outbox-relay] MarkFailed err id=%d: %v", e.ID, mfErr)
 			}
 			newAttempts := e.Attempts + 1
-			log.Printf("[outbox-relay] publish failed id=%d attempts=%d: %v", e.ID, newAttempts, err)
+			logging.PrintfContext(ctx, "[outbox-relay] publish failed id=%d attempts=%d: %v", e.ID, newAttempts, err)
 			if r.MaxAttempts > 0 && newAttempts >= r.MaxAttempts {
 				if mdErr := r.repo.MarkDead(ctx, e.ID, err.Error()); mdErr != nil {
-					log.Printf("[outbox-relay] MarkDead err id=%d: %v", e.ID, mdErr)
+					logging.PrintfContext(ctx, "[outbox-relay] MarkDead err id=%d: %v", e.ID, mdErr)
 				} else {
 					// Stage 86（§3.6）: dead 行计数器，Prometheus 规则 outbox-dead.yml 据此告警
 					IncDead()
-					log.Printf("[outbox-relay] row marked dead id=%d attempts=%d max=%d (will NOT retry)",
+					logging.PrintfContext(ctx, "[outbox-relay] row marked dead id=%d attempts=%d max=%d (will NOT retry)",
 						e.ID, newAttempts, r.MaxAttempts)
 				}
 			}
 			continue
 		}
 		if err := r.repo.MarkSent(ctx, e.ID); err != nil {
-			log.Printf("[outbox-relay] MarkSent err id=%d: %v", e.ID, err)
+			logging.PrintfContext(ctx, "[outbox-relay] MarkSent err id=%d: %v", e.ID, err)
 		}
 	}
 	return nil

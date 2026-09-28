@@ -296,11 +296,26 @@ func main() {
 // authPathBypass 让 /api/v1/auth/* 路径跳过鉴权（login/register/refresh/logout/verification-code
 // 端点拿不到 X-User-Id，必须白名单）。Stage 33 PR-19b/21：仅剩这 5 条白名单路径，
 // 其他 /api/v1/* 全部走 sharedmw.GinAuthMiddleware。
+// authPathBypass 放行"未登录也必须可用"的端点。
+//
+// 两类：
+//   - /api/v1/auth/* 登录/注册/找回密码等（E2E-07 起）
+//   - /api/v1/client-error 前端错误上报（E2E-F-148）。
+//     "用户还没登录就白屏"恰恰是最需要被记录的一类错误，若要求鉴权就等于
+//     把最关键的情况挡在门外。2026-09-29 实测：只加 APISIX 白名单路由不够，
+//     BFF 自身这层仍会 401，必须两处都放行。
+var noAuthPathPrefixes = []string{
+	"/api/v1/auth/",
+	"/api/v1/client-error",
+}
+
 func authPathBypass(authMW gin.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/api/v1/auth/") {
-			c.Next()
-			return
+		for _, p := range noAuthPathPrefixes {
+			if strings.HasPrefix(c.Request.URL.Path, p) {
+				c.Next()
+				return
+			}
 		}
 		authMW(c)
 	}
@@ -450,6 +465,11 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	// Sprint 1 PR-4c-2: user avatar upload (multipart → MinIO → user-svc UpdateMe)
 	// 总是注册：handler 内部 nil 检查；缺 Storage 时 503
 	handler.NewAvatarHandler(s.User, s.Storage).Register(r)
+	// E2E-F-148：浏览器侧未捕获异常上报。route 100 挂了 jwt-auth，未登录会 401 ——
+	// 而"用户还没登录就白屏"恰恰是最需要被记录的一类错误，所以这里用独立 POST
+	// 且刻意不要求鉴权（handler 内部总是 200，绝不影响前端主流程）。
+	r.POST("/api/v1/client-error", handler.ClientErrorHandler())
+
 	// Sprint F2（2026-09-11）：ai-svc gRPC AIHealth RPC 接入
 	// /api/v1/ai/health 探针路由（之前未注册，pre-existing 缺失；本次 Sprint 顺手补）
 	r.GET("/api/v1/ai/health", handler.NewAIHealthHandler(s.AI).Health)

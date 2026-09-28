@@ -199,6 +199,29 @@ jobs:
       - name: Scan for residual artifacts
         run: bash scripts/check_residual.sh
 
+  helm-loki-render:
+    name: Loki chart 渲染回归
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      # E2E-F-147：promtail DaemonSet 曾写死 runAsUser=10001 读 hostPath 日志目录，
+      # 读不到日志不会让 Pod 变 NotReady ⇒ 静默失效。渲染结果必须机械校验。
+      - name: helm template assertions
+        run: bash scripts/test_helm_loki_render.sh
+
+  ctx-logging-gate:
+    name: ctx 日志门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # E2E-F-146：带 ctx 的函数里不得出现 log.Printf（否则 trace_id 永远进不了日志）。
+      # 现有调用点已迁移 + 登记 ALLOWLIST；这条门禁防止新代码写回老样子。
+      - name: No ctx-less logging where ctx is available
+        run: python scripts/check_ctx_logging.py
+
   orphan-outputs:
     name: 孤儿产出物检测
     runs-on: ubuntu-latest

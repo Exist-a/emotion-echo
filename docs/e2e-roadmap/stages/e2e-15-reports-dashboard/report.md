@@ -1,7 +1,7 @@
 ---
 stage: e2e-15
 title: 报表 Dashboard
-status: done
+status: partial
 date: 2026-09-21
 verdict: DONE
 superseded-note: 2026-09-21 落地 + 当日收口：触发器补写 mental_health_assessments（修 E2E-F-10）+ 4 dashboard 空态修复（修 E2E-F-14 同型残留）+ 端到端 24/24 PASS

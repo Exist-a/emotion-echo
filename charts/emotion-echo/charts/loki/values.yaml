@@ -10,6 +10,19 @@ promtail:
     repository: grafana/promtail
     tag: 3.2.0
     pullPolicy: IfNotPresent
+  # E2E-F-147：promtail 要读 hostPath 的 /var/log/containers 与 /var/log/pods，
+  # 这两个目录由 kubelet 创建、属主通常是 root:root，逐级子目录多为 0750/0710。
+  # 设 runAsUser=10001 会导致 promtail 读不到任何日志，**而 Pod 仍然全绿**
+  # （readinessProbe 打的是 promtail 自己的 /ready）——静默失效，最难查。
+  # 因此默认留空（= 镜像默认用户 root，与 Grafana 官方 chart 一致）。
+  # 仅当集群强制非 root，且已确认节点日志目录对该 uid 可读时才覆盖。
+  podSecurityContext: {}
+  #  示例（启用前务必先确认目录权限，否则会退回静默失效）：
+  #  podSecurityContext:
+  #    runAsNonRoot: true
+  #    runAsUser: 10001
+  #    runAsGroup: 10001
+  #    fsGroup: 10001
 
 service:
   type: ClusterIP

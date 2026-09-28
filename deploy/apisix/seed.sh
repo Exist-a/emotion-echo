@@ -668,6 +668,12 @@ put_auth_route 117 "/api/v1/auth/verify-security-answer"
 # E2E-07：找回密码「获取密保问题」在未登录态调用（POST，与 auth/:action 路由一致）。
 # 前端输入用户名后需获取该用户的密保问题展示，必须在 APISIX 白名单中。
 put_auth_route 118 "/api/v1/auth/security-questions"
+# E2E-F-148：前端错误上报。**必须是白名单路由**（不带 jwt-auth）——
+# 放在 catch-all `/api/v1/*` 下会被 jwt-auth 拦成 401，而"用户还没登录就白屏"
+# 恰恰是最需要被记录的一类错误。
+# 2026-09-29 实测：先只注册在 BFF（落到 route 100）→ 经网关一律 401，
+# 与设计意图相反。故补这条白名单路由（实测确认原样）。
+put_auth_route 119 "/api/v1/client-error"
 
 # 健康探针（直接打到下游 svc，绕开 BFF 聚合）
 put_route_health 200 "/user-health"          1

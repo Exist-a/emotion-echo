@@ -16,7 +16,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"strconv"
 	"time"
 
@@ -128,7 +129,7 @@ func (s *RedisStore) RecordFailure(ctx context.Context, username string) bool {
 	if err != nil {
 		// E2E-20 GREEN 诊断：静默降级掩盖真错误（100ms→1s 修复后 keys 仍空）。
 		// 打日志让运维能定位（降级行为不变——不 fail-closed）。
-		log.Printf("[authlock] RecordFailure redis err (degraded): %v", err)
+		logging.PrintfContext(ctx, "[authlock] RecordFailure redis err (degraded): %v", err)
 		return false // Redis 不可达 → 降级不更糟
 	}
 	arr, ok := res.([]any)

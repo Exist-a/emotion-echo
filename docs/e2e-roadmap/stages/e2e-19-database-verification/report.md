@@ -2,7 +2,7 @@
 stage: e2e-19
 title: 数据库层验证（连接池 / 迁移幂等重放 / 视图 / 软删除 / 备份→破坏→恢复）
 executed: 2026-09-27
-status: done
+status: partial
 note: ✅ done — 12/12 PASS + audit 0 FAIL + F-141 修复 + CI 门禁红线/绿线（PR #99）；§13.3 第二方核对 17 条断言用户 2026-09-28 审过批准（STATUS v2）；**2026-09-28 IAB 补账完成**（见 §9）
 environment: dev 模式（19 容器 healthy，infra+apps+dev compose + .env.local + --profile dev；db-migrate Exited(0) 修后状态）
 ---

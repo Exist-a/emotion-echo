@@ -454,7 +454,7 @@ services:
 
   # ===== PR-OBS-5: Loki + Promtail (logs layer) =====
   loki:
-    image: grafana/loki:2.9.4
+    image: grafana/loki:3.2.0
     container_name: emotion-echo-loki
     profiles: ["obs"]
     command: -config.file=/etc/loki/loki-config.yaml
@@ -467,7 +467,7 @@ services:
       - app-network
 
   promtail:
-    image: grafana/promtail:2.9.4
+    image: grafana/promtail:3.2.0
     container_name: emotion-echo-promtail
     profiles: ["obs"]
     command: -config.file=/etc/promtail/promtail-config.yaml

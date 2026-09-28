@@ -14,10 +14,23 @@ spec:
       labels:
         {{- include "loki.promtailSelectorLabels" . | nindent 8 }}
     spec:
+      # E2E-F-147：这里原本写死 runAsNonRoot / runAsUser=10001，是**静默失效**的配置。
+      #
+      # promtail 要读的 /var/log/containers 与 /var/log/pods 都是 hostPath，由 kubelet
+      # 在节点上创建、属主通常是 root:root；且 /var/log/pods/<ns>_<pod>_<uid>/ 下的
+      # 逐级子目录在多数发行版是 0750/0710 —— uid 10001 根本遍历不进去。
+      # 而 promtail 读不到日志**不会让 Pod 变 NotReady**（readinessProbe 打的是
+      # promtail 自己的 /ready，与"采到没有"无关），于是表现为
+      # "Pod 全绿、Loki 里一条业务日志都没有"，极难归因。
+      # 这也是 Grafana 官方 chart 不给 promtail DaemonSet 设非 root 的原因。
+      #
+      # 现改为 values 可配、默认留空（= 镜像默认用户 root，与上游一致）。
+      # 若集群强制非 root（PodSecurity admission），必须先确保节点日志目录对
+      # 对应 uid 可读，再打开开关，否则会退回本条注释描述的静默失效。
+      {{- with .Values.promtail.podSecurityContext }}
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 10001
-        runAsGroup: 10001
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: promtail
           image: "{{ .Values.promtail.image.repository }}:{{ .Values.promtail.image.tag | default .Chart.AppVersion }}"

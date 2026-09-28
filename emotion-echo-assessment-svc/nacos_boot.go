@@ -5,7 +5,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+
+	"github.com/emotion-echo/shared/pkg/logging"
 	"os"
 	"time"
 
@@ -79,7 +80,7 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 	if err := reg.Register(ctx, instance); err != nil {
 		return nil, fmt.Errorf("[nacos] Register: %w", err)
 	}
-	log.Printf("[nacos] registered %s at %s:%d", instance.ServiceName, instance.Host, instance.Port)
+	logging.PrintfContext(ctx, "[nacos] registered %s at %s:%d", instance.ServiceName, instance.Host, instance.Port)
 	hbCtx, hbCancel := context.WithCancel(context.Background())
 	reg.Heartbeat(hbCtx, instance, 5*time.Second)
 	cc, err := deps.configFactory(ctx, addr, namespace, group)
@@ -90,16 +91,16 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 	}
 	dataId := cfg.Name + ".ops.yaml"
 	if opsYaml, err := cc.GetConfig(ctx, dataId, group); err != nil {
-		log.Printf("[nacos] GetConfig(%s/%s) failed (continuing): %v", group, dataId, err)
+		logging.PrintfContext(ctx, "[nacos] GetConfig(%s/%s) failed (continuing): %v", group, dataId, err)
 	} else {
-		log.Printf("[nacos] ops config loaded: %s/%s, %d bytes", group, dataId, len(opsYaml))
+		logging.PrintfContext(ctx, "[nacos] ops config loaded: %s/%s, %d bytes", group, dataId, len(opsYaml))
 	}
 	if cfg.Nacos.HotReload {
 		if err := cc.ListenConfig(ctx, dataId, group, func(d, g, content string) error {
-			log.Printf("[nacos] [hot-reload] %s/%s changed, %d bytes", g, d, len(content))
+			logging.PrintfContext(ctx, "[nacos] [hot-reload] %s/%s changed, %d bytes", g, d, len(content))
 			return nil
 		}); err != nil {
-			log.Printf("[nacos] ListenConfig failed (continuing): %v", err)
+			logging.PrintfContext(ctx, "[nacos] ListenConfig failed (continuing): %v", err)
 		}
 	}
 	return &NacosRuntime{Registry: reg, ConfigCenter: cc, Cancel: hbCancel}, nil

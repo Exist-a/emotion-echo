@@ -1,9 +1,9 @@
 # PR-OBS-5: dev compose Loki config (filesystem store)
 #
-# 镜像: grafana/loki:2.9.4 (与 charts/emotion-echo/charts/loki/values 同步)
+# 镜像: grafana/loki:3.2.0（与 charts/emotion-echo/charts/loki/values.yaml + ADR-2026-09-loki-aggregator-dev §三 同一版本；E2E-F-147 对齐，原为 2.9.4）
 # 启动方式: COMPOSE_PROFILES=obs docker compose ... up -d
 #
-# dev 单节点 filesystem store + 24h retention,生产部署走 S3/minio (ADR-2 候选)
+# dev 单节点 filesystem store + 24h retention（ADR 写的 1d 与此同值），生产部署走 S3/minio
 # 与 charts/emotion-echo/charts/loki/values.yaml 严格对齐 schema 字段名
 
 auth_enabled: false
@@ -44,3 +44,10 @@ limits_config:
 compactor:
   working_directory: /loki/compactor
   retention_enabled: true
+  # Loki ≥ 3.0 的硬性要求：一旦 retention_enabled: true，delete_request_store
+  # 必须显式配置，否则启动即退出：
+  #   CONFIG ERROR: invalid compactor config: compactor.delete-request-store
+  #   should be configured when retention is enabled
+  # （E2E-F-147 升级 2.9.4 → 3.2.0 时实测踩到；2.9 时代没有这个校验，
+  #  所以旧配置在旧版本上"看不出问题"。）
+  delete_request_store: filesystem
