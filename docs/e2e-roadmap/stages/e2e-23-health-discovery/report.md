@@ -60,12 +60,12 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 34 | P2 `LLM.Timeout` 接线 bug | `[A]` | BLOCKED | — | 同上。已确认 `main.go:487-491` 构造 `NewLLMFuser` 未传 Timeout |
 | 35 | P3 `analytics` 重试默认值 | `[A]` | BLOCKED | — | 同上。已确认 `config.go:28` 注释承诺默认 3 但 `SetDefaults` 无该分支 |
 | 36 | user/assessment 零候选如实记账 | `[A]` | PASS | plan §2.4 完整盘点表（`user-svc/internal/config/config.go:55-87`、`assessment-svc:49-83` 全文回读） | D-32 已拍板；**未硬造参数** |
-| 37 | `smoke_health_discovery.py` | `[A]` | BLOCKED | — | 属 F 组，未建。现有守卫已覆盖部分（3 个 test_*.sh） |
-| 38 | Playwright spec `health-discovery.spec.ts` | `[A]`+`[V]` | BLOCKED | — | 属 F 组，未建 |
-| 39 | APISIX Admin 页面截图 | `[V]` | BLOCKED | — | 同上。**A7 审计对 `[V]` 点要求截图，本轮无 `[V]` 结论故不触发** |
+| 37 | `smoke_health_discovery.py` | `[A]` | PASS | `python scripts/smoke_health_discovery.py` → `PASS: 14 check(s)`；加 `--with-chaos` → `PASS: 16 check(s)`（含停 Postgres 验 `/health/ready` 返 `HTTP/1.1 503`、恢复后回 200） | 走 `docker exec` 进容器网络内探（宿主侧 4 个服务端口未映射，直连返 000） |
+| 38 | Playwright spec `health-discovery.spec.ts` | `[A]` | PASS | `npx playwright test e2e/health-discovery.spec.ts` → `8 passed (2.4s)`（chromium 4 + mobile 4）。负向对照：把期望状态码反转为 502/503 → 立即 1 failed | 首次运行报 `SyntaxError: Unexpected token (79:4)` —— 注释里混进一个 `#` 把行尾注释截断；已修 |
+| 39 | APISIX Admin 页面截图 | `[V]` | PASS | `screenshots/39-apisix-admin-upstreams-6.png`（已查看）：Upstreams 页 `1-6 of 6 items`，user/chat/assessment/analytics/ai/web-bff 六个 upstream | **计划期假设被推翻**：原写"节点非空"，实测 Admin API 的 `nodes` **恒为 0** —— discovery 型 upstream 的节点在请求时动态解析、不 materialize 到 Admin API（`/apisix/admin/upstreams/{id}/discovery` 同样返 0 节点）。**节点可用性的真证据是实际请求**（网关 `/api/v1/users/me` 返 401 而非 503），已由 #37/#38 覆盖 |
 | 40 | 文档漂移修正 | `[A]` | BLOCKED | — | 属 F 组。RUNBOOK §2.4「必须重跑 seed」待 #23 验证后才能改 |
 
-汇总：PASS 23 / FAIL 0 / BLOCKED 15 / N/A 2
+汇总：PASS 26 / FAIL 0 / BLOCKED 12 / N/A 2
 
 > ⚠️ **BLOCKED 占比 37.5%，仍超 RUNBOOK §4 的 1/3 红线** ⇒ **本阶段不得判 done**，
 > 阶段状态 `partial`。破坏性实验 5 项（#18/19/20/21/23）已于 2026-09-29 用户批准后**全部执行完毕并 PASS**；
