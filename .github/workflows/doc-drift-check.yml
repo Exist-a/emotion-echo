@@ -230,3 +230,33 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check for orphan outputs
         run: bash scripts/check_orphan_outputs.sh
+
+  helm-prometheus-render:
+    name: Prometheus chart 渲染回归
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      # E2E-22：prometheus chart 曾声明 rule_files 指向 /etc/prometheus/rules/*.yml，
+      # 但该 ConfigMap 的 data 只有 prometheus.yml 一个 key、deployment 也无对应
+      # volume 挂载 ⇒ 空 glob ⇒ **0 条告警规则且 Prometheus 不报错**。
+      # 静默失效只能靠渲染断言机械拦截（与 helm-loki-render 同一类问题）。
+      - name: helm template assertions
+        run: bash scripts/test_helm_prometheus_render.sh
+
+  obs-monitoring-contract:
+    name: 观测面配置契约
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # E2E-22：观测面曾有 8 处"配置声明了但没接上"的静默失效（kafka-exporter
+      # depends_on 误指 prometheus 致启动即死 / 无 alertmanager 自身指标 /
+      # llm-service 暴露 /metrics 却无 target / Alertmanager 空 receiver 等）。
+      # 这些都不产生运行时错误，只能靠静态契约钉住。
+      - name: Observability config contract assertions
+        run: node deploy/obs_monitoring.test.js

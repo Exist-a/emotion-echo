@@ -127,7 +127,7 @@
     },
     {
       "type": "stat",
-      "title": "Goroutines (by svc)",
+      "title": "Goroutines (by scrape job)",
       "id": 4,
       "gridPos": {
         "h": 8,
@@ -178,7 +178,8 @@
         },
         "orientation": "auto",
         "textMode": "auto"
-      }
+      },
+      "description": "E2E-22（第二方核对）更正：原标题写 \"by svc\"，但 expr 是 `sum by (job) (go_goroutines)` —— 按 Prometheus **抓取 job** 聚合，而非按服务。图例实为 alertmanager / emotion-echo-services / kafka-exporter / prometheus 四项，6 个业务 svc 被合并成一个 job，与标题承诺的粒度不符。\n与本轮修掉的 DLQ 面板属同类误导源（标题说一套、数据是另一套）。\n此处只更正标题以与既有 expr 一致；改 expr 为 by instance 可获得单服务粒度，但会让 stat 面板从 4 个数字变 9 个，属独立的产品决定。"
     }
   ],
   "refresh": "10s",

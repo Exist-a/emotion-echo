@@ -55,6 +55,20 @@ EXPECTED_TARGETS = [
     "emotion-echo-sw-oap:1234",
 ]
 
+# E2E-22: **观测面自身**的 scrape target（2026-09-29 第二方核对补）。
+#
+# 为什么单列一组而不是并入 EXPECTED_TARGETS:
+#   业务 svc 挂掉 → 用户功能受损，人一定会发现；
+#   而观测面挂掉 → **不产生任何运行时错误**，只是"看不见了"——这恰恰是本阶段
+#   修复的那类静默失效（kafka-exporter 曾因 depends_on 误指 prometheus 而启动
+#   即死、长期 DOWN 无人知晓；prometheus.yml 一度根本不抓 alertmanager）。
+#   第二方核对指出：原 smoke 只钉了"alertmanager 作为配置存在"，却没有钉
+#   "它作为 scrape target 实际 UP" ⇒ job 的 targets 被清空也能全绿。
+OBSERVABILITY_TARGETS = [
+    "emotion-echo-kafka-exporter:9308",
+    "emotion-echo-alertmanager:9093",
+]
+
 results: list[tuple[str, bool, str]] = []
 
 
@@ -106,7 +120,24 @@ def main() -> int:
                 check(
                     "prometheus scrape targets UP (>= expected count)",
                     True,
-                    f"UP={len(up_targets)}/{len(EXPECTED_TARGETS)} (apisix + 6 svc + skywalking-oap)",
+                    f"UP={len(up_targets)}/{len(EXPECTED_TARGETS)} (apisix + 7 svc + skywalking-oap)",
+                )
+
+            # E2E-22（第二方核对补）：观测面自身必须 UP。缺这组断言时，
+            # alertmanager / kafka-exporter 的 job 被清空 targets 也能全绿。
+            obs_missing = [t for t in OBSERVABILITY_TARGETS if t not in scrape_pool]
+            if obs_missing:
+                check(
+                    "observability targets UP (alertmanager + kafka-exporter)",
+                    False,
+                    f"missing={obs_missing} —— 观测面 DOWN 不产生运行时错误，"
+                    f"只是相关告警静默失效（查 prometheus targets 面板）",
+                )
+            else:
+                check(
+                    "observability targets UP (alertmanager + kafka-exporter)",
+                    True,
+                    f"both present among {len(up_targets)} UP targets",
                 )
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             check("prometheus targets JSON parseable", False, f"{type(e).__name__}: {e}")

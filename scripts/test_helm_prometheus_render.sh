@@ -93,7 +93,12 @@ else:
     dep_body = dep[0]
     code = "\n".join(l for l in dep_body.split("\n") if not l.strip().startswith("#"))
 
-    if "mountPath: /etc/prometheus/rules" in code:
+    # 行锚定匹配（第二方核对修正）：子串包含会把 "/etc/prometheus/rulesXX"
+    # 这类拼写错误也判为通过 —— 属"正则太松"的 AP-11 变体。
+    def _has_mount(path):
+        return re.search(r"^\s*mountPath:\s*" + re.escape(path) + r"\s*$", code, re.M) is not None
+
+    if _has_mount("/etc/prometheus/rules"):
         ok("deployment 挂载 /etc/prometheus/rules")
     else:
         bad("deployment 未挂载 /etc/prometheus/rules —— rule_files 指向空目录，规则永不加载")
@@ -116,7 +121,7 @@ else:
         else:
             # /etc/prometheus/rules/*.yml -> /etc/prometheus/rules
             declared_dir = re.sub(r"/\*.*$", "", declared)
-            if "mountPath: " + declared_dir in code:
+            if _has_mount(declared_dir):
                 ok(f"rule_files 声明 {declared} 的挂载目录 {declared_dir} 已接线")
             else:
                 bad(f"rule_files 声明 {declared}（目录 {declared_dir}），但无对应挂载 —— 声明与接线脱节（静默失效）")
@@ -177,7 +182,7 @@ s = re.sub(r"\n\s*- name: rules\n\s*configMap:\n\s*name: prometheus-rules", "", 
 open(p, "w", encoding="utf-8").write(s)
 PY
 
-if grep -q "mountPath: /etc/prometheus/rules" "$DEPLOY_TPL"; then
+if grep -qE "^\s*mountPath:\s*/etc/prometheus/rules\s*$" "$DEPLOY_TPL"; then
   bad "负向对照无法执行：rules 挂载未被移除，注入的破坏未生效"
 else
   if E2E22_NEG=1 bash "$SELF_ABS" > "$TMP/neg.txt" 2>&1; then
