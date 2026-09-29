@@ -116,11 +116,20 @@ environment: dev 模式（26 容器运行 + 4 init 容器 Exited(0)，compose.de
 
 ## 8. 收口自检
 
-- [x] `git status` 干净（收口前工作树含本轮全部预期改动，无意外残留）
-- [x] `main` 与 `origin/main` 同步（通过 PR 合入，非直推）
-- [x] 无残留已合并分支 / worktree
-- [x] `python scripts/e2e_stage_audit.py --all` 0 FAIL
-- [x] 账本 E2E-F-11 闭环 + E2E-F-150~153 新登；**无 owner=E2E-22 的未解决条目**
-- [x] 观测栈恢复至 12/12 targets UP，dev mode 锁 `deploy/.devmode-session` 已清除
+> **时点声明（2026-09-29 复核时补记）**：本节第 2、3 条在**本文件初稿写出时尚未成立**（初稿写于 13:55，其时 PR #127 尚未创建、更未合入）。初稿把它们直接标成 `[x]` 属于"把尚未发生的事记成已完成"，是本项目 anti-patterns 清单里的一类失真。本轮复核逐条重跑后确认成立，并在此显式标注复核时点，避免下一位读者把"事后成立"误读为"当时即已核对"。
+
+| # | 自检项 | 复核时点 | 实际输出 |
+|---|--------|---------|---------|
+| 1 | 工作树无意外残留 | 初稿 | `git status --porcelain` → 空 |
+| 2 | `main` 与 `origin/main` 同步 | **PR #127 squash 合入后复核** | `git log --oneline -1` → `7b6088b`；`git status -sb` → `## main...origin/main`（无 ahead/behind） |
+| 3 | 无残留已合并分支 / worktree | **合入后复核** | `git branch --merged main` → 仅 `main`；`git worktree list` → 仅主工作区；源分支本地 + 远端均已删 |
+| 4 | 审计器全绿 | 初稿 + 复核 | `python scripts/e2e_stage_audit.py --all` → `合计：30 个阶段，0 个存在 FAIL` |
+| 5 | 账本对账干净 | 初稿 | E2E-F-11 已翻 ✅；新登 F-150~153；**无 owner 列归属 E2E-22 的未解决条目**（A5 未报） |
+| 6 | 观测栈健康 + 锁已清 | 收尾 | 12/12 targets UP；26 容器运行；`deploy/.devmode-session` 已删除 |
+
+**本报告的证据强度（据实说明，勿高估）**：
+
+- **CI 30/30 绿**（合并后 commit `7b6088b` 的 check-runs 实测 `total: 30 / 非成功: 0`），但 **CI 不覆盖本阶段的核心功能**——它跑的是 Go 单测、契约测试与门禁，只能证明"这批改动没有把仓库改坏"。**告警全链（firing → 送达 → resolved）全部是本机手工实测，无任何自动化守护**：改坏 `observability-self.yml` 的 expr 或 mock receiver 的 URL，CI 不会变红。
+- **18/18 PASS 是执行者自证**。按 [anti-patterns.md](../../anti-patterns.md)，执行者自证的"完成"一律不可信 —— 本阶段所有结论仍待第二方按 §13.3 独立复核，尤其是"负向对照"三组（它们是断言有牙齿的唯一证据，但也是最容易被自查者放宽的环节）。
 
 > §7 收口契约 #10（第二方核对）**未完成** ⇒ 阶段标 `partial`，按 E2E-18/19/20 先例等待非执行者按 RUNBOOK §13.3 逐条核对。
