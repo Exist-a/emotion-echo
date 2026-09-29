@@ -34,7 +34,10 @@ Nacos:
   Addr:      emotion-echo-nacos:8848
   Namespace: emotion-echo-dev
   GroupName: DEFAULT_GROUP
-  # HotReload: 省略 → Config struct tag default=false
+  # E2E-23 E 组（D-32）：显式开启 —— 4 个 Outbox 运营参数
+  # （死信阈值 / 保留天数 / 清理间隔）要能被 Nacos 推送热更，
+  # 必须注册 ListenConfig；关闭它则 ops 只在启动时读一次。
+  HotReload: true
 
 # Stage 36-A3.2: ai-svc gRPC 客户端配置
 # dev fallback（KAFKA_ENABLED=false）时，chat-svc 用此地址 dial ai-svc 同步写中性情绪占位。

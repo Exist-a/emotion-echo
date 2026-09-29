@@ -31,13 +31,30 @@ import (
 
 // Relay 周期性发送 outbox pending 行
 type Relay struct {
-	repo        repository.OutboxRepo
-	publisher   events.EventPublisher
-	interval    time.Duration
-	batchSize   int
+	repo      repository.OutboxRepo
+	publisher events.EventPublisher
+	interval  time.Duration
+	batchSize int
 	// MaxAttempts ADR-19 PR-A6.1: 失败最大重试次数，超出则 status=dead。
 	// 默认 100；0 视作关闭 dead 状态机（保留原行为,向后兼容）。
+	//
+	// E2E-23 E 组：设了 Ops 时**以 Ops 的当前值为准**（可热更），
+	// 未设 Ops 才回落到本字段 —— 见 currentMaxAttempts()。
 	MaxAttempts int
+	// Ops 运营参数容器（Nacos 推送写入）。nil 时行为与热更前完全一致。
+	Ops *Ops
+}
+
+// currentMaxAttempts 返回本轮 flush 应当使用的重试上限。
+//
+// 每次判定都重新读 Ops 快照：热更后**下一轮**立即生效，无需重启 relay。
+func (r *Relay) currentMaxAttempts() int {
+	if r.Ops != nil {
+		if v := r.Ops.Snapshot().MaxAttempts; v > 0 {
+			return v
+		}
+	}
+	return r.MaxAttempts
 }
 
 // NewRelay 构造
@@ -96,14 +113,15 @@ func (r *Relay) FlushOnce(ctx context.Context) error {
 			}
 			newAttempts := e.Attempts + 1
 			logging.PrintfContext(ctx, "[outbox-relay] publish failed id=%d attempts=%d: %v", e.ID, newAttempts, err)
-			if r.MaxAttempts > 0 && newAttempts >= r.MaxAttempts {
+			maxAttempts := r.currentMaxAttempts()
+			if maxAttempts > 0 && newAttempts >= maxAttempts {
 				if mdErr := r.repo.MarkDead(ctx, e.ID, err.Error()); mdErr != nil {
 					logging.PrintfContext(ctx, "[outbox-relay] MarkDead err id=%d: %v", e.ID, mdErr)
 				} else {
 					// Stage 86（§3.6）: dead 行计数器，Prometheus 规则 outbox-dead.yml 据此告警
 					IncDead()
 					logging.PrintfContext(ctx, "[outbox-relay] row marked dead id=%d attempts=%d max=%d (will NOT retry)",
-						e.ID, newAttempts, r.MaxAttempts)
+						e.ID, newAttempts, maxAttempts)
 				}
 			}
 			continue

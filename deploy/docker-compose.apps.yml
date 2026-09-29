@@ -141,7 +141,7 @@ services:
       NACOS_ENABLED:   "true"
       NACOS_ADDR:      "emotion-echo-nacos:8848"
       NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
-      NACOS_HOT_RELOAD: "false"
+      NACOS_HOT_RELOAD: "true"   # E2E-23 D-32：chat-svc 的 4 个 Outbox 运营参数需热更；此前显式 false 会覆盖 etc/chat-api.yaml 里的 HotReload: true（env 优先于 yaml）
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release

@@ -19,23 +19,23 @@ import (
 	"emotion-echo-chat-svc/internal/config"
 	"emotion-echo-chat-svc/internal/events"
 	"emotion-echo-chat-svc/internal/grpcclient"
+	"emotion-echo-chat-svc/internal/grpcserver"
 	"emotion-echo-chat-svc/internal/handler"
 	"emotion-echo-chat-svc/internal/outbox"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
-	"emotion-echo-chat-svc/internal/grpcserver"
 
 	"github.com/SkyAPM/go2sky"
-	"github.com/gin-gonic/gin"
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
-	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedskywalking "github.com/emotion-echo/shared/pkg/skywalking"
+	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -122,8 +122,8 @@ func main() {
 			if os.Getenv("SKIP_MIGRATION") == "1" {
 				log.Printf("[outbox] migration failed (SKIP_MIGRATION=1): %v", err)
 			} else {
-					log.Fatalf("[outbox] migration failed: %v", err)
-				}
+				log.Fatalf("[outbox] migration failed: %v", err)
+			}
 		}
 	}
 
@@ -218,12 +218,33 @@ func main() {
 	//   - 新：db != nil && outboxRepo != nil && pub != nil
 	//   - 行为：KAFKA_ENABLED=true → KafkaEventPublisher；KAFKA_ENABLED=false → DevEventPublisher
 	//     两者都已在 §2 构造，pub 永远非 nil（最差情况是 InMemoryEventPublisher fallback）
+	// E2E-23 E 组（D-32）：ops 容器承载 4 个可热更的运营参数。
+	// 必须**先于** BootNacos 建好 —— 它要被注入 deps.ops 才能收到 Nacos 推送，
+	// 又要被 relay / cleanup 协程共享（同一实例，热更才生效）。
+	// 用它而非直接改 c.Outbox.* 的原因：cleanup 协程在 ticker 闭包里读那些
+	// 字段，而 c 是 main() 的局部变量，Nacos 回调直接写就是 data race
+	//（E2E-21 教训：单测全绿也照样是 bug）。
+	ops := outbox.NewOps(outbox.OpsConfig{
+		MaxAttempts:       c.Outbox.MaxAttempts,
+		SentRetentionDays: c.Outbox.SentRetentionDays,
+		DeadRetentionDays: c.Outbox.DeadRetentionDays,
+		CleanupIntervalS:  c.Outbox.CleanupIntervalS,
+	})
+	bootDeps := defaultBootDeps()
+	bootDeps.ops = ops
+
 	if db != nil && outboxRepo != nil && pub != nil {
 		relayCtx, relayCancel := context.WithCancel(context.Background())
 		defer relayCancel()
 		relay := outbox.NewRelay(outboxRepo, pub, 1*time.Second, 100)
 		// Stage 86：dead 阈值走配置（yaml/OUTBOX_MAX_ATTEMPTS env，默认 100，0=关闭 dead 状态机）
-		relay.MaxAttempts = c.Outbox.MaxAttempts
+		//
+		// E2E-23 E 组（D-32）：引入 Ops 容器承载 4 个可热更的运营参数。
+		// 用它而非直接改 c.Outbox.* 的原因：下面 cleanup 协程在 ticker 闭包里
+		// 读这些字段（main.go 的 c 是局部变量），Nacos 回调若直接写就是真实
+		// data race（E2E-21 教训：单测全绿也照样是 bug）。
+		relay.Ops = ops
+
 		go func() {
 			log.Printf("[outbox] relay started")
 			_ = relay.Run(relayCtx)
@@ -235,7 +256,7 @@ func main() {
 			cleanupInterval := time.Duration(c.Outbox.CleanupIntervalS) * time.Second
 			go func() {
 				log.Printf("[outbox] cleanup ticker started: interval=%s sent_retention=%dd dead_retention=%dd",
-					cleanupInterval, c.Outbox.SentRetentionDays, c.Outbox.DeadRetentionDays)
+					cleanupInterval, ops.Snapshot().SentRetentionDays, ops.Snapshot().DeadRetentionDays)
 				ticker := time.NewTicker(cleanupInterval)
 				defer ticker.Stop()
 				for {
@@ -244,8 +265,19 @@ func main() {
 						log.Printf("[outbox] cleanup ticker stopped: %v", relayCtx.Err())
 						return
 					case <-ticker.C:
+						// 间隔热更：ticker 的周期在创建时固定，若不重建，
+						// CleanupIntervalS 就又是一个"配了不生效"的参数
+						// （与 LLM.Timeout 同型，账本 F-159）。
+						if newInterval := time.Duration(ops.Snapshot().CleanupIntervalS) * time.Second; newInterval > 0 && newInterval != cleanupInterval {
+							ticker.Reset(newInterval)
+							cleanupInterval = newInterval
+							log.Printf("[outbox] cleanup interval hot-updated to %s", cleanupInterval)
+						}
+						// 读 ops 快照而非 c.Outbox.*：后者是 main() 的局部变量，
+						// 被 Nacos 回调并发写就是 data race（E2E-21 教训）
+						snap := ops.Snapshot()
 						deleted, err := outbox.CleanupOnce(relayCtx, outboxRepo,
-							c.Outbox.SentRetentionDays, c.Outbox.DeadRetentionDays,
+							snap.SentRetentionDays, snap.DeadRetentionDays,
 							outbox.DefaultCleanupLimit)
 						if err != nil {
 							log.Printf("[outbox] cleanup err: %v", err)
@@ -307,7 +339,7 @@ func main() {
 	bootCtx, bootCancel := context.WithCancel(context.Background())
 	defer bootCancel()
 
-	nacosRuntime, err := BootNacos(bootCtx, &c, defaultBootDeps())
+	nacosRuntime, err := BootNacos(bootCtx, &c, bootDeps)
 	if err != nil {
 		if shareddiscovery.IsHardBootError(err.Error()) {
 			log.Fatalf("[nacos] boot failed (fatal): %v", err)

@@ -14,8 +14,10 @@ import (
 
 	sharedconfig "github.com/emotion-echo/shared/pkg/configcenter"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	"gopkg.in/yaml.v3"
 
 	"emotion-echo-chat-svc/internal/config"
+	"emotion-echo-chat-svc/internal/outbox"
 )
 
 // NacosRuntime 持有本 svc 的 Nacos 客户端与生命周期钩子。
@@ -46,6 +48,10 @@ type bootDeps struct {
 	registryFactory func(ctx context.Context, addr, namespace, group string) (shareddiscovery.Registry, error)
 	configFactory   func(ctx context.Context, addr, namespace, group string) (sharedconfig.ConfigCenter, error)
 	waitForNacos    func(ctx context.Context, addr string, maxWait time.Duration) error
+	// ops 运营参数容器（E2E-23 E 组）。nil 时退化为"只读不写"——
+	// 即维持 F-155 修复前的行为（拿到 ops 配置只打日志）。
+	// 注入它才能让 Nacos 推送真正生效。
+	ops *outbox.Ops
 }
 
 func defaultBootDeps() bootDeps {
@@ -121,18 +127,44 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 	}
 
 	dataId := cfg.Name + ".ops.yaml"
+	applyOps := func(content string, source string) {
+		if deps.ops == nil {
+			logging.PrintfContext(ctx, "[nacos] ops %s: %d bytes（未注入 ops 容器，仅记录）", source, len(content))
+			return
+		}
+		// P1（账本 F-158）：反序列化**之前**先做内容层敏感字段清洗 ——
+		// 既有 sensitivePrefixes 只拦 dataId，而 ops 是"单 dataId 打包全部运营
+		// 参数"，往里塞 llm.api_key 不会被拦。
+		cleaned, dropped := sharedconfig.SanitizeOpsContent(content)
+		if len(dropped) > 0 {
+			logging.PrintfContext(ctx, "[nacos] ops %s 剔除敏感 key: %v", source, dropped)
+		}
+		var parsed outbox.OpsConfig
+		if err := yaml.Unmarshal([]byte(cleaned), &parsed); err != nil {
+			logging.PrintfContext(ctx, "[nacos] ops %s parse failed (continuing): %v", source, err)
+			return
+		}
+		deps.ops.Apply(parsed)
+		got := deps.ops.Snapshot()
+		logging.PrintfContext(ctx, "[nacos] ops applied via %s: max_attempts=%d sent_retention=%dd dead_retention=%dd cleanup=%ds",
+			source, got.MaxAttempts, got.SentRetentionDays, got.DeadRetentionDays, got.CleanupIntervalS)
+	}
+
 	if opsYaml, err := cc.GetConfig(ctx, dataId, group); err != nil {
 		logging.PrintfContext(ctx, "[nacos] GetConfig(%s/%s) failed (continuing): %v", group, dataId, err)
 	} else {
-		logging.PrintfContext(ctx, "[nacos] ops config loaded: %s/%s, %d bytes", group, dataId, len(opsYaml))
+		applyOps(opsYaml, "GetConfig")
 	}
 
 	if cfg.Nacos.HotReload {
 		if err := cc.ListenConfig(ctx, dataId, group, func(d, g, content string) error {
 			logging.PrintfContext(ctx, "[nacos] [hot-reload] %s/%s changed, %d bytes", g, d, len(content))
+			applyOps(content, "hot-reload")
 			return nil
 		}); err != nil {
 			logging.PrintfContext(ctx, "[nacos] ListenConfig failed (continuing): %v", err)
+		} else {
+			logging.PrintfContext(ctx, "[nacos] hot-reload listener registered on %s/%s", group, dataId)
 		}
 	}
 
