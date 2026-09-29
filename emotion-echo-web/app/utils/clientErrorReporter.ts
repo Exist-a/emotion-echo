@@ -11,8 +11,6 @@
  *  - 采样：只上报 error / unhandledrejection；高频场景（资源加载失败）不重复刷
  *  - 限流：同一 msg 在滑动窗口内只报一次，避免死循环把日志打爆
  */
-import { getApiBaseUrl } from '~/lib/apiBaseUrl'
-
 /** 同一错误在窗口内只上报一次（防死循环刷爆日志） */
 const DEDUP_WINDOW_MS = 10_000
 const lastSent = new Map<string, number>()
@@ -53,6 +51,17 @@ function describe(err: unknown): { msg: string; stack: string } {
 }
 
 /**
+ * 上报目标 base URL。
+ *
+ * ⚠️ 必须在**安装时**（Nuxt plugin 上下文内）取好并传进来，不能在 window 事件
+ * 回调里现调 `useRuntimeConfig()` —— 2026-09-29 IAB 实测踩到：事件回调不在
+ * Nuxt 实例上下文内，`useRuntimeConfig()` 抛错，而 reportClientError 的
+ * try/catch 会把它**静默吞掉**，表现为"监听器装了却一条都发不出去"，
+ * 单元测试因为 stub 了 useRuntimeConfig 完全测不出来。
+ */
+let baseUrl = ''
+
+/**
  * 发送一条客户端错误。非阻塞、永不 reject。
  * @param kind error | unhandledrejection
  */
@@ -67,12 +76,22 @@ export async function reportClientError(
     if (!msg && !stack) return
     if (!shouldSend(key)) return
 
+    if (!baseUrl) {
+      // 没装或装失败（理论上不会，见 installClientErrorReporter）——
+      // 直接放弃上报，绝不为了"发出去"而抛给调用方
+      return
+    }
     // 刻意用裸 fetch，不走 composables/useApi 的封装：
     // 1) useApi 带鉴权 / 重试 / 401 跳转等包装 —— 上报失败时再触发跳转或重试，
     //    就变成"错误上报引发更多错误"的循环；
     // 2) 这个端点不要求登录（未登录白屏恰恰最需要被记录）。
-    const base = getApiBaseUrl(useRuntimeConfig())
-    await fetch(`${base}/api/v1/client-error`, {
+    // ⚠️ baseUrl 本身**已经含** /api/v1 前缀（NUXT_PUBLIC_API_BASE_URL=
+    // http://localhost:19080/api/v1，决策 11/12：APISIX 是唯一业务入口）。
+    // 早期版本这里又拼了一次 /api/v1 ⇒ 实际打到 /api/v1/api/v1/client-error
+    // ⇒ 落到 catch-all route 100 ⇒ jwt-auth 401。
+    // （2026-09-29 IAB 实测：网关 access log 里 url=/api/v1/api/v1/client-error
+    //   route_id=100 status=401 —— curl 测不出来，因为 curl 用的是手写路径。）
+    await fetch(`${baseUrl}/client-error`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -93,10 +112,17 @@ export async function reportClientError(
 
 /**
  * 安装全局捕获（nuxt plugin 调用）。
+ *
+ * @param apiBase API base URL（形如 http://localhost:19080/api/v1）。
+ *   必须在 Nuxt plugin 内取（getApiBaseUrl() 依赖 runtimeConfig）。
  * 返回卸载函数，便于测试里复原。
  */
-export function installClientErrorReporter(): () => void {
+export function installClientErrorReporter(apiBase: string): () => void {
   if (typeof window === 'undefined') return () => {}
+  baseUrl = (apiBase || '').replace(/\/+$/, '')
+  // 正向标记：2026-09-29 IAB 排查时，"监听器到底装没装"没有任何可观测点，
+  // 只能靠加日志猜。留一个显式标记，排查与线上排障都能直接读。
+  ;(window as any).__CLIENT_ERROR_REPORTER_READY__ = true
 
   const onError = (ev: ErrorEvent) => {
     void reportClientError('error', ev.error ?? ev.message, {
