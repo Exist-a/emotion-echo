@@ -292,6 +292,7 @@ func main() {
 	//   5 个业务端点统一走 /api/v1 group + GinAuthMiddleware
 	//   仿 user-svc main.go:147-155 noAuth group + r.Use 范式
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/health/ready", handler.HealthReadyHandler(svcCtx))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	auth := r.Group("/api/v1")

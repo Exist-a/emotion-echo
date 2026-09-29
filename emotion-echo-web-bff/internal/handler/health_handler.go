@@ -4,15 +4,16 @@
 //
 // 端点：GET /health
 // 响应：
-//   {
-//     "status": "ok",
-//     "version": "git-sha 或 dev-build",
-//     "build_time": "2026-09-24T12:34:56Z",
-//     "downstream": {
-//       "user": {"status":"ok"},
-//       ...
-//     }
-//   }
+//
+//	{
+//	  "status": "ok",
+//	  "version": "git-sha 或 dev-build",
+//	  "build_time": "2026-09-24T12:34:56Z",
+//	  "downstream": {
+//	    "user": {"status":"ok"},
+//	    ...
+//	  }
+//	}
 //
 // 实现：并发 GET 各下游 /health（带超时），单个下游失败不影响整体（标记 unhealthy）。
 // 全部下游 ok → status: ok；任一失败 → status: degraded。
@@ -44,14 +45,20 @@ type BuildInfo struct {
 	BuildTime string
 }
 
-// HealthHandler 聚合下游健康探测
+// HealthHandler 聚合下游健康探测。
+//
+// 语义（D-29）：本 handler 走 **liveness** 路径，下游全挂也返 HTTP 200；
+// 需要按下游健康判定时用 NewHealthReadyHandler。两者共用同一套探测与
+// status 计算，响应体必然一致，只有 HTTP 码不同。
 type HealthHandler struct {
 	targets []DownstreamTarget
 	client  *http.Client
 	build   BuildInfo
+	// readiness 为 true 时，下游降级返 503 而非 200。
+	readiness bool
 }
 
-// NewHealthHandler 构造
+// NewHealthHandler 构造 liveness handler（恒 200）。
 // targets == nil 时不探测下游（仅返回 build 信息）；用于测试 / 启动早期自检。
 func NewHealthHandler(targets []DownstreamTarget, timeout time.Duration) gin.HandlerFunc {
 	return NewHealthHandlerWithBuild(targets, timeout, BuildInfo{})
@@ -59,10 +66,21 @@ func NewHealthHandler(targets []DownstreamTarget, timeout time.Duration) gin.Han
 
 // NewHealthHandlerWithBuild 含构建信息；main.go 用此入口传 version/build_time。
 func NewHealthHandlerWithBuild(targets []DownstreamTarget, timeout time.Duration, build BuildInfo) gin.HandlerFunc {
+	return newHealthHandler(targets, timeout, build, false)
+}
+
+// NewHealthReadyHandler 构造 readiness handler：任一下游降级即返 503。
+// compose healthcheck 指向本端点，使"下游挂了"能真正影响容器健康判定
+// （此前恒返 200，探针形同虚设 —— 见 plan §0 F-b）。
+func NewHealthReadyHandler(targets []DownstreamTarget, timeout time.Duration) gin.HandlerFunc {
+	return newHealthHandler(targets, timeout, BuildInfo{}, true)
+}
+
+func newHealthHandler(targets []DownstreamTarget, timeout time.Duration, build BuildInfo, readiness bool) gin.HandlerFunc {
 	if timeout <= 0 {
 		timeout = 2 * time.Second
 	}
-	h := &HealthHandler{targets: targets, client: &http.Client{Timeout: timeout}, build: build}
+	h := &HealthHandler{targets: targets, client: &http.Client{Timeout: timeout}, build: build, readiness: readiness}
 	return h.ServeHTTP
 }
 
@@ -106,7 +124,15 @@ func (h *HealthHandler) ServeHTTP(c *gin.Context) {
 			break
 		}
 	}
-	c.JSON(http.StatusOK, resp)
+
+	// liveness 恒 200（D-29：存量消费方按 200 判定，改 503 会让
+	// apisix-seed 的 condition: service_healthy 永不满足）；
+	// readiness 则用 503 把下游降级传给 compose 探针。
+	code := http.StatusOK
+	if h.readiness && resp.Status != "ok" {
+		code = http.StatusServiceUnavailable
+	}
+	c.JSON(code, resp)
 }
 
 // probe 探测单个下游 /health

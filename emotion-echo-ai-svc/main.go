@@ -426,6 +426,7 @@ func main() {
 
 	// 6. routes
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/health/ready", handler.HealthReadyHandler(svcCtx))
 	r.GET("/api/v1/emotion/message/:messageId", handler.GetEmotionByMessageHandler(svcCtx))
 	r.GET("/api/v1/emotion/conversation/:conversationId", handler.ListEmotionByConversationHandler(svcCtx))
 	// Stage 23: AI multimodal / TTS / AI health endpoints

@@ -112,6 +112,8 @@ func main() {
 	r.Use(sharedmw.GinAuthMiddleware())
 
 	r.GET("/health", handler.HealthHandler(svcCtx))
+
+	r.GET("/health/ready", handler.HealthReadyHandler(svcCtx))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 	r.GET("/api/v1/surveys", handler.ListSurveysHandler(svcCtx))
 	r.GET("/api/v1/surveys/:id", handler.GetSurveyHandler(svcCtx))

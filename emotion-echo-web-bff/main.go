@@ -445,6 +445,16 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 		Version:   gitVersion(),
 		BuildTime: time.Now().UTC().Format(time.RFC3339),
 	}))
+	// D-29：readiness 端点。下游降级时返 503，供 compose healthcheck 判定 ——
+	// 此前 /health 恒返 200，探针看不到"某下游挂了"。
+	r.GET("/health/ready", handler.NewHealthReadyHandler([]handler.DownstreamTarget{
+		{Name: "user", BaseURL: c.UserService.BaseURL},
+		{Name: "chat", BaseURL: c.ChatService.BaseURL},
+		{Name: "assessment", BaseURL: c.AssessmentService.BaseURL},
+		{Name: "analytics", BaseURL: c.AnalyticsService.BaseURL},
+		{Name: "ai", BaseURL: c.AIService.HTTPAddr},
+		{Name: "xtts", BaseURL: c.XTTS.BaseURL},
+	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	// auth（Stage 33 PR-19b：真实登录，注入 UserClient）

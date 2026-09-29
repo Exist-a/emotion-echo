@@ -305,6 +305,7 @@ func main() {
 func registerRoutes(r *gin.Engine, svcCtx *svc.ServiceContext) {
 	// 基础设施
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/health/ready", handler.HealthReadyHandler(svcCtx))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	// Stage 30-A 业务路由
