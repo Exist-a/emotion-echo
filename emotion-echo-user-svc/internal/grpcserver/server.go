@@ -37,6 +37,10 @@ import (
 
 const healthServiceFullName = "/grpc.health.v1.Health"
 
+// emotionQueryServiceName 是本服务在 gRPC health 中注册的业务 service 名。
+// 抽成常量：注册与停机翻转两处必须用同一个值，否则翻转漏掉业务 service。
+const emotionQueryServiceName = "emotion.User"
+
 // newServiceAwareUserIDInterceptor 跳过 health probe + Login/Register 的 user id 检查
 //
 // 跳过清单：
@@ -73,6 +77,30 @@ type Server struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 	port       int
+	// healthSrv 必须存下来：停机时要把所有 service 翻成 NOT_SERVING，
+	// 让上游在连接真正关闭前先摘掉流量。此前它是 New() 里的局部变量，
+	// 停机分支拿不到 —— 于是 health 永远停在 SERVING（E2E-23 测试点 #13）。
+	healthSrv *health.Server
+}
+
+// MarkShuttingDown 把所有已注册 service 的健康状态翻为 NOT_SERVING。
+//
+// 生产路径：main 收到 SIGTERM/SIGINT 后、GracefulStop 之前调用。
+// 顺序很关键 —— 先翻状态（上游摘流量），再 GracefulStop（等在途 RPC 结束），
+// 反过来会让停机窗口内的请求被丢在正在关闭的实例上。
+//
+// 幂等：停机信号可能重复送达（SIGTERM 后 SIGKILL、重启重试等），
+// 重复调用只是重复写入同一状态，grpc 的 health.Server 内部有锁。
+func (s *Server) MarkShuttingDown() {
+	s.mu.RLock()
+	hs := s.healthSrv
+	s.mu.RUnlock()
+	if hs == nil {
+		return
+	}
+	for _, svcName := range []string{"", emotionQueryServiceName} {
+		hs.SetServingStatus(svcName, healthpb.HealthCheckResponse_NOT_SERVING)
+	}
 }
 
 // New 创建并配置 gRPC server（未启动）
@@ -111,12 +139,13 @@ func New(svcCtx *svc.ServiceContext, port int) *Server {
 	// 注册 health check（跳过 user id 校验）
 	healthSrv := health.NewServer()
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthSrv.SetServingStatus("emotion.User", healthpb.HealthCheckResponse_SERVING)
+	healthSrv.SetServingStatus(emotionQueryServiceName, healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(gs, healthSrv)
 
 	return &Server{
 		grpcServer: gs,
 		port:       port,
+		healthSrv:  healthSrv,
 	}
 }
 
@@ -135,6 +164,9 @@ func (s *Server) Start(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		logging.PrintfContext(ctx, "[grpc] shutting down...")
+		// 先翻 health 状态再关连接：让上游能在连接真正断开前摘掉流量。
+		// 顺序反了会让停机窗口内的请求打进正在关闭的实例。
+		s.MarkShuttingDown()
 		s.grpcServer.GracefulStop()
 	}()
 
