@@ -2,7 +2,7 @@
 stage: e2e-22
 title: 监控告警（Prometheus 抓取闭环 + Grafana 面板实数据 + Alertmanager 通知渠道）
 type: transformation
-status: partial
+status: done
 created: 2026-09-29
 depends-on: []
 blocks: [E2E-28]
