@@ -65,9 +65,9 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 39 | APISIX Admin 页面截图 | `[V]` | BLOCKED | — | 同上。**A7 审计对 `[V]` 点要求截图，本轮无 `[V]` 结论故不触发** |
 | 40 | 文档漂移修正 | `[A]` | BLOCKED | — | 属 F 组。RUNBOOK §2.4「必须重跑 seed」待 #23 验证后才能改 |
 
-汇总：PASS 22 / FAIL 0 / BLOCKED 16 / N/A 2
+汇总：PASS 23 / FAIL 0 / BLOCKED 15 / N/A 2
 
-> ⚠️ **BLOCKED 占比 40%，仍超 RUNBOOK §4 的 1/3 红线** ⇒ **本阶段不得判 done**，
+> ⚠️ **BLOCKED 占比 37.5%，仍超 RUNBOOK §4 的 1/3 红线** ⇒ **本阶段不得判 done**，
 > 阶段状态 `partial`。破坏性实验 5 项（#18/19/20/21/23）已于 2026-09-29 用户批准后**全部执行完毕并 PASS**；
 > 剩余 16 项 BLOCKED 分三类：① 属 E/F 组未开工（#30~35、#37~40）② 依赖尚未落地的基础设施
 > （#5/#6 需 Redis 与 Nacos 状态注入）③ 需特定场景（#10 seed 降级场景 / #15 客户端分流阅读）。
