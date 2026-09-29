@@ -1,0 +1,142 @@
+{{/*
+E2E-22: Prometheus 告警规则的 k8s 侧 ConfigMap。
+
+为什么需要这个文件（2026-09-29 实测缺陷，非假想）:
+  prometheus-config 的 rule_files 声明了 /etc/prometheus/rules/*.yml，
+  但该 ConfigMap 的 data **只有 prometheus.yml 一个 key**，而 deployment
+  也只挂了 config(整个 /etc/prometheus) 与 data(/prometheus) 两个 volume。
+  ⇒ 规则目录为空 ⇒ rule_files 命中**空 glob** ⇒ Prometheus **不报错**、
+  静默加载 0 条规则、0 条告警。与 E2E-F-147（promtail 无权限读日志但 Pod 全绿）
+  属同一类"配置声明了但实际没接上"的静默失效。
+
+维护约定（防止 dev / k8s 两份规则漂移）:
+  deploy/prometheus/rules/*.yml 是**唯一事实源**；本文件内联其内容。
+  两份的 alert 名一致性由 deploy/obs_monitoring.test.js 的
+  "规则名双向相等"断言兜底 —— 改任一侧而忘改另一侧，契约测试立即红。
+
+⚠️ 运行时未验证: 本机无 k8s 集群，本文件仅通过 helm template 渲染回归
+  （scripts/test_helm_prometheus_render.sh，含负向对照）。生产部署时需实测一次。
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: {{ include "prometheus.namespaceObservability" . }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+data:
+  # --- 与 deploy/prometheus/rules/outbox-dead.yml 保持一致 ---
+  outbox-dead.yml: |
+    groups:
+      - name: outbox-dead
+        interval: 30s
+        rules:
+          - alert: OutboxEventsDead
+            expr: emotion_echo_outbox_events_dead_total > 0
+            for: 1m
+            labels:
+              severity: critical
+              component: chat-svc
+            annotations:
+              summary: "chat-svc outbox row(s) marked dead (events permanently dropped)"
+              description: |
+                outbox dead counter = {{ `{{ $value }}` }}。
+                有事件行超过 MaxAttempts 仍发布失败，已被标记 dead 并永久放弃。
+                查 chat-svc 日志 + emotion_echo_chat.outbox_events 表 last_error 排查根因。
+
+  # --- 与 deploy/prometheus/rules/kafka-lag.yml 保持一致 ---
+  kafka-lag.yml: |
+    groups:
+      - name: kafka-consumer-lag
+        interval: 30s
+        rules:
+          - alert: KafkaConsumerGroupLagHigh
+            expr: kafka_consumergroup_lag{consumergroup=~"ai-svc|analytics-svc"} > 10000
+            for: 5m
+            labels:
+              severity: warning
+              component: kafka
+            annotations:
+              summary: "Kafka consumer group {{ `{{ $labels.consumergroup }}` }} lag high"
+              description: |
+                Consumer group {{ `{{ $labels.consumergroup }}` }} lag = {{ `{{ $value }}` }} on partition {{ `{{ $labels.partition }}` }}
+                (topic={{ `{{ $labels.topic }}` }}, threshold=10000, duration=5m)
+                检查 consumer 进程状态 + Kafka broker 健康。
+
+  # --- 与 deploy/prometheus/rules/kafka-dlq.yml 保持一致 ---
+  kafka-dlq.yml: |
+    groups:
+      - name: kafka-dlq
+        interval: 30s
+        rules:
+          - alert: AIDLQPublishFailure
+            expr: rate(emotion_echo_dlq_publish_total{result="failure"}[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: critical
+              component: ai-svc
+            annotations:
+              summary: "ai-svc DLQ publish failure rate > 0.1/s over 5m"
+              description: |
+                ai-svc DLQ.Publish 失败率 = {{ `{{ $value }}` }}/s。
+                业务消息 + DLQ 双失败：sarama 已 retry 但仍失败，事件已 MarkMessage 也无法挽回。
+                查 ai-svc 日志 "consumer DLQ publish failed (dropping msg)" 找 broker 错误。
+
+          - alert: AnalyticsDLQPublishFailure
+            expr: rate(emotion_echo_analytics_dlq_publish_total{result="failure"}[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: critical
+              component: analytics-svc
+            annotations:
+              summary: "analytics-svc DLQ publish failure rate > 0.1/s over 5m"
+              description: |
+                analytics-svc DLQ.Publish 失败率 = {{ `{{ $value }}` }}/s。
+                user_behavior_events 落库失败的毒消息 + DLQ 双失败。
+                查 analytics-svc 日志 "DLQ publish failed (dropping msg)" 找 broker 错误。
+
+  # --- 与 deploy/prometheus/rules/observability-self.yml 保持一致（E2E-22 新增）---
+  # 注: k8s 侧 PrometheusTargetDown 依赖 up 指标，kubernetes-pods SD job 下同样有效
+  #     （被 scrape 的 Pod 挂掉后 Pod 对象仍在，target 变 down）。
+  observability-self.yml: |
+    groups:
+      - name: observability-self
+        interval: 30s
+        rules:
+          - alert: PrometheusTargetDown
+            expr: up == 0
+            for: 2m
+            labels:
+              severity: critical
+              component: observability
+            annotations:
+              summary: "scrape target DOWN: {{ `{{ $labels.job }}` }} / {{ `{{ $labels.instance }}` }}"
+              description: |
+                target {{ `{{ $labels.instance }}` }}（job={{ `{{ $labels.job }}` }}）已持续 2 分钟不可抓取。
+                若 instance 属观测面自身，则该组件当前**无任何指标** ——
+                依赖它的告警将静默失效。
+
+          - alert: AlertmanagerNotificationFailing
+            expr: sum(rate(alertmanager_notifications_failed_total[5m])) > 0
+            for: 5m
+            labels:
+              severity: critical
+              component: alertmanager
+            annotations:
+              summary: "Alertmanager 通知投递持续失败（告警响了但发不出去）"
+              description: |
+                alertmanager_notifications_failed_total 的 rate > 0 已持续 5 分钟。
+                后果: 告警已进入 Alertmanager 但**没有送达任何 receiver** ——
+                比不告警更危险，因为它制造"已有告警覆盖"的虚假安全感。
+
+          - alert: AlertmanagerClusterDegraded
+            expr: alertmanager_cluster_members < 1
+            for: 5m
+            labels:
+              severity: critical
+              component: alertmanager
+            annotations:
+              summary: "Alertmanager 集群成员数为 0"
+              description: |
+                alertmanager_cluster_members = {{ `{{ $value }}` }}，应至少为 1。
+                为 0 表示 gossip 环未建立，Alertmanager 无法在接收方之间复制告警。

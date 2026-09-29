@@ -1,0 +1,80 @@
+# E2E-22: 观测面自身的健康告警（"黑瞎子"缺口）
+#
+# 背景（2026-09-29 实测，非假想）:
+#   emotion-echo-prometheus / alertmanager / kafka-exporter / sw-oap / minio / kafka
+#   六个容器于同一刻 Exited(255)。探针 localhost:9090 与 :9093 返 000。
+#   **全程零告警** —— 因为发告警的 Prometheus 自己死了，规则根本不评估。
+#
+#   kafka-exporter 更是可稳定复现: 它的 depends_on 误写为 prometheus(与 consumer lag
+#   采集无因果关系)而非 kafka，且无 restart 策略 ⇒ broker 未就绪时
+#   "Error Init Kafka Client" 退出一次即永久 DOWN。
+#
+# 本文件能做什么 / 不能做什么（重要，不要误读覆盖范围）:
+#   ✓ 能: Prometheus 活着时，发现**其它** target 挂掉（含 alertmanager / kafka-exporter /
+#     skywalking-oap 等观测面自身），以及发现"通知发不出去"。
+#   ✗ 不能: Prometheus **自身**进程死亡。本规则由 Prometheus 自己评估，
+#     它死了就无人评估 ⇒ 真实解需 deadman's switch / blackbox exporter 这类
+#     **进程外**发送方，单机 dev 无法自举。已登记账本，见 E2E-22 plan §2.3。
+#
+# severity 约定: 全部 critical —— 观测面失效意味着"其余告警的可信度归零"，
+#   属于"看不见风险"而非"风险升高"。
+
+groups:
+  - name: observability-self
+    interval: 30s
+    rules:
+      # ---------------------------------------------------------------
+      # 任意 scrape target 不可达。对无 agent 的基础设施（exporter / OAP /
+      # Alertmanager）而言，target 掉了就是彻底没有指标，没有任何兜底。
+      # ---------------------------------------------------------------
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: observability
+        annotations:
+          summary: "scrape target DOWN: {{ $labels.job }} / {{ $labels.instance }}"
+          description: |
+            target {{ $labels.instance }}（job={{ $labels.job }}）已持续 2 分钟不可抓取。
+            若 instance 属观测面自身（alertmanager / kafka-exporter / skywalking-oap），
+            则该组件当前**无任何指标** —— 依赖它的告警将静默失效。
+            排查: docker ps -a --filter name=emotion-echo | grep {{ $labels.job }}
+            实测参考: 2026-09-29 kafka-exporter 因 depends_on 指向 prometheus 而非 kafka，
+            启动即 exit 255 且无 restart ⇒ target 长期 down 而无人发现。
+
+      # ---------------------------------------------------------------
+      # 通知发不出去 ⇒ 告警"响了但没人收到"，比不响更危险（它制造虚假安全感）。
+      # 指标名经 alertmanager v0.27 /-/metrics 实测核对，非凭记忆书写。
+      # ---------------------------------------------------------------
+      - alert: AlertmanagerNotificationFailing
+        expr: sum(rate(alertmanager_notifications_failed_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: alertmanager
+        annotations:
+          summary: "Alertmanager 通知投递持续失败（告警响了但发不出去）"
+          description: |
+            alertmanager_notifications_failed_total 的 rate > 0 已持续 5 分钟。
+            典型原因: receiver URL 不可达（dev 侧见 alertmanager.yml 的 mock-webhook）、
+            认证失败、payload 超限。
+            后果: 告警已进入 Alertmanager 但**没有送达任何 receiver** ——
+            比不告警更危险，因为它制造"已有告警覆盖"的虚假安全感。
+            排查: curl http://localhost:9093/#/alerts 看 receiver 状态 + 容器日志。
+
+      # ---------------------------------------------------------------
+      # Alertmanager gossip 集群失效：dev 单实例，members 应恒为 1。
+      # 掉到 0 意味着它连自己都没连上，告警不会重试也不会通知。
+      # ---------------------------------------------------------------
+      - alert: AlertmanagerClusterDegraded
+        expr: alertmanager_cluster_members < 1
+        for: 5m
+        labels:
+          severity: critical
+          component: alertmanager
+        annotations:
+          summary: "Alertmanager 集群成员数为 0"
+          description: |
+            alertmanager_cluster_members = {{ $value }}，dev 单实例部署应为 1。
+            为 0 表示 gossip 环未建立，Alertmanager 无法在接收方之间复制告警。

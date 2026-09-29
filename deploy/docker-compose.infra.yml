@@ -393,6 +393,27 @@ services:
   # 镜像: prom/alertmanager:v0.27.0 (与 prometheus v2.51.2 同代发布线)
   # 配置: deploy/alertmanager/alertmanager.yml — dev 只做 UI 展示,不接外部通知渠道
   # 告警来源: prometheus.yml alerting 段 → rules/*.yml (kafka-lag.yml / outbox-dead.yml)
+  # ===== E2E-22: 告警接收靶子 (dev-only mock webhook target) =====
+  # 作用: 让"通知真的送达"成为机器可断言项。此前 dev 侧只有 dev-ui 空 receiver
+  # (E2E-F-11), 告警是否送达只能人眼看 UI ⇒ smoke 永远抓不到"规则加载了但通知
+  # 发不出去"。本服务无鉴权, 只用于本地 obs profile, 禁止进 prod。
+  obs-mock-receiver:
+    image: python:3-alpine
+    container_name: emotion-echo-obs-mock-receiver
+    profiles: ["obs"]
+    restart: unless-stopped
+    command: ["python", "/app/receiver.py"]
+    environment:
+      MOCK_RECEIVER_PORT: "8080"
+      MOCK_RECEIVER_DATA_DIR: "/data"
+    volumes:
+      - ./obs-mock-receiver/receiver.py:/app/receiver.py:ro
+      - ./tmp/obs-mock-receiver:/data
+    ports:
+      - "18080:8080"
+    networks:
+      - app-network
+
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: emotion-echo-alertmanager
@@ -418,6 +439,12 @@ services:
     image: danielqsj/kafka-exporter:latest
     container_name: emotion-echo-kafka-exporter
     profiles: ["obs"]
+    # E2E-22 (2026-09-29 实测 exit 255 根因): kafka-exporter 只做一次性 client 初始化,
+    # broker 未就绪即 "Error Init Kafka Client: ... connection refused" 退出。原 depends_on
+    # 误写为 prometheus —— 与 consumer lag 采集毫无因果关系, 却掩盖了真正的上游 kafka,
+    # 于是启动顺序无人保证; 又无 restart 策略 ⇒ 一次失败即永久 DOWN (target 长期 down)。
+    # 修正: 依赖真正的上游 kafka(service_healthy) + 加 restart 让失败可自愈。
+    restart: unless-stopped
     command:
       - "--kafka.server=emotion-echo-kafka:9092"
       - "--web.listen-address=:9308"
@@ -426,7 +453,8 @@ services:
     networks:
       - app-network
     depends_on:
-      - prometheus
+      kafka:
+        condition: service_healthy
 
   grafana:
     image: grafana/grafana:10.4.2

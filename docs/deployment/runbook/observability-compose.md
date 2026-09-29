@@ -33,7 +33,8 @@ sleep 60
 | 3 | Grafana 就绪 | `curl :13000/api/health` | `{"database":"ok"}` |
 | 4 | Loki 就绪 | `curl :3100/ready` | "ready"（注意：loki /ready 在 compactor 启动后 ~15s 才返回 200）|
 | 5 | Kafka exporter 就绪 | `curl :9308/metrics` | body 含 `kafka_consumergroup_lag` |
-| 6 | 跑全 smoke | `python scripts/smoke_observability.py` | 11 项 PASS + 1 项 FAIL（prometheus scrape targets，需干净环境） |
+| 6 | 跑全 smoke | `python scripts/smoke_observability.py` | 全部 PASS（断言数随 E2E-21/E2E-22 扩充，以实跑输出为准；不要再引用过期的固定数字） |
+| 7 | 告警接收靶子 | `curl :18080/health` | `{"ok": true, ...}`（E2E-22：critical 告警的送达断言靶子） |
 
 ### 1.3 UI 入口速查
 
@@ -41,7 +42,8 @@ sleep 60
 |------|-----|----------|
 | Grafana | http://localhost:13000（Stage 74 起让位 web :3000）| admin / admin（dev 默认，**prod 必须改**）|
 | Prometheus | http://localhost:9090 | 无（dev 无鉴权）|
-| Alertmanager | （PR-OBS-8 范围外，dev 未启用）| — |
+| Alertmanager | http://localhost:9093 | 无（dev 无鉴权）。E2E-22 起 critical 告警额外投递到 mock-webhook（`:18080`），`dev-ui` receiver 仍保留故全部告警在此可见 |
+| 告警接收靶子 | http://localhost:18080/received | 无（dev-only mock receiver，禁止进 prod）|
 | SkyWalking UI | http://localhost:8080 | 无 |
 | APISIX Dashboard | http://localhost:9180/ui/ | admin key 在 `deploy/apisix/config.yaml` |
 
@@ -55,15 +57,16 @@ sleep 60
 curl -s http://localhost:9090/api/v1/targets?state=active | python -m json.tool | grep -E '"instance"|"health"' | head -20
 ```
 
-### 2.2 期望的 scrape job（PR-OBS-4 + PR-OBS-7）
+### 2.2 期望的 scrape job（PR-OBS-4 + PR-OBS-7 + E2E-22）
 
 | Job | Targets | 用途 |
 |-----|---------|------|
-| `emotion-echo-services` | 6 业务 svc | HTTP /metrics |
+| `emotion-echo-services` | 7 个（6 业务 svc + `emotion-llm-service:8000`）| HTTP /metrics（E2E-22 补 llm-service：它暴露 `/metrics` 但此前无 target，而 k8s chart 却带 scrape annotation）|
 | `apisix` | emotion-echo-apisix:9091 | APISIX 自 metrics |
-| `skywalking-oap` | emotion-echo-sw-oap:1234 | OAP 自 metrics（**注意**：sw-oap env 未设 SW_TELEMETRY=prometheus，**DOWN**，留作 PR-OBS-? 启用）|
+| `skywalking-oap` | emotion-echo-sw-oap:1234 | OAP 自 metrics（`SW_TELEMETRY=prometheus` 已在 compose 中设置并生效；E2E-22 实测该 target `up`）|
 | `prometheus` | localhost:9090 | 自监控 |
-| `kafka-exporter` | emotion-echo-kafka-exporter:9308 | Kafka consumer lag（PR-OBS-7）|
+| `kafka-exporter` | emotion-echo-kafka-exporter:9308 | Kafka consumer lag（PR-OBS-7）。E2E-22 修正其 `depends_on`（原误指 prometheus）并加 `restart` |
+| `alertmanager` | emotion-echo-alertmanager:9093 | **E2E-22 新增**：收告警的东西自己可观测，此前它挂掉时无人知道 |
 
 ### 2.3 排查 scrape target DOWN
 

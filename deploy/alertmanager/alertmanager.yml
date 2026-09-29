@@ -1,11 +1,19 @@
 # Stage 86: dev alertmanager 配置（kafka-reliability-gaps.md §3.6 "dead 告警接 alertmanager"）
 #
-# dev 范围: alertmanager 只做 告警聚合去重 + Web UI 展示（:9093），
-# 不接外部通知渠道（无钉钉/slack/webhook 值班群——dev 单人开发场景无意义）。
-# 告警在 http://localhost:9093 可见 silences/inhibited/firing 全状态。
+# E2E-22 补充（2026-09-29）: 增加 mock-webhook 通道, 闭环账本 E2E-F-11。
+#   改动前的真实状况: dev 侧只有无任何集成段的 dev-ui receiver ⇒ "通知发不出去"
+#   这类故障**没有任何断言能抓到**（smoke 只查规则是否"已加载"）。这比"没有告警"
+#   更危险, 因为它制造"已有告警覆盖"的虚假安全感。
+#   改动后: critical 级走 mock-webhook → 本地 obs-mock-receiver, 送达与否
+#   可被 scripts/smoke_observability.py 机器断言（收到 + body 含 labels/annotations
+#   + resolved 也送达）。receiver 地址用 compose 服务名, 仅 obs profile 可达。
 #
-# prod 演进: route 按 severity 分流（critical → 值班 webhook，warning → 群机器人），
-# 此文件是接入点，届时只加 receivers 不动 prometheus 侧。
+# 边界（务必保持）: 真实外部渠道（钉钉/企微/邮件）**仍不在 dev 范围** ——
+#   单人开发无值班群, 且需要真实凭据。prod 接入方式不变: 换掉 mock-webhook 的
+#   url 指向真实值班 webhook 即可, prometheus 侧无需改动。
+#
+# dev-ui receiver 刻意保留且不做任何集成: Stage 86 的"告警在 :9093 Web UI
+# 可见 silences/inhibited/firing 全状态"决策不被推翻。
 
 global:
   resolve_timeout: 5m
@@ -16,7 +24,18 @@ route:
   group_wait: 10s
   group_interval: 1m
   repeat_interval: 4h
+  routes:
+    # critical → 可断言通道（E2E-22）。warning 仍只落 dev-ui:
+    # warning 量大且无需即时确认, 不制造噪声投递。
+    - receiver: mock-webhook
+      matchers:
+        - severity="critical"
 
 receivers:
-  # dev-ui: 无任何集成——告警仅进 alertmanager Web UI（dev 预期行为）
+  # dev-ui: 无任何集成——告警仅进 alertmanager Web UI（dev 预期行为，Stage 86 决策）
   - name: dev-ui
+  # E2E-22: 本地靶子, 接收后可被 smoke 取回断言
+  - name: mock-webhook
+    webhook_configs:
+      - url: http://obs-mock-receiver:8080/alert
+        send_resolved: true

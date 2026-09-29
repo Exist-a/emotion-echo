@@ -2,7 +2,7 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-09-28 (**E2E-21 ✅ done**：13/13 测试点全 PASS + promtail docker_sd 采集打通 + traceId 全链路注入 + smoke 断言收紧与 5 组负向对照；**E2E-20 ✅ done** §13.3 用户批准收口；**E2E-21 详档已建档**，详档 [plan.md](stages/e2e-21-logging-observability/plan.md) —— 计划期实测推翻"159 处 stdlib log 需迁移"的初判（Go 1.26 `slog.SetDefault` 已桥接），范围收窄为采集入口 + traceId 生产侧 + smoke 收紧)
+last-refresh: 2026-09-29 (**E2E-22 详档已建档**，[plan.md](stages/e2e-22-monitoring-alerting/plan.md) —— 18 个测试点；计划期实测抓到三条硬事实：观测栈 6 容器同刻 `Exited(255)` **且零告警**、`llm-service` 指标 dev 侧采不到、k8s 侧告警规则空 glob 静默为 0 条；**E2E-21 ✅ done** 13/13 测试点全 PASS + 三条留账 F-146/147/148 闭环；**E2E-20 ✅ done** §13.3 用户批准收口)
 type: e2e-stage-roadmap
 ---
 
@@ -31,7 +31,8 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 
 **E2E-20 多实例并发正确性 ✅ done（2026-09-28 §13.3 用户批准，PR #118 收口）** → 详档 [STATUS v4](stages/e2e-20-multi-instance-concurrency/STATUS.md)。下一阶段按 roadmap 排期推进
 
-> **当前激活**：**E2E-21 日志体系**（✅ done 2026-09-29：13/13 测试点 PASS + 三条留账 F-146/147/148 收尾闭环；→ [report.md](stages/e2e-21-logging-observability/report.md)）。**下一阶段 = E2E-22 监控告警**（Prometheus 抓取/Grafana 面板/Alertmanager 通知渠道），详档待其前序阶段收口后建档。无依赖前置、RUNBOOK §9 无阻塞决策门。计划期实测：Docker Desktop 上 `/var/lib/docker/containers`（**29 个**容器目录）与 `/var/run/docker.sock` 均可见 ⇒ [ADR-2026-09-loki-aggregator-dev](../../../architecture/adr/adr-2026-09-loki-aggregator-dev.md) §2.1/§2.3 原定的 docker_sd 采集路线可行（ADR 该决策**从未落地**）。计划期另一处修正：Go 1.26 的 `slog.SetDefault` 已把 stdlib `log` 桥接进 slog handler ⇒ **"159 处 stdlib log 需迁移"的初判被推翻**，阶段范围收窄为采集入口 + traceId 生产侧 + smoke 断言收紧。
+> **当前激活**：**E2E-22 监控告警**（🔵 详档已建档 2026-09-29，[plan.md](stages/e2e-22-monitoring-alerting/plan.md)）：Prometheus 抓取 / Grafana 面板 / Alertmanager 通知渠道。**无依赖前置、RUNBOOK §9 无阻塞决策门**。计划期实测三处硬事实：① **观测栈当前是死的且零告警** —— `emotion-echo-prometheus` / `alertmanager` / `kafka-exporter` / `sw-oap` / `minio` / `kafka` 六容器于 `2026-09-29T03:12:40Z` **同刻 `Exited(255)`**（`OOMKilled=false`、日志尾部正常 ⇒ 外部终止事件非自身崩溃），`localhost:9090/9093` 探测返 `000`；**发告警的东西自己死了，故无人告警** —— 阶段核心测试点即针对此类"黑瞎子"缺口。② **`llm-service` 暴露 `/metrics` 但 dev 侧无 target**（`emotion-llm-service/main.py:215` vs `prometheus.yml:26-32`），而 k8s 侧有 annotation ⇒ 双栈不一致。③ **k8s 侧告警规则为 0 条且零报错** —— `charts/.../prometheus` 的 `rule_files` 指向 `/etc/prometheus/rules/*.yml`，但该 ConfigMap 的 `data` 只有 `prometheus.yml` 一个 key、deployment 也无对应 volume 挂载 ⇒ 空 glob 静默失效（与 E2E-F-147 权限静默失效同型）。另：`db-migrate` `Exited(1)`（`FATAL: Postgres 30s 内未就绪`，迁移本身 31 文件全成功）属启动竞态，**范围外**归 E2E-23。
+> **上一阶段**：**E2E-21 日志体系** ✅ done 2026-09-29（13/13 测试点 PASS + 三条留账 F-146/147/148 收尾闭环；→ [report.md](stages/e2e-21-logging-observability/report.md)）。其计划期实测：Docker Desktop 上 `/var/lib/docker/containers`（**29 个**容器目录）与 `/var/run/docker.sock` 均可见 ⇒ [ADR-2026-09-loki-aggregator-dev](../../../architecture/adr/adr-2026-09-loki-aggregator-dev.md) §2.1/§2.3 原定的 docker_sd 采集路线可行（ADR 该决策**从未落地**）；Go 1.26 的 `slog.SetDefault` 已把 stdlib `log` 桥接进 slog handler ⇒ **"159 处 stdlib log 需迁移"的初判被推翻**，阶段范围收窄为采集入口 + traceId 生产侧 + smoke 断言收紧。
 > E2E-18 缓存层（✅ done，2026-09-28 §13.3 第二方核对用户批准）：LRU 默认启用 TDD + D-27 Redis 保留决议，详档 [report.md](stages/e2e-18-cache-layer/report.md) + [STATUS v2](stages/e2e-18-cache-layer/STATUS.md)。
 
 > **2026-09-19 治理轮（07~10 收口审计）**：对 E2E-07/08/09/10 跑 `scripts/e2e_stage_audit.py` 发现四个阶段**全部 FAIL**（E2E-11 是唯一干净的近期阶段），错误模式与 R-02 判定过的完全同型：`screenshots/` 全为 0 张、report 非 §10 模板（缺「收口自检」/无汇总行）、plan 与 roadmap 状态未同步。用户决议 = **轻量补账 + 四阶段降 `partial`**（取证补拍另排一轮，账本 E2E-F-90）。
@@ -106,7 +107,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
 | E2E-21 | 日志体系 | 结构化日志 + traceId 注入（含 gRPC 侧）+ Loki 采集链路（Go 日志现未进 Loki） | 日志平台选型 | ✅ **done**（2026-09-28：**13/13 测试点全 PASS**；**2026-09-29 三条留账 E2E-F-146/147/148 全部闭环**，0 FAIL / 0 BLOCKED。补实现 ADR-2026-09-loki-aggregator-dev §2.1/§2.3/§四 写下但**从未落地**的 docker_sd 采集 ⇒ Go 6 服务日志进 Loki；traceId 三层断点全修（APISIX 注入 X-Trace-Id → 4 组插件变量全覆盖 / gRPC metadata 透传 / 拦截器日志改带 ctx）⇒ 一次登录的 trace_id 同时出现在 web-bff + user-svc + 网关 access log。**过程中另抓 3 个真缺陷**：bash 单引号串里 `` 被吞成空串 → **全站 500**（契约钉已补"校验 bash 展开后值"）；file-logger 取 `$http_x_request_id`（客户端不传 ⇒ 字段整条省略）改 `$apisix_request_id`；注释写进 JSON 片段致 route PUT 失败（同 Stage 106 trailing comma 一类）。5 组负向对照证明断言有约束力。**2026-09-29 收尾轮**：三条留账 F-146（ctx 日志门禁 + 迁 68 处 + sw8 解析）/ F-147（Loki 2.9.4→3.2.0 对齐 + k8s promtail 权限）/ F-148（Python 字段对齐 + 前端错误上报）全部闭环，阶段判 done。⚠️ 途中撞到既有缺陷 E2E-F-149（分区表化后 `ON CONFLICT (event_id)` 失效）→ E2E-15/E2E-19 连带降级。详档 [report.md](stages/e2e-21-logging-observability/report.md)） |
-| E2E-22 | 监控告警 | Prometheus 抓取/Grafana 面板/Alertmanager 通知渠道 | — | ⏳ pending |
+| E2E-22 | 监控告警 | Prometheus 抓取/Grafana 面板/Alertmanager 通知渠道 | — | 🟡 **partial**（2026-09-29 执行完毕 18/18 测试点 PASS，待 RUNBOOK §13.3 第二方核对批准收口）：[plan.md](stages/e2e-22-monitoring-alerting/plan.md) + [report.md](stages/e2e-22-monitoring-alerting/report.md)。计划期实测：观测栈 6 容器同刻 `Exited(255)` 且**零告警**（发告警的 Prometheus 自己死了）、`llm-service` 有 `/metrics` 无 target、k8s 侧 `rule_files` 空 glob ⇒ **0 条告警规则零报错**；留账 E2E-F-11（Alertmanager 无通知渠道）为本阶段唯一归属留账 |
 | E2E-23 | 健康检查与服务发现 | /health 与 gRPC health 语义 + Nacos 注册/配置中心/热更新 | — | ⏳ pending |
 
 ### 第七批：消息与网关
@@ -259,6 +260,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | **E2E-16 多模态（语音/表情/文件上传）** | [stages/e2e-16-multimodal/plan.md](stages/e2e-16-multimodal/plan.md) |
 | **E2E-17 数字人 + TTS（真口型同步 + 段间断点）** | [stages/e2e-17-digital-human-tts/plan.md](stages/e2e-17-digital-human-tts/plan.md) |
 | **E2E-21 日志体系（结构化 + traceId + Loki 采集）** | [stages/e2e-21-logging-observability/plan.md](stages/e2e-21-logging-observability/plan.md)（2026-09-28 建档；E2E-18/19/20 的详档在各自目录，见其 STATUS/report） |
+| **E2E-22 监控告警（Prometheus 抓取 + Grafana 面板 + 通知渠道）** | [stages/e2e-22-monitoring-alerting/plan.md](stages/e2e-22-monitoring-alerting/plan.md)（2026-09-29 建档；18 个测试点，核心是把"配了告警"升级为"实测 firing + 送达 + resolved"） |
 
 模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)，执行记录模板见 [stages/_REPORT_TEMPLATE.md](stages/_REPORT_TEMPLATE.md)。批次三及以后在轮到前补写。E2E-01 已按判定分级标注，其余已写详档在启动前补齐标记。
 

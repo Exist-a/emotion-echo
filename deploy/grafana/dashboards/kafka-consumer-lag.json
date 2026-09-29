@@ -1,5 +1,7 @@
 {
-  "annotations": {"list": []},
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -11,8 +13,16 @@
       "type": "timeseries",
       "title": "ai-svc Consumer Lag (by topic/partition)",
       "id": 1,
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "kafka_consumergroup_lag{consumergroup=\"ai-svc\"}",
@@ -26,24 +36,48 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 1000},
-              {"color": "red", "value": 10000}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 10000
+              }
             ]
           },
-          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
         }
       },
       "options": {
-        "legend": {"displayMode": "table", "placement": "right"}
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
       }
     },
     {
       "type": "timeseries",
       "title": "analytics-svc Consumer Lag (by topic/partition)",
       "id": 2,
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "kafka_consumergroup_lag{consumergroup=\"analytics-svc\"}",
@@ -57,28 +91,52 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 1000},
-              {"color": "red", "value": 10000}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 10000
+              }
             ]
           },
-          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
         }
       },
       "options": {
-        "legend": {"displayMode": "table", "placement": "right"}
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        }
       }
     },
     {
       "type": "stat",
-      "title": "DLQ (chat-events-dlq) — non-alerting",
+      "title": "DLQ Depth (chat-events-dlq messages) — non-alerting",
       "id": 3,
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-      "description": "PR-A3.1 + PR-A3.2 已落 chat-events-dlq topic。毒消息进 DLQ 是预期行为,本面板仅展示,不在 alert rule 中。人工回放由独立运维窗口处理 (Stage 43 §三 §3)。",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "description": "E2E-22 语义修正: 原 expr 用 kafka_consumergroup_lag 按 topic 过滤，但 lag 是\"消费组落后量\"，DLQ 主题没有常驻 consumer（设计上为人工回放），因此该 series 恒不存在 → 面板永远 \"No data\"。改为 offset 求和 = 死信堆积条数，这才是运维要看的量；`or vector(0)` 保证主题尚未创建时显示 0 而非空白。2026-09-29 实测原 expr series=0。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "expr": "kafka_consumergroup_lag{topic=\"chat-events-dlq\"}",
+          "expr": "sum(kafka_topic_partition_current_offset{topic=\"chat-events-dlq\"}) or vector(0)",
           "refId": "A",
           "legendFormat": "{{consumergroup}}"
         }
@@ -89,15 +147,30 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 100},
-              {"color": "red", "value": 1000}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
             ]
           }
         }
       },
       "options": {
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "orientation": "auto",
         "textMode": "auto"
       }
@@ -105,9 +178,18 @@
   ],
   "refresh": "30s",
   "schemaVersion": 38,
-  "tags": ["emotion-echo", "kafka", "lag"],
-  "templating": {"list": []},
-  "time": {"from": "now-6h", "to": "now"},
+  "tags": [
+    "emotion-echo",
+    "kafka",
+    "lag"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "",
   "title": "Kafka Consumer Lag",

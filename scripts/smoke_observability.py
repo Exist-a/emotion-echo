@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import sys
 import urllib.error
@@ -32,9 +33,16 @@ KAFKA_EXPORTER = "http://localhost:9308"
 ALERTMANAGER = "http://localhost:9093"  # Stage 86: alertmanager Web UI
 
 # 期望的 scrape target 列表（prometheus.yml 静态 targets）
-# 与 deploy/prometheus/prometheus.yml 的 scrape_configs.static_configs 对齐
+# 与 deploy/prometheus/prometheus.yml 的 scrape_configs.static_configs 对齐。
+#
+# ⚠️ 本清单与 prometheus.yml 是**两份手写副本**，历史上已漂移过一次：
+#   llm-service 暴露了 /metrics（emotion-llm-service/main.py:215）却既不在
+#   prometheus.yml 也不在本清单 ⇒ 双方都"通过"，缺口结构上无法被发现
+#   （2026-09-29 E2E-22 实测修复）。故下方新增"直接从 prometheus.yml 解析比对"的
+#   断言组：任何一侧漏登记都会让 smoke 变红，而不是等到指标静默缺失才发现。
 #
 # O-1 落地: sw-oap env 已加 SW_TELEMETRY=prometheus,OAP 监听 :1234,纳入期望 target。
+# E2E-22: 补 llm-service（Python 服务同样暴露 /metrics）。
 EXPECTED_TARGETS = [
     "emotion-echo-user-svc:8888",
     "emotion-echo-chat-svc:8890",
@@ -42,6 +50,7 @@ EXPECTED_TARGETS = [
     "emotion-echo-analytics-svc:8893",
     "emotion-echo-ai-svc:8891",
     "emotion-echo-web-bff:8894",
+    "emotion-llm-service:8000",
     "emotion-echo-apisix:9091",
     "emotion-echo-sw-oap:1234",
 ]
@@ -180,6 +189,107 @@ def main() -> int:
             )
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             check("grafana dashboard JSON parseable", False, f"{type(e).__name__}: {e}")
+
+    # ===== E2E-22: 面板"有 JSON" ≠ "有数据" =====
+    # 背景: 本 smoke 此前只断言 dashboard JSON 存在 + 面板数 >= 4，**从不查询面板 expr**。
+    #   ⇒ 面板引用不存在的指标、或 expr 语义错误（如用 consumer lag 查一个没有常驻
+    #   consumer 的 DLQ topic）时，本 smoke 全绿，而 Grafana 上是一屏 "No data"。
+    #   这正是 memory `frontend-visual-evidence-failure-modes` 的形态在监控面的翻版。
+    # 2026-09-29 实测确认两处: ① 5xx 错误率面板在"零错误"时返回 0 series（用户无法
+    #   区分"没有错误"与"面板坏了"）；② DLQ 面板因该 topic 无常驻 consumer 恒 0 series。
+    # 本组把每个面板的 expr 真正打到 Prometheus 上，要求返回非空 series。
+
+    def _panel_exprs(uid):
+        st, bd = http_get(
+            f"{GRAFANA}/api/dashboards/uid/{uid}",
+            headers={"Authorization": f"Basic {grafana_auth}"},
+        )
+        if st != 200:
+            return None, f"HTTP {st}"
+        try:
+            panels = json.loads(bd).get("dashboard", {}).get("panels", [])
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            return None, f"{type(e).__name__}: {e}"
+        out = []
+        for p in panels:
+            for t in p.get("targets", []):
+                if t.get("expr"):
+                    out.append((p.get("title", "?"), t["expr"]))
+        return out, None
+
+    for _uid in ("emotion-echo-overview", "kafka-consumer-lag"):
+        _exprs, _err = _panel_exprs(_uid)
+        if _exprs is None:
+            check(f"grafana dashboard '{_uid}' panels readable", False, _err or "unknown")
+            continue
+        if not _exprs:
+            check(f"grafana dashboard '{_uid}' has query panels", False, "no expr found")
+            continue
+        check(f"dashboard '{_uid}' query panels present", True, f"panels_with_expr={len(_exprs)}")
+
+        for _title, _expr in _exprs:
+            _q = f"{PROMETHEUS}/api/v1/query?query=" + urllib.parse.quote(_expr)
+            _st, _bd = http_get(_q, timeout=10.0)
+            _n = -1
+            if _st == 200:
+                try:
+                    _n = len(json.loads(_bd).get("data", {}).get("result", []))
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    _n = -1
+            check(
+                f"panel expr returns data [{_uid}] {_title}",
+                _n >= 1,
+                f"series={_n} expr={_expr[:90]}",
+            )
+
+    # ===== E2E-22: 抓取清单防漂移 =====
+    # 背景: EXPECTED_TARGETS 是 prometheus.yml targets 的**手抄副本**。改 prometheus.yml
+    #   而不同步常量，smoke 不会发现；更糟的是当初 llm-service 暴露 /metrics 却两边
+    #   都没有 ⇒ 该缺口结构上不可能被本 smoke 检出（E2E-22 修复）。
+    # 本断言直接从 prometheus.yml 解析 targets，与常量双向比对。
+    _prom_yml_path = os.path.normpath(os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "..", "deploy", "prometheus", "prometheus.yml",
+    ))
+    try:
+        with open(_prom_yml_path, "r", encoding="utf-8") as fh:
+            _prom_txt = fh.read()
+        _in_targets = False
+        _yml_targets = set()
+        for _line in _prom_txt.splitlines():
+            # 形式 A: `- targets: ["host:port", ...]`（单行内联，apisix/sw-oap 用此形式）
+            _m_inline = re.match(r'^\s*-\s*targets:\s*\[(.*)\]\s*$', _line)
+            if _m_inline:
+                for _t in re.findall(r'"([^"]+)"', _m_inline.group(1)):
+                    _yml_targets.add(_t)
+                _in_targets = False
+                continue
+            # 形式 B: `- targets:` 后跟缩进列表项
+            if re.match(r"^\s*-\s*targets:\s*$", _line):
+                _in_targets = True
+                continue
+            if _in_targets:
+                _m = re.match(r'^\s*-\s*"?([\w.\-]+:\d+)"?\s*$', _line)
+                if _m:
+                    _yml_targets.add(_m.group(1))
+                elif _line.strip() and not _line.strip().startswith("#"):
+                    _in_targets = False
+        _expect_set = set(EXPECTED_TARGETS)
+        _missing = _expect_set - _yml_targets
+        _biz = {t for t in _yml_targets if "svc" in t or "llm-service" in t}
+        _biz_uncovered = _biz - _expect_set
+        check(
+            "prometheus.yml targets superset of EXPECTED_TARGETS (清单无陈旧项)",
+            not _missing,
+            f"missing_in_yml={sorted(_missing)} yml_targets={sorted(_yml_targets)}",
+        )
+        check(
+            "every business-svc target is covered by EXPECTED_TARGETS",
+            not _biz_uncovered,
+            f"uncovered={sorted(_biz_uncovered)} (抓到了但常量漏登记 ⇒ 漂移会再次发生)",
+        )
+    except OSError as e:
+        check("prometheus.yml readable for target drift check", False, f"{type(e).__name__}: {e}")
 
     # ===== PR-OBS-8: observability compose runbook 文档 断言 =====
 
