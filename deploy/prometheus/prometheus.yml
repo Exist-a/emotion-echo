@@ -30,8 +30,24 @@ scrape_configs:
           - "emotion-echo-analytics-svc:8893"
           - "emotion-echo-ai-svc:8891"
           - "emotion-echo-web-bff:8894"
+          # E2E-22 (2026-09-29): llm-service 暴露 /metrics (emotion-llm-service/main.py:215)
+          # 但此前无 target ⇒ dev 采不到, 而 k8s chart 却带 prometheus.io/scrape
+          # annotation ⇒ 双栈不一致; smoke 的 EXPECTED_TARGETS 同样漏了它,
+          # 结构上不可能发现该缺口。端口未映射宿主(仅 expose), 但同在 app-network,
+          # Prometheus 容器网络内可达。
+          - "emotion-llm-service:8000"
         labels:
           monitor: "emotion-echo-dev"
+
+  # === Alertmanager 自身 (E2E-22) ===
+  # 此前 5 个 job 中没有 alertmanager —— "收告警的东西自己无指标", 它挂掉时
+  # 无人知道。E2E-22 实测: 2026-09-29 prometheus 与 alertmanager 同刻 Exited(255),
+  # 而正因为 Prometheus 也死了, 规则不评估 ⇒ 零告警。
+  - job_name: "alertmanager"
+    static_configs:
+      - targets: ["emotion-echo-alertmanager:9093"]
+        labels:
+          component: "alertmanager"
 
   # === APISIX prometheus plugin ===
   - job_name: "apisix"

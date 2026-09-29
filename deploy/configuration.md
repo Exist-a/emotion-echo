@@ -193,7 +193,7 @@ docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose
 ```bash
 python scripts/smoke_data_layer.py    # 数据契约（5 项）
 bash scripts/healthcheck_smoke.sh    # 健康检查
-bash scripts/smoke_observability.sh   # OAP trace 检查
+python scripts/smoke_observability.py   # 可观测性（Prometheus / Grafana / Alertmanager / Loki / Kafka exporter）
 ```
 
 ---

@@ -55,6 +55,10 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /etc/prometheus
+            # E2E-22: rule_files 声明的 /etc/prometheus/rules 此前无任何 volume 挂载
+            # ⇒ 规则目录为空 ⇒ 空 glob ⇒ 0 条告警规则且 Prometheus 不报错（静默失效）。
+            - name: rules
+              mountPath: /etc/prometheus/rules
             {{- if .Values.persistence.enabled }}
             - name: data
               mountPath: /prometheus
@@ -63,6 +67,9 @@ spec:
         - name: config
           configMap:
             name: prometheus-config
+        - name: rules
+          configMap:
+            name: prometheus-rules
         {{- if .Values.persistence.enabled }}
         - name: data
           persistentVolumeClaim:
