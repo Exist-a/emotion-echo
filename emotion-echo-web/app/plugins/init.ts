@@ -1,4 +1,5 @@
 // plugins/init.ts - 应用初始化插件
+import { getApiBaseUrl } from '~/lib/apiBaseUrl'
 import { installClientErrorReporter } from '~/utils/clientErrorReporter'
 import { useUserStore } from '~/stores/user'
 import { useConversationStore } from '~/stores/conversation'
@@ -19,9 +20,22 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   // E2E-F-148：先装错误捕获，再做初始化 —— 否则初始化阶段自己抛的错抓不到。
   // 它内部 try/catch 且永不 reject，装失败也不影响后续初始化。
   try {
-    installClientErrorReporter()
+    // base URL 在这里（Nuxt plugin 上下文）取，事件回调里取不到 runtimeConfig。
+    // ⚠️ 必须显式传 useRuntimeConfig()：getApiBaseUrl() 不传参时走的是
+    // `globalThis.useRuntimeConfig?.()` 兜底，而 Nuxt 自动导入是**按文件注入**的
+    // —— apiBaseUrl.ts 里并没有 useRuntimeConfig 这个符号，页面上
+    // globalThis.useRuntimeConfig 也是 undefined ⇒ getApiBaseUrl() 抛
+    // "API_BASE_URL 未配置" ⇒ 被下面这个 catch 吞掉 ⇒ 监听器压根没装。
+    // （2026-09-29 IAB 实测抓到；单测 stub 了全局，测不出来。）
+    installClientErrorReporter(getApiBaseUrl(useRuntimeConfig()))
   } catch (e) {
-    console.warn('[client-error] reporter install failed', e)
+    // 这里原本只 console.warn —— 2026-09-29 的安装失败就是被它**静默吞掉**的，
+    // 表现为"代码在、监听器没装、一条日志都没有"且毫无线索。
+    // 改成把失败原因挂到 window 上：IAB/自动化可以直接读到，
+    // 生产则至少能在用户反馈里看到一句明确的报错。
+    console.error('[client-error] reporter install FAILED', e)
+    ;(window as any).__CLIENT_ERROR_REPORTER_INIT_ERROR__ =
+      e instanceof Error ? e.message : String(e)
   }
 
   console.log('🚀 应用初始化开始...')

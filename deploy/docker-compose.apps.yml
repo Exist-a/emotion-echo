@@ -783,7 +783,7 @@ services:
         NUXT_PUBLIC_API_BASE_URL: "${NUXT_PUBLIC_API_BASE_URL:-http://localhost:19080/api/v1}"
         # Bug 9: default to public npmjs; override via build-arg in restricted networks
         NPM_REGISTRY: https://registry.npmjs.org/
-    image: emotion-echo/web:v0.1.7  # E2E-17: F-128 phoneme 驱动 + F-129 队列化（E2E-F-99 同型：镜像须含前端修复）
+    image: emotion-echo/web:v0.1.9  # E2E-F-148：前端未捕获异常上报（clientErrorReporter → BFF /api/v1/client-error → Loki）  # E2E-17: F-128 phoneme 驱动 + F-129 队列化（E2E-F-99 同型：镜像须含前端修复）
     container_name: emotion-echo-web
     restart: on-failure
     # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.

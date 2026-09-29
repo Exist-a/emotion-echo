@@ -17,6 +17,11 @@ import { dirname, join } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SRC = readFileSync(join(__dirname, 'clientErrorReporter.ts'), 'utf-8')
+// 只看代码行：断言"不得出现某写法"时，注释里为了说明原因提到该写法会造成误判
+// （本文件已因这个吃过两次亏，故固化为 helper 而不是逐次改写措辞）
+const SRC_CODE = SRC.split(/\r?\n/)
+  .filter(l => !l.trim().startsWith('*') && !l.trim().startsWith('//') && !l.trim().startsWith('/*'))
+  .join('\n')
 
 // 模块内部状态（DEDUP_WINDOW 缓存）跨用例会串，统一用 vi.resetModules 隔离
 async function freshModule() {
@@ -29,15 +34,29 @@ describe('clientErrorReporter · 静态源契约', () => {
     expect(SRC).toContain("typeof window === 'undefined'")
   })
 
-  it('上报端点固定为 /api/v1/client-error', () => {
-    expect(SRC).toContain('/api/v1/client-error')
-    expect(SRC).toContain("method: 'POST'")
+  it('上报端点只拼 /client-error（baseUrl 已含 /api/v1 前缀，不能拼两次）', () => {
+    // 拼两次 ⇒ 打到 /api/v1/api/v1/client-error ⇒ 落 catch-all route 100
+    // ⇒ jwt-auth 401。2026-09-29 IAB 实测抓到，curl 测不出来。
+    expect(SRC_CODE).toContain('${baseUrl}/client-error')
+    expect(SRC_CODE).not.toContain('${baseUrl}/api/v1/client-error')
+    expect(SRC_CODE).toContain("method: 'POST'")
+  })
+
+  // 2026-09-29 IAB 实测：base URL 必须在**安装时**取。原先在 window 事件回调里
+  // 现调 useRuntimeConfig()，不在 Nuxt 上下文 ⇒ 抛错 ⇒ 被 try/catch 静默吞掉
+  // ⇒ 表现为「监听器装了却一条都发不出去」，而单测 stub 掉了 useRuntimeConfig
+  // 所以完全测不出来（IAB 真实事件才抓到）。
+  it('base URL 由 install 时传入，事件回调里不得再取 runtimeConfig', () => {
+    expect(SRC_CODE).toMatch(/export function installClientErrorReporter\(apiBase: string\)/)
+    expect(SRC_CODE).not.toContain('useRuntimeConfig(')
+    expect(SRC_CODE).not.toContain('getApiBaseUrl(')
   })
 
   it('用裸 fetch 而非 useApi（避免鉴权包装/401 跳转造成上报循环）', () => {
     expect(SRC).toContain('await fetch(')
     expect(SRC).not.toMatch(/useApi\(\)\.post|\{\s*\$fetch\s*\}/)
   })
+
 
   it('上报调用外层有 try/catch —— 绝不 reject', () => {
     // 唯一的 fetch 调用必须处在 try 内（文件里 catch 分支存在且吞掉）
@@ -69,8 +88,14 @@ describe('clientErrorReporter · 去重与截断行为', () => {
     vi.unstubAllGlobals()
   })
 
+  it('未安装（baseUrl 空）时静默放弃上报，不抛给调用方', async () => {
+    const { reportClientError } = await freshModule() // 故意不调 install
+    await expect(reportClientError('error', new Error('boom'))).resolves.toBeUndefined()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('同一条错误在去重窗口内只发一次', async () => {
-    const { reportClientError } = await freshModule()
+    const { reportClientError } = await install()
     await reportClientError('error', new Error('boom'))
     await reportClientError('error', new Error('boom'))
     await reportClientError('error', new Error('boom'))
@@ -78,13 +103,22 @@ describe('clientErrorReporter · 去重与截断行为', () => {
   })
 
   it('不同错误各报一次', async () => {
-    const { reportClientError } = await freshModule()
+    const { reportClientError } = await install()
     await reportClientError('error', new Error('a'))
     await reportClientError('error', new Error('b'))
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   /** 取第 n 次 fetch 调用的 body（mock.calls 元素在 strict 下可能是 undefined，故收口到一处断言） */
+  const API_BASE = 'http://localhost:19080/api/v1'
+
+  /** 先装上报器再触发（与生产同序：plugin 里装 → 之后才有事件） */
+  async function install() {
+    const mod = await freshModule()
+    mod.installClientErrorReporter(API_BASE)
+    return mod
+  }
+
   function bodyOf(n: number): any {
     const call = fetchMock.mock.calls[n]
     if (!call) throw new Error(`fetch 未被调用第 ${n} 次`)
@@ -94,7 +128,7 @@ describe('clientErrorReporter · 去重与截断行为', () => {
   }
 
   it('超大 message / stack 被截断', async () => {
-    const { reportClientError } = await freshModule()
+    const { reportClientError } = await install()
     const huge = 'x'.repeat(50_000)
     await reportClientError('error', { message: huge, stack: huge })
     const body = bodyOf(0)
@@ -105,12 +139,20 @@ describe('clientErrorReporter · 去重与截断行为', () => {
 
   it('fetch 失败时静默吞掉，不 reject', async () => {
     fetchMock.mockRejectedValue(new Error('network down'))
-    const { reportClientError } = await freshModule()
+    const { reportClientError } = await install()
     await expect(reportClientError('error', new Error('boom'))).resolves.toBeUndefined()
   })
 
+  it('最终 URL 恰为 <API_BASE>/client-error，无重复前缀', async () => {
+    const { reportClientError } = await install()
+    await reportClientError('error', new Error('url-shape-check'))
+    const call = fetchMock.mock.calls[0]
+    if (!call) throw new Error('fetch 未被调用')
+    expect(call[0]).toBe(API_BASE + '/client-error')
+  })
+
   it('上报内容带 kind/url/line/col，便于在 Loki 里按维度筛', async () => {
-    const { reportClientError } = await freshModule()
+    const { reportClientError } = await install()
     await reportClientError('unhandledrejection', new Error('nope'), {
       url: 'http://localhost:3000/dashboard',
       line: 12,
