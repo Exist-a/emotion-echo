@@ -13,7 +13,7 @@
 //   - 网络/超时/HTTP 非 2xx → error
 //   - LLM 返回非 JSON → error
 //   - 解析后的字段缺失（primary_emotion 为空）→ error
-//   错误一律返回让 Worker 走 late_fuser 兜底。
+//     错误一律返回让 Worker 走 late_fuser 兜底。
 package fusion
 
 import (
@@ -70,6 +70,19 @@ func NewLLMFuser(cfg LLMConfig) *LLMFuser {
 		cfg: cfg,
 		cli: &http.Client{Timeout: timeout},
 	}
+}
+
+// HTTPTimeout 暴露内部 http.Client 的实际超时。
+//
+// 用途：让"yaml/env 里配的超时是否真的生效"可被行为测试断言。
+// E2E-23 P2（账本 F-159）修复前，main 构造 LLMFuser 时漏传 Timeout，
+// 该值永远为 0 → 永远走内置 3s，而**外部无从察觉**（没有任何接口能读出
+// 生效值）。有了这个方法，"配了不生效"这类缺陷就能被单测直接抓住。
+func (f *LLMFuser) HTTPTimeout() time.Duration {
+	if f == nil || f.cli == nil {
+		return 0
+	}
+	return f.cli.Timeout
 }
 
 // SetBreaker 注入熔断器（可选，Stage 35 PR-5）。

@@ -94,6 +94,18 @@ func SetDefaults(c *Config) {
 	if len(c.Kafka.Topics) == 0 {
 		c.Kafka.Topics = []string{"chat-events"}
 	}
+	// E2E-23 P3（账本 F-160）：补齐 struct 注释早已承诺、却一直缺失的默认值。
+	// 此前 MaxRetries 从 SetDefaults 出来恒为 0，实际生效的 3 来自
+	// internal/kafka/consumer.go:69,71 的硬编码 ⇒ 改 yaml 改不动。
+	// ai-svc 侧本就有该分支（ai-svc/internal/config/config.go:143-145），
+	// 补齐后两个服务对同名字段行为一致。
+	//
+	// 边界：0 被视为"未设置"→ 填 3，因此**无法用本参数关闭重试**
+	// （main.go 的 `> 0` 守卫会跳过 0）。要关重试需另加显式开关，
+	// 本阶段不扩范围。
+	if c.Kafka.MaxRetries == 0 {
+		c.Kafka.MaxRetries = 3
+	}
 	if c.TriggerQueueCap == 0 {
 		c.TriggerQueueCap = 64
 	}
