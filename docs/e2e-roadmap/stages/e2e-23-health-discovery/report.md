@@ -53,7 +53,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 27 | **db-migrate 冷启动 `Exited(0)`** | `[A]` | PASS | **前后对照**：修复前 `ExitCode 1` + `FATAL: Postgres 30s 内未就绪`；修复后 `ExitCode 0` + 日志以 `全部迁移应用完成，共 31 个文件` 结尾 | **F-151 闭环**，账本已翻状态 |
 | 28 | `migrate.sh` 有负向测试 | `[A]` | PASS | `scripts/test_migrate_pg_wait.sh` 4/4；负向对照：删掉递增退避 → RED | |
 | 29 | `dev-up.sh` 批次等待语义 | `[A]` | PASS | `bash scripts/test_devup_batch_waits.sh` → `PASS: 3  FAIL: 0` + `GREEN`；抽出 `wait_healthy` 实机跑四条路径（redis/apisix/postgres/BFF）→ 全部 `exit=0`、0 秒返回 | 挖出**更深缺陷**：`wait_healthy` 对设了 `container_name` 的服务恒失效（见 §3） |
-| 30 | chat-svc 4 个 Outbox 参数可热更 | `[A]` | BLOCKED | — | 属 E 组，未实施 |
+| 30 | chat-svc 4 个 Outbox 参数可热更 | `[A]` | PASS | 运行时实测：**不重启服务**推 Nacos → `[hot-reload] … changed, 86 bytes` → `ops applied via hot-reload: max_attempts=21 sent_retention=6d dead_retention=8d cleanup=300s`；删配置重启后回落 yaml 默认 `100/7/30/3600`。单测 5 例，负向对照（relay 忽略 Ops → 立即红） | 附带修出 `CleanupIntervalS` 也是死配置（ticker 启动时固化，改了不生效）；根因修正：F-155 原文「HotReload 全线关闭」实为**编排层显式压制**（`apps.yml:144` 的 `NACOS_HOT_RELOAD: "false"` 覆盖 yaml，因 env 优先于 yaml），非「没人设」 |
 | 31 | ai-svc 9 个参数可热更 | `[A]` | BLOCKED | — | 同上 |
 | 32 | analytics-svc `MaxRetries` 可热更 | `[A]` | BLOCKED | — | 同上 |
 | 33 | P1 敏感字段白名单（负向断言） | `[A]` | BLOCKED | — | 属 E 组前置缺陷，未实施 |
@@ -65,9 +65,9 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 39 | APISIX Admin 页面截图 | `[V]` | PASS | `screenshots/39-apisix-admin-upstreams-6.png`（已查看）：Upstreams 页 `1-6 of 6 items`，user/chat/assessment/analytics/ai/web-bff 六个 upstream | **计划期假设被推翻**：原写"节点非空"，实测 Admin API 的 `nodes` **恒为 0** —— discovery 型 upstream 的节点在请求时动态解析、不 materialize 到 Admin API（`/apisix/admin/upstreams/{id}/discovery` 同样返 0 节点）。**节点可用性的真证据是实际请求**（网关 `/api/v1/users/me` 返 401 而非 503），已由 #37/#38 覆盖 |
 | 40 | 文档漂移修正 | `[A]` | BLOCKED | — | 属 F 组。RUNBOOK §2.4「必须重跑 seed」待 #23 验证后才能改 |
 
-汇总：PASS 26 / FAIL 0 / BLOCKED 12 / N/A 2
+汇总：PASS 27 / FAIL 0 / BLOCKED 11 / N/A 2
 
-> ⚠️ **BLOCKED 占比 37.5%，仍超 RUNBOOK §4 的 1/3 红线** ⇒ **本阶段不得判 done**，
+> ⚠️ **BLOCKED 占比 27.5%，已低于 RUNBOOK §4 的 1/3 红线** ⇒ **本阶段不得判 done**，
 > 阶段状态 `partial`。破坏性实验 5 项（#18/19/20/21/23）已于 2026-09-29 用户批准后**全部执行完毕并 PASS**；
 > 剩余 16 项 BLOCKED 分三类：① 属 E/F 组未开工（#30~35、#37~40）② 依赖尚未落地的基础设施
 > （#5/#6 需 Redis 与 Nacos 状态注入）③ 需特定场景（#10 seed 降级场景 / #15 客户端分流阅读）。
