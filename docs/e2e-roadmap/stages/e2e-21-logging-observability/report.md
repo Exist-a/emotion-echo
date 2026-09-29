@@ -213,7 +213,8 @@ k8s 侧 promtail DaemonSet 去掉写死的 `runAsUser=10001`（读不到 hostPat
 ### 9.3 E2E-F-148（Python + 前端日志）——已解决
 
 - **Python 字段对齐**：`logging_setup.py` 补 `time` / `svc`，`ts`/`logger` 保留为兼容别名。运行时实测 JSON 行含 `{"time": ..., "svc": "llm-service", "ts": ..., "logger": ...}`（16 条测试）
-- **前端错误上报**：`clientErrorReporter.ts` → BFF `/api/v1/client-error` → 同一条结构化日志流 → Loki。**不引第三方 SDK**（新增外部数据出口 + 隐私评审冲突）。端到端实测：一次上报按 trace_id 在 Loki 查回（Go 6 条 + 前端 9 条测试）
+- **前端错误上报**：`clientErrorReporter.ts` → BFF `/api/v1/client-error` → 同一条结构化日志流 → Loki。**不引第三方 SDK**（新增外部数据出口 + 隐私评审冲突）。Go 6 条 + 前端 9 条测试。
+  > ⚠️ **本条当时的"端到端实测"结论是错的，已由 §10 更正**：当时只用 `curl` 直接打 BFF 端点验证，把整个前端绕过去了。真实浏览器里该功能**完全不可用**。
 
 ### 9.4 复验中发现并修掉的自身缺陷
 
@@ -224,8 +225,53 @@ k8s 侧 promtail DaemonSet 去掉写死的 `runAsUser=10001`（读不到 hostPat
 
 两处缺一不可，各加断言锁死（`TestNoAuthPathPrefixes_ClientErrorMustStayOpen` + seed_test 路由断言）。
 
+（这两层是 curl 就能发现的，与 §10 的三个缺陷不同 —— 后者只有真实浏览器能暴露。）
+
 ### 9.5 途中撞到的**既有**缺陷（记账不修）
 
 **E2E-F-149**：`user_behavior_events` 在 `a008` 被改成分区表后，唯一索引建在 `("event_id","occurred_at")`（分区表唯一索引必须含分区键），而 `event_repository.go:238` 仍写 `ON CONFLICT ("event_id")` ⇒ `SQLSTATE 42P10`。实测发 1 条消息即触发 consumer 重试 3 次、**报表数据源写不进任何行**。属数据层（E2E-15 / E2E-19），本阶段不修；两阶段按 A5 约束由 `done` 降为 `partial`。
 
 连带影响：本轮**无法端到端验证** Kafka 消费侧的 sw8 trace（消费在写库处即失败）。`TraceIDFromSW8` 有 5 条单测覆盖，其运行时价值待 E2E-F-149 修好后复验。另需注意：outbox 异步发布用的是**后台 ctx**，sw8 在发布时刻生成，因此异步链路的 trace_id 与原始请求**不是同一个**——这是架构限制，非本次改动引入。
+
+---
+
+## 10. IAB 复验轮（2026-09-29）：更正 §9.3 的不实结论
+
+### 10.1 为什么要复验
+
+§9.3 写"前端错误上报端到端实测通过"，但当时的验证方式是 **`curl` 直接打 BFF 的 `/api/v1/client-error`** —— 这条路把浏览器、Nuxt 运行时、模块打包、CORS 全部绕开了，**只验证了 BFF 端点本身能收能写**。
+
+补 IAB（真实浏览器 + 真实未捕获异常）后确认：**该功能在真实浏览器里完全不可用，一次都发不出去。**
+
+### 10.2 三个缺陷（全部是单测与 curl 都测不出的）
+
+| # | 缺陷 | 为什么测不出 | 修法 |
+|---|------|-------------|------|
+| ① | `useRuntimeConfig()` 在 window 事件回调里不在 Nuxt 实例上下文 → 抛错 → 被 `reportClientError` 的 `try/catch` **静默吞掉** | 单测 stub 了全局函数，函数能正常返回 | base URL 改为**安装时**（plugin 上下文）取好传入 |
+| ② | `getApiBaseUrl()` 不传参时走 `globalThis.useRuntimeConfig?.()` 兜底，而 **Nuxt 自动导入是按文件注入的** —— `apiBaseUrl.ts` 里没有该符号，页面上 `globalThis.useRuntimeConfig` 实测 `undefined` ⇒ install 抛错又被 `init.ts` 的 catch 吞掉 ⇒ **监听器压根没装** | 同上；且症状是"没装"而非"报错" | 显式传 `getApiBaseUrl(useRuntimeConfig())`（与 `useApi.ts:29` 同型）；并把 catch 升级为 `console.error` + 写 `window.__CLIENT_ERROR_REPORTER_INIT_ERROR__` |
+| ③ | `NUXT_PUBLIC_API_BASE_URL` 本身以 `/api/v1` 结尾，代码又拼一次 `/api/v1/client-error` ⇒ 实际打到 `/api/v1/api/v1/client-error`，落 catch-all route 100 被 jwt-auth 401 | curl 用的是手写正确路径 | 只拼 `/client-error` |
+
+### 10.3 IAB 最终验收证据
+
+| 环节 | 证据 |
+|------|------|
+| 安装 | `window.__CLIENT_ERROR_REPORTER_READY__ = true`，`__CLIENT_ERROR_REPORTER_INIT_ERROR__ = null` |
+| 真实异常 | 页面内 `setTimeout(() => { throw new Error('E2E-21-FINAL-REAL-UNCAUGHT') })`（经文档注入脚本，在页面主世界执行） |
+| 网关 | `POST /api/v1/client-error  route_id=119  status=200` |
+| BFF | `[client-error] kind=error msg="E2E-21-FINAL-REAL-UNCAUGHT" url=http://localhost:3000/login` |
+| Loki | `{job="services"} \|= "E2E-21-FINAL-REAL-UNCAUGHT"` 命中，`labels: {container: emotion-echo-web-bff, svc: web-bff}` |
+
+### 10.4 排查手法留档
+
+- **正向标记**：`__CLIENT_ERROR_REPORTER_READY__` / `__CLIENT_ERROR_REPORTER_INIT_ERROR__`。本轮最费劲的正是"监听器到底装没装"没有任何可观测点，只能靠加日志猜。
+- **零插桩优先**：中途一度误判"监听器没装"，真因是**观测代码自己把 fetch 弄坏了** —— `window.fetch` 包装器里 `orig.apply(this, args)` 在严格模式下 `this` 为 `undefined`，原生 fetch 抛 `Illegal invocation`，又被上报函数的 catch 吞掉。**先跑一次完全无插桩的真实事件，再回头加观测。**
+- **网关 access log 是判 401 来源的最快手段**：`url` + `route_id` + `status` 三字段一眼看出是"路径拼错落到 catch-all"还是"鉴权拦截"。
+- **`__NUXT__` / `globalThis.useRuntimeConfig` 在页面上是 `undefined`**，别拿它们当 runtimeConfig 探针。
+
+### 10.5 方法论结论（对本项目有普遍意义）
+
+**"curl 通了 = 前端链路通了"是错的。** 单测 stub 了环境、curl 绕过了前端，只有"真实页面 + 真实事件"能同时穿过运行时上下文、模块打包、CORS 三层。
+
+由此给后续阶段的约束：凡验收项写"前端会发请求"，要么真跑浏览器，要么在 report 里**明确标 `N/A（未经浏览器验证）`**，**不得因 curl 通过而默认判 PASS**。
+
+（对应修复：[PR #125](https://github.com/Exist-a/emotion-echo/pull/125)，CI 30/30 全绿；本轮未改动 §2 的范围界定，缺陷全部落在 plan §2「F-148 前端上报」范围内。）
