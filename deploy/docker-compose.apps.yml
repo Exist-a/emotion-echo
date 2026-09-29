@@ -298,6 +298,14 @@ services:
       NACOS_ADDR:      "emotion-echo-nacos:8848"
       NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
       NACOS_HOT_RELOAD: "false"
+      # D-31（2026-09-29 用户拍板）：显式声明 Nacos 注册失败策略，dev 选"继续运行"。
+      # main.py:87-94 的默认行为是注册失败 log+continue，只有 =1 才 fail-fast。
+      # dev 之所以能继续，是因为 Nacos 本就不该是硬依赖（本地开发）；
+      # **写成显式值而非吃默认值**，是为了将来改 main.py 默认值时 dev 行为
+      # 不会静默改变。prod 必须覆盖为 "1"（见 compose.prod.yml 待办清单）——
+      # 否则 prod 会静默降级：HTTP 可达但 Nacos 无实例 ⇒ BFF Resolve 502
+      # （与账本 E2E-F-137 同型）。
+      NACOS_REQUIRED: "0"
       PYTHONUNBUFFERED: "1"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}

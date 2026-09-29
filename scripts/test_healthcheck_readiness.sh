@@ -61,47 +61,29 @@ done
 # 一次性任务容器（db-migrate / apisix-seed）不应有 healthcheck：
 # 它们跑完即退出，healthcheck 对它们无意义。
 #
-# 用 python 按 YAML 两空格缩进切服务块，而不是 awk —— awk 版在
-# "服务名后紧跟注释块"时会把下一个服务的 healthcheck 误算进来
-# （E2E-23 实施期真踩到：脚本误报 2 个 FAIL，实际两个服务都没有 healthcheck）。
+# 用 scripts/_extract_compose_block.py 切块，而不是内嵌 heredoc：
+#   - awk 版在"服务名后紧跟注释块"时会把下一个服务的 healthcheck 误算进来
+#     （E2E-23 实施期真踩到：脚本误报 2 个 FAIL，实际两个都没有 healthcheck）；
+#   - `$(...)` 里嵌 python heredoc 在 Git Bash 下会吞掉 stdin（实测退出码
+#     49、零输出），脚本却继续往下跑，把"没检查到"当成"检查通过"——**假绿**。
+#     这个坑本轮真的踩过一次：python3 在本机根本不存在，守卫报了假绿。
 # 验证工具自身出 bug 会把结论整个搞反，比没有守卫更危险。
-one_shot_result="$(python3 - "$COMPOSE" <<'PYEOF'
-import re
-import sys
-
-path = sys.argv[1]
-with open(path, encoding="utf-8") as fh:
-    lines = fh.read().split("\n")
-
-targets = ["emotion-echo-db-migrate", "emotion-echo-apisix-seed"]
-problems = []
-
-for svc in targets:
-    start = None
-    for i, line in enumerate(lines):
-        if line.strip() == svc + ":":
-            start = i
-            break
-    if start is None:
-        problems.append(f"{svc} 服务块未找到")
-        continue
-    end = len(lines)
-    for j in range(start + 1, len(lines)):
-        if re.match(r"^  [a-zA-Z]", lines[j]):
-            end = j
-            break
-    block = "\n".join(lines[start:end])
-    if "healthcheck:" in block:
-        problems.append(f"{svc} 一次性任务容器不应有 healthcheck（跑完即退出，探针无意义）")
-
-if problems:
-    for p in problems:
-        print("FAIL " + p)
-    sys.exit(1)
-sys.exit(0)
-PYEOF
-)"
-one_shot_rc=$?
+one_shot_result=""
+one_shot_rc=0
+for svc in emotion-echo-db-migrate emotion-echo-apisix-seed; do
+  block="$(python "$REPO_ROOT/scripts/_extract_compose_block.py" "$COMPOSE" "$svc")"
+  if [ -z "$block" ] || [ "$block" = "BLOCK_NOT_FOUND" ]; then
+    one_shot_result="${one_shot_result}FAIL 提取 $svc 服务块失败（守卫自身故障，非被测对象问题）
+"
+    one_shot_rc=1
+    continue
+  fi
+  if echo "$block" | grep -q 'healthcheck:'; then
+    one_shot_result="${one_shot_result}FAIL $svc 一次性任务容器不应有 healthcheck（跑完即退出，探针无意义）
+"
+    one_shot_rc=1
+  fi
+done
 
 if [ "$one_shot_rc" -ne 0 ]; then
   while IFS= read -r line; do
