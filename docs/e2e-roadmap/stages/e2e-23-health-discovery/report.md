@@ -41,12 +41,12 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 15 | `ai-svc` 客户端按状态分流 | `[A]` | BLOCKED | — | 未读 `grpc_analyzer.go:25` 的分流逻辑。`ai-svc` 全包测试耗时 76s（见 §6 已知债），本轮未深入 |
 | 16 | web-bff 无 gRPC server 属设计现状 | `[A]` | N/A | — | 陈述性测试点，无可断言行为。已记入 plan §2 B3 |
 | 17 | 6 服务注册齐全（`count:6`） | `[A]` | PASS | `curl .../ns/service/list?...namespaceId=emotion-echo-dev` → `count: 6` | |
-| 18 | 停 Nacos ⇒ 重启 BFF ⇒ 自愈（**F-107 复现**） | `[A]` | BLOCKED | — | 未执行破坏性操作（停 Nacos 会影响全栈）。代码侧已确认 BFF 有 dev backoff 重试（`main.go:150-171`）+ 5 服务 fail-fast ⇒ F-107 启动期部分**已修**，但**运行时复现未做**，账本 F-107 状态**未翻转** |
-| 19 | 5 服务 fail-fast 退出码 | `[A]` | BLOCKED | — | 同上，需停 Nacos 构造 |
-| 20 | 运行期掉线 ⇒ 重注册 | `[A]` | BLOCKED | — | 属 C 组 #20，本轮未实施 |
-| 21 | 心跳协议统一 | `[A]` | BLOCKED | — | BFF 用 `BeatHeartbeat`、5 服务用 SDK `Heartbeat`，本轮未统一 |
+| 18 | 停 Nacos ⇒ 重启 BFF ⇒ 自愈（**F-107 复现**） | `[A]` | PASS | `docker logs emotion-echo-web-bff` 实测 retry 序列 `attempt 1/10 → 5/10`（退避 2→4→8→16→30s 与代码一致）；Nacos 恢复后日志 `19:02:51 attempt 2/10 → 19:02:56 Starting web-bff`（**5s 内自愈**）；`curl /ns/service/list` → `count: 6`；网关 login → 400（路由通） | F-107 启动期修复获**运行时证据**，账本已翻 |
+| 19 | 5 服务 fail-fast 退出码 | `[A]` | PASS | `docker logs emotion-echo-user-svc` 实测 `boot failed (fatal): [nacos] WaitForNacos: context deadline exceeded` ×5；`docker inspect` → `RestartCount=2`（on-failure 拉起）；Nacos 恢复后回 `(healthy)`、重新注册 | **新发现（plan H4 获答）**：Nacos 长期宕机时构成**崩溃-重启打鸣**（fatal 每 ~60s 一次）——dev 可接受，prod 需注意 compose restart 策略 |
+| 20 | 运行期掉线 ⇒ 重注册 | `[A]` | PASS | **干净实验**：记录 6 服务 `StartedAt` → 停 Nacos 100s → 起 Nacos 90s → `count: 6`，全程**未重启任何业务服务** | **计划期"必 FAIL"预判被推翻**（AP-06 自纠）：grep 无显式重连代码，但漏了两条隐性通道——SDK gRPC 自动重连 + `Heartbeat()` watcher 每 5s `UpdateInstance`（upsert）。边界：watcher `_, _ =` 吞错误，SDK 若死透则静默失效；>90s 的宕机未测 |
+| 21 | 心跳协议统一 | `[A]` | PASS | BFF 日志实测 `BeatInstance failed ... beat HTTP 501: no such api:POST:/nacos/v1/ns/instance/beat` ×9（Nacos 3.x 无该端点）→ 每次静默降级 SDK；5 服务日志 0 次同类告警（一直走 SDK） | **新发现**：BFF 的 HTTP beat 协议**从未生效过**——功能上等价（都靠 SDK），但 ① beat 代码是死的 ② `failCount>3` 后连 WARN 都不打（`nacos_beat.go` 的 `if failCount <= 3`）③ 观测盲区 |
 | 22 | `NACOS_REQUIRED` prod 实情 | `[A]` | PASS | 全仓 grep → **0 命中**；`compose.prod.yml` 为 ADR-20 空壳占位（故意不填值） | 结论：**从未被任何编排声明过** ⇒ 促成 D-31 |
-| 23 | Nacos 重启 ⇒ APISIX 节点自动跟随 | `[A]` | BLOCKED | — | 未停 Nacos 做对照。D-30 保持待实测 |
+| 23 | Nacos 重启 ⇒ APISIX 节点自动跟随 | `[A]` | PASS | `docker restart emotion-echo-nacos` → 服务重注册 `count: 6` → **未重跑 seed、未碰 Admin API** → 网关 login 400（路由通）。反向：停 user-svc 75s 后 Nacos 实例数→0 | **D-30 落定**：RUNBOOK §2.4「重建服务后必须重跑 apisix-seed」判为**误导性文档**并已更正。边界：user 路由在实例摘除后仍 401（非 503）⇒ APISIX 摘除有滞后，属 F-154/E2E-25 的主动健康检查范围 |
 | 24 | `GetConfig` 首帧失败仍能继续 | `[A]` | BLOCKED | — | 属 E 组 |
 | 25 | APISIX 补 healthcheck | `[A]` | PASS | `docker ps` → `emotion-echo-apisix Up (healthy)`；探针命令**双向实测**（通→0、不通→1） | 该镜像内 wget/curl/nc/busybox **全缺**，只能用 bash /dev/tcp 测 9080 |
 | 26 | 观测栈 + skywalking 补 healthcheck | `[A]` | PASS | `docker ps --format '{{.Status}}'` 逐个查询 → grafana/loki/prometheus/alertmanager/kafka-exporter/promtail 均 `Up (healthy)`；`bash scripts/test_obs_healthchecks.sh` → `PASS: 15  FAIL: 0` + `GREEN` | skywalking-oap/ui 与 obs-mock-receiver **未补**（见 §4） |
@@ -65,12 +65,12 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 39 | APISIX Admin 页面截图 | `[V]` | BLOCKED | — | 同上。**A7 审计对 `[V]` 点要求截图，本轮无 `[V]` 结论故不触发** |
 | 40 | 文档漂移修正 | `[A]` | BLOCKED | — | 属 F 组。RUNBOOK §2.4「必须重跑 seed」待 #23 验证后才能改 |
 
-汇总：PASS 17 / FAIL 0 / BLOCKED 21 / N/A 2
+汇总：PASS 22 / FAIL 0 / BLOCKED 16 / N/A 2
 
-> ⚠️ **BLOCKED 占比 52.5%，远超 RUNBOOK §4 的 1/3 红线** ⇒ **本阶段不得判 done**，
-> 阶段状态 `partial`。21 项 BLOCKED 分三类：① 需停 Nacos/Postgres 做破坏性实验
-> （#18/19/20/21/23）② 属 E/F 组未开工（#30~35、#37~40）③ 依赖尚未落地的基础设施
-> （#5/#6 需 Redis 与 Nacos 状态注入，#10/#15 需相应场景或代码阅读）。
+> ⚠️ **BLOCKED 占比 40%，仍超 RUNBOOK §4 的 1/3 红线** ⇒ **本阶段不得判 done**，
+> 阶段状态 `partial`。破坏性实验 5 项（#18/19/20/21/23）已于 2026-09-29 用户批准后**全部执行完毕并 PASS**；
+> 剩余 16 项 BLOCKED 分三类：① 属 E/F 组未开工（#30~35、#37~40）② 依赖尚未落地的基础设施
+> （#5/#6 需 Redis 与 Nacos 状态注入）③ 需特定场景（#10 seed 降级场景 / #15 客户端分流阅读）。
 > **未用 N/A 或"待后续"掩盖任何一项。**
 
 ## 3. 发现与分类
@@ -131,15 +131,15 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 
 | 账本条目 | 归属 | 本轮处理 | 状态 |
 |---------|------|---------|------|
-| E2E-F-107 | E2E-23 | **未翻转** —— 代码侧确认启动期已修，但运行时复现（#18）未做 | 🔴 未解决 |
+| E2E-F-107 | E2E-23 | **启动期部分闭环（有运行时证据）**：#18 实测 retry 序列 + Nacos 恢复后 5s 自愈。运行期部分由 #20 证明**本就成立**（SDK 重连 + Heartbeat watcher），账本条目收窄为"beat 协议死代码 + watcher 吞错误"（见 F-156 说明） | 🟡 部分解决 |
 | E2E-F-151 | E2E-23 | **db-migrate 部分已闭环**（前后对照 ExitCode 1→0）；观测栈部分随 `997111e` 补齐 7 个，skywalking/obs-mock-receiver 仍缺 | 🟡 部分解决 |
-| E2E-F-154 | E2E-25 | 本阶段范围外，仅记录 | 🔴 未解决 |
+| E2E-F-154 | E2E-25 | 本阶段范围外，仅记录；#23 的反向验证（实例摘除后路由仍 401 非 503）补充了其证据 | 🔴 未解决 |
 | E2E-F-155 | E2E-23 | E 组未开工 | 🟡 待决策（已由 D-32 拍板范围） |
-| E2E-F-156 | E2E-23 | **未翻转** —— 待 #18 运行时复现 | 🔴 未解决 |
-| E2E-F-157 | E2E-23 | 依赖 #13/#14 结论 | 🔴 未解决 |
-| E2E-F-158/159/160（新） | E2E-23 | E 组 P1/P2/P3，本轮仅确认缺陷存在、未修 | 🔴 未解决 |
+| E2E-F-156 | E2E-23 | **主体闭环**：F-107 描述与代码相反的失真已用运行时证据修正；#20 推翻了"无重注册"的预判。残留：BFF beat 协议死代码（501）+ watcher `_, _ =` 吞错误的观测盲区，转入下轮小修 | 🟡 部分解决 |
+| E2E-F-157 | E2E-23 | #13/#14 已落地（commit `5cab18c`），ADR 文本回填待 F 组 | 🟡 部分解决 |
+| E2E-F-158/159/160 | E2E-23 | E 组 P1/P2/P3，本轮仅确认缺陷存在、未修 | 🔴 未解决 |
 
-**存在 5 条归属本阶段且未解决的账本 ⇒ 按 RUNBOOK §7 #9 与审计 A5，阶段只能标 `partial`。**
+**存在归属本阶段且未完全解决的账本（F-151/155/156/157/158/159/160）⇒ 按 RUNBOOK §7 #9 与审计 A5，阶段只能标 `partial`。**
 
 ## 6. 回归钉
 

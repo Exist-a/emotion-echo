@@ -304,7 +304,7 @@ docker inspect emotion-echo-apisix --format '{{json .Config.Healthcheck}}'   # �
 3. compose 的 11 处 `healthcheck:` 改指 `/health/ready`。
 4. **执行期必须实测**：`apisix-seed` 的 `depends_on: service_healthy` 语义随之变严（ready 才算 healthy）——须验证冷启动全栈不会因此死锁（plan 风险 R3）。
 
-### 决策 2（→ **D-30，需用户拍板**）：RUNBOOK §2.4"重建服务后必须重跑 `apisix-seed`"是否仍成立
+### 决策 2（**D-30，✅ 2026-09-29 实测落定**）：RUNBOOK §2.4"重建服务后必须重跑 `apisix-seed`"**判为误导性文档，已更正**
 
 F-g 的调查指向：**节点由 APISIX 内置 discovery 插件每 30s 拉取**（`deploy/apisix/config.yaml:202-212`），`seed.sh` 只写 upstream **定义**、不含 `nodes`（`seed.sh:230-245`）⇒ **节点变化应自动跟随，重跑 seed 非必需**。
 但该结论**尚未运行时验证**（测试点 #23 就是干这个的）。若 #23 成立 ⇒ 这条写进 RUNBOOK §2.4 已 N 轮的"运维铁律"是**误导性文档**，须更正（AP-02 反向：文档说 A、代码是 B）。
