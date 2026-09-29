@@ -119,7 +119,7 @@ services:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8888/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8888/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -170,7 +170,7 @@ services:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8890/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8890/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -224,7 +224,7 @@ services:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8893/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8893/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -273,7 +273,7 @@ services:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8889/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8889/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -425,7 +425,7 @@ services:
         condition: service_healthy
 
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8891/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8891/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -692,8 +692,13 @@ services:
         reservations:
           cpus: "0.1"
           memory: 64M
+    # D-29：探针指向 readiness 而非 liveness。BFF 是聚合式探针（并发探 6 个下游），
+    # 改前恒返 200 ⇒ 下游挂了容器仍判 healthy。GNU wget 遇非 2xx 返非零
+    # （实测 200→0、404→6），故 `|| exit 1` 能正确识别 503。
+    # 注意：apisix-seed 的 depends_on: service_healthy 因此变严（ready 才算 healthy），
+    # 这是期望行为 —— 路由不该注入到一组"下游还没准备好"的节点上。
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --tries=1 -O /dev/null http://localhost:8894/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --tries=1 -O /dev/null http://localhost:8894/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
