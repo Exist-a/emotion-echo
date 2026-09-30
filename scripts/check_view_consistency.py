@@ -1,6 +1,3 @@
-import sys
-print("AP-11 门禁实测：故意失败")
-sys.exit(1)
 #!/usr/bin/env python3
 """
 check_view_consistency.py — 数据库视图定义跨文件 diff 工具
