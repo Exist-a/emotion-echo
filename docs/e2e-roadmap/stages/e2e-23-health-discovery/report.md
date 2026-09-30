@@ -184,6 +184,11 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 - [x] **§13.3 #17 残留扫描** `bash scripts/check_residual.sh` → GREEN
       （核对前为 RED：`.e2e23-probe-server.py;D` 空目录是实施期探针遗留，已删）
 - [x] **第二方核对已完成**（2026-09-30，见 §9.1）
+- [x] **CI 5 workflow 全绿**（`72b418a`：go-test / llm-test / web-test /
+      doc-drift-check / e2e-guards 全 `success`；过程记录见 §9.2 与 §9.3 的 G-2b）
+- [x] **文档级联扫描已完成**（10 个文件，见 §9.3）
+- [x] **§2.5 分支纪律**：`git status -sb` 与 origin 无 ahead/behind；
+      `git branch --merged main` 仅 main；本会话未新增 worktree
 
 > ⚠️ **自检项自身曾漏项**：本节原写"账本对账完成，**5 条**未解决项"而 §5 实列 7 行，
 > 且缺 #12/#17 两项 —— 由第二方核对（C-10）抓出并补正。
