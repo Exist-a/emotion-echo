@@ -269,13 +269,16 @@ func main() {
 	// 之前放在 registerRoutes 内部 defer ⇒ registerRoutes 返回时（路由注册完
 	// 立即）Redis 客户端被关闭 ⇒ 后续请求 RecordFailure 恒 "client is closed"
 	// ⇒ 静默降级，Redis keys 恒空，跨实例锁定失效。
-	authLockStore := buildAuthLockStore()
+	// E2E-23 #5：Redis client 由 main 持有，authLockStore 与 /health 探针**共用**同一个
+	// —— 早先版本让 buildHealthDeps 自建 client，等于多开一个连接池且永不关闭。
+	redisClient := buildRedisClient()
+	authLockStore := buildAuthLockStoreWithClient(redisClient)
 	if closer, ok := authLockStore.(interface{ Close() error }); ok {
 		defer closer.Close() // main 退出时释放（RedisStore Close）
 	}
 	// E2E-20 收尾拆出：验证码缓存仅 in-memory（D-01 裁定遗留端点，见 authlock store.go）
 	vcStore := authlock.NewInMemoryStore()
-	registerRoutes(r, svcCtx, &c, llmStreamer, intentClassifier, authLockStore, vcStore)
+	registerRoutes(r, svcCtx, &c, llmStreamer, intentClassifier, authLockStore, vcStore, buildHealthDeps(nacosRuntime, redisClient))
 
 	log.Printf("Starting web-bff at %s:%d...", c.Host, c.Port)
 	go func() {
@@ -429,12 +432,12 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 // 路径契约（路由清单）：main_test.go 的 wantRoutes + wantRoutesWithEmotionQ 切片。
 // 改路由必须同步更新测试文件 + 在 PR 描述里说明（决策 18 §四.1 结论须附证据）。
 // 调试时临时增减路由也行——但合 PR 前 main_test.go 必须绿。
-func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier, authLockStore authlock.LoginLockStore, vcStore authlock.VerificationCodeStore) {
+func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier, authLockStore authlock.LoginLockStore, vcStore authlock.VerificationCodeStore, healthDeps handler.HealthDeps) {
 	// health（聚合下游探测）— 免鉴权（GinAuthMiddleware 白名单已含 /health）
 	// E2E-F-130/F-99：响应里带 version + build_time，便于一眼判定容器跑的是不是
 	// 最新代码（防 dev 跑旧 bundle 类 bug 复发）。Version 优先取 GIT_VERSION env，
 	// 否则 fall back 到 dev-build；BuildTime 为 main 启动时刻。
-	r.GET("/health", handler.NewHealthHandlerWithBuild([]handler.DownstreamTarget{
+	r.GET("/health", handler.NewHealthHandlerWithBuildAndDeps([]handler.DownstreamTarget{
 		{Name: "user", BaseURL: c.UserService.BaseURL},
 		{Name: "chat", BaseURL: c.ChatService.BaseURL},
 		{Name: "assessment", BaseURL: c.AssessmentService.BaseURL},
@@ -444,17 +447,17 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond, handler.BuildInfo{
 		Version:   gitVersion(),
 		BuildTime: time.Now().UTC().Format(time.RFC3339),
-	}))
+	}, healthDeps))
 	// D-29：readiness 端点。下游降级时返 503，供 compose healthcheck 判定 ——
 	// 此前 /health 恒返 200，探针看不到"某下游挂了"。
-	r.GET("/health/ready", handler.NewHealthReadyHandler([]handler.DownstreamTarget{
+	r.GET("/health/ready", handler.NewHealthReadyHandlerWithDeps([]handler.DownstreamTarget{
 		{Name: "user", BaseURL: c.UserService.BaseURL},
 		{Name: "chat", BaseURL: c.ChatService.BaseURL},
 		{Name: "assessment", BaseURL: c.AssessmentService.BaseURL},
 		{Name: "analytics", BaseURL: c.AnalyticsService.BaseURL},
 		{Name: "ai", BaseURL: c.AIService.HTTPAddr},
 		{Name: "xtts", BaseURL: c.XTTS.BaseURL},
-	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond))
+	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond, healthDeps))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	// auth（Stage 33 PR-19b：真实登录，注入 UserClient）
@@ -512,21 +515,63 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 //      默认/其他 → InMemoryStore（保持原行为，向后兼容）。
 // 降级（plan §6 [M]）：Redis 不可达时 InMemoryStore 由 NewRedisStore 内部
 //      返 allow 实现（不 fail-closed）。
-func buildAuthLockStore() authlock.LoginLockStore {
-	switch os.Getenv("LOGIN_LOCK_BACKEND") {
-	case "redis":
-		addr := os.Getenv("REDIS_ADDR")
-		if addr == "" {
-			addr = "emotion-echo-redis:6379" // dev 默认
-		}
-		client := redis.NewClient(&redis.Options{Addr: addr})
-		log.Printf("[authlock] using RedisStore addr=%s", addr)
+// buildHealthDeps 组装 /health 的额外依赖探针（E2E-23 测试点 #5 / #6）。
+//
+// 两者都可能在 dev 未启用（Redis 由 LOGIN_LOCK_BACKEND 决定、Nacos 由
+// Nacos.Enabled 决定），此时对应探针为 nil ⇒ 该维度不参与判定，
+// 避免"没配 Redis 的环境被判死"。
+// redisClient 由 main 持有（与 authLockStore 共用同一个，避免多建连接池）；
+// 未启用登录锁 Redis 后端时为 nil。
+func buildHealthDeps(nacosRuntime *NacosRuntime, redisClient *redis.Client) handler.HealthDeps {
+	deps := handler.HealthDeps{}
+
+	// #5：Redis（仅在启用登录锁 Redis 后端时探）
+	if redisClient != nil {
+		deps.Redis = &redisHealthProbe{client: redisClient}
+	}
+
+	// #6：Nacos 注册状态。
+	// Nacos 未启用时**不报降级** —— 此时"网关能否发现我"不由服务发现决定，
+	// 用它判健康会误伤无 Nacos 的部署。
+	if os.Getenv("NACOS_ENABLED") == "true" || os.Getenv("NACOS_ENABLED") == "1" {
+		deps.NacosRegistered = func() bool { return nacosRuntime.Registered() }
+	}
+	return deps
+}
+
+// redisHealthProbe 把 go-redis client 适配成 handler.Pinger。
+type redisHealthProbe struct{ client *redis.Client }
+
+func (p *redisHealthProbe) Ping(ctx context.Context) error {
+	return p.client.Ping(ctx).Err()
+}
+
+// buildRedisClient 构造 Redis client；未启用时返回 nil。
+//
+// 独立出来是为了让 /health 能探它（E2E-23 测试点 #5）：此前 client
+// 藏在 buildAuthLockStore 内部，**结构上无法**被健康检查看到 ——
+// 不是"忘了写"，是"没有注入位"。
+func buildRedisClient() *redis.Client {
+	if os.Getenv("LOGIN_LOCK_BACKEND") != "redis" {
+		return nil
+	}
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		addr = "emotion-echo-redis:6379" // dev 默认
+	}
+	log.Printf("[authlock] using RedisStore addr=%s", addr)
+	return redis.NewClient(&redis.Options{Addr: addr})
+}
+
+// buildAuthLockStoreWithClient 用给定的 Redis client 构造登录锁存储；
+// client 为 nil 时退回 in-memory（未启用 Redis 后端）。
+func buildAuthLockStoreWithClient(client *redis.Client) authlock.LoginLockStore {
+	if client != nil {
 		return authlock.NewRedisStore(authlock.RedisConfig{
 			Client: client,
 			Prefix: "web-bff-auth",
 		})
-	default:
-		log.Printf("[authlock] using InMemoryStore (LOGIN_LOCK_BACKEND=redis to enable Redis)")
-		return authlock.NewInMemoryStore()
 	}
+	log.Printf("[authlock] using InMemoryStore (LOGIN_LOCK_BACKEND=redis to enable Redis)")
+	return authlock.NewInMemoryStore()
 }

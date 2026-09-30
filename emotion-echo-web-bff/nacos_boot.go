@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/emotion-echo/shared/pkg/logging"
 	"os"
@@ -28,9 +29,32 @@ type NacosRuntime struct {
 	Registry     shareddiscovery.Registry
 	ConfigCenter sharedconfig.ConfigCenter
 	Cancel       context.CancelFunc
+
+	// registered 记录本实例当前是否已注册到 Nacos（E2E-23 测试点 #6）。
+	//
+	// 为什么需要它：/health 若只看"进程活着 + 下游都通"，就会出现
+	// F-137 那个悖论 —— 自查健康但**网关解析不到本实例**。
+	// 探针必须能回答"我现在可被发现吗"。
+	//
+	// 用 atomic 而非普通 bool：BootNacos 在启动 goroutine 里写，
+	// /health 在请求 goroutine 里读，无同步即为 data race
+	//（E2E-21 教训：单测全绿也照样是 bug）。
+	registered atomic.Bool
+}
+
+// Registered 报告本服务当前是否已注册到 Nacos。
+// Nacos 未启用（runtime 为 nil）时返回 false —— 此时"是否可被发现"
+// 不由服务发现决定，不应据此报降级，调用方需自行判断。
+func (r *NacosRuntime) Registered() bool {
+	if r == nil {
+		return false
+	}
+	return r.registered.Load()
 }
 
 func (r *NacosRuntime) Close(ctx context.Context, svcName, host string, port int) {
+	// 先置 false：注销过程中网关已可能解析不到本实例
+	r.registered.Store(false)
 	if r.Registry != nil {
 		_ = r.Registry.Unregister(ctx, shareddiscovery.Instance{ServiceName: svcName, Host: host, Port: port})
 	}
@@ -85,6 +109,7 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 	if err := reg.Register(ctx, instance); err != nil {
 		return nil, fmt.Errorf("[nacos] Register: %w", err)
 	}
+
 	logging.PrintfContext(ctx, "[nacos] registered %s at %s:%d", instance.ServiceName, instance.Host, instance.Port)
 	hbCtx, hbCancel := context.WithCancel(context.Background())
 	// Round 4.2 P1-7: BeatHeartbeat 走 Nacos /instance/beat 标准协议（HTTP POST），
@@ -124,7 +149,10 @@ func BootNacos(ctx context.Context, cfg *config.Config, deps bootDeps) (*NacosRu
 			logging.PrintfContext(ctx, "[nacos] ListenConfig failed (continuing): %v", err)
 		}
 	}
-	return &NacosRuntime{Registry: reg, ConfigCenter: cc, Cancel: hbCancel}, nil
+	rt := &NacosRuntime{Registry: reg, ConfigCenter: cc, Cancel: hbCancel}
+	// 注册已成功 ⇒ 本实例可被网关发现（E2E-23 #6）
+	rt.registered.Store(true)
+	return rt, nil
 }
 
 func gitVersion() string {
