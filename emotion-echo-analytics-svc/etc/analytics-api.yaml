@@ -35,7 +35,10 @@ Nacos:
   Addr:      emotion-echo-nacos:8848
   Namespace: emotion-echo-dev
   GroupName: DEFAULT_GROUP
-  # HotReload: 省略 → Config struct tag default=false
+  # E2E-23 E 组（D-32）：显式开启 —— max_retries 需被 Nacos 推送热更。
+  # 注意 compose 里 NACOS_HOT_RELOAD 必须同步为 "true"，
+  # 因为 env 优先于 yaml（E2E-23 实施期踩过：只改 yaml 会被压回 false）。
+  HotReload: true
 
 
 # Stage 62 PR-3.2：analytics-svc gRPC server 配置（暴露 AnalyticsService 给 BFF）
