@@ -284,11 +284,16 @@ ai-svc grpcserver/ops、analytics config、shared configcenter、**6 个守卫�
 | # | 缺口 | 后果 | 处置 |
 |---|------|------|------|
 | G-1 | **Helm 侧 6 个服务的 `readinessProbe` 仍打 `/health`** —— 本阶段只改了 compose | **生产（K8s）里 DB 挂掉时 Pod 不会被摘出 Endpoints，继续接流量，且零报错**（探针返 200 判定"健康"）。liveness/readiness 分离在生产等于没做 | TDD 修：先把断言加进 `scripts/test_healthcheck_readiness.sh`（RED 6 FAIL）→ 改 6 份 chart（GREEN 19/19）→ 负向对照（把 user-svc 改回 `/health` 立即 `FAIL 1 / RED`）|
+| G-2b | `test_route_contract.sh` 里 `WEB_API_ROUTES` 写的是 `Emotion-Echo-Web/...`，仓库实名是 `emotion-echo-web/...`（全小写） | **本地 Windows 绿、CI ubuntu 红**：Windows 文件系统大小写不敏感，脚本照常跑通；接进 Actions 后第一步就 `missing source` exit 1。**"本地全绿"不能替代跨平台验证** | 改小写 + 在脚本里写明这条坑（E2E-23 新增的 7 个守卫中唯一一个有大小写依赖的） |
 | G-2 | `scripts/test_route_contract.sh` 变红：`BFF route GET /health/ready NOT covered by APISIX` | 该脚本**不在 6 个 CI 守卫之列**，所以本阶段加路由时它静默变红、无人发现（AP-10 孤儿守卫的变体：守卫存在但没接进任何执行路径） | 修三处：① 把 `/health/ready` 显式加入该脚本的基础设施路径白名单（**只加这一条，不改成"跳过所有非 `/api/v1`"**，那会放过任何拼错前缀的路径）；② 更正脚本头部三处陈旧计数（27→37 主路径、`main.go:214-246`→`main.go:430`）并指向 `main_test.go` 的 `wantRoutes` 为单一事实源；③ **把它接进 `.github/workflows/e2e-guards.yml`（现 7 个守卫）**——光修脚本不接线，下次加路由还会静默变红 |
 
 **教训**：G-1 说明"改了 dev 编排"不等于"改了健康契约"——契约的适用面是**所有部署形态**。
 G-2 说明"守卫写好了"不等于"守卫在跑"——`test_route_contract.sh` 早于本阶段存在，
 但因为没接进 CI，本阶段的一次路由新增就能让它悄悄变红。
+G-2b 说明**本地绿 ≠ CI 绿**：本项目开发机是 Windows（大小写不敏感），
+脚本里一处路径大小写写错能躲过所有本地检查，一进 ubuntu runner 立刻死。
+这也解释了为什么前 6 个守卫从 `92805ad` 起就在 CI 跑得好好的，
+而新加的第 7 个第一次跑就红——**不是新守卫写得差，是它第一次离开了 Windows**。
 这两条都是 anti-patterns 里已有条目的复现（AP-10 / AP-01），已按原条目处置，未新开账本条目。
 
 ## 10. 下轮建议

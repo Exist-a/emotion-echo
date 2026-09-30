@@ -2,7 +2,7 @@
 # scripts/test_route_contract.sh — Sprint 1 PR-3 三方路由契约脚本
 #
 # 用途：离线静态比对 APISIX (deploy/apisix/seed.sh) ↔ BFF (emotion-echo-web-bff) ↔ 前端
-#       (Emotion-Echo-Web/app/lib/apiRoutes.ts) 三方路径集合，防止三方漂移未被发现。
+#       (emotion-echo-web/app/lib/apiRoutes.ts) 三方路径集合，防止三方漂移未被发现。
 #
 # 三方关系：
 #   - APISIX 是网关（catch-all /api/v1/* 路由到 web-bff + 5 auth 白名单）
@@ -39,7 +39,11 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SEED_SH="$REPO_ROOT/deploy/apisix/seed.sh"
 BFF_MAIN="$REPO_ROOT/emotion-echo-web-bff/main.go"
 BFF_HANDLERS="$REPO_ROOT/emotion-echo-web-bff/internal/handler"
-WEB_API_ROUTES="$REPO_ROOT/Emotion-Echo-Web/app/lib/apiRoutes.ts"
+# ⚠️ 大小写：目录实名是 emotion-echo-web（全小写）。本脚本此前写成
+#    `Emotion-Echo-Web`，在 Windows 上因文件系统大小写不敏感**照样跑通**，
+#    接进 GitHub Actions（ubuntu，区分大小写）后立刻 exit 1 "missing source"。
+#    本地绿 ≠ CI 绿：跨平台脚本里的路径必须逐字符对得上仓库真实大小写。
+WEB_API_ROUTES="$REPO_ROOT/emotion-echo-web/app/lib/apiRoutes.ts"
 
 fail_count=0
 warn_count=0
