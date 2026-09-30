@@ -28,7 +28,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 > 依据 [anti-patterns.md](../../anti-patterns.md) **AP-14**（同一事实只允许一处定义）与
 > **AP-03**（不得用"待后续"掩盖未做）。
 >
-> **最后更新：2026-09-30（复核修正）· 4 项未完成**。
+> **最后更新：2026-09-30（复核修正）· 3 项未完成**。
 > **本版推翻了上一版的 4 条记录**，理由逐条写在下表与"订正依据"中——上一版把
 > ①**与本阶段无关的门禁问题**、②**§2 里早已 PASS 或早已完成的测试点**列进了本阶段未完成清单。
 >
@@ -41,8 +41,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 |---|------|-------------|--------|------------------------|------|
 | **T-1** | **账本 F-107 / F-156 的三处代码残留** | #21 实测 BFF 的 HTTP beat 在 Nacos 3.x 下 **100% 返 501**（beat 代码是死的）；`nacos_beat.go` 的 `if failCount <= 3` 使 3 次后**连 WARN 都不打**；`nacos_register.go` watcher 的 `_, _ =` **吞掉续约错误** ⇒ SDK 死透时无人知晓 | **执行者** | 三处各有 TDD 回归钉：beat 失败达阈值必打 WARN（或删掉死代码）、watcher 续约失败必记日志；账本 F-107/F-156 随之翻闭环 | E2E-F-107 / F-156 |
 | **T-2** | **账本 F-163：`Resume()` 接线的降级批准** | plan B1 要求接入，实际只接了 `Shutdown()`。5 个服务**没有"暂停后恢复"路径**，停机是单向终态，接线会让 `Resume()` 成为孤儿代码（AP-10）⇒ 这是"需求不适用"而非"做不到"，但按 §4.2 须用户批准才可降级 | **用户** | 批准降级 → 账本 F-163 翻「已降级 + 理由」；或要求补做 → 接线 + 回归钉 | E2E-F-163 |
-| **T-3** | **重建 ai-svc 镜像并复验 F-170 运行时** | F-170 修复同时改了 `voice_emotion_repository.go` / `face_emotion_repository.go` 两处**生产代码**（不只是测试），dev 栈里跑的还是旧二进制 | **执行者** | 重建后跑一次多模态写入，`ON CONFLICT (upload_id) DO NOTHING` **不再报 42P10**，且行真的落库 | E2E-F-170 |
-| **T-4** | **阶段判 `done`** | 按 RUNBOOK §7 #10，执行者**不得自行宣布 done**；且 T-1~T-3 未销账 | **用户** | T-1~T-3 全部销账、§5 账本对账无未闭环项后，用户批准 → roadmap 与 front-matter 同步改 `done` | 本文件 front-matter |
+| **T-4** | **阶段判 `done`** | 按 RUNBOOK §7 #10，执行者**不得自行宣布 done**；且 T-1~T-2 未销账 | **用户** | T-1~T-2 全部销账、§5 账本对账无未闭环项后，用户批准 → roadmap 与 front-matter 同步改 `done` | 本文件 front-matter |
 
 ### 已移出本阶段（上一版误列在此）
 
@@ -81,6 +80,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 事项 | 结论 | 证据 |
 |------|------|------|
 | **测试点 #40**（阶段唯一 BLOCKED） | ✅ **由 BLOCKED 改判 PASS** | ① `git log -S` 确认 ADR 更正节由 `49b5daf` 落地；② `grep -rn NACOS_REFRESH_MS` 0 命中，与更正节一致；③ RUNBOOK `:125` 已按 D-30 更正；④ 账本 F-107 已带运行时证据翻新 |
+| **T-3 重建 ai-svc 镜像 + 复验 F-170 运行时** | ✅ **已完成，有 dev 库上的前后对照** | ① 重建 `emotion-echo/ai-svc:v0.1.9` + `--force-recreate` 该容器（**未重启整栈**），`/health` → `{"status":"ok","dbOk":true}`；② 查明根因是**索引为 partial unique**（`WHERE upload_id <> '__legacy__'`）而旧二进制发的是**不带谓词**的 `ON CONFLICT (upload_id)`；③ **dev 库前后对照**：旧 SQL → `ERROR 42P10 there is no unique or exclusion constraint matching the ON CONFLICT specification`；新 SQL（带 `TargetWhere`）→ `INSERT 0 1`；同 `upload_id` 重复插入 → `INSERT 0 0`（幂等）；落库 1 行且 `primary_emotion` 仍是 `joy` 未被 `sad` 覆盖（`DO NOTHING` 语义正确）；④ 真 Postgres + 真迁移的集成测试 `TestFaceEmotionRepo_Integration_UploadIDDedup` / `TestVoiceEmotionRepo_Integration_UploadIDDedup` 全绿；⑤ 探针行已 `DELETE` 并复验 `leftover = 0` |
 
 | 事项 | 结论 | 证据 |
 |------|------|------|
@@ -265,6 +265,20 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 - `Resume()` 接线（#14）与 skywalking 侧 healthcheck（#26 范围内）两项属"计划要求但未做"，已在 §2 与 §3 如实标注，**建议下一轮补做或由用户裁定降级**。
 
 ## 9. 收口自检
+
+- [x] **第三轮复核顺带抓到一个真门禁漏洞并已修**：`e2e_stage_audit.py` 的 `parse_ledger()`
+      对格数 < 6 的行**静默 `continue`**，而账本有 4 条**跨行的 Markdown 表格行**
+      （F-165/166/167/171）⇒ 这 4 条对审计器完全不可见。
+      **要害不是 A8 误报编号不连续，而是 A5**——A5 是"阶段判 done 前账本须对账干净"的
+      唯一执行者，它也看不见 ⇒ **阶段可以带着一条未解决的账本判 done 而门禁全绿**。
+      本阶段当时**侥幸**没被绕过（那 4 条都不归 E2E-23）——**靠运气不是机制**。
+      修法 + 回归钉 `scripts/test_audit_ledger_parser.sh`（5/5 GREEN，含 2 条负向对照），
+      已接入 `e2e-guards.yml` 第 10 项；**顺带清掉 23 个阶段共 23 条 A8 误报**。
+      修的过程中又踩了两个坑，都已固化进守卫（见该脚本文件头）：
+      ① `command -v python3` 在 Windows 命中 Store 别名桩，**存在却静默不执行**，
+      导致守卫有两条断言空跑成 PASS；② "解析结果为空 ⇒ PASS" 是弱断言，
+      python 片段抛异常时 stdout 同样为空，**异常会被读成 PASS**。
+      故守卫改为：解释器必须实跑出版本号才认；每条断言先校验退出码再解释输出。
 
 - [x] **第三轮复核（2026-09-30）：§0 与 §5 均查出与事实相反的陈述并已更正** —— §0 的旧 T-6 是失实条目、
       旧 T-1~T-3 误归属本阶段；§5 把 F-151/155/158/159/160 记作未闭环而它们实际均已闭环。

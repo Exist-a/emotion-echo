@@ -94,3 +94,11 @@ jobs:
 
       - name: 守卫 9/9 阶段未完成清单完整且数字自洽
         run: bash scripts/check_stage_todo_section.sh
+
+      # 这条守的是**审计器自己**。A5（"阶段判 done 前账本须对账干净"）
+      # 是"未解决账本"的唯一执行者，而旧 parse_ledger 对格数 < 6 的行
+      # **静默 continue** ⇒ 有 4 条跨行的 Markdown 账本行对 A5 完全不可见，
+      # 阶段可以带着一条未解决的账本判 done 而门禁全绿。
+      # E2E-23 当时是**侥幸**没被绕过（那 4 条都不归它）——靠运气不是机制。
+      - name: 守卫 10/10 审计器账本解析器无盲区
+        run: bash scripts/test_audit_ledger_parser.sh

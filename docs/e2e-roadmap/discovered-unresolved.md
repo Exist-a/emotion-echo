@@ -338,8 +338,7 @@ pie `radius`/`center` 未分离：图例占位挤进了绘图区。属**版面�
 用 canvas backing store 直读逐行统计证伪：该画布 432px 高、内容覆盖第 40~348 行（**71.5%**），
 5 个轴标签（开放性/尽责性/外向性/宜人性/神经质）全部完整渲染。
 假象成因：我给的 `clip` 矩形 y 范围**越出了视口下沿**（canvas 顶部 y=945，视口高 1100），
-越界部分被填成卡片背景色，看起来像"图表只画了一半"。加高视口到 1680×1900 后截图完全正常 | —
-| 🟢 **已推翻，不成立**。教训与 E2E-F-149/F-152 同源：**截图类证据必须先自证有效**
+越界部分被填成卡片背景色，看起来像"图表只画了一半"。加高视口到 1680×1900 后截图完全正常 | 不适用（本条记录方法论，不涉及产品代码） | — | 🟢 **已推翻，不成立**。教训与 E2E-F-149/F-152 同源：**截图类证据必须先自证有效**
 （元素是否完整落在视口内），否则会"从坏证据推出真缺陷"。本页 `window.scrollTo` 无效
 （布局由内层容器滚动），加高视口是本机可靠手段 |
 
@@ -355,8 +354,7 @@ config.Config value`（handler 构造签名变更后集成测试未同步）。
 **为什么全绿**：三者都带 `//go:build integration`，而 `go test ./...`、`go vet ./...`、CI 的 go-test
 **默认全部跳过 build tag 下的文件** ⇒ AGENTS.md §1.1 要求的 `go test -tags integration ./...`
 从来没被真正执行过 | 没有任何门禁编译 build tag 下的代码。集成测试只"存在"、从不被执行，
-是 AP-10「孤儿产出物」的最隐蔽形态（连"文件已创建"都不是，是**不可编译的已创建**） |
-**E2E-06 / E2E-03**（集成测试基线与 CI 覆盖）| 🟡 **降级并记录（ratchet 模式）**：
+是 AP-10「孤儿产出物」的最隐蔽形态（连"文件已创建"都不是，是**不可编译的已创建**） | **E2E-06 / E2E-03**（集成测试基线与 CI 覆盖）| 🟡 **降级并记录（ratchet 模式）**：
 新增守卫 `scripts/test_integration_tag_compiles.sh`（已接入 `e2e-guards.yml` 第 8 项）。
 语义是**棘轮**：user-svc / web-bff 在守卫的 `KNOWN_BROKEN` 清单里 ⇒ 报醒目 WARN 但**不判红**
 （常红门禁会训练出"看见红色就跳过"，正是 AP-11 的成因）；**任何清单外的模块编译不过一律判红**。
@@ -367,6 +365,7 @@ WARN 数量只会单调下降；每修好一项就删一行清单，守卫自动
 
 | E2E-F-169 | **E2E-23 收尾轮（2026-09-30）** | 🟡 F-165 图例重叠修复的浏览器复验缺口。上一轮记的是"未验证"，**本轮已补上** | 上一轮的两个障碍都已绕开：① `docker build emotion-echo-web` 在本机失败，真因不是记忆里写的 npm 超时，而是 **`@mlc-ai/web-llm` 没装** ⇒ `pnpm build` 报 `Rollup failed to resolve import "@mlc-ai/web-llm"` ⇒ 整个客户端 bundle 失败（这也解释了上一轮 `nuxt dev` 下 0 个 canvas 的真正原因，不是 dev 模式的问题）；② 退一步把构建产物跑在 3001 会因 **CORS** 取不到数据（`localhost:3001` 不在 APISIX 的 `CORS_ALLOW_ORIGINS` 白名单，fetch 报 `Failed to fetch`，见 memory `apisix-cors-origin-and-seed-override`）。最终路径：装上缺失依赖 → 主机 `pnpm build` 成功 → **停 web 容器**、用 `node .output/server/index.mjs` 在 **3000** 上跑同一份生产构建（origin 对齐白名单）→ 浏览器复验 | 环境限制，非代码问题 | **E2E-11** | ✅ **已复验（2026-09-30）**：视口 1680×1080 下 `/chat/user` 四图全部渲染真实数据，昼夜使用模式的图例已是**底部 2×2 横排、完全在圆环之外**，无任何文字压色块。截图 `screenshots/41-f165-legend-no-overlap-verified.png`（整页）+ `42-f165-donut-canvas-closeup.png`（该图 canvas 特写）。顺带查明：卡片高度是 `vhToPx(40)` = **40vh**（不是固定值），我上一轮用 1900px 超高视口量到的 760px 高卡片是视口造成的，不是回退 |
 
+| E2E-F-170 | **E2E-23 收尾轮 F-168 共享 fixture 抓出（2026-09-30）** | 🔴 **多模态情绪入库 100% 失败**：`voice_emotion_results` / `face_emotion_results` 的去重索引是 **partial unique**（`CREATE UNIQUE INDEX uq_voice_emotion_upload_id ON ... (upload_id) WHERE upload_id <> '__legacy__'`），而 gorm 发的是**不带谓词**的 `ON CONFLICT (upload_id) DO NOTHING` ⇒ Postgres 报 **`42P10 there is no unique or exclusion constraint matching the ON CONFLICT specification`**，每一次语音/面部情绪写入都失败（幂等去重能力实际为零） | partial unique 索引**不能**被无谓词的 `ON CONFLICT (col)` 推断——PG 要求 ON CONFLICT 的索引推断式**与 partial 索引的谓词一致**（即需写 `ON CONFLICT (upload_id) WHERE upload_id <> '__legacy__'`）。gorm v1.31.1 的 `clause.OnConflict` 支持 `TargetWhere`，但必须显式给出该谓词 | **E2E-23**（F 组）| ✅ **已解决（2026-09-30，有 dev 库运行时前后对照）**。修法：gorm 侧补 `clause.OnConflict{TargetWhere: ...}` 谓词（`voice_emotion_repository.go` / `face_emotion_repository.go`）。**证据链四层**：① 真 Postgres + 真迁移的集成测试 `TestFaceEmotionRepo_Integration_UploadIDDedup` / `TestVoiceEmotionRepo_Integration_UploadIDDedup` 全绿；② 重建 `emotion-echo/ai-svc:v0.1.9` + `--force-recreate` 单容器（未重启整栈），`/health` → `{"status":"ok","dbOk":true}`；③ **dev 库前后对照**——旧 SQL `ON CONFLICT (upload_id) DO NOTHING` → `ERROR 42P10`；新 SQL（带谓词）→ `INSERT 0 1`；同 `upload_id` 重复插入 → `INSERT 0 0`（幂等）；落库 1 行且 `primary_emotion` 仍为首次写入的 `joy`、**未被第二次的 `sad` 覆盖**（`DO NOTHING` 语义正确）；④ 探针行已 `DELETE` 并复验 `leftover = 0`。**注**：本条此前只存在于 report §9.6 的叙述里、**从未作为独立行登记进账本**（编号从 F-169 直接跳到 F-171），故无状态格可翻；本 commit 补登记 |
 | E2E-F-171 | **E2E-23 收尾轮 AP-11 实测（2026-09-30）** | 🟠 **两次对照均未观测到"被门禁挡住"，但据此断言"门禁没在拦"证据不足。**
 判据设想：`mergeable_state` 区分得开 —— `blocked` = 被门禁挡住（有**必需**检查红/未完成），
 `unstable` = 只有**非必需**检查红（仍可合并），`clean` = 一切正常。
