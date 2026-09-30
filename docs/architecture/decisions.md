@@ -8,6 +8,8 @@
 > 最后更新：2026-09-05（新增决策 19 · 仓库顶层命名规范与废弃件处置，详见 `adr-2026-09-repo-top-level-naming.md`；决策 18 · 文档失真治理，详见 `adr-2026-09-doc-drift-registry.md`；决策 17 · dev 模式日志聚合后端 = Loki，详见 `adr-2026-09-loki-aggregator-dev.md`）
 
 > 2026-09-03：撤回 2026-08-31 决策 10 "不引入注册中心/配置中心" 判断；新增决策 11/12/13，演进路线 Stage 31/32/33；详见 `adr-2026-09-nacos-reintroduction.md`
+>
+> **2026-09-30（E2E-23）**：新增 [`adr-2026-09-health-check-contract.md`](adr/adr-2026-09-health-check-contract.md) —— 健康检查契约（liveness/readiness 分离，D-29）。同时更正 Nacos ADR §四 两条**从未落地**的设计承诺（"grpc health 5s/次连续 3 次摘除"、"`NACOS_REFRESH_MS` 拉取间隔"）—— 原文以约定口吻书写造成"已实现"误读，见该 ADR §四 更正小节与账本 E2E-F-157
 
 ---
 
