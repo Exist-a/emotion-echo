@@ -91,3 +91,6 @@ jobs:
 
       - name: 守卫 8/8 build tag 下的代码也能编译
         run: bash scripts/test_integration_tag_compiles.sh
+
+      - name: 守卫 9/9 阶段未完成清单完整且数字自洽
+        run: bash scripts/check_stage_todo_section.sh

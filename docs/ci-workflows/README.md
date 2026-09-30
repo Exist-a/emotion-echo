@@ -44,6 +44,7 @@ related-stage: stage-97, e2e-03, e2e-22, e2e-23
 | `scripts/test_obs_healthchecks.sh` | 16 个观测/网关容器都有 healthcheck 且真的探得到东西 |
 | `scripts/test_devup_batch_waits.sh` | `dev-up.sh` 的分批等待没有"起完就当就绪"的空等 |
 | `scripts/test_route_contract.sh` | APISIX ↔ BFF ↔ 前端三方路由集合无漂移（早于 E2E-23 存在，**本轮才接进 CI** —— 见下方"为什么补这一条"） |
+| `scripts/test_stage_todo_section.sh` | 每个 partial 阶段的 report 必须有 §0 未完成清单，且声明条数与实际条目一致（棘轮：历史阶段计入 legacy，基线只降不升） |
 
 需要运行中的容器栈的 `scripts/smoke_health_discovery.py` **不在 CI**（CI 无 docker 栈），
 只在本地/dev 模式跑。

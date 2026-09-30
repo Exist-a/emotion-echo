@@ -35,18 +35,27 @@ for script in scripts/*.sh scripts/*.py; do
             ;;
     esac
     
-    # 检查是否被其他文件引用（检查 docs、.github 和 README）
+    # 检查是否被**任何 git 跟踪的文件**引用。
     #
-    # 注意：`docs/**/*.md` 在未开 globstar 的 bash 里会退化成「docs/<单层>/<文件>.md」，
-    # 于是 docs/e2e-roadmap/stages/<dir>/report.md 这类 3 层深的引用匹配不到，
-    # 有引用的脚本被误判孤儿（E2E-11 复查实测：seed_security_question.sh 被
-    # docs/e2e-roadmap/stages/e2e-07-password-recovery/report.md 引用却判孤儿）。
-    # 改用 find 做无条件递归，不依赖 shopt。
-    referenced=$(
-        grep -l "$basename" scripts/README.md .github/workflows/*.yml 2>/dev/null
-        find docs -name '*.md' -type f -exec grep -l "$basename" {} + 2>/dev/null
-    )
-    if ! echo "$referenced" | grep -v "^$script$" | grep -q .; then
+    # 两次修过的盲区：
+    # ① `docs/**/*.md` 在未开 globstar 的 bash 里会退化成「docs/<单层>/<文件>.md」，
+    #    docs/e2e-roadmap/stages/<dir>/report.md 这类 3 层深的引用匹配不到
+    #    （E2E-11 复查实测：seed_security_question.sh 被 3 层深的 report 引用却判孤儿）
+    #    ⇒ 改用 find 做无条件递归。
+    # ② 只搜 docs + .github + README，**不搜 scripts/ 下其他脚本**
+    #    ⇒ 「被另一个守卫脚本调用」的 helper 一律判孤儿
+    #    （E2E-23 收口轮实测：_extract_partial_stages.py 被 check_stage_todo_section.sh
+    #      调用却被判孤儿）。
+    # ③ 补上 docs/ 之外的源码目录（emotion-echo-*/、deploy/、emotion-echo-web/）
+    #    —— 脚本完全可能被 Go 源码或 compose 引用。
+    #
+    # 现在统一用 `git grep`：只搜 git 跟踪的文件，递归无深度限制，
+    # 覆盖 docs / .github / scripts / 任何源码目录，一次解决 ①②③。
+    # 排除脚本自身（否则每个脚本引用自己就"被引用"了，检查形同虚设）。
+    referenced="$(
+        git grep -l -F "$basename" -- . 2>/dev/null | grep -v -x -F "$script"
+    )"
+    if ! echo "$referenced" | grep -q .; then
         orphans+=("$script")
     fi
 done
