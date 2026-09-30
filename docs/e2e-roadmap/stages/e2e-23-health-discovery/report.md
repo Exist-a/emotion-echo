@@ -28,7 +28,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 > 依据 [anti-patterns.md](../../anti-patterns.md) **AP-14**（同一事实只允许一处定义）与
 > **AP-03**（不得用"待后续"掩盖未做）。
 >
-> **最后更新：2026-09-30（复核修正）· 3 项未完成**。
+> **最后更新：2026-09-30（复核修正）· 2 项未完成**。
 > **本版推翻了上一版的 4 条记录**，理由逐条写在下表与"订正依据"中——上一版把
 > ①**与本阶段无关的门禁问题**、②**§2 里早已 PASS 或早已完成的测试点**列进了本阶段未完成清单。
 >
@@ -39,9 +39,8 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 
 | # | 事项 | 为什么没做完 | 谁来做 | 怎么算做完（可核验判据） | 关联 |
 |---|------|-------------|--------|------------------------|------|
-| **T-1** | **账本 F-107 / F-156 的三处代码残留** | #21 实测 BFF 的 HTTP beat 在 Nacos 3.x 下 **100% 返 501**（beat 代码是死的）；`nacos_beat.go` 的 `if failCount <= 3` 使 3 次后**连 WARN 都不打**；`nacos_register.go` watcher 的 `_, _ =` **吞掉续约错误** ⇒ SDK 死透时无人知晓 | **执行者** | 三处各有 TDD 回归钉：beat 失败达阈值必打 WARN（或删掉死代码）、watcher 续约失败必记日志；账本 F-107/F-156 随之翻闭环 | E2E-F-107 / F-156 |
-| **T-2** | **账本 F-163：`Resume()` 接线的降级批准** | plan B1 要求接入，实际只接了 `Shutdown()`。5 个服务**没有"暂停后恢复"路径**，停机是单向终态，接线会让 `Resume()` 成为孤儿代码（AP-10）⇒ 这是"需求不适用"而非"做不到"，但按 §4.2 须用户批准才可降级 | **用户** | 批准降级 → 账本 F-163 翻「已降级 + 理由」；或要求补做 → 接线 + 回归钉 | E2E-F-163 |
-| **T-4** | **阶段判 `done`** | 按 RUNBOOK §7 #10，执行者**不得自行宣布 done**；且 T-1~T-2 未销账 | **用户** | T-1~T-2 全部销账、§5 账本对账无未闭环项后，用户批准 → roadmap 与 front-matter 同步改 `done` | 本文件 front-matter |
+| **T-1** | **账本 F-163：`Resume()` 接线的降级批准** | plan B1 要求接入，实际只接了 `Shutdown()`。5 个服务**没有"暂停后恢复"路径**，停机是单向终态，接线会让 `Resume()` 成为孤儿代码（AP-10）⇒ 这是"需求不适用"而非"做不到"，但按 §4.2 须用户批准才可降级 | **用户** | 批准降级 → 账本 F-163 翻「已降级 + 理由」；或要求补做 → 接线 + 回归钉 | E2E-F-163 |
+| **T-2** | **阶段判 `done`** | 按 RUNBOOK §7 #10，执行者**不得自行宣布 done**；且 T-1 未销账 | **用户** | T-1 销账、§5 账本对账无未闭环项后，用户批准 → roadmap 与 front-matter 同步改 `done` | 本文件 front-matter |
 
 ### 已移出本阶段（上一版误列在此）
 
@@ -81,6 +80,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 |------|------|------|
 | **测试点 #40**（阶段唯一 BLOCKED） | ✅ **由 BLOCKED 改判 PASS** | ① `git log -S` 确认 ADR 更正节由 `49b5daf` 落地；② `grep -rn NACOS_REFRESH_MS` 0 命中，与更正节一致；③ RUNBOOK `:125` 已按 D-30 更正；④ 账本 F-107 已带运行时证据翻新 |
 | **T-3 重建 ai-svc 镜像 + 复验 F-170 运行时** | ✅ **已完成，有 dev 库上的前后对照** | ① 重建 `emotion-echo/ai-svc:v0.1.9` + `--force-recreate` 该容器（**未重启整栈**），`/health` → `{"status":"ok","dbOk":true}`；② 查明根因是**索引为 partial unique**（`WHERE upload_id <> '__legacy__'`）而旧二进制发的是**不带谓词**的 `ON CONFLICT (upload_id)`；③ **dev 库前后对照**：旧 SQL → `ERROR 42P10 there is no unique or exclusion constraint matching the ON CONFLICT specification`；新 SQL（带 `TargetWhere`）→ `INSERT 0 1`；同 `upload_id` 重复插入 → `INSERT 0 0`（幂等）；落库 1 行且 `primary_emotion` 仍是 `joy` 未被 `sad` 覆盖（`DO NOTHING` 语义正确）；④ 真 Postgres + 真迁移的集成测试 `TestFaceEmotionRepo_Integration_UploadIDDedup` / `TestVoiceEmotionRepo_Integration_UploadIDDedup` 全绿；⑤ 探针行已 `DELETE` 并复验 `leftover = 0` |
+| **T-1 账本 F-107 / F-156 的续约可观测性** | ✅ **已完成（TDD + 负向对照）** | ① `nacos_beat.go` 的 `if failCount <= 3` 改为**节流而非封顶**（第 1 次必打、其后每 12 次一次），并在连续失败达 12 次时加一条**说明后果**的日志（该端点已被 Nacos 3.x 移除、心跳实际由 SDK UpdateInstance 承担）；② `nacos_register.go` 的 `_, _ = r.client.UpdateInstance(...)` 改为捕获 error → WARN（节流）+ 恢复 INFO；③ 回归钉 `nacos_renewal_observability_test.go` **5 例全绿**，含性质化断言"不存在长度 ≥ 12 的完全静默窗口"（前 1000 次失败全扫描）；④ **负向对照实测旧代码：49 次失败只打 3 条 WARN、续约错误 0 条、恢复 0 条**；回退修复后 4/4 转 RED；⑤ `go vet` + shared 全模块 `go test ./...` 全绿。**边界**：`>90s` Nacos 宕机未测；HTTP beat 通道**未删除**（Nacos 2.x 下可能可用，本轮只让它可观测）；`-race` 本机跑不了（Windows `0xc0000139`），须 CI 复核 |
 
 | 事项 | 结论 | 证据 |
 |------|------|------|
@@ -227,13 +227,13 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | E2E-F-158 / 159 / 160 | E2E-23 | **均已修**（commit `4d4b1f9`）：P1 敏感字段词根拆分 + P2 `LLM.Timeout` 真正接线 + P3 `SetDefaults` 补 `Kafka.MaxRetries`；§2 #33/#34/#35 已判 PASS 并附负向对照 | ✅ 已解决 |
 | E2E-F-163 | E2E-23 | `Resume()` 未接线（只接了 `Shutdown()`）；等待用户对降级的批准 | 🟡 待裁定 |
 
-**归属本阶段且未闭环的账本 = F-107 / F-156 / F-163，共 3 条**
-（其中 F-107 与 F-156 的残留是同一批代码，合并为 §0 的 T-1 一项；F-163 待用户裁定）。
+**归属本阶段且未闭环的账本 = F-163，仅 1 条**（待用户对 `Resume()` 降级拍板）。
+F-107 / F-156 的续约可观测性残留已于 2026-09-30 TDD 修完并翻 ✅。
 
-⇒ 按 RUNBOOK §7 #9 与审计 A5，**在这 3 条闭环前阶段只能标 `partial`**。
+⇒ 按 RUNBOOK §7 #9 与审计 A5，**在 F-163 闭环前阶段只能标 `partial`**。
 ⇒ **上一版把 F-151/155/157/158/159/160 也算作未闭环，是本阶段被判 `partial` 的假理由**；
-真实理由自始至终只有上面这 3 条，而它们的工作量是**几个小改动 + 一句用户批准**，
-不是"做了很久还没 done"。
+真实理由自始至终只有 F-107 / F-156 / F-163 三条，而它们的工作量是**几个小改动 + 一句用户批准**，
+不是"做了很久还没 done"。**前两条本轮已做完 ⇒ 现在真的只差一句批准。**
 
 ## 6. 回归钉
 

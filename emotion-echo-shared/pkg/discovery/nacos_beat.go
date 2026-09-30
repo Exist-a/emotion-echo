@@ -8,11 +8,12 @@
 // 跳过 SDK 限制，按 BeatInstance 标准协议发送。
 //
 // BeatInstance 协议（Nacos 2.x OpenAPI）：
-//   POST {server}/nacos/v1/ns/instance/beat
-//   Params:
-//     ip, port, serviceName, groupName, namespaceId, beat (JSON string of BeatInfo)
-//   BeatInfo: { clusterName, ip, port, weight, metadata }
-//   Response: 200 OK {"clientBeatInterval": 5000}
+//
+//	POST {server}/nacos/v1/ns/instance/beat
+//	Params:
+//	  ip, port, serviceName, groupName, namespaceId, beat (JSON string of BeatInfo)
+//	BeatInfo: { clusterName, ip, port, weight, metadata }
+//	Response: 200 OK {"clientBeatInterval": 5000}
 //
 // 设计：保留现有 UpdateInstance 兜底（SDK 长连接断开时 fallback），新增 HTTP beat
 // 作为主通道。失败 → 退化为 UpdateInstance（向后兼容）。
@@ -36,6 +37,41 @@ import (
 // beatIntervalMS 默认 5s（与 Nacos 服务端默认一致）；SDK BeatInstance 响应
 // 会带 clientBeatInterval 字段，本实现固定 5s（Nacos 2.x 服务端也接受此间隔）。
 const defaultBeatIntervalMS = 5000
+
+// 续约失败日志的三条节流参数（E2E-23 F-107 / F-156 修复）。
+//
+// 修复前是 `if failCount <= 3`：**第 4 次连续失败起一条日志都不打**。
+// 而 BFF 的 HTTP beat 在 Nacos 3.x 下实测 **100% 失败**（`beat HTTP 501: no such api`
+// 在日志里出现过 ×9），即这条通道是恒死的 ——
+// "恒死 + 3 次后永久静默" = 运维永远看不到"这条路已经废了一年"。
+const (
+	// renewalFailureLogEvery：第 1 次失败必打，其后每 N 次再打一次。
+	// 按默认 5s 心跳算约每 60s 一条 —— 足够引起注意，又不至于刷屏。
+	// 关键性质：**永不永久静默**（旧实现的 `failCount <= 3` 恰好相反）。
+	renewalFailureLogEvery = 12
+
+	// beatChannelDeadAfter：连续失败达到该次数时，额外打一条**说明后果**的日志。
+	// 重复的 warn 只说明"又失败了一次"，这条说明"这条通道已长期不可用，
+	// 心跳实际由 SDK UpdateInstance 兜底" —— 运维据此能得出结论而不只是看到噪声。
+	beatChannelDeadAfter = 12
+)
+
+// shouldLogConsecutiveFailure 判定"第 n 次连续失败"（n 从 1 起）是否要打日志。
+//
+// 规则：第 1 次必打；其后每 every 次再打一次。
+// 本函数是"永不永久静默"这条性质的**唯一实现点**，单测直接锁住它。
+func shouldLogConsecutiveFailure(n, every int) bool {
+	if n <= 0 {
+		return false
+	}
+	if n == 1 {
+		return true
+	}
+	if every <= 0 {
+		every = 1
+	}
+	return n%every == 0
+}
 
 // BeatInfo 是 Nacos /instance/beat 端点的请求体（与 Java 客户端字段一致）。
 //
@@ -163,9 +199,23 @@ func (r *NacosRegistry) BeatHeartbeat(ctx context.Context, ins Instance, initial
 				if err != nil {
 					failCount++
 					// 失败兜底：SDK UpdateInstance（保持长连接）
-					if failCount <= 3 {
+					//
+					// 节流而非封顶：旧实现 `if failCount <= 3` 让第 4 次起**永久静默**，
+					// 而本通道在 Nacos 3.x 下恒 501 ⇒ 静默 = 这条路废了却没人知道。
+					if shouldLogConsecutiveFailure(failCount, renewalFailureLogEvery) {
 						slog.WarnContext(ctx, "nacos BeatInstance failed, fallback to SDK UpdateInstance",
 							"err", err, "fail_count", failCount)
+					}
+					if failCount == beatChannelDeadAfter {
+						// 只打一次，且说清后果 —— 重复的 warn 说明不了"这条路已经废了"
+						slog.WarnContext(ctx,
+							"nacos BeatInstance channel unavailable (long-term): "+
+								"Nacos 3.x 已移除 /nacos/v1/ns/instance/beat 端点，"+
+								"HTTP beat 通道在此环境下不会成功；"+
+								"实例续约实际由兜底的 SDK UpdateInstance 承担，服务不受影响",
+							"fail_count", failCount,
+							"fallback", "SDK UpdateInstance",
+							"endpoint", "/nacos/v1/ns/instance/beat")
 					}
 					_, _ = r.client.UpdateInstance(nacosvo.UpdateInstanceParam{
 						Ip:          beat.IP,
