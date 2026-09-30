@@ -39,7 +39,14 @@ const healthServiceFullName = "/grpc.health.v1.Health"
 
 // emotionQueryServiceName 是本服务在 gRPC health 中注册的业务 service 名。
 // 抽成常量：注册与停机翻转两处必须用同一个值，否则翻转漏掉业务 service。
-const emotionQueryServiceName = "emotion.User"
+const emotionQueryServiceName = "emotion_user.v1.UserService"
+
+// ⚠️ 这里的值必须是 **proto 生成的 ServiceDesc.ServiceName 原样**
+//    （可在 emotion-echo-shared 的 *_grpc.pb.go 里 grep 'ServiceName: "emotion_user.v1.UserService"' 复核）。
+// E2E-23 复核轮更正：本常量此前写的是 "emotion.User" —— **proto 里根本不存在这个名字**，
+//    导致 per-service 健康只有测试自己查得到，真实 gRPC 客户端一律 NOT_FOUND，
+//    而测试用同一字面量断言形成自证循环，永远绿。
+//    回归钉：scripts/test_grpc_health_shutdown.sh 第 6 条。
 
 // newServiceAwareUserIDInterceptor 跳过 health probe + Login/Register 的 user id 检查
 //

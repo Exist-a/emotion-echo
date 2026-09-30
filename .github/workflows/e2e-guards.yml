@@ -1,6 +1,6 @@
 name: e2e-guards
 
-# E2E-23 引入的静态守卫（2026-09-30）。
+# E2E-23 引入的静态守卫（2026-09-30；复核轮扩到 8 个）。
 #
 # 为什么是"静态"：这些守卫断言的是**配置与源码的一致性**
 # （compose / Helm healthcheck 指向、路由三方契约、dev-up 分批等待、
@@ -10,6 +10,10 @@ name: e2e-guards
 # 为什么不含 smoke_health_discovery.py：它要探测真实运行的服务
 # （`docker exec` 进容器网络、Nacos 注册数、网关链路），
 # runner 上没有 19 容器栈 ⇒ 保持"本地/收口时执行"。
+#
+# 为什么含 test_integration_tag_compiles.sh：默认 `go test ./...` 与 `go vet ./...`
+# 都**跳过** `//go:build integration` 的文件，于是那块代码没有任何门禁在管——
+# E2E-23 自己就因此留下一个语法错误还全绿（report §9.5）。
 #
 # 为什么含 test_route_contract.sh：它早于 E2E-23 就存在，但**从未接进任何
 # 执行路径** —— 本阶段新增 `GET /health/ready` 时它静默变红
@@ -50,10 +54,19 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: 前置（bash + python 可用）
+      # 第 8 个守卫需要 Go 工具链：`go vet -tags integration` 用来编译
+      # **带 build tag 的测试代码**。这类代码默认被 `go test ./...` 和
+      # `go vet ./...` 跳过 —— E2E-23 自己就因此漏过一个语法错误（见
+      # report §9.5 / 账本 E2E-F-167）。没有这一步，该守卫会因"无 go"判红。
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+
+      - name: 前置（bash + python + go 可用）
         run: |
           bash --version | head -1
           python --version
+          go version
 
       - name: 守卫 1/6 compose healthcheck 指向 readiness
         run: bash scripts/test_healthcheck_readiness.sh
@@ -75,3 +88,6 @@ jobs:
 
       - name: 守卫 7/7 三方路由契约（APISIX ↔ BFF ↔ 前端）
         run: bash scripts/test_route_contract.sh
+
+      - name: 守卫 8/8 build tag 下的代码也能编译
+        run: bash scripts/test_integration_tag_compiles.sh

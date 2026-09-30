@@ -4,11 +4,11 @@
 // Package integration_test 跑真实 Postgres + ai-svc emotionrepo + emotionquery proto 接口的端到端集成测试。
 //
 // 流程：
-//  - testcontainers 起 postgres:15-alpine
-//  - emotion_echo_ai schema + emotion_analysis 表
-//  - PostgresEmotionRepo 注入数据
-//  - 启真实 grpc.Server（注册 EmotionQueryService + 标准 grpc.health.v1 health）
-//  - 用 grpc.ClientConn + emotionhealth.Client + emotionquery.NewEmotionQueryServiceClient 真实交互
+//   - testcontainers 起 postgres:15-alpine
+//   - emotion_echo_ai schema + emotion_analysis 表
+//   - PostgresEmotionRepo 注入数据
+//   - 启真实 grpc.Server（注册 EmotionQueryService + 标准 grpc.health.v1 health）
+//   - 用 grpc.ClientConn + emotionhealth.Client + emotionquery.NewEmotionQueryServiceClient 真实交互
 //
 // 跑：  go test -tags integration -v -timeout 5m ./integration_test/...
 package integration_test
@@ -26,24 +26,27 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
-	emotionhealth "github.com/emotion-echo/shared/pkg/healthcheck"
 	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	emotionhealth "github.com/emotion-echo/shared/pkg/healthcheck"
 
 	"emotion-echo-ai-svc/internal/model"
 	"emotion-echo-ai-svc/internal/repository"
 
-	gormpg "gorm.io/driver/postgres"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+	gormpg "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
 
 // pgContainerDesc 起 Postgres 容器，初始化 emotion_echo_ai schema + emotion_analysis 表
+// grpcServerHealthSvcName 与生产构造函数注册的 per-service 名保持一致（proto 真名）。
+const grpcServerHealthSvcName = "emotion_ai.v1.EmotionQueryService"
+
 func pgContainerDesc(t *testing.T, ctx context.Context) (*pgcontainer.PostgresContainer, *gorm.DB) {
 	t.Helper()
 
@@ -112,7 +115,7 @@ func startFakeAIGRPCServer(t *testing.T, repo repository.EmotionRepo) (*grpc.Ser
 	)
 	healthSrv := health.NewServer()
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthSrv.SetServingStatus("emotion.AI", healthpb.HealthCheckResponse_SERVING)
+	healthSrv.SetServingStatus(grpcServerHealthSvcName, healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(gs, healthSrv)
 	emotionquery.RegisterEmotionQueryServiceServer(gs, &emotionQueryAdapter{repo: repo})
 
@@ -202,8 +205,8 @@ func TestAIGRPC_HealthCheckIntegration(t *testing.T) {
 
 	hc := emotionhealth.NewClient(conn)
 
-	// 1. Check("emotion.AI") → SERVING
-	st, err := hc.Check(ctx, "emotion.AI")
+	// 1. Check(真实 service 名) → SERVING
+	st, err := hc.Check(ctx, grpcServerHealthSvcName)
 	require.NoError(t, err)
 	require.Equal(t, emotionhealth.ServingStatusServing, st)
 
@@ -213,7 +216,7 @@ func TestAIGRPC_HealthCheckIntegration(t *testing.T) {
 	require.Equal(t, emotionhealth.ServingStatusServing, st)
 
 	// 3. WaitForReady
-	require.NoError(t, hc.WaitForReady(ctx, "emotion.AI", 2*time.Second))
+	require.NoError(t, hc.WaitForReady(ctx, grpcServerHealthSvcName, 2*time.Second))
 
 	// 4. Check 不存在的 service — grpc health 对 unknown service 返 NotFound error
 	// shared emotionhealth.Client.Check 已 normalizes error 为 ServiceUnknown

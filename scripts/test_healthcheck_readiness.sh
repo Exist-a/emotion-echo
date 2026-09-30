@@ -42,20 +42,20 @@ for port in "${PORTS[@]}"; do
   lineno="${line%%:*}"
   content="${line#*:}"
 
-  case "$content" in
-    *"/health/ready"*)
-      echo "PASS [port $port] healthcheck 指向 /health/ready（行 $lineno）"
-      pass=$((pass + 1))
-      ;;
-    *"/health ||"*)
-      echo "FAIL [port $port] healthcheck 仍指向 /health —— 依赖挂了也不会降级（行 $lineno）"
-      fail=$((fail + 1))
-      ;;
-    *)
-      echo "WARN [port $port] 路径形态未识别，需人工确认（行 $lineno）: $content"
-      fail=$((fail + 1))
-      ;;
-  esac
+  # ⚠️ 必须是**精确 URL 相等**，不能用 `*"/health/ready"*` 这种子串 glob。
+  #    第二方核对实测：把 URL 改成 `/health/readyXYZ` 时子串 glob 仍匹配 → 守卫报 GREEN，
+  #    弱断言（AP-01）。Helm 段已经用精确比较，这里必须同一标准。
+  url="$(printf '%s' "$content" | grep -o 'http://localhost:[0-9]*/[A-Za-z0-9/_-]*' | head -1)"
+  if [ "$url" = "http://localhost:${port}/health/ready" ]; then
+    echo "PASS [port $port] healthcheck → $url（行 $lineno，精确相等）"
+    pass=$((pass + 1))
+  elif [ -z "$url" ]; then
+    echo "FAIL [port $port] 该行里提取不出 http://localhost:${port}/... 形式的 URL（行 $lineno）: $content"
+    fail=$((fail + 1))
+  else
+    echo "FAIL [port $port] healthcheck → $url，期望精确等于 http://localhost:${port}/health/ready（行 $lineno）"
+    fail=$((fail + 1))
+  fi
 done
 
 # 一次性任务容器（db-migrate / apisix-seed）不应有 healthcheck：

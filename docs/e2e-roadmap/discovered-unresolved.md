@@ -344,7 +344,27 @@ pie `radius`/`center` 未分离：图例占位挤进了绘图区。属**版面�
 （元素是否完整落在视口内），否则会"从坏证据推出真缺陷"。本页 `window.scrollTo` 无效
 （布局由内层容器滚动），加高视口是本机可靠手段 |
 
-**累计编号至此 166 项**（E2E-F-163 `Resume()` 未接线待用户裁定；F-164 7 处 pre-existing 坏相对链接；F-165 图例重叠待修；F-166 一次被推翻的假缺陷，仅留方法论）。
+| E2E-F-167 | **E2E-23 复核轮（2026-09-30）** | 🔴 **本仓库的 `-tags integration` 构建长期编译不过，无任何门禁发现**。
+三处，其中一处是本阶段自己造成的：
+① **ai-svc（E2E-23 自己引入，commit `81da12d`）** —— 改 `Consumer.Consume` 签名时把集成测试里一行
+`}()` 手误改成 `}(, nil)`，又漏了新增的第 8 个参数 ⇒ `dlq_integration_test.go` 语法错误。**已在本轮修掉**。
+② **user-svc（pre-existing）** —— `integration_test/user_integration_test.go:97: unknown field Phone in
+struct literal of type model.User`（`Phone` 字段早已从 model 移除，集成测试没跟着改）。
+**这正是 anti-patterns.md AP-09 里当例子引用的那一处**，说明它坏了很久。
+③ **web-bff（pre-existing）** —— `integration_test/bff_integration_test.go:99: cannot use fakeAI ... as
+config.Config value`（handler 构造签名变更后集成测试未同步）。
+**为什么全绿**：三者都带 `//go:build integration`，而 `go test ./...`、`go vet ./...`、CI 的 go-test
+**默认全部跳过 build tag 下的文件** ⇒ AGENTS.md §1.1 要求的 `go test -tags integration ./...`
+从来没被真正执行过 | 没有任何门禁编译 build tag 下的代码。集成测试只"存在"、从不被执行，
+是 AP-10「孤儿产出物」的最隐蔽形态（连"文件已创建"都不是，是**不可编译的已创建**） |
+**E2E-06 / E2E-03**（集成测试基线与 CI 覆盖）| 🟡 **降级并记录（ratchet 模式）**：
+新增守卫 `scripts/test_integration_tag_compiles.sh`（已接入 `e2e-guards.yml` 第 8 项）。
+语义是**棘轮**：user-svc / web-bff 在守卫的 `KNOWN_BROKEN` 清单里 ⇒ 报醒目 WARN 但**不判红**
+（常红门禁会训练出"看见红色就跳过"，正是 AP-11 的成因）；**任何清单外的模块编译不过一律判红**。
+WARN 数量只会单调下降；每修好一项就删一行清单，守卫自动转严。负向对照已做（往 chat-svc 塞一个
+坏文件 ⇒ `FAIL 1 / rc=1`） |
+
+**累计编号至此 167 项**（E2E-F-163 `Resume()` 未接线待用户裁定；F-164 7 处 pre-existing 坏相对链接；F-165 图例重叠待修；F-166 一次被推翻的假缺陷，仅留方法论；**F-167 build tag 代码无人编译，本阶段引入的那处已修，另 2 处 pre-existing 走 ratchet**）。
 
 
 **PR #64 状态**：已开，2 commits pushed 到 fix 分支（`fix/e2e-16-full-multimodal-fix`），23 项 required status checks 状态 pending — GitHub runner 临时延迟或权限问题（4 workflow 均已配 `pull_request: branches: [main]` trigger，trigger 配置无误）。**合并策略**：① 等 GitHub 端自动恢复（runner 排队超时通常 5-10 分钟）；② 若持续不启动，下一轮单独开 PR 排查 CI trigger；③ 临时 admin override（需仓库管理员在网页端操作）。本会话核心交付已完成（5 修复 + 9 测试 + 本地全绿 + typecheck + go vet/build 干净）。

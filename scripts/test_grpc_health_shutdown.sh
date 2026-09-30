@@ -15,13 +15,18 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# 服务目录 → gRPC service 名
+# 服务目录 → (目录, 真实 gRPC service 全名)
+#
+# ⚠️ 真实名必须**从 proto 生成的 pb.go 里查**（`ServiceName: "..."`），
+#    凭直觉写会写成 proto 里不存在的名字 —— 那种名字注册进 health server 后
+#    只有测试自己查得到，真实 gRPC 客户端（APISIX grpc-health-check 等）一律 NOT_FOUND。
+#    这正是本守卫第 6 条要防的事。
 SERVICES=(
-  "emotion-echo-user-svc"
-  "emotion-echo-chat-svc"
-  "emotion-echo-analytics-svc"
-  "emotion-echo-assessment-svc"
-  "emotion-echo-ai-svc"
+  "emotion-echo-user-svc:emotion_user.v1.UserService"
+  "emotion-echo-chat-svc:emotion_chat.v1.ChatService"
+  "emotion-echo-analytics-svc:emotion_analytics.v1.AnalyticsService"
+  "emotion-echo-assessment-svc:emotion_assessment.v1.AssessmentService"
+  "emotion-echo-ai-svc:emotion_ai.v1.EmotionQueryService"
 )
 
 fail=0
@@ -29,7 +34,9 @@ pass=0
 
 echo "== E2E-23 gRPC health 停机翻转守卫 =="
 
-for svc in "${SERVICES[@]}"; do
+for entry in "${SERVICES[@]}"; do
+  svc="${entry%%:*}"
+  real_name="${entry#*:}"
   f="$REPO_ROOT/$svc/internal/grpcserver/server.go"
 
   if [ ! -f "$f" ]; then
@@ -82,6 +89,21 @@ for svc in "${SERVICES[@]}"; do
     pass=$((pass + 1))
   else
     echo "FAIL [$svc] 未写入 NOT_SERVING —— 翻转是空壳"
+    fail=$((fail + 1))
+  fi
+
+  # 6) 停机翻转必须覆盖**真实 gRPC service 名**（不只是 "" 服务器级）
+  #
+  #    背景（第二方核对 2026-09-30 抓出）：此前 5 个服务注册的 per-service 名是
+  #    `emotion.User` / `emotion.Chat` / `emotion.AI` ... —— 这些名字**在 proto 里不存在**，
+  #    真实全名是 `emotion_user.v1.UserService` 之类（见 emotion-echo-shared 的
+  #    `ServiceName: "..."`）。后果：真实客户端用真名 Check 会拿到 NOT_FOUND，
+  #    per-service 健康**实际不可查询**；而因为测试用同一个字面量断言，永远绿（自证循环）。
+  if grep -q ""$real_name"" "$f"; then
+    echo "PASS [$svc] health 注册了真实 service 名 $real_name"
+    pass=$((pass + 1))
+  else
+    echo "FAIL [$svc] health 未注册真实 service 名 $real_name —— per-service 健康对真实客户端不可查询"
     fail=$((fail + 1))
   fi
 done

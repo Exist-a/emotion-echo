@@ -12,9 +12,9 @@
 //   - Start a real Server on an ephemeral port (Addrr returns ":0"
 //     before Listen; we override via a tiny test helper).
 //   - Dial a gRPC client over loopback and exercise:
-//     - GetEmotionByMessage (happy / not-found / invalid arg / repo err)
-//     - GetEmotionByConversation (happy / limit-clamping / invalid arg)
-//     - Health check (standard grpc.health.v1)
+//   - GetEmotionByMessage (happy / not-found / invalid arg / repo err)
+//   - GetEmotionByConversation (happy / limit-clamping / invalid arg)
+//   - Health check (standard grpc.health.v1)
 //   - All tests share an in-memory EmotionRepo.
 //
 // We avoid bufconn / shared memory transports because grpc v1.80
@@ -39,8 +39,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/credentials/insecure"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -251,7 +251,10 @@ func TestGetEmotionByConversation_ZeroConvID_ReturnsInvalidArgument(t *testing.T
 
 // TestHealthCheck_Serving verifies the standard grpc.health.v1
 // endpoint returns SERVING for both the empty service name and the
-// "emotion.AI" service name registered by the production constructor.
+// emotionQueryServiceName（= proto 真名 emotion_ai.v1.EmotionQueryService），
+// 由生产构造函数注册。E2E-23 复核轮更正：此处此前写死字面量 "emotion.AI"，
+// 与实现共享同一个错误前提 ⇒ 常量一旦写错测试照样绿。改为引用常量后，
+// 常量错会被 TestGrpcHealth_RegisteredNameMatchesProtoServiceName 抓住。
 func TestHealthCheck_Serving(t *testing.T) {
 	repo := repository.NewInMemoryEmotionRepo()
 	_, conn, cleanup := startTestServer(t, repo)
@@ -259,7 +262,7 @@ func TestHealthCheck_Serving(t *testing.T) {
 
 	healthClient := healthpb.NewHealthClient(conn)
 
-	for _, svc := range []string{"", "emotion.AI"} {
+	for _, svc := range []string{"", emotionQueryServiceName} {
 		t.Run("service="+svc, func(t *testing.T) {
 			resp, err := healthClient.Check(context.Background(), &healthpb.HealthCheckRequest{
 				Service: svc,

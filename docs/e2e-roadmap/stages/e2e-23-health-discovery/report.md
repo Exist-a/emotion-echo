@@ -34,10 +34,10 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 6 | BFF 未注册 Nacos ⇒ `/health` 报 degraded | `[A]` | PASS | `NacosRuntime.registered atomic.Bool`：注册成功后置 true、`Close()` 置 false；探针接入 `/health` 的 `deps.nacos`；Nacos 未启用时**不注册该探针**（避免误伤无 Nacos 的部署）。单测 6 例 + 负向对照 | "BFF 掉出注册"属破坏性场景，**运行时未实测**（如实记录） |
 | 7 | chat-svc `EventPublisher` 是真连还是仅判 nil | `[A]` | PASS | `healthlogic.go:43-52` 锁死现状并加注释：「此处只判非 nil，并不真连 Kafka」 | 现状 = **仅判 nil**。plan §2 A2 要求"二选一不得留模糊"，本轮选择**明确记录现状**而非改造真连（后者需 Kafka 连接探测设计，超出本轮） |
 | 8 | `/health/ready` 存在且不通返 503 | `[A]` | PASS | `go test ./pkg/middleware/ -run HealthReadyRoute -count=1 -v` → 6 子用例 `PASS`；`go test ./internal/handler/ -run D29Readiness` → `ok 0.632s` | |
-| 9 | compose healthcheck 指向 ready | `[A]` | PASS | `bash scripts/test_healthcheck_readiness.sh` → `PASS: 7  FAIL: 0` + `GREEN`；`docker inspect emotion-echo-user-svc --format '{{json .Config.Healthcheck.Test}}'` → `["CMD-SHELL","wget --quiet ... /health/ready || exit 1"]` | 负向对照：改回 `/health` → RED |
+| 9 | compose healthcheck 指向 ready | `[A]` | PASS | `bash scripts/test_healthcheck_readiness.sh` → `PASS: 25  FAIL: 0` + `GREEN`（6 compose + 1 一次性容器 + 6 Helm 静态 readiness + 6 Helm 静态 liveness + 6 Helm 渲染）；`docker inspect emotion-echo-user-svc --format '{{json .Config.Healthcheck.Test}}'` → `["CMD-SHELL","wget --quiet ... /health/ready || exit 1"]` | 负向对照：改回 `/health` → RED |
 | 10 | `seed.sh` 自带探针在依赖降级下行为正确 | `[A]` | PASS | **运行时前后对照**：正常态 5 个 `upstream OK: .../health/ready`；**停 Postgres 后** `FATAL: upstream emotion-echo-web-bff:8894/health/ready not healthy` → **exit=2 中止**（改前探恒 200 的 liveness，**这一步会通过**）；恢复后 11 处 OK | 原探针打 `/health`（liveness 恒 200）⇒ **结构上不可能发现降级**，形同虚设。已改指 `/health/ready` |
 | 11 | user-svc / chat-svc 补齐 `/health` handler 测试 | `[A]` | PASS | `go test ./internal/handler/ -run D29Readiness -count=1` → `ok`；`go test ./internal/logic/ -run TestHealthLogic -count=1` → `ok 0.576s` | 二者此前**零** `/health` 测试 |
-| 12 | 5 服务 gRPC health service 名正确 | `[A]` | PASS | `go test ./internal/grpcserver/ -run GrpcHealth -count=1` → 4/4 `PASS`（20.7s） | |
+| 12 | 5 服务 gRPC health service 名正确 | `[A]` | PASS | `bash scripts/test_grpc_health_shutdown.sh` → `PASS: 30  FAIL: 0` + `GREEN：5 个服务的 gRPC health 均会在停机时翻转为 NOT_SERVING`；`cd emotion-echo-ai-svc && go test ./internal/grpcserver/ -run TestGrpcHealth -count=1` → `ok  emotion-echo-ai-svc/internal/grpcserver  25.686s` | **🔴 第二方核对推翻原判定，已 TDD 修**：原判"名正确"是错的 —— 5 个服务注册的 per-service 名是 `emotion.User` / `emotion.Chat` / `emotion.Analytics` / `emotion.Assessment` / `emotion.AI`，**这些名字在 proto 里根本不存在**（真实全名 `emotion_user.v1.UserService` 等，取自 `emotion-echo-shared/*_grpc.pb.go` 的 `ServiceName`）。后果：真实 gRPC 客户端用真名 `Check()` 拿到 `NOT_FOUND`，**per-service 健康实际不可查询**；原测试用同一字面量断言 ⇒ **自证循环、永远绿**。处置：守卫加第 6 条（RED `PASS: 25 FAIL: 5`）→ 改 5 个 `server.go`（GREEN `30/0`）→ 补 `TestGrpcHealth_RegisteredNameMatchesProtoServiceName`（负向对照：改回 `emotion.AI` 立即 FAIL）|
 | 13 | 优雅停机翻 `NOT_SERVING` | `[A]` | PASS | `--- PASS: TestGrpcHealth_FlipsToNotServingOnShutdown (5.01s)`，起真实 gRPC server + shared healthcheck 客户端 | 修复前**无任何 NOT_SERVING 写入**（plan §0 F-d） |
 | 14 | 恢复后翻回 `SERVING`（`Resume()`） | `[A]` | N/A | — | **语义不适用 + 记录为降级**：停机是单向终态，无"暂停后恢复"路径；接线会让 `Resume()` 成为**孤儿代码**（AP-10）。plan B1 曾要求接线，实际只接 `Shutdown()` —— 按 §4.2 本应走"主动放弃 → BLOCKED + 用户批准 + 账本降级"，**未经批准故仍列待裁定**（见 §10 第 1 项）。`Resume()` 本体在 `shared/pkg/healthcheck/server.go:158` 保留待用 |
 | 15 | `ai-svc` 客户端按状态分流 | `[A]` | PASS | **定案：只做启动期门禁，请求期不分流**。依据 `grpc_analyzer.go:91-99`：`NewGRPCAnalyzer` 内一次 `WaitForReady`，不通过则关连接返错；此后业务 RPC 不再查 health。测试：NOT_SERVING 时构造必须失败 + 对照组（否则可能因"连不上"假通过）+ 负向对照（绕过门禁立即红） | 不一定是缺陷（每请求探一次代价高），但**必须写进文档**，否则运维会误以为"health 翻 NOT_SERVING ⇒ 客户端自动绕开" |
@@ -146,11 +146,11 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 
 ## 6. 回归钉
 
-- 新增 `scripts/test_healthcheck_readiness.sh`（7/7）
+- 新增 `scripts/test_healthcheck_readiness.sh`（**25/25**；初版 7 项，复核轮加了 Helm 静态 12 项 + 渲染 6 项）
 - 新增 `scripts/test_grpc_health_shutdown.sh`（25/25）
 - 新增 `scripts/test_nacos_required_declared.sh`（3/3）
 - 新增 `scripts/test_migrate_pg_wait.sh`（4/4）
-- 新增 `scripts/test_obs_healthchecks.sh`（15/15）
+- 新增 `scripts/test_obs_healthchecks.sh`（**18/18**；16 常驻 + 2 一次性。⚠️ 第二方核对实测：**它只断言 `healthcheck:` 键存在，不校验探针端点** —— 把 grafana 探针端口改到永远不通的 `:9999`，守卫仍报 GREEN。端点正确性目前靠人工一次性验证，不是回归钉）
 - 新增 `scripts/test_devup_batch_waits.sh`（3/3）
 - 新增 `scripts/_extract_compose_block.py`、`scripts/_check_devup_batches.py`（守卫辅助，非独立门禁）
 - Go 单测：5 份 `healthlogic_contract_test.go` + 1 份 `health_ready_handler_test.go` + 1 份 `health_ready_test.go` + 1 份 `server_health_transition_test.go` + 1 份 `health_endpoint_auth_test.go` + 1 份 `health_routes_wiring_test.go`
@@ -396,6 +396,53 @@ grafana/loki/minio/prometheus/alertmanager），BFF 因 Nacos 不可达而 unhea
 逐个跑全部正常；两个 `.sh` 也已有 `PYTHON_BIN` 绝对路径 + `command -v python3 || python` 兜底链。
 已订正记忆。残留的真问题只有：`PYTHON_BIN` 默认值是本机绝对路径，且这两个脚本不在 CI 里。
 
+## 9.5 第二方独立复核（2026-09-30，40 个测试点全量重验）
+
+独立子代理，任务书明写"执行者自证一律不可信、须独立跑命令"，共 113 次工具调用 / 104 分钟。
+
+### 总判
+
+**PASS 成立 25 项 / 判定存疑或证据不足 9 项 / 复现不了 6 项**
+
+**没有抓到"文件已创建"式的假 PASS**（AP-01 零命中），37/0/1/2 的算术经其独立统计确认正确。
+但抓到 **2 处真 soft assert（守卫自身假绿）**、**1 处结论相反**、多处数字与事实不一致。
+
+### 已处置（本轮修完）
+
+| # | 问题 | 严重度 | 处置 |
+|---|------|--------|------|
+| V-6 | **#12 结论相反（本阶段自造）**：注册的 per-service 名 `emotion.AI` 等 5 个名字 **proto 里不存在**；真实客户端 `Check()` 得 `NOT_FOUND`；原测试用同一字面量 ⇒ 自证循环永远绿 | 🔴 | 守卫加第 6 条（RED 5 FAIL）→ 5 个 `server.go` 改 proto 真名（GREEN 30/0）→ 补 `TestGrpcHealth_RegisteredNameMatchesProtoServiceName`（负向对照 FAIL）。**报告 §2 #12 判定已更正** |
+| V-7 | **我的守卫 compose 段是子串 glob**（`case ... in *"/health/ready"*`）：核对者把 URL 改成 `/health/readyXYZ`，守卫仍报 GREEN | 🟠 | 改**精确 URL 相等**。负向对照：注入 `/health/readyXYZ` → `FAIL 1 / rc=1`；还原 `rc=0`。现与 Helm 段同一标准 |
+| V-8 | **`-tags integration` 构建编译不过且无人发现**：核对过程中 `gofmt` 暴露出 `ai-svc/integration_test/dlq_integration_test.go` 语法错误 —— 查 git 确认是**本阶段 commit `81da12d` 手误**（`}()` → `}(, nil)` 且漏了 `Consume` 新增的第 8 参数）。带 `//go:build integration` ⇒ `go test ./...` / `go vet ./...` / CI **全部跳过**，所以全绿 | 🔴 | ① 修好 ai-svc；② 顺藤查出 **user-svc 与 web-bff 也早已编译不过**（pre-existing，user-svc 那处正是 anti-patterns AP-09 当例子引用的 `unknown field Phone`）；③ 新增守卫 `scripts/test_integration_tag_compiles.sh`（**ratchet 语义**）接入 `e2e-guards.yml` 第 8 项；④ 账本 E2E-F-167 |
+| V-9 | #9 证据写 `PASS: 7 FAIL: 0`（加 Helm 前的旧值，实为 25）、§6 写 `7/7` 与 `15/15`（实为 25/25、18/18）、§10 写"4 个 workflow 零引用"（守卫已全部接入） | 🟡 | 三处数字全部更正 |
+| V-10 | #26 观测守卫**只断言 `healthcheck:` 键存在，不校验端点** —— 核对者把 grafana 探针端口改到永远不通的 `:9999`，守卫仍 GREEN | 🟡 | 如实标注进 §6 与 §2 #26 备注：**端点正确性目前靠人工一次性验证，不是回归钉**。不修（修它要"对运行中容器发请求"，已超静态守卫范畴），记入待办 |
+
+### 我复核后**驳回**的一条（不能照单全收）
+
+核对者称「`e2e-guards.yml` 没装 helm ⇒ 该守卫在 GitHub runner 上**必然 FAIL**，与'CI 5 workflow 全绿'冲突」。
+**这条不成立**：Actions API 实测 `4efec2b` 的 `e2e-guards` = `success`，而守卫在无 helm 时 `exit 1` ——
+两者只能同时成立于"runner 自带 helm"（GitHub `ubuntu-latest` 镜像确实预装）。
+**未加 helm 安装步骤不是缺陷**；但为消除隐式依赖，仍显式加了 `actions/setup-go`（第 8 个守卫需要），
+helm 保持使用 runner 预装版并在守卫里保留"缺失即判红"的显式分支。
+
+### 核对者复现不了的（如实转述，不做"已核实"声称）
+
+- **#2 / #5 / #10**（停 Postgres、停 Redis 的降级行为）：破坏性实验未复跑。
+  **注**：本轮我已亲自做过等价的运行时验证（停 Redis + Postgres → `/health` 200+`degraded`、
+  `/health/ready` 503，恢复回 ok，见 §9.4 ②），但那是**换时点的独立复现**，不等于它复现了原测试点。
+- **#18~#23**（Nacos 自愈/重注册/beat 501/APISIX 跟随）：需停起 Nacos 100~190s，未做。
+- **#30~#32**（热更 14 参数运行时）：需推 Nacos 配置，会改动共享配置中心，未做。
+  核对者判"接线完整、可热更的结论成立"但"运行时实测"复现不了。
+- **#27**（db-migrate `Exited(0)`）：需重建容器，未做。
+- **#38**（IAB 浏览器）：未重跑浏览器，但**看了截图**并确认数据真实（见 §9.4 ③，本轮我自己重跑了）。
+
+### 核对者独立复现成功的（可作为独立佐证）
+
+`#17` Nacos `count:6`（6 个名字与报告完全一致）、`#22` `NACOS_REQUIRED` dev 段（并确认 prod 段只命中注释行，
+即 C-8 描述准确）、`#25` APISIX 镜像内**无任何 HTTP 客户端**（`which wget curl nc busybox` 全空）、
+`#39` 截图 6 个 upstream 名字全对。核对者对 `test_grpc_health_shutdown.sh` / `test_migrate_pg_wait.sh` /
+`test_devup_batch_waits.sh` / `test_route_contract.sh` 四个守卫的自评是"**不能假绿**"，并各做了负向对照。
+
 ## 10. 下轮建议
 
 原列的 4 项（C 组破坏性实验 / F 组回归钉 / E 组 14 参数 / #5#6）**均已于本轮完成**
@@ -406,7 +453,8 @@ grafana/loki/minio/prometheus/alertmanager），BFF 因 Nacos 不可达而 unhea
    （按 §4.2，主动放弃须走 BLOCKED + 批准 + 账本记录，不能以 N/A 了结）
 2. ~~#26 范围内的 skywalking healthcheck~~ ✅ **已完成**（2026-09-30，见 §2 #26 行）
 3. **C-5 后续：把 `e2e-guards` 接为 required check**（workflow 已建并在 CI 上 success，见 §9.1）—— ——
-   当前 4 个 workflow 中零引用，门禁价值未兑现
+   ✅ **已兑现**（复核轮）：8 个静态守卫已全部接入 `.github/workflows/e2e-guards.yml`（第 1~8 项）
+   —— 2026-09-30 初核时这里还写着"4 个 workflow"，是守卫接入前的陈旧叙述
 4. **C-4：`check_adr_gate.sh` 是空转门禁**（`git ls-tree` 判整棵树是否含 ADR 路径，
    本仓永远命中）—— 修它，否则 §13.3 #15 的机械校验永远无意义
 5. **健康契约 ADR** —— plan §8 承诺的 `adr-2026-09-health-check-contract.md` 未建；

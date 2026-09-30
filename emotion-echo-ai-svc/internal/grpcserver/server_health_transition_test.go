@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/emotion-echo/shared/pkg/healthcheck"
 
 	"google.golang.org/grpc"
@@ -26,7 +27,7 @@ func TestGrpcHealth_ReportsServingWhileRunning(t *testing.T) {
 	defer stop()
 	client := healthcheck.NewClient(conn)
 
-	for _, name := range []string{"", "emotion.AI"} {
+	for _, name := range []string{"", emotionQueryServiceName} {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		status, err := client.Check(ctx, name)
 		cancel()
@@ -52,7 +53,7 @@ func TestGrpcHealth_FlipsToNotServingOnShutdown(t *testing.T) {
 
 	// 先确认当前是 SERVING（否则后面的翻转无从谈起）
 	ctx0, cancel0 := context.WithTimeout(context.Background(), 3*time.Second)
-	before, err := client.Check(ctx0, "emotion.AI")
+	before, err := client.Check(ctx0, emotionQueryServiceName)
 	cancel0()
 	if err != nil {
 		t.Fatalf("停机前探活失败：%v", err)
@@ -70,7 +71,7 @@ func TestGrpcHealth_FlipsToNotServingOnShutdown(t *testing.T) {
 	var lastErr error
 	for time.Now().Before(deadline) {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		lastStatus, lastErr = client.Check(ctx, "emotion.AI")
+		lastStatus, lastErr = client.Check(ctx, emotionQueryServiceName)
 		cancel()
 		if lastErr == nil && lastStatus == healthcheck.ServingStatusNotServing {
 			return // 成功翻转
@@ -96,7 +97,7 @@ func TestGrpcHealth_MarkShuttingDownIsIdempotent(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	status, err := client.Check(ctx, "emotion.AI")
+	status, err := client.Check(ctx, emotionQueryServiceName)
 	if err != nil {
 		t.Fatalf("重复调用后探活失败：%v", err)
 	}
@@ -126,3 +127,40 @@ func TestGrpcHealth_UnknownService(t *testing.T) {
 
 // 编译期确认 client 参数类型，避免误传。
 var _ func(*grpc.ClientConn) *healthcheck.Client = healthcheck.NewClient
+
+// TestGrpcHealth_RegisteredNameMatchesProtoServiceName 钉住"注册名必须是 proto 真名"。
+//
+// 这条测试存在的理由：E2E-23 复核轮发现注册名是 `emotion.AI` —— proto 里不存在这个名字。
+// 后果是 per-service 健康只有测试自己查得到，真实 gRPC 客户端一律 NOT_FOUND；
+// 而旧测试用同一个字面量断言，与实现共享错误前提 ⇒ 永远绿（自证循环）。
+//
+// 现在断言的基准是**独立来源**：emotion-echo-shared 生成的 pb.go 里的 ServiceDesc.ServiceName。
+func TestGrpcHealth_RegisteredNameMatchesProtoServiceName(t *testing.T) {
+	const wantRealName = "emotion_ai.v1.EmotionQueryService" // = emotionquery.EmotionQueryService_ServiceDesc.ServiceName
+
+	if emotionQueryServiceName != wantRealName {
+		t.Fatalf("注册的 per-service 名 = %q，应为 proto 真名 %q；"+
+			"写成 proto 里不存在的名字会让真实客户端 Check 时拿到 NOT_FOUND，"+
+			"而只被自己写的测试查到（自证循环）",
+			emotionQueryServiceName, wantRealName)
+	}
+
+	// 反向确认：这个名字确实来自 proto，而不是凭空捏造
+	if got := emotionquery.EmotionQueryService_ServiceDesc.ServiceName; got != wantRealName {
+		t.Fatalf("基准本身错了：pb.go 里 ServiceDesc.ServiceName = %q，期望 %q", got, wantRealName)
+	}
+
+	// 且真实名字必须真的可查（不只是常量对上了）
+	_, conn, stop := startTestServer(t, nil)
+	defer stop()
+	client := healthcheck.NewClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	status, err := client.Check(ctx, wantRealName)
+	if err != nil {
+		t.Fatalf("用 proto 真名探活失败：%v", err)
+	}
+	if status != healthcheck.ServingStatusServing {
+		t.Fatalf("用 proto 真名探活得到 %v，期望 SERVING", status)
+	}
+}
