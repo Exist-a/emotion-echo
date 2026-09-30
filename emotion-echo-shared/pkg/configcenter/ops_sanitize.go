@@ -33,18 +33,29 @@ import "strings"
 // 若直接拿 dataId 规则去匹配 key，`auth_token` 会被切成
 // ["auth","token"] 而 `.token` 后缀匹配不到整串 ⇒ **漏判**。
 // 词根集合让两种命名风格都能被覆盖。
-var sensitiveBaseNames = map[string]bool{
+// credentialNames 是**凭据类**词根：出现在 key 的任意段即判敏感，
+// 与分隔符无关（`auth_token` / `db.password` / `main-dsn` 都命中）。
+var credentialNames = map[string]bool{
 	"password": true,
 	"secret":   true,
 	"token":    true,
 	"dsn":      true,
 	"jwt":      true,
-	"database": true,
-	"db":       true,
+	"apikey":   true,
+	"api_key":  true,
+}
+
+// componentNames 是**组件/服务类**词根：仅当它们作为点号命名空间的
+// 第一段时判敏感（`llm.api_key`），而 `llm_timeout` 这类**运营参数名**
+// 不判 —— 后者被误删会导致合法配置静默失效（比漏判更难排查）。
+var componentNames = map[string]bool{
+	"llm":      true,
 	"kafka":    true,
+	"db":       true,
+	"database": true,
 	"openai":   true,
 	"deepseek": true,
-	"llm":      true,
+	"postgres": true,
 }
 
 // IsSensitiveOpsKey 判定 ops 配置里的一个 key 是否敏感。
@@ -69,17 +80,39 @@ func IsSensitiveOpsKey(key string) bool {
 			return true
 		}
 	}
-	// 整串前缀（覆盖 postgres_password 这种无分隔符的既有前缀）
+	// 整串前缀：**仅保留带点号的形态**（`llm.xxx` / `db.xxx`）。
+	//
+	// 不能退化成 `HasPrefix(k, "llm")` —— 那样 `llm_timeout` 会被误判
+	// （E2E-23 实施期实测踩到：整份 ai-svc ops 配置被剔得只剩 7 项）。
+	// 无分隔符的老前缀（如 `postgres_password`）由 credentialNames 的
+	// `password` 段覆盖，不需要在这里兜。
 	for _, p := range sensitivePrefixes {
-		if strings.HasPrefix(k, p) || strings.HasPrefix(k, strings.TrimSuffix(p, ".")) {
+		if strings.HasSuffix(p, ".") && strings.HasPrefix(k, p) {
 			return true
 		}
 	}
-	// 逐段词根
-	for _, seg := range strings.FieldsFunc(k, func(r rune) bool {
+	// 逐段词根。
+	//
+	// ⚠️ 关键区分（E2E-23 实施期实测踩到）：`llm` / `kafka` / `db` 这类
+	// **服务名或组件名**出现在 key 里时，往往是**合法运营参数**
+	// （`llm_timeout` / `kafka_max_retries` / `db_pool_size`），
+	// 而非敏感凭据。真正敏感的是它们作为**命名空间前缀**时的子项
+	// （`llm.api_key` / `db.password`）。
+	//
+	// 故：组件类词根**仅在点号命名空间下**判定（`llm.xxx`），
+	// 下划线形式（`llm_timeout`）不判敏感；而凭据类词根
+	// （password / secret / token / dsn）无论何种分隔符都判敏感。
+	segs := strings.FieldsFunc(k, func(r rune) bool {
 		return r == '.' || r == '_' || r == '-'
-	}) {
-		if sensitiveBaseNames[seg] {
+	})
+	for _, seg := range segs {
+		if credentialNames[seg] {
+			return true
+		}
+	}
+	// 点号命名空间的组件前缀：`llm.api_key` / `db.password`
+	if i := strings.Index(k, "."); i > 0 {
+		if componentNames[k[:i]] {
 			return true
 		}
 	}

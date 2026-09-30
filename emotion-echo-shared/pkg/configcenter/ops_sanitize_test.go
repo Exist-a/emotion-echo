@@ -60,10 +60,10 @@ func TestSanitizeOpsContent_RejectsSensitiveKeys(t *testing.T) {
 			wantKept:    []string{"limit_count"},
 		},
 		{
-			name:        "nested sensitive key is dropped",
+			name:        "nested sensitive key is dropped, namespace kept",
 			content:     "limit_count: 5\ndb:\n  password: x\n",
-			wantDropped: []string{"db.password"},
-			wantKept:    []string{"limit_count"},
+			wantDropped: []string{"password"},
+			wantKept:    []string{"limit_count", "db:"},
 		},
 	}
 

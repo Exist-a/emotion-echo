@@ -1,17 +1,21 @@
-
 package svc
 
 import (
 	"emotion-echo-ai-svc/internal/aiclient"
 	"emotion-echo-ai-svc/internal/analyzer"
 	"emotion-echo-ai-svc/internal/config"
+	"emotion-echo-ai-svc/internal/ops"
 	"emotion-echo-ai-svc/internal/repository"
+	"time"
 
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 )
 
 type ServiceContext struct {
-	Config     config.Config
+	Config config.Config
+	// Ops 运营参数容器（E2E-23 #31 / D-32）。nil 时热更钩子不装，
+	// 行为与热更前完全一致（单测 / 未启用配置中心的部署）。
+	Ops         *ops.Ops
 	EmotionRepo repository.EmotionRepo
 
 	// Stage 22-A: 多模态 AI 模型客户端（任一可为 nil）。
@@ -47,11 +51,11 @@ func NewServiceContext(c config.Config, repo repository.EmotionRepo,
 	fusedRepo repository.FusedEmotionRepo,
 ) *ServiceContext {
 	return &ServiceContext{
-		Config:             c,
-		EmotionRepo:        repo,
-		FaceEmotionRepo:    faceRepo,
-		VoiceEmotionRepo:   voiceRepo,
-		FusedEmotionRepo:   fusedRepo,
+		Config:           c,
+		EmotionRepo:      repo,
+		FaceEmotionRepo:  faceRepo,
+		VoiceEmotionRepo: voiceRepo,
+		FusedEmotionRepo: fusedRepo,
 	}
 }
 
@@ -82,6 +86,16 @@ func (s *ServiceContext) InitMultiModal() {
 	svClient := aiclient.NewSenseVoiceClient(aiclient.Config{BaseURL: s.Config.SenseVoice.BaseURL, Timeout: s.Config.SenseVoice.Timeout})
 	xttsClient := aiclient.NewXTTSClient(aiclient.Config{BaseURL: s.Config.XTTS.BaseURL, Timeout: s.Config.XTTS.Timeout},
 		s.Config.XTTS.Language, s.Config.XTTS.Speed)
+
+	// E2E-23 #31（D-32）：装上运行时取值钩子，使 9 个运营参数可经 Nacos 热更。
+	// Ops 为 nil（未启用配置中心 / 单测）时钩子不装，行为与热更前完全一致。
+	if s.Ops != nil {
+		ferClient.TimeoutFn = func() time.Duration { return s.Ops.Snapshot().FERTimeout }
+		svClient.TimeoutFn = func() time.Duration { return s.Ops.Snapshot().SenseVoiceTimeout }
+		xttsClient.TimeoutFn = func() time.Duration { return s.Ops.Snapshot().XTTSTimeout }
+		xttsClient.LanguageFn = func() string { return s.Ops.Snapshot().XTSLanguage }
+		xttsClient.SpeedFn = func() float64 { return s.Ops.Snapshot().XTSSpeed }
+	}
 
 	// Assign to interface fields (production) AND keep concrete refs
 	// for the analyzer (which still takes concrete *aiclient.*Client).

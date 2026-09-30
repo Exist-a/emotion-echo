@@ -146,7 +146,7 @@ func TestKafka_DLQ_ReceivesPoisonMessage(t *testing.T) {
 	go func() {
 		_ = kcConsumer.Consume(runCtx, []string{"chat-events"},
 			handler, "", nil, dlq, 1) // MaxRetries=1: 第 2 次进 DLQ
-	}()
+	}(, nil)
 	// 等 Setup
 	time.Sleep(2 * time.Second)
 

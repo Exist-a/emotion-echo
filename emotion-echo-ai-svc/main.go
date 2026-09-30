@@ -38,6 +38,7 @@ import (
 	"emotion-echo-ai-svc/internal/handler"
 	logging "emotion-echo-ai-svc/internal/logging" // Stage 41 PR-5: re-export shared/pkg/logging,实际定义在 _re_export.go
 	"emotion-echo-ai-svc/internal/logic"
+	"emotion-echo-ai-svc/internal/ops"
 	"emotion-echo-ai-svc/internal/repository"
 	"emotion-echo-ai-svc/internal/svc"
 
@@ -325,6 +326,20 @@ func main() {
 		}
 	}
 
+	// E2E-23 #31（D-32）：ops 容器承载 9 个可热更的运营参数。
+	// 必须**先于** BootNacos 建好 —— 它要被注入 deps.ops 才能收到 Nacos 推送，
+	// 又要被 ServiceContext 的客户端钩子与熔断器共享（同一实例，热更才生效）。
+	opsState := ops.New(ops.Initial{
+		LLMTimeout:           time.Duration(c.LLM.Timeout) * time.Second,
+		FERTimeout:           time.Duration(c.FER.Timeout) * time.Second,
+		SenseVoiceTimeout:    time.Duration(c.SenseVoice.Timeout) * time.Second,
+		XTTSTimeout:          time.Duration(c.XTTS.Timeout) * time.Second,
+		XTSLanguage:          c.XTTS.Language,
+		XTSSpeed:             c.XTTS.Speed,
+		KafkaMaxRetries:      c.Kafka.MaxRetries,
+		BreakerFailThreshold: readEnvInt("LLM_BREAKER_FAIL_THRESHOLD", 5),
+		BreakerOpenSeconds:   time.Duration(readEnvInt("LLM_BREAKER_OPEN_SECONDS", 30)) * time.Second,
+	})
 	// 3. Kafka Consumer
 	if c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
 		kc, err := consumer.NewKafkaConsumer(kafkaBrokersList, c.Kafka.GroupID)
@@ -385,7 +400,9 @@ func main() {
 						return createdHandler.Handle(ctx, evt)
 					},
 					events.EventTypeMessageCreated,
-					sharedgrpc.NewGo2SkyTracer(tracer), dlq, maxRetries); err != nil {
+					sharedgrpc.NewGo2SkyTracer(tracer), dlq, maxRetries,
+					// E2E-23 #31：每条消息现读 ops 容器 ⇒ max_retries 可热更
+					func() int { return opsState.Snapshot().KafkaMaxRetries }); err != nil {
 					slog.Error("kafka consume err", "err", err)
 				}
 			}()
@@ -404,6 +421,9 @@ func main() {
 		svcFusedRepo = repository.NewPostgresFusedEmotionRepo(db)
 	}
 	svcCtx := svc.NewServiceContext(c, emoRepo, faceRepo, voiceRepo, svcFusedRepo)
+	svcCtx.Ops = opsState // E2E-23 #31：客户端钩子从这里取热更值
+
+	svcCtx.Ops = opsState
 
 	// Stage 22-A.5: build 3 AI model clients + MultiModalAnalyzer.
 	svcCtx.InitMultiModal()
@@ -467,7 +487,9 @@ func main() {
 
 	// Stage 31 PR-09: Nacos 注册 + 配置（ai-svc 同时暴露 HTTP :8891 + gRPC :8892）
 	// 注册时仅注册 HTTP 端口（metadata.grpc_port=8892 供 Stage 32 APISIX 双注册决策）
-	nacosRuntime, err := BootNacos(rootCtx, &c, defaultBootDeps())
+	bootDeps := defaultBootDeps()
+	bootDeps.ops = opsState
+	nacosRuntime, err := BootNacos(rootCtx, &c, bootDeps)
 	if err != nil {
 		if shareddiscovery.IsHardBootError(err.Error()) {
 			logging.Fatalf("[nacos] boot failed (fatal): %v", err)
@@ -521,6 +543,10 @@ func main() {
 				FailThreshold: readEnvInt("LLM_BREAKER_FAIL_THRESHOLD", 5),
 				OpenSeconds:   time.Duration(readEnvInt("LLM_BREAKER_OPEN_SECONDS", 30)) * time.Second,
 			})
+			// E2E-23 #31：LLM 超时 + 两个熔断阈值全部可热更
+			llmFuser.TimeoutFn = func() time.Duration { return opsState.Snapshot().LLMTimeout }
+			br.FailThresholdFn = func() int { return opsState.Snapshot().BreakerFailThreshold }
+			br.OpenSecondsFn = func() time.Duration { return opsState.Snapshot().BreakerOpenSeconds }
 			llmFuser.SetBreaker(br)
 			logging.Printf("[fusion] LLM fuser active: %s model=%s breaker=%v", llmBase, os.Getenv("LLM_MODEL"), br.State())
 		} else {

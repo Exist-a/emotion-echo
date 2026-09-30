@@ -56,13 +56,21 @@ type BreakerConfig struct {
 type CircuitBreaker struct {
 	mu sync.Mutex
 
-	state          BreakerState
-	consecFails    int       // 连续失败计数（Closed 状态）
-	openedAt       time.Time // 进入 Open 的时刻
-	halfOpenInUse  bool      // HalfOpen 时是否已发过 1 次试探
+	state         BreakerState
+	consecFails   int       // 连续失败计数（Closed 状态）
+	openedAt      time.Time // 进入 Open 的时刻
+	halfOpenInUse bool      // HalfOpen 时是否已发过 1 次试探
 
 	failThreshold int
-	openSeconds   time.Duration
+	// FailThresholdFn / OpenSecondsFn 是运行时取值钩子（E2E-23 #31 / D-32）。
+	// 非 nil 时**每次判定**调它取当前值；nil 时退回构造期值。
+	//
+	// 用途：LLM 抖动时运维要在不发版的前提下调阈值 ——
+	// Closed 卡死就调低，误杀正常流量就调高，Open 想快点恢复就调 OpenSeconds。
+	// 此前它们在构造期存入普通字段、冻结不可变（"配了不生效"同型）。
+	FailThresholdFn func() int
+	OpenSecondsFn   func() time.Duration
+	openSeconds     time.Duration
 
 	// nowFunc 用于测试注入（默认 time.Now）。
 	nowFunc func() time.Time
@@ -144,7 +152,7 @@ func (b *CircuitBreaker) RecordFailure() {
 	}
 
 	b.consecFails++
-	if b.state == BreakerClosed && b.consecFails >= b.failThreshold {
+	if b.state == BreakerClosed && b.consecFails >= b.effectiveFailThreshold() {
 		b.state = BreakerOpen
 		b.openedAt = b.nowFunc()
 	}
@@ -161,8 +169,28 @@ func (b *CircuitBreaker) RecordResult(err error) {
 
 // transitionIfNeeded 检查 Open 是否到期（需持锁）。
 func (b *CircuitBreaker) transitionIfNeeded() {
-	if b.state == BreakerOpen && b.nowFunc().Sub(b.openedAt) >= b.openSeconds {
+	if b.state == BreakerOpen && b.nowFunc().Sub(b.openedAt) >= b.effectiveOpenSeconds() {
 		b.state = BreakerHalfOpen
 		b.halfOpenInUse = false
 	}
+}
+
+// effectiveFailThreshold 返回当前生效的失败阈值（E2E-23 #31）。
+func (b *CircuitBreaker) effectiveFailThreshold() int {
+	if b.FailThresholdFn != nil {
+		if v := b.FailThresholdFn(); v > 0 {
+			return v
+		}
+	}
+	return b.failThreshold
+}
+
+// effectiveOpenSeconds 返回当前生效的 Open 持续时间（E2E-23 #31）。
+func (b *CircuitBreaker) effectiveOpenSeconds() time.Duration {
+	if b.OpenSecondsFn != nil {
+		if d := b.OpenSecondsFn(); d > 0 {
+			return d
+		}
+	}
+	return b.openSeconds
 }
