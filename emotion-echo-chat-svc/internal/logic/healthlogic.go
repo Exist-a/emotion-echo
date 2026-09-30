@@ -1,4 +1,3 @@
-
 package logic
 
 import (
@@ -7,8 +6,6 @@ import (
 
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
-
-	
 )
 
 var (
@@ -42,8 +39,15 @@ const (
 //
 // 报告 DB / Kafka 两个依赖的状态
 func (l *HealthLogic) Health() (resp *types.HealthResp, err error) {
-	dbOK := true
-	if l.svcCtx.ConversationRepo != nil {
+	// ⚠️ 降级启动（E2E-23 F-96 实测修复，2026-09-30）：
+	// main.go 的 Postgres 连接是**单次尝试**，失败则 repo 保持 nil 并照常启动。
+	// 原写法 `dbOK := true` + `if repo != nil` 跳过整个 if，
+	// 于是**恰恰在数据库完全不可用时报 dbOk=true / status=ok** ——
+	// 实测该服务 /health/ready 返 200、容器 (healthy)、APISIX 照常路由，
+	// 而每个 DB 调用都返 Unavailable，且零告警。
+	// 修法：repo 为 nil **本身就是「依赖不可用」**，必须如实报 false。
+	dbOK := l.svcCtx.ConversationRepo != nil
+	if dbOK {
 		if err := l.svcCtx.ConversationRepo.Ping(l.ctx); err != nil {
 			dbOK = false
 		}

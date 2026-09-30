@@ -110,3 +110,12 @@ jobs:
       # 并确保删死代码时没有连带删掉 MarkShuttingDown 的有效行为覆盖。
       - name: 守卫 11/11 healthcheck 无生产死代码
         run: bash scripts/test_healthcheck_no_dead_server.sh
+
+      # 防「降级启动却报健康」（E2E-23 F-96 实测修复）。
+      # 5 个服务的 healthlogic 曾是 `dbOK := true` + `if XxxRepo != nil { ping }`
+      # ——repo 为 nil（main.go 单次连接失败后的降级启动）时整个 if 被跳过，
+      # 恰恰在数据库完全不可用时报 dbOk=true / status=ok，
+      # 使 /health/ready 返 200、容器判 healthy、APISIX 照常路由，且零告警。
+      # 本守卫守覆盖面（5 服务同型），语义由 user-svc 的行为测试钉住。
+      - name: 守卫 12/12 降级启动时健康探针必须说假话
+        run: bash scripts/test_health_nilrepo_truthful.sh

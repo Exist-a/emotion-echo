@@ -2,7 +2,7 @@
 stage: e2e-23
 title: 健康检查与服务发现（/health 与 gRPC health 语义 + Nacos 注册/配置中心/热更新 + 编排健康门禁）
 type: transformation
-status: partial
+status: done
 created: 2026-09-29
 depends-on: []
 blocks: []
