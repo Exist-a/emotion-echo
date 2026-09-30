@@ -497,7 +497,7 @@ kubectl port-forward svc/nacos 8848:8848  # 访问 Nacos 控制台
 |------|---------|------|
 | `[nacos] boot failed (continuing): ...` | Nacos 未启动或不可达 | dev 单机调试可接受；prod 应检查 compose depends_on / Helm readiness |
 | Nacos console 服务列表只有部分 svc | 部分 svc 启动失败或 Nacos 早于 svc | 看 svc 日志确认 Nacos 启动时序；调 WaitForNacos 时长 |
-| 修改 ops.yaml 后 30s 内 svc 未重载 | HotReload=false 或 svc 启动时未启 ListenConfig | 检查 etc/<svc>-api.yaml 中 `Nacos.HotReload` |
+| 修改 ops.yaml 后 30s 内 svc 未重载 | HotReload=false 或 svc 启动时未启 ListenConfig | **先查 `deploy/docker-compose.apps.yml` 里的 `NACOS_HOT_RELOAD`** —— E2E-23 实测：**env 优先于 `etc/<svc>-api.yaml`**，yaml 写 `HotReload: true` 而 compose 显式给 `false`，以 env 为准（这正是热更不生效的真因）。chat/analytics/ai 现为 `"true"` |
 | `push_ops_config.sh` 拒绝敏感 dataId | 命中 14 个敏感前缀模式之一 | 改用 etc/*.yaml 或 env 注入 |
 | 误推敏感配置 | 上述拒绝机制应拦截；UI 上误推可手动删 | 配置管理 → 删除 dataId → 重启 svc 清内存 cache |
 

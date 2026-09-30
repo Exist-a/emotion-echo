@@ -95,7 +95,7 @@ spec:
             failureThreshold: 6
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready  # E2E-23 D-29：readiness 必须检依赖；liveness 才用 /health
               port: http
             periodSeconds: 10
           livenessProbe:

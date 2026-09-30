@@ -174,9 +174,11 @@ docker compose --env-file .env.local -f docker-compose.infra.yml -f docker-compo
 ### 步骤 5：验证联通
 
 ```bash
-# 1. BFF 健康检查（聚合 6 下游）
-curl http://localhost:8894/health
-# 期望: {"status":"ok","downstream":{"ai":"ok",...,"xtts":"ok"}}
+# 1. BFF 健康检查（聚合 6 下游 + Redis + Nacos 注册态）
+#    ⚠️ 必须用 /health/ready：/health 是 liveness，恒 200，验不出任何东西（E2E-23 D-29）
+curl -i http://localhost:8894/health/ready
+# 期望: HTTP 200 + {"status":"ok","downstream":{"ai":"ok",...},"deps":{"redis":"ok","nacos":"ok"}}
+# 依赖不通时: HTTP 503 + {"status":"degraded",...}
 
 # 2. 端到端冒烟（16/16 通过为 GREEN）
 python scripts/smoke_bff_t5.py
@@ -285,7 +287,7 @@ curl http://emotion-echo-fer:8004/health
 python scripts/smoke_bff_t5.py
 ```
 
-期望：**16/16 通过**。覆盖 BFF `/health` 聚合 6 下游、登录、当前用户、创建/列表会话、发送消息、AI 流式回复（mock 或真实 LLM）、情绪分析报表、心理量表列表、Prometheus metrics。
+期望：**16/16 通过**。覆盖 BFF `/health/ready` 聚合 6 下游、登录、当前用户、创建/列表会话、发送消息、AI 流式回复（mock 或真实 LLM）、情绪分析报表、心理量表列表、Prometheus metrics。
 
 ### 测试 3：文本对话功能
 
@@ -337,12 +339,23 @@ docker ps | grep emotion-echo-postgres
 docker logs emotion-echo-postgres
 ```
 
-### Q3: 容器 (unhealthy) 但 /health 返回 200
+### Q3: 容器 (unhealthy) 但 `/health` 返回 200
 
-参考 `scripts/healthcheck_smoke.sh`。可能原因：
+**这现在是设计使然，不是 bug**（E2E-23 / D-29 起）：
+`/health` 是 **liveness**，恒 200，只表示"进程活着"；
+compose `healthcheck` 与 Helm `readinessProbe` 打的是 **`/health/ready`**，依赖不通才 503。
+
+**排障第一步**：把探针 URL 换成 `/health/ready` 看真实状态 ——
+```bash
+curl -i http://localhost:8894/health/ready
+# 503 + {"status":"degraded", "deps":{"redis":"down","nacos":"ok"}}
+```
+
+若 `/health/ready` 也是 200 但容器仍 unhealthy，再查下面几项：
 - start_period 太短（已默认 60s）
-- wget --spider 用 HEAD 但 /health 只支持 GET（已修）
+- `wget --spider` 用 HEAD 但端点只支持 GET（已修；**`/health/ready` 同样只支持 GET**）
 - kafka healthcheck 短路径找不到二进制（已修）
+- 探针 URL 写成了 `/ready`（正确路径是 `/health/ready`，少一层前缀会 404）
 
 ### Q4: BFF /api/v1/reports/daily 500
 

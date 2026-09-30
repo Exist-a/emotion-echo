@@ -15,11 +15,14 @@ cd "D:/源码/Emotion-Echo"
 # 只起 postgres（其它组件 apisix/nacos/kafka 镜像不可用，按需启动）
 docker compose -f deploy/docker-compose.infra.yml up -d postgres
 
-# 等 healthy
-for i in $(seq 1 30); do
-  status=$(docker inspect --format='{{.State.Health.Status}}' emotion-echo-postgres 2>&1)
+# 等 healthy（E2E-23 起 postgres 容器已有 healthcheck；窗口按 dev 模式实测放宽到 120s）
+# 注意：这与 deploy/db/migrate.sh 曾犯的同型错相反 —— migrate.sh 原本是"固定 30s 无退避"，
+# 冷启动时 DB 没起来就 FATAL 退出（E2E-F-151）。下面同样用递增退避，别写死。
+for i in $(seq 1 40); do
+  status=$(docker inspect --format='{{.State.Health.Status}}' emotion-echo-postgres 2>/dev/null)
   if [ "$status" = "healthy" ]; then echo "postgres ready"; break; fi
-  sleep 2
+  if [ "$i" = "40" ]; then echo "postgres 未在 120s 内就绪（最后状态: ${status:-<无 healthcheck 字段>}）" >&2; exit 1; fi
+  sleep $(( i < 5 ? i : 5 ))
 done
 ```
 

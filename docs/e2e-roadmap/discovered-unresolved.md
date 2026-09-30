@@ -322,7 +322,9 @@ type: e2e-discovered-unresolved-ledger
 
 | E2E-F-163 | **E2E-23 第二方核对（2026-09-30）** | 🟡 **`Resume()` 未接线**：plan B1 要求"接入 `healthcheck.Server` 已有的 `Shutdown()` / `Resume()`"，E2E-23 只接了 `Shutdown()`（停机翻 `NOT_SERVING`），`Resume()` 仍零调用方，测试点 #14 以 `N/A` 收口 | 这 5 个服务**没有"暂停后恢复"路径** —— 停机是单向终态，接线会让 `Resume()` 成为**孤儿代码**（AP-10）。故实际是"需求不适用"而非"做不到" | **E2E-23** | 🟡 **降级并记录（待用户裁定）**：按 RUNBOOK §4.2，`N/A` 只限"语义上不可能验证"；"主动放弃需求"须走 BLOCKED + 用户批准 + 账本降级。执行者已如实标注未取得批准，并在 report §10 第 1 项列为待裁定 |
 
-**累计编号至此 163 项**（E2E-F-163 为 `Resume()` 未接线，待用户裁定降级）。
+| E2E-F-164 | **E2E-23 收口后级联扫描（2026-09-30）** | 🟡 **10 处坏相对链接**（脚本扫 `docs/architecture/decisions.md` / `microservices.md` / `e2e-roadmap/roadmap.md` 实测）：① `decisions.md` 6 条 `../../plans/on-device-*.md` —— 从 `docs/architecture/` 出发 `../../` 是**仓库根**，正确应为 `../plans/`，故全断；② `adr-adr-2026-09-decision-4-closure.md` 文件名不存在；③ `microservices.md` 2 条 `/docs/...` 绝对路径（本地 Markdown 渲染器不解）；④ `roadmap.md` 指向 `../../../architecture/adr/adr-2026-09-loki-aggregator-dev.md` —— 从 `docs/e2e-roadmap/` 出发 `../../../` 是仓库根之上 | 写这些链接时按"文件在自己目录同级"直觉写相对路径，未验证；`e2e_stage_audit.py` 的链接检查**只覆盖 plan.md / report.md**，覆盖不到 decisions.md 等散落文档 | **E2E-05**（文档一致性）/ 端侧 track 归 **Lane O**（`on-device-*` 目标文件属 §八 隔离协议下的端侧产出） | 🟡 未解决：**只记账不修** —— `on-device-*` 目标文件属端侧轨独占面（AGENTS.md §八），Lane E 不得触碰；其余 4 条可修但需与端侧轨合并后再统一处理，避免同一文件双轨冲突 |
+
+**累计编号至此 164 项**（E2E-F-163 `Resume()` 未接线待用户裁定；E2E-F-164 10 处坏相对链接，含端侧轨独占目标文件）。
 
 
 **PR #64 状态**：已开，2 commits pushed 到 fix 分支（`fix/e2e-16-full-multimodal-fix`），23 项 required status checks 状态 pending — GitHub runner 临时延迟或权限问题（4 workflow 均已配 `pull_request: branches: [main]` trigger，trigger 配置无误）。**合并策略**：① 等 GitHub 端自动恢复（runner 排队超时通常 5-10 分钟）；② 若持续不启动，下一轮单独开 PR 排查 CI trigger；③ 临时 admin override（需仓库管理员在网页端操作）。本会话核心交付已完成（5 修复 + 9 测试 + 本地全绿 + typecheck + go vet/build 干净）。

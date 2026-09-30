@@ -170,9 +170,9 @@ spec:
   containers:
     - name: chat-svc
       readinessProbe:
-        httpGet: { path: /health, port: http }
+        httpGet: { path: /health/ready, port: http }
         periodSeconds: 10
-        # 如果 /health 失败 → 不接流量，但不会"等待"
+        # 如果 /health/ready 失败 → 不接流量，但不会"等待"
 
 # 方式 2：显式 initContainer 等
 initContainers:
@@ -189,7 +189,7 @@ initContainers:
 ```yaml
 # docker-compose
 healthcheck:
-  test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8888/health"]
+  test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8888/health/ready"]
   interval: 30s
   timeout: 5s
   start_period: 15s
@@ -200,16 +200,27 @@ startupProbe:        # 启动阶段宽限（start_period 类似）
   httpGet: { path: /health, port: http }
   periodSeconds: 5
   failureThreshold: 6       # 5*6=30s 宽限
-readinessProbe:       # 持续探活（interval 类似）
-  httpGet: { path: /health, port: http }
+readinessProbe:       # 持续探活（interval 类似）—— 深探针，检依赖
+  httpGet: { path: /health/ready, port: http }   # ⚠️ 不是 /health，见下
   periodSeconds: 10
   failureThreshold: 3
-livenessProbe:        # 持续探活（retries 类似）
+livenessProbe:        # 持续探活（retries 类似）—— 浅探针，只判进程存活
   httpGet: { path: /health, port: http }
   initialDelaySeconds: 60
   periodSeconds: 30
   failureThreshold: 3
 ```
+
+> ⚠️ **这一节的映射不是无脑 1:1。** compose 的 `healthcheck` 只有一种语义
+> （容器 unhealthy → 不再被依赖它启动/不再视为可用），而 K8s 拆成了三种：
+> **readiness 摘流量、liveness 才重启**。所以只有当 compose 的 `healthcheck` 打的是
+> **深探针**时，映射到 `readinessProbe` 才对得上；`livenessProbe` 应当另配一个浅探针。
+>
+> 本项目（E2E-23 / D-29）为此把端点拆开：`/health` 恒 200 当 liveness，
+> `/health/ready` 检依赖当 readiness，compose healthcheck 与 Helm readinessProbe
+> 一律指 `/health/ready`（守卫 `scripts/test_healthcheck_readiness.sh` 两侧同查）。
+> 若你把三探针全指向 `/health`，DB 挂掉时 Pod 会**继续接流量**——
+> 分离就等于没做，这是本条最常见的落地遗漏。
 
 ### 9. `restart` → restartPolicy
 
@@ -302,7 +313,7 @@ emotion-echo-user-svc:
     postgres:
       condition: service_started
   healthcheck:
-    test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8888/health"]
+    test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8888/health/ready"]
     interval: 30s
     start_period: 15s
 ```
@@ -355,15 +366,15 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - { name: http, containerPort: 8888 }
-          startupProbe:
+          startupProbe:      # 浅探针：只等进程起来
             httpGet: { path: /health, port: http }
             periodSeconds: 5
             failureThreshold: 6
-          readinessProbe:
-            httpGet: { path: /health, port: http }
+          readinessProbe:     # 深探针：依赖不通就摘出 Endpoints
+            httpGet: { path: /health/ready, port: http }
             periodSeconds: 10
             failureThreshold: 3
-          livenessProbe:
+          livenessProbe:      # 浅探针：依赖抖动不该触发重启
             httpGet: { path: /health, port: http }
             initialDelaySeconds: 60
             periodSeconds: 30

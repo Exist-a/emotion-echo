@@ -1,19 +1,24 @@
 name: e2e-guards
 
-# E2E-23 引入的 6 个静态守卫（2026-09-30）。
+# E2E-23 引入的静态守卫（2026-09-30）。
 #
 # 为什么是"静态"：这些守卫断言的是**配置与源码的一致性**
-# （compose healthcheck 指向、dev-up 分批等待、migrate.sh 退避、
-#  gRPC 停机翻转接线、NACOS_REQUIRED 声明），
+# （compose / Helm healthcheck 指向、路由三方契约、dev-up 分批等待、
+#  migrate.sh 退避、gRPC 停机翻转接线、NACOS_REQUIRED 声明），
 # 只读文件即可判定，**不需要运行容器栈** —— 故可在 GitHub runner 上跑。
 #
 # 为什么不含 smoke_health_discovery.py：它要探测真实运行的服务
 # （`docker exec` 进容器网络、Nacos 注册数、网关链路），
 # runner 上没有 19 容器栈 ⇒ 保持"本地/收口时执行"。
 #
+# 为什么含 test_route_contract.sh：它早于 E2E-23 就存在，但**从未接进任何
+# 执行路径** —— 本阶段新增 `GET /health/ready` 时它静默变红
+# （`BFF route GET /health/ready NOT covered by APISIX`），没有任何机制发现。
+# 这就是"守卫写了但不等于守卫在跑"（anti-patterns AP-10 的变体），本轮接进来。
+#
 # 门禁效力声明（AP-11 要求如实标注）：
 #   本 workflow **当前仅报告，不拦合并** —— main 的 required_status_checks
-#   未启用（见 discovered-unresolved.md 的 E2E-F-30 与 E2E-19 收口记录）。
+#   未启用（见 discovered-unresolved.md 的 E2E-F-30 / E2E-F-162）。
 #   "能跑红" ≠ "能拦"。接入 required checks 是独立动作，需仓库管理员在
 #   网页端开启（`scripts/check_required_checks.py` 可核）。
 
@@ -67,3 +72,6 @@ jobs:
 
       - name: 守卫 6/6 dev-up.sh 分批等待
         run: bash scripts/test_devup_batch_waits.sh
+
+      - name: 守卫 7/7 三方路由契约（APISIX ↔ BFF ↔ 前端）
+        run: bash scripts/test_route_contract.sh

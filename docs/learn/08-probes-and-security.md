@@ -116,27 +116,45 @@ livenessProbe:
 - 不能太宽松：liveness 太松 → 真死了 K8s 不知道
 - **不要** 把 readinessProbe 直接复制成 livenessProbe（语义不同）
 
-### 1.4 `/health` 端点的设计
+### 1.4 `/health` 与 `/health/ready` 两个端点的设计
 
-我们 Stage 27 的 `/health` 端点实现：
+我们项目（E2E-23 / 决策 D-29 起）把 liveness 与 readiness **拆成两个端点**：
+
+| 端点 | 语义 | 深度 | 失败后果 |
+|------|------|------|----------|
+| `GET /health` | **liveness**（浅） | 只确认 HTTP server 活着 | 恒 200（除非进程本身挂） |
+| `GET /health/ready` | **readiness**（深） | 检下游 + 依赖（DB / Redis / Nacos / Kafka…） | **503** + `status:"degraded"` |
+
+`/health` 保持恒 200 是**刻意的向后兼容**：大量外部探针（负载均衡、APISIX、运维脚本）
+打的是 liveness，把它变成会抖动 503 的深探针，会在 DB 抖动时引发
+"探针误杀 → 全站重启"的事故链。
+
+依赖维度已经扩到 **Redis 与 Nacos**（BFF）：`/health` 与 `/health/ready` 的响应体都带
+`deps` 字段（如 `{"redis":"ok","nacos":"ok"}`），任一不 ok 即 `status:"degraded"`。
+实现也不再是硬编码常量（`emotion-echo-web-bff/internal/handler/health_handler.go`）：
 
 ```go
-// Stage 11-12: gin /health handler
-func HealthHandler(c *gin.Context) {
-    // 浅探活：只确认 HTTP server 活着
-    c.JSON(200, gin.H{"status": "ok"})
+// 依赖探针结果并入 status：任一依赖不 ok → degraded
+status := StatusOk
+if !depsOK {
+    status = StatusDegraded
 }
+return &types.HealthResp{Status: status, Deps: deps, ...}
 ```
 
-**为什么是浅探活**：
+**为什么 liveness 必须浅**：
 - liveness 太深（探活时连 DB）→ DB 抖动 → Pod 被重启 → 雪崩
-- readiness 可以深（探活时连 DB）→ DB 不通时摘流量
+- readiness 可以深（探活时连 DB）→ DB 不通时摘流量，但**不重启**
 
-**最佳实践**：
-- `/health` → liveness 用（浅）
-- `/ready` → readiness 用（深，可连下游）
+**最佳实践（= 本项目现状）**：
+- `/health` → livenessProbe / startupProbe 用（浅）
+- `/health/ready` → readinessProbe 用（深，可连下游）
 
-我们项目把所有探针都指向 `/health`（浅）以简化；**生产建议分两个端点**。
+**K8s 侧最常见的落地遗漏**：`charts/emotion-echo/charts/*/templates/deployment.yaml` 里
+`startupProbe` / `livenessProbe` 打 `/health`（正确），但 `readinessProbe` **也**很容易被
+写成 `/health`。一旦如此，DB 挂掉时 Pod 仍然留在 Endpoints 里继续接流量，
+liveness/readiness 分离等于没做。`scripts/test_healthcheck_readiness.sh`
+同时校验 compose 与 Helm 两侧，防止其中一侧被改回 `/health`。
 
 ---
 
@@ -428,11 +446,11 @@ spec:
             periodSeconds: 5
             failureThreshold: 6       # 30s 宽限
           readinessProbe:
-            httpGet: { path: /health, port: http }
+            httpGet: { path: /health/ready, port: http }   # readiness = 深探针（见 §1.4）
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            httpGet: { path: /health, port: http }
+            httpGet: { path: /health, port: http }          # liveness = 浅探针，恒 200
             initialDelaySeconds: 60
             periodSeconds: 30
             failureThreshold: 3
@@ -441,7 +459,13 @@ spec:
             limits:   { cpu: 500m, memory: 256Mi }
 ```
 
-**这一段字段**等于："这个 Pod 用 nobody 跑；不需要 root；启动给 30s 宽限；启动后 5s 进流量；挂了 3 次重启；吃不超过 0.5 核 256MB"。
+**这一段字段**等于："这个 Pod 用 nobody 跑；不需要 root；启动给 30s 宽限；
+**依赖不通时 30s 内摘出 Endpoints（readiness）**；启动后 5s 进流量；挂了 3 次重启；
+吃不超过 0.5 核 256MB"。
+
+> ⚠️ 注意 `readinessProbe` 与 `livenessProbe` 的 path **不同**。若把 readiness 也写成
+> `/health`，依赖挂掉时 Pod 不会被摘流量——这段 YAML 是本仓 Helm chart 的形态，
+> `charts/emotion-echo/charts/*/templates/deployment.yaml` 与此保持一致。
 
 ---
 

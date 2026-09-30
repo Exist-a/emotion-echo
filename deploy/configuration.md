@@ -43,7 +43,7 @@ deploy/
 | `NACOS_NAMESPACE` | `emotion-echo-dev` | Nacos 命名空间。prod 应改为 `prod` |
 | `NACOS_ENABLED` | `true` | 是否启用 Nacos 注册/配置中心 |
 | `NACOS_ADDR` | `emotion-echo-nacos:8848` | Nacos 地址（容器 DNS） |
-| `NACOS_HOT_RELOAD` | `false` | Nacos 配置热更新（v2.3.5 SDK ↔ v2.4.3 server 有 bug，详见 todo-pile B2） |
+| `NACOS_HOT_RELOAD` | `false`（**chat-svc / analytics-svc / ai-svc 在 `docker-compose.apps.yml` 里显式置 `true`**） | Nacos 配置热更新。E2E-23 已运行时逐项验证 14 个运营参数热更生效（chat 4 / ai 9 / analytics 1），原括号里"SDK↔server 有 bug"的理由**已不成立**。⚠️ **env 优先于 `etc/*.yaml`**：yaml 里写 `HotReload: true` 而 compose 显式给 `false`，以 env 为准 —— 这正是 E2E-23 排查出的热更不生效真因 |
 
 ### 3.2 业务开关
 

@@ -259,6 +259,38 @@ ai-svc grpcserver/ops、analytics config、shared configcenter、**6 个守卫�
 **留下的教训**（已并入本轮收口动作）：守卫脚本绿 ≠ 代码绿；**凡改动跨包签名或路由表，
 必须 `go vet ./...`（会编译测试文件）而非 `go build`**，这正是 AP-09 硬规则第 2 条。
 
+## 9.3 收口后文档级联扫描（2026-09-30，catch → 修 → 再抓两处真缺口）
+
+§13.3 只要求"级联修改文档"，但没给"扫哪些"的清单。本轮用独立子代理做了一次
+**只读全仓漂移扫描**（专挑与本阶段 12 条新事实矛盾的陈述），结果分两类。
+
+### 已更正的文档级联（10 个文件）
+
+| 文件 | 陈旧内容 | 更正 |
+|------|----------|------|
+| `docs/learn/08-probes-and-security.md` | 「我们项目**把所有探针都指向 `/health`**（浅）以简化；生产建议分两个端点」 | 整节重写为 D-29 双端点现状 + K8s 侧常见落地遗漏；示例 YAML 的 readinessProbe 同步 |
+| `docs/ci-workflows/README.md` | 文件清单只有 3 个 workflow；整段前提是「PAT 无 workflow scope 故存模板」；「**任何 test 失败 → PR 不可 merge**」 | 重写为 5 个 workflow 的权威说明；**删掉那句"不可 merge"**（正是 anti-patterns AP-11 本身禁止的表述，而本仓新加的 `e2e-guards.yml` 头里就写着"仅报告不拦"）；补 CI 查询的正确姿势（旧 Statuses API 对本仓恒空） |
+| `docs/e2e-roadmap/roadmap.md:34` vs `:112` | 同一文件 L34「E2E-23 🟡 详档待建档」与 L112「partial，PASS 37，23 commit」自相矛盾 | 激活块改为「当前 E2E-24 / 上一阶段 E2E-23 partial」；E2E-22 块里「db-migrate 范围外归 E2E-23」补闭环标记 |
+| `docs/architecture/decisions.md` 决策 10 汇总表 | 「健康检查 = grpc health 探活（5s/次连续 3 次摘除）」「服务发现 = 客户端定时拉取 + watch（30s 间隔）」—— 两条**从未落地**的承诺，勘误只落在 Nacos ADR 没落到汇总表 | 两行按实际机制重写（`/health`+`/health/ready`+`MarkShuttingDown()`；`Heartbeat()` 续约，无 `NACOS_REFRESH_MS` 轮询），并标出原文是未落地承诺 |
+| `docs/architecture/decisions.md` / `microservices.md` 验证段 | 6 条 `curl .../health` 当验收手段 | 全改 `curl -i .../health/ready` —— `/health` 恒 200，用它验收等于什么都没验 |
+| `docs/architecture/microservices.md:177` | 「每个 svc 暴露 `/health`，返回 dbOk / kafkaOk」 | 补 `/health/ready` + BFF 另加 redis/nacos |
+| `deploy/configuration.md` / `stage-35-ops-runbook.md` | `NACOS_HOT_RELOAD` 默认 false，理由写「SDK↔server 有 bug」 | 注明 chat/analytics/ai 现为 `true`、原理由已不成立，并写明 **env 优先于 yaml**（本阶段排查出的真因） |
+| `QUICKSTART.md` Q3 | 「容器 unhealthy 但 /health 返回 200」的答案停在旧根因 | 改为"这是 D-29 的设计使然"，第一步就是换 `/health/ready`；补 503 输出样例与 `/health/ready` 只支持 GET 等新坑 |
+| `docs/learn/11-compose-to-k8s.md` | compose→k8s 的 healthcheck→3 探针映射是无脑 1:1；三探针全打 `/health` | 示例按双端点改写，并加一段说明**这个映射不是 1:1**（readiness 摘流量、liveness 才重启） |
+| `docs/stages/stage-31-landing.md` / `observability-compose.md` / `docker-compose.md` / `stage-34-ops-runbook.md` / `decomposition-plan.md` | 排障指向 `etc/*.yaml`（env 优先，指向 yaml 会误判）；验收判据停留在 6 容器；固定 30×2s 等 PG（与 E2E-F-151 同型反模式） | 逐条更正；`stage-34` 的等待循环改成递增退避 + 超时非零退出 |
+
+### 扫描顺带抓出的两处**真缺口**（不是文档问题）
+
+| # | 缺口 | 后果 | 处置 |
+|---|------|------|------|
+| G-1 | **Helm 侧 6 个服务的 `readinessProbe` 仍打 `/health`** —— 本阶段只改了 compose | **生产（K8s）里 DB 挂掉时 Pod 不会被摘出 Endpoints，继续接流量，且零报错**（探针返 200 判定"健康"）。liveness/readiness 分离在生产等于没做 | TDD 修：先把断言加进 `scripts/test_healthcheck_readiness.sh`（RED 6 FAIL）→ 改 6 份 chart（GREEN 19/19）→ 负向对照（把 user-svc 改回 `/health` 立即 `FAIL 1 / RED`）|
+| G-2 | `scripts/test_route_contract.sh` 变红：`BFF route GET /health/ready NOT covered by APISIX` | 该脚本**不在 6 个 CI 守卫之列**，所以本阶段加路由时它静默变红、无人发现（AP-10 孤儿守卫的变体：守卫存在但没接进任何执行路径） | 修三处：① 把 `/health/ready` 显式加入该脚本的基础设施路径白名单（**只加这一条，不改成"跳过所有非 `/api/v1`"**，那会放过任何拼错前缀的路径）；② 更正脚本头部三处陈旧计数（27→37 主路径、`main.go:214-246`→`main.go:430`）并指向 `main_test.go` 的 `wantRoutes` 为单一事实源；③ **把它接进 `.github/workflows/e2e-guards.yml`（现 7 个守卫）**——光修脚本不接线，下次加路由还会静默变红 |
+
+**教训**：G-1 说明"改了 dev 编排"不等于"改了健康契约"——契约的适用面是**所有部署形态**。
+G-2 说明"守卫写好了"不等于"守卫在跑"——`test_route_contract.sh` 早于本阶段存在，
+但因为没接进 CI，本阶段的一次路由新增就能让它悄悄变红。
+这两条都是 anti-patterns 里已有条目的复现（AP-10 / AP-01），已按原条目处置，未新开账本条目。
+
 ## 10. 下轮建议
 
 原列的 4 项（C 组破坏性实验 / F 组回归钉 / E 组 14 参数 / #5#6）**均已于本轮完成**

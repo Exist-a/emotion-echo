@@ -247,9 +247,9 @@
 | 注册中心 | **Nacos 2.4.x**（`github.com/nacos-group/nacos-sdk-go/v2` ≥ v2.3.5；`nacos-sdk-python` ≥ 3.1.0 避开 3.0.x 断线重注册缺陷） |
 | 配置中心 | 同 Nacos（一体化部署，避免引入多组件） |
 | 配置中心**范围** | **仅放运营参数**（feature flag、限流阈值、模型路由表、Kafka 重试次数、A/B 分组）。`etc/*.yaml` 仍是启动默认值，Nacos 在启动后覆盖；**JWT secret、DATABASE_DSN、LLM_API_KEY 等敏感配置不进 Nacos** |
-| 服务发现 | Nacos 主动注册 + 心跳；客户端定时拉取 + watch（30s 间隔）。**BFF 也参与发现**（Stage 32 APISIX `nacos-discovery` 上游拉取） |
+| 服务发现 | Nacos 主动注册 + 心跳；BFF 侧 `nacosRuntime.Heartbeat()` 持续 upsert 存活实例（**这是 E2E-23 修好的真机制** —— 注册返回的 watcher 此前无人调用，注册后不续约，见 E2E-F-107）。**不存在 `NACOS_REFRESH_MS` 轮询**：SDK 自维护连接与重连，没有"客户端定时拉取"这一环。**BFF 也参与发现**（Stage 32 APISIX `nacos-discovery` 上游拉取） |
 | 命名空间 | `emotion-echo-dev` / `emotion-echo-prod`；group `DEFAULT_GROUP`；dataId `{service-name}`（注册）+ `{service-name}.ops.yaml`（运营参数） |
-| 健康检查 | grpc health 探活（5s/次，连续 3 次失败自动摘除） |
+| 健康检查 | **HTTP**：`/health` = liveness **恒 200**（向后兼容，外部探针打的是它）；`/health/ready` = readiness 检依赖，失败返 **503** + `status:"degraded"`（D-29，E2E-23 落地；compose 11 处 healthcheck 与 Helm readinessProbe 均指 ready）。**gRPC**：5 个服务注册 `grpc.health.v1.Health`，优雅停机前先 `MarkShuttingDown()` 把 `""` 与 `emotion.*` 全翻 `NOT_SERVING` 再 `GracefulStop()`。<br>⚠️ 本行原文"grpc health 探活（5s/次，连续 3 次失败自动摘除）"是**从未落地的设计承诺**，2026-09-30 已更正（ADR §四 + 账本 E2E-F-157） |
 | 演进路径 | Stage 31 注册+运营参数 → Stage 32 API 网关回归 → Stage 33 P0 修复 + BFF 净化 |
 
 ### 决策 11：API 网关 = **APISIX**（独立网关层，与 BFF 解耦）
@@ -803,13 +803,15 @@ cd emotion-echo-web-bff && ./web-bff.exe &
 # 3. 启动 Python LLM（启动后自动注册到 Nacos）
 cd emotion-llm-service && python main.py &
 
-# 4. 验证（通过 BFF；各 svc 自带 /health）
-curl http://localhost:8894/health          # BFF 聚合下游健康探测
-curl http://localhost:8888/health          # user-svc
-curl http://localhost:8890/health          # chat-svc
-curl http://localhost:8889/health          # assessment-svc
-curl http://localhost:8891/health          # ai-svc
-curl http://localhost:8893/health          # analytics-svc
+# 4. 验证（通过 BFF；各 svc 自带 /health/ready）
+#    ⚠️ 必须用 /health/ready —— /health 是 liveness，恒 200，验不出任何东西（D-29）
+curl -i http://localhost:8894/health/ready     # BFF 聚合下游健康探测（deps 字段含 redis/nacos）
+curl -i http://localhost:8888/health/ready     # user-svc
+curl -i http://localhost:8890/health/ready     # chat-svc
+curl -i http://localhost:8889/health/ready     # assessment-svc
+curl -i http://localhost:8891/health/ready     # ai-svc
+curl -i http://localhost:8893/health/ready     # analytics-svc
+# 期望：HTTP 200 + {"status":"ok",...}；任一下游/依赖不通 → 503 + {"status":"degraded"}
 
 # 5. 验证 Nacos 注册中心（Stage 31 验收）
 open http://localhost:8848/nacos           # 默认 nacos/nacos

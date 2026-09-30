@@ -73,6 +73,16 @@ APISIX 解析不到节点 ⇒ 全站 502。**探针看不到"我是否可被发�
 - 6 个 Go 服务各新增一路由 + 一套依赖检查；`shared/pkg/middleware` 白名单同步
   （`isHealthProbePath` 集中定义，gin 与 net/http 两版共用）
 - `docker-compose.apps.yml` 的 11 处 healthcheck 改指 `/health/ready`
+- **`charts/emotion-echo/charts/{user,chat,assessment,analytics,ai}-svc` 与
+  `web-bff` 的 6 份 `deployment.yaml`：`readinessProbe` 同样改指 `/health/ready`**
+  （`startupProbe` / `livenessProbe` **保持** `/health`）。
+  这条是收口后补上的：本 ADR 初版只覆盖 compose，而**生产走 Helm** ——
+  compose 全绿而 K8s readiness 仍打浅探针，等于"依赖挂了 Pod 继续接流量且零报错"，
+  分离在生产等于没做。现由 `scripts/test_healthcheck_readiness.sh` **两侧同查**，
+  并反向断言 liveness 没被顺手改成 readiness（那会让 DB 抖动直接重启 Pod）。
+  契约范围**只含这 6 个自研 Go 服务**：prometheus/alertmanager/loki/grafana 走各自官方
+  `/-/ready` 或 `/api/health`，apisix/web/fer/sensevoice/xtts 无该语义，
+  postgres/redis 用 exec 探针 —— 守卫里写明 N/A 理由，不做"扫到啥查啥"。
 - `deploy/apisix/seed.sh` 自带探针改指 `/health/ready`（原探 liveness 恒 200，
   **结构上不可能发现降级**）
 - **顺序敏感（实施期实测踩到）**：改了 compose 的 healthcheck 但**未重建镜像**

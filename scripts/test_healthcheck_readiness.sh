@@ -94,6 +94,88 @@ else
   pass=$((pass + 1))
 fi
 
+# ---------------------------------------------------------------------------
+# Helm 侧同一契约：readinessProbe 也必须打 /health/ready。
+#
+# 为什么 compose 全绿还不够（D-29 落地后的实测缺口）：compose 是 dev 栈，
+# 生产走 charts/emotion-echo/charts/*/templates/deployment.yaml。E2E-23 只改了
+# compose 侧，Helm 的 readinessProbe 仍打 /health —— 后果是 K8s 里
+# **DB 挂掉时 Pod 不会被摘出 Endpoints，继续接流量**，liveness/readiness
+# 分离在生产等于没做，而且**不会报任何错**（探针返 200，判定"健康"）。
+#
+# startupProbe / livenessProbe 打 /health 是**正确的**（浅探针，避免依赖抖动
+# 触发重启雪崩），本守卫只约束 readinessProbe 这一处。
+# ---------------------------------------------------------------------------
+echo
+echo "-- Helm 侧 readinessProbe --"
+CHARTS_DIR="$REPO_ROOT/charts/emotion-echo/charts"
+if [ ! -d "$CHARTS_DIR" ]; then
+  echo "FATAL: 找不到 charts 目录 $CHARTS_DIR（守卫自身故障）"
+  exit 2
+fi
+
+# D-29 契约只覆盖**本仓自己实现了 /health/ready 的 6 个 Go 服务**。
+# 下面这张表就是契约范围本身 —— 漏了谁、为什么别人不在范围内，都写在这里，
+# 不做"扫到啥查啥"（那会把外部组件的 /-/ready 误判成缺陷，也会在范围变化时静默漏检）。
+# 端口与上面 compose 段的 PORTS 一一对应。
+D29_CHARTS="user-svc chat-svc assessment-svc analytics-svc ai-svc web-bff"
+D29_CHARTS_EXPANDED="$D29_CHARTS"
+NON_D29_REASON="外部/非 Go 组件：prometheus·alertmanager·loki·grafana 走各自官方 /-/ready 或 /api/health；apisix·web·fer·sensevoice·xtts 无 /health/ready 语义；postgres·redis 用 exec 探针（探 PG 自身而非 HTTP）"
+
+for chart in $D29_CHARTS_EXPANDED; do
+  f="$CHARTS_DIR/$chart/templates/deployment.yaml"
+  if [ ! -f "$f" ]; then
+    echo "FAIL [$chart] D-29 契约内的 chart 不存在（$f）—— 契约范围与实际不符"
+    fail=$((fail + 1))
+    continue
+  fi
+
+  ready_path="$(awk '
+    /readinessProbe:/ { inblk = 1; next }
+    inblk && /^[[:space:]]{0,10}[a-zA-Z]/ && !/httpGet|path|port|periodSeconds|failureThreshold|timeoutSeconds|initialDelaySeconds|scheme/ { inblk = 0 }
+    inblk && /path:/ { print $2; exit }
+  ' "$f")"
+
+  case "$ready_path" in
+    */health/ready)
+      echo "PASS [$chart] readinessProbe → $ready_path（charts/.../$chart）"
+      pass=$((pass + 1))
+      ;;
+    "")
+      echo "FAIL [$chart] readinessProbe 块里找不到 path —— 探针路径缺失即等于永远 ready"
+      fail=$((fail + 1))
+      ;;
+    *)
+      echo "FAIL [$chart] readinessProbe → $ready_path，应为 /health/ready —— 依赖挂了 Pod 不会被摘流量"
+      fail=$((fail + 1))
+      ;;
+  esac
+done
+
+# startupProbe / livenessProbe 必须**保持**浅探针（打 /health）。
+# 反向断言：有人"顺手"把 liveness 也改成 readiness，会让 DB 抖动直接重启 Pod（雪崩）。
+for chart in $D29_CHARTS_EXPANDED; do
+  f="$CHARTS_DIR/$chart/templates/deployment.yaml"
+  [ -f "$f" ] || continue
+  live_path="$(awk '
+    /livenessProbe:/ { inblk = 1; next }
+    inblk && /^[[:space:]]{0,10}[a-zA-Z]/ && !/httpGet|path|port|periodSeconds|failureThreshold|timeoutSeconds|initialDelaySeconds|scheme/ { inblk = 0 }
+    inblk && /path:/ { print $2; exit }
+  ' "$f")"
+  case "$live_path" in
+    /health)
+      echo "PASS [$chart] livenessProbe 保持浅探针 /health（未被误改成 readiness）"
+      pass=$((pass + 1))
+      ;;
+    *)
+      echo "FAIL [$chart] livenessProbe → ${live_path:-<无>}，应为 /health —— 依赖抖动会直接重启 Pod"
+      fail=$((fail + 1))
+      ;;
+  esac
+done
+
+echo "N/A [Helm 其余 chart] $NON_D29_REASON"
+
 echo
 echo "PASS: $pass  FAIL: $fail"
 
@@ -102,4 +184,4 @@ if [ "$fail" -gt 0 ]; then
   exit 1
 fi
 
-echo "GREEN：6 个服务 healthcheck 均指向 readiness，且一次性任务未被误加探针"
+echo "GREEN：compose 6 服务 + Helm 6 服务的 readinessProbe 指向 /health/ready，liveness 保持 /health"
