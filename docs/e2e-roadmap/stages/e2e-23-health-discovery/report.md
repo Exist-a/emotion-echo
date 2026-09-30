@@ -269,7 +269,12 @@ ai-svc grpcserver/ops、analytics config、shared configcenter、**6 个守卫�
 §13.3 只要求"级联修改文档"，但没给"扫哪些"的清单。本轮用独立子代理做了一次
 **只读全仓漂移扫描**（专挑与本阶段 12 条新事实矛盾的陈述），结果分两类。
 
-### 已更正的文档级联（10 个文件）
+### 已更正的文档级联（**10 组 / 17 个 .md 文件**）
+
+> ⚠️ **本节初版写"10 个文件"，是执行者自己数错了**：`10` 是下表的**组数**，
+> 实际改动的 `.md` 是 **17** 个（`git show --stat e1c9ab0 | grep -c '\.md$'` 实测）。
+> 同一组里的多个文件（如 decisions.md 与 microservices.md 同时改了汇总表和验证段）被并成一行，
+> 于是"组数"被当成了"文件数"——正是 anti-patterns **AP-14（数字与事实不一致）**。
 
 | 文件 | 陈旧内容 | 更正 |
 |------|----------|------|
@@ -283,6 +288,7 @@ ai-svc grpcserver/ops、analytics config、shared configcenter、**6 个守卫�
 | `QUICKSTART.md` Q3 | 「容器 unhealthy 但 /health 返回 200」的答案停在旧根因 | 改为"这是 D-29 的设计使然"，第一步就是换 `/health/ready`；补 503 输出样例与 `/health/ready` 只支持 GET 等新坑 |
 | `docs/learn/11-compose-to-k8s.md` | compose→k8s 的 healthcheck→3 探针映射是无脑 1:1；三探针全打 `/health` | 示例按双端点改写，并加一段说明**这个映射不是 1:1**（readiness 摘流量、liveness 才重启） |
 | `docs/stages/stage-31-landing.md` / `observability-compose.md` / `docker-compose.md` / `stage-34-ops-runbook.md` / `decomposition-plan.md` | 排障指向 `etc/*.yaml`（env 优先，指向 yaml 会误判）；验收判据停留在 6 容器；固定 30×2s 等 PG（与 E2E-F-151 同型反模式） | 逐条更正；`stage-34` 的等待循环改成递增退避 + 超时非零退出 |
+| `docs/ci-workflows/{go-test,llm-test}.yml`（2 个**模板副本**） | 头部仍写「本文件存放在 `docs/ci-workflows/` 而非 `.github/workflows/`」——该前提 2026-09-24 已解除，是不实陈述；两份内容已与真实 workflow 分叉却无任何免责标注（`web-test.yml` 早有 HISTORICAL 标注，另两份没有） | 按 `web-test.yml` 的既有格式补 HISTORICAL TEMPLATE 头 + "如有冲突以 `.github/workflows/` 为准" |
 
 ### 扫描顺带抓出的两处**真缺口**（不是文档问题）
 
@@ -291,6 +297,22 @@ ai-svc grpcserver/ops、analytics config、shared configcenter、**6 个守卫�
 | G-1 | **Helm 侧 6 个服务的 `readinessProbe` 仍打 `/health`** —— 本阶段只改了 compose | **生产（K8s）里 DB 挂掉时 Pod 不会被摘出 Endpoints，继续接流量，且零报错**（探针返 200 判定"健康"）。liveness/readiness 分离在生产等于没做 | TDD 修：先把断言加进 `scripts/test_healthcheck_readiness.sh`（RED 6 FAIL）→ 改 6 份 chart（GREEN 19/19）→ 负向对照（把 user-svc 改回 `/health` 立即 `FAIL 1 / RED`）|
 | G-2b | `test_route_contract.sh` 里 `WEB_API_ROUTES` 写的是 `Emotion-Echo-Web/...`，仓库实名是 `emotion-echo-web/...`（全小写） | **本地 Windows 绿、CI ubuntu 红**：Windows 文件系统大小写不敏感，脚本照常跑通；接进 Actions 后第一步就 `missing source` exit 1。**"本地全绿"不能替代跨平台验证** | 改小写 + 在脚本里写明这条坑（E2E-23 新增的 7 个守卫中唯一一个有大小写依赖的） |
 | G-2 | `scripts/test_route_contract.sh` 变红：`BFF route GET /health/ready NOT covered by APISIX` | 该脚本**不在 6 个 CI 守卫之列**，所以本阶段加路由时它静默变红、无人发现（AP-10 孤儿守卫的变体：守卫存在但没接进任何执行路径） | 修三处：① 把 `/health/ready` 显式加入该脚本的基础设施路径白名单（**只加这一条，不改成"跳过所有非 `/api/v1`"**，那会放过任何拼错前缀的路径）；② 更正脚本头部三处陈旧计数（27→37 主路径、`main.go:214-246`→`main.go:430`）并指向 `main_test.go` 的 `wantRoutes` 为单一事实源；③ **把它接进 `.github/workflows/e2e-guards.yml`（现 7 个守卫）**——光修脚本不接线，下次加路由还会静默变红 |
+
+### 复核轮（2026-09-30，被用户追问"中间态和结果都核实了吗"触发的自查）
+
+上一节的所有结论都只有**静态检查**背书。复核时逐条追问"这个验证本身可靠吗"，抓出 4 处问题：
+
+| # | 问题 | 处置 |
+|---|------|------|
+| V-1 | **改了 6 份 Helm 模板却从未 `helm template` 渲染过** —— 静态 grep 只证明"文本里有 `/health/ready`"，证明不了 YAML 没被改坏 | 实测 6 个 chart 全部 RENDER OK 且 readiness/liveness 路径正确；并把 `helm template` **固化进守卫**（守卫 19 → 25 项），helm 缺失时**报红并注明"本项未验证"**（不静默跳过 —— 本阶段 `python3` 假绿的同型教训）；负向对照（注入坏模板）确认守卫会红 |
+| V-2 | **liveness 断言没做过负向对照** —— 只验证过 readiness 侧 | 注入（把 chat-svc 的 liveness 改成 `/health/ready`）→ `FAIL 1 / rc=1`；还原后 `19/0 / rc=0`，工作树干净 |
+| V-3 | 本节写「已更正的文档级联（**10 个文件**）」，实际是 **10 组 / 17 个 .md** —— 组数被当成了文件数（AP-14） | 已更正，并在小节头写明更正原因与复核命令 `git show --stat e1c9ab0 \| grep -c '\.md$'` |
+| V-4 | 账本 E2E-F-164 写「10 处坏相对链接」，其中 2 条是 `/docs/...` **root-absolute** 路径 —— 它们在 GitHub 上**完全有效**；且未验证是否 pre-existing | 更正为 **7 处**（decisions.md 6 + roadmap.md 1），并**对 `origin/main` 跑同一扫描确认 7 条全部 pre-existing、非本轮引入** |
+
+顺带抓出第 5 处：`docs/ci-workflows/{go-test,llm-test}.yml` 两份**模板副本**头部仍写
+「本文件存放在 `docs/ci-workflows/` 而非 `.github/workflows/`」——该前提 2026-09-24 已解除，
+是不实陈述；两份内容也已与真实 workflow 分叉却无任何免责标注（`web-test.yml` 早有 HISTORICAL
+标注，另两份没有）。已按 `web-test.yml` 的既有格式补 HISTORICAL TEMPLATE 头。
 
 **教训**：G-1 说明"改了 dev 编排"不等于"改了健康契约"——契约的适用面是**所有部署形态**。
 G-2 说明"守卫写好了"不等于"守卫在跑"——`test_route_contract.sh` 早于本阶段存在，

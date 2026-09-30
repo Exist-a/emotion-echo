@@ -1,4 +1,9 @@
-# docs/ci-workflows/go-test.yml
+# ⚠️ HISTORICAL TEMPLATE — 本文件是 CI 落地前的设计模板，不是真实 workflow。
+# 真实 CI: .github/workflows/go-test.yml（两者内容已分叉，见下）。
+# 保留本文件仅供追溯 Stage 97 PR-9e 的设计；**如有冲突一律以 .github/workflows/ 为准**。
+# 旁证：本文件头部原写"存放在 docs/ci-workflows/ 而非 .github/workflows/"——
+# 该前提已于 2026-09-24 解除（token 拿到 workflow scope，见 docs/e2e-roadmap/roadmap.md），
+# 故那句话现在是不实陈述。
 #
 # Stage 97 PR-9e · Round 2 §P1-R2-16 · AGENTS.md §2.2 合并前门槛
 #

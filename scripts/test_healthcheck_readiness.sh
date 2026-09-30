@@ -176,6 +176,51 @@ done
 
 echo "N/A [Helm 其余 chart] $NON_D29_REASON"
 
+# ---------------------------------------------------------------------------
+# 渲染验证：改了 chart 模板必须证明它还能渲染。
+#
+# 为什么静态 grep 不够：grep 只证明"文本里有 /health/ready"，
+# 证明不了 YAML 结构没被改坏。本轮 6 份 deployment.yaml 改完后，
+# 第一次实测就是 `helm template` 全 6 个 RENDER OK —— 但那只是**手工跑过一次**，
+# 没有留痕就等于下轮会烂掉。守卫要能长期守住，就得每次都渲染。
+#
+# ⚠️ helm 缺失时的处置：如实报"未验证"并判红，**不静默跳过**。
+#    本阶段吃过教训——`python3` 在本机不存在，守卫那段检查从未执行却报 PASS（假绿）。
+#    "没验证"和"验证通过"必须能被区分。
+# ---------------------------------------------------------------------------
+echo
+echo "-- Helm 渲染验证 --"
+if ! command -v helm >/dev/null 2>&1; then
+  echo "FAIL [Helm 渲染] 环境无 helm 可执行文件 ⇒ 本项**未验证**（不是通过）。"
+  echo "      装 helm 后重跑本守卫；如需在无 helm 环境放行，请显式设置 SKIP_HELM_RENDER=1 并知悉该项失效。"
+  fail=$((fail + 1))
+elif [ "${SKIP_HELM_RENDER:-0}" = "1" ]; then
+  echo "SKIP [Helm 渲染] 由 SKIP_HELM_RENDER=1 显式跳过 ⇒ 本项**未验证**"
+else
+  for chart in $D29_CHARTS_EXPANDED; do
+    rendered="$(helm template "$chart" "$CHARTS_DIR/$chart" 2>&1)"
+    if [ $? -ne 0 ]; then
+      echo "FAIL [$chart] helm template 渲染失败（模板被改坏？）"
+      printf '%s
+' "$rendered" | head -3
+      fail=$((fail + 1))
+      continue
+    fi
+    r_path="$(printf '%s\n' "$rendered" | grep -A3 'readinessProbe:' | grep -m1 'path:' | sed 's|.*path: *||' | cut -d'#' -f1 | tr -d ' \r')"
+    l_path="$(printf '%s\n' "$rendered" | grep -A3 'livenessProbe:' | grep -m1 'path:' | sed 's|.*path: *||' | cut -d'#' -f1 | tr -d ' \r')"
+    case "$r_path" in
+      /health/ready*) ;;
+      *) echo "FAIL [$chart] 渲染产物里 readinessProbe 路径 = '$r_path'（期望 /health/ready）"; fail=$((fail + 1)); continue ;;
+    esac
+    case "$l_path" in
+      /health) ;;
+      *) echo "FAIL [$chart] 渲染产物里 livenessProbe 路径 = '$l_path'（期望 /health）"; fail=$((fail + 1)); continue ;;
+    esac
+    echo "PASS [$chart] helm template 渲染 OK（ready=$r_path live=$l_path）"
+    pass=$((pass + 1))
+  done
+fi
+
 echo
 echo "PASS: $pass  FAIL: $fail"
 
