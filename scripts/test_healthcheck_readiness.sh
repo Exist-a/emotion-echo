@@ -22,7 +22,6 @@ PORTS=(8888 8890 8893 8889 8891 8894)
 fail=0
 pass=0
 
-echo "AP-11 门禁实测：故意失败"; exit 1
 echo "== E2E-23 健康探针守卫：compose healthcheck 应指向 /health/ready =="
 
 if [ ! -f "$COMPOSE" ]; then
