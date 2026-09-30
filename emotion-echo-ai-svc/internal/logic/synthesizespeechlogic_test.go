@@ -6,9 +6,9 @@
 // test surface. The logic gates on three preconditions before invoking
 // the XTTS-bound SynthesizeText:
 //
-//   1. svcCtx.MultiModal != nil
-//   2. svcCtx.XTTS != nil
-//   3. text != ""
+//  1. svcCtx.MultiModal != nil
+//  2. svcCtx.XTTS != nil
+//  3. text != ""
 //
 // We exercise all three preconditions with NO XTTS network call needed
 // (each gates BEFORE SynthesizeText). The error-class surface is

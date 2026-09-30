@@ -117,9 +117,9 @@ func toProtoSurveyResult(r *types.SubmitSurveyResp) *emotionassessment.SurveyRes
 // toProtoSurveyResultItem 把 types.SurveyResultItem 转 proto
 func toProtoSurveyResultItem(t types.SurveyResultItem) *emotionassessment.SurveyResult {
 	return &emotionassessment.SurveyResult{
-		ResultId:   int64(t.ResultID),
-		SurveyId:   int64(t.SurveyID),
-		RiskLevel:  t.RiskLevel,
+		ResultId:  int64(t.ResultID),
+		SurveyId:  int64(t.SurveyID),
+		RiskLevel: t.RiskLevel,
 	}
 }
 
@@ -233,10 +233,10 @@ func (s *assessmentServer) GetSurveyResult(ctx context.Context, req *emotionasse
 		return nil, grpcerr.MapToError(err, "getSurveyResult")
 	}
 	return &emotionassessment.SurveyResult{
-		ResultId:   int64(resp.ResultID),
-		SurveyId:   int64(resp.SurveyID),
-		TotalScore: int32(resp.TotalScore),
-		RiskLevel:  resp.RiskLevel,
+		ResultId:    int64(resp.ResultID),
+		SurveyId:    int64(resp.SurveyID),
+		TotalScore:  int32(resp.TotalScore),
+		RiskLevel:   resp.RiskLevel,
 		DurationSec: int32(resp.DurationSec),
 	}, nil
 }

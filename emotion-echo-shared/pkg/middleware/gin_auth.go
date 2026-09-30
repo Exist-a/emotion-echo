@@ -5,9 +5,10 @@
 // 注入到 ctx。
 //
 // 流程：
-//   浏览器 → APISIX jwt-auth 验证 token → 通过后注入 X-User-Id: <uid>
-//          → svc 信任 APISIX（不再验证 signature）
-//          → svc 读 X-User-Id header，转 int64，注入 ctx
+//
+//	浏览器 → APISIX jwt-auth 验证 token → 通过后注入 X-User-Id: <uid>
+//	       → svc 信任 APISIX（不再验证 signature）
+//	       → svc 读 X-User-Id header，转 int64，注入 ctx
 //
 // Stage 94 PR-6 §P0-7：APISIX IP 白名单 —— 仅允许可信 APISIX 来源 IP
 // 携带 X-User-Id header，避免 svc 端口被外部直连时 header 伪造。
@@ -108,8 +109,11 @@ func GinAuthMiddlewareWithOpts(opts AuthOpts) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		// 跳过白名单端点（monitoring / metrics 不需要鉴权）
-		path := c.Request.URL.Path
-		if path == "/health" || path == "/metrics" {
+		//
+		// D-29：/health/ready 与 /health 同属健康探针面，必须一并免鉴权 ——
+		// compose healthcheck 从容器内发起、不带 X-User-Id，若漏了这里探针恒 401。
+		// 用精确匹配而非前缀，避免 /health/live 之类未定义路径被顺手放行。
+		if isHealthProbePath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}

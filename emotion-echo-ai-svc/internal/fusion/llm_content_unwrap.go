@@ -4,18 +4,18 @@
 // 剥成"干净的 JSON 字符串"供 json.Unmarshal 使用。
 //
 // 真实 LLM 返回模式（按出现频率）：
-//   1. 纯 JSON 字符串（理想情况）
-//   2. ```json\n{...}\n``` markdown 包裹（DeepSeek / OpenAI 偶发）
-//   3. ```\n{...}\n``` 无语言标记（Llama 类兼容实现）
-//   4. 双重 JSON 编码（content 本身是 JSON 字符串，需再反序列化一次）
-//   5. 前置/后置自然语言（"以下是融合结果：..."）
+//  1. 纯 JSON 字符串（理想情况）
+//  2. ```json\n{...}\n``` markdown 包裹（DeepSeek / OpenAI 偶发）
+//  3. ```\n{...}\n``` 无语言标记（Llama 类兼容实现）
+//  4. 双重 JSON 编码（content 本身是 JSON 字符串，需再反序列化一次）
+//  5. 前置/后置自然语言（"以下是融合结果：..."）
 //
 // 实现策略（按优先级）：
-//   1. TrimSpace
-//   2. 检测并剥 markdown 三反引号（含可选 json 语言标记）
-//   3. 再 TrimSpace
-//   4. 若首字符是 '"' 且 Unmarshal 后是 string → 视为双重 JSON，重 Marshal
-//   5. 返回最终字符串
+//  1. TrimSpace
+//  2. 检测并剥 markdown 三反引号（含可选 json 语言标记）
+//  3. 再 TrimSpace
+//  4. 若首字符是 '"' 且 Unmarshal 后是 string → 视为双重 JSON，重 Marshal
+//  5. 返回最终字符串
 package fusion
 
 import (

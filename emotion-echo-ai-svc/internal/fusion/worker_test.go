@@ -180,12 +180,12 @@ func TestWorker_Tick_FusesOneMessage_NoModalityButText(t *testing.T) {
 	}}
 
 	w := NewFusionWorker(FusionWorkerDeps{
-		EmotionRepo:    textRepo,
-		FaceEmotionRepo: faceRepo,
+		EmotionRepo:      textRepo,
+		FaceEmotionRepo:  faceRepo,
 		VoiceEmotionRepo: voiceRepo,
 		FusedEmotionRepo: fusedRepo, PendingLister: fusedRepo,
-		LLMFuser: llm,
-		LateFuser: late,
+		LLMFuser:     llm,
+		LateFuser:    late,
 		TickInterval: 5 * time.Second,
 	})
 
@@ -239,7 +239,7 @@ func TestWorker_Tick_AllThreeModalities(t *testing.T) {
 		TickInterval: 5 * time.Second,
 	})
 
-require.NoError(t, w.Tick(context.Background()))
+	require.NoError(t, w.Tick(context.Background()))
 	assert.Equal(t, 1, llm.called, "should call LLM first")
 	assert.Equal(t, 0, late.called, "should NOT fall back when LLM succeeds")
 	require.Len(t, fusedRepo.upserts, 1)

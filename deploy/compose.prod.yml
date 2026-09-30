@@ -23,6 +23,12 @@
 #  以下项是 ADR-20 §三列出的 dev vs prod 差异，但本文件**故意留空**：
 #
 #  1. NACOS_NAMESPACE        — prod 应改为 "prod"（不是 emotion-echo-dev）
+#  1b. NACOS_REQUIRED        — prod **必须** "1"（E2E-23 D-31，2026-09-29 用户拍板）。
+#                             dev 的 apps.yml 已显式设 "0"（注册失败继续跑，因为本地
+#                             开发不该被 Nacos 卡住）；prod 若沿用 "0" 则会在注册失败时
+#                             **静默降级**：HTTP 端口可达看起来活着，但 Nacos 里没有
+#                             实例 ⇒ APISIX/BFF 解析不到节点 ⇒ 全站 502。
+#                             与账本 E2E-F-137 完全同型，故 prod 必须 fail-fast。
 #  2. BFF_DEV_RETURN_CODE    — prod 必须 0（验证码回显关闭）
 #  3. BFF_TRUST_APISIX       — prod 应由 APISIX 强制 X-User-Id 注入，BFF 不再信任直连
 #  4. KAFKA_ENABLED          — prod 必须 true（dev 默认 false 是例外）

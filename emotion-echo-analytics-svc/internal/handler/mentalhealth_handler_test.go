@@ -43,9 +43,9 @@ type mhStubRepo2 struct {
 	assessment    *repository.MentalAssessment
 	assessmentErr error
 
-	history         []repository.AssessmentHistoryItem
-	historyNextCur  string
-	historyErr      error
+	history        []repository.AssessmentHistoryItem
+	historyNextCur string
+	historyErr     error
 
 	trend    []repository.TrendPoint
 	trendErr error
@@ -78,7 +78,7 @@ func TestMentalHealthAssessmentHandler_HappyPath_Returns200(t *testing.T) {
 		UserID: 1, Type: "daily",
 		WindowStart: "2026-07-15", WindowEnd: "2026-07-15",
 		OverallScore: 35.5, RiskLevel: "moderate",
-		Dimensions:    []repository.DimensionScore{},
+		Dimensions: []repository.DimensionScore{},
 	}}
 	r := gin.New()
 	r.GET("/api/v1/mental-health/assessment", MentalHealthAssessmentHandler(newMHHandlerCtx(repo, nil)))

@@ -174,7 +174,10 @@ emotion-echo-{domain}-svc/
 5. **Repository 模式**：interface + InMemory（测试替身）+ Postgres（生产）
 6. **鉴权**：**信任 APISIX 注入的 X-User-Id**（Stage 32 落地后；当前 JWT 不验签是审计 P0 S-1）
 7. **配置**：yaml 文件 + **Nacos 配置中心运营参数**（Stage 31 PR-04/05），仅放 feature flag / 限流阈值 / 模型路由表
-8. **健康检查**：每个 svc 暴露 `/health`，返回 dbOk / kafkaOk
+8. **健康检查**：每个 svc 暴露**两个**端点（E2E-23 / D-29）——
+   `/health` = liveness 恒 200（向后兼容）；`/health/ready` = readiness 检依赖，
+   返回 `dbOk` / `kafkaOk` / BFF 另加 `redis` / `nacos`，任一不 ok 即 503 + `status:"degraded"`。
+   compose healthcheck 与 Helm readinessProbe 一律指 `/health/ready`
 
 ---
 
@@ -227,12 +230,13 @@ cd emotion-echo-web-bff && ./web-bff.exe &
 cd emotion-llm-service && python main.py &
 
 # 4. 验证（通过 web-bff；APISIX Stage 32 落地后改 :9080）
-curl http://localhost:8894/health          # BFF 聚合下游健康探测
-curl http://localhost:8888/health          # user-svc
-curl http://localhost:8889/health          # assessment-svc
-curl http://localhost:8890/health          # chat-svc
-curl http://localhost:8891/health          # ai-svc
-curl http://localhost:8893/health          # analytics-svc
+#    ⚠️ 必须用 /health/ready —— /health 是 liveness，恒 200，验不出任何东西（D-29）
+curl -i http://localhost:8894/health/ready     # BFF 聚合下游健康探测（deps 含 redis/nacos）
+curl -i http://localhost:8888/health/ready     # user-svc
+curl -i http://localhost:8889/health/ready     # assessment-svc
+curl -i http://localhost:8890/health/ready     # chat-svc
+curl -i http://localhost:8891/health/ready     # ai-svc
+curl -i http://localhost:8893/health/ready     # analytics-svc
 
 # 5. 验证 Nacos 注册中心（Stage 31 验收）
 open http://localhost:8848/nacos           # 默认 nacos/nacos

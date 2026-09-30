@@ -71,6 +71,12 @@ func GetUserByIdHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 }
 
 // HealthHandler 健康检查（无鉴权）
+//
+// liveness 语义：进程活着即 200。**依赖不可用时仍返 200** —— 存量消费方
+// （apisix-seed 自带探活、smoke 脚本、APISIX upstream 检测）都按 200 判定，
+// 改成 503 会让 apisix-seed 的 condition: service_healthy 永不满足，
+// 把"某依赖降级"放大成"整站无路由"（D-29 选方案 A 的原因）。
+// 依赖状态由响应体的 status 字段表达，见 /health/ready。
 func HealthHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		resp, err := logic.NewHealthLogic(c.Request.Context(), svcCtx).Health()
@@ -79,5 +85,25 @@ func HealthHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, resp)
+	}
+}
+
+// HealthReadyHandler 就绪检查（无鉴权，D-29 新增）
+//
+// readiness 语义：依赖不可用时返 **503**，供 compose healthcheck 判定。
+// 与 /health 共用同一套依赖检查（同一个 HealthLogic），差别仅在 HTTP 码 ——
+// 两者的响应体 status 字段必然一致，测试已钉住。
+func HealthReadyHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		resp, err := logic.NewHealthLogic(c.Request.Context(), svcCtx).Health()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		code := http.StatusOK
+		if resp.Status != logic.StatusOk {
+			code = http.StatusServiceUnavailable
+		}
+		c.JSON(code, resp)
 	}
 }

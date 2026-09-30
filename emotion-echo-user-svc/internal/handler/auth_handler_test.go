@@ -12,10 +12,10 @@
 //     被拦（推测与 Gin 路由树中动态路由 /api/v1/users/:id 的优先级有关）。
 //
 // 本测试 RED 阶段要做到的：
-//   1. ResetPasswordHandler 在 gin.New() + 全局 GinAuthMiddleware 环境下，
-//      必须能进 handler 并按预期返回（非 401）。
-//   2. 修复方案 RED 描述：要么 main.go 修 noAuth 路由的中间件继承，要么
-//      GinAuthMiddleware 加白名单（/api/v1/users/login|/register|/reset-password）。
+//  1. ResetPasswordHandler 在 gin.New() + 全局 GinAuthMiddleware 环境下，
+//     必须能进 handler 并按预期返回（非 401）。
+//  2. 修复方案 RED 描述：要么 main.go 修 noAuth 路由的中间件继承，要么
+//     GinAuthMiddleware 加白名单（/api/v1/users/login|/register|/reset-password）。
 //
 // 测试规模：3 用例
 //   - happy path（前置 create user + reset）→ 200
@@ -30,9 +30,9 @@ import (
 	"strings"
 	"testing"
 
-	emotionmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-user-svc/internal/model"
 	"emotion-echo-user-svc/internal/repository"
+	emotionmw "github.com/emotion-echo/shared/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"

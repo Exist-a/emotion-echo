@@ -1,0 +1,128 @@
+name: e2e-guards
+
+# E2E-23 引入的静态守卫（2026-09-30；复核轮扩到 8 个）。
+#
+# 为什么是"静态"：这些守卫断言的是**配置与源码的一致性**
+# （compose / Helm healthcheck 指向、路由三方契约、dev-up 分批等待、
+#  migrate.sh 退避、gRPC 停机翻转接线、NACOS_REQUIRED 声明），
+# 只读文件即可判定，**不需要运行容器栈** —— 故可在 GitHub runner 上跑。
+#
+# 为什么不含 smoke_health_discovery.py：它要探测真实运行的服务
+# （`docker exec` 进容器网络、Nacos 注册数、网关链路），
+# runner 上没有 19 容器栈 ⇒ 保持"本地/收口时执行"。
+#
+# 为什么含 test_integration_tag_compiles.sh：默认 `go test ./...` 与 `go vet ./...`
+# 都**跳过** `//go:build integration` 的文件，于是那块代码没有任何门禁在管——
+# E2E-23 自己就因此留下一个语法错误还全绿（report §9.5）。
+#
+# 为什么含 test_route_contract.sh：它早于 E2E-23 就存在，但**从未接进任何
+# 执行路径** —— 本阶段新增 `GET /health/ready` 时它静默变红
+# （`BFF route GET /health/ready NOT covered by APISIX`），没有任何机制发现。
+# 这就是"守卫写了但不等于守卫在跑"（anti-patterns AP-10 的变体），本轮接进来。
+#
+# 门禁效力声明（AP-11 要求如实标注）：
+#   本 workflow **当前仅报告，不拦合并** —— main 的 required_status_checks
+#   未启用（见 discovered-unresolved.md 的 E2E-F-30 / E2E-F-162）。
+#   "能跑红" ≠ "能拦"。接入 required checks 是独立动作，需仓库管理员在
+#   网页端开启（`scripts/check_required_checks.py` 可核）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # python 用于守卫内的 YAML 块解析（scripts/_extract_compose_block.py 等）。
+      # ⚠️ 守卫脚本内一律调 `python` 而非 `python3` —— 后者在部分环境
+      # （本项目开发机实测）不存在且**静默返回非零**，会让检查"从未执行
+      # 却报 PASS"（E2E-23 实施期真实踩到的假绿）。
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # 第 8 个守卫需要 Go 工具链：`go vet -tags integration` 用来编译
+      # **带 build tag 的测试代码**。这类代码默认被 `go test ./...` 和
+      # `go vet ./...` 跳过 —— E2E-23 自己就因此漏过一个语法错误（见
+      # report §9.5 / 账本 E2E-F-167）。没有这一步，该守卫会因"无 go"判红。
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+
+      - name: 前置（bash + python + go 可用）
+        run: |
+          bash --version | head -1
+          python --version
+          go version
+
+      - name: 守卫 1/6 compose healthcheck 指向 readiness
+        run: bash scripts/test_healthcheck_readiness.sh
+
+      - name: 守卫 2/6 观测栈 + 网关 healthcheck 覆盖
+        run: bash scripts/test_obs_healthchecks.sh
+
+      - name: 守卫 3/6 gRPC health 停机翻转接线
+        run: bash scripts/test_grpc_health_shutdown.sh
+
+      - name: 守卫 4/6 NACOS_REQUIRED 编排声明
+        run: bash scripts/test_nacos_required_declared.sh
+
+      - name: 守卫 5/6 migrate.sh 等待 Postgres 的退避
+        run: bash scripts/test_migrate_pg_wait.sh
+
+      - name: 守卫 6/6 dev-up.sh 分批等待
+        run: bash scripts/test_devup_batch_waits.sh
+
+      - name: 守卫 7/7 三方路由契约（APISIX ↔ BFF ↔ 前端）
+        run: bash scripts/test_route_contract.sh
+
+      - name: 守卫 8/8 build tag 下的代码也能编译
+        run: bash scripts/test_integration_tag_compiles.sh
+
+      - name: 守卫 9/9 阶段未完成清单完整且数字自洽
+        run: bash scripts/check_stage_todo_section.sh
+
+      # 这条守的是**审计器自己**。A5（"阶段判 done 前账本须对账干净"）
+      # 是"未解决账本"的唯一执行者，而旧 parse_ledger 对格数 < 6 的行
+      # **静默 continue** ⇒ 有 4 条跨行的 Markdown 账本行对 A5 完全不可见，
+      # 阶段可以带着一条未解决的账本判 done 而门禁全绿。
+      # E2E-23 当时是**侥幸**没被绕过（那 4 条都不归它）——靠运气不是机制。
+      - name: 守卫 10/10 审计器账本解析器无盲区
+        run: bash scripts/test_audit_ledger_parser.sh
+
+      # 防"生产死代码回流"（E2E-23 F-163，用户裁定删掉 healthcheck 的 server 侧包装）。
+      # 那段 Server/NewServer/RegisterWith/Shutdown/Resume 在生产路径上一次都没被实例化
+      # ——5 个服务用的是上游 google.golang.org/grpc/health。更坏的是它与生产实现
+      # 形成两套并存的健康语义，排障会查错地方。本守卫钉死"生产只用上游"，
+      # 并确保删死代码时没有连带删掉 MarkShuttingDown 的有效行为覆盖。
+      - name: 守卫 11/11 healthcheck 无生产死代码
+        run: bash scripts/test_healthcheck_no_dead_server.sh
+
+      # 防「降级启动却报健康」（E2E-23 F-96 实测修复）。
+      # 5 个服务的 healthlogic 曾是 `dbOK := true` + `if XxxRepo != nil { ping }`
+      # ——repo 为 nil（main.go 单次连接失败后的降级启动）时整个 if 被跳过，
+      # 恰恰在数据库完全不可用时报 dbOk=true / status=ok，
+      # 使 /health/ready 返 200、容器判 healthy、APISIX 照常路由，且零告警。
+      # 本守卫守覆盖面（5 服务同型），语义由 user-svc 的行为测试钉住。
+      - name: 守卫 12/12 降级启动时健康探针必须说假话
+        run: bash scripts/test_health_nilrepo_truthful.sh
+
+      # 防「用失真的命令判定 go test 结果」（E2E-23 收口轮亲历）。
+      # 本机 Git Bash 的 grep 是 ugrep，`grep -cE "^FAIL"` 对含 FAIL 的输出返回 0，
+      # 而 `grep -c "FAIL"` 返回 8 —— 我据此误报"5 个服务全绿"并把阶段判成 done，
+      # 真正抓住问题的是 CI 而非本地校验。本守卫锁死"用退出码判定"这条规则。
+      - name: 守卫 13/13 go test 结果判定必须用退出码
+        run: bash scripts/test_go_test_exitcode_gate.sh

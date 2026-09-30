@@ -60,7 +60,7 @@ type FaceEmotionRepo interface {
 type InMemoryFaceEmotionRepo struct {
 	mu             sync.RWMutex
 	byID           map[int64]*model.FaceEmotionResult
-	byUploadID     map[string]int64 // uploadID → result ID
+	byUploadID     map[string]int64  // uploadID → result ID
 	byMessageIndex map[int64][]int64 // messageID → result IDs（用于 GetLatestByMessageID）
 	nextID         int64
 }
@@ -194,9 +194,24 @@ func (r *PostgresFaceEmotionRepo) Create(ctx context.Context, f *model.FaceEmoti
 		}
 		// 不存在：继续走 INSERT 路径（理论上 OnConflict 兜底，但实际很少触发）
 	}
+	// ⚠️ `Where` 谓词**必须**与 partial 唯一索引的谓词逐字一致，否则 PostgreSQL
+	// 推不出冲突目标 ⇒ `42P10 there is no unique or exclusion constraint matching
+	// the ON CONFLICT specification`。
+	//
+	// 这不是测试环境问题：migration `i006_upload_id_not_null_unique.sql` 把索引改成
+	// `CREATE UNIQUE INDEX uq_face_emotion_upload_id ON ...(upload_id)
+	//  WHERE upload_id <> '__legacy__'`（partial，为了让历史 NULL/占位行共存），
+	// 而这里的 ON CONFLICT 一直没带谓词。**实测在运行中的 dev 库上直接复现**：
+	// 任何一条 face 情绪插入都会 42P10 —— 即多模态情绪入库完全不可用。
+	// 前面的 SELECT 早退出只能避开"重复插入"，避不开这个（它在语句解析期就失败）。
+	// 回归钉：integration_test/multimodal_repo_integration_test.go（共享 fixture 跑真实迁移）。
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "upload_id"}},
-		DoNothing: true,
+		// 用 TargetWhere 而不是 Where：GORM 把 TargetWhere 拼在冲突目标列**之后、
+		// 动作之前**（`ON CONFLICT (col) WHERE <pred> DO NOTHING`），
+		// 而 Where 被拼在动作**之后**（那是给 DO UPDATE 用的），位置错了会 42601。
+		TargetWhere: clause.Where{Exprs: []clause.Expression{clause.Neq{Column: clause.Column{Name: "upload_id"}, Value: "__legacy__"}}},
+		DoNothing:   true,
 	}).Create(f).Error
 }
 

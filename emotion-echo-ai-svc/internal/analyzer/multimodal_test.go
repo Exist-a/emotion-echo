@@ -147,7 +147,7 @@ func TestMultiModalAnalyzer_SynthesizeText_NoXTTS(t *testing.T) {
 func TestMultiModalAnalyzer_SynthesizeText_WithXTTS(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(aiclient.TTSResponse{
-			Audio: base64.StdEncoding.EncodeToString([]byte("WAV1")),
+			Audio:      base64.StdEncoding.EncodeToString([]byte("WAV1")),
 			SampleRate: 24000,
 		})
 	}))

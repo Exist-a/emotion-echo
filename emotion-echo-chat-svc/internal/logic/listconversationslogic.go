@@ -12,11 +12,9 @@ import (
 	"context"
 	"errors"
 
-	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
-
-	
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 )
 
 // ListConversationsLogic 处理 GET /api/v1/conversations

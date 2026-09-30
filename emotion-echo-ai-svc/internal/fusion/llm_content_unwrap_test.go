@@ -4,11 +4,11 @@
 // unwrapLLMContent 负责把各种包装剥掉，给 json.Unmarshal 一个干净的 JSON 字符串。
 //
 // 5 个 case 覆盖：
-//   1. 纯 JSON（无包装）
-//   2. ```json\n{...}\n``` 包裹
-//   3. ```\n{...}\n``` 包裹（无语言标记）
-//   4. 双重 JSON 编码（content 本身就是 JSON 字符串）
-//   5. 前置自然语言 + JSON（LLM 偶发"以下是结果：..."模式）
+//  1. 纯 JSON（无包装）
+//  2. ```json\n{...}\n``` 包裹
+//  3. ```\n{...}\n``` 包裹（无语言标记）
+//  4. 双重 JSON 编码（content 本身就是 JSON 字符串）
+//  5. 前置自然语言 + JSON（LLM 偶发"以下是结果：..."模式）
 package fusion
 
 import (
@@ -73,6 +73,6 @@ func TestUnwrapLLMContent_WhitespaceTrimmed(t *testing.T) {
 // TestUnwrapLLMContent_EmptyReturnsEmpty 空字符串 → 空。
 func TestUnwrapLLMContent_EmptyReturnsEmpty(t *testing.T) {
 	t.Parallel()
-assert.Equal(t, "", unwrapLLMContent(""))
-assert.Equal(t, "", unwrapLLMContent("   "))
+	assert.Equal(t, "", unwrapLLMContent(""))
+	assert.Equal(t, "", unwrapLLMContent("   "))
 }

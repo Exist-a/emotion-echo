@@ -52,6 +52,9 @@ type ConsumerGroupHandler struct {
 	DLQ DLQPublisher
 	// MaxRetries Stage 30-C A2：失败最大重试次数，0 时取默认值 3。
 	MaxRetries int
+	// MaxRetriesFn 重试上限的运行时取值钩子（E2E-23 #31 / D-32）。
+	// 非 nil 时**每条消息**现读；nil 时退回 MaxRetries 字段。
+	MaxRetriesFn func() int
 	// attempts Stage 30-C A2：msg.Key → 已重试次数（消费周期内有效）
 	//
 	// Round 5b §B：attemptsMu 守卫 map 读写。sarama 当前版本 ConsumeClaim
@@ -96,7 +99,7 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 		h.attempts = make(map[string]int)
 	}
 	h.attemptsMu.Unlock()
-	maxRetries := h.MaxRetries
+	maxRetries := h.effectiveMaxRetries()
 	if maxRetries <= 0 {
 		maxRetries = 3
 	}
@@ -169,3 +172,16 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 }
 
 // KafkaConsumer 实现见 consumer_runner.go（Round 4.7 §F 拆分）
+
+// effectiveMaxRetries 返回当前生效的重试上限（E2E-23 #31）。
+func (h *ConsumerGroupHandler) effectiveMaxRetries() int {
+	if h != nil && h.MaxRetriesFn != nil {
+		if v := h.MaxRetriesFn(); v > 0 {
+			return v
+		}
+	}
+	if h == nil {
+		return 3
+	}
+	return h.MaxRetries
+}

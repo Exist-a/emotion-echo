@@ -38,11 +38,11 @@ import (
 	"emotion-echo-ai-svc/internal/handler"
 	logging "emotion-echo-ai-svc/internal/logging" // Stage 41 PR-5: re-export shared/pkg/logging,实际定义在 _re_export.go
 	"emotion-echo-ai-svc/internal/logic"
+	"emotion-echo-ai-svc/internal/ops"
 	"emotion-echo-ai-svc/internal/repository"
 	"emotion-echo-ai-svc/internal/svc"
 
 	"github.com/SkyAPM/go2sky"
-	"github.com/gin-gonic/gin"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
 	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
@@ -50,6 +50,7 @@ import (
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	sharedskywalking "github.com/emotion-echo/shared/pkg/skywalking"
+	"github.com/gin-gonic/gin"
 
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
 	"gorm.io/driver/postgres"
@@ -83,6 +84,30 @@ func readEnvInt(name string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+// newLLMFuserForConfig 把 config 层的 LLM 参数接到 fusion.LLMFuser。
+//
+// 存在的理由（E2E-23 P2，账本 E2E-F-159）：修之前 main 直接内联构造
+// `fusion.NewLLMFuser(fusion.LLMConfig{BaseURL, APIKey, Model})`，
+// **漏了 Timeout** —— 而 c.LLM.Timeout 是加载了的（yaml `Timeout: 3`、
+// env `LLM_TIMEOUT` 经 applyEnvOverrides 覆盖、SetDefaults 兜底 3），
+// 只是没传下去 ⇒ 永远走 NewLLMFuser 内置的 3s，配置形同虚设。
+//
+// 抽成函数而非就地补一个字段，是为了**让"值有没有真的传下去"可被行为测试
+// 断言**：仓内既有的 main_*_test.go 多是源码字符串匹配，那只能证明
+// "代码里出现过这个字段名"，证���不了"它被用上了"。
+//
+// timeoutSecs 的单位是**秒**（与 config.LLM.Timeout / yaml 一致），
+// 这里负责换算成 time.Duration —— 少这一乘会得到 5**纳秒**，
+// 比不传更糟（每次 LLM 调用立刻超时）。
+func newLLMFuserForConfig(baseURL, apiKey, model string, timeoutSecs int) *fusion.LLMFuser {
+	return fusion.NewLLMFuser(fusion.LLMConfig{
+		BaseURL: baseURL,
+		APIKey:  apiKey,
+		Model:   model,
+		Timeout: time.Duration(timeoutSecs) * time.Second,
+	})
 }
 
 // lruCapacityFromEnv 读 fusion worker LRU 容量（E2E-18 测试点 #3 契约）：
@@ -301,6 +326,20 @@ func main() {
 		}
 	}
 
+	// E2E-23 #31（D-32）：ops 容器承载 9 个可热更的运营参数。
+	// 必须**先于** BootNacos 建好 —— 它要被注入 deps.ops 才能收到 Nacos 推送，
+	// 又要被 ServiceContext 的客户端钩子与熔断器共享（同一实例，热更才生效）。
+	opsState := ops.New(ops.Initial{
+		LLMTimeout:           time.Duration(c.LLM.Timeout) * time.Second,
+		FERTimeout:           time.Duration(c.FER.Timeout) * time.Second,
+		SenseVoiceTimeout:    time.Duration(c.SenseVoice.Timeout) * time.Second,
+		XTTSTimeout:          time.Duration(c.XTTS.Timeout) * time.Second,
+		XTSLanguage:          c.XTTS.Language,
+		XTSSpeed:             c.XTTS.Speed,
+		KafkaMaxRetries:      c.Kafka.MaxRetries,
+		BreakerFailThreshold: readEnvInt("LLM_BREAKER_FAIL_THRESHOLD", 5),
+		BreakerOpenSeconds:   time.Duration(readEnvInt("LLM_BREAKER_OPEN_SECONDS", 30)) * time.Second,
+	})
 	// 3. Kafka Consumer
 	if c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
 		kc, err := consumer.NewKafkaConsumer(kafkaBrokersList, c.Kafka.GroupID)
@@ -361,7 +400,9 @@ func main() {
 						return createdHandler.Handle(ctx, evt)
 					},
 					events.EventTypeMessageCreated,
-					sharedgrpc.NewGo2SkyTracer(tracer), dlq, maxRetries); err != nil {
+					sharedgrpc.NewGo2SkyTracer(tracer), dlq, maxRetries,
+					// E2E-23 #31：每条消息现读 ops 容器 ⇒ max_retries 可热更
+					func() int { return opsState.Snapshot().KafkaMaxRetries }); err != nil {
 					slog.Error("kafka consume err", "err", err)
 				}
 			}()
@@ -380,6 +421,9 @@ func main() {
 		svcFusedRepo = repository.NewPostgresFusedEmotionRepo(db)
 	}
 	svcCtx := svc.NewServiceContext(c, emoRepo, faceRepo, voiceRepo, svcFusedRepo)
+	svcCtx.Ops = opsState // E2E-23 #31：客户端钩子从这里取热更值
+
+	svcCtx.Ops = opsState
 
 	// Stage 22-A.5: build 3 AI model clients + MultiModalAnalyzer.
 	svcCtx.InitMultiModal()
@@ -426,6 +470,7 @@ func main() {
 
 	// 6. routes
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/health/ready", handler.HealthReadyHandler(svcCtx))
 	r.GET("/api/v1/emotion/message/:messageId", handler.GetEmotionByMessageHandler(svcCtx))
 	r.GET("/api/v1/emotion/conversation/:conversationId", handler.ListEmotionByConversationHandler(svcCtx))
 	// Stage 23: AI multimodal / TTS / AI health endpoints
@@ -442,7 +487,9 @@ func main() {
 
 	// Stage 31 PR-09: Nacos 注册 + 配置（ai-svc 同时暴露 HTTP :8891 + gRPC :8892）
 	// 注册时仅注册 HTTP 端口（metadata.grpc_port=8892 供 Stage 32 APISIX 双注册决策）
-	nacosRuntime, err := BootNacos(rootCtx, &c, defaultBootDeps())
+	bootDeps := defaultBootDeps()
+	bootDeps.ops = opsState
+	nacosRuntime, err := BootNacos(rootCtx, &c, bootDeps)
 	if err != nil {
 		if shareddiscovery.IsHardBootError(err.Error()) {
 			logging.Fatalf("[nacos] boot failed (fatal): %v", err)
@@ -478,21 +525,28 @@ func main() {
 		// 退化为环境变量 LLM_BASE_URL；为空则 nil（Worker 走 late_fuser 兜底）
 		//
 		// Stage 35 PR-4 + PR-5 + PR-8 接线：
-		//   - Timeout 默认 3s（NewLLMFuser 内置；env LLM_TIMEOUT 可覆盖）
+		//   - Timeout 默认 3s（NewLLMFuser 内置）；**yaml / env LLM_TIMEOUT 经
+		//     newLLMFuserForConfig 真正传入**（E2E-23 P2 修复前此处漏传，
+		//     导致 c.LLM.Timeout 加载后被丢弃，"配了但不生效"，账本 F-159）
 		//   - SetBreaker（连续 5 失败 / 30s Open / 不重试）由 env LLM_BREAKER_* 配置
 		//   - Model 默认 deepseek-chat
 		var llmFuser *fusion.LLMFuser
 		if llmBase := os.Getenv("LLM_BASE_URL"); llmBase != "" {
-			llmFuser = fusion.NewLLMFuser(fusion.LLMConfig{
-				BaseURL: llmBase,
-				APIKey:  os.Getenv("LLM_API_KEY"),
-				Model:   os.Getenv("LLM_MODEL"),
-			})
+			llmFuser = newLLMFuserForConfig(
+				llmBase,
+				os.Getenv("LLM_API_KEY"),
+				os.Getenv("LLM_MODEL"),
+				c.LLM.Timeout,
+			)
 			// 注入 circuit breaker（默认值；env 覆盖）
 			br := fusion.NewCircuitBreaker(fusion.BreakerConfig{
 				FailThreshold: readEnvInt("LLM_BREAKER_FAIL_THRESHOLD", 5),
 				OpenSeconds:   time.Duration(readEnvInt("LLM_BREAKER_OPEN_SECONDS", 30)) * time.Second,
 			})
+			// E2E-23 #31：LLM 超时 + 两个熔断阈值全部可热更
+			llmFuser.TimeoutFn = func() time.Duration { return opsState.Snapshot().LLMTimeout }
+			br.FailThresholdFn = func() int { return opsState.Snapshot().BreakerFailThreshold }
+			br.OpenSecondsFn = func() time.Duration { return opsState.Snapshot().BreakerOpenSeconds }
 			llmFuser.SetBreaker(br)
 			logging.Printf("[fusion] LLM fuser active: %s model=%s breaker=%v", llmBase, os.Getenv("LLM_MODEL"), br.State())
 		} else {

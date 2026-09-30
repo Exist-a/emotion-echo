@@ -3,9 +3,9 @@
 // validateLLMOutput 校验 LLM 反序列化后的 llmFusedOutput 结构是否合法。
 //
 // 校验三条（任一失败 → 返回 error，让 Worker 走 late_fuser 兜底）：
-//   1. PrimaryEmotion ∈ 白名单（happy/sad/angry/neutral/calm/anxious/surprised/disgusted/fearful）
-//   2. SentimentScore ∈ [-1, 1]（闭区间）
-//   3. ModalityContrib 非空、各 value ∈ [0, 1]、总和 ∈ [0.99, 1.01]（容忍浮点）
+//  1. PrimaryEmotion ∈ 白名单（happy/sad/angry/neutral/calm/anxious/surprised/disgusted/fearful）
+//  2. SentimentScore ∈ [-1, 1]（闭区间）
+//  3. ModalityContrib 非空、各 value ∈ [0, 1]、总和 ∈ [0.99, 1.01]（容忍浮点）
 //
 // 设计理由（ADR-15 §B）：
 //   - 白名单比正则稳：emotion 标签体系是封闭集合

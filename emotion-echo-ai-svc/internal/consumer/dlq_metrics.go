@@ -8,13 +8,13 @@
 // 但 DLQ.Publish 失败（broker 不可达、sarama 超时）时仅 slog.Error 即丢弃，业务消息已
 // MarkMessage 也无法挽回——属于"业务 + DLQ 双失败"的不可观测黑洞。本 counter 让黑洞可见：
 //
-//   emotion_echo_dlq_publish_total{result="success"} — DLQ 投递成功累计
-//   emotion_echo_dlq_publish_total{result="failure"} — DLQ 投递失败累计（broker 不可达 / 超时）
+//	emotion_echo_dlq_publish_total{result="success"} — DLQ 投递成功累计
+//	emotion_echo_dlq_publish_total{result="failure"} — DLQ 投递失败累计（broker 不可达 / 超时）
 //
 // 部署侧告警（deploy/prometheus/rules/kafka-dlq.yml，本 round 同步）：
 //
-//   rate(emotion_echo_dlq_publish_total{result="failure"}[5m]) > 0.1
-//     for 5m  → severity=critical，page on-call
+//	rate(emotion_echo_dlq_publish_total{result="failure"}[5m]) > 0.1
+//	  for 5m  → severity=critical，page on-call
 //
 // 设计取舍：
 //   - counter 在 caller (consumer.go) 调，而不是 DLQ.Publish 实现内部：

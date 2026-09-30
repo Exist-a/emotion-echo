@@ -21,13 +21,13 @@ import (
 
 // MultiModalAnalyzeResp 标准响应结构
 type MultiModalAnalyzeResp struct {
-	Kind        string             `json:"kind"`
-	Emotion     string             `json:"emotion"`
-	Confidence  float64            `json:"confidence"`
-	Sentiment   float64            `json:"sentimentScore"`
-	Model       string             `json:"model"`
-	Transcript  string             `json:"transcript,omitempty"`
-	AllScores   map[string]float64 `json:"allScores,omitempty"`
+	Kind       string             `json:"kind"`
+	Emotion    string             `json:"emotion"`
+	Confidence float64            `json:"confidence"`
+	Sentiment  float64            `json:"sentimentScore"`
+	Model      string             `json:"model"`
+	Transcript string             `json:"transcript,omitempty"`
+	AllScores  map[string]float64 `json:"allScores,omitempty"`
 }
 
 // MultiModalAnalyzeLogic 多模态情绪分析的对外网关逻辑

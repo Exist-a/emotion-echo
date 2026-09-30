@@ -71,7 +71,7 @@ rate(emotion_echo_fusion_lru_stat{kind="hits"}[5m]) /
 | `NACOS_ENABLED` | `false` | Nacos 注册中心开关 |
 | `NACOS_ADDR` | `emotion-echo-nacos:8848` | Nacos 地址 |
 | `NACOS_NAMESPACE` | `emotion-echo-dev` | Nacos 命名空间 |
-| `NACOS_HOT_RELOAD` | `false` | Nacos 配置热更新 |
+| `NACOS_HOT_RELOAD` | `false`（compose 中 chat/analytics/ai 显式 `true`） | Nacos 配置热更新。**env 覆盖 yaml**，排障先看 compose 再看 `etc/*.yaml` |
 | `KAFKA_ENABLED` | `true` | Kafka 消费者开关 |
 | `KAFKA_BROKERS` | `localhost:9092` | Kafka brokers |
 | `SKYWALKING_ENABLED` | `false` | SkyWalking tracer 开关 |

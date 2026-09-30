@@ -169,6 +169,14 @@ services:
     networks:
       - app-network
 
+    # E2E-23 #26：OAP 未启用 SW_HEALTH_CHECKER（无 /internal/liveness），
+    # 但 SW_TELEMETRY=prometheus 在 :1234 暴露 /metrics（实测可达）⇒ 用它做存活信号。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:1234/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
 # =====================================================
 # SkyWalking UI (前端)
 # =====================================================
@@ -187,6 +195,13 @@ services:
     networks:
       - app-network
 
+    # E2E-23 #26：UI 是 web 应用，探根路径（实测返 HTML）。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
   # =====================================================
   # Nacos 2.4.3 standalone（Stage 31 PR-11）
   # 注册中心 + 配置中心；dev 用内嵌 Derby，免外部依赖
@@ -352,6 +367,29 @@ services:
       - "9091"         # Prometheus exporter
     networks:
       - app-network
+    # E2E-23 D1：全站入口此前**零 healthcheck** —— 网关自己死了也没人知道
+    # （E2E-F-152 记录的"发告警的东西自己死了"是同型问题的更深版本）。
+    #
+    # 为什么只能测端口、不能测 HTTP 端点（计划期实测，非臆断）：
+    #   ① 该镜像内**没有任何 HTTP 客户端** —— 实测 wget/curl/nc/busybox 全缺，
+    #      所以 `wget ... || exit 1` 这种写法在本容器里用不了；
+    #   ② openresty 自带的 `resty` 也跑不通 —— 它依赖 worker 运行环境，
+    #      独立执行报 init_worker_by_lua 错误；
+    #   ③ APISIX 未启用 healthcheck / public-api 插件 —— 实测
+    #      `/apisix/status` 返 404、`/v1/healthcheck/...` 返 404，
+    #      没有可供外部探测的健康端点。
+    # ⇒ 唯一可行的信号是 data plane 9080 能否建连（容器内有 bash，
+    #    用 /dev/tcp 测，不依赖任何外部二进制）。
+    #
+    # 已知局限（如实记录，不假装闭合）：端口通只说明 openresty 在监听，
+    # **不能**反映"路由是否真的可用"。后者由 E2E-25 的上游主动健康检查
+    # 承担（账本 E2E-F-154 已裁定归 E2E-25）。
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/9080' 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
 
   # Stage 36-C1: apisix-dashboard 容器已删除。
   # 历史（Stage 32 PR-14）：apache/apisix-dashboard:3.18.0-alpine 镜像实际不存在于 Docker Hub
@@ -386,6 +424,15 @@ services:
       - prometheus_data:/prometheus
     networks:
       - app-network
+    # E2E-23 D2：补 healthcheck —— 观测栈此前零探针（账本 E2E-F-151），
+    # 而 E2E-F-152 记录的“发告警的东西自己死了”正是零探针的直接后果。
+    # 端点 /-/healthy 于 2026-09-29 计划期逐个实测可达后才写入（非照抄文档）。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     depends_on:
       - apisix
 
@@ -414,6 +461,14 @@ services:
     networks:
       - app-network
 
+    # E2E-23 #26：receiver 的 /received 返回已收告警 JSON（实测 {"count":N,...}）——
+    # 兼作"通知渠道可断言"的存活端点。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:8080/received || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: emotion-echo-alertmanager
@@ -428,6 +483,15 @@ services:
       - alertmanager_data:/alertmanager
     networks:
       - app-network
+    # E2E-23 D2：补 healthcheck —— 观测栈此前零探针（账本 E2E-F-151），
+    # 而 E2E-F-152 记录的“发告警的东西自己死了”正是零探针的直接后果。
+    # 端点 /-/healthy 于 2026-09-29 计划期逐个实测可达后才写入（非照抄文档）。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:9093/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     depends_on:
       - prometheus
 
@@ -452,6 +516,15 @@ services:
       - "9308:9308"
     networks:
       - app-network
+    # E2E-23 D2：补 healthcheck —— 观测栈此前零探针（账本 E2E-F-151），
+    # 而 E2E-F-152 记录的“发告警的东西自己死了”正是零探针的直接后果。
+    # 端点 /metrics 于 2026-09-29 计划期逐个实测可达后才写入（非照抄文档）。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:9308/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     depends_on:
       kafka:
         condition: service_healthy
@@ -477,6 +550,15 @@ services:
       - grafana_data:/var/lib/grafana
     networks:
       - app-network
+    # E2E-23 D2：补 healthcheck —— 观测栈此前零探针（账本 E2E-F-151），
+    # 而 E2E-F-152 记录的“发告警的东西自己死了”正是零探针的直接后果。
+    # 端点 /api/health 于 2026-09-29 计划期逐个实测可达后才写入（非照抄文档）。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     depends_on:
       - prometheus
 
@@ -494,6 +576,15 @@ services:
     networks:
       - app-network
 
+    # E2E-23 D2：补 healthcheck —— 观测栈此前零探针（账本 E2E-F-151），
+    # 而 E2E-F-152 记录的“发告警的东西自己死了”正是零探针的直接后果。
+    # 端点 /ready 于 2026-09-29 计划期逐个实测可达后才写入（非照抄文档）。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
   promtail:
     image: grafana/promtail:3.2.0
     container_name: emotion-echo-promtail
@@ -512,6 +603,15 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - app-network
+    # E2E-23 D2：补 healthcheck —— 观测栈此前零探针（账本 E2E-F-151），
+    # 而 E2E-F-152 记录的“发告警的东西自己死了”正是零探针的直接后果。
+    # 端点 /ready 于 2026-09-29 计划期逐个实测可达后才写入（非照抄文档）。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:9080/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     depends_on:
       - loki
 

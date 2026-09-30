@@ -51,13 +51,13 @@ type FusedUpserter interface {
 
 // FusionWorkerDeps Worker 的依赖。
 type FusionWorkerDeps struct {
-	EmotionRepo     EmotionTextGetter
-	FaceEmotionRepo FaceModalityGetter
+	EmotionRepo      EmotionTextGetter
+	FaceEmotionRepo  FaceModalityGetter
 	VoiceEmotionRepo VoiceModalityGetter
 	FusedEmotionRepo FusedUpserter
-	LLMFuser        Fuser
-	LateFuser       Fuser
-	TickInterval    time.Duration
+	LLMFuser         Fuser
+	LateFuser        Fuser
+	TickInterval     time.Duration
 	// PendingLister 可选：决定 tick() 找哪些 candidate
 	PendingLister interface {
 		ListPending(ctx context.Context, ttlSeconds int) ([]int64, error)
@@ -138,8 +138,8 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 
 	// 3. 拼 snapshot
 	snap := ModalitySnapshot{
-		Text: emotionToModality(text),
-		Face: faceEmotionToModality(face),
+		Text:  emotionToModality(text),
+		Face:  faceEmotionToModality(face),
 		Voice: voiceEmotionToModality(voice),
 	}
 
@@ -244,12 +244,12 @@ func (w *FusionWorker) Run(ctx context.Context) error {
 		case <-ticker.C:
 			logging.Printf("[fusion] tick fired (counter=%d)", w.ticked.Load()+1)
 			func() {
-defer func() {
-				if r := recover(); r != nil {
-					debug.PrintStack()
-					logging.Printf("[fusion] PANIC recovered: %v", r)
-				}
-			}()
+				defer func() {
+					if r := recover(); r != nil {
+						debug.PrintStack()
+						logging.Printf("[fusion] PANIC recovered: %v", r)
+					}
+				}()
 				_ = w.Tick(ctx)
 			}()
 		}

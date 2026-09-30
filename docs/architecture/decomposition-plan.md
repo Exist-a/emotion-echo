@@ -318,7 +318,7 @@ emotion-echo.analytics.events    { behavior.tracked }
 | 所有 RPC 调用必须带 trace 头 | 否则跨服务 trace 断 |
 | 所有 svc 必须 emit metrics | Prometheus / SkyWalking |
 | 所有 svc 启动 < 5s | K8s readiness probe 容忍上限 |
-| 所有 svc 必须有 `/health` 端点 | K8s liveness probe |
+| 所有 svc 必须有 `/health` + `/health/ready` 两个端点 | 前者 K8s liveness/startup probe（恒 200），后者 readiness probe + compose healthcheck（依赖失败 503）—— E2E-23 / D-29 |
 | 任何 svc 不能跨库 JOIN | 微服务铁律 |
 | 任何 svc 不能"反向依赖"更高层 svc | 依赖方向：API → svc → DB/Kafka，单向 |
 

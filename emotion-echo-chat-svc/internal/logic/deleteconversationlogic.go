@@ -21,13 +21,13 @@ import (
 	"time"
 
 	"emotion-echo-chat-svc/internal/events"
-	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 
 	"github.com/google/uuid"
-	
+
 	"gorm.io/gorm"
 )
 

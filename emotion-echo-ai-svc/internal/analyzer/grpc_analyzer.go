@@ -187,7 +187,7 @@ func getEnvOrDefault(key, def string) string {
 	}
 	return def
 }
-//
+
 // Stage 12 升级：internal svc-to-svc 调用走 API key 鉴权。
 // ai-svc 启动时从 config.LLM.InternalAPIKey 读取 key。
 func (a *GRPCAnalyzer) AnalyzeWithAuth(ctx context.Context, text, apiKey string) (*EmotionResult, error) {

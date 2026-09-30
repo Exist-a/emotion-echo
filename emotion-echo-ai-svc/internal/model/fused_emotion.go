@@ -26,19 +26,19 @@ import (
 //   - "llm" → Reasoning 非空（LLM 输出）
 //   - "late_fusion_weighted" → Reasoning 为空
 type FusedEmotion struct {
-	ID                  int64     `gorm:"column:id;primaryKey;autoIncrement"`
-	MessageID           int64     `gorm:"column:message_id;uniqueIndex:uq_fused_emotions_message_id;not null"`
-	UserID              int64     `gorm:"column:user_id;not null"`
-	ConversationID      int64     `gorm:"column:conversation_id;not null"`
-	PrimaryEmotion      string    `gorm:"column:primary_emotion;size:32;not null"`
-	SentimentScore      float64   `gorm:"column:sentiment_score"`
-	Confidence          float64   `gorm:"column:confidence"`
-	ModalityContrib     string    `gorm:"column:modality_contrib;type:jsonb;default:'{}'"`
-	Reasoning           string    `gorm:"column:reasoning;type:text"`
-	FusionMethod        string    `gorm:"column:fusion_method;size:32"`
-	AvailableModalities string          `gorm:"column:available_modalities;type:jsonb;default:'[]'"`
-	CreatedAt           time.Time       `gorm:"column:created_at;autoCreateTime"`
-	DeletedAt           gorm.DeletedAt  `gorm:"column:deleted_at;index"`
+	ID                  int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	MessageID           int64          `gorm:"column:message_id;uniqueIndex:uq_fused_emotions_message_id;not null"`
+	UserID              int64          `gorm:"column:user_id;not null"`
+	ConversationID      int64          `gorm:"column:conversation_id;not null"`
+	PrimaryEmotion      string         `gorm:"column:primary_emotion;size:32;not null"`
+	SentimentScore      float64        `gorm:"column:sentiment_score"`
+	Confidence          float64        `gorm:"column:confidence"`
+	ModalityContrib     string         `gorm:"column:modality_contrib;type:jsonb;default:'{}'"`
+	Reasoning           string         `gorm:"column:reasoning;type:text"`
+	FusionMethod        string         `gorm:"column:fusion_method;size:32"`
+	AvailableModalities string         `gorm:"column:available_modalities;type:jsonb;default:'[]'"`
+	CreatedAt           time.Time      `gorm:"column:created_at;autoCreateTime"`
+	DeletedAt           gorm.DeletedAt `gorm:"column:deleted_at;index"`
 }
 
 // TableName 显式指向 emotion_echo_ai schema。

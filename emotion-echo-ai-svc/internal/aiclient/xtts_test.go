@@ -43,7 +43,7 @@ func TestNewXTTSClient_DefaultsApplied(t *testing.T) {
 // sample rate; the client decodes + base64-decodes them.
 func TestXTTSClient_Synthesize_Success(t *testing.T) {
 	// base64-encoded "WAV"
-	audio := "V0FWMQ=="                                 // ASCII "WAV1"
+	audio := "V0FWMQ==" // ASCII "WAV1"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/tts" {
 			t.Errorf("path: %s", r.URL.Path)

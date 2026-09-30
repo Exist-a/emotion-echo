@@ -66,15 +66,21 @@ func NewKafkaConsumer(brokers []string, groupID string) (*KafkaConsumer, error) 
 // 与 analytics-svc 的差异:本服务单 topic 消费 + sarama.ConsumerGroupHandler
 // 路径,内部行为对齐即可;Sleep 时长与 analytics-svc 保持一致,便于未来提取到
 // shared pkg 重试 helper。
-func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string, tracer grpcinterceptor.Tracer, dlq DLQPublisher, maxRetries int) error {
+// Consume 启动消费循环。
+//
+// maxRetriesFn（E2E-23 #31 / D-32）为可选的运行时取值钩子：非 nil 时
+// handler **每条消息**读它，使 Nacos 推送的 max_retries 立即生效；
+// nil 时退回 maxRetries 参数（启动值），行为与热更前一致。
+func (c *KafkaConsumer) Consume(ctx context.Context, topics []string, handler MessageHandler, topicFilter string, tracer grpcinterceptor.Tracer, dlq DLQPublisher, maxRetries int, maxRetriesFn func() int) error {
 	c.topics = topics
 	h := &ConsumerGroupHandler{
-		Ready:       make(chan bool),
-		Handler:     handler,
-		TopicFilter: topicFilter,
-		Tracer:      tracer,
-		DLQ:         dlq,
-		MaxRetries:  maxRetries,
+		Ready:        make(chan bool),
+		Handler:      handler,
+		TopicFilter:  topicFilter,
+		Tracer:       tracer,
+		DLQ:          dlq,
+		MaxRetries:   maxRetries,
+		MaxRetriesFn: maxRetriesFn,
 	}
 
 	// 阻塞循环：每次 Consume 返回时（rebalance 或错误）重试

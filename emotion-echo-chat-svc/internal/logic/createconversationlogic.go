@@ -1,4 +1,3 @@
-
 package logic
 
 import (
@@ -10,14 +9,14 @@ import (
 	"log/slog"
 
 	"emotion-echo-chat-svc/internal/events"
-	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/model"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 
 	"github.com/google/uuid"
-	
+
 	"gorm.io/gorm"
 )
 
@@ -84,12 +83,12 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 // persistWithOutbox 在事务中写业务 + outbox 行
 //
 // 路径优先级（Stage 94 PR-7 §P0-8 修复后）：
-//   1. svcCtx.DB 非 nil && OutboxRepo 非 nil：开事务，业务 + outbox 同事务（生产场景）
-//   2. svcCtx.DB 非 nil && OutboxRepo nil：开事务，只写业务（直 Publish 退化）
-//   3. svcCtx.DB nil：业务直接 CreateConversation（非事务），事件走 EventPublisher.Publish
-//      （best-effort；dev / 测试场景。注：原"路径 2 = DB nil + OutboxRepo 非 nil"的
-//      拆分无事务写模式已被 §P0-8 修复移除——这种配置本就不安全:
-//      业务写完但 outbox 写失败 → 事件静默丢失）
+//  1. svcCtx.DB 非 nil && OutboxRepo 非 nil：开事务，业务 + outbox 同事务（生产场景）
+//  2. svcCtx.DB 非 nil && OutboxRepo nil：开事务，只写业务（直 Publish 退化）
+//  3. svcCtx.DB nil：业务直接 CreateConversation（非事务），事件走 EventPublisher.Publish
+//     （best-effort；dev / 测试场景。注：原"路径 2 = DB nil + OutboxRepo 非 nil"的
+//     拆分无事务写模式已被 §P0-8 修复移除——这种配置本就不安全:
+//     业务写完但 outbox 写失败 → 事件静默丢失）
 //
 // §P0-8 修复要点:不允许"业务写成功后再独立调 CreateInTx(nil, ...)"模式。
 // 退化路径(DB nil)直接走 best-effort Publish,允许事件丢失的可见降级

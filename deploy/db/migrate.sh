@@ -200,18 +200,55 @@ run_tracked_sql_file() {
   fi
 }
 
-# 等 Postgres 可用（compose 的 depends_on healthy 已保证，这里兜底重试）
-i=0
-while [ "$i" -lt 30 ]; do
+# 等 Postgres 可用。
+#
+# 为什么不能靠 compose 的 depends_on: condition: service_healthy：
+#   db-migrate 在 docker-compose.apps.yml，而 postgres 在 docker-compose.infra.yml，
+#   跨文件 depends_on 在 compose v5.5.1 下会引发回归（见 apps.yml:609 注释），
+#   故该服务**没有 depends_on** ⇒ 这个 shell 循环是唯一的等待手段，
+#   必须自己扛住启动竞态。
+#
+# E2E-F-151（2026-09-23 记账，2026-09-29 E2E-23 计划期当场复现：
+#   ExitCode=1，日志尾部 `全部迁移应用完成，共 31 个文件` 紧接
+#   `FATAL: Postgres 30s 内未就绪` ⇒ 迁移成功但进程非零退出）：
+#   原实现是 `i=0; while [ $i -lt 30 ]; do ...; sleep 1; done`，
+#   即 30 次 × 固定 1s。冷启动时 Postgres 正在 initdb / 恢复 WAL，
+#   30s 窗口可能刚好不够 ⇒ 而 apisix-seed 对本服务有
+#   condition: service_completed_successfully 依赖，非零退出会连锁阻断。
+#
+# 修法（E2E-23 D3）：
+#   1) 上限可由 PG_WAIT_MAX_SECS 覆盖（默认 120s，冷启动宽裕）；
+#   2) 线性递增间隔（1→5s 封顶）—— 前期密集探测便于"快起来时立刻发现"，
+#      后期拉长避免在 Postgres 最慢的初始化阶段空转；
+#   3) 超时信息带实际等待秒数与尝试次数，便于排障。
+PG_WAIT_MAX_SECS="${PG_WAIT_MAX_SECS:-120}"
+waited=0
+attempt=0
+wait_delay=1
+pg_ready=0
+while [ "$waited" -lt "$PG_WAIT_MAX_SECS" ]; do
+  attempt=$((attempt + 1))
   if [ "$USE_DOCKER" = "1" ]; then
-    docker exec "$PG_CONTAINER" pg_isready -U "$PGUSER" >/dev/null 2>&1 && break
+    if docker exec "$PG_CONTAINER" pg_isready -U "$PGUSER" >/dev/null 2>&1; then
+      pg_ready=1
+      break
+    fi
   else
-    pg_isready -h "$PGHOST" -U "$PGUSER" >/dev/null 2>&1 && break
+    if pg_isready -h "$PGHOST" -U "$PGUSER" >/dev/null 2>&1; then
+      pg_ready=1
+      break
+    fi
   fi
-  i=$((i + 1))
-  [ "$i" -eq 30 ] && die "Postgres 30s 内未就绪"
-  sleep 1
+  sleep "$wait_delay"
+  waited=$((waited + wait_delay))
+  if [ "$wait_delay" -lt 5 ]; then
+    wait_delay=$((wait_delay + 1))
+  fi
 done
+
+if [ "$pg_ready" -ne 1 ]; then
+  die "Postgres ${PG_WAIT_MAX_SECS}s 内未就绪（已尝试 ${attempt} 次，累计等待 ${waited}s）—— 可调大 PG_WAIT_MAX_SECS；若持续失败请检查 postgres 容器日志"
+fi
 
 # Round 1.3：glob 模式自动发现 */migrations/（不依赖 SERVICE_ORDER 硬编码）。
 # 1) PRIORITY_ORDER 中的 svc 按声明顺序排前（兜底跨 svc 依赖）

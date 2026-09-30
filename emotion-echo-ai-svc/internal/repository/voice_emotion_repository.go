@@ -152,9 +152,15 @@ func (r *PostgresVoiceEmotionRepo) Create(ctx context.Context, v *model.VoiceEmo
 			return err
 		}
 	}
+	// ⚠️ 同 face：`Where` 谓词必须与 i008 建的 partial 唯一索引逐字一致，
+	// 否则 42P10。已在运行中的 dev 库上复现（voice 侧同样每次插入都失败）。
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "upload_id"}},
-		DoNothing: true,
+		// 用 TargetWhere 而不是 Where：GORM 把 TargetWhere 拼在冲突目标列**之后、
+		// 动作之前**（`ON CONFLICT (col) WHERE <pred> DO NOTHING`），
+		// 而 Where 被拼在动作**之后**（那是给 DO UPDATE 用的），位置错了会 42601。
+		TargetWhere: clause.Where{Exprs: []clause.Expression{clause.Neq{Column: clause.Column{Name: "upload_id"}, Value: "__legacy__"}}},
+		DoNothing:   true,
 	}).Create(v).Error
 }
 

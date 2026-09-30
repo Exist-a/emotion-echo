@@ -1,4 +1,3 @@
-
 package logic
 
 import (
@@ -11,16 +10,16 @@ import (
 	"time"
 
 	"emotion-echo-chat-svc/internal/events"
-	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/model"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
-	
+
 	"gorm.io/gorm"
 )
 
@@ -215,8 +214,8 @@ func (l *SendMessageLogic) persistWithOutbox(
 	}
 
 	// 退化路径(DB nil，dev / 测试场景)
-// §P0-8 修复:删"业务 AppendMessage + 独立 CreateInTx(nil, ...)"无事务拆分模式
-// —— 业务写完但 outbox 写失败 = 事件静默丢失。现在直接 best-effort Publish。
+	// §P0-8 修复:删"业务 AppendMessage + 独立 CreateInTx(nil, ...)"无事务拆分模式
+	// —— 业务写完但 outbox 写失败 = 事件静默丢失。现在直接 best-effort Publish。
 	if err := l.svcCtx.ConversationRepo.AppendMessage(l.ctx, msg); err != nil {
 		return err
 	}

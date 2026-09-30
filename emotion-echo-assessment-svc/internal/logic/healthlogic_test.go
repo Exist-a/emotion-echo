@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"emotion-echo-assessment-svc/internal/config"
+	"emotion-echo-assessment-svc/internal/repository"
 	"emotion-echo-assessment-svc/internal/svc"
 
 	"github.com/stretchr/testify/assert"
@@ -13,7 +14,9 @@ import (
 
 func newTestHealthLogic(t *testing.T) *HealthLogic {
 	t.Helper()
-	svcCtx := &svc.ServiceContext{Config: config.Config{}}
+	svcCtx := &svc.ServiceContext{
+		SurveyRepo: repository.NewInMemorySurveyRepo(),
+		Config:     config.Config{}}
 	return NewHealthLogic(context.Background(), svcCtx)
 }
 

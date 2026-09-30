@@ -11,8 +11,6 @@ import (
 	"emotion-echo-analytics-svc/internal/repository"
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
-
-	
 )
 
 // MentalHealthAssessmentLogic 处理最新评估查询

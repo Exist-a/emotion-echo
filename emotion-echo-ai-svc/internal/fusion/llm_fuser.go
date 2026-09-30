@@ -13,7 +13,7 @@
 //   - 网络/超时/HTTP 非 2xx → error
 //   - LLM 返回非 JSON → error
 //   - 解析后的字段缺失（primary_emotion 为空）→ error
-//   错误一律返回让 Worker 走 late_fuser 兜底。
+//     错误一律返回让 Worker 走 late_fuser 兜底。
 package fusion
 
 import (
@@ -54,6 +54,15 @@ type LLMFuser struct {
 	cfg     LLMConfig
 	cli     *http.Client
 	breaker *CircuitBreaker // Stage 35 PR-5：可为空（nil → 不启用熔断）
+	// TimeoutFn 单次调用超时的运行时取值钩子（E2E-23 #31 / D-32）。
+	//
+	// 与 aiclient 的 TimeoutFn 同型：E2E-23 已修"根本没传"（F-159），
+	// 但传进去的值仍是构造期冻结的 —— 运行期改不了。装钩子后每请求现读。
+	//
+	// 用钩子而非重建 http.Client：客户端复用连接池，重建会丢失 keep-alive
+	// 收益；而 http.Client.Timeout 本身不可变，故改为**每请求**用
+	// context.WithTimeout 施加动态超时（见 doRequest）。
+	TimeoutFn func() time.Duration
 }
 
 // NewLLMFuser 构造器。
@@ -70,6 +79,27 @@ func NewLLMFuser(cfg LLMConfig) *LLMFuser {
 		cfg: cfg,
 		cli: &http.Client{Timeout: timeout},
 	}
+}
+
+// HTTPTimeout 暴露内部 http.Client 的实际超时。
+//
+// 用途：让"yaml/env 里配的超时是否真的生效"可被行为测试断言。
+// E2E-23 P2（账本 F-159）修复前，main 构造 LLMFuser 时漏传 Timeout，
+// 该值永远为 0 → 永远走内置 3s，而**外部无从察觉**（没有任何接口能读出
+// 生效值）。有了这个方法，"配了不生效"这类缺陷就能被单测直接抓住。
+func (f *LLMFuser) HTTPTimeout() time.Duration {
+	if f == nil {
+		return 0
+	}
+	if f.TimeoutFn != nil {
+		if d := f.TimeoutFn(); d > 0 {
+			return d
+		}
+	}
+	if f.cli == nil {
+		return 0
+	}
+	return f.cli.Timeout
 }
 
 // SetBreaker 注入熔断器（可选，Stage 35 PR-5）。
@@ -228,6 +258,15 @@ func (f *LLMFuser) doFuse(ctx context.Context, s ModalitySnapshot) (*model.Fused
 	}
 
 	// 3. 调 LLM
+	//
+	// E2E-23 #31：超时改为**每请求**用 context 施加 —— http.Client.Timeout
+	// 是构造期冻结的，装了 TimeoutFn 也改不动它。用 context.WithTimeout
+	// 既能动态取值，又保留客户端连接池复用（重建 client 会丢 keep-alive）。
+	if d := f.HTTPTimeout(); d > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, d)
+		defer cancel()
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		f.cfg.BaseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {

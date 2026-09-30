@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -312,7 +313,7 @@ func TestHandleOne_TableDriven_TargetFormatUnified(t *testing.T) {
 		name          string
 		eventType     string
 		data          events.MessageCreatedData // conv.* 路径只取 ConversationID+UserID
-		wantEventType string // PR-A1.4: ev.Type 原值(带点)
+		wantEventType string                    // PR-A1.4: ev.Type 原值(带点)
 		wantTarget    string
 		wantSessionID string
 	}{
@@ -467,11 +468,11 @@ func TestHandleOne_DLQ_NoOpWhenSuccess(t *testing.T) {
 	t.Parallel()
 	dlq := NewInMemoryDLQPublisher()
 	h := &chatEventHandler{
-		repo:       &captureEventRepo{},
-		topic:      "chat-events",
-		dlq:        dlq,
-		maxRetries: 3,
-		attempts:   make(map[string]int),
+		repo:     &captureEventRepo{},
+		topic:    "chat-events",
+		dlq:      dlq,
+		retries:  newInt32Ptr(3),
+		attempts: make(map[string]int),
 	}
 
 	msg := &sarama.ConsumerMessage{
@@ -495,11 +496,11 @@ func TestHandleFailure_DLQ_RetriesThenMarks(t *testing.T) {
 	t.Parallel()
 	dlq := NewInMemoryDLQPublisher()
 	h := &chatEventHandler{
-		repo:       &captureEventRepo{},
-		topic:      "chat-events",
-		dlq:        dlq,
-		maxRetries: 3,
-		attempts:   make(map[string]int),
+		repo:     &captureEventRepo{},
+		topic:    "chat-events",
+		dlq:      dlq,
+		retries:  newInt32Ptr(3),
+		attempts: make(map[string]int),
 	}
 
 	msg := &sarama.ConsumerMessage{
@@ -550,11 +551,11 @@ func TestHandleFailure_DLQ_RetriesThenMarks(t *testing.T) {
 func TestHandleFailure_NoopDLQ_RetriesAndMarks(t *testing.T) {
 	t.Parallel()
 	h := &chatEventHandler{
-		repo:       &captureEventRepo{},
-		topic:      "chat-events",
-		dlq:        NoopDLQPublisher{},
-		maxRetries: 1,
-		attempts:   make(map[string]int),
+		repo:     &captureEventRepo{},
+		topic:    "chat-events",
+		dlq:      NoopDLQPublisher{},
+		retries:  newInt32Ptr(1),
+		attempts: make(map[string]int),
 	}
 
 	msg := &sarama.ConsumerMessage{
@@ -648,11 +649,11 @@ func TestConsumeClaim_RestoresParentTraceFromSw8Header(t *testing.T) {
 	tracer := &mockTracer93{entrySpan: span}
 
 	h := &chatEventHandler{
-		repo:       &captureEventRepo{},
-		topic:      "chat-events",
-		dlq:        NoopDLQPublisher{},
-		maxRetries: 3,
-		attempts:   make(map[string]int),
+		repo:     &captureEventRepo{},
+		topic:    "chat-events",
+		dlq:      NoopDLQPublisher{},
+		retries:  newInt32Ptr(3),
+		attempts: make(map[string]int),
 	}
 
 	// 通过 WithTracer builder 注入 tracer（GREEN 阶段提供 builder）。
@@ -704,12 +705,12 @@ func TestConsumeClaim_NoSw8Header_StillCreatesSpan(t *testing.T) {
 	tracer := &mockTracer93{entrySpan: span}
 
 	h := &chatEventHandler{
-		repo:       &captureEventRepo{},
-		topic:      "chat-events",
-		dlq:        NoopDLQPublisher{},
-		maxRetries: 3,
-		attempts:   make(map[string]int),
-		Tracer:     tracer,
+		repo:     &captureEventRepo{},
+		topic:    "chat-events",
+		dlq:      NoopDLQPublisher{},
+		retries:  newInt32Ptr(3),
+		attempts: make(map[string]int),
+		Tracer:   tracer,
 	}
 
 	msg := &sarama.ConsumerMessage{
@@ -745,12 +746,12 @@ func TestConsumeClaim_NilTracer_DoesNotCallCreateEntrySpan(t *testing.T) {
 	repo := &captureEventRepo{}
 
 	h := &chatEventHandler{
-		repo:       repo,
-		topic:      "chat-events",
-		dlq:        NoopDLQPublisher{},
-		maxRetries: 3,
-		attempts:   make(map[string]int),
-		Tracer:     nil, // 关键：tracer=nil
+		repo:     repo,
+		topic:    "chat-events",
+		dlq:      NoopDLQPublisher{},
+		retries:  newInt32Ptr(3),
+		attempts: make(map[string]int),
+		Tracer:   nil, // 关键：tracer=nil
 	}
 
 	msg := &sarama.ConsumerMessage{
@@ -788,11 +789,11 @@ func TestHandleFailure_ConcurrentAccessIsSafe(t *testing.T) {
 	t.Parallel()
 	dlq := NewInMemoryDLQPublisher()
 	h := &chatEventHandler{
-		repo:       &captureEventRepo{},
-		topic:      "chat-events",
-		dlq:        dlq,
-		maxRetries: 100, // 高值,避免任一 goroutine 触发 DLQ 路径
-		attempts:   make(map[string]int),
+		repo:     &captureEventRepo{},
+		topic:    "chat-events",
+		dlq:      dlq,
+		retries:  newInt32Ptr(100), // 高值,避免任一 goroutine 触发 DLQ 路径
+		attempts: make(map[string]int),
 	}
 
 	const N = 50
@@ -877,19 +878,19 @@ func TestConsumeClaim_SpanEndSpanCalledWithinCaseBody(t *testing.T) {
 	// 自定义 observeRepo:Create 在第 2/3 条 msg 写入时观测 span[0/1] 的 ended 状态
 	// 嵌入 captureEventRepo 让其保持 EventRepo 接口合规 + items 累积不变
 	repo := &observeRepoP03{
-		inner:      &captureEventRepo{},
-		spans:      spans,
-		prevEnded:  make([]bool, 3),
-		invokeIdx:  &idx,
+		inner:     &captureEventRepo{},
+		spans:     spans,
+		prevEnded: make([]bool, 3),
+		invokeIdx: &idx,
 	}
 
 	h := &chatEventHandler{
-		repo:       repo,
-		topic:      "chat-events",
-		dlq:        NoopDLQPublisher{},
-		maxRetries: 3,
-		attempts:   make(map[string]int),
-		Tracer:     tracer,
+		repo:     repo,
+		topic:    "chat-events",
+		dlq:      NoopDLQPublisher{},
+		retries:  newInt32Ptr(3),
+		attempts: make(map[string]int),
+		Tracer:   tracer,
 	}
 
 	// 构造 3 条消息
@@ -946,4 +947,11 @@ func (r *observeRepoP03) GetInteractionDepth(_ context.Context, _ int64, _, _ ti
 }
 func (r *observeRepoP03) GetFrequencyTrend(_ context.Context, _ int64, _, _ time.Time) ([]repository.DailyCount, error) {
 	return nil, nil
+}
+
+// newInt32Ptr 构造 *atomic.Int32（E2E-23 #32：重试次数改为共享 atomic 容器）
+func newInt32Ptr(n int32) *atomic.Int32 {
+	v := &atomic.Int32{}
+	v.Store(n)
+	return v
 }

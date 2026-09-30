@@ -38,6 +38,8 @@ docker-compose -f deploy/docker-compose.infra.yml up -d
 ```
 
 > 启动后等待约 30~90 秒（SkyWalking OAP 较慢），各容器 healthcheck 通过即就绪。
+> E2E-23 起 infra 侧 16 个容器都有 healthcheck（含此前零探针的 `skywalking-oap` / `skywalking-ui` / `obs-mock-receiver`），
+> 所以"等 healthy"现在是**有门禁的等待**而不是盲等；判据见 `scripts/test_obs_healthchecks.sh`。
 
 ### 3.2 查看容器状态
 

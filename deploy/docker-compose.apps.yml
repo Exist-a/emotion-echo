@@ -119,7 +119,7 @@ services:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8888/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8888/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -141,7 +141,7 @@ services:
       NACOS_ENABLED:   "true"
       NACOS_ADDR:      "emotion-echo-nacos:8848"
       NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
-      NACOS_HOT_RELOAD: "false"
+      NACOS_HOT_RELOAD: "true"   # E2E-23 D-32：chat-svc 的 4 个 Outbox 运营参数需热更；此前显式 false 会覆盖 etc/chat-api.yaml 里的 HotReload: true（env 优先于 yaml）
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
@@ -170,7 +170,7 @@ services:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8890/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8890/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -192,7 +192,7 @@ services:
       NACOS_ENABLED:   "true"
       NACOS_ADDR:      "emotion-echo-nacos:8848"
       NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
-      NACOS_HOT_RELOAD: "false"
+      NACOS_HOT_RELOAD: "true"   # E2E-23 D-32：max_retries 需热更；env 优先于 yaml，两处必须同步
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
@@ -224,7 +224,7 @@ services:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8893/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8893/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -273,7 +273,7 @@ services:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8889/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8889/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -298,6 +298,14 @@ services:
       NACOS_ADDR:      "emotion-echo-nacos:8848"
       NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
       NACOS_HOT_RELOAD: "false"
+      # D-31（2026-09-29 用户拍板）：显式声明 Nacos 注册失败策略，dev 选"继续运行"。
+      # main.py:87-94 的默认行为是注册失败 log+continue，只有 =1 才 fail-fast。
+      # dev 之所以能继续，是因为 Nacos 本就不该是硬依赖（本地开发）；
+      # **写成显式值而非吃默认值**，是为了将来改 main.py 默认值时 dev 行为
+      # 不会静默改变。prod 必须覆盖为 "1"（见 compose.prod.yml 待办清单）——
+      # 否则 prod 会静默降级：HTTP 可达但 Nacos 无实例 ⇒ BFF Resolve 502
+      # （与账本 E2E-F-137 同型）。
+      NACOS_REQUIRED: "0"
       PYTHONUNBUFFERED: "1"
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
@@ -358,7 +366,7 @@ services:
       NACOS_ENABLED:   "true"
       NACOS_ADDR:      "emotion-echo-nacos:8848"
       NACOS_NAMESPACE: "${NACOS_NAMESPACE:-emotion-echo-dev}"
-      NACOS_HOT_RELOAD: "false"
+      NACOS_HOT_RELOAD: "true"   # E2E-23 #31：9 个运营参数需热更；env 优先于 yaml，两处必须同步
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
       GIN_MODE: release
@@ -425,7 +433,7 @@ services:
         condition: service_healthy
 
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8891/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8891/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
@@ -692,8 +700,13 @@ services:
         reservations:
           cpus: "0.1"
           memory: 64M
+    # D-29：探针指向 readiness 而非 liveness。BFF 是聚合式探针（并发探 6 个下游），
+    # 改前恒返 200 ⇒ 下游挂了容器仍判 healthy。GNU wget 遇非 2xx 返非零
+    # （实测 200→0、404→6），故 `|| exit 1` 能正确识别 503。
+    # 注意：apisix-seed 的 depends_on: service_healthy 因此变严（ready 才算 healthy），
+    # 这是期望行为 —— 路由不该注入到一组"下游还没准备好"的节点上。
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --tries=1 -O /dev/null http://localhost:8894/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --tries=1 -O /dev/null http://localhost:8894/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s

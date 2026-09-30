@@ -1,7 +1,8 @@
 // Package handler — reports_handler.go
 //
 // Stage 30-A Round 4 GREEN: GET /api/v1/reports/daily
-//                              GET /api/v1/reports/trend.
+//
+//	GET /api/v1/reports/trend.
 //
 // 纯参数解析 + 委派 logic 层；错误转 HTTP 状态码（per stage-30-A §二）。
 package handler

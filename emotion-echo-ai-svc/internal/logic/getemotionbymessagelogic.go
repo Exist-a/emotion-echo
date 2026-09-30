@@ -1,4 +1,3 @@
-
 package logic
 
 import (
@@ -7,8 +6,6 @@ import (
 
 	"emotion-echo-ai-svc/internal/svc"
 	"emotion-echo-ai-svc/internal/types"
-
-	
 )
 
 // GetEmotionByMessageLogic 处理 GET /api/v1/emotion/message/:messageId

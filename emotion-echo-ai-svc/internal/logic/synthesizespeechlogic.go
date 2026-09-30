@@ -20,7 +20,7 @@ var (
 )
 
 type SynthesizeSpeechResp struct {
-	Audio      string `json:"audio"`         // base64-encoded WAV
+	Audio      string `json:"audio"` // base64-encoded WAV
 	SampleRate int    `json:"sampleRate"`
 	MIME       string `json:"mime"`
 	Bytes      int    `json:"bytes"`

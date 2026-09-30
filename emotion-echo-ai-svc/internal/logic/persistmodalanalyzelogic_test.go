@@ -8,9 +8,9 @@
 //   - 复用 analyzer.MultiModalAnalyzer，不重复分析路径
 //   - persist=false 时行为与原 MultiModalAnalyzeLogic 完全一致（不写库）
 //   - persist=true 时根据 kind 选择对应 repo 写入
-//     - image → FaceEmotionRepo.Create
-//     - audio → VoiceEmotionRepo.Create
-//     - text → 不写库（文本情绪走 Kafka 异步链路，不在 multimodal 端点写）
+//   - image → FaceEmotionRepo.Create
+//   - audio → VoiceEmotionRepo.Create
+//   - text → 不写库（文本情绪走 Kafka 异步链路，不在 multimodal 端点写）
 //   - upload_id 来自 handler 透传（前端 nonce），message_id 可空
 package logic
 
@@ -57,9 +57,9 @@ func TestPersistMultiModalAnalyzeLogic_NotPersist_NoWrite(t *testing.T) {
 	stub := &stubMultiModalForPersist{result: &analyzer.EmotionResult{PrimaryEmotion: "happy", Confidence: 0.9, Model: "stub"}}
 	mma := analyzer.NewMultiModalAnalyzer(stub, nil, nil, nil)
 	svcCtx := &svc.ServiceContext{
-		MultiModal:           mma,
-		FaceEmotionRepo:      faceRepo,
-		VoiceEmotionRepo:     voiceRepo,
+		MultiModal:       mma,
+		FaceEmotionRepo:  faceRepo,
+		VoiceEmotionRepo: voiceRepo,
 	}
 
 	l := NewPersistMultiModalAnalyzeLogic(svcCtx)

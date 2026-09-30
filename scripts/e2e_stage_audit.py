@@ -204,15 +204,104 @@ def roadmap_state_kind(raw: str) -> str:
     return "pending"
 
 
+# 格式损坏的账本行（格数 != LEDGER_COLUMNS）由 parse_ledger 填充、A8 报出。
+# 不用返回值传递是为了让 A8 无需改签名即可看到解析器丢弃了什么。
+LEDGER_MALFORMED: list[str] = []
+
+# 账本表格的列数（编号|来源|现象|根因|归属|状态）。判定用 != 而非 <，
+# 因为格数多于 6 与少于 6 一样危险（格内裸竖线会把行撕开、owner/status 取错）。
+LEDGER_COLUMNS = 6
+
+# 格式损坏的账本行由 parse_ledger 填充、A8 报出。
+
+
+def _logical_table_rows(text: str) -> list[str]:
+    """把 Markdown 表格里**跨多行**的行拼回单行后再返回。
+
+    为什么需要（E2E-23 第三轮复核抓到的真门禁漏洞，回归钉
+    `scripts/test_audit_ledger_parser.sh`）：
+
+        账本里有 4 条（F-165/166/167/171）的单元格内含换行，
+        在 Markdown 表格语法里那是**一条逻辑行、跨多个物理行**。
+        旧实现逐物理行处理，格数 < 6 就 `continue` 静默丢弃
+        ⇒ 这 4 条账本**对审计器完全不可见**。
+
+        后果不只是 A8 误报"编号不连续"，更要命的是：
+        **A5 是"阶段判 done 前账本必须对账干净"的唯一执行者**，
+        解析器看不见的行 A5 也看不见 ⇒ 阶段可以带着未解决的账本判 done 而门禁全绿。
+        （E2E-23 当时侥幸没被绕过 —— 那 4 条都不归它。**靠运气不是机制。**）
+
+    规则（**按管道符数量判定行是否已完整**，不是"以 `|` 结尾"）：
+
+        账本里未以 `|` 结尾的行有两类，肉眼一样、必须分开：
+          · 9 条是**只差一个装饰性的行尾 `|`**（F-15/20/22/23/33/40/68/102/152）。
+            它们已含 6 个 `|` ⇒ `strip("|").split("|")` 正好得到 **6 格**，
+            本来就是可解析的完整行。早期用"拼到以 `|` 结尾为止"的规则，
+            会把它们和**下一条账本**粘成一行 ⇒ 下一条的 ID 不再是 cells[0]，
+            于是 F-16/21/23/24/34/69 集体"消失"——把漏报变成了误报。
+          · 4 条是**真跨行**（F-165/166/167/171），首行只有 3 个 `|`，需要续行。
+
+        故判据：一行**以 `|` 结尾**，或**已含 >= 6 个 `|`**，即视为完整。
+        遇空行或 `##` 标题强制断开，防止把整节正文吞进一行。
+        （已知局限：若某行既有 6 个 `|` 又要续写下一格，会被误判为完整——
+        但那种情况会以"格数不对"被 LEDGER_MALFORMED 报出，**不会静默消失**，
+        这正是本函数存在的意义。）
+    """
+    rows: list[str] = []
+    buf: str | None = None
+
+    def flush() -> None:
+        nonlocal buf
+        if buf is not None:
+            rows.append(buf)
+            buf = None
+
+    for raw in text.splitlines():
+        s = raw.strip()
+        if not s or s.startswith("#"):
+            flush()
+            if s:
+                rows.append(s)
+            continue
+        if buf is None:
+            if not s.startswith("|"):
+                rows.append(s)  # 非表格行（正文/列表），原样保留
+                continue
+            buf = s
+        else:
+            buf = buf + " " + s
+        if buf.rstrip().endswith("|") or buf.count("|") >= 6:
+            flush()
+    flush()
+    return rows
+
+
 def parse_ledger() -> list[dict[str, str]]:
     """账本 → 条目列表（id / 归属 / 状态）"""
     entries = []
-    for line in read(LEDGER).splitlines():
-        s = line.strip()
+    malformed: list[str] = []
+    for s in _logical_table_rows(read(LEDGER)):
         if not s.startswith("| E2E-F-"):
             continue
-        cells = [c.strip() for c in s.strip("|").split("|")]
-        if len(cells) < 6:
+        # **只按未转义的 `|` 切格**（第二方核对 P-5 抓到的解析器 bug）。
+        #
+        # Markdown 表格里，格内的字面量竖线必须写成 `\|`。本账本有 3 条
+        # （F-46 / F-65 / F-169）正当地这么写了 —— 例如状态格里引用了一条
+        # BRE grep：``grep -n "phone\|email" deploy/db/...``。
+        # 而旧代码用 `s.split("|")`，**会把转义竖线也当分隔符** ⇒ 这 3 行被
+        # 撕成 7 格 ⇒ `cells[-2]`（归属）与 `cells[-1]`（状态）取到的是
+        # 被撕开的后半截。
+        # 后果与"静默丢弃"同型且更隐蔽：**条目还在列表里，但归属与状态是错的**
+        # ⇒ A5「判 done 前账本须对账干净」会拿错误的归属去比对。
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", s.strip("|"))]
+        if len(cells) != LEDGER_COLUMNS:
+            # **绝不静默丢弃**：格数不对说明这条账本的 Markdown 表格行坏了。
+            # 注意判定是 `!= 6` 而不是 `< 6` —— 格数**多**于 6 与少于 6 一样危险
+            # （说明有格内裸竖线把行撕开了，owner/status 会取错）。
+            # 旧实现在这里直接 `continue` ⇒ 该条对 A5 完全不可见
+            # ⇒ 阶段可以带着未解决的账本判 done 而门禁全绿。
+            # 现在改为记下来并由 A8 报出（见 check_a8）。
+            malformed.append(f"{cells[0]}({len(cells)}格)")
             continue
         entries.append({
             "id": cells[0],
@@ -220,6 +309,7 @@ def parse_ledger() -> list[dict[str, str]]:
             "owner": cells[-2],
             "status": cells[-1],
         })
+    LEDGER_MALFORMED[:] = malformed
     return entries
 
 
@@ -429,6 +519,16 @@ def check_a8(ledger: list[dict[str, str]], res: StageResult) -> None:
         m = re.match(r"E2E-F-(\d+)", e["id"])
         if m:
             ids.append(int(m.group(1)))
+    if LEDGER_MALFORMED:
+        res.findings.append(
+            Finding(
+                "A8", "WARN",
+                f"有 {len(LEDGER_MALFORMED)} 条账本表格行格数**不等于** {LEDGER_COLUMNS}（多或少都算坏），"
+                f"**对 A5 账本对账不可见**（格数多是格内裸竖线把行撕开、owner/status 会取错；"
+                f"格数少是某续行漏了行首的 `|`）："
+                f"{'、'.join(LEDGER_MALFORMED[:10])}",
+            )
+        )
     if not ids:
         return
     ids.sort()

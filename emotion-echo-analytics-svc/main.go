@@ -23,16 +23,16 @@ import (
 	"emotion-echo-analytics-svc/internal/trigger"
 
 	"github.com/SkyAPM/go2sky"
-	"github.com/gin-gonic/gin"
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
-	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	sharedconfig "github.com/emotion-echo/shared/pkg/config"
+	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedlogging "github.com/emotion-echo/shared/pkg/logging"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
-	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedskywalking "github.com/emotion-echo/shared/pkg/skywalking"
+	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -189,19 +189,29 @@ func main() {
 	// topic 不存在 / broker 不可达 → log warn 不 crash（Consumer.Run 自带 5s 重试）。
 	appCtx, stopConsumer := context.WithCancel(context.Background())
 	defer stopConsumer()
+
+	// E2E-23 #32：consumer 提到 main 作用域，BootNacos 才能注入 deps
+	// （Nacos 推送的 max_retries 需要一个落点）。Kafka 未启用时保持 nil，
+	// BootNacos 的 applyOps 会退化为"只记录不应用"。
+	var kc *kafka.Consumer
+	var consumerInitErr error
+
 	if c.Kafka.Enabled && evtRepo != nil {
 		brokers := splitBrokersCSV(c.Kafka.BrokersCSV)
 		topic := events.TopicChatEvents
 		if len(c.Kafka.Topics) > 0 {
 			topic = c.Kafka.Topics[0]
 		}
-		kc, err := kafka.NewConsumer(brokers, c.Kafka.GroupID, topic, evtRepo)
-		// P2-13: 注入 MaxRetries（配置优先，默认 3）
+		// E2E-23 #32：kc 提到 main 作用域，BootNacos 才能把它注入 deps ——
+		// Nacos 推送的 max_retries 要能作用到这个 consumer（此前它只在块内，
+		// 外部拿不到，热更无处落地）。
+		kc, consumerInitErr = kafka.NewConsumer(brokers, c.Kafka.GroupID, topic, evtRepo)
+		// P2-13：注入 MaxRetries（配置优先，默认 3）
 		if c.Kafka.MaxRetries > 0 {
 			kc.WithMaxRetries(c.Kafka.MaxRetries)
 		}
-		if err != nil {
-			log.Printf("[kafka] consumer init failed: %v (behavior events disabled)", err)
+		if consumerInitErr != nil {
+			log.Printf("[kafka] consumer init failed: %v (behavior events disabled)", consumerInitErr)
 		} else {
 			// ADR-19 PR-A3.2: 根据 KAFKA_DLQ_TOPIC env 自动注入 Kafka DLQ
 			// 替代默认 NoopDLQPublisher{}。DLQ 不可达时 log + 退化为 Noop(向后兼容)
@@ -247,7 +257,9 @@ func main() {
 	// Stage 31 PR-09: Nacos 注册 + 配置
 	bootCtx, bootCancel := context.WithCancel(context.Background())
 	defer bootCancel()
-	nacosRuntime, err := BootNacos(bootCtx, &c, defaultBootDeps())
+	bootDeps := defaultBootDeps()
+	bootDeps.consumer = kc // E2E-23 #32：把 consumer 交给 Nacos boot，热更才有落点
+	nacosRuntime, err := BootNacos(bootCtx, &c, bootDeps)
 	if err != nil {
 		if shareddiscovery.IsHardBootError(err.Error()) {
 			log.Fatalf("[nacos] boot failed (fatal): %v", err)
@@ -305,6 +317,7 @@ func main() {
 func registerRoutes(r *gin.Engine, svcCtx *svc.ServiceContext) {
 	// 基础设施
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/health/ready", handler.HealthReadyHandler(svcCtx))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	// Stage 30-A 业务路由

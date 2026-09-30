@@ -163,8 +163,9 @@ func main() {
 	r.Use(sharedmw.GinAuthMiddleware())
 
 	// === 5. 路由注册 ===
-	// health 不需要鉴权（中间件内已跳过 /health）
+	// health 不需要鉴权（中间件内已跳过 /health 与 /health/ready）
 	r.GET("/health", handler.HealthHandler(svcCtx))
+	r.GET("/health/ready", handler.HealthReadyHandler(svcCtx))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 	r.GET("/api/v1/users/me", handler.GetMeHandler(svcCtx))
 	r.PATCH("/api/v1/users/me", handler.UpdateProfileHandler(svcCtx))

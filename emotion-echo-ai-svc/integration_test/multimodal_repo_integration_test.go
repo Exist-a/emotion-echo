@@ -183,13 +183,17 @@ func TestDailyEmotionByModalityView_Integration(t *testing.T) {
 	voiceRepo := repository.NewPostgresVoiceEmotionRepo(db)
 
 	// 文本走 emotion_analysis（迁移 002 不写 emotion_analysis，需要直接 SQL）
+	// ⚠️ event_id 必须给：真实 schema（i001 + i009）把它设成 NOT NULL，
+	// 而这条 INSERT 是照着旧的、不完整的测试库 DDL 写的，长期没发现。
+	// 这正是"测试库与生产不一致 → 假绿"的具体形态：以前测试库的表由手抄 DDL 建，
+	// 根本没有 event_id 列，插入自然不会失败。
 	require.NoError(t, db.Exec(`
 INSERT INTO emotion_echo_ai.emotion_analysis
-  (message_id, user_id, conversation_id, primary_emotion, sentiment_score, confidence, model)
+  (event_id, message_id, user_id, conversation_id, primary_emotion, sentiment_score, confidence, model)
 VALUES
-  (1000, 7, 50, 'sad', -0.5, 0.9, 'text-v1'),
-  (1001, 7, 50, 'sad', -0.6, 0.85, 'text-v1'),
-  (1002, 7, 50, 'happy', 0.5, 0.9, 'text-v1')
+  ('evt-view-1000', 1000, 7, 50, 'sad', -0.5, 0.9, 'text-v1'),
+  ('evt-view-1001', 1001, 7, 50, 'sad', -0.6, 0.85, 'text-v1'),
+  ('evt-view-1002', 1002, 7, 50, 'happy', 0.5, 0.9, 'text-v1')
 `).Error)
 
 	require.NoError(t, faceRepo.Create(context.Background(), &model.FaceEmotionResult{

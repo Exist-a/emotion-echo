@@ -102,10 +102,16 @@ func TestHealthHandler_DBDown_ReturnsOKWithDbOKFalse(t *testing.T) {
 	assert.Equal(t, false, body["dbOk"], "DbOK must be false on DB error")
 }
 
-// TestHealthHandler_NilEventRepo_ReturnsOKDbOKTrue covers the
-// "no repo wired" branch: the logic skips the Ping probe and
-// reports DbOK=true (because we have no evidence of failure).
-func TestHealthHandler_NilEventRepo_ReturnsOKDbOKTrue(t *testing.T) {
+// TestHealthHandler_NilEventRepoReportsDegraded covers the "no repo wired" branch.
+//
+// 🔴 契约反转（2026-09-30，E2E-23 F-96 实测驱动）：本测试原名
+// `..._ReturnsOKDbOKTrue`，断言 `dbOk=true`，注释理由是
+// 「no evidence of failure」。
+// 该推理把"这个部署本来不接 DB"与"main.go 单次连接失败后的降级启动"混为一谈 ——
+// 后者在生产中真实发生，实测会让 `/health/ready` 返 200、容器判 healthy、
+// APISIX 照常路由而后端全挂，**零告警**。「没有失败的证据」不等于「依赖正常」：
+// 依赖层**根本不存在**时，它必然是不满足的。
+func TestHealthHandler_NilEventRepoReportsDegraded(t *testing.T) {
 	t.Parallel()
 
 	svcCtx := newAnalyticsHandlerSvc(t, repository.NewInMemoryEventRepo())
@@ -120,8 +126,10 @@ func TestHealthHandler_NilEventRepo_ReturnsOKDbOKTrue(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, true, body["dbOk"],
-		"with nil EventRepo the probe is skipped; DbOK stays true (no evidence of failure)")
+	assert.Equal(t, false, body["dbOk"],
+		"with nil EventRepo the DB layer does not exist at all; DbOK must be false "+
+			"(reporting true makes /health/ready return 200 and the container look healthy "+
+			"while every DB call fails)")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────

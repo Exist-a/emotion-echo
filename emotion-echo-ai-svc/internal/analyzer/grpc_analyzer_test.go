@@ -305,10 +305,10 @@ var _ grpcinterceptor.Tracer = (*captureSw8Tracer)(nil)
 // captureSw8Span 满足 grpcinterceptor.Span 接口,不做事(仅让 EndSpan 调用不 panic)
 type captureSw8Span struct{}
 
-func (*captureSw8Span) EndSpan(_ error)                                {}
-func (*captureSw8Span) Tag(_ string, _ string)                         {}
-func (*captureSw8Span) SetComponent(_ int32)                           {}
-func (*captureSw8Span) SetSpanLayer(_ int32)                           {}
+func (*captureSw8Span) EndSpan(_ error)        {}
+func (*captureSw8Span) Tag(_ string, _ string) {}
+func (*captureSw8Span) SetComponent(_ int32)   {}
+func (*captureSw8Span) SetSpanLayer(_ int32)   {}
 
 // TestGRPCAnalyzer_UsesClientDialOptionsHelper §P0-2 钉死契约:
 //

@@ -3,13 +3,15 @@
 // Stage 30-C A2: 死信队列（DLQ）抽象。
 //
 // 背景：
-//   ai-svc 当前 consumer.go:98-101 行为是 Handler 返 error → 不 MarkMessage，
-//   让 sarama 无限重投。注释说"最终入 DLQ"但无实现 → 毒消息卡死 partition。
+//
+//	ai-svc 当前 consumer.go:98-101 行为是 Handler 返 error → 不 MarkMessage，
+//	让 sarama 无限重投。注释说"最终入 DLQ"但无实现 → 毒消息卡死 partition。
 //
 // A2 方案：
-//   重试 N 次（默认 3）后 → 调 DLQPublisher.Publish 发到 chat-events-dlq
-//   → MarkMessage 让消费继续。DLQ 消息保留原 payload + 错误原因（sarama headers），
-//   便于运营事后回放与告警。
+//
+//	重试 N 次（默认 3）后 → 调 DLQPublisher.Publish 发到 chat-events-dlq
+//	→ MarkMessage 让消费继续。DLQ 消息保留原 payload + 错误原因（sarama headers），
+//	便于运营事后回放与告警。
 //
 // 设计：
 //   - DLQPublisher 是接口，InMemory / Kafka 两个实现

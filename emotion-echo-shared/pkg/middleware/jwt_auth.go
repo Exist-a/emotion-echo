@@ -4,9 +4,10 @@
 // 注入到 ctx。
 //
 // 流程：
-//   浏览器 → APISIX jwt-auth 验证 token → 通过后注入 X-User-Id: <uid>
-//          → svc 信任 APISIX（不再验证 signature）
-//          → svc 读 X-User-Id header，转 int64，注入 ctx
+//
+//	浏览器 → APISIX jwt-auth 验证 token → 通过后注入 X-User-Id: <uid>
+//	       → svc 信任 APISIX（不再验证 signature）
+//	       → svc 读 X-User-Id header，转 int64，注入 ctx
 //
 // 这样 svc 端不需要共享 JWT secret，符合"边界信任"原则。
 //
@@ -49,8 +50,10 @@ func AuthMiddleware() Middleware {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			// 跳过白名单端点（monitoring / metrics 不需要鉴权）
-			path := r.URL.Path
-			if path == "/health" || path == "/metrics" {
+			//
+			// D-29：/health/ready 与 /health 同属健康探针面，必须一并免鉴权。
+			// 本函数与 GinAuthMiddlewareWithOpts 共用同一判定，两处必须同步。
+			if isHealthProbePath(r.URL.Path) {
 				next(w, r)
 				return
 			}

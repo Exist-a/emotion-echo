@@ -13,111 +13,27 @@ package integration_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	pgcontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
-	gormpg "gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 
 	"emotion-echo-ai-svc/internal/model"
 	"emotion-echo-ai-svc/internal/repository"
 )
 
-// pgContainerForEmotion 起 postgres + emotion_echo_ai schema + apply ai-svc 全套 migration
-func pgContainerForEmotion(t *testing.T, ctx context.Context) (*gorm.DB, func()) {
+// pgContainerForEmotion 保留旧名，委托给共享 fixture（E2E-F-168）。
+//
+// 旧实现在这里**只手抄了 emotion_analysis 一张表**再跑 ai-svc 迁移，
+// 而 `voice_transcripts` / `face_detections` 属于**基础 schema 文件**
+// `deploy/db/02-create-tables-in-schemas.sql`、不在 ai-svc 的增量迁移里
+// ⇒ 跑完全部迁移后这些表仍不存在，14 个测试全红。
+// 现在统一走 testdb_test.go 的 newAIDB：测试库 = 生产库（同源，不会再漂移）。
+func pgContainerForEmotion(t *testing.T, _ context.Context) (*gorm.DB, func()) {
 	t.Helper()
-	pgC, err := pgcontainer.RunContainer(ctx,
-		testcontainers.WithImage("postgres:15-alpine"),
-		pgcontainer.WithDatabase("emotion_echo_test"),
-		pgcontainer.WithUsername("test"),
-		pgcontainer.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
-		),
-	)
-	require.NoError(t, err)
-	cleanup := func() { _ = pgC.Terminate(ctx) }
-
-	dsn, err := pgC.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
-
-	db, err := gorm.Open(gormpg.Open(dsn), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
-	})
-	require.NoError(t, err)
-
-	require.NoError(t, db.Exec("CREATE SCHEMA IF NOT EXISTS emotion_echo_ai").Error)
-
-	// 1) 建基础表（与 deploy/db/02-create-tables-in-schemas.sql 一致，无 message_id UNIQUE 漂移）
-	require.NoError(t, db.Exec(`
-CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
-    id BIGSERIAL PRIMARY KEY,
-    message_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
-    conversation_id BIGINT NOT NULL,
-    primary_emotion VARCHAR(32),
-    sentiment_score REAL,
-    confidence REAL,
-    model VARCHAR(64),
-    created_at TIMESTAMPTZ DEFAULT NOW()
-)`).Error)
-
-	// 2) apply 所有 ai-svc migrations（按文件名排序）。migrations 在空表上加列与约束。
-	migDir := findEmotionMigrationsDir(t)
-	entries, err := os.ReadDir(migDir)
-	require.NoError(t, err)
-	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".sql" {
-			continue
-		}
-		require.NoError(t, applySQLFile(db, filepath.Join(migDir, e.Name())))
-	}
-
-	return db, cleanup
-}
-
-// applySQLFile 读 SQL 文件并执行（与 analytics-svc 同包内 helper 一致）
-func applySQLFile(db *gorm.DB, path string) error {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	_, err = sqlDB.Exec(string(b))
-	return err
-}
-
-// findEmotionMigrationsDir 解析 ai-svc/migrations/ 绝对路径
-func findEmotionMigrationsDir(t *testing.T) string {
-	t.Helper()
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-	candidates := []string{
-		filepath.Join(cwd, "migrations"),
-		filepath.Join(cwd, "..", "migrations"),
-		filepath.Join(cwd, "..", "..", "migrations"),
-	}
-	for _, p := range candidates {
-		if info, err := os.Stat(p); err == nil && info.IsDir() {
-			return p
-		}
-	}
-	t.Skipf("ai-svc/migrations/ not found from cwd=%s", cwd)
-	return ""
+	return newAIDB(t)
 }
 
 // TestEmotionRepo_DuplicateEventID_InsertsOnce PG 端 ON CONFLICT 幂等：同 event_id 两次 Create → 1 行

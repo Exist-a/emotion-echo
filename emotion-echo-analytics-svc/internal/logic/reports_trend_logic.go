@@ -19,8 +19,6 @@ import (
 	"emotion-echo-analytics-svc/internal/repository"
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
-
-	
 )
 
 // ReportsTrendLogic 处理 GET /api/v1/reports/trend
@@ -86,4 +84,3 @@ func (l *ReportsTrendLogic) GetTrendReport(req *types.GetTrendReportReq) (*types
 
 	return &types.GetTrendReportResp{Report: report}, nil
 }
-

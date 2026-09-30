@@ -140,16 +140,16 @@ func TestMentalHealthAssessmentLogic_RepoError_Propagates(t *testing.T) {
 
 // mhStubRepo 满足 MentalHealthRepo 接口（仅实现测试用方法）。
 type mhStubRepo struct {
-	assessment      *repository.MentalAssessment
-	assessmentErr   error
+	assessment    *repository.MentalAssessment
+	assessmentErr error
 
-	history         []repository.AssessmentHistoryItem
-	historyNextCur  string
-	historyErr      error
-	onListHistory   func(userID int64, atype, cursor string, limit int)
+	history        []repository.AssessmentHistoryItem
+	historyNextCur string
+	historyErr     error
+	onListHistory  func(userID int64, atype, cursor string, limit int)
 
-	trend           []repository.TrendPoint
-	trendErr        error
+	trend    []repository.TrendPoint
+	trendErr error
 }
 
 func (s *mhStubRepo) GetLatestAssessment(_ context.Context, _ int64, _ repository.AssessmentType) (*repository.MentalAssessment, error) {

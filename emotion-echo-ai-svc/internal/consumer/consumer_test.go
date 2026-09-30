@@ -114,9 +114,9 @@ func TestConsumeClaim_SkipsUnmarshalErrors(t *testing.T) {
 
 	// 3 条消息：第 1 条格式错，后 2 条正确
 	msgs := []*sarama.ConsumerMessage{
-		{Topic: "t", Value: []byte(`{bad json`)},                    // bad
-		{Topic: "t", Value: []byte(`{"type":"message.created"}`)},     // good
-		{Topic: "t", Value: []byte(`{"type":"message.created"}`)},     // good
+		{Topic: "t", Value: []byte(`{bad json`)},                  // bad
+		{Topic: "t", Value: []byte(`{"type":"message.created"}`)}, // good
+		{Topic: "t", Value: []byte(`{"type":"message.created"}`)}, // good
 	}
 
 	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, len(msgs))}
@@ -160,8 +160,8 @@ func TestConsumeClaim_TopicFilter(t *testing.T) {
 	}
 
 	msgs := []*sarama.ConsumerMessage{
-		{Topic: "t", Value: []byte(`{"type":"message.created"}`)},   // match
-		{Topic: "t", Value: []byte(`{"type":"user.created"}`)},        // skip (filter)
+		{Topic: "t", Value: []byte(`{"type":"message.created"}`)}, // match
+		{Topic: "t", Value: []byte(`{"type":"user.created"}`)},    // skip (filter)
 	}
 
 	claim := &fakeClaim{msgs: make(chan *sarama.ConsumerMessage, len(msgs))}
@@ -427,7 +427,8 @@ func TestConsumeClaim_TraceTagLiterals(t *testing.T) {
 //
 // 目的: Trace 链入 ctx 必须传递,handler 才能用 ctx 跨服务调用传递 trace_id
 // 现状: consumer.go:108 span, _, _ 返回 ctx (第 2 个返回值) → handler(ctx, evt)
-//       即使 Tracer 为 nil,ctx 也需传递
+//
+//	即使 Tracer 为 nil,ctx 也需传递
 func TestConsumeClaim_HandlerReceivesContext(t *testing.T) {
 	handlerCalled := make(chan struct{}, 1)
 	gotCtx := make(chan context.Context, 1)
@@ -534,8 +535,8 @@ type tagKV struct{ K, V string }
 
 // mockSpan PR-OBS-17 — 满足 grpcinterceptor.Span 接口 + 记录调用
 type mockSpan struct {
-	ended   bool
-	endErr  error
+	ended    bool
+	endErr   error
 	tagCalls []tagKV
 }
 
@@ -564,20 +565,20 @@ type mockTracer struct {
 	localErr     error
 
 	// Stage 92 PR-2: CreateEntrySpan 字段（用于 Kafka consumer 从 sw8 header 重建父 trace）
-	entryOpCalls  []string
-	entrySw8Seen  string // extractor("sw8") 抽到的值
-	entrySpan     *mockSpan
-	entryCtx      context.Context
-	entryErr      error
+	entryOpCalls []string
+	entrySw8Seen string // extractor("sw8") 抽到的值
+	entrySpan    *mockSpan
+	entryCtx     context.Context
+	entryErr     error
 
 	// Stage 94 PR-2 §P0-3 扩展：entryFn 可选，若非 nil 则 CreateEntrySpan 走自定义
 	// 路径（每次返回新 mockSpan）。老测试 entryFn=nil 走原路径（向后兼容）。
 	entryFn func(ctx context.Context, opName string, extractor func(string) (string, error)) (context.Context, grpcinterceptor.Span, error)
 
 	// Stage 92 PR-2: CreateExitSpan 字段（本测试不验证，本服务不发消息；保留接口合规）
-	exitOpCalls  []string
-	exitSpan     *mockSpan
-	exitErr      error
+	exitOpCalls []string
+	exitSpan    *mockSpan
+	exitErr     error
 }
 
 func (t *mockTracer) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
@@ -970,12 +971,12 @@ func TestConsumeClaim_NoSw8Header_StillCreatesSpan(t *testing.T) {
 func TestHandleFailure_ConcurrentAccessIsSafe(t *testing.T) {
 	dlq := NewInMemoryDLQPublisher()
 	h := &ConsumerGroupHandler{
-		Ready:      make(chan bool),
-		Handler:    func(ctx context.Context, e *events.Event) error { return errors.New("forced") },
+		Ready:       make(chan bool),
+		Handler:     func(ctx context.Context, e *events.Event) error { return errors.New("forced") },
 		TopicFilter: "",
-		Tracer:     nil,
-		DLQ:        dlq,
-		MaxRetries: 100, // 高值,避免任一 goroutine 触发 DLQ 路径
+		Tracer:      nil,
+		DLQ:         dlq,
+		MaxRetries:  100, // 高值,避免任一 goroutine 触发 DLQ 路径
 	}
 
 	const N = 50

@@ -28,7 +28,7 @@ sleep 60
 
 | # | 检查 | 命令 | 期望 |
 |---|------|------|------|
-| 1 | 容器健康 | `docker ps --format "{{.Names}}\t{{.Status}}" \| grep -E 'obs\|bff\|chat\|user'"` | 6 个 obs 容器 + 6 个业务 svc healthy |
+| 1 | 容器健康 | `docker ps --format "{{.Names}}\t{{.Status}}" \| grep -E 'obs\|bff\|chat\|user'"` | 6 个 obs 容器 + 6 个业务 svc healthy（E2E-23 后 infra 侧共 16 个 healthcheck，另有 apisix / sw-oap / sw-ui / obs-mock-receiver 参与门禁，`scripts/test_obs_healthchecks.sh` 静态核对 16 项） |
 | 2 | Prometheus 就绪 | `curl :9090/-/ready` | "Prometheus Server is Ready." |
 | 3 | Grafana 就绪 | `curl :13000/api/health` | `{"database":"ok"}` |
 | 4 | Loki 就绪 | `curl :3100/ready` | "ready"（注意：loki /ready 在 compactor 启动后 ~15s 才返回 200）|

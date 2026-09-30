@@ -8,6 +8,8 @@
 > 最后更新：2026-09-05（新增决策 19 · 仓库顶层命名规范与废弃件处置，详见 `adr-2026-09-repo-top-level-naming.md`；决策 18 · 文档失真治理，详见 `adr-2026-09-doc-drift-registry.md`；决策 17 · dev 模式日志聚合后端 = Loki，详见 `adr-2026-09-loki-aggregator-dev.md`）
 
 > 2026-09-03：撤回 2026-08-31 决策 10 "不引入注册中心/配置中心" 判断；新增决策 11/12/13，演进路线 Stage 31/32/33；详见 `adr-2026-09-nacos-reintroduction.md`
+>
+> **2026-09-30（E2E-23）**：新增 [`adr-2026-09-health-check-contract.md`](adr/adr-2026-09-health-check-contract.md) —— 健康检查契约（liveness/readiness 分离，D-29）。同时更正 Nacos ADR §四 两条**从未落地**的设计承诺（"grpc health 5s/次连续 3 次摘除"、"`NACOS_REFRESH_MS` 拉取间隔"）—— 原文以约定口吻书写造成"已实现"误读，见该 ADR §四 更正小节与账本 E2E-F-157
 
 ---
 
@@ -127,7 +129,7 @@
 - ~~❌ chat-svc HTTP /api/v1/conversations 500~~ 🟢 **Stage 64 PR-3 关闭**（`3e07571`，#32：旧镜像时代 bug，v0.1.3 rebuild 实测 4 路径全 200/401）
 ```
 
-**收口 ADR**：[`adr-2026-09-decision-4-closure.md`](adr-2026-09-decision-4-closure.md) — 决策 4 从"未来/待实施"翻"✅ 实施完成"的形式化收口，含覆盖度量化、故意不做的边界列表、后续 sprint backlog。
+**收口 ADR**：[`adr-2026-09-decision-4-closure.md`](adr/adr-2026-09-decision-4-closure.md) — 决策 4 从"未来/待实施"翻"✅ 实施完成"的形式化收口，含覆盖度量化、故意不做的边界列表、后续 sprint backlog。
 
 **关联**：
 - 决策 5（Python LLM 独立微服务 + gRPC server）：不变，emotion-llm-service 维持 gRPC
@@ -245,9 +247,9 @@
 | 注册中心 | **Nacos 2.4.x**（`github.com/nacos-group/nacos-sdk-go/v2` ≥ v2.3.5；`nacos-sdk-python` ≥ 3.1.0 避开 3.0.x 断线重注册缺陷） |
 | 配置中心 | 同 Nacos（一体化部署，避免引入多组件） |
 | 配置中心**范围** | **仅放运营参数**（feature flag、限流阈值、模型路由表、Kafka 重试次数、A/B 分组）。`etc/*.yaml` 仍是启动默认值，Nacos 在启动后覆盖；**JWT secret、DATABASE_DSN、LLM_API_KEY 等敏感配置不进 Nacos** |
-| 服务发现 | Nacos 主动注册 + 心跳；客户端定时拉取 + watch（30s 间隔）。**BFF 也参与发现**（Stage 32 APISIX `nacos-discovery` 上游拉取） |
+| 服务发现 | Nacos 主动注册 + 心跳；BFF 侧 `nacosRuntime.Heartbeat()` 持续 upsert 存活实例（**这是 E2E-23 修好的真机制** —— 注册返回的 watcher 此前无人调用，注册后不续约，见 E2E-F-107）。**不存在 `NACOS_REFRESH_MS` 轮询**：SDK 自维护连接与重连，没有"客户端定时拉取"这一环。**BFF 也参与发现**（Stage 32 APISIX `nacos-discovery` 上游拉取） |
 | 命名空间 | `emotion-echo-dev` / `emotion-echo-prod`；group `DEFAULT_GROUP`；dataId `{service-name}`（注册）+ `{service-name}.ops.yaml`（运营参数） |
-| 健康检查 | grpc health 探活（5s/次，连续 3 次失败自动摘除） |
+| 健康检查 | **HTTP**：`/health` = liveness **恒 200**（向后兼容，外部探针打的是它）；`/health/ready` = readiness 检依赖，失败返 **503** + `status:"degraded"`（D-29，E2E-23 落地；compose 11 处 healthcheck 与 Helm readinessProbe 均指 ready）。**gRPC**：5 个服务注册 `grpc.health.v1.Health`，优雅停机前先 `MarkShuttingDown()` 把 `""` 与 `emotion.*` 全翻 `NOT_SERVING` 再 `GracefulStop()`。<br>⚠️ 本行原文"grpc health 探活（5s/次，连续 3 次失败自动摘除）"是**从未落地的设计承诺**，2026-09-30 已更正（ADR §四 + 账本 E2E-F-157） |
 | 演进路径 | Stage 31 注册+运营参数 → Stage 32 API 网关回归 → Stage 33 P0 修复 + BFF 净化 |
 
 ### 决策 11：API 网关 = **APISIX**（独立网关层，与 BFF 解耦）
@@ -801,13 +803,15 @@ cd emotion-echo-web-bff && ./web-bff.exe &
 # 3. 启动 Python LLM（启动后自动注册到 Nacos）
 cd emotion-llm-service && python main.py &
 
-# 4. 验证（通过 BFF；各 svc 自带 /health）
-curl http://localhost:8894/health          # BFF 聚合下游健康探测
-curl http://localhost:8888/health          # user-svc
-curl http://localhost:8890/health          # chat-svc
-curl http://localhost:8889/health          # assessment-svc
-curl http://localhost:8891/health          # ai-svc
-curl http://localhost:8893/health          # analytics-svc
+# 4. 验证（通过 BFF；各 svc 自带 /health/ready）
+#    ⚠️ 必须用 /health/ready —— /health 是 liveness，恒 200，验不出任何东西（D-29）
+curl -i http://localhost:8894/health/ready     # BFF 聚合下游健康探测（deps 字段含 redis/nacos）
+curl -i http://localhost:8888/health/ready     # user-svc
+curl -i http://localhost:8890/health/ready     # chat-svc
+curl -i http://localhost:8889/health/ready     # assessment-svc
+curl -i http://localhost:8891/health/ready     # ai-svc
+curl -i http://localhost:8893/health/ready     # analytics-svc
+# 期望：HTTP 200 + {"status":"ok",...}；任一下游/依赖不通 → 503 + {"status":"degraded"}
 
 # 5. 验证 Nacos 注册中心（Stage 31 验收）
 open http://localhost:8848/nacos           # 默认 nacos/nacos
@@ -942,9 +946,9 @@ Stage 33 P0 修复+BFF净化 █████████████████
 
 **关联 ADR**：[adr-2026-09-on-device-hybrid-main.md](adr/adr-2026-09-on-device-hybrid-main.md)
 
-**关联计划**：[on-device-hybrid-inference-2026-09-23.md](../../plans/on-device-hybrid-inference-2026-09-23.md)（v0.2）/ [on-device-hybrid-inference-implementation-roadmap-2026-09-23.md](../../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md)（v0.3）
+**关联计划**：[on-device-hybrid-inference-2026-09-23.md](../plans/on-device-hybrid-inference-2026-09-23.md)（v0.2）/ [on-device-hybrid-inference-implementation-roadmap-2026-09-23.md](../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md)（v0.3）
 
-**并行协议**：[parallel-tracks.md](../../_meta/parallel-tracks.md)（Lane O × Lane E 隔离规则，AGENTS §八挂钩）
+**并行协议**：[parallel-tracks.md](../_meta/parallel-tracks.md)（Lane O × Lane E 隔离规则，AGENTS §八挂钩）
 
 **账本**：`docs/plans/on-device-findings.md`（OND-F-xx，stage1 收口并入 E2E-F）
 
@@ -965,8 +969,8 @@ Stage 33 P0 修复+BFF净化 █████████████████
 **关联 ADR**：[adr-2026-09-on-device-model-selection-qwen3.md](adr/adr-2026-09-on-device-model-selection-qwen3.md)
 
 **关联计划 / 决策材料**：
-- [on-device-model-selection-decision-material-2026-09-24.md](../../plans/on-device-model-selection-decision-material-2026-09-24.md)（10 维度决策矩阵 + License 实测）
-- [on-device-mindchat-survey-2026-09-24.md](../../plans/on-device-mindchat-survey-2026-09-24.md)（MindChat 模型侧调研）
+- [on-device-model-selection-decision-material-2026-09-24.md](../plans/on-device-model-selection-decision-material-2026-09-24.md)（10 维度决策矩阵 + License 实测）
+- [on-device-mindchat-survey-2026-09-24.md](../plans/on-device-mindchat-survey-2026-09-24.md)（MindChat 模型侧调研）
 
 **两套编号说明**：同一决策在 E2E 轨索引登记为 **D-26.2**（`docs/e2e-roadmap/decisions.md`）；D-NN 与决策 N 是并行编号体系（D-26 ↔ 决策 33 + D-26.2 ↔ 决策 34）。
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -12,9 +13,9 @@ import (
 	"time"
 
 	nacosclients "github.com/nacos-group/nacos-sdk-go/v2/clients"
+	nacosnaming "github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	nacosconstant "github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	nacosmodel "github.com/nacos-group/nacos-sdk-go/v2/model"
-	nacosnaming "github.com/nacos-group/nacos-sdk-go/v2/clients/naming_client"
 	nacosvo "github.com/nacos-group/nacos-sdk-go/v2/vo"
 )
 
@@ -302,6 +303,7 @@ func (r *NacosRegistry) Heartbeat(ctx context.Context, ins Instance, interval ti
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		failCount := 0
 		for {
 			select {
 			case <-ctx.Done():
@@ -309,7 +311,12 @@ func (r *NacosRegistry) Heartbeat(ctx context.Context, ins Instance, interval ti
 			case <-ticker.C:
 				// 周期续约：调一次 UpdateInstance 让 Nacos 重新感知本实例。
 				// SDK 没有独立的 SendHeartbeat 公开方法，UpdateInstance 是公开心跳通道。
-				_, _ = r.client.UpdateInstance(nacosvo.UpdateInstanceParam{
+				//
+				// E2E-23 F-156 修复：本行原先是 `_, _ = r.client.UpdateInstance(...)`，
+				// **把续约错误完全丢弃** —— SDK 长连接死透时零日志，
+				// 实例静默从 Nacos 消失而本项目毫无感知（账本 F-156 记的"观测盲区"）。
+				// 现在：第 1 次失败打 WARN、其后按 renewalFailureLogEvery 节流、恢复打 INFO。
+				_, err := r.client.UpdateInstance(nacosvo.UpdateInstanceParam{
 					Ip:          registerHost(ins.Host),
 					Port:        uint64(ins.Port),
 					Weight:      1.0,
@@ -321,6 +328,23 @@ func (r *NacosRegistry) Heartbeat(ctx context.Context, ins Instance, interval ti
 					GroupName:   r.cfg.GroupName,
 					Ephemeral:   true,
 				})
+				if err != nil {
+					failCount++
+					if shouldLogConsecutiveFailure(failCount, renewalFailureLogEvery) {
+						slog.WarnContext(ctx,
+							"nacos instance renewal failed: UpdateInstance returned error; "+
+								"the instance may silently disappear from Nacos",
+							"err", err,
+							"service_name", ins.ServiceName,
+							"fail_count", failCount)
+					}
+					continue
+				}
+				if failCount > 0 {
+					slog.InfoContext(ctx, "nacos instance renewal recovered",
+						"service_name", ins.ServiceName, "fail_count", failCount)
+					failCount = 0
+				}
 			}
 		}
 	}()

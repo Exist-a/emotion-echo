@@ -2,11 +2,13 @@
 # scripts/test_route_contract.sh — Sprint 1 PR-3 三方路由契约脚本
 #
 # 用途：离线静态比对 APISIX (deploy/apisix/seed.sh) ↔ BFF (emotion-echo-web-bff) ↔ 前端
-#       (Emotion-Echo-Web/app/lib/apiRoutes.ts) 三方路径集合，防止三方漂移未被发现。
+#       (emotion-echo-web/app/lib/apiRoutes.ts) 三方路径集合，防止三方漂移未被发现。
 #
 # 三方关系：
 #   - APISIX 是网关（catch-all /api/v1/* 路由到 web-bff + 5 auth 白名单）
-#   - web-bff 是聚合层（27 主路径 + EmotionQ 3 条件）
+#   - web-bff 是聚合层（去重后 40 条注册路由，其中 37 条主路径 + EmotionQ 3 条条件分支；
+#     含 /health、/health/ready、/metrics 三个基础设施路径 —— 这三个不是业务路径，
+#     断言 1/2 对它们另行放行）
 #   - 前端 API_ROUTES 是 API 客户端单点真理（26 主路径 + 5 knownOrphans）
 #
 # 契约断言（每条 fail → exit 1）：
@@ -23,8 +25,13 @@
 #
 # 调研依据：
 #   - deploy/apisix/seed.sh:417,456-478 路由清单
-#   - emotion-echo-web-bff/main.go:214-246 registerRoutes（PR-1 测试已锁 27 条）
-#   - Emotion-Echo-Web/app/lib/apiRoutes.ts（PR-2 新建，含 26 + 5 orphan）
+#   - emotion-echo-web-bff/main.go:430 registerRoutes（PR-1 测试已锁；E2E-23 起含
+#     GET /health/ready，main_test.go 的 wantRoutes 白名单同步该条目并做精确计数断言）
+#   - emotion-echo-web/app/lib/apiRoutes.ts（PR-2 新建，含 26 + 5 orphan）
+#
+# ⚠️ 计数注释易腐化：上面的 37 / 26 是 2026-09-30 实测值。真实清单以
+#    emotion-echo-web-bff/main_test.go 的 wantRoutes / wantRoutesWithEmotionQ 为单一事实源，
+#    数量对不上时**先读那份白名单**，不要相信本注释。
 
 set -uo pipefail
 
@@ -32,7 +39,11 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SEED_SH="$REPO_ROOT/deploy/apisix/seed.sh"
 BFF_MAIN="$REPO_ROOT/emotion-echo-web-bff/main.go"
 BFF_HANDLERS="$REPO_ROOT/emotion-echo-web-bff/internal/handler"
-WEB_API_ROUTES="$REPO_ROOT/Emotion-Echo-Web/app/lib/apiRoutes.ts"
+# ⚠️ 大小写：目录实名是 emotion-echo-web（全小写）。本脚本此前写成
+#    `Emotion-Echo-Web`，在 Windows 上因文件系统大小写不敏感**照样跑通**，
+#    接进 GitHub Actions（ubuntu，区分大小写）后立刻 exit 1 "missing source"。
+#    本地绿 ≠ CI 绿：跨平台脚本里的路径必须逐字符对得上仓库真实大小写。
+WEB_API_ROUTES="$REPO_ROOT/emotion-echo-web/app/lib/apiRoutes.ts"
 
 fail_count=0
 warn_count=0
@@ -163,10 +174,13 @@ log ""
 log "=== contract 1: BFF 路由 ⊆ APISIX 覆盖集 ==="
 APISIX_AUTH_WHITELIST="^/api/v1/auth/(login|register|verification-code|refresh|logout)\$"
 while IFS=$'\t' read -r method path; do
-  # 跳过基础设施路径（不在 /api/v1 下）
-  if [ "$path" = "/health" ] || [ "$path" = "/metrics" ]; then
-    continue
-  fi
+  # 跳过基础设施路径（不在 /api/v1 下，APISIX 不经网关直接探）
+  # E2E-23 补入 /health/ready：它在 main_test.go 的 wantRoutes 里与 /health、/metrics
+  # 同属基础设施三兄弟。**只跳这三条白名单里的**，不改成"跳过所有非 /api/v1"——
+  # 那样任何拼错前缀的路径都会被静默放过，正是本脚本要防的漂移。
+  case "$path" in
+    /health|/health/ready|/metrics) continue ;;
+  esac
   # 检查 (1) 精确在 APISIX URI 列表 (2) 命中 catch-all /api/v1/* (3) auth 白名单
   covered=0
   if [ -n "${APISIX_URIS[$path]:-}" ]; then
@@ -264,9 +278,9 @@ done < "$WEB_ROUTES_FILE"
 # ---------- 反向警告：BFF 注册但前端无调用 ----------
 log ""
 log "=== contract 3 (warning): BFF 路由未在前端 API_ROUTES ==="
-# 只检查 /api/v1/ 业务路径（跳过 /health /metrics）
+# 只检查 /api/v1/ 业务路径（跳过 /health /health/ready /metrics）
 while IFS=$'\t' read -r method path; do
-  [[ "$path" == /health || "$path" == /metrics ]] && continue
+  [[ "$path" == /health || "$path" == /health/ready || "$path" == /metrics ]] && continue
   [[ "$path" != /api/v1/* ]] && continue
   # 跳过 catch-all / :action（前端不需要显式调用）
   [[ "$path" == */:action || "$path" == */:id ]] && continue

@@ -1,9 +1,9 @@
 // Package config — Stage 41 PR-5 · ai-svc 配置加载测试
 //
 // 验证 ai-svc 改用 shared/pkg/config 后语义保持：
-//   1. yaml 显式 false 必须保留(R3 反向)
-//   2. env 注入(applyEnvOverrides 复制实现)能覆盖 yaml 字面量
-//   3. SetDefaults 填零值字段
+//  1. yaml 显式 false 必须保留(R3 反向)
+//  2. env 注入(applyEnvOverrides 复制实现)能覆盖 yaml 字面量
+//  3. SetDefaults 填零值字段
 package config
 
 import (

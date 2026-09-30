@@ -21,8 +21,6 @@ import (
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/trigger"
 	"emotion-echo-analytics-svc/internal/types"
-
-	
 )
 
 // MentalHealthTriggerLogic 处理异步触发评估
@@ -76,8 +74,8 @@ func (l *MentalHealthTriggerLogic) TriggerAssessment(req *types.TriggerMentalHea
 	}
 
 	return &types.TriggerMentalHealthResp{
-		TaskID: taskID,
-		Status: "accepted",
+		TaskID:  taskID,
+		Status:  "accepted",
 		TraceID: taskID,
 	}, nil
 }

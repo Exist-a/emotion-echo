@@ -8,34 +8,34 @@
 //
 // Coverage matrix:
 //
-//   ListSurveysHandler    GET  /api/v1/surveys
-//     - default limit=50 → 200 + JSON items
-//     - limit=10 query param → 200 (param respected)
-//     - limit=garbage → 200 (falls back to default; non-positive ignored)
-//     - repo error → 500
+//	ListSurveysHandler    GET  /api/v1/surveys
+//	  - default limit=50 → 200 + JSON items
+//	  - limit=10 query param → 200 (param respected)
+//	  - limit=garbage → 200 (falls back to default; non-positive ignored)
+//	  - repo error → 500
 //
-//   GetSurveyHandler      GET  /api/v1/surveys/:id
-//     - existing → 200 + survey body
-//     - id=0 → 400 invalid survey id
-//     - id=abc → 400 invalid survey id
-//     - id=999 (missing) → 404 survey not found
+//	GetSurveyHandler      GET  /api/v1/surveys/:id
+//	  - existing → 200 + survey body
+//	  - id=0 → 400 invalid survey id
+//	  - id=abc → 400 invalid survey id
+//	  - id=999 (missing) → 404 survey not found
 //
-//   SubmitSurveyHandler   POST /api/v1/surveys/:id/submit
-//     - happy PHQ-9 → 200 + scored body
-//     - id=0 → 400 invalid survey id
-//     - empty body → 400 bind error
-//     - unknown survey → 404 survey not found
+//	SubmitSurveyHandler   POST /api/v1/surveys/:id/submit
+//	  - happy PHQ-9 → 200 + scored body
+//	  - id=0 → 400 invalid survey id
+//	  - empty body → 400 bind error
+//	  - unknown survey → 404 survey not found
 //
-//   GetSurveyResultHandler GET /api/v1/surveys/results/:resultId
-//     - existing result → 200
-//     - id=0 → 400 invalid result id
-//     - id=abc → 400 invalid result id
-//     - unknown result → 404 result not found
+//	GetSurveyResultHandler GET /api/v1/surveys/results/:resultId
+//	  - existing result → 200
+//	  - id=0 → 400 invalid result id
+//	  - id=abc → 400 invalid result id
+//	  - unknown result → 404 result not found
 //
-//   ListMyResultsHandler  GET /api/v1/surveys/results
-//     - default limit=20 → 200 + items
-//     - limit=99 → 200 (param respected)
-//     - no userID in ctx → 400 (logic layer rejects)
+//	ListMyResultsHandler  GET /api/v1/surveys/results
+//	  - default limit=20 → 200 + items
+//	  - limit=99 → 200 (param respected)
+//	  - no userID in ctx → 400 (logic layer rejects)
 package handler
 
 import (

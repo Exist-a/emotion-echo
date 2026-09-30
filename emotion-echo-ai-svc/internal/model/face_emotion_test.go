@@ -3,17 +3,18 @@
 // FaceEmotionResult 是 FER（人脸情绪识别）的落库模型。
 //
 // Schema（emotion_echo_ai.face_emotion_results）：
-//   id              BIGSERIAL PK
-//   upload_id       VARCHAR(64) UNIQUE         -- 前端去重 nonce
-//   message_id      BIGINT                     -- 可空（用户可能上传无人脸）
-//   user_id         BIGINT NOT NULL
-//   conversation_id BIGINT
-//   primary_emotion VARCHAR(32)
-//   emotion_scores  JSONB
-//   confidence      REAL
-//   model           VARCHAR(64)
-//   raw_response    JSONB
-//   created_at      TIMESTAMPTZ
+//
+//	id              BIGSERIAL PK
+//	upload_id       VARCHAR(64) UNIQUE         -- 前端去重 nonce
+//	message_id      BIGINT                     -- 可空（用户可能上传无人脸）
+//	user_id         BIGINT NOT NULL
+//	conversation_id BIGINT
+//	primary_emotion VARCHAR(32)
+//	emotion_scores  JSONB
+//	confidence      REAL
+//	model           VARCHAR(64)
+//	raw_response    JSONB
+//	created_at      TIMESTAMPTZ
 //
 // 这些测试**故意**只引用未定义的符号 — 跑必须红。
 package model

@@ -4,11 +4,11 @@
 // Package integration_test 跑真实 Postgres + ai-svc emotionrepo + emotionquery proto 接口的端到端集成测试。
 //
 // 流程：
-//  - testcontainers 起 postgres:15-alpine
-//  - emotion_echo_ai schema + emotion_analysis 表
-//  - PostgresEmotionRepo 注入数据
-//  - 启真实 grpc.Server（注册 EmotionQueryService + 标准 grpc.health.v1 health）
-//  - 用 grpc.ClientConn + emotionhealth.Client + emotionquery.NewEmotionQueryServiceClient 真实交互
+//   - testcontainers 起 postgres:15-alpine
+//   - emotion_echo_ai schema + emotion_analysis 表
+//   - PostgresEmotionRepo 注入数据
+//   - 启真实 grpc.Server（注册 EmotionQueryService + 标准 grpc.health.v1 health）
+//   - 用 grpc.ClientConn + emotionhealth.Client + emotionquery.NewEmotionQueryServiceClient 真实交互
 //
 // 跑：  go test -tags integration -v -timeout 5m ./integration_test/...
 package integration_test
@@ -21,18 +21,14 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	pgcontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
-	emotionhealth "github.com/emotion-echo/shared/pkg/healthcheck"
 	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	emotionhealth "github.com/emotion-echo/shared/pkg/healthcheck"
 
 	"emotion-echo-ai-svc/internal/model"
 	"emotion-echo-ai-svc/internal/repository"
 
-	gormpg "gorm.io/driver/postgres"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -40,61 +36,21 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
-// pgContainerDesc 起 Postgres 容器，初始化 emotion_echo_ai schema + emotion_analysis 表
-func pgContainerDesc(t *testing.T, ctx context.Context) (*pgcontainer.PostgresContainer, *gorm.DB) {
+// pgContainerDesc 保留旧名，改为走共享 fixture（E2E-F-168）。
+//
+// 旧实现在这里**手写了一份只建 emotion_analysis 的 DDL**（带一条非 partial 的
+// `CONSTRAINT uq_emotion_analysis_event_id UNIQUE`），与生产的真实 schema 不一致 ——
+// 生产上 i006/i009 把索引改成了 partial 形式，仓储的 `ON CONFLICT (event_id)`
+// 也必须带谓词才能匹配。用真实 schema 跑，才能测出这类"测试库与生产不一致导致
+// 假绿/假红"的问题。
+// grpcServerHealthSvcName 与生产构造函数注册的 per-service 名保持一致（proto 真名）。
+const grpcServerHealthSvcName = "emotion_ai.v1.EmotionQueryService"
+
+func pgContainerDesc(t *testing.T, _ context.Context) (*gorm.DB, func()) {
 	t.Helper()
-
-	pgC, err := pgcontainer.RunContainer(ctx,
-		testcontainers.WithImage("postgres:15-alpine"),
-		pgcontainer.WithDatabase("emotion_echo_test"),
-		pgcontainer.WithUsername("test"),
-		pgcontainer.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
-		),
-	)
-	require.NoError(t, err)
-
-	dsn, err := pgC.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
-
-	require.NoError(t, runSQL(ctx, dsn, `CREATE SCHEMA IF NOT EXISTS emotion_echo_ai`))
-	require.NoError(t, runSQL(ctx, dsn, `
-CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
-  id BIGSERIAL PRIMARY KEY,
-  event_id VARCHAR(64),
-  message_id BIGINT NOT NULL UNIQUE,
-  user_id BIGINT NOT NULL,
-  conversation_id BIGINT NOT NULL,
-  primary_emotion VARCHAR(32),
-  sentiment_score REAL,
-  confidence REAL,
-  model VARCHAR(64),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT uq_emotion_analysis_event_id UNIQUE (event_id)
-)`))
-	require.NoError(t, runSQL(ctx, dsn,
-		`CREATE INDEX IF NOT EXISTS idx_emotion_conv ON emotion_echo_ai.emotion_analysis(conversation_id)`))
-
-	db, err := gorm.Open(gormpg.Open(dsn), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
-	})
-	require.NoError(t, err)
-
-	return pgC, db
-}
-
-func runSQL(ctx context.Context, dsn, sql string) error {
-	db, err := gorm.Open(gormpg.Open(dsn), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
-	if err != nil {
-		return err
-	}
-	return db.WithContext(ctx).Exec(sql).Error
+	return newAIDB(t)
 }
 
 // startFakeAIGRPCServer 起真实 grpc.Server，注册 health + emotionquery.EmotionQueryService
@@ -112,7 +68,7 @@ func startFakeAIGRPCServer(t *testing.T, repo repository.EmotionRepo) (*grpc.Ser
 	)
 	healthSrv := health.NewServer()
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthSrv.SetServingStatus("emotion.AI", healthpb.HealthCheckResponse_SERVING)
+	healthSrv.SetServingStatus(grpcServerHealthSvcName, healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(gs, healthSrv)
 	emotionquery.RegisterEmotionQueryServiceServer(gs, &emotionQueryAdapter{repo: repo})
 
@@ -189,8 +145,8 @@ func toProtoEmotion(e *model.EmotionAnalysis) *emotionquery.Emotion {
 func TestAIGRPC_HealthCheckIntegration(t *testing.T) {
 	ctx := context.Background()
 
-	pgC, db := pgContainerDesc(t, ctx)
-	t.Cleanup(func() { _ = pgC.Terminate(ctx) })
+	db, cleanup := pgContainerDesc(t, ctx)
+	t.Cleanup(cleanup)
 
 	repo := repository.NewPostgresEmotionRepo(db)
 
@@ -202,8 +158,8 @@ func TestAIGRPC_HealthCheckIntegration(t *testing.T) {
 
 	hc := emotionhealth.NewClient(conn)
 
-	// 1. Check("emotion.AI") → SERVING
-	st, err := hc.Check(ctx, "emotion.AI")
+	// 1. Check(真实 service 名) → SERVING
+	st, err := hc.Check(ctx, grpcServerHealthSvcName)
 	require.NoError(t, err)
 	require.Equal(t, emotionhealth.ServingStatusServing, st)
 
@@ -213,7 +169,7 @@ func TestAIGRPC_HealthCheckIntegration(t *testing.T) {
 	require.Equal(t, emotionhealth.ServingStatusServing, st)
 
 	// 3. WaitForReady
-	require.NoError(t, hc.WaitForReady(ctx, "emotion.AI", 2*time.Second))
+	require.NoError(t, hc.WaitForReady(ctx, grpcServerHealthSvcName, 2*time.Second))
 
 	// 4. Check 不存在的 service — grpc health 对 unknown service 返 NotFound error
 	// shared emotionhealth.Client.Check 已 normalizes error 为 ServiceUnknown
@@ -227,8 +183,8 @@ func TestAIGRPC_HealthCheckIntegration(t *testing.T) {
 func TestAIGRPC_EmotionQueryIntegration(t *testing.T) {
 	ctx := context.Background()
 
-	pgC, db := pgContainerDesc(t, ctx)
-	t.Cleanup(func() { _ = pgC.Terminate(ctx) })
+	db, cleanup := pgContainerDesc(t, ctx)
+	t.Cleanup(cleanup)
 
 	repo := repository.NewPostgresEmotionRepo(db)
 
@@ -291,7 +247,8 @@ func TestAIGRPC_EmotionQueryIntegration(t *testing.T) {
 func TestAIGRPC_PostgresDown_EmotionQueryError(t *testing.T) {
 	ctx := context.Background()
 
-	pgC, db := pgContainerDesc(t, ctx)
+	// 这个用例要主动终止容器来验"PG 宕机"路径，所以拿容器句柄而非只拿 cleanup
+	db, pgC, _ := newAIDBWithContainer(t)
 	repo := repository.NewPostgresEmotionRepo(db)
 
 	gs, lis := startFakeAIGRPCServer(t, repo)

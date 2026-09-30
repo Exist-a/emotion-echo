@@ -3,9 +3,9 @@
 // validateLLMOutput 校验 LLM 反序列化后的 llmFusedOutput 结构是否合法。
 //
 // 校验三条：
-//   1. PrimaryEmotion 在白名单内（happy/sad/angry/neutral/calm/anxious/...）
-//   2. SentimentScore ∈ [-1, 1]
-//   3. ModalityContrib 非空、各 value ∈ [0, 1]、总和 ∈ [0.99, 1.01]
+//  1. PrimaryEmotion 在白名单内（happy/sad/angry/neutral/calm/anxious/...）
+//  2. SentimentScore ∈ [-1, 1]
+//  3. ModalityContrib 非空、各 value ∈ [0, 1]、总和 ∈ [0.99, 1.01]
 package fusion
 
 import (

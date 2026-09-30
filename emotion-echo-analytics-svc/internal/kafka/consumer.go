@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync/atomic"
 
 	"github.com/emotion-echo/shared/pkg/logging"
 	"sync"
@@ -44,8 +45,8 @@ type Consumer struct {
 	consumer sarama.ConsumerGroupHandler
 
 	// Stage 30-C A2: DLQ 注入与重试配置
-	dlq        DLQPublisher
-	maxRetries int
+	dlq     DLQPublisher
+	retries *atomic.Int32
 }
 
 // NewConsumer 构造（不启动；需调 Run）
@@ -60,15 +61,21 @@ func NewConsumer(brokers []string, groupID, topic string, repo repository.EventR
 		return nil, err
 	}
 
+	// E2E-23 #32：重试次数改为 atomic 容器，consumer 与 handler **共享同一个**。
+	// 此前是构造期拷贝进 handler 的普通 int，Nacos 推新值只改得到 consumer
+	// 那一侧，消费判定仍读旧值 ⇒ 又一个"配了不生效"（账本 F-160）。
+	var retries atomic.Int32
+	retries.Store(3) // 默认 3，与 consumer.go:69,71 的历史硬编码一致
+
 	c := &Consumer{
-		topic:      topic,
-		groupID:    groupID,
-		brokers:    brokers,
-		repo:       repo,
-		client:     client,
-		consumer:   &chatEventHandler{repo: repo, topic: topic, dlq: NoopDLQPublisher{}, maxRetries: 3},
-		dlq:        NoopDLQPublisher{},
-		maxRetries: 3,
+		topic:    topic,
+		groupID:  groupID,
+		brokers:  brokers,
+		repo:     repo,
+		client:   client,
+		consumer: &chatEventHandler{repo: repo, topic: topic, dlq: NoopDLQPublisher{}, retries: &retries},
+		dlq:      NoopDLQPublisher{},
+		retries:  &retries,
 	}
 	return c, nil
 }
@@ -77,16 +84,46 @@ func NewConsumer(brokers []string, groupID, topic string, repo repository.EventR
 func (c *Consumer) WithDLQ(dlq DLQPublisher) *Consumer {
 	if dlq != nil {
 		c.dlq = dlq
-		c.consumer = &chatEventHandler{repo: c.repo, topic: c.topic, dlq: dlq, maxRetries: c.maxRetries}
+		c.consumer = &chatEventHandler{repo: c.repo, topic: c.topic, dlq: dlq, retries: c.retries}
 	}
 	return c
+}
+
+// currentMaxRetries 读当前重试上限（consumer 与 handler 共用同一容器）。
+func (c *Consumer) currentMaxRetries() int {
+	if c == nil || c.retries == nil {
+		return 0
+	}
+	return int(c.retries.Load())
+}
+
+// CurrentMaxRetries 导出当前重试上限（供 Nacos ops 回调日志与测试用）。
+func (c *Consumer) CurrentMaxRetries() int { return c.currentMaxRetries() }
+
+// UpdateMaxRetries 运行期更新重试上限（Nacos ops 回调调用）。
+//
+// 非正值被忽略：0 会变成"永不重试"（一旦入 DLQ 就再无重试），
+// 与 main.go 的 `> 0` 守卫语义保持一致。
+func (c *Consumer) UpdateMaxRetries(n int) {
+	if c == nil || c.retries == nil || n <= 0 {
+		return
+	}
+	c.retries.Store(int32(n))
+}
+
+// currentMaxRetries handler 侧的读取（与 Consumer 共享容器）。
+func (h *chatEventHandler) currentMaxRetries() int {
+	if h == nil || h.retries == nil {
+		return 0
+	}
+	return int(h.retries.Load())
 }
 
 // WithMaxRetries 设置最大重试次数
 func (c *Consumer) WithMaxRetries(n int) *Consumer {
 	if n > 0 {
-		c.maxRetries = n
-		c.consumer = &chatEventHandler{repo: c.repo, topic: c.topic, dlq: c.dlq, maxRetries: n}
+		c.retries.Store(int32(n))
+		c.consumer = &chatEventHandler{repo: c.repo, topic: c.topic, dlq: c.dlq, retries: c.retries}
 	}
 	return c
 }
@@ -97,11 +134,11 @@ func (c *Consumer) WithMaxRetries(n int) *Consumer {
 // 重建父 trace。tracer=nil 时不注入,与 Stage 30-A Round 4 原行为一致（向后兼容）。
 func (c *Consumer) WithTracer(tracer grpcinterceptor.Tracer) *Consumer {
 	c.consumer = &chatEventHandler{
-		repo:       c.repo,
-		topic:      c.topic,
-		dlq:        c.dlq,
-		maxRetries: c.maxRetries,
-		Tracer:     tracer,
+		repo:    c.repo,
+		topic:   c.topic,
+		dlq:     c.dlq,
+		retries: c.retries,
+		Tracer:  tracer,
 	}
 	return c
 }
@@ -137,10 +174,10 @@ func (c *Consumer) Close() error {
 
 // chatEventHandler 处理 chat-events 消息
 type chatEventHandler struct {
-	repo       repository.EventRepo
-	topic      string
-	dlq        DLQPublisher
-	maxRetries int
+	repo    repository.EventRepo
+	topic   string
+	dlq     DLQPublisher
+	retries *atomic.Int32
 	// attempts msg.Key → 重试次数（消费周期内）
 	//
 	// Round 5b §B: attemptsMu 守卫 map 读写。sarama 当前 ConsumeClaim 是单
@@ -278,9 +315,10 @@ func (h *chatEventHandler) handleFailure(sess sarama.ConsumerGroupSession, msg *
 	attempt := h.attempts[key]
 	h.attemptsMu.Unlock()
 
-	if attempt <= h.maxRetries {
+	maxRetries := h.currentMaxRetries()
+	if attempt <= maxRetries {
 		log.Printf("[kafka-consumer] handle %s failed (will retry attempt=%d/%d offset=%d): %v",
-			string(msg.Key), attempt, h.maxRetries, msg.Offset, handlerErr)
+			string(msg.Key), attempt, maxRetries, msg.Offset, handlerErr)
 		return
 	}
 
