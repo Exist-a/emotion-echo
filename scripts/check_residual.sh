@@ -39,7 +39,23 @@ for file in scripts/*.sh scripts/*.py; do
     fi
 done
 
-# 3. 跳过空文件检查（太慢）
+# 3. 扫描仓库根的临时/调试残留（E2E-23 收口轮新增）
+#
+# 由来：收口轮里我两次用 `git add -A`，把 API 查询的临时响应文件
+# （`.r.json` / `.c.json` / `.ci-runs.json` …）**误提交进了仓库**。
+# 当时两个门禁都没抓到 —— 本脚本原先只扫 `*;D` 空目录与"无末尾换行"，
+# 而 check_orphan_outputs.sh 只看 scripts/ 与 workflows/ 的引用关系，
+# **根目录的散落临时文件是两个门禁的共同盲区**。
+#
+# 判据：仓库根下 git 跟踪或未跟踪的、以 . 开头且属于已知临时前缀的文件。
+# 用 git 自己的索引判定，避开 .gitignore 已覆盖的情况。
+echo "检查仓库根临时文件..."
+while IFS= read -r f; do
+    base="$(basename "$f")"
+    residuals+=("根目录临时文件: $base （疑似 git add -A 误提交或未清理的调试产物）")
+done < <(git ls-files --others --exclude-standard --cached 2>/dev/null          | grep -E '^\.(r|c|ci|api|resp|tmp|probe)[A-Za-z0-9_.-]*\.(json|log|txt|out)$'          | sort -u)
+
+# 4. 跳过空文件检查（太慢）
 # echo "检查空文件..."
 
 echo ""

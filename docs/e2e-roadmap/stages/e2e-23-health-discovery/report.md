@@ -588,6 +588,22 @@ anti-patterns **AP-01（把"文件已创建"当"已验证"）** 的近亲，
 - 任何"清点清单得 N 条、所以缺 M 条"的推论，**必须先自证枚举是完整的**；
 - 反向同样成立："我看到了 N 条"**不能**推出"只有 N 条"。
 
+### 自曝第四处：`git add -A` 误提交临时文件（已被门禁盲区放过）
+
+提交 `cf67113` 时我用 `git add -A`，把此前 API 查询的临时响应文件 `.r.json`
+**一并提交进了仓库**。本轮 `c51bcda` 已删除。
+
+- **内容是否敏感**：逐项核过 —— 文件里 12 处 `token|key|secret|password` 匹配全是
+  GitHub API 的字段名 `keys_url`；31 处 40+ 字符长串是 **git commit SHA** 与中文提交信息。
+  **无任何真实凭据**。但它本就不该进版本库。
+- **为什么没人发现**：`check_residual.sh` 原先只扫 `*;D` 空目录与"无末尾换行"；
+  `check_orphan_outputs.sh` 只看 `scripts/` 与 `workflows/` 的引用关系。
+  **根目录的散落临时文件是两个门禁的共同盲区** —— 又是同一族问题：
+  "守卫在，但它守的不是那块地方"。
+- **已修**：`check_residual.sh` 增加第 3 项扫描，用 `git ls-files` 判定仓库根下
+  `.r*/.c*/.ci*/.api*/.resp*/.tmp*/.probe*` 形态的 `.json/.log/.txt/.out`。
+  负向对照：造一个 `.ci-tmp.json` → `rc=1` 并报出；删除 → `GREEN`。
+
 ### 另一处真相更正：经典保护没有公开可读的 API
 
 我先前在 `memory` 里写"用 `GET /rules/branches/main` 就能核实门禁"，**那是错的** ——
