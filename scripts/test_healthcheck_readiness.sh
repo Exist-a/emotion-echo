@@ -208,14 +208,17 @@ else
     fi
     r_path="$(printf '%s\n' "$rendered" | grep -A3 'readinessProbe:' | grep -m1 'path:' | sed 's|.*path: *||' | cut -d'#' -f1 | tr -d ' \r')"
     l_path="$(printf '%s\n' "$rendered" | grep -A3 'livenessProbe:' | grep -m1 'path:' | sed 's|.*path: *||' | cut -d'#' -f1 | tr -d ' \r')"
-    case "$r_path" in
-      /health/ready*) ;;
-      *) echo "FAIL [$chart] 渲染产物里 readinessProbe 路径 = '$r_path'（期望 /health/ready）"; fail=$((fail + 1)); continue ;;
-    esac
-    case "$l_path" in
-      /health) ;;
-      *) echo "FAIL [$chart] 渲染产物里 livenessProbe 路径 = '$l_path'（期望 /health）"; fail=$((fail + 1)); continue ;;
-    esac
+    # ⚠️ 必须是**精确相等**，不能用 /health/ready* 这种前缀匹配 ——
+    #    前缀写法下 `/health/ready-but-wrong` 也会通过（弱断言，AP-01）。
+    #    行内注释已在上面 cut -d'#' -f1 去掉。
+    if [ "$r_path" != "/health/ready" ]; then
+      echo "FAIL [$chart] 渲染产物里 readinessProbe 路径 = '$r_path'（期望精确等于 /health/ready）"
+      fail=$((fail + 1)); continue
+    fi
+    if [ "$l_path" != "/health" ]; then
+      echo "FAIL [$chart] 渲染产物里 livenessProbe 路径 = '$l_path'（期望精确等于 /health）"
+      fail=$((fail + 1)); continue
+    fi
     echo "PASS [$chart] helm template 渲染 OK（ready=$r_path live=$l_path）"
     pass=$((pass + 1))
   done

@@ -323,6 +323,79 @@ G-2b 说明**本地绿 ≠ CI 绿**：本项目开发机是 Windows（大小写�
 而新加的第 7 个第一次跑就红——**不是新守卫写得差，是它第一次离开了 Windows**。
 这两条都是 anti-patterns 里已有条目的复现（AP-10 / AP-01），已按原条目处置，未新开账本条目。
 
+## 9.4 收尾复核轮（2026-09-30，用户追问"中间态和结果都核实了吗"）
+
+上一条消息只报了"门禁全绿"，但**没交代这些门禁本身覆盖了什么、没覆盖什么**。
+复核把"我说已验证"逐条拆开重跑，抓出 5 处问题（详见 §9.3 复核轮表 V-1~V-5）。
+本节记录**为补齐覆盖面而新做的四组验证**。
+
+### ① Helm 契约：渲染产物级验证（补 V-1 的窟窿）
+
+| 验证 | 命令 | 结果 |
+|------|------|------|
+| 6 个 chart 能否渲染 | `helm template <c> charts/.../<c>` | 6/6 **RENDER OK** |
+| 渲染产物里探针路径**精确值** | `yaml.safe_load` 取 `Deployment.spec.template.spec.containers[].readinessProbe.httpGet.path` | 6/6 `== /health/ready`（**精确相等**，不是前缀包含） |
+| liveness 仍为浅探针 | 同上，取 `livenessProbe.httpGet.path` | 6/6 `== /health`（startupProbe 同为 `/health`） |
+| chart 静态合法性 | `helm lint` × 6 | 6/6 `0 chart(s) failed` |
+
+> **为什么必须是 YAML 解析而不是 grep**：守卫里用 `case "$r_path" in /health/ready*)` 是
+> **前缀匹配**，`/health/ready-but-wrong` 也能过。已把守卫的渲染断言改成
+> 去掉行内注释后**精确字符串比较**。
+
+### ② D-29 运行时契约（本轮新做，非引用旧结论）
+
+在真实 dev 栈上做**前 / 中 / 后**三段对照（停依赖 → 观察 → 恢复）：
+
+| 阶段 | `GET /health` | `GET /health/ready` |
+|------|--------------|---------------------|
+| 基线（全绿） | **200** `status=ok` `deps{nacos:ok, redis:ok}` | **200** `status=ok` 同 deps |
+| **停 Redis** | **200**（仍 200，符合"liveness 恒 200"）`status=**degraded**` `deps.redis=unhealthy` + `detail` | **503** `status=**degraded**` |
+| 再停 Postgres | 200 `degraded` | 503 `degraded` |
+| 恢复 | 200 `status=ok` | 200 `status=ok` |
+
+**这就是 D-29 的定义性行为**：`/health` 不因依赖故障而变红（避免探针误杀引发全站重启），
+但 `status` 说真话；`/health/ready` 承载 200/503。`deps` 字段带 `detail` 而非裸 bool ——
+**排障时能直接看到 `dial tcp: lookup emotion-echo-redis: i/o timeout`**，不必翻日志。
+
+### ③ IAB 浏览器复验（重跑，不引用旧截图）
+
+栈在我接手前有 10 个 infra 容器被外部终止（同刻 `Exited(255)`，postgres/nacos/redis/kafka/etcd/
+grafana/loki/minio/prometheus/alertmanager），BFF 因 Nacos 不可达而 unhealthy 并在重试
+`WaitForNacos`（attempt 1→3/10）。按 §八 登记 `deploy/.devmode-session` 后重启
+（`nacos` 带 `profiles: ["dev"]`，普通 `up -d` **不会**起它 —— 这是个容易漏的点），
+22 容器全 healthy 后再测。
+
+`/chat/user` 复验（演示账号 Echo User / ID 1，**登录态真实**）：
+
+| 图表 | 客观证据（canvas backing store 直读） | 视觉结论 |
+|------|----------------------------------------|----------|
+| 昼夜使用模式 | canvas 399×432，着色像素 **23.2%** | donut 四段 + 图例，**图例与圆环重叠**（见 E2E-F-165） |
+| 近30天对话频次 | 着色像素 **14.9%** | 面积图，2026-09-04~09-14，峰值 ~60，真实时序 |
+| 互动深度指标 | 着色像素 **12.9%** | 柱状图 平均轮数/总消息/第三指标，真实数值 |
+| 人格维度（雷达） | 着色像素 **6.2%**，纵向内容覆盖 **71.5%**（第 40~348 行 / 432） | 5 轴标签齐全，**完整无裁剪** |
+
+> **我自己推翻了一次假缺陷**（已记 E2E-F-166）：按 `clip` 截雷达图时看到底部大片空白，
+> 初判"被截断"；用 canvas 逐行像素统计证伪 —— 越界部分是我给的 `clip` 矩形**超出视口下沿**
+> 被填成卡片背景。加高视口到 1680×1900 后截图完全正常。
+> 附带发现：本布局里 **`window.scrollTo` 无效**（滚动容器是内层 div）。
+
+截图：[`screenshots/40-verify-my-space-4-charts-real-data.png`](screenshots/40-verify-my-space-4-charts-real-data.png)
+
+### ④ 门禁是否真能拦合并：从"无法核实"变成"已核实"
+
+`GET /repos/{owner}/{repo}/branches/main/protection` 返 **401**（需管理员），
+`scripts/check_required_checks.py` 因此只能 SKIP —— 这是我上一条消息里"无法核实"的那项。
+本轮改用**公开可读**的 `GET /repos/Exist-a/emotion-echo/rules/branches/main`，返回 **`[]`**
+⇒ `main` 上**零条分支规则** ⇒ `required_status_checks` 必为空。
+**CI 全红也不阻止合并**，这是有正面证据的结论（已回填账本 E2E-F-162）。
+
+### ⑤ 记忆纠错：python3 "遗留地雷"是错的
+
+我此前记录"仓内另有 4 个脚本仍用 `python3`，未修，属遗留债"。**复核证明这条不成立**：
+6 个 `.py` 的 `#!/usr/bin/env python3` **从不生效**（它们一律被 `python <file>` 调用，shebang 无人使用），
+逐个跑全部正常；两个 `.sh` 也已有 `PYTHON_BIN` 绝对路径 + `command -v python3 || python` 兜底链。
+已订正记忆。残留的真问题只有：`PYTHON_BIN` 默认值是本机绝对路径，且这两个脚本不在 CI 里。
+
 ## 10. 下轮建议
 
 原列的 4 项（C 组破坏性实验 / F 组回归钉 / E 组 14 参数 / #5#6）**均已于本轮完成**

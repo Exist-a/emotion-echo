@@ -318,7 +318,7 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-160 | **E2E-23 执行期代码回读** | 🔴 **`analytics-svc` 的 `SetDefaults` 漏了 `Kafka.MaxRetries`**：`internal/config/config.go:28` 注释明确承诺"默认 3"，但 `SetDefaults`（`:69-114`）**无该分支** ⇒ 实际生效值来自 `internal/kafka/consumer.go:69,71` 的硬编码 `3`。而 `main.go:200` 有 `>0` 守卫 ⇒ **ops 推 `0`（想关重试）会被静默忽略**且无人察觉 | 注释与实现脱节（`SetDefaults` 先跑、yaml 后覆盖的顺序在 E2E-17 修过一次，但补默认值时漏了此处） | **E2E-23**（E 组 P3） | ✅ **已解决**（2026-09-29 commit `4d4b1f9`：`config.go` 补 `if c.Kafka.MaxRetries == 0 { = 3 }`，与 ai-svc 对齐；测试锁定默认 3 + 非零不被覆盖。边界：0 视为"未设置"⇒ 无法用该参数关闭重试，已写进注释。收口轮接入热更 #32）。原修法：补 `SetDefaults` 分支 + 明确"`0` 是否合法"的语义）。**对比：`ai-svc/internal/config/config.go:143-145` 是有设默认的** ⇒ 两个服务对同一参数处理不一致，本身也是一致性隐患 |
 
 | E2E-F-161 | **E2E-23 第二方核对（2026-09-30）** | 🟠 **`check_adr_gate.sh` 是空转门禁，永久 GREEN**：`scripts/check_adr_gate.sh:113-140` 的 `has_adr_in_commit()` 用 `git ls-tree -r "$commit"` 判断"该 commit 的**整棵目录树**里是否存在 `docs/architecture/adr/` 路径"，并有 HEAD 树兜底 ⇒ **本仓任何 commit 都命中**，该门禁**不可能报红**。RUNBOOK §13.4 恰警告过这类"只校验格式给出假绿"（举 `check_docker_digests.sh` 为例） | 判定粒度错位：要验的是"**本次改动**是否新增/更新了 ADR"，实际验的是"仓库里有没有 ADR 目录" | **E2E-03 / R-03**（门禁机制） | 🔴 未解决（修法：改为比对 `git diff --name-only <base>..<head>` 是否含 `docs/architecture/adr/*.md`，而非判整棵树；并补负向对照：一个不含 ADR 的架构改动应报红） |
-| E2E-F-162 | **E2E-23 第二方核对（2026-09-30）** | 🟡 **E2E-23 的 6 个静态守卫在 CI 中"能跑但不拦"**：已新增 `.github/workflows/e2e-guards.yml`（6 守卫逐个执行），但 main 的 `required_status_checks` 未启用 ⇒ 红了也不阻止合并（AP-11 形态） | 分支保护由仓库管理员在网页端开启；本会话无 token（`check_required_checks.py` SKIP） | **E2E-03**（CI 门禁） | 🟡 已降级并记录（workflow 头部**如实标注"仅报告，不拦合并"**，且在 report §9.1 与本节说明"能跑红 ≠ 能拦"。开启 required checks 需用户操作） |
+| E2E-F-162 | **E2E-23 第二方核对（2026-09-30）** | 🟡 **E2E-23 的 6 个静态守卫在 CI 中"能跑但不拦"**：已新增 `.github/workflows/e2e-guards.yml`（6 守卫逐个执行），但 main 的 `required_status_checks` 未启用 ⇒ 红了也不阻止合并（AP-11 形态） | 分支保护由仓库管理员在网页端开启；本会话无 token（`check_required_checks.py` SKIP） | **E2E-03**（CI 门禁） | 🟡 已降级并记录（workflow 头部**如实标注"仅报告，不拦合并"**，且在 report §9.1 与本节说明"能跑红 ≠ 能拦"。开启 required checks 需用户操作）。**2026-09-30 复核轮补正面证据**：`GET /repos/Exist-a/emotion-echo/rules/branches/main` **无需管理员 token 即返回 `[]`** —— `main` 上**零条分支规则**，故 `required_status_checks` 必为空、CI 红绿都不能拦合并。（`/branches/main/protection` 端点返 401 需 admin，无法用它下结论；改用 rules 端点才拿到可复核的事实。此前列为"无法核实"，现已能核实。） |
 
 | E2E-F-163 | **E2E-23 第二方核对（2026-09-30）** | 🟡 **`Resume()` 未接线**：plan B1 要求"接入 `healthcheck.Server` 已有的 `Shutdown()` / `Resume()`"，E2E-23 只接了 `Shutdown()`（停机翻 `NOT_SERVING`），`Resume()` 仍零调用方，测试点 #14 以 `N/A` 收口 | 这 5 个服务**没有"暂停后恢复"路径** —— 停机是单向终态，接线会让 `Resume()` 成为**孤儿代码**（AP-10）。故实际是"需求不适用"而非"做不到" | **E2E-23** | 🟡 **降级并记录（待用户裁定）**：按 RUNBOOK §4.2，`N/A` 只限"语义上不可能验证"；"主动放弃需求"须走 BLOCKED + 用户批准 + 账本降级。执行者已如实标注未取得批准，并在 report §10 第 1 项列为待裁定 |
 
@@ -326,7 +326,25 @@ type: e2e-discovered-unresolved-ledger
 
 > ⚠️ **本条曾被本轮执行者自己报错**：初版写"10 处坏相对链接"，其中 2 条是 `/docs/architecture/decisions.md` 这类 **root-absolute** 路径 —— 它们在 GitHub 上**完全有效**，只有部分本地 Markdown 渲染器不解。已按 anti-patterns AP-14（数字要与事实一致）更正为 7。
 
-**累计编号至此 164 项**（E2E-F-163 `Resume()` 未接线待用户裁定；E2E-F-164 10 处坏相对链接，含端侧轨独占目标文件）。
+| E2E-F-165 | **E2E-23 复核轮 IAB 复验（2026-09-30）** | 🟡 **`/chat/user` 昼夜使用模式图例与圆环重叠**：
+ECharts donut 的 legend 画在左下角，与圆环左下弧**实际相交** —— 「下午 (12:00-18:00)」一行横穿橙色扇区，
+「夜间 (18:00-24:00)」一行横穿浅绿扇区，文字压在色块上影响可读性。
+证据：`screenshots/40-verify-my-space-4-charts-real-data.png` + canvas 直读像素分析
+（canvas 0 着色像素 23.2%，非空白 ⇒ 图表有数据，问题只在版面） | legend 的 `left`/`top`/`orient` 与
+pie `radius`/`center` 未分离：图例占位挤进了绘图区。属**版面缺陷非数据缺陷**，
+同 memory `frontend-visual-evidence-failure-modes` 记的"断言全绿但界面是坏的"一类 | **E2E-11**（我的空间页面）或前端质量轮 | 🟡 未解决：**范围外，只记账不修**（E2E-23 是健康检查阶段，不动前端图表） |
+
+| E2E-F-166 | **E2E-23 复核轮 IAB 复验（2026-09-30）** | ⚪ **一次被自己推翻的假缺陷（记录方法论，不修代码）**：
+复验时按 `clip` 截雷达图，看到底部大片空白，**初判"雷达图被截断"**。
+用 canvas backing store 直读逐行统计证伪：该画布 432px 高、内容覆盖第 40~348 行（**71.5%**），
+5 个轴标签（开放性/尽责性/外向性/宜人性/神经质）全部完整渲染。
+假象成因：我给的 `clip` 矩形 y 范围**越出了视口下沿**（canvas 顶部 y=945，视口高 1100），
+越界部分被填成卡片背景色，看起来像"图表只画了一半"。加高视口到 1680×1900 后截图完全正常 | —
+| 🟢 **已推翻，不成立**。教训与 E2E-F-149/F-152 同源：**截图类证据必须先自证有效**
+（元素是否完整落在视口内），否则会"从坏证据推出真缺陷"。本页 `window.scrollTo` 无效
+（布局由内层容器滚动），加高视口是本机可靠手段 |
+
+**累计编号至此 166 项**（E2E-F-163 `Resume()` 未接线待用户裁定；F-164 7 处 pre-existing 坏相对链接；F-165 图例重叠待修；F-166 一次被推翻的假缺陷，仅留方法论）。
 
 
 **PR #64 状态**：已开，2 commits pushed 到 fix 分支（`fix/e2e-16-full-multimodal-fix`），23 项 required status checks 状态 pending — GitHub runner 临时延迟或权限问题（4 workflow 均已配 `pull_request: branches: [main]` trigger，trigger 配置无误）。**合并策略**：① 等 GitHub 端自动恢复（runner 排队超时通常 5-10 分钟）；② 若持续不启动，下一轮单独开 PR 排查 CI trigger；③ 临时 admin override（需仓库管理员在网页端操作）。本会话核心交付已完成（5 修复 + 9 测试 + 本地全绿 + typecheck + go vet/build 干净）。
