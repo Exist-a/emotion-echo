@@ -513,6 +513,31 @@ helm 保持使用 runner 预装版并在守卫里保留"缺失即判红"的显�
 
 ⚠️ 修复只落在代码上；**运行中的 ai-svc 镜像仍是旧二进制**，需重建后多模态写入才恢复。
 
+## 9.8 F-165 浏览器复验（用户裁定"想办法解决"后完成，2026-09-30）
+
+§9.6 记为"未完成"的那一项，本轮做成了。**两个障碍的真实原因都和原先记的不一样**：
+
+| 障碍 | 原记 | 实测真因 |
+|------|------|----------|
+| web 镜像构建失败 | 记忆 `docker-build-frontend-workaround` 说是 npm 装 `@oxc-parser/binding-linux-x64-musl` 超时 | **`@mlc-ai/web-llm` 根本没装** ⇒ 主机 `pnpm build` 直接报 `Rollup failed to resolve import "@mlc-ai/web-llm"`。这同时解释了 §9.6 里"`nuxt dev` 起来但 0 个 canvas"——**不是 dev 模式的问题，是整个客户端 bundle 加载失败** |
+| 换端口跑构建产物 | 以为换端口即可 | **CORS 取不到数据**：`localhost:3001` 不在 APISIX 的 `CORS_ALLOW_ORIGINS` 白名单，页面内 fetch 直接 `Failed to fetch`（memory `apisix-cors-origin-and-seed-override` 记过这个坑） |
+
+**最终路径**：装上缺失依赖 → 主机 `pnpm build` 成功（7.52 MB）→ **停掉 web 容器**、
+用 `node .output/server/index.mjs` 在 **3000** 上跑**同一份生产构建**（origin 与白名单对齐）→ 浏览器复验。
+
+**复验结果**（视口 1680×1080，登录态真实）：四图全部渲染真实数据；
+昼夜使用模式的图例已是**底部 2×2 横排、完全在圆环之外**，无任何文字压色块。
+截图：[`41-f165-legend-no-overlap-verified.png`](screenshots/41-f165-legend-no-overlap-verified.png)（整页）
++ [`42-f165-donut-canvas-closeup.png`](screenshots/42-f165-donut-canvas-closeup.png)（该图 canvas 特写）。
+
+顺带查明一件事：卡片高度是 `vhToPx(40)` = **40vh**（不是固定 300px）。
+我先前用 1900px 超高视口量到的 760px 高卡片与中间大片空白，是**视口造成的、不是回退** ——
+换回 1080px 常规视口后 canvas 为 292×432，版面正常。
+
+环境已恢复（停 node 进程、重启 web 容器、删 devmode 锁）。
+`package.json` / `pnpm-lock.yaml` 被 `pnpm add` 改动过（把包从 `optionalDependencies` 挪到
+`devDependencies`），已 `git checkout` 回退 —— **那是端侧轨的设计决定，不该由本轨顺手改**。
+
 ## 10. 下轮建议
 
 原列的 4 项（C 组破坏性实验 / F 组回归钉 / E 组 14 参数 / #5#6）**均已于本轮完成**
