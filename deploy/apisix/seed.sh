@@ -170,12 +170,17 @@ if [ "${SKIP_HEALTH_CHECK:-false}" = "true" ]; then
   log "  SKIP_HEALTH_CHECK=true: skipping upstream health probe (dev validation only)"
 else
   log "  probing from inside docker network '$DOCKER_NETWORK'"
+  # E2E-23 测试点 #10：探针由 /health 改为 /health/ready。
+  # 原实现探 /health —— 按 D-29 契约那是 liveness，恒 200，
+  # 因此"依赖挂了但进程还在"这种降级它结构上不可能发现，探针形同虚设。
+  # 改指 readiness 后：依赖不通则 503，curl -sf 非零则 die，
+  # 避免把路由注入到一组"还没准备好"的节点上。
   for hp in \
-    "$WEB_BFF_HOST:$WEB_BFF_PORT/health" \
-    "$USER_SVC_HOST:$USER_SVC_PORT/health" \
-    "$CHAT_SVC_HOST:$CHAT_SVC_PORT/health" \
-    "$ASSESSMENT_SVC_HOST:$ASSESSMENT_SVC_PORT/health" \
-    "$AI_SVC_HOST:$AI_SVC_PORT/health"; do
+    "$WEB_BFF_HOST:$WEB_BFF_PORT/health/ready" \
+    "$USER_SVC_HOST:$USER_SVC_PORT/health/ready" \
+    "$CHAT_SVC_HOST:$CHAT_SVC_PORT/health/ready" \
+    "$ASSESSMENT_SVC_HOST:$ASSESSMENT_SVC_PORT/health/ready" \
+    "$AI_SVC_HOST:$AI_SVC_PORT/health/ready"; do
     if ! probe "http://$hp"; then
       die "upstream $hp not healthy (seed will silently skip if continued, aborting per AGENTS.md RED→GREEN)" 2
     fi
