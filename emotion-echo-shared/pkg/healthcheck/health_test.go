@@ -1,9 +1,15 @@
-// Package healthcheck 提供 gRPC 标准 health/v1 协议的封装
+// healthcheck 的 **client 侧**行为测试
 //
-// TDD 阶段：先写测试，再实现
+// 关键保真度约定（E2E-23 F-163，2026-09-30）：
+//
+//	server 侧一律使用 **上游 google.golang.org/grpc/health**，
+//	因为 5 个 Go 服务的 internal/grpcserver/server.go 就是这么做的。
+//	本包原先那个 server 侧包装（Server/NewServer/RegisterWith/…）因生产零调用方已删除。
+//	⇒ 本文件**必须**对着上游 health server 测 Client，
+//	否则就是"client 对着一个生产不存在的替身实现测"，无任何保真度。
+//	守卫：scripts/test_healthcheck_no_dead_server.sh 第 5 条断言本文件 import 了上游包。
 //
 // 标准协议参考：https://github.com/grpc/grpc/blob/master/doc/health-checking.md
-// 服务端使用 grpc-go 自带的 google.golang.org/grpc/health 包（已含 grpc_health_v1）
 package healthcheck
 
 import (
@@ -14,6 +20,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/test/bufconn"
 
@@ -49,78 +56,15 @@ func dialBuf(t *testing.T, lis *bufconn.Listener) *grpc.ClientConn {
 }
 
 // =====================================================
-// Test 1: 默认服务（空 service 名）状态为 Serving
-// =====================================================
-
-func TestNewServer_DefaultServingStatus(t *testing.T) {
-	srv := NewServer()
-
-	// 新建 server 默认为 Serving（"server liveness"）
-	assert.Equal(t, ServingStatusServing, srv.GetServingStatus(""),
-		"default empty service should be SERVING (server liveness)")
-}
-
-// =====================================================
-// Test 2: 注册后可通过 gRPC Check 查询到 SERVING
-// =====================================================
-
-func TestServer_CheckReturnsServing(t *testing.T) {
-	gs := grpc.NewServer()
-	srv := NewServer()
-	srv.RegisterWith(gs)
-	lis := bufNetworkListener(t, gs)
-
-	conn := dialBuf(t, lis)
-	client := healthpb.NewHealthClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	resp, err := client.Check(ctx, &healthpb.HealthCheckRequest{Service: ""})
-	require.NoError(t, err)
-	assert.Equal(t, healthpb.HealthCheckResponse_SERVING, resp.GetStatus())
-}
-
-// =====================================================
-// Test 3: SetServingStatus 后状态变更
-// =====================================================
-
-func TestServer_SetServingStatus_NotServing(t *testing.T) {
-	srv := NewServer()
-	assert.Equal(t, ServingStatusServing, srv.GetServingStatus(""),
-		"initial status must be SERVING")
-
-	srv.SetServingStatus("", ServingStatusNotServing)
-	assert.Equal(t, ServingStatusNotServing, srv.GetServingStatus(""),
-		"status should be NOT_SERVING after SetServingStatus")
-}
-
-// =====================================================
-// Test 4: 按 service 名独立管理状态（多服务场景）
-// =====================================================
-
-func TestServer_PerServiceStatus(t *testing.T) {
-	srv := NewServer()
-
-	// 业务服务 A：SERVING
-	srv.SetServingStatus("emotion.A", ServingStatusServing)
-	// 业务服务 B：未设置（UNKNOWN by default per spec）
-
-	assert.Equal(t, ServingStatusServing, srv.GetServingStatus("emotion.A"))
-	assert.Equal(t, ServingStatusUnknown, srv.GetServingStatus("emotion.B"),
-		"unset service should be UNKNOWN per gRPC health spec")
-}
-
-// =====================================================
-// Test 5: Client.Check 远程调用并返回对应状态
+// Test 1: Client.Check 远程调用并返回对应状态
 // =====================================================
 
 func TestClient_CheckReturnsCurrentStatus(t *testing.T) {
 	gs := grpc.NewServer()
-	srv := NewServer()
-	srv.SetServingStatus("emotion.LLM", ServingStatusServing)
-	srv.SetServingStatus("emotion.Broken", ServingStatusNotServing)
-	srv.RegisterWith(gs)
+	srv := health.NewServer()
+	srv.SetServingStatus("emotion.LLM", healthpb.HealthCheckResponse_SERVING)
+	srv.SetServingStatus("emotion.Broken", healthpb.HealthCheckResponse_NOT_SERVING)
+	healthpb.RegisterHealthServer(gs, srv)
 	lis := bufNetworkListener(t, gs)
 
 	conn := dialBuf(t, lis)
@@ -141,13 +85,13 @@ func TestClient_CheckReturnsCurrentStatus(t *testing.T) {
 }
 
 // =====================================================
-// Test 6: Client.Check 查询不存在服务 → 返回 ServiceUnknown
+// Test 2: Client.Check 查询不存在服务 → 返回 ServiceUnknown
 // =====================================================
 
 func TestClient_CheckUnknownService_ReturnsServiceUnknown(t *testing.T) {
 	gs := grpc.NewServer()
-	srv := NewServer()
-	srv.RegisterWith(gs)
+	srv := health.NewServer()
+	healthpb.RegisterHealthServer(gs, srv)
 	lis := bufNetworkListener(t, gs)
 
 	conn := dialBuf(t, lis)
@@ -165,14 +109,14 @@ func TestClient_CheckUnknownService_ReturnsServiceUnknown(t *testing.T) {
 }
 
 // =====================================================
-// Test 7: WaitForReady 阻塞等待服务变 SERVING
+// Test 3: WaitForReady 阻塞等待服务变 SERVING
 // =====================================================
 
 func TestClient_WaitForReady_SucceedsWhenServing(t *testing.T) {
 	gs := grpc.NewServer()
-	srv := NewServer()
-	srv.SetServingStatus("emotion.LateStart", ServingStatusNotServing)
-	srv.RegisterWith(gs)
+	srv := health.NewServer()
+	srv.SetServingStatus("emotion.LateStart", healthpb.HealthCheckResponse_NOT_SERVING)
+	healthpb.RegisterHealthServer(gs, srv)
 	lis := bufNetworkListener(t, gs)
 
 	conn := dialBuf(t, lis)
@@ -181,7 +125,7 @@ func TestClient_WaitForReady_SucceedsWhenServing(t *testing.T) {
 	// 异步：500ms 后服务变 SERVING
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		srv.SetServingStatus("emotion.LateStart", ServingStatusServing)
+		srv.SetServingStatus("emotion.LateStart", healthpb.HealthCheckResponse_SERVING)
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -199,14 +143,14 @@ func TestClient_WaitForReady_SucceedsWhenServing(t *testing.T) {
 }
 
 // =====================================================
-// Test 8: WaitForReady 超时返回错误
+// Test 4: WaitForReady 超时返回错误
 // =====================================================
 
 func TestClient_WaitForReady_TimeoutWhenNotServing(t *testing.T) {
 	gs := grpc.NewServer()
-	srv := NewServer()
-	srv.SetServingStatus("emotion.Down", ServingStatusNotServing)
-	srv.RegisterWith(gs)
+	srv := health.NewServer()
+	srv.SetServingStatus("emotion.Down", healthpb.HealthCheckResponse_NOT_SERVING)
+	healthpb.RegisterHealthServer(gs, srv)
 	lis := bufNetworkListener(t, gs)
 
 	conn := dialBuf(t, lis)

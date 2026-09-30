@@ -102,3 +102,11 @@ jobs:
       # E2E-23 当时是**侥幸**没被绕过（那 4 条都不归它）——靠运气不是机制。
       - name: 守卫 10/10 审计器账本解析器无盲区
         run: bash scripts/test_audit_ledger_parser.sh
+
+      # 防"生产死代码回流"（E2E-23 F-163，用户裁定删掉 healthcheck 的 server 侧包装）。
+      # 那段 Server/NewServer/RegisterWith/Shutdown/Resume 在生产路径上一次都没被实例化
+      # ——5 个服务用的是上游 google.golang.org/grpc/health。更坏的是它与生产实现
+      # 形成两套并存的健康语义，排障会查错地方。本守卫钉死"生产只用上游"，
+      # 并确保删死代码时没有连带删掉 MarkShuttingDown 的有效行为覆盖。
+      - name: 守卫 11/11 healthcheck 无生产死代码
+        run: bash scripts/test_healthcheck_no_dead_server.sh

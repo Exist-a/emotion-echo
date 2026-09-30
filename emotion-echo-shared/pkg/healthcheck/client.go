@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // Client 是 health/v1 协议的 client 封装
@@ -34,7 +34,8 @@ func NewClient(conn *grpc.ClientConn) *Client {
 //   - error：网络错误 / 超时 / NOT_FOUND
 //
 // 注意：service 不存在时 grpc.health.Server 默认返回 ServiceUnknown + nil error；
-//       server 关闭时返回 NotFound 错误
+//
+//	server 关闭时返回 NotFound 错误
 func (c *Client) Check(ctx context.Context, service string) (ServingStatus, error) {
 	resp, err := c.inner.Check(ctx, &healthpb.HealthCheckRequest{Service: service})
 	if err != nil {
