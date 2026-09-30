@@ -34,6 +34,7 @@ import (
 	"emotion-echo-web-bff/internal/auth"
 	"emotion-echo-web-bff/internal/authlock"
 	"emotion-echo-web-bff/internal/config"
+	"emotion-echo-web-bff/internal/handler"
 	"emotion-echo-web-bff/internal/svc"
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
@@ -48,17 +49,18 @@ import (
 
 // wantRoutes 是 registerRoutes 必须注册的完整路径集合（不含 EmotionQ 条件分支）。
 // 新增/删除路由必须同步更新本列表 + 在 PR 描述里说明。
-// 行内排序：先 main.go 直接注册的 4 条，再按 handler 文件字母序。
+// 行内排序：先 main.go 直接注册的 5 条，再按 handler 文件字母序。
 var wantRoutes = gin.RoutesInfo{
-	// ----- main.go 直接注册（4 条）-----
+	// ----- main.go 直接注册（5 条）-----
 	{Method: "GET", Path: "/health"},
+	{Method: "GET", Path: "/health/ready"}, // E2E-23 D-29：liveness/readiness 分离
 	{Method: "GET", Path: "/metrics"},
 	{Method: "POST", Path: "/api/v1/auth/:action"},
 	{Method: "POST", Path: "/api/v1/ai/stream"},
-	{Method: "GET", Path: "/api/v1/ai/health"},  // Sprint F2（2026-09-11）
+	{Method: "GET", Path: "/api/v1/ai/health"}, // Sprint F2（2026-09-11）
 
 	// ----- voice_handler.go 多 1 条（E2E-F-113 反代）-----
-	{Method: "GET", Path: "/api/v1/voice/audio/:filekey"},  // E2E-F-113：音频反代
+	{Method: "GET", Path: "/api/v1/voice/audio/:filekey"}, // E2E-F-113：音频反代
 
 	// ----- user_handler.go (4 条) -----
 	{Method: "GET", Path: "/api/v1/user/profile"},
@@ -140,17 +142,23 @@ func stubServiceContext(t *testing.T, withEmotionQ bool) (*svc.ServiceContext, *
 	s := svc.NewServiceContext(*cfg)
 	s.Auth = mgr
 	// 6 个 client 保持 nil —— registerRoutes 不触发调用
-if withEmotionQ {
-			// EmotionQueryHandler.Register() 仅注册路由，不调 client 方法，
-			// 所以可以传一个非 nil 的 fakeEmotionQueryClient 让 `s.EmotionQ != nil` 进
-			// 分支（main.go:320）。fakeEmotionQueryClient 是 stub 模式。
-			s.EmotionQ = fakeEmotionQueryClient{}
-		}
-		return s, cfg
+	if withEmotionQ {
+		// EmotionQueryHandler.Register() 仅注册路由，不调 client 方法，
+		// 所以可以传一个非 nil 的 fakeEmotionQueryClient 让 `s.EmotionQ != nil` 进
+		// 分支（main.go:320）。fakeEmotionQueryClient 是 stub 模式。
+		s.EmotionQ = fakeEmotionQueryClient{}
 	}
+	return s, cfg
+}
 
-	// fakeEmotionQueryClient 是 stub — 让 registerRoutes 走 EmotionQ 分支但不触发实际调用。
-	type fakeEmotionQueryClient struct{}
+// stubHealthDeps 返回零值 HealthDeps —— HasDeps() 为 false，
+// /health 与 /health/ready 的行为与"未接入 deps"完全一致（不额外 ping Redis / Nacos）。
+// deps 本身的语义（Redis down、Nacos 未注册 → status=degraded）由
+// internal/handler/health_deps_test.go 专项覆盖，这里只保证路由能装配起来。
+func stubHealthDeps() handler.HealthDeps { return handler.HealthDeps{} }
+
+// fakeEmotionQueryClient 是 stub — 让 registerRoutes 走 EmotionQ 分支但不触发实际调用。
+type fakeEmotionQueryClient struct{}
 
 // 实现 downstream EmotionQueryClient 接口（3 方法）。Register() 不调这些方法；
 // 测试代码意外触发会 panic 立即暴露。
@@ -168,7 +176,7 @@ func TestRegisterRoutes_MainContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	s, cfg := stubServiceContext(t, false)
-	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore())
+	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore(), stubHealthDeps())
 
 	// testify assert.Subset 用 reflect.DeepEqual 比对 RouteInfo 全字段（含 Handler/HandlerFunc）；
 	// got 的 Handler/HandlerFunc 是真实值（字符串 + 函数指针），want 是零值，会永远不等。
@@ -196,10 +204,10 @@ func TestRegisterRoutes_MainContract(t *testing.T) {
 // 目的：防止重构时漏挂 metrics 中间件 (PR-4c-4 reset-password 同源教训)
 // 复用 stubServiceContext + registerRoutes 启动完整 router,
 // 然后 httptest 拉 /metrics 端点,断言：
-//   1. /metrics 返回 200 + Content-Type text/plain;version=0.0.4
-//   2. /metrics body 含 emotion_echo_http_requests_total + emotion_echo_http_request_duration_seconds
-//   3. /metrics 含 svc 短名 label: service="web-bff"
-//   4. 触发 1 次 /health 后 http_requests_total 增 1 (label 正确)
+//  1. /metrics 返回 200 + Content-Type text/plain;version=0.0.4
+//  2. /metrics body 含 emotion_echo_http_requests_total + emotion_echo_http_request_duration_seconds
+//  3. /metrics 含 svc 短名 label: service="web-bff"
+//  4. 触发 1 次 /health 后 http_requests_total 增 1 (label 正确)
 //
 // 注：与 TestRegisterRoutes_MainContract 共享 stubServiceContext,
 // 避免重复构造 ServiceContext (含 Nacos boot + DB 连接等副作用)。
@@ -211,7 +219,7 @@ func TestMetricsEndpoint_WebBFF(t *testing.T) {
 	r.Use(sharedmetrics.GinMetricsMiddleware("web-bff"))
 	// 不手动注册 /metrics 与 /health — registerRoutes 已注册
 	// (main.go:252 r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler())))
-	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore())
+	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore(), stubHealthDeps())
 
 	// 触发 1 次 registerRoutes 已注册的路由 (auth/login),让 counter 出现
 	// 用 POST /api/v1/auth/login (registerRoutes 注册的 catch-all auth 路由)
@@ -307,13 +315,13 @@ func matchLabels(labelStr string, want map[string]string) bool {
 
 // TestRegisterRoutes_RouteSubset 独立断言：每个注册的 path 都属于某个"已知前缀"集合。
 // 这层断言在主契约变更时不会因为 wantRoutes 漏更新而误 pass。
-// 已知业务前缀白名单（main.go 实际注册的 27 条 + EmotionQ 3 条共 30 条路径的合法前缀）：
+// 已知业务前缀白名单（每条已注册 path 至少要匹配其一；完整清单见 wantRoutes + wantRoutesWithEmotionQ）：
 var knownPathPrefixes = []string{
 	"/health",
 	"/metrics",
 	"/api/v1/auth/:action",
 	"/api/v1/ai/stream",
-	"/api/v1/ai/health",  // Sprint F2（2026-09-11）
+	"/api/v1/ai/health", // Sprint F2（2026-09-11）
 	"/api/v1/user/profile",
 	"/api/v1/users/",
 	"/api/v1/conversations",
@@ -328,16 +336,16 @@ var knownPathPrefixes = []string{
 	"/api/v1/multimodal/",
 	"/api/v1/tts/",
 	"/api/v1/uploads/:kind",
-	"/api/v1/voice/",   // Sprint 1 PR-4c-1: voice upload
+	"/api/v1/voice/",      // Sprint 1 PR-4c-1: voice upload
 	"/api/v1/user/avatar", // Sprint 1 PR-4c-2: avatar upload
-	"/api/v1/emotion/", // 仅当 EmotionQ != nil 时
+	"/api/v1/emotion/",    // 仅当 EmotionQ != nil 时
 }
 
 func TestRegisterRoutes_NoUnknownPathPrefix(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	s, cfg := stubServiceContext(t, false)
-	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore())
+	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore(), stubHealthDeps())
 
 	got := r.Routes()
 
@@ -392,7 +400,7 @@ func TestBootstrap_WebBFF_AllMiddlewaresAttached(t *testing.T) {
 	// Tracer=nil 即可 (Stage 43 PR-OBS-2 已让 GinSkywalkingMiddleware 支持 nil)
 	r.Use(sharedmw.GinSkywalkingMiddleware(nil))
 	r.Use(sharedmw.GinAuthMiddleware())
-	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore())
+	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore(), stubHealthDeps())
 
 	// 1. /metrics 端点 200 (GinMetricsMiddleware 跳过 /metrics 自循环,但 /metrics 端点仍注册)
 	wMetrics := httptest.NewRecorder()
@@ -433,7 +441,7 @@ func TestRegisterRoutes_WithEmotionQ(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	s, cfg := stubServiceContext(t, true) // withEmotionQ=true
-	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore())
+	registerRoutes(r, s, cfg, nil, nil, authlock.NewInMemoryStore(), authlock.NewInMemoryStore(), stubHealthDeps())
 
 	got := r.Routes()
 	for i := range got {

@@ -228,6 +228,37 @@ ai-svc grpcserver/ops、analytics config、shared configcenter、**6 个守卫�
 **执行者确认**：上述"无法核实"项**不做"已核实"声称**；破坏性实验的原始日志在 §2 各行证据列，
 可由任何人按命令复现。
 
+## 9.2 CI 检出：两处 AP-09（改实现未同步测试）——执行者自曝
+
+`92805ad` 推送后 CI 5 个 workflow 中 **`go-test` 红**（其余 4 个 success）。
+逐步定位：
+
+| 步骤 | 命令 | 结果 |
+|------|------|------|
+| 1 | Actions API 查 run 列表 | `go-test` failure，其余 4 个 success |
+| 2 | run → jobs API | 仅 `test (emotion-echo-web-bff)` 失败，失败步骤 = `go vet` |
+| 3 | 本地复现 `go vet ./...` | `main_test.go:171: not enough arguments in call to registerRoutes` |
+| 4 | 补参数后 `go test ./...` | `TestRegisterRoutes_WithEmotionQ` 失败：`should have 39, but has 40` |
+
+**根因**：本阶段改了 BFF 的 `registerRoutes` 签名（新增 `handler.HealthDeps`）并新增了
+`GET /health/ready` 路由，但**没有同步更新 `main_test.go`** —— 正是
+[anti-patterns.md](../../anti-patterns.md) **AP-09（改实现不改测试）** 的教科书案例。
+两个具体漂移：
+
+1. 5 处 `registerRoutes(...)` 调用少传第 8 个参数 → **测试文件编译不过**；
+2. `wantRoutes` 白名单缺 `GET /health/ready` → **路由契约测试计数差 1**。
+
+**为什么本地没发现**：本阶段 Go 侧的验证一直以 `go build` + 守卫脚本为主，
+**没有对 5 个服务逐个跑 `go test ./...` 全量**；`go build` 按定义不编译 `_test.go`。
+
+**处置**：`main_test.go` 5 处调用补 `stubHealthDeps()`（零值 `HealthDeps`，
+`HasDeps()==false`，路由装配行为与改动前一致），`wantRoutes` 补 `GET /health/ready`，
+并把该文件 `gofmt -w`（此前缩进已被本阶段早前的误操作打乱，gofmt -l 一直有输出）。
+`go vet ./...` + `go test ./...` 全绿。
+
+**留下的教训**（已并入本轮收口动作）：守卫脚本绿 ≠ 代码绿；**凡改动跨包签名或路由表，
+必须 `go vet ./...`（会编译测试文件）而非 `go build`**，这正是 AP-09 硬规则第 2 条。
+
 ## 10. 下轮建议
 
 原列的 4 项（C 组破坏性实验 / F 组回归钉 / E 组 14 参数 / #5#6）**均已于本轮完成**
