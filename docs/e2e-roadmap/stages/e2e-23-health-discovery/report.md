@@ -184,9 +184,13 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 - [x] **§13.3 #17 残留扫描** `bash scripts/check_residual.sh` → GREEN
       （核对前为 RED：`.e2e23-probe-server.py;D` 空目录是实施期探针遗留，已删）
 - [x] **第二方核对已完成**（2026-09-30，见 §9.1）
-- [x] **CI 5 workflow 全绿**（`72b418a`：go-test / llm-test / web-test /
-      doc-drift-check / e2e-guards 全 `success`；过程记录见 §9.2 与 §9.3 的 G-2b）
-- [x] **文档级联扫描已完成**（10 个文件，见 §9.3）
+- [x] **CI 5 workflow 全绿**（最终 `d6cbad7`：go-test / llm-test / web-test /
+      doc-drift-check / e2e-guards 全 `success`；过程记录见 §9.2、§9.3 的 G-2b、§9.5）
+- [x] **第三轮复核（用户追问"核实了吗"触发）**：§9.4 四组新验证 +
+      §9.5 第二方独立复核全量重验 40 个测试点 + 本轮 5 项修复
+- [x] **8 个静态守卫全部 exit=0**（healthcheck 25/0、grpc 30/0、
+      integration-tag 有条件 GREEN：新增损坏 0、已知债 2 见 E2E-F-167）
+- [x] **文档级联扫描已完成**（**10 组 / 17 个 .md**，见 §9.3）
 - [x] **§2.5 分支纪律**：`git status -sb` 与 origin 无 ahead/behind；
       `git branch --merged main` 仅 main；本会话未新增 worktree
 
