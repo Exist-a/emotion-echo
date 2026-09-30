@@ -367,8 +367,23 @@ WARN 数量只会单调下降；每修好一项就删一行清单，守卫自动
 
 | E2E-F-169 | **E2E-23 收尾轮（2026-09-30）** | 🟡 F-165 图例重叠修复的浏览器复验缺口。上一轮记的是"未验证"，**本轮已补上** | 上一轮的两个障碍都已绕开：① `docker build emotion-echo-web` 在本机失败，真因不是记忆里写的 npm 超时，而是 **`@mlc-ai/web-llm` 没装** ⇒ `pnpm build` 报 `Rollup failed to resolve import "@mlc-ai/web-llm"` ⇒ 整个客户端 bundle 失败（这也解释了上一轮 `nuxt dev` 下 0 个 canvas 的真正原因，不是 dev 模式的问题）；② 退一步把构建产物跑在 3001 会因 **CORS** 取不到数据（`localhost:3001` 不在 APISIX 的 `CORS_ALLOW_ORIGINS` 白名单，fetch 报 `Failed to fetch`，见 memory `apisix-cors-origin-and-seed-override`）。最终路径：装上缺失依赖 → 主机 `pnpm build` 成功 → **停 web 容器**、用 `node .output/server/index.mjs` 在 **3000** 上跑同一份生产构建（origin 对齐白名单）→ 浏览器复验 | 环境限制，非代码问题 | **E2E-11** | ✅ **已复验（2026-09-30）**：视口 1680×1080 下 `/chat/user` 四图全部渲染真实数据，昼夜使用模式的图例已是**底部 2×2 横排、完全在圆环之外**，无任何文字压色块。截图 `screenshots/41-f165-legend-no-overlap-verified.png`（整页）+ `42-f165-donut-canvas-closeup.png`（该图 canvas 特写）。顺带查明：卡片高度是 `vhToPx(40)` = **40vh**（不是固定值），我上一轮用 1900px 超高视口量到的 760px 高卡片是视口造成的，不是回退 |
 
+| E2E-F-171 | **E2E-23 收尾轮 AP-11 实测（2026-09-30）** | 🔴 **实测证明 main 的 required status checks 没有在拦截。**
+判据：`mergeable_state` 区分得开 —— `blocked` = 被门禁挡住（有**必需**检查红/未完成），
+`unstable` = 只有**非必需**检查红（仍可合并），`clean` = 一切正常。
+**光看 `clean` 证明不了门禁存在**（没有门禁时也是 `clean`），所以必须故意弄红再看。
+两次对照（用现成 PR #130 做载体）：① `static-guards` 失败 → `unstable` ⇒ 不在必需检查；
+② `视图定义一致性` 失败 → 经 `文档守卫总闸` 传播为红 → **仍 `unstable`** ⇒ `文档守卫总闸` 也不在必需检查。
+两次各轮询 14~16 次（约 7 分钟）、SHA 正确、状态稳定，不是抖动。**这与页面上"能看到这些条目"矛盾。**
+三种可能，执行者无法从本侧区分（经典保护无公开只读 API、无管理员 token）：① 保存未真正落盘；
+② 名字有肉眼不可见的差异（GitHub **精确字符串匹配**，`文档守卫总闸` 前后多一个空格/全角字符就永不匹配）；
+③ 规则未应用到 main。**判定必须开 PR 试合并** | 页面显示与实际生效不一致 —— 这本身就是
+[anti-patterns.md](anti-patterns.md) **AP-11** 的形态："设置页看起来配好了" 与
+"真的在拦" 是两件事，本条是它的**实证** | **E2E-03**（CI 门禁）| 🟡 **未解决 · 已升级给用户**。
+CI 侧两组对照已做完并清理干净（`4e02485` 还原，15 项门禁 + 审计器 0 FAIL）；
+**剩下的只有"试一次合并"这一步需用户操作** |
 
-**累计编号至此 170 项**（**本阶段净未解决：仅 E2E-F-163（`Resume()` 待你裁定）**；**F-164 ✅ 已修（7 处坏链全清）**；F-166 假缺陷方法论（不修）；**F-165 ✅ 已修且已浏览器复验**；**F-167 ✅ 3 处全修，守卫转无条件门禁 7/7 GREEN**；**F-168 ✅ 已解决（共享 fixture，14 红/0 绿 → 全绿）**；**F-169 ✅ 已复验**；**F-170 ✅ 已修（多模态入库 100% 失败）**）。
+
+**累计编号至此 171 项**（**本阶段净未解决：仅 E2E-F-163（`Resume()` 待你裁定）**；**F-164 ✅ 已修（7 处坏链全清）**；F-166 假缺陷方法论（不修）；**F-165 ✅ 已修且已浏览器复验**；**F-167 ✅ 3 处全修，守卫转无条件门禁 7/7 GREEN**；**F-168 ✅ 已解决（共享 fixture，14 红/0 绿 → 全绿）**；**F-169 ✅ 已复验**；**F-170 ✅ 已修（多模态入库 100% 失败）**；**F-171 🔴 AP-11 实测：门禁未在拦截，待用户试合并确认**）。
 
 
 **PR #64 状态**：已开，2 commits pushed 到 fix 分支（`fix/e2e-16-full-multimodal-fix`），23 项 required status checks 状态 pending — GitHub runner 临时延迟或权限问题（4 workflow 均已配 `pull_request: branches: [main]` trigger，trigger 配置无误）。**合并策略**：① 等 GitHub 端自动恢复（runner 排队超时通常 5-10 分钟）；② 若持续不启动，下一轮单独开 PR 排查 CI trigger；③ 临时 admin override（需仓库管理员在网页端操作）。本会话核心交付已完成（5 修复 + 9 测试 + 本地全绿 + typecheck + go vet/build 干净）。
