@@ -39,7 +39,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 11 | user-svc / chat-svc 补齐 `/health` handler 测试 | `[A]` | PASS | `go test ./internal/handler/ -run D29Readiness -count=1` → `ok`；`go test ./internal/logic/ -run TestHealthLogic -count=1` → `ok 0.576s` | 二者此前**零** `/health` 测试 |
 | 12 | 5 服务 gRPC health service 名正确 | `[A]` | PASS | `go test ./internal/grpcserver/ -run GrpcHealth -count=1` → 4/4 `PASS`（20.7s） | |
 | 13 | 优雅停机翻 `NOT_SERVING` | `[A]` | PASS | `--- PASS: TestGrpcHealth_FlipsToNotServingOnShutdown (5.01s)`，起真实 gRPC server + shared healthcheck 客户端 | 修复前**无任何 NOT_SERVING 写入**（plan §0 F-d） |
-| 14 | 恢复后翻回 `SERVING`（`Resume()`） | `[A]` | N/A | — | 停机是单向终态，无"恢复"语义。`shared/pkg/healthcheck/server.go:158` 的 `Resume()` 面向"暂停后恢复"场景，进程停机不会调它。**属语义上不适用**，非未做 |
+| 14 | 恢复后翻回 `SERVING`（`Resume()`） | `[A]` | N/A | — | **语义不适用 + 记录为降级**：停机是单向终态，无"暂停后恢复"路径；接线会让 `Resume()` 成为**孤儿代码**（AP-10）。plan B1 曾要求接线，实际只接 `Shutdown()` —— 按 §4.2 本应走"主动放弃 → BLOCKED + 用户批准 + 账本降级"，**未经批准故仍列待裁定**（见 §10 第 1 项）。`Resume()` 本体在 `shared/pkg/healthcheck/server.go:158` 保留待用 |
 | 15 | `ai-svc` 客户端按状态分流 | `[A]` | PASS | **定案：只做启动期门禁，请求期不分流**。依据 `grpc_analyzer.go:91-99`：`NewGRPCAnalyzer` 内一次 `WaitForReady`，不通过则关连接返错；此后业务 RPC 不再查 health。测试：NOT_SERVING 时构造必须失败 + 对照组（否则可能因"连不上"假通过）+ 负向对照（绕过门禁立即红） | 不一定是缺陷（每请求探一次代价高），但**必须写进文档**，否则运维会误以为"health 翻 NOT_SERVING ⇒ 客户端自动绕开" |
 | 16 | web-bff 无 gRPC server 属设计现状 | `[A]` | N/A | — | 陈述性测试点，无可断言行为。已记入 plan §2 B3 |
 | 17 | 6 服务注册齐全（`count:6`） | `[A]` | PASS | `curl .../ns/service/list?...namespaceId=emotion-echo-dev` → `count: 6` | |
@@ -51,7 +51,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 23 | Nacos 重启 ⇒ APISIX 节点自动跟随 | `[A]` | PASS | `docker restart emotion-echo-nacos` → 服务重注册 `count: 6` → **未重跑 seed、未碰 Admin API** → 网关 login 400（路由通）。反向：停 user-svc 75s 后 Nacos 实例数→0 | **D-30 落定**：RUNBOOK §2.4「重建服务后必须重跑 apisix-seed」判为**误导性文档**并已更正。边界：user 路由在实例摘除后仍 401（非 503）⇒ APISIX 摘除有滞后，属 F-154/E2E-25 的主动健康检查范围 |
 | 24 | `GetConfig` 首帧失败仍能继续 | `[A]` | PASS | `go test . -run TestBootNacos_Ops -count=1` → `ok emotion-echo-chat-svc 1.083s`（4 例）：首帧失败**仍成功启动**、注册照常、ops 保持启动值；首帧成功则真应用；敏感 key 被清洗；`deps.ops` 为 nil 时退化为"只记录不应用" | 依据：`IsHardBootError` 把 `Register`/`WaitForNacos` 归 hard，**GetConfig 不在其列** ⇒ 缺配置是正常状态（新环境还没推过 ops） |
 | 25 | APISIX 补 healthcheck | `[A]` | PASS | `docker ps` → `emotion-echo-apisix Up (healthy)`；探针命令**双向实测**（通→0、不通→1） | 该镜像内 wget/curl/nc/busybox **全缺**，只能用 bash /dev/tcp 测 9080 |
-| 26 | 观测栈 + skywalking 补 healthcheck | `[A]` | PASS | `docker ps --format '{{.Status}}'` 逐个查询 → grafana/loki/prometheus/alertmanager/kafka-exporter/promtail 均 `Up (healthy)`；`bash scripts/test_obs_healthchecks.sh` → `PASS: 15  FAIL: 0` + `GREEN` | skywalking-oap/ui 与 obs-mock-receiver **未补**（见 §4） |
+| 26 | 观测栈 + skywalking 补 healthcheck | `[A]` | PASS | **16 个常驻服务全部补齐**：`bash scripts/test_obs_healthchecks.sh` → `PASS: 18  FAIL: 0`（16 常驻 + 2 一次性）；`docker ps` 逐个确认 grafana/loki/prometheus/alertmanager/kafka-exporter/promtail/**sw-oap/sw-ui/obs-mock-receiver** 均 `Up (healthy)` | **首轮遗漏 skywalking-oap/ui + obs-mock-receiver 三个**（plan D2 点名），由第二方核对 C-6 抓出并补：端点先逐个实测可达才写入（OAP 无 `SW_HEALTH_CHECKER` 故用 `:1234/metrics`；UI 探 `/`；receiver 探 `/received`） |
 | 27 | **db-migrate 冷启动 `Exited(0)`** | `[A]` | PASS | **前后对照**：修复前 `ExitCode 1` + `FATAL: Postgres 30s 内未就绪`；修复后 `ExitCode 0` + 日志以 `全部迁移应用完成，共 31 个文件` 结尾 | **F-151 闭环**，账本已翻状态 |
 | 28 | `migrate.sh` 有负向测试 | `[A]` | PASS | `scripts/test_migrate_pg_wait.sh` 4/4；负向对照：删掉递增退避 → RED | |
 | 29 | `dev-up.sh` 批次等待语义 | `[A]` | PASS | `bash scripts/test_devup_batch_waits.sh` → `PASS: 3  FAIL: 0` + `GREEN`；抽出 `wait_healthy` 实机跑四条路径（redis/apisix/postgres/BFF）→ 全部 `exit=0`、0 秒返回 | 挖出**更深缺陷**：`wait_healthy` 对设了 `container_name` 的服务恒失效（见 §3） |
@@ -236,10 +236,8 @@ ai-svc grpcserver/ops、analytics config、shared configcenter、**6 个守卫�
 1. **#14 `Resume()` 接线** —— plan B1 要求接入，实际只接了 `Shutdown()`。
    `Resume()` 面向"暂停后恢复"，停机终态用不到它；**建议由用户裁定是补做还是降级**
    （按 §4.2，主动放弃须走 BLOCKED + 批准 + 账本记录，不能以 N/A 了结）
-2. **#26 范围内的 skywalking healthcheck** —— plan D2 点名 `skywalking-oap` /
-   `skywalking-ui` / `obs-mock-receiver`，本轮未补（现无 `(healthy)`）。
-   测试点名称含"skywalking"却在范围未满足时判 PASS，属降格 ⇒ 建议下轮补做
-3. **C-5：把 6 个守卫 + smoke 接入 CI，或按 AP-11 明写"仅报告不拦"** ——
+2. ~~#26 范围内的 skywalking healthcheck~~ ✅ **已完成**（2026-09-30，见 §2 #26 行）
+3. **C-5 后续：把 `e2e-guards` 接为 required check**（workflow 已建并在 CI 上 success，见 §9.1）—— ——
    当前 4 个 workflow 中零引用，门禁价值未兑现
 4. **C-4：`check_adr_gate.sh` 是空转门禁**（`git ls-tree` 判整棵树是否含 ADR 路径，
    本仓永远命中）—— 修它，否则 §13.3 #15 的机械校验永远无意义

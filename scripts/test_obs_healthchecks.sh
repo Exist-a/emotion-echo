@@ -50,6 +50,10 @@ MUST_HAVE=(
   "loki"
   "promtail"
   "kafka-exporter"
+  # E2E-23 #26 补：plan D2 点名但首轮遗漏的三个（第二方核对 C-6 抓出）
+  "skywalking-oap"
+  "skywalking-ui"
+  "obs-mock-receiver"
 )
 
 # 一次性任务容器：不应有 healthcheck
@@ -105,4 +109,4 @@ if [ "$fail" -gt 0 ]; then
   exit 1
 fi
 
-echo "GREEN：13 个常驻服务均有 healthcheck，2 个一次性任务未被误加"
+echo "GREEN：16 个常驻服务均有 healthcheck，2 个一次性任务未被误加"

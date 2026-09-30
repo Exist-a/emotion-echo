@@ -320,7 +320,9 @@ type: e2e-discovered-unresolved-ledger
 | E2E-F-161 | **E2E-23 第二方核对（2026-09-30）** | 🟠 **`check_adr_gate.sh` 是空转门禁，永久 GREEN**：`scripts/check_adr_gate.sh:113-140` 的 `has_adr_in_commit()` 用 `git ls-tree -r "$commit"` 判断"该 commit 的**整棵目录树**里是否存在 `docs/architecture/adr/` 路径"，并有 HEAD 树兜底 ⇒ **本仓任何 commit 都命中**，该门禁**不可能报红**。RUNBOOK §13.4 恰警告过这类"只校验格式给出假绿"（举 `check_docker_digests.sh` 为例） | 判定粒度错位：要验的是"**本次改动**是否新增/更新了 ADR"，实际验的是"仓库里有没有 ADR 目录" | **E2E-03 / R-03**（门禁机制） | 🔴 未解决（修法：改为比对 `git diff --name-only <base>..<head>` 是否含 `docs/architecture/adr/*.md`，而非判整棵树；并补负向对照：一个不含 ADR 的架构改动应报红） |
 | E2E-F-162 | **E2E-23 第二方核对（2026-09-30）** | 🟡 **E2E-23 的 6 个静态守卫在 CI 中"能跑但不拦"**：已新增 `.github/workflows/e2e-guards.yml`（6 守卫逐个执行），但 main 的 `required_status_checks` 未启用 ⇒ 红了也不阻止合并（AP-11 形态） | 分支保护由仓库管理员在网页端开启；本会话无 token（`check_required_checks.py` SKIP） | **E2E-03**（CI 门禁） | 🟡 已降级并记录（workflow 头部**如实标注"仅报告，不拦合并"**，且在 report §9.1 与本节说明"能跑红 ≠ 能拦"。开启 required checks 需用户操作） |
 
-**累计编号至此 162 项**（E2E-F-161/162 为 E2E-23 第二方核对新增 2 项，均属门禁机制，归 E2E-03/R-03）。
+| E2E-F-163 | **E2E-23 第二方核对（2026-09-30）** | 🟡 **`Resume()` 未接线**：plan B1 要求"接入 `healthcheck.Server` 已有的 `Shutdown()` / `Resume()`"，E2E-23 只接了 `Shutdown()`（停机翻 `NOT_SERVING`），`Resume()` 仍零调用方，测试点 #14 以 `N/A` 收口 | 这 5 个服务**没有"暂停后恢复"路径** —— 停机是单向终态，接线会让 `Resume()` 成为**孤儿代码**（AP-10）。故实际是"需求不适用"而非"做不到" | **E2E-23** | 🟡 **降级并记录（待用户裁定）**：按 RUNBOOK §4.2，`N/A` 只限"语义上不可能验证"；"主动放弃需求"须走 BLOCKED + 用户批准 + 账本降级。执行者已如实标注未取得批准，并在 report §10 第 1 项列为待裁定 |
+
+**累计编号至此 163 项**（E2E-F-163 为 `Resume()` 未接线，待用户裁定降级）。
 
 
 **PR #64 状态**：已开，2 commits pushed 到 fix 分支（`fix/e2e-16-full-multimodal-fix`），23 项 required status checks 状态 pending — GitHub runner 临时延迟或权限问题（4 workflow 均已配 `pull_request: branches: [main]` trigger，trigger 配置无误）。**合并策略**：① 等 GitHub 端自动恢复（runner 排队超时通常 5-10 分钟）；② 若持续不启动，下一轮单独开 PR 排查 CI trigger；③ 临时 admin override（需仓库管理员在网页端操作）。本会话核心交付已完成（5 修复 + 9 测试 + 本地全绿 + typecheck + go vet/build 干净）。
