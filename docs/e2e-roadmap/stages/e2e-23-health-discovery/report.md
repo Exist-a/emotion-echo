@@ -538,6 +538,63 @@ helm 保持使用 runner 预装版并在守卫里保留"缺失即判红"的显�
 `package.json` / `pnpm-lock.yaml` 被 `pnpm add` 改动过（把包从 `optionalDependencies` 挪到
 `devDependencies`），已 `git checkout` 回退 —— **那是端侧轨的设计决定，不该由本轨顺手改**。
 
+## 9.9 门禁收口：汇总门禁 + 本轮问题落档（2026-09-30）
+
+### 门禁本身：从 33 条点名降到 10 条
+
+用户配好 33 条 required checks 后，我复核发现两个**结构性**隐患（详见
+[ADR-2026-09-e2e-23-gate-aggregation](../../../architecture/adr/adr-2026-09-e2e-23-gate-aggregation.md)）：
+
+1. 其中 23 条是 `doc-drift-check` 的**中文 job 名**，GitHub 精确匹配 ——
+   谁改一个字的门禁就**静默失效**，不报错、不拦。
+2. 33 条要人肉同步，新增检查不会自动纳入。
+
+已加 `doc-drift-gate`（`needs` 全部 23 个检查 + `if: always()`）与
+`doc-drift-needs-sync`（校验 gate 的 `needs` 覆盖完整性，且**独立于 gate 跑**）。
+分支保护改为只填 `文档守卫总闸`，共 **10 条**（gate 1 + go-test 7 + llm/web/e2e-guards 各 1 - gate 替代了 23 条中除被 gate 覆盖外的全部）。
+
+守卫 `scripts/check_doc_drift_gate_needs.sh` 的两组负向对照已实测：
+漏一个 job → `rc=1` 并报出漏项；留一个幽灵 job → `rc=1` 并报出幽灵引用；还原 → `rc=0`。
+汇总脚本的判定逻辑也在本地实跑过三种输入：全成功 `rc=0` / 有 failure `rc=1` / 有 skipped `rc=1`
+（**skipped 刻意判为不通过** —— 否则"检查被跳过"会被 GitHub 当成通过）。
+
+### 本轮我自己的两次误判（如实落档）
+
+同一件事——"门禁到底配没配好"——我连错两次，**都是同一类错误：把"我没看到"当成"它不存在"**。
+
+| # | 我的做法 | 实际 | 根因 |
+|---|---------|------|------|
+| M-1 | 查 `GET /repos/{o}/{r}/rules/branches/main`，拿到 `[]` 就断言"门禁没生效" | 门禁**早已生效** | 该端点**只返回 Rulesets（仓库规则集）**，不含经典分支保护。用户建的是经典保护（URL `/settings/branch_protection_rules/83308753`）。**拿错了尺子** |
+| M-2 | 用 computer-use 枚举"已保存的 required checks"，稳定得 26 条，据此断言"缺 7 条 go-test" | **33 条一条不缺** | Edge 的无障碍树会**按优先级裁剪长列表**，列表上部的条目根本不出现在树里。我用**被裁剪的证据**做完整性判断 |
+
+M-1 已更正到 `discovered-unresolved.md` 的 E2E-F-162（此前记的是"无法核实"，实际当时就能核实，
+只是我查错了地方）。M-2 由用户截图直接推翻。
+
+**这两条不是小事**：它们与本阶段反复在治的病同源 ——
+anti-patterns **AP-01（把"文件已创建"当"已验证"）** 的近亲，
+以及 [anti-patterns.md](../../anti-patterns.md) 反复警告的
+"根因未验证就下结论"。已记入 memory `invalid-probe-evidence-pattern` 与
+`emotion-echo-pr-workflow-mechanics`。
+
+**自曝第三处**：写完上面这段"相对路径写错"的记录后，我给新 ADR 加的第一条链接
+**当场就写错了同一类错**（从 `stages/e2e-23-health-discovery/` 出发用了 `../../`，
+只到 `docs/e2e-roadmap/`，应�� `../../../`）。已由坏链扫描当场抓出并修掉。
+顺带修掉 `discovered-unresolved.md` 里一条 pre-existing 的同型坏链
+（`../../architecture/adr/adr-2026-09-client-object-url-bff-proxy.md`）。
+**这条记录的教训比我预想的具体**：把教训写进文档，并不会自动让我不再犯；
+真正抓住它的是**每次改完都跑一遍坏链扫描**这个机械动作。
+
+**沉淀下来的判据**（本轮新增，值得写进规程）：
+- 任何"清点清单得 N 条、所以缺 M 条"的推论，**必须先自证枚举是完整的**；
+- 反向同样成立："我看到了 N 条"**不能**推出"只有 N 条"。
+
+### 另一处真相更正：经典保护没有公开可读的 API
+
+我先前在 `memory` 里写"用 `GET /rules/branches/main` 就能核实门禁"，**那是错的** ——
+该端点覆盖不到经典保护。经典保护只能靠
+`/branches/main/protection`（需管理员 token，我拿不到）或**开 PR 实测能否被拦**来验证。
+已订正 memory。
+
 ## 10. 下轮建议
 
 原列的 4 项（C 组破坏性实验 / F 组回归钉 / E 组 14 参数 / #5#6）**均已于本轮完成**

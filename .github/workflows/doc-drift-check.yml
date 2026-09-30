@@ -260,3 +260,52 @@ jobs:
       # 这些都不产生运行时错误，只能靠静态契约钉住。
       - name: Observability config contract assertions
         run: node deploy/obs_monitoring.test.js
+
+  # =====================================================
+  # 汇总门禁（E2E-23 收口轮新增）
+  # =====================================================
+  # 为什么加它：分支保护里 23 条 required checks 全是**精确 job 名**（含中文），
+  # 列表长、且谁改了 job 的 name: 门禁就**静默失效**（匹配不上、不报错、不拦）——
+  # 正是 anti-patterns AP-11「门禁只报不拦」的变体。
+  #
+  # `needs` 全部检查 + `if: always()` ⇒ 任一检查红则本 job 红。
+  # 分支保护只需填 `doc-drift-gate` 这一条，且**以后新增检查只要被 gate 覆盖就自动纳入**。
+  #
+  # ⚠️ needs 是硬编码列表，会漂。所以配了 doc-drift-needs-sync 独立盯住它（见下）。
+  doc-drift-gate:
+    name: 文档守卫总闸
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [routes-alignment, view-consistency, env-vars-lint, yaml-lint, git-layout, docker-digests, docs-update, bff-jwt-secret, user-oauth-zero-ref, migrations-contract, migrations-no-service-order, soft-assert-scan, apisix-seed-structure, secrets-scan, e2e-stage-audit, tdd-gate, adr-gate, residual-scan, helm-loki-render, ctx-logging-gate, orphan-outputs, helm-prometheus-render, obs-monitoring-contract]
+    # always()：否则任一上游失败时本 job 会被**跳过**（skipped ≠ 通过，GitHub 不会拦），
+    # 反而变成"检查失败反而没人拦"的漏洞。
+    if: ${{ always() }}
+    steps:
+      - name: 汇总全部检查结果
+        # 用 env: 传值而不是在 shell 里插 ${{ }} —— 后者要处理多层花括号转义，
+        # 极易写错且错了只在 CI 上暴露（本地无法验证表达式）。
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -uo pipefail
+          echo "$NEEDS_JSON" | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)
+          failed = [(k, v.get("result")) for k, v in d.items() if v.get("result") != "success"]
+          if not failed:
+              print("OK: %d 项文档守卫全部通过" % len(d))
+              sys.exit(0)
+          for k, r in failed:
+              print("::error::检查未通过: %s (%s)" % (k, r))
+          sys.exit(1)
+          '
+
+  # 必须**独立于 gate** 跑（不被 gate 覆盖），否则 gate 漏掉自己就没人发现。
+  doc-drift-needs-sync:
+    name: 汇总门禁 needs 覆盖校验
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: gate 的 needs 必须覆盖全部检查 job
+        run: bash scripts/check_doc_drift_gate_needs.sh

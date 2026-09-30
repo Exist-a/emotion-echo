@@ -21,7 +21,16 @@ related-stage: stage-97, e2e-03, e2e-22, e2e-23
 | `go-test.yml` | push / PR | 6 Go svc + shared 跑 `go test` + `go vet` | ai / analytics / chat / web-bff / assessment / user / shared |
 | `llm-test.yml` | push / PR | emotion-llm-service pytest | /analyze auth + gRPC + file_context + Nacos |
 | `web-test.yml` | push / PR | emotion-echo-web vitest + lint | composables + apiRoutes + auth.global + renderMarkdown |
-| `doc-drift-check.yml` | push / PR | 文档/代码漂移守卫（ADR 门禁、TDD 门禁、孤儿产出物、残留物等） | `docs/**` + `scripts/check_*.sh` |
+| `doc-drift-check.yml` | push / PR | 文档/代码漂移守卫（23 项）+ **汇总门禁** | `docs/**` + `scripts/check_*.sh` |
+
+> `doc-drift-check.yml` 里除 23 个检查 job 外还有两个**元 job**（E2E-23 收口轮新增，见 [ADR](../architecture/adr/adr-2026-09-e2e-23-gate-aggregation.md)）：
+>
+> - `文档守卫总闸`（`doc-drift-gate`）：`needs` 全部 23 个检查 + `if: always()`，任一失败即失败。
+>   **分支保护只填这一条**即可覆盖全部文档守卫 —— 避免 23 条中文 job 名被逐条维护、
+>   避免有人改 `name:` 导致门禁**静默失效**（精确匹配不上、不报错、不拦）。
+> - `汇总门禁 needs 覆盖校验`（`doc-drift-needs-sync`）：跑 `scripts/check_doc_drift_gate_needs.sh`，
+>   断言 gate 的 `needs` 覆盖全部检查 job 且无失效引用。**它必须独立于 gate 跑** ——
+>   校验汇总门禁的 job 不能被汇总门禁覆盖，否则 gate 漏掉自己就没人发现。 |
 | `e2e-guards.yml` | push / PR | 静态守卫（E2E-23 新增） | 7 个 `scripts/test_*.sh` 静态守卫，**见下方"门禁生效边界"** |
 
 `e2e-guards.yml` 跑的这 7 个守卫（均为纯静态检查，不需要运行中的容器）：
