@@ -1,4 +1,3 @@
-
 package logic
 
 import (
@@ -8,8 +7,6 @@ import (
 	"emotion-echo-user-svc/internal/repository"
 	"emotion-echo-user-svc/internal/svc"
 	"emotion-echo-user-svc/internal/types"
-
-	
 )
 
 type GetUserByIdLogic struct {

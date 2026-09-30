@@ -16,9 +16,9 @@ import (
 	"errors"
 
 	"emotion-echo-chat-svc/internal/repository"
-	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 )
 
 // PinConversationLogic 处理置顶/取消置顶会话

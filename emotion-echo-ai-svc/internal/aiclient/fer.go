@@ -16,9 +16,10 @@ import (
 // backend: emotion-echo-models/FER -> FastAPI :8004/analyze
 //
 // 用法：
-//   client := aiclient.NewFERClient(cfg.FER)
-//   if client == nil { /* service 关闭，走降级 */ }
-//   result, err := client.AnalyzeImage(ctx, imageBytes, "face.jpg")
+//
+//	client := aiclient.NewFERClient(cfg.FER)
+//	if client == nil { /* service 关闭，走降级 */ }
+//	result, err := client.AnalyzeImage(ctx, imageBytes, "face.jpg")
 type FERClient struct {
 	baseURL string
 	hc      *http.Client

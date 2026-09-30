@@ -5,9 +5,9 @@
 // Stage 30-A Round 1 RED commit: cover the daily report logic
 // contract. Logic signature:
 //
-//   func NewReportsDailyLogic(ctx, svcCtx) *ReportsDailyLogic
-//   func (l *ReportsDailyLogic) GetDailyReport(req *types.GetDailyReportReq)
-//       (*types.GetDailyReportResp, error)
+//	func NewReportsDailyLogic(ctx, svcCtx) *ReportsDailyLogic
+//	func (l *ReportsDailyLogic) GetDailyReport(req *types.GetDailyReportReq)
+//	    (*types.GetDailyReportResp, error)
 //
 // Coverage matrix:
 //
@@ -35,8 +35,8 @@ import (
 
 func newReportsDailySvcCtx(repo repository.ReportRepo) *svc.ServiceContext {
 	return &svc.ServiceContext{
-		Config:    config.Config{},
-		EventRepo: nil, // ReportRepo 独立字段（Round 1 扩展 ServiceContext）
+		Config:     config.Config{},
+		EventRepo:  nil, // ReportRepo 独立字段（Round 1 扩展 ServiceContext）
 		ReportRepo: repo,
 	}
 }
@@ -94,8 +94,8 @@ func TestReportsDailyLogic_PopulatesEmotionDistributionByModality(t *testing.T) 
 	}
 
 	ctx := &svc.ServiceContext{
-		Config:           config.Config{},
-		ReportRepo:       reportRepo,
+		Config:             config.Config{},
+		ReportRepo:         reportRepo,
 		ModalityReportRepo: modalityRepo,
 	}
 	l := NewReportsDailyLogic(context.Background(), ctx)
@@ -117,7 +117,7 @@ func TestReportsDailyLogic_PopulatesEmotionDistributionByModality(t *testing.T) 
 type fakeModalityReportRepo struct {
 	repository.ModalityReportRepo // embedded interface for forward-compat
 
-	getDailyEmotionByModality *repository.ModalityEmotionDistribution
+	getDailyEmotionByModality    *repository.ModalityEmotionDistribution
 	getDailyEmotionByModalityErr error
 }
 
@@ -207,8 +207,8 @@ func TestReportsDailyLogic_NoData_EmptyEmotionCountsNotNil(t *testing.T) {
 // fakeReportRepo 满足 repository.ReportRepo 接口；只让 GetDailyReport
 // / GetTrendReport 可注入行为，其他方法 panic。
 type fakeReportRepo struct {
-	repository.EventRepo    // embed for unmocked methods (panic if called)
-	repository.ReportRepo   // interface satisfaction (methods below override)
+	repository.EventRepo  // embed for unmocked methods (panic if called)
+	repository.ReportRepo // interface satisfaction (methods below override)
 
 	getDailyReport    *repository.DailyReport
 	getDailyReportErr error

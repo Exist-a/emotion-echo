@@ -29,11 +29,11 @@ type MultiModalInput struct {
 //   - 当用户没有启用 AI profile（BaseURL 未配置），三个 client 都为 nil，
 //     自动降级到 fallback.Analyze(text)
 type MultiModalAnalyzer struct {
-	Fallback   Analyzer                                // 必填：纯文本分析兜底
-	FER        *aiclient.FERClient                     // 可选
-	SenseVoice *aiclient.SenseVoiceClient              // 可选
-	XTTS       *aiclient.XTTSClient                    // 暂不参与 Analyze（Synthesize 在其他方法里）
-	Logger     func(msg string, args ...any)           // info log；nil 时静默
+	Fallback   Analyzer                      // 必填：纯文本分析兜底
+	FER        *aiclient.FERClient           // 可选
+	SenseVoice *aiclient.SenseVoiceClient    // 可选
+	XTTS       *aiclient.XTTSClient          // 暂不参与 Analyze（Synthesize 在其他方法里）
+	Logger     func(msg string, args ...any) // info log；nil 时静默
 }
 
 // NewMultiModalAnalyzer 构造器；fallback 必填，三个 client 可空

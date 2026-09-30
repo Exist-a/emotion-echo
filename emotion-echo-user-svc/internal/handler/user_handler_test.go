@@ -270,7 +270,14 @@ func TestGetUserByIdHandler_Existing_Returns200(t *testing.T) {
 
 func TestHealthHandler_HappyPath_Returns200WithJSON(t *testing.T) {
 	t.Parallel()
-	svcCtx := &svc.ServiceContext{Config: config.Config{Name: "emotion-echo-user-svc"}}
+	// 2026-09-30 更正：原先这里 **不注入 repo**，于是这个名义上的 happy path
+	// 实际跑的是"repo == nil"分支，只因旧实现对 nil 报 ok 才碰巧通过。
+	// 探针语义改成 nil ⇒ degraded 后，这里必须**真的**提供可用依赖，
+	// 否则它测的就不是它声称的东西。
+	svcCtx := &svc.ServiceContext{
+		Config:   config.Config{Name: "emotion-echo-user-svc"},
+		UserRepo: repository.NewInMemoryUserRepo(),
+	}
 	r := gin.New()
 	r.GET("/health", HealthHandler(svcCtx))
 

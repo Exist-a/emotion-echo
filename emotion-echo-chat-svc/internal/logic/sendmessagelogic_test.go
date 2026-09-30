@@ -625,8 +625,9 @@ func TestSendMessageLogic_AIClientError_DoesNotBlock(t *testing.T) {
 // Stage 69 RED · chat-svc → ai-svc dev fallback 缺 x-user-id metadata bug
 //
 // 现象：docker logs emotion-echo-chat-svc 显示
-//   "dev fallback UpsertNeutralEmotion failed:
-//    rpc error: code = Unauthenticated desc = missing x-user-id metadata"
+//
+//	"dev fallback UpsertNeutralEmotion failed:
+//	 rpc error: code = Unauthenticated desc = missing x-user-id metadata"
 //
 // 根因：ai_client_grpc.go UpsertNeutralEmotion 直接传 ctx，没把 l.ctx 里的
 // user_id 注入到 outgoing metadata 的 x-user-id 头。ai-svc gRPC server
@@ -662,6 +663,7 @@ func TestSendMessageLogic_DevFallback_InjectsXUserIDMetadata(t *testing.T) {
 	require.NotEmpty(t, vals, "outgoing metadata 必须含 x-user-id")
 	assert.Equal(t, "100", vals[0], "x-user-id 值应等于 ctx 里的 uid")
 }
+
 // Stage 79 RED：SendMessage 响应 MessageView 必须回带 ContentType——
 // e2e 实测 DB 落库 file 但响应丢字段（响应链第 4 处缺口：logic 响应组装）。
 // 契约：请求带 contentType="file" → 响应 MessageView.ContentType=="file"。
@@ -686,7 +688,7 @@ func TestSendMessageLogic_ContentType_RoundTripsInResponse(t *testing.T) {
 	assert.Equal(t, "file", resp.Message.ContentType, "响应视图必须回带 contentType")
 }
 
-// Stage 82 PR-3b：intent 白名单校验（§契约 5）——合法值入库并回带，非法值落 ''。
+// Stage 82 PR-3b：intent 白名单校验（§契约 5）——合法值入库并回带，非法值落 ”。
 // 白名单三方一致：DDL 注释 / allowedIntents / emotion-llm intent.INTENTS。
 func TestSendMessageLogic_IntentWhitelist(t *testing.T) {
 	t.Parallel()

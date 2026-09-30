@@ -59,10 +59,10 @@ func TestInitMultiModal_AllBaseURLsSet_ClientsAndAnalyzerNonNil(t *testing.T) {
 	t.Parallel()
 
 	svcCtx := NewServiceContext(config.Config{
-		Name:        "test",
-		FER:         config.FER{BaseURL: "http://fer:8004"},
-		SenseVoice:  config.SenseVoice{BaseURL: "http://sv:8005"},
-		XTTS:        config.XTTS{BaseURL: "http://xtts:8003", Language: "zh-cn", Speed: 0.75},
+		Name:       "test",
+		FER:        config.FER{BaseURL: "http://fer:8004"},
+		SenseVoice: config.SenseVoice{BaseURL: "http://sv:8005"},
+		XTTS:       config.XTTS{BaseURL: "http://xtts:8003", Language: "zh-cn", Speed: 0.75},
 	}, repository.NewInMemoryEmotionRepo(), nil, nil, nil) // Stage 34: face/voice/fused nil
 
 	svcCtx.InitMultiModal()
@@ -97,11 +97,11 @@ func TestInitMultiModal_EmptyBaseURLs_ClientsNil(t *testing.T) {
 func TestInitMultiModal_MixedBaseURLs_PartialInit(t *testing.T) {
 	t.Parallel()
 
-svcCtx := NewServiceContext(config.Config{
-		Name:        "test",
-		FER:         config.FER{BaseURL: "http://fer:8004"},
-		SenseVoice:  config.SenseVoice{BaseURL: "http://sv:8005"},
-		XTTS:        config.XTTS{BaseURL: ""}, // disabled
+	svcCtx := NewServiceContext(config.Config{
+		Name:       "test",
+		FER:        config.FER{BaseURL: "http://fer:8004"},
+		SenseVoice: config.SenseVoice{BaseURL: "http://sv:8005"},
+		XTTS:       config.XTTS{BaseURL: ""}, // disabled
 	}, repository.NewInMemoryEmotionRepo(), nil, nil, nil) // Stage 34: face/voice/fused nil
 
 	svcCtx.InitMultiModal()

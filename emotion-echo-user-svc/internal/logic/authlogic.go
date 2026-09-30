@@ -20,7 +20,6 @@ import (
 	"emotion-echo-user-svc/internal/types"
 
 	"github.com/emotion-echo/shared/pkg/password"
-	
 )
 
 // AuthLogic 同时承载 Login / Register 流程；它们共享 ctx 与 svcCtx。
@@ -163,9 +162,9 @@ var ErrSecurityAnswerMismatch = errors.New("security answer mismatch")
 //  3. bcrypt 校验答案
 //
 // 错误语义：
-//  - ErrNotFound：用户无密保问题
-//  - ErrValidation：questionOrder 不合法
-//  - ErrSecurityAnswerMismatch：答案错误
+//   - ErrNotFound：用户无密保问题
+//   - ErrValidation：questionOrder 不合法
+//   - ErrSecurityAnswerMismatch：答案错误
 func (l *AuthLogic) VerifySecurityAnswer(userID int64, questionOrder int, answer string) error {
 	if questionOrder < 1 || questionOrder > 2 {
 		return ErrValidation
@@ -198,9 +197,9 @@ func (l *AuthLogic) VerifySecurityAnswer(userID int64, questionOrder int, answer
 //  2. 调用 VerifySecurityAnswer 验证答案
 //
 // 错误语义：
-//  - ErrNotFound：用户不存在或无密保问题
-//  - ErrValidation：questionOrder 不合法
-//  - ErrSecurityAnswerMismatch：答案错误
+//   - ErrNotFound：用户不存在或无密保问题
+//   - ErrValidation：questionOrder 不合法
+//   - ErrSecurityAnswerMismatch：答案错误
 func (l *AuthLogic) VerifySecurityAnswerByUsername(username string, questionOrder int, answer string) error {
 	if username == "" {
 		return ErrValidation
@@ -286,11 +285,11 @@ var _ = repository.ErrNotFound
 // Sprint 1 PR-4c-3: 重置密码（forget-pwd 流程；由 BFF 验证 code 后调此方法）
 //
 // 流程：
-//   1. 校验 username + newPassword 长度（与 Register 一致 ≥ 6 字节）
-//   2. 校验 verificationCode（与 Register 共用同一字段；调用方 BFF 已校验过）
-//   3. password.Hash(newPassword) bcrypt
-//   4. repo.UpdatePassword(id, hash) 写库
-//   5. 返 UserInfo
+//  1. 校验 username + newPassword 长度（与 Register 一致 ≥ 6 字节）
+//  2. 校验 verificationCode（与 Register 共用同一字段；调用方 BFF 已校验过）
+//  3. password.Hash(newPassword) bcrypt
+//  4. repo.UpdatePassword(id, hash) 写库
+//  5. 返 UserInfo
 func (l *AuthLogic) ResetPassword(req *types.ResetPasswordReq) (*types.ResetPasswordResp, error) {
 	if req.Username == "" || req.NewPassword == "" {
 		return nil, ErrValidation

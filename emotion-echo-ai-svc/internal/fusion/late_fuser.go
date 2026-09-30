@@ -3,14 +3,14 @@
 // WeightedLateFuser 是 LLM-as-Fusion 失败时的兜底算法。
 //
 // 算法：late fusion 加权投票
-//   1. 收集所有可用模态的 (Emotion, Confidence, Sentiment)
-//   2. 按用户配置的默认权重（text=0.4, voice=0.3, face=0.3）重新归一化
-//      — 缺失模态的权重按比例分配给剩余模态
-//   3. 对每个 (modality, emotion) 计算 score = Sentiment × Confidence × Weight
-//   4. 取得分最高的 emotion 作为 primary（如果最高分是负数，则回退到 confidence 最高的模态）
-//   5. sentiment_score = Σ (Sentiment_i × Weight_i) / Σ Weight_i
-//   6. confidence = Σ (Confidence_i × Weight_i) / Σ Weight_i
-//   7. modality_contrib: 各模态归一化权重（JSON 字符串）
+//  1. 收集所有可用模态的 (Emotion, Confidence, Sentiment)
+//  2. 按用户配置的默认权重（text=0.4, voice=0.3, face=0.3）重新归一化
+//     — 缺失模态的权重按比例分配给剩余模态
+//  3. 对每个 (modality, emotion) 计算 score = Sentiment × Confidence × Weight
+//  4. 取得分最高的 emotion 作为 primary（如果最高分是负数，则回退到 confidence 最高的模态）
+//  5. sentiment_score = Σ (Sentiment_i × Weight_i) / Σ Weight_i
+//  6. confidence = Σ (Confidence_i × Weight_i) / Σ Weight_i
+//  7. modality_contrib: 各模态归一化权重（JSON 字符串）
 //
 // 输出是 *model.FusedEmotion（与 Worker 写库契约一致）。
 package fusion
@@ -49,9 +49,9 @@ func (f *WeightedLateFuser) Fuse(ctx context.Context, s ModalitySnapshot) (*mode
 
 	// 1. 收集有效模态
 	type slot struct {
-		name     string
-		score    *ModalityScore
-		weight   float64
+		name   string
+		score  *ModalityScore
+		weight float64
 	}
 	slots := make([]slot, 0, 3)
 	if s.Text != nil {

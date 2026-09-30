@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"emotion-echo-chat-svc/internal/events"
-	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
+	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -130,8 +130,8 @@ func TestCreateConversationLogic_PersistWithOutbox_AtomicTransaction(t *testing.
 	// 反向断言(§P0-8 bug 模式):不应出现 CreateInTx(nil, ...)
 	// —— 传 nil tx 是 PostgresOutboxRepo 下 panic 模式,业务写完但 outbox 写失败 = 事件丢失。
 	if strings.Contains(src, "CreateInTx(nil,") {
-		t.Errorf("createconversationlogic.go 仍含 CreateInTx(nil, ...) —— §P0-8 修复要求\n"+
-			"业务写 + outbox 写必须在同一 DB.Transaction 内,不允许传 nil tx(退化路径下\n"+
+		t.Errorf("createconversationlogic.go 仍含 CreateInTx(nil, ...) —— §P0-8 修复要求\n" +
+			"业务写 + outbox 写必须在同一 DB.Transaction 内,不允许传 nil tx(退化路径下\n" +
 			"业务写完但 outbox 写失败 → 事件静默丢失)")
 	}
 
@@ -161,7 +161,7 @@ func TestSendMessageLogic_PersistWithOutbox_AtomicTransaction(t *testing.T) {
 	src := stripGoComments(string(srcBytes))
 
 	if strings.Contains(src, "CreateInTx(nil,") {
-		t.Errorf("sendmessagelogic.go 仍含 CreateInTx(nil, ...) —— §P0-8 修复要求\n"+
+		t.Errorf("sendmessagelogic.go 仍含 CreateInTx(nil, ...) —— §P0-8 修复要求\n" +
 			"AppendMessage + outbox 写必须在同一 DB.Transaction 内")
 	}
 

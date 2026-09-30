@@ -18,10 +18,19 @@ import (
 //   - 包含服务名 / 版本号
 //   - 提供时间戳
 
+// newTestHealthLogic 构造一个**依赖齐备**的 HealthLogic（注入可用 repo）。
+//
+// 2026-09-30 更正：原先这里**不注入任何 repo**，于是所有用它的测试
+// （含 TestHealthLogic_Health_ReturnsOkStatus 这个名义上的 happy path）
+// 实际都在跑"repo == nil"这条分支，只是从没人发现 —— 因为旧实现对
+// nil repo 报 ok，**看起来正好符合 happy path 的预期**。
+// 本次把 nil repo 的语义改成 degraded（见 healthlogic_degraded_test.go 的运行时证据），
+// 这个 helper 必须真正提供依赖，否则它测的就不是它声称的东西。
 func newTestHealthLogic(t *testing.T) *HealthLogic {
 	t.Helper()
 	svcCtx := &svc.ServiceContext{
-		Config: config.Config{},
+		Config:   config.Config{},
+		UserRepo: &pingUserRepo{pingErr: nil}, // 同包的测试替身：Ping 恒成功
 	}
 	return NewHealthLogic(context.Background(), svcCtx)
 }

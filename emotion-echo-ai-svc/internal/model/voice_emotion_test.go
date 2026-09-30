@@ -3,20 +3,21 @@
 // VoiceEmotionResult 是 SenseVoice（语音情绪识别）的落库模型。
 //
 // Schema（emotion_echo_ai.voice_emotion_results）：
-//   id              BIGSERIAL PK
-//   upload_id       VARCHAR(64) UNIQUE
-//   message_id      BIGINT                     -- 可空
-//   user_id         BIGINT NOT NULL
-//   conversation_id BIGINT
-//   transcript      TEXT                       -- SenseVoice 转写文本
-//   primary_emotion VARCHAR(32)                -- SenseVoice 情绪 token
-//   emotion_scores  JSONB
-//   confidence      REAL
-//   model           VARCHAR(64)
-//   duration_ms     INT
-//   language        VARCHAR(16)
-//   raw_response    JSONB
-//   created_at      TIMESTAMPTZ
+//
+//	id              BIGSERIAL PK
+//	upload_id       VARCHAR(64) UNIQUE
+//	message_id      BIGINT                     -- 可空
+//	user_id         BIGINT NOT NULL
+//	conversation_id BIGINT
+//	transcript      TEXT                       -- SenseVoice 转写文本
+//	primary_emotion VARCHAR(32)                -- SenseVoice 情绪 token
+//	emotion_scores  JSONB
+//	confidence      REAL
+//	model           VARCHAR(64)
+//	duration_ms     INT
+//	language        VARCHAR(16)
+//	raw_response    JSONB
+//	created_at      TIMESTAMPTZ
 package model
 
 import (

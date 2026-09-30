@@ -5,13 +5,13 @@
 // 算法：late fusion 加权平均
 //   - 输入：ModalitySnapshot{Text?, Face?, Voice?}，每个含 emotion/confidence/scores
 //   - 输出：FusedEmotion
-//     - primary_emotion: 取加权得分最高的 emotion
-//     - sentiment_score: 按 confidence 加权平均各路 sentiment
-//     - confidence: 各路 confidence 的加权平均
-//     - modality_contrib: 各路权重（默认 text=0.4, voice=0.3, face=0.3；缺失则按比例重分配）
-//     - fusion_method: "late_fusion_weighted"
-//     - available_modalities: 实际用到的模态
-//     - reasoning: 空（late_fusion 没有 LLM 解释）
+//   - primary_emotion: 取加权得分最高的 emotion
+//   - sentiment_score: 按 confidence 加权平均各路 sentiment
+//   - confidence: 各路 confidence 的加权平均
+//   - modality_contrib: 各路权重（默认 text=0.4, voice=0.3, face=0.3；缺失则按比例重分配）
+//   - fusion_method: "late_fusion_weighted"
+//   - available_modalities: 实际用到的模态
+//   - reasoning: 空（late_fusion 没有 LLM 解释）
 //
 // 设计原则：
 //   - 单模态也能跑（只有 text 也算融合，权重=1）

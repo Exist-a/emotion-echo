@@ -7,8 +7,9 @@
 //   - IncDLQPublishResult(false) → emotion_echo_dlq_publish_total{result="failure"} +1
 //
 // 现状（dlq.go 缺 counter，consumer.go:218 仅 slog.Error 不计数）：
-//   旧实现 IncDLQPublishResult 调用不存在 → compile fail → FAIL
-//   新实现 dlq_metrics.go 加 counter + consumer.go:218 调 Inc → PASS
+//
+//	旧实现 IncDLQPublishResult 调用不存在 → compile fail → FAIL
+//	新实现 dlq_metrics.go 加 counter + consumer.go:218 调 Inc → PASS
 //
 // 为什么单独测 IncDLQPublishResult 而不是测 consumer.go 集成路径：
 //   - IncDLQPublishResult 是公开 API，caller 只需传 bool

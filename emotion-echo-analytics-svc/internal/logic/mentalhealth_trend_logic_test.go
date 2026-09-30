@@ -150,17 +150,17 @@ func TestMentalHealthTrendLogic_TimeWindowPassed(t *testing.T) {
 // stub 名或共享。共享得用 _test.go 跨文件 helper，这违反 sibling。
 // 改名：trend_test 用 mhTrendStubRepo（独立类型）。
 type mhTrendStubRepo struct {
-	assessment      *repository.MentalAssessment
-	assessmentErr   error
+	assessment    *repository.MentalAssessment
+	assessmentErr error
 
-	history         []repository.AssessmentHistoryItem
-	historyNextCur  string
-	historyErr      error
-	onListHistory   func(userID int64, atype, cursor string, limit int)
+	history        []repository.AssessmentHistoryItem
+	historyNextCur string
+	historyErr     error
+	onListHistory  func(userID int64, atype, cursor string, limit int)
 
-	trend           []repository.TrendPoint
-	trendErr        error
-	onGetTrend      func(userID int64, trendType string, start, end time.Time)
+	trend      []repository.TrendPoint
+	trendErr   error
+	onGetTrend func(userID int64, trendType string, start, end time.Time)
 }
 
 func (s *mhTrendStubRepo) GetLatestAssessment(_ context.Context, _ int64, _ repository.AssessmentType) (*repository.MentalAssessment, error) {

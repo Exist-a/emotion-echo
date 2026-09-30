@@ -110,7 +110,13 @@ func TestHealthLogic_Health_StatusReflectsDependencies(t *testing.T) {
 	}
 }
 
-// TestHealthLogic_Health_NilRepoAndPublisher 边界：全 nil 时不谎报故障。
+// TestHealthLogic_Health_NilRepoAndPublisher 边界：两个依赖都缺时，**两个都要报不健康**。
+//
+// 2026-09-30 契约反转（E2E-23 F-96 实测驱动）：原断言是
+// `DbOK == true`，注释「repo 未注入时 DbOK 保持 true（不谎报失败）」。
+// 该推理把"这个部署本来不接 DB"与"main.go 单次连接失败后的降级启动"混为一谈 ——
+// 而后者在生产中真实发生，且会让 `/health/ready` 返 200、容器判 healthy、
+// APISIX 照常路由而后端全挂，**零告警**（实测见 E2E-23 report）。
 func TestHealthLogic_Health_NilRepoAndPublisher(t *testing.T) {
 	t.Parallel()
 
@@ -120,6 +126,8 @@ func TestHealthLogic_Health_NilRepoAndPublisher(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "degraded", resp.Status,
 		"Kafka publisher 缺失必须报 degraded —— 否则事件永远发不出去而探针说健康")
-	assert.True(t, resp.DbOK, "repo 未注入时 DbOK 保持 true（不谎报失败）")
+	assert.False(t, resp.DbOK,
+		"repo 为 nil（生产降级启动的真实形态）时 DbOK 必须是 false —— "+
+			"数据库层不存在，不存在「依赖正常」这回事")
 	assert.False(t, resp.KafkaOK)
 }

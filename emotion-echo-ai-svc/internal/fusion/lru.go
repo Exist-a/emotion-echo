@@ -38,13 +38,13 @@ type msgIDLRUEntry struct {
 
 // MsgIDLRU 线程安全的 LRU 缓存。
 type MsgIDLRU struct {
-	mu       sync.Mutex
-	cap      int
-	ttl      time.Duration
-	items    map[int64]*list.Element // msgID → list element
-	order    *list.List              // 双向链表：front=最新，back=最旧
-	hits     int64                   // 累计命中次数（供 metrics 读取）
-	misses   int64                   // 累计未命中次数（供 metrics 读取）
+	mu     sync.Mutex
+	cap    int
+	ttl    time.Duration
+	items  map[int64]*list.Element // msgID → list element
+	order  *list.List              // 双向链表：front=最新，back=最旧
+	hits   int64                   // 累计命中次数（供 metrics 读取）
+	misses int64                   // 累计未命中次数（供 metrics 读取）
 }
 
 // NewMsgIDLRU 构造器。

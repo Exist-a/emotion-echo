@@ -27,7 +27,7 @@ func init() { gin.SetMode(gin.TestMode) }
 // newTestServiceContext 构造 ServiceContext，全 AI client 用空 BaseURL（关闭）
 func newTestServiceContext() *svc.ServiceContext {
 	cfg := config.Config{
-		Name: "emotion-echo-ai-svc",
+		Name:       "emotion-echo-ai-svc",
 		FER:        config.FER{BaseURL: ""},
 		SenseVoice: config.SenseVoice{BaseURL: ""},
 		XTTS:       config.XTTS{BaseURL: ""},

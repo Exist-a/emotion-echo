@@ -13,8 +13,6 @@ import (
 	"emotion-echo-analytics-svc/internal/repository"
 	"emotion-echo-analytics-svc/internal/svc"
 	"emotion-echo-analytics-svc/internal/types"
-
-	
 )
 
 // trendTypeWhitelist mentalhealth trend 的合法 type

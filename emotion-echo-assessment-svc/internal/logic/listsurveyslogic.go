@@ -1,4 +1,3 @@
-
 package logic
 
 import (
@@ -7,8 +6,6 @@ import (
 	"emotion-echo-assessment-svc/internal/model"
 	"emotion-echo-assessment-svc/internal/svc"
 	"emotion-echo-assessment-svc/internal/types"
-
-	
 )
 
 type ListSurveysLogic struct {

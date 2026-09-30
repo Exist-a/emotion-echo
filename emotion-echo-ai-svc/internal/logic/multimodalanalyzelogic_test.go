@@ -177,6 +177,7 @@ func TestMultiModalAnalyzeLogic_AnalyzerError_PropagatesAsIs(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "downstream unavailable")
 }
+
 // TestMultiModalAnalyzeLogic_AudioTranscriptPropagated 是 E2E-F-104 的回归钉。
 //
 // 背景：analyzer.EmotionResult 原先无 Text 字段 ⇒ ASR 转写文本在 analyzer 内部

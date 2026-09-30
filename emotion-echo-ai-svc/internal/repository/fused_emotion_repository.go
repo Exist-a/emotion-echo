@@ -49,10 +49,10 @@ type FusedEmotionRepo interface {
 // =====================================================
 
 type InMemoryFusedEmotionRepo struct {
-	mu         sync.RWMutex
-	byID       map[int64]*model.FusedEmotion
+	mu          sync.RWMutex
+	byID        map[int64]*model.FusedEmotion
 	byMessageID map[int64]int64
-	nextID     int64
+	nextID      int64
 }
 
 func NewInMemoryFusedEmotionRepo() *InMemoryFusedEmotionRepo {
@@ -186,9 +186,10 @@ func (r *PostgresFusedEmotionRepo) GetByMessageID(ctx context.Context, messageID
 // 导致 FusionWorker candidates=0 永远不工作 → /reports/daily 拿不到情绪数据。
 //
 // SQL 语义：
-//   SELECT ea.message_id FROM emotion_echo_ai.emotion_analysis ea
-//   LEFT JOIN emotion_echo_ai.fused_emotions fe USING (message_id)
-//   WHERE fe.message_id IS NULL
+//
+//	SELECT ea.message_id FROM emotion_echo_ai.emotion_analysis ea
+//	LEFT JOIN emotion_echo_ai.fused_emotions fe USING (message_id)
+//	WHERE fe.message_id IS NULL
 //
 // ttlSeconds 参数当前未使用（与 InMemory 版对齐语义：列出所有未收敛候选），
 // 未来"已 fused 但 TTL 内无新 face/voice 数据则不再重试"再扩展。

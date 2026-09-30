@@ -1,4 +1,3 @@
-
 package types
 
 type EmotionView struct {

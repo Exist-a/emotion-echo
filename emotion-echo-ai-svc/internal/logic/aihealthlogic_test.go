@@ -47,7 +47,7 @@ type fakeAIHealth struct {
 	healthy  atomic.Bool
 	err      error
 	calls    atomic.Int32
-	delay    time.Duration // simulated work before returning
+	delay    time.Duration               // simulated work before returning
 	healthFn func(context.Context) error // override hook for advanced cases
 }
 

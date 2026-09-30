@@ -119,3 +119,10 @@ jobs:
       # 本守卫守覆盖面（5 服务同型），语义由 user-svc 的行为测试钉住。
       - name: 守卫 12/12 降级启动时健康探针必须说假话
         run: bash scripts/test_health_nilrepo_truthful.sh
+
+      # 防「用失真的命令判定 go test 结果」（E2E-23 收口轮亲历）。
+      # 本机 Git Bash 的 grep 是 ugrep，`grep -cE "^FAIL"` 对含 FAIL 的输出返回 0，
+      # 而 `grep -c "FAIL"` 返回 8 —— 我据此误报"5 个服务全绿"并把阶段判成 done，
+      # 真正抓住问题的是 CI 而非本地校验。本守卫锁死"用退出码判定"这条规则。
+      - name: 守卫 13/13 go test 结果判定必须用退出码
+        run: bash scripts/test_go_test_exitcode_gate.sh

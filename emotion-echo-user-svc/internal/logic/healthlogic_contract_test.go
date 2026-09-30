@@ -117,14 +117,37 @@ func TestHealthLogic_Health_StatusAndDbOKNeverDisagree(t *testing.T) {
 		"DbOK=false 时 status 绝不能是 ok —— 响应体不得自相矛盾")
 }
 
-// repo 为 nil 时保持 ok：未接入依赖不等于依赖故障（dev 单测场景大量依赖此行为）。
-func TestHealthLogic_Health_NilRepoStillOk(t *testing.T) {
+// 🔴 契约反转（2026-09-30，E2E-23 F-96 实测驱动）：repo 为 nil **必须**报 degraded。
+//
+// 本测试原先断言相反，注释写的是：
+//   「repo 为 nil 时保持 ok：未接入依赖不等于依赖故障（dev 单测场景大量依赖此行为）」
+//
+// **那句推理把两件不同的事当成了同一件**：状态变量 `repo == nil` 同时表示
+//  ①「这个部署本来就不接 DB」（本项目 5 个服务**都不是**这种情况）
+//  ②「main.go 的单次连接失败了，降级启动」（**生产中真实发生**，`main.go:85-93`）
+// 按 ① 论证而让 ② 也报 ok，代价是（dev 栈实测，降级态下 user-svc）：
+//   · `/health`        → `{"status":"ok","dbOk":true}`
+//   · `/health/ready`  → **200**
+//   · `docker ps`      → 容器 **(healthy)**
+//   · 经网关 `/api/v1/users/me` → `upstream unavailable:
+//     user-svc repository not initialized (degraded start)`
+// ⇒ compose 的 `service_healthy` 闸门（含 apisix-seed）失效、APISIX 照常路由、
+//   **后端全挂而零告警**。
+//
+// 注释里说的「不谎报失败」恰恰说反了：它不是避免谎报，而是**在谎报健康**。
+// 「dev 单测大量依赖此行为」是真问题，但解法是**让那些测试注入 repo**
+// （见 healthlogic_test.go 的 newTestHealthLogic），而不是让探针对
+// 缺依赖说谎。
+func TestHealthLogic_Health_NilRepoReportsDegraded(t *testing.T) {
 	t.Parallel()
 
 	l := newHealthLogicWithRepo(nil)
 	resp, err := l.Health()
 
 	require.NoError(t, err)
-	assert.Equal(t, "ok", resp.Status, "repo 未注入时不判故障，保持向后兼容")
-	assert.True(t, resp.DbOK, "repo 未注入时 DbOK 保持 true（不谎报失败）")
+	assert.Equal(t, StatusDegraded, resp.Status,
+		"repo 为 nil（生产降级启动的真实形态）时 status 必须是 degraded —— "+
+			"报 ok 会让 compose service_healthy 闸门与 APISIX 路由双双失明")
+	assert.False(t, resp.DbOK,
+		"repo 为 nil 时 DbOK 必须是 false：数据库层根本不存在，不存在'依赖正常'这回事")
 }

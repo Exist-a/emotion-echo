@@ -50,9 +50,9 @@ func TestListMessagesLogic_HappyPath_ReturnsMessageViews(t *testing.T) {
 	for _, content := range []string{"hi", "how are you?", "goodbye"} {
 		require.NoError(t, repo.AppendMessage(context.Background(), &model.Message{
 			ConversationID: 1,
-			UserID:        100,
-			Role:          "user",
-			Content:       content,
+			UserID:         100,
+			Role:           "user",
+			Content:        content,
 		}))
 	}
 
@@ -89,7 +89,7 @@ func TestListMessagesLogic_ZeroLimit_DefaultsTo50(t *testing.T) {
 	var observedLimit int
 	wrapped := &limitObservingRepo{
 		ConversationRepo: repo,
-		hook: func(l int) { observedLimit = l },
+		hook:             func(l int) { observedLimit = l },
 	}
 	svcCtx := newSvcCtxWithRepo(wrapped)
 
@@ -113,7 +113,7 @@ func TestListMessagesLogic_CustomLimit_PropagatedToRepo(t *testing.T) {
 	var observedLimit int
 	wrapped := &limitObservingRepo{
 		ConversationRepo: repo,
-		hook: func(l int) { observedLimit = l },
+		hook:             func(l int) { observedLimit = l },
 	}
 	svcCtx := newSvcCtxWithRepo(wrapped)
 

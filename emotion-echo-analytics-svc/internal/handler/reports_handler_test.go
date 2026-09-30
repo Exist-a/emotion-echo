@@ -60,7 +60,7 @@ func TestReportsDailyHandler_HappyPath_Returns200(t *testing.T) {
 		daily: &repository.DailyReport{
 			UserID: 1, Date: "2026-07-15",
 			EmotionCounts: map[string]int64{"happy": 3},
-			MessageCount: 10, ConversationCount: 2, AssessmentCount: 1,
+			MessageCount:  10, ConversationCount: 2, AssessmentCount: 1,
 			AvgSentiment: 0.42, AvgConfidence: 0.85,
 		},
 	}
