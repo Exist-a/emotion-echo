@@ -129,7 +129,7 @@
 - ~~❌ chat-svc HTTP /api/v1/conversations 500~~ 🟢 **Stage 64 PR-3 关闭**（`3e07571`，#32：旧镜像时代 bug，v0.1.3 rebuild 实测 4 路径全 200/401）
 ```
 
-**收口 ADR**：[`adr-2026-09-decision-4-closure.md`](adr-2026-09-decision-4-closure.md) — 决策 4 从"未来/待实施"翻"✅ 实施完成"的形式化收口，含覆盖度量化、故意不做的边界列表、后续 sprint backlog。
+**收口 ADR**：[`adr-2026-09-decision-4-closure.md`](adr/adr-2026-09-decision-4-closure.md) — 决策 4 从"未来/待实施"翻"✅ 实施完成"的形式化收口，含覆盖度量化、故意不做的边界列表、后续 sprint backlog。
 
 **关联**：
 - 决策 5（Python LLM 独立微服务 + gRPC server）：不变，emotion-llm-service 维持 gRPC
@@ -946,9 +946,9 @@ Stage 33 P0 修复+BFF净化 █████████████████
 
 **关联 ADR**：[adr-2026-09-on-device-hybrid-main.md](adr/adr-2026-09-on-device-hybrid-main.md)
 
-**关联计划**：[on-device-hybrid-inference-2026-09-23.md](../../plans/on-device-hybrid-inference-2026-09-23.md)（v0.2）/ [on-device-hybrid-inference-implementation-roadmap-2026-09-23.md](../../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md)（v0.3）
+**关联计划**：[on-device-hybrid-inference-2026-09-23.md](../plans/on-device-hybrid-inference-2026-09-23.md)（v0.2）/ [on-device-hybrid-inference-implementation-roadmap-2026-09-23.md](../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md)（v0.3）
 
-**并行协议**：[parallel-tracks.md](../../_meta/parallel-tracks.md)（Lane O × Lane E 隔离规则，AGENTS §八挂钩）
+**并行协议**：[parallel-tracks.md](../_meta/parallel-tracks.md)（Lane O × Lane E 隔离规则，AGENTS §八挂钩）
 
 **账本**：`docs/plans/on-device-findings.md`（OND-F-xx，stage1 收口并入 E2E-F）
 
@@ -969,8 +969,8 @@ Stage 33 P0 修复+BFF净化 █████████████████
 **关联 ADR**：[adr-2026-09-on-device-model-selection-qwen3.md](adr/adr-2026-09-on-device-model-selection-qwen3.md)
 
 **关联计划 / 决策材料**：
-- [on-device-model-selection-decision-material-2026-09-24.md](../../plans/on-device-model-selection-decision-material-2026-09-24.md)（10 维度决策矩阵 + License 实测）
-- [on-device-mindchat-survey-2026-09-24.md](../../plans/on-device-mindchat-survey-2026-09-24.md)（MindChat 模型侧调研）
+- [on-device-model-selection-decision-material-2026-09-24.md](../plans/on-device-model-selection-decision-material-2026-09-24.md)（10 维度决策矩阵 + License 实测）
+- [on-device-mindchat-survey-2026-09-24.md](../plans/on-device-mindchat-survey-2026-09-24.md)（MindChat 模型侧调研）
 
 **两套编号说明**：同一决策在 E2E 轨索引登记为 **D-26.2**（`docs/e2e-roadmap/decisions.md`）；D-NN 与决策 N 是并行编号体系（D-26 ↔ 决策 33 + D-26.2 ↔ 决策 34）。
 
