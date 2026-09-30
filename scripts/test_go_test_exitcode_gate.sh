@@ -97,13 +97,18 @@ GOEOF
   fi
 fi
 
-# ---------------------------------------------------------------- 3. 文档级断言
+# ---------------------------------------------------------------- 3. 可执行物里不得再用
 echo
-echo "-- 3. 仓库内不得再用 grep 计数判定 go test 成败 --"
-hits="$(grep -rn "go test.*| *grep -c" --include=*.sh --include=*.md --include=*.py . 2>/dev/null \
+echo "-- 3. scripts/ 与 workflows/ 里不得再用 grep 计数判定 go test 成败 --"
+# **为什么只扫可执行物、不扫 .md**（这是本守卫自身的实测教训）：
+#   第一版把 docs/**/*.md 一并纳入，结果它把 E2E-23 report §8.9 判成 FAIL ——
+#   那一节**正是**把这条坏命令作为反面教材原样引用、并解释它为何误报的。
+#   ⇒ 引用反面教材是文档的正常职责；把它判红只会逼人把反面教材删掉（更糟）。
+#   危害发生在**自动化**里，所以判定范围收敛到 scripts/ 与 .github/workflows/。
+hits="$(grep -rn "go test.*| *grep -c" --include=*.sh scripts/ .github/ 2>/dev/null \
         | grep -v 'test_go_test_exitcode_gate.sh' || true)"
 if [ -z "$hits" ]; then
-  ok "scripts/ 与文档中无 'go test | grep -c' 形态的判定"
+  ok "scripts/ 与 .github/workflows/ 中无 'go test | grep -c' 形态的判定"
 else
   bad "仍存在该形态：$(printf '%s' "$hits" | tr '\n' ' ' | cut -c1-160)"
 fi
