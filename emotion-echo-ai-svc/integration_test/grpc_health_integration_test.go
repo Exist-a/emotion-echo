@@ -21,9 +21,6 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	pgcontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
@@ -38,66 +35,22 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
-	gormpg "gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
-// pgContainerDesc 起 Postgres 容器，初始化 emotion_echo_ai schema + emotion_analysis 表
+// pgContainerDesc 保留旧名，改为走共享 fixture（E2E-F-168）。
+//
+// 旧实现在这里**手写了一份只建 emotion_analysis 的 DDL**（带一条非 partial 的
+// `CONSTRAINT uq_emotion_analysis_event_id UNIQUE`），与生产的真实 schema 不一致 ——
+// 生产上 i006/i009 把索引改成了 partial 形式，仓储的 `ON CONFLICT (event_id)`
+// 也必须带谓词才能匹配。用真实 schema 跑，才能测出这类"测试库与生产不一致导致
+// 假绿/假红"的问题。
 // grpcServerHealthSvcName 与生产构造函数注册的 per-service 名保持一致（proto 真名）。
 const grpcServerHealthSvcName = "emotion_ai.v1.EmotionQueryService"
 
-func pgContainerDesc(t *testing.T, ctx context.Context) (*pgcontainer.PostgresContainer, *gorm.DB) {
+func pgContainerDesc(t *testing.T, _ context.Context) (*gorm.DB, func()) {
 	t.Helper()
-
-	pgC, err := pgcontainer.RunContainer(ctx,
-		testcontainers.WithImage("postgres:15-alpine"),
-		pgcontainer.WithDatabase("emotion_echo_test"),
-		pgcontainer.WithUsername("test"),
-		pgcontainer.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
-		),
-	)
-	require.NoError(t, err)
-
-	dsn, err := pgC.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
-
-	require.NoError(t, runSQL(ctx, dsn, `CREATE SCHEMA IF NOT EXISTS emotion_echo_ai`))
-	require.NoError(t, runSQL(ctx, dsn, `
-CREATE TABLE IF NOT EXISTS emotion_echo_ai.emotion_analysis (
-  id BIGSERIAL PRIMARY KEY,
-  event_id VARCHAR(64),
-  message_id BIGINT NOT NULL UNIQUE,
-  user_id BIGINT NOT NULL,
-  conversation_id BIGINT NOT NULL,
-  primary_emotion VARCHAR(32),
-  sentiment_score REAL,
-  confidence REAL,
-  model VARCHAR(64),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT uq_emotion_analysis_event_id UNIQUE (event_id)
-)`))
-	require.NoError(t, runSQL(ctx, dsn,
-		`CREATE INDEX IF NOT EXISTS idx_emotion_conv ON emotion_echo_ai.emotion_analysis(conversation_id)`))
-
-	db, err := gorm.Open(gormpg.Open(dsn), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
-	})
-	require.NoError(t, err)
-
-	return pgC, db
-}
-
-func runSQL(ctx context.Context, dsn, sql string) error {
-	db, err := gorm.Open(gormpg.Open(dsn), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
-	if err != nil {
-		return err
-	}
-	return db.WithContext(ctx).Exec(sql).Error
+	return newAIDB(t)
 }
 
 // startFakeAIGRPCServer 起真实 grpc.Server，注册 health + emotionquery.EmotionQueryService
@@ -192,8 +145,8 @@ func toProtoEmotion(e *model.EmotionAnalysis) *emotionquery.Emotion {
 func TestAIGRPC_HealthCheckIntegration(t *testing.T) {
 	ctx := context.Background()
 
-	pgC, db := pgContainerDesc(t, ctx)
-	t.Cleanup(func() { _ = pgC.Terminate(ctx) })
+	db, cleanup := pgContainerDesc(t, ctx)
+	t.Cleanup(cleanup)
 
 	repo := repository.NewPostgresEmotionRepo(db)
 
@@ -230,8 +183,8 @@ func TestAIGRPC_HealthCheckIntegration(t *testing.T) {
 func TestAIGRPC_EmotionQueryIntegration(t *testing.T) {
 	ctx := context.Background()
 
-	pgC, db := pgContainerDesc(t, ctx)
-	t.Cleanup(func() { _ = pgC.Terminate(ctx) })
+	db, cleanup := pgContainerDesc(t, ctx)
+	t.Cleanup(cleanup)
 
 	repo := repository.NewPostgresEmotionRepo(db)
 
@@ -294,7 +247,8 @@ func TestAIGRPC_EmotionQueryIntegration(t *testing.T) {
 func TestAIGRPC_PostgresDown_EmotionQueryError(t *testing.T) {
 	ctx := context.Background()
 
-	pgC, db := pgContainerDesc(t, ctx)
+	// 这个用例要主动终止容器来验"PG 宕机"路径，所以拿容器句柄而非只拿 cleanup
+	db, pgC, _ := newAIDBWithContainer(t)
 	repo := repository.NewPostgresEmotionRepo(db)
 
 	gs, lis := startFakeAIGRPCServer(t, repo)

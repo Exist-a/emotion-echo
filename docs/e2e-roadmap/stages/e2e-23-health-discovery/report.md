@@ -475,6 +475,44 @@ helm 保持使用 runner 预装版并在守卫里保留"缺失即判红"的显�
 （全目录只建了 `emotion_analysis` 一张表，`voice_transcripts` / `fused_emotions` / `face_detections` 全缺）。
 **修法本身是设计决策**（共享 fixture 跑真实迁移 vs 逐文件补 DDL），按 AGENTS.md §八 第 4 条不由执行者自决，已升级。
 
+## 9.7 用户裁定后的执行轮（2026-09-30）
+
+用户对 4 项待裁定给了结论：F-168 走**共享 fixture 跑真实迁移**；F-165 的验证缺口
+**想办法解决**、阶段**暂不收尾**；required status checks 要操作流程。本节记录执行结果。
+
+### F-168 已解决，并顺带抓出一个真生产 bug（E2E-F-170）
+
+按裁定新增 `emotion-echo-ai-svc/integration_test/testdb_test.go` 的 `newAIDB`，
+按**生产顺序**执行 `deploy/db/01-create-schemas.sql` → `02-create-tables-in-schemas.sql`
+→ `emotion-echo-ai-svc/migrations/i*.sql`（排序）。测试库从此与生产同源；
+两个旧 helper 改为委托共享 fixture（`grpc_health` 那份自带残缺 DDL 也并入）。
+**找不到任何一份 SQL 一律 `t.Fatal` 而非 `t.Skip`** ——「没检查到」不能算「检查通过」。
+
+第一次跑：**14 红 → 5 红**（基础表齐了）。逐个修的过程中抓出 **E2E-F-170**：
+
+> 🔴 **多模态（face/voice）情绪入库 100% 失败。**
+> `i006` / `i008` 把唯一索引改成 **partial** 形式
+> （`CREATE UNIQUE INDEX ... ON ...(upload_id) WHERE upload_id <> '__legacy__'`），
+> 而仓储的 `ON CONFLICT (upload_id) DO NOTHING` **不带谓词** ⇒ PostgreSQL 推不出冲突目标
+> ⇒ `42P10`。**这不是"重复插入时报错"，是每次 INSERT 都在解析期失败**；
+> 前面那道 `SELECT` 早退出只能避开重复插入，避不开这个。
+> **已在运行中的 dev 库上直接复现**（face 与 voice 均报 42P10；`emotion_analysis` 的
+> `event_id` 侧因另有非 partial 约束而不受影响）。
+
+修法：`clause.OnConflict` 补 **`TargetWhere`**（不是 `Where` —— GORM 把 `TargetWhere`
+拼在冲突目标列**之后、动作之前**，而 `Where` 拼在动作**之后**，那是给 `DO UPDATE` 用的，
+用错会 42601；这个坑我也踩了一次，第一次写成 `Where` 直接语法错）。
+另外 `TestDailyEmotionByModalityView_Integration` 的 INSERT 补上 `event_id`
+——真实 schema 把它设成 NOT NULL，而这条 INSERT 是照着旧的、不完整的测试库 DDL 写的。
+
+**结果：`go test -tags integration` 由 14 红/0 绿 变为全绿（68.7s）。**
+
+> 这正是"共享 fixture 跑真实迁移"这条路线换来��的核心价值：
+> **测试库与生产不同源时，`ON CONFLICT` 这类"依赖索引形态"的 bug 对测试完全不可见。**
+> 手抄 DDL 的测试库带的是非 partial 约束，所以永远测不到这条路径。
+
+⚠️ 修复只落在代码上；**运行中的 ai-svc 镜像仍是旧二进制**，需重建后多模态写入才恢复。
+
 ## 10. 下轮建议
 
 原列的 4 项（C 组破坏性实验 / F 组回归钉 / E 组 14 参数 / #5#6）**均已于本轮完成**
