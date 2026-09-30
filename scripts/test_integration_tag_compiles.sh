@@ -24,7 +24,9 @@ MODULES="emotion-echo-user-svc emotion-echo-chat-svc emotion-echo-assessment-svc
 
 # 已知编译不过的模块 → 账本编号。**修好一个就从这里删一行，守卫随之自动转严。**
 # 每一项都必须有账本编号可查，不允许"先挂着以后再说"。
-KNOWN_BROKEN="emotion-echo-user-svc:E2E-F-167 emotion-echo-web-bff:E2E-F-167"
+KNOWN_BROKEN=""   # 2026-09-30 复核轮已把两处 pre-existing 全部修好（user-svc 集成测试对着已删除的
+                  # Phone/Email/Status schema 写；web-bff 的 handler 签名与下游接口都演进过），
+                  # 守卫随之转严为**无条件门禁**。修复前先见提交 d6cbad7（ratchet 期）。
 
 fail=0
 pass=0

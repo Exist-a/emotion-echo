@@ -364,7 +364,28 @@ config.Config value`（handler 构造签名变更后集成测试未同步）。
 WARN 数量只会单调下降；每修好一项就删一行清单，守卫自动转严。负向对照已做（往 chat-svc 塞一个
 坏文件 ⇒ `FAIL 1 / rc=1`） |
 
-**累计编号至此 167 项**（E2E-F-163 `Resume()` 未接线待用户裁定；F-164 7 处 pre-existing 坏相对链接；F-165 图例重叠待修；F-166 一次被推翻的假缺陷，仅留方法论；**F-167 build tag 代码无人编译，本阶段引入的那处已修，另 2 处 pre-existing 走 ratchet**）。
+| E2E-F-168 | **E2E-23 收尾轮（2026-09-30）** | 🔴 **`ai-svc` 的集成测试套件 14 个全红、0 个通过**，且原因是**每个测试文件各自手写一份不完整的建表 DDL**：
+实测首个失败是 `relation "emotion_echo_ai.voice_transcripts" does not exist (42P01)`；
+全目录 `grep 'CREATE TABLE'` 只建了 `emotion_echo_ai.emotion_analysis` 一张表，
+`voice_transcripts` / `fused_emotions` / `face_detections` 等全缺。
+这些测试**编译是过的**（E2E-F-167 已修），所以这轮才第一次真正跑起来、第一次暴露出来 | 各文件独立手写 DDL，
+没有共享 fixture，也没复用 `deploy/db/migrations/` 里的真实迁移。
+schema 一演进，每个文件各坏各的。**修法本身是个设计决策**：
+① 建共享 testcontainer fixture，统一跑真实 migrations（推荐，schema 永不漂移，但要把迁移改成可在测试里执行）；
+② 逐个文件补 DDL（快，但下次 schema 演进还要重来一遍） | **E2E-06 / E2E-03** | 🟡 **未解决 · 已升级给用户**：
+需要用户在上面两种修法之间拍板（属"哪条路线"而非"能不能做"，执行者不得自行决定） |
+
+| E2E-F-169 | **E2E-23 收尾轮（2026-09-30）** | 🟡 **F-165 图例重叠修复的浏览器复验未完成**。
+代码与测试都到位（`pieChartConfig.test.ts` 几何断言 9/9 绿，且有完整 RED→GREEN 记录；
+另用真实 ECharts 6 离屏排版做了引擎级对照，方向一致：修复前相交、修复后不相交），
+但**没有拿到浏览器渲染截图**。原因：`emotion-echo-web` 是生产构建镜像（`node .output/server/index.mjs`，无 bind mount），
+源码改动必须重建镜像才可见；而本机 `docker build emotion-echo-web` **必然失败**
+（`npm install @oxc-parser/binding-linux-x64-musl` 超时，见 memory `docker-build-frontend-workaround`），
+改用本地 `nuxt dev` 后页面能出 SSR 骨架但 **0 个 canvas**（图表不渲染），无法取证 | 环境限制，非代码问题。
+**结论按"未验证"记账，不按"已修且已验"记账** | **E2E-11**（我的空间页面）| 🟡 未解决：
+待 web 镜像能在本机构建（或 CI 里跑一次 Playwright 视觉断言）后复验 |
+
+**累计编号至此 169 项**（E2E-F-163 `Resume()` 待裁定；F-164 7 处坏相对链接；**F-165 图例重叠 —— 代码已修、测试已绿，浏览器复验未完成（见 F-169）**；F-166 假缺陷方法论；**F-167 build tag 盲区 —— 3 处全部已修，守卫转无条件门禁 7/7 GREEN**；**F-168 ai-svc 集成测试 14 红 0 绿，需用户定修法**；F-169 F-165 的复验缺口）。
 
 
 **PR #64 状态**：已开，2 commits pushed 到 fix 分支（`fix/e2e-16-full-multimodal-fix`），23 项 required status checks 状态 pending — GitHub runner 临时延迟或权限问题（4 workflow 均已配 `pull_request: branches: [main]` trigger，trigger 配置无误）。**合并策略**：① 等 GitHub 端自动恢复（runner 排队超时通常 5-10 分钟）；② 若持续不启动，下一轮单独开 PR 排查 CI trigger；③ 临时 admin override（需仓库管理员在网页端操作）。本会话核心交付已完成（5 修复 + 9 测试 + 本地全绿 + typecheck + go vet/build 干净）。

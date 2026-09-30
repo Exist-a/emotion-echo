@@ -447,6 +447,34 @@ helm 保持使用 runner 预装版并在守卫里保留"缺失即判红"的显�
 `#39` 截图 6 个 upstream 名字全对。核对者对 `test_grpc_health_shutdown.sh` / `test_migrate_pg_wait.sh` /
 `test_devup_batch_waits.sh` / `test_route_contract.sh` 四个守卫的自评是"**不能假绿**"，并各做了负向对照。
 
+## 9.6 收尾轮：把"记账未修"的四项真正做掉（2026-09-30）
+
+前几轮抓到的问题里有 4 项只写了账本没动。本轮按"能修就修"处理。
+
+| 项 | 处置 | 证据 |
+|----|------|------|
+| **F-167 剩余 2 个 pre-existing 模块** | ✅ **修完**。`user-svc` 集成测试对着**已删除的 schema** 写（model 早无 `Phone`/`Email`/`Status`，repo 早无 `GetByPhone`；反过来 model 有的 `config` 列 DDL 里却缺）⇒ 编译不过，且真跑会 42703。`web-bff` 的 `NewAIStreamHandler` 签名早已改为 `(cfg config.Config)`，fake 缺 `XTTSPhonemes` 与 `UserClient` 6 个方法、`ChatClient` 1 个方法。**改完之后真跑**：`go test -tags integration` user-svc 与 web-bff **全绿**。守卫的 `KNOWN_BROKEN` 随之清空，从 ratchet 转成**无条件门禁**（7/7 GREEN） | 修 user-svc 时又暴露一层：修好编译后**真跑**才发现建表 DDL 缺 `config` 列（`42P03`）—— 改一层、跑一次、再暴露下一层，这正是"编译通过 ≠ 能跑"的实证 |
+| **V-10 观测守卫不校验端点** | ✅ 修完。把 16 个探针的**关键串（端口+路径）**固化成基准表，守卫从"查 `healthcheck:` 键存在"升级为"探针必须含基准串"。基准来源是 2026-09-30 在**真实运行的栈上逐个实测可达**，不是照抄文档 | 负向对照：把 grafana 探针端口改成永远不通的 `:9999`（正是第二方演示的场景）→ `FAIL 1 / rc=1`；还原 `rc=0` |
+| **F-165 图例与圆环重叠** | ✅ 代码已修（TDD）。`legend` 由 `orient:'vertical', left:'left'` 改为横排底部，`center`/`radius` 配套收小。新增 2 条**几何断言**（把 option 换算成圆环外接矩形与图例占位矩形，要求不相交；另加一条"不得压到标题带"） | RED：`2 failed \| 6 passed` → GREEN：`9 passed`；`typecheck` 中我的文件 0 错误。**另用真实 ECharts 6 离屏排版做引擎级对照**，方向一致（修复前相交、修复后不相交） |
+| **F-164 坏相对链接** | 🟡 部分。`roadmap.md` 那 1 条已在本轮修正；`decisions.md` 的 6 条指向端侧轨（Lane O）独占文件，按 AGENTS.md §八 不得触碰 | 账本已改为 7 条并标注 pre-existing（对 `origin/main` 跑同一扫描确认） |
+
+### 未能完成的一项（如实记账，不粉饰）
+
+**F-165 的浏览器渲染复验没做成。** 代码、单元测试、引擎级对照都到位了，但**没拿到浏览器截图**：
+`emotion-echo-web` 是生产构建镜像（`node .output/server/index.mjs`，无 bind mount），
+源码改动必须重建镜像才可见；而本机 `docker build emotion-echo-web` **必然失败**
+（`@oxc-parser/binding-linux-x64-musl` 安装超时，memory `docker-build-frontend-workaround` 有记录）。
+退而用本地 `nuxt dev` 后页面能出 SSR 骨架，但 **0 个 canvas**（图表不渲染），无法取证。
+已恢复环境（停 dev、重启 web 容器、删 devmode 锁），并记为 **E2E-F-169**。
+**按"未验证"记账，不按"已修且已验"记账。**
+
+### 本轮新发现并升级给用户的一项
+
+**E2E-F-168：ai-svc 集成测试 14 个全红、0 个通过。** 这些测试编译是过的（F-167 已修），
+所以这轮第一次真跑才暴露：根因是**每个测试文件各自手写一份不完整的建表 DDL**
+（全目录只建了 `emotion_analysis` 一张表，`voice_transcripts` / `fused_emotions` / `face_detections` 全缺）。
+**修法本身是设计决策**（共享 fixture 跑真实迁移 vs 逐文件补 DDL），按 AGENTS.md §八 第 4 条不由执行者自决，已升级。
+
 ## 10. 下轮建议
 
 原列的 4 项（C 组破坏性实验 / F 组回归钉 / E 组 14 参数 / #5#6）**均已于本轮完成**

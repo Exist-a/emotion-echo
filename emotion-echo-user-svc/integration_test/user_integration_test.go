@@ -4,7 +4,8 @@
 // Package integration_test 真实 Postgres + user-svc PostgresUserRepo CRUD + UpdateProfile。
 //
 // 流程：testcontainers postgres + emotion_echo_user schema + users 表
-//        → 真实 PostgresUserRepo.Create + GetByID + UpdateProfile + Ping
+//
+//	→ 真实 PostgresUserRepo.Create + GetByID + UpdateProfile + Ping
 //
 // 跑：  go test -tags integration -v -timeout 5m ./integration_test/...
 package integration_test
@@ -52,14 +53,13 @@ func pgContainerDesc(t *testing.T, ctx context.Context) (*pgcontainer.PostgresCo
 CREATE TABLE IF NOT EXISTS emotion_echo_user.users (
   id BIGSERIAL PRIMARY KEY,
   username VARCHAR(64) UNIQUE NOT NULL,
-  phone VARCHAR(20) UNIQUE,
-  email VARCHAR(128) UNIQUE,
   password_hash VARCHAR(255),
   nickname VARCHAR(64),
   avatar_url TEXT,
   gender SMALLINT DEFAULT 0,
   birthday TIMESTAMPTZ,
-  status SMALLINT DEFAULT 1,
+  config JSONB,                      -- model.User.Config JSONMap；缺这列时
+                                       -- Create/UpdateProfile 直接 42703
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   deleted_at TIMESTAMPTZ
@@ -89,15 +89,21 @@ func TestUser_Integration_PostgresCRUD(t *testing.T) {
 
 	repo := repository.NewPostgresUserRepo(db)
 
-	phone := "+8613800000001"
-	email := "u1@example.com"
+	// ⚠️ 本测试此前对着**已废弃的 schema** 写（DDL 里还留着已删除的 phone/email/status 列，
+	// 而 model.User 早已没有这三个字段；反过来 model 早已有的 config 列在 DDL 里却缺着）：model.User 早已移除 Phone/Email/Status，
+	// repo 也早已移除 GetByPhone/…ByEmail，但集成测试没跟着改 ⇒
+	// `go test -tags integration` 直接编译不过，而**默认的 `go test ./...` /
+	// `go vet ./...` / CI go-test 全部跳过 build tag 下的文件**，所以坏了很久没人发现
+	// （账本 E2E-F-167；anti-patterns AP-09 的"改实现不改测试"跨了 build tag 变体）。
+	// 现按当前 schema 重写：断言点从"已删除的联系方式"换成"现存的资料字段 + 现存的方法"。
+	nick := "小明"
+	gender := int16(1)
 	pw := "hashed-pw"
 	u := &model.User{
 		Username:     "u1",
-		Phone:        &phone,
-		Email:        &email,
+		Nickname:     &nick,
+		Gender:       gender,
 		PasswordHash: &pw,
-		Status:       1,
 	}
 	require.NoError(t, repo.Create(ctx, u))
 	require.Greater(t, u.ID, int64(0))
@@ -107,18 +113,22 @@ func TestUser_Integration_PostgresCRUD(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.Equal(t, "u1", got.Username)
-	require.Equal(t, phone, *got.Phone)
-	require.Equal(t, email, *got.Email)
+	require.NotNil(t, got.Nickname)
+	require.Equal(t, nick, *got.Nickname)
+	require.Equal(t, gender, got.Gender)
 
 	// GetByUsername
 	got2, err := repo.GetByUsername(ctx, "u1")
 	require.NoError(t, err)
 	require.Equal(t, u.ID, got2.ID)
 
-	// GetByPhone
-	got3, err := repo.GetByPhone(ctx, phone)
+	// UsernameExists（取代已删除的 GetByPhone 断言位）
+	exists, err := repo.UsernameExists(ctx, "u1")
 	require.NoError(t, err)
-	require.Equal(t, u.ID, got3.ID)
+	require.True(t, exists, "刚创建的用户名应存在")
+	exists2, err := repo.UsernameExists(ctx, "nope-not-exist")
+	require.NoError(t, err)
+	require.False(t, exists2, "不存在的用户名应返回 false")
 
 	// Ping
 	require.NoError(t, repo.Ping(ctx))
@@ -137,7 +147,6 @@ func TestUser_Integration_PostgresUpdateProfile(t *testing.T) {
 	u := &model.User{
 		Username:     "u-edit",
 		PasswordHash: &pw,
-		Status:       1,
 	}
 	require.NoError(t, repo.Create(ctx, u))
 

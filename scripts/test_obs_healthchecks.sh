@@ -35,25 +35,35 @@ if [ ! -f "$INFRA" ]; then
   exit 2
 fi
 
-# 必须有 healthcheck 的常驻服务 → 期望的健康信号（用于报告，不参与判定）
+# 必须有 healthcheck 的常驻服务 → **探针里必须出现的关键串**。
+#
+# ⚠️ 为什么不能只查 `healthcheck:` 键存在（第二方核对 2026-09-30 实测的洞）：
+#   把 grafana 的探针端口从 3000 改成永远不通的 9999，守卫照样 `PASS: 18 FAIL: 0` GREEN
+#   —— 它只防"回归删掉 healthcheck"，不防"写错端点"。而端点写错的后果是
+#   **容器永远 unhealthy，且没有任何错误信息**。
+#   故这里把每个探针的关键串（端口 + 路径/子命令）固化成基准表，改错即红。
+#
+# 基准来源：**2026-09-30 在真实运行的 19 容器栈上逐个实测可达**后写定，
+# 不是照抄官方文档；这 16 项当时全部 `Up (healthy)`。
+#   ⚠️ 改任何一条探针前，先在跑着的容器上验证新探针真的能通，再同步改这里。
 MUST_HAVE=(
-  "postgres"
-  "redis"
-  "kafka"
-  "nacos"
-  "emotion-echo-minio"
-  "etcd"
-  "apisix"
-  "prometheus"
-  "alertmanager"
-  "grafana"
-  "loki"
-  "promtail"
-  "kafka-exporter"
+  "postgres:pg_isready"
+  "redis:redis-cli"
+  "kafka:kafka-topics.sh --bootstrap-server localhost:9092"
+  "nacos:http://localhost:8848/nacos/actuator/health"
+  "emotion-echo-minio:http://localhost:9000/minio/health/live"
+  "etcd:etcdctl endpoint health"
+  "apisix:/dev/tcp/127.0.0.1/9080"
+  "prometheus:http://127.0.0.1:9090/-/healthy"
+  "alertmanager:http://127.0.0.1:9093/-/healthy"
+  "grafana:http://127.0.0.1:3000/api/health"
+  "loki:http://127.0.0.1:3100/ready"
+  "promtail:http://127.0.0.1:9080/ready"
+  "kafka-exporter:http://127.0.0.1:9308/metrics"
   # E2E-23 #26 补：plan D2 点名但首轮遗漏的三个（第二方核对 C-6 抓出）
-  "skywalking-oap"
-  "skywalking-ui"
-  "obs-mock-receiver"
+  "skywalking-oap:http://127.0.0.1:1234/metrics"
+  "skywalking-ui:http://127.0.0.1:8080/"
+  "obs-mock-receiver:http://127.0.0.1:8080/received"
 )
 
 # 一次性任务容器：不应有 healthcheck
@@ -68,20 +78,39 @@ block_of() {
 
 echo
 echo "--- 常驻服务（应各有 healthcheck）---"
-for svc in "${MUST_HAVE[@]}"; do
+for entry in "${MUST_HAVE[@]}"; do
+  svc="${entry%%:*}"
+  want="${entry#*:}"
   blk="$(block_of "$svc")"
   if [ -z "$blk" ] || [ "$blk" = "BLOCK_NOT_FOUND" ]; then
     echo "FAIL $svc: 提取服务块失败（守卫自身故障，非被测对象问题）"
     fail=$((fail + 1))
     continue
   fi
-  if echo "$blk" | grep -q 'healthcheck:'; then
-    echo "PASS $svc"
-    pass=$((pass + 1))
-  else
+  if ! echo "$blk" | grep -q 'healthcheck:'; then
     echo "FAIL $svc: 缺 healthcheck —— 挂了也没人知道"
     fail=$((fail + 1))
+    continue
   fi
+  # 端点校验：探针命令行必须含基准关键串（端口+路径/子命令）。
+  # 用包含匹配而非精确相等：compose 的 test 是数组、跨行、行内还有注释，
+  # 精确相等会把格式调整也判红。
+  # 归一化：去掉引号/逗号/方括号并压掉空白，让 JSON 数组式探针
+  # （["CMD","etcdctl","endpoint","health"]）与 shell 式探针都能连续匹配同一关键串。
+  probe="$(echo "$blk" | sed -n '/healthcheck:/,/^[[:space:]]*[a-z]/p'            | tr -d '
+"' | tr -d '[],' | tr -s ' ')"
+  case "$probe" in
+    *"$want"*)
+      echo "PASS $svc: healthcheck 存在且端点含 [$want]"
+      pass=$((pass + 1))
+      ;;
+    *)
+      echo "FAIL $svc: 探针端点与基准不符 —— 未找到 [$want]"
+      echo "       实际: $probe" | head -c 300
+      echo
+      fail=$((fail + 1))
+      ;;
+  esac
 done
 
 echo
