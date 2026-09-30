@@ -107,8 +107,23 @@
 | service name | `{service-name}`（小写连字符：`user-svc` / `web-bff` / `emotion-llm-service`） |
 | dataId（配置中心） | `{service-name}.yaml`（例如 `user-svc.yaml`） |
 | instance metadata | `stage=dev`、`version={git-sha}`、`profile=default` |
-| 健康探活 | grpc health 5s/次，连续 3 次失败摘除 |
-| 客户端拉取间隔 | 30s（可通过 env `NACOS_REFRESH_MS` 覆盖） |
+| 健康探活 | ~~grpc health 5s/次，连续 3 次失败摘除~~ **未采纳**（见下方更正） |
+| 客户端拉取间隔 | ~~30s（可通过 env `NACOS_REFRESH_MS` 覆盖）~~ **未实现**（见下方更正） |
+
+### ⚠️ 更正（2026-09-29，E2E-23 实测）
+
+本表上述两行是**选型期的设计设想，实现阶段均未落地**，原文以"约定"口吻书写
+造成了"已实现"的误读。E2E-23 逐条核实后更正如下：
+
+| 原承诺 | 实测结论 | 归属 |
+|--------|---------|------|
+| 「grpc health 5s/次，连续 3 次失败摘除」 | **成立，但机制与原文不同**。实际实现是**停机时翻 `NOT_SERVING`**（E2E-23 #13/#14 已落地，commit `5cab18c`：5 个 Go 服务的 `MarkShuttingDown()` 在 `GracefulStop` 之前调用）。**没有**"5s/次周期探活 + 连续 3 次失败摘除"这套主动探测 —— 那是上游（APISIX/Nacos）的职责，本项目不实现 | 已澄清 |
+| 「客户端拉取间隔 30s（env `NACOS_REFRESH_MS` 覆盖）」 | **未实现**。`grep -rn NACOS_REFRESH_MS --include=*.go --include=*.py` → **0 命中**。实际的"拉取"由 nacos-sdk-go v2 的长连接 + `Heartbeat()` watcher（5s 周期 `UpdateInstance`）承担，无 `NACOS_REFRESH_MS` 这个开关 | 已更正为"未实现" |
+
+**教训**（与 [ADR-18 文档失真治理](adr-2026-09-doc-drift-registry.md) 同源）：
+设计期文档必须显式标注"设想 / 未实现"，否则下游会把承诺当事实引用。
+本条的发现与更正过程见 [E2E-23 report](../../e2e-roadmap/stages/e2e-23-health-discovery/report.md)
+与账本 `E2E-F-157`。
 
 ---
 

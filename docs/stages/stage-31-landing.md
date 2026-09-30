@@ -182,7 +182,7 @@ charts/emotion-echo/
 | 运营参数 dataId | `{service-name}.ops.yaml` |
 | instance metadata | `stage={env}` / `version={git-sha}` / `grpc_port={int}` (仅 ai-svc) |
 | 心跳间隔 | 5s |
-| 客户端拉取间隔 | 30s（env `NACOS_REFRESH_MS` 可覆盖） |
+| 客户端拉取间隔 | ~~30s（env `NACOS_REFRESH_MS` 可覆盖）~~ ⚠️ **未实现** —— E2E-23（2026-09-29）grep 全仓 `NACOS_REFRESH_MS` 0 命中；实际的"拉取"由 nacos-sdk-go v2 长连接 + `Heartbeat()` watcher（5s `UpdateInstance`）承担。见 [ADR-2026-09-nacos-reintroduction §四 更正](../../architecture/adr/adr-2026-09-nacos-reintroduction.md) |
 
 ### 4.3 安全边界（ADR 决策 10 + 共享实现）
 

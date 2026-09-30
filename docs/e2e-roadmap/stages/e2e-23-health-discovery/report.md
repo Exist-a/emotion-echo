@@ -28,17 +28,17 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 2 | 停 Postgres ⇒ user-svc `status` 变化 | `[A]` | PASS | 停 postgres 后 `wget -qO- :8888/health` → `{"status":"degraded",...,"dbOk":false}` | 修复前为 `"ok"`（`healthlogic.go:41` 硬编码），RED 实测 expected `degraded` / actual `ok` |
 | 3 | 同上验证 analytics / assessment / ai | `[A]` | PASS | `go test ./internal/logic/ -run TestHealthLogic -count=1` 三服务均 `ok`（各 1.4~1.6s），表驱动覆盖 ok/degraded | 原缺陷同为硬编码（各 `:40`） |
 | 4 | BFF 下游全挂 ⇒ HTTP 码与 `status` | `[A]` | PASS | `TestHealthHandler_D29LivenessAlwaysOK` + `TestHealthReadyHandler_D29ReadinessReflectsDownstream`（4 子用例全绿） | 修复前 degraded 却恒 200（`health_handler.go:109`） |
-| 5 | `/health` 覆盖 Redis 依赖 | `[A]` | BLOCKED | — | 本轮未实施。6 个服务的 ServiceContext 均无 Redis client（D-27 决定"保留待接入"，当前零业务引用），**无可探测对象**；需先决定接哪个业务入口 |
-| 6 | BFF 未注册 Nacos ⇒ 报 degraded | `[A]` | BLOCKED | — | 需在 ServiceContext 注入注册状态查询，属 C 组 #20 的基础设施，未在本轮做 |
+| 5 | `/health` 覆盖 Redis 依赖 | `[A]` | PASS | **运行时前后对照**：基线 `deps={nacos:ok,redis:ok}`；**停 Redis** → `status=degraded`、`redis=unhealthy`（`dial tcp: lookup emotion-echo-redis: i/o timeout`）、**ready → 503**；恢复 → 双 ok、ready 200、容器 healthy | 修法：拆出 `buildRedisClient()` 由 main 持有，**authLockStore 与 /health 探针共用同一 client**（第一版自建 client 会多开连接池且永不关闭，已修） |
+| 6 | BFF 未注册 Nacos ⇒ `/health` 报 degraded | `[A]` | PASS | `NacosRuntime.registered atomic.Bool`：注册成功后置 true、`Close()` 置 false；探针接入 `/health` 的 `deps.nacos`；Nacos 未启用时**不注册该探针**（避免误伤无 Nacos 的部署）。单测 6 例 + 负向对照 | "BFF 掉出注册"属破坏性场景，**运行时未实测**（如实记录） |
 | 7 | chat-svc `EventPublisher` 是真连还是仅判 nil | `[A]` | PASS | `healthlogic.go:43-52` 锁死现状并加注释：「此处只判非 nil，并不真连 Kafka」 | 现状 = **仅判 nil**。plan §2 A2 要求"二选一不得留模糊"，本轮选择**明确记录现状**而非改造真连（后者需 Kafka 连接探测设计，超出本轮） |
 | 8 | `/health/ready` 存在且不通返 503 | `[A]` | PASS | `go test ./pkg/middleware/ -run HealthReadyRoute -count=1 -v` → 6 子用例 `PASS`；`go test ./internal/handler/ -run D29Readiness` → `ok 0.632s` | |
 | 9 | compose healthcheck 指向 ready | `[A]` | PASS | `bash scripts/test_healthcheck_readiness.sh` → `PASS: 7  FAIL: 0` + `GREEN`；`docker inspect emotion-echo-user-svc --format '{{json .Config.Healthcheck.Test}}'` → `["CMD-SHELL","wget --quiet ... /health/ready || exit 1"]` | 负向对照：改回 `/health` → RED |
-| 10 | `seed.sh` 自带探活在 readiness 变严后行为正确 | `[A]` | BLOCKED | — | 未实机验证 seed 重跑。`apisix-seed` 仍在跑且 `Exited(0)`，但未构造"某依赖降级"场景 |
+| 10 | `seed.sh` 自带探针在依赖降级下行为正确 | `[A]` | PASS | **运行时前后对照**：正常态 5 个 `upstream OK: .../health/ready`；**停 Postgres 后** `FATAL: upstream emotion-echo-web-bff:8894/health/ready not healthy` → **exit=2 中止**（改前探恒 200 的 liveness，**这一步会通过**）；恢复后 11 处 OK | 原探针打 `/health`（liveness 恒 200）⇒ **结构上不可能发现降级**，形同虚设。已改指 `/health/ready` |
 | 11 | user-svc / chat-svc 补齐 `/health` handler 测试 | `[A]` | PASS | `go test ./internal/handler/ -run D29Readiness -count=1` → `ok`；`go test ./internal/logic/ -run TestHealthLogic -count=1` → `ok 0.576s` | 二者此前**零** `/health` 测试 |
 | 12 | 5 服务 gRPC health service 名正确 | `[A]` | PASS | `go test ./internal/grpcserver/ -run GrpcHealth -count=1` → 4/4 `PASS`（20.7s） | |
 | 13 | 优雅停机翻 `NOT_SERVING` | `[A]` | PASS | `--- PASS: TestGrpcHealth_FlipsToNotServingOnShutdown (5.01s)`，起真实 gRPC server + shared healthcheck 客户端 | 修复前**无任何 NOT_SERVING 写入**（plan §0 F-d） |
 | 14 | 恢复后翻回 `SERVING`（`Resume()`） | `[A]` | N/A | — | 停机是单向终态，无"恢复"语义。`shared/pkg/healthcheck/server.go:158` 的 `Resume()` 面向"暂停后恢复"场景，进程停机不会调它。**属语义上不适用**，非未做 |
-| 15 | `ai-svc` 客户端按状态分流 | `[A]` | BLOCKED | — | 未读 `grpc_analyzer.go:25` 的分流逻辑。`ai-svc` 全包测试耗时 76s（见 §6 已知债），本轮未深入 |
+| 15 | `ai-svc` 客户端按状态分流 | `[A]` | PASS | **定案：只做启动期门禁，请求期不分流**。依据 `grpc_analyzer.go:91-99`：`NewGRPCAnalyzer` 内一次 `WaitForReady`，不通过则关连接返错；此后业务 RPC 不再查 health。测试：NOT_SERVING 时构造必须失败 + 对照组（否则可能因"连不上"假通过）+ 负向对照（绕过门禁立即红） | 不一定是缺陷（每请求探一次代价高），但**必须写进文档**，否则运维会误以为"health 翻 NOT_SERVING ⇒ 客户端自动绕开" |
 | 16 | web-bff 无 gRPC server 属设计现状 | `[A]` | N/A | — | 陈述性测试点，无可断言行为。已记入 plan §2 B3 |
 | 17 | 6 服务注册齐全（`count:6`） | `[A]` | PASS | `curl .../ns/service/list?...namespaceId=emotion-echo-dev` → `count: 6` | |
 | 18 | 停 Nacos ⇒ 重启 BFF ⇒ 自愈（**F-107 复现**） | `[A]` | PASS | `docker logs emotion-echo-web-bff` 实测 retry 序列 `attempt 1/10 → 5/10`（退避 2→4→8→16→30s 与代码一致）；Nacos 恢复后日志 `19:02:51 attempt 2/10 → 19:02:56 Starting web-bff`（**5s 内自愈**）；`curl /ns/service/list` → `count: 6`；网关 login → 400（路由通） | F-107 启动期修复获**运行时证据**，账本已翻 |
@@ -47,15 +47,15 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 21 | 心跳协议统一 | `[A]` | PASS | BFF 日志实测 `BeatInstance failed ... beat HTTP 501: no such api:POST:/nacos/v1/ns/instance/beat` ×9（Nacos 3.x 无该端点）→ 每次静默降级 SDK；5 服务日志 0 次同类告警（一直走 SDK） | **新发现**：BFF 的 HTTP beat 协议**从未生效过**——功能上等价（都靠 SDK），但 ① beat 代码是死的 ② `failCount>3` 后连 WARN 都不打（`nacos_beat.go` 的 `if failCount <= 3`）③ 观测盲区 |
 | 22 | `NACOS_REQUIRED` prod 实情 | `[A]` | PASS | 全仓 grep → **0 命中**；`compose.prod.yml` 为 ADR-20 空壳占位（故意不填值） | 结论：**从未被任何编排声明过** ⇒ 促成 D-31 |
 | 23 | Nacos 重启 ⇒ APISIX 节点自动跟随 | `[A]` | PASS | `docker restart emotion-echo-nacos` → 服务重注册 `count: 6` → **未重跑 seed、未碰 Admin API** → 网关 login 400（路由通）。反向：停 user-svc 75s 后 Nacos 实例数→0 | **D-30 落定**：RUNBOOK §2.4「重建服务后必须重跑 apisix-seed」判为**误导性文档**并已更正。边界：user 路由在实例摘除后仍 401（非 503）⇒ APISIX 摘除有滞后，属 F-154/E2E-25 的主动健康检查范围 |
-| 24 | `GetConfig` 首帧失败仍能继续 | `[A]` | BLOCKED | — | 属 E 组 |
+| 24 | `GetConfig` 首帧失败仍能继续 | `[A]` | PASS | `go test . -run TestBootNacos_Ops -count=1` → `ok emotion-echo-chat-svc 1.083s`（4 例）：首帧失败**仍成功启动**、注册照常、ops 保持启动值；首帧成功则真应用；敏感 key 被清洗；`deps.ops` 为 nil 时退化为"只记录不应用" | 依据：`IsHardBootError` 把 `Register`/`WaitForNacos` 归 hard，**GetConfig 不在其列** ⇒ 缺配置是正常状态（新环境还没推过 ops） |
 | 25 | APISIX 补 healthcheck | `[A]` | PASS | `docker ps` → `emotion-echo-apisix Up (healthy)`；探针命令**双向实测**（通→0、不通→1） | 该镜像内 wget/curl/nc/busybox **全缺**，只能用 bash /dev/tcp 测 9080 |
 | 26 | 观测栈 + skywalking 补 healthcheck | `[A]` | PASS | `docker ps --format '{{.Status}}'` 逐个查询 → grafana/loki/prometheus/alertmanager/kafka-exporter/promtail 均 `Up (healthy)`；`bash scripts/test_obs_healthchecks.sh` → `PASS: 15  FAIL: 0` + `GREEN` | skywalking-oap/ui 与 obs-mock-receiver **未补**（见 §4） |
 | 27 | **db-migrate 冷启动 `Exited(0)`** | `[A]` | PASS | **前后对照**：修复前 `ExitCode 1` + `FATAL: Postgres 30s 内未就绪`；修复后 `ExitCode 0` + 日志以 `全部迁移应用完成，共 31 个文件` 结尾 | **F-151 闭环**，账本已翻状态 |
 | 28 | `migrate.sh` 有负向测试 | `[A]` | PASS | `scripts/test_migrate_pg_wait.sh` 4/4；负向对照：删掉递增退避 → RED | |
 | 29 | `dev-up.sh` 批次等待语义 | `[A]` | PASS | `bash scripts/test_devup_batch_waits.sh` → `PASS: 3  FAIL: 0` + `GREEN`；抽出 `wait_healthy` 实机跑四条路径（redis/apisix/postgres/BFF）→ 全部 `exit=0`、0 秒返回 | 挖出**更深缺陷**：`wait_healthy` 对设了 `container_name` 的服务恒失效（见 §3） |
 | 30 | chat-svc 4 个 Outbox 参数可热更 | `[A]` | PASS | 运行时实测：**不重启服务**推 Nacos → `[hot-reload] … changed, 86 bytes` → `ops applied via hot-reload: max_attempts=21 sent_retention=6d dead_retention=8d cleanup=300s`；删配置重启后回落 yaml 默认 `100/7/30/3600`。单测 5 例，负向对照（relay 忽略 Ops → 立即红） | 附带修出 `CleanupIntervalS` 也是死配置（ticker 启动时固化，改了不生效）；根因修正：F-155 原文「HotReload 全线关闭」实为**编排层显式压制**（`apps.yml:144` 的 `NACOS_HOT_RELOAD: "false"` 覆盖 yaml，因 env 优先于 yaml），非「没人设」 |
-| 31 | ai-svc 9 个参数可热更 | `[A]` | BLOCKED | — | 同上 |
-| 32 | analytics-svc `MaxRetries` 可热更 | `[A]` | BLOCKED | — | 同上 |
+| 31 | ai-svc 9 个参数可热更 | `[A]` | PASS | **运行时 9/9**：不重启推 Nacos → `ops applied via hot-reload: llm=11s fer=33s sv=55s xtts=1m39s lang=ja speed=1.35 retries=7 breaker=12/1m15s` | 途中抓到 P1 的**误判缺陷**：`llm_timeout`/`kafka_max_retries` 被敏感词根误删（词根含 `llm`/`kafka`）⇒ 拆成凭据类/组件类，组件类仅点号命名空间下判定 |
+| 32 | analytics-svc `MaxRetries` 可热更 | `[A]` | PASS | **运行时**：启动 `max_retries=3` → 不重启推 8 → `ops applied via hot-reload: max_retries=8` | 修法：consumer 与 handler 改为**共享同一个 atomic 容器**（此前是构造期拷贝两份 int，热更只改到一份） |
 | 33 | P1 敏感字段白名单（负向断言） | `[A]` | BLOCKED | — | 属 E 组前置缺陷，未实施 |
 | 34 | P2 `LLM.Timeout` 接线 bug | `[A]` | BLOCKED | — | 同上。已确认 `main.go:487-491` 构造 `NewLLMFuser` 未传 Timeout |
 | 35 | P3 `analytics` 重试默认值 | `[A]` | BLOCKED | — | 同上。已确认 `config.go:28` 注释承诺默认 3 但 `SetDefaults` 无该分支 |
@@ -65,7 +65,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 39 | APISIX Admin 页面截图 | `[V]` | PASS | `screenshots/39-apisix-admin-upstreams-6.png`（已查看）：Upstreams 页 `1-6 of 6 items`，user/chat/assessment/analytics/ai/web-bff 六个 upstream | **计划期假设被推翻**：原写"节点非空"，实测 Admin API 的 `nodes` **恒为 0** —— discovery 型 upstream 的节点在请求时动态解析、不 materialize 到 Admin API（`/apisix/admin/upstreams/{id}/discovery` 同样返 0 节点）。**节点可用性的真证据是实际请求**（网关 `/api/v1/users/me` 返 401 而非 503），已由 #37/#38 覆盖 |
 | 40 | 文档漂移修正 | `[A]` | BLOCKED | — | 属 F 组。RUNBOOK §2.4「必须重跑 seed」待 #23 验证后才能改 |
 
-汇总：PASS 27 / FAIL 0 / BLOCKED 11 / N/A 2
+汇总：PASS 34 / FAIL 0 / BLOCKED 4 / N/A 2
 
 > ⚠️ **BLOCKED 占比 27.5%，已低于 RUNBOOK §4 的 1/3 红线** ⇒ **本阶段不得判 done**，
 > 阶段状态 `partial`。破坏性实验 5 项（#18/19/20/21/23）已于 2026-09-29 用户批准后**全部执行完毕并 PASS**；
