@@ -54,7 +54,33 @@ func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
 func (h *captureHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h *captureHandler) WithGroup(string) slog.Handler      { return h }
 
+// countLevel 返回「级别**恰好等于** want 且消息包含 substr」的记录条数。
+//
+// 为什么要有这个而不是只用 countAtLeast（第二方核对 P-1 抓到的弱断言）：
+//
+//	countAtLeast 用的是 `r.Level >= want`。slog 的级别数值是
+//	Error=8 > Warn=4 > Info=0，即 **数值越大越严重**。于是
+//	`countAtLeast(slog.LevelInfo, "renew")` 会把 **WARN 记录也数进去** ——
+//	而"续约失败"的 WARN 消息恰好也含 "renew" 子串。
+//	结果：断言"恢复时会打 INFO"实际被**失败期**的日志喂饱，
+//	**把恢复日志整行删掉测试仍然 PASS**（核对方实测复现）。
+//	⇒ 凡是要断言"某级别打了日志"，必须用精确匹配，本文件已全部改掉。
+func (h *captureHandler) countLevel(want slog.Level, substr string) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	n := 0
+	for _, r := range h.records {
+		if r.Level == want && contains(r.Message, substr) {
+			n++
+		}
+	}
+	return n
+}
+
 // countAtLeast 返回「级别 >= want 且消息包含 substr」的记录条数。
+//
+// ⚠️ 仅适用于 want 是**该场景可能出现的最高级别**时（例如断言"至少有 WARN"）。
+// 断言低级别（Info/Debug）时**必须**改用 countLevel，否则会被更高级别喂饱。
 func (h *captureHandler) countAtLeast(want slog.Level, substr string) int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -275,7 +301,9 @@ func TestHeartbeat_LogsRecovery(t *testing.T) {
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 
-	assert.GreaterOrEqual(t, h.countAtLeast(slog.LevelInfo, "renew"),
+	assert.GreaterOrEqual(t, h.countLevel(slog.LevelInfo, "renewal recovered"),
 		1,
-		"续约恢复后必须有一条 INFO 记录 —— 只有 warn 没有 recovery，运维无法判断当前是否已恢复")
+		"续约恢复后必须有一条 **INFO** 记录 —— 只有 warn 没有 recovery，运维无法判断当前是否已恢复。"+
+			"此处必须用 countLevel 精确匹配：countAtLeast 的 `Level >= Info` 会把含 'renew' 子串的 "+
+			"WARN 一并计入，导致删掉整条恢复日志测试仍然 PASS（第二方核对 P-1 实测复现）")
 }

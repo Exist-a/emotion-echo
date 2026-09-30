@@ -19,7 +19,9 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 > ② §0「唯一真相源」里躺着一条**失实条目**（称 #40 需停 Nacos 实跑，而 §2 记 #18~#23 早已全 PASS）；
 > ③ 「门禁是否在拦」被误列为本阶段收口障碍——**账本 F-171 自登记起就归 E2E-03**；
 > ④ **#40 本身也已全部完成**（`git log -S` 证实 ADR 更正由 `49b5daf` 落地），改判 PASS。
-> 未完成项由 7 项收敛为 4 项，**判 partial 的真实理由只剩 §5 的两条账本残留 + 一条待裁定**。
+> 未完成项由 **7 项收敛为 1 项**（第三轮复核 + 用户裁定 A + 第二方核对整改后）。
+> **归属本阶段且未闭环的账本已归零**（F-107 / F-156 / F-163 全部翻 ✅）——
+> 按 RUNBOOK §7 #9 与审计 A5，阶段**已具备判 `done` 的账本条件**，只等用户批准。
 > 详见 §0「订正依据」四条。
 
 ## 0. 未完成清单（唯一真相源 · 收口时必须逐条销账）
@@ -28,7 +30,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 > 依据 [anti-patterns.md](../../anti-patterns.md) **AP-14**（同一事实只允许一处定义）与
 > **AP-03**（不得用"待后续"掩盖未做）。
 >
-> **最后更新：2026-09-30（复核修正）· 2 项未完成**。
+> **最后更新：2026-09-30（复核修正 + 第二方核对整改后）· 1 项未完成**。
 > **本版推翻了上一版的 4 条记录**，理由逐条写在下表与"订正依据"中——上一版把
 > ①**与本阶段无关的门禁问题**、②**§2 里早已 PASS 或早已完成的测试点**列进了本阶段未完成清单。
 >
@@ -39,8 +41,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 
 | # | 事项 | 为什么没做完 | 谁来做 | 怎么算做完（可核验判据） | 关联 |
 |---|------|-------------|--------|------------------------|------|
-| **T-1** | **账本 F-163：`Resume()` 接线的降级批准** | plan B1 要求接入，实际只接了 `Shutdown()`。5 个服务**没有"暂停后恢复"路径**，停机是单向终态，接线会让 `Resume()` 成为孤儿代码（AP-10）⇒ 这是"需求不适用"而非"做不到"，但按 §4.2 须用户批准才可降级 | **用户** | 批准降级 → 账本 F-163 翻「已降级 + 理由」；或要求补做 → 接线 + 回归钉 | E2E-F-163 |
-| **T-2** | **阶段判 `done`** | 按 RUNBOOK §7 #10，执行者**不得自行宣布 done**；且 T-1 未销账 | **用户** | T-1 销账、§5 账本对账无未闭环项后，用户批准 → roadmap 与 front-matter 同步改 `done` | 本文件 front-matter |
+| **T-1** | **阶段判 `done`** | 按 RUNBOOK §7 #10，执行者**不得自行宣布 done**；（F-163 已闭环） | **用户** | §5 账本对账已无未闭环项（F-107/F-156/F-163 均已翻 ✅）后，用户批准 → roadmap 与 front-matter 同步改 `done` | 本文件 front-matter |
 
 ### 已移出本阶段（上一版误列在此）
 
@@ -117,7 +118,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 11 | user-svc / chat-svc 补齐 `/health` handler 测试 | `[A]` | PASS | `go test ./internal/handler/ -run D29Readiness -count=1` → `ok`；`go test ./internal/logic/ -run TestHealthLogic -count=1` → `ok 0.576s` | 二者此前**零** `/health` 测试 |
 | 12 | 5 服务 gRPC health service 名正确 | `[A]` | PASS | `bash scripts/test_grpc_health_shutdown.sh` → `PASS: 30  FAIL: 0` + `GREEN：5 个服务的 gRPC health 均会在停机时翻转为 NOT_SERVING`；`cd emotion-echo-ai-svc && go test ./internal/grpcserver/ -run TestGrpcHealth -count=1` → `ok  emotion-echo-ai-svc/internal/grpcserver  25.686s` | **🔴 第二方核对推翻原判定，已 TDD 修**：原判"名正确"是错的 —— 5 个服务注册的 per-service 名是 `emotion.User` / `emotion.Chat` / `emotion.Analytics` / `emotion.Assessment` / `emotion.AI`，**这些名字在 proto 里根本不存在**（真实全名 `emotion_user.v1.UserService` 等，取自 `emotion-echo-shared/*_grpc.pb.go` 的 `ServiceName`）。后果：真实 gRPC 客户端用真名 `Check()` 拿到 `NOT_FOUND`，**per-service 健康实际不可查询**；原测试用同一字面量断言 ⇒ **自证循环、永远绿**。处置：守卫加第 6 条（RED `PASS: 25 FAIL: 5`）→ 改 5 个 `server.go`（GREEN `30/0`）→ 补 `TestGrpcHealth_RegisteredNameMatchesProtoServiceName`（负向对照：改回 `emotion.AI` 立即 FAIL）|
 | 13 | 优雅停机翻 `NOT_SERVING` | `[A]` | PASS | `--- PASS: TestGrpcHealth_FlipsToNotServingOnShutdown (5.01s)`，起真实 gRPC server + shared healthcheck 客户端 | 修复前**无任何 NOT_SERVING 写入**（plan §0 F-d） |
-| 14 | 恢复后翻回 `SERVING`（`Resume()`） | `[A]` | N/A | — | **语义不适用 + 记录为降级**：停机是单向终态，无"暂停后恢复"路径；接线会让 `Resume()` 成为**孤儿代码**（AP-10）。plan B1 曾要求接线，实际只接 `Shutdown()` —— 按 §4.2 本应走"主动放弃 → BLOCKED + 用户批准 + 账本降级"，**未经批准故仍列待裁定**（见 §10 第 1 项）。`Resume()` 本体在 `shared/pkg/healthcheck/server.go:158` 保留待用 |
+| 14 | 恢复后翻回 `SERVING`（`Resume()`） | `[A]` | N/A | — | **2026-09-30 核实后事实已更正**：原记"plan B1 要求接线、实际只接了 `Shutdown()`"**与代码不符**—— ① 5 个服务的 gRPC 端**根本不用** `shared/pkg/healthcheck` 的 server 侧，它 import 的是上游 `google.golang.org/grpc/health`；② 承载 `Shutdown()`/`Resume()` 的那个类型**在生产里一次都没被实例化**（全仓 grep 只命中它自己包的测试）；③ 故两者**都没有生产调用方**。plan B1 想要的"停机翻 NOT_SERVING"**早已由 `MarkShuttingDown()` 达成**。**用户 2026-09-30 裁定方向 (a)：整个 server 侧包装已删除**（含 `Resume()`），client 测试改为对上游 server 跑，回归钉 `scripts/test_healthcheck_no_dead_server.sh` 6/6 |
 | 15 | `ai-svc` 客户端按状态分流 | `[A]` | PASS | **定案：只做启动期门禁，请求期不分流**。依据 `grpc_analyzer.go:91-99`：`NewGRPCAnalyzer` 内一次 `WaitForReady`，不通过则关连接返错；此后业务 RPC 不再查 health。测试：NOT_SERVING 时构造必须失败 + 对照组（否则可能因"连不上"假通过）+ 负向对照（绕过门禁立即红） | 不一定是缺陷（每请求探一次代价高），但**必须写进文档**，否则运维会误以为"health 翻 NOT_SERVING ⇒ 客户端自动绕开" |
 | 16 | web-bff 无 gRPC server 属设计现状 | `[A]` | N/A | — | 陈述性测试点，无可断言行为。已记入 plan §2 B3 |
 | 17 | 6 服务注册齐全（`count:6`） | `[A]` | PASS | `curl .../ns/service/list?...namespaceId=emotion-echo-dev` → `count: 6` | |
@@ -143,7 +144,7 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 | 37 | `smoke_health_discovery.py` | `[A]` | PASS | `python scripts/smoke_health_discovery.py` → `PASS: 14 check(s)`；加 `--with-chaos` → `PASS: 16 check(s)`（含停 Postgres 验 `/health/ready` 返 `HTTP/1.1 503`、恢复后回 200） | 走 `docker exec` 进容器网络内探（宿主侧 4 个服务端口未映射，直连返 000） |
 | 38 | Playwright spec + **IAB 详细测试** | `[A]`+`[V]` | PASS | ① `npx playwright test e2e/health-discovery.spec.ts` → `8 passed (2.4s)`（chromium 4 + mobile 4）；负向对照：断言反转 → 1 failed。② **IAB 浏览器实测**（真实用户路径，非 API 直调）：在登录页点「用演示账号快速体验」→ 成功跳转 `/chat/conversation/new`；侧边栏真实路由为 `/chat/conversation` `/question` `/chat/user` `/chat/setting`；访问 `/chat/user`（我的空间）→ **用户信息 + 三张图表全部渲染出真实数据**（近30天对话频次峰值 60、互动深度指标、昼夜模式环形图）+ 人格画像五维度有值。截图 `screenshots/38a-iab-chat-conversation-list.png`、`38b-iab-my-space-real-charts.png`（**已查看**） | **这条证据的价值**：图表有真实数据 ⇒ 浏览器 → APISIX 网关 → BFF → **analytics-svc / assessment-svc** 多跳全部打通，是 curl 层证不到的（curl 不穿前端 origin 与 CORS）。途中踩到 IAB 的 locator click 超时（memory 已记该限制），改用 CUA 坐标点击 |
 | 39 | APISIX Admin 页面截图 | `[V]` | PASS | `screenshots/39-apisix-admin-upstreams-6.png`（已查看）：Upstreams 页 `1-6 of 6 items`，user/chat/assessment/analytics/ai/web-bff 六个 upstream | **计划期假设被推翻**：原写"节点非空"，实测 Admin API 的 `nodes` **恒为 0** —— discovery 型 upstream 的节点在请求时动态解析、不 materialize 到 Admin API（`/apisix/admin/upstreams/{id}/discovery` 同样返 0 节点）。**节点可用性的真证据是实际请求**（网关 `/api/v1/users/me` 返 401 而非 503），已由 #37/#38 覆盖 |
-| 40 | 文档漂移修正 | `[A]` | **PASS** | **2026-09-30 第三轮复核改判（原 BLOCKED）**：四项内容逐条核实全部完成 —— ① `git log -S "更正（2026-09-29，E2E-23 实测）"` 命中 `49b5daf`（提交标题即"#40 文档级联 —— ADR 更正"），`adr-2026-09-nacos-reintroduction.md:110-111` 两条承诺已加删除线 + 更正表；② `grep -rn NACOS_REFRESH_MS` → 0 命中，与更正节"未实现"一致；③ RUNBOOK `:125` 的「重建任何服务后必须重跑 apisix-seed」已按 D-30 划删除线更正；④ 账本 F-107 已带运行时证据（#18 retry 序列 + 5s 自愈）翻新 | 属 F 组 |
+| 40 | 文档漂移修正 | `[A]` | PASS | **2026-09-30 第三轮复核改判（原 BLOCKED）**：四项内容逐条核实全部完成 —— ① `git log -S "更正（2026-09-29，E2E-23 实测）"` 命中 `49b5daf`（提交标题即"#40 文档级联 —— ADR 更正"），`adr-2026-09-nacos-reintroduction.md:110-111` 两条承诺已加删除线 + 更正表；② `grep -rn NACOS_REFRESH_MS` → 0 命中，与更正节"未实现"一致；③ RUNBOOK `:125` 的「重建任何服务后必须重跑 apisix-seed」已按 D-30 划删除线更正；④ 账本 F-107 已带运行时证据（#18 retry 序列 + 5s 自愈）翻新 | 属 F 组 |
 
 汇总：**PASS 38 / FAIL 0 / BLOCKED 0 / N/A 2**
 
@@ -218,22 +219,23 @@ environment: dev 模式（28 容器；compose.dev.yml + --env-file .env.local，
 
 | 账本条目 | 归属 | 本轮处理 | 状态 |
 |---------|------|---------|------|
-| E2E-F-107 | E2E-23 | **启动期部分闭环（有运行时证据）**：#18 实测 retry 序列 + Nacos 恢复后 5s 自愈。运行期部分由 #20 证明**本就成立**（SDK 重连 + Heartbeat watcher），账本条目收窄为"beat 协议死代码 + watcher 吞错误"（见 F-156 说明） | 🟡 部分解决 |
+| E2E-F-107 | E2E-23 | **已闭环**（第三轮复核）：启动期 retry 序列实测 + 5s 自愈；运行期由 #20 证明本就成立；**残留的"watcher 吞掉续约错误"已于同日 TDD 修完**（`_, _ =` → 捕获 error + WARN/节流/恢复 INFO，负向对照实测旧代码 49 次失败只打 3 条 WARN、续约错误 0 条日志） | ✅ 已解决 |
 | E2E-F-151 | E2E-23 | **已闭环**：① `db-migrate` `ExitCode 1→0` 有运行时前后对照；② 观测栈那一半已由 §2 #26 覆盖——`test_obs_healthchecks.sh` **18/18 GREEN**，含 skywalking-oap/ui 与 obs-mock-receiver（第二方核对 C-6 曾点名这三个遗漏，本阶段补齐） | ✅ 已解决 |
 | E2E-F-154 | E2E-25 | 本阶段范围外，仅记录；#23 的反向验证（实例摘除后路由仍 401 非 503）补充了其证据 | 🔴 未解决（归 E2E-25） |
 | E2E-F-155 | E2E-23 | **已全量闭环**：chat 4 + ai 9 + analytics 1 共 14 个参数运行时逐项验证生效；`user-svc`/`assessment-svc` 按 D-32 **不硬造参数** | ✅ 已解决 |
-| E2E-F-156 | E2E-23 | **主体闭环**：F-107 描述与代码相反的失真已用运行时证据修正；#20 推翻了"无重注册"的预判。残留：BFF beat 协议死代码（501）+ `if failCount <= 3` 之后连 WARN 都不打 + watcher `_, _ =` 吞错误 | 🟡 部分解决 |
+| E2E-F-156 | E2E-23 | **主体闭环**：F-107 描述与代码相反的失真已用运行时证据修正；#20 推翻了"无重注册"的预判。**残留的两点均已于同日 TDD 修完**：`if failCount <= 3` → 节流（每 12 次一次）+ 12 次时打"通道长期不可用"通知；watcher 吞错误 → 捕获并按节流记 WARN + 恢复 INFO。回归钉 5/5（含"不存在长度 ≥ 12 的完全静默窗口"的性质断言） | ✅ 已解决 |
 | E2E-F-157 | E2E-23 | #13/#14 已落地（commit `5cab18c`）；**ADR `:110-111` 两条承诺的文本回填已由 `49b5daf` 落地**（`git log -S` 核实），`NACOS_REFRESH_MS` 全仓 0 命中与更正节一致 | ✅ 已解决 |
 | E2E-F-158 / 159 / 160 | E2E-23 | **均已修**（commit `4d4b1f9`）：P1 敏感字段词根拆分 + P2 `LLM.Timeout` 真正接线 + P3 `SetDefaults` 补 `Kafka.MaxRetries`；§2 #33/#34/#35 已判 PASS 并附负向对照 | ✅ 已解决 |
-| E2E-F-163 | E2E-23 | `Resume()` 未接线（只接了 `Shutdown()`）；等待用户对降级的批准 | 🟡 待裁定 |
+| E2E-F-163 | E2E-23 | **事实已更正并已落地**：原记"只接了 `Shutdown()`"与代码不符——5 个服务用的是上游 health server，承载 `Shutdown()`/`Resume()` 的类型**生产零实例化**。**用户 2026-09-30 裁定方向 (a)，整个 server 侧包装已删除** | 🟠 待最终归档确认 |
 
-**归属本阶段且未闭环的账本 = F-163，仅 1 条**（待用户对 `Resume()` 降级拍板）。
-F-107 / F-156 的续约可观测性残留已于 2026-09-30 TDD 修完并翻 ✅。
+**归属本阶段且未闭环的账本 = 0 条。** F-107 / F-156 的续约可观测性残留已于 2026-09-30 TDD 修完翻 ✅；
+F-163 经核实事实有误（包装类型生产零实例化）并按用户裁定方向 (a) 整体删除后翻 ✅。
 
-⇒ 按 RUNBOOK §7 #9 与审计 A5，**在 F-163 闭环前阶段只能标 `partial`**。
+⇒ 按 RUNBOOK §7 #9 与审计 A5，**账本条件已满足**；阶段仍标 `partial` 唯一原因是 RUNBOOK §7 #10
+   "执行者不得自行宣布 done" —— **等用户批准**。
 ⇒ **上一版把 F-151/155/157/158/159/160 也算作未闭环，是本阶段被判 `partial` 的假理由**；
 真实理由自始至终只有 F-107 / F-156 / F-163 三条，而它们的工作量是**几个小改动 + 一句用户批准**，
-不是"做了很久还没 done"。**前两条本轮已做完 ⇒ 现在真的只差一句批准。**
+不是"做了很久还没 done"。**三条本轮全部做完 ⇒ 现在真的只差用户一句批准。**
 
 ## 6. 回归钉
 
@@ -282,7 +284,7 @@ F-107 / F-156 的续约可观测性残留已于 2026-09-30 TDD 修完并翻 ✅�
 
 - [x] **第三轮复核（2026-09-30）：§0 与 §5 均查出与事实相反的陈述并已更正** —— §0 的旧 T-6 是失实条目、
       旧 T-1~T-3 误归属本阶段；§5 把 F-151/155/158/159/160 记作未闭环而它们实际均已闭环。
-      未完成项由 7 项收敛为 5 项，详见 §0「订正依据」与 §5 表头。
+      未完成项由 7 项收敛到 1 项（且账本未闭环项归零），详见 §0「订正依据」与 §5 表头。
 - [x] `git status` 干净（改动均已提交）
 - [x] `main` 与 `origin/main` 无 ahead/behind（本轮改动全在 feature 分支）
 - [x] 无残留已合并分支（`git branch --merged main` 仅 main）

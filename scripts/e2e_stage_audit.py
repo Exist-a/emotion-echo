@@ -204,9 +204,15 @@ def roadmap_state_kind(raw: str) -> str:
     return "pending"
 
 
-# 格式损坏的账本行（格数 < 6）由 parse_ledger 填充、A8 报出。
+# 格式损坏的账本行（格数 != LEDGER_COLUMNS）由 parse_ledger 填充、A8 报出。
 # 不用返回值传递是为了让 A8 无需改签名即可看到解析器丢弃了什么。
 LEDGER_MALFORMED: list[str] = []
+
+# 账本表格的列数（编号|来源|现象|根因|归属|状态）。判定用 != 而非 <，
+# 因为格数多于 6 与少于 6 一样危险（格内裸竖线会把行撕开、owner/status 取错）。
+LEDGER_COLUMNS = 6
+
+# 格式损坏的账本行由 parse_ledger 填充、A8 报出。
 
 
 def _logical_table_rows(text: str) -> list[str]:
@@ -277,12 +283,23 @@ def parse_ledger() -> list[dict[str, str]]:
     for s in _logical_table_rows(read(LEDGER)):
         if not s.startswith("| E2E-F-"):
             continue
-        cells = [c.strip() for c in s.strip("|").split("|")]
-        if len(cells) < 6:
-            # **绝不静默丢弃**：格数不足说明这条账本的 Markdown 表格行本身坏了
-            # （多数是某个续行漏了行首的 `|`，与前一格粘在了一起）。
-            # 旧实现在这里直接 `continue` ⇒ 该条对 A5「判 done 前账本须对账干净」
-            # 完全不可见 ⇒ 阶段可以带着未解决的账本判 done 而门禁全绿。
+        # **只按未转义的 `|` 切格**（第二方核对 P-5 抓到的解析器 bug）。
+        #
+        # Markdown 表格里，格内的字面量竖线必须写成 `\|`。本账本有 3 条
+        # （F-46 / F-65 / F-169）正当地这么写了 —— 例如状态格里引用了一条
+        # BRE grep：``grep -n "phone\|email" deploy/db/...``。
+        # 而旧代码用 `s.split("|")`，**会把转义竖线也当分隔符** ⇒ 这 3 行被
+        # 撕成 7 格 ⇒ `cells[-2]`（归属）与 `cells[-1]`（状态）取到的是
+        # 被撕开的后半截。
+        # 后果与"静默丢弃"同型且更隐蔽：**条目还在列表里，但归属与状态是错的**
+        # ⇒ A5「判 done 前账本须对账干净」会拿错误的归属去比对。
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", s.strip("|"))]
+        if len(cells) != LEDGER_COLUMNS:
+            # **绝不静默丢弃**：格数不对说明这条账本的 Markdown 表格行坏了。
+            # 注意判定是 `!= 6` 而不是 `< 6` —— 格数**多**于 6 与少于 6 一样危险
+            # （说明有格内裸竖线把行撕开了，owner/status 会取错）。
+            # 旧实现在这里直接 `continue` ⇒ 该条对 A5 完全不可见
+            # ⇒ 阶段可以带着未解决的账本判 done 而门禁全绿。
             # 现在改为记下来并由 A8 报出（见 check_a8）。
             malformed.append(f"{cells[0]}({len(cells)}格)")
             continue
@@ -506,8 +523,9 @@ def check_a8(ledger: list[dict[str, str]], res: StageResult) -> None:
         res.findings.append(
             Finding(
                 "A8", "WARN",
-                f"有 {len(LEDGER_MALFORMED)} 条账本表格行格数不足，"
-                f"**对 A5 账本对账不可见**（多半是某续行漏了行首的 `|`）："
+                f"有 {len(LEDGER_MALFORMED)} 条账本表格行格数**不等于** {LEDGER_COLUMNS}（多或少都算坏），"
+                f"**对 A5 账本对账不可见**（格数多是格内裸竖线把行撕开、owner/status 会取错；"
+                f"格数少是某续行漏了行首的 `|`）："
                 f"{'、'.join(LEDGER_MALFORMED[:10])}",
             )
         )

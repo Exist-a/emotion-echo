@@ -167,6 +167,47 @@ else
   bad "解析器把非账本内容当成了条目（或漏掉了唯一条目）"
 fi
 
+# ---------------------------------------------------------------- 3b. 转义竖线
+echo
+echo "-- 3b. 格内转义竖线（Markdown 的 \\|）不得被当列分隔符 --"
+# 第二方核对 P-5：账本里有 3 条（F-46/F-65/F-169）在格内正当地写了 \|，
+# 例如状态格里引用一条 BRE grep：`grep -n "phone\|email" f.sql`。
+# 旧解析器用 split("|")，**把转义竖线也当分隔符** ⇒ 该行被撕成 7 格
+# ⇒ cells[-2]/cells[-1]（归属/状态）取到的是被撕开的后半截。
+# 后果与"静默丢弃"同型且更隐蔽：**条目还在列表里，但归属与状态是错的**，
+# A5「判 done 前账本须对账干净」会拿错误的归属去比对。
+if "$PYTHON_BIN" - "$AUDIT" <<'PYEOF'
+import importlib.util, os, pathlib, sys, tempfile
+spec = importlib.util.spec_from_file_location("audit2", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
+spec.loader.exec_module(mod)
+
+# 注意 Go/JS 里 `\|` 就是竖线本身；这里要写进 Markdown 源，须再转义一层成 `\\|`
+row = (
+    "| ID | 标题 | 现象 | 根因 | 归属 | 状态 |\n"
+    "|---|---|---|---|---|---|\n"
+    "| E2E-F-904 | 转义竖线 | 现象 | 根因 | **E2E-23** | ✅ 已解决：grep -n \"a\\|b\" f.sql 零命中 |\n"
+)
+fd, path = tempfile.mkstemp(suffix=".md")
+os.write(fd, row.encode("utf-8")); os.close(fd)
+mod.LEDGER = pathlib.Path(path)
+mod.LEDGER_MALFORMED.clear()
+entries = mod.parse_ledger()
+os.unlink(path)
+
+assert not mod.LEDGER_MALFORMED, f"转义竖线导致行被判畸形：{mod.LEDGER_MALFORMED}"
+assert len(entries) == 1, f"期望 1 条，实际 {len(entries)}"
+e = entries[0]
+assert e["owner"] == "**E2E-23**", f"归属取错：{e['owner']!r}"
+assert e["status"].startswith("✅ 已解决"), f"状态取错：{e['status']!r}"
+PYEOF
+then
+  ok "格内 \\| 被正确视为字面量，owner/status 未被撕错"
+else
+  bad "解析器把转义竖线当成了列分隔符 —— owner/status 会取错（A5 同型盲点）"
+fi
+
 # ---------------------------------------------------------------- 4. A8 不再误报
 echo
 echo "-- 4. A8 不再因多行行而误报'缺失' --"
