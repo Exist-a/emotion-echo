@@ -132,27 +132,27 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 
 | # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
 |---|--------|------|---------|------|------|
-| 1 | **F-149 修复**：真实 PG（分区表 schema）上 `Create` 重复 event_id 幂等不报 42P10 | [A] | RED：先写会失败的 repository 测试（连真 PG 或最小分区表 fixture）→ GREEN：改 conflict target；负向对照旧代码必红 | 测试输出 + 运行时 INSERT 前后行数 | ⬜ |
-| 2 | F-149 修复后端到端：发 1 条消息 → `user_behavior_events` 出现新行（此前必失败） | [A] | BFF 发消息 → psql COUNT 前后对照 + consumer 日志无 `SQLSTATE 42P10` | DB 行 + 日志 | ⬜ |
+| 1 | **F-149 修复**：真实 PG（分区表 schema）上 `Create` 重复 event_id 幂等不报 42P10 | [A] | RED：先写会失败的 repository 测试（连真 PG 或最小分区表 fixture）→ GREEN：改 conflict target；负向对照旧代码必红 | `event_create_partition_integration_test.go` RED 42P10 → GREEN；负向对照（还原单列即红）；PR #133 | PASS |
+| 2 | F-149 修复后端到端：发 1 条消息 → `user_behavior_events` 出现新行（此前必失败） | [A] | BFF 发消息 → psql COUNT 前后对照 + consumer 日志无 `SQLSTATE 42P10` | v0.1.10 部署后发消息 → 0×42P10、events 163→165（plan §0.2 #7） | PASS |
 
 ### B 组：全链正向 + 幂等
 
 | # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
 |---|--------|------|---------|------|------|
-| 3 | outbox 行生命周期：发消息 → `outbox_events` pending → relay interval 内 → sent | [A] | psql 查 status/sent_at + relay 日志 | DB 行 | ⬜ |
-| 4 | §2.4 契约 1：`user_behavior_events` 行数增量 = 业务事件数（message.created 等） | [A] | psql COUNT 对照 | smoke 输出 | ⬜ |
-| 5 | §2.4 契约 2：event_type 细分（≥2 种带点原值，不全 'conversation'） | [A] | psql GROUP BY | smoke 输出 | ⬜ |
-| 6 | **消费幂等**：同一 event_id 手工重发布 → 行数不增 | [A] | kafka-console-producer 重发同 payload → COUNT 不变 | DB 行数 | ⬜ |
-| 7 | **双消费组**：analytics-svc 与 ai-svc 各自独立消费（互不依赖 offset） | [A] | 两消费组 lag/offset + 各自业务侧落库证据 | console 输出 + 日志 | ⬜ |
+| 3 | outbox 行生命周期：发消息 → `outbox_events` pending → relay interval 内 → sent | [A] | psql 查 status/sent_at + relay 日志 | probe 消息后 `SELECT id,status FROM outbox_events` → 877/879/880 均 sent（plan §0.2 #3） | PASS |
+| 4 | §2.4 契约 1：`user_behavior_events` 行数增量 = 业务事件数（message.created 等） | [A] | psql COUNT 对照 | 发 1 消息 → +2 行（conv.created+msg.created，§0.2 #7）；回放 26 → +25 行逐条对应 | PASS |
+| 5 | §2.4 契约 2：event_type 细分（≥2 种带点原值，不全 'conversation'） | [A] | psql GROUP BY | GROUP BY：message.created 83 / conversation.created 74 / conversation.closed 22（+历史旧值 8） | PASS |
+| 6 | **消费幂等**：同一 event_id 手工重发布 → 行数不增 | [A] | kafka-console-producer 重发同 payload → COUNT 不变 | replay 重放同 5 条 → 192 不变；(event_id,occurred_at) 重复 0 行 | PASS |
+| 7 | **双消费组**：analytics-svc 与 ai-svc 各自独立消费（互不依赖 offset） | [A] | 两消费组 lag/offset + 各自业务侧落库证据 | kafka-consumer-groups --all-groups：analytics-svc 与 ai-svc 均独立 offset、LAG=0 | PASS |
 | 8 | KAFKA_ENABLED=false dev fallback（契约 6）：dev_publisher 直写路径事件落库不空跑 | [A] | 关 Kafka env 重启 chat-svc → 触发事件 → DB 行存在（标注 dev 路径） | DB 行 + 配置 | ⬜ |
 
 ### C 组：重试与死信
 
 | # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
 |---|--------|------|---------|------|------|
-| 9 | **consumer 失败重试**：注入非法 payload 毒消息 → 日志 `attempt=1/3→3/3` | [A] | kafka-console-producer 发坏 payload → consumer 日志 | 日志 | ⬜ |
-| 10 | 超限进 **DLQ**：`chat-events-dlq` 收到消息且 headers 含 `x-original-topic`/`x-error-reason`/`x-attempts` | [A] | kafka-console-consumer 读 DLQ + headers | console 输出 | ⬜ |
-| 11 | 毒消息被 Mark 后**不卡死**：后续正常消息继续消费 | [A] | 毒消息后发正常消息 → 正常落库 | DB 行 | ⬜ |
+| 9 | **consumer 失败重试**：注入非法 payload 毒消息 → 原地重试日志 | [A] | kafka-console-producer 发坏 payload → consumer 日志 | F-174 修复后：同 offset=89 attempt=1/3(backoff=2s)→2/3(4s)→3/3(8s)，原地重试实测 | PASS |
+| 10 | 超限进 **DLQ**：`chat-events-dlq` 收到消息且 headers 含 `x-original-topic`/`x-error-reason`/`x-attempts` | [A] | kafka-console-consumer 读 DLQ + headers | 死信 headers 实测读取：`x-original-topic:chat-events,x-error-reason:...42P10,x-attempts:4` | PASS |
+| 11 | 毒消息被 Mark 后**不卡死**：后续正常消息继续消费 | [A] | 毒消息后发正常消息 → 正常落库 | 毒消息 DLQ 后再发消息正常落库（167→...）、LAG=0；旧缺陷（单条毒消息阻塞分区）已随 F-174 修复消除 | PASS |
 | 12 | **outbox relay 失败重试**：停 Kafka → outbox pending 积压 + attempts++ → 恢复 Kafka → 全部 sent | [A] | 停/起容器 + psql status 对照 + relay 日志 | DB 行 + 日志 | ⬜ |
 | 13 | outbox **dead 状态机**：MaxAttempts 调小（Nacos 热更或配置）→ 超限行 status=dead、ListPending 不再扫、`IncDead` 计数 | [A] | psql status + chat-svc /metrics + 日志 | 指标 + DB | ⬜ |
 
@@ -160,11 +160,11 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 
 | # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
 |---|--------|------|---------|------|------|
-| 14 | **回放工具形态拍板**（§8 决策点 2：DLQ 回放脚本 vs ops 命令 vs admin 端点；outbox dead 重置方式） | [M] | 用户裁定，本阶段按裁定实现 | decisions.md 登记 | ⬜ |
-| 15 | **DLQ 回放**：工具从 `chat-events-dlq` 读死信 → 重发布原 topic → 正常消费落库 | [A] | 工具运行输出 + DB 行 + DLQ offset 变化 | 工具输出 + DB | ⬜ |
-| 16 | 回放**幂等**：回放已消费过的消息 → ON CONFLICT DO NOTHING → 行数不增 | [A] | 重复回放同一批 → COUNT 不变 | DB 行数 | ⬜ |
+| 14 | **回放工具形态拍板**（§8 决策点 2：DLQ 回放脚本 vs ops 命令 vs admin 端点；outbox dead 重置方式） | [M] | 用户裁定，本阶段按裁定实现 | 用户 2026-10-01 裁定 (a) ops 脚本形态 → **D-33** 落地 `scripts/replay_dlq` | PASS |
+| 15 | **DLQ 回放**：工具从 `chat-events-dlq` 读死信 → 重发布原 topic → 正常消费落库 | [A] | 工具运行输出 + DB 行 + DLQ offset 变化 | 真实回放 26/26 发布成功 → 25 条落库（events 167→192） | PASS |
+| 16 | 回放**幂等**：回放已消费过的消息 → ON CONFLICT DO NOTHING → 行数不增 | [A] | 重复回放同一批 → COUNT 不变 | 重放同 5 条 → 192 不变；(event_id,occurred_at) 重复 0 行 | PASS |
 | 17 | **outbox dead 行回放**：dead 行经重置后重新被 relay 扫描并成功发出（status dead→pending→sent） | [A] | 构造 dead 行 → 重置工具 → psql 状态迁移 | DB 行 | ⬜ |
-| 18 | **存量 24 条死信处置**：逐条诊断错误分布 → 可回放回放 / 不可回放归档留账 → 面板归零或死信数与账面一致 | [A/M] | 工具 + psql + Grafana 面板对照；处置策略按 §8 决策点 3 | 面板截图 + 处置清单 | ⬜ |
+| 18 | **存量 24 条死信处置**：逐条诊断错误分布 → 可回放回放 / 不可回放归档留账 → 面板归零或死信数与账面一致 | [A/M] | 工具 + psql + Grafana 面板对照；处置策略按 §8 决策点 3 | 26 条全量回放：25 落库 / 1 毒探针再进 DLQ 留证；账实一致（DLQ offset 27 = 累计历史，未处置余额 1） | PASS |
 
 ### E 组：运营参数与观测
 
