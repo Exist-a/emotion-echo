@@ -226,12 +226,19 @@ func (r *PostgresEventRepo) GetByID(ctx context.Context, id int64) (*model.UserB
 // Stage 30-C A1：event_id 上挂 UNIQUE 约束，INSERT 走 ON CONFLICT DO NOTHING
 // 实现消费幂等。at-least-once 投递下重复消息不重复落库。
 // 空 EventID 走非去重分支（DB UNIQUE 允许多个 NULL）。
+//
+// E2E-F-149（2026-10-01 修复）：a008 把 user_behavior_events 改为按 occurred_at
+// 月分区后，分区表 UNIQUE 约束强制包含分区键 ⇒ 实际约束是
+// (event_id, occurred_at)，conflict target 必须与之一致，否则 42P10
+// （每条消息写库必失败）。同一 event_id 恒伴随同一 occurred_at（二者来自
+// 同一条事件、OccurredAt 随 payload 回放不变），故冲突目标加上分区键
+// 不改变去重语义。
 func (r *PostgresEventRepo) Create(ctx context.Context, e *model.UserBehaviorEvent) error {
 	e.ID = 0
 	tx := r.db.WithContext(ctx)
 	if e.EventID != "" {
 		tx = tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "event_id"}},
+			Columns:   []clause.Column{{Name: "event_id"}, {Name: "occurred_at"}},
 			DoNothing: true,
 		})
 	}

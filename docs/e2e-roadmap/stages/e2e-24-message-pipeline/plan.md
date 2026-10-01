@@ -2,8 +2,9 @@
 stage: e2e-24
 title: 消息链路（outbox→Kafka→consumer→DLQ 全链 + 重试/死信/回放）
 type: transformation
-status: pending
+status: in-progress
 created: 2026-10-01
+last-updated: 2026-10-01（开工：devmode 锁已登记，工作分支 fix/e2e-24-f149-consumption-blocked；执行顺序 = §0.2 复核 F-149 现状 → TDD 循环 1）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策；回放工具形态为执行期内 [M] 决策点（见 §8）
@@ -48,9 +49,21 @@ related-findings: [E2E-F-149, E2E-F-12, E2E-F-150, E2E-F-96, E2E-F-160]
 | **F-i** | **消费写库不带 ctx** | `consumer.go:417` `h.repo.Create(nil, be)` —— ctx 传 nil。gorm 侧 `WithContext(nil)` 目前不炸但绕过了取消/超时语义；执行期评估是否顺手收口（范围外发现只记账，不强制修） |
 | **F-j** | **历史决策 D1/D2/D4 已落地、D3/D5 未落地** | D1（producer init 失败 fallback InMemory 击穿 outbox 承诺）✅ Stage 94 PR-3；D2（outbox sent/dead 行清理）✅ `outbox/cleanup.go` + Ops 保留天数热更；D4（maxRetries 配置通道）✅ F-160 commit `4d4b1f9`；**D3（attempts 不跨 rebalance）🔴 未落地**；**D5（relay 多副本需分布式互斥）🔴 未落地**（dev 单副本，扩容前置条件） |
 
-### 0.2 本阶段三类工作定性
+### 0.2 开工复核（2026-10-01 实测回填，防止任务书事实表过期）
 
-1. **修真缺陷**（TDD 循环）：F-149 是本阶段的前置性修复——不修它，重试/死信测试点全部只能测出"每条消息都进 DLQ"这一种失败。
+> 环境基线：19 容器 healthy、Nacos count:6、BFF downstream 全 ok、db-migrate/apisix-seed Exited(0)。
+
+| # | 复核结果 | 证据 |
+|---|---------|------|
+| 1 | **F-149 仍在且实时复现**：echo/echo123 网关登录 → conv 360 发消息 → consumer `SQLSTATE 42P10`（`event_repository.go:238` 的 `ON CONFLICT ("event_id") DO NOTHING`），`user_behavior_events` 行数 163 不变 | consumer 日志 `handle 360 failed (will retry attempt=1/3 offset=82)` |
+| 2 | **重试→DLQ 状态机工作**：attempt 1→4 → `failed after 4 retries → DLQ` → DLQ offset 24→25；死信 headers 完整（`x-original-topic=chat-events` / `x-error-reason=...42P10` / `x-attempts=4`） | kafka-get-offsets + kafka-console-consumer 读回 |
+| 3 | **D3 实证**：重启 analytics-svc 后 attempt 计数清零、从 1/3 重新开始；outbox relay 半正常（行 status=sent） | 重启前后日志对照 |
+| 4 | **DLQ 实时数 = 25**（24 旧 + 1 本轮 probe），与账本 F-150 的 24 一致（期间栈未跑） | `kafka-get-offsets.sh --topic chat-events-dlq` |
+| 5 | **新发现 F-174（范围内）**：重试语义失真——sarama session 内不重投未 Mark 消息，attempt 计数靠后续同 key 消息推进；单条毒消息会永久阻塞分区（offset 82/83 卡住） | attempt 1/3 (offset 82) → 下一条直接是 83 |
+| 6 | **新发现 F-175（范围内）**：a008 换表未推进 BIGSERIAL 序列 ⇒ F-149 修复后新行拿 id=1,2,3，与老行 id≤162 重叠（max(id)=162 < count=165）；序列 last_value=3 | psql 查询 2026-10-01 行 id=1,2,3 |
+| 7 | **修复后运行时复验**：F-149 修复（conflict target 补 occurred_at，analytics-svc:v0.1.10）→ 新消息事件落库成功（0× 42P10，events 163→165）；F-175 修复（a010 setval）→ 新行 id=163 > 老 max 162 | psql 行 + 日志 |
+
+### 0.3 本阶段三类工作定性1. **修真缺陷**（TDD 循环）：F-149 是本阶段的前置性修复——不修它，重试/死信测试点全部只能测出"每条消息都进 DLQ"这一种失败。
 2. **补缺失能力**（TDD 循环）：DLQ 回放工具 + outbox dead 行回放能力（F-12/F-150）。
 3. **验证既有实现**（测试点）：relay / consumer / DLQ / 热更 / 双消费组 / dev fallback 的正向与负向行为。
 
