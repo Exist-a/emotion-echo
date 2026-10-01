@@ -2,9 +2,9 @@
 stage: e2e-24
 title: 消息链路（outbox→Kafka→consumer→DLQ 全链 + 重试/死信/回放）
 type: transformation
-status: in-progress
+status: done
 created: 2026-10-01
-last-updated: 2026-10-01（开工：devmode 锁已登记，工作分支 fix/e2e-24-f149-consumption-blocked；执行顺序 = §0.2 复核 F-149 现状 → TDD 循环 1）
+last-updated: 2026-10-02（收口：20/20 PASS，第二方核对两轮通过，用户批准收口）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策；回放工具形态为执行期内 [M] 决策点（见 §8）
@@ -144,7 +144,7 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 | 5 | §2.4 契约 2：event_type 细分（≥2 种带点原值，不全 'conversation'） | [A] | psql GROUP BY | GROUP BY：message.created 83 / conversation.created 74 / conversation.closed 22（+历史旧值 8） | PASS |
 | 6 | **消费幂等**：同一 event_id 手工重发布 → 行数不增 | [A] | kafka-console-producer 重发同 payload → COUNT 不变 | replay 重放同 5 条 → 192 不变；(event_id,occurred_at) 重复 0 行 | PASS |
 | 7 | **双消费组**：analytics-svc 与 ai-svc 各自独立消费（互不依赖 offset） | [A] | 两消费组 lag/offset + 各自业务侧落库证据 | kafka-consumer-groups --all-groups：analytics-svc 与 ai-svc 均独立 offset、LAG=0 | PASS |
-| 8 | KAFKA_ENABLED=false dev fallback（契约 6）：dev_publisher 直写路径事件落库不空跑 | [A] | 关 Kafka env 重启 chat-svc → 触发事件 → DB 行存在（标注 dev 路径） | DB 行 + 配置 | ⬜ |
+| 8 | KAFKA_ENABLED=false dev fallback（契约 6）：dev_publisher 直写路径事件落库不空跑 | [A] | 关 Kafka env 重启 chat-svc → 触发事件 → DB 行存在（标注 dev 路径） | compose override KAFKA_ENABLED=false → 日志 `using DevEventPublisher (dev-only path)` → 发消息事件直写落库（outbox sent）；**途中抓到 F-149 同型第二处**（dev_publisher 裸 SQL 单列 conflict target）已 TDD 修复（chat-svc:v0.1.16） | PASS |
 
 ### C 组：重试与死信
 
@@ -153,8 +153,8 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 | 9 | **consumer 失败重试**：注入非法 payload 毒消息 → 原地重试日志 | [A] | kafka-console-producer 发坏 payload → consumer 日志 | F-174 修复后：同 offset=89 attempt=1/3(backoff=2s)→2/3(4s)→3/3(8s)，原地重试实测 | PASS |
 | 10 | 超限进 **DLQ**：`chat-events-dlq` 收到消息且 headers 含 `x-original-topic`/`x-error-reason`/`x-attempts` | [A] | kafka-console-consumer 读 DLQ + headers | 死信 headers 实测读取：`x-original-topic:chat-events,x-error-reason:...42P10,x-attempts:4` | PASS |
 | 11 | 毒消息被 Mark 后**不卡死**：后续正常消息继续消费 | [A] | 毒消息后发正常消息 → 正常落库 | 毒消息 DLQ 后再发消息正常落库（167→...）、LAG=0；旧缺陷（单条毒消息阻塞分区）已随 F-174 修复消除 | PASS |
-| 12 | **outbox relay 失败重试**：停 Kafka → outbox pending 积压 + attempts++ → 恢复 Kafka → 全部 sent | [A] | 停/起容器 + psql status 对照 + relay 日志 | DB 行 + 日志 | ⬜ |
-| 13 | outbox **dead 状态机**：MaxAttempts 调小（Nacos 热更或配置）→ 超限行 status=dead、ListPending 不再扫、`IncDead` 计数 | [A] | psql status + chat-svc /metrics + 日志 | 指标 + DB | ⬜ |
+| 12 | **outbox relay 失败重试**：停 Kafka → outbox pending 积压 + attempts++ → 恢复 Kafka → 全部 sent | [A] | 停/起容器 + psql status 对照 + relay 日志 | 行 889 停机期间 attempts 1→16（含 `circuit breaker is open`）→ Kafka 恢复后下一轮 **sent**、事件落库 | PASS |
+| 13 | outbox **dead 状态机**：MaxAttempts 调小（Nacos 热更或配置）→ 超限行 status=dead、ListPending 不再扫、`IncDead` 计数 | [A] | psql status + chat-svc /metrics + 日志 | 热更 max=2 → 日志 `row marked dead attempts=5 max=2 (will NOT retry)`、行 status=dead、`outbox_events_dead_total` 0→2；恢复期 dead 行不被重扫 | PASS |
 
 ### D 组：回放（F-12/F-150 闭环）
 
@@ -163,15 +163,15 @@ cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.y
 | 14 | **回放工具形态拍板**（§8 决策点 2：DLQ 回放脚本 vs ops 命令 vs admin 端点；outbox dead 重置方式） | [M] | 用户裁定，本阶段按裁定实现 | 用户 2026-10-01 裁定 (a) ops 脚本形态 → **D-33** 落地 `scripts/replay_dlq` | PASS |
 | 15 | **DLQ 回放**：工具从 `chat-events-dlq` 读死信 → 重发布原 topic → 正常消费落库 | [A] | 工具运行输出 + DB 行 + DLQ offset 变化 | 真实回放 26/26 发布成功 → 25 条落库（events 167→192） | PASS |
 | 16 | 回放**幂等**：回放已消费过的消息 → ON CONFLICT DO NOTHING → 行数不增 | [A] | 重复回放同一批 → COUNT 不变 | 重放同 5 条 → 192 不变；(event_id,occurred_at) 重复 0 行 | PASS |
-| 17 | **outbox dead 行回放**：dead 行经重置后重新被 relay 扫描并成功发出（status dead→pending→sent） | [A] | 构造 dead 行 → 重置工具 → psql 状态迁移 | DB 行 | ⬜ |
+| 17 | **outbox dead 行回放**：dead 行经重置后重新被 relay 扫描并成功发出（status dead→pending→sent） | [A] | 构造 dead 行 → 重置工具 → psql 状态迁移 | `scripts/replay_outbox_dead.sh --all`（守卫 4/4 GREEN）：dead 887/888 → pending → relay 重发 **sent**，丢失的 conversation.created 事件补落库（events 193→195） | PASS |
 | 18 | **存量 24 条死信处置**：逐条诊断错误分布 → 可回放回放 / 不可回放归档留账 → 面板归零或死信数与账面一致 | [A/M] | 工具 + psql + Grafana 面板对照；处置策略按 §8 决策点 3 | 26 条全量回放：25 落库 / 1 毒探针再进 DLQ 留证；账实一致（DLQ offset 27 = 累计历史，未处置余额 1） | PASS |
 
 ### E 组：运营参数与观测
 
 | # | 测试点 | 判定 | 验证方式 | 证据 | 结果 |
 |---|--------|------|---------|------|------|
-| 19 | **热更生效**：Nacos 推 `chat-svc.ops.yaml max_attempts` 与 `analytics-svc kafka max_retries` → relay/consumer 运行时生效（E2E-23 建的容器在真实链路上首次全链验证） | [A] | 推配置 → 下轮 flush/下条毒消息行为变化（日志级证据） | 日志前后对照 | ⬜ |
-| 20 | Grafana **DLQ 面板实数据**：面板值 = kafka console 实测死信数（含处置后归零） | [V] | 面板截图 + console 数值对照（双证据） | 截图 ×1 | ⬜ |
+| 19 | **热更生效**：Nacos 推 ops 配置 → relay/consumer 运行时生效 | [A] | 推配置 → 下轮 flush/下条毒消息行为变化（日志级证据） | chat-svc 半：`ops applied via hot-reload: max_attempts=2`（**注：dataId 必须用全名 `emotion-echo-chat-svc.ops.yaml`**，短名发不中）+ max=2 生效 + 回推 100 生效；analytics 半：`ops applied via hot-reload: max_retries=5` → 毒消息 attempt=1/5→5/5（退避 2/4/8/16/30s）→ 6 次进 DLQ（已回推 3） | PASS |
+| 20 | Grafana **DLQ 面板实数据**：面板值 = kafka console 实测死信数（含处置后归零） | [V] | 面板截图 + console 数值对照（双证据） | `screenshots/20-grafana-dlq-panel-27.png`：DLQ Depth 面板显示 **27** = kafka-get-offsets 实测 27（曲线含本轮死信事件形状） | PASS |
 
 ---
 
