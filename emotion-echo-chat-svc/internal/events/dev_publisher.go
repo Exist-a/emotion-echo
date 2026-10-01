@@ -101,7 +101,7 @@ INSERT INTO emotion_echo_analytics.user_behavior_events
   (event_id, user_id, event_type, target, session_id, occurred_at)
 VALUES
   ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (event_id) DO NOTHING`
+ON CONFLICT (event_id, occurred_at) DO NOTHING`
 
 	if _, err := p.db.ExecContext(ctx, insertSQL,
 		row.EventID,

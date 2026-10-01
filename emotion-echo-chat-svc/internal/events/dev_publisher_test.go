@@ -363,3 +363,27 @@ func itoaInt64(v int64) string {
 	}
 	return string(buf[pos:])
 }
+
+// TestDevEventPublisher_SQL_ConflictTargetIncludesPartitionKey（E2E-F-149 同型第二处，2026-10-01）
+//
+// a008 把 user_behavior_events 改为分区表后，UNIQUE 约束 = (event_id, occurred_at)。
+// DevEventPublisher 的裸 SQL 与 analytics-svc repo 的 gorm OnConflict（F-149）同型：
+// 冲突目标只写 (event_id) ⇒ 42P10 ⇒ KAFKA_ENABLED=false 的 dev 直写路径每条事件
+// 写库必失败（契约 6 假绿风险）。
+//
+// 行为级验证由 E2E-24 测试点 #8 在真栈上完成（KAFKA_ENABLED=false 发消息落库）；
+// 本钉以字面量契约锁死冲突目标（CI 可跑，模式同 analytics event_repository_partition_conflict_test.go）。
+func TestDevEventPublisher_SQL_ConflictTargetIncludesPartitionKey(t *testing.T) {
+	db := &fakeDBExecutor{}
+	p := NewDevEventPublisher(db)
+	defer func() { _ = p.Close() }()
+
+	require.NoError(t, p.Publish(context.Background(), TopicChatEvents, newMessageCreatedEvent()))
+
+	call, ok := db.lastCall()
+	require.True(t, ok)
+	assert.Contains(t, call.query, `ON CONFLICT (event_id, occurred_at)`,
+		"dev 直写 SQL 的冲突目标必须含分区键 occurred_at（分区表 UNIQUE = (event_id, occurred_at)，见 a008）；缺它 ⇒ 42P10，F-149 同型复发")
+	assert.NotContains(t, call.query, "ON CONFLICT (event_id) DO NOTHING",
+		"不允许残留单列冲突目标")
+}
