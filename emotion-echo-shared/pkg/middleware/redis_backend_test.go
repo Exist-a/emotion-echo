@@ -60,17 +60,22 @@ func TestRedisLimiterBackend_PerKeyIsolation(t *testing.T) {
 //
 // 实现说明：Lua 脚本读 Go 进程 time.Now()，miniredis.FastForward
 // 推进的是 miniredis 内部时钟（key 过期），不影响服务端 Go 时间。
-// 因此本测试用真实 sleep（rate=100/s + 200ms = 20 tokens 远超 1 个所需）。
-// sleep 加大到 200ms 留余量（CI runner 负载高时 50ms 可能边界）。
+// 因此本测试用真实 sleep 验证补满。
+//
+// E2E-F-172（2026-10-01）：原 rate=100/s 时重填 1 token 仅需 10ms，
+// 与两个连续 Allow 调用间的调度抖动同量级——第三次 Allow 前桶可能
+// 已被补上，assert.False 概率性必假（本机 -count=5 稳定复现、CI 偶发）。
+// 降 rate 到 5/s：重填窗口拉大到 200ms，调用抖动（<50ms）不可能提前
+// 补满；sleep 400ms 补 2 tokens，正向余量同样充足。
 func TestRedisLimiterBackend_Refills(t *testing.T) {
-	backend, _ := newTestRedisLimiter(t, 100, 2, "test-refill")
+	backend, _ := newTestRedisLimiter(t, 5, 2, "test-refill")
 
 	assert.True(t, backend.Allow("u1"))
 	assert.True(t, backend.Allow("u1"))
 	assert.False(t, backend.Allow("u1"))
 
-	// 真实 sleep 200ms：100/s * 0.2 = 20 tokens（远超 1 个所需）
-	time.Sleep(200 * time.Millisecond)
+	// 真实 sleep 400ms：5/s * 0.4 = 2 tokens（远超 1 个所需）
+	time.Sleep(400 * time.Millisecond)
 	assert.True(t, backend.Allow("u1"), "refill 后应放行（rate=100/s, sleep=200ms）")
 }
 
