@@ -181,7 +181,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-analytics-svc/Dockerfile
-    image: emotion-echo/analytics-svc:v0.1.10  # Stage 94 PR-5: analytics_reader role 改 NOLOGIN (§P0-9)
+    image: emotion-echo/analytics-svc:v0.1.11  # Stage 94 PR-5: analytics_reader role 改 NOLOGIN (§P0-9)
     container_name: emotion-echo-analytics-svc
     restart: on-failure
     # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
@@ -355,7 +355,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-ai-svc/Dockerfile
-    image: emotion-echo/ai-svc:v0.1.9   # Stage 94 PR-2: ai-svc→llm-service grpc_analyzer.go 改用 ClientDialOptions helper (§P0-2 + §P0-3a)
+    image: emotion-echo/ai-svc:v0.1.10   # Stage 94 PR-2: ai-svc→llm-service grpc_analyzer.go 改用 ClientDialOptions helper (§P0-2 + §P0-3a)
     container_name: emotion-echo-ai-svc
     restart: on-failure
     # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.

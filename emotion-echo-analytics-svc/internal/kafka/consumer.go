@@ -23,7 +23,6 @@ import (
 	"sync/atomic"
 
 	"github.com/emotion-echo/shared/pkg/logging"
-	"sync"
 	"time"
 
 	"emotion-echo-analytics-svc/internal/model"
@@ -178,13 +177,10 @@ type chatEventHandler struct {
 	topic   string
 	dlq     DLQPublisher
 	retries *atomic.Int32
-	// attempts msg.Key → 重试次数（消费周期内）
-	//
-	// Round 5b §B: attemptsMu 守卫 map 读写。sarama 当前 ConsumeClaim 是单
-	// goroutine(内部保证),但未来重构或 sarama 跨 goroutine 派发 partition 时
-	// map 会触发 race detector。加 sync.Mutex 防御性保护。
-	attempts   map[string]int
-	attemptsMu sync.Mutex
+
+	// E2E-F-174（2026-10-01）：重试退避注入点。nil = 默认指数退避
+	// min(2^attempt 秒, 30s)。测试注入 0 退避以保证确定性。
+	backoffFn func(attempt int) time.Duration
 
 	// Stage 93 PR-1: 可选 SkyWalking tracer（grpcinterceptor.Tracer 接口,
 	// PR-OBS-17 + Stage 92 PR-1 扩展)。非 nil 时每条消息走 CreateEntrySpan
@@ -209,26 +205,12 @@ func (h *chatEventHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
 //   - attempt > MaxRetries：调 DLQ.Publish + Mark + 清 attempts
 //   - DLQ=NoopDLQPublisher 时等价于"无 DLQ 兜底"，仍走 attempt 计数（避免毒消息卡死）
 //
-// Stage 93 PR-1: 当 h.Tracer 非 nil 时,每条消息调 CreateEntrySpan 从 msg.Headers[sw8]
-// 重建父 trace（chat-svc producer → analytics-svc consumer 跨进程 trace）。
-//   - msg 含 sw8 header → extractor 抽到 → go2sky 重建父 SpanContext
-//   - msg 无 sw8 header → extractor 返 "" → go2sky Valid=false → 新 trace 起点
-//   - Tracer=nil → 完全跳过 span 创建（Stage 30-A Round 4 原行为,向后兼容）
-//
-// 与 ai-svc Stage 92 PR-2 同模式 (consumer.go:115-134)：先 DecodeChatEvent 抽出 evt,
-// 再创建 span 并打 4 个 messaging.* tag (含 event.type),最后调 handleOne 写库。
-// 解析失败时仍走 handleOne 自身错误路径(返回 error 走 attempt 计数)。
-//
-// Stage 94 PR-2b §P0-3：方案 A — span 生命周期提到 case 顶部、case 末尾显式
-// span.EndSpan(handlerErr)。原 `defer span.EndSpan(nil)` 在 for-loop case 内
-// 会延后到 ConsumeClaim 退出才批量收尾，OAP 上每条消息 duration = 整 consumer
-// goroutine 寿命。本次修复 + err 透传。
+// E2E-F-174（2026-10-01 重写）：handleOne 失败的消息**在同一条消息上原地重试**
+// （deliverWithRetry，预算 = MaxRetries+1 次尝试），预算耗尽 → DLQ + Mark。
+// 旧实现的"重试"不回退 offset、计数靠后续同 key 消息失败次数推进 ⇒ 单条毒消息
+// 永不被重新处理、可永久阻塞分区，且计数跨重启清零（账本 D3/F-174 实测）。
+// 新实现下每条消息的结果（落库 or DLQ）在单次遍历内确定，分区永不因单条消息卡死。
 func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	h.attemptsMu.Lock()
-	if h.attempts == nil {
-		h.attempts = make(map[string]int)
-	}
-	h.attemptsMu.Unlock()
 	for {
 		select {
 		case msg, ok := <-claim.Messages():
@@ -264,19 +246,13 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 					log.Printf("[kafka-consumer] decode failed (skip span, handleOne will retry): %v", decodeErr)
 				}
 			}
-			// 业务处理 + handlerErr 收集,让 span.EndSpan(handlerErr) 透传失败
-			var handlerErr error
-			if handlerErr = h.handleOne(msg); handlerErr != nil {
-				h.handleFailure(sess, msg, handlerErr)
-			} else {
-				// 业务成功：清 attempts
-				if key := string(msg.Key); key != "" {
-					h.attemptsMu.Lock()
-					delete(h.attempts, key)
-					h.attemptsMu.Unlock()
-				}
-				sess.MarkMessage(msg, "")
+			attempts, handlerErr := h.deliverWithRetry(msg)
+			if handlerErr != nil {
+				h.publishToDLQ(sess, msg, handlerErr, attempts)
 			}
+			// 落库成功 或 重试预算耗尽（已进 DLQ）→ 都 Mark 前进，
+			// 分区消费不因单条消息停滞。
+			sess.MarkMessage(msg, "")
 			// Stage 94 PR-2b §P0-3：case 末尾立刻 EndSpan（不用 defer —— 绑定到
 			// ConsumeClaim 函数返回会让 N 条消息 span 累积到 consumer 退出才收尾）
 			if span != nil {
@@ -286,6 +262,71 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 			return nil
 		}
 	}
+}
+
+// deliverWithRetry 在**同一条消息**上原地重试 handleOne，直到成功或预算耗尽。
+//
+// 预算 = currentMaxRetries()+1 次尝试（与旧语义的 DLQ.Attempts=4 对齐）。
+// 相邻尝试之间按 backoffFor(attempt) 退避；handleOne 无内部状态，天然可重入。
+// 返回 (实际尝试次数, 最终 error)；成功时 error 为 nil。
+func (h *chatEventHandler) deliverWithRetry(msg *sarama.ConsumerMessage) (int, error) {
+	maxRetries := h.currentMaxRetries()
+	var err error
+	for attempt := 1; ; attempt++ {
+		if err = h.handleOne(msg); err == nil {
+			return attempt, nil
+		}
+		if attempt > maxRetries {
+			return attempt, err
+		}
+		d := h.backoffFor(attempt)
+		log.Printf("[kafka-consumer] handle %s failed (will retry attempt=%d/%d offset=%d, backoff=%s): %v",
+			string(msg.Key), attempt, maxRetries, msg.Offset, d, err)
+		time.Sleep(d)
+	}
+}
+
+// backoffFor 第 attempt 次失败后的等待时长：注入的 backoffFn 优先；
+// 默认指数退避 min(2^attempt 秒, 30s)——2s/4s/8s…，给下游（DB/网络）恢复窗口。
+func (h *chatEventHandler) backoffFor(attempt int) time.Duration {
+	if h.backoffFn != nil {
+		return h.backoffFn(attempt)
+	}
+	d := time.Duration(1<<uint(attempt)) * time.Second
+	if d > 30*time.Second {
+		d = 30 * time.Second
+	}
+	return d
+}
+
+// publishToDLQ 重试预算耗尽后的兜底：投 DLQ（带诊断 headers + sw8 透传）+ 计数。
+// 无论 DLQ 是否配置（Noop），调用方都必须 Mark 前进 —— 由 ConsumeClaim 统一处理。
+func (h *chatEventHandler) publishToDLQ(sess sarama.ConsumerGroupSession, msg *sarama.ConsumerMessage, lastErr error, attempts int) {
+	if h.dlq != nil {
+		// P1-2 (Round 1): 透传原 headers（含 sw8），让 OAP 端能继续追 trace。
+		dlqHeaders := make(map[string]string, len(msg.Headers))
+		for _, hd := range msg.Headers {
+			dlqHeaders[string(hd.Key)] = string(hd.Value)
+		}
+		dlqEntry := DLQEntry{
+			Topic:         msg.Topic,
+			Key:           msg.Key,
+			Value:         msg.Value,
+			Attempts:      attempts,
+			LastError:     lastErr.Error(),
+			OriginalTopic: msg.Topic,
+			Headers:       dlqHeaders,
+		}
+		if dlqErr := h.dlq.Publish(sess.Context(), dlqEntry); dlqErr != nil {
+			// Round 2.3 §PR-1: analytics-svc DLQ 投递失败计数（kafka-pipeline-pending-decisions.md §P1-14）。
+			IncDLQPublishResult(false)
+			log.Printf("[kafka-consumer] DLQ publish failed (dropping msg): %v", dlqErr)
+		} else {
+			IncDLQPublishResult(true)
+		}
+	}
+	log.Printf("[kafka-consumer] handle %s failed after %d attempts → DLQ: %v",
+		string(msg.Key), attempts, lastErr)
 }
 
 // extractSw8Header 从 sarama RecordHeader 列表抽 sw8 header value
@@ -303,64 +344,9 @@ func extractSw8Header(headers []*sarama.RecordHeader) string {
 	return sharedmessaging.ExtractSw8Header(headers)
 }
 
-// handleFailure 处理 handleOne 失败（Stage 30-C A2）
-func (h *chatEventHandler) handleFailure(sess sarama.ConsumerGroupSession, msg *sarama.ConsumerMessage, handlerErr error) {
-	key := attemptKey(msg)
-	// Round 5b §B: 读写 attempts 加 sync.Mutex 守卫(防御性,跨 goroutine 安全)
-	h.attemptsMu.Lock()
-	if h.attempts == nil {
-		h.attempts = make(map[string]int)
-	}
-	h.attempts[key]++
-	attempt := h.attempts[key]
-	h.attemptsMu.Unlock()
-
-	maxRetries := h.currentMaxRetries()
-	if attempt <= maxRetries {
-		log.Printf("[kafka-consumer] handle %s failed (will retry attempt=%d/%d offset=%d): %v",
-			string(msg.Key), attempt, maxRetries, msg.Offset, handlerErr)
-		return
-	}
-
-	// 已达最大重试 → DLQ + Mark
-	if h.dlq != nil {
-		// P1-2 (Round 1): 透传原 headers（含 sw8），让 OAP 端能继续追 trace。
-		dlqHeaders := make(map[string]string, len(msg.Headers))
-		for _, h := range msg.Headers {
-			dlqHeaders[string(h.Key)] = string(h.Value)
-		}
-		dlqEntry := DLQEntry{
-			Topic:         msg.Topic,
-			Key:           msg.Key,
-			Value:         msg.Value,
-			Attempts:      attempt,
-			LastError:     handlerErr.Error(),
-			OriginalTopic: msg.Topic,
-			Headers:       dlqHeaders,
-		}
-		if dlqErr := h.dlq.Publish(sess.Context(), dlqEntry); dlqErr != nil {
-			// Round 2.3 §PR-1: analytics-svc DLQ 投递失败计数（kafka-pipeline-pending-decisions.md §P1-14）。
-			IncDLQPublishResult(false)
-			log.Printf("[kafka-consumer] DLQ publish failed (dropping msg): %v", dlqErr)
-		} else {
-			IncDLQPublishResult(true)
-		}
-	}
-	log.Printf("[kafka-consumer] handle %s failed after %d retries → DLQ: %v",
-		string(msg.Key), attempt, handlerErr)
-	h.attemptsMu.Lock()
-	delete(h.attempts, key)
-	h.attemptsMu.Unlock()
-	sess.MarkMessage(msg, "")
-}
-
-// attemptKey 取 msg.Key，无 key 时用 partition:offset 兜底
-func attemptKey(msg *sarama.ConsumerMessage) string {
-	if len(msg.Key) > 0 {
-		return string(msg.Key)
-	}
-	return fmt.Sprintf("%d:%d", msg.Partition, msg.Offset)
-}
+// handleFailure / attemptKey 已删除（E2E-F-174，2026-10-01）：
+// 旧"重试"不重投消息、按 msg.Key 统计后续消息失败次数，语义失真（F-174/D3 实测）。
+// 替代物 = deliverWithRetry（原地重试）+ publishToDLQ（预算耗尽兜底）。
 
 // handleOne 把一条 chat-event 写为 User_behaviorEvent
 //

@@ -16,7 +16,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
+	"time"
 
 	"emotion-echo-ai-svc/internal/events"
 
@@ -55,14 +55,9 @@ type ConsumerGroupHandler struct {
 	// MaxRetriesFn 重试上限的运行时取值钩子（E2E-23 #31 / D-32）。
 	// 非 nil 时**每条消息**现读；nil 时退回 MaxRetries 字段。
 	MaxRetriesFn func() int
-	// attempts Stage 30-C A2：msg.Key → 已重试次数（消费周期内有效）
-	//
-	// Round 5b §B：attemptsMu 守卫 map 读写。sarama 当前版本 ConsumeClaim
-	// 是单 goroutine(SARAMA 内部保证),但未来重构(worker pool / 异步 retry)
-	// 或 sarama 跨 goroutine 派发 partition 时,map 会触发 race detector。
-	// 加 sync.Mutex 防御性保护 —— 比 sync.Map 简单且对小 map(<1000 key)性能更好。
-	attempts   map[string]int
-	attemptsMu sync.Mutex
+	// BackoffFn 重试退避注入点（E2E-F-174，2026-10-01）。nil = 默认指数退避
+	// min(2^attempt 秒, 30s)。测试注入 0 退避以保证确定性。
+	BackoffFn func(attempt int) time.Duration
 }
 
 // MessageHandler 是单条消息的业务处理函数
@@ -89,16 +84,17 @@ func (h *ConsumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 //
 // Stage 30-C A2: Handler 返 error → handleFailure：重试计数 + DLQ。
 //
+// E2E-F-174（2026-10-01 重写）：Handler 失败的消息**在同一条消息上原地重试**
+// （deliverWithRetry，预算 = MaxRetries+1 次尝试），预算耗尽 → DLQ（若配置）+
+// Mark 前进。旧实现的"重试"不回退 offset、计数靠后续同 key 消息失败次数推进
+// ⇒ 单条毒消息永不被重新处理、可永久阻塞分区（账本 D3/F-174 实测）。
+// 新实现下每条消息的结果（成功 or DLQ）在单次遍历内确定。
+//
 // Stage 94 PR-2a §P0-3：方案 A — span 生命周期提到 case 顶部、case 末尾显式
 // span.EndSpan(handlerErr)。原 `defer span.EndSpan(nil)` 在 for-loop case 内会
 // 延后到 ConsumeClaim 退出才批量收尾，OAP 上每条消息 duration = 整 consumer
 // goroutine 寿命（或永不 EndSpan 直到进程退出）。本次修复 + err 透传。
 func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	h.attemptsMu.Lock()
-	if h.attempts == nil {
-		h.attempts = make(map[string]int)
-	}
-	h.attemptsMu.Unlock()
 	maxRetries := h.effectiveMaxRetries()
 	if maxRetries <= 0 {
 		maxRetries = 3
@@ -147,19 +143,15 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 					span.Tag("event.type", evt.Type)
 				}
 			}
-			// 调业务。Stage 94 PR-2a：handlerErr 透传给 span.EndSpan，让 OAP 标记失败
-			var handlerErr error
-			if handlerErr = h.Handler(sess.Context(), evt); handlerErr != nil {
-				h.handleFailure(sess, msg, handlerErr, maxRetries)
-			} else {
-				// 业务成功：清空 attempts（key 复用 = 同事件再次成功）
-				if key := attemptKey(msg); key != "" {
-					h.attemptsMu.Lock()
-					delete(h.attempts, key)
-					h.attemptsMu.Unlock()
-				}
-				sess.MarkMessage(msg, "")
+			// 调业务。E2E-F-174：失败原地重试（预算 = maxRetries+1 次尝试），
+			// 预算耗尽 → DLQ（若配置）+ Mark 前进。
+			// Stage 94 PR-2a：handlerErr 透传给 span.EndSpan，让 OAP 标记失败
+			attempts, handlerErr := h.deliverWithRetry(sess, evt, msg, maxRetries)
+			if handlerErr != nil {
+				h.publishToDLQ(sess, msg, handlerErr, attempts)
 			}
+			// 落库成功 或 重试预算耗尽（已投 DLQ / DLQ 未配置）→ 都 Mark 前进
+			sess.MarkMessage(msg, "")
 			// Stage 94 PR-2a §P0-3：case 末尾立刻 EndSpan（不用 defer —— defer 绑定到
 			// ConsumeClaim 函数返回，会让 N 条消息 span 累积到 consumer 退出才收尾）
 			if span != nil {

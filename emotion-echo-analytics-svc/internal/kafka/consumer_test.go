@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -472,7 +471,6 @@ func TestHandleOne_DLQ_NoOpWhenSuccess(t *testing.T) {
 		topic:    "chat-events",
 		dlq:      dlq,
 		retries:  newInt32Ptr(3),
-		attempts: make(map[string]int),
 	}
 
 	msg := &sarama.ConsumerMessage{
@@ -489,18 +487,30 @@ func TestHandleOne_DLQ_NoOpWhenSuccess(t *testing.T) {
 	}
 }
 
-// TestHandleFailure_DLQ_RetriesThenMarks Stage 30-C A2:
-// 直接测 handleFailure：第 1/2/3 次不 Mark（attempt <= MaxRetries），
-// 第 4 次投 DLQ + Mark + 清 attempts。
-func TestHandleFailure_DLQ_RetriesThenMarks(t *testing.T) {
+// TestConsumeClaim_RetryBudgetExhausted_PublishesDLQ_AndMarks（替代 TestHandleFailure_DLQ_RetriesThenMarks，
+// E2E-F-174 2026-10-01 契约翻转）
+//
+// 旧契约（失真，F-174）：handleFailure 被外部反复调用 4 次才 DLQ —— "重试"从未
+// 真的重投同一条消息，计数靠后续同 key 消息推进。**该契约编码的正是缺陷本身**，
+// 随 F-174 修复一并翻转。
+//
+// 新契约：单条消息在 ConsumeClaim 内原地重试 maxRetries+1 次（handleOne 共调
+// 4 次、退避 3 次），预算耗尽 → 恰好 1 条 DLQ（Attempts=4、LastError 非空、
+// Value=原 payload）→ Mark 前进。
+func TestConsumeClaim_RetryBudgetExhausted_PublishesDLQ_AndMarks(t *testing.T) {
 	t.Parallel()
 	dlq := NewInMemoryDLQPublisher()
+	repo := &captureEventRepo{err: errors.New("forced err (F-174)")}
+	backoffs := []time.Duration{}
 	h := &chatEventHandler{
-		repo:     &captureEventRepo{},
-		topic:    "chat-events",
-		dlq:      dlq,
-		retries:  newInt32Ptr(3),
-		attempts: make(map[string]int),
+		repo:    repo,
+		topic:   "chat-events",
+		dlq:     dlq,
+		retries: newInt32Ptr(3),
+		backoffFn: func(attempt int) time.Duration {
+			backoffs = append(backoffs, time.Duration(attempt))
+			return 0 // 测试零退避
+		},
 	}
 
 	msg := &sarama.ConsumerMessage{
@@ -509,29 +519,21 @@ func TestHandleFailure_DLQ_RetriesThenMarks(t *testing.T) {
 		Value: []byte(`{"type":"message.created","id":"evt-hf-1","data":{"userId":1}}`),
 	}
 
-	for i := 1; i <= 4; i++ {
-		sess, marked := newStubSession()
-		h.handleFailure(sess, msg, errors.New("forced err"))
-		if i <= 3 {
-			if *marked {
-				t.Errorf("attempt=%d <= MaxRetries=3 时不应 Mark", i)
-			}
-			if len(dlq.Captured()) != 0 {
-				t.Errorf("attempt=%d <= MaxRetries=3 时不应投 DLQ", i)
-			}
-		} else {
-			if !*marked {
-				t.Errorf("attempt=%d > MaxRetries=3 时应 Mark", i)
-			}
-			if len(dlq.Captured()) != 1 {
-				t.Errorf("attempt=%d > MaxRetries=3 时应投 DLQ，got %d entries", i, len(dlq.Captured()))
-			}
-			if h.attempts["evt-hf-1"] != 0 {
-				t.Errorf("投 DLQ 后应清 attempts，got %d", h.attempts["evt-hf-1"])
-			}
-		}
+	sess := &fakeSession93{}
+	claim := &fakeClaim93{msgs: make(chan *sarama.ConsumerMessage, 1)}
+	claim.msgs <- msg
+	close(claim.msgs)
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ConsumeClaim timeout")
 	}
 
+	if len(backoffs) != 3 {
+		t.Errorf("退避次数 = %d，want 3（maxRetries=3 ⇒ 尝试 4 次、退避 3 次）", len(backoffs))
+	}
 	got := dlq.Captured()
 	if len(got) != 1 {
 		t.Fatalf("expected 1 DLQ entry, got %d", len(got))
@@ -545,17 +547,22 @@ func TestHandleFailure_DLQ_RetriesThenMarks(t *testing.T) {
 	if string(got[0].Value) != string(msg.Value) {
 		t.Error("DLQ.Value 应等于原 message.Value")
 	}
+	if len(sess.marked) != 1 {
+		t.Errorf("预算耗尽后应 Mark 前进，marked=%d，want 1", len(sess.marked))
+	}
 }
 
-// TestHandleFailure_NoopDLQ_RetriesAndMarks 验证 NoopDLQPublisher 也走 attempt 计数（不退化为"无限重投"）。
-func TestHandleFailure_NoopDLQ_RetriesAndMarks(t *testing.T) {
+// TestConsumeClaim_NoopDLQ_StillMarksAfterBudget（替代 TestHandleFailure_NoopDLQ_RetriesAndMarks，
+// E2E-F-174 契约翻转）：DLQ 未配置（Noop）时预算耗尽仍 Mark 前进，毒消息不卡分区。
+func TestConsumeClaim_NoopDLQ_StillMarksAfterBudget(t *testing.T) {
 	t.Parallel()
+	repo := &captureEventRepo{err: errors.New("err (F-174)")}
 	h := &chatEventHandler{
-		repo:     &captureEventRepo{},
-		topic:    "chat-events",
-		dlq:      NoopDLQPublisher{},
-		retries:  newInt32Ptr(1),
-		attempts: make(map[string]int),
+		repo:      repo,
+		topic:     "chat-events",
+		dlq:       NoopDLQPublisher{},
+		retries:   newInt32Ptr(1),
+		backoffFn: func(int) time.Duration { return 0 },
 	}
 
 	msg := &sarama.ConsumerMessage{
@@ -564,15 +571,20 @@ func TestHandleFailure_NoopDLQ_RetriesAndMarks(t *testing.T) {
 		Value: []byte(`{"type":"message.created","id":"evt-noop-1","data":{"userId":1}}`),
 	}
 
-	sess1, marked1 := newStubSession()
-	h.handleFailure(sess1, msg, errors.New("err"))
-	if *marked1 {
-		t.Error("attempt=1 <= MaxRetries=1 不应 Mark")
+	sess := &fakeSession93{}
+	claim := &fakeClaim93{msgs: make(chan *sarama.ConsumerMessage, 1)}
+	claim.msgs <- msg
+	close(claim.msgs)
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ConsumeClaim timeout")
 	}
-	sess2, marked2 := newStubSession()
-	h.handleFailure(sess2, msg, errors.New("err"))
-	if !*marked2 {
-		t.Error("attempt=2 > MaxRetries=1 应 Mark（避免毒消息卡死）")
+
+	if len(sess.marked) != 1 {
+		t.Errorf("NoopDLQ 下预算耗尽（尝试 2 次）也应 Mark 前进，marked=%d", len(sess.marked))
 	}
 }
 
@@ -653,7 +665,6 @@ func TestConsumeClaim_RestoresParentTraceFromSw8Header(t *testing.T) {
 		topic:    "chat-events",
 		dlq:      NoopDLQPublisher{},
 		retries:  newInt32Ptr(3),
-		attempts: make(map[string]int),
 	}
 
 	// 通过 WithTracer builder 注入 tracer（GREEN 阶段提供 builder）。
@@ -709,7 +720,6 @@ func TestConsumeClaim_NoSw8Header_StillCreatesSpan(t *testing.T) {
 		topic:    "chat-events",
 		dlq:      NoopDLQPublisher{},
 		retries:  newInt32Ptr(3),
-		attempts: make(map[string]int),
 		Tracer:   tracer,
 	}
 
@@ -750,7 +760,6 @@ func TestConsumeClaim_NilTracer_DoesNotCallCreateEntrySpan(t *testing.T) {
 		topic:    "chat-events",
 		dlq:      NoopDLQPublisher{},
 		retries:  newInt32Ptr(3),
-		attempts: make(map[string]int),
 		Tracer:   nil, // 关键：tracer=nil
 	}
 
@@ -777,75 +786,9 @@ func TestConsumeClaim_NilTracer_DoesNotCallCreateEntrySpan(t *testing.T) {
 // TestHandleFailure_ConcurrentAccessIsSafe Round 5b §B GREEN:
 //
 // observability-edge-gaps §B (consumer.attempts 加锁 P2 0.5h):
-// 与 ai-svc TestHandleFailure_ConcurrentAccessIsSafe 同模式:N=50 goroutine
-// 并发调 chatEventHandler.handleFailure + ConsumeClaim,断言 attempts map
-// 至少 N 个 key 且无 panic。
-//
-// 测试设计:
-//   - 启动 N=50 goroutine 并发调 handleFailure + ConsumeClaim
-//   - 断言:attempts map 至少 N 个 key(无锁会偶发 panic + 数据丢失)
-//   - 不依赖 -race(Windows 限制,详见 ai-svc 测试注释)
-func TestHandleFailure_ConcurrentAccessIsSafe(t *testing.T) {
-	t.Parallel()
-	dlq := NewInMemoryDLQPublisher()
-	h := &chatEventHandler{
-		repo:     &captureEventRepo{},
-		topic:    "chat-events",
-		dlq:      dlq,
-		retries:  newInt32Ptr(100), // 高值,避免任一 goroutine 触发 DLQ 路径
-		attempts: make(map[string]int),
-	}
-
-	const N = 50
-	var wg sync.WaitGroup
-	wg.Add(N * 2)
-
-	// goroutine 1: N 个 handleFailure
-	for i := 0; i < N; i++ {
-		i := i
-		go func() {
-			defer wg.Done()
-			msg := &sarama.ConsumerMessage{
-				Topic: "chat-events",
-				Key:   []byte(fmt.Sprintf("evt-an-race-%d", i)),
-				Value: mustJSON(t, events.Event{ID: "x", Type: events.EventTypeMessageCreated, Time: time.Now()}),
-			}
-			sess := &fakeSession93{}
-			h.handleFailure(sess, msg, errors.New("forced"))
-		}()
-	}
-
-	// goroutine 2: N 个 ConsumeClaim
-	for i := 0; i < N; i++ {
-		i := i
-		go func() {
-			defer wg.Done()
-			msg := &sarama.ConsumerMessage{
-				Topic:     "chat-events",
-				Key:       []byte(fmt.Sprintf("evt-an-claim-race-%d", i)),
-				Value:     mustJSON(t, events.Event{ID: "x", Type: events.EventTypeMessageCreated, Time: time.Now()}),
-				Headers:   nil,
-				Timestamp: time.Now(),
-			}
-			claim := &fakeClaim93{msgs: make(chan *sarama.ConsumerMessage, 1)}
-			sess := &fakeSession93{}
-			claim.msgs <- msg
-			close(claim.msgs)
-			done := make(chan error, 1)
-			go func() { done <- h.ConsumeClaim(sess, claim) }()
-			select {
-			case <-done:
-			case <-time.After(2 * time.Second):
-			}
-		}()
-	}
-
-	wg.Wait()
-
-	if got := len(h.attempts); got < N {
-		t.Errorf("attempts map len = %d, want >= %d (handleFailure 写入被并发丢失?)", got, N)
-	}
-}
+// TestHandleFailure_ConcurrentAccessIsSafe 已随 F-174 修复删除（2026-10-01）：
+// 它守护的 attempts map / attemptsMu 已被整体移除（新实现 = 每条消息原地重试，
+// 无跨消息共享状态）；atomic.Int32 retries 的并发安全由 ops_retry_test.go 覆盖。
 
 // =====================================================
 // Stage 94 PR-2b §P0-3 RED · analytics-svc consumer "span 在 case 末尾 EndSpan"
@@ -889,7 +832,6 @@ func TestConsumeClaim_SpanEndSpanCalledWithinCaseBody(t *testing.T) {
 		topic:    "chat-events",
 		dlq:      NoopDLQPublisher{},
 		retries:  newInt32Ptr(3),
-		attempts: make(map[string]int),
 		Tracer:   tracer,
 	}
 
@@ -954,4 +896,81 @@ func newInt32Ptr(n int32) *atomic.Int32 {
 	v := &atomic.Int32{}
 	v.Store(n)
 	return v
+}
+
+// =====================================================
+// E2E-F-174: 重试语义修复 —— 失败消息必须原地重试（2026-10-01）
+// =====================================================
+//
+// 旧语义（失真，运行时实测）：ConsumeClaim 内 handleOne 失败后不 Mark 也不回退，
+// 循环直接读下一条 ⇒ "重试计数"靠后续同 key 消息失败次数推进，单条毒消息
+// 永远不被重新处理、可永久阻塞分区；重启清零计数（账本 D3）。
+//
+// 新语义：失败消息在同一条消息上原地重试（预算 = MaxRetries+1 次尝试），
+// 预算耗尽 → DLQ + Mark，继续下一条；分区永不因单条消息卡死。
+
+// flakyEventRepo 按事件 ID 控制前 N 次 Create 失败（F-174 测试桩）。
+type flakyEventRepo struct {
+	*captureEventRepo
+	mu            sync.Mutex
+	failRemaining map[string]int
+	calls         int
+}
+
+func (r *flakyEventRepo) Create(_ context.Context, e *model.UserBehaviorEvent) error {
+	r.mu.Lock()
+	r.calls++
+	remaining := r.failRemaining[string(e.EventID)]
+	if remaining > 0 {
+		r.failRemaining[string(e.EventID)] = remaining - 1
+		r.mu.Unlock()
+		return errors.New("forced transient err (F-174)")
+	}
+	r.mu.Unlock()
+	return r.captureEventRepo.Create(context.Background(), e)
+}
+
+// TestConsumeClaim_FailedMessage_RetriedInPlace F-174 RED：
+// msg1 首次失败后必须**在同一条消息上**重试成功，然后才处理 msg2。
+// 旧代码下 Create 总调用数 = 2（msg1 失败一次后放弃、直接处理 msg2）⇒ RED。
+func TestConsumeClaim_FailedMessage_RetriedInPlace(t *testing.T) {
+	t.Parallel()
+	repo := &flakyEventRepo{
+		captureEventRepo: &captureEventRepo{},
+		failRemaining:    map[string]int{"evt-red-1": 1},
+	}
+	h := &chatEventHandler{
+		repo:     repo,
+		topic:    "chat-events",
+		dlq:      NoopDLQPublisher{},
+		retries:  newInt32Ptr(3),
+	}
+
+	msg1 := &sarama.ConsumerMessage{Topic: "chat-events", Key: []byte("evt-red-1"),
+		Value: mustJSON(t, events.Event{ID: "evt-red-1", Type: events.EventTypeMessageCreated,
+			Time: time.Now(), Data: events.MessageCreatedData{MessageID: 1, ConversationID: 1, UserID: 7}})}
+	msg2 := &sarama.ConsumerMessage{Topic: "chat-events", Key: []byte("evt-red-2"),
+		Value: mustJSON(t, events.Event{ID: "evt-red-2", Type: events.EventTypeMessageCreated,
+			Time: time.Now(), Data: events.MessageCreatedData{MessageID: 2, ConversationID: 1, UserID: 7}})}
+
+	sess := &fakeSession93{}
+	claim := &fakeClaim93{msgs: make(chan *sarama.ConsumerMessage, 2)}
+	claim.msgs <- msg1
+	claim.msgs <- msg2
+	close(claim.msgs)
+
+	done := make(chan error, 1)
+	go func() { done <- h.ConsumeClaim(sess, claim) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("ConsumeClaim timeout")
+	}
+
+	if repo.calls != 3 {
+		t.Errorf("F-174 RED：Create 调用数 = %d，want 3（msg1 失败 1 次 + 原地重试成功 1 次 + msg2 一次）；旧语义 msg1 失败后不重投 ⇒ 只有 2 次", repo.calls)
+	}
+	if n := len(sess.marked); n != 2 {
+		t.Errorf("F-174 RED：MarkMessage 次数 = %d，want 2（两条消息都必须被 Mark）", n)
+	}
 }
