@@ -137,6 +137,13 @@ jobs:
       # 却因为没人跑而无人发现（测试不接 CI 等于没有测试）。
       - name: seed.sh structural assertions
         run: node deploy/apisix/seed_test.js
+      # E2E-25 C2：seed↔admin 漂移检测纯函数库的契约测试（F-139 治理）。
+      # 网络侧由 scripts/check_apisix_drift.sh 在 dev 环境跑（RUNBOOK §12），
+      # CI 覆盖纯逻辑（normalize/diff/extras 提取）。
+      - name: apisix drift lib contract tests
+        run: node scripts/test_apisix_drift_lib.js
+      - name: apisix drift wrapper offline tests
+        run: bash scripts/test_check_apisix_drift.sh
 
   secrets-scan:
     name: 明文密钥扫描
