@@ -31,20 +31,29 @@ related-stage: stage-97, e2e-03, e2e-22, e2e-23
 > - `汇总门禁 needs 覆盖校验`（`doc-drift-needs-sync`）：跑 `scripts/check_doc_drift_gate_needs.sh`，
 >   断言 gate 的 `needs` 覆盖全部检查 job 且无失效引用。**它必须独立于 gate 跑** ——
 >   校验汇总门禁的 job 不能被汇总门禁覆盖，否则 gate 漏掉自己就没人发现。 |
-| `e2e-guards.yml` | push / PR | 静态守卫（E2E-23 新增） | 7 个 `scripts/test_*.sh` 静态守卫，**见下方"门禁生效边界"** |
+| `e2e-guards.yml` | push / PR | 静态守卫（E2E-23 新增） | **14 个**静态守卫（13 个 `scripts/test_*.sh` + 1 个 `scripts/check_*.sh`），**见下方"门禁生效边界"** |
 
-`e2e-guards.yml` 跑的这 7 个守卫（均为纯静态检查，不需要运行中的容器）：
+`e2e-guards.yml` 跑的这 14 个守卫（均为纯静态检查，不需要运行中的容器；计数 2026-10-02 E2E-25 对账——此前写"7 个"且清单只列 8 行，与 workflow 实际 14 步不符，属"守卫清单漂移"）：
 
 | 脚本 | 断言 |
 |------|------|
 | `scripts/test_healthcheck_readiness.sh` | compose + Helm 两侧 readiness 探针必须是 `/health/ready`；反向断言 liveness 仍是浅探针 `/health` |
-| `scripts/test_grpc_health_shutdown.sh` | 5 个 gRPC 服务 `MarkShuttingDown()` 先翻 NOT_SERVING 再 GracefulStop |
+| `scripts/test_grpc_health_shutdown.sh` | 5 个 gRPC 服务 `MarkShuttingDown()` 先翻 NOT_SERVING 再 GraceStop |
 | `scripts/test_nacos_required_declared.sh` | 各服务在 compose 中声明了它实际依赖的 Nacos 服务 |
 | `scripts/test_migrate_pg_wait.sh` | `migrate.sh` 的 `PG_WAIT_MAX_SECS` + 递增退避，且失败非零退出 |
-| `scripts/test_obs_healthchecks.sh` | 16 个观测/网关容器都有 healthcheck 且真的探得到东西 |
+| `scripts/test_obs_healthchecks.sh` | 16 个观测/网关容器都有 healthcheck 且真的探得到东西（E2E-25 更新：apisix 基准为 admin API 9180 原始 GET，非 TCP 9080） |
 | `scripts/test_devup_batch_waits.sh` | `dev-up.sh` 的分批等待没有"起完就当就绪"的空等 |
+| `scripts/test_devup_drift_check.sh` | **（E2E-25 D-36 新增）** `dev-up.sh` 接入 `check_apisix_drift.sh extras` 漂移报告且只报不拦（`if !` 保护），调用位置在 apisix-seed 之后 |
 | `scripts/test_route_contract.sh` | APISIX ↔ BFF ↔ 前端三方路由集合无漂移（早于 E2E-23 存在，**本轮才接进 CI** —— 见下方"为什么补这一条"） |
 | `scripts/test_stage_todo_section.sh` | 每个 partial 阶段的 report 必须有 §0 未完成清单，且声明条数与实际条目一致（棘轮：历史阶段计入 legacy，基线只降不升） |
+| `scripts/test_integration_tag_compiles.sh` | `//go:build integration` 的代码在 `-tags integration` 下也能编译（E2E-23，防编译盲区） |
+| `scripts/test_audit_ledger_parser.sh` | 审计器账本解析器无盲区（跨行 Markdown / 转义竖线不丢行） |
+| `scripts/test_healthcheck_no_dead_server.sh` | healthcheck 无生产死代码（E2E-23 F-163） |
+| `scripts/test_health_nilrepo_truthful.sh` | 降级启动（repo=nil）时健康探针必须说假话，不许 dbOK=true（E2E-23 F-96） |
+| `scripts/test_go_test_exitcode_gate.sh` | go test 结果判定必须用退出码，禁止 grep（E2E-23 ugrep 假绿教训） |
+
+> **E2E-25 另在 `doc-drift-check.yml` 的 `apisix-seed-structure` job 加了 2 步**（属该 job 内步骤，不改上方 job 计数）：
+> `scripts/test_apisix_drift_lib.js`（漂移检测纯函数契约 15 断言）+ `scripts/test_check_apisix_drift.sh`（wrapper 离线 6 断言）。
 
 需要运行中的容器栈的 `scripts/smoke_health_discovery.py` **不在 CI**（CI 无 docker 栈），
 只在本地/dev 模式跑。
