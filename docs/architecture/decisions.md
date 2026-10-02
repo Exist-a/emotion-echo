@@ -165,7 +165,7 @@
 
 ### 决策 7：鉴权 = **APISIX jwt-auth**（替换 svc mock 鉴权）
 
-> ❌ **2026-08-31 已退役且未落地**：随 APISIX 一起退役。当前全链路 JWT **不验签**（shared `jwt_auth.go` 只 base64 解码 payload，签名验证点随 APISIX 消失），为审计 P0 问题 S-1；鉴权回归 BFF/svc 验签的修复见审计 §八 R-3。
+> ❌→✅ **状态更正（2026-10-02 E2E-25 复核，原 2026-08-31 退役注记已过时）**：APISIX 已随决策 11 复职（2026-09-03），**jwt-auth 验签已真实落地**——consumer 验签（key=user/secret=BFF_JWT_SECRET）+ catch-all `store_in_ctx` + serverless 注入 X-User-Id（deploy/apisix/seed.sh），Stage 109a 修复 3.18 encrypt_fields 上游 bug 后全链 401/200 实测通过。E2E-25 运行时复证：篡改签名 401 / 有效 token 200 / 伪造 X-User-Id 被覆盖。`jwt_auth.go` 的 base64 解码逻辑仅存于 dev 直连 BFF 的调试路径（BFF_TRUST_APISIX=true + APISIXCIDRs 门控）。
 
 | 维度 | 选择 |
 |------|------|
@@ -183,7 +183,7 @@
 | 熔断 | APISIX `api-breaker`（保护下游 svc） |
 | CORS | APISIX `cors`（统一一次配） |
 
-> ❌ **2026-08-31 已退役且未落地**：限流/熔断随 APISIX 退役后**未在 BFF 实现**（stage-30 文档明示"当前未实现"）。恢复路径见 `stage-30-apisix-retirement.md` §五：BFF 内 `golang.org/x/time/rate` + `sony/gobreaker`（轻量）。
+> ❌→✅ **状态更正（2026-10-02 E2E-25 复核）**：APISIX 复职后限流/熔断**已在网关层落地**——limit-count（60/min/IP，policy=redis 跨节点共享，E2E-25 双节点实测不放大）+ limit-req（1000/s burst 100）+ api-breaker（unhealthy 500/502/504×3 → 503 熔断，E2E-25 实测触发与恢复；原配置三字段非 schema 字段被静默忽略，已换真实字段 = E2E-F-178）。CORS 亦由 APISIX cors 插件统一（allow_credential=true，白名单 env 单源）。
 
 ### 决策 9：服务入口 = **web-bff**（APISIX 已退役）
 
