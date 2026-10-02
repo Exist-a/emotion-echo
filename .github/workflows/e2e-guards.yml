@@ -130,3 +130,9 @@ jobs:
       # 真正抓住问题的是 CI 而非本地校验。本守卫锁死"用退出码判定"这条规则。
       - name: 守卫 13/13 go test 结果判定必须用退出码
         run: bash scripts/test_go_test_exitcode_gate.sh
+
+      # E2E-F-173（2026-10-02）：总闸把 adr-gate 的 skipped 判红 ⇒ main push 恒红。
+      # 聚合判定已抽成 scripts/check_doc_drift_gate_result.sh，本守卫钉其语义契约
+      # （success/skipped=通过、failure/cancelled=失败）。没有它，判定逻辑改回去没人知道。
+      - name: 守卫 14/14 文档总闸聚合判定（skipped 视为通过）
+        run: bash scripts/test_check_doc_drift_gate_result.sh
