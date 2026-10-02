@@ -60,7 +60,11 @@ const src = fs.readFileSync(SEED_SH, 'utf8');
 const cfg = fs.readFileSync(CONFIG_YAML, 'utf8');
 const checks = [
   ['seed.sh executable', isExecutable(SEED_SH)],
-  ['set -euo pipefail', src.includes('set -euo pipefail')],
+  // E2E-25 #11 弱断言修复：原断言 `src.includes('set -euo pipefail')` 会被
+  // seed.sh:24 **注释**里的字面量满足，而脚本实际用 `set -eu`（ash 兼容，
+  // 见 seed.sh 头注释）。断言必须匹配"实际生效的 set 行"，不得被注释满足。
+  ['set -eu 严格模式（非注释行；ash 兼容，勿写 pipefail）',
+    /^set -eu\s*$/m.test(src)],
   // E2E-F-69（2026-09-18）：原断言把**真实密钥**写进了测试文件 ⇒ 等于换个地方
   // 继续留在公开仓库里（测试文件也是仓库的一部分）。改为断言"安全性质"：
   // 默认值必须是非密钥占位符，且 seed.sh 不得内联任何长十六进制字面量。
@@ -113,6 +117,47 @@ const checks = [
     /"redis_host":\s*"\$\{?LIMIT_REDIS_HOST\}?"/.test(src)],
   ['LIMIT_POLICY default = redis (E2E-20 #8)',
     /LIMIT_POLICY="\$\{LIMIT_POLICY:-redis\}"/.test(src)],
+  // E2E-25 #17/N2：白名单路由的 limit-count 此前漏配 rejected_code ⇒ 限流拒绝走
+  // APISIX 默认 503（openresty 裸页），与 catch-all 的 429 语义不一致——客户端无法
+  // 区分"被限流"与"网关故障"（2026-10-02 实测 60×200 + 10×503）。
+  ['E2E-25 AUTH_WHITELIST limit-count 补 rejected_code=429（N2）',
+    (() => {
+      const m = src.match(/AUTH_WHITELIST_PLUGINS=\$\(cat <<EOF([\s\S]*?)\nEOF\n\)/);
+      return m ? /"rejected_code":\s*429/.test(m[1]) : false;
+    })()],
+
+  // === E2E-25 C1 RED：upstream 主动健康检查（F-154）===
+  // 6 个 nacos-discovery upstream 此前完全没有 checks 段 ⇒ 节点健康 100% 外包给
+  // Nacos 心跳 + discovery fetch_interval:30（D-30 实测摘除滞后 ≥75s）。
+  // 依据 https://apisix.apache.org/docs/apisix/tutorials/health-check/ ：
+  //   passive 单独无法把节点标回健康，必须与 active 组合 ⇒ checks 必须含 active。
+  ['E2E-25 put_nacos_upstream JSON 含 checks 段（F-154）',
+    (() => {
+      const m = src.match(/put_nacos_upstream\(\) \{([\s\S]*?)\n\}/);
+      return m ? /"checks"/.test(m[1]) : false;
+    })()],
+  ['E2E-25 checks.active 主动探测（passive 单独无法标回健康）',
+    (() => {
+      const m = src.match(/put_nacos_upstream\(\) \{([\s\S]*?)\n\}/);
+      return m ? /"active"\s*:\s*\{/.test(m[1]) : false;
+    })()],
+  ['E2E-25 checks.active.http_path = /health（svc 健康端点）',
+    (() => {
+      const m = src.match(/put_nacos_upstream\(\) \{([\s\S]*?)\n\}/);
+      return m ? /"http_path":\s*"\/health"/.test(m[1]) : false;
+    })()],
+  ['E2E-25 checks.active 阈值显式（healthy.successes + unhealthy.http_failures）',
+    (() => {
+      const m = src.match(/put_nacos_upstream\(\) \{([\s\S]*?)\n\}/);
+      return m ? /"successes"/.test(m[1]) && /"http_failures"/.test(m[1]) : false;
+    })()],
+
+  // === E2E-25 C4 RED：死变量禁令（F-d）===
+  // seed.sh 曾定义 PLUGINS_JSON（内含硬编码 "policy": "local" 的 limit-count）但
+  // 全部路由 PUT 只引用 CATCHALL/AUTH_WHITELIST/HEALTH——改它不生效，属"配置分叉"
+  // 型漂移陷阱。禁令：不得存在定义后未被引用的插件配置块。
+  ['E2E-25 不存在死变量 PLUGINS_JSON（定义后必须被引用或删除，F-d）',
+    !/^PLUGINS_JSON=\$\(cat <<EOF/m.test(src)],
   ['api-breaker min_requests = 20', src.includes('"min_requests": 20')],
   ['api-breaker error_threshold_ratio = 0.5',
     src.includes('"error_threshold_ratio": 0.5')],
