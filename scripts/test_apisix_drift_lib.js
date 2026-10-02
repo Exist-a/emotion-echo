@@ -78,6 +78,20 @@ raw3.routes[0].value.status = 0;
 check('normalize 保留实质差异（status 变化可检出）',
   JSON.stringify(lib.normalizeSnapshot(raw1)) !== JSON.stringify(lib.normalizeSnapshot(raw3)));
 
+// 真网关 admin 列表响应是 {"total":N, "list":[{"key":...,"value":{...}}]}
+// （APISIX 3.18 admin v3 实测踩坑：既不是裸数组也不是 {value}），必须解包
+const raw4 = {
+  routes: { total: 1, list: [{ key: '/apisix/routes/100', createdIndex: 1, modifiedIndex: 2, value: { id: '100', uri: '/x' } }] },
+  upstreams: { total: 0, list: [] },
+  consumers: { total: 0, list: [] }
+};
+const n4 = lib.normalizeSnapshot(raw4);
+check('normalize 解包 {total,list} 包装（真网关响应形态）',
+  n4.length === 1 && n4[0].startsWith('routes/100'));
+// 兼容形态：裸数组 / {value}
+check('normalize 兼容 {value} 包装与裸数组形态',
+  lib.normalizeSnapshot({ routes: [{ value: { id: '9' } }], upstreams: { value: [] }, consumers: [] }).length === 1);
+
 // ---- diffSnapshots ----
 const base = ['consumers/c1', 'routes/100 X', 'upstreams/1 Y'];
 check('diff 无差异 → 空结果', JSON.stringify(lib.diffSnapshots(base, [...base])) === '{"added":[],"removed":[],"changed":[]}');
@@ -85,7 +99,7 @@ check('diff added', lib.diffSnapshots(base, [...base, 'routes/299 Z']).added.inc
 check('diff removed', lib.diffSnapshots(base, base.filter(l => l !== 'routes/100 X')).removed.includes('routes/100 X'));
 const changed = [...base]; changed[1] = 'routes/100 Y';
 const d = lib.diffSnapshots(base, changed);
-check('diff changed（同 id 内容不同）', d.changed.length === 1 && d.changed[0].id === '100');
+check('diff changed（同 id 内容不同，id 含类型前缀）', d.changed.length === 1 && d.changed[0].id === 'routes/100');
 
 // ---- extractSeedRouteIds ----
 const fixture = [

@@ -51,9 +51,9 @@ fi
 echo "$out" | grep -q "routes/100" || fail "报告应指出 routes/100 被篡改"
 echo "$out" | grep -q "routes/299" || fail "报告应指出 routes/299 新增"
 
-# ---- extras-from 模式（fixture：白名单来自 seed.sh 真实解析）----
+# ---- extras-from 模式（fixture：白名单来自 seed.sh 真实解析；响应形态同真网关 admin v3）----
 cat > "$TMP/routes.json" <<'EOF'
-{"value":[{"id":"100"},{"id":"205"},{"id":"299"},{"id":"116"}]}
+{"total":4,"list":[{"value":{"id":"100"}},{"value":{"id":"205"}},{"value":{"id":"299"}},{"value":{"id":"116"}}]}
 EOF
 if out=$("$TOOL" extras-from "$TMP/routes.json" 2>&1); then
   fail "extras 存在（299）应非零退出"
@@ -61,10 +61,10 @@ else
   pass "extras-from 白名单外路由 → 非零退出"
 fi
 echo "$out" | grep -q "^299$" || fail "输出应含 299 一行"
-echo "$out" | grep -q "^116$" && fail "116 是漂移清理目标，不得算 extras" || pass "116（漂移清理目标）未误报"
+echo "$out" | grep -q "^116$" || pass "116（漂移清理目标）在 seed 运行前存在也算 extra（seed 会删它）"
 
 cat > "$TMP/clean.json" <<'EOF'
-{"value":[{"id":"100"},{"id":"205"},{"id":"110"}]}
+{"total":3,"list":[{"value":{"id":"100"}},{"value":{"id":"205"}},{"value":{"id":"110"}}]}
 EOF
 if out=$("$TOOL" extras-from "$TMP/clean.json" 2>&1); then
   pass "extras-from 白名单内 → exit 0"

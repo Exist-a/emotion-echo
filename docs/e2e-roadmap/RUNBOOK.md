@@ -404,6 +404,10 @@ python scripts/smoke_data_layer.py
 
 # 文档/配置一致性校验（E2E-05 用）
 bash scripts/check_routes_alignment.sh && python scripts/check_view_consistency.py
+
+# APISIX seed↔admin 漂移检测（E2E-25 用；纯逻辑契约测试在 CI 的 apisix-seed-structure job）
+bash scripts/check_apisix_drift.sh verify   # 快照→重跑 seed→对比+白名单外路由检查；exit 1=extras / 2=篡改类
+bash scripts/check_apisix_drift.sh extras   # 只查白名单外路由（route 116/299 类漂移）
 ```
 
 ---
