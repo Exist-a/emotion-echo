@@ -154,27 +154,38 @@ else
   err "缺 X-User-Id 返 $NO_AUTH_HTTP（期望 401/403，鉴权未拦截）"
 fi
 
-# ---------- 契约 9: SkyWalking OAP rpc.* tag（best-effort）----------
-log "=== 契约 9: SkyWalking OAP rpc.* tag（best-effort，需 OAP :12800 通）==="
-if docker inspect emotion-echo-sw-oap --format '{{.State.Status}}' 2>/dev/null | grep -q '^running$'; then
-  # 查 chat-svc 服务 OAP 上是否有 rpc.* 维度
-  # OAP GraphQL endpoint（/graphql）支持 query，最近 N 分钟的 rpc.* tag
-  OAP_QUERY='{"query":"{ queryServices(serviceId: \"emotion-echo-chat-svc\", startTimeBucket: 0, endTimeBucket: 9999999999, topN: 10) { nodes { name { value } } }"}'
-  OAP_RESP=$(curl -sS -X POST 'http://localhost:12800/graphql' \
-    -H 'Content-Type: application/json' \
-    -d "$OAP_QUERY" \
-    --max-time 10 2>/dev/null || echo '{"errors":"OAP_UNREACHABLE"}')
+# ---------- 契约 9: SkyWalking OAP rpc.* tag（E2E-26 #12 真断言）----------
+# 旧版三重空转已修复，由 scripts/test_smoke_oap_contract.sh 守卫，禁止回退：
+#   ① 宿主直连 12800 端口（无宿主映射必超时）→ 改容器网 query_oap.sh
+#   ② 伪签名 queryServices 携带 startTimeBucket/endTimeBucket/topN（官方协议不存在，
+#      容器网实证 FieldUndefined@[queryServices]）
+#   ③ 探测失败只打 WARN 不置 FAIL（OAP 挂 = 静默通过）
+log "=== 契约 9: SkyWalking OAP rpc.* tag（真断言，容器网经 query_oap.sh）==="
+SMOKE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-  if echo "$OAP_RESP" | grep -qE 'rpc\.|rpc.client|rpc.server'; then
-    log "[OK  ] OAP 上看到 rpc.* tag"
-  elif echo "$OAP_RESP" | grep -q '"name"'; then
-    # OAP 通但没采集到 rpc.*（可能 metrics 未上报）
-    log "[WARN] OAP 通但未看到 rpc.* tag（可能 metrics 未上报或采样窗口未到）"
+# 9a) OAP 可达 + chat-svc 注册（官方 listServices 签名）
+if OAP_SVCS=$(bash "$SMOKE_DIR/query_oap.sh" services 2>&1); then
+  if echo "$OAP_SVCS" | grep -q '"emotion-echo-chat-svc"'; then
+    log "[OK  ] OAP listServices 含 emotion-echo-chat-svc（gRPC 注册链活）"
   else
-    log "[WARN] OAP 探测失败（best-effort，不计入 FAIL）"
+    err "契约 9a: OAP 可达但 listServices 无 chat-svc（tracer 未注册）: $OAP_SVCS"
   fi
 else
-  log "[WARN] emotion-echo-sw-oap 未运行，跳过 OAP rpc.* tag 验证（best-effort）"
+  err "契约 9a: OAP 查询失败（失败必须置 FAIL）: $OAP_SVCS"
+fi
+
+# 9b) RPC span 真实落盘：本 smoke 前序 RPC 已产生流量，最近 5 分钟
+#     chat-svc 必须有非健康检查类 endpoint 的 trace
+if OAP_TRACES=$(bash "$SMOKE_DIR/query_oap.sh" traces emotion-echo-chat-svc 5 2>&1); then
+  if echo "$OAP_TRACES" | grep -qE '"traces":\[ *]'; then
+    err "契约 9b: 最近 5 分钟 chat-svc 无任何 trace —— server span 未上报 OAP"
+  elif echo "$OAP_TRACES" | grep -qE '"endpointNames":\["/(emotion_|api/|chat|auth|users)'; then
+    log "[OK  ] OAP 上 chat-svc 有 RPC span（跨进程 trace 已上报）"
+  else
+    err "契约 9b: 仅有健康检查类 span、无 RPC span（server 端 tracing 断）"
+  fi
+else
+  err "契约 9b: OAP trace 查询失败: $OAP_TRACES"
 fi
 
 # ---------- 汇总 ----------
