@@ -8,6 +8,14 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 
 # E2E-25 执行记录
 
+## 0. 未完成清单（唯一真相源 · 收口时必须逐条销账）
+
+**1 项未完成**：
+
+| # | 事项 | 责任人 | 可核验的完成判据 |
+|---|------|--------|------------------|
+| **T-1** | M2 漂移处置策略裁定（fail-closed vs 覆盖+报告，建议后者，见 §6） | 用户 | `docs/e2e-roadmap/decisions.md` 出现 D-36 处置策略决议；若选 fail-closed 则 `check_apisix_drift.sh verify` 的 exit 2 改为拦截并补测试；裁定后本阶段翻 done |
+
 ## 1. 环境基线
 
 - 启动命令：`cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml --env-file .env.local --profile dev up -d`（错峰：先核心 infra 后全量）+ `--profile obs` 补观测栈
