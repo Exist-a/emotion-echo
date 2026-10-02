@@ -288,24 +288,19 @@ jobs:
     # 反而变成"检查失败反而没人拦"的漏洞。
     if: ${{ always() }}
     steps:
+      - uses: actions/checkout@v4
       - name: 汇总全部检查结果
+        # E2E-F-173（2026-10-02 修）：判定逻辑抽到 scripts/check_doc_drift_gate_result.sh
+        # （契约由 scripts/test_check_doc_drift_gate_result.sh 钉死）。
+        # 旧内联判定只认 success ⇒ adr-gate 在 push 事件下 skip 被判红 ⇒
+        # main 的 push 总闸恒红。现语义：success/skipped=通过，其余=失败。
         # 用 env: 传值而不是在 shell 里插 ${{ }} —— 后者要处理多层花括号转义，
         # 极易写错且错了只在 CI 上暴露（本地无法验证表达式）。
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           set -uo pipefail
-          echo "$NEEDS_JSON" | python3 -c '
-          import json, sys
-          d = json.load(sys.stdin)
-          failed = [(k, v.get("result")) for k, v in d.items() if v.get("result") != "success"]
-          if not failed:
-              print("OK: %d 项文档守卫全部通过" % len(d))
-              sys.exit(0)
-          for k, r in failed:
-              print("::error::检查未通过: %s (%s)" % (k, r))
-          sys.exit(1)
-          '
+          echo "$NEEDS_JSON" | bash scripts/check_doc_drift_gate_result.sh
 
   # 必须**独立于 gate** 跑（不被 gate 覆盖），否则 gate 漏掉自己就没人发现。
   doc-drift-needs-sync:
