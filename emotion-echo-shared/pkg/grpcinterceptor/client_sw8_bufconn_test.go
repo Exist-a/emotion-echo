@@ -20,6 +20,14 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
+// fakeReporter：go2sky 无 reporter 时 initFlag 恒 0 ⇒ 全 NoopSpan（连 sw8 都
+// 不注入）——测试必须带 reporter 才反映生产形态（Bootstrap 走 NewGRPCReporter）。
+type fakeReporter struct{}
+
+func (fakeReporter) Boot(string, string, []go2sky.AgentConfigChangeWatcher) {}
+func (fakeReporter) Send([]go2sky.ReportedSpan)                             {}
+func (fakeReporter) Close()                                                 {}
+
 func TestClientDialOptions_FullChain_InjectsSw8(t *testing.T) {
 	lis := bufconn.Listen(1 << 20)
 	t.Cleanup(func() { _ = lis.Close() })

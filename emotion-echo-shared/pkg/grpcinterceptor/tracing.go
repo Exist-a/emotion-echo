@@ -285,10 +285,16 @@ func NewClientTracingInterceptor(tracer Tracer) grpc.UnaryClientInterceptor {
 			peer = cc.Target()
 		}
 
-		// injector: go2sky/CreateExitSpanWithContext 内部对每个 sw8 header 调一次
-		// 我们把值写入 md —— go2sky 完成编码(产出 8 段格式)后回调过来
-		injector := func(_, value string) error {
-			md.Set("sw8", value)
+		// injector: go2sky/CreateExitSpanWithContext 内部对每个 header 回调一次。
+		// E2E-26 #3 修 4/4：必须**按 key 过滤且拒空值**——go2sky Encode 会先回调
+		// sw8=1-... 再回调 sw8-correlation=""（恒空），旧实现忽略 key 导致
+		// 空的 correlation 值把 md["sw8"] 覆盖成 "" ⇒ 下游收到空 sw8 头
+		// ⇒ 服务端按「无 sw8」起 root trace（2026-10-03 生产实测 + bufconn 红测复现）。
+		// 对照：Kafka 侧 kafka_publisher.go 的注入器有同样过滤（Stage 92 即正确）。
+		injector := func(key, value string) error {
+			if key == "sw8" && value != "" {
+				md.Set("sw8", value)
+			}
 			return nil
 		}
 
