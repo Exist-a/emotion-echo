@@ -14,9 +14,11 @@
 # 端点可信度：prometheus/alertmanager/grafana/loki/kafka-exporter/promtail
 # 六者的健康端点均于 2026-09-29 计划期**逐个实测可达**后才写入
 # （docker exec + wget 实际请求），非照抄文档。
-# APISIX 只能测端口 —— 镜像内无 wget/curl/nc/busybox，openresty 的 resty
-# 跑不通，且未启用 healthcheck/public-api 插件（/apisix/status 实测 404）。
-# 该局限已在 compose 注释里如实记录。
+# APISIX：E2E-23 时只能测端口（镜像内无 HTTP 客户端）——但纯 TCP 探针是假绿：
+# 2026-10-02 E2E-25 实测 etcd 停摆时数据面 404/admin 503 而容器仍 healthy。
+# E2E-25 #5 改为 bash /dev/tcp 向 admin API 9180 发原始 HTTP GET（带 X-API-KEY），
+# 按状态行判 200；实测 etcd 停 → unhealthy(~90s)、恢复 → healthy(~15s)。
+# ⚠️ 更新此基准时必须先在跑着的容器上验证新探针真的能通（含负向：etcd 停须翻 unhealthy）。
 #
 # 负向对照：删掉任一 healthcheck → 本脚本非零退出。
 
@@ -53,7 +55,8 @@ MUST_HAVE=(
   "nacos:http://localhost:8848/nacos/actuator/health"
   "emotion-echo-minio:http://localhost:9000/minio/health/live"
   "etcd:etcdctl endpoint health"
-  "apisix:/dev/tcp/127.0.0.1/9080"
+  "apisix:/dev/tcp/127.0.0.1/9180"
+  "apisix:X-API-KEY"
   "prometheus:http://127.0.0.1:9090/-/healthy"
   "alertmanager:http://127.0.0.1:9093/-/healthy"
   "grafana:http://127.0.0.1:3000/api/health"
@@ -97,7 +100,10 @@ for entry in "${MUST_HAVE[@]}"; do
   # 精确相等会把格式调整也判红。
   # 归一化：去掉引号/逗号/方括号并压掉空白，让 JSON 数组式探针
   # （["CMD","etcdctl","endpoint","health"]）与 shell 式探针都能连续匹配同一关键串。
-  probe="$(echo "$blk" | sed -n '/healthcheck:/,/^[[:space:]]*[a-z]/p'            | tr -d '
+  # ⚠️ 截止锚必须是"2 空格缩进的服务级键"（/^  [a-z]/）——E2E-25 起探针是
+  # 多行块标量，续行以小写字母开头，旧的 [[:space:]]*[a-z] 会在第一行续行
+  # 处把探针截断（2026-10-02 实测：apisix 新探针被截成 "healthcheck: test:"）。
+  probe="$(echo "$blk" | sed -n '/healthcheck:/,/^  [a-z]/p'            | tr -d '
 "' | tr -d '[],' | tr -s ' ')"
   case "$probe" in
     *"$want"*)
