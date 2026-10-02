@@ -652,10 +652,13 @@ put_route_health 203 "/analytics-health"     4
 put_route_health 204 "/ai-health"            5
 
 # APISIX gateway 自身健康（不需要 upstream）
+# E2E-25（N1）：本路由原只有 prometheus 插件、无 upstream ⇒ 命中即 openresty
+# "no valid upstream node" 503（2026-10-02 实测）——自健康路由本身是坏的。
+# echo 插件在 rewrite 后直接应答 200，无需 upstream。
 if curl -sf -X PUT \
   -H "X-API-KEY: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"uri":"/apisix-health","status":1,"plugins":{"prometheus":{}}}' \
+  -d '{"uri":"/apisix-health","status":1,"plugins":{"prometheus":{},"echo":{"body":"ok"}}}' \
   "$ADMIN_URL/apisix/admin/routes/205" >/dev/null; then
   log "  apisix self-health route OK: 205"
 else
