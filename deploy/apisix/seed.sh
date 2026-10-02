@@ -246,6 +246,21 @@ put_nacos_upstream() {
     "connect": 10,
     "send": $upstream_timeout,
     "read": $upstream_timeout
+  },
+  "checks": {
+    "active": {
+      "type": "http",
+      "http_path": "/health",
+      "healthy": {
+        "interval": 2,
+        "successes": 2
+      },
+      "unhealthy": {
+        "interval": 1,
+        "http_failures": 3,
+        "timeouts": 3
+      }
+    }
   }
 }
 EOF
@@ -328,8 +343,8 @@ fi
 # ---- Step 3: 全局插件链（每个 route 共享）----
 log "Step 3/4: defining shared plugins"
 
-# PR-OBS-1 REFACTOR: skywalking-logger + file-logger 在 PLUGINS_JSON 与
-# CATCHALL_PLUGINS_JSON 完全相同,抽出 OBSERVABILITY_PLUGINS_JSON 共享变量。
+# PR-OBS-1 REFACTOR: skywalking-logger + file-logger 在 CATCHALL_PLUGINS_JSON 与
+# AUTH_WHITELIST_PLUGINS 完全相同,抽出 OBSERVABILITY_PLUGINS_JSON 共享变量。
 # 保持 bash-only(不引入 python/jq),与原 seed 设计一致。
 
 # skywalking-logger: 每个请求把 APISIX access 信息上报 OAP
@@ -386,8 +401,8 @@ OBSERVABILITY_PLUGINS_JSON='
 #
 # 覆盖式赋值：与 X-User-Id 同理，无条件覆盖客户端自带的值，避免外部伪造。
 #
-# ⚠️ 必须挂到**全部 4 组**插件变量（PLUGINS_JSON / CATCHALL_PLUGINS_JSON /
-# AUTH_WHITELIST_PLUGINS / HEALTH_PLUGINS）。本文件 :323 那句注释
+# ⚠️ 必须挂到**全部 3 组**在用插件变量（CATCHALL_PLUGINS_JSON /
+# AUTH_WHITELIST_PLUGINS / HEALTH_PLUGINS）。本文件早期注释
 # 「全局插件链（每个 route 共享）」与事实不符：put_auth_route 用的是
 # AUTH_WHITELIST_PLUGINS、put_route_health 用的是 HEALTH_PLUGINS，
 # 两者都不含 observability 插件（实测 15 条路由里只有 route 100 有 file-logger）。
@@ -399,60 +414,11 @@ TRACE_ID_PLUGIN='
     ]
   }'
 
-# jwt-auth 真正验签（替换 shared jwt_auth.go 的"信任 APISIX"模型）
-#   2026-09-04：route 侧只留 {}——key/secret/algorithm 属 consumer（Step 2.5），
-#   放在 route 上不会生效。见 https://apisix.apache.org/docs/apisix/plugins/jwt-auth/
-# limit-count / limit-req 限流（双层：按 IP 计数 + 全局突发）
-# api-breaker 下游 5xx > 50% 熔断 30s
-# cors 统一 CORS（替代 BFF corsMiddleware）
-# prometheus 默认配置（OAP 上报 metrics）
-# skywalking-logger + file-logger 引用 OBSERVABILITY_PLUGINS_JSON (PR-OBS-1 REFACTOR)
-PLUGINS_JSON=$(cat <<EOF
-{
-  "jwt-auth": {
-    # Stage 112 修复：之前只配 cookie=BFF Set-Cookie 名；前端 useApi.ts 默认发
-    # Authorization: Bearer <token> header + credentials:include cookie。jwt-auth 单读
-    # cookie 时，前端 header-only fetch（如 dashboard 调 /reports/*）必 401。
-    # 加 header/query/key_claim_name 三路兜底，并明确 key_claim_name="user" 匹配 consumer key=user。
-    "header": "authorization",
-    "cookie": "access_token",
-    "query": "jwt",
-    "key_claim_name": "user"
-  },
-  "limit-count": {
-    "count": 60,
-    "time_window": 60,
-    "key": "remote_addr",
-    "policy": "local",
-    "rejected_code": 429
-  },
-  "limit-req": {
-    "rate": 1000,
-    "burst": 100,
-    "key": "remote_addr",
-    "policy": "local",
-    "rejected_code": 503
-  },
-  "api-breaker": {
-    "break_response_code": 503,
-    "min_requests": 20,
-    "error_threshold_ratio": 0.5,
-    "open_time": 30
-  },
-  "cors": {
-    "allow_origins": "$CORS_ALLOW_ORIGINS",
-    "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
-    "allow_headers": "Content-Type,Authorization,X-User-Id,X-Trace-Id",
-    "expose_headers": "X-User-Id,X-Trace-Id",
-    "allow_credential": true,
-    "max_age": 600
-  },
-${OBSERVABILITY_PLUGINS_JSON},
-${TRACE_ID_PLUGIN},
-  "prometheus": {}
-}
-EOF
-)
+# E2E-25（F-d）：原 PLUGINS_JSON 变量（jwt-auth + 限流 + 熔断 + cors 全套）在此处
+# 定义后**从未被任何 PUT 引用**（路由只用 CATCHALL/AUTH_WHITELIST/HEALTH 三组），
+# 且其 limit-count 硬编码 "policy": "local"、与实际生效链的 $LIMIT_POLICY(redis)
+# 分叉，heredoc 里还混有 # 注释（真去 PUT 会直接 JSON 解析失败）——已删除。
+# catch-all 与白名单的实际插件配置见下方 CATCHALL_PLUGINS_JSON / AUTH_WHITELIST_PLUGINS。
 
 # 2026-09-04 新增：把已验签 JWT 的 sub claim 注入 X-User-Id header。
 #
@@ -478,9 +444,7 @@ EOF
 #
 # 覆盖式赋值：无条件覆盖客户端自带的 X-User-Id，避免外部伪造身份。
 #
-# 写成字面量而非用 python 改 PLUGINS_JSON：seed 要能在最小 seed 容器里跑
-# （bash + curl 即可），不引入 python 依赖。与 PLUGINS_JSON 的重复部分有限，
-# 换来的是零额外运行时依赖。
+# 写成字面量（bash + curl 即可），不引入 python 依赖。
 CATCHALL_PLUGINS_JSON=$(cat <<EOF
 {
   "jwt-auth": { "store_in_ctx": true, "cookie": "access_token" },
@@ -536,7 +500,7 @@ log "Step 4/4: creating routes"
 put_route() {
   local id="$1" uri="$2" upstream_id="$3" methods="$4" extra_uri="${5:-}"
   local body
-  # 用 CATCHALL_PLUGINS_JSON（= PLUGINS_JSON + proxy-rewrite 注入 X-User-Id）；
+  # 用 CATCHALL_PLUGINS_JSON（= jwt-auth 验签 + X-User-Id 注入 + 限流/熔断/CORS）；
   # 仅 catch-all 走鉴权链路，故 X-User-Id 注入只需挂这里。
   body=$(cat <<EOF
 {
@@ -622,7 +586,7 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH","OPTIONS"]'
 # allow_headers 必须显式列出（400: you can not set '*' for other option）
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
-  "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "$LIMIT_POLICY", "redis_host": "$LIMIT_REDIS_HOST", "redis_port": $LIMIT_REDIS_PORT, "redis_db": $LIMIT_REDIS_DB, "redis_password": "$LIMIT_REDIS_PASSWORD", "redis_timeout": $LIMIT_REDIS_TIMEOUT},
+  "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "$LIMIT_POLICY", "redis_host": "$LIMIT_REDIS_HOST", "redis_port": $LIMIT_REDIS_PORT, "redis_db": $LIMIT_REDIS_DB, "redis_password": "$LIMIT_REDIS_PASSWORD", "redis_timeout": $LIMIT_REDIS_TIMEOUT, "rejected_code": 429},
   "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-User-Id,X-Trace-Id"},
 ${OBSERVABILITY_PLUGINS_JSON},
 ${TRACE_ID_PLUGIN}

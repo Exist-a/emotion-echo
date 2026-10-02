@@ -259,16 +259,12 @@ const checks = [
     src.split('\n').some(l =>
       l.includes('X-Trace-Id') && l.includes('ctx.var.request_id') && l.includes('set_header'))],
 
-  // 关键：必须挂在**全部 4 组**插件变量上。
+  // 关键：必须挂在**全部 3 组**在用插件变量上。
   // 曾经的坑：seed.sh 注释写「全局插件链（每个 route 共享）」，但 put_auth_route 用的是
   // AUTH_WHITELIST_PLUGINS、put_route_health 用的是 HEALTH_PLUGINS，两者都不含该片段
   // ⇒ 登录/注册/健康检查等 10 条路由仍无 trace_id（E2E-21 实测：15 条路由中仅
   // route 100 有 file-logger，其余全部没有）。
-  ['E2E-F-13 TRACE_ID_PLUGIN 挂在 PLUGINS_JSON（route 100 基座）',
-    (() => {
-      const m = src.match(/PLUGINS_JSON=\$\(cat <<EOF([\s\S]*?)\nEOF\n\)/);
-      return m ? m[1].includes('${TRACE_ID_PLUGIN}') : false;
-    })()],
+  // E2E-25（F-d）：原第 4 组 PLUGINS_JSON 是死变量，已删除（见下方死变量禁令）。
   ['E2E-F-13 TRACE_ID_PLUGIN 挂在 CATCHALL_PLUGINS_JSON（route 100 实际使用）',
     (() => {
       const m = src.match(/CATCHALL_PLUGINS_JSON=\$\(cat <<EOF([\s\S]*?)\nEOF\n\)/);
