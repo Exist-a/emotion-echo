@@ -160,7 +160,28 @@ func NewServerTracingInterceptor(tracer Tracer) grpc.UnaryServerInterceptor {
 			return handler(ctx, req)
 		}
 
-		ctx, span := tracer.StartEntry(ctx, info.FullMethod)
+		// E2E-26 #3：改用 CreateEntrySpan + incoming metadata extractor ——
+		// 从 sw8 提取上游 span 引用（跨进程父子链接），并把承载 span 的 nCtx
+		// 交给 handler（下游 exit span 才能续上同一 trace）。
+		// 旧实现 StartEntry 不提取 sw8 且返原 ctx ⇒ OAP 实测 RPC 侧 span 全灭、
+		// trace 每跳断裂（2026-10-02 运行时证据）。
+		md, _ := metadata.FromIncomingContext(ctx)
+		extractor := func(key string) (string, error) {
+			if md == nil {
+				return "", nil
+			}
+			if vals := md.Get(key); len(vals) > 0 {
+				return vals[0], nil
+			}
+			return "", nil
+		}
+		nCtx, span, spanErr := tracer.CreateEntrySpan(ctx, info.FullMethod, extractor)
+		if spanErr != nil || span == nil {
+			// 建 span 失败不阻塞 handler（与 client 端降级语义一致）；
+			// trace_id 已在上方注入 ctx，日志链路不受影响。
+			return handler(ctx, req)
+		}
+		ctx = nCtx
 
 		// PR-OBS-19: 设置 OAP layer/component + 3 个 RPC tag
 		span.SetSpanLayer(SpanLayerGRPC)

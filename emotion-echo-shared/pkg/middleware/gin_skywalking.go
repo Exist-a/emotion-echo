@@ -79,7 +79,12 @@ func GinSkywalkingMiddleware(tracer grpcinterceptor.Tracer) gin.HandlerFunc {
 		// 业务路径: 创建 EntrySpan + 打前置 tag
 		var span grpcinterceptor.Span
 		if tracer != nil {
-			_, span = tracer.StartEntry(c.Request.Context(), c.FullPath())
+			// E2E-26 #3：装回承载 span 的 ctx —— handler 下游的 gRPC/Kafka
+			// exit span 必须从这里续上入口 trace。旧实现 `_, span = ...`
+			// 丢弃 ctx ⇒ 下游 exit 每跳各起新 trace（OAP 孤岛 trace 实证）。
+			reqCtx, sp := tracer.StartEntry(c.Request.Context(), c.FullPath())
+			span = sp
+			c.Request = c.Request.WithContext(reqCtx)
 		}
 		// P1-5 (Round 1): panic 后 EndSpan 兜底
 		defer ginSkywalkingRecover(span)
