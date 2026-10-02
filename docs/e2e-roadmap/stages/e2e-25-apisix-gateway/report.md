@@ -12,9 +12,9 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 
 **1 项未完成**：
 
-| # | 事项 | 责任人 | 可核验的完成判据 |
-|---|------|--------|------------------|
-| **T-1** | M2 漂移处置策略裁定（fail-closed vs 覆盖+报告，建议后者，见 §6） | 用户 | `docs/e2e-roadmap/decisions.md` 出现 D-36 处置策略决议；若选 fail-closed 则 `check_apisix_drift.sh verify` 的 exit 2 改为拦截并补测试；裁定后本阶段翻 done |
+| # | 事项 | 责任人 | 可核验的完成判据 | 状态 |
+|---|------|--------|------------------|------|
+| **T-1** | M2 漂移处置策略裁定（fail-closed vs 覆盖+报告，建议后者，见 §6） | 用户 | `docs/e2e-roadmap/decisions.md` 出现 D-36 处置策略决议；若选 fail-closed 则 `check_apisix_drift.sh verify` 的 exit 2 改为拦截并补测试；裁定后本阶段翻 done | 🔴 待裁定 |
 
 ## 1. 环境基线
 
