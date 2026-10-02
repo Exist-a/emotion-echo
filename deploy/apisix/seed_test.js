@@ -175,10 +175,28 @@ const checks = [
     /healthcheck:[\s\S]{0,700}?9180[\s\S]{0,300}?X-API-KEY/.test(infraYaml)],
   ['E2E-25 apisix healthcheck 不再是纯 TCP 探 9080（负向）',
     !/timeout 3 bash -c '<\/dev\/tcp\/127\.0\.0\.1\/9080'/.test(infraYaml)],
-  ['api-breaker min_requests = 20', src.includes('"min_requests": 20')],
-  ['api-breaker error_threshold_ratio = 0.5',
-    src.includes('"error_threshold_ratio": 0.5')],
-  ['api-breaker open_time = 30s', src.includes('"open_time": 30')],
+  // E2E-25 N3：min_requests/error_threshold_ratio/open_time 根本不是 api-breaker 的
+  // schema 字段（官方文档核实），APISIX 静默收下但不生效——实际行为=默认值
+  // （unhealthy.http_statuses=[500]、failures=3、backoff 2/4/8s…max_breaker_sec）。
+  // 改为钉真实字段。
+  ['api-breaker 不含幽灵字段 min_requests（N3，官方 schema 无此字段）',
+    !src.includes('"min_requests"')],
+  ['api-breaker 不含幽灵字段 error_threshold_ratio/open_time（N3）',
+    !src.includes('"error_threshold_ratio"') && !src.includes('"open_time"')],
+  ['api-breaker unhealthy.failures=3 显式（真实阈值字段）',
+    /"unhealthy":\s*\{[^}]*"failures":\s*3/.test(src)],
+  ['api-breaker unhealthy.http_statuses 覆盖 500/502/504（连接拒绝 502 不计数但上游返回计数）',
+    /"unhealthy":\s*\{[^}]*"http_statuses":\s*\[\s*500[^\]]*502[^\]]*504/.test(src)],
+  ['api-breaker healthy.successes=2 显式（恢复阈值，限定 CATCHALL 块）',
+    (() => {
+      const marker = 'CATCHALL_PLUGINS_JSON=' + '$(cat <<EOF';
+      const seg = src.split(marker)[1];
+      if (!seg) return false;
+      const body = seg.split('\nEOF')[0];
+      return /"healthy":\s*\{[^}]*"successes":\s*2/.test(body);
+    })()],
+  ['api-breaker max_breaker_sec=60 显式（原 open_time 语义的真实对应）',
+    /"max_breaker_sec":\s*60/.test(src)],
 
   // === PR-OBS-1 RED assertions: APISIX skywalking endpoint + logger plugins ===
   // 依据 docs/plans/observability-sprint-b.md §2.3 + Stage 35 §78 dial fail 现象

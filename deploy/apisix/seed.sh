@@ -475,9 +475,15 @@ CATCHALL_PLUGINS_JSON=$(cat <<EOF
   },
   "api-breaker": {
     "break_response_code": 503,
-    "min_requests": 20,
-    "error_threshold_ratio": 0.5,
-    "open_time": 30
+    "unhealthy": {
+      "http_statuses": [500, 502, 504],
+      "failures": 3
+    },
+    "healthy": {
+      "http_statuses": [200, 206],
+      "successes": 2
+    },
+    "max_breaker_sec": 60
   },
   "cors": {
     "allow_origins": "$CORS_ALLOW_ORIGINS",
