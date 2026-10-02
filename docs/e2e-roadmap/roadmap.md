@@ -119,7 +119,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 |------|--------|------|--------------|------|
 | E2E-24 | 消息链路 | outbox→Kafka→consumer→DLQ 全链 + 重试/死信/回放 | — | ✅ **done**（2026-10-02 收口：[report.md](stages/e2e-24-message-pipeline/report.md) **20/20 测试点 PASS**；修复 F-149（消费 42P10）/F-175（序列 a010）/F-174（原地重试 D-34）/F-149 同型第二处（dev_publisher）+ D-33 回放工具（F-12/F-150 闭环，存量死信 26 处置 25 落库）；账本 E2E-24 名下 5 条全 ✅；第二方核对两轮通过（首轮抓 5 项失真全部处置）；下一阶段 = E2E-25 网关 APISIX） |
 | E2E-25 | 网关 APISIX | 路由注册/JWT 插件/限流/CORS + **上游 nacos-discovery 健康检查/重连**（F-137 部分症状已由 E2E-17 PR #77 临时缓解） + **seed ↔ admin 持久化关系**（F-139） | — | ✅ **done**（2026-10-02 收口：[report.md](stages/e2e-25-apisix-gateway/report.md) **20/20 PASS** + 第二方核对通过（§9，5 项发现已处置/记账）；PR #137/#138/#139/#140/#141；**F-154 checks.active 落地**（摘除 75s→~7s，D-35）+ **F-137 同轮闭环**（BFF 重启自愈 ≤19s）+ **F-139 drift 工具+CI+D-36 B+ 接入 dev-up** + **F-145 双节点实测不放大**；新修 N1/N2/F-f/N3 = 账本 F-176/177/178；回归钉 apisix-gateway.spec.ts 12/12 + seed_test 72 断言；**下一阶段 = E2E-26**） |
-| E2E-26 | 链路追踪 SkyWalking | sw8 传播 + OAP 查询 + UI 可视化（OAP 9.x queryDuration bug） | — | ⏳ pending（**plan 已建档 2026-10-02**：[plan.md](stages/e2e-26-tracing-skywalking/plan.md)，20 测试点 + M1/M2 决策点，名下账本 0 条） |
+| E2E-26 | 链路追踪 SkyWalking | sw8 传播 + OAP 查询 + UI 可视化（OAP 9.x queryDuration bug） | — | 🔶 **in-progress**（2026-10-02 开工：[plan.md](stages/e2e-26-tracing-skywalking/plan.md) 20 测试点 + M1/M2 决策点，名下账本 0 条；开工基线 = 全栈 Exited 待恢复） |
 | E2E-27 | 对象存储 MinIO | 头像上传/下载/匿名读权限 | 其他文件类型接入 | ⏳ pending |
 
 ### 第八批：质量属性与收口
