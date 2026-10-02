@@ -2,9 +2,9 @@
 stage: e2e-25
 title: 网关 APISIX（路由/JWT 插件/限流/CORS + 上游健康检查与重连 + seed↔admin 持久化治理）
 type: transformation
-status: planned
+status: in-progress
 created: 2026-10-02
-last-updated: 2026-10-02（建档：20 测试点；F-137/F-154/F-139/F-145 四条名下账本 + 2 项计划期新事实）
+last-updated: 2026-10-02（开工：§0.2 复核 6/6 完成 + 新发现 N1/N2 回填；F-137/F-154/F-139/F-145 四条名下账本 + 3 项计划期新事实）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；3 个执行期 [M] 决策点见 §4
@@ -67,6 +67,17 @@ related-findings: [E2E-F-137, E2E-F-139, E2E-F-145, E2E-F-154]
 | 4 | F-i 基线：单节点压 60 req/min → 429 | 记录单节点配额基线，供 #18 双节点对照 |
 | 5 | F-f 复现（负向）：`docker stop etcd` → 数据面/admin/healthcheck 三方状态 | 404/报错/healthy 三态并存可复现（测完立即恢复） |
 | 6 | 第二 APISIX 节点资源可行性（M3 前置）：docker stats 余量评估 | 内存余量 ≥ 512M（.wslconfig 8GB 上限，19 容器稳态 ≈6G 贴顶的前科） |
+
+#### 0.2.1 开工复核实测回填（2026-10-02 执行，全部完成）
+
+| # | 结果 | 证据 |
+|---|------|------|
+| 1 | ✅ 全栈恢复：30 容器，应用 6 svc + infra 全 healthy，`db-migrate`/`apisix-seed`/`minio-init`/`kafka-init` 均 Exited(0)，Nacos `count:6` | `docker ps` 输出 + `curl nacos service/list` |
+| 2 | ✅ **F-a 成立**：6 个 upstream 运行时 JSON 均无 `checks` 键（逐一 grep 计数 = 0） | admin GET /upstreams/1..6 |
+| 3 | ✅ **F-c 成立且比账本更细——漂移有两形态**：① 篡改已 seed 对象（route 100 裸 PUT 成仅 prometheus）→ seed 重跑**静默覆盖回**（jwt-auth 恢复）；② **额外对象**（手工建 route 299 `/api/v1/__drift_probe__`）→ seed 重跑**不清理**（seed 只点删已知 id 116），且数据面可命中（401=路由活着，jwt-auth 拦截） | 两形态均 admin GET + 数据面 curl 双证据；探针路由已删 |
+| 4 | ✅ **F-i 基线 + 新发现 N2**：70 次连发 login → 60×200 + 10×**503**（非 429）。根因：`AUTH_WHITELIST_PLUGINS`（seed.sh:625）的 limit-count **漏配 `rejected_code`** ⇒ 走 APISIX 默认 503，与 catch-all（route 100，`rejected_code: 429`）不一致；redis 键 `plugin-limit-count:v1:/apisix/routes/110:...` 正常计数 ⇒ policy=redis 本身工作正常。**修复列入 #17 同轮**（白名单补 `rejected_code: 429`） | 状态码分布 + route 110 GET 配置（limit-count 无 rejected_code 字段）+ redis 键存在 |
+| 5 | ✅ **F-f 两形态齐**：① 启动期无 etcd（建档时实测）= 数据面 404 + admin 报错 + healthcheck healthy；② 运行中停 etcd（本轮）= admin `has no healthy etcd endpoint available` + **数据面靠内存缓存继续 200** + healthcheck healthy。附加新发现 **N1**：`/apisix-health`（route 205）**无 upstream**，命中即 openresty 503——网关自健康路由本身是坏的，`#5` 修 healthcheck 时同轮修 | stop/start etcd 前后三探针输出；route 205 GET（仅 prometheus 插件，无 upstream_id） |
+| 6 | ✅ 第二节点可行：全栈实际内存 ≈2.9GiB（27 容器），APISIX 单节点 388MiB ⇒ 临时第二节点 +400MiB 无压力 | `docker stats --no-stream` |
 
 ---
 

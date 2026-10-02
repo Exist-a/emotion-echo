@@ -118,7 +118,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | 阶段 | 功能块 | 目标 | 边界（不做） | 状态 |
 |------|--------|------|--------------|------|
 | E2E-24 | 消息链路 | outbox→Kafka→consumer→DLQ 全链 + 重试/死信/回放 | — | ✅ **done**（2026-10-02 收口：[report.md](stages/e2e-24-message-pipeline/report.md) **20/20 测试点 PASS**；修复 F-149（消费 42P10）/F-175（序列 a010）/F-174（原地重试 D-34）/F-149 同型第二处（dev_publisher）+ D-33 回放工具（F-12/F-150 闭环，存量死信 26 处置 25 落库）；账本 E2E-24 名下 5 条全 ✅；第二方核对两轮通过（首轮抓 5 项失真全部处置）；下一阶段 = E2E-25 网关 APISIX） |
-| E2E-25 | 网关 APISIX | 路由注册/JWT 插件/限流/CORS + **上游 nacos-discovery 健康检查/重连**（F-137 部分症状已由 E2E-17 PR #77 临时缓解：web-bff Nacos retry + /health version + dev-up.sh 注册校验） + **seed ↔ admin 持久化关系**（F-139 暴露：`apisix-seed` 重跑会覆盖 admin 手工改动，无 CI 兜底；`CORS_ALLOW_ORIGINS` compose 默认值已扩为 4 origin 持久） | — | ⏳ pending（**详档已建档 2026-10-02**：[plan.md](stages/e2e-25-apisix-gateway/plan.md)，20 测试点；名下 4 条账本 F-137/F-139/F-145/F-154 计划期复核成立，F-137/F-154 须同轮闭环；另含 3 项计划期新事实——PLUGINS_JSON 死变量限流分叉、seed_test.js 弱断言、etcd 停摆时 APISIX 容器假 healthy。开工第一天先跑 plan §0.2 复核清单） |
+| E2E-25 | 网关 APISIX | 路由注册/JWT 插件/限流/CORS + **上游 nacos-discovery 健康检查/重连**（F-137 部分症状已由 E2E-17 PR #77 临时缓解：web-bff Nacos retry + /health version + dev-up.sh 注册校验） + **seed ↔ admin 持久化关系**（F-139 暴露：`apisix-seed` 重跑会覆盖 admin 手工改动，无 CI 兜底；`CORS_ALLOW_ORIGINS` compose 默认值已扩为 4 origin 持久） | — | 🔶 **in-progress**（2026-10-02 开工：[plan.md](stages/e2e-25-apisix-gateway/plan.md) 20 测试点；§0.2 复核 6/6 完成——F-a/F-c/F-i/F-f 运行时全部实证成立，另获 3 项新事实：N1 route 205 无 upstream 恒 503、N2 白名单路由 limit-count 缺 rejected_code 致 429 变 503、漂移有"篡改被覆盖回/额外不清理"两形态；漂移检测与处置策略 M2 待用户裁定） |
 | E2E-26 | 链路追踪 SkyWalking | sw8 传播 + OAP 查询 + UI 可视化（OAP 9.x queryDuration bug） | — | ⏳ pending |
 | E2E-27 | 对象存储 MinIO | 头像上传/下载/匿名读权限 | 其他文件类型接入 | ⏳ pending |
 
