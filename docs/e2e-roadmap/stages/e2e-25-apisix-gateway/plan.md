@@ -2,9 +2,9 @@
 stage: e2e-25
 title: 网关 APISIX（路由/JWT 插件/限流/CORS + 上游健康检查与重连 + seed↔admin 持久化治理）
 type: transformation
-status: partial
+status: done
 created: 2026-10-02
-last-updated: 2026-10-02（执行完成：19/20 PASS + 1 BLOCKED（M2 待裁定）；F-137/139/145/154 + F-176/177/178 全闭环；报告见 report.md，状态 partial 待 M2 裁定+第二方核对）
+last-updated: 2026-10-02（**done**：20/20 PASS——M2 用户裁定 B+（D-36）落地后 #9 翻 PASS；第二方核对通过（报告 §9），抓 5 项发现已处置/记账；F-137/139/145/154 + F-176/177/178 全闭环）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；3 个执行期 [M] 决策点见 §4

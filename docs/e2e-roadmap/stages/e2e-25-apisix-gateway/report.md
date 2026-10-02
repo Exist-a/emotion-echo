@@ -2,7 +2,7 @@
 stage: e2e-25
 title: 网关 APISIX（上游健康检查/重连 + seed↔admin 治理 + JWT/限流/CORS）
 executed: 2026-10-02
-status: partial
+status: done
 environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；worktree ../Emotion-Echo-e2e25 执行）
 ---
 
@@ -10,11 +10,9 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 
 ## 0. 未完成清单（唯一真相源 · 收口时必须逐条销账）
 
-**1 项未完成**：
+**0 项未完成。**
 
-| # | 事项 | 责任人 | 可核验的完成判据 | 状态 |
-|---|------|--------|------------------|------|
-| **T-1** | M2 漂移处置策略裁定（fail-closed vs 覆盖+报告，建议后者，见 §6） | 用户 | `docs/e2e-roadmap/decisions.md` 出现 D-36 处置策略决议；若选 fail-closed 则 `check_apisix_drift.sh verify` 的 exit 2 改为拦截并补测试；裁定后本阶段翻 done | 🔴 待裁定 |
+- T-1（M2 漂移处置策略裁定）**已于 2026-10-02 销账**：用户裁定 **B+**，`decisions.md` 已登记 **D-36**；实现为 `dev-up.sh` 尾部接入 `check_apisix_drift.sh extras`（只报不拦），回归钉 `scripts/test_devup_drift_check.sh` 4 断言 + CI 守卫 6b/7 已接。原判据：裁定落 decisions.md 且翻 done —— 见 §6 M2 行。
 
 ## 1. 环境基线
 
@@ -35,8 +33,8 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 | 6 | IAB 故障注入可见行为 | [V] | PASS | screenshots/06-chat-during-chat-svc-outage.png（骨架完整/无白屏/无踢登录/空态+spinner）+ 06-chat-recovered.png（列表恢复） | 前端把 503 静默处理为空态，记观察项 O-1 |
 | 7 | seed 幂等性 | [A] | PASS | `check_apisix_drift.sh verify` → no drift + no extras（24 行快照） | PR #138 |
 | 8 | 漂移检测两形态 | [A] | PASS | 篡改 route 100 → seed 覆盖回（§0.2.1）；PUT 探针 299 → extras rc=1 精确定位 → 删除后 rc=0 | |
-| 9 | **M2：漂移处置策略（fail-closed vs 报告）** | [M] | BLOCKED | 工具已落地（exit 1=extras / 2=篡改类），**处置策略需用户裁定**（见 §6） | 唯一阻塞项，1/20 ≤ 1/3 |
-| 10 | 路由集合回归钉 + CI 兜底 | [A] | PASS | lib 契约测试 15 断言 + wrapper 离线测试 8 断言进 `apisix-seed-structure` job | PR #138 |
+| 9 | **M2：漂移处置策略（fail-closed vs 报告）** | [M] | PASS | ✅ 2026-10-02 用户裁定 **B+** → **D-36** 已登记（decisions.md:307）；实现：dev-up.sh:181 `if ! ... extras` 只报不拦 + `test_devup_drift_check.sh` GREEN 4/4 + CI 守卫 6b/7 | 裁定后销账 |
+| 10 | 路由集合回归钉 + CI 兜底 | [A] | PASS | lib 契约测试 15 断言 + wrapper 离线测试 6 断言进 `apisix-seed-structure` job（2026-10-02 第二方核对修正：原记 8 为计数失实，实跑 6 ✓；全文件 11 处检查含静默 fail 守卫） | PR #138 |
 | 11 | 弱断言修复 | [A] | PASS | `set -euo pipefail` 断言改为匹配非注释行 `^set -eu$`；全量复核无"被注释满足"型 | PR #137 |
 | 12 | check_routes_alignment 保持全绿 | [A] | PASS | 开工基线 PASS=2 FAIL=0（8/8 auth action 对齐） | |
 | 13 | jwt 验签 401/200 + X-User-Id 注入 | [A] | PASS | 有效 token → /users/me 200 userId=1；篡改签名 → 401 | |
@@ -48,7 +46,7 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 | 19 | CORS preflight + 单源回归 | [A] | PASS | 六头齐全 + origin 精确回显；重跑 seed 后仍成立 | 回归钉 spec 钉死 |
 | 20 | api-breaker 真实触发/恢复 | [M] | PASS | 可控 5xx 探针 upstream：500×3 → **503 打开** → 200 恢复；连接拒绝 502 不计数（同官方文档）；**N3**：原配置三字段非 schema 字段被静默忽略 → 已换真实字段 | seed_test 72/72 |
 
-汇总：PASS 19 / FAIL 0 / BLOCKED 1 / N/A 0
+汇总：PASS 20 / FAIL 0 / BLOCKED 0 / N/A 0
 
 ## 3. 发现与分类
 
@@ -85,7 +83,7 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 
 | # | 决策 | 建议 |
 |---|------|------|
-| M2（#9） | seed 漂移处置策略：**A. fail-closed**（seed 检测到漂移即退出，要求人工确认）vs **B. 覆盖+报告**（现状：seed 覆盖后 drift 工具报告，exit 2 只报不拦） | 建议 **B+CI 兜底**：dev 环境保持"seed 是唯一真理源"的覆盖语义（可预期、可自动化），篡改类漂移由 `check_apisix_drift.sh verify` 在 dev-up 后报告 + 账本留痕；A 会让 compose up 卡死在交互确认，违反无人值守启动。若用户选 A，verify 的 exit 2 改为直接拦截 |
+| M2（#9） | seed 漂移处置策略 | ✅ **已裁定 D-36 = B+**（2026-10-02 用户采纳建议）：覆盖照常 + dev-up 尾部自动跑 `check_apisix_drift.sh extras` 只报不拦；`test_devup_drift_check.sh` 4 断言回归钉 + CI 守卫 6b/7 已接 |
 | M1（#2） | checks × discovery 实证成立（D-35），无需 fallback | 无需用户动作，登记备查 |
 | M3（#18） | 双节点验证已实测完成（临时容器压完即撤） | 无需用户动作 |
 
@@ -95,4 +93,23 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 - [ ] main 与 origin 无 ahead/behind
 - [ ] 无残留已合并分支
 
-> 状态 partial 的原因：#9（M2）需用户裁定 + RUNBOOK §13.3 第二方核对未做。裁定与核对完成后翻 done。
+> ~~状态 partial 的原因~~：**两项均已闭环**——M2 已裁定（D-36，T-1 销账）；第二方核对 2026-10-02 通过（结论：partial 诚实；抓 2 处失真已修——本文件 #9/汇总/wrapper 计数三处同步 + 架构决策 9 表残留注记更正；另 2 项非本阶段遗留：账本 F-115/117/119 双行、A3 对本阶段跳过——见 §9）。
+
+## 9. 第二方核对（RUNBOOK §13.3，2026-10-02）
+
+> 由独立子代理执行（只读 + 唯一写操作 = 负向探针 route 999，已清理并复核 extras 回 0）。执行者未自证。
+
+| # | 核对项 | 结果 | 核对方证据 |
+|---|--------|------|-----------|
+| 1 | 三处 status 一致 | PASS | report/plan/roadmap 均 partial（核对时点） |
+| 2 | 账本对账 A5 | PASS | owner 含 E2E-25 的 7 条全 ✅；1..178 无跳号；**发现 F-115/117/119 双行 + F-119 状态矛盾（非本阶段遗留，另账）** |
+| 3 | 3 个 [A] 探针重跑 | PASS 3/3 | /apisix-health 200+ok；无 token 401 → 有效 token 200 userId=1；upstreams/1 checks.active=/health + routes/100 unhealthy.failures=3 无 min_requests |
+| 4 | 5 个守卫独立跑 | PASS 5/5 | seed_test 72/0、drift extras rc=0、audit --all 30 阶段 0 FAIL、todo GREEN、drift_check GREEN 4/4 |
+| 5 | 回归钉 + 截图 | PASS | spec 6 test( 无注释断言；5 张 PNG 均 >10KB |
+| 6 | D-36 真实存在且接线 | PASS | decisions.md:307；dev-up.sh:181-185 if ! 块内 |
+| 7 | 架构决策注记 | PASS（修 1 残留） | 决策 7/8 已更正；**决策 9 表 :227 残留已本轮更正** |
+| 8 | 汇总行算术 | PASS | 20 行 = 19+1+0+0（核对时点）；修 #9 后 20+0+0+0=20 |
+| 9 | AP-02 抽查 | 2 句属实 + 1 句失实已修 | upstreams/1 checks 属实、set -eu 断言属实、**wrapper 8→6 计数已修** |
+| 10 | 负向对照 | PASS | PUT route 999 → extras rc=1 定位 999 → DELETE → 404 + extras rc=0 |
+
+**核对结论**：partial 诚实，允许翻 done。核对方提 5 项发现，处置：#1/#2/#4 已修（本轮）；#3（账本双行，E2E-16 遗留）登记 [E2E-F-179](../../discovered-unresolved.md)；#5（A3 跳过）登记 [E2E-F-180](../../discovered-unresolved.md)。
