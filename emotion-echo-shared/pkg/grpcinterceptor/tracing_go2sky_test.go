@@ -109,6 +109,37 @@ func TestGo2SkyTracer_StartEntry_OperatesOnExistingCtx(t *testing.T) {
 	}
 }
 
+// TestGo2SkyTracer_StartEntry_ReturnsSpanBearingCtx E2E-26 #3：
+// StartEntry 必须返回**承载 span 的新 ctx** —— gin handler 拿它调下游 gRPC/Kafka，
+// exit span 才能续上同一 trace。返回原 ctx ⇒ HTTP 入口 span 成孤岛，
+// 每个下游 exit 各起新 trace（OAP 实测 web-bff 只有孤岛 gin trace 的根因之一）。
+func TestGo2SkyTracer_StartEntry_ReturnsSpanBearingCtx(t *testing.T) {
+	realTr, err := go2sky.NewTracer("startentry-ctx-test")
+	if err != nil {
+		t.Skipf("go2sky.NewTracer unsupported without reporter: %v", err)
+	}
+	tr := NewGo2SkyTracer(realTr)
+	if tr == nil {
+		t.Fatal("NewGo2SkyTracer(non-nil) 不应为 nil")
+	}
+
+	bg := context.Background()
+	ctx1, sp := tr.StartEntry(bg, "GET /api/test")
+	if sp == nil {
+		t.Fatal("StartEntry 应返回非 nil span")
+	}
+	if ctx1 == bg {
+		t.Fatalf("StartEntry 必须返回承载 span 的新 ctx（当前返回原 ctx ⇒ 下游 exit 每跳各起新 trace）")
+	}
+	// 承载 ctx 必须保留原 ctx 的值（X-Trace-Id 等已注入的字段）
+	type k struct{}
+	parent := context.WithValue(bg, k{}, "v")
+	ctx2, _ := tr.StartEntry(parent, "op")
+	if ctx2.Value(k{}) != "v" {
+		t.Fatalf("承载 ctx 必须保留原 ctx 的值")
+	}
+}
+
 // fakeGo2SkySpan 实现 go2sky.Span 接口
 type fakeGo2SkySpan struct {
 	endCount   int

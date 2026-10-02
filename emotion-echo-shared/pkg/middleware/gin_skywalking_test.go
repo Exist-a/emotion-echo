@@ -260,12 +260,18 @@ type stubTracer struct {
 	createLocalCalls []string
 	// span PR-OBS-18: StartEntry 返回的 span(测试可断言 Tag/EndSpan 调用)
 	span *stubSpan
+	// ctxToReturn E2E-26: 非 nil 时 StartEntry 返回它(承载 ctx 契约测试用;
+	// nil 时维持旧行为返回入参 ctx)
+	ctxToReturn context.Context
 }
 
 func (t *stubTracer) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
 	t.startEntryCalls = append(t.startEntryCalls, opName)
 	if t.span == nil {
 		t.span = &stubSpan{}
+	}
+	if t.ctxToReturn != nil {
+		return t.ctxToReturn, t.span
 	}
 	return ctx, t.span
 }
