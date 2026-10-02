@@ -58,6 +58,7 @@ try {
 
 const src = fs.readFileSync(SEED_SH, 'utf8');
 const cfg = fs.readFileSync(CONFIG_YAML, 'utf8');
+const infraYaml = fs.readFileSync(path.join(SCRIPT_DIR, '..', 'docker-compose.infra.yml'), 'utf8');
 const checks = [
   ['seed.sh executable', isExecutable(SEED_SH)],
   // E2E-25 #11 弱断言修复：原断言 `src.includes('set -euo pipefail')` 会被
@@ -158,6 +159,22 @@ const checks = [
   // 型漂移陷阱。禁令：不得存在定义后未被引用的插件配置块。
   ['E2E-25 不存在死变量 PLUGINS_JSON（定义后必须被引用或删除，F-d）',
     !/^PLUGINS_JSON=\$\(cat <<EOF/m.test(src)],
+
+  // === E2E-25 C3 RED：网关自身健康语义（F-f / N1）===
+  // ① N1：route 205 /apisix-health 无 upstream ⇒ 命中即 openresty 503（2026-10-02
+  //    实测）。修法 = echo 插件直接应答，无需 upstream。
+  // ② F-f：compose healthcheck 原为纯 TCP 探 9080 ⇒ etcd 停摆时数据面 404/admin 报错
+  //    而容器仍 healthy。修法 = 探 admin API（etcd 依赖的唯一直读面；镜像无 curl，
+  //    用 bash /dev/tcp 发原始 HTTP GET，按状态行判 200）。
+  ['E2E-25 route 205 self-health 挂 echo 插件（无 upstream 也可 200，N1）',
+    (() => {
+      const i = src.indexOf('"uri":"/apisix-health"');
+      return i >= 0 && src.slice(i, i + 200).includes('"echo"');
+    })()],
+  ['E2E-25 apisix healthcheck 探 admin API 9180（F-f，etcd 依赖可观测）',
+    /healthcheck:[\s\S]{0,700}?9180[\s\S]{0,300}?X-API-KEY/.test(infraYaml)],
+  ['E2E-25 apisix healthcheck 不再是纯 TCP 探 9080（负向）',
+    !/timeout 3 bash -c '<\/dev\/tcp\/127\.0\.0\.1\/9080'/.test(infraYaml)],
   ['api-breaker min_requests = 20', src.includes('"min_requests": 20')],
   ['api-breaker error_threshold_ratio = 0.5',
     src.includes('"error_threshold_ratio": 0.5')],
