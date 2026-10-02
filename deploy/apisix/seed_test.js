@@ -166,10 +166,10 @@ const checks = [
   // ② F-f：compose healthcheck 原为纯 TCP 探 9080 ⇒ etcd 停摆时数据面 404/admin 报错
   //    而容器仍 healthy。修法 = 探 admin API（etcd 依赖的唯一直读面；镜像无 curl，
   //    用 bash /dev/tcp 发原始 HTTP GET，按状态行判 200）。
-  ['E2E-25 route 205 self-health 挂 echo 插件（无 upstream 也可 200，N1）',
+  ['E2E-25 route 205 self-health 用 serverless exit(200) 终止请求（无 upstream 也可 200，N1）',
     (() => {
       const i = src.indexOf('"uri":"/apisix-health"');
-      return i >= 0 && src.slice(i, i + 200).includes('"echo"');
+      return i >= 0 && /response\.exit\(200/.test(src.slice(i, i + 400));
     })()],
   ['E2E-25 apisix healthcheck 探 admin API 9180（F-f，etcd 依赖可观测）',
     /healthcheck:[\s\S]{0,700}?9180[\s\S]{0,300}?X-API-KEY/.test(infraYaml)],
