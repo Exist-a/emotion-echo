@@ -155,9 +155,11 @@ func buildSpanError(c *gin.Context) error {
 // shouldSkipPath Round 4.7 §D：env 驱动的跳过路径判定。
 //
 // env SKIP_PATH_LIST（逗号分隔），如：
-//   SKIP_PATH_LIST="/health,/metrics,/internal/"
-// 缺省 fallback："/health,/metrics,/internal/"（与原硬编码行为对齐，
-// 但增加了 /metrics 跳过——Prometheus scrape 制造的无意义 span 也算）。
+//   SKIP_PATH_LIST="/health,/health/,/metrics,/internal/"
+// 缺省 fallback："/health,/health/,/metrics,/internal/"（与原硬编码行为对齐，
+// 增加 /metrics 跳过——Prometheus scrape 制造的无意义 span 也算；
+// E2E-26 增加 "/health/" 前缀——D-29 的 /health/ready、/health/live 探针
+// 每容器 30s 一跳，不跳过会持续污染 OAP trace 存储）。
 //
 // 缓存：env 只在启动时读一次（sync.Once），避免每次请求都读 env。
 var (
@@ -182,7 +184,7 @@ func shouldSkipPath(path string) bool {
 func initSkipPathList() {
 	raw := os.Getenv("SKIP_PATH_LIST")
 	if raw == "" {
-		raw = "/health,/metrics,/internal/"
+		raw = "/health,/health/,/metrics,/internal/"
 	}
 	skipPathExact = make(map[string]struct{})
 	for _, p := range strings.Split(raw, ",") {
