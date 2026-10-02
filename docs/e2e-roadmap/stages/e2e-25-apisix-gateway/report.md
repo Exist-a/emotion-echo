@@ -10,11 +10,9 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 
 ## 0. 未完成清单（唯一真相源 · 收口时必须逐条销账）
 
-**1 项未完成**：
+**0 项未完成。**
 
-| # | 事项 | 责任人 | 可核验的完成判据 | 状态 |
-|---|------|--------|------------------|------|
-| **T-1** | M2 漂移处置策略裁定（fail-closed vs 覆盖+报告，建议后者，见 §6） | 用户 | `docs/e2e-roadmap/decisions.md` 出现 D-36 处置策略决议；若选 fail-closed 则 `check_apisix_drift.sh verify` 的 exit 2 改为拦截并补测试；裁定后本阶段翻 done | 🔴 待裁定 |
+- T-1（M2 漂移处置策略裁定）**已于 2026-10-02 销账**：用户裁定 **B+**，`decisions.md` 已登记 **D-36**；实现为 `dev-up.sh` 尾部接入 `check_apisix_drift.sh extras`（只报不拦），回归钉 `scripts/test_devup_drift_check.sh` 4 断言 + CI 守卫 6b/7 已接。原判据：裁定落 decisions.md 且翻 done —— 见 §6 M2 行。
 
 ## 1. 环境基线
 
@@ -85,7 +83,7 @@ environment: dev 模式（30 容器 healthy，compose.dev.yml + .env.local；wor
 
 | # | 决策 | 建议 |
 |---|------|------|
-| M2（#9） | seed 漂移处置策略：**A. fail-closed**（seed 检测到漂移即退出，要求人工确认）vs **B. 覆盖+报告**（现状：seed 覆盖后 drift 工具报告，exit 2 只报不拦） | 建议 **B+CI 兜底**：dev 环境保持"seed 是唯一真理源"的覆盖语义（可预期、可自动化），篡改类漂移由 `check_apisix_drift.sh verify` 在 dev-up 后报告 + 账本留痕；A 会让 compose up 卡死在交互确认，违反无人值守启动。若用户选 A，verify 的 exit 2 改为直接拦截 |
+| M2（#9） | seed 漂移处置策略 | ✅ **已裁定 D-36 = B+**（2026-10-02 用户采纳建议）：覆盖照常 + dev-up 尾部自动跑 `check_apisix_drift.sh extras` 只报不拦；`test_devup_drift_check.sh` 4 断言回归钉 + CI 守卫 6b/7 已接 |
 | M1（#2） | checks × discovery 实证成立（D-35），无需 fallback | 无需用户动作，登记备查 |
 | M3（#18） | 双节点验证已实测完成（临时容器压完即撤） | 无需用户动作 |
 

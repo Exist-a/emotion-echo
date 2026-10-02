@@ -86,6 +86,10 @@ jobs:
       - name: 守卫 6/6 dev-up.sh 分批等待
         run: bash scripts/test_devup_batch_waits.sh
 
+      # E2E-25 M2（D-36 B+）：dev-up 必须接 drift extras 报告且只报不拦
+      - name: 守卫 6b/7 dev-up 漂移报告接入（B+ 只报不拦）
+        run: bash scripts/test_devup_drift_check.sh
+
       - name: 守卫 7/7 三方路由契约（APISIX ↔ BFF ↔ 前端）
         run: bash scripts/test_route_contract.sh
 

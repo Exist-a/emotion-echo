@@ -161,5 +161,28 @@ log "批4/4: XTls（2.6G 模型加载 40-180s）..."
 $COMPOSE up -d emotion-echo-xtts
 
 log "=== 全部 up -d 完成；等 healthy ==="
+
+# 批4.5：等 apisix-seed 跑完（compose 的 apisix-seed 依赖 6 服务 healthy 才启动，
+# 批3 之后才可能完成）——seed 是网关配置的唯一真相源，未跑完就做漂移检查会
+# 把"seed 还没写"误报成漂移。
+log "批4.5/4: 等 apisix-seed 完成 + 漂移报告（D-36 B+）..."
+for i in $(seq 1 60); do
+  st=$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' emotion-echo-apisix-seed 2>/dev/null || echo "absent 0")
+  case "$st" in
+    "exited 0" | "absent 0") break ;;
+  esac
+  sleep 2
+done
+
+# D-36（2026-10-02 用户裁定 B+）：每次启动自动报告 seed 白名单外的野生路由
+# （route 116/299 类漂移）。**只报不拦**（if ! ... 即使 extras 返 1 也只打告警）——
+# 发现漂移不阻断启动（fail-closed 会把 compose up 卡成半启动，比漂移更难排查），
+# 但必须在启动输出里留痕可见。
+if ! bash "$(dirname "$0")/check_apisix_drift.sh" extras; then
+  log "⚠ 漂移：存在 seed 白名单外的 APISIX 路由（D-36 B+ 只报不拦）——"
+  log "  人工核对后：野生路由用 admin API 删除，或改 seed.sh 纳入白名单。工具："
+  log "  bash scripts/check_apisix_drift.sh extras"
+fi
+
 log "探活建议：bash scripts/dev-up.sh 后再 docker ps 看 emotion-echo-xtts 启动情况"
 log "注：F-132/F-133/F-137 等开放项详见账本 discovered-unresolved.md"
