@@ -88,6 +88,11 @@ type fakeStorage struct {
 	err    error
 	// E2E-27 #4：捕获 PutObject 收到的 ctx，用于断言 deadline 存在（防停机挂起）
 	putCtx context.Context
+	// E2E-27 M1：GET image 端点用例的可配置对象内容与错误
+	getObjBytes []byte
+	getObjCT    string
+	getObjErr   error
+	gotGetObjKey string
 }
 
 func (f *fakeStorage) PutObject(ctx context.Context, key string, r io.Reader, size int64, ct string) (string, error) {
@@ -99,9 +104,12 @@ func (f *fakeStorage) PutObject(ctx context.Context, key string, r io.Reader, si
 }
 func (f *fakeStorage) GetObjectURL(key string) string { return "" }
 func (f *fakeStorage) GetObject(ctx context.Context, key string) (io.ReadCloser, string, int64, error) {
-	// avatar handler 不调用 GetObject；E2E-F-113 后 storage 接口扩展必须实现此方法
-	// 才能编译。若 handler 误调 ⇒ 暴露意外调用链。
-	return nil, "", 0, errors.New("fakeStorage.GetObject not implemented (avatar handler does not need it)")
+	// M1 起 avatar GET image 端点会调用 GetObject（原「不应调用」防护随端点新增解除）
+	f.gotGetObjKey = key
+	if f.getObjErr != nil {
+		return nil, "", 0, f.getObjErr
+	}
+	return io.NopCloser(bytes.NewReader(f.getObjBytes)), f.getObjCT, int64(len(f.getObjBytes)), nil
 }
 func (f *fakeStorage) RemoveObject(ctx context.Context, key string) error { return nil }
 func (f *fakeStorage) HealthCheck(ctx context.Context) error             { return nil }
@@ -133,7 +141,10 @@ func TestAvatarHandler_Upload_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
 	require.NotNil(t, user.gotReq, "应调用 user-svc UpdateMe")
 	require.NotNil(t, user.gotReq.AvatarURL)
-	assert.Equal(t, "http://localhost:9000/avatars/avatars/7-abc.jpg", *user.gotReq.AvatarURL)
+	// E2E-27 M1 / F-116：响应与落库一律网关相对路径（ADR-2026-09 决策 1），
+	// 不得下发 PublicBaseURL 绝对地址（宿主浏览器可用纯属端口转发巧合）。
+	assert.Equal(t, "/api/v1/user/avatar/image/7-2cdae8ed.jpg", *user.gotReq.AvatarURL,
+		"落库必须是网关相对路径（sha8(me.jpg)=2cdae8ed）")
 
 	var got struct {
 		Data struct {
@@ -141,9 +152,70 @@ func TestAvatarHandler_Upload_Success(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	// E2E-11 复查：原断言读顶层 got["avatar"]，把"无 data 包装"这个 bug 固化了。
+	// E2E-11 复查：原断言读顶层 got["avatar"]，把"无 data 包装"的 bug 固化了。
 	// 现按前端真实消费路径（useApi 返回 data.data）断言 data.avatar。
-	assert.Equal(t, "http://localhost:9000/avatars/avatars/7-abc.jpg", got.Data.Avatar)
+	assert.Equal(t, "/api/v1/user/avatar/image/7-2cdae8ed.jpg", got.Data.Avatar,
+		"响应必须是网关相对路径（E2E-27 M1/F-116）")
+}
+
+// E2E-27 M1：GET /api/v1/user/avatar/image/:filekey 反代端点（ADR-2026-09 决策 1/
+// 3 的 avatar 落地——voice 反代同型）。相对 URL 的消费方（浏览器 <img> 经网关
+// getFullUrl 解析）都指向这个端点；端点本身须具备 voice 同款防御语义。
+func TestAvatarHandler_ImageGet_Success(t *testing.T) {
+	sto := &fakeStorage{getObjBytes: []byte("PNG-BYTES"), getObjCT: "image/png"}
+	r := newAvatarRouter(&fakeAvatarUserClient{}, sto)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/user/avatar/image/7-2cdae8ed.jpg", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+	assert.Equal(t, "image/png", w.Header().Get("Content-Type"), "必须回读真实 Content-Type")
+	assert.Equal(t, []byte("PNG-BYTES"), w.Body.Bytes(), "body 必须等于 storage 流")
+	assert.Equal(t, "avatars/7-2cdae8ed.jpg", sto.gotGetObjKey, "handler 补 avatars/ 前缀")
+}
+
+func TestAvatarHandler_ImageGet_ObjectNotFound_Returns404(t *testing.T) {
+	sto := &fakeStorage{getObjErr: errors.New("StatObject(avatars/x.jpg): The specified key does not exist.")}
+	r := newAvatarRouter(&fakeAvatarUserClient{}, sto)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/user/avatar/image/missing.jpg", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code,
+		"缺失对象必须 404（ADR 决策 3；minio-go 真实文案），body: %s", w.Body.String())
+	// 断言 body 是 handler 的 JSON——gin 路由未注册时也返 404（空 body），
+	// 仅断言状态码会让「端点不存在」假通过。
+	assert.Contains(t, w.Body.String(), `"code"`, "必须是 handler 的 404 JSON 响应而非路由级空 404")
+}
+
+func TestAvatarHandler_ImageGet_PathTraversal_Returns400(t *testing.T) {
+	sto := &fakeStorage{getObjBytes: []byte("x")}
+	r := newAvatarRouter(&fakeAvatarUserClient{}, sto)
+
+	for _, key := range []string{"..vhidden", "abc..xyz"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/user/avatar/image/"+key, nil)
+		req.Header.Set("X-User-Id", "7")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code, "filekey 含 .. 必须 400（key=%s）", key)
+	}
+	assert.Empty(t, sto.gotGetObjKey, "被拦截的非法 key 不应触达 storage")
+}
+
+func TestAvatarHandler_ImageGet_NilStorage_Returns503(t *testing.T) {
+	r := newAvatarRouter(&fakeAvatarUserClient{}, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/user/avatar/image/7-x.jpg", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code,
+		"storage 未配置必须 503（与上传语义一致），body: %s", w.Body.String())
 }
 
 // E2E-27 #4 运行时实证（2026-10-03）：停 MinIO 容器后 avatar 上传挂起——
