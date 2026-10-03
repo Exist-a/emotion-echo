@@ -148,6 +148,8 @@ func main() {
 			log.Printf("[skywalking] tracer init failed (warn mode, continue): %v", err)
 		} else {
 			tracer = t
+			// E2E-26 #3：注册全局 tracer —— gRPC server 拦截器 + ai client traceTracer() 取它
+			sharedskywalking.SetTracer(t)
 			log.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
 		}
 	}

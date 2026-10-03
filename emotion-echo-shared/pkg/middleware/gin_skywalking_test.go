@@ -260,12 +260,18 @@ type stubTracer struct {
 	createLocalCalls []string
 	// span PR-OBS-18: StartEntry 返回的 span(测试可断言 Tag/EndSpan 调用)
 	span *stubSpan
+	// ctxToReturn E2E-26: 非 nil 时 StartEntry 返回它(承载 ctx 契约测试用;
+	// nil 时维持旧行为返回入参 ctx)
+	ctxToReturn context.Context
 }
 
 func (t *stubTracer) StartEntry(ctx context.Context, opName string) (context.Context, grpcinterceptor.Span) {
 	t.startEntryCalls = append(t.startEntryCalls, opName)
 	if t.span == nil {
 		t.span = &stubSpan{}
+	}
+	if t.ctxToReturn != nil {
+		return t.ctxToReturn, t.span
 	}
 	return ctx, t.span
 }
@@ -738,7 +744,10 @@ func TestGinSkywalkingMiddleware_EndSpanNil_OnStatus200(t *testing.T) {
 	}
 }
 
-// TestShouldSkipPath_DefaultFallback env 缺省时按 /health,/metrics,/internal/ 判定
+// TestShouldSkipPath_DefaultFallback env 缺省时按 /health,/health/,/metrics,/internal/ 判定
+// E2E-26 补：/health/ready、/health/live（D-29 readiness 探针）必须默认跳过——
+// 否则各容器 30s 一次健康检查持续制造 /health/ready span，污染 OAP trace 存储
+// （2026-10-02 实测 web-bff 10 分钟窗口 15 条 health trace）。
 func TestShouldSkipPath_DefaultFallback(t *testing.T) {
 	skipPathOnce = sync.Once{}
 	skipPathExact = nil
@@ -750,6 +759,8 @@ func TestShouldSkipPath_DefaultFallback(t *testing.T) {
 		want bool
 	}{
 		{"/health", true},
+		{"/health/ready", true},
+		{"/health/live", true},
 		{"/metrics", true},
 		{"/internal/probe", true},
 		{"/api/v1/conversations", false},

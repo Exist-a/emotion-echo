@@ -128,8 +128,21 @@ func (t *mockTracer) CreateEntrySpan(
 	outCtx := ctx
 	if t.entryCtx != nil {
 		outCtx = t.entryCtx
+	} else if t.ctxToReturn != nil {
+		// E2E-26 迁移垫片：老 server 测试只设 StartEntry 时代的 spanToReturn/
+		// ctxToReturn —— server 拦截器改走 CreateEntrySpan 后复用同一 fixture。
+		outCtx = t.ctxToReturn
 	}
-	return outCtx, t.entrySpan, t.entryErr
+	// 返回值必须是**非 typed-nil 的接口**：entrySpan 未设时回落 spanToReturn；
+	// 两者皆无 → 返回未typed化的 nil（让调用方 `span == nil` 降级分支生效，
+	// 否则 typed-nil 进接口 → SetSpanLayer 空指针 panic）。
+	var outSpan Span
+	if t.entrySpan != nil {
+		outSpan = t.entrySpan
+	} else if t.spanToReturn != nil {
+		outSpan = t.spanToReturn
+	}
+	return outCtx, outSpan, t.entryErr
 }
 
 // =====================================================
@@ -233,9 +246,10 @@ func TestServerTracing_HappyPath_CallsTracerAndEndsSpan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	// tracer.StartEntry 应被调用一次，参数是 FullMethod
-	if len(tracer.calls) != 1 || tracer.calls[0] != "/svc/Method" {
-		t.Fatalf("expected StartEntry called once with method name, got %v", tracer.calls)
+	// tracer.CreateEntrySpan 应被调用一次，参数是 FullMethod
+	// （E2E-26 #3：server 端由 StartEntry 迁移到 CreateEntrySpan，断言随契约迁移）
+	if len(tracer.entryOpCalls) != 1 || tracer.entryOpCalls[0] != "/svc/Method" {
+		t.Fatalf("expected CreateEntrySpan called once with method name, got %v", tracer.entryOpCalls)
 	}
 	if !span.ended {
 		t.Fatal("expected span to be ended")
@@ -583,7 +597,7 @@ func TestServerTracing_NoTagsOnNilTracer(t *testing.T) {
 // - metadata x-user-id → handler ctx (handler 读 ctx 验证)
 // 这些是 Span.Tag 扩展前的关键前置条件,本 PR 固化避免重构时丢失
 
-// TestServerTracing_FullMethodAsOpName 验证 StartEntry 的 opName = FullMethod
+// TestServerTracing_FullMethodAsOpName 验证 CreateEntrySpan 的 opName = FullMethod
 func TestServerTracing_FullMethodAsOpName(t *testing.T) {
 	t.Parallel()
 	span := &mockSpan{}
@@ -598,9 +612,10 @@ func TestServerTracing_FullMethodAsOpName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	// 验证 StartEntry 的 opName == FullMethod (这是 span tag rpc.method 的来源)
-	if len(tracer.calls) != 1 || tracer.calls[0] != "/emotion_llm.v1.EmotionLLMService/Analyze" {
-		t.Errorf("expected opName = FullMethod, got %v", tracer.calls)
+	// 验证 CreateEntrySpan 的 opName == FullMethod (这是 span tag rpc.method 的来源)
+	// （E2E-26 #3：server 端契约由 StartEntry 迁移到 CreateEntrySpan）
+	if len(tracer.entryOpCalls) != 1 || tracer.entryOpCalls[0] != "/emotion_llm.v1.EmotionLLMService/Analyze" {
+		t.Errorf("expected opName = FullMethod, got %v", tracer.entryOpCalls)
 	}
 }
 

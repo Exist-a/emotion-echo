@@ -322,6 +322,8 @@ func main() {
 			}
 		} else {
 			tracer = t
+			// E2E-26 #3：注册全局 tracer —— gRPC server 拦截器 + analyzer client 取它
+			sharedskywalking.SetTracer(t)
 			logging.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
 		}
 	}

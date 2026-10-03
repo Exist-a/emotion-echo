@@ -15,6 +15,9 @@
 #
 # 用法：bash scripts/dev-up.sh
 set -euo pipefail
+# E2E-26 F-181：在 cd 之前固化仓库脚本目录 —— 下面 cd 到 deploy 后，
+# 相对 dirname "$0" 会解析成 deploy/scripts/...（不存在）。
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$(dirname "$0")/../deploy" || exit 1
 COMPOSE="docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml --env-file .env.local --profile dev --profile ai"
 NACOS_URL="http://127.0.0.1:8848"
@@ -178,10 +181,17 @@ done
 # （route 116/299 类漂移）。**只报不拦**（if ! ... 即使 extras 返 1 也只打告警）——
 # 发现漂移不阻断启动（fail-closed 会把 compose up 卡成半启动，比漂移更难排查），
 # 但必须在启动输出里留痕可见。
-if ! bash "$(dirname "$0")/check_apisix_drift.sh" extras; then
-  log "⚠ 漂移：存在 seed 白名单外的 APISIX 路由（D-36 B+ 只报不拦）——"
-  log "  人工核对后：野生路由用 admin API 删除，或改 seed.sh 纳入白名单。工具："
-  log "  bash scripts/check_apisix_drift.sh extras"
+# E2E-26 F-181：路径改用 cd 前固化的 $SCRIPT_DIR（旧 $(dirname "$0")/... 在
+# cd deploy 后不存在 → 127 → 被误判成「存在漂移」假告警），且区分
+# 「工具缺失=检查未执行」与「真漂移」两种情形。
+if ! bash "$SCRIPT_DIR/check_apisix_drift.sh" extras; then
+  if [ -f "$SCRIPT_DIR/check_apisix_drift.sh" ]; then
+    log "⚠ 漂移：存在 seed 白名单外的 APISIX 路由（D-36 B+ 只报不拦）——"
+    log "  人工核对后：野生路由用 admin API 删除，或改 seed.sh 纳入白名单。工具："
+    log "  bash scripts/check_apisix_drift.sh extras"
+  else
+    log "⚠ 漂移检查未执行：找不到 $SCRIPT_DIR/check_apisix_drift.sh（工具缺失≠无漂移，F-181）"
+  fi
 fi
 
 log "探活建议：bash scripts/dev-up.sh 后再 docker ps 看 emotion-echo-xtts 启动情况"

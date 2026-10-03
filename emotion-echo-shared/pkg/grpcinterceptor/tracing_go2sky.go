@@ -93,20 +93,29 @@ func NewGo2SkyTracer(tracer *go2sky.Tracer) *Go2SkyTracer {
 
 // StartEntry implements Tracer.
 //
-// Uses CreateExitSpanWithContext as a workaround for gRPC server tracing.
-// go2sky v1.5 doesn't expose a dedicated EntrySpan for incoming requests.
-// The "peer" param is set to the local service name as a placeholder.
+// E2E-26 #3 修正：改用 go2sky CreateEntrySpan（空 extractor = 无上游引用的
+// 根 entry span），并返回**承载 span 的 nCtx**。
+//
+// 旧实现（Stage 46 时代）用 CreateExitSpanWithContext 空注入 + 返回原 ctx，
+// 注释称 "go2sky v1.5 doesn't expose a dedicated EntrySpan" —— 该陈述失实
+// （同文件 CreateEntrySpan 即为 v1.5 的 EntrySpan 封装，Kafka consumer 一直在用）。
+// 旧实现的两个后果（2026-10-02 OAP 运行时实证）：
+//  1. span type=Exit 而非 Entry —— UI 语义错位；
+//  2. 返回原 ctx ⇒ gin handler 的下游 exit span 续不上入口，每跳各起新 trace。
+//
+// 无上游引用是安全的：propagation.decode 对空 sw8 直接 return nil（不报错），
+// go2sky 视为 root entry。gRPC server 端的 sw8 提取走 CreateEntrySpan
+// （NewServerTracingInterceptor），不经本方法。
 func (t *Go2SkyTracer) StartEntry(ctx context.Context, operationName string) (context.Context, Span) {
 	if t == nil || t.tracer == nil {
 		return ctx, &Go2SkySpan{} // no-op span
 	}
-	span, _, err := t.tracer.CreateExitSpanWithContext(ctx, operationName, "grpc-server", func(_, _ string) error {
-		return nil // no-op injector (not propagating to downstream)
-	})
+	span, nCtx, err := t.tracer.CreateEntrySpan(ctx, operationName,
+		func(string) (string, error) { return "", nil })
 	if err != nil || span == nil {
 		return ctx, &Go2SkySpan{}
 	}
-	return ctx, &Go2SkySpan{span: span}
+	return nCtx, &Go2SkySpan{span: span}
 }
 
 // CreateLocalSpan implements Tracer for local (non-network) operations

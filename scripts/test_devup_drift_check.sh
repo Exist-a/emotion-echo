@@ -68,6 +68,28 @@ else
   fail=$((fail + 1))
 fi
 
+# 4) (E2E-26 F-181) 路径必须可解析：dev-up 开头 `cd .../deploy` 之后，
+#    `$(dirname "$0")/check_apisix_drift.sh`（$0 为相对调用时）解析到
+#    deploy/scripts/... 不存在 ⇒ bash 返 127 ⇒ 被 if ! 当成"存在漂移"假告警，
+#    真漂移永远查不到（2026-10-03 开工实测复现）。
+drift_invoke_line=$(grep -n 'bash .*check_apisix_drift\.sh.*extras' "$DEVUP" | head -1 || true)
+if echo "$drift_invoke_line" | grep -q '\$(dirname "\$0")/check_apisix_drift.sh'; then
+  echo "FAIL (F-181): drift 调用依赖 cd 之后的相对 dirname \$0 —— 路径不存在（实测 No such file → 127 → 假漂移告警）"
+  fail=$((fail + 1))
+else
+  echo "PASS drift 调用不依赖 cd 后的相对 dirname \$0（F-181）"
+  pass=$((pass + 1))
+fi
+
+# 5) (F-181) 工具缺失必须显式报「检查未执行」——不得把退出码 127 误报成漂移。
+if grep -qE '检查未执行|工具缺失' "$DEVUP"; then
+  echo "PASS 工具缺失分支显式区分「未执行」与「有漂移」（F-181）"
+  pass=$((pass + 1))
+else
+  echo "FAIL (F-181): 无「工具缺失≠漂移」分支 —— 127 仍触发假漂移告警"
+  fail=$((fail + 1))
+fi
+
 echo
 echo "PASS: $pass  FAIL: $fail"
 if [ "$fail" -gt 0 ]; then

@@ -176,16 +176,9 @@ func main() {
 		}
 	}()
 
-	// 1. 下游 client 装配（PR-2: Resolver 由 nacosRuntime.Registry 派生）
-	// Stage 75: grpcResolver 带 grpc_port portHint，gRPC 拨号地址 Nacos 优先（env 兜底）。
-	var resolver, grpcResolver bffdiscovery.Resolver
-	if nacosRuntime != nil && nacosRuntime.Registry != nil {
-		resolver = bffdiscovery.NewNacosResolver(nacosRuntime.Registry, c.Nacos.Namespace)
-		grpcResolver = bffdiscovery.NewNacosResolver(nacosRuntime.Registry, c.Nacos.Namespace).WithPortHint("grpc_port")
-	}
-	svcCtx := buildServiceContext(&c, resolver, grpcResolver)
-
-	// 2. SkyWalking（可选, PR-OBS-2: 用 shared BootstrapSkyWalkingTracer 统一 7 svc 行为）
+	// 1. SkyWalking（可选, PR-OBS-2: 用 shared BootstrapSkyWalkingTracer 统一 7 svc 行为）
+	// E2E-26 顺序守卫：本块必须在 buildServiceContext（拨号读 packageTracer）**之前**，
+	// 否则 ClientDialOptions 拿到 nil tracer，5+1 下游 gRPC conn 全部不注入 sw8。
 	var tracer *go2sky.Tracer
 	if c.SkyWalking.Enabled {
 		t, err := sharedbootstrap.BootstrapSkyWalkingTracer(context.Background(), c.SkyWalking.ServiceName, c.SkyWalking.OAPAddr, 2*time.Second)
@@ -203,6 +196,15 @@ func main() {
 			log.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
 		}
 	}
+
+	// 2. 下游 client 装配（PR-2: Resolver 由 nacosRuntime.Registry 派生）
+	// Stage 75: grpcResolver 带 grpc_port portHint，gRPC 拨号地址 Nacos 优先（env 兜底）。
+	var resolver, grpcResolver bffdiscovery.Resolver
+	if nacosRuntime != nil && nacosRuntime.Registry != nil {
+		resolver = bffdiscovery.NewNacosResolver(nacosRuntime.Registry, c.Nacos.Namespace)
+		grpcResolver = bffdiscovery.NewNacosResolver(nacosRuntime.Registry, c.Nacos.Namespace).WithPortHint("grpc_port")
+	}
+	svcCtx := buildServiceContext(&c, resolver, grpcResolver)
 
 	// 3. Gin
 	gin.SetMode(gin.ReleaseMode)

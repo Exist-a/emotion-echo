@@ -408,6 +408,19 @@ bash scripts/check_routes_alignment.sh && python scripts/check_view_consistency.
 # APISIX seed↔admin 漂移检测（E2E-25 用；纯逻辑契约测试在 CI 的 apisix-seed-structure job）
 bash scripts/check_apisix_drift.sh verify   # 快照→重跑 seed→对比+白名单外路由检查；exit 1=extras / 2=篡改类
 bash scripts/check_apisix_drift.sh extras   # 只查白名单外路由（route 116/299 类漂移）
+
+# SkyWalking OAP 查询（E2E-26 用；容器网直达 + 官方 SECOND 格式，宿主 12800 无映射）
+bash scripts/query_oap.sh services               # 服务列表（含 serviceId）
+bash scripts/query_oap.sh traces <服务名> [分钟]   # queryBasicTraces
+bash scripts/query_oap.sh trace <traceId>        # 全 span + refs
+bash scripts/query_oap.sh logs [分钟]            # OAP 日志（APISIX access log 落点）
+bash scripts/query_oap.sh dry-run traces <服务名> # 只打印 payload（格式审计）
+# SkyWalking UI（E2E-26 D-38）：http://127.0.0.1:18080/ （dev 127.0.0.1 限定映射）
+
+# E2E-26 守卫（先红后绿的契约测试）
+bash scripts/test_query_oap.sh           # 查询工具四契约（格式/容器网/dry-run/非静默）
+bash scripts/test_smoke_oap_contract.sh  # smoke 契约 9 防回退（禁宿主直连/伪签名/best-effort）
+bash scripts/test_devup_drift_check.sh   # dev-up 漂移段（含 F-181 路径可解析断言）
 ```
 
 ---
