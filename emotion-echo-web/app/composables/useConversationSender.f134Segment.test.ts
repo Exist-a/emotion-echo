@@ -54,8 +54,25 @@ describe('useConversationSender · F-134 流中标点即发（第二层 debounce
 
   it('500ms debounce 尾冲必须保留（无标点余量/流尾）', () => {
     expect(
-      /ttsDebounceTimer\s*=\s*setTimeout\([\s\S]{0,200}?500/.test(senderSrc),
+      // 窗口 400：GREEN 后 debounce 分支缩进加深（else 嵌套），200 会顶爆
+      /ttsDebounceTimer\s*=\s*setTimeout\([\s\S]{0,400}?,\s*500\)/.test(senderSrc),
       'debounce 尾冲被删 —— 无标点文本将永远不发 TTS',
+    ).toBe(true)
+  })
+
+  it('onFinish 的 flushTTS 兜底必须保留（流尾余量 + flushRemaining 清队）', () => {
+    // 防"只做了 onDelta 分支、把流末兜底删了"的半边改动：流在标点中间
+    // 断掉（异常/中断）时，残留文本只能靠 onFinish flushTTS 发出。
+    const finIdx = senderSrc.indexOf('onFinish:')
+    expect(finIdx, 'onFinish 回调必须存在').toBeGreaterThan(-1)
+    const finBlock = senderSrc.slice(finIdx, finIdx + 400)
+    expect(
+      /flushTTS\(\)/.test(finBlock),
+      'onFinish 必须调用 flushTTS（残留 accumulated + flushRemaining 兜底）',
+    ).toBe(true)
+    expect(
+      /playText\(accumulatedDeltaText\.value\)/.test(senderSrc.slice(0, senderSrc.indexOf('onDelta:'))),
+      'flushTTS 定义内必须保留 playText 调用',
     ).toBe(true)
   })
 })
