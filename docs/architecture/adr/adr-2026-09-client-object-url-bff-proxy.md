@@ -2,6 +2,11 @@
 
 - **状态**：已采纳（2026-09-22）
 - **关联**：账本 E2E-F-113（触发实测）、E2E-F-116（存量 avatar/uploads 同型债）、PR #59、E2E-16 plan §5 测试点 2/3/4a
+- **落地进度（2026-10-03 回填）**：voice = PR #59（2026-09-22）；**avatar + uploads = E2E-27 / D-40 已落地**
+  ——`GET /api/v1/user/avatar/image/:filekey`、`GET /api/v1/uploads/file/:filekey`（GET/HEAD 双注册 + 网关
+  catch-all methods 放行 HEAD）、前端 `resolveObjectUrl` 头像解析、存量行惰性兼容不回填，**E2E-F-116 已 ✅ 关闭**；
+  连带 D-41（MinIO 端口 127.0.0.1 限定）与孤儿对象治理（更新删旧）。执行记录见
+  [E2E-27 report](../../e2e-roadmap/stages/e2e-27-object-storage-minio/report.md)。
 
 ## 背景
 
@@ -32,8 +37,9 @@ E2E-F-113 实测（2026-09-22）：`voice_handler` 返回的 `audioUrl` 由 `sto
 ## 后果
 
 - **全环境一致**：宿主 / 远程协作 / 生产走同一路径，host 与存储部署解耦，无需按环境切 `PublicBaseURL`。
-- **每类新对象需要一个反代端点**：voice 已落地（PR #59）；avatar / uploads 仍是 `PublicBaseURL`
-  绝对地址下发 ⇒ 同型存量债登记 **E2E-F-116**（归 E2E-27 对象存储阶段迁移）。
+- **每类新对象一个反代端点**：voice 已落地（PR #59）；avatar / uploads **已迁移完毕**（2026-10-03 E2E-27/D-40：
+  `/api/v1/user/avatar/image/:filekey` + `/api/v1/uploads/file/:filekey`，本节原「仍是 `PublicBaseURL` 绝对地址
+  下发 ⇒ E2E-F-116 归 E2E-27 迁移」的存量债**已关闭**——响应与落库改网关相对、存量行惰性兼容不回填）。
 - 验收口径升级：任何对象 URL 的测试点必须在**发起者视角**断言可达（E2E-16 plan §5 测试点 2/3/4a
   双视角 curl + `readyState ≥ 1`），仅 `curl -I 宿主` 200 不算通过（AP-01 第四次复发的根治条款）。
 

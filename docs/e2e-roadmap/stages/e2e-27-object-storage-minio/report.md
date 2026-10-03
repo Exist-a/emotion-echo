@@ -117,5 +117,15 @@ environment: dev 模式（全栈 healthy：6 应用 svc + APISIX/Nacos/Kafka/etc
 - **全量 `pnpm playwright test`（chromium+mobile 双 project）**：**31 failed / 255 passed / 2 skipped（27.1m，RC=1）**
   - **本阶段 `object-storage.spec.ts` 双项目 4/4 全过**；域邻 spec（my-space 头像 #5/#6、apisix-gateway）亦过——**零本域失败**
   - 失败分布跨 11 个**他阶段** spec（E2E-07 ×6 / E2E-15 ×3 / E2E-10 #7 / E2E-08 / E2E-19 / E2E-17 / E2E-11 ×2 / E2E-09 / F-124 / jwt-expiry / survey-scoring；mobile 占比高）→ **按 §5 范围外只记账不修：F-189**（根因逐条待查，禁臆断；历史惯例收口只跑本阶段 spec，全量基线红首次暴露、无历史对照）
+- **IAB 双证补验（2026-10-03 用户指令轮，F-184 口径的 DOM 级实测）**：截图证据仍以 Playwright 独立栈为主
+  （IAB 渲染帧失真已知，本轮 IAB 不出截图、只取 DOM 级确定性数值）：
+  - 真实键入 `echo`/`echo123` → 提交登录 → 跳转 `/chat/conversation/new`；
+  - 我的空间头像 **src = `http://localhost:19080/api/v1/user/avatar/image/1-e25930d7.png`**
+    （`resolveObjectUrl` 解析为网关地址、指向 M1 新反代端点）+ **`naturalWidth=1`、`complete=true`**
+    （1×1 PNG 真实解码，非 URL 字符串相等）；
+  - 「修改资料」弹框交互实证：主头像与 `avatarPreviewSrc` 预览**双 img 同值同解码**（两处解析接线均过）；
+  - 边界如实记录：① IAB 文件上传 `capability_unsupported`（上传步由 Playwright 覆盖，见 #19）；
+    ② 该页 button 的 Playwright/dom_cua/回车三种点击均超时，最终以页面侧 `evaluate(click)` 触发
+    —— IAB 交互面 quirk（与 F-184 同族的工具面观察），不影响功能结论，已在 §8 相邻留档。
 - **哈希说明**：收口轮为修 TDD 门禁将 C2 RED/GREEN 对拼合（rebase 自 `72cd2d4` 起哈希改写）——本表 #8~#12 与回归钉行已更新为新哈希；第二方核对的 25 哈希逐验发生在改写前，其核对结论不受影响（改动仅哈希与拼合，diff 内容一致）。
 - **第二方核对（§13.3，独立子代理、自证不可信）**：**12 项 11 PASS + 1 阻塞（B1=本节回填本身）**，逐项含审计器重跑/解析器 import 复核/A5 191 条账本重解析/12 处行号回读/截图目视/spec 独立复跑 2 passed（9.8s）/25 个 commit hash 逐验——**「同意判 done」**，B1 完成后无需二次核对；4 项建议处置：S1=本节 §8.7 已补 A11 记录、S2=守卫步骤名分母标签（美观性，登记不动 CI 文件防再触门禁）、S3=PR 记录引用随后续合并自然成立、S4=全量复跑的 34 个截图产物已 `git checkout/clean` 恢复（工作树 0 脏）
