@@ -581,7 +581,9 @@ EOF
 # 但 APISIX 支持 longest-prefix 优先，所以顺序无严格要求。
 # Sprint 109b: 加 OPTIONS — 浏览器 CORS preflight 走 OPTIONS 方法,
 # 不加 OPTIONS 则 preflight 被 APISIX 404, 前端 fetch 失败 ("Failed to fetch")。
-put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH","OPTIONS"]'
+# E2E-27：HEAD 必须在列——反代端点（avatar image / uploads file）GET/HEAD 双注册，
+# 方法表缺 HEAD 时经网关 HEAD 404（BFF 直连 200 实测定位到本行）。
+put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH","OPTIONS","HEAD"]'
 
 # ---- Stage 33 PR-19b：/api/v1/auth/* 白名单（跳过 jwt-auth 插件）----
 # login/register/verification-code/refresh 端点拿不到 token，不能被 jwt-auth 拦截。
