@@ -342,11 +342,15 @@ func TestAvatarHandler_Register_PathContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	(&AvatarHandler{user: &fakeAvatarUserClient{}, storage: &fakeStorage{}}).Register(r)
-	assert.Equal(t, 1, len(r.Routes()))
+	// E2E-27 M1：注册表由 1 条变 2 条（POST 上传 + GET image 反代，ADR-2026-09）
+	assert.Equal(t, 2, len(r.Routes()), "应注册 POST 上传 + GET image 两条路由")
+	methods := map[string]string{}
 	for _, ri := range r.Routes() {
-		assert.Equal(t, "/api/v1/user/avatar", ri.Path)
-		assert.Equal(t, http.MethodPost, ri.Method)
+		methods[ri.Path] = ri.Method
 	}
+	assert.Equal(t, http.MethodPost, methods["/api/v1/user/avatar"], "POST /api/v1/user/avatar 必须在位")
+	assert.Equal(t, http.MethodGet, methods["/api/v1/user/avatar/image/:filekey"],
+		"GET image 反代端点必须在位（相对 URL 的唯一服务端落点）")
 }
 
 // TestAvatarHandler_PassesUserIDToDownstream 契约（E2E-11）：
@@ -455,8 +459,10 @@ func TestAvatarHandler_ResponseUsesDataWrapper(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapped))
 	assert.Equal(t, 0, wrapped.Code)
-	assert.Equal(t, "http://localhost:9000/avatars/avatars/7-abc.jpg", wrapped.Data.Avatar,
-		"E2E-11: 头像 URL 必须在 data.avatar 内（与 BFF 其他端点一致）。"+
-			"原实现在顶层返回 avatar ⇒ useApi 的 data.data 为 undefined ⇒ "+
-			"前端 res.avatar 抛错 ⇒ 上传成功却提示失败。")
+	// E2E-27 M1 / F-116 契约演化（2026-10-03）：值由 PublicBaseURL 绝对地址改为
+	// 网关相对路径（ADR-2026-09 决策 1）——**包装结构不变**（data.avatar），
+	// E2E-11 的「必须在 data.avatar 内」语义原样保持。
+	assert.Equal(t, "/api/v1/user/avatar/image/7-2cdae8ed.jpg", wrapped.Data.Avatar,
+		"E2E-11 包装语义 + E2E-27 M1 相对路径：data.avatar 必须在且为网关相对路径。"+
+			"原实现在顶层返回绝对地址 ⇒ useApi data.data undefined ⇒ 前端 res.avatar 抛错。")
 }

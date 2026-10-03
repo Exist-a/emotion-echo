@@ -19,8 +19,11 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"emotion-echo-web-bff/internal/downstream"
@@ -49,9 +52,12 @@ func NewAvatarHandler(user downstream.UserClient, storage storageClient) *Avatar
 	return &AvatarHandler{user: user, storage: storage}
 }
 
-// Register 注册路由：POST /api/v1/user/avatar
+// Register 注册路由：POST /api/v1/user/avatar + GET /api/v1/user/avatar/image/:filekey
 func (h *AvatarHandler) Register(r *gin.Engine) {
 	r.POST("/api/v1/user/avatar", h.upload)
+	// E2E-27 M1 / ADR-2026-09 决策 1/3：avatar 反代端点（voice 同型）——
+	// 相对 URL 的消费方（浏览器 <img> 经 getFullUrl 指向网关）在此取回对象。
+	r.GET("/api/v1/user/avatar/image/:filekey", h.image)
 }
 
 // upload 处理头像上传
@@ -103,7 +109,10 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	putCtx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
 	defer cancel()
 	objectKey := storage.ObjectKey(uid, fileHeader.Filename)
-	publicURL, err := h.storage.PutObject(putCtx, objectKey, file, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
+	// E2E-27 M1 / F-116（ADR-2026-09 决策 1）：PutObject 返回的 publicURL
+	// （PublicBaseURL 绝对地址）**不再下发也不落库**——只作内部用途；
+	// 面向客户端一律网关相对路径，由 GET image 端点反代取回。
+	_, err = h.storage.PutObject(putCtx, objectKey, file, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
 	if err != nil {
 		if isStorageUnavailableErr(err) {
 			Fail(c, http.StatusServiceUnavailable, 1, "storage unavailable: "+err.Error())
@@ -119,9 +128,9 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	// 下游 gRPC 客户端的 withUserID(ctx) 才能带上 x-user-id metadata。
 	// 原实现传 c.Request.Context() ⇒ metadata 缺失 ⇒ user-svc 拦截器返
 	// Unauthenticated ⇒ 头像上传 500（且 MinIO 对象已写入 → 孤儿对象）。
-	urlStr := publicURL
+	avatarURL := "/api/v1/user/avatar/image/" + path.Base(objectKey)
 	_, err = h.user.UpdateMe(session.WithRequestAuth(c), downstream.UpdateProfileReq{
-		AvatarURL: &urlStr,
+		AvatarURL: &avatarURL,
 	})
 	if err != nil {
 		// 已写 MinIO 但写库失败 — 此处不删 MinIO（防删了用户没换上的图）
@@ -136,5 +145,45 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	// 放在**顶层**（无 data 字段），而前端 useApi 统一 `return data.data` ⇒
 	// `post<{avatar}>()` 返回 undefined ⇒ `res.avatar` 抛 TypeError 被 catch
 	// ⇒ 用户看到"上传失败"提示，但服务端其实已写成功（DB 已更新）。
-	OK(c, gin.H{"avatar": publicURL})
+	OK(c, gin.H{"avatar": avatarURL})
+}
+
+// image GET /api/v1/user/avatar/image/:filekey —— avatar 对象反代
+// （E2E-27 M1 / ADR-2026-09 决策 1/3，voice_handler.audio 同型）：
+//   - 单段 filekey（gin 路由限制），handler 补 "avatars/" 前缀还原桶内 key
+//   - 拒含 / 或 .. 的 key（400，不触达 storage）；对象缺失 404（非 200 空 body）
+//   - storage 未配置 503（与上传语义一致）；回读真实 Content-Type/Length（<img> 可缓存）
+func (h *AvatarHandler) image(c *gin.Context) {
+	fileKey := c.Param("filekey")
+	if fileKey == "" || strings.Contains(fileKey, "/") || strings.Contains(fileKey, "..") {
+		Fail(c, http.StatusBadRequest, 1, "invalid key")
+		return
+	}
+	if h.storage == nil {
+		Fail(c, http.StatusServiceUnavailable, 1, "object storage not configured")
+		return
+	}
+
+	rc, contentType, size, err := h.storage.GetObject(c.Request.Context(), "avatars/"+fileKey)
+	if err != nil {
+		if isStorageNotFoundErr(err) {
+			Fail(c, http.StatusNotFound, 1, "avatar not found")
+			return
+		}
+		if isStorageUnavailableErr(err) {
+			Fail(c, http.StatusServiceUnavailable, 1, "storage unavailable: "+err.Error())
+			return
+		}
+		Fail(c, http.StatusInternalServerError, 1, "storage get: "+err.Error())
+		return
+	}
+	defer rc.Close()
+
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Length", strconv.FormatInt(size, 10))
+	c.Status(http.StatusOK)
+	if _, copyErr := io.Copy(c.Writer, rc); copyErr != nil {
+		c.Error(copyErr)
+		return
+	}
 }
