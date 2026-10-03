@@ -600,3 +600,26 @@ func TestAvatarHandler_Upload_NoPrevOrUnknown_SkipsRemove(t *testing.T) {
 		})
 	}
 }
+
+// oldAvatarKey 提取纯函数表（E2E-27 #17 GREEN 附带：两形态 + 边界不误删）
+func TestOldAvatarKey_Table(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"新相对形态", "/api/v1/user/avatar/image/7-2cdae8ed.jpg", "avatars/7-2cdae8ed.jpg"},
+		{"legacy 绝对（bucket=avatars 双段）", "http://localhost:9000/avatars/avatars/1-2ec01835.png", "avatars/1-2ec01835.png"},
+		{"空串", "", ""},
+		{"无法识别的外部 URL", "https://example.com/x.png", ""},
+		{"新形态但 fk 含斜杠（异常）", "/api/v1/user/avatar/image/a/b.png", ""},
+		{"仅 /image/ 尾空", "/api/v1/user/avatar/image/", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := oldAvatarKey(tc.in); got != tc.want {
+				t.Fatalf("oldAvatarKey(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
