@@ -31,9 +31,9 @@ related-stage: stage-97, e2e-03, e2e-22, e2e-23
 > - `汇总门禁 needs 覆盖校验`（`doc-drift-needs-sync`）：跑 `scripts/check_doc_drift_gate_needs.sh`，
 >   断言 gate 的 `needs` 覆盖全部检查 job 且无失效引用。**它必须独立于 gate 跑** ——
 >   校验汇总门禁的 job 不能被汇总门禁覆盖，否则 gate 漏掉自己就没人发现。 |
-| `e2e-guards.yml` | push / PR | 静态守卫（E2E-23 新增） | **18 个**静态守卫（17 个 `scripts/test_*.sh` + 1 个 `scripts/check_*.sh`），**见下方"门禁生效边界"** |
+| `e2e-guards.yml` | push / PR | 静态守卫（E2E-23 新增） | **19 个**静态守卫（17 个 `scripts/test_*.sh` + 2 个 `scripts/check_*.sh`），**见下方"门禁生效边界"** |
 
-`e2e-guards.yml` 跑的这 18 个守卫（均为纯静态检查，不需要运行中的容器；计数 2026-10-03 更新 +1——E2E-28 C1 perf_baseline 三契约接线（步骤 17/17）；同日早前 +2 为 E2E-27 #2 MinIO 双守卫接线（F-h 治理），当时对账 15 个，此前曾写"7 个"且清单只列 8 行，属"守卫清单漂移"，已修）：
+`e2e-guards.yml` 跑的这 19 个守卫（均为纯静态检查，不需要运行中的容器；计数 2026-10-03 更新 +2——E2E-28 C1 perf_baseline 四契约接线（步骤 17）+ E2E-28 #5 check_xtts_cpu_limit 接线（步骤 18，E2E-17 只写未接的 F-h 同型治理）；同日早前 +2 为 E2E-27 #2 MinIO 双守卫接线，当时对账 15 个，此前曾写"7 个"且清单只列 8 行，属"守卫清单漂移"，已修）：
 
 | 脚本 | 断言 |
 |------|------|
@@ -54,7 +54,8 @@ related-stage: stage-97, e2e-03, e2e-22, e2e-23
 | `scripts/test_check_doc_drift_gate_result.sh` | **（E2E-F-173 新增）** 文档总闸聚合判定：success/skipped=通过、failure/cancelled=失败——防 push 事件下 adr-gate skip 被判红致 main 总闸恒红 |
 | `scripts/test_check_minio_health.sh` | **（E2E-27 #2 新增）** MinIO 健康守卫结构：4 契约在位（容器/liveness/console/avatars 桶）+ 前置容器检查 + 退出码（F-h 双守卫接线其一） |
 | `scripts/test_smoke_upload_minio.sh` | **（E2E-27 #2 新增）** 上传 smoke 三缺陷防回退：cwd 临时文件（native curl 读不到 /tmp）/ 登录取 Bearer（uploads 路由 jwt-auth）/ mc 走 MC_HOST 免 alias（静默空列）+ 本轮对象 basename 精确匹配 |
-| `scripts/test_perf_baseline.sh` | **（E2E-28 C1 新增）** perf_baseline 三契约：percentile 官方线性插值（[1..100] p50=50.5/p95=95.05）/ 未监听端口非零退出+显式 ERROR（防静默 PASS）/ 本地 http.server 正向 N=5 测量 JSON 有效 |
+| `scripts/test_perf_baseline.sh` | **（E2E-28 C1 新增）** perf_baseline 四契约：percentile 官方线性插值（[1..100] p50=50.5/p95=95.05）/ 未监听端口非零退出+显式 ERROR（防静默 PASS）/ 本地 http.server 正向 N=5 测量 JSON 有效 / SSE 模式 --n 多轮 + burst_ratio（本地 SSE server 0.6s 间隔流） |
+| `scripts/check_xtts_cpu_limit.sh` | **（E2E-28 #5 接线）** XTTS 容器 CPU 限额静态契约 cpus>=8.0（E2E-F-132 真根因钉：2.0 vs torch 8 线程超订 → 188s 撞 180s 上限）；静态解析 compose 无 docker 依赖，CI 可直跑 |
 
 > **E2E-25 另在 `doc-drift-check.yml` 的 `apisix-seed-structure` job 加了 2 步**（属该 job 内步骤，不改上方 job 计数）：
 > `scripts/test_apisix_drift_lib.js`（漂移检测纯函数契约 15 断言）+ `scripts/test_check_apisix_drift.sh`（wrapper 离线 6 断言）。

@@ -25,7 +25,11 @@ HTTP_REQUEST_DURATION = Histogram(
     "llm_http_request_duration_seconds",
     "Histogram of HTTP request latency in seconds.",
     ["method", "path"],
-    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
+    # E2E-28 #4（2026-10-03）：原桶底 1ms —— /analyze 热路径 ~1ms 时
+    # ≥50% 样本堆进 [0,0.001] 桶，histogram_quantile 被钉在桶界（匹配窗口
+    # 实测 p50=0.517 vs client 1.168 = 2.26x 带外）。补 0.0005/0.002 两档
+    # 亚毫秒/低毫秒分辨率（契约测试 TestBucketResolution）。
+    buckets=(0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
 )
 
 ANALYZE_TOTAL = Counter(

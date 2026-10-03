@@ -146,7 +146,14 @@ jobs:
       - name: 守卫 16/16 上传 smoke 三缺陷防回退（cwd 文件/Bearer/MC_HOST）
         run: bash scripts/test_smoke_upload_minio.sh
 
-      # E2E-28 C1：perf_baseline 三契约（percentile 官方方法 / 负向非零退出 /
-      # 正向 N=5 测量）。纯本地可跑（http.server 自起自测），不需容器栈。
-      - name: 守卫 17/17 perf_baseline 三契约（percentile/负向/正向）
+      # E2E-28 C1：perf_baseline 四契约（percentile 官方方法 / 负向非零退出 /
+      # 正向 N=5 测量 / SSE 多轮+burst）。纯本地可跑（http.server 自起自测），
+      # 不需容器栈。
+      - name: 守卫 17/18 perf_baseline 四契约（percentile/负向/正向/SSE）
         run: bash scripts/test_perf_baseline.sh
+
+      # E2E-28 #5（F-h 同型治理）：check_xtts_cpu_limit.sh 此前从未进 CI
+      # （E2E-17 钉的守卫只写未接）。该守卫是**静态解析 compose**（awk 切
+      # emotion-echo-xtts 段 cpus 字段），无 docker 依赖，CI 可直跑。
+      - name: 守卫 18/18 XTTS CPU 限额静态契约（cpus>=8.0，F-132 钉）
+        run: bash scripts/check_xtts_cpu_limit.sh
