@@ -132,7 +132,7 @@ related-findings: [E2E-F-26, E2E-F-134, E2E-F-135, E2E-F-136]
 | 1 | [A] | **测量脚本方法自检 + 负向对照**：percentile 计算对官方方法（A4）用已知样本断言（如 `[1..100]` p50=50/p95=95 容差内）；指向**未监听端口** → 脚本**非零退出**且错误显式输出（非静默 PASS、非 traceback 裸崩） | 单测断言输出 + 负向运行退出码 ≠0 |
 | 2 | [A] | **/analyze p50/p95 基线**（容器网内 N≥50，F-c）：冷首请求**单列**不入热样本；热样本 p50/p95 落 `baseline/analyze.json`；**复现性断言**：独立跑两轮 p50 比值 ∈ [0.5, 2] | 两轮 p50/p95 数字 + 比值 + JSON 落档路径 |
 | 3 | [A] | **小阶梯 1/2/4/8 并发对 /analyze**：每档 N≥20，HTTP 200 率 100%、零超时；每档 p50/p95 记录成退化表（**记录不设门禁**——无 SLA，A5） | 四档状态码统计 + 分位数表（阶梯 JSON 落档） |
-| 4 | [A] | **Prometheus 交叉验证（埋点消费闭环）**：obs 栈 UP → `histogram_quantile(0.5/0.95, emotion_echo_http_request_duration_seconds{path="/analyze"})`（llm-service job）与 #2 脚本 p50/p95 **同数量级（0.5x~2x）**——首次有人消费这些 histogram | PromQL 输出 + 脚本数字对照表 + target UP 截图/输出 |
+| 4 | [A] | **Prometheus 交叉验证（埋点消费闭环）**：obs 栈 UP → `histogram_quantile(0.5/0.95, llm_http_request_duration_seconds{path="/analyze"})` 与 #2 脚本 p50/p95 **同数量级（0.5x~2x）**——首次有人消费这些 histogram。**执行期回填（2026-10-03，F-193）**：比值带宽对亚毫秒端点结构性失效（client/server 测点加性差 ~0.65ms > 数值本身）⇒ 判读按**三段式**：①同数量级 ②带宽命中与否如实判 ③测点差定性；p50 带外判 FAIL-已分类，桶分辨率修复为范围内处置 | PromQL 输出 + 脚本数字对照表 + target UP 截图/输出 |
 | 5 | [A] | **配置事实回读（数字可比性）**：① `bash scripts/check_xtts_cpu_limit.sh` 绿（8 核在位）；② 该守卫**接线**（e2e-guards workflow 步骤 + `docs/ci-workflows/README.md` 清单行——F-h 缺口本轮补，或给出不接理由并记账）；③ `INTERNAL_API_KEY` 状态记录（影响 /analyze 鉴权路径） | rc=0 + workflow/清单文件:行号回读（RUNBOOK §4.1 证据要求） |
 
 ### 组 B：SSE TTFT（F-a / F-d）
@@ -140,7 +140,7 @@ related-findings: [E2E-F-26, E2E-F-134, E2E-F-135, E2E-F-136]
 | # | 判定 | 测试点 | 通过标准 |
 |---|------|--------|----------|
 | 6 | [A] | **TTFT 基线**：登录 → `POST /api/v1/ai/stream` → 计时**首个 `data:` 块**到达，N≥5 短 prompt；p50/p95/min/max 落档（计划期样本 11.7s 作对照锚点；**计时点=首个含 `delta.content` 的 data 块**，非 HTTP 响应头） | 5+ 条原始样本 + 分位数 + 与 11.7s 对照结论 |
-| 7 | [A] | **流式渐进性定性（F-a 疑点）**：逐块记录到达时间戳 → 计算"首块后 0.5s 内到达的块占比"；**≥80% ⇒ 定性为整段缓冲（伪流式）** → 进修复队列（根因在 BFF/llm-service 流式链内可定位则 TDD 修，查不出根因**记账写"待查"禁臆断**）；<80% ⇒ 渐进正常，结论反转回填 F-a | 每块时间戳序列 + 占比数字 + 定性结论/账本行 |
+| 7 | [A] | **流式渐进性定性（F-a 疑点）**：逐块记录到达时间戳 → 计算"首块后 0.5s 内到达的块占比"；**≥80% ⇒ 定性为整段缓冲（伪流式）** → 进修复队列（根因在 BFF/llm-service 流式链内可定位则 TDD 修，查不出根因**记账写"待查"禁臆断**）；<80% ⇒ 渐进正常，结论反转回填 F-a。**执行期回填（2026-10-03，F-190）**：短流（总时长 < 2×burst 窗口=1s）的 burst **必然 ≥0.8**（判据饱和）⇒ 必须以**长回复鉴别探针**（tail>3s）交叉定性，短流单凭 burst 不得判伪流式 | 每块时间戳序列 + 占比数字 + 定性结论/账本行 |
 | 8 | [A] | **SSE 服务端埋点缺口定性**（F-d③）：代码回读确认 `HTTPRequestDuration` 对 `/api/v1/ai/stream` 观察的是**流总时长**（observe 在 `c.Next()` 后）⇒ 结论入 report；**处置**：裁定补 TTFT 埋点（则走 C3 TDD）或**记账不修**（客户端脚本已覆盖测量）——执行者择优，存疑升级 | `metrics.go:179` + `ai_stream_handler.go` 行号回读 + 处置结论 |
 | 9 | [V] | **浏览器流式体验对照**：IAB/Playwright 聊天页发消息 → 观察输出到达形态（逐字渐进 vs 一次性整段）+ DOM 级首 token 到达计时 + 截图 `28-*.png` ——与 #7 时间戳结论**互证**（两法结论一致才 PASS） | 截图被查看 + DOM 计时数字 + 与 #7 对照结论 |
 
