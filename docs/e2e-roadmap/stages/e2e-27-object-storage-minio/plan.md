@@ -2,9 +2,9 @@
 stage: e2e-27
 title: 对象存储 MinIO（头像上传/下载/匿名读权限）
 type: verification
-status: pending
+status: in-progress
 created: 2026-10-03
-last-updated: 2026-10-03（建档：计划期调研完成，20 测试点，2 个 [M] 决策点）
+last-updated: 2026-10-03（**开工**：状态翻 in-progress，RUNBOOK §1 开工前置三项全过——depends-on 空 / 无决策门 / plan 就绪；执行环境基线 = 全栈 20 healthy 遗留运行态）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §4
