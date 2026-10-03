@@ -11,7 +11,8 @@
 #   2. 含 4 项契约断言：容器 running / liveness 200 / console 可达 / avatars 桶存在
 #   3. 退出码定义清晰（0 全过 / 1 有 FAIL）
 #   4. 前置：容器未运行时报错退出（不默默通过）
-#   5. bash 语法合法
+#   5. E2E-27 M2：compose 端口映射必须 127.0.0.1 限定（局域网不得绕 JWT 直读）
+#   6. bash 语法合法
 #
 # 退出码：0 全 PASS / 1 至少 1 项 FAIL
 # 用法：bash scripts/test_check_minio_health.sh
@@ -79,7 +80,23 @@ assert_contains "$SCRIPT" 'docker inspect' "前置: docker inspect 状态检查"
 assert_contains "$SCRIPT" '未运行' "前置: 未运行报错文案"
 
 echo
-echo "--- 5) bash 语法合法 ---"
+echo "--- 5) E2E-27 M2：端口必须 127.0.0.1 限定（局域网不得直读对象） ---"
+COMPOSE="$SCRIPT_DIR/../deploy/docker-compose.infra.yml"
+if [ -f "$COMPOSE" ]; then
+  if grep -qE '"127\.0\.0\.1:9000:9000"' "$COMPOSE" && grep -qE '"127\.0\.0\.1:9001:9001"' "$COMPOSE"; then
+    echo "  ✓ compose 9000/9001 均为 127.0.0.1 限定映射"
+    pass=$((pass + 1))
+  else
+    echo "  ✗ compose 端口映射未限定 127.0.0.1（0.0.0.0 绑定 = 局域网可绕 JWT 直读对象）"
+    fail=$((fail + 1))
+  fi
+else
+  echo "  ✗ compose 文件缺失: $COMPOSE"
+  fail=$((fail + 1))
+fi
+
+echo
+echo "--- 6) bash 语法合法 ---"
 if bash -n "$SCRIPT" 2>/dev/null; then
   echo "  ✓ bash -n 通过"
   pass=$((pass + 1))
