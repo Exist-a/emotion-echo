@@ -203,12 +203,16 @@ func (h *VoiceHandler) audio(c *gin.Context) {
 }
 
 // isStorageNotFoundErr 判 MinIO 不存在对象的错误（上层 GetObject 包装）
+//
+// E2E-27 #12（2026-10-03）：补 "does not exist"——minio-go v7 StatObject 对缺失
+// 对象的真实文案是 "The specified key does not exist."（无 NoSuchKey 字样），
+// 原三 hint 全不匹配导致运行时 500 违反 ADR-2026-09 决策 3 的 404 契约。
 func isStorageNotFoundErr(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	for _, hint := range []string{"nosuchkey", "no such key", "not found"} {
+	for _, hint := range []string{"nosuchkey", "no such key", "not found", "does not exist"} {
 		if strings.Contains(msg, hint) {
 			return true
 		}
