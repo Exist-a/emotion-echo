@@ -36,10 +36,11 @@ type fakeAvatarUserClient struct {
 	gotReq *downstream.UpdateProfileReq
 	gotCtx context.Context
 	err    error
+	getMe  *downstream.UserInfo // E2E-27 #17：GetMe 返回值（旧头像 URL 来源）
 }
 
 func (f *fakeAvatarUserClient) GetMe(ctx context.Context) (*downstream.UserInfo, error) {
-	return nil, nil
+	return f.getMe, nil
 }
 func (f *fakeAvatarUserClient) GetByID(ctx context.Context, id int64) (*downstream.UserInfo, error) {
 	return nil, nil
@@ -93,6 +94,7 @@ type fakeStorage struct {
 	getObjCT    string
 	getObjErr   error
 	gotGetObjKey string
+	removedKeys  []string // E2E-27 #17：RemoveObject 调用捕获
 }
 
 func (f *fakeStorage) PutObject(ctx context.Context, key string, r io.Reader, size int64, ct string) (string, error) {
@@ -111,7 +113,11 @@ func (f *fakeStorage) GetObject(ctx context.Context, key string) (io.ReadCloser,
 	}
 	return io.NopCloser(bytes.NewReader(f.getObjBytes)), f.getObjCT, int64(len(f.getObjBytes)), nil
 }
-func (f *fakeStorage) RemoveObject(ctx context.Context, key string) error { return nil }
+func (f *fakeStorage) RemoveObject(ctx context.Context, key string) error {
+	// E2E-27 #17：捕获删除调用（孤儿对象治理断言）
+	f.removedKeys = append(f.removedKeys, key)
+	return nil
+}
 func (f *fakeStorage) HealthCheck(ctx context.Context) error             { return nil }
 
 func newAvatarRouter(user downstream.UserClient, storage storageClient) *gin.Engine {
@@ -486,4 +492,111 @@ func TestAvatarHandler_ImageGet_HeadSupported(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code,
 		"HEAD 必须与 GET 同语义 200（gin 不自动挂 HEAD——运行时 smoke 实测 404），body: %s",
 		w.Body.String())
+}
+
+// ============ E2E-27 #17：头像更新的孤儿对象治理 ============
+//
+// 现状（运行时实证 F-d）：uid=1 存 5 个 avatars/ 对象——上传只 Put 不删旧。
+// 语义：UpdateMe 成功后 best-effort 删旧对象；旧 URL 形态两兼容（新相对 /
+// legacy 绝对）；同 key（同文件名重传）绝不删（会删掉刚写入的对象）。
+
+func TestAvatarHandler_Upload_RemovesOldAvatarObject_LegacyAbsolute(t *testing.T) {
+	user := &fakeAvatarUserClient{
+		getMe: &downstream.UserInfo{UserID: 7, AvatarURL: "http://localhost:9000/avatars/avatars/7-old99999.png"},
+	}
+	sto := &fakeStorage{putURL: "http://localhost:9000/avatars/avatars/7-2cdae8ed.jpg"}
+	r := newAvatarRouter(user, sto)
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, _ := mw.CreateFormFile("avatar", "me.jpg")
+	_, _ = io.WriteString(fw, "fake jpg bytes")
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/avatar", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+	assert.Equal(t, []string{"avatars/7-old99999.png"}, sto.removedKeys,
+		"必须删除旧对象（legacy 绝对地址提取 key）")
+}
+
+func TestAvatarHandler_Upload_RemovesOldAvatarObject_NewRelative(t *testing.T) {
+	user := &fakeAvatarUserClient{
+		getMe: &downstream.UserInfo{UserID: 7, AvatarURL: "/api/v1/user/avatar/image/7-prev0000.jpg"},
+	}
+	sto := &fakeStorage{putURL: "x"}
+	r := newAvatarRouter(user, sto)
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, _ := mw.CreateFormFile("avatar", "me.jpg")
+	_, _ = io.WriteString(fw, "fake jpg bytes")
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/avatar", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+	assert.Equal(t, []string{"avatars/7-prev0000.jpg"}, sto.removedKeys,
+		"必须删除旧对象（新相对形态提取 key）")
+}
+
+func TestAvatarHandler_Upload_SameKey_SkipsRemove(t *testing.T) {
+	// 同文件名重传 → ObjectKey 稳定（sha 同）→ 旧 key == 新 key，删了就没了
+	user := &fakeAvatarUserClient{
+		getMe: &downstream.UserInfo{UserID: 7, AvatarURL: "/api/v1/user/avatar/image/7-2cdae8ed.jpg"},
+	}
+	sto := &fakeStorage{putURL: "x"}
+	r := newAvatarRouter(user, sto)
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, _ := mw.CreateFormFile("avatar", "me.jpg")
+	_, _ = io.WriteString(fw, "fake jpg bytes")
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/avatar", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Empty(t, sto.removedKeys, "新旧同 key 时绝不删（否则删掉刚写入的对象）")
+}
+
+func TestAvatarHandler_Upload_NoPrevOrUnknown_SkipsRemove(t *testing.T) {
+	cases := map[string]*fakeAvatarUserClient{
+		"无旧头像": {getMe: &downstream.UserInfo{UserID: 7, AvatarURL: ""}},
+		"GetMe 为 nil":  {},
+		"无法识别的旧值": {getMe: &downstream.UserInfo{UserID: 7, AvatarURL: "https://example.com/x.png"}},
+	}
+	for name, user := range cases {
+		t.Run(name, func(t *testing.T) {
+			sto := &fakeStorage{putURL: "x"}
+			r := newAvatarRouter(user, sto)
+
+			body := &bytes.Buffer{}
+			mw := multipart.NewWriter(body)
+			fw, _ := mw.CreateFormFile("avatar", "me.jpg")
+			_, _ = io.WriteString(fw, "fake jpg bytes")
+			mw.Close()
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/user/avatar", body)
+			req.Header.Set("Content-Type", mw.FormDataContentType())
+			req.Header.Set("X-User-Id", "7")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code)
+			assert.Empty(t, sto.removedKeys, "空/无法识别的旧 URL 不得触发删除")
+		})
+	}
 }
