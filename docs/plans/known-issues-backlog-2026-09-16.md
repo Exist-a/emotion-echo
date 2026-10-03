@@ -101,6 +101,8 @@ related-issues:
 
 ### Item 4 · A5: OAP 9.x queryDuration bug（🟡 low）
 
+**状态（2026-10-03）：✅ 定性关闭（E2E-26 · D-37）**——判「客户端时间格式错」非上游 bug：官方 SECOND 格式无冒号 + 容器网实测带冒号报 malformed 同型 + 上游 issues 零命中 + 合规查询正常。DoD「UI 能查 trace + service map 完整调用链」已由 E2E-26 #14/#15 IAB 实证。详见 `docs/e2e-roadmap/decisions.md` D-37。
+
 | 维度 | 内容 |
 |---|---|
 | **现象** | Stage 93 报告"OAP 9.x graphql queryDuration bug 阻塞 UI 可视化"，trace 列表 UI 看不全 |

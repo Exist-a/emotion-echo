@@ -190,8 +190,14 @@ services:
       SW_OAP_ADDRESS: http://skywalking-oap:12800
       TZ: Asia/Shanghai
     # Stage 33 PR-20: 端口收紧（UI 通过 APISIX 网关或容器内访问）
+    # E2E-26 D-38（2026-10-03 裁定）例外回填：dev 用 127.0.0.1 限定映射 18080 ——
+    # APM UI localhost 绑定是业界惯例（Jaeger/Grafana 同型），127.0.0.1 限定
+    # 不扩大暴露面（不违反 Stage 33 防局域网暴露初衷）；生产 k8s 走 charts/ingress
+    # 独立入口，本映射仅 dev compose 生效。OAP GraphQL 12800 保持不映射。
     expose:
       - "8080"
+    ports:
+      - "127.0.0.1:18080:8080"
     networks:
       - app-network
 

@@ -1,5 +1,7 @@
 # Stage 92 · 2026-09-14 Kafka sw8 透传（observability P1）
 
+> **2026-10-03 修订注记（E2E-26 执行期 · D-37 定性）**：本文所述「OAP 9.x graphql queryDuration 时间格式 bug」**已定性为客户端时间格式错误，非上游缺陷**。证据链：① 官方 apache/skywalking-query-protocol `common.graphqls` 明文 SECOND 步长格式 = `yyyy-MM-dd HHmmss`（**无冒号**）；② E2E-26 容器网实测带冒号查询报 `is malformed at ":30:00"`，与本文记录的 "malformed at :00:00" 同型——OAP 按协议**正确拒绝**了非法输入；③ apache/skywalking issues 检索该 bug 零命中；④ 官方格式查询一切正常（`scripts/query_oap.sh` 已封装合规格式）。本文历史结论保留作记录，**后续以 D-37 为准**。
+
 > **状态**：🟢 **PR-1+PR-2 全收口——单测全绿 + chat-svc producer sw8 写入实证**
 > **关联**：[`docs/plans/stage-92-kafka-sw8-propagation.md`](../plans/stage-92-kafka-sw8-propagation.md)（本期计划）
 > 来源：[`docs/plans/observability-edge-gaps-from-code-review.md`](../plans/observability-edge-gaps-from-code-review.md) §A（P1）
