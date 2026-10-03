@@ -71,13 +71,13 @@ environment: dev 模式（全栈 healthy：6 应用 svc + APISIX/Nacos/Kafka/etc
 | 5 | `315a566` → `e7d780b` | M2/D-41：端口 127.0.0.1 限定 + 匿名读边界文档化 | `test_check_minio_health` §5（11/1→12/0） |
 | 6 | `4b5f6c0` → `6b73911` | C1：avatar 相对路径 + GET image 反代四语义（含 2 处既有测试契约演化） | avatar 5 用例红（绝对 vs 相对 + 端点缺失） |
 | 7 | `3e733d9` → `59547bb` | 前端 resolveObjectUrl + 头像/预览接线 + architecture 3 断言 | vitest 模块缺失 RED → 5/5 |
-| 8 | `72cd2d4` → `51cfc36` | C2：uploads 相对 url + GET file 反代四语义 + 路由清单同步 | upload 6 用例红 |
-| 9 | `0ab366a` → `905ed6d` | fileSourceURL 相对新形态 → 容器网内部端点（FILE_FETCH_ALLOWLIST 过链） | `RelativeNewForm_RewritesToInternal` |
-| 10 | `bc3110e` → `8a23661` | 反代端点 GET/HEAD 双注册 + smoke 契约 2 经网关 + Bearer | `HeadSupported` ×2（HEAD 404 vs 200） |
-| 11 | `56cd49c` → `8eb8a99` | seed catch-all methods +HEAD（重跑 seed 实证） | `seed_test.js` 72/1→73/0 |
-| 12 | `b5dfecc` → `325b1cf` | #17 孤儿治理：UpdateMe 成功删旧 + oldAvatarKey 纯函数 | `RemovesOld_*` ×2 红 + 表 6 用例 |
+| 8 | `7f5ab64`（RED+GREEN 拼合，收口轮 TDD 门禁修复） | C2：uploads 相对 url + GET file 反代四语义 + 路由清单同步 | upload 6 用例红 |
+| 9 | `b6b0953` → `99d3a2d` | fileSourceURL 相对新形态 → 容器网内部端点（FILE_FETCH_ALLOWLIST 过链） | `RelativeNewForm_RewritesToInternal` |
+| 10 | `b24960b` → `7003f1f` | 反代端点 GET/HEAD 双注册 + smoke 契约 2 经网关 + Bearer | `HeadSupported` ×2（HEAD 404 vs 200） |
+| 11 | `2750fae` → `32f3904` | seed catch-all methods +HEAD（重跑 seed 实证） | `seed_test.js` 72/1→73/0 |
+| 12 | `0382676` → `73da36f` | #17 孤儿治理：UpdateMe 成功删旧 + oldAvatarKey 纯函数 | `RemovesOld_*` ×2 红 + 表 6 用例 |
 
-（回归钉 `18fa96a`：`object-storage.spec.ts` 2/2 + 双截图）
+（回归钉 `3b22ede`：`object-storage.spec.ts` 2/2 + 双截图）
 
 ## 5. 回归钉
 
@@ -117,4 +117,5 @@ environment: dev 模式（全栈 healthy：6 应用 svc + APISIX/Nacos/Kafka/etc
 - **全量 `pnpm playwright test`（chromium+mobile 双 project）**：**31 failed / 255 passed / 2 skipped（27.1m，RC=1）**
   - **本阶段 `object-storage.spec.ts` 双项目 4/4 全过**；域邻 spec（my-space 头像 #5/#6、apisix-gateway）亦过——**零本域失败**
   - 失败分布跨 11 个**他阶段** spec（E2E-07 ×6 / E2E-15 ×3 / E2E-10 #7 / E2E-08 / E2E-19 / E2E-17 / E2E-11 ×2 / E2E-09 / F-124 / jwt-expiry / survey-scoring；mobile 占比高）→ **按 §5 范围外只记账不修：F-189**（根因逐条待查，禁臆断；历史惯例收口只跑本阶段 spec，全量基线红首次暴露、无历史对照）
+- **哈希说明**：收口轮为修 TDD 门禁将 C2 RED/GREEN 对拼合（rebase 自 `72cd2d4` 起哈希改写）——本表 #8~#12 与回归钉行已更新为新哈希；第二方核对的 25 哈希逐验发生在改写前，其核对结论不受影响（改动仅哈希与拼合，diff 内容一致）。
 - **第二方核对（§13.3，独立子代理、自证不可信）**：**12 项 11 PASS + 1 阻塞（B1=本节回填本身）**，逐项含审计器重跑/解析器 import 复核/A5 191 条账本重解析/12 处行号回读/截图目视/spec 独立复跑 2 passed（9.8s）/25 个 commit hash 逐验——**「同意判 done」**，B1 完成后无需二次核对；4 项建议处置：S1=本节 §8.7 已补 A11 记录、S2=守卫步骤名分母标签（美观性，登记不动 CI 文件防再触门禁）、S3=PR 记录引用随后续合并自然成立、S4=全量复跑的 34 个截图产物已 `git checkout/clean` 恢复（工作树 0 脏）
