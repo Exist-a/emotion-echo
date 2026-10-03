@@ -95,6 +95,26 @@ class TestBucketResolution:
             f"桶界必须严格递增（当前 {bounds}）"
         )
 
+    def test_sub_ms_buckets_exposed_in_exposition(self):
+        # GREEN 配套断言（E2E-28 #4）：新桶界必须真的出现在 /metrics
+        # exposition 文本里——只改 _upper_bounds 而 exposition 缺档 =
+        # Prometheus 端照样采不到（配置改了但暴露面没跟上，同型假绿）。
+        HTTP_REQUEST_DURATION.labels("GET", "/expose-probe").observe(0.0007)
+        body = metrics_endpoint().body.decode("utf-8")
+        lines = [ln for ln in body.splitlines()
+                 if 'path="/expose-probe"' in ln]
+        assert lines, "exposition 缺 /expose-probe 序列"
+        le_0005 = [ln for ln in lines if 'le="0.0005"' in ln]
+        assert le_0005, (
+            "亚毫秒桶界 0.0005 未出现在 exposition（Prometheus 采集不到）"
+        )
+        # 0.0007 > 0.0005 ⇒ le=0.0005 cumulative=0；le=0.001 cumulative=1
+        assert le_0005[0].split()[-1] == '0.0', f"unexpected: {le_0005[0]}"
+        le_001 = [ln for ln in lines if 'le="0.001"' in ln]
+        assert le_001 and le_001[0].split()[-1] == '1.0', (
+            f"0.001 桶 cumulative 应含 0.0007 样本: {le_001}"
+        )
+
 
 # =====================================================
 # metrics_endpoint tests
