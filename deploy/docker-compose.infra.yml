@@ -194,6 +194,9 @@ services:
     # APM UI localhost 绑定是业界惯例（Jaeger/Grafana 同型），127.0.0.1 限定
     # 不扩大暴露面（不违反 Stage 33 防局域网暴露初衷）；生产 k8s 走 charts/ingress
     # 独立入口，本映射仅 dev compose 生效。OAP GraphQL 12800 保持不映射。
+    # ⚠ 冲突注记（E2E-26 第二方核对建议）：obs-mock-receiver（profile obs）
+    #   同用宿主 18080（0.0.0.0:18080）——两 profile 同时启用时 Docker 端口
+    #   绑定撞车，届时须改 mock 宿主端口。
     expose:
       - "8080"
     ports:

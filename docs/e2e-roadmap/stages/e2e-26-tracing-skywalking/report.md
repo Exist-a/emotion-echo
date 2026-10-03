@@ -99,4 +99,29 @@ environment: dev 模式（30 容器，compose -f infra -f apps --env-file .env.l
 
 ## 8. 第二方核对
 
-见 §9（收口轮按 RUNBOOK §13.3 独立核对，执行者不自证）。
+按 RUNBOOK §13.3 由**独立子代理**执行（执行者不自证；核对方全部结论来自其亲自运行的命令与亲自读取的文件/图片，未引用本 report 的声称）。
+
+## 9. 第二方核对结论（2026-10-03）
+
+**总结论：同意判 done；阻塞问题：无**（12 项 11 PASS，1 项为本节回填本身）。
+
+| 项 | 结论 | 核对方独立证据 |
+|----|------|----------------|
+| 机器门槛 | PASS | `e2e_stage_audit.py --all` → 30 阶段 0 FAIL（EXIT=0）；`--stage e2e-26` ✅ done；A3 对 e2e-26 真实执行（无 skip WARN）且 20⊆20 |
+| A3 编号对账 | PASS | plan={1..20}、report={1..20}，双向差集为空 |
+| A2 汇总计数 | PASS | 20 行数据行，`Counter({PASS: 20})` 与汇总行逐项相等 |
+| 必填章节 | PASS | §1~§7 齐全 |
+| 证据抽查 | PASS | #3/#12/#17/#19 均为命令+输出型；**亲跑** `test_smoke_oap_contract.sh`(5/5)、`go test TraceIDFromSW8`(全绿)、`test_query_oap.sh`(C0-C4)、`query_oap services/traces`(真数据) |
+| [V] 截图 | PASS | 3 文件非空（67400/42509/65877 B），逐张目视与 report 描述一致（含 #14 末版 2 服务的如实披露） |
+| 账本对账(A5) | PASS | owner=E2E-26 仅 F-185 且 ✅；`test_devup_drift_check.sh` 亲跑 6/6 GREEN（F-181 修复复证） |
+| A9 三处状态 | PASS | plan/report=done、roadmap ✅ done + last-refresh 同步 |
+| 回归钉 | PASS | 亲跑 spec → **3 passed (21.2s)** |
+| 裁决落地 | PASS | D-37/38/39 行结构与 D-36 同构；stage-92/93 注记在文；infra.yml 映射在位 + 宿主 200 |
+| 行号回读 | PASS | seed.sh:543 探针豁免、deps.go:16 STARTUP_STRICT 默认 false 均精确吻合 |
+
+**核对方建议（不阻 done）及处置**：
+1. ~~plan front-matter 预先写死"核对通过"属先于事实的自证措辞~~ → **本轮已修正**（改为以本节结论为准）
+2. 18080 端口潜在冲突：`skywalking-ui`（默认 profile）与 `obs-mock-receiver`（profile obs，infra.yml L472）同宿主端口，同时启用 `--profile obs` 时绑定撞车 → **已在 infra.yml D-38 注记处标注**；如未来启用 obs profile 需改 mock 宿主端口
+3. 残留容器 `e2e26-sw-ui-proxy`（M2 备选③试验遗留）→ **已删除**
+4. 账本 F-180 坏行（8 格）致全阶段 A8 WARN——owner=账本治理/审计器（既有 F-180 修法条目），非本阶段，留其修法执行
+5. spec 用例名"3 服务树"与末版截图（2 服务）口径落差——report #14 已如实披露 + 09:45 三服务版有 queryTrace 文字留档；后续可让用例名与断言口径对齐（记入下阶段顺手项）
