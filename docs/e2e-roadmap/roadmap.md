@@ -2,7 +2,7 @@
 status: active
 priority: critical
 created: 2026-09-17
-last-refresh: 2026-10-03 (**E2E-27 对象存储 MinIO ✅ done** —— 20/20 处置（19 PASS + 1 FAIL 已分类 F-186）+ D-40/D-41 两裁决落地（裁定来源如实标注）+ 9 组 TDD 修复（6 真缺陷：voice 404 文案 / 停机挂起 / smoke 三缺陷从未真跑通 / F-116 绝对地址全链 / HEAD 双层 404 / 孤儿不删旧）+ 回归钉 spec 2/2 + 双截图目视 + 新账 F-186~188；详档 [report.md](stages/e2e-27-object-storage-minio/report.md)；**下一阶段 = E2E-28 性能与延迟基线**）
+last-refresh: 2026-10-03 (**E2E-27 对象存储 MinIO ✅ done** —— 20/20 处置（19 PASS + 1 FAIL 已分类 F-186）+ D-40/D-41 两裁决落地（裁定来源如实标注）+ 9 组 TDD 修复（6 真缺陷：voice 404 文案 / 停机挂起 / smoke 三缺陷从未真跑通 / F-116 绝对地址全链 / HEAD 双层 404 / 孤儿不删旧）+ 回归钉 spec 2/2 + 双截图目视 + 新账 F-186~189（含收口全量 Playwright 基线红 F-189）；详档 [report.md](stages/e2e-27-object-storage-minio/report.md)；**下一阶段 = E2E-28 性能与延迟基线**）
 type: e2e-stage-roadmap
 ---
 
@@ -120,7 +120,7 @@ R-02 #1~#3（report 模板化 / `[V]` 截图 / 账本对账）、R-03 #7 批量�
 | E2E-24 | 消息链路 | outbox→Kafka→consumer→DLQ 全链 + 重试/死信/回放 | — | ✅ **done**（2026-10-02 收口：[report.md](stages/e2e-24-message-pipeline/report.md) **20/20 测试点 PASS**；修复 F-149（消费 42P10）/F-175（序列 a010）/F-174（原地重试 D-34）/F-149 同型第二处（dev_publisher）+ D-33 回放工具（F-12/F-150 闭环，存量死信 26 处置 25 落库）；账本 E2E-24 名下 5 条全 ✅；第二方核对两轮通过（首轮抓 5 项失真全部处置）；下一阶段 = E2E-25 网关 APISIX） |
 | E2E-25 | 网关 APISIX | 路由注册/JWT 插件/限流/CORS + **上游 nacos-discovery 健康检查/重连**（F-137 部分症状已由 E2E-17 PR #77 临时缓解） + **seed ↔ admin 持久化关系**（F-139） | — | ✅ **done**（2026-10-02 收口：[report.md](stages/e2e-25-apisix-gateway/report.md) **20/20 PASS** + 第二方核对通过（§9，5 项发现已处置/记账）；PR #137/#138/#139/#140/#141；**F-154 checks.active 落地**（摘除 75s→~7s，D-35）+ **F-137 同轮闭环**（BFF 重启自愈 ≤19s）+ **F-139 drift 工具+CI+D-36 B+ 接入 dev-up** + **F-145 双节点实测不放大**；新修 N1/N2/F-f/N3 = 账本 F-176/177/178；回归钉 apisix-gateway.spec.ts 12/12 + seed_test 72 断言；**下一阶段 = E2E-26**） |
 | E2E-26 | 链路追踪 SkyWalking | sw8 传播 + OAP 查询 + UI 可视化（OAP 9.x queryDuration bug） | — | ✅ **done**（2026-10-03 收口：[report.md](stages/e2e-26-tracing-skywalking/report.md) **20/20 PASS**；**M1=客户端格式错(D-37)** 回填三处旧账 / **M2a=127.0.0.1:18080 UI 入口(D-38)** / **M2b=双 trace ID 保留+文档化(D-39)**；途中修复 9 组 TDD——C1 bff 拨号顺序、C2 5svc SetTracer、C3 server EntrySpan+承载 ctx、C3b client injector 空串覆盖 sw8、C4 health 探针噪声、#8 query_oap 工具、#12 契约 9 三重空转、F-181 dev-up 漂移路径、F-185 TraceIDFromSW8 base64 半修；回归钉 skywalking-trace.spec.ts 3/3 绿 + 3 截图人工验收；新账 F-182(归E2E-29)/F-183(归E2E-30)/F-184(工具治理)，**名下 F-185 ✅**；下一阶段 = E2E-27） |
-| E2E-27 | 对象存储 MinIO | 头像上传/下载/匿名读权限 | 其他文件类型接入 | ✅ **done**（2026-10-03 收口：[report.md](stages/e2e-27-object-storage-minio/report.md) **20/20 处置** = 19 PASS + 1 FAIL 已分类；**D-40**（F-116 相对化+双反代+惰性兼容，账本 ✅）/**D-41**（127.0.0.1 限定+匿名读文档化）；9 组 TDD 修 6 真缺陷；回归钉 spec 2/2 + 双截图；新账 F-186/187/188 转挂；下一阶段 = E2E-28） |
+| E2E-27 | 对象存储 MinIO | 头像上传/下载/匿名读权限 | 其他文件类型接入 | ✅ **done**（2026-10-03 收口：[report.md](stages/e2e-27-object-storage-minio/report.md) **20/20 处置** = 19 PASS + 1 FAIL 已分类；**D-40**（F-116 相对化+双反代+惰性兼容，账本 ✅）/**D-41**（127.0.0.1 限定+匿名读文档化）；9 组 TDD 修 6 真缺陷；回归钉 spec 2/2 + 双截图；新账 F-186/187/188/189 转挂（F-189=全量联跑基线红）；下一阶段 = E2E-28） |
 
 ### 第八批：质量属性与收口
 

@@ -96,7 +96,7 @@ environment: dev 模式（全栈 healthy：6 应用 svc + APISIX/Nacos/Kafka/etc
 - [x] main 与 origin 无 ahead/behind（合并后复核，见 PR 记录）
 - [x] 无残留已合并分支（§2.5 收口时删除本分支）
 - [x] `e2e_stage_audit.py --all` 30 阶段 0 FAIL（收口轮实跑，见 §9）
-- [ ] 全量 `pnpm playwright test` 收口复跑（**结果回填 §9 后本行才翻 [x]**——先勾等于自证）
+- [x] 全量 `pnpm playwright test` 收口复跑（31 failed / 255 passed / 2 skipped——结果与范围外分类见 §9，本阶段 spec 零失败）
 - [x] 账本对账：归属 E2E-27 条目仅 F-116 且 ✅（F-186→E2E-23 / F-187→E2E-16 / F-188→E2E-30）
 - [x] `e2e_stage_audit.py --stage e2e-27` A3 解析 20/20、无 A1~A5 问题
 
@@ -108,11 +108,13 @@ environment: dev 模式（全栈 healthy：6 应用 svc + APISIX/Nacos/Kafka/etc
 4. **计划期 §0 smoke 豁免**：业务契约 smoke（§2.4）不适用于 plan 建档 PR（纯文档）；执行期改动涉及上传链——**收口轮已实跑** `smoke_upload_minio` ALL PASS（比 §2.4 更贴近本阶段契约）。
 5. **外部官方文档检索**（min.io docs）计划期 404 不可达 → 匿名语义以运行时 `mc anonymous get` 行为级实测为准（已在 plan §0 声明，执行期沿用）。
 6. **途中契约演化 3 处**（非挪球门，均伴随新契约更严断言）：`TestUploadHandler_StorageError`（S3 timeout 500→503，保留业务错误 500 用例）、`ResponseUsesDataWrapper`（URL 值改相对，data 包装语义不变）、`Register_PathContract`（1/2→3 条含 HEAD）。
+7. **A11 结果列格式**：#4 初稿写 `**FAIL**`（粗体）被 A11 判「基值不合法」——已改裸 `FAIL`；此为格式修正非改判（结果值本身未变），现 A11 零 WARN。
 
 ## 9. 收口审计与全量复跑（2026-10-03 收口轮）
 
-- `python scripts/e2e_stage_audit.py --all` → **30 阶段 0 FAIL**；`--stage e2e-27` → ✅ done 无 A1~A5 问题（A3 解析 20/20）
-- 全量 `pnpm playwright test` 结果：见本节提交时回填（下方补记）
-- 第二方核对（§13.3）：**由独立子代理执行**，结论回填本节（下方补记）
-
-> 本节两处回填在收口流水线（全量测试 + 子代理核对）完成后补齐；回填完成前本报告不作为 done 依据。
+- `python scripts/e2e_stage_audit.py --all` → **30 阶段 0 FAIL**；`--stage e2e-27` → ✅ done 无 A1~A5 问题（A3 解析 20/20）；`--selftest` 通过
+- 守卫独立复跑（核对方与执行方各跑一遍结论一致）：ledger-parser **6/0**、minio 守卫 **12/0**、smoke 守卫 **20/0**、seed_test **73/0**、soft-assert/orphan/residual/tdd-gate/doc-drift-needs 全 GREEN；前端全量 vitest **608/608**；`nuxt typecheck` rc=0；web-bff `go test ./...` 0 FAIL + vet 干净
+- **全量 `pnpm playwright test`（chromium+mobile 双 project）**：**31 failed / 255 passed / 2 skipped（27.1m，RC=1）**
+  - **本阶段 `object-storage.spec.ts` 双项目 4/4 全过**；域邻 spec（my-space 头像 #5/#6、apisix-gateway）亦过——**零本域失败**
+  - 失败分布跨 11 个**他阶段** spec（E2E-07 ×6 / E2E-15 ×3 / E2E-10 #7 / E2E-08 / E2E-19 / E2E-17 / E2E-11 ×2 / E2E-09 / F-124 / jwt-expiry / survey-scoring；mobile 占比高）→ **按 §5 范围外只记账不修：F-189**（根因逐条待查，禁臆断；历史惯例收口只跑本阶段 spec，全量基线红首次暴露、无历史对照）
+- **第二方核对（§13.3，独立子代理、自证不可信）**：**12 项 11 PASS + 1 阻塞（B1=本节回填本身）**，逐项含审计器重跑/解析器 import 复核/A5 191 条账本重解析/12 处行号回读/截图目视/spec 独立复跑 2 passed（9.8s）/25 个 commit hash 逐验——**「同意判 done」**，B1 完成后无需二次核对；4 项建议处置：S1=本节 §8.7 已补 A11 记录、S2=守卫步骤名分母标签（美观性，登记不动 CI 文件防再触门禁）、S3=PR 记录引用随后续合并自然成立、S4=全量复跑的 34 个截图产物已 `git checkout/clean` 恢复（工作树 0 脏）
