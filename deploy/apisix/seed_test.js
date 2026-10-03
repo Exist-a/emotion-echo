@@ -77,6 +77,8 @@ const checks = [
     !/(APISIX_ADMIN_KEY|BFF_JWT_SECRET)[:=]\s*"?[0-9a-f]{32,}/i.test(src)],
   ['catch-all route /api/v1/* → web-bff (upstream 6)',
     src.includes('put_route 100 "/api/v1/*" 6')],
+  ['catch-all methods 必须放行 HEAD（E2E-27：反代端点 gin 侧 GET/HEAD 双注册，网关方法表缺 HEAD 则经网关 HEAD 404——运行时 smoke 实测）',
+    /put_route 100 "\/api\/v1\/\*" 6 '\["GET","POST","PUT","DELETE","PATCH","OPTIONS","HEAD"\]'/.test(src)],
   ['upstream id 1 user-svc (Nacos discovery, Stage 39 后)',
     src.includes('put_nacos_upstream 1  user-svc')],
   ['upstream id 2 chat-svc (Nacos discovery, Stage 39 后)',

@@ -28,8 +28,21 @@ bash scripts/check_minio_health.sh
 
 | 端口 | 用途 |
 |---|---|
-| 9000 | S3 API（dev 暴露给宿主机；prod 通过容器名:9000 内网访问） |
-| 9001 | Web 控制台 <http://localhost:9001>（dev 默认账号 `minioadmin` / `minioadmin`） |
+| 9000 | S3 API（**127.0.0.1 限定映射**——仅宿主本机；prod 通过容器名:9000 内网访问） |
+| 9001 | Web 控制台 <http://localhost:9001>（**127.0.0.1 限定**；dev 默认账号 `minioadmin` / `minioadmin`） |
+
+> **E2E-27 M2 / D-41（2026-10-03）**：两端口原为 `0.0.0.0` 绑定。配合桶级匿名
+> download 策略，局域网任意机器可**绕过网关 JWT** 直读全部对象（含 voice 音频）。
+> 现改为 `127.0.0.1` 限定（与 E2E-26 D-38 对 sw-ui 的处置同型）；宿主浏览器、
+> 宿主 curl/脚本不受影响，容器网走 `emotion-echo-minio:9000`（expose，与本映射无关）。
+> 结构守卫：`scripts/test_check_minio_health.sh` §5。
+
+## 匿名读边界（M2 裁定留档）
+
+- `avatars` 桶策略 = `download`（init `mc anonymous set download`，桶级）——
+  `avatars/` `uploads/` `voice/` 三前缀**全部**无鉴权可 GET/HEAD（`mc anonymous get` 实测）
+- **应用侧唯一入口是网关**：`/api/v1/*` 反代端点走 APISIX jwt-auth；直连 9000 仅本机可达（上节绑定）
+- voice 音频**不在**独立桶（分桶方案为 M2 备选②，未采纳）——安全依赖 = 127.0.0.1 绑定 + key 含 uuid 不可枚举
 
 ## 镜像源选择
 
@@ -56,6 +69,7 @@ PR-4 只落地 dev 默认；prod K8s Secret 模板留作后续 Sprint。
 | `deploy/docker-compose.infra.yml` | `emotion-echo-minio` + `emotion-echo-minio-init` 服务定义 |
 | `deploy/minio/README.md` | 本文档 |
 | `scripts/check_minio_health.sh` | 4 契约健康检查（容器 running + liveness + console + avatars bucket） |
+| `scripts/test_check_minio_health.sh` | 上者的结构守卫 + M2 端口 127.0.0.1 限定断言（E2E-27 接入 CI） |
 
 ## 调研依据
 

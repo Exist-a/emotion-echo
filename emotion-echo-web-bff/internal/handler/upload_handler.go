@@ -22,13 +22,16 @@
 package handler
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -83,9 +86,13 @@ func NewUploadHandler(storage storageClient) *UploadHandler {
 	return &UploadHandler{storage: storage}
 }
 
-// Register 注册路由
+// Register 注册路由：POST /api/v1/uploads/:kind + GET /api/v1/uploads/file/:filekey
 func (h *UploadHandler) Register(r *gin.Engine) {
 	r.POST("/api/v1/uploads/:kind", h.upload)
+	// E2E-27 M1 / ADR-2026-09 决策 1/3：uploads 反代端点（voice/avatar 同型）。
+	// HEAD 与 GET 同挂（gin 不自动转发 HEAD——运行时 smoke 实测 404）。
+	r.GET("/api/v1/uploads/file/:filekey", h.file)
+	r.HEAD("/api/v1/uploads/file/:filekey", h.file)
 }
 
 // upload 处理 /api/v1/uploads/:kind
@@ -156,8 +163,19 @@ func (h *UploadHandler) upload(c *gin.Context) {
 	defer file.Close()
 
 	objectKey := uploadObjectKey(uid, kind, fileHeader.Filename, contentType)
-	publicURL, err := h.storage.PutObject(c.Request.Context(), objectKey, file, fileHeader.Size, contentType)
+	// E2E-27 #4：ctx 必须带 3s deadline——MinIO 停机时快速失败（运行时实证
+	// 裸 request ctx 无 deadline ⇒ curl 15s 挂起 000）；连接类失败映射 503。
+	putCtx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
+	// E2E-27 M1 / F-116（ADR-2026-09 决策 1）：PutObject 的 publicURL
+	// （PublicBaseURL 绝对地址）不再下发——只作内部用途；面向客户端一律
+	// 网关相对路径，由 GET file 端点反代取回。
+	_, err = h.storage.PutObject(putCtx, objectKey, file, fileHeader.Size, contentType)
 	if err != nil {
+		if isStorageUnavailableErr(err) {
+			Fail(c, http.StatusServiceUnavailable, 1, "storage unavailable: "+err.Error())
+			return
+		}
 		Fail(c, http.StatusInternalServerError, 1, "storage put: "+err.Error())
 		return
 	}
@@ -167,11 +185,49 @@ func (h *UploadHandler) upload(c *gin.Context) {
 	// data.data，裸顶层 gin.H 会让前端拿到 undefined ⇒ url 丢失 ⇒ 附件消息被
 	// chat-svc 以 content is required 拒绝（而 MinIO 里文件其实已写入）。
 	OK(c, gin.H{
-		"url":  publicURL,
+		"url":  "/api/v1/uploads/file/" + path.Base(objectKey),
 		"kind": kind,
 		"size": fileHeader.Size,
 		"mime": contentType,
 	})
+}
+
+// file GET /api/v1/uploads/file/:filekey —— 上传对象反代
+// （E2E-27 M1 / ADR-2026-09 决策 1/3，voice.audio / avatar.image 同型）：
+// 单段 filekey 补 "uploads/" 前缀；拒 ..（400）；缺失 404；nil storage 503。
+func (h *UploadHandler) file(c *gin.Context) {
+	fileKey := c.Param("filekey")
+	if fileKey == "" || strings.Contains(fileKey, "/") || strings.Contains(fileKey, "..") {
+		Fail(c, http.StatusBadRequest, 1, "invalid key")
+		return
+	}
+	if h.storage == nil {
+		Fail(c, http.StatusServiceUnavailable, 1, "object storage not configured")
+		return
+	}
+
+	rc, contentType, size, err := h.storage.GetObject(c.Request.Context(), "uploads/"+fileKey)
+	if err != nil {
+		if isStorageNotFoundErr(err) {
+			Fail(c, http.StatusNotFound, 1, "file not found")
+			return
+		}
+		if isStorageUnavailableErr(err) {
+			Fail(c, http.StatusServiceUnavailable, 1, "storage unavailable: "+err.Error())
+			return
+		}
+		Fail(c, http.StatusInternalServerError, 1, "storage get: "+err.Error())
+		return
+	}
+	defer rc.Close()
+
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Length", strconv.FormatInt(size, 10))
+	c.Status(http.StatusOK)
+	if _, copyErr := io.Copy(c.Writer, rc); copyErr != nil {
+		c.Error(copyErr)
+		return
+	}
 }
 
 // uploadObjectKey 生成上传对象 key

@@ -269,19 +269,31 @@ func (h *AIStreamHandler) saveAIMessage(c *gin.Context, conversationID, content 
 	}
 }
 
-// fileSourceURL 把消息里存的 MinIO 公开 URL（PublicBaseURL，面向浏览器）
-// 重写为 llm-service 容器内可达的内部端点。前缀不匹配时原样返回
-// （llm-service 侧 FILE_FETCH_ALLOWLIST 会拒绝并降级为"附件未能读取"）。
+// fileSourceURL 把消息里存的对象 URL 重写为 llm-service 容器内可达的内部端点。
+// 两种落库形态都要覆盖（E2E-27 M1 / F-116）：
+//   - 新形态：网关相对 /api/v1/uploads/file/<name>（M1 起）→ 内部端点直译
+//   - 存量形态：PublicBaseURL 绝对地址（惰性兼容，不回填）
+//
+// 前缀均不匹配时原样返回（llm-service 侧 FILE_FETCH_ALLOWLIST 只放行
+// emotion-echo-minio:9000 / localhost:9000 / 127.0.0.1:9000，见 file_context.py:24，
+// 不匹配即拒绝并降级为"附件未能读取"）。
 func fileSourceURL(publicURL string, cfg config.Config) string {
-	base := cfg.MinIO.PublicBaseURL
-	if base == "" || !strings.HasPrefix(publicURL, base) {
-		return publicURL
-	}
 	scheme := "http"
 	if cfg.MinIO.UseSSL {
 		scheme = "https"
 	}
 	if cfg.MinIO.Endpoint == "" {
+		return publicURL
+	}
+	// 新形态：网关相对路径 → /<bucket>/uploads/<name>（bucket 用配置值）
+	const relPrefix = "/api/v1/uploads/file/"
+	if strings.HasPrefix(publicURL, relPrefix) {
+		return scheme + "://" + cfg.MinIO.Endpoint + "/" + cfg.MinIO.Bucket + "/uploads/" +
+			strings.TrimPrefix(publicURL, relPrefix)
+	}
+	// 存量形态：PublicBaseURL 前缀重写
+	base := cfg.MinIO.PublicBaseURL
+	if base == "" || !strings.HasPrefix(publicURL, base) {
 		return publicURL
 	}
 	return scheme + "://" + cfg.MinIO.Endpoint + strings.TrimPrefix(publicURL, base)

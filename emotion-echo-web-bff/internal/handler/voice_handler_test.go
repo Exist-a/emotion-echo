@@ -264,6 +264,70 @@ func TestVoiceHandler_Audio_ObjectNotFound_Returns404(t *testing.T) {
 		"storage 返 NoSuchKey 必须 404——绝不能 200 返空 body（那会让 <audio> readyState=0）")
 }
 
+// E2E-27 #12 运行时实证（2026-10-03）：minio-go v7 StatObject 对缺失对象返回的
+// 真实错误文案是 "The specified key does not exist."（包在 StatObject(key): 前缀后，
+// 无 "NoSuchKey" 字样、无 "not found" 字样）——上面既有 fixture "NoSuchKey: ..."
+// 与生产形态不符，导致 isStorageNotFoundErr 三个 hint 全不匹配 ⇒ 运行时实测 500
+// （违反 ADR-2026-09-client-object-url-bff-proxy 决策 3「对象不存在返 404」）。
+// 真实文案证据：BFF 直连响应
+// {"message":"storage get: StatObject(voice/nonexistent-xyz.webm): The specified key does not exist."}
+func TestVoiceHandler_Audio_ObjectNotFound_RealMinioGoMessage_Returns404(t *testing.T) {
+	sto := &fakeUploadStorage{
+		getObjErr: errors.New("StatObject(voice/nonexistent-xyz.webm): The specified key does not exist."),
+	}
+	r := newVoiceRouter(&fakeAIClient{}, sto)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/voice/audio/nonexistent-xyz.webm", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code,
+		"minio-go 真实缺失文案（The specified key does not exist.）必须 404——运行时实测曾 500")
+}
+
+// E2E-27 #12：isStorageNotFoundErr hint 分类表——锁死"真实文案必须命中 + 非缺失
+// 错误不得误判 404"两向语义。
+func TestIsStorageNotFoundErr_HintTable(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"minio-go 真实 StatObject 文案", errors.New("StatObject(voice/x.webm): The specified key does not exist."), true},
+		{"带 NoSuchKey 前缀（旧 fixture 形态）", errors.New("NoSuchKey: The specified key does not exist."), true},
+		{"not found 形态", errors.New("StatObject(k): not found"), true},
+		{"连接类错误不得误判", errors.New("StatObject(k): dial tcp 127.0.0.1:9000: connect: connection refused"), false},
+		{"nil 错误", nil, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isStorageNotFoundErr(tc.err))
+		})
+	}
+}
+
+// E2E-27 #4：isStorageUnavailableErr hint 分类表——连接类/deadline 必须判不可用
+// （→503），非连接类错误不得误判（仍走 500）。
+func TestIsStorageUnavailableErr_HintTable(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"连接拒绝", errors.New("dial tcp 127.0.0.1:9000: connect: connection refused"), true},
+		{"deadline 超时（3s ctx 触发的真实形态）", errors.New("PutObject: context deadline exceeded"), true},
+		{"context canceled", errors.New("operation was canceled: context canceled"), true},
+		{"DNS 失败", errors.New("dial tcp: lookup emotion-echo-minio: no such host"), true},
+		{"业务类错误不得误判（NoSuchKey 属 404 语义）", errors.New("StatObject(k): The specified key does not exist."), false},
+		{"nil 错误", nil, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isStorageUnavailableErr(tc.err))
+		})
+	}
+}
+
 // 防御性：拒绝任何带 .. 的 :filekey。gin 路由层负责拦 "" 与 "/"（直接在路由
 // 树层面不 match）；本 handler 兜底防御 gin 匹配的合法 URL 但 filekey 内容异常。
 func TestVoiceHandler_Audio_PathTraversal_Returns400(t *testing.T) {

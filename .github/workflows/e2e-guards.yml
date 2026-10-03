@@ -136,3 +136,12 @@ jobs:
       # （success/skipped=通过、failure/cancelled=失败）。没有它，判定逻辑改回去没人知道。
       - name: 守卫 14/14 文档总闸聚合判定（skipped 视为通过）
         run: bash scripts/test_check_doc_drift_gate_result.sh
+
+      # E2E-27 #2（F-h，AP-10 治理）：MinIO 双守卫接线——check_minio_health.sh /
+      # smoke_upload_minio.sh 此前从未进 CI（守卫写了不接线 = 没写）。
+      # 两者运行时需容器栈（本地/dev 跑），CI 跑其纯静态结构守卫。
+      - name: 守卫 15/16 MinIO 健康守卫结构（4 契约在位）
+        run: bash scripts/test_check_minio_health.sh
+
+      - name: 守卫 16/16 上传 smoke 三缺陷防回退（cwd 文件/Bearer/MC_HOST）
+        run: bash scripts/test_smoke_upload_minio.sh

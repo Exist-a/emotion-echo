@@ -93,7 +93,7 @@
         <form class="profile-form" @submit.prevent="saveInfo">
           <label class="ee-field" data-label="头像">
             <span class="avatar-uploader" @click="triggerAvatarPick">
-              <img v-if="form.avatarPath" :src="form.avatarPath" class="avatar" alt="头像预览" />
+              <img v-if="form.avatarPath" :src="avatarPreviewSrc" class="avatar" alt="头像预览" />
               <span class="ee-icon" aria-hidden="true">
                 <svg
                   viewBox="0 0 24 24"
@@ -177,6 +177,7 @@ import { ref, onMounted } from 'vue'
 import { get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { notify } from '~/composables/useNotify'
+import { resolveObjectUrl } from '~/utils/objectUrl'
 
 const userStore = useUserStore()
 // E2E-11：必须包 computed —— Pinia 的 defineStore(setup) 返回值经 store 代理后
@@ -184,7 +185,11 @@ const userStore = useUserStore()
 // （setup 时 userInfo 仍为 null ⇒ 冻结在兜底值 "用户"/18/空 ID，永不更新），
 // 且 `nickname.value` 为 undefined（导致编辑弹框回填为空）。
 const nickname = computed(() => userStore.getNickname)
-const avatarPath = computed(() => userStore.getAvatarPath)
+// E2E-27 M1 / F-116：store 内存原始值（新数据=网关相对 / 存量=legacy 绝对），
+// 渲染 <img> 前统一经 resolveObjectUrl 解析为网关绝对地址（存量惰性兼容）。
+const runtimeConfig = useRuntimeConfig()
+const apiBase = runtimeConfig.public.API_BASE_URL as string
+const avatarPath = computed(() => resolveObjectUrl(userStore.getAvatarPath, apiBase))
 const age = computed(() => userStore.getAge)
 const id = computed(() => userStore.getId)
 const dialogFormVisible = ref(false)
@@ -201,6 +206,10 @@ const form = ref<{
   avatarPath: '',
   age: 18,
 })
+
+// 预览图：blob（本地选图）/ 网关相对（上传成功回填）/ 绝对（编辑回填）三形态
+// 都经 resolveObjectUrl——blob 与 http 原样透传，仅 /api/ 前缀被解析。
+const avatarPreviewSrc = computed(() => resolveObjectUrl(form.value.avatarPath, apiBase))
 
 const validateInfo = () => {
   form.value.nickname = form.value.nickname.trim()

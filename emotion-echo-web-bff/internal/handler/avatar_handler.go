@@ -17,9 +17,15 @@
 package handler
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
+	"time"
 
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/session"
@@ -47,9 +53,14 @@ func NewAvatarHandler(user downstream.UserClient, storage storageClient) *Avatar
 	return &AvatarHandler{user: user, storage: storage}
 }
 
-// Register 注册路由：POST /api/v1/user/avatar
+// Register 注册路由：POST /api/v1/user/avatar + GET /api/v1/user/avatar/image/:filekey
 func (h *AvatarHandler) Register(r *gin.Engine) {
 	r.POST("/api/v1/user/avatar", h.upload)
+	// E2E-27 M1 / ADR-2026-09 决策 1/3：avatar 反代端点（voice 同型）——
+	// 相对 URL 的消费方（浏览器 <img> 经 getFullUrl 指向网关）在此取回对象。
+	// HEAD 与 GET 同挂（gin 不自动转发 HEAD——运行时 smoke 实测 404）。
+	r.GET("/api/v1/user/avatar/image/:filekey", h.image)
+	r.HEAD("/api/v1/user/avatar/image/:filekey", h.image)
 }
 
 // upload 处理头像上传
@@ -96,22 +107,40 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	defer file.Close()
 
 	// 4. 写 MinIO
+	// E2E-27 #4：ctx 必须带 3s deadline——MinIO 停机时快速失败（运行时实证
+	// 裸 request ctx 无 deadline ⇒ curl 15s 挂起 000）；连接类失败映射 503。
+	putCtx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
 	objectKey := storage.ObjectKey(uid, fileHeader.Filename)
-	publicURL, err := h.storage.PutObject(c.Request.Context(), objectKey, file, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
+	// E2E-27 M1 / F-116（ADR-2026-09 决策 1）：PutObject 返回的 publicURL
+	// （PublicBaseURL 绝对地址）**不再下发也不落库**——只作内部用途；
+	// 面向客户端一律网关相对路径，由 GET image 端点反代取回。
+	_, err = h.storage.PutObject(putCtx, objectKey, file, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
 	if err != nil {
+		if isStorageUnavailableErr(err) {
+			Fail(c, http.StatusServiceUnavailable, 1, "storage unavailable: "+err.Error())
+			return
+		}
 		Fail(c, http.StatusInternalServerError, 1, "storage put: "+err.Error())
 		return
 	}
 
-	// 5. 同步 user-svc 写库（UpdateMe AvatarURL）
+	// 5. 取旧头像 URL（E2E-27 #17 孤儿治理的输入；best-effort——GetMe 失败
+	// 只跳过后续清理，不影响上传主流程）
+	var prevAvatar string
+	if me, meErr := h.user.GetMe(session.WithRequestAuth(c)); meErr == nil && me != nil {
+		prevAvatar = me.AvatarURL
+	}
+
+	// 6. 同步 user-svc 写库（UpdateMe AvatarURL）
 	//
 	// E2E-11：必须用 session.WithRequestAuth(c) 包 ctx —— 它把 X-User-Id 存入 ctx，
 	// 下游 gRPC 客户端的 withUserID(ctx) 才能带上 x-user-id metadata。
 	// 原实现传 c.Request.Context() ⇒ metadata 缺失 ⇒ user-svc 拦截器返
 	// Unauthenticated ⇒ 头像上传 500（且 MinIO 对象已写入 → 孤儿对象）。
-	urlStr := publicURL
+	avatarURL := "/api/v1/user/avatar/image/" + path.Base(objectKey)
 	_, err = h.user.UpdateMe(session.WithRequestAuth(c), downstream.UpdateProfileReq{
-		AvatarURL: &urlStr,
+		AvatarURL: &avatarURL,
 	})
 	if err != nil {
 		// 已写 MinIO 但写库失败 — 此处不删 MinIO（防删了用户没换上的图）
@@ -126,5 +155,82 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	// 放在**顶层**（无 data 字段），而前端 useApi 统一 `return data.data` ⇒
 	// `post<{avatar}>()` 返回 undefined ⇒ `res.avatar` 抛 TypeError 被 catch
 	// ⇒ 用户看到"上传失败"提示，但服务端其实已写成功（DB 已更新）。
-	OK(c, gin.H{"avatar": publicURL})
+
+	// 8. 删除旧对象（E2E-27 #17——UpdateMe 成功后 best-effort：旧 key 与新 key
+	// 相同（同文件名重传）绝不删；删失败仅告警（留运维清，与既有语义一致）。
+	if oldKey := oldAvatarKey(prevAvatar); oldKey != "" && oldKey != objectKey {
+		rmCtx, rmCancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer rmCancel()
+		if rmErr := h.storage.RemoveObject(rmCtx, oldKey); rmErr != nil {
+			slog.WarnContext(c.Request.Context(), "avatar: remove old object failed (best-effort)",
+				"old_key", oldKey, "err", rmErr)
+		}
+	}
+	OK(c, gin.H{"avatar": avatarURL})
+}
+
+// oldAvatarKey 从历史 avatar_url 提取桶内 key（E2E-27 #17，best-effort）：
+//   - 新形态 /api/v1/user/avatar/image/<fk> → avatars/<fk>
+//   - legacy 绝对地址 PublicBaseURL/<bucket>/<key...> → 首个 "/avatars/" 之后
+//     （bucket 恰为 avatars，其后即 key 全文）
+//   - 空 / 无法识别 → ""（不删，宁留孤儿不误删）
+func oldAvatarKey(u string) string {
+	if u == "" {
+		return ""
+	}
+	if i := strings.Index(u, "/image/"); i >= 0 {
+		fk := u[i+len("/image/"):]
+		if fk == "" || strings.Contains(fk, "/") {
+			return ""
+		}
+		return "avatars/" + fk
+	}
+	if i := strings.Index(u, "/avatars/"); i >= 0 {
+		key := u[i+len("/avatars/"):]
+		if key == "" {
+			return ""
+		}
+		return key
+	}
+	return ""
+}
+
+// image GET /api/v1/user/avatar/image/:filekey —— avatar 对象反代
+// （E2E-27 M1 / ADR-2026-09 决策 1/3，voice_handler.audio 同型）：
+//   - 单段 filekey（gin 路由限制），handler 补 "avatars/" 前缀还原桶内 key
+//   - 拒含 / 或 .. 的 key（400，不触达 storage）；对象缺失 404（非 200 空 body）
+//   - storage 未配置 503（与上传语义一致）；回读真实 Content-Type/Length（<img> 可缓存）
+func (h *AvatarHandler) image(c *gin.Context) {
+	fileKey := c.Param("filekey")
+	if fileKey == "" || strings.Contains(fileKey, "/") || strings.Contains(fileKey, "..") {
+		Fail(c, http.StatusBadRequest, 1, "invalid key")
+		return
+	}
+	if h.storage == nil {
+		Fail(c, http.StatusServiceUnavailable, 1, "object storage not configured")
+		return
+	}
+
+	rc, contentType, size, err := h.storage.GetObject(c.Request.Context(), "avatars/"+fileKey)
+	if err != nil {
+		if isStorageNotFoundErr(err) {
+			Fail(c, http.StatusNotFound, 1, "avatar not found")
+			return
+		}
+		if isStorageUnavailableErr(err) {
+			Fail(c, http.StatusServiceUnavailable, 1, "storage unavailable: "+err.Error())
+			return
+		}
+		Fail(c, http.StatusInternalServerError, 1, "storage get: "+err.Error())
+		return
+	}
+	defer rc.Close()
+
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Length", strconv.FormatInt(size, 10))
+	c.Status(http.StatusOK)
+	if _, copyErr := io.Copy(c.Writer, rc); copyErr != nil {
+		c.Error(copyErr)
+		return
+	}
 }

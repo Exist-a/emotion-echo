@@ -203,17 +203,36 @@ func (h *VoiceHandler) audio(c *gin.Context) {
 }
 
 // isStorageNotFoundErr 判 MinIO 不存在对象的错误（上层 GetObject 包装）
+//
+// E2E-27 #12（2026-10-03）：补 "does not exist"——minio-go v7 StatObject 对缺失
+// 对象的真实文案是 "The specified key does not exist."（无 NoSuchKey 字样），
+// 原三 hint 全不匹配导致运行时 500 违反 ADR-2026-09 决策 3 的 404 契约。
 func isStorageNotFoundErr(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	for _, hint := range []string{"nosuchkey", "no such key", "not found"} {
+	for _, hint := range []string{"nosuchkey", "no such key", "not found", "does not exist"} {
 		if strings.Contains(msg, hint) {
 			return true
 		}
 	}
 	return false
+}
+
+// isStorageUnavailableErr 判存储**不可用**（连接拒绝 / 超时 / deadline）——与
+// handler 契约 "Storage 未配置 → 503" 同语义：存储不可用时上传必须 503 快速失败，
+// 而非挂起（E2E-27 #4：裸 ctx 无 deadline + minio-go 重试 ⇒ 运行时挂起 >15s）
+// 或泛 500。连接类 hint 复用 isConnectionErr；deadline/cancel 属本函数专有。
+func isStorageUnavailableErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if isConnectionErr(err) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "context deadline exceeded") || strings.Contains(msg, "context canceled")
 }
 
 // isConnectionErr 简单判断网络/连接类错误（ai-svc 不可达）

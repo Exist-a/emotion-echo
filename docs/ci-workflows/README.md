@@ -31,9 +31,9 @@ related-stage: stage-97, e2e-03, e2e-22, e2e-23
 > - `汇总门禁 needs 覆盖校验`（`doc-drift-needs-sync`）：跑 `scripts/check_doc_drift_gate_needs.sh`，
 >   断言 gate 的 `needs` 覆盖全部检查 job 且无失效引用。**它必须独立于 gate 跑** ——
 >   校验汇总门禁的 job 不能被汇总门禁覆盖，否则 gate 漏掉自己就没人发现。 |
-| `e2e-guards.yml` | push / PR | 静态守卫（E2E-23 新增） | **15 个**静态守卫（14 个 `scripts/test_*.sh` + 1 个 `scripts/check_*.sh`），**见下方"门禁生效边界"** |
+| `e2e-guards.yml` | push / PR | 静态守卫（E2E-23 新增） | **17 个**静态守卫（16 个 `scripts/test_*.sh` + 1 个 `scripts/check_*.sh`），**见下方"门禁生效边界"** |
 
-`e2e-guards.yml` 跑的这 15 个守卫（均为纯静态检查，不需要运行中的容器；计数 2026-10-02 对账——此前写"7 个"且清单只列 8 行，属"守卫清单漂移"，已修）：
+`e2e-guards.yml` 跑的这 17 个守卫（均为纯静态检查，不需要运行中的容器；计数 2026-10-03 更新 +2——E2E-27 #2 MinIO 双守卫接线，F-h「守卫写了没接 CI」治理；上轮 2026-10-02 对账 15 个，此前曾写"7 个"且清单只列 8 行，属"守卫清单漂移"，已修）：
 
 | 脚本 | 断言 |
 |------|------|
@@ -52,6 +52,8 @@ related-stage: stage-97, e2e-03, e2e-22, e2e-23
 | `scripts/test_health_nilrepo_truthful.sh` | 降级启动（repo=nil）时健康探针必须说假话，不许 dbOK=true（E2E-23 F-96） |
 | `scripts/test_go_test_exitcode_gate.sh` | go test 结果判定必须用退出码，禁止 grep（E2E-23 ugrep 假绿教训） |
 | `scripts/test_check_doc_drift_gate_result.sh` | **（E2E-F-173 新增）** 文档总闸聚合判定：success/skipped=通过、failure/cancelled=失败——防 push 事件下 adr-gate skip 被判红致 main 总闸恒红 |
+| `scripts/test_check_minio_health.sh` | **（E2E-27 #2 新增）** MinIO 健康守卫结构：4 契约在位（容器/liveness/console/avatars 桶）+ 前置容器检查 + 退出码（F-h 双守卫接线其一） |
+| `scripts/test_smoke_upload_minio.sh` | **（E2E-27 #2 新增）** 上传 smoke 三缺陷防回退：cwd 临时文件（native curl 读不到 /tmp）/ 登录取 Bearer（uploads 路由 jwt-auth）/ mc 走 MC_HOST 免 alias（静默空列）+ 本轮对象 basename 精确匹配 |
 
 > **E2E-25 另在 `doc-drift-check.yml` 的 `apisix-seed-structure` job 加了 2 步**（属该 job 内步骤，不改上方 job 计数）：
 > `scripts/test_apisix_drift_lib.js`（漂移检测纯函数契约 15 断言）+ `scripts/test_check_apisix_drift.sh`（wrapper 离线 6 断言）。

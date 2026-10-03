@@ -2,9 +2,9 @@
 stage: e2e-27
 title: 对象存储 MinIO（头像上传/下载/匿名读权限）
 type: verification
-status: pending
+status: done
 created: 2026-10-03
-last-updated: 2026-10-03（建档：计划期调研完成，20 测试点，2 个 [M] 决策点）
+last-updated: 2026-10-03（**done**：20/20 测试点处置完毕——19 PASS + 1 FAIL 已分类（#4 health 翻转子项 → F-186 范围外）；D-40/D-41 两裁决落地；9 组 TDD 修复 + 回归钉 spec 2/2 + 双截图目视；名下账本 F-116 ✅；详见 report.md）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §4
@@ -186,10 +186,10 @@ related-findings: [E2E-F-116]
 
 | # | 决策 | 背景 | 备选 |
 |---|------|------|------|
-| M1 | **F-116 修复范围与形态**（#14/#15/#16/#18） | ADR 已裁方向（相对+反代），但范围牵动：chat file 持久化数据（F-b）、fileSourceURL 耦合（F-c）、roadmap 边界"其他文件类型接入" | 范围：① 仅 avatar ② avatar+uploads ③ 全量含存量数据；形态：每类一端点（ADR 字面）vs 通用对象端点；存量：回填 vs 惰性归一 |
-| M2 | **匿名读范围与 `:9000` 暴露处置**（#11） | F-a（voice 同桶匿名绕 JWT）+ F-f（0.0.0.0 暴露）——安全性与 dev 便利的取舍，无客观对错 | ① 保持+文档化 ② voice 分桶去匿名（动 A3 假设，连带 init/handler） ③ `127.0.0.1` 限定映射（D-38 同型） |
+| M1 ✅ | **F-116 修复范围与形态**（#14/#15/#16/#18）——**已裁定 D-40**：②avatar+uploads 新数据相对+反代+存量惰性兼容（裁定来源如实登记：升级时用户未选定，执行者按推荐落地） | ADR 已裁方向（相对+反代），但范围牵动：chat file 持久化数据（F-b）、fileSourceURL 耦合（F-c）、roadmap 边界"其他文件类型接入" | 范围：① 仅 avatar ② avatar+uploads ③ 全量含存量数据；形态：每类一端点（ADR 字面）vs 通用对象端点；存量：回填 vs 惰性归一 |
+| M2 ✅ | **匿名读范围与 `:9000` 暴露处置**（#11）——**已裁定 D-41**：③127.0.0.1 限定映射 + 匿名读边界文档化（裁定来源同 D-40） | F-a（voice 同桶匿名绕 JWT）+ F-f（0.0.0.0 暴露）——安全性与 dev 便利的取舍，无客观对错 | ① 保持+文档化 ② voice 分桶去匿名（动 A3 假设，连带 init/handler） ③ `127.0.0.1` 限定映射（D-38 同型） |
 
-> 决议产生后登记 [decisions.md](../../decisions.md)（**D-40 起**；D-37/38/39 为 E2E-26 已占用）；涉及存储架构语义的同步 `docs/architecture/decisions.md`（**决策 39 起**）。
+> **裁决已登记**（2026-10-03）：[decisions.md](../../decisions.md) **D-40**（M1）+ **D-41**（M2）；存储架构语义无新增（沿用 ADR-2026-09，未启用 architecture/decisions 决策号）。
 
 ---
 
