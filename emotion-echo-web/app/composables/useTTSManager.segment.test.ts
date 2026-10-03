@@ -79,4 +79,15 @@ describe('useTTSManager 首句切段（F-134）', () => {
     vi.advanceTimersByTime(600)
     expect(playTextSpy).not.toHaveBeenCalled()
   })
+
+  it('GREEN 配套：一次补完多段时 while 全部立即发出（防只切一段）', () => {
+    const m = useTTSManager()
+    m.playText('第一句。第二句。第三句还')
+    expect(playTextSpy).toHaveBeenCalledTimes(2)
+    expect(playTextSpy).toHaveBeenNthCalledWith(1, '第一句。')
+    expect(playTextSpy).toHaveBeenNthCalledWith(2, '第二句。')
+    vi.advanceTimersByTime(600)
+    expect(playTextSpy).toHaveBeenCalledTimes(3)
+    expect(playTextSpy).toHaveBeenLastCalledWith('第三句还')
+  })
 })
