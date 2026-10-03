@@ -342,15 +342,20 @@ func TestAvatarHandler_Register_PathContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	(&AvatarHandler{user: &fakeAvatarUserClient{}, storage: &fakeStorage{}}).Register(r)
-	// E2E-27 M1：注册表由 1 条变 2 条（POST 上传 + GET image 反代，ADR-2026-09）
-	assert.Equal(t, 2, len(r.Routes()), "应注册 POST 上传 + GET image 两条路由")
-	methods := map[string]string{}
+	// E2E-27 M1：注册表由 1 条变 3 条（POST 上传 + GET/HEAD image 反代，
+	// ADR-2026-09 + HEAD 双注册——gin 不自动转发 HEAD，运行时 smoke 实测 404）
+	assert.Equal(t, 3, len(r.Routes()), "应注册 POST 上传 + GET/HEAD image 三条路由")
+	type routeKey struct{ method, path string }
+	got := map[routeKey]bool{}
 	for _, ri := range r.Routes() {
-		methods[ri.Path] = ri.Method
+		got[routeKey{ri.Method, ri.Path}] = true
 	}
-	assert.Equal(t, http.MethodPost, methods["/api/v1/user/avatar"], "POST /api/v1/user/avatar 必须在位")
-	assert.Equal(t, http.MethodGet, methods["/api/v1/user/avatar/image/:filekey"],
+	assert.True(t, got[routeKey{http.MethodPost, "/api/v1/user/avatar"}],
+		"POST /api/v1/user/avatar 必须在位")
+	assert.True(t, got[routeKey{http.MethodGet, "/api/v1/user/avatar/image/:filekey"}],
 		"GET image 反代端点必须在位（相对 URL 的唯一服务端落点）")
+	assert.True(t, got[routeKey{http.MethodHead, "/api/v1/user/avatar/image/:filekey"}],
+		"HEAD 必须与 GET 同挂（gin 不自动转发 HEAD）")
 }
 
 // TestAvatarHandler_PassesUserIDToDownstream 契约（E2E-11）：

@@ -57,7 +57,9 @@ func (h *AvatarHandler) Register(r *gin.Engine) {
 	r.POST("/api/v1/user/avatar", h.upload)
 	// E2E-27 M1 / ADR-2026-09 决策 1/3：avatar 反代端点（voice 同型）——
 	// 相对 URL 的消费方（浏览器 <img> 经 getFullUrl 指向网关）在此取回对象。
+	// HEAD 与 GET 同挂（gin 不自动转发 HEAD——运行时 smoke 实测 404）。
 	r.GET("/api/v1/user/avatar/image/:filekey", h.image)
+	r.HEAD("/api/v1/user/avatar/image/:filekey", h.image)
 }
 
 // upload 处理头像上传

@@ -109,16 +109,18 @@ var wantRoutes = gin.RoutesInfo{
 
 	// ----- upload_handler.go (2 条) -----
 	{Method: "POST", Path: "/api/v1/uploads/:kind"},
-	// E2E-27 M1：uploads 反代端点（相对 url 的服务端落点）
+	// E2E-27 M1：uploads 反代端点（相对 url 的服务端落点）——GET/HEAD 双注册
 	{Method: "GET", Path: "/api/v1/uploads/file/:filekey"},
+	{Method: "HEAD", Path: "/api/v1/uploads/file/:filekey"},
 
 	// ----- voice_handler.go (Sprint 1 PR-4c-1, 1 条) -----
 	{Method: "POST", Path: "/api/v1/voice/upload"},
 
 	// ----- avatar_handler.go (Sprint 1 PR-4c-2 + E2E-27 M1, 2 条) -----
 	{Method: "POST", Path: "/api/v1/user/avatar"},
-	// E2E-27 M1：avatar 反代端点（相对 avatar url 的服务端落点）
+	// E2E-27 M1：avatar 反代端点（相对 avatar url 的服务端落点）——GET/HEAD 双注册
 	{Method: "GET", Path: "/api/v1/user/avatar/image/:filekey"},
+	{Method: "HEAD", Path: "/api/v1/user/avatar/image/:filekey"},
 }
 
 // wantRoutesWithEmotionQ 是当 svc.EmotionQ != nil 时额外注册的 3 条。

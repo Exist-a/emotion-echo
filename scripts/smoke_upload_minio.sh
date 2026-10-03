@@ -91,13 +91,23 @@ if [ -z "$URL" ]; then
 else
   log "[OK  ] url 字段存在：$URL"
 
-  # ---------- 契约 2：HEAD url 可达（MinIO bucket 匿名下载） ----------
-  log "=== 契约 2: HEAD $URL ==="
-  HEAD_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -I "$URL" --max-time 10 2>/dev/null || echo "000")
-  if [ "$HEAD_CODE" = "200" ]; then
-    log "[OK  ] url HEAD 200 (MinIO anonymous download 配置正确)"
+  # ---------- 契约 2：HEAD url 可达 ----------
+  # E2E-27 M1：url 已是网关相对路径（/api/v1/uploads/file/...，反代端点走
+  # jwt-auth）——相对路径经网关 + Bearer HEAD；legacy 绝对地址（存量）直接 HEAD。
+  # 可达性语义不变：返回的 url 在浏览器视角必须打得通。
+  if [ "${URL#/}" != "$URL" ]; then
+    HEAD_TARGET="$APISIX_URL$URL"
+    HEAD_AUTH=(-H "Authorization: Bearer $TOKEN")
   else
-    err "url HEAD $HEAD_CODE（bucket 可能是 private，MinIO console 改 policy 为 download）"
+    HEAD_TARGET="$URL"
+    HEAD_AUTH=()
+  fi
+  log "=== 契约 2: HEAD $HEAD_TARGET ==="
+  HEAD_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -I "${HEAD_AUTH[@]}" "$HEAD_TARGET" --max-time 10 2>/dev/null || echo "000")
+  if [ "$HEAD_CODE" = "200" ]; then
+    log "[OK  ] url HEAD 200 (对象可达——M1 反代端点 / legacy 匿名)"
+  else
+    err "url HEAD $HEAD_CODE（反代端点应经网关 200；legacy 则检查 bucket 匿名策略）"
   fi
 fi
 

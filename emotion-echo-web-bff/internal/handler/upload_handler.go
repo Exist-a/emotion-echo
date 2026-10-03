@@ -90,7 +90,9 @@ func NewUploadHandler(storage storageClient) *UploadHandler {
 func (h *UploadHandler) Register(r *gin.Engine) {
 	r.POST("/api/v1/uploads/:kind", h.upload)
 	// E2E-27 M1 / ADR-2026-09 决策 1/3：uploads 反代端点（voice/avatar 同型）。
+	// HEAD 与 GET 同挂（gin 不自动转发 HEAD——运行时 smoke 实测 404）。
 	r.GET("/api/v1/uploads/file/:filekey", h.file)
+	r.HEAD("/api/v1/uploads/file/:filekey", h.file)
 }
 
 // upload 处理 /api/v1/uploads/:kind

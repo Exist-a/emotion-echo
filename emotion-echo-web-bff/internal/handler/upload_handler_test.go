@@ -322,14 +322,17 @@ func TestUploadHandler_Register_PathContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	(&UploadHandler{storage: &fakeUploadStorage{}}).Register(r)
-	assert.Equal(t, 2, len(r.Routes()), "应注册 POST uploads/:kind + GET file 反代两条路由")
-	methods := map[string]string{}
+	assert.Equal(t, 3, len(r.Routes()), "应注册 POST uploads/:kind + GET/HEAD file 三条路由")
+	type routeKey struct{ method, path string }
+	got := map[routeKey]bool{}
 	for _, ri := range r.Routes() {
-		methods[ri.Path] = ri.Method
+		got[routeKey{ri.Method, ri.Path}] = true
 	}
-	assert.Equal(t, http.MethodPost, methods["/api/v1/uploads/:kind"], "POST 上传必须在位")
-	assert.Equal(t, http.MethodGet, methods["/api/v1/uploads/file/:filekey"],
+	assert.True(t, got[routeKey{http.MethodPost, "/api/v1/uploads/:kind"}], "POST 上传必须在位")
+	assert.True(t, got[routeKey{http.MethodGet, "/api/v1/uploads/file/:filekey"}],
 		"GET file 反代端点必须在位（相对 url 的唯一服务端落点）")
+	assert.True(t, got[routeKey{http.MethodHead, "/api/v1/uploads/file/:filekey"}],
+		"HEAD 必须与 GET 同挂（gin 不自动转发 HEAD）")
 }
 
 func TestUploadHandler_FileGet_Success(t *testing.T) {
