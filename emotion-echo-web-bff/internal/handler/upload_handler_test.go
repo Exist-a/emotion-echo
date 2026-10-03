@@ -45,6 +45,8 @@ type fakeUploadStorage struct {
 	gotKey string
 	gotSize int64
 	gotCT   string
+	// E2E-27 #4：捕获 PutObject 收到的 ctx，用于断言 deadline 存在（防停机挂起）
+	putCtx context.Context
 	// E2E-F-113：GetObject mock 字段。fakeUploadStorage 原本只服务 upload 路径，
 	// voice 反代音频路径开始后也必须满足 storage.StorageClient 接口。
 	getObjBytes  []byte
@@ -57,6 +59,7 @@ func (f *fakeUploadStorage) PutObject(ctx context.Context, key string, r io.Read
 	f.gotKey = key
 	f.gotSize = size
 	f.gotCT = ct
+	f.putCtx = ctx
 	if f.err != nil {
 		return "", f.err
 	}
@@ -103,6 +106,28 @@ func multipartBuild(t *testing.T, filename, contentType, content string) (*bytes
 }
 
 // ============ 成功路径 ============
+
+// E2E-27 #4 运行时实证（2026-10-03）：与 avatar 同型——PutObject 裸 ctx 无
+// deadline ⇒ MinIO 停机时请求挂起（curl 15s 超时 000）。存储连接类失败必须
+// 503 快速失败 + ctx 带 deadline。
+func TestUploadHandler_StorageDown_FastFail503(t *testing.T) {
+	sto := &fakeUploadStorage{err: errors.New("dial tcp 127.0.0.1:9000: connect: connection refused")}
+	r := newUploadRouter(sto)
+
+	body, ct := multipartBuild(t, "a.png", "image/png", "x")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/image", body)
+	req.Header.Set("Content-Type", ct)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.NotNil(t, sto.putCtx, "PutObject 必须被调用")
+	_, hasDeadline := sto.putCtx.Deadline()
+	assert.True(t, hasDeadline,
+		"PutObject ctx 必须带 deadline——运行时实证无 deadline 时停机挂起 >15s")
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code,
+		"存储连接类失败必须 503 快速失败（存储不可用语义），body: %s", w.Body.String())
+}
 
 func TestUploadHandler_Image_Success(t *testing.T) {
 	sto := &fakeUploadStorage{putURL: "http://localhost:9000/avatars/uploads/7-abc.jpg"}

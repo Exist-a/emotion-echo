@@ -86,9 +86,12 @@ func (f *fakeAvatarUserClient) GetSecurityQuestionsByUsername(ctx context.Contex
 type fakeStorage struct {
 	putURL string
 	err    error
+	// E2E-27 #4：捕获 PutObject 收到的 ctx，用于断言 deadline 存在（防停机挂起）
+	putCtx context.Context
 }
 
 func (f *fakeStorage) PutObject(ctx context.Context, key string, r io.Reader, size int64, ct string) (string, error) {
+	f.putCtx = ctx
 	if f.err != nil {
 		return "", f.err
 	}
@@ -141,6 +144,35 @@ func TestAvatarHandler_Upload_Success(t *testing.T) {
 	// E2E-11 复查：原断言读顶层 got["avatar"]，把"无 data 包装"这个 bug 固化了。
 	// 现按前端真实消费路径（useApi 返回 data.data）断言 data.avatar。
 	assert.Equal(t, "http://localhost:9000/avatars/avatars/7-abc.jpg", got.Data.Avatar)
+}
+
+// E2E-27 #4 运行时实证（2026-10-03）：停 MinIO 容器后 avatar 上传挂起——
+// curl --max-time 15 得 000（0 字节），既非 500 也非 503。根因：
+// PutObject 用裸 request ctx（无 deadline）+ minio-go 内部重试 ⇒ 请求被拖死。
+// 通过标准（plan #4）：存储停机必须**快速失败**返 503（与 handler 契约
+// "Storage 未配置 → 503" 同属存储不可用语义），且 ctx 必须带 deadline。
+func TestAvatarHandler_Upload_StorageDown_FastFail503(t *testing.T) {
+	sto := &fakeStorage{err: errors.New("dial tcp 127.0.0.1:9000: connect: connection refused")}
+	r := newAvatarRouter(&fakeAvatarUserClient{}, sto)
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, _ := mw.CreateFormFile("avatar", "me.jpg")
+	_, _ = io.WriteString(fw, "fake jpg bytes")
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/avatar", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.NotNil(t, sto.putCtx, "PutObject 必须被调用")
+	_, hasDeadline := sto.putCtx.Deadline()
+	assert.True(t, hasDeadline,
+		"PutObject ctx 必须带 deadline——运行时实证无 deadline 时停机挂起 >15s")
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code,
+		"存储连接类失败必须 503 快速失败（存储不可用语义），body: %s", w.Body.String())
 }
 
 func TestAvatarHandler_MissingXUserId_Returns401(t *testing.T) {
