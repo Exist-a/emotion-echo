@@ -6,6 +6,7 @@ import { useMessageStore } from '~/stores/message'
 import { useConversationStore } from '~/stores/conversation'
 import { useAIStreamHandler } from './useAIStreamHandler'
 import { useTTSManager } from './useTTSManager'
+import { takeSentenceSegment } from '~/utils/takeSentenceSegment'
 import type { MessageWithStatus } from '~/types/api'
 
 export interface UseConversationSenderOptions {
@@ -154,15 +155,29 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
           accumulatedDeltaText.value += delta
           callbacks?.onDelta?.(delta)
 
-          if (ttsDebounceTimer) {
-            clearTimeout(ttsDebounceTimer)
-          }
-          ttsDebounceTimer = setTimeout(() => {
-            if (accumulatedDeltaText.value.trim().length > 0) {
-              playText(accumulatedDeltaText.value)
-              accumulatedDeltaText.value = ''
+          // F-134 第二层（E2E-28 #13 运行时实测 ttsFirst==sseFinish 同刻暴露）：
+          // 原 500ms debounce 被 SSE token 流持续重置 ⇒ 流中永不触发，全部
+          // 积压到 onFinish flushTTS —— manager 侧切段的"首声提前"收益被上游
+          // 完全挡住。攒到可切段（主标点/maxLen 规则见 takeSentenceSegment）
+          // 立即交给 manager 切段发出；无整段余量仍走 500ms 尾冲。
+          if (takeSentenceSegment(accumulatedDeltaText.value) !== null) {
+            if (ttsDebounceTimer) {
+              clearTimeout(ttsDebounceTimer)
+              ttsDebounceTimer = null
             }
-          }, 500)
+            playText(accumulatedDeltaText.value)
+            accumulatedDeltaText.value = ''
+          } else {
+            if (ttsDebounceTimer) {
+              clearTimeout(ttsDebounceTimer)
+            }
+            ttsDebounceTimer = setTimeout(() => {
+              if (accumulatedDeltaText.value.trim().length > 0) {
+                playText(accumulatedDeltaText.value)
+                accumulatedDeltaText.value = ''
+              }
+            }, 500)
+          }
 
           messageStore.updateMessage(tempAiMessage.id, {
             content: tempAiMessage.content + delta,
