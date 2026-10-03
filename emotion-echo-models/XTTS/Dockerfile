@@ -74,7 +74,9 @@ COPY --chown=app:app XTTS/TTS/ ./TTS/
 COPY --chown=app:app XTTS/pcm_chunk_shape.py ./
 
 # application code
-COPY --chown=app:app XTTS/logging_setup.py XTTS/metrics_setup.py XTTS/server.py ./
+# E2E-28 C4: synth_pool.py 必须随行 —— server.py `from synth_pool import
+# run_synth`，漏 COPY 则容器启动即 ModuleNotFoundError（首轮构建前自查发现）。
+COPY --chown=app:app XTTS/logging_setup.py XTTS/metrics_setup.py XTTS/server.py XTTS/synth_pool.py ./
 
 # Stage 36-D fix: torchaudio shim (monkey-patch torchaudio.load via soundfile + .float())
 COPY --chown=app:app XTTS/torchaudio_shim.py ./

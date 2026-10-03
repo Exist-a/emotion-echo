@@ -149,3 +149,16 @@ class TestGreenWiringContracts:
         assert "XTTS_SYNTH_WORKERS" in block, (
             "compose xtts 段未声明 XTTS_SYNTH_WORKERS"
         )
+
+    def test_dockerfile_copies_synth_pool(self):
+        """Dockerfile 必须 COPY synth_pool.py —— server.py 顶层
+        `from synth_pool import run_synth`，漏 COPY ⇒ 容器启动即
+        ModuleNotFoundError（2026-10-03 首轮构建前自查抓到的真缺口，
+        与 Stage 36-B5 pcm_chunk_shape 漏 COPY 同型）。"""
+        dockerfile = (SERVICE_DIR / "Dockerfile").read_text(encoding="utf-8")
+        copy_lines = [ln for ln in dockerfile.splitlines()
+                      if ln.startswith("COPY") and "server.py" in ln]
+        assert copy_lines, "Dockerfile 无 server.py COPY 行"
+        assert any("synth_pool.py" in ln for ln in copy_lines), (
+            "server.py 的 COPY 行未随行 synth_pool.py —— 镜像启动必炸"
+        )
