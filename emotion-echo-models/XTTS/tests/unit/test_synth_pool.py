@@ -120,3 +120,32 @@ class TestServerWiringStaticContract:
             "stream_audio_generator 仍是 async —— 流式块生成会锁死事件循环"
         )
         assert "def stream_audio_generator" in src
+
+
+class TestGreenWiringContracts:
+    """GREEN 侧配套契约（与实现同批落地的真实断言）。"""
+
+    def test_synth_pool_module_never_imports_torch(self):
+        """synth_pool 必须保持零 torch 依赖 —— 它是卸载层，若被拖进 torch
+        导入链，池本身变重且测试无法脱离模型环境运行。"""
+        src = (SERVICE_DIR / "synth_pool.py").read_text(encoding="utf-8")
+        for line in src.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("import ", "from ")):
+                assert "torch" not in stripped, (
+                    f"synth_pool 顶层引入 torch: {stripped}"
+                )
+
+    def test_compose_declares_synth_workers_env(self):
+        """compose 必须显式声明 XTTS_SYNTH_WORKERS —— 容量是调优面，
+        隐式默认会让部署侧看不见可调参数（同 F-132 cpus 隐式教训）。"""
+        repo = SERVICE_DIR.parents[1]
+        compose = (repo / "deploy" / "docker-compose.apps.yml").read_text(
+            encoding="utf-8")
+        # 锚点必须是 2 空格缩进的服务键 —— 裸 "emotion-echo-xtts:" 会先撞
+        # XTTS_BASE_URL 里的 "emotion-echo-xtts:8003" 子串（首轮实测误命中）。
+        i = compose.index("\n  emotion-echo-xtts:\n")
+        block = compose[i:i + 3000]
+        assert "XTTS_SYNTH_WORKERS" in block, (
+            "compose xtts 段未声明 XTTS_SYNTH_WORKERS"
+        )

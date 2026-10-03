@@ -21,6 +21,7 @@ import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pcm_chunk_shape import pcm_chunk_shape
+from synth_pool import run_synth  # E2E-28 C4/D-43: 推理卸载线程池（事件循环阻塞根因修复）
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -166,7 +167,10 @@ async def text_to_speech(req: TTSRequest):
         logger.info("tts: lang=%s len=%d text=%r", req.language, len(req.text), clipped)
 
         with TTS_INFERENCE_DURATION.labels(endpoint="tts").time():
-            outputs = tts_model.synthesize(
+            # E2E-28 C4：阻塞推理卸载线程池 —— 原直调在事件循环里锁死
+            # 循环 13~30s，并发请求全部排队（#11 实测串行根因）。
+            outputs = await run_synth(
+                tts_model.synthesize,
                 clipped,
                 xtts_config,
                 speaker_wav=xtts_speaker,
@@ -204,9 +208,12 @@ async def text_to_speech(req: TTSRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def stream_audio_generator(text: str, language: str = "zh-cn",
-                                 stream_chunk_size: int = 20, speed: float = 0.9,
-                                 volume: float = 2.0):
+# E2E-28 C4：同步 def（原 async def）—— Starlette 对**同步**迭代器自动走
+# iterate_in_threadpool，块生成在池线程里推进；async 生成器会回到事件循环
+# 里逐块阻塞（与 /tts、/tts_with_phonemes 同根因）。
+def stream_audio_generator(text: str, language: str = "zh-cn",
+                           stream_chunk_size: int = 20, speed: float = 0.9,
+                           volume: float = 2.0):
     global gpt_cond_latent, speaker_embedding, tts_model, xtts_speaker
     import numpy as np
     import torchaudio
@@ -291,7 +298,9 @@ async def tts_with_phonemes(req: TTSRequest):
         logger.info("tts_phonemes: lang=%s text=%r", req.language, clipped[:40])
 
         with TTS_INFERENCE_DURATION.labels(endpoint="tts_with_phonemes").time():
-            outputs = tts_model.synthesize(
+            # E2E-28 C4：同 /tts —— 阻塞推理卸载线程池（事件循环阻塞根因）。
+            outputs = await run_synth(
+                tts_model.synthesize,
                 clipped,
                 xtts_config,
                 speaker_wav=xtts_speaker,

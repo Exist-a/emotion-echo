@@ -563,6 +563,11 @@ services:
       <<: *logging-env
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL:  ${LOG_LEVEL:-INFO}
+      # E2E-28 C4/D-43（2026-10-03）：推理卸载线程池容量。F-136 深层根因 =
+      # async handler 直调阻塞推理锁死事件循环（#11 实测串行 [12.2s,23.3s]），
+      # 修法 = synth_pool 线程池（torch 算子释放 GIL 零内存成本）；否决进程级
+      # 多 worker（每 worker ~2.5GiB，.wslconfig 8GB 击穿前科）。设 1 退化串行。
+      XTTS_SYNTH_WORKERS: ${XTTS_SYNTH_WORKERS:-2}
     # Stage 33 PR-20: 端口收紧
     expose:
       - "8003"
