@@ -69,6 +69,33 @@ class TestCounters:
         assert after == before + 1
 
 
+class TestBucketResolution:
+    """E2E-28 #4：/analyze 热路径 ~1ms，桶分辨率必须让亚毫秒分位数可分辨。
+
+    实测（2026-10-03 匹配窗口，30 请求突发）：client p50=1.168ms vs
+    Prometheus p50=0.517ms（2.26x，超 plan #4 的 0.5x~2x 带宽）——根因是
+    原桶底 1ms 让 ≥50% 样本堆进 [0, 0.001] 桶，histogram_quantile 桶内均匀
+    假设把 p50 钉在 ~0.5ms、p95 直接钉在桶界 1ms（实测 p95=0.983ms 即此
+    现象）。契约：
+      ① ≤0.5ms 有一个桶界（0.0005）—— 亚毫秒可分辨；
+      ② 0.001~0.01 之间至少再有一个桶界（如 0.002）—— 1~10ms 段不止两档；
+      ③ 桶界严格递增。
+    """
+
+    def test_sub_ms_bucket_resolution(self):
+        bounds = list(HTTP_REQUEST_DURATION._upper_bounds)
+        assert any(b <= 0.0005 for b in bounds), (
+            f"缺 ≤0.5ms 桶界，亚毫秒分位数不可分辨（当前 {bounds}）"
+        )
+        mid = [b for b in bounds if 0.001 < b < 0.01]
+        assert len(mid) >= 1, (
+            f"0.001~0.01 区间无中间桶界，1~10ms 段分辨率不足（当前 {bounds}）"
+        )
+        assert all(x < y for x, y in zip(bounds, bounds[1:])), (
+            f"桶界必须严格递增（当前 {bounds}）"
+        )
+
+
 # =====================================================
 # metrics_endpoint tests
 # =====================================================
