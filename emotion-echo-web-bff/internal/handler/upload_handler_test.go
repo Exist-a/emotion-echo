@@ -387,3 +387,19 @@ func TestUploadHandler_FileGet_NilStorage_Returns503(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code,
 		"storage 未配置必须 503，body: %s", w.Body.String())
 }
+
+// E2E-27 运行时（smoke 契约 2）：gin 不会为 GET 路由自动注册 HEAD——
+// HEAD 打反代端点 404（GET 200）。对象端点必须同时支持 HEAD。
+func TestUploadHandler_FileGet_HeadSupported(t *testing.T) {
+	sto := &fakeUploadStorage{getObjBytes: []byte("PNG"), getObjCT: "image/png"}
+	r := newUploadRouter(sto)
+
+	req := httptest.NewRequest(http.MethodHead, "/api/v1/uploads/file/7-aff6100b.jpg", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code,
+		"HEAD 必须与 GET 同语义 200（gin 不自动挂 HEAD——运行时 smoke 实测 404），body: %s",
+		w.Body.String())
+}

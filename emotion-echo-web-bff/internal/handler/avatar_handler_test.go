@@ -466,3 +466,19 @@ func TestAvatarHandler_ResponseUsesDataWrapper(t *testing.T) {
 		"E2E-11 包装语义 + E2E-27 M1 相对路径：data.avatar 必须在且为网关相对路径。"+
 			"原实现在顶层返回绝对地址 ⇒ useApi data.data undefined ⇒ 前端 res.avatar 抛错。")
 }
+
+// E2E-27 运行时（smoke 契约 2）：gin 不会为 GET 路由自动注册 HEAD——
+// HEAD 打反代端点 404（GET 200）。对象端点必须同时支持 HEAD（工具/预取语义）。
+func TestAvatarHandler_ImageGet_HeadSupported(t *testing.T) {
+	sto := &fakeStorage{getObjBytes: []byte("PNG"), getObjCT: "image/png"}
+	r := newAvatarRouter(&fakeAvatarUserClient{}, sto)
+
+	req := httptest.NewRequest(http.MethodHead, "/api/v1/user/avatar/image/7-2cdae8ed.jpg", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code,
+		"HEAD 必须与 GET 同语义 200（gin 不自动挂 HEAD——运行时 smoke 实测 404），body: %s",
+		w.Body.String())
+}
