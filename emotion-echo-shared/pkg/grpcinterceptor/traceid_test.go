@@ -300,3 +300,46 @@ func TestTraceIDFromSW8(t *testing.T) {
 		})
 	}
 }
+
+// E2E-26 #17 / F-185：go2sky 的 sw8 第 2 段是 **base64(traceId)**（EncodeSW8
+// encodeBase64），TraceIDFromSW8 必须解码后才与 OAP traceId 同形。
+// 真实证据（2026-10-03 Kafka header 实抓）：sw8 第2段 =
+// NWNhYWIwM2RiNjIwMTFmMWIxMjczZTVlMWQ5OTkxNzE= → 明文 5caab03db62011f1b1273e5e1d999171（base64.b64decode 实核）。
+// 旧实现直接返回 parts[1]（b64 原文）⇒ 消费侧日志 trace_id 与 OAP 永远对不上（F-146 半修）。
+func TestTraceIDFromSW8_Base64EncodedSegment(t *testing.T) {
+	// go2sky EncodeSW8 产物形态（b64 第2段）
+	sw8 := "1-NWNhYWIwM2RiNjIwMTFmMWIxMjczZTVlMWQ5OTkxNzE=-NWNhYWIyODNiNjIwMTFmMWIxMjczZTVlMWQ5OTkxNzE=-0-ZW1vdGlvbi1lY2hvLWNoYXQtc3Zj-ZTkwOTA3ZDJiNjFmMTFmMWIxMjczZTVlMWQ5OTkxNzFAMTcyLjE4LjAuMTI=-a2Fma2EtcHVibGlzaA==-Y2hhdC1ldmVudHM="
+	want := "5caab03db62011f1b1273e5e1d999171"
+	got := TraceIDFromSW8(sw8)
+	if got != want {
+		t.Fatalf("TraceIDFromSW8(b64 sw8) = %q, want 明文 traceId %q —— 未 base64 解码则与 OAP 永远 join 不上", got, want)
+	}
+}
+
+func TestTraceIDFromSW8_LegacyPlainSegmentStillWorks(t *testing.T) {
+	// 兼容旧明文形态（历史测试样例）：解不出 base64 或解出非 hex → 回退原文
+	for _, sw8 := range []string{
+		"1-TRACEID-SEG-3-1-parent-ps-0.0.0.1:80",
+		"1-A-B-1-1-p-i-a",
+	} {
+		got := TraceIDFromSW8(sw8)
+		parts := splitN(sw8)
+		if got != parts[1] {
+			t.Fatalf("明文段应原样返回: got %q want %q", got, parts[1])
+		}
+	}
+}
+
+func splitN(sw8 string) []string {
+	out := []string{}
+	cur := ""
+	for _, r := range sw8 {
+		if r == '-' {
+			out = append(out, cur)
+			cur = ""
+		} else {
+			cur += string(r)
+		}
+	}
+	return append(out, cur)
+}
