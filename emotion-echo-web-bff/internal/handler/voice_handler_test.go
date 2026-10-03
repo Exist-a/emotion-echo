@@ -264,6 +264,27 @@ func TestVoiceHandler_Audio_ObjectNotFound_Returns404(t *testing.T) {
 		"storage 返 NoSuchKey 必须 404——绝不能 200 返空 body（那会让 <audio> readyState=0）")
 }
 
+// E2E-27 #12 运行时实证（2026-10-03）：minio-go v7 StatObject 对缺失对象返回的
+// 真实错误文案是 "The specified key does not exist."（包在 StatObject(key): 前缀后，
+// 无 "NoSuchKey" 字样、无 "not found" 字样）——上面既有 fixture "NoSuchKey: ..."
+// 与生产形态不符，导致 isStorageNotFoundErr 三个 hint 全不匹配 ⇒ 运行时实测 500
+// （违反 ADR-2026-09-client-object-url-bff-proxy 决策 3「对象不存在返 404」）。
+// 真实文案证据：BFF 直连响应
+// {"message":"storage get: StatObject(voice/nonexistent-xyz.webm): The specified key does not exist."}
+func TestVoiceHandler_Audio_ObjectNotFound_RealMinioGoMessage_Returns404(t *testing.T) {
+	sto := &fakeUploadStorage{
+		getObjErr: errors.New("StatObject(voice/nonexistent-xyz.webm): The specified key does not exist."),
+	}
+	r := newVoiceRouter(&fakeAIClient{}, sto)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/voice/audio/nonexistent-xyz.webm", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code,
+		"minio-go 真实缺失文案（The specified key does not exist.）必须 404——运行时实测曾 500")
+}
+
 // 防御性：拒绝任何带 .. 的 :filekey。gin 路由层负责拦 "" 与 "/"（直接在路由
 // 树层面不 match）；本 handler 兜底防御 gin 匹配的合法 URL 但 filekey 内容异常。
 func TestVoiceHandler_Audio_PathTraversal_Returns400(t *testing.T) {
