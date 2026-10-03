@@ -239,7 +239,9 @@ describe('E2E-11 · 我的空间前端契约', () => {
         return !(t.startsWith('//') || t.startsWith('*') || t.startsWith('/*'))
       })
       .join('\n')
-    for (const getter of ['getNickname', 'getAvatarPath', 'getAge', 'getId']) {
+    // getAvatarPath 自 E2E-27 M1 起被 resolveObjectUrl 包裹（见下方 M1 专属断言），
+    // 本循环只管"不许快照化"的三个裸 getter。
+    for (const getter of ['getNickname', 'getAge', 'getId']) {
       expect(
         new RegExp(`const\\s+\\w+\\s*=\\s*userStore\\.${getter}\\b`).test(code),
         `E2E-11: \`const x = userStore.${getter}\` 会快照化（Pinia 解包 ref）⇒ 值永不更新，` +
@@ -252,5 +254,36 @@ describe('E2E-11 · 我的空间前端契约', () => {
         `E2E-11: ${getter} 必须包成 computed(() => userStore.${getter}) 才能随 store 更新。`,
       ).toBe(true)
     }
+  })
+})
+
+// E2E-27 M1 / F-116：头像对象 URL 网关相对化后的前端解析接线
+// （resolveObjectUrl 共享 util 的行为契约见 app/utils/objectUrl.test.ts）
+describe('E2E-27 M1 · 头像相对 URL 解析接线', () => {
+  it('页面 import resolveObjectUrl', () => {
+    expect(
+      /import\s*\{\s*resolveObjectUrl\s*\}\s*from\s*['"]~\/utils\/objectUrl['"]/.test(pageSrc),
+      'M1: 渲染前必须解析网关相对路径（否则 <img src="/api/v1/..."> 打到 :3000 无代理 404）',
+    ).toBe(true)
+  })
+
+  it('顶部头像 avatarPath computed 必须经 resolveObjectUrl 包裹', () => {
+    expect(
+      /computed\(\s*\(\)\s*=>\s*resolveObjectUrl\(\s*userStore\.getAvatarPath/.test(pageSrc),
+      'M1: avatarPath = computed(() => resolveObjectUrl(userStore.getAvatarPath, apiBase))——' +
+        'store 存原始值（新=相对/存量=绝对），解析责任在渲染点',
+    ).toBe(true)
+  })
+
+  it('编辑弹框预览不得直绑 form.avatarPath（blob/相对双形态需解析）', () => {
+    expect(
+      /:src="avatarPreviewSrc"/.test(pageSrc),
+      'M1: 预览 <img :src="avatarPreviewSrc">——上传成功回填的是相对路径，' +
+        '直绑 form.avatarPath 会打到 :3000',
+    ).toBe(true)
+    expect(
+      /<img v-if="form\.avatarPath" :src="form\.avatarPath"/.test(pageSrc),
+      'M1: 旧直绑写法必须移除',
+    ).toBe(false)
   })
 })
