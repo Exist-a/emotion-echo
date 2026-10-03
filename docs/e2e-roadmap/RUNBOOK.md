@@ -421,6 +421,17 @@ bash scripts/query_oap.sh dry-run traces <服务名> # 只打印 payload（格�
 bash scripts/test_query_oap.sh           # 查询工具四契约（格式/容器网/dry-run/非静默）
 bash scripts/test_smoke_oap_contract.sh  # smoke 契约 9 防回退（禁宿主直连/伪签名/best-effort）
 bash scripts/test_devup_drift_check.sh   # dev-up 漂移段（含 F-181 路径可解析断言）
+
+# MinIO 对象存储（E2E-27 用；宿主 9000/9001 = 127.0.0.1 限定 D-41，匿名读桶级）
+bash scripts/check_minio_health.sh       # 4 契约健康检查（容器/liveness/console/avatars 桶）
+bash scripts/smoke_upload_minio.sh       # 上传链路 smoke（登录 Bearer + 相对 url HEAD 经网关 + mc basename）
+# 对象清单/策略探针（容器网，MC_HOST_ 免 alias）：
+#   MSYS_NO_PATHCONV=1 docker run --rm --network emotion-echo_app-network #     -e MC_HOST_dev=http://minioadmin:minioadmin@emotion-echo-minio:9000 #     quay.io/minio/mc:latest ls -r dev/avatars/
+
+# E2E-27 守卫（先红后绿的契约测试；已接 e2e-guards 守卫 15/16）
+bash scripts/test_check_minio_health.sh    # 健康守卫结构 + M2 端口 127.0.0.1 断言
+bash scripts/test_smoke_upload_minio.sh    # smoke 三缺陷防回退（cwd 文件/Bearer/MC_HOST）
+node deploy/apisix/seed_test.js            # seed 契约（含 catch-all HEAD 方法表断言）
 ```
 
 ---
