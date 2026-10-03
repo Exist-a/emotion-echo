@@ -120,6 +120,72 @@ assert s['min'] >= 0 and s['p50'] <= s['p95'], 'inconsistent summary'
 fi
 
 echo
+echo "--- 4) SSE 模式：--n 多次运行 + 逐块时间戳 + burst_ratio ---"
+# 本地起 SSE 服务器：6 个 data 块、间隔 0.6s（> 0.5s burst 窗口 ⇒ burst_ratio 应低）。
+# 契约（plan #6/#7）：--n 2 → summary.n==2（多次运行）；每轮 ttfb 有值、
+# data_chunks==6、burst_ratio < 0.8（渐进流不是整段缓冲）。
+SSE_PORT=18998
+cat > sse_test_server.py <<'PYEOF'
+import sys, time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class H(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.end_headers()
+        for i in range(6):
+            self.wfile.write(f'data: {{"choices":[{{"delta":{{"content":"c{i}"}}}}]}}\n\n'.encode())
+            self.wfile.flush()
+            time.sleep(0.6)
+    def log_message(self, *a):
+        pass
+
+HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PYEOF
+python sse_test_server.py "$SSE_PORT" >/dev/null 2>&1 &
+SERVER_PID=$!
+sse_ready=0
+for _ in $(seq 1 25); do
+  if python -c "import socket; s=socket.socket(); r=s.connect_ex(('127.0.0.1',$SSE_PORT)); s.close(); exit(0 if r==0 else 1)"; then
+    sse_ready=1; break
+  fi
+  sleep 0.2
+done
+if [ "$sse_ready" -ne 1 ]; then
+  echo "FAIL SSE：本地 SSE server 未就绪"
+  fail=$((fail + 1))
+else
+  err_file2="$(mktemp)"
+  sse_out="$(python scripts/perf_baseline.py --mode sse --url "http://127.0.0.1:$SSE_PORT/sse" --n 2 --timeout 30 2>"$err_file2")"
+  sse_rc=$?
+  if [ "$sse_rc" -eq 0 ] && printf '%s' "$sse_out" | python -c "
+import json, sys
+d = json.load(sys.stdin)
+assert d['mode'] == 'sse'
+s = d['summary']
+assert s['n'] == 2, f\"summary.n={s['n']} != 2 (--n 未生效)\"
+assert s['p50'] is not None and s['p95'] is not None, 'missing ttfb percentiles'
+for r in d['runs']:
+    assert r['ttfb_ms'] is not None, 'missing ttfb'
+    assert r['data_chunks'] == 6, f\"chunks={r['data_chunks']} != 6\"
+    assert r['burst_ratio'] is not None and r['burst_ratio'] < 0.8, (
+        f\"burst_ratio={r['burst_ratio']} (0.6s 间隔流应远小于 0.8)\")
+assert d['errors'] == [], f\"errors={d['errors']}\"
+"
+  then
+    echo "PASS SSE：n=2 + ttfb 分位数 + chunks=6 + burst_ratio<0.8"
+    pass=$((pass + 1))
+  else
+    echo "FAIL SSE：rc=$sse_rc out=[$(printf '%s' "$sse_out" | head -c 300)] err=[$(head -c 300 "$err_file2")]"
+    fail=$((fail + 1))
+  fi
+  rm -f "$err_file2"
+fi
+rm -f sse_test_server.py
+SERVER_PID=""
+
+echo
 echo "PASS: $pass  FAIL: $fail"
 
 if [ "$fail" -gt 0 ]; then
