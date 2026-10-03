@@ -989,3 +989,10 @@ Stage 33 P0 修复+BFF净化 █████████████████
 ### 决策 38：端侧化记忆/摘要存储 = **随 D-26.1 联动（a）服务端生成下发**（2026-09-28 用户拍板 · D-26.5）
 
 > 🟢 **accepted**（2026-09-28 用户拍板；详见 ADR `docs/architecture/adr/adr-2026-09-on-device-memory-storage.md`）。D-26.1=(a) ⇒ 服务端；D-26.1=(b) ⇒ 本地（联动当前 D-26.1=(a) 拍板）。
+
+### 决策 39：XTTS 并发解串行 = **线程池卸载（synth_pool），否决进程级多 worker**（2026-10-03 · E2E-28 C4 · D-43 落地）
+
+> 🟢 **accepted**（2026-10-03 执行者按 RUNBOOK §8 择优（D-43 已由用户裁定"多 worker 全做"的目标=消除排队；实现路径按执行期发现的**深层根因**调整），详见 ADR `docs/architecture/adr/adr-2026-10-xtts-synth-threadpool.md`）。
+>
+> **根因修正**：账本 F-136 原记"uvicorn 单 worker 串行"是表象；E2E-28 #11 实测 + server.py 回读定位真根因 = **async handler 在事件循环里直调阻塞推理（13~30s）⇒ 循环锁死**。
+> **取舍**：线程池（torch CPU 算子释放 GIL，零内存）✓；进程级多 worker 每 worker ~2.5GiB，`.wslconfig` 8GB + 19 容器稳态 ~6G ⇒ 击穿前科（2026-09-22 冻结三连）✗。
