@@ -1,0 +1,45 @@
+{
+  "mode": "ladder",
+  "url": "http://localhost:19080/api/v1/ai/stream",
+  "levels": [
+    {
+      "concurrency": 1,
+      "requested": 3,
+      "samples_ms": [
+        1407.55,
+        1006.933,
+        768.125
+      ],
+      "summary": {
+        "n": 3,
+        "min": 768.125,
+        "max": 1407.55,
+        "mean": 1060.869,
+        "p50": 1006.933,
+        "p95": 1367.488
+      },
+      "errors": []
+    },
+    {
+      "concurrency": 2,
+      "requested": 3,
+      "samples_ms": [
+        663.484,
+        976.417,
+        772.396
+      ],
+      "summary": {
+        "n": 3,
+        "min": 663.484,
+        "max": 976.417,
+        "mean": 804.099,
+        "p50": 772.396,
+        "p95": 956.015
+      },
+      "errors": []
+    }
+  ],
+  "errors": [],
+  "tool": "perf_baseline/1",
+  "ts": "2026-10-03T18:43:38+0800"
+}

@@ -1,0 +1,38 @@
+{
+  "mode": "ladder",
+  "url": "http://localhost:19080/api/v1/ai/stream",
+  "levels": [
+    {
+      "concurrency": 1,
+      "requested": 2,
+      "samples_ms": [],
+      "summary": {
+        "n": 0
+      },
+      "errors": [
+        "HTTP 401",
+        "HTTP 401"
+      ]
+    },
+    {
+      "concurrency": 2,
+      "requested": 2,
+      "samples_ms": [],
+      "summary": {
+        "n": 0
+      },
+      "errors": [
+        "HTTP 401",
+        "HTTP 401"
+      ]
+    }
+  ],
+  "errors": [
+    "HTTP 401",
+    "HTTP 401",
+    "HTTP 401",
+    "HTTP 401"
+  ],
+  "tool": "perf_baseline/1",
+  "ts": "2026-10-03T18:44:29+0800"
+}

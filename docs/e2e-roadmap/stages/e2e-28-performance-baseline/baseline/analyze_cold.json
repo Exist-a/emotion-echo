@@ -1,0 +1,19 @@
+{
+  "mode": "http",
+  "url": "http://emotion-llm-service:8000/analyze",
+  "requested": 1,
+  "samples_ms": [
+    271.269
+  ],
+  "summary": {
+    "n": 1,
+    "min": 271.269,
+    "max": 271.269,
+    "mean": 271.269,
+    "p50": 271.269,
+    "p95": 271.269
+  },
+  "errors": [],
+  "tool": "perf_baseline/1",
+  "ts": "2026-10-03T17:54:45+0800"
+}

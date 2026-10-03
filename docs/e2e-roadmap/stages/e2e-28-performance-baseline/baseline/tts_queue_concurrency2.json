@@ -1,0 +1,26 @@
+{
+  "mode": "ladder",
+  "url": "http://localhost:19080/api/v1/tts/phonemes",
+  "levels": [
+    {
+      "concurrency": 2,
+      "requested": 2,
+      "samples_ms": [
+        12221.561,
+        23267.01
+      ],
+      "summary": {
+        "n": 2,
+        "min": 12221.561,
+        "max": 23267.01,
+        "mean": 17744.286,
+        "p50": 17744.286,
+        "p95": 22714.737
+      },
+      "errors": []
+    }
+  ],
+  "errors": [],
+  "tool": "perf_baseline/1",
+  "ts": "2026-10-03T18:16:53+0800"
+}

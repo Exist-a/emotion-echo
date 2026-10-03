@@ -1,0 +1,345 @@
+{
+  "mode": "sse",
+  "url": "http://localhost:19080/api/v1/ai/stream",
+  "requested": 5,
+  "runs": [
+    {
+      "ttfb_ms": 2062.1,
+      "first_content_ms": 2062.1,
+      "total_ms": 2239.2,
+      "data_chunks": 12,
+      "burst_ratio": 1.0,
+      "error": null,
+      "chunks": [
+        {
+          "t_ms": 2062.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"}}]}"
+        },
+        {
+          "t_ms": 2115.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"呀\"}}]}"
+        },
+        {
+          "t_ms": 2128.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2128.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"很高兴\"}}]}"
+        },
+        {
+          "t_ms": 2153.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"在这里\"}}]}"
+        },
+        {
+          "t_ms": 2153.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"遇见\"}}]}"
+        },
+        {
+          "t_ms": 2161.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}"
+        },
+        {
+          "t_ms": 2162.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2174.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"我在\"}}]}"
+        },
+        {
+          "t_ms": 2194.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"听\"}}]}"
+        },
+        {
+          "t_ms": 2197.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 2217.5,
+          "line": "data: [DONE]"
+        }
+      ]
+    },
+    {
+      "ttfb_ms": 579.8,
+      "first_content_ms": 579.8,
+      "total_ms": 689.9,
+      "data_chunks": 14,
+      "burst_ratio": 1.0,
+      "error": null,
+      "chunks": [
+        {
+          "t_ms": 579.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"}}]}"
+        },
+        {
+          "t_ms": 631.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 643.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"我\"}}]}"
+        },
+        {
+          "t_ms": 644.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"在这儿\"}}]}"
+        },
+        {
+          "t_ms": 644.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"呢\"}}]}"
+        },
+        {
+          "t_ms": 658.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 658.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不用\"}}]}"
+        },
+        {
+          "t_ms": 659.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"急\"}}]}"
+        },
+        {
+          "t_ms": 680.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 680.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"慢慢\"}}]}"
+        },
+        {
+          "t_ms": 681.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"来\"}}]}"
+        },
+        {
+          "t_ms": 685.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"就好\"}}]}"
+        },
+        {
+          "t_ms": 685.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 686.5,
+          "line": "data: [DONE]"
+        }
+      ]
+    },
+    {
+      "ttfb_ms": 652.7,
+      "first_content_ms": 652.7,
+      "total_ms": 812.5,
+      "data_chunks": 16,
+      "burst_ratio": 1.0,
+      "error": null,
+      "chunks": [
+        {
+          "t_ms": 652.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"}}]}"
+        },
+        {
+          "t_ms": 757.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"呀\"}}]}"
+        },
+        {
+          "t_ms": 757.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 758.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"我在\"}}]}"
+        },
+        {
+          "t_ms": 758.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"呢\"}}]}"
+        },
+        {
+          "t_ms": 759.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 759.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"愿意\"}}]}"
+        },
+        {
+          "t_ms": 759.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"听\"}}]}"
+        },
+        {
+          "t_ms": 762.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你说\"}}]}"
+        },
+        {
+          "t_ms": 763.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"说\"}}]}"
+        },
+        {
+          "t_ms": 776.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"今天\"}}]}"
+        },
+        {
+          "t_ms": 776.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"想\"}}]}"
+        },
+        {
+          "t_ms": 776.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"聊\"}}]}"
+        },
+        {
+          "t_ms": 789.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"点什么\"}}]}"
+        },
+        {
+          "t_ms": 803.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 812.3,
+          "line": "data: [DONE]"
+        }
+      ]
+    },
+    {
+      "ttfb_ms": 551.6,
+      "first_content_ms": 551.6,
+      "total_ms": 660.6,
+      "data_chunks": 14,
+      "burst_ratio": 1.0,
+      "error": null,
+      "chunks": [
+        {
+          "t_ms": 551.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"}}]}"
+        },
+        {
+          "t_ms": 591.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 606.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"很高兴\"}}]}"
+        },
+        {
+          "t_ms": 619.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"见到\"}}]}"
+        },
+        {
+          "t_ms": 619.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}"
+        },
+        {
+          "t_ms": 619.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 633.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"我\"}}]}"
+        },
+        {
+          "t_ms": 633.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"在这儿\"}}]}"
+        },
+        {
+          "t_ms": 645.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 645.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"慢慢\"}}]}"
+        },
+        {
+          "t_ms": 645.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"说\"}}]}"
+        },
+        {
+          "t_ms": 659.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"就好\"}}]}"
+        },
+        {
+          "t_ms": 659.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 660.5,
+          "line": "data: [DONE]"
+        }
+      ]
+    },
+    {
+      "ttfb_ms": 761.3,
+      "first_content_ms": 761.3,
+      "total_ms": 918.0,
+      "data_chunks": 13,
+      "burst_ratio": 1.0,
+      "error": null,
+      "chunks": [
+        {
+          "t_ms": 761.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"}}]}"
+        },
+        {
+          "t_ms": 853.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 854.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"我在\"}}]}"
+        },
+        {
+          "t_ms": 854.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"呢\"}}]}"
+        },
+        {
+          "t_ms": 854.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"——\"}}]}"
+        },
+        {
+          "t_ms": 856.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"今天\"}}]}"
+        },
+        {
+          "t_ms": 873.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"想\"}}]}"
+        },
+        {
+          "t_ms": 873.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"从\"}}]}"
+        },
+        {
+          "t_ms": 899.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"哪儿\"}}]}"
+        },
+        {
+          "t_ms": 899.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"说起\"}}]}"
+        },
+        {
+          "t_ms": 899.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"都可以\"}}]}"
+        },
+        {
+          "t_ms": 916.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 917.9,
+          "line": "data: [DONE]"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "n": 5,
+    "min": 551.6,
+    "max": 2062.1,
+    "mean": 921.5,
+    "p50": 652.7,
+    "p95": 1801.94
+  },
+  "burst_window_s": 0.5,
+  "errors": [],
+  "tool": "perf_baseline/1",
+  "ts": "2026-10-03T18:01:45+0800"
+}

@@ -4,7 +4,7 @@ title: 性能与延迟基线
 type: verification
 status: in-progress
 created: 2026-10-03
-last-updated: 2026-10-03（开工：M1/M2 双裁定已落 D-42/D-43——只落档不门禁 / 双端点+多 worker 全做）
+last-updated: 2026-10-03（**收口未完成——用户指令停工留档**（原拟 partial；未完成清单见 report §9）：20/20 有结论 = 19 PASS + 1 FAIL-已分类（#4）；F-136/F-134/F-26 闭环；**F-135 未实施 ⇒ partial**（report §6 升级项①）；M1/M2 → D-42/D-43；新账 F-190~194；详见 report.md）
 depends-on: [e2e-10, e2e-17, e2e-22]
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §4

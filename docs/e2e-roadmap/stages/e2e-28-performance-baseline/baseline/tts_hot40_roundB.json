@@ -1,0 +1,24 @@
+{
+  "mode": "http",
+  "url": "http://localhost:19080/api/v1/tts/phonemes",
+  "requested": 5,
+  "samples_ms": [
+    14670.876,
+    23559.578,
+    27677.528,
+    20130.17
+  ],
+  "summary": {
+    "n": 4,
+    "min": 14670.876,
+    "max": 27677.528,
+    "mean": 21509.538,
+    "p50": 21844.874,
+    "p95": 27059.835
+  },
+  "errors": [
+    "ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。"
+  ],
+  "tool": "perf_baseline/1",
+  "ts": "2026-10-03T18:08:45+0800"
+}

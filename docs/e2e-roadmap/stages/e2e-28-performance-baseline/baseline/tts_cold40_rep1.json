@@ -1,0 +1,19 @@
+{
+  "mode": "http",
+  "url": "http://localhost:19080/api/v1/tts/phonemes",
+  "requested": 1,
+  "samples_ms": [
+    14045.524
+  ],
+  "summary": {
+    "n": 1,
+    "min": 14045.524,
+    "max": 14045.524,
+    "mean": 14045.524,
+    "p50": 14045.524,
+    "p95": 14045.524
+  },
+  "errors": [],
+  "tool": "perf_baseline/1",
+  "ts": "2026-10-03T18:22:26+0800"
+}
