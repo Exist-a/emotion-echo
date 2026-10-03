@@ -197,6 +197,8 @@ services:
     # ⚠ 冲突注记（E2E-26 第二方核对建议）：obs-mock-receiver（profile obs）
     #   同用宿主 18080（0.0.0.0:18080）——两 profile 同时启用时 Docker 端口
     #   绑定撞车，届时须改 mock 宿主端口。
+    # ✅ 已解决（E2E-28 开工 2026-10-03）：mock 宿主端口改 127.0.0.1:18090，
+    #   本映射保留；守卫 test_obs_healthchecks.sh 新增"宿主端口全局唯一"契约防复发。
     expose:
       - "8080"
     ports:
@@ -475,7 +477,12 @@ services:
       - ./obs-mock-receiver/receiver.py:/app/receiver.py:ro
       - ./tmp/obs-mock-receiver:/data
     ports:
-      - "18080:8080"
+      # E2E-28（2026-10-03）：18080 → 127.0.0.1:18090。E2E-26 D-38 已把 18080
+      # 给 sw-ui（127.0.0.1 限定），本服务原绑 0.0.0.0:18080 ⇒ --profile dev+obs
+      # 同启必撞车（E2E-28 开工实测 Bind failed）。改 18090 + 127.0.0.1 限定
+      # （Stage 33 端口收紧同型）。容器网内访问不受影响（mock-webhook 的
+      # prometheus 告警走容器网 receiver:8080，与宿主端口无关）。
+      - "127.0.0.1:18090:8080"
     networks:
       - app-network
 

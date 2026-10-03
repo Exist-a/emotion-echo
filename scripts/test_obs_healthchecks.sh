@@ -137,6 +137,46 @@ for svc in "${ONE_SHOT[@]}"; do
 done
 
 echo
+echo "--- 宿主端口冲突检测（E2E-28 实案：--profile dev+obs 同启时撞车）---"
+# 实案：E2E-26 D-38 给 sw-ui 加了 127.0.0.1:18080，而 obs-mock-receiver（profile obs）
+# 本来就绑 18080:8080 —— infra.yml 注记当时写"届时须改"，E2E-28 开工启用 obs
+# profile 即撞车（Bind for 127.0.0.1:18080 failed: port is already allocated）。
+# 契约：infra.yml 全部显式宿主端口映射（ip:host:container 或 host:container）
+# 的宿主端口全局唯一；随机宿主端口（单段写法）不参与判定。
+dups="$(python - "$INFRA" <<'PY'
+import re, sys, collections
+text = open(sys.argv[1], encoding='utf-8').read()
+hosts, in_ports = [], False
+for line in text.splitlines():
+    stripped = line.split('#')[0].rstrip()
+    if not stripped.strip():
+        continue
+    if re.match(r'^\s*ports:', stripped):
+        in_ports = True
+        continue
+    if in_ports:
+        m = re.match(r'^\s+-\s+"([^"]+)"', stripped)
+        if m:
+            parts = m.group(1).split(':')
+            if len(parts) == 3:
+                hosts.append(parts[1])
+            elif len(parts) == 2:
+                hosts.append(parts[0])
+        elif not stripped.lstrip().startswith('-'):
+            in_ports = False
+cnt = collections.Counter(hosts)
+print(','.join(f'{p}x{n}' for p, n in sorted(cnt.items()) if n > 1))
+PY
+)"
+if [ -n "$dups" ]; then
+  echo "FAIL 宿主端口冲突: $dups —— 两服务绑同一宿主端口，profile 同启必撞车"
+  fail=$((fail + 1))
+else
+  echo "PASS 宿主端口全局唯一（无冲突）"
+  pass=$((pass + 1))
+fi
+
+echo
 echo "PASS: $pass  FAIL: $fail"
 
 if [ "$fail" -gt 0 ]; then
