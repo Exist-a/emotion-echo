@@ -220,6 +220,21 @@ func isStorageNotFoundErr(err error) bool {
 	return false
 }
 
+// isStorageUnavailableErr 判存储**不可用**（连接拒绝 / 超时 / deadline）——与
+// handler 契约 "Storage 未配置 → 503" 同语义：存储不可用时上传必须 503 快速失败，
+// 而非挂起（E2E-27 #4：裸 ctx 无 deadline + minio-go 重试 ⇒ 运行时挂起 >15s）
+// 或泛 500。连接类 hint 复用 isConnectionErr；deadline/cancel 属本函数专有。
+func isStorageUnavailableErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if isConnectionErr(err) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "context deadline exceeded") || strings.Contains(msg, "context canceled")
+}
+
 // isConnectionErr 简单判断网络/连接类错误（ai-svc 不可达）
 func isConnectionErr(err error) bool {
 	if err == nil {

@@ -278,7 +278,11 @@ func TestUploadHandler_ImageMimeMismatch_Returns415(t *testing.T) {
 	assert.Equal(t, http.StatusUnsupportedMediaType, w.Code)
 }
 
-func TestUploadHandler_StorageError_Returns500(t *testing.T) {
+// E2E-27 #4 契约演化（2026-10-03）：存储**连接/超时类**错误从 500 改为 503——
+// 与 handler 契约 "Storage 未配置 → 503" 同属存储不可用语义（plan #4 通过标准
+// "停机快速失败 503"）。原测试用例 fixture "S3 timeout" 正属连接类，期望随之
+// 演化；**非连接类**存储错误仍必须 500（下例保留该分支覆盖）。
+func TestUploadHandler_StorageTimeout_Returns503(t *testing.T) {
 	sto := &fakeUploadStorage{err: errors.New("S3 timeout")}
 	r := newUploadRouter(sto)
 
@@ -289,5 +293,22 @@ func TestUploadHandler_StorageError_Returns500(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code,
+		"连接/超时类存储错误必须 503（存储不可用），body: %s", w.Body.String())
+}
+
+// 非连接类存储错误（如配额/策略拒绝）仍走 500——503 分支不得吞掉泛错误。
+func TestUploadHandler_StorageBusinessError_Returns500(t *testing.T) {
+	sto := &fakeUploadStorage{err: errors.New("quota exceeded for bucket")}
+	r := newUploadRouter(sto)
+
+	body, ct := multipartBuild(t, "x.jpg", "image/jpeg", "x")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/image", body)
+	req.Header.Set("Content-Type", ct)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code,
+		"非连接类存储错误必须 500，body: %s", w.Body.String())
 }

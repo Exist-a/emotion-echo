@@ -17,9 +17,11 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/session"
@@ -96,9 +98,17 @@ func (h *AvatarHandler) upload(c *gin.Context) {
 	defer file.Close()
 
 	// 4. 写 MinIO
+	// E2E-27 #4：ctx 必须带 3s deadline——MinIO 停机时快速失败（运行时实证
+	// 裸 request ctx 无 deadline ⇒ curl 15s 挂起 000）；连接类失败映射 503。
+	putCtx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
 	objectKey := storage.ObjectKey(uid, fileHeader.Filename)
-	publicURL, err := h.storage.PutObject(c.Request.Context(), objectKey, file, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
+	publicURL, err := h.storage.PutObject(putCtx, objectKey, file, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
 	if err != nil {
+		if isStorageUnavailableErr(err) {
+			Fail(c, http.StatusServiceUnavailable, 1, "storage unavailable: "+err.Error())
+			return
+		}
 		Fail(c, http.StatusInternalServerError, 1, "storage put: "+err.Error())
 		return
 	}

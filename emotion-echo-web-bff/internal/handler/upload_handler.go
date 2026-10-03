@@ -22,6 +22,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -156,8 +158,16 @@ func (h *UploadHandler) upload(c *gin.Context) {
 	defer file.Close()
 
 	objectKey := uploadObjectKey(uid, kind, fileHeader.Filename, contentType)
-	publicURL, err := h.storage.PutObject(c.Request.Context(), objectKey, file, fileHeader.Size, contentType)
+	// E2E-27 #4：ctx 必须带 3s deadline——MinIO 停机时快速失败（运行时实证
+	// 裸 request ctx 无 deadline ⇒ curl 15s 挂起 000）；连接类失败映射 503。
+	putCtx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
+	publicURL, err := h.storage.PutObject(putCtx, objectKey, file, fileHeader.Size, contentType)
 	if err != nil {
+		if isStorageUnavailableErr(err) {
+			Fail(c, http.StatusServiceUnavailable, 1, "storage unavailable: "+err.Error())
+			return
+		}
 		Fail(c, http.StatusInternalServerError, 1, "storage put: "+err.Error())
 		return
 	}

@@ -306,6 +306,28 @@ func TestIsStorageNotFoundErr_HintTable(t *testing.T) {
 	}
 }
 
+// E2E-27 #4：isStorageUnavailableErr hint 分类表——连接类/deadline 必须判不可用
+// （→503），非连接类错误不得误判（仍走 500）。
+func TestIsStorageUnavailableErr_HintTable(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"连接拒绝", errors.New("dial tcp 127.0.0.1:9000: connect: connection refused"), true},
+		{"deadline 超时（3s ctx 触发的真实形态）", errors.New("PutObject: context deadline exceeded"), true},
+		{"context canceled", errors.New("operation was canceled: context canceled"), true},
+		{"DNS 失败", errors.New("dial tcp: lookup emotion-echo-minio: no such host"), true},
+		{"业务类错误不得误判（NoSuchKey 属 404 语义）", errors.New("StatObject(k): The specified key does not exist."), false},
+		{"nil 错误", nil, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isStorageUnavailableErr(tc.err))
+		})
+	}
+}
+
 // 防御性：拒绝任何带 .. 的 :filekey。gin 路由层负责拦 "" 与 "/"（直接在路由
 // 树层面不 match）；本 handler 兜底防御 gin 匹配的合法 URL 但 filekey 内容异常。
 func TestVoiceHandler_Audio_PathTraversal_Returns400(t *testing.T) {
