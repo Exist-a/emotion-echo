@@ -107,14 +107,18 @@ var wantRoutes = gin.RoutesInfo{
 	// E2E-F-127：带字符级时间戳的 TTS 端点（plan §2.A / D-03 真口型同步）
 	{Method: "POST", Path: "/api/v1/tts/phonemes"},
 
-	// ----- upload_handler.go (1 条) -----
+	// ----- upload_handler.go (2 条) -----
 	{Method: "POST", Path: "/api/v1/uploads/:kind"},
+	// E2E-27 M1：uploads 反代端点（相对 url 的服务端落点）
+	{Method: "GET", Path: "/api/v1/uploads/file/:filekey"},
 
 	// ----- voice_handler.go (Sprint 1 PR-4c-1, 1 条) -----
 	{Method: "POST", Path: "/api/v1/voice/upload"},
 
-	// ----- avatar_handler.go (Sprint 1 PR-4c-2, 1 条) -----
+	// ----- avatar_handler.go (Sprint 1 PR-4c-2 + E2E-27 M1, 2 条) -----
 	{Method: "POST", Path: "/api/v1/user/avatar"},
+	// E2E-27 M1：avatar 反代端点（相对 avatar url 的服务端落点）
+	{Method: "GET", Path: "/api/v1/user/avatar/image/:filekey"},
 }
 
 // wantRoutesWithEmotionQ 是当 svc.EmotionQ != nil 时额外注册的 3 条。
@@ -336,6 +340,7 @@ var knownPathPrefixes = []string{
 	"/api/v1/multimodal/",
 	"/api/v1/tts/",
 	"/api/v1/uploads/:kind",
+	"/api/v1/uploads/file/:filekey", // E2E-27 M1: uploads 反代端点
 	"/api/v1/voice/",      // Sprint 1 PR-4c-1: voice upload
 	"/api/v1/user/avatar", // Sprint 1 PR-4c-2: avatar upload
 	"/api/v1/emotion/",    // 仅当 EmotionQ != nil 时
