@@ -268,8 +268,11 @@ services:
     expose:
       - "9000"
     ports:
-      - "9000:9000"   # dev 暴露给宿主机，BFF 通过 容器名:9000 访问
-      - "9001:9001"   # dev 控制台 http://localhost:9001
+      # E2E-27 M2 / D-41（2026-10-03）：127.0.0.1 限定——桶级匿名 download 意味着
+      # 0.0.0.0 绑定 = 局域网任意机器可绕网关 JWT 直读全部对象（含 voice 音频）。
+      # 宿主浏览器/BFF 走 localhost 不受影响；容器网走容器名:9000（expose），与本映射无关。
+      - "127.0.0.1:9000:9000"   # S3 API（dev 仅本机；D-38 sw-ui 同型处置）
+      - "127.0.0.1:9001:9001"   # dev 控制台 http://localhost:9001（仅本机）
     networks:
       - app-network
     healthcheck:
