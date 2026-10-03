@@ -91,6 +91,9 @@ assert_contains "$SCRIPT" 'auth/login' "缺陷2: 开头登录取 token"
 assert_contains "$SCRIPT" 'Authorization: Bearer' "缺陷2b: 上传请求带 Bearer"
 # 缺陷 3：docker run 裸 mc ls 无 alias ⇒ 空输出 rc=0 ⇒ 契约 3 永远 FAIL（从未真验过）
 assert_contains "$SCRIPT" 'MC_HOST_' "缺陷3: mc 走 MC_HOST_ 环境变量（免 alias 静默空列）"
+# 缺陷 3b（运行时修正）：mc 对指定前缀显示相对 key（无 uploads/ 段）——断言必须
+# 用本轮对象 basename 精确匹配，而非裸 uid-pattern 把历史文件当本轮证据
+assert_contains "$SCRIPT" 'basename "\$URL"' "缺陷3b: 契约3 用本轮 URL basename 精确匹配（非任意历史文件）"
 
 echo
 echo "--- 7) bash 语法合法 ---"
