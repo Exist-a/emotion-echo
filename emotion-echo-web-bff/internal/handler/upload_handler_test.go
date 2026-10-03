@@ -151,7 +151,10 @@ func TestUploadHandler_Image_Success(t *testing.T) {
 	data, ok := got["data"].(map[string]any)
 	require.True(t, ok, "响应必须含 data 对象（resp.go OK() 契约），实际：%v", got)
 	assert.Equal(t, "image", data["kind"])
-	assert.Equal(t, "http://localhost:9000/avatars/uploads/7-abc.jpg", data["url"])
+	// E2E-27 M1 / F-116：url 改网关相对路径（ADR-2026-09 决策 1）——
+	// sha8("photo.jpg")=aff6100b，key=uploads/7-aff6100b.jpg
+	assert.Equal(t, "/api/v1/uploads/file/7-aff6100b.jpg", data["url"],
+		"响应 url 必须是网关相对路径（不得下发 PublicBaseURL 绝对地址）")
 	assert.Equal(t, "image/jpeg", data["mime"])
 	// multipart part 边界可能让 fileHeader.Size 比原始字符串多 1-2 字节（CRLF）
 	// 用 >= 而非精确等号
@@ -311,4 +314,76 @@ func TestUploadHandler_StorageBusinessError_Returns500(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code,
 		"非连接类存储错误必须 500，body: %s", w.Body.String())
+}
+// E2E-27 M1：GET /api/v1/uploads/file/:filekey 反代端点（ADR-2026-09 决策 1/3
+// 的 uploads 落地——voice/avatar 同型）。相对 url 的消费方：ChatFile.getFullUrl
+//（已兼容 /api/ 前缀）与 chat 附件消息持久化。
+func TestUploadHandler_Register_PathContract(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	(&UploadHandler{storage: &fakeUploadStorage{}}).Register(r)
+	assert.Equal(t, 2, len(r.Routes()), "应注册 POST uploads/:kind + GET file 反代两条路由")
+	methods := map[string]string{}
+	for _, ri := range r.Routes() {
+		methods[ri.Path] = ri.Method
+	}
+	assert.Equal(t, http.MethodPost, methods["/api/v1/uploads/:kind"], "POST 上传必须在位")
+	assert.Equal(t, http.MethodGet, methods["/api/v1/uploads/file/:filekey"],
+		"GET file 反代端点必须在位（相对 url 的唯一服务端落点）")
+}
+
+func TestUploadHandler_FileGet_Success(t *testing.T) {
+	sto := &fakeUploadStorage{getObjBytes: []byte("FILE-BYTES"), getObjCT: "image/png"}
+	r := newUploadRouter(sto)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/uploads/file/7-aff6100b.jpg", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+	assert.Equal(t, "image/png", w.Header().Get("Content-Type"), "必须回读真实 Content-Type")
+	assert.Equal(t, []byte("FILE-BYTES"), w.Body.Bytes(), "body 必须等于 storage 流")
+	assert.Equal(t, "uploads/7-aff6100b.jpg", sto.gotGetObjKey, "handler 补 uploads/ 前缀")
+}
+
+func TestUploadHandler_FileGet_ObjectNotFound_Returns404(t *testing.T) {
+	sto := &fakeUploadStorage{getObjErr: errors.New("StatObject(uploads/x.jpg): The specified key does not exist.")}
+	r := newUploadRouter(sto)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/uploads/file/missing.jpg", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code,
+		"缺失对象必须 404（ADR 决策 3），body: %s", w.Body.String())
+	// 防 gin 路由级空 404 假通过（端点未注册时状态码同样是 404）
+	assert.Contains(t, w.Body.String(), `"code"`, "必须是 handler 的 404 JSON 响应")
+}
+
+func TestUploadHandler_FileGet_PathTraversal_Returns400(t *testing.T) {
+	sto := &fakeUploadStorage{getObjBytes: []byte("x")}
+	r := newUploadRouter(sto)
+
+	for _, key := range []string{"..vhidden", "abc..xyz"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/uploads/file/"+key, nil)
+		req.Header.Set("X-User-Id", "7")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code, "filekey 含 .. 必须 400（key=%s）", key)
+	}
+	assert.Empty(t, sto.gotGetObjKey, "被拦截的非法 key 不应触达 storage")
+}
+
+func TestUploadHandler_FileGet_NilStorage_Returns503(t *testing.T) {
+	r := newUploadRouter(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/uploads/file/7-x.jpg", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code,
+		"storage 未配置必须 503，body: %s", w.Body.String())
 }
