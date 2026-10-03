@@ -193,4 +193,4 @@ if [ "$fail" -gt 0 ]; then
   exit 1
 fi
 
-echo "GREEN：percentile 官方方法 / 负向非零退出 / 正向 N=5 测量 三契约全过"
+echo "GREEN：percentile 官方方法 / 负向非零退出 / 正向 N=5 测量 / SSE 多轮+burst 四契约全过"

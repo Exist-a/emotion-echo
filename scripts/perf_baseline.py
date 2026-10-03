@@ -153,43 +153,60 @@ def run_ladder(args: argparse.Namespace) -> dict:
 
 
 def run_sse(args: argparse.Namespace) -> dict:
-    """SSE 流式测量：TTFT + 逐块时间戳 + 突发占比（plan #6/#7）。"""
-    req = build_request(args)
-    start = time.perf_counter()
-    chunk_times: list[dict] = []
-    error: str | None = None
-    try:
-        with urllib.request.urlopen(req, timeout=args.timeout) as resp:
-            for raw in resp:
-                now = time.perf_counter() - start
-                line = raw.decode("utf-8", "replace").strip()
-                if not line:
-                    continue
-                chunk_times.append({"t_ms": round(now * 1000, 1), "line": line[:200]})
-    except Exception as e:
-        error = f"{type(e).__name__}: {e}"
+    """SSE 流式测量（plan #6/#7）：--n 轮，每轮 TTFT + 逐块时间戳 + 突发占比。
 
-    data_lines = [c for c in chunk_times if c["line"].startswith("data:")]
-    ttfb_ms = data_lines[0]["t_ms"] if data_lines else None
-    first_content = next((c["t_ms"] for c in data_lines
-                          if '"delta"' in c["line"]), None)
-    burst_ratio = None
-    if data_lines and ttfb_ms is not None:
-        cutoff = ttfb_ms + BURST_WINDOW_S * 1000
-        in_window = sum(1 for c in data_lines if c["t_ms"] <= cutoff)
-        burst_ratio = round(in_window / len(data_lines), 3)
+    输出：runs[]（逐轮明细）+ summary（各轮 ttfb_ms 的分位数）+ errors 汇总。
+    """
+    runs: list[dict] = []
+    all_errors: list[str] = []
+    for _ in range(args.n):
+        req = build_request(args)
+        start = time.perf_counter()
+        chunk_times: list[dict] = []
+        error: str | None = None
+        try:
+            with urllib.request.urlopen(req, timeout=args.timeout) as resp:
+                for raw in resp:
+                    now = time.perf_counter() - start
+                    line = raw.decode("utf-8", "replace").strip()
+                    if not line:
+                        continue
+                    chunk_times.append({"t_ms": round(now * 1000, 1),
+                                        "line": line[:200]})
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+
+        data_lines = [c for c in chunk_times if c["line"].startswith("data:")]
+        ttfb_ms = data_lines[0]["t_ms"] if data_lines else None
+        first_content = next((c["t_ms"] for c in data_lines
+                              if '"delta"' in c["line"]), None)
+        burst_ratio = None
+        if data_lines and ttfb_ms is not None:
+            cutoff = ttfb_ms + BURST_WINDOW_S * 1000
+            in_window = sum(1 for c in data_lines if c["t_ms"] <= cutoff)
+            burst_ratio = round(in_window / len(data_lines), 3)
+        if error is not None:
+            all_errors.append(error)
+        runs.append({
+            "ttfb_ms": ttfb_ms,
+            "first_content_ms": first_content,
+            "total_ms": round((time.perf_counter() - start) * 1000, 1),
+            "data_chunks": len(data_lines),
+            # plan #7 判定输入：>=0.8 ⇒ 整段缓冲（伪流式）疑点成立
+            "burst_ratio": burst_ratio,
+            "error": error,
+            "chunks": chunk_times,
+        })
+
+    ttfbs = [r["ttfb_ms"] for r in runs if r["ttfb_ms"] is not None]
     return {
         "mode": "sse",
         "url": args.url,
-        "ttfb_ms": ttfb_ms,
-        "first_content_ms": first_content,
-        "total_ms": round((time.perf_counter() - start) * 1000, 1),
-        "data_chunks": len(data_lines),
-        # plan #7 判定输入：>=0.8 ⇒ 整段缓冲（伪流式）疑点成立
-        "burst_ratio": burst_ratio,
+        "requested": args.n,
+        "runs": runs,
+        "summary": summarize([float(t) for t in ttfbs]),
         "burst_window_s": BURST_WINDOW_S,
-        "chunks": chunk_times,
-        "errors": [error] if error else [],
+        "errors": all_errors,
     }
 
 
