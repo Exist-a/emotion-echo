@@ -105,3 +105,15 @@ func TestFileSourceURL_Rewrite(t *testing.T) {
 	assert.Equal(t, "http://emotion-echo-minio:9000/avatars/uploads/u1-11111111.pdf", got)
 	assert.Equal(t, "https://example.com/other", fileSourceURL("https://example.com/other", cfg))
 }
+
+// E2E-27 M1 / F-c：新落库形态 = 网关相对路径（/api/v1/uploads/file/<name>）。
+// fileSourceURL 必须同样直译为容器网 MinIO 内部端点——llm-service 的
+// FILE_FETCH_ALLOWLIST（file_context.py:24）只放行
+// emotion-echo-minio:9000 / localhost:9000 / 127.0.0.1:9000：
+// 相对路径原样返回 ⇒ 下游白名单拒绝 ⇒ 附件降级（M1 范围的硬约束，plan #16）。
+func TestFileSourceURL_RelativeNewForm_RewritesToInternal(t *testing.T) {
+	cfg := minioTestConfig()
+	got := fileSourceURL("/api/v1/uploads/file/u1-11111111.pdf", cfg)
+	assert.Equal(t, "http://emotion-echo-minio:9000/avatars/uploads/u1-11111111.pdf", got,
+		"相对新形态必须直译内部端点（bucket 用 cfg.MinIO.Bucket）")
+}
