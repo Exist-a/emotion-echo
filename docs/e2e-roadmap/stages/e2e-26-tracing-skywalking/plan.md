@@ -2,9 +2,9 @@
 stage: e2e-26
 title: 链路追踪 SkyWalking（sw8 传播 + OAP 查询 + UI 可视化）
 type: verification
-status: pending
+status: done
 created: 2026-10-02
-last-updated: 2026-10-02（建档：计划期调研完成，20 测试点，2 个 [M] 决策点）
+last-updated: 2026-10-03（**done**：20/20 PASS——M1/M2a/M2b 三裁决落地 D-37/38/39；途中修复 9 组 TDD（含 sw8 空串覆盖、TraceIDFromSW8 base64 半修等 6 个真缺陷）；回归钉 skywalking-trace.spec.ts 3/3 绿；第二方核对通过见 report §9）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §4
