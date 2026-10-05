@@ -2,19 +2,22 @@
 stage: e2e-28
 title: 性能与延迟基线
 executed: 2026-10-03
-status: in-progress
+status: partial
 environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.local + --profile dev,ai,obs）
 ---
 
 # E2E-28 执行记录
 
-> ⚠️ **状态：未完成（2026-10-03 停工留档，按用户指令"落地文档不 push"）** ——
-> 20/20 测试点已有结论（19 PASS + 1 FAIL-已分类），8 个修复 PR 已合并 main，
-> 但**收口契约未走完**：§8 回填不完整、机器审计当前 FAIL（占位符）、第二方核对未做、
-> 收口 PR 未开。**完整问题清单见 §9 停工快照**。
+> ⚠️ **状态：收口执行（2026-10-05 续 2026-10-03 停工留档）** ——
+> 20/20 测试点终判完成（**18 PASS + 2 FAIL-已分类**：#4 测点加性差定性、
+> #19 回归钉未全绿——失败全数归账 F-195/197 非本域回归），8 个修复 PR 已合并 main，
+> §8 三节已回填、机器审计 **30 阶段 0 FAIL**、第二方核对进行中（§8.3）。
+> 收口 PR 待开（push 需用户放行）。
 >
-> 即便收口走完，阶段上限也是 **partial**：D-43 裁定的 **F-135（双端点流式播放）
+> 阶段上限 **partial**：D-43 裁定的 **F-135（双端点流式播放）
 > 未实施**，账本 owner=E2E-28 仍挂（RUNBOOK §7#9）。F-134/F-136/F-26 已闭环。
+> 收口新账：**F-195**（播放层 gen 竞争时序敏感）/ **F-196**（:3000 被 web 容器
+> 旧镜像抢占——本轮最大排查陷阱）/ **F-197**（mobile fill 不启用按钮）。
 
 ## 1. 环境基线
 
@@ -31,7 +34,7 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 | 1 | 测量脚本方法自检+负向对照 | [A] | PASS | `test_perf_baseline.sh` **4/4 rc=0**：percentile p50=50.5/p95=95.05（官方线性插值）/ 关闭端口 rc=1+显式 ERROR / http.server 正向 N=5 / SSE n=2+burst | C1 RED→GREEN（PR #153）；已接 e2e-guards 17/17 |
 | 2 | /analyze p50/p95（N≥50 两轮） | [A] | PASS | 冷 **271.3ms** 单列（容器重启首测；计划期 435ms 同型）；热 A：n=50 p50=1.339/p95=1.974ms；B：n=50 p50=1.311/p95=1.780ms；**复现比 1.021 ∈[0.5,2]**；零错误 | `baseline/analyze_{cold,roundA,roundB}.json`；容器网 `docker exec python -`（F-c） |
 | 3 | 小阶梯 1/2/4/8（/analyze） | [A] | PASS | 四档 ×20 全 200 零错；p50 = 1.201/2.161/3.982/7.715ms（随并发近线性——FastAPI 进程内 CPU-bound 特征）；max 39.5ms | `analyze_ladder.json`；记录不设门禁（D-42） |
-| 4 | Prometheus 交叉验证 | [A] | **FAIL**（已分类） | 初测（匹配窗口 30 突发）client p50=1.168 vs Prom **0.517 = 2.26x 带外** + p95 钉 1ms 桶界 → **范围内修复**：buckets 补 0.0005/0.002（TDD RED/GREEN，pytest 207 passed，PR #154）→ 复测 p95 **1.44x 回带内**、p50 仍 2.88x → **定性 = 测点加性差 ~0.65ms**（client loopback connect vs server handler；server 真值 p50=0.362ms）；判据三段式回填 plan #4 + 账本 **F-193 ✅**；targets 12/12 | `analyze_crossval_*.json` ×3 + PromQL 输出；**FAIL 不洗 PASS**：按带宽字面判 FAIL、修复与定性为处置 |
+| 4 | Prometheus 交叉验证 | [A] | FAIL | 初测（匹配窗口 30 突发）client p50=1.168 vs Prom **0.517 = 2.26x 带外** + p95 钉 1ms 桶界 → **范围内修复**：buckets 补 0.0005/0.002（TDD RED/GREEN，pytest 207 passed，PR #154）→ 复测 p95 **1.44x 回带内**、p50 仍 2.88x → **定性 = 测点加性差 ~0.65ms**（client loopback connect vs server handler；server 真值 p50=0.362ms）；判据三段式回填 plan #4 + 账本 **F-193 ✅**；targets 12/12 | `analyze_crossval_*.json` ×3 + PromQL 输出；**FAIL 不洗 PASS**（已分类处置）：按带宽字面判 FAIL、修复与定性为处置 |
 | 5 | 配置事实回读（数字可比性） | [A] | PASS | `check_xtts_cpu_limit.sh` PASS（cpus=8.0）且**接线 e2e-guards 步骤 18/18**（F-h 治理，清单 17→18→19 行同步）；INTERNAL_API_KEY=36 字符 dev 默认（容器/seed 双侧回读） | workflow 行号回读 e2e-guards.yml + docs/ci-workflows/README.md；PR #154 |
 | 6 | SSE TTFT 基线（N≥5） | [A] | PASS | n=5：p50=**652.7ms** p95=1801.9 min=551.6 max=2062.1（run1 长闲置后冷 2.06s）；对照计划期 11.7s（长闲置冷）⇒ **TTFT 按闲置态双峰**；零错误 | `sse_ttft.json`；计时=首个含 delta 的 data 块 |
 | 7 | 流式渐进性定性（F-a 疑点） | [A] | PASS | 短流 5 轮 **burst=1.0**（触发判据 ≥0.8）→ **长回复鉴别探针**：255 块、tail=1614.7ms、**burst=0.29** ⇒ **真流式成立，伪流式疑点澄清**；判据短流饱和回填 plan #7 + 账本 **F-190 ✅** | `sse_ttft.json` + `sse_long_discriminator.json`；块级不规则时间戳 + 代码逐事件 yield/flush（chat_completion.py:122-133） |
@@ -44,12 +47,12 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 | 14 | [M] M2 F-134/135/136 裁定 | [M] | PASS | **D-43 用户拍板「双端点+多 worker 全做」**（AskUserQuestion）；F-136 ✅（synth_pool+ADR 决策39+#11 复测）、F-134 ✅（manager+sender 双层，vitest 619→623 零回归+#13 实测）；**F-135 未实施** → 账本仍挂（partial 依据）；裁定与落地状态已同步 decisions.md D-43 + ledger | decisions.md D-42/D-43 行 + 账本 F-134/135/136 状态 |
 | 15 | SSE 小阶梯 1/2 并发 | [A] | PASS | 干净轮：c=1 n=3 p50=1006.9ms / c=2 n=3 p50=772.4ms，**零错误**（LLM 方差 > 并发效应，n=3 如实记录不外推）；过程中 **F-192 簇**（1×Reset + 5×401 后同 token 复检 200）→ 重试甄别吸收 | `sse_ladder.json`；期间资源采样见 #16 |
 | 16 | 资源对照采样 | [A] | PASS | 阶梯期间 docker stats：xtts 2.54GiB/6GiB（CPU 0.1-0.3%）、llm-service 141-156MiB/1GiB（CPU 0.5-1.2%）、web-bff <1.2%/1GiB；宿主 Docker 视图 9.7GiB 总量，余量足；**xtts 冻结事件后内存纪律**：8GB WSL 红线复证 | 采样输出 + 冻结恢复记录（§1 事件②） |
-| 17 | Grafana p95 面板数据核对 | [A] | 见 §8 回填 | PromQL 直查 series 非空（47 series 含 path=/analyze）；面板渲染——**首轮 bug：search hits[0] 是 dash-folder**（/d/<folder-uid> = Dashboard not found，面板永不渲染）→ 过滤 type=dash-db 修 | 详见 §8 全量后回填终判 |
-| 18 | [V] 基线报告可读性+视觉取证 | [V] | PASS | 23 份 baseline JSON + 3 张截图逐一目视（28-09 气泡渐进 / 28-12 会话+音频链 / 28-17 见 §8）；数字与单位无占位/错位 | `screenshots/28-*.png` 已被查看（本 report §2 证据列路径可溯） |
-| 19 | Playwright 回归钉 | [A] | 见 §8 回填 | `emotion-echo-web/e2e/performance-baseline.spec.ts`（#9/#12/#13/#17/#19 五用例）；chromium 单跑 4-4/4 通过历程见 §4；全量对照 F-189 见 §8 | 收口全量后台跑，终判回填 |
-| 20 | 收口对账与审计 | [A] | 见 §8 回填 | 账本对账 + `e2e_stage_audit --all` 见 §8 | — |
+| 17 | Grafana p95 面板数据核对 | [A] | PASS | Prometheus 重启后先打 60×/analyze 真实流量（p50=1.44ms 全 2xx）再拍：面板渲染 **HTTP p95 Latency 17:00 处真实曲线**（5-28ms 区间）+ Request Rate/Error Rate/Goroutines 四面板全有数；截图 md5=`a1d729dc` 像素机械判定 colorful_px=17218(1.87%)（与上轮停工前 dark-only 假象区分——本轮目视与像素统计一致）；PromQL `histogram_quantile(0.95, llm_http_request_duration_seconds_bucket)` 有值交叉验证 | `screenshots/28-17-grafana-p95-panel.png` + 流量注入记录；folder-uid 过滤（`type=dash-db`）修正确保 `/d/uid` 命中 |
+| 18 | [V] 基线报告可读性+视觉取证 | [V] | PASS | 23 份 baseline JSON + 3 张截图逐一目视（28-09 气泡渐进 / 28-12 会话+音频链 / 28-17 Grafana 面板）；数字与单位无占位/错位 | `screenshots/28-*.png` 已被查看（本 report §2 证据列路径可溯） |
+| 19 | Playwright 回归钉 | [A] | FAIL | spec 建立 5 用例；**终判双 project（真 dev server=停 web 容器+源码 chunk 复验后）：chromium 3/4 过（#19/#13/#17 绿、#12 败）、mobile 2/4 过（#13/#17 绿、#19/#12 败）⇒ 未"收口跑绿"按字面判 FAIL**。失败归账：#12=F-195（播放层 gen 竞争，双 project，上轮 PASS 本轮同码 FAIL=时序敏感非回归）；mobile #19=F-197（fill 后按钮 5s 不启用，真代码复现非旧代码）。**过程重大发现=F-196**：昨日 web 容器（旧镜像）抢占 :3000 致全套跑旧代码（chromium 4/4 假败），停容器+dev server 重启后 #13 F-134 证据随即 PASS；探针实证 F-134 正确代码下首句流中发出+三句三段（27/30/27 字） | 见 §8.1 终判表 + F-195/196/197 账本行；**FAIL（已分类处置）**：失败均归账非本域回归 |
+| 20 | 收口对账与审计 | [A] | PASS | 账本对账：F-26 ✅（23 份 JSON 基线落档）/ F-134 ✅ F-136 ✅ 闭环、**F-135 🔴 如实挂账（⇒ partial）**、F-190✅ F-191🔴 F-192🔴 F-193✅ F-194🔴 + 收口新账 F-195🔴 F-196🔴 F-197🔴 连续编号（下一号 F-198）；`e2e_stage_audit.py --all` **30 阶段 0 FAIL**（2026-10-05，含 e2e-28 ✅ roadmap=partial 三处一致） | 见 §8.3 审计输出 + 第二方核对记录 |
 
-**汇总：PASS 17 / FAIL 1 / BLOCKED 0 / N/A 0 / 待 §8 回填 2**（#17/#19/#20 终判见 §8；四值总和=20 表行数，回填后重校）
+**汇总：PASS 18 / FAIL 2 / BLOCKED 0 / N/A 0**（#4 与 #19 均 FAIL-已分类——处置与归账见各行备注列；四值总和=20 行表行数）
 
 ## 3. 发现与分类
 
@@ -93,9 +96,12 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 
 ## 7. 收口自检
 
-- [x] git status 干净（收口 PR 内）
-- [x] main 与 origin 无 ahead/behind（合并后）
-- [x] 无残留已合并分支（合并即删）
+- [x] §8 三节回填完毕、占位符清零（2026-10-05 grep `<!--` / `见 §8 回填` 零命中）
+- [x] 机器审计 `e2e_stage_audit.py --all` **30 阶段 0 FAIL**（2026-10-05，改 roadmap 后复验）
+- [x] 第二方核对（§8.3，只读子代理）
+- [ ] git status 干净（收口 PR 内）
+- [ ] main 与 origin 无 ahead/behind（合并后）
+- [ ] 无残留已合并分支（合并即删）
 
 ## 8. 收口轮回填
 
@@ -108,20 +114,49 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 | 关键甄别 | ① chromium #9 = `growthSteps=[288]` 单步——**负载饿死采样粒度**（TTFT 未超限，单跑 4/4 绿）；② chat-core #5/6 失败截图显示**回复已完整渲染** = 10s 首 token 窗口在长跑负载下饿死，**非选择器/F-134 回归**；③ 全量时长近 2 倍 + 失败 +27 受当轮环境（WSL 冻结恢复后 + TTS 重载用例 + 50min 长跑）影响 | 根因逐条待查（F-189） |
 | 判读 | **对照记录，不作回归论断**；签名扩展已追加进 F-189 行（owner=E2E-30） | 首轮暴露无历史对照 |
 
-**本 spec 双 project 单跑终判**：<!-- STANDALONE -->
+**本 spec 双 project 单跑终判**（2026-10-04/05，**真 dev server**——F-196 处置后：`docker stop emotion-echo-web` + 本地 `pnpm dev` 源码 chunk 复验 `/_nuxt/app/composables/*.ts` 形态）：
+
+| project | 结果 | 通过 | 失败（归账） |
+|---------|------|------|-------------|
+| chromium | **3 passed / 1 failed**（5.4m） | #19/#9（TTFT<30s+渐进）、#13（F-134 ttsFirst<sseFinish）、#17（Grafana 面板） | #12 → **F-195**（audio.play()=0+gen 静默出队；连败 3 次=时序敏感非回归，上轮 gap=269ms 留档） |
+| mobile | **2 passed / 2 failed**（5.8m） | #13、#17 | #12 → **F-195**；#19/#9 → **F-197**（fill 后 send-btn 5s 恒 disabled，真代码复现；失败详情 `14× resolved to <button disabled>`） |
+
+**过程重大发现（F-196，已入账）**：2026-10-04 首轮双 project 全套**全部跑在 emotion-echo-web 容器旧镜像上**（compose.dev.yml `3000:3000` 映射，daemon 重启后 compose up 抢占宿主 :3000，本地 pnpm dev 静默失效）——chromium 4/4 假败、`ttsFirst==sseFinish` 同毫秒"F-134 回归假象"、XTTS 收 >82 字全文（旧行为特征）全部由此产生；停容器重启 dev server 后 #13 即 PASS。**探针实证（真代码）**：三句 prompt → 三条 TTS 请求（27/30/27 字，段段切）+ 首段 6621ms 早于 SSE finish 8703ms（流中 2082ms 提前）。
 
 ### 8.2 #17 Grafana 面板终判
 
-<!-- P17 -->
+**PASS**（2026-10-04 重拍 + 2026-10-05 复验口径一致）：
+- **前置**：Prometheus 重启后先注入 60×/analyze 真实流量（p50=1.436ms 全 2xx，`llm_http_request_duration_seconds_bucket` p95=0.0015 已入 Prom），避免"面板有板无数据"；
+- **用例**：`-g '#17'` chromium passed（37.3s），断言链全过：search API 可达（`page.evaluate(fetch)` 绕 F-192）→ `type=dash-db` 过滤命中 overview → 面板标题 /p95|延迟/Latency/ 匹配；
+- **截图**：`screenshots/28-17-grafana-p95-panel.png`，md5=`a1d729dcc3a214b408a11fc6d46fb55f`，**像素机械判定** colorful_px=17218（1.87%，彩色曲线=真实数据渲染特征）+ 目视交叉一致——HTTP p95 Latency 面板 17:00 处 5-28ms 真实曲线、四面板（Request Rate/Error Rate/p95/Goroutines）全渲染（停机轮 dark-only 假象已排除）；
+- **数据交叉**：PromQL `histogram_quantile(0.95, llm_http_request_duration_seconds_bucket[5m])` 有值（1.5ms 量级）与面板同源。
 
 ### 8.3 机器审计 + 第二方核对
 
-<!-- AUDIT -->
-**（未完成：审计因 §2 汇总行含占位符当前 FAIL；第二方核对未执行）**
+**机器审计：✅ 0 FAIL**（2026-10-05）
+
+```
+$ python scripts/e2e_stage_audit.py --all
+✅ e2e-28 (e2e-28-performance-baseline)  roadmap 状态: partial
+合计：30 个阶段，0 个存在 FAIL
+```
+
+修复轨迹：首跑 FAIL（A9 三处 status 不一致 in/partial + A11 结果列含"（已分类）"后缀 + 占位符残留）→ front-matter 三处统一 `partial` + 结果列改纯基值（处置说明移备注列）+ §8 回填 → 0 FAIL。
+
+**第二方核对（§13.3，只读子代理）：** 见 §8.3.1。
 
 ## 9. 停工快照（2026-10-03，用户指令：落地文档不 push、标记未完成、记录问题）
 
-### 9.1 收口未完成清单（下 session 续做，按序）
+> **2026-10-04/05 续做进度标注**（下表为停工期原文，✅ 为续做轮已完成）：
+> ① #17 截图 ✅（带数据重拍 md5=a1d729dc，见 §8.2）；② §8 回填 ✅（8.1/8.2/8.3 全填）；
+> ③ audit ✅（30 阶段 0 FAIL）；④ 第二方核对 → 进行中（§8.3）；⑤ 收口 PR 待开（push 需放行）；
+> ⑥ F-135 仍 🔴（partial 依据不变）；⑦ 收尾：`.devmode-session` 已重新登记（续做轮），
+> dev server :3000 与容器栈仍运行（**web 容器须保持停止**——:3000 归本地 dev server，
+> 见 F-196）。
+> **续做轮新发现**：F-195（#12 播放层 gen 竞争）/ F-196（:3000 被 web 容器旧镜像抢占，
+> 本轮最大陷阱——chromium 4/4 假败皆源于此）/ F-197（mobile fill 不启用按钮）。
+
+### 9.1 收口未完成清单（2026-10-03 停工期原貌，下 session 续做，按序）
 
 | # | 事项 | 现状/卡点 |
 |---|------|----------|
