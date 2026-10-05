@@ -12,7 +12,7 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 > 20/20 测试点终判完成（**18 PASS + 2 FAIL-已分类**：#4 测点加性差定性、
 > #19 回归钉未全绿——失败全数归账 F-195/197 非本域回归），8 个修复 PR 已合并 main，
 > §8 三节已回填、机器审计 **30 阶段 0 FAIL**、第二方核对**首轮 3 项已修正→第二轮复核通过**（§8.3.1）。
-> 收口 PR 待开（push 需用户放行）。
+> IAB 收口复测通过（2026-10-05，见 §7）；收口 PR = 本 PR（用户已放行推送）。
 >
 > 阶段上限 **partial**：D-43 裁定的 **F-135（双端点流式播放）
 > 未实施**，账本 owner=E2E-28 仍挂（RUNBOOK §7#9）。F-134/F-136/F-26 已闭环。
@@ -99,9 +99,10 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 - [x] §8 三节回填完毕、占位符清零（2026-10-05 grep `<!--` / `见 §8 回填` 零命中）
 - [x] 机器审计 `e2e_stage_audit.py --all` **30 阶段 0 FAIL**（2026-10-05，改 roadmap 后复验）
 - [x] 第二方核对（§8.3.1）：首轮不通过 3 项已全部修正，**第二轮复核通过（可收口）**
-- [ ] git status 干净（收口 PR 内）
-- [ ] main 与 origin 无 ahead/behind（合并后）
-- [ ] 无残留已合并分支（合并即删）
+- [x] IAB 收口复测（2026-10-05）：真 dev server（chunk URL = `@fs`/源码路径形态，F-196 甄别法）下演示账号登录 → 发消息 → AI 回复完整到达 + 截图目视——`screenshots/28-closure-iab-retest.png`
+- [x] git status 干净（收口 PR 提交时点）
+- [x] main 与 origin 无 ahead/behind（合并后复核，见 PR 记录）
+- [x] 无残留已合并分支（§2.5 收口时删除本分支）
 
 ## 8. 收口轮回填
 
