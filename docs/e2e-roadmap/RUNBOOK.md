@@ -432,6 +432,21 @@ bash scripts/smoke_upload_minio.sh       # 上传链路 smoke（登录 Bearer + 
 bash scripts/test_check_minio_health.sh    # 健康守卫结构 + M2 端口 127.0.0.1 断言
 bash scripts/test_smoke_upload_minio.sh    # smoke 三缺陷防回退（cwd 文件/Bearer/MC_HOST）
 node deploy/apisix/seed_test.js            # seed 契约（含 catch-all HEAD 方法表断言）
+
+# E2E-28 性能基线（perf_baseline 三模式；守卫 = e2e-guards 17/17）
+bash scripts/test_perf_baseline.sh         # 四契约：percentile/负向退出/正向 N=5/SSE 多轮
+#   http 顺序：python scripts/perf_baseline.py --url <URL> --n 50 [--token T] [--method POST --body J] [--json-out F]
+#   并发阶梯：--mode ladder --levels 1,2,4,8 --per-level 20
+#   SSE TTFT：--mode sse --n 5 → summary(分位数) + runs[].burst_ratio（plan #7 判定）
+#   ⚠ 容器网目标（llm-service 无宿主端口，plan F-c）：
+#     docker exec -i emotion-llm-service python - --url http://emotion-llm-service:8000/analyze \
+#       --method POST -H "Internal-API-Key:$KEY" --body '{"text":"..."}' --n 50 < scripts/perf_baseline.py
+#   ⚠ 路径纪律：--json-out 用相对路径（Git Bash /tmp 的 MSYS 路径 Windows python 打不开）；一律 python 非 python3
+# Prometheus 交叉验证（E2E-28 #4；obs profile 必须起）
+curl -sG localhost:9090/api/v1/query --data-urlencode 'query=histogram_quantile(0.5, rate(llm_http_request_duration_seconds_bucket{path="/analyze"}[2m]))'
+# E2E-28 回归钉（#9/#12/#13/#17/#19；需 :3000 dev server + BASE_URL）
+cd emotion-echo-web && BASE_URL=http://localhost:3000 npx playwright test e2e/performance-baseline.spec.ts --project=chromium
+# E2E-28 守卫：check_xtts_cpu_limit.sh 已接 e2e-guards（18/18，静态解析 compose 无 docker 依赖）
 ```
 
 ---

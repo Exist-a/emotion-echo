@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{"instance":"emotion-llm-service:8000","job":"emotion-echo-services","method":"POST","monitor":"emotion-echo-dev","path":"/analyze"},"value":[1791023892.368,"0.00035941315020833985"]}]}}

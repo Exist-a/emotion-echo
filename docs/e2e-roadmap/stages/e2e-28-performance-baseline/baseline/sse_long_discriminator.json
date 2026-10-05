@@ -1,0 +1,2091 @@
+{
+  "mode": "sse",
+  "url": "http://localhost:19080/api/v1/ai/stream",
+  "requested": 2,
+  "runs": [
+    {
+      "ttfb_ms": 955.4,
+      "first_content_ms": 955.4,
+      "total_ms": 2570.1,
+      "data_chunks": 255,
+      "burst_ratio": 0.29,
+      "error": null,
+      "chunks": [
+        {
+          "t_ms": 955.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 978.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"《\"}}]}"
+        },
+        {
+          "t_ms": 1002.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春\"}}]}"
+        },
+        {
+          "t_ms": 1003.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"晓\"}}]}"
+        },
+        {
+          "t_ms": 1003.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"即\"}}]}"
+        },
+        {
+          "t_ms": 1045.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"景\"}}]}"
+        },
+        {
+          "t_ms": 1045.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"》\"}}]}"
+        },
+        {
+          "t_ms": 1045.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\\n\"}}]}"
+        },
+        {
+          "t_ms": 1046.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"细雨\"}}]}"
+        },
+        {
+          "t_ms": 1046.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"醒\"}}]}"
+        },
+        {
+          "t_ms": 1046.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"新\"}}]}"
+        },
+        {
+          "t_ms": 1047.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"泥\"}}]}"
+        },
+        {
+          "t_ms": 1078.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1078.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"风\"}}]}"
+        },
+        {
+          "t_ms": 1079.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"轻\"}}]}"
+        },
+        {
+          "t_ms": 1079.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"燕子\"}}]}"
+        },
+        {
+          "t_ms": 1106.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"低\"}}]}"
+        },
+        {
+          "t_ms": 1122.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\"}}]}"
+        },
+        {
+          "t_ms": 1122.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一\"}}]}"
+        },
+        {
+          "t_ms": 1167.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"庭\"}}]}"
+        },
+        {
+          "t_ms": 1167.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春\"}}]}"
+        },
+        {
+          "t_ms": 1168.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"色\"}}]}"
+        },
+        {
+          "t_ms": 1168.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"满\"}}]}"
+        },
+        {
+          "t_ms": 1168.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1168.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不\"}}]}"
+        },
+        {
+          "t_ms": 1169.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"语\"}}]}"
+        },
+        {
+          "t_ms": 1193.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"也\"}}]}"
+        },
+        {
+          "t_ms": 1219.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"成\"}}]}"
+        },
+        {
+          "t_ms": 1220.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"蹊\"}}]}"
+        },
+        {
+          "t_ms": 1220.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 1221.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1221.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"逐\"}}]}"
+        },
+        {
+          "t_ms": 1221.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"句\"}}]}"
+        },
+        {
+          "t_ms": 1221.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"解释\"}}]}"
+        },
+        {
+          "t_ms": 1229.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 1229.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 1230.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"-\"}}]}"
+        },
+        {
+          "t_ms": 1230.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" **\"}}]}"
+        },
+        {
+          "t_ms": 1230.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"细雨\"}}]}"
+        },
+        {
+          "t_ms": 1231.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"醒\"}}]}"
+        },
+        {
+          "t_ms": 1238.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"新\"}}]}"
+        },
+        {
+          "t_ms": 1238.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"泥\"}}]}"
+        },
+        {
+          "t_ms": 1238.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1239.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 1252.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 1252.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的小\"}}]}"
+        },
+        {
+          "t_ms": 1263.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"雨\"}}]}"
+        },
+        {
+          "t_ms": 1263.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"落\"}}]}"
+        },
+        {
+          "t_ms": 1314.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"下来\"}}]}"
+        },
+        {
+          "t_ms": 1314.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1314.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"把\"}}]}"
+        },
+        {
+          "t_ms": 1314.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"沉睡\"}}]}"
+        },
+        {
+          "t_ms": 1314.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的\"}}]}"
+        },
+        {
+          "t_ms": 1314.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"泥土\"}}]}"
+        },
+        {
+          "t_ms": 1314.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"都\"}}]}"
+        },
+        {
+          "t_ms": 1314.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"唤\"}}]}"
+        },
+        {
+          "t_ms": 1314.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"醒了\"}}]}"
+        },
+        {
+          "t_ms": 1314.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 1345.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一个\"}}]}"
+        },
+        {
+          "t_ms": 1345.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 1345.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"醒\"}}]}"
+        },
+        {
+          "t_ms": 1346.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 1346.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"字\"}}]}"
+        },
+        {
+          "t_ms": 1346.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1346.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"让\"}}]}"
+        },
+        {
+          "t_ms": 1356.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"土地\"}}]}"
+        },
+        {
+          "t_ms": 1370.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"有了\"}}]}"
+        },
+        {
+          "t_ms": 1384.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"呼吸\"}}]}"
+        },
+        {
+          "t_ms": 1400.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"与\"}}]}"
+        },
+        {
+          "t_ms": 1411.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"生机\"}}]}"
+        },
+        {
+          "t_ms": 1424.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"——\"}}]}"
+        },
+        {
+          "t_ms": 1424.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"仿佛\"}}]}"
+        },
+        {
+          "t_ms": 1439.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"大地\"}}]}"
+        },
+        {
+          "t_ms": 1453.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"从\"}}]}"
+        },
+        {
+          "t_ms": 1468.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"冬\"}}]}"
+        },
+        {
+          "t_ms": 1480.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"眠\"}}]}"
+        },
+        {
+          "t_ms": 1480.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"里\"}}]}"
+        },
+        {
+          "t_ms": 1481.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"轻轻\"}}]}"
+        },
+        {
+          "t_ms": 1481.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"睁\"}}]}"
+        },
+        {
+          "t_ms": 1494.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"开了\"}}]}"
+        },
+        {
+          "t_ms": 1494.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"眼\"}}]}"
+        },
+        {
+          "t_ms": 1494.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 1495.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"-\"}}]}"
+        },
+        {
+          "t_ms": 1495.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" **\"}}]}"
+        },
+        {
+          "t_ms": 1495.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"风\"}}]}"
+        },
+        {
+          "t_ms": 1512.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"轻\"}}]}"
+        },
+        {
+          "t_ms": 1512.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"燕子\"}}]}"
+        },
+        {
+          "t_ms": 1513.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"低\"}}]}"
+        },
+        {
+          "t_ms": 1513.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1513.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 1514.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"风\"}}]}"
+        },
+        {
+          "t_ms": 1523.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"很\"}}]}"
+        },
+        {
+          "t_ms": 1523.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"柔\"}}]}"
+        },
+        {
+          "t_ms": 1535.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1535.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"燕子\"}}]}"
+        },
+        {
+          "t_ms": 1535.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"贴着\"}}]}"
+        },
+        {
+          "t_ms": 1547.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"地面\"}}]}"
+        },
+        {
+          "t_ms": 1567.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"轻轻\"}}]}"
+        },
+        {
+          "t_ms": 1579.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"飞\"}}]}"
+        },
+        {
+          "t_ms": 1580.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"过\"}}]}"
+        },
+        {
+          "t_ms": 1580.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 1580.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"这里\"}}]}"
+        },
+        {
+          "t_ms": 1588.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"写\"}}]}"
+        },
+        {
+          "t_ms": 1611.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的是\"}}]}"
+        },
+        {
+          "t_ms": 1611.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"动态\"}}]}"
+        },
+        {
+          "t_ms": 1622.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的\"}}]}"
+        },
+        {
+          "t_ms": 1658.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春\"}}]}"
+        },
+        {
+          "t_ms": 1658.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"意\"}}]}"
+        },
+        {
+          "t_ms": 1658.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1658.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不是\"}}]}"
+        },
+        {
+          "t_ms": 1659.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"喧\"}}]}"
+        },
+        {
+          "t_ms": 1659.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"闹\"}}]}"
+        },
+        {
+          "t_ms": 1659.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的热\"}}]}"
+        },
+        {
+          "t_ms": 1674.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"烈\"}}]}"
+        },
+        {
+          "t_ms": 1683.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1684.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"而\"}}]}"
+        },
+        {
+          "t_ms": 1699.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"是一种\"}}]}"
+        },
+        {
+          "t_ms": 1699.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"低\"}}]}"
+        },
+        {
+          "t_ms": 1710.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"回\"}}]}"
+        },
+        {
+          "t_ms": 1724.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"、\"}}]}"
+        },
+        {
+          "t_ms": 1725.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"贴近\"}}]}"
+        },
+        {
+          "t_ms": 1751.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"人\"}}]}"
+        },
+        {
+          "t_ms": 1751.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"间的\"}}]}"
+        },
+        {
+          "t_ms": 1752.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"温柔\"}}]}"
+        },
+        {
+          "t_ms": 1767.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 1767.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"-\"}}]}"
+        },
+        {
+          "t_ms": 1768.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" **\"}}]}"
+        },
+        {
+          "t_ms": 1768.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一\"}}]}"
+        },
+        {
+          "t_ms": 1768.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"庭\"}}]}"
+        },
+        {
+          "t_ms": 1769.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春\"}}]}"
+        },
+        {
+          "t_ms": 1778.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"色\"}}]}"
+        },
+        {
+          "t_ms": 1778.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"满\"}}]}"
+        },
+        {
+          "t_ms": 1779.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1779.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 1780.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"院子里\"}}]}"
+        },
+        {
+          "t_ms": 1791.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1805.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春\"}}]}"
+        },
+        {
+          "t_ms": 1805.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"色\"}}]}"
+        },
+        {
+          "t_ms": 1818.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"已经\"}}]}"
+        },
+        {
+          "t_ms": 1818.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"装\"}}]}"
+        },
+        {
+          "t_ms": 1832.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"得\"}}]}"
+        },
+        {
+          "t_ms": 1832.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"满满\"}}]}"
+        },
+        {
+          "t_ms": 1877.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"当当\"}}]}"
+        },
+        {
+          "t_ms": 1877.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 1877.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"从\"}}]}"
+        },
+        {
+          "t_ms": 1877.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 1878.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"细雨\"}}]}"
+        },
+        {
+          "t_ms": 1878.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 1878.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"燕子\"}}]}"
+        },
+        {
+          "t_ms": 1892.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 1892.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"两个\"}}]}"
+        },
+        {
+          "t_ms": 1893.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"近\"}}]}"
+        },
+        {
+          "t_ms": 1893.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"景\"}}]}"
+        },
+        {
+          "t_ms": 1924.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1924.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一下\"}}]}"
+        },
+        {
+          "t_ms": 1924.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"拉到\"}}]}"
+        },
+        {
+          "t_ms": 1925.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"整个\"}}]}"
+        },
+        {
+          "t_ms": 1925.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"庭\"}}]}"
+        },
+        {
+          "t_ms": 1980.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"院的\"}}]}"
+        },
+        {
+          "t_ms": 1980.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"铺\"}}]}"
+        },
+        {
+          "t_ms": 1980.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"展\"}}]}"
+        },
+        {
+          "t_ms": 1980.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1981.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"像\"}}]}"
+        },
+        {
+          "t_ms": 1981.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"镜头\"}}]}"
+        },
+        {
+          "t_ms": 1981.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"缓缓\"}}]}"
+        },
+        {
+          "t_ms": 1982.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"推\"}}]}"
+        },
+        {
+          "t_ms": 1982.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"远\"}}]}"
+        },
+        {
+          "t_ms": 1982.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 1983.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"-\"}}]}"
+        },
+        {
+          "t_ms": 1983.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" **\"}}]}"
+        },
+        {
+          "t_ms": 1983.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不\"}}]}"
+        },
+        {
+          "t_ms": 1989.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"语\"}}]}"
+        },
+        {
+          "t_ms": 1989.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"也\"}}]}"
+        },
+        {
+          "t_ms": 1989.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"成\"}}]}"
+        },
+        {
+          "t_ms": 2026.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"蹊\"}}]}"
+        },
+        {
+          "t_ms": 2027.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 2027.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 2028.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"这一\"}}]}"
+        },
+        {
+          "t_ms": 2028.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"句\"}}]}"
+        },
+        {
+          "t_ms": 2028.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"最有\"}}]}"
+        },
+        {
+          "t_ms": 2029.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"意味\"}}]}"
+        },
+        {
+          "t_ms": 2029.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"——\"}}]}"
+        },
+        {
+          "t_ms": 2029.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 2034.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"什么\"}}]}"
+        },
+        {
+          "t_ms": 2041.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"话\"}}]}"
+        },
+        {
+          "t_ms": 2055.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"都没\"}}]}"
+        },
+        {
+          "t_ms": 2055.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"说\"}}]}"
+        },
+        {
+          "t_ms": 2055.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2056.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"可\"}}]}"
+        },
+        {
+          "t_ms": 2065.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"花\"}}]}"
+        },
+        {
+          "t_ms": 2079.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"下\"}}]}"
+        },
+        {
+          "t_ms": 2079.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"自然\"}}]}"
+        },
+        {
+          "t_ms": 2095.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"被人\"}}]}"
+        },
+        {
+          "t_ms": 2106.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"走\"}}]}"
+        },
+        {
+          "t_ms": 2121.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"出一条\"}}]}"
+        },
+        {
+          "t_ms": 2121.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"小路\"}}]}"
+        },
+        {
+          "t_ms": 2122.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"（\"}}]}"
+        },
+        {
+          "t_ms": 2150.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"化\"}}]}"
+        },
+        {
+          "t_ms": 2150.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"用\"}}]}"
+        },
+        {
+          "t_ms": 2151.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 2151.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"桃\"}}]}"
+        },
+        {
+          "t_ms": 2151.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"李\"}}]}"
+        },
+        {
+          "t_ms": 2151.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不言\"}}]}"
+        },
+        {
+          "t_ms": 2162.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2162.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"下\"}}]}"
+        },
+        {
+          "t_ms": 2162.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"自成\"}}]}"
+        },
+        {
+          "t_ms": 2162.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"蹊\"}}]}"
+        },
+        {
+          "t_ms": 2163.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 2163.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"）。\"}}]}"
+        },
+        {
+          "t_ms": 2174.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 2191.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不\"}}]}"
+        },
+        {
+          "t_ms": 2192.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"张扬\"}}]}"
+        },
+        {
+          "t_ms": 2207.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2207.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"却\"}}]}"
+        },
+        {
+          "t_ms": 2207.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"让\"}}]}"
+        },
+        {
+          "t_ms": 2217.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"所有\"}}]}"
+        },
+        {
+          "t_ms": 2217.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"人心\"}}]}"
+        },
+        {
+          "t_ms": 2231.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"甘\"}}]}"
+        },
+        {
+          "t_ms": 2242.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"情愿\"}}]}"
+        },
+        {
+          "t_ms": 2242.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"走近\"}}]}"
+        },
+        {
+          "t_ms": 2256.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"它\"}}]}"
+        },
+        {
+          "t_ms": 2256.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 2256.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"整\"}}]}"
+        },
+        {
+          "t_ms": 2271.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"首\"}}]}"
+        },
+        {
+          "t_ms": 2284.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"想\"}}]}"
+        },
+        {
+          "t_ms": 2298.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"说的是\"}}]}"
+        },
+        {
+          "t_ms": 2298.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 2298.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 2313.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 2326.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"最深\"}}]}"
+        },
+        {
+          "t_ms": 2338.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的力量\"}}]}"
+        },
+        {
+          "t_ms": 2411.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2411.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"是\"}}]}"
+        },
+        {
+          "t_ms": 2412.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"无声\"}}]}"
+        },
+        {
+          "t_ms": 2412.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的\"}}]}"
+        },
+        {
+          "t_ms": 2412.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"邀请\"}}]}"
+        },
+        {
+          "t_ms": 2413.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\"}}]}"
+        },
+        {
+          "t_ms": 2413.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 2413.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" \"}}]}"
+        },
+        {
+          "t_ms": 2413.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}"
+        },
+        {
+          "t_ms": 2414.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"愿意\"}}]}"
+        },
+        {
+          "t_ms": 2414.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"多说\"}}]}"
+        },
+        {
+          "t_ms": 2420.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一点\"}}]}"
+        },
+        {
+          "t_ms": 2420.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2433.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}"
+        },
+        {
+          "t_ms": 2434.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"心里的\"}}]}"
+        },
+        {
+          "t_ms": 2447.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 2447.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 2548.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"\\\"\"}}]}"
+        },
+        {
+          "t_ms": 2548.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"现在\"}}]}"
+        },
+        {
+          "t_ms": 2549.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"是什么\"}}]}"
+        },
+        {
+          "t_ms": 2549.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"样子\"}}]}"
+        },
+        {
+          "t_ms": 2549.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"吗\"}}]}"
+        },
+        {
+          "t_ms": 2550.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"？\"}}]}"
+        },
+        {
+          "t_ms": 2563.3,
+          "line": "data: [DONE]"
+        }
+      ]
+    },
+    {
+      "ttfb_ms": 975.1,
+      "first_content_ms": 975.1,
+      "total_ms": 2539.1,
+      "data_chunks": 258,
+      "burst_ratio": 0.318,
+      "error": null,
+      "chunks": [
+        {
+          "t_ms": 975.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"先\"}}]}"
+        },
+        {
+          "t_ms": 1038.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"谢谢你\"}}]}"
+        },
+        {
+          "t_ms": 1038.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"愿意\"}}]}"
+        },
+        {
+          "t_ms": 1039.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"把\"}}]}"
+        },
+        {
+          "t_ms": 1040.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"这份\"}}]}"
+        },
+        {
+          "t_ms": 1040.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"心\"}}]}"
+        },
+        {
+          "t_ms": 1040.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"绪\"}}]}"
+        },
+        {
+          "t_ms": 1044.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"交\"}}]}"
+        },
+        {
+          "t_ms": 1050.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"给我\"}}]}"
+        },
+        {
+          "t_ms": 1050.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1051.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"我们一起\"}}]}"
+        },
+        {
+          "t_ms": 1051.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"慢慢\"}}]}"
+        },
+        {
+          "t_ms": 1051.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"看\"}}]}"
+        },
+        {
+          "t_ms": 1051.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 1052.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1063.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"《\"}}]}"
+        },
+        {
+          "t_ms": 1063.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春\"}}]}"
+        },
+        {
+          "t_ms": 1063.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"望\"}}]}"
+        },
+        {
+          "t_ms": 1076.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"》\"}}]}"
+        },
+        {
+          "t_ms": 1076.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\\n\"}}]}"
+        },
+        {
+          "t_ms": 1076.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"风\"}}]}"
+        },
+        {
+          "t_ms": 1090.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"软\"}}]}"
+        },
+        {
+          "t_ms": 1103.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"梳\"}}]}"
+        },
+        {
+          "t_ms": 1120.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"新\"}}]}"
+        },
+        {
+          "t_ms": 1130.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"柳\"}}]}"
+        },
+        {
+          "t_ms": 1131.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1131.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"泥\"}}]}"
+        },
+        {
+          "t_ms": 1157.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"融\"}}]}"
+        },
+        {
+          "t_ms": 1158.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"醒\"}}]}"
+        },
+        {
+          "t_ms": 1171.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"旧\"}}]}"
+        },
+        {
+          "t_ms": 1171.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"根\"}}]}"
+        },
+        {
+          "t_ms": 1187.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\"}}]}"
+        },
+        {
+          "t_ms": 1187.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一\"}}]}"
+        },
+        {
+          "t_ms": 1187.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"痕\"}}]}"
+        },
+        {
+          "t_ms": 1201.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"青\"}}]}"
+        },
+        {
+          "t_ms": 1215.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"到\"}}]}"
+        },
+        {
+          "t_ms": 1227.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"眼\"}}]}"
+        },
+        {
+          "t_ms": 1240.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1240.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"万象\"}}]}"
+        },
+        {
+          "t_ms": 1254.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"自\"}}]}"
+        },
+        {
+          "t_ms": 1265.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"温\"}}]}"
+        },
+        {
+          "t_ms": 1279.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"存\"}}]}"
+        },
+        {
+          "t_ms": 1279.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 1279.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1279.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"逐\"}}]}"
+        },
+        {
+          "t_ms": 1296.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"句\"}}]}"
+        },
+        {
+          "t_ms": 1296.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"解释\"}}]}"
+        },
+        {
+          "t_ms": 1296.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 1296.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\\n\"}}]}"
+        },
+        {
+          "t_ms": 1297.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"1\"}}]}"
+        },
+        {
+          "t_ms": 1297.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\".\"}}]}"
+        },
+        {
+          "t_ms": 1307.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" **\"}}]}"
+        },
+        {
+          "t_ms": 1307.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"风\"}}]}"
+        },
+        {
+          "t_ms": 1307.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"软\"}}]}"
+        },
+        {
+          "t_ms": 1397.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"梳\"}}]}"
+        },
+        {
+          "t_ms": 1398.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"新\"}}]}"
+        },
+        {
+          "t_ms": 1398.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"柳\"}}]}"
+        },
+        {
+          "t_ms": 1398.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1398.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 1399.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春风\"}}]}"
+        },
+        {
+          "t_ms": 1399.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"轻柔\"}}]}"
+        },
+        {
+          "t_ms": 1399.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"得像\"}}]}"
+        },
+        {
+          "t_ms": 1399.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一把\"}}]}"
+        },
+        {
+          "t_ms": 1400.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"梳\"}}]}"
+        },
+        {
+          "t_ms": 1404.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"子\"}}]}"
+        },
+        {
+          "t_ms": 1404.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1404.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"把\"}}]}"
+        },
+        {
+          "t_ms": 1404.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"新\"}}]}"
+        },
+        {
+          "t_ms": 1404.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"生的\"}}]}"
+        },
+        {
+          "t_ms": 1404.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"柳\"}}]}"
+        },
+        {
+          "t_ms": 1404.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"条\"}}]}"
+        },
+        {
+          "t_ms": 1415.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一缕\"}}]}"
+        },
+        {
+          "t_ms": 1428.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"缕\"}}]}"
+        },
+        {
+          "t_ms": 1428.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"理顺\"}}]}"
+        },
+        {
+          "t_ms": 1428.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。「\"}}]}"
+        },
+        {
+          "t_ms": 1442.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"梳\"}}]}"
+        },
+        {
+          "t_ms": 1442.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"」\"}}]}"
+        },
+        {
+          "t_ms": 1442.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"字\"}}]}"
+        },
+        {
+          "t_ms": 1455.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"把\"}}]}"
+        },
+        {
+          "t_ms": 1455.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"风\"}}]}"
+        },
+        {
+          "t_ms": 1470.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"写得\"}}]}"
+        },
+        {
+          "t_ms": 1470.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"有\"}}]}"
+        },
+        {
+          "t_ms": 1486.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"耐心\"}}]}"
+        },
+        {
+          "t_ms": 1498.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"、\"}}]}"
+        },
+        {
+          "t_ms": 1498.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"有\"}}]}"
+        },
+        {
+          "t_ms": 1499.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"手法\"}}]}"
+        },
+        {
+          "t_ms": 1509.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1510.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"像\"}}]}"
+        },
+        {
+          "t_ms": 1510.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"在\"}}]}"
+        },
+        {
+          "t_ms": 1524.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"照料\"}}]}"
+        },
+        {
+          "t_ms": 1537.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1550.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"而不是\"}}]}"
+        },
+        {
+          "t_ms": 1551.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"催促\"}}]}"
+        },
+        {
+          "t_ms": 1566.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\"}}]}"
+        },
+        {
+          "t_ms": 1566.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"2\"}}]}"
+        },
+        {
+          "t_ms": 1567.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\".\"}}]}"
+        },
+        {
+          "t_ms": 1567.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" **\"}}]}"
+        },
+        {
+          "t_ms": 1567.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"泥\"}}]}"
+        },
+        {
+          "t_ms": 1567.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"融\"}}]}"
+        },
+        {
+          "t_ms": 1587.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"醒\"}}]}"
+        },
+        {
+          "t_ms": 1587.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"旧\"}}]}"
+        },
+        {
+          "t_ms": 1588.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"根\"}}]}"
+        },
+        {
+          "t_ms": 1588.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1588.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 1588.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"泥土\"}}]}"
+        },
+        {
+          "t_ms": 1593.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"化\"}}]}"
+        },
+        {
+          "t_ms": 1594.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"开\"}}]}"
+        },
+        {
+          "t_ms": 1594.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"、\"}}]}"
+        },
+        {
+          "t_ms": 1611.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"变\"}}]}"
+        },
+        {
+          "t_ms": 1611.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"松\"}}]}"
+        },
+        {
+          "t_ms": 1621.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"软\"}}]}"
+        },
+        {
+          "t_ms": 1621.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"了\"}}]}"
+        },
+        {
+          "t_ms": 1660.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1660.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"沉睡\"}}]}"
+        },
+        {
+          "t_ms": 1660.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的\"}}]}"
+        },
+        {
+          "t_ms": 1660.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"旧\"}}]}"
+        },
+        {
+          "t_ms": 1661.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"根\"}}]}"
+        },
+        {
+          "t_ms": 1661.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"被\"}}]}"
+        },
+        {
+          "t_ms": 1661.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"唤醒\"}}]}"
+        },
+        {
+          "t_ms": 1672.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。「\"}}]}"
+        },
+        {
+          "t_ms": 1672.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"旧\"}}]}"
+        },
+        {
+          "t_ms": 1687.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"根\"}}]}"
+        },
+        {
+          "t_ms": 1687.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"」\"}}]}"
+        },
+        {
+          "t_ms": 1687.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"藏着\"}}]}"
+        },
+        {
+          "t_ms": 1706.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"过去\"}}]}"
+        },
+        {
+          "t_ms": 1706.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1718.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 1731.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不是\"}}]}"
+        },
+        {
+          "t_ms": 1745.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"凭空\"}}]}"
+        },
+        {
+          "t_ms": 1759.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"来的\"}}]}"
+        },
+        {
+          "t_ms": 1826.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1826.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"是从\"}}]}"
+        },
+        {
+          "t_ms": 1826.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"旧的\"}}]}"
+        },
+        {
+          "t_ms": 1826.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"里面\"}}]}"
+        },
+        {
+          "t_ms": 1827.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"长\"}}]}"
+        },
+        {
+          "t_ms": 1827.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"出来的\"}}]}"
+        },
+        {
+          "t_ms": 1827.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\"}}]}"
+        },
+        {
+          "t_ms": 1828.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"3\"}}]}"
+        },
+        {
+          "t_ms": 1829.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\".\"}}]}"
+        },
+        {
+          "t_ms": 1829.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" **\"}}]}"
+        },
+        {
+          "t_ms": 1830.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一\"}}]}"
+        },
+        {
+          "t_ms": 1830.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"痕\"}}]}"
+        },
+        {
+          "t_ms": 1830.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"青\"}}]}"
+        },
+        {
+          "t_ms": 1830.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"到\"}}]}"
+        },
+        {
+          "t_ms": 1838.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"眼\"}}]}"
+        },
+        {
+          "t_ms": 1838.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 1839.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 1839.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"远远\"}}]}"
+        },
+        {
+          "t_ms": 1857.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"看去\"}}]}"
+        },
+        {
+          "t_ms": 1857.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1857.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"只有\"}}]}"
+        },
+        {
+          "t_ms": 1863.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一道\"}}]}"
+        },
+        {
+          "t_ms": 1877.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"淡淡的\"}}]}"
+        },
+        {
+          "t_ms": 1892.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"青色\"}}]}"
+        },
+        {
+          "t_ms": 1892.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"进入\"}}]}"
+        },
+        {
+          "t_ms": 1907.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"眼里\"}}]}"
+        },
+        {
+          "t_ms": 1907.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。「\"}}]}"
+        },
+        {
+          "t_ms": 1934.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一\"}}]}"
+        },
+        {
+          "t_ms": 1934.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"痕\"}}]}"
+        },
+        {
+          "t_ms": 1935.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"」\"}}]}"
+        },
+        {
+          "t_ms": 1935.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"很\"}}]}"
+        },
+        {
+          "t_ms": 1935.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"轻\"}}]}"
+        },
+        {
+          "t_ms": 1936.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1936.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 1948.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"刚\"}}]}"
+        },
+        {
+          "t_ms": 1948.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"起\"}}]}"
+        },
+        {
+          "t_ms": 1961.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"头\"}}]}"
+        },
+        {
+          "t_ms": 1976.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"时\"}}]}"
+        },
+        {
+          "t_ms": 1977.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"就是这样\"}}]}"
+        },
+        {
+          "t_ms": 1988.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 1988.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不\"}}]}"
+        },
+        {
+          "t_ms": 1989.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"喧\"}}]}"
+        },
+        {
+          "t_ms": 2004.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"哗\"}}]}"
+        },
+        {
+          "t_ms": 2004.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2004.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"却\"}}]}"
+        },
+        {
+          "t_ms": 2005.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"已经\"}}]}"
+        },
+        {
+          "t_ms": 2015.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"在了\"}}]}"
+        },
+        {
+          "t_ms": 2030.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\"}}]}"
+        },
+        {
+          "t_ms": 2031.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"4\"}}]}"
+        },
+        {
+          "t_ms": 2031.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\".\"}}]}"
+        },
+        {
+          "t_ms": 2032.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\" **\"}}]}"
+        },
+        {
+          "t_ms": 2032.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"万象\"}}]}"
+        },
+        {
+          "t_ms": 2032.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"自\"}}]}"
+        },
+        {
+          "t_ms": 2044.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"温\"}}]}"
+        },
+        {
+          "t_ms": 2044.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"存\"}}]}"
+        },
+        {
+          "t_ms": 2095.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"**\"}}]}"
+        },
+        {
+          "t_ms": 2095.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 2096.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"万物\"}}]}"
+        },
+        {
+          "t_ms": 2096.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"各自\"}}]}"
+        },
+        {
+          "t_ms": 2096.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"安\"}}]}"
+        },
+        {
+          "t_ms": 2097.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"放在\"}}]}"
+        },
+        {
+          "t_ms": 2097.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"温和\"}}]}"
+        },
+        {
+          "t_ms": 2169.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"的气息\"}}]}"
+        },
+        {
+          "t_ms": 2169.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"里\"}}]}"
+        },
+        {
+          "t_ms": 2169.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2170.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不必\"}}]}"
+        },
+        {
+          "t_ms": 2170.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"争先\"}}]}"
+        },
+        {
+          "t_ms": 2170.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。「\"}}]}"
+        },
+        {
+          "t_ms": 2171.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"自\"}}]}"
+        },
+        {
+          "t_ms": 2171.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"」\"}}]}"
+        },
+        {
+          "t_ms": 2171.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"字\"}}]}"
+        },
+        {
+          "t_ms": 2171.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"最\"}}]}"
+        },
+        {
+          "t_ms": 2172.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"要紧\"}}]}"
+        },
+        {
+          "t_ms": 2179.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"——\"}}]}"
+        },
+        {
+          "t_ms": 2179.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 2193.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不\"}}]}"
+        },
+        {
+          "t_ms": 2217.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"命令\"}}]}"
+        },
+        {
+          "t_ms": 2219.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"谁\"}}]}"
+        },
+        {
+          "t_ms": 2220.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2220.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"它\"}}]}"
+        },
+        {
+          "t_ms": 2220.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"只是\"}}]}"
+        },
+        {
+          "t_ms": 2234.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"让\"}}]}"
+        },
+        {
+          "t_ms": 2234.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一切\"}}]}"
+        },
+        {
+          "t_ms": 2248.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"慢慢\"}}]}"
+        },
+        {
+          "t_ms": 2248.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"回来\"}}]}"
+        },
+        {
+          "t_ms": 2261.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 2261.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"如果\"}}]}"
+        },
+        {
+          "t_ms": 2262.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"非要\"}}]}"
+        },
+        {
+          "t_ms": 2272.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"挑\"}}]}"
+        },
+        {
+          "t_ms": 2287.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一句\"}}]}"
+        },
+        {
+          "t_ms": 2287.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"最\"}}]}"
+        },
+        {
+          "t_ms": 2288.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"想\"}}]}"
+        },
+        {
+          "t_ms": 2301.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"送\"}}]}"
+        },
+        {
+          "t_ms": 2314.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你的\"}}]}"
+        },
+        {
+          "t_ms": 2329.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2329.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"我会\"}}]}"
+        },
+        {
+          "t_ms": 2341.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"选\"}}]}"
+        },
+        {
+          "t_ms": 2342.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"最后\"}}]}"
+        },
+        {
+          "t_ms": 2384.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"一句\"}}]}"
+        },
+        {
+          "t_ms": 2384.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"：\"}}]}"
+        },
+        {
+          "t_ms": 2385.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"不用\"}}]}"
+        },
+        {
+          "t_ms": 2385.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"急着\"}}]}"
+        },
+        {
+          "t_ms": 2385.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"茂\"}}]}"
+        },
+        {
+          "t_ms": 2385.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"盛\"}}]}"
+        },
+        {
+          "t_ms": 2386.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2386.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"温\"}}]}"
+        },
+        {
+          "t_ms": 2400.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"存\"}}]}"
+        },
+        {
+          "t_ms": 2400.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"地\"}}]}"
+        },
+        {
+          "t_ms": 2467.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"待\"}}]}"
+        },
+        {
+          "t_ms": 2467.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"着\"}}]}"
+        },
+        {
+          "t_ms": 2467.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2468.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"也算\"}}]}"
+        },
+        {
+          "t_ms": 2468.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"春天\"}}]}"
+        },
+        {
+          "t_ms": 2469.1,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"。\\n\\n\"}}]}"
+        },
+        {
+          "t_ms": 2469.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}"
+        },
+        {
+          "t_ms": 2469.8,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"写\"}}]}"
+        },
+        {
+          "t_ms": 2479.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"这首诗\"}}]}"
+        },
+        {
+          "t_ms": 2479.5,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2494.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"是想\"}}]}"
+        },
+        {
+          "t_ms": 2494.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"送给\"}}]}"
+        },
+        {
+          "t_ms": 2532.7,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"谁\"}}]}"
+        },
+        {
+          "t_ms": 2533.0,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"，\"}}]}"
+        },
+        {
+          "t_ms": 2533.3,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"还是\"}}]}"
+        },
+        {
+          "t_ms": 2533.6,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"想\"}}]}"
+        },
+        {
+          "t_ms": 2533.9,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"留\"}}]}"
+        },
+        {
+          "t_ms": 2534.2,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"给自己\"}}]}"
+        },
+        {
+          "t_ms": 2534.4,
+          "line": "data: {\"choices\":[{\"delta\":{\"content\":\"？\"}}]}"
+        },
+        {
+          "t_ms": 2535.4,
+          "line": "data: [DONE]"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "n": 2,
+    "min": 955.4,
+    "max": 975.1,
+    "mean": 965.25,
+    "p50": 965.25,
+    "p95": 974.115
+  },
+  "burst_window_s": 0.5,
+  "errors": [],
+  "tool": "perf_baseline/1",
+  "ts": "2026-10-03T18:02:55+0800"
+}
