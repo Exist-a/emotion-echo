@@ -11,7 +11,7 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 > ⚠️ **状态：收口执行（2026-10-05 续 2026-10-03 停工留档）** ——
 > 20/20 测试点终判完成（**18 PASS + 2 FAIL-已分类**：#4 测点加性差定性、
 > #19 回归钉未全绿——失败全数归账 F-195/197 非本域回归），8 个修复 PR 已合并 main，
-> §8 三节已回填、机器审计 **30 阶段 0 FAIL**、第二方核对进行中（§8.3）。
+> §8 三节已回填、机器审计 **30 阶段 0 FAIL**、第二方核对**首轮不通过 3 项已修正→复核中**（§8.3.1）。
 > 收口 PR 待开（push 需用户放行）。
 >
 > 阶段上限 **partial**：D-43 裁定的 **F-135（双端点流式播放）
@@ -47,7 +47,7 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 | 14 | [M] M2 F-134/135/136 裁定 | [M] | PASS | **D-43 用户拍板「双端点+多 worker 全做」**（AskUserQuestion）；F-136 ✅（synth_pool+ADR 决策39+#11 复测）、F-134 ✅（manager+sender 双层，vitest 619→623 零回归+#13 实测）；**F-135 未实施** → 账本仍挂（partial 依据）；裁定与落地状态已同步 decisions.md D-43 + ledger | decisions.md D-42/D-43 行 + 账本 F-134/135/136 状态 |
 | 15 | SSE 小阶梯 1/2 并发 | [A] | PASS | 干净轮：c=1 n=3 p50=1006.9ms / c=2 n=3 p50=772.4ms，**零错误**（LLM 方差 > 并发效应，n=3 如实记录不外推）；过程中 **F-192 簇**（1×Reset + 5×401 后同 token 复检 200）→ 重试甄别吸收 | `sse_ladder.json`；期间资源采样见 #16 |
 | 16 | 资源对照采样 | [A] | PASS | 阶梯期间 docker stats：xtts 2.54GiB/6GiB（CPU 0.1-0.3%）、llm-service 141-156MiB/1GiB（CPU 0.5-1.2%）、web-bff <1.2%/1GiB；宿主 Docker 视图 9.7GiB 总量，余量足；**xtts 冻结事件后内存纪律**：8GB WSL 红线复证 | 采样输出 + 冻结恢复记录（§1 事件②） |
-| 17 | Grafana p95 面板数据核对 | [A] | PASS | Prometheus 重启后先打 60×/analyze 真实流量（p50=1.44ms 全 2xx）再拍：面板渲染 **HTTP p95 Latency 17:00 处真实曲线**（5-28ms 区间）+ Request Rate/Error Rate/Goroutines 四面板全有数；截图 md5=`a1d729dc` 像素机械判定 colorful_px=17218(1.87%)（与上轮停工前 dark-only 假象区分——本轮目视与像素统计一致）；PromQL `histogram_quantile(0.95, llm_http_request_duration_seconds_bucket)` 有值交叉验证 | `screenshots/28-17-grafana-p95-panel.png` + 流量注入记录；folder-uid 过滤（`type=dash-db`）修正确保 `/d/uid` 命中 |
+| 17 | Grafana p95 面板数据核对 | [A] | PASS | Prometheus 重启后先打 60×/analyze 真实流量（p50=1.44ms 全 2xx）再拍：面板渲染 **HTTP p95 Latency 注入点处真实曲线**（蓝峰 ~200ms + 红橙支线）+ Request Rate/Error Rate/Goroutines 四面板全有数；截图 md5=`81f3f79d17ace49cebf481fa6c7e5544`（**1280×720 chromium 终版**，2026-10-05 第二方核对后重拍——此前被 mobile project 同路径截图覆盖成 1081×1999 属证据漂移，已修流程：mobile 全套跑后必须 chromium 重拍 #17 存档）像素机械判定 colorful_px=17243(1.87%) + 目视四面板交叉一致；PromQL `histogram_quantile(0.95, llm_http_request_duration_seconds_bucket)` 有值交叉验证 | `screenshots/28-17-grafana-p95-panel.png` + 流量注入记录；folder-uid 过滤（`type=dash-db`）修正确保 `/d/uid` 命中 |
 | 18 | [V] 基线报告可读性+视觉取证 | [V] | PASS | 23 份 baseline JSON + 3 张截图逐一目视（28-09 气泡渐进 / 28-12 会话+音频链 / 28-17 Grafana 面板）；数字与单位无占位/错位 | `screenshots/28-*.png` 已被查看（本 report §2 证据列路径可溯） |
 | 19 | Playwright 回归钉 | [A] | FAIL | spec 建立 5 用例；**终判双 project（真 dev server=停 web 容器+源码 chunk 复验后）：chromium 3/4 过（#19/#13/#17 绿、#12 败）、mobile 2/4 过（#13/#17 绿、#19/#12 败）⇒ 未"收口跑绿"按字面判 FAIL**。失败归账：#12=F-195（播放层 gen 竞争，双 project，上轮 PASS 本轮同码 FAIL=时序敏感非回归）；mobile #19=F-197（fill 后按钮 5s 不启用，真代码复现非旧代码）。**过程重大发现=F-196**：昨日 web 容器（旧镜像）抢占 :3000 致全套跑旧代码（chromium 4/4 假败），停容器+dev server 重启后 #13 F-134 证据随即 PASS；探针实证 F-134 正确代码下首句流中发出+三句三段（27/30/27 字） | 见 §8.1 终判表 + F-195/196/197 账本行；**FAIL（已分类处置）**：失败均归账非本域回归 |
 | 20 | 收口对账与审计 | [A] | PASS | 账本对账：F-26 ✅（23 份 JSON 基线落档）/ F-134 ✅ F-136 ✅ 闭环、**F-135 🔴 如实挂账（⇒ partial）**、F-190✅ F-191🔴 F-192🔴 F-193✅ F-194🔴 + 收口新账 F-195🔴 F-196🔴 F-197🔴 连续编号（下一号 F-198）；`e2e_stage_audit.py --all` **30 阶段 0 FAIL**（2026-10-05，含 e2e-28 ✅ roadmap=partial 三处一致） | 见 §8.3 审计输出 + 第二方核对记录 |
@@ -98,7 +98,7 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 
 - [x] §8 三节回填完毕、占位符清零（2026-10-05 grep `<!--` / `见 §8 回填` 零命中）
 - [x] 机器审计 `e2e_stage_audit.py --all` **30 阶段 0 FAIL**（2026-10-05，改 roadmap 后复验）
-- [x] 第二方核对（§8.3，只读子代理）
+- [x] 第二方核对首轮（§8.3.1）：**不通过 3 项已全部修正**，第二轮复核中（结论见 §8.3.1 末）
 - [ ] git status 干净（收口 PR 内）
 - [ ] main 与 origin 无 ahead/behind（合并后）
 - [ ] 无残留已合并分支（合并即删）
@@ -128,7 +128,7 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 **PASS**（2026-10-04 重拍 + 2026-10-05 复验口径一致）：
 - **前置**：Prometheus 重启后先注入 60×/analyze 真实流量（p50=1.436ms 全 2xx，`llm_http_request_duration_seconds_bucket` p95=0.0015 已入 Prom），避免"面板有板无数据"；
 - **用例**：`-g '#17'` chromium passed（37.3s），断言链全过：search API 可达（`page.evaluate(fetch)` 绕 F-192）→ `type=dash-db` 过滤命中 overview → 面板标题 /p95|延迟/Latency/ 匹配；
-- **截图**：`screenshots/28-17-grafana-p95-panel.png`，md5=`a1d729dcc3a214b408a11fc6d46fb55f`，**像素机械判定** colorful_px=17218（1.87%，彩色曲线=真实数据渲染特征）+ 目视交叉一致——HTTP p95 Latency 面板 17:00 处 5-28ms 真实曲线、四面板（Request Rate/Error Rate/p95/Goroutines）全渲染（停机轮 dark-only 假象已排除）；
+- **截图**：`screenshots/28-17-grafana-p95-panel.png`，md5=`81f3f79d17ace49cebf481fa6c7e5544`（**1280×720 chromium 终版**），**像素机械判定** colorful_px=17243（1.87%，彩色曲线=真实数据渲染特征）+ 目视交叉一致——HTTP p95 Latency 面板注入点处蓝峰 ~200ms 真实曲线、四面板（Request Rate/Error Rate/p95/Goroutines）全渲染（停机轮 dark-only 假象已排除）；**证据漂移事件（第二方核对抓获）**：首版 md5=a1d729dc 曾被后续 mobile project 同路径截图（1081×1999 视口）覆盖致 report 引用不可复核——2026-10-05 按核对意见 chromium 重拍本版为终版，**流程固化：mobile 全套跑完后必须重拍 #17 chromium 版存档**；
 - **数据交叉**：PromQL `histogram_quantile(0.95, llm_http_request_duration_seconds_bucket[5m])` 有值（1.5ms 量级）与面板同源。
 
 ### 8.3 机器审计 + 第二方核对
@@ -145,10 +145,24 @@ $ python scripts/e2e_stage_audit.py --all
 
 **第二方核对（§13.3，只读子代理）：** 见 §8.3.1。
 
+### 8.3.1 第二方核对结果（2026-10-05，只读子代理独立取证）
+
+**首轮判定：不通过（3 项 FAIL）**——核对有效（自证不可信原则再次验证），逐项修正如下：
+
+| # | 核对抓到的问题 | 修正动作 | 状态 |
+|---|---------------|----------|------|
+| 1 | **账本对账失真**：report 称 F-26✅/F-134✅/F-136✅ 闭环，账本实为 🔴/🟡/🟡；F-135 状态 🟡 且"依赖 F-136 顺序"文案过期 | 翻账本 4 行状态列（证据均已在案）：F-26→✅（落档+埋点消费+复现性三判据过，D-42 阈值门禁留 M1）、F-134→✅（双层修复+探针三段切实证）、F-136→✅（synth_pool+重叠实证）、F-135→🔴（去依赖文案，明确=partial 唯一本阶段依据） | ✅ 已修正 |
+| 2 | **#17 截图证据不可复核**：report 引 md5=a1d729dc 全仓库零命中；当前文件 1081×1999 只含两面板——**mobile project 同路径截图覆盖了 chromium 版**（`fullPage:false` 同文件名，双 project 证据漂移） | chromium 重拍 #17 终版（passed 37.5s）：md5=`81f3f79d17ace49cebf481fa6c7e5544`、1280×720、colorful_px=17243(1.87%)、目视四面板一致；report 三处引用（§2/§8.2/§9）已更新；**流程固化：mobile 全套跑完必须 chromium 重拍 #17 存档** | ✅ 已修正 |
+| 3 | **§7 假勾选**：`[x] 第二方核对` 在核对完成前勾选 + §8.3.1 悬空引用 + §1 前言"进行中"三处状态矛盾 | 本小节补实（核对结果+修正记录）；§7 勾选改为"首轮不通过 3 项已修正，复核中"；§1 前言同步 | ✅ 已修正 |
+
+**复核（第二轮）：** 见下方复核结论（修正后由原核对子代理只读复核 3 项修正）。
+
+核对其余 5 项（四值+汇总计数 / §8 占位清零 / audit 独立复跑 0 FAIL / 三处 status 一致 / plan 判据口径一致）**首轮即 PASS**；§5"4/4 绿"与 §9 停工期原文判为带标注历史记录（合规）。
+
 ## 9. 停工快照（2026-10-03，用户指令：落地文档不 push、标记未完成、记录问题）
 
 > **2026-10-04/05 续做进度标注**（下表为停工期原文，✅ 为续做轮已完成）：
-> ① #17 截图 ✅（带数据重拍 md5=a1d729dc，见 §8.2）；② §8 回填 ✅（8.1/8.2/8.3 全填）；
+> ① #17 截图 ✅（带数据重拍终版 md5=81f3f79d，见 §8.2；首版曾被 mobile 覆盖已按核对修正）；② §8 回填 ✅（8.1/8.2/8.3 全填）；
 > ③ audit ✅（30 阶段 0 FAIL）；④ 第二方核对 → 进行中（§8.3）；⑤ 收口 PR 待开（push 需放行）；
 > ⑥ F-135 仍 🔴（partial 依据不变）；⑦ 收尾：`.devmode-session` 已重新登记（续做轮），
 > dev server :3000 与容器栈仍运行（**web 容器须保持停止**——:3000 归本地 dev server，
