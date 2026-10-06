@@ -188,7 +188,7 @@ $ python scripts/e2e_stage_audit.py --all
 **实施（TDD，本地分支 `feat/e2e-28-f135-dual-endpoint-tts` 5 commits，未合并）**：
 - RED→GREEN：`pcmStreamPlayer.ts`（WebAudio int16 PCM 流式播放器，16 契约测试：int16 解码含跨 chunk 奇数字节 carry / gapless 排程 / 欠载贴 currentTime / gain clamp F-140 / 媒体时钟 / finish 衔接 / stop 停声）+ `useTTSPlayer` 双端点整合（stream 主路径 + phonemes 口型 + 回退链）；vitest 646/646 + typecheck 0 错。
 
-**实测抓出两个真缺陷（已修复并合并 main）**：
+**实测抓出两个真缺陷（XTTS 锁修复已含于本收口 PR；StreamBuffer 背压修复在 f135 本地分支随 D-44 否决不合并）**：
 1. **XTTS 模型级并发数据竞争**（服务端）：`inference()`/`inference_stream()` 共享 `gpt_inference.cached_prefix_emb`（gpt.py:570 每次推理覆盖写）⇒ 跨端点并发推理 = 数据竞争（stream+phonemes 并发双双截断 1.1s vs 基线 2.1s；`index out of range`/`tensor a(84)!=b(83)` 错误簇）。修 = `INFERENCE_LOCK`（模型级互斥）+ `locked_stream`（生产者线程+有界队列防消费者饿死锁）；XTTS 单测 47/47；镜像 v2.0.1 部署后容器内 6 并发全成功零截断。**注**：test_synth_pool 契约 #1（"两推理真并行"）有意反转为互斥——ADR-2026-10 决策 39 的"算子释放 GIL=可真并行"前提被证伪。
 2. **前端未读 stream body 的 TCP 背压饿死服务端推理锁**：预取即读缓冲（StreamBuffer）修复。
 
