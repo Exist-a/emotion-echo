@@ -996,3 +996,7 @@ Stage 33 P0 修复+BFF净化 █████████████████
 >
 > **根因修正**：账本 F-136 原记"uvicorn 单 worker 串行"是表象；E2E-28 #11 实测 + server.py 回读定位真根因 = **async handler 在事件循环里直调阻塞推理（13~30s）⇒ 循环锁死**。
 > **取舍**：线程池（torch CPU 算子释放 GIL，零内存）✓；进程级多 worker 每 worker ~2.5GiB，`.wslconfig` 8GB + 19 容器稳态 ~6G ⇒ 击穿前科（2026-09-22 冻结三连）✗。
+
+### 决策 40：在线 TTS 主链路 = **SiliconFlow CosyVoice2-0.5B 流式 API，XTTS 降级离线回退**（2026-10-06 用户拍板 · D-44）
+
+> 🟢 **accepted**（2026-10-06 用户拍板「接 TTS API」路线；详见 ADR `docs/architecture/adr/adr-2026-10-tts-api-cosyvoice2.md`）。**选型实测定稿**（同日）：TTFB ~0.33s、33 字完整合成 1.4~1.6s（≈2x 实时）、pcm=int16 LE 单声道 24k 直配 PCMStreamPlayer、ASR 回读逐字一致、4/4 稳定；MOSS-TTSD 实测不适合短句（复读参考内容）排除。**实施 = E2E-F-198 专项**：TTS provider 接口隔离（cloud/local 双 provider，禁止业务代码直写供应商域名）、`TTS_API_KEY` 只进 gitignored `.env.local`（红线同 LLM key）、播放层复用本地分支 `feat/e2e-28-f135-dual-endpoint-tts` 的 PCMStreamPlayer、cloud 异常自动降级 XTTS v2.0.1（含 INFERENCE_LOCK）。
