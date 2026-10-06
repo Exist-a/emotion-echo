@@ -10,7 +10,9 @@ test_synth_pool.py · XTTS 推理卸载线程池单元测试（E2E-28 C4 / D-43 
   ~6G）有击穿风险 ⇒ 修法取**线程池卸载**（torch CPU 算子释放 GIL，零内存成本）。
 
 契约：
-  1. run_synth 并发重叠：两个 0.4s 任务并行完成 < 0.7s（串行会 ≥0.8s）
+  1. 【2026-10-06 反转】run_synth 模型级互斥：两个 0.4s 任务串行（≥0.8s）——
+     原"并行"契约有误（模型共享 cached_prefix_emb，并发=数据竞争，
+     F-135 实测引爆）；F-136 原始意图（事件循环不阻塞）仍由本文件验证
   2. 池容量上限：max_workers=1 时两个任务串行（≥0.8s）——防"无限开线程"
   3. 异常透传：任务抛错 → await 方抛同异常（不静默）
   4. env 配置：XTTS_SYNTH_WORKERS 解析（非法值回退默认）
@@ -42,14 +44,22 @@ def _sleep_task(seconds: float) -> str:
 
 class TestRunSynthConcurrency:
     def test_two_tasks_overlap(self):
-        """并发重叠：两个 0.4s 任务并行 < 0.7s（串行 ≥0.8s）。"""
+        """【2026-10-06 有意反转】并发任务模型级互斥：两个 0.4s 任务 ≥0.8s。
+
+        F-135 实测推翻原契约"两推理真并行"：inference/inference_stream 共享
+        gpt_inference.cached_prefix_emb（gpt.py:570 覆盖写）⇒ 并发推理 =
+        数据竞争（stream+phonemes 并发双双截断 1.1s vs 基线 2.1s + index
+        out of range / tensor 错位错误簇）。修法 = INFERENCE_LOCK（见
+        test_inference_lock.py）。本测试只验证**事件循环不阻塞**（两任务
+        都能在池里被受理完成，而非第二个请求连 accept 都进不来）。
+        """
         start = time.perf_counter()
         results = asyncio.run(_two_runs(0.4))
         elapsed = time.perf_counter() - start
         assert results == ["ok", "ok"]
-        assert elapsed < 0.7, (
-            f"两个 0.4s 任务耗时 {elapsed:.3f}s —— 未并行（串行才会 ≥0.8s），"
-            "事件循环阻塞问题没修掉"
+        assert elapsed >= 0.8, (
+            f"两个 0.4s 任务耗时 {elapsed:.3f}s —— 未互斥！模型并发 = "
+            "cached_prefix_emb 数据竞争（坏数据比崩溃更隐蔽）"
         )
 
     def test_pool_capacity_one_serializes(self):

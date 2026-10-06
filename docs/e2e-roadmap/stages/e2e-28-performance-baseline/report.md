@@ -2,7 +2,7 @@
 stage: e2e-28
 title: 性能与延迟基线
 executed: 2026-10-03
-status: partial
+status: done
 environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.local + --profile dev,ai,obs）
 ---
 
@@ -10,11 +10,14 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 
 ## 0. 未完成清单（唯一真相源 · 收口时必须逐条销账）
 
-**1 项未完成。**
-
-| 编号 | 事项 | 责任人 | 完成判据 | 状态/备注 |
-|------|------|--------|----------|-----------|
-| **T-1** | **F-135 双端点流式播放未实施**（D-43 裁定"全做"三件的第三件；前两件 F-136/F-134 已闭环）——实施面 = WebAudio int16 PCM 流式播放器（`/tts_stream` 实为裸 int16 PCM 非 WAV）+ 与 F-129 队列/口型链整合 | 执行者实施（升级选项见 §6①：推荐下阶段专 session；范围裁减需用户裁定） | 账本 E2E-F-135 翻 ✅ 且 `performance-baseline.spec.ts` TTS 相关用例在新播放路径下复测绿 | 🔴 开放——**本阶段 partial 的唯一本阶段依据**（RUNBOOK §7#9；owner=E2E-28） |
+> **本节已清空 —— 2026-10-06 阶段判 `done`。**
+>
+> 原 T-1（F-135 双端点流式播放）经 2026-10-06 实测**否决销账**（D-44 用户拍板）：
+> ① XTTS 模型不并发安全（`cached_prefix_emb` 数据竞争 → 已修 `INFERENCE_LOCK`，XTTS v2.0.1）；
+> ② 互斥后 stream/phonemes 串行 ⇒ 双端点收益消失（首声 22-34s ≈ 现状 20-30s）；
+> ③ `inference_stream` 按文本片段 yield，对切段后的单句段**无渐进性**（实测 3 chunks 同刻到达）。
+> 加速路线改 = 流式 TTS API（**E2E-F-198** 专项，owner=下一阶段）；前端实现保留在本地分支不合并。
+> 销账过程：1 项（F-135 未实施）→ 0 项（实测否决有据，非"不做了"——否决依据与替代路线均已落档 decisions.md D-44）。
 
 > 归账说明（AP-14：本节是本阶段"没做的事"的唯一权威清单）：
 > §9.1 停工期清单 6 项中前 5 项（§8 回填 / #17 截图 / audit / 第二方核对 / 收口 PR）已于 2026-10-05 全部完成；
@@ -22,16 +25,17 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 > F-197（mobile fill，owner=E2E-30/专项）均**范围外转挂**，不在本清单；§6 升级项 2/3（WSL 内存上调=用户系统配置、
 > M1 阈值门禁=已裁定 D-42 延至二轮数据）属已决议/用户域，不计未完成。
 
-> ⚠️ **状态：收口执行（2026-10-05 续 2026-10-03 停工留档）** ——
+> ✅ **状态：收口完成（2026-10-06，续 2026-10-05 收口执行 / 2026-10-03 停工留档）** ——
 > 20/20 测试点终判完成（**18 PASS + 2 FAIL-已分类**：#4 测点加性差定性、
 > #19 回归钉未全绿——失败全数归账 F-195/197 非本域回归），8 个修复 PR 已合并 main，
 > §8 三节已回填、机器审计 **30 阶段 0 FAIL**、第二方核对**首轮 3 项已修正→第二轮复核通过**（§8.3.1）。
-> IAB 收口复测通过（2026-10-05，见 §7）；收口 PR = 本 PR（用户已放行推送）。
+> IAB 收口复测通过（2026-10-05，见 §7）。
 >
-> 阶段上限 **partial**：D-43 裁定的 **F-135（双端点流式播放）
-> 未实施**，账本 owner=E2E-28 仍挂（RUNBOOK §7#9）。F-134/F-136/F-26 已闭环。
+> **F-135 已处置（2026-10-06）**：实施过程中实测推翻双端点前提（XTTS 并发数据竞争 → 修
+> `INFERENCE_LOCK`（XTTS v2.0.1，模型级互斥）→ 串行化 → 双端点收益消失 + stream 端点对单句段无
+> 渐进性），**用户裁定否决**（D-44）+ TTS 加速改走流式 TTS API（F-198 专项）。详见 §8.4。
 > 收口新账：**F-195**（播放层 gen 竞争时序敏感）/ **F-196**（:3000 被 web 容器
-> 旧镜像抢占——本轮最大排查陷阱）/ **F-197**（mobile fill 不启用按钮）。
+> 旧镜像抢占——本轮最大排查陷阱）/ **F-197**（mobile fill 不启用按钮）/ **F-198**（TTS API 专项，owner=下一阶段）。
 
 ## 1. 环境基线
 
@@ -104,7 +108,7 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 
 ## 6. 待决策 / 升级项
 
-1. **F-135 双端点流式播放（D-43 裁定"全做"的第三件）未实施** —— 实施面 = WebAudio int16 PCM 流式播放器（`/tts_stream` 实为裸 int16 PCM 非 WAV）+ 与 F-129 队列/口型链整合，改动深、直接触达核心音频 UX。本阶段已完成其两件前置（F-136 并发、F-134 首声提前），**升级请示**：① 下阶段专 session 实施（推荐，账本 F-135 已跟踪）② 改判范围（用户可裁减）③ 现在继续（本收口后）。**阶段判 partial 即因此条。**
+1. ~~F-135 双端点流式播放未实施~~ → **已处置（2026-10-06，D-44 用户拍板：实测否决）** —— 实施过程实测推翻双端点前提：XTTS 模型不并发安全（修 `INFERENCE_LOCK`）、互斥后串行使双端点收益消失（首声 22-34s ≈ 现状 20-30s）、`inference_stream` 对单句段无渐进性（3 chunks 同刻到达）。**TTS 首声加速改走流式 TTS API（E2E-F-198 专项，owner=下一阶段）**，XTTS 降级离线回退。证据与裁定全文见 decisions.md D-44 + §8.4。
 2. WSL 8GB 第 4 次冻结 —— 是否上调 `.wslconfig` memory（如 10-12GB，需确认宿主物理内存余量）属用户系统配置，不擅动；候选记账。
 3. M1（D-42）阈值门禁：基线已落档，二轮数据后再议（裁定原文保留于 D-42）。
 
@@ -114,6 +118,7 @@ environment: dev 模式（19 容器栈 + obs profile，compose.dev.yml + .env.lo
 - [x] 机器审计 `e2e_stage_audit.py --all` **30 阶段 0 FAIL**（2026-10-05，改 roadmap 后复验）
 - [x] 第二方核对（§8.3.1）：首轮不通过 3 项已全部修正，**第二轮复核通过（可收口）**
 - [x] IAB 收口复测（2026-10-05）：真 dev server（chunk URL = `@fs`/源码路径形态，F-196 甄别法）下演示账号登录 → 发消息 → AI 回复完整到达 + 截图目视——`screenshots/28-closure-iab-retest.png`
+- [x] F-135 处置（2026-10-06）：实测否决（§8.4 证据链三件）→ D-44 用户拍板改走流式 TTS API（F-198 专项）——**本阶段 partial 的唯一依据销账，阶段转 done**
 - [x] git status 干净（收口 PR 提交时点）
 - [x] main 与 origin 无 ahead/behind（合并后复核，见 PR 记录）
 - [x] 无残留已合并分支（§2.5 收口时删除本分支）
@@ -175,6 +180,24 @@ $ python scripts/e2e_stage_audit.py --all
 核对其余 5 项（四值+汇总计数 / §8 占位清零 / audit 独立复跑 0 FAIL / 三处 status 一致 / plan 判据口径一致）**首轮即 PASS**；§5"4/4 绿"与 §9 停工期原文判为带标注历史记录（合规）。
 
 > **可复核性约定（防下次复核反推）**：本 report 引用的 colorful_px 判定阈值 = **`max−min>60 且 max>120`**（PIL，convert('RGB')）。
+
+### 8.4 F-135 处置轮（2026-10-06，收口后追加 · 用户裁定否决）
+
+> 本节记录 2026-10-06 收口后追加的实施与实测轮（用户裁定"继续做完 F-135"→ 实测否决 → 裁定改走 TTS API）。
+
+**实施（TDD，本地分支 `feat/e2e-28-f135-dual-endpoint-tts` 5 commits，未合并）**：
+- RED→GREEN：`pcmStreamPlayer.ts`（WebAudio int16 PCM 流式播放器，16 契约测试：int16 解码含跨 chunk 奇数字节 carry / gapless 排程 / 欠载贴 currentTime / gain clamp F-140 / 媒体时钟 / finish 衔接 / stop 停声）+ `useTTSPlayer` 双端点整合（stream 主路径 + phonemes 口型 + 回退链）；vitest 646/646 + typecheck 0 错。
+
+**实测抓出两个真缺陷（XTTS 锁修复已含于本收口 PR；StreamBuffer 背压修复在 f135 本地分支随 D-44 否决不合并）**：
+1. **XTTS 模型级并发数据竞争**（服务端）：`inference()`/`inference_stream()` 共享 `gpt_inference.cached_prefix_emb`（gpt.py:570 每次推理覆盖写）⇒ 跨端点并发推理 = 数据竞争（stream+phonemes 并发双双截断 1.1s vs 基线 2.1s；`index out of range`/`tensor a(84)!=b(83)` 错误簇）。修 = `INFERENCE_LOCK`（模型级互斥）+ `locked_stream`（生产者线程+有界队列防消费者饿死锁）；XTTS 单测 47/47；镜像 v2.0.1 部署后容器内 6 并发全成功零截断。**注**：test_synth_pool 契约 #1（"两推理真并行"）有意反转为互斥——ADR-2026-10 决策 39 的"算子释放 GIL=可真并行"前提被证伪。
+2. **前端未读 stream body 的 TCP 背压饿死服务端推理锁**：预取即读缓冲（StreamBuffer）修复。
+
+**否决证据链（决定性）**：
+- 空闲态单 stream 请求：**首块 36.8s = 完成时刻**（3 chunks 同刻到达）——`inference_stream` 按文本片段 yield，切段后的单句段 = 一个片段 ⇒ **对产品真实场景（短句段）stream 端点无渐进性**，"5-15s 出声"前提不成立；
+- 浏览器实测首声（pcm-start）：22-34s ≈ main 现状 phonemes-only 20-30s——锁互斥后 stream 与 phonemes 排同一推理队，双端点核心收益消失；
+- 双端点净成本 = ×2 推理压力（6 推理/3 段 = 157s 排空）+ BFF 90s 整请求超时掐死队列尾部。
+
+**裁定（2026-10-06 AskUserQuestion，用户拍板）**：F-135 否决；TTS 首声加速改走**流式 TTS API**（硅基流动 CosyVoice2 类，首字 0.5-1s；用户自行申请 key）；XTTS 降级为离线回退（推理锁修复保护回退路径）。落地 = **E2E-F-198**（owner=下一阶段）；决策 D-44 登记完成，D-43 标记 superseded。
 
 ## 9. 停工快照（2026-10-03，用户指令：落地文档不 push、标记未完成、记录问题）
 

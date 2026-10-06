@@ -550,13 +550,14 @@ services:
   # 验证过 133KB WAV 端到端跑通）。
   # =====================================================
   emotion-echo-xtts:
-    image: emotion-echo/xtts:v2.0.0
+    image: emotion-echo/xtts:v2.0.1
     container_name: emotion-echo-xtts
     restart: on-failure
     # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
     user: root
     profiles: ["ai"]
-    # 仓内镜像 emotion-echo/xtts:v2.0.0（build 自 emotion-echo-models/XTTS/Dockerfile）；
+    # 仓内镜像 emotion-echo/xtts:v2.0.1（build 自 emotion-echo-models/XTTS/Dockerfile；
+    # v2.0.1 = F-135 实测修复：模型级推理互斥 INFERENCE_LOCK + locked_stream，2026-10-06）；
     # Dockerfile CMD 已包含 python server.py --host=0.0.0.0 --port=8003 --device cpu，
     # 故此处不覆盖 command
     environment:

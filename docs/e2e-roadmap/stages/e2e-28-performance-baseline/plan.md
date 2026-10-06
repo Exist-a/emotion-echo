@@ -2,9 +2,9 @@
 stage: e2e-28
 title: 性能与延迟基线
 type: verification
-status: partial
+status: done
 created: 2026-10-03
-last-updated: 2026-10-05（**收口执行中**：§8 回填 + audit + 第二方核对推进（续 2026-10-03 停工留档）；20/20 有结论 = 18 PASS + 2 FAIL-已分类（#4 测点加性差 / #19 回归钉未全绿 F-195/197 归账）；F-136/F-134/F-26 闭环；**F-135 未实施 ⇒ partial**（report §6 升级项①）；M1/M2 → D-42/D-43；账本 F-190~197；详见 report.md）
+last-updated: 2026-10-06（**done：F-135 实测否决（D-44）+ TTS API 路线裁定（F-198 专项）销账**；原记录：2026-10-05 收口执行中：§8 回填 + audit + 第二方核对推进（续 2026-10-03 停工留档）；20/20 有结论 = 18 PASS + 2 FAIL-已分类（#4 测点加性差 / #19 回归钉未全绿 F-195/197 归账）；F-136/F-134/F-26 闭环；**F-135 未实施 ⇒ partial**（report §6 升级项①）；M1/M2 → D-42/D-43；账本 F-190~197；详见 report.md）
 depends-on: [e2e-10, e2e-17, e2e-22]
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §4
