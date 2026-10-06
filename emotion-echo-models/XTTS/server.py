@@ -21,7 +21,7 @@ import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pcm_chunk_shape import pcm_chunk_shape
-from synth_pool import run_synth  # E2E-28 C4/D-43: 推理卸载线程池（事件循环阻塞根因修复）
+from synth_pool import locked_stream, run_synth  # E2E-28 C4/D-43: 推理卸载线程池 + F-135: 模型级推理互斥
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -239,7 +239,12 @@ def stream_audio_generator(text: str, language: str = "zh-cn",
 
         chunk_count = 0
         total_bytes = 0
-        for chunk in streamer:
+        # F-135（2026-10-06）：inference_stream 与 synthesize 共享
+        # gpt_inference.cached_prefix_emb（gpt.py:570 store_prefix_emb），
+        # 跨路径并发推理 = 数据竞争（实测截断 + index out of range）。
+        # locked_stream 把整段生成搬进 INFERENCE_LOCK（与 run_synth 互斥），
+        # 生产者线程 + 有界队列保证消费者读慢/断开时锁可释放（防 phonemes 饿死）。
+        for chunk in locked_stream(lambda: streamer):
             if isinstance(chunk, torch.Tensor):
                 chunk = chunk.cpu().numpy()
             # Volume + clip + dtype conversion extracted to pcm_chunk_shape
