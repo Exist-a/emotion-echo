@@ -1,5 +1,5 @@
 ---
-status: planned
+status: landed
 priority: high
 created: 2026-10-06
 owner: E2E-F-198
@@ -247,3 +247,34 @@ compose（web-bff 段，紧邻 `BFF_LLM_API_KEY`）：`TTS_API_KEY: ${TTS_API_KE
 ## §H 调研依据（commit message 末尾用）
 
 调研依据：`tts_handler.go`、`downstream/xtts.go`、`config/config.go`、`XTTS/server.py:93,96-100,330-341`、`useTTSPlayer.ts:146,195,215,250`、`deploy/docker-compose.apps.yml:647,665`、`scripts/lint_env_vars.sh`、ADR `adr-2026-10-tts-api-cosyvoice2`（决策 40 / D-44）、SiliconFlow TTS 官方文档（WebFetch 实读）、账本 F-198/F-135/F-195/F-196/F-197/F-138。
+
+---
+
+## §I 执行记录（2026-10-07，PR #162 建档 + #163 实施，main=f7c51c4）
+
+**T1~T8 全部落地**（test+impl 成对 commit；CI Linux 全绿含 `-race`）。
+
+**决策点处置**：M1=B（`gain=20·log10(volume)` clamp [-10,10]，volume≤0 不发字段）/ M2=A（仅 tier-1）/ M3=A（BFF downstream 层）。
+
+**20 测试点结论速览**：
+
+| 组 | 结论 |
+|----|------|
+| #1~#6 provider/契约/复刻/前端零改动 | ✅ 单测全绿（web-bff 12 包 + shared）+ CI |
+| #7 缺 key 自动降级无 Warn | ✅ 运行时实证（重建 BFF 后真链 200，BFF 日志 0 条 degraded） |
+| #8 cloud 故障降级 + reason | ✅ 运行时实证（真 key + 上游哨兵缺陷期间：200 走 XTTS + `Warn(reason)` 留档）+ 单测 |
+| #9 mode=cloud fail-loud / #10 mode=local | ⚠️ 单测覆盖；运行时探针因 shell env 未达 compose 插值未完成（非阻塞，模式开关本身有单测钉死） |
+| #11 中文 payload 无编码损坏 | ✅ node 构造 UTF-8 `--data-binary`（红线执行），22 字原文到达上游并合成 |
+| #12 首声延迟 | ✅ **p50=1.34s（4/4，网关端到端）** vs XTTS 同文本 18.8s ≈14x；证据 `tts_evidence.json`/bench 运行日志 |
+| #13/#14 数字人可听+口型/多段 gap | 🔴 未做（浏览器 `[V]`）→ **转账本 F-199** |
+| #15 响度 / #16 音色 | 🔴 未做（可听性主观项）→ 转 F-199 |
+| #17 计费口径 | ✅ 按 UTF-8 字节计（官方文档）；22 字 120B/请求量级，~几元/月 |
+| #18 secret 红线 | ✅ 全 diff 无 key；yaml 无 Key 字段（测试钉死）；`.env.local` 未动（key 由用户 2026-10-07 自行加入） |
+| #19 env 门禁 | ✅ `lint_env_vars.sh` GREEN + 守卫 19/19 接 CI |
+| #20 回归钉 | ⚠️ 后端契约由 T1~T8 单测钉死；浏览器回归钉随 F-199 一并落 |
+
+**运行时抓到并 TDD 修掉的 2 个真缺陷**（本轮最大价值）：
+1. **SiliconFlow WAV `data` 块流式哨兵 0xFFFFFF00 误判截断**——真 key 首测 cloud 返回 307KB 完整音频却被 `parseWavMeta` 拒收 → 按设计降级 XTTS → 专项目标整体落空。修法：data 声明尺寸不可信（哨兵/截断不可区分）一律以实际到港字节算 duration；fmt 块仍须完整。
+2. **integration 测试构造签名未同步**——`test_integration_tag_compiles.sh`（守卫 8/8）在 CI 抓到，正是 E2E-23"build tag 代码无门禁编译"教训的活例证。
+
+**方法论留痕**：`| tail` 吃掉管道退出码造成"构建成功"假象（本 pipefail 陷阱的新形态：无 pipefail 时 tail 恒 0 掩盖 compose 失败）；`--env-file` 相对路径随 cwd 解析（构建必须在 deploy/ 下跑）；worktree 缺 gitignored 证书/`.env.local` 时 Docker 把挂载点建成目录 → 服务 crash-loop（`deploy/tls/*` 需从主工作区复制）。
