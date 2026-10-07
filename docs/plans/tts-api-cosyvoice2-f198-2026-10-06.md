@@ -278,3 +278,21 @@ compose（web-bff 段，紧邻 `BFF_LLM_API_KEY`）：`TTS_API_KEY: ${TTS_API_KE
 2. **integration 测试构造签名未同步**——`test_integration_tag_compiles.sh`（守卫 8/8）在 CI 抓到，正是 E2E-23"build tag 代码无门禁编译"教训的活例证。
 
 **方法论留痕**：`| tail` 吃掉管道退出码造成"构建成功"假象（本 pipefail 陷阱的新形态：无 pipefail 时 tail 恒 0 掩盖 compose 失败）；`--env-file` 相对路径随 cwd 解析（构建必须在 deploy/ 下跑）；worktree 缺 gitignored 证书/`.env.local` 时 Docker 把挂载点建成目录 → 服务 crash-loop（`deploy/tls/*` 需从主工作区复制）。
+
+---
+
+## §J F-199 浏览器端到端机械轮执行记录（2026-10-07 晚，IAB 实测）
+
+**环境**：main=3bded37 / web-bff v0.1.32（15:40:50 构建，含 T1~T8 + T3 哨兵修复）/ 本地 `pnpm dev` :3000（chunk URL 源码路径甄别通过，F-196 铁律）/ Nacos count:7 / cloud provider + 真 key。会话 #550、演示账号 echo、5 条消息 14 段。证据包：[f198-browser-evidence/](f198-browser-evidence/f199-tts-browser-evidence.json)（JSON + 4 截图，截图已人工目视）；11 段 WAV 本地留存 `f199-audio/`（gitignored，不入库）。
+
+| F-199 子项 | 结论 |
+|----|------|
+| ① 可听 | ✅ 14/14 段真实播放（HTMLMediaElement.play 只读探针），currentTime 逐段推进，零 console/page error |
+| ① 口型 | 🔴 **FAIL 实锤**——BFF phonemes char=汉字（T3 复刻 XTTS per-char，两 provider 同病）vs 前端 `charToLipShape` 拉丁映射表 → 89/89 次回调 neutral，口型从未激活。**长期潜伏缺陷，非云端迁移引入**。修复三选项属 [M] 用户拍板（a BFF 出拼音韵母 / b 前端 pinyin-pro / c 伪口型不推荐）；回归钉随修复 TDD |
+| ② 多段 gap | ✅ 5-41ms（基线 269ms）；F-195 未复现（21 fetch/14 play 差值 7 = 测试者自跑探针，已逐一对账） |
+| ③ 响度 | 客观 ✅（peak -4.6~-10.2 / RMS -23.5~-26.3 dBFS，散差 2.8dB）；主观待用户 |
+| ④ 音色 | 待用户听 `f199-audio/seg-01~11.wav` |
+
+**新观察**：① `speed` 默认 0.75（useTTSPlayer.ts:429）→ 播放墙钟 ≈ 音频时长 ×1.33，设计行为非缺陷；② duration/bytes/phonemesTotal 3/3 自洽（24kHz mono 16bit），一次 '你好' 短文本上游不一致（duration=2.32s vs bytes=0.64s）未复现，记观察；③ SiliconFlow WAV data 块 size=0xFFFFFF00 哨兵在生产路径被 T3 修复正确钳制（python `wave` 模块等"信任头字段"的读法会得天文数字时长，已知坑）。
+
+**F-198 专项整体**：API 链路 ✅（§I）；浏览器机械项如上；**完全闭环剩 = 口型 [M] 决策 + 修复 + 用户主观判定（③④）**。
