@@ -66,7 +66,7 @@ related-findings: [E2E-F-27, E2E-F-28, E2E-F-182, E2E-F-200, E2E-F-201, E2E-F-20
 |---|------|--------------------------|
 | **F1** | 🔴 **`POST /api/v1/auth/refresh` 匿名返回 200 并发放 `user_id=1` 的 24h 有效 JWT（认证绕过）** | 探针：`curl -i -X POST http://localhost:19080/api/v1/auth/refresh`（无 cookie、无 Authorization）→ `HTTP/1.1 200` + `Set-Cookie: access_token=eyJ…` + body `{"code":0,"data":{"accessToken":"…","expiresIn":86400,"user":{"id":"1","username":"user"…}}}`。**该 token 经网关读 `/users/me` 实测返回 `userId":1,"account":"echo"`** ⇒ 非仅"发了个 token"，而是**可直接用的会话**。根因三层：① BFF `main.go:307-313` `noAuthPathPrefixes` 用**前缀**放行整个 `/api/v1/auth/`；② APISIX `seed.sh:632` `put_auth_route 113 "/api/v1/auth/refresh"`（无 jwt-auth）；③ `auth_handler.go:215` `var userID int64 = 1` —— cookie/header 解析失败时**静默回落默认身份**（连"传了过期 token"也照样发新 token） |
 | **F2** | 🔴 **令牌类型隔离靠"恰好"而非显式契约** | `jwt.go:109-139` reset token（`Subject="reset-password"`、无 `UserID`）与 access token **共用同一 secret**；`Parse`（:82-97）要求 `UserID != 0` ⇒ reset token 确实过不了 access 路径（**当前安全**），但反向（access token 当 reset token）仅靠 `ParseResetToken` 的 `Subject` 校验兜住，且 **APISIX consumer 对 `key` claim 的匹配未测**——无任何测试钉住双向隔离 |
-| **F3** | 🔴 **BFF 可信链默认 fail-open + 端口暴露** | 探针：`curl -H "X-User-Id: 2" http://localhost:8894/api/v1/users/me` → **200** 返回 `smoke_user`（零认证）；`docker-compose.apps.yml:662` `BFF_TRUST_APISIX: ${BFF_TRUST_APISIX:-false}`（**默认关**）+ `:701` `- "8894:8894"`（宿主映射在位）；`compose.prod.yml:33-37` 只有注释"prod 应设 true / 应移除 8894"。`gin_auth.go:130-140` 语义：`RequireAPISIXIP=true` 且 CIDR 为空 ⇒ `cidrs==nil` ⇒ **一律拒绝**（fail-closed），`compileCIDRs` 失败同样退化空白名单 ⇒ **结论：风险不在中间件，而在"默认 false + 端口暴露 + prod 无强制"** |
+| **F3** | 🔴 **BFF 可信链默认 fail-open + 端口暴露** | 探针：`curl -H "X-User-Id: 2" http://localhost:8894/api/v1/users/me` → **200** 返回 `smoke_user`（零认证）；`docker-compose.apps.yml:662` `BFF_TRUST_APISIX: ${BFF_TRUST_APISIX:-false}`（**默认关**）+ `:701` `- "8894:8894"`（宿主映射在位）；`compose.prod.yml:33-37` 只有注释"prod 应设 true / 应移除 8894"。`gin_auth.go:130-140` 语义：`RequireAPISIXIP=true` 且 CIDR 为空 ⇒ `cidrs==nil` ⇒ **一律拒绝**（fail-closed），`compileCIDRs` 失败同样退化空白名单 ⇒ **结论：风险不在中间件，而在"默认 false + 端口暴露 + prod 无强制"**。**补正（同日实测）**：`compose.dev.yml:28-36` 的 dev 覆盖本会置 `true` 并给 CIDR `172.18.0.0/16`，而该网段**含 docker 网关 IP** ⇒ 宿主经映射直连 8894 时 RemoteAddr 落在段内，**即便加载 overlay 也照样能伪造**；当轮运行栈未加载该文件（见 F18），实际生效 apps.yml 默认 `false` |
 | **F4** | ✅ **缺 token 访问受保护端点被网关拦下** | 探针：`curl -i http://localhost:19080/api/v1/users/me` → `401` + `{"message":"Missing JWT token in request"}` + `WWW-Authenticate: Bearer realm="jwt"`（APISIX jwt-auth 生效） |
 | **F5** | ✅ **X-User-Id 由 APISIX 无条件覆盖注入（防伪造）** | `seed.sh:417-531`（serverless-post-function 在 jwt-auth **之后**执行，覆盖客户端传入的 `X-User-Id`）——与探针 F3 的对照：**经网关**不可伪造，**直连 8894** 可伪造 |
 | **F6** | ✅ **网关限流实测生效 60/60s（key=remote_addr）** | 探针：连续 70 次 `POST /api/v1/auth/login` → **60 个非 429 + 10 个 429**；响应头 `X-RateLimit-Limit: 60` / `X-RateLimit-Remaining: 59` / `X-RateLimit-Reset: 60`（`seed.sh:597` 白名单链、:457-465 catch-all 链，`policy=$LIMIT_POLICY`=redis） |
@@ -80,18 +80,20 @@ related-findings: [E2E-F-27, E2E-F-28, E2E-F-182, E2E-F-200, E2E-F-201, E2E-F-20
 | **F14** | 🔴 **F-200 成立：错误透出与真因留痕缺失** | `emotion-echo-web/app/composables/useFaceEmotion.ts:97` 是 **TypeError 宽兜底**（非"权限拒绝/无设备/被占用"三条具名分支），文案"摄像头组件未就绪，请刷新页面或稍后重试"对"环境无 `navigator.mediaDevices`"情形属误导，且 `error.name` 无落痕；FER 容器本轮 `healthy`（非环境缺件） |
 | **F15** | 🟡 **F-27 生产化封装未做（dev 演练已过）** | 2026-09-27 实测：PG `pg_dump -Fc` + `pg_restore --clean --if-exists`，备份 245KB → 真 DROP `emotion_echo_chat.messages` CASCADE → 恢复 417→417 一致；**全仓无封装脚本、无 cron、无异地**（生产化封装留归本阶段） |
 | **F16** | ✅ **环境基线可用（计划期实测）** | `docker ps`：17 容器 healthy（含 postgres/redis/kafka/nacos/etcd/minio/apisix/6 应用服务/2 模型服务）；`deploy/.env.local` 存在；无 `deploy/.devmode-session`（双轨锁空闲）；`main` = `a7429e3` 干净 |
-| **F17** | 🟡 **§2.5 残留：两个已合并远端分支未删** | `git branch -r` 仍有 `origin/fix/f199-lipsync-pinyin`（PR #166 squash 源）与 `origin/feat/f199-tts-speed-config`（PR #167 squash 源，diff=0）；本阶段开工前顺手清理（不占测试点） |
+| **F17** | 🟡 **§2.5 残留：两个已合并远端分支未删** | `git branch -r` 仍有 `origin/fix/f199-lipsync-pinyin`（PR #166 squash 源）与 `origin/feat/f199-tts-speed-config`（PR #167 squash 源，diff=0）；**2026-10-07 用户批准后已双双删除**，远端现仅 `origin/main` |
+| **F18** | 🔴 **运行栈的归属与形态与 RUNBOOK §2.1 不一致（环境基线必须记明）** | ① 容器标签 `com.docker.compose.project.config_files` = `D:\源码\Emotion-Echo-f198\deploy\{infra,apps}.yml` ⇒ 17 个后端容器由**另一个仍在磁盘上、但已非注册 worktree 的目录**创建（`git worktree list` 只剩主目录）；② **未加载 `compose.dev.yml`**（`BFF_TRUST_APISIX=false`、无 `BFF_APISIX_CIDRS`，容器启动日志 `[warn] TrustAPISIX=false; dev mode, any X-User-Id accepted`）；③ `:3000` **不是容器**——`emotion-echo-web` 容器 `Exited (0) 2 days ago`，端口由**宿主 `node.exe`（PID 1800）跑 `nuxt dev`** 提供，其命令行指向**主 worktree** `D:\源码\Emotion-Echo\emotion-echo-web`（⇒ 前端跑的是当前 main 代码，后端不是）。**后果**：任何从本 worktree 执行 `docker compose up` 都会因 `container_name` 固定而冲突/并行起第二套栈；`[V]` 测试前必须按 F-196 铁律先验服务身份。**处理**：不在本轮强拆（会打断用户正在跑的前端 dev server），列为下次会话开工第一步（§0.2 #1） |
 
 ### 0.2 开工复核清单（第一天执行，防止任务书事实表过期）
 
 | # | 复核项 | 通过标准 |
 |---|--------|---------|
-| 1 | 环境基线（RUNBOOK §2.1 + `--env-file .env.local` + `--profile dev`） | 6 应用服务 + infra healthy；`docker inspect emotion-echo-db-migrate` ExitCode=0；Nacos `count:6` |
-| 2 | **重跑 F1 探针** | 若匿名 refresh 已修复则 §2 组 A #1 直接判 PASS 并记录"修复先于本阶段"（禁止默认其仍坏） |
-| 3 | 重跑 F3 探针（直连 8894 伪造 header） | 复核 `BFF_TRUST_APISIX` 运行时取值（`docker exec emotion-echo-web-bff env | grep TRUST`） |
-| 4 | 重跑 F6/F9 探针 | 429 阈值与 CORS 头与本节一致（配额可能被前序探针消耗，先等待窗口重置） |
-| 5 | 服务身份先验（F-196 铁律） | `:3000` 由本地 dev server 还是 web 容器服务，先验明再判 `[V]` |
-| 6 | 账本编号连续性 | 新登编号从 **E2E-F-201** 起（当前最大 F-200） |
+| 1 | **运行栈归属与形态**（F18，**先于一切**） | 决定"接管现栈"还是"重起基线栈"：现栈来自 `Emotion-Echo-f198` 且无 `compose.dev.yml`，与 RUNBOOK §2.1 不一致。**注意 `container_name` 固定**，直接 `up` 会冲突；建议先 `docker compose ... down`（确认前端不依赖）再按 §2.1 全量起（含 `-f compose.dev.yml --env-file .env.local --profile dev`）；管理 `deploy/.devmode-session` |
+| 2 | 环境基线（RUNBOOK §2.1） | 6 应用服务 + infra healthy；`docker inspect emotion-echo-db-migrate` ExitCode=0；Nacos `count:6` |
+| 3 | **重跑 F1 探针** | 若匿名 refresh 已 401（L1 已修，需栈重建后生效）则组 A #1 判 PASS 并记录；禁止默认其仍坏 |
+| 4 | 重跑 F3 探针（直连 8894 伪造 header） | 复核 `BFF_TRUST_APISIX` 运行时取值（`docker exec emotion-echo-web-bff env` + 启动日志 `[auth]`/`[warn]` 行）与 8894 是否仍暴露 |
+| 5 | 重跑 F6/F9 探针 | 429 阈值与 CORS 头与本节一致（配额可能被前序探针消耗，先等窗口重置） |
+| 6 | 服务身份先验（F-196 铁律） | `:3000` 由本地 dev server 还是 web 容器服务（F18③ 实测为宿主 dev server，跑主 worktree 代码）；`[V]` 结论必须绑定被验对象 |
+| 7 | 账本编号连续性 | 新登编号从 **E2E-F-201** 起（当前最大 F-200；本轮已登 201~203） |
 
 ---
 
@@ -194,9 +196,9 @@ related-findings: [E2E-F-27, E2E-F-28, E2E-F-182, E2E-F-200, E2E-F-201, E2E-F-20
 
 | # | 决策 | 背景 | 备选 |
 |---|------|------|------|
-| **M1** | `refresh` 在"无有效令牌"时的语义 | F1 实测匿名发 token；前端依赖 `refresh` 做 401 续期 | ① **硬 401**（最简单、安全；前端已兼容失败路径）② 双令牌（短期 access + 长期 refresh token 表，工程量大）③ 保留宽限（接受"刚过期"token 换新，禁止无 token） |
-| **M2** | prod 信任链默认值 | F3：`BFF_TRUST_APISIX` 默认 `false` + 8894 暴露 + prod 仅注释 | ① dev/prod 默认值分离（prod 默认 true + CIDR 必填 fail-fast）② 中间件在 non-dev 且 CIDR 空时拒绝启动 ③ 移除 8894 宿主映射（dev 用 `docker exec`/容器网） |
-| **M3** | JWT 密钥轮换形态 | F11：无 kid/双密钥，轮换必致全站 401 | ① 双密钥并存窗口（BFF 验两个、签新的；APISIX consumer 需两条或插件能力核实）② 一次性原子轮换 + 接受存量失效（文档化）③ 外部 KMS/密钥服务（超范围） |
+| **M1** | `refresh` 在"无有效令牌"时的语义 | F1 实测匿名发 token；前端依赖 `refresh` 做 401 续期 | ① **硬 401**（最简单、安全；前端已兼容失败路径）② 双令牌（短期 access + 长期 refresh token 表，工程量大）③ 保留宽限（接受"刚过期"token 换新，禁止无 token）—— ✅ **已裁定 = ① 硬 401（D-46，2026-10-07 用户拍板）** |
+| **M2** | prod 信任链默认值 | F3：`BFF_TRUST_APISIX` 默认 `false` + 8894 暴露 + prod 仅注释 | ① dev/prod 默认值分离（prod 默认 true + CIDR 必填 fail-fast）② 中间件在 non-dev 且 CIDR 空时拒绝启动 ③ 移除 8894 宿主映射（dev 用 `docker exec`/容器网）—— ✅ **已裁定 = ①+②+③ 三件一起做（D-47，2026-10-07 用户拍板）** |
+| **M3** | JWT 密钥轮换形态 | F11：无 kid/双密钥，轮换必致全站 401 | ① 双密钥并存窗口（BFF 验两个、签新的；APISIX consumer 需两条或插件能力核实）② 一次性原子轮换 + 接受存量失效（文档化）③ 外部 KMS/密钥服务（超范围）—— ✅ **已裁定 = ① 双密钥并存窗口（D-48，2026-10-07 用户拍板；落地方案属架构级，须附 ADR）** |
 | **M4** | 备份生产化封装范围 | F15：dev 演练已过，封装未做 | ① 只做封装脚本 + dev 演练钉（最小）② 加 cron/定时（dev 可验，prod 转交运维）③ 含异地/加密（需存储凭据，超 dev） |
 | **M5** | 组 B #9 发现"资源级越权"（若实测存在）的处置归属 | 可能触及 chat/analytics/assessment 多模块 | ① 属本阶段（越权横切）则修 ② 若为单模块业务缺陷 → 记账本转该模块 stage ③ 若需 schema（owner 列） → 升级 |
 
