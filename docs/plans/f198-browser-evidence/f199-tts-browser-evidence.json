@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "item": "E2E-F-199 浏览器端到端机械项验收(F-198 TTS API 专项收尾)",
+    "date": "2026-10-07",
+    "round": "IAB 实测(dev server + dev 栈),会话 #550,演示账号 echo",
+    "env": {
+      "main": "3bded37",
+      "webBffImage": "emotion-echo/web-bff:v0.1.32(2026-10-07T15:40:50+08 构建,含 T1~T8 + T3 WAV 哨兵修复)",
+      "frontend": "本地 pnpm dev :3000(chunk URL 源码路径甄别通过,F-196 铁律)",
+      "nacos": "count:7(含 web-bff)",
+      "provider": "cloud(CosyVoice2 via SiliconFlow),TTS_API_KEY 在位"
+    }
+  },
+  "audible": {
+    "verdict": "PASS",
+    "evidence": "5 条消息 → 14 段入队 → 14 段真实播放(HTMLMediaElement.play 探针 14/14),audio.currentTime 逐段推进(如 seg1 maxCT=17.37s/88 次 timeupdate),console error=0,page error=0"
+  },
+  "lipSync": {
+    "verdict": "FAIL(真缺陷,长期潜伏,非云端迁移引入)",
+    "evidence": {
+      "wiring": "[id].vue 直连路径(digitalHumanRef.value.setLipShape,绕过 store)工作正常——组件级探针实测 89 次调用;new.vue 走 store 路径(store 采样 134/134 neutral 在 [id].vue 属预期,非缺陷)",
+      "rootCause": "BFF /tts/phonemes 返回 char=原始汉字(实测 {\"char\":\"你\",\"start\":0,\"duration\":0.32});前端 useTTSPlayer.ts charToLipShape 仅映射拉丁字母(VOWEL_TO_LIP/CONSONANT_CLOSE,键为 a/o/e/i/u/b/p/m/f 等)→ 汉字全部落 neutral → 89/89 次回调 shape='neutral',0 次非 neutral → 数字人说话时嘴部无口型(仅 idle 眨眼)",
+      "scope": "云端与 XTTS 同病(T3 computePhonemes 1:1 复刻 XTTS server.py per-char 等分,char 均为汉字)——E2E-17 时代即已潜伏,首次被机械探针实锤",
+      "apiSample": "POST /tts/phonemes text=你好,今天心情怎么样 → 10 phonemes,char=[你,好,，,今,天,心,情,怎,...]"
+    },
+    "fixOptions": {
+      "a": "BFF computePhonemes 输出拼音韵母替代汉字(需 Go 侧拼音字典依赖,改动 T3 的 1:1 复刻契约)",
+      "b": "前端引入 pinyin-pro 类依赖做 汉字→拼音→韵腹→口型(前端 bundle 增量)",
+      "c": "简化伪口型(汉字一律 'aa')(不推荐,假动作)",
+      "decision": "[M] 需用户拍板;回归钉(RED 断言非 neutral)随修复走 TDD"
+    }
+  },
+  "segmentGap": {
+    "verdict": "PASS",
+    "gapsMs": {
+      "msg1": [23, 11],
+      "msg2": [26, 7],
+      "msg3": [16, 12, 5],
+      "msg4": [41]
+    },
+    "baseline": "XTTS 时代 segment_gap.json = 269ms",
+    "f195": "静默丢段未复现(14/14 全播;21 次 phonemes fetch 与 14 次播放的差值 7 = 测试者自跑的诊断探针,已逐一对账,见 phonemesT 时间戳 839146~1339263)"
+  },
+  "loudness": {
+    "verdict": "客观 PASS,主观待用户",
+    "objective": "11 段 WAV(24kHz/mono/16bit):peak -4.6~-10.2 dBFS(无削波),RMS -23.5~-26.3 dBFS(段间散差 2.8dB,响度均匀)——M1=B(gain=20·log10(volume) clamp)产出健康",
+    "files": "f199-audio/seg-01~11.wav(本地留存,gitignored,供 ③ 主观响度与 ④ 音色听判)"
+  },
+  "observations": [
+    "playbackRate:前端 speed 默认 0.75(useTTSPlayer.ts:429)→ 实测播放墙钟 ≈ 音频时长 ×1.34-1.38,设计行为非缺陷",
+    "duration 自洽性:3/3 新鲜探测 duration == phonemesTotal == bytes/(24000×2);此前一次 '你好' 探测出现 duration=2.32 vs bytes=0.64s 的一次性上游不一致,未复现,记观察",
+    "WAV data 块 size 字段 = 0xFFFFFF00 流式哨兵(SiliconFlow 流式响应特征),BFF parseWavMeta 按实际字节钳制正确(T3 修复在生产路径生效);该哨兵会使 python wave 模块等'信任头字段'的读法得到天文数字时长,属已知坑"
+  ],
+  "artifacts": {
+    "screenshots": "docs/plans/f198-browser-evidence/screenshots/",
+    "audio": "f199-audio/(本地,不入库)"
+  }
+}
