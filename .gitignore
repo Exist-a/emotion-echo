@@ -171,3 +171,6 @@ deploy/.devmode-session
 # Chart.lock 是 helm dependency build 生成的依赖锁，与 helm version 强绑定，
 # 团队成员本地 helm 版本可能不同导致锁文件差异。按需手动提交（release pipeline 时）。
 charts/**/Chart.lock
+
+# E2E-29 M4：备份产物（pg_dump -Fc 体积大且含数据，绝不入库）
+deploy/backups/

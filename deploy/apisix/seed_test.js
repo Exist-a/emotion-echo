@@ -332,6 +332,17 @@ const checks = [
     })()],
   ['E2E-F-13 CORS allow_headers/expose_headers 含 X-Trace-Id（浏览器端可见该 ID）',
     src.includes('X-User-Id,X-Trace-Id')],
+  // E2E-29 #16：allow_headers 不得再含 X-User-Id（浏览器从不发送；APISIX 无条件覆盖）。
+  // 逐行判定：只检查**真的 JSON 行**（形如 `"allow_headers": "..."`），跳过注释
+  // （注释里会同时出现这两个词，按"出现即判"会把说明文字误判成违规）。
+  ['E2E-29 #16 CORS allow_headers 不含 X-User-Id（防把可伪造身份头写进契约）',
+    src.split('\n').filter(function (line) {
+      return line.indexOf('"allow_headers"') !== -1;
+    }).every(function (line) {
+      return line.indexOf('X-User-Id') === -1;
+    })],
+  // E2E-29 #16：白名单块也必须显式 max_age（否则 APISIX 默认 5s，每次跨域预检都吃限流配额）
+  ['E2E-29 #16 两处 CORS 均设 max_age', (src.match(/max_age/g) || []).length >= 2],
 
   // 上面几条只校验**源码文本**，踩过一个真实的坑，必须再校验**展开后的实际值**：
   // bash 的单引号字符串里根本无法嵌入单引号——写 '' 会被解析成"空串 + 重新开引号"，

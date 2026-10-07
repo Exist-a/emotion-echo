@@ -175,3 +175,8 @@ jobs:
       # 且无人看着。本守卫把"必须带 Bearer"钉成静态契约（含负向自检）。
       - name: 守卫 21/21 smoke_bff_chat_grpc 必须带令牌（F-182 防回退）
         run: bash scripts/test_smoke_bff_chat_grpc_contract.sh
+
+      # E2E-29 M4（F-27 后续）：备份/恢复封装必须能"失败"——空文件/缺失文件/被吞掉的
+      # 退出码都要非零。静态契约 + 行为负向对照（真跑三次），无数据库依赖。
+      - name: 守卫 22/22 备份/恢复封装契约（非静默失败）
+        run: bash scripts/test_db_backup_restore_contract.sh

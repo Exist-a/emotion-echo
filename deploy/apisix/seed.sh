@@ -444,6 +444,12 @@ TRACE_ID_PLUGIN='
 #
 # 覆盖式赋值：无条件覆盖客户端自带的 X-User-Id，避免外部伪造身份。
 #
+# E2E-29 #16（2026-10-07）：cors 的 **allow_headers 不含 X-User-Id** —— 浏览器侧从不发送该头
+# （前端全仓零处生产，实测 2026-10-07），它由上面这个 serverless 段在 jwt-auth 之后无条件注入；
+# 把它列进 allow_headers 等于把"可伪造的身份头"写进 CORS 契约。expose_headers 仍保留
+# X-User-Id（那是服务端注入后的值，暴露无风险）。两处 CORS 均显式 max_age=600
+# （此前白名单块缺该字段 ⇒ APISIX 默认 5s，每次跨域预检都吃限流配额）。
+#
 # 写成字面量（bash + curl 即可），不引入 python 依赖。
 CATCHALL_PLUGINS_JSON=$(cat <<EOF
 {
@@ -488,7 +494,7 @@ CATCHALL_PLUGINS_JSON=$(cat <<EOF
   "cors": {
     "allow_origins": "$CORS_ALLOW_ORIGINS",
     "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
-    "allow_headers": "Content-Type,Authorization,X-User-Id,X-Trace-Id",
+    "allow_headers": "Content-Type,Authorization,X-Trace-Id",
     "expose_headers": "X-User-Id,X-Trace-Id",
     "allow_credential": true,
     "max_age": 600
@@ -595,7 +601,7 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH","OPTIONS","HEA
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
   "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "$LIMIT_POLICY", "redis_host": "$LIMIT_REDIS_HOST", "redis_port": $LIMIT_REDIS_PORT, "redis_db": $LIMIT_REDIS_DB, "redis_password": "$LIMIT_REDIS_PASSWORD", "redis_timeout": $LIMIT_REDIS_TIMEOUT, "rejected_code": 429},
-  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-User-Id,X-Trace-Id"},
+  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-Trace-Id", "max_age": 600},
 ${OBSERVABILITY_PLUGINS_JSON},
 ${TRACE_ID_PLUGIN}
 }
