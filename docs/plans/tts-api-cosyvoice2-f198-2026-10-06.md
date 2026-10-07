@@ -296,3 +296,16 @@ compose（web-bff 段，紧邻 `BFF_LLM_API_KEY`）：`TTS_API_KEY: ${TTS_API_KE
 **新观察**：① `speed` 默认 0.75（useTTSPlayer.ts:429）→ 播放墙钟 ≈ 音频时长 ×1.33，设计行为非缺陷；② duration/bytes/phonemesTotal 3/3 自洽（24kHz mono 16bit），一次 '你好' 短文本上游不一致（duration=2.32s vs bytes=0.64s）未复现，记观察；③ SiliconFlow WAV data 块 size=0xFFFFFF00 哨兵在生产路径被 T3 修复正确钳制（python `wave` 模块等"信任头字段"的读法会得天文数字时长，已知坑）。
 
 **F-198 专项整体**：API 链路 ✅（§I）；浏览器机械项如上；**完全闭环剩 = 口型 [M] 决策 + 修复 + 用户主观判定（③④）**。
+
+### §J.1 口型修复 + 用户判定闭环（同日晚，D-45）
+
+用户 AskUserQuestion 三项裁定：**① 口型修复 = 前端 pinyin-pro**（备选 BFF 拼音韵母/伪口型被否）；**③ 响度合格，保持 M1=B**；**④ 音色接受，保持 anna**。
+
+**修复落地**（TDD RED→GREEN，commit 内测试+实现成对）：
+- `useTTSPlayer.ts`：`charToLipShape` 拉丁表 miss 后走 `hanziToLipShape`——pinyin-pro 取默认读音 → 韵腹优先级 **a>o>e>i>u>ü 全词扫描**（ian 韵腹是 a、yue 是 ü）→ 复用同一张 `VOWEL_TO_LIP`；特判 **jqxy 后的 u 实为 ü**（鱼/去/需/举）；`Map` 缓存 4096 条（ontimeupdate ~4/s）；标点/无韵腹字符仍 neutral。
+- 契约测试：韵腹 14 例 + 标点 3 例 + 多音字稳定性 + 缓存一致性（`useTTSPlayer.phoneme.test.ts`）；**RED 3 例确认红 → GREEN 18/18**；全仓 vitest **628/628**；lint 8 errors 为 pre-existing（旧测试块 require() 风格，范围外记账不修）。
+- 依赖：`pinyin-pro`（parallel-tracks §六 已登握手行；Lane O 无需跟进）。
+
+**修复后 IAB 复测**（会话 #550，HMR 载新码，第 6 条消息）：3/3 段播放，口型回调 **76 次中 60 次非 neutral（78.9%；ih16/ee11/oh13/aa18/ou2）**，修复前 89/89 全 neutral；零 console/page error；4 帧面部特写可见嘴部开合（证据截图 `f198-browser-evidence/screenshots/`）。
+
+**F-198 专项自此完整闭环**（API 链路 §I + 浏览器机械轮 §J + 口型修复与主观判定 §J.1）。下一阶段 = E2E-29（横切：异常与安全，待建档）。

@@ -22,6 +22,7 @@
 // 关联 plan：E2E-17 [stages/e2e-17-digital-human-tts/plan.md] §2.B / §4 #13-15
 
 import { ref, onUnmounted } from 'vue'
+import { pinyin } from 'pinyin-pro'
 import { stripMarkdown, extractReadableText } from '~/utils/stripMarkdown'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { getApiBaseUrl } from '../lib/apiBaseUrl'
@@ -99,14 +100,50 @@ const CONSONANT_CLOSE: Record<string, LipShape> = {
  * 优先级：VOWEL > CONSONANT（v/n/m 在两边都有，按 VOWEL 优先；语义上 v/n/m
  * 在尾音是闭嘴，ih 实际是闭嘴对位，故归元音侧更合理）。
  *
+ * 汉字（F-199 ①修复，2026-10-07 用户拍板前端 pinyin-pro）：phonemes char 为
+ * 原始汉字（BFF T3 1:1 复刻 XTTS per-char，cloud/XTTS 两 provider 同病），旧
+ * 实现对汉字全落 neutral → 口型从未激活（IAB 探针 89/89 neutral）。汉字取
+ * 拼音韵腹（a>o>e>i>u>ü 优先级）复用同一张 VOWEL_TO_LIP，标点/数字等无韵腹
+ * 字符仍 neutral。
+ *
  * 大小写不敏感；未知字符 / 空串 → 'neutral'（graceful fallback，plan §4 #8 钉死）。
  *
  * 单元测试：app/composables/useTTSPlayer.phoneme.test.ts (Vitest)。
  */
+const lipShapeCache = new Map<string, LipShape>()
+const LIP_SHAPE_CACHE_MAX = 4096
+
 export function charToLipShape(char: string): LipShape {
   if (!char) return 'neutral'
   const lower = char.toLowerCase()
-  return VOWEL_TO_LIP[lower] ?? CONSONANT_CLOSE[lower] ?? 'neutral'
+  const direct = VOWEL_TO_LIP[lower] ?? CONSONANT_CLOSE[lower]
+  if (direct) return direct
+  if (!lipShapeCache.has(char)) {
+    if (lipShapeCache.size >= LIP_SHAPE_CACHE_MAX) lipShapeCache.clear()
+    lipShapeCache.set(char, hanziToLipShape(char))
+  }
+  return lipShapeCache.get(char)!
+}
+
+/**
+ * hanziToLipShape 汉字 → 拼音韵腹 → 口型。
+ *
+ * 韵腹判定按 a > o > e > i > u > ü 的音系优先级全词扫描（非按字符位置）：
+ * ian 的韵腹是 a、yue 的是 ü、ying 的是 i。jqxy 后的 u 按拼音正字法实为 ü
+ * （鱼/去/需/举）。简化：iu 的韵腹按 i 处理（实为 o，口型差异在此粒度不可辨）；
+ * 多音字取 pinyin-pro 默认最常见读音（如 重 zhong/chong 韵腹均为 o，结果稳定）。
+ */
+function hanziToLipShape(char: string): LipShape {
+  const syllable = (pinyin(char, { toneType: 'none', type: 'array' })[0] ?? '').toLowerCase()
+  const jqxy = /^[jqxy]/.test(syllable)
+  const vowel = syllable.includes('a') ? 'a'
+    : syllable.includes('o') ? 'o'
+    : syllable.includes('e') ? 'e'
+    : syllable.includes('i') ? 'i'
+    : syllable.includes('ü') ? 'ü'
+    : syllable.includes('u') ? (jqxy ? 'ü' : 'u')
+    : null
+  return vowel ? (VOWEL_TO_LIP[vowel] ?? 'neutral') : 'neutral'
 }
 
 /**

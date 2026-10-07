@@ -182,3 +182,4 @@ T4  E2E 全收口 + §十二拍板 → Lane O 进阶段二（v0.3 四道门）
 - **终止**：Lane O stage1 收口（v0.3 §G.1 阶段一收口契约满足）且 E2E-17 已 done 后，
   本协议降级为历史参考（改 `status: landed` 并迁 `docs/legacy-plans/`——按 AGENTS.md §七）；
 - **修订**：修订须在 §六 登握手行，且注明"谁要求改、为什么"。
+| 2026-10-07 | Lane E | `emotion-echo-web/package.json`、`pnpm-lock.yaml` | **F-199 ① 口型修复**：新增依赖 `pinyin-pro`（D-45：汉字→拼音韵腹→口型，前端单点接入 `charToLipShape`；phonemes char=汉字为两 provider 共同语义，修复只能在前端做） | Lane O 无需跟进——WebLLM Demo 不触 useTTSPlayer/口型链路；bundle 增量仅落在 chat 页 TTS 路径 |
