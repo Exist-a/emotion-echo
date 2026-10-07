@@ -281,4 +281,22 @@ describe('useTTSPlayer 段间断点修复（E2E-17 plan §6 step 4）', () => {
     await Promise.allSettled([p1, p2, p3])
     stop()
   })
+
+  // F-199 后续（2026-10-07 用户反馈）：0.75 倍速听感偏慢 ⇒ 默认语速调 1.0。
+  // 语速的可配置入口在设置页 userConfig.ttsSpeed（slow/normal/fast），
+  // 此处钉死 enqueue 层缺省值 —— 任何调用方不传 speed 时按自然语速播放。
+  it('playStream 缺省 speed = 1.0（自然语速，用户反馈 0.75 偏慢）', async () => {
+    const { playStream, stop } = useTTSPlayer()
+
+    const p = playStream('默认语速文本', () => {})
+    await flush()
+    expect(pendingFetches.length).toBe(1)
+    expect(pendingFetches[0]!.body.speed, '缺省语速必须为 1.0').toBe(1)
+
+    pendingFetches[0]!.resolve(okResp('默认语速文本'))
+    await flush()
+    FakeAudio.instances[0]!.end()
+    await Promise.allSettled([p])
+    stop()
+  })
 })

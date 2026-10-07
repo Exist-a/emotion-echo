@@ -463,7 +463,9 @@ const flushBuffer = async (_onLipSync?: LipSyncCallback): Promise<void> => {
 const playStream = async (
   text: string,
   onLipSync: LipSyncCallback,
-  speed: number = 0.75,
+  // 缺省自然语速 1.0（F-199 后续：用户反馈 0.75 偏慢，2026-10-07）。
+  // 真实调用方（useDigitalHumanTTS）显式传入 userConfig.ttsSpeed 解析值。
+  speed: number = 1,
   volume: number = 2.0,
 ): Promise<void> => {
   const cleanText = stripMarkdown(text).trim()
