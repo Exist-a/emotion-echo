@@ -309,3 +309,18 @@ compose（web-bff 段，紧邻 `BFF_LLM_API_KEY`）：`TTS_API_KEY: ${TTS_API_KE
 **修复后 IAB 复测**（会话 #550，HMR 载新码，第 6 条消息）：3/3 段播放，口型回调 **76 次中 60 次非 neutral（78.9%；ih16/ee11/oh13/aa18/ou2）**，修复前 89/89 全 neutral；零 console/page error；4 帧面部特写可见嘴部开合（证据截图 `f198-browser-evidence/screenshots/`）。
 
 **F-198 专项自此完整闭环**（API 链路 §I + 浏览器机械轮 §J + 口型修复与主观判定 §J.1）。下一阶段 = E2E-29（横切：异常与安全，待建档）。
+
+### §J.2 语音语速配置化（用户实听反馈，2026-10-07 晚）
+
+用户实听后反馈「语速有点慢了」+「这个配置项可以放在配置中心吧，先做占位，如果简单的话可以直接做出来」。
+
+**根因**：`playStream`/enqueue 缺省 `0.75` 倍速（局部 ref，无任何 UI/持久化入口）——实测播放墙钟 = 音频时长 ×1.33（§J 已记录）；合成侧为原速，慢在播放侧 `playbackRate`。
+
+**落地**（前端闭环——BFF `config` 是 `map[string]any` JSONB 透传，零后端改动）：
+- `userConfig.ttsSpeed` 三档 `slow/normal/fast` → `0.75/1/1.25`（`TTS_SPEED_TO_VALUE` 一处映射），JSONB 持久化（E2E-12 范式，`setTtsSpeed` 镜像 `setTheme`）；
+- 设置页「语音语速」段（复用主题单选块样式）；改档**下一句即生效**（`playText` 现读配置）；
+- `useDigitalHumanTTS` 语速解析：`customSpeed > options.speed > userConfig.ttsSpeed`（缺省 normal=1.0）；移除死 ref(0.75) 与无调用方的 `setSpeed`；`useTTSPlayer.playStream` 缺省 1.0；
+- **TDD**：RED 8 例（缺省 1.0 契约 / `setTtsSpeed` 装配 3 例 / 语速解析 4 例）→ GREEN；全仓 vitest **637/637**；lint 无新增 error（8 errors 为既有基线）；
+- **IAB 实测**：设置页选「快」→ `PATCH /users/me` body `config.ttsSpeed:"fast"`（fontSize/theme 等其余键保留）→ 会话播放 `playbackRate=1.25`（2/2 段实测）。
+
+**同轮用户实测登记**：E2E-F-200（摄像头「组件未就绪」TypeError 兜底分支，归 E2E-29）；语音上传失败经核实 = MinIO 容器未运行（环境缺件，**按用户指示不记账**，已 `docker start` 恢复 healthy + bucket ready）。

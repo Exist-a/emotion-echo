@@ -1,5 +1,5 @@
 // types/api.ts - API 类型定义
-import type { fontSizePxType, themeType } from '~/types/userConfig/userConfigType'
+import type { fontSizePxType, themeType, ttsSpeedType } from '~/types/userConfig/userConfigType'
 
 /**
  * 通用 API 响应
@@ -93,6 +93,7 @@ export interface UserInfo {
   config: {
     fontSize?: fontSizePxType
     theme?: themeType
+    ttsSpeed?: ttsSpeedType
   }
   createdAt: string
   updatedAt?: string
@@ -107,6 +108,7 @@ export interface UpdateProfileParams {
   config?: {
     fontSize?: fontSizePxType
     theme?: themeType
+    ttsSpeed?: ttsSpeedType
   }
 }
 

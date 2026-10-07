@@ -101,13 +101,59 @@ describe('user store config 持久化（E2E-12）', () => {
       expect(config.theme).toBe('dark')
     })
 
-    it('config 为空时返回默认值（medium/light）', () => {
+    it('config 为空时返回默认值（medium/light + ttsSpeed normal）', () => {
       const store = useUserStore()
       store.userInfo = { ...baseUser, config: {} }
 
       const config = store.getUserConfig()
       expect(config.fontSize).toBe('medium')
       expect(config.theme).toBe('light')
+      expect(config.ttsSpeed).toBe('normal')
+    })
+
+    it('已持久化的 ttsSpeed 从 config 读取', () => {
+      const store = useUserStore()
+      store.userInfo = { ...baseUser, config: { ttsSpeed: 'fast' } }
+
+      expect(store.getUserConfig().ttsSpeed).toBe('fast')
+    })
+  })
+
+  // F-199 后续（2026-10-07 用户反馈 0.75 偏慢）：语速做成用户配置项，
+  // 设置页三档（slow/normal/fast）→ userConfig JSONB 持久化（BFF map[string]any 透传），
+  // TTS 链路在 playText 时读取。本 describe 锁定 store 层装配契约（范式同 setTheme）。
+  describe('setTtsSpeed', () => {
+    it('调 API 时 config 包含 ttsSpeed（其余键保留）', async () => {
+      const store = useUserStore()
+      store.userInfo = { ...baseUser, config: { theme: 'dark' } }
+
+      await store.setTtsSpeed('fast')
+
+      expect(patchMock).toHaveBeenCalledTimes(1)
+      const [path, body] = patchMock.mock.calls[0]!
+      expect(path).toContain('users')
+      expect((body as any).config.ttsSpeed).toBe('fast')
+      expect((body as any).config.theme).toBe('dark')
+    })
+
+    it('API 成功后本地 userInfo.config.ttsSpeed 同步更新', async () => {
+      const store = useUserStore()
+      store.userInfo = { ...baseUser, config: {} }
+
+      await store.setTtsSpeed('slow')
+
+      expect(store.getUserConfig().ttsSpeed).toBe('slow')
+    })
+
+    it('API 失败时不落本地', async () => {
+      const store = useUserStore()
+      store.userInfo = { ...baseUser, config: {} }
+      // updateProfile 的失败语义 = patch promise reject（不看响应 code）
+      patchMock.mockRejectedValue(new Error('network'))
+
+      await store.setTtsSpeed('fast')
+
+      expect(store.getUserConfig().ttsSpeed).toBe('normal')
     })
   })
 

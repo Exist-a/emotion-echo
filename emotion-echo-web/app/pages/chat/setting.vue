@@ -52,12 +52,38 @@
           </label>
         </div>
       </div>
+
+      <!-- F-199 后续（2026-10-07 用户反馈 0.75 偏慢）：数字人语音语速三档。
+           持久化到 userConfig（JSONB），下一句 TTS 即生效 -->
+      <div class="setting-item tts-speed-edit">
+        <div class="setting-copy">
+          <span class="setting-title">语音语速</span>
+          <span class="setting-description">调节数字人说话的语速</span>
+        </div>
+        <div class="theme-options">
+          <label
+            v-for="opt in ttsSpeedOptions"
+            :key="opt.value"
+            class="theme-option"
+            :class="{ active: userConfig.ttsSpeed === opt.value }"
+          >
+            <input
+              type="radio"
+              name="ttsSpeed"
+              :value="opt.value"
+              :checked="userConfig.ttsSpeed === opt.value"
+              @change="handleTtsSpeedChange(opt.value)"
+            />
+            <span>{{ opt.label }}</span>
+          </label>
+        </div>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import type { themeType } from '~/types/userConfig/userConfigType'
+import type { themeType, ttsSpeedType } from '~/types/userConfig/userConfigType'
 
 const userStore = useUserStore()
 // E2E-12: computed 保持与 store 同步（fetchUserInfo 完成后自动更新选中态）
@@ -78,6 +104,13 @@ const themeOptions: { value: 'light' | 'dark' | 'auto'; label: string }[] = [
   { value: 'auto', label: '跟随系统' },
 ]
 
+// F-199 后续：语速三档（slow/normal/fast → 0.75/1/1.25，映射见 TTS_SPEED_TO_VALUE 一处）
+const ttsSpeedOptions: { value: ttsSpeedType; label: string }[] = [
+  { value: 'slow', label: '慢' },
+  { value: 'normal', label: '正常' },
+  { value: 'fast', label: '快' },
+]
+
 const fontSizeValue = computed(
   () => fontSizes[userConfig.value.fontSize as keyof typeof fontSizes] || '16px',
 )
@@ -89,6 +122,10 @@ const handleFontSizeChange = async (size: 'small' | 'medium' | 'large') => {
 const handleThemeChange = async (theme: string | number | boolean | undefined) => {
   const t = (theme as themeType) || 'auto'
   await userStore.setTheme(t)
+}
+
+const handleTtsSpeedChange = async (speed: ttsSpeedType) => {
+  await userStore.setTtsSpeed(speed)
 }
 </script>
 

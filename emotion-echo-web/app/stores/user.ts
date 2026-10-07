@@ -51,6 +51,7 @@ export const useUserStore = defineStore('user', () => {
     return {
       fontSize,
       theme: config?.theme || 'light',
+      ttsSpeed: config?.ttsSpeed || 'normal',
     }
   }
 
@@ -96,6 +97,28 @@ export const useUserStore = defineStore('user', () => {
 
     userInfo.value.config.theme = theme
     applyTheme(theme)
+  }
+
+  /**
+   * 设置数字人语音语速（F-199 后续：用户反馈 0.75 偏慢，2026-10-07）。
+   * 语义档直接持久化（wire=UI 同形态，数值换算在 TTS_SPEED_TO_VALUE 一处）。
+   * TTS 链路在 useDigitalHumanTTS.playText 时读取，下一句即生效。
+   */
+  const setTtsSpeed = async (speed: 'slow' | 'normal' | 'fast') => {
+    if (!userInfo.value) return
+    if (!userInfo.value.config) {
+      userInfo.value.config = {}
+    }
+
+    const result = await updateProfile({
+      config: {
+        ...userInfo.value.config,
+        ttsSpeed: speed,
+      },
+    })
+    if (!result.isOk) return
+
+    userInfo.value.config.ttsSpeed = speed
   }
 
   // E2E-12 #8：auto 模式的媒体查询变更监听句柄。
@@ -425,6 +448,7 @@ export const useUserStore = defineStore('user', () => {
     getUserConfig,
     setFontSize,
     setTheme,
+    setTtsSpeed,
     applyTheme,
     // Actions
     setAccessToken,
