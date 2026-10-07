@@ -151,4 +151,44 @@ describe('useTTSPlayer phoneme-driven lip sync helpers (E2E-17 plan §6 step 3)'
       expect(src).not.toMatch(/lipAnimationInterval/)
     })
   })
+
+  // F-199 ① 口型缺陷修复（2026-10-07 用户拍板：前端 pinyin-pro）：
+  // phonemes char=原始汉字（BFF T3 1:1 复刻 XTTS per-char，两 provider 同病），
+  // 旧实现拉丁映射表对汉字全落 neutral → 口型从未激活（IAB 探针 89/89 neutral）。
+  // 修复契约：charToLipShape 对汉字取拼音韵腹（a>o>e>i>u>ü 优先级）复用 VOWEL_TO_LIP。
+  describe('charToLipShape 汉字→口型（pinyin-pro 韵腹，F-199 ①修复）', () => {
+    it('韵腹优先级 a>o>e>i>u>ü 逐例映射正确', () => {
+      expect((TTSPlayer as any).charToLipShape('你')).toBe('ih') // ni
+      expect((TTSPlayer as any).charToLipShape('好')).toBe('aa') // hao
+      expect((TTSPlayer as any).charToLipShape('走')).toBe('oh') // zou（韵腹 o）
+      expect((TTSPlayer as any).charToLipShape('中')).toBe('oh') // zhong
+      expect((TTSPlayer as any).charToLipShape('天')).toBe('aa') // tian（韵腹 a，非 i）
+      expect((TTSPlayer as any).charToLipShape('安')).toBe('aa') // an
+      expect((TTSPlayer as any).charToLipShape('恩')).toBe('ee') // en
+      expect((TTSPlayer as any).charToLipShape('英')).toBe('ih') // ying
+      expect((TTSPlayer as any).charToLipShape('五')).toBe('ou') // wu
+      expect((TTSPlayer as any).charToLipShape('月')).toBe('ee') // yue（韵腹 ü）
+      expect((TTSPlayer as any).charToLipShape('绿')).toBe('ee') // lü
+      expect((TTSPlayer as any).charToLipShape('鱼')).toBe('ee') // yu（jqxy 后 u 实为 ü）
+      expect((TTSPlayer as any).charToLipShape('去')).toBe('ee') // qu
+      expect((TTSPlayer as any).charToLipShape('说')).toBe('oh') // shuo
+    })
+
+    it('标点/非音素字符 → neutral（不激活口型）', () => {
+      expect((TTSPlayer as any).charToLipShape('，')).toBe('neutral')
+      expect((TTSPlayer as any).charToLipShape('。')).toBe('neutral')
+      expect((TTSPlayer as any).charToLipShape('！')).toBe('neutral')
+    })
+
+    it('多音字任一读音韵腹结果稳定（重 zhong/chong 均为 o）', () => {
+      expect((TTSPlayer as any).charToLipShape('重')).toBe('oh')
+    })
+
+    it('同字重复调用结果一致（Map 缓存语义）', () => {
+      const first = (TTSPlayer as any).charToLipShape('情')
+      const second = (TTSPlayer as any).charToLipShape('情')
+      expect(first).toBe(second)
+      expect(first).not.toBe('neutral') // qing 韵腹 i → ih
+    })
+  })
 })
