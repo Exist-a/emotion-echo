@@ -427,3 +427,13 @@ CI 侧两组对照已做完并清理干净（`4e02485` 还原，15 项门禁 + �
 
 
 **PR #64 状态**：已开，2 commits pushed 到 fix 分支（`fix/e2e-16-full-multimodal-fix`），23 项 required status checks 状态 pending — GitHub runner 临时延迟或权限问题（4 workflow 均已配 `pull_request: branches: [main]` trigger，trigger 配置无误）。**合并策略**：① 等 GitHub 端自动恢复（runner 排队超时通常 5-10 分钟）；② 若持续不启动，下一轮单独开 PR 排查 CI trigger；③ 临时 admin override（需仓库管理员在网页端操作）。本会话核心交付已完成（5 修复 + 9 测试 + 本地全绿 + typecheck + go vet/build 干净）。
+
+### L. E2E-29 计划期只读探针（2026-10-07，E2E-F-201~203）
+
+> 来源：E2E-29 建档前的计划期安全探针（AGENTS.md §〇 功课③），dev mode 17 容器 healthy 下实测；探针均为**只读 GET/OPTIONS/一次 POST refresh**，无数据写入。详见 [stages/e2e-29-security-exceptions/plan.md](stages/e2e-29-security-exceptions/plan.md) §0.1 事实表 F1~F17。
+
+| 编号 | 来源 | 现象 | 根因 | 归属阶段 | 状态 |
+|------|------|------|------|---------|------|
+| E2E-F-201 | **E2E-29 计划期只读探针（2026-10-07）** | 🔴 **`POST /api/v1/auth/refresh` 匿名调用返回 200 并发放 `user_id=1` 的 24h 有效 JWT（认证绕过）**——裸 `curl -X POST http://localhost:19080/api/v1/auth/refresh`（无 cookie 无 Authorization）即得 `accessToken` + `Set-Cookie`，该 token 经网关读 `/users/me` 实测返回 `account=echo`（可用会话，非仅签发）；带过期或伪造签名 token 同样发放 | 三层叠加：① `emotion-echo-web-bff/main.go:307-313` `noAuthPathPrefixes` 用**前缀**放行整个 `/api/v1/auth/`；② `deploy/apisix/seed.sh:632` route 113 无 jwt-auth；③ `emotion-echo-web-bff/internal/handler/auth_handler.go:215` `var userID int64 = 1` 在无有效令牌时**静默回落默认身份** | E2E-29 | 🔴 未解决（修法 = plan §2 组 A #1 TDD L1；语义取舍见 plan §4 M1：硬 401 或双令牌） |
+| E2E-F-202 | **E2E-29 计划期只读探针（2026-10-07）** | 🔴 **BFF 可信链默认 fail-open：`BFF_TRUST_APISIX` 默认 `false` + `8894` 端口映射宿主 + prod 无强制**——实测直连 `http://localhost:8894/api/v1/users/me` 带 `X-User-Id: 2` 返 200 `smoke_user`（零认证即可冒充任意用户） | `deploy/docker-compose.apps.yml:662` 默认 false、`:701` `8894:8894` 宿主映射；`deploy/compose.prod.yml:33-37` 仅以**注释**要求 prod 设 true 并移除端口（无门禁）。中间件侧 `emotion-echo-shared/pkg/middleware/gin_auth.go` 在 `RequireAPISIXIP=true` 且 CIDR 为空时**fail-closed**，故风险点是默认值与端口暴露，非中间件逻辑 | E2E-29 | 🔴 未解决（plan §2 组 B #11 + §4 M2 决策：默认值分离 / CIDR 缺失拒绝启动 / 收 8894） |
+| E2E-F-203 | **E2E-29 计划期只读探针（2026-10-07）** | 🟡 **cookie 属性与注释相反 + 前端 refresh 契约漂移**：实测响应头 `Set-Cookie: access_token=…; Path=/; Max-Age=86400; HttpOnly`——**无 `SameSite`、无 `Secure`**，而 `auth_handler.go:298` 注释称 `SameSite=Lax`；另 `useApi.ts:157-159` 注释称"后端要求回传 jti 用于黑名单/轮换校验"且真的发 `{jti}`，BFF 侧**零 jti 逻辑** | 前者：`emotion-echo-web-bff/internal/handler/auth_handler.go:301` 用 gin `c.SetCookie`（该 API 无 SameSite 形参，logout `:242` 同型）；后者：`emotion-echo-web/app/composables/useApi.ts:157-159` 与 BFF `auth_handler.go:212-234` 对照 | E2E-29 | 🔴 未解决（plan §2 组 A #4/#6 + TDD L4；根因族 = 注释承诺从未落地，与决策 18 Decision9 同型，属 AP-02） |
