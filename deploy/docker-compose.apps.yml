@@ -668,6 +668,14 @@ services:
       # Stage 81 PR-2: llm-service ChatCompletion gRPC 上游（真实 LLM 收敛到 llm-service；
       # llm-service 未注册 Nacos → env 直连；无 key 时 llm-service 自降级 mock）
       LLM_SVC_GRPC_ADDR:   emotion-llm-service:50051
+      # F-198（ADR-2026-10 / 架构决策 40）：在线 TTS 主链路 = SiliconFlow CosyVoice2。
+      # key 只进 gitignored .env.local（红线同 BFF_LLM_API_KEY，勿 commit 真实 key）；
+      # TTS_API_KEY 留空 ⇒ BFF 自动降级 XTTS local（dev 常态，不打降级日志）
+      TTS_API_KEY:         ${TTS_API_KEY:-}
+      TTS_PROVIDER:        ${TTS_PROVIDER:-auto}
+      TTS_API_BASE_URL:    ${TTS_API_BASE_URL:-https://api.siliconflow.cn/v1}
+      TTS_MODEL:           ${TTS_MODEL:-FunAudioLLM/CosyVoice2-0.5B}
+      TTS_VOICE:           ${TTS_VOICE:-}
       TLS_ENABLED: "1"
       TLS_CA_CERT: /app/etc/tls/ca.crt
       TLS_CLIENT_CERT: /app/etc/tls/ai-client.crt

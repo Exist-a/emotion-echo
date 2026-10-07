@@ -157,3 +157,9 @@ jobs:
       # emotion-echo-xtts 段 cpus 字段），无 docker 依赖，CI 可直跑。
       - name: 守卫 18/18 XTTS CPU 限额静态契约（cpus>=8.0，F-132 钉）
         run: bash scripts/check_xtts_cpu_limit.sh
+
+      # E2E-F-198 T8（ADR-2026-10 §Decision.1）：TTS 业务代码零硬编码供应商
+      # 域名/模型名——换供应商只改配置。含负向自检（注入违规样例必须能抓到，
+      # 防弱断言假绿）。纯 grep，无 docker 依赖，CI 可直跑。
+      - name: 守卫 19/19 TTS provider 隔离（供应商域名/模型名零硬编码）
+        run: bash scripts/test_tts_provider_isolation.sh
