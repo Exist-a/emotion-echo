@@ -98,6 +98,26 @@ type Config struct {
 		UseSSL        bool
 		PublicBaseURL string
 	}
+
+	// TTS 是语音合成上游配置（E2E-F-198，ADR-2026-10 / 架构决策 40）
+	//
+	// Provider 语义（downstream.NewTTSProvider 语义矩阵）：
+	//   auto（默认）+ APIKey 空 → 直接 XTTS（dev 常态，无降级日志）
+	//   auto + APIKey 非空     → cloud（CosyVoice2 API）优先，失败降级 XTTS + Warn
+	//   cloud                  → 只用 cloud，失败即失败（fail-loud）
+	//   local                  → 只用 XTTS（回滚开关）
+	//
+	// ⚠️ APIKey 恒不入 yaml（同 LLM 段纪律）：只进 gitignored .env.local（TTS_API_KEY）。
+	TTS struct {
+		Provider       string // auto | cloud | local
+		BaseURL        string // cloud API base（含 /v1）
+		APIKey         string
+		Model          string
+		Voice          string // 预置音色带模型名前缀（官方约定）
+		SampleRate     int    // 必须 24000（与 XTTS SAMPLE_RATE 对齐；官方默认 44100 不可用）
+		ResponseFormat string // wav（前端 base64ToWavBlob 不构造 WAV 头）
+		Timeout        int    // 秒
+	}
 }
 
 // Nacos 注册中心 + 配置中心配置（Stage 31 PR-09）
@@ -189,6 +209,34 @@ func SetDefaults(c *Config) {
 	}
 	if c.LLM.Timeout == 0 {
 		c.LLM.Timeout = 60
+	}
+	// E2E-F-198（ADR-2026-10）：默认值与 etc/web-bff.yaml TTS 段必须一致
+	// （yaml 非 0 非空时此处不覆盖；漂移即事故——TestConfig_TTSDefaults 钉守卫）。
+	if c.TTS.Provider == "" {
+		c.TTS.Provider = "auto"
+	}
+	if c.TTS.BaseURL == "" {
+		c.TTS.BaseURL = "https://api.siliconflow.cn/v1"
+	}
+	if c.TTS.Model == "" {
+		c.TTS.Model = "FunAudioLLM/CosyVoice2-0.5B"
+	}
+	if c.TTS.Voice == "" {
+		// 预置音色带模型名前缀（官方约定）；换 TTS_MODEL 时需同步 TTS_VOICE 前缀
+		c.TTS.Voice = "FunAudioLLM/CosyVoice2-0.5B:anna"
+	}
+	if c.TTS.SampleRate == 0 {
+		// 官方默认 44100 不可用：XTTS SAMPLE_RATE=24000，前端 duration 算术与
+		// 音调都依赖 24k（plan §B.4）
+		c.TTS.SampleRate = 24000
+	}
+	if c.TTS.ResponseFormat == "" {
+		// 前端 base64ToWavBlob 不构造 WAV 头 ⇒ 必须 wav 容器（plan §B.3）
+		c.TTS.ResponseFormat = "wav"
+	}
+	if c.TTS.Timeout == 0 {
+		// cloud 实测 33 字完整返回 ~1.5s（ADR §实证），30s 极宽裕
+		c.TTS.Timeout = 30
 	}
 	if c.MinIO.Endpoint == "" {
 		c.MinIO.Endpoint = "emotion-echo-minio:9000"
@@ -324,6 +372,23 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("LLM_SVC_GRPC_ADDR"); v != "" {
 		c.LLM.GRPCAddr = v
+	}
+	// E2E-F-198：TTS API 配置注入（key 红线同 BFF_LLM_API_KEY——只进 gitignored
+	// .env.local，compose 用 ${TTS_API_KEY:-} 空默认，缺 key 自动降级 XTTS）
+	if v := os.Getenv("TTS_PROVIDER"); v != "" {
+		c.TTS.Provider = v
+	}
+	if v := os.Getenv("TTS_API_KEY"); v != "" {
+		c.TTS.APIKey = v
+	}
+	if v := os.Getenv("TTS_API_BASE_URL"); v != "" {
+		c.TTS.BaseURL = v
+	}
+	if v := os.Getenv("TTS_MODEL"); v != "" {
+		c.TTS.Model = v
+	}
+	if v := os.Getenv("TTS_VOICE"); v != "" {
+		c.TTS.Voice = v
 	}
 	// Stage 31 PR-09: Nacos
 	if v := os.Getenv("NACOS_ENABLED"); v != "" {

@@ -61,7 +61,7 @@ func (f *fakeXTTSPhonemes) Phonemes(_ context.Context, req downstream.TTSPhoneme
 func newPhonemesHandlerRouter(fake *fakeXTTSPhonemes) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := NewTTSHandler(nil, fake) // ai=nil（synthesize 不测）；xtts=fake
+	h := NewTTSHandler(nil, fake, downstream.NewLocalTTSProvider(fake)) // phonemes 经 provider（local 包装 = XTTS 语义不变）
 	h.Register(r)
 	return r
 }
@@ -157,7 +157,7 @@ func TestTTSHandler_Phonemes_NilClient_ReturnsNotConfigured(t *testing.T) {
 	// 契约 5：nil-safe — 与 Stream 一致（避免 BFF 启动时 XTTS_BASE_URL="" panic）
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := NewTTSHandler(nil, &nilXTTSClient{}) // xtts 字段 nil（=BaseURL""的等效）
+	h := NewTTSHandler(nil, &nilXTTSClient{}, downstream.NewLocalTTSProvider(&nilXTTSClient{}))
 	h.Register(r)
 
 	w := httptest.NewRecorder()

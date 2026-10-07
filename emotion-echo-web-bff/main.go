@@ -472,7 +472,25 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	handler.NewSurveyHandler(s.Assessment).WithAssessmentBase(c.AssessmentService.BaseURL).Register(r)
 	handler.NewAnalyticsHandler(s.Analytics).Register(r)
 	handler.NewMultimodalHandler(s.AI).Register(r)
-	handler.NewTTSHandler(s.AI, s.XTTS).Register(r)
+	// E2E-F-198（ADR-2026-10 / 架构决策 40）：phonemes 端点经 TTSProvider——
+	// auto+key 有 → cloud(CosyVoice2) 优先失败降级 XTTS（Warn(reason) +
+	// emotion_echo_tts_fallback_total 计数）；auto+key 空 → 直接 XTTS（dev 常态）。
+	// /tts/stream 仍走 s.XTTS 直连（cloud 流式 = tier-2 另立项）。
+	ttsProvider := downstream.NewTTSProvider(downstream.TTSProviderConfig{
+		Mode:   c.TTS.Provider,
+		APIKey: c.TTS.APIKey,
+		Cloud: downstream.NewCloudTTSProvider(downstream.CloudTTSOptions{
+			BaseURL: c.TTS.BaseURL, APIKey: c.TTS.APIKey, Model: c.TTS.Model,
+			Voice: c.TTS.Voice, SampleRate: c.TTS.SampleRate,
+			TimeoutMs: c.TTS.Timeout * 1000,
+		}),
+		Local:  downstream.NewLocalTTSProvider(s.XTTS),
+		OnFallback: func(reason string) {
+			sharedmetrics.TTSFallbackTotal.WithLabelValues(sharedmetrics.TTSFallbackFromCloud).Inc()
+			// reason 已由 fallbackProvider 打入 slog.Warn；此处只管指标
+		},
+	})
+	handler.NewTTSHandler(s.AI, s.XTTS, ttsProvider).Register(r)
 	handler.NewUploadHandler(s.Storage).Register(r)
 	// Sprint 1 PR-4c-1 + D-11 (E2E-16): voice upload（multipart → ai-svc multimodal
 	// kind=audio → 音频落 MinIO voice/ 前缀 → 返回 audioUrl 使气泡可回放）

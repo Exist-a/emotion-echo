@@ -104,7 +104,7 @@ func buildBFFRouter() *gin.Engine {
 	//    CI go-test **全部跳过 build tag 下的文件**，所以坏了很久没人发现（账本 E2E-F-167）。
 	//    传零值 Config：APIKey 为空 ⇒ 走 mock 共情回复分支，正是本用例要验的路径（不依赖真实 LLM）。
 	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandler(config.Config{}))
-	handler.NewTTSHandler(fakeAI, &fakeIntegrationXTTS{body: "RIFFWAVE"}).Register(r)
+	handler.NewTTSHandler(fakeAI, &fakeIntegrationXTTS{body: "RIFFWAVE"}, downstream.NewLocalTTSProvider(&fakeIntegrationXTTS{body: "RIFFWAVE"})).Register(r) // E2E-F-198: phonemes goes through provider (local wraps the same fake)
 
 	// 业务 handler
 	handler.NewUserHandler(&fakeIntegrationUser{}).Register(r)
