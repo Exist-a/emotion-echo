@@ -23,11 +23,16 @@ import (
 type TTSHandler struct {
 	ai   downstream.AIClient
 	xtts downstream.XTTSClient
+	// tts 是 phonemes 端点的上游 provider（E2E-F-198：cloud=CosyVoice2 优先 /
+	// local=XTTS 回退，语义收敛在 downstream.NewTTSProvider）
+	tts downstream.TTSProvider
 }
 
-// NewTTSHandler 构造（ai 与 xtts 都可选注入）
-func NewTTSHandler(ai downstream.AIClient, xtts downstream.XTTSClient) *TTSHandler {
-	return &TTSHandler{ai: ai, xtts: xtts}
+// NewTTSHandler 构造（ai / xtts / tts 均可选注入）。
+// xtts 供 /tts/stream 直连（M2-A：cloud 流式 tier-2 另立项）；
+// tts 供 /api/v1/tts/phonemes——装配语义见 downstream.NewTTSProvider。
+func NewTTSHandler(ai downstream.AIClient, xtts downstream.XTTSClient, tts downstream.TTSProvider) *TTSHandler {
+	return &TTSHandler{ai: ai, xtts: xtts, tts: tts}
 }
 
 // Register 注册路由
@@ -76,7 +81,8 @@ func (h *TTSHandler) stream(c *gin.Context) {
 	}
 }
 
-// phonemes 处理 /api/v1/tts/phonemes 请求，转发到 XTTS /tts_with_phonemes，
+// phonemes 处理 /api/v1/tts/phonemes 请求——E2E-F-198 起经 TTSProvider
+// （cloud=CosyVoice2 优先 / local=XTTS 回退，装配语义见 downstream.NewTTSProvider），
 // 返回完整 JSON（audio base64 + phonemes 数组 + duration）。响应透传无封装 ——
 // 前端 useTTSPlayer 直接消费 phonemes 驱动口型。
 func (h *TTSHandler) phonemes(c *gin.Context) {
@@ -85,10 +91,15 @@ func (h *TTSHandler) phonemes(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, 1, "validation: text is required")
 		return
 	}
-	resp, err := h.xtts.Phonemes(session.WithRequestAuth(c), req)
+	if h.tts == nil {
+		// nil-safe 纪律（与 XTTSClient 同款）：装配缺失时 503 而非 panic
+		Fail(c, http.StatusServiceUnavailable, 1, "downstream: tts provider not configured")
+		return
+	}
+	resp, err := h.tts.Synthesize(session.WithRequestAuth(c), req)
 	if err != nil {
 		// statusFor(err) 把 gRPC / 4xx 错误转 HTTP（与 synthesize/stream 同款）；
-		// FastAPI 4xx detail 文本已在 err 里（BFF 不二次包装），便于前端排查。
+		// cloud/XTTS 上游 detail 文本已在 err 里（BFF 不二次包装），便于前端排查。
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}

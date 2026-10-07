@@ -71,6 +71,26 @@ XTTS:
   # 真实可听性根因 = F-132（XTTS 2 核限额）：本字段单独不够，8 核下 49 字仅 19.9s。
   TimeoutMs: 180000
 
+# E2E-F-198（ADR-2026-10 / 架构决策 40 / D-44）：在线 TTS 主链路 = SiliconFlow
+# CosyVoice2 API，XTTS 降为离线回退。
+#   Provider=auto + TTS_API_KEY 未设 → 直接 XTTS（dev 常态，不打降级日志）
+#   Provider=auto + key 非空        → cloud 优先，失败自动降级 XTTS +
+#                                     Warn(reason) + emotion_echo_tts_fallback_total 计数
+#   Provider=cloud / local          → 强制单边（实测甄别 / 回滚开关）
+# ⚠️ 本文件不写 APIKey（同 LLM 段纪律）：真 key 只进 gitignored deploy/.env.local
+#    （变量名 TTS_API_KEY），经容器 env 注入。
+# ⚠️ 默认音色 anna 为预置音色（官方约定带模型名前缀）；换 TTS_MODEL 时需同步
+#    换 TTS_VOICE 前缀。SampleRate 必须 24000（官方默认 44100 与 XTTS/前端
+#    duration 算术不兼容）；ResponseFormat 必须 wav（前端 base64ToWavBlob 不建头）。
+TTS:
+  Provider: auto
+  BaseURL: https://api.siliconflow.cn/v1
+  Model: FunAudioLLM/CosyVoice2-0.5B
+  Voice: FunAudioLLM/CosyVoice2-0.5B:anna
+  SampleRate: 24000
+  ResponseFormat: wav
+  Timeout: 30
+
 # 聚合下游 health 的超时
 Health:
   TimeoutMs: 2000
