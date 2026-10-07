@@ -122,6 +122,12 @@ func main() {
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
 	config.ApplyEnvOverrides(&c)
 
+	// E2E-29 D-47（2026-10-07 用户拍板）：信任链自洽性校验——两种危险形态都**拒绝启动**
+	// 而不是留到流量上表现为"全站 401"（Stage 109a）或"可冒充任意用户"（E2E-F-202）。
+	if err := c.ValidateAuthTrust(); err != nil {
+		log.Fatalf("[auth] trust-chain validation failed: %v", err)
+	}
+
 	// PR-2: Nacos 启动在 buildServiceContext 之前——这样 Resolver 可以用 nacosRuntime.Registry。
 	bootCtx, bootCancel := context.WithCancel(context.Background())
 	defer bootCancel()

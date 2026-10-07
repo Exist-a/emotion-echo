@@ -163,3 +163,10 @@ jobs:
       # 防弱断言假绿）。纯 grep，无 docker 依赖，CI 可直跑。
       - name: 守卫 19/19 TTS provider 隔离（供应商域名/模型名零硬编码）
         run: bash scripts/test_tts_provider_isolation.sh
+
+      # E2E-29 D-47（2026-10-07 用户拍板）：BFF 信任链契约——8894 宿主映射不得回归
+      # （那是"直连伪造 X-User-Id 绕过网关"的入口 E2E-F-202）+ fail-fast 校验必须被
+      # main 调用（防"写了没接线"）。纯静态解析 compose + grep，无 docker 依赖；
+      # 自检含两个负向对照（注入 8894 发布 / 删掉 main 调用，守卫必须转红）。
+      - name: 守卫 20/20 BFF 信任链契约（收 8894 + fail-fast 已接线）
+        run: bash scripts/test_check_bff_trust_chain.sh

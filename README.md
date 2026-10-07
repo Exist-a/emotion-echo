@@ -186,7 +186,8 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 - ✅ **Stage 30 Web BFF**：`emotion-echo-web-bff`（:8894）BFF 聚合层 — 聚合 5 下游 + SSE 编排 + 自有 mock 鉴权（`docs/stage-30-web-bff.md`）。
   > 🔧 **2026-09-04 措辞就地更正**（决策 18 §4.4）：原"唯一入口"与决策 11（APISIX = 网关层）/
   > 决策 12（BFF 宿主机不再直接映射）字面冲突。准确说法：BFF 是 APISIX 的 upstream，
-  > **APISIX 才是唯一业务入口**；BFF 端口 8894 仅在 dev 调试保留（cf. `apps.yml:602-604` 注释）。
+  > **APISIX 才是唯一业务入口**；BFF 端口 8894 的**宿主映射已于 E2E-29 D-47（2026-10-07）移除**
+> —— 该直连面曾是"伪造 `X-User-Id` 绕过网关"的入口（账本 E2E-F-202）。BFF 现仅容器网可达。
 - ✅ **Phase D 接 DeepSeek**：BFF ai_stream 改造为 OpenAI 兼容真实 LLM（env 注入 key，无 key 降级 mock）
 - ✅ **APISIX 退役**：Stage 30 BFF 替代网关职责后，compose + helm apisix-routes + etcd 全清；历史保留在 `docs/`（`stage-29-D-tls-all-routes.md`）
   > 🔧 **2026-09-04 措辞就地更正**（决策 18 §4.4）：此条是 Stage 30 的**演进记录**（APISIX 在 Stage 30 暂时退场）；Stage 32 已重新引入 APISIX 网关层（决策 11），
