@@ -209,25 +209,32 @@ func (h *AuthHandler) register(c *gin.Context) {
 	OK(c, data)
 }
 
+// refresh 用现有有效令牌换新令牌（D-46 / E2E-29 M1）。
+//
+// 不再回落默认身份：原实现 `var userID int64 = 1` 在 cookie 与 Authorization 均解析
+// 失败时静默使用 user_id=1，配合 /api/v1/auth/ 前缀白名单（main.go:307-313）与
+// APISIX route 113 放行 ⇒ **匿名调用即得 user_id=1 的 24h 有效 JWT**（E2E-F-201 实测，
+// 该 token 经网关可读 /users/me）。现改为：无令牌 / 过期 / 签名不符 / 令牌类型不符
+// 一律 401 且不下发 cookie；有效令牌仍正常续期（同一 user_id）。
+//
+// 前端零改动：useApi.ts:302-340 已有"刷新失败 → clearAuth() + 跳 /login"路径。
 func (h *AuthHandler) refresh(c *gin.Context) {
-	// mock：直接重新签发（user 从 Authorization 解析）
-	// Stage 32 PR-16: 不再依赖 downstream.JWTFromContext（已删），
-	// 改为直接从 Authorization header 或 cookie 解析。
-	var userID int64 = 1
+	var tokenStr string
 	// P0-R2-1: 优先从 HttpOnly cookie 读取，其次从 Authorization header
-	cookieToken, _ := c.Cookie("access_token")
-	if cookieToken != "" {
-		if uid, err := h.jwt.Parse(cookieToken); err == nil {
-			userID = uid
-		}
-	} else {
-		authHeader := c.GetHeader("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if uid, err := h.jwt.Parse(token); err == nil {
-				userID = uid
-			}
-		}
+	if cookieToken, _ := c.Cookie("access_token"); cookieToken != "" {
+		tokenStr = cookieToken
+	} else if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	if tokenStr == "" {
+		Fail(c, http.StatusUnauthorized, 1, "unauthorized: refresh requires a token")
+		return
+	}
+	userID, err := h.jwt.Parse(tokenStr)
+	if err != nil {
+		// Parse 已拒过期 / 签名不符 / 非 HMAC / UserID==0（reset token 属此类）
+		Fail(c, http.StatusUnauthorized, 1, "unauthorized: invalid or expired token")
+		return
 	}
 	data := h.buildLoginData(userID, "user", "")
 	h.setAccessTokenCookie(c, data.AccessToken, data.ExpiresIn)
