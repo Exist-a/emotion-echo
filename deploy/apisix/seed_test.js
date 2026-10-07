@@ -343,6 +343,12 @@ const checks = [
     })],
   // E2E-29 #16：白名单块也必须显式 max_age（否则 APISIX 默认 5s，每次跨域预检都吃限流配额）
   ['E2E-29 #16 两处 CORS 均设 max_age', (src.match(/max_age/g) || []).length >= 2],
+  // E2E-29 D-48：双密钥轮换窗口 —— 必须有"建 prev consumer"与"清理 prev consumer"两条分支
+  //（只建不清理 = 旧密钥永久可用，轮换白做；只清理不建 = 窗口期旧 token 全断）。
+  ['E2E-29 D-48 seed 支持窗口期 prev consumer（BFF_JWT_KEY_ID_PREV）',
+    src.includes('BFF_JWT_KEY_ID_PREV') && src.includes('emotion_echo_bff_prev')],
+  ['E2E-29 D-48 未配置 _PREV 时必须清理 prev consumer（防旧密钥残留）',
+    src.includes('DELETE') && src.includes('prev consumer removed')],
 
   // 上面几条只校验**源码文本**，踩过一个真实的坑，必须再校验**展开后的实际值**：
   // bash 的单引号字符串里根本无法嵌入单引号——写 '' 会被解析成"空串 + 重新开引号"，

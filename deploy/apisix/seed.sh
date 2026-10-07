@@ -308,7 +308,11 @@ put_nacos_upstream 6  web-bff        "emotion-echo-web-bff"
 #
 # JWT_KEY 必须与 BFF 签发的 token 里的 key claim 一致
 # （BFF auth_handler 签的是 key="user"，见 internal/auth）。
-JWT_KEY="${BFF_JWT_KEY:-user}"
+# E2E-29 D-48：key id 以 BFF 侧名字为准（BFF_JWT_KEY_ID），兼容历史 BFF_JWT_KEY。
+JWT_KEY="${BFF_JWT_KEY_ID:-${BFF_JWT_KEY:-user}}"
+# 双密钥窗口期的"上一把"（key id + secret 成对出现；缺一则视为不在窗口期）
+JWT_KEY_PREV="${BFF_JWT_KEY_ID_PREV:-}"
+JWT_SECRET_PREV="${BFF_JWT_SECRET_PREV:-}"
 
 log "Step 2.5/4: creating jwt-auth consumer (key=$JWT_KEY)"
 CONSUMER_BODY=$(cat <<EOF
@@ -338,6 +342,38 @@ else
     -d "$CONSUMER_BODY" \
     "$ADMIN_URL/apisix/admin/consumers/emotion_echo_bff" 2>&1 | head -c 300)
   die "failed to PUT jwt-auth consumer: $err" 3
+fi
+
+# E2E-29 D-48：双密钥并存窗口 —— 为"上一把"再建一条 consumer。
+# 为什么需要：APISIX 一个 consumer 只有一个 secret，而窗口期必须同时验新旧两把密钥；
+# 靠 token 里的 key claim 区分 ⇒ 旧 key id 走旧 consumer、新 key id 走新 consumer。
+# 窗口收尾时把 BFF_JWT_KEY_ID_PREV/BFF_JWT_SECRET_PREV 清掉并重跑本脚本，prev consumer 会被删除。
+if [ -n "$JWT_KEY_PREV" ] && [ -n "$JWT_SECRET_PREV" ]; then
+  log "Step 2.6/4: creating jwt-auth consumer for PREVIOUS key (rotation window, key=$JWT_KEY_PREV)"
+  CONSUMER_PREV_BODY=$(cat <<EOF
+{
+  "username": "emotion_echo_bff_prev",
+  "desc": "E2E-29 D-48 双密钥窗口：上一把密钥（窗口收尾后应删除）",
+  "plugins": {
+    "jwt-auth": {
+      "key": "$JWT_KEY_PREV",
+      "secret": "$JWT_SECRET_PREV",
+      "algorithm": "HS256"
+    }
+  }
+}
+EOF
+)
+  if curl -sf -X PUT     -H "X-API-KEY: $ADMIN_KEY"     -H "Content-Type: application/json"     -d "$CONSUMER_PREV_BODY"     "$ADMIN_URL/apisix/admin/consumers/emotion_echo_bff_prev" >/dev/null; then
+    log "  consumer OK: emotion_echo_bff_prev (jwt key=$JWT_KEY_PREV, 窗口期)"
+  else
+    die "failed to PUT prev jwt-auth consumer (window)" 3
+  fi
+else
+  # 未配置上一把 ⇒ 清理可能残留的 prev consumer（防"窗口已收尾但旧密钥还能用"）
+  if curl -sf -X DELETE -H "X-API-KEY: $ADMIN_KEY"     "$ADMIN_URL/apisix/admin/consumers/emotion_echo_bff_prev" >/dev/null 2>&1; then
+    log "  prev consumer removed (no rotation window configured)"
+  fi
 fi
 
 # ---- Step 3: 全局插件链（每个 route 共享）----
