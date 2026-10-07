@@ -14,7 +14,8 @@
 //   - 5 次错密码 → 锁定（E2E-20：经 authlock.LoginLockStore，多实例用 redis 跨实例共享）
 //   - verification-code 同 username 60s 内只能发一次（in-memory 缓存；防枚举。
 //     E2E-20 收尾裁定：该端点是 D-01 决议下的遗留物待删 E2E-F-144，禁止 Redis 化）
-//   - refresh：保持 mock（解析现有 JWT 重签）；真实 refresh token 留 Stage 34+
+//   - refresh：**必须带有效令牌**（D-46/E2E-29 M1：无令牌/过期/签名不符一律 401，
+//     不再回落默认身份）；真实 refresh token（服务端吊销表）仍留待后续
 //   - BFF 不再持有"独立 mock JWT"能力（PR-19b/21 收口）
 package handler
 
@@ -29,6 +30,7 @@ import (
 
 	"emotion-echo-web-bff/internal/auth"
 	"emotion-echo-web-bff/internal/authlock"
+	"emotion-echo-web-bff/internal/config"
 	"emotion-echo-web-bff/internal/downstream"
 
 	"github.com/gin-gonic/gin"
@@ -51,6 +53,10 @@ type AuthUserInfo struct {
 	Config    map[string]any `json:"config"`
 	CreatedAt string         `json:"createdAt"`
 }
+
+// accessTokenCookieName 是登录态 cookie 名（同时被 APISIX jwt-auth 读取：
+// deploy/apisix/seed.sh 的 `jwt-auth.cookie = "access_token"`）。
+const accessTokenCookieName = "access_token"
 
 // 限流常量
 const (
@@ -221,7 +227,7 @@ func (h *AuthHandler) register(c *gin.Context) {
 func (h *AuthHandler) refresh(c *gin.Context) {
 	var tokenStr string
 	// P0-R2-1: 优先从 HttpOnly cookie 读取，其次从 Authorization header
-	if cookieToken, _ := c.Cookie("access_token"); cookieToken != "" {
+	if cookieToken, _ := c.Cookie(accessTokenCookieName); cookieToken != "" {
 		tokenStr = cookieToken
 	} else if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
 		tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
@@ -242,8 +248,18 @@ func (h *AuthHandler) refresh(c *gin.Context) {
 }
 
 func (h *AuthHandler) logout(c *gin.Context) {
-	// P0-R2-1: 清除 HttpOnly cookie
-	c.SetCookie("access_token", "", -1, "/", "", false, true)
+	// P0-R2-1: 清除 HttpOnly cookie。
+	// F-203（E2E-29）：清除必须与签发同属性（Path/HttpOnly/SameSite/Secure），
+	// 否则浏览器可能留下同名 cookie 或删不干净。
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     accessTokenCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   config.IsProdMarked(),
+		SameSite: http.SameSiteLaxMode,
+	})
 	OK(c, gin.H{"success": true})
 }
 
@@ -299,13 +315,26 @@ func (h *AuthHandler) buildLoginData(userID int64, username, nickname string) Lo
 	}
 }
 
-// setAccessTokenCookie 设置 HttpOnly cookie（P0-R2-1: 防 XSS 窃取 token）
-// cookie 同时被 APISIX jwt-auth 读取（seed.sh 配置 cookie: "access_token"）
+// setAccessTokenCookie 设置 access_token cookie（P0-R2-1 防 XSS；F-203 补 SameSite/Secure）。
+//
+// F-203（E2E-29 计划期实测）：原实现用 `gin.Context.SetCookie` —— 该 API **没有 SameSite
+// 形参**（只有 name/value/maxAge/path/domain/secure/httpOnly），于是注释声称的
+// `SameSite=Lax` **从未生效**（实测 Set-Cookie 里既无 SameSite 也无 Secure）。
+// 现改用 `http.SetCookie` 显式构造：
+//   - SameSite=Lax：允许顶层导航携带（如 OAuth 回调），同时挡掉跨站子请求携带
+//   - HttpOnly=true：JS 不可读，防 XSS 窃取
+//   - Secure：随形态 —— prod 形态必须 true（HTTPS）；dev false（dev 走 HTTP，
+//     Secure=true 会让浏览器直接拒收 cookie，把登录打坏）
 func (h *AuthHandler) setAccessTokenCookie(c *gin.Context, token string, maxAge int64) {
-	// SameSite=Lax: 允许顶层导航携带 cookie（如 OAuth 回调）
-	// Secure=false: dev 模式下 HTTP 也能用；生产应由 APISIX TLS 终止
-	// HttpOnly=true: JavaScript 不可读，防 XSS
-	c.SetCookie("access_token", token, int(maxAge), "/", "", false, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     accessTokenCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   int(maxAge),
+		HttpOnly: true,
+		Secure:   config.IsProdMarked(),
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // =====================================================
