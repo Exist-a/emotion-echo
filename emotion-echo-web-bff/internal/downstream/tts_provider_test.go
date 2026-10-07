@@ -432,12 +432,39 @@ func TestParseWavMeta_RejectsNonWav(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseWavMeta_StreamSentinelDataSize_UsesActualBytes(t *testing.T) {
+	// F-198 运行时实测（2026-10-07）：SiliconFlow 的 WAV 响应 data 块声明
+	// 0xFFFFFF00（流式/未知长度哨兵），实际字节完整到港。此时必须以实际字节
+	// 算 duration——原"声明>实际即报错"语义会把 cloud 路径整体打成降级
+	//（实测 BFF Warn: declared 4294967040 bytes, have 307356）。
+	// data 声明值不可信是上游契约的一部分；fmt 块仍须完整（那才是格式事实源）。
+	wav := buildWav(t, 24000, 1, 16, 24000) // 1.0s / 48000 data bytes
+	// 把 data 块的 size 字段改写为哨兵 0xFFFFFF00
+	sentinel := []byte{0x00, 0xFF, 0xFF, 0xFF}
+	copy(wav[40:44], sentinel) // "data" @36..39，size @40..43
+
+	meta, err := parseWavMeta(wav)
+	require.NoError(t, err, "哨兵 size 不得按截断报错")
+	assert.InDelta(t, 1.0, meta.durationSec(), 0.001, "duration 以实际到港字节计算")
+}
+
 func TestParseWavMeta_RejectsTruncatedData(t *testing.T) {
-	// 声明 48000 字节 data 但只给一半 → 报错（不得静默算出错误 duration）
+	// data 声明 48000 字节但实际只到港一半：仍以实际字节算（同哨兵语义——
+	// 无法区分"流式哨兵"与"真截断"，取实际值让播放层自然收尾）；
+	// 但 fmt 块截断必须报错（TestParseWavMeta_RejectsTruncatedFmt）。
 	wav := buildWav(t, 24000, 1, 16, 24000)
-	truncated := wav[:len(wav)/2]
+	truncated := wav[:len(wav)/2] // data 只到港一半
+	meta, err := parseWavMeta(truncated)
+	require.NoError(t, err, "data 短到港以实际字节计算，不报错")
+	assert.Greater(t, meta.durationSec(), 0.0)
+}
+
+func TestParseWavMeta_RejectsTruncatedFmt(t *testing.T) {
+	// fmt 块声明 16 字节但只到港 8 → 报错（fmt 是格式事实源，截断不可解析）
+	wav := buildWav(t, 24000, 1, 16, 24000)
+	truncated := wav[:36] // RIFF/WAVE + "fmt " 头，fmt body 全缺
 	_, err := parseWavMeta(truncated)
-	require.Error(t, err, "data 声明尺寸与实际不符必须报错")
+	require.Error(t, err, "fmt 块截断必须报错")
 }
 
 func TestCloudProvider_FillsPhonemesAndDuration(t *testing.T) {

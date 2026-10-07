@@ -257,21 +257,29 @@ func parseWavMeta(wav []byte) (wavMeta, error) {
 		id := string(wav[pos : pos+4])
 		size := int(binary.LittleEndian.Uint32(wav[pos+4 : pos+8]))
 		bodyStart := pos + 8
-		if bodyStart+size > len(wav) {
-			return wavMeta{}, fmt.Errorf("downstream: tts cloud: wav chunk %q truncated (declared %d bytes, have %d)", id, size, len(wav)-bodyStart)
-		}
-		switch id {
-		case "fmt ":
-			if size < 16 {
-				return wavMeta{}, fmt.Errorf("downstream: tts cloud: wav fmt chunk too small (%d bytes)", size)
+		avail := len(wav) - bodyStart
+		if id == "fmt " {
+			// fmt 是格式事实源，必须完整（16 字节头部齐）
+			if size < 16 || avail < 16 {
+				return wavMeta{}, fmt.Errorf("wav fmt chunk truncated or too small (declared %d, have %d)", size, avail)
 			}
 			meta.channels = int(binary.LittleEndian.Uint16(wav[bodyStart+2:]))
 			meta.sampleRate = int(binary.LittleEndian.Uint32(wav[bodyStart+4:]))
 			meta.bitsPerSample = int(binary.LittleEndian.Uint16(wav[bodyStart+14:]))
 			haveFmt = true
-		case "data":
-			meta.dataBytes = size
+		} else if id == "data" {
+			// data 声明尺寸不可信：SiliconFlow 实测流式哨兵 0xFFFFFF00（未知长度）。
+			// 无法区分哨兵与真截断 ⇒ 一律以实际到港字节为准（播放层自然收尾）。
+			if size > avail {
+				meta.dataBytes = avail
+			} else {
+				meta.dataBytes = size
+			}
 			haveData = true
+			break // data 是最后需要关心的块；哨兵会让 size 溢出到假偏移
+		}
+		if size > avail {
+			break // 其余块声明异常：不再推进（防假偏移死循环）
 		}
 		pos = bodyStart + size
 		if size%2 == 1 {
