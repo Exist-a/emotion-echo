@@ -170,3 +170,8 @@ jobs:
       # 自检含两个负向对照（注入 8894 发布 / 删掉 main 调用，守卫必须转红）。
       - name: 守卫 20/20 BFF 信任链契约（收 8894 + fail-fast 已接线）
         run: bash scripts/test_check_bff_trust_chain.sh
+
+      # E2E-29 F-182：smoke_bff_chat_grpc.sh 曾因"只带 X-User-Id 不带令牌"恒 4/7 FAIL
+      # 且无人看着。本守卫把"必须带 Bearer"钉成静态契约（含负向自检）。
+      - name: 守卫 21/21 smoke_bff_chat_grpc 必须带令牌（F-182 防回退）
+        run: bash scripts/test_smoke_bff_chat_grpc_contract.sh

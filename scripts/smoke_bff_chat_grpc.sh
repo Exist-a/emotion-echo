@@ -11,7 +11,11 @@
 #   5. BFF POST /api/v1/conversations/:id/messages → 200（gRPC SendMessage 链路通）
 #   6. BFF GET  /api/v1/conversations/:id/messages → 200（gRPC ListMessages 链路通）
 #   7. BFF GET  /api/v1/conversations → 200（gRPC ListConversations 链路通）
-#   8. X-User-Id header 透传到 gRPC metadata x-user-id（chat-svc 拦截器读得到）
+#   8. 缺身份调用受保护端点 → 401（由网关 jwt-auth 承担；BFF 侧信任链见 E2E-29 D-47）
+#
+# E2E-29 F-182 修复（2026-10-07）：契约 4~7 原只带 `X-User-Id` 不带 `Authorization: Bearer`，
+# 而 APISIX 的 catch-all 路由自 jwt-auth 落地起就要求令牌 ⇒ 该脚本**恒 4/7 FAIL**（编写于
+# PR-GRPC-6 时代，未随鉴权要求补登录取 token 步骤）。现先 login 取 Bearer 再调受保护端点。
 #   9. SkyWalking OAP 上看到 rpc.* tag（chat-svc OAP layer / BFF OAP layer）
 #
 # 退出码：0 全 PASS / 1 至少 1 项 FAIL
@@ -40,6 +44,23 @@ for c in emotion-echo-web-bff emotion-echo-chat-svc emotion-echo-apisix emotion-
     exit 1
   fi
 done
+
+# ---------- 契约 1.5: 登录取 Bearer（F-182：受保护端点必须带令牌）----------
+log "=== 契约 1.5: POST /api/v1/auth/login 取 accessToken ==="
+LOGIN_RESP=$(curl -sS -X POST "$APISIX_URL/api/v1/auth/login"   -H 'Content-Type: application/json'   -d "{\"username\":\"${SMOKE_USER:-echo}\",\"password\":\"${SMOKE_PASS:-echo123}\"}"   --max-time 15 2>/dev/null || echo "{}")
+TOKEN=$(printf '%s' "$LOGIN_RESP" | python -c "
+import sys, json
+try:
+    print(json.load(sys.stdin).get('data', {}).get('accessToken', ''))
+except Exception:
+    print('')
+" 2>/dev/null)
+if [ -n "$TOKEN" ] && [ ${#TOKEN} -gt 50 ]; then
+  log "[OK  ] 取得 accessToken（长度=${#TOKEN}）"
+else
+  err "登录取 token 失败（resp=$(printf '%s' "$LOGIN_RESP" | head -c 160)）"
+  exit 1
+fi
 
 # ---------- 契约 2: chat-svc :8892 gRPC 端口 listening ----------
 log "=== 契约 2: chat-svc :8892 gRPC 端口 listening ==="
@@ -76,14 +97,16 @@ log "=== 契约 4: POST /api/v1/conversations (CreateConversation RPC) ==="
 CREATE_RESP=/tmp/create_conv_resp.json
 CREATE_HTTP=$(curl -sS -o "$CREATE_RESP" -w '%{http_code}' \
   -X POST "$APISIX_URL/api/v1/conversations" \
-  -H "X-User-Id: $USER_ID" \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"title":"smoke test"}' \
   --max-time 30 2>/dev/null || echo "000")
 
 if [ "$CREATE_HTTP" = "200" ]; then
   log "[OK  ] create conv HTTP 200"
-  CONV_ID=$(grep -oE '"id"[[:space:]]*:[[:space:]]*[0-9]+' "$CREATE_RESP" 2>/dev/null | head -1 | grep -oE '[0-9]+')
+  # F-182 同族第二处：BFF 响应 id 自 Stage 72 起为**字符串**（"id":"551"），
+  # 原正则只匹配裸数字 ⇒ 恒取不到 id ⇒ 契约 5/6 连带跳过。
+  CONV_ID=$(grep -oE '"id"[[:space:]]*:[[:space:]]*"?[0-9]+' "$CREATE_RESP" 2>/dev/null | head -1 | grep -oE '[0-9]+')
   if [ -n "$CONV_ID" ]; then
     log "[OK  ] conv id=$CONV_ID"
   else
@@ -99,7 +122,7 @@ if [ -n "$CONV_ID" ]; then
   log "=== 契约 5: POST /api/v1/conversations/$CONV_ID/messages (SendMessage RPC) ==="
   SEND_HTTP=$(curl -sS -o /tmp/send_resp.json -w '%{http_code}' \
     -X POST "$APISIX_URL/api/v1/conversations/$CONV_ID/messages" \
-    -H "X-User-Id: $USER_ID" \
+    -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' \
     -d '{"role":"user","content":"hello gRPC","client_msg_id":"smoke-test-uuid"}' \
     --max-time 30 2>/dev/null || echo "000")
@@ -114,7 +137,7 @@ if [ -n "$CONV_ID" ]; then
   log "=== 契约 6: GET /api/v1/conversations/$CONV_ID/messages (ListMessages RPC) ==="
   LIST_HTTP=$(curl -sS -o /tmp/list_resp.json -w '%{http_code}' \
     -X GET "$APISIX_URL/api/v1/conversations/$CONV_ID/messages?limit=10" \
-    -H "X-User-Id: $USER_ID" \
+    -H "Authorization: Bearer $TOKEN" \
     --max-time 30 2>/dev/null || echo "000")
 
   if [ "$LIST_HTTP" = "200" ]; then
@@ -129,7 +152,7 @@ fi
 log "=== 契约 7: GET /api/v1/conversations (ListConversations RPC) ==="
 LISTCONV_HTTP=$(curl -sS -o /tmp/listconv_resp.json -w '%{http_code}' \
   -X GET "$APISIX_URL/api/v1/conversations?limit=10&offset=0" \
-  -H "X-User-Id: $USER_ID" \
+  -H "Authorization: Bearer $TOKEN" \
   --max-time 30 2>/dev/null || echo "000")
 
 if [ "$LISTCONV_HTTP" = "200" ]; then
@@ -139,8 +162,8 @@ else
 fi
 
 # ---------- 契约 8: gRPC 端点鉴权 (x-user-id metadata) ----------
-log "=== 契约 8: x-user-id 鉴权（缺 user id 时应被拦截）==="
-# 不带 X-User-Id 应返 401
+log "=== 契约 8: 缺身份调用受保护端点应被拦截（网关 jwt-auth，E2E-29 F-182 语义更新）==="
+# 不带任何凭据应返 401（jwt-auth 在网关层拦截；此前只测"缺 X-User-Id"是 BFF 层语义）
 NO_AUTH_HTTP=$(curl -sS -o /dev/null -w '%{http_code}' \
   -X POST "$APISIX_URL/api/v1/conversations" \
   -H 'Content-Type: application/json' \
