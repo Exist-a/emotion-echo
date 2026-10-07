@@ -85,9 +85,9 @@ deploy/
 | 维度 | dev（默认） | prod（应改） |
 |---|---|---|
 | 启动命令 | `-f compose.dev.yml` | `-f compose.prod.yml`（待建） |
-| BFF 直连端口（8894） | ✅ 暴露（dev 调试） | ❌ 不暴露（仅 APISIX 可达） |
+| BFF 直连端口（8894） | ❌ **不暴露**（E2E-29 D-47，2026-10-07：该直连面即"伪造 X-User-Id 绕过网关"入口 E2E-F-202） | ❌ 不暴露（仅 APISIX 可达） |
 | `BFF_DEV_RETURN_CODE` | `1`（验证码回显） | `0`（生产关闭） |
-| `BFF_TRUST_APISIX` | `true`（信任直连调试） | `false`（APISIX 强制注入） |
+| `BFF_TRUST_APISIX` | `true` + `BFF_APISIX_CIDRS` 必填（BFF 启动自校验：true 而无 CIDR ⇒ 拒绝启动） | `true` + 明确网关网段（prod 形态下留 `false` ⇒ 拒绝启动，D-47 ②） |
 | `KAFKA_ENABLED` | `false`（dev 简化） | `true`（生产必须） |
 | AI profile（FER/SenseVoice/XTTS） | `--profile ai` 按需启 | 启用 |
 | 日志级别 | `DEBUG` | `INFO` |
@@ -110,7 +110,6 @@ services:
       BFF_DEV_RETURN_CODE: ${BFF_DEV_RETURN_CODE:-1}
       BFF_TRUST_APISIX: ${BFF_TRUST_APISIX:-true}
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}            # dev 看调试日志
-    ports: ["8894:8894"]              # dev 调试直连
 
   emotion-echo-web:
     environment:

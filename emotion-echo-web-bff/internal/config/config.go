@@ -7,9 +7,40 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 )
+
+// IsProdMarked 判定"生产形态"。
+//
+// 复用既有变量而非新造开关：STARTUP_STRICT_DEPS 是仓库既有且**只在 prod 非空**的
+// fail-fast 载体（shared/pkg/bootstrap/deps.go；D-31 亦以它为 prod 必填项的口径，
+// compose.prod.yml TODO 1b 同源）。空白串等同未设置。
+func IsProdMarked() bool {
+	return strings.TrimSpace(os.Getenv("STARTUP_STRICT_DEPS")) != ""
+}
+
+// ValidateAuthTrust 校验"信任 APISIX 注入的 X-User-Id"这一安全前提是否自洽（E2E-29 D-47）。
+//
+// 两种危险形态都在真实环境发生过，且**都表现为线上异常而非启动失败**：
+//  1. TrustAPISIX=true + APISIXCIDRs 为空 ⇒ 中间件对**所有**来源 fail-closed
+//     （`gin_auth.go` 的 `cidrs == nil` 分支）⇒ 全站 401（Stage 109a 事故形态）。
+//  2. prod 形态（STARTUP_STRICT_DEPS 非空）下 TrustAPISIX=false ⇒ 任何来源的
+//     X-User-Id 均被接受 ⇒ 可冒充任意用户（E2E-F-202：直连 BFF 端口伪造 header）。
+//
+// 让它们在**启动时**失败，而不是在流量上失败。
+func (c *Config) ValidateAuthTrust() error {
+	if c.TrustAPISIX && len(c.APISIXCIDRs) == 0 {
+		return fmt.Errorf("BFF_TRUST_APISIX=true 但 BFF_APISIX_CIDRS 为空：中间件将拒绝所有来源" +
+			"（全站 401，Stage 109a 事故形态）；请设可信 APISIX 网段，或显式关掉 BFF_TRUST_APISIX")
+	}
+	if !c.TrustAPISIX && IsProdMarked() {
+		return fmt.Errorf("prod 形态（STARTUP_STRICT_DEPS 非空）下 BFF_TRUST_APISIX 必须为 true：" +
+			"false 会接受任意来源的 X-User-Id（可冒充任意用户，见账本 E2E-F-202）")
+	}
+	return nil
+}
 
 // SkyWalking 链路追踪配置（与 chat-svc 同构）
 type SkyWalking struct {

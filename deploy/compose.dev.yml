@@ -24,20 +24,21 @@
 
 services:
 
-  # BFF 覆盖：dev 调试便利（端口直连 + 验证码回显 + 信任 APISIX）
+  # BFF 覆盖：dev 调试便利（验证码回显 + 信任 APISIX 注入的身份）
   emotion-echo-web-bff:
     environment:
       # prod 必须 0，dev 默认 1（验证码回显方便 forget-pwd e2e）
       BFF_DEV_RETURN_CODE: ${BFF_DEV_RETURN_CODE:-1}
-      # dev 默认 true（直连 BFF 调试）；prod 设 false（强制走 APISIX X-User-Id 注入）
+      # dev 默认 true：BFF 只认 APISIX 注入的 X-User-Id（dev 也走 :19080 网关链路）
       BFF_TRUST_APISIX: ${BFF_TRUST_APISIX:-true}
-      # dev Docker 网络 CIDR（APISIX 容器 IP 所在网段，TrustAPISIX=true 时必填）
+      # dev Docker 网络 CIDR（TrustAPISIX=true 时必填，否则 BFF 启动即失败——D-47 ②）。
+      # 该段**含 docker 网关**，故它只对"容器网内调用者"有意义：宿主到 BFF 的通路已在
+      # D-47 ③ 收掉（apps.yml 已移除 8894 映射）⇒ 宿主无法再借网关 IP 落在白名单内伪造身份。
       BFF_APISIX_CIDRS: ${BFF_APISIX_CIDRS:-172.18.0.0/16}
       # dev 默认 DEBUG（看调试日志）；prod 设 INFO（apps.yml 默认值）
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
-    ports:
-      # dev 调试直连；prod 移除此行（仅 APISIX 入口）
-      - "8894:8894"
+    # E2E-29 D-47 ③：dev 也不再发布 8894 —— 直连面即"伪造 X-User-Id 绕过网关"的入口
+    # （E2E-F-202）。需要直连请用 `docker exec emotion-echo-web-bff ...`，或经 :19080。
 
   # Web 覆盖：dev 浏览器访问 + API base 指向宿主 localhost:19080
   emotion-echo-web:

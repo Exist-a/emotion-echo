@@ -43,7 +43,7 @@ Emotion-Echo/
 | 服务 | 容器内 | 宿主映射 |
 |---|---|---|
 | **前端 Web (Nuxt)** | :3000 | <http://localhost:3000> |
-| **BFF (APISIX 后端，dev 调试可直连；prod 仅 APISIX 访问)** | :8894 | <http://localhost:8894> |
+| **BFF (APISIX 后端，仅容器网可达)** | :8894 | ❌ 宿主不可达（E2E-29 D-47 已收宿主映射）；排障用 `docker exec emotion-echo-web-bff wget -qO- http://localhost:8894/health/ready` |
 | **APISIX（唯一业务入口，决策 11/12）** | :19080 | <http://localhost:19080> |
 | user-svc | :8888 | (容器内) |
 | chat-svc | :8890 | (容器内) |
@@ -168,7 +168,8 @@ docker compose --env-file .env.local -f docker-compose.infra.yml -f docker-compo
 ```
 
 > 📋 **环境配置分层（ADR-20）**：详见 [`deploy/configuration.md`](deploy/configuration.md)。
-> 简版：`apps.yml` 是中性基线，`compose.dev.yml` 覆盖 dev 假设（BFF 8894 端口 / 验证码回显 / CORS 等），
+> 简版：`apps.yml` 是中性基线，`compose.dev.yml` 覆盖 dev 假设（验证码回显 / 信任 APISIX 身份 / CORS 等；
+> BFF 8894 宿主映射自 E2E-29 D-47 起在**两个文件里都已移除**），
 > `compose.prod.yml` 是远端部署占位（待真部署时填具体值）。所有 env 变量支持 `${VAR:-default}` 形式覆盖。
 
 ### 步骤 5：验证联通
@@ -176,8 +177,9 @@ docker compose --env-file .env.local -f docker-compose.infra.yml -f docker-compo
 ```bash
 # 1. BFF 健康检查（聚合 6 下游 + Redis + Nacos 注册态）
 #    ⚠️ 必须用 /health/ready：/health 是 liveness，恒 200，验不出任何东西（E2E-23 D-29）
-curl -i http://localhost:8894/health/ready
+docker exec emotion-echo-web-bff wget -qO- http://localhost:8894/health/ready
 # 期望: HTTP 200 + {"status":"ok","downstream":{"ai":"ok",...},"deps":{"redis":"ok","nacos":"ok"}}
+# 注：E2E-29 D-47 起 8894 不再映射宿主（直连面 = 伪造 X-User-Id 入口），故用 docker exec
 # 依赖不通时: HTTP 503 + {"status":"degraded",...}
 
 # 2. 端到端冒烟（16/16 通过为 GREEN）
@@ -327,7 +329,7 @@ python scripts/smoke_bff_t5.py
 ### Q1: 端口被占用
 
 ```bash
-netstat -ano | findstr :8894
+netstat -ano | findstr :19080   # BFF 8894 自 E2E-29 D-47 起不再映射宿主；排查网关端口
 taskkill /F /PID <PID>
 ```
 
@@ -347,7 +349,7 @@ compose `healthcheck` 与 Helm `readinessProbe` 打的是 **`/health/ready`**，
 
 **排障第一步**：把探针 URL 换成 `/health/ready` 看真实状态 ——
 ```bash
-curl -i http://localhost:8894/health/ready
+docker exec emotion-echo-web-bff wget -qO- http://localhost:8894/health/ready
 # 503 + {"status":"degraded", "deps":{"redis":"down","nacos":"ok"}}
 ```
 

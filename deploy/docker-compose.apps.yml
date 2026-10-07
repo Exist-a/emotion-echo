@@ -610,7 +610,7 @@ services:
     build:
       context: ..
       dockerfile: emotion-echo-web-bff/Dockerfile
-    image: emotion-echo/web-bff:v0.1.33  # E2E-29 L1：/api/v1/auth/refresh 在拿不到有效令牌（缺失/过期/签名不符/类型不符）时一律 401，不再回落默认身份 user_id=1（D-46，修 E2E-F-201 认证绕过）。前 v0.1.32 承接 E2E-21：shared/pkg/grpcinterceptor 加 ClientTraceIDInterceptor（ctx→outgoing metadata x-trace-id）+ ClientLoggingInterceptor 改带 ctx 打日志（否则 trace_id 永远进不了日志行）。前 v0.1.31 承接 E2E-20 D-28 收尾裁定：验证码存储退回 in-memory（VerificationCodeStore 独立接口，契约测试锁死禁止 Redis 化）；登录锁定 RedisStore 收缩为 3 方法不变。前置 v0.1.30 = E2E-F-127 yaml/config.go 漂移修复（e2e-17 step 5 收口 2026-09-23）：etc/web-bff.yaml XTTS TimeoutMs 30000→90000（与 config.go SetDefaults 对齐；否则 yaml 实际生效 30s → BFF→XTTS client.Timeout 30s 撞底 → 502；详见 config_test.go:TestConfig_XTTSDefaultTimeoutIs90s）。原 v0.1.28 commit 只改 config.go 默认值未改 yaml 是真 bug。E2E-F-129: /tts/phonemes 端点 + 段间断点队列化。E2E-F-127: audioUrl 反代。
+    image: emotion-echo/web-bff:v0.1.34  # E2E-29 D-47：信任链自校验——BFF_TRUST_APISIX=true 而 CIDR 为空、或 prod 形态下 TrustAPISIX=false 时**拒绝启动**（config.ValidateAuthTrust + main.go 接线）；8894 宿主映射同轮移除。前 v0.1.33 承接 E2E-29 L1：/api/v1/auth/refresh 在拿不到有效令牌（缺失/过期/签名不符/类型不符）时一律 401，不再回落默认身份 user_id=1（D-46，修 E2E-F-201 认证绕过）。前 v0.1.32 承接 E2E-21：shared/pkg/grpcinterceptor 加 ClientTraceIDInterceptor（ctx→outgoing metadata x-trace-id）+ ClientLoggingInterceptor 改带 ctx 打日志（否则 trace_id 永远进不了日志行）。前 v0.1.31 承接 E2E-20 D-28 收尾裁定：验证码存储退回 in-memory（VerificationCodeStore 独立接口，契约测试锁死禁止 Redis 化）；登录锁定 RedisStore 收缩为 3 方法不变。前置 v0.1.30 = E2E-F-127 yaml/config.go 漂移修复（e2e-17 step 5 收口 2026-09-23）：etc/web-bff.yaml XTTS TimeoutMs 30000→90000（与 config.go SetDefaults 对齐；否则 yaml 实际生效 30s → BFF→XTTS client.Timeout 30s 撞底 → 502；详见 config_test.go:TestConfig_XTTSDefaultTimeoutIs90s）。原 v0.1.28 commit 只改 config.go 默认值未改 yaml 是真 bug。E2E-F-129: /tts/phonemes 端点 + 段间断点队列化。E2E-F-127: audioUrl 反代。
     container_name: emotion-echo-web-bff
     restart: on-failure
     # E2E-17: on-failure (避免 exit=0 也被 unless-stopped 重启). 仅异常退出重启.
@@ -696,9 +696,12 @@ services:
       # LOGIN_LOCK_BACKEND=redis → RedisStore（多 BFF 实例共享，跨实例失效修复）
       # 默认/缺省 → InMemoryStore（单实例行为，向后兼容）
       LOGIN_LOCK_BACKEND: ${LOGIN_LOCK_BACKEND:-redis}
-    # Stage 33 PR-20: BFF 端口保留（dev 调试 / Postman 直连；prod 应仅暴露 APISIX）
-    ports:
-      - "8894:8894"
+    # E2E-29 D-47（2026-10-07 用户拍板）：**移除 8894 宿主映射**。
+    # 历史（Stage 33 PR-20）此处保留映射供"dev 调试 / Postman 直连"，但该路径同时是
+    # "伪造 X-User-Id 绕过网关"的入口（账本 E2E-F-202 实测：直连发 X-User-Id:2 → 200
+    # smoke_user）。收口后 BFF 仅容器网可达：需要时用 `docker exec emotion-echo-web-bff`，
+    # 或经 APISIX（:19080）走正常鉴权链路。BFF 存活性由网关链路 + 容器 healthcheck 证明。
+    # 关联：compose.prod.yml TODO 3（prod 必须 TrustAPISIX=true + 明确 CIDR）。
     volumes:
       - ../emotion-echo-web-bff/etc/web-bff.yaml:/app/etc/web-bff.yaml:ro
       - ../deploy/tls/ca.crt:/app/etc/tls/ca.crt:ro

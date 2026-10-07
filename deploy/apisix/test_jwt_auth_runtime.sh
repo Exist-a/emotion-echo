@@ -115,17 +115,17 @@ else
   bad "no-auth HTTP=$NO_AUTH_HTTP (期望 401)"
 fi
 
-# ---- Step 5: BFF 直连（绕开 APISIX）应能收到请求 ----
+# ---- Step 5: D-47 收口（E2E-29 M2）—— 宿主直连 BFF 必须已不可达 ----
+# 历史（Stage 109a）此步断言"宿主直连 8894 应 200"，用以证明"BFF 上游没坏"；但同一条
+# 通路正是"伪造 X-User-Id 绕过网关"的入口（账本 E2E-F-202：直连发 X-User-Id:2 → 200）。
+# E2E-29 D-47 ③（2026-10-07 用户拍板）后 8894 宿主映射已移除 ⇒ 该通路应从宿主不可达；
+# BFF 存活性由 Step 2（经网关带合法令牌 200）证明，不再依赖直连。
 echo ""
-echo "Step 5: BFF 直连 (绕开 APISIX) 应 200 — 证明 BFF 上游没坏"
-BFF_HTTP=$(curl -sS -o /dev/null -w "%{http_code}" \
-  -H "X-User-Id: 1" \
-  "$BFF_DIRECT/api/v1/user/profile" 2>&1)
-if [ "$BFF_HTTP" = "200" ] || [ "$BFF_HTTP" = "404" ]; then
-  # 200 = BFF 真有 /user/profile; 404 = 路径不存在但 BFF 响应了 (都说明 BFF 上游通)
-  ok "BFF-direct HTTP=$BFF_HTTP (BFF 上游 reachable)"
+echo "Step 5: 宿主直连 BFF 必须不可达（D-47 收 8894 映射）"
+if curl -sS -o /dev/null -m 3 "$BFF_DIRECT/health" >/dev/null 2>&1; then
+  bad "BFF-direct 仍可达（$BFF_DIRECT）—— 直连伪造面未收，D-47 ③ 未生效?"
 else
-  bad "BFF-direct HTTP=$BFF_HTTP (BFF 自身有问题, 不是 APISIX 401)"
+  ok "BFF-direct 不可达（直连伪造面已收；BFF 存活性由 Step 2 证明）"
 fi
 
 # ---- 收口 ----

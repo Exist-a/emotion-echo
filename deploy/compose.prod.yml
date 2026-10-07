@@ -30,11 +30,20 @@
 #                             实例 ⇒ APISIX/BFF 解析不到节点 ⇒ 全站 502。
 #                             与账本 E2E-F-137 完全同型，故 prod 必须 fail-fast。
 #  2. BFF_DEV_RETURN_CODE    — prod 必须 0（验证码回显关闭）
-#  3. BFF_TRUST_APISIX       — prod 应由 APISIX 强制 X-User-Id 注入，BFF 不再信任直连
+#  3. BFF_TRUST_APISIX + APISIXCIDR — prod **必须** true + 明确的网关网段（E2E-29 D-47，
+#                             2026-10-07 用户拍板）。BFF 现已**自校验**：prod 形态
+#                             （STARTUP_STRICT_DEPS 非空）却把 TrustAPISIX 留 false ⇒
+#                             **拒绝启动**（否则任意来源的 X-User-Id 都被接受，可冒充任意
+#                             用户 = 账本 E2E-F-202）；反之 TrustAPISIX=true 而 CIDR 为空 ⇒
+#                             同样拒绝启动（中间件对所有来源 fail-closed ⇒ 全站 401 =
+#                             Stage 109a 事故形态）。实现见 emotion-echo-web-bff 的
+#                             config.ValidateAuthTrust + main.go。
 #  4. KAFKA_ENABLED          — prod 必须 true（dev 默认 false 是例外）
 #  5. CORS_ALLOW_ORIGINS     — prod 用域名白名单（如 https://emotion-echo.example.com）
 #  6. NUXT_PUBLIC_API_BASE_URL — prod 用 HTTPS 域名而非 http://localhost:19080
-#  7. BFF 端口映射（8894）   — prod 必须移除（仅 APISIX 入口可达）
+#  7. BFF 端口映射（8894）   — ✅ **已在 apps.yml + compose.dev.yml 移除**（E2E-29 D-47 ③，
+#                             2026-10-07）：BFF 仅容器网可达（`docker exec` 或经 APISIX :19080）。
+#                             该映射曾是"伪造 X-User-Id 绕过网关"的入口（E2E-F-202）。prod 无需额外动作。
 #  8. Web 端口映射（3000）   — prod 反代或不放宿主
 #  9. SKYWALKING_ENABLED     — 默认 true 保持
 #  10. JWT secret            — prod 用真随机（部署时由密钥管理系统生成）
