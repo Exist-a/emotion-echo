@@ -62,6 +62,21 @@ func (s *InMemoryStore) IsLocked(_ context.Context, username string) bool {
 	return false
 }
 
+// RetryAfter Round 4.3 后补 / E2E-29 遗留项 1：返回剩余锁定时间，未锁定返 0。
+func (s *InMemoryStore) RetryAfter(_ context.Context, username string) time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	attempt, ok := s.failures[username]
+	if !ok || attempt.lockedAt.IsZero() {
+		return 0
+	}
+	remaining := s.lockWindow - time.Since(attempt.lockedAt)
+	if remaining <= 0 {
+		return 0
+	}
+	return remaining
+}
+
 // RecordFailure Round 4.3 后补：记录一次登录失败。返 true 表示这次失败触发了锁定。
 //
 // 行为与原 recordFailure 函数一致：

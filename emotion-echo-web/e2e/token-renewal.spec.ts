@@ -1,5 +1,5 @@
 /**
- * 访问令牌滑动续期回归钉（E2E-F-207 follow-up；设计见 docs/plans/sliding-token-renewal.md）。
+ * 访问令牌滑动续期回归钉（E2E-F-207 follow-up；设计见 docs/legacy-plans/landed/sliding-token-renewal.md）。
  *
  * 背景：前端原「401 + `code===10002` → 自动续期」是死代码（无后端下发 10002，且
  * APISIX 先拒过期令牌）⇒ 令牌一过期就登出。现改为**过期前主动续期**（寿命 75% 处）。

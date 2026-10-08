@@ -10,7 +10,8 @@
  *   #3  受保护端点匿名枚举（≥6 条）全部 401
  *   #4  令牌类型隔离：reset token 不得当 access token 用；access token 不得当 reset token 用
  *   #6  logout 清除 cookie 且带 SameSite（F-203）
- *   #7/#8 reports 的 user_id 归属 403；别名参数不得构成越权（响应体与基准逐字相同）
+ *   #7/#8 reports 的 user_id 归属 403；身份别名（数字型）不符亦 403（遗留项 3 加固），
+ *         一致时响应体与基准逐字相同
  *   #9/#10 跨用户资源：读/改/删/发消息 一律 403，自己的资源 2xx
  *   #11 宿主直连 BFF 8894 不可达（D-47 收映射）
  *   #13 限流拒绝码 = 429（白名单链）
@@ -143,12 +144,24 @@ test.describe('E2E-29 横切安全回归钉', () => {
     expect(base.status()).toBe(200)
     const baseBody = await base.text()
 
-    for (const alias of ['userId', 'id', 'uid']) {
+    // E2E-29 遗留项 3（2026-10-08）：身份别名（userId/userid/uid/user/id）的
+    // **数字型**取值与认证身份不符 → 403（与 user_id 同语义），不再被静默忽略。
+    for (const alias of ['userId', 'userid', 'uid', 'user', 'id']) {
       const res = await api.get(`/api/v1/reports/daily?${alias}=${idB}`, {
         headers: { Authorization: `Bearer ${tokenA}` },
       })
-      expect(res.status(), `别名 ${alias} 不应 403（被忽略）`).toBe(200)
-      expect(await res.text(), `别名 ${alias} 的响应体必须与基准逐字相同（未泄漏他人数据）`).toBe(baseBody)
+      expect(res.status(), `别名 ${alias} 携带他人 id 必须 403（同 user_id 语义）`).toBe(403)
+    }
+
+    // 别名与认证身份一致 → 200，且响应体与基准逐字相同（未泄漏他人数据）
+    const meA = await api.get('/api/v1/users/me', { headers: { Authorization: `Bearer ${tokenA}` } })
+    const idA = String((await meA.json()).data.user.userId)
+    for (const alias of ['userId', 'uid', 'id']) {
+      const res = await api.get(`/api/v1/reports/daily?${alias}=${idA}`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      })
+      expect(res.status(), `别名 ${alias} 与认证身份一致应 200`).toBe(200)
+      expect(await res.text(), `别名 ${alias} 一致时响应体应与基准逐字相同`).toBe(baseBody)
     }
   })
 

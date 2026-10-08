@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,11 +60,14 @@ type AuthUserInfo struct {
 const accessTokenCookieName = "access_token"
 
 // 限流常量
+//
+// 登录锁定窗口 / 失败阈值 / 验证码最小间隔的**唯一事实源在 authlock 包**
+// （`authlock/store.go`：loginLockWindow=15min / loginMaxFailures=5 /
+// verificationMinGap=60s），由注入的 LoginLockStore 执行。
+// 本包原先另有一套同名常量（loginLockWindow=5min 等），既未被引用、又与
+// authlock 真值矛盾（5min vs 15min）⇒ E2E-29 遗留项 1 一并删除（防注释漂移）。
 const (
-	loginLockWindow     = 5 * time.Minute // 锁定窗口
-	loginMaxFailures    = 5               // 触发锁定的连续失败次数
-	verificationTTL     = 60 * time.Second // 验证码有效 + 限流窗口
-	verificationMinGap  = 60 * time.Second // 同 username 最小间隔
+	verificationTTL = 60 * time.Second // 验证码有效期（handler 侧保存 TTL；与 authlock 无冲突）
 )
 
 // AuthHandler 处理 /api/v1/auth/* 端点
@@ -118,6 +122,21 @@ func NewAuthHandler(mgr *auth.Manager, userClient downstream.UserClient, store a
 	}
 }
 
+// setLockRetryAfter 在锁定响应上写 `Retry-After`（RFC 7231 §7.1.3：整数秒）。
+//
+// E2E-29 遗留项 1：前端 `useApi.ts:getRetryDelayMs` 优先读该头、缺失才指数退避
+// 兜底；给出**剩余**秒数可让前端精确退避。d <= 0（未锁 / store 降级）时不写头。
+func setLockRetryAfter(c *gin.Context, d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	secs := int((d + time.Second - 1) / time.Second) // 向上取整
+	if secs < 1 {
+		secs = 1
+	}
+	c.Header("Retry-After", strconv.Itoa(secs))
+}
+
 func (h *AuthHandler) login(c *gin.Context) {
 	var req struct {
 		Username   string `json:"username"`
@@ -131,6 +150,7 @@ func (h *AuthHandler) login(c *gin.Context) {
 
 	// 锁定检查（Round 4.3 后补：跨实例共享通过 store 接口）
 	if h.store.IsLocked(c.Request.Context(), req.Username) {
+		setLockRetryAfter(c, h.store.RetryAfter(c.Request.Context(), req.Username))
 		Fail(c, http.StatusLocked, 1, "too many failed attempts; try again later")
 		return
 	}
@@ -138,7 +158,11 @@ func (h *AuthHandler) login(c *gin.Context) {
 	info, err := h.user.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
 		// 记录失败次数（不区分错误类型，避免用户名枚举）
-		h.store.RecordFailure(c.Request.Context(), req.Username)
+		triggered := h.store.RecordFailure(c.Request.Context(), req.Username)
+		// 本次失败刚好触发锁定 → 一并给出 Retry-After，客户端无需再试
+		if triggered {
+			setLockRetryAfter(c, h.store.RetryAfter(c.Request.Context(), req.Username))
+		}
 		// user-svc 401 → BFF 也返 401；其他 → 502
 		statusCode := http.StatusBadGateway
 		if apiErr, ok := err.(*downstream.APIError); ok && apiErr.StatusCode == http.StatusUnauthorized {

@@ -37,13 +37,13 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 | 5 | 过期语义与续期路径（**2026-10-08 补验：IAB 实测**） | [A] | PASS | 短 TTL 探针：过期后 refresh → **401**；**签名有效但已过期**的 JWT 经网关受保护端点 → **401** `{"message":"failed to verify jwt"}`（**无 `code` 字段**）；未过期 refresh → 200。**IAB 真实浏览器补验**（browser-use）：过期令牌触发受保护请求 → 应用跳 `/login`（登录表单可见）、**零次 `/auth/refresh` 调用**（截图 `screenshots/expiry-redirect-to-login.png`）；`jwt-expiry.spec.ts` 加严为 2 用例 × 2 project = **4 passed** | **更正（2026-10-08）**：原写"前端 `code===10002` 续期分支由回归钉 #1 的 cookie 语义间接覆盖"**不成立**——实测该分支为**死代码**（全仓无任何后端下发 10002，见 §6 观察项 4 与账本 E2E-F-207）；真实行为是"过期即登出跳登录、不尝试续期"。plan §6 风险表要求的"IAB 实测真实过期场景"本轮**已补做** |
 | 6 | logout 清除 cookie 语义 + 已知边界 | [A] | PASS | `POST /auth/logout` → `Set-Cookie: access_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`；回归钉 #6 断言清空 + SameSite | **已知边界（如实）**：无服务端黑名单 ⇒ 已签发 token 有效至 exp（D-46 已记录的另一议题） |
 | 7 | reports 端点 IDOR 守卫 | [A] | PASS | A 的令牌 + `?user_id=<B>` → **403** `forbidden: user_id mismatch with authenticated user`；无 query → 200（用认证身份）；自己 id → 200；回归钉 #7/#8 | 实现 `analytics_handler.go:47-72` |
-| 8 | 参数别名不构成越权 | [A] | PASS | `?userId=` / `?id=` / `?uid=` / `?user=` → 200 且**响应体 md5 与"不带 query"完全相同**（被忽略、无泄漏）；回归钉断言**逐字相同** | 守卫生效但语义是"字面参数名白名单"（已记录） |
+| 8 | 参数别名不构成越权 | [A] | PASS | `?userId=` / `?id=` / `?uid=` / `?user=` → 200 且**响应体 md5 与"不带 query"完全相同**（被忽略、无泄漏）；回归钉断言**逐字相同** | 守卫生效但语义是"字面参数名白名单"（已记录）。**2026-10-08 遗留项 3 跟进**：语义升级为"身份别名同守"——数字型别名不符 → 403；本行"别名被忽略→200"的旧行为仅对**相符/非数字**别名成立。回归钉 #7/#8 已同步加严（5 别名不符全 403 + 相符 200 且响应体逐字相同） |
 | 9 | 资源级越权（跨用户读） | [A] | PASS | A 的令牌读 B 的会话消息 `GET /conversations/<B>/messages` → **403** `forbidden: conversation does not belong to current user`；A 的会话列表**不含** B 的会话；回归钉 #9/#10 | 下游 chat-svc 侧归属校验生效 |
 | 10 | 越权写拒绝 | [A] | PASS | A 对 B 的会话 `PATCH` / `POST pin` / `POST messages` / `DELETE` → **全部 403**；对照：A 对自己的会话同四动作 → **200**；事后核验 B 的会话标题/isTop **未被改动**；回归钉 #9/#10 同批 | — |
 | 11 | BFF 可信链（F-202） | [A]+[M] | PASS | **D-47 落地后**：宿主 `curl localhost:8894/health` → **code=000 拒连**（`docker inspect` → `ports=map[]`）；`docker exec` 内 `/health/ready` → 200；网关链路 login=200 / 匿名 refresh=401；fail-fast 两种危险形态 → **ExitCode=1** + 可操作日志，dev 形态对照 → running；回归钉 #11（宿主直连必须不可达） | [M] 已裁定 **D-47**；守卫 `check_bff_trust_chain.sh` 5/5 + 自检 3/3（两个负向对照） |
 | 12 | 网关限流实测（两条链） | [A] | PASS | 白名单链（`/auth/login`）与 catch-all 链（`/users/me`）各打 70 次 → **第 61 次 429**（60 通过 + 10×429），带 `X-RateLimit-Limit/Remaining/Reset` | `policy=redis`（见 #14 的 Redis 键证据） |
 | 13 | 限流拒绝码一致性（F-177 域） | [A] | PASS | 两条链的限流拒绝**均为 429**（响应体 `<title>429 Too Many Requests</title>`，非 openresty 裸 503） | 与 E2E-25 的 `rejected_code` 收口一致 |
-| 14 | 登录锁定 + 跨实例共享 + Retry-After | [A] | PASS | 5 次错密码 → 401×5，第 6 次 → **423 Locked** `too many failed attempts`；锁定后正确密码仍 423；`LOGIN_LOCK_BACKEND=redis` + Redis 实键 `web-bff-auth:fails:<user>` 与 `plugin-limit-count:v1:/apisix/routes/110:…`（跨节点配额共享实证） | **观察项（如实）**：423 响应**无 Retry-After**；前端 `getRetryDelayMs` 优先读它、缺失则指数退避兜底 ⇒ 可用但可改进（本轮不修，理由：前端已有兜底且 423 语义清晰） |
+| 14 | 登录锁定 + 跨实例共享 + Retry-After | [A] | PASS | 5 次错密码 → 401×5，第 6 次 → **423 Locked** `too many failed attempts`；锁定后正确密码仍 423；`LOGIN_LOCK_BACKEND=redis` + Redis 实键 `web-bff-auth:fails:<user>` 与 `plugin-limit-count:v1:/apisix/routes/110:…`（跨节点配额共享实证） | **观察项（如实）**：423 响应**无 Retry-After**；前端 `getRetryDelayMs` 优先读它、缺失则指数退避兜底 ⇒ 可用但可改进（本轮不修，理由：前端已有兜底且 423 语义清晰）。**2026-10-08 遗留项 1 跟进**：已补——423 与"触发锁定的那次 401"均带 `Retry-After`（剩余秒数，运行时实测 900） |
 | 15 | CORS origin 白名单双向 | [A] | PASS | 恶意 origin（`http://evil.example.com`）预检 → **0 个 `Access-Control-Allow-*`**；合法 origin → `ACAO: http://localhost:3000` 精确回显 + `ACAC: true`；回归钉 #15/#16 | — |
 | 16 | `allow_headers` 面与预检时效 | [A] | PASS | 改后：`Access-Control-Allow-Headers: Content-Type,Authorization,X-Trace-Id`（**不含 X-User-Id**）、两条链 `Access-Control-Max-Age: 600`（白名单链原为默认 5）；`seed_test.js` +2 契约 → 77/0；回归钉断言不含 X-User-Id 且 Max-Age=600 | 依据：前端全仓**零处**发送 X-User-Id，且 APISIX 无条件覆盖该头 |
 | 17 | JWT 密钥轮换机制（F-28） | [M] | PASS | **D-48 双密钥窗口**：TDD `jwt_multikey_test.go` 6 例 RED→GREEN；**运行时实测（真实网关 + 探针 keyID）**：新 keyID token → 200 / **旧 keyID token → 200（在途会话未断）** / 窗口态 BFF 的 refresh 接受旧密钥 → 200 / 无关密钥 → 401；`seed.sh` Step 2.6 双 consumer + 未配置 `_PREV` 时自动清理；`scripts/rotate_jwt_secret.sh`（status/plan/verify/finalize） | [M] 已裁定 **D-48**；ADR `adr-2026-10-jwt-key-rotation-dual-key` + 架构决策 41 |
@@ -102,9 +102,9 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 | M5 | 资源级越权发现归属 | **由证据关闭**（实测未发现资源级越权：跨用户 5/5 → 403 + 同资源对照 200） | 证据落定，无需裁定 |
 
 **遗留观察项（本轮明确不修，理由已记录）**：
-1. 423 响应无 `Retry-After`（前端有指数退避兜底）；
-2. `useApi.ts` 的 `jti` 注释与 BFF 零 jti 实现不一致（注释漂移；jti 黑名单属另一议题）；
-3. 越权"参数名白名单"式守卫（只认字面 `user_id`，别名被忽略）——现状无泄漏，但新增读别名的端点需同守。
+1. 423 响应无 `Retry-After`（前端有指数退避兜底）；**→ 已解决（2026-10-08，遗留项 1）**：`authlock.LoginLockStore` 新增 `RetryAfter(ctx,user)`（in-memory/redis 双实现，返**剩余**锁定时间），handler 在 423 与"触发锁定的那次 401"上写 `Retry-After`（整数秒，向上取整）。TDD 5 例；运行时实测第 5 次 401 与第 6 次 423 均 `Retry-After: 900`（镜像 v0.1.37）。顺带删除 handler 内**从未被引用**且与 authlock 真值矛盾（5min vs 15min）的同名常量 `loginLockWindow/loginMaxFailures/verificationMinGap`（注释漂移治理）。
+2. `useApi.ts` 的 `jti` 注释与 BFF 零 jti 实现不一致（注释漂移；jti 黑名单属另一议题）；**→ 已解决（2026-10-08，遗留项 2）**：`getTokenJti` / `refreshAccessToken` 两处注释改为如实描述"`jti` 是前向兼容占位、服务端当前忽略；刷新成败只取决于令牌有效性"；同时修正 4 处指向已迁移文档的陈旧路径（`docs/plans/sliding-token-renewal.md` → `docs/legacy-plans/landed/…`）。
+3. 越权"参数名白名单"式守卫（只认字面 `user_id`，别名被忽略）——现状无泄漏，但新增读别名的端点需同守。**→ 已解决（2026-10-08，遗留项 3）**：`userIDQuery` 扩展为**身份别名同守**——数字型 `userId/userid/uid/user/id` 与认证身份不符一律 403（与 `user_id` 同语义）；非数字别名值（如 `?id=<uuid>`）不视为身份声明、保持忽略（不误伤）；别名**永不**作为身份来源（无认证头 + 仅别名仍 400）。TDD 8 例（含 5 别名表驱动）；运行时经网关实测 5 别名不符全 403 / 相符全 200 / 非数字 200；回归钉 #7/#8 同步加严后 **9/9 绿**（镜像 v0.1.37）。
 4. **（2026-10-08 补验新增）前端"401 + `code===10002` → 自动续期"分支为死代码**：全仓无任何后端下发 `code:10002`（BFF 一律 `code:1`；网关返 `{"message":"failed to verify jwt"}` 无 code；shared 中间件返 `{"error":"unauthorized"}`），`refreshToken()` 仅被该分支调用 ⇒ 线上从未执行。**行为安全**（过期 → 登出跳登录），但"滑动续期"能力实为缺失。已登记账本 **E2E-F-207**。**→ 已解决（2026-10-08，D-49，PR #178）**：用户拍板**实现真正的滑动续期**（前端在令牌寿命 75% 处主动换新，零后端改动），删两处死分支；landed plan `docs/legacy-plans/landed/sliding-token-renewal.md`（§F 含执行期抓到的 2 个运行时问题）。
 5. **（2026-10-08 补验新增）HttpOnly `access_token` 无法被页面 JS 覆盖/删除**：IAB 实测 `document.cookie = 'access_token=…'` 被浏览器拒绝（同名 HttpOnly 存在），`clearToken()` 的客户端 cookie 清除因此**无效**。**非安全缺陷**：显式登出走 `POST /auth/logout`（服务端 `Set-Cookie` 清除，生效）；`clearAuth()` 仅在 401 时触发，彼时令牌本已失效。记为边界。
 
@@ -155,3 +155,21 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 | §1 表述与实测一致性 | PASS | 报告 §1 与实测**逐字一致**，且如实标注修正前的失真、**明确限定 D-48 窗口证据来自隔离探针容器**（未把窗口态归到主栈），无夸大；§8 如实收录首轮 FAIL 与处置 |
 
 **结论**：第二方核对**两轮完成**——首轮 1 FAIL + 1 WARN → 修正后第二轮 **PASS**（FAIL 已闭环，WARN 为既有治理债并如实登记）。E2E-29 判 **done**。
+
+## 9. 遗留项跟进（2026-10-08，done 后）
+
+> 起因：用户裁定"其余范围内观察项 / 既有债 → 先进文档，等下一轮"。本轮（下一轮）把这 4 项**全部解决**。
+> 性质：**follow-up 修复轮**（不改 E2E-29 的 done 结论，只清收遗留）；TDD 全覆盖；运行时验收在**重建的 v0.1.37** 上完成。
+
+| # | 遗留项 | 处置 | 证据 |
+|---|--------|------|------|
+| 1 | 423 无 `Retry-After` | `authlock.LoginLockStore` 新增 `RetryAfter(ctx,user) time.Duration`（in-memory/redis 双实现，返**剩余**锁定时间）；`auth_handler.login` 在 423 与"触发锁定那次 401"写 `Retry-After`（整数秒向上取整）；顺带删除 handler 内未引用且与 authlock 矛盾的同名常量 | TDD：`retry_after_test.go` 4 例（RED=方法未定义）+ `auth_handler_test.go` 2 例（RED=头为空）→ GREEN；运行时 `curl`：第 5 次 `401 + Retry-After: 900`、第 6 次 `423 + Retry-After: 900` |
+| 2 | `useApi.ts` jti 注释漂移 | 两处注释改为如实描述（`jti` = 前向兼容占位、服务端当前忽略）；修正 4 处陈旧文档路径（`docs/plans/…` → `docs/legacy-plans/landed/…`） | `npx tsc --noEmit` rc=0；vitest 全仓 **657 passed**（无行为改动） |
+| 3 | IDOR 守卫仅认字面 `user_id` | `userIDQuery` 升级为**身份别名同守**：数字型 `userId/userid/uid/user/id` 与认证身份不符 → 403；非数字别名忽略；别名永不作为身份来源 | TDD：`analytics_handler_test.go` 新增 4 函数/8 例（5 别名表驱动）RED→GREEN；运行时经网关：5 别名不符全 **403** / 相符全 **200** / `?id=<uuid>` **200**；回归钉 `security-boundaries.spec.ts` 同步加严 → **9 passed** |
+| 4 | 账本重复行（E2E-F-115/117/119 各 2 行；F-119 状态矛盾） | 删除 I 段 3 行"同 H 段"重复汇总（保留 H 段详表为准）；**F-119 二选一裁定** = 保留 H 段原始条目（"摄像头失败处理"，权限侧 🟡 用户/环境边界），I 段同号行（"错误提示笼统"）系同轮另一现象被误挂同号、随重复行删除并在 H 段加"同号合并"注记 | 账本 `grep -c` F-115/117/119 各 **1** 行；`e2e_stage_audit.py --all` → **30 阶段 0 FAIL**（A8 编号连续仍过） |
+
+**门禁**：`go build` + `go vet ./...` + `go test ./...` 全绿（BFF）；`audit --all` 0 FAIL；`check_soft_asserts` / `check_orphan_outputs` / `check_residual` / `check_secrets` 全 GREEN；vitest 657 / tsc 0 / Playwright 回归钉 9/9。
+
+**环境**：重建 `emotion-echo/web-bff:v0.1.37`（`docker inspect Created=2026-10-08T02:21:27Z`）；其余 18 容器沿用 E2E-29 基线（healthy）；`:3000` 仍由宿主 `nuxt dev` 服务。
+
+**未解决 / 边界**：无新增；E2E-29 名下及遗留观察项至此**全部清零**（F-207 已于 D-49 闭环）。

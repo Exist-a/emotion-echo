@@ -31,6 +31,12 @@ type LoginLockStore interface {
 	// IsLocked 检查 username 是否被锁（在 loginLockWindow 锁定期内）
 	IsLocked(ctx context.Context, username string) bool
 
+	// RetryAfter 返回 username 的**剩余**锁定时间；未锁定返 0。
+	//
+	// E2E-29 遗留项 1（2026-10-08）：供 handler 在 423 响应写 `Retry-After`
+	// 头（RFC 7231 §7.1.3），让前端精确退避而非恒等满窗口。
+	RetryAfter(ctx context.Context, username string) time.Duration
+
 	// RecordFailure 记录一次登录失败。返 true 表示这次失败触发了锁定。
 	// 锁定期内重复失败不增加计数（避免恶意打爆 failCount）。
 	RecordFailure(ctx context.Context, username string) bool

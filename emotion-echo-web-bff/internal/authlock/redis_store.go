@@ -110,6 +110,27 @@ func (s *RedisStore) IsLocked(ctx context.Context, username string) bool {
 	return time.Now().UnixMilli()-lockedAtMs < loginLockWindow.Milliseconds()
 }
 
+// RetryAfter Round 4.3 后补 / E2E-29 遗留项 1：返回剩余锁定时间，未锁定或
+// Redis 不可达（降级）返 0。窗口口径与 IsLocked 一致（loginLockWindow）。
+func (s *RedisStore) RetryAfter(ctx context.Context, username string) time.Duration {
+	c, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+
+	val, err := s.client.HGet(c, s.failKey(username), "locked_at").Result()
+	if err != nil {
+		return 0 // Redis 不可达 → 降级（不发 Retry-After）
+	}
+	lockedAtMs := parseLockedAtMs(val)
+	if lockedAtMs == 0 {
+		return 0
+	}
+	remaining := loginLockWindow - time.Duration(time.Now().UnixMilli()-lockedAtMs)*time.Millisecond
+	if remaining <= 0 {
+		return 0
+	}
+	return remaining
+}
+
 // RecordFailure Round 4.3 后补：记录失败
 //
 // 实现：Redis Lua 脚本原子读 + 写：
