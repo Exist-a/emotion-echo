@@ -351,7 +351,12 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	svcCtx := svc.NewServiceContext(*c)
 
 	// auth manager（自有 JWT 签发）
-	mgr, err := auth.NewManager(c.Auth.JWTSecret, c.Auth.TokenTTLSeconds)
+	// E2E-29 D-48：双密钥并存窗口 —— 当前密钥 + （可选）上一把密钥 + 各自 key id。
+	mgr, err := auth.NewManagerMulti(
+		c.Auth.JWTSecret, c.Auth.JWTSecretPrev,
+		c.Auth.JWTKeyID, c.Auth.JWTKeyIDPrev,
+		c.Auth.TokenTTLSeconds,
+	)
 	if err != nil {
 		log.Fatalf("[auth] JWT manager init failed: %v", err)
 	}

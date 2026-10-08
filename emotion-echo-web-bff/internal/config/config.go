@@ -99,6 +99,12 @@ type Config struct {
 	Auth struct {
 		JWTSecret        string
 		TokenTTLSeconds  int
+		// E2E-29 D-48（双密钥并存窗口）：JWTKeyID 是当前签名密钥的 key id（写进 token 的
+		// key/user claim，网关据此选 consumer）；JWTSecretPrev/JWTKeyIDPrev 是轮换窗口期
+		// 仍接受验签的上一把。三者都空/缺省时行为与历史一致（key id = "user"，无上一把）。
+		JWTKeyID      string
+		JWTSecretPrev string
+		JWTKeyIDPrev  string
 	}
 
 	// TrustAPISIX 控制 BFF 是否信任 APISIX 注入的 X-User-Id header
@@ -231,6 +237,11 @@ func SetDefaults(c *Config) {
 	}
 	if c.Auth.TokenTTLSeconds == 0 {
 		c.Auth.TokenTTLSeconds = 86400
+	}
+	if c.Auth.JWTKeyID == "" {
+		// 历史所有 token 的 key claim 都是 "user"；缺省保持该值 ⇒ 既有 consumer 与
+		// 既有在途 token 全部继续可用（E2E-29 D-48 的向后兼容前提）。
+		c.Auth.JWTKeyID = "user"
 	}
 	if c.LLM.BaseURL == "" {
 		c.LLM.BaseURL = "https://api.deepseek.com"
@@ -378,6 +389,16 @@ func ApplyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("BFF_JWT_SECRET"); v != "" {
 		c.Auth.JWTSecret = v
+	}
+	// E2E-29 D-48：双密钥窗口的三个旋钮（缺省不设置 ⇒ 历史单密钥行为）
+	if v := os.Getenv("BFF_JWT_KEY_ID"); v != "" {
+		c.Auth.JWTKeyID = v
+	}
+	if v := os.Getenv("BFF_JWT_SECRET_PREV"); v != "" {
+		c.Auth.JWTSecretPrev = v
+	}
+	if v := os.Getenv("BFF_JWT_KEY_ID_PREV"); v != "" {
+		c.Auth.JWTKeyIDPrev = v
 	}
 	if v := os.Getenv("BFF_TRUST_APISIX"); v != "" {
 		c.TrustAPISIX = v == "true" || v == "1"
