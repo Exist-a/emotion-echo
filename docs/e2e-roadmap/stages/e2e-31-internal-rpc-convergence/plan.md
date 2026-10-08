@@ -4,7 +4,7 @@ title: 内部 RPC 收敛（BFF→assessment-svc 切回 gRPC + proto 契约扩展
 type: transformation
 status: pending
 created: 2026-10-08
-last-updated: 2026-10-08（建档；**仅只读调研 + 文档，未改代码**）
+last-updated: 2026-10-08（**已开工**：§0.3 复核 8 项全跑完 + Playwright 基线 **48/48** + **IAB 实测 4 张截图已查看**；M1/M2 已拍板；P1~P3 未开始。执行进度见 §0.4）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §5
@@ -90,7 +90,26 @@ related-findings: [E2E-F-208, E2E-F-213]
 | 4 | **环境基线** | 按 RUNBOOK §2.1 起栈；**注意 F4**——xtts 停用后 BFF 仍可能 `unhealthy`，须先按 §0.1 F4 处置（归 E2E-30）或显式记录该偏差 |
 | 5 | **前端契约冻结** | `question/[id].vue` 的 `questions`/`options`/`answers` 形状未变（F5 为反推基线） |
 | 6 | **回归钉基线** ✅ **已取（2026-10-08）** | `quiz.spec.ts` / `survey-scoring.spec.ts` / `personality.spec.ts` 全量跑 **48/48 PASS**（2.8m，dev `BASE_URL=http://localhost:3000`）。**过程**：首跑 46/48——`survey-scoring #5` 因固定 `waitForTimeout(2000)` 在慢路由上稳定假红（**E2E-F-213**，已当轮修：改条件等待 `toHaveCount(9,{timeout:30000})`，断言值不变）；页面与后端经探针确认正常（热态 ~9.7s、详情 API 12ms/9 题） |
-| 7 | **账本编号** | 新登编号从 **E2E-F-212** 起（E2E-30 已用至 F-211） |
+| 7 | **账本编号** | 新登编号从 **E2E-F-214** 起（本轮已用至 **F-213**：F-210/211/212 = 环境基线与 xtts 停用，F-213 = 回归钉固定 sleep 假红） |
+| 8 | **IAB 实测（改动前基线）** ✅ **已做（2026-10-08）** | IAB（内置浏览器）黑盒实测测验链路，**4 张截图且已逐张查看**，存于 [`screenshots/`](screenshots/)：① [`01`](screenshots/01-quiz-list-symptom-tab-1280x720.png) 列表-症状筛查 tab（GAD-7 7 题 / PHQ-9 9 题 + **描述可见**）；② [`02`](screenshots/02-quiz-detail-phq9-questions-1280x720.png) PHQ-9 详情（**q1~q9 有序、题干为 `title` 文案、每题 4 个选项文本正确**）；③ [`03`](screenshots/03-quiz-result-dialog-total27-extreme-1280x720.png) 全选「几乎每天」→ 结果弹窗 **总分 27 / 等级 极重度**（E2E-F-97 计分契约成立）；④ [`04`](screenshots/04-quiz-list-personality-tab-1280x720.png) 列表-人格画像 tab（**人格五因素量表 30 题 + 描述可见**）。**这份基线是 P1~P3 改造后必须不劣化的对照物** |
+
+---
+
+### 0.4 执行进度（2026-10-08）
+
+| 环节 | 状态 | 证据 / 说明 |
+|------|------|------------|
+| 立项 | ✅ 已合并 | PR #182：roadmap 新增「第九批」+ 账本 E2E-F-208 转出 + 新登 F-210/211/212 + 决策 D-50 |
+| §0.3 开工复核 8 项 | ✅ 全跑完 | 见上表；工具链实测 `protoc 32.1` / `protoc-gen-go v1.36.11` / `protoc-gen-go-grpc 1.6.2` / `grpcio-tools` 齐备 |
+| Playwright 基线（测点 #15/#16 的**改动前对照**） | ✅ 48/48 PASS | 首跑 46/48 → 修 **E2E-F-213**（固定 sleep → 条件等待）→ 复跑 **48/48**（PR #183） |
+| **IAB 实测**（测点 #17 的**改动前对照**） | ✅ 已做 | 4 张截图且逐张查看，见 §0.3 #8 与 `screenshots/` |
+| P1 proto 契约扩展（L1） | ⬜ 未开始 | 前置已满足，可直接开工 |
+| P2 服务端 5 RPC 转换（L2/L3） | ⬜ 未开始 | — |
+| P3 BFF 客户端补全 + 删恒真旁路（L4/L5） | ⬜ 未开始 | — |
+| P4 端到端回归 + 收口（L6 + §6） | ⬜ 未开始 | — |
+| **`report.md`** | ⬜ **未写（有意为之）** | 按 [_REPORT_TEMPLATE.md](../_REPORT_TEMPLATE.md)「**执行完成后**」撰写；本文档 20 个测试点中组 A~C 需 P1~P3 落地后才可能有结论，此刻写 report 的汇总行无法四值自洽（审计 A2 要求「汇总计数合计 = 测试点行数」）⇒ 硬写只能把未执行的点标成 N/A，属失真。收口时补 |
+
+> **一句话状态**：**前置复核与改动前基线（Playwright 48/48 + IAB 4 图）已完成；正式的 proto/RPC 改造尚未开始**——本文档 §3 组 A~E 的测试点结论、§6 收口门槛、`report.md` 均待 P1~P4。
 
 ---
 
