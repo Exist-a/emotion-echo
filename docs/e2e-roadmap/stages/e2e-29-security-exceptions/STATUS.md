@@ -82,3 +82,13 @@
 
 **环境**：dev 栈运行中（web-bff `v0.1.36`，其余 18 容器 healthy）；`:3000` 由宿主 `nuxt dev`（主 worktree）服务；本轮注册并释放了 `deploy/.devmode-session` 锁。
 
+## 六、E2E-F-207 follow-up（2026-10-08，PR #178）
+
+**用户裁定（AskUserQuestion）**：① E2E-F-207 → **实现真正的滑动续期**；② 会话吊销策略 → 保持自动续期方向；③ 其余范围内观察项 / 既有债 → **先进文档，等下一轮**。
+
+**已做 ✅**：前端滑动续期落地（`app/lib/tokenRenewal.ts` 16 单测 + `plugins/init.ts` 接线 + 删两处 `code===10002` 死分支 + `refreshAccessToken` 导出）；回归钉 `e2e/token-renewal.spec.ts`（2 用例 × 2 project）；决策 **D-49**；账本 **E2E-F-207 → ✅**；landed plan `docs/legacy-plans/landed/sliding-token-renewal.md`。
+**验收**：vitest 全仓 **657 passed** / `tsc` 干净 / Playwright `token-renewal`+`jwt-expiry` **8 passed** / IAB 实测 `renewNow()` → `/auth/refresh` **200** + 新令牌 `exp-iat=86400`。
+**执行期抓到 2 个只在运行时/端到端暴露的问题**：`isAuthenticated`（还要求 userInfo.id）挡住排程；SPA 登录后不排程（插件只跑一次）——均已修（无条件调用 + `watch(token)` 重排）。
+
+**未做 ❌**：其余范围内观察项（423 `Retry-After` / `useApi.ts:159` jti 注释漂移 / IDOR 字面参数名白名单）与既有债（账本重复行 E2E-F-115/117/119 = E2E-F-179）**按用户指示留待下一轮**，本轮只进文档。
+

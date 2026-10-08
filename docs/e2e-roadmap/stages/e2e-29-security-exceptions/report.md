@@ -105,7 +105,7 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 1. 423 响应无 `Retry-After`（前端有指数退避兜底）；
 2. `useApi.ts` 的 `jti` 注释与 BFF 零 jti 实现不一致（注释漂移；jti 黑名单属另一议题）；
 3. 越权"参数名白名单"式守卫（只认字面 `user_id`，别名被忽略）——现状无泄漏，但新增读别名的端点需同守。
-4. **（2026-10-08 补验新增）前端"401 + `code===10002` → 自动续期"分支为死代码**：全仓无任何后端下发 `code:10002`（BFF 一律 `code:1`；网关返 `{"message":"failed to verify jwt"}` 无 code；shared 中间件返 `{"error":"unauthorized"}`），`refreshToken()` 仅被该分支调用 ⇒ 线上从未执行。**行为安全**（过期 → 登出跳登录），但"滑动续期"能力实为缺失。已登记账本 **E2E-F-207**（owner = 决策门，需产品裁定是否实现滑动续期），**本轮不修**（属产品取舍，非缺陷修复）。
+4. **（2026-10-08 补验新增）前端"401 + `code===10002` → 自动续期"分支为死代码**：全仓无任何后端下发 `code:10002`（BFF 一律 `code:1`；网关返 `{"message":"failed to verify jwt"}` 无 code；shared 中间件返 `{"error":"unauthorized"}`），`refreshToken()` 仅被该分支调用 ⇒ 线上从未执行。**行为安全**（过期 → 登出跳登录），但"滑动续期"能力实为缺失。已登记账本 **E2E-F-207**。**→ 已解决（2026-10-08，D-49，PR #178）**：用户拍板**实现真正的滑动续期**（前端在令牌寿命 75% 处主动换新，零后端改动），删两处死分支；landed plan `docs/legacy-plans/landed/sliding-token-renewal.md`（§F 含执行期抓到的 2 个运行时问题）。
 5. **（2026-10-08 补验新增）HttpOnly `access_token` 无法被页面 JS 覆盖/删除**：IAB 实测 `document.cookie = 'access_token=…'` 被浏览器拒绝（同名 HttpOnly 存在），`clearToken()` 的客户端 cookie 清除因此**无效**。**非安全缺陷**：显式登出走 `POST /auth/logout`（服务端 `Set-Cookie` 清除，生效）；`clearAuth()` 仅在 401 时触发，彼时令牌本已失效。记为边界。
 
 ## 7. 收口自检
