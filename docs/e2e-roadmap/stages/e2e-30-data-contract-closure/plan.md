@@ -4,11 +4,11 @@ title: 数据契约收口（§2.4 六项数据契约 smoke 全绿 + helm templat
 type: transformation
 status: pending
 created: 2026-10-08
-last-updated: 2026-10-08（建档；**本轮未使用 docker** ⇒ 运行时/smoke 验证留待开工；建档期只读事实表见 §0.1）
+last-updated: 2026-10-08（建档；**已开工复核**——2026-10-08 起了 dev 栈跑 §0.2，实测补充见 §0.1b；**M3 已由用户裁定转出**：选 ③ 补全走 gRPC ⇒ 立项 E2E-31，本阶段不再含该 [M]）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §4
-related-findings: [E2E-F-180, E2E-F-183, E2E-F-184, E2E-F-186, E2E-F-187, E2E-F-188, E2E-F-189, E2E-F-191, E2E-F-192, E2E-F-195, E2E-F-196, E2E-F-197, E2E-F-204, E2E-F-208, E2E-F-209]
+related-findings: [E2E-F-180, E2E-F-183, E2E-F-184, E2E-F-186, E2E-F-187, E2E-F-188, E2E-F-189, E2E-F-191, E2E-F-192, E2E-F-195, E2E-F-196, E2E-F-197, E2E-F-204, E2E-F-209, E2E-F-210, E2E-F-211, E2E-F-212]
 ---
 
 # E2E-30 数据契约收口 — 详档（任务书）
@@ -72,6 +72,21 @@ Helm 官方 `helm template` / `helm lint`（本地实测 `helm v3.18.4+gd80839c`
 | **F10** | ✅ **迁移/视图守卫已存在**（可复用，不必新建） | `deploy/db/test_migrations_contract.sh` / `scripts/test_migrations_no_service_order.sh` / CI `view-consistency` job（`doc-drift-check.yml`） |
 | **F11** | 🟡 **AGENTS §2.4 文案与现状漂移**（"待建"） | `AGENTS.md` §2.4 末行"smoke 脚本：`scripts/smoke_data_layer.py`（**待建**）" —— 实际已存在（F1） |
 | **F12** | ✅ **环境基线未复核**（本轮禁用 docker） | 未执行 `docker ps`/`docker inspect`；被验镜像 tag 为 `web-bff:v0.1.37`（`apps.yml:613`，E2E-29 遗留项跟进轮产物） |
+
+### 0.1b 执行期实测补充（2026-10-08，**已开工** —— 起 dev 栈跑 §0.2；AP-02 要求「以实测为准并回填本节」）
+
+| # | 事实 | 证据 | 与建档期对比 |
+|---|------|------|------------|
+| **G1** | ✅ **F4 复核成立**：`helm template` rc=0 / **3039 行**；`helm lint` → `1 chart(s) linted, 0 chart(s) failed` | 本轮实跑 | 一致 |
+| **G2** | ⚠️ **子 chart 实测 23 个**（建档期 §0.1 F5 与 roadmap 均写 22） | `ls charts/emotion-echo/charts/` → 23 项（多 `cert-manager`） | **建档期笔误，已更正 roadmap** |
+| **G3** | 🔴 **F2/F3 复核成立 + 实测确认 F-209**：宿主 `curl localhost:8894/health` → `000`；`python scripts/smoke_data_layer.py` **原样跑** → `[FATAL] BFF /health 不可达: <urlopen error [WinError 10061] 由于目标计算机积极拒绝>`，**rc=2**（脚本在 §契约 1 之前就死） | 本轮实跑 | F-209 从「源码回读推断」升级为**运行时实测** |
+| **G4** | 🔴 **新发现 E2E-F-210**：按 RUNBOOK §2.1 起栈（`--profile dev`，不带 `--profile ai`）时 **BFF 必然 `unhealthy`** —— `/health/ready` 硬编码探 `xtts`（profile 门控），实测 `docker exec ... wget /health/ready` → **rc=8**；**级联** `apisix-seed`（`depends_on: web-bff: service_healthy`）**本轮从未运行**（仍是上次 `Exited(0)`，配置来自 etcd 旧态）。**功能面可用**（网关登录 `HTTP 200`、`POST /api/v1/conversations` 200） | 本轮实跑 | **建档期未预见**（当时未起栈） |
+| **G5** | 🔴 **新发现 E2E-F-211**：网关**无 BFF health 路由** ⇒ §测试点 #1 的「健康前置」不能沿用 BFF `/health` | `curl :19080/bff-health` → `404`；`/api/v1/health` 带 Bearer → `404 {"error":"not found"}` | **建档期未预见**；影响 L1 设计 |
+| **G6** | ✅ **账本编号**：本轮新登从 **F-210** 起（建档期最大 F-209）；`audit --all` 仍 **0 FAIL** | `python scripts/e2e_stage_audit.py --all` | 一致 |
+| **G7** | 🔴 **新发现 E2E-F-212 / 决策 D-50**：用户 2026-10-08 决定 **xtts 暂时停用**（云端 TTS API 已接） | 用户对话 | 影响 G4 的修法方向 |
+
+> **§0.2 复核结论**：#1（docker 可用）✅、#2（补跑 smoke）✅ 见 G3、#3（环境基线）⚠️ **部分不达标**——G4 的 BFF unhealthy 使「6 应用服务全部 healthy」不成立（**根因不在本阶段被测面**，已登 F-210）、#4/#5（helm）✅ 见 G1/G2、#6（F2/F3）✅ 见 G3、#7（编号）✅ 见 G6。
+> **开工状态**：`# 状态` 待转 `in-progress`（收口 PR 时统一处理 status 三处一致性）。
 
 ### 0.2 开工复核清单（第一天执行，防止任务书事实表过期）
 
@@ -181,7 +196,7 @@ Helm 官方 `helm template` / `helm lint`（本地实测 `helm v3.18.4+gd80839c`
 |---|------|------|------|
 | **M1** | §契约 4 的判据在"dev 无 AI 触发"时如何定 | `emotionDistribution` 依赖 AI 情绪分析落库；dev 冷启动可能合法为空 | ① 严格非空（先触发一次 AI 分析再断言）② 允许空但断言"AI 分析表有行" ③ 分环境判据 |
 | **M2** | E2E-F-186 readiness 是否含 storage | MinIO 停时 `/health/ready` 不翻转 | ① 硬依赖（翻转）② 只可观测 ③ 折中（超时+告警） |
-| **M3** | **E2E-F-208 死 gRPC 治理形态** | 15 处"构建了没人用"；ADR 已记录未清理 | ① 保留 + 注释 + "不得新增调用方"守卫 ② **删客户端死代码**（保留 HTTP 实现）③ 补全改走 gRPC（扩 proto JSONB，ADR-18 §B P3）④ assessment-svc 停起 :8886 ⑤ **单独立项 E2E-31**（若 ③） |
+| **M3** | ~~**E2E-F-208 死 gRPC 治理形态**~~ → **✅ 已裁定，转出本阶段** | 15 处"构建了没人用"；ADR 已记录未清理 | ✅ **用户 2026-10-08 经 AskUserQuestion 裁定 = ③ 补全改走 gRPC**（原话「得使用 grpc，这是之前定下来的」）⇒ 按本表备选 ⑤ **单独立项 [E2E-31 内部 RPC 收敛](../e2e-31-internal-rpc-convergence/plan.md)**；同轮拍板 M1=`repeated SurveyOption option_items`、M2=`map<string,int32> answers`。**本阶段不再持有该 [M]** |
 | **M4** | E2E-F-183 Kafka trace 断链是否本阶段修 | 修法涉及 relay 后台 ctx + 消费侧提取（架构级） | ① 本阶段修（附 ADR）② 记账转专项（与 M3 合并考虑） |
 | **M5** | 环境面账本（F-192 / F-196）去向 | 属"宿主端口/长连接层"，非业务代码 | ① 本阶段修 ② 转运维 runbook ③ 封存（记录判据） |
 | **M6** | §2.4 smoke 是否接 CI（阻塞 vs 告警） | 当前零门禁消费（F6） | ① required check（阻塞）② 仅告警 ③ 只在含 schema/chat/analytics/BFF 改动的 PR 触发 |
@@ -194,9 +209,9 @@ Helm 官方 `helm template` / `helm lint`（本地实测 `helm v3.18.4+gd80839c`
 - [ ] 范围内缺陷走完 TDD（L1~L6 各自 RED→GREEN 记录）
 - [ ] **回归钉**：新增/扩展 spec（数据契约 smoke 契约化 + helm 渲染断言），**跑过且绿**
 - [ ] **凡"改变前端用户可见行为"的修复，必须 IAB 实测真实场景**（E2E-29 教训）
-- [ ] §4 的 M2/M3/M4/M5 **已升级给用户并落定**（未落定不得判 done）
+- [ ] §4 的 M2/M4/M5 **已升级给用户并落定**（未落定不得判 done）；M1/M3 已落定（M3 转出至 [E2E-31](../e2e-31-internal-rpc-convergence/plan.md)）
 - [ ] L5 架构改动附 ADR + `docs/architecture/decisions.md`
-- [ ] **账本对账**：13 条转挂（F-180/183/184/186/187/188/189/191/192/195/196/197/204）+ 本轮新登 2 条（F-208/209）**逐条翻状态或写明仍挂理由**；`E2E-F-184`（IAB 渲染帧失真）须给出"工具治理/上游报"的明确去向
+- [ ] **账本对账**：13 条转挂（F-180/183/184/186/187/188/189/191/192/195/196/197/204）+ 本轮新登 **F-209/210/211/212** 逐条翻状态或写明仍挂理由；`E2E-F-184`（IAB 渲染帧失真）须给出"工具治理/上游报"的明确去向。**注**：`E2E-F-208` 已随 M3 裁定**转挂 E2E-31**，不在本阶段对账范围
 - [ ] **AGENTS §2.4 文案纠偏**（"待建" → 实际；基址口径）已提交
 - [ ] `python scripts/e2e_stage_audit.py --all` → 0 FAIL；§13.3 第二方核对通过
 - [ ] §2.5 收口自检三连 + 残留分支/worktree 清理
@@ -210,7 +225,9 @@ Helm 官方 `helm template` / `helm lint`（本地实测 `helm v3.18.4+gd80839c`
 | **smoke 脚本修基址后仍 FAIL（真实契约问题）** | 区分"连接类 FAIL"与"契约类 FAIL"（L1 断言前者为零）；契约类 FAIL 按 §契约 1~6 逐个 TDD 修，不掩盖 |
 | **helm 渲染断言写成"行数 > 0"弱断言** | 断言**具体资源名存在**（22 子 chart 逐个），并写负向对照（改坏 ⇒ RED）——防 E2E-22「空 glob 静默 0 条」同型 |
 | **转挂账本范围膨胀（12 条 🔴）** | 用 §4 决策点把"代码级可修"与"环境/架构级"分开；后者裁定去向后**只登记不修**（RUNBOOK §5） |
-| **M3（死 gRPC）选"补全"会引发大改** | 默认建议 **②删客户端死代码 + ①守卫**（低风险）；③ 单独立项，不在本阶段做 |
+| ~~**M3（死 gRPC）选"补全"会引发大改**~~ → **已由用户裁定转出**：选 ③ 补全走 gRPC ⇒ 立项 **E2E-31**，本阶段**不承担**该改动 | 已处置（M3 行见 §4） |
+| **BFF readiness 含 profile 门控的 xtts** ⇒ RUNBOOK §2.1 标准起栈必 `unhealthy`、级联 `apisix-seed` 不运行（执行期新发现 **E2E-F-210**） | 不在本阶段被测面；修法取决于 §4 **M2**（已登账本）。**先按 §0.1b G4 记录该偏差**，不改本阶段测试点判据 |
+| **网关无 BFF health 路由**（**E2E-F-211**）⇒ 测试点 #1 的"健康前置"不能沿用 BFF `/health` | L1 落地方案由三选一决定（新增 `/bff-health` / **登录成功即判 BFF 可用** / docker inspect）；倾向后者（零新增路由、不触发路由对齐守卫） |
 | **dev 无 AI 触发导致 §契约 4 假 FAIL** | §4 M1 先定判据；断言前先触发一次 AI 分析 |
 | 本阶段是末阶段，易被当"什么都塞进来" | §1 不做清单写死边界；范围外一律只记账 |
 | 本轮未用 docker 导致事实表可能过期 | §0.2 开工复核 7 项**逐项跑**（尤其 #2 补跑 smoke、#6 重跑 F2/F3） |
