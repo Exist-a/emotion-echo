@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -128,8 +129,9 @@ func TestAuthHandler_Login_5Failures_LocksAccount(t *testing.T) {
 	assert.Equal(t, http.StatusLocked, w.Code, "5 次失败后第 6 次必须返 423")
 }
 
-func TestAuthHandler_Login_AfterLock_5Minutes_AllowsRetry(t *testing.T) {
+func TestAuthHandler_Login_WithinLockWindow_StillReturns423(t *testing.T) {
 	// 验证锁定窗口内仍返 423：5 次失败后用同一 router 实例第 6 次
+	// （锁定窗口 = authlock.loginLockWindow = 15min；测试不推进时钟，故恒在窗口内）
 	router := newAuthRouter(t, &fakeUserClient{
 		login:    &downstream.UserInfo{UserID: 42, Account: "alice"},
 		loginErr: &apiError{StatusCode: http.StatusUnauthorized, Msg: "invalid"},
@@ -492,3 +494,51 @@ func TestAuthHandler_VerificationCode_ProdMode_NoDevCode(t *testing.T) {
 	assert.NotContains(t, body, "devCode", "prod mode must not echo the code")
 }
 
+
+// =============================================================================
+// E2E-29 遗留项 1（2026-10-08）：423 锁定响应补 `Retry-After`
+//
+// 测试点 #14 通过标准要求"`Retry-After` 存在且与前端指数退避策略一致"。
+// 前端 `useApi.ts:getRetryDelayMs` 优先读该头、缺失才指数退避兜底；
+// 服务端给出**剩余**秒数可让前端精确退避（而非恒等满窗口）。
+// =============================================================================
+
+func TestAuthHandler_Login_LockResponse_HasRetryAfter(t *testing.T) {
+	router := newAuthRouter(t, &fakeUserClient{
+		loginErr: &apiError{StatusCode: http.StatusUnauthorized, Msg: "invalid"},
+	})
+
+	for i := 0; i < 5; i++ {
+		postJSON(router, "/api/v1/auth/login", `{"username":"alice","password":"wrong"}`)
+	}
+
+	w := postJSON(router, "/api/v1/auth/login", `{"username":"alice","password":"right"}`)
+	require.Equal(t, http.StatusLocked, w.Code, "前置：第 6 次应 423")
+
+	ra := w.Header().Get("Retry-After")
+	require.NotEmpty(t, ra, "423 必须带 Retry-After")
+	secs, err := strconv.Atoi(ra)
+	require.NoError(t, err, "Retry-After 必须是整数秒（RFC 7231 §7.1.3）")
+	assert.Greater(t, secs, 0, "剩余秒数必须 > 0")
+	assert.LessOrEqual(t, secs, 15*60, "不得超过锁定窗口（15min）")
+}
+
+func TestAuthHandler_Login_TriggeringFailure_HasRetryAfter(t *testing.T) {
+	// 第 5 次失败即触发锁定：虽仍返 401（密码错），也应带 Retry-After
+	// 让客户端立刻知道已被锁、无需再试。
+	router := newAuthRouter(t, &fakeUserClient{
+		loginErr: &apiError{StatusCode: http.StatusUnauthorized, Msg: "invalid"},
+	})
+
+	var w *httptest.ResponseRecorder
+	for i := 0; i < 5; i++ {
+		w = postJSON(router, "/api/v1/auth/login", `{"username":"alice","password":"wrong"}`)
+	}
+	require.Equal(t, http.StatusUnauthorized, w.Code, "第 5 次仍是密码错 → 401")
+
+	ra := w.Header().Get("Retry-After")
+	require.NotEmpty(t, ra, "触发锁定的那次失败也应带 Retry-After")
+	secs, err := strconv.Atoi(ra)
+	require.NoError(t, err)
+	assert.Greater(t, secs, 0)
+}

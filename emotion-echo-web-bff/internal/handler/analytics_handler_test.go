@@ -683,3 +683,69 @@ func TestAnalyticsHandler_Depth_ComputesMaxConsecutiveDays(t *testing.T) {
 	assert.InDelta(t, 25.0, resp.Data.AvgMessagesPerDay, 0.01,
 		"活跃天数取自 frequency 数据后，日均消息应 = 总消息/活跃天数")
 }
+
+// =====================================================
+// E2E-29 遗留项 3（2026-10-08）：IDOR 守卫从"字面参数名白名单"升级为
+// "身份别名同守"——凡携带**数字型**身份别名（userId/userid/uid/user/id）
+// 且与认证身份不符者，一律 403（与 user_id 同语义）。
+//
+// 背景：收口时该守卫只认字面 `user_id`，别名被忽略（现状无泄漏，因 handler
+// 不读别名）。但"新增读别名的端点不覆盖"是真实前向风险 ⇒ 现于守卫层统一拦截。
+// 非数字别名值（如 ?id=<uuid>）不视为身份声明，保持忽略（不误伤）。
+// =====================================================
+
+func TestUserIDQuery_AliasMismatch_Returns403(t *testing.T) {
+	// 别名携带**他人** id（数字）→ 与 user_id 同语义，必须 403（防前向越权）
+	for _, alias := range []string{"userId", "userid", "uid", "user", "id"} {
+		t.Run(alias, func(t *testing.T) {
+			fc := &fakeAnalyticsClient{report: &downstream.DailyReport{UserID: 42, Date: "2026-09-17"}}
+			r := newAnalyticsRouter(fc)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?"+alias+"=42", nil)
+			req.Header.Set("X-User-Id", "7")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusForbidden, w.Code,
+				"别名 %s 携带他人 id 应 403（不得被忽略）", alias)
+			assert.NotEqual(t, int64(42), fc.gotUID, "不得把他人 uid 透传给下游")
+		})
+	}
+}
+
+func TestUserIDQuery_AliasMatch_Returns200(t *testing.T) {
+	// 别名与认证身份一致 → 200，且下游收到认证身份
+	fc := &fakeAnalyticsClient{report: &downstream.DailyReport{UserID: 7, Date: "2026-09-17"}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?userId=7", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, int64(7), fc.gotUID)
+}
+
+func TestUserIDQuery_AliasNonNumeric_Ignored(t *testing.T) {
+	// 非数字别名值（如 ?id=<uuid>）不是身份声明 → 忽略，回退认证身份 200
+	fc := &fakeAnalyticsClient{report: &downstream.DailyReport{UserID: 7, Date: "2026-09-17"}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?id=conv-abc-123", nil)
+	req.Header.Set("X-User-Id", "7")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "非数字别名不应触发 403（不误伤）")
+	assert.Equal(t, int64(7), fc.gotUID, "应回退认证身份")
+}
+
+func TestUserIDQuery_AliasOnly_NoAuth_Returns400(t *testing.T) {
+	// 保守语义：别名**永不**作为身份来源（只用于"不符即 403"的拒绝），
+	// 故无认证头 + 仅别名（无 user_id）→ 仍 400（与既有契约一致，不扩大入参面）。
+	fc := &fakeAnalyticsClient{report: &downstream.DailyReport{UserID: 5, Date: "2026-09-17"}}
+	r := newAnalyticsRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/daily?uid=5", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code, "别名不构成身份来源，缺 user_id 且无认证头应 400")
+}

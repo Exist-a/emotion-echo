@@ -44,6 +44,14 @@ func (h *AnalyticsHandler) Register(r *gin.Engine) {
 	r.GET("/api/v1/mental-health/assessment", h.mentalAssessment)
 }
 
+// userIDAliases 是"身份类" query 别名的白名单（E2E-29 遗留项 3，2026-10-08）。
+//
+// 这些别名**不作为身份来源**（身份来源只有显式 `user_id` 或 APISIX 注入的
+// `X-User-Id`），但若其值是可解析的**正整数**且与认证身份不符，则一律 403
+// ——把"越权拒绝面"从字面 `user_id` 扩展到所有身份别名，堵住"新增端点若读
+// 别名即绕过守卫"的前向风险。非数字值（如 `?id=<uuid>`）不视为身份声明，忽略。
+var userIDAliases = []string{"userId", "userid", "uid", "user", "id"}
+
 // userIDQuery 解析请求的 user_id。
 //
 // Stage 112 修复（Bug A 第二层）：APISIX jwt-auth 注入的 X-User-Id 是权威身份来源。
@@ -52,12 +60,34 @@ func (h *AnalyticsHandler) Register(r *gin.Engine) {
 //   - 有 query user_id 且与 X-User-Id 不一致 → 403（防 IDOR 越权查他人报表）
 //   - 有 query user_id 且一致 / 无认证头（单测直连）→ 200（向后兼容）
 //   - 两者都无 → 400（保留原契约错误）
+//
+// E2E-29 遗留项 3：追加**身份别名同守**——凡数字型身份别名（见 userIDAliases）
+// 与认证身份不符，一律 403（与 user_id 同语义），不再被静默忽略。
 func userIDQuery(c *gin.Context) (int64, bool) {
 	authedUID, hasAuth := downstream.UserIDFromContext(session.WithRequestAuth(c))
+	authed := hasAuth && authedUID > 0
+
+	// 身份别名面：数字型且与认证身份不符 → 403（防前向越权）
+	if authed {
+		for _, name := range userIDAliases {
+			av := c.Query(name)
+			if av == "" {
+				continue
+			}
+			aid, err := strconv.ParseInt(av, 10, 64)
+			if err != nil || aid <= 0 {
+				continue // 非数字 → 非身份声明，忽略（不误伤 ?id=<uuid> 类用法）
+			}
+			if aid != authedUID {
+				Fail(c, http.StatusForbidden, 1, "forbidden: user_id mismatch with authenticated user")
+				return 0, false
+			}
+		}
+	}
 
 	v := c.Query("user_id")
 	if v == "" {
-		if hasAuth && authedUID > 0 {
+		if authed {
 			return authedUID, true
 		}
 		Fail(c, http.StatusBadRequest, 1, "validation: user_id is required")
@@ -68,7 +98,7 @@ func userIDQuery(c *gin.Context) (int64, bool) {
 		Fail(c, http.StatusBadRequest, 1, "validation: user_id is required")
 		return 0, false
 	}
-	if hasAuth && authedUID > 0 && id != authedUID {
+	if authed && id != authedUID {
 		Fail(c, http.StatusForbidden, 1, "forbidden: user_id mismatch with authenticated user")
 		return 0, false
 	}

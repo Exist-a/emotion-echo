@@ -8,7 +8,7 @@
  *
  * 本模块：在令牌寿命的 `RENEW_AT_FRACTION`（默认 75%）处调后端 refresh 换新令牌。
  * 纯逻辑与调度分离，便于注入时钟/定时器做确定性单测。
- * 设计见 `docs/plans/sliding-token-renewal.md`。
+ * 设计见 `docs/legacy-plans/landed/sliding-token-renewal.md`。
  */
 
 /** 在令牌寿命的该比例处续期（0.75 = 用掉 75% 时续）。 */

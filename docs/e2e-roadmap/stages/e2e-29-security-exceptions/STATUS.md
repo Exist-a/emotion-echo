@@ -90,5 +90,21 @@
 **验收**：vitest 全仓 **657 passed** / `tsc` 干净 / Playwright `token-renewal`+`jwt-expiry` **8 passed** / IAB 实测 `renewNow()` → `/auth/refresh` **200** + 新令牌 `exp-iat=86400`。
 **执行期抓到 2 个只在运行时/端到端暴露的问题**：`isAuthenticated`（还要求 userInfo.id）挡住排程；SPA 登录后不排程（插件只跑一次）——均已修（无条件调用 + `watch(token)` 重排）。
 
-**未做 ❌**：其余范围内观察项（423 `Retry-After` / `useApi.ts:159` jti 注释漂移 / IDOR 字面参数名白名单）与既有债（账本重复行 E2E-F-115/117/119 = E2E-F-179）**按用户指示留待下一轮**，本轮只进文档。
+**未做 ❌**：其余范围内观察项（423 `Retry-After` / `useApi.ts:159` jti 注释漂移 / IDOR 字面参数名白名单）与既有债（账本重复行 E2E-F-115/117/119 = E2E-F-179）**按用户指示留待下一轮**，本轮只进文档。**→ 已全部解决（2026-10-08 遗留项跟进轮，见 §七）**。
 
+
+## 七、遗留项跟进轮（2026-10-08，done 后）
+
+**用户指示**：解决上一阶段（E2E-29）的遗留任务。**结论：§六 未做 ❌ 列出的 4 项全部解决**，E2E-29 遗留清零。
+
+| # | 遗留项 | 状态 | 落地 |
+|---|--------|------|------|
+| 1 | 423 `Retry-After` | ✅ | `authlock.LoginLockStore.RetryAfter` + handler 设头（423 与触发锁定的 401）；**IAB 追加修**两处 CORS `expose_headers`（否则浏览器 JS 读不到）；运行时/IAB 均 `Retry-After: 900` |
+| 2 | `useApi.ts` jti 注释漂移 | ✅ | 注释如实化 + 4 处陈旧 plan 路径修正 |
+| 3 | IDOR 字面参数名白名单 | ✅ | `userIDQuery` 身份别名同守（数字别名不符 → 403）；回归钉 9/9 |
+| 4 | 账本重复行 E2E-F-115/117/119 | ✅ | 删 I 段重复 3 行 + F-119 裁定（保留 H 段）；`E2E-F-179 → ✅`；audit 0 FAIL |
+
+**镜像**：`emotion-echo/web-bff:v0.1.37`（承接遗留项 1+3；`Created=2026-10-08T02:21:27Z`），其余 18 容器沿用 E2E-29 基线。
+**门禁**：go build/vet/test 全绿；audit --all 0 FAIL；4 个仓库守卫 + TDD/ADR 门禁 GREEN；vitest 657 / tsc 0 / Playwright `security-boundaries` 9/9；`seed_test.js` 78/0。
+**IAB 实测（2026-10-08，用户质询后补做）**：抓到 1 个 curl/Playwright 抓不到的半修复（`Retry-After` 未在 CORS `expose_headers` ⇒ 浏览器 JS 读不到，已修 + 复验可读）；5 个报表/我的空间页面真实浏览器加载无 403；登录页第 6 次 toast 显示锁定提示。
+**详档**：[report.md](report.md) §9。**本轨收工三查**：STATUS 已写（本节）→ `deploy/.devmode-session` 已删 → §2.5 三连自检（见收口）。

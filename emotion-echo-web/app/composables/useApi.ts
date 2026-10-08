@@ -138,7 +138,11 @@ function setAccessToken(token: string, expiresIn: number = 900, rememberMe?: boo
 
 /**
  * 从 JWT Token 中解析 jti（唯一标识）
- * 用于刷新时回传给后端做 Token 轮换校验
+ *
+ * ⚠️ E2E-29 遗留项 2（2026-10-08）注释更正：BFF `refresh` 目前**不消费** jti
+ * （全仓零 jti 逻辑，无黑名单/轮换校验；D-46 后 refresh 只验令牌有效性，
+ * D-48 密钥轮换靠 `kid` 而非 jti）⇒ 本字段当前是**前向兼容占位**，服务端忽略。
+ * 若日后实现"服务端吊销表 / jti 黑名单"，须先补后端消费点。
  */
 function getTokenJti(token: string | null): string | null {
   if (!token) return null
@@ -156,12 +160,17 @@ function getTokenJti(token: string | null): string | null {
 
 /**
  * 刷新 Token（带锁，防止并发）
- * 后端要求回传当前 AccessToken 的 jti，用于黑名单/轮换校验
+ *
+ * ⚠️ E2E-29 遗留项 2（2026-10-08）：原注释称"后端要求回传当前 AccessToken 的
+ * jti，用于黑名单/轮换校验"——**与实现不符**（BFF `refresh` 零 jti 逻辑）。
+ * 现如实描述：请求体里的 `jti` 是**前向兼容占位**，服务端当前忽略；刷新是否
+ * 成功只取决于携带的令牌（Cookie/Bearer）是否有效（D-46 硬 401）。
  *
  * E2E-F-207：本函数原先只被「401 + `code===10002`」分支调用，而该分支是**死代码**
  * （全仓无任何后端下发 `code:10002`）⇒ 从未执行。现改由 `~/lib/tokenRenewal` 的
- * 调度器在令牌**过期前**调用（sliding renewal，见 `docs/plans/sliding-token-renewal.md`），
- * 故导出。注意：**过期后无法续期**（D-46 / APISIX 先拒），所以必须提前调用。
+ * 调度器在令牌**过期前**调用（sliding renewal，见
+ * `docs/legacy-plans/landed/sliding-token-renewal.md`），故导出。
+ * 注意：**过期后无法续期**（D-46 / APISIX 先拒），所以必须提前调用。
  */
 export async function refreshAccessToken(): Promise<string | null> {
   // 如果已有刷新在进行中，等待其结果

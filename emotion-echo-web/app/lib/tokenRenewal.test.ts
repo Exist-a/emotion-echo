@@ -1,5 +1,5 @@
 /**
- * 访问令牌滑动续期逻辑单测（plan docs/plans/sliding-token-renewal.md，E2E-F-207 follow-up）。
+ * 访问令牌滑动续期逻辑单测（plan docs/legacy-plans/landed/sliding-token-renewal.md，E2E-F-207 follow-up）。
  *
  * 覆盖：JWT 时间解析 / 续期时点计算 / 调度器（注入时钟与定时器，无真实等待）。
  */
