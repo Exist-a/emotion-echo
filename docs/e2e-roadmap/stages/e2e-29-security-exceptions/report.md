@@ -21,7 +21,9 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
   - `BFF_DEV_RETURN_CODE=1`（验证码回显）、`BFF_TRUST_APISIX=true` + `BFF_APISIX_CIDRS=172.18.0.0/16`
   - **8894 宿主映射已移除**（E2E-29 D-47 ③）：BFF 仅容器网可达（`docker exec` 或经 :19080）
   - 前端：宿主 `nuxt dev --port 3000`（**主 worktree 源码**），非容器产物（F-196 铁律先验）
-- **被验镜像**：`emotion-echo/web-bff:v0.1.36`（`docker inspect` 实证；含 L1/D-47/F-203/D-48 全部改动）
+- **被验镜像（如实修正，见 §8 第二方核对发现 #1）**：**`emotion-echo/web-bff:v0.1.36`**（`docker inspect` 实证：`image=emotion-echo/web-bff:v0.1.36 created=2026-10-08T00:09:54Z`；含 L1/D-47/F-203/D-48 全部改动）。
+  - **修正前的失真**：本报告初稿写 v0.1.36，但当时**运行容器实际是 v0.1.35**（v0.1.36 镜像已构建却未重建容器）。第二方核对机械证伪后，已 `up -d` 重建到 v0.1.36 并**在 v0.1.36 上复跑全部关键事实**（匿名 refresh 401 / login+受保护 200 / cookie `SameSite=Lax` / 宿主直连 8894 `code=000` / 回归钉 9/9），修正后结论不变。
+  - **D-48 运行时窗口证据的来源（如实标注）**：窗口机制（新/旧 keyID token 都被网关接受、窗口态 BFF 接受旧密钥）是在**两个 v0.1.36 隔离探针容器**上实测的（探针 keyID `ee29-probe-*`，避免触碰真实密钥），**不是**主栈容器——主栈默认不开窗口（未配 `_PREV`）。
 - **环境事实（如实记录，plan §0.1 F18）**：开工前 17 个后端容器由**另一个目录**（`Emotion-Echo-f198`，已非注册 worktree）的 compose 创建且**未加载 `compose.dev.yml`**（实测 `BFF_TRUST_APISIX=false`），且多数容器在开工前已 `Exited(127/255)` —— 故本轮**重建基线栈**后才做任何运行时结论。
 
 ## 2. 测试点结果
@@ -112,3 +114,32 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 - [x] `e2e_stage_audit.py --all` → **30 阶段 0 FAIL**
 - [x] 账本对账：本阶段名下 7 条（F-27 后续 / F-28 / F-182 / F-200 / F-201 / F-202 / F-203）**全部 ✅**；新发现 F-204 已登记且 owner 不回挂
 - [x] 收口契约 §7 十一项：report ✅ / 截图 ✅（`screenshots/19-camera-error-attributable.png`，已查看）/ 回归钉 ✅（9/9 首跑绿）/ roadmap+plan 状态同步 ✅ / 账本 ✅ / 决策 ✅（D-46/47/48 + 架构决策 41）/ commit+push ✅ / 自检三连 ✅ / 账本对账 ✅ / 第二方核对（见 §8）/ 复读关键断言（证据列均带命令输出或 `文件:行号`）✅
+
+## 8. 第二方核对（RUNBOOK §13.3；独立子代理，2026-10-08）
+
+**核对方式**：另起独立子代理（明写"执行者自证不可信"），**只读 + 自己复跑**：不引用报告结论，
+逐项执行 23 条断言（模板/账本/状态/机器门禁/运行时事实/失真排查）。**禁改仓库文件、禁重启容器、禁读 `.env.local`**。
+
+**首轮结论：不通过**（1 项 FAIL + 1 项 WARN，其余 21 项 PASS）。
+
+| # | 判定 | 核对方实测摘要 |
+|---|------|---------------|
+| 1~5 | PASS | report 含 §10 全部章节；汇总行非占位符且**表格行数自己数得 20**；判定/结果列取值合法；证据列 `grep` 存在性措辞 = NONE；`[V]` 截图 60,963 字节非空 |
+| 6~9 | PASS（#9 WARN） | 归属 E2E-29 的 7 条账本**全 ✅**；F-204 owner 只含主归属（A5 逻辑不触发）；三处 status 一致（done）；编号连续无跳号（1..206 无缺号）——**WARN：E2E-F-115/117/119 各 2 行（既有账本治理债 E2E-F-179，非本阶段引入）** |
+| 10~12 | PASS | `audit --all` 退出码 0 / 30 阶段 0 FAIL；`--selftest` 通过；三个守卫 3/5/9 全过（含负向）；`seed_test.js` 77/0 |
+| 13~20 | PASS | 匿名 refresh 401 无 cookie/token；6 条受保护端点匿名全 401；宿主 8894 拒连（`ports={"8894/tcp":null}`）而容器内 `/health/ready` 200；登录/登出 cookie 均 `SameSite=Lax`；CORS 恶意 origin 无 ACAO、合法 origin 无 `X-User-Id` 且 `Max-Age=600`；**自建两账号复跑越权：跨用户 5 动作全 403 + 同资源 5 动作全 200**；别名 `userId` 响应体 md5 逐字相同、`user_id` 403；回归钉 **9 passed** |
+| 21 | **FAIL** | **环境基线失真**：报告称被验镜像 v0.1.36，实测容器为 **v0.1.35**（`Created=2026-10-07T22:58:13Z` 早于 v0.1.36 镜像 `23:35:38Z`；容器 env 无 D-48 的 `BFF_JWT_KEY_ID*`）⇒ "运行栈含 D-48 全部改动"不成立 |
+| 22~23 | PASS | 无 N/A/BLOCKED 掩盖；证据列普遍含可复现命令或 `文件:行号`；未发现"只有单测却声称已验证"（#5 的前端分支如实标注为"间接覆盖"） |
+
+**核对方另独立复读源码验证三条关键断言**（均成立）：`auth_handler.go:227-248` refresh 无回落默认身份；
+`config.go:33` `ValidateAuthTrust` 存在且 `main.go:127` 调用；`useFaceEmotion.ts:13-20/100/119-130`
+（mediaDevices 探测 + `reportClientError` + 两条独立前置条件分支）。
+
+**FAIL 的处置（已闭环）**：
+1. `docker compose … up -d emotion-echo-web-bff` **重建到 v0.1.36**（`image=…:v0.1.36 created=2026-10-08T00:09:54Z`）；
+2. **在 v0.1.36 上复跑全部关键事实**：匿名 refresh **401** / login+受保护 **200** / cookie **`HttpOnly; SameSite=Lax`**（登出 `Max-Age=0; HttpOnly; SameSite=Lax`）/ 宿主直连 8894 **000** / 回归钉 **9/9**；
+3. §1 环境基线改写为如实表述，并**明确标注 D-48 窗口证据来自隔离探针容器**（主栈默认不开窗口）。
+
+**WARN 的处置**：E2E-F-115/117/119 重复行属既有账本治理债（E2E-F-179 已登记、owner 不回挂），**本阶段不修**（避免范围蔓延），已在 §8 如实记录。
+
+**结论**：FAIL 项修正后**复检通过**（见本节处置 2 的复跑输出）；E2E-29 判 **done**。
