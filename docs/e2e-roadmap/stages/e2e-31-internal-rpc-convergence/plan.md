@@ -8,7 +8,7 @@ last-updated: 2026-10-08（建档；**仅只读调研 + 文档，未改代码**�
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §5
-related-findings: [E2E-F-208]
+related-findings: [E2E-F-208, E2E-F-213]
 ---
 
 # E2E-31 内部 RPC 收敛 — 详档（任务书）
@@ -89,7 +89,7 @@ related-findings: [E2E-F-208]
 | 3 | **工具链** | `protoc --version`、`protoc-gen-go --version` 可用；`bash proto/gen.sh` 当前可跑通（rc=0） |
 | 4 | **环境基线** | 按 RUNBOOK §2.1 起栈；**注意 F4**——xtts 停用后 BFF 仍可能 `unhealthy`，须先按 §0.1 F4 处置（归 E2E-30）或显式记录该偏差 |
 | 5 | **前端契约冻结** | `question/[id].vue` 的 `questions`/`options`/`answers` 形状未变（F5 为反推基线） |
-| 6 | **回归钉基线** | `quiz.spec.ts` / `survey-scoring.spec.ts` / `personality.spec.ts` **改动前先跑一遍**取绿基线 |
+| 6 | **回归钉基线** ✅ **已取（2026-10-08）** | `quiz.spec.ts` / `survey-scoring.spec.ts` / `personality.spec.ts` 全量跑 **48/48 PASS**（2.8m，dev `BASE_URL=http://localhost:3000`）。**过程**：首跑 46/48——`survey-scoring #5` 因固定 `waitForTimeout(2000)` 在慢路由上稳定假红（**E2E-F-213**，已当轮修：改条件等待 `toHaveCount(9,{timeout:30000})`，断言值不变）；页面与后端经探针确认正常（热态 ~9.7s、详情 API 12ms/9 题） |
 | 7 | **账本编号** | 新登编号从 **E2E-F-212** 起（E2E-30 已用至 F-211） |
 
 ---

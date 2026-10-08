@@ -133,9 +133,13 @@ test.describe('E2E-F-97 症状量表按 score 计分（精确取值断言）', (
 
     await page.goto(`/question/${sid}`)
     await page.waitForLoadState('domcontentloaded')
-    await page.waitForTimeout(2000)
-
+    // 条件等待，不用固定 sleep：dev 模式下 `/question/[id]` 首次加载实测 ~9.7s
+    // （冷启动 Vite 编译 >20s）。原固定 `waitForTimeout(2000)` 在首跑稳定假红——
+    // 2026-10-08 全量跑实测 46/48，本用例 chromium + mobile 同点失败（count 实收 0，
+    // 页面仍停在 loading 分支，详见账本 E2E-F-213）。断言值不变（仍是精确 9），只是把
+    // "睡够没有"换成"等到条件成立"，属加严（对照 `quiz.spec.ts` #5 的 `toBeVisible`）。
     const questions = page.locator('.question-block')
+    await expect(questions).toHaveCount(9, { timeout: 30000 })
     const count = await questions.count()
     expect(count).toBe(9)
     // 每题点**最后一个**选项（正是修前会 400 的那一档）
