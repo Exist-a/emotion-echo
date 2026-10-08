@@ -16,7 +16,9 @@
 
 **最大一块**：**BFF → assessment-svc 的整条 gRPC 通道**（客户端 5 RPC + 服务端 251 行实现 + 3 个测试文件 + :8886 监听 + 一条白 dial 的连接）——成因是 ADR-2026-09-survey-http-bypass 让 survey 5 端点改走 HTTP，且 personality 取数硬编码 HTTP。
 
-**与已记录 ADR 的关系**：ADR-2026-09-survey-http-bypass §后果已**如实**写明"survey 端点的 gRPC 路径变成死代码"，并列了后续（扩展 proto 支持完整 JSONB）。⇒ 这**不是文档漂移**，是**已决策但未清理**的技术债（ADR 未含清理/删除动作）。
+**与已记录 ADR 的关系**：ADR-2026-09-survey-http-bypass §后果已**如实**写明"survey 端点的 gRPC 路径变成死代码"，并列了后续（扩展 proto 支持完整 JSONB）。⇒ 死代码本身**不是文档漂移**，是**已决策但未清理**的技术债（ADR 未含清理/删除动作）。
+
+> **2026-10-08 补充（E2E-F-208 复核）**：但该 ADR **自身含两处与实际代码不符**（已在 ADR 内加「更正记录」节同步）——① §决策称「其他交互（如 ListSurveys 列表）仍走 gRPC」而实际走 HTTP；② §后果把死代码范围说成"survey 端点的 gRPC 路径"，实际是**整条 BFF→assessment-svc gRPC 通道**且 `ListResults`/`GetResult` 客户端从未实现。故准确表述是：**技术债为主 + 伴有一处 ADR 漂移**，而非纯粹的"非文档漂移"。
 
 ---
 
