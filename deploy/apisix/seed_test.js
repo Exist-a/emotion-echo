@@ -343,6 +343,16 @@ const checks = [
     })],
   // E2E-29 #16：白名单块也必须显式 max_age（否则 APISIX 默认 5s，每次跨域预检都吃限流配额）
   ['E2E-29 #16 两处 CORS 均设 max_age', (src.match(/max_age/g) || []).length >= 2],
+  // E2E-29 遗留项 1（IAB 实测 2026-10-08）：423 的 `Retry-After` / 429 的 `X-RateLimit-*`
+  // 必须列进 cors 的 expose_headers —— 否则**跨域响应里浏览器 JS 读不到**这些头。
+  // 陷阱：curl / Playwright APIRequest 不受 CORS 限制，会读到而假绿；只有真实浏览器
+  // （IAB）才暴露。BFF 已发 Retry-After，但无 expose_headers ⇒ 前端 `getRetryDelayMs`
+  // 的"优先读后端"分支恒为死代码。逐行判定（只检查真的 JSON 行）。
+  ['E2E-29 遗留项1 两处 CORS 均暴露 Retry-After（浏览器 JS 可读）',
+    (src.match(/"expose_headers"/g) || []).length >= 2
+      && src.split('\n')
+           .filter(function (line) { return line.indexOf('"expose_headers"') !== -1; })
+           .every(function (line) { return line.indexOf('Retry-After') !== -1; })],
   // E2E-29 D-48：双密钥轮换窗口 —— 必须有"建 prev consumer"与"清理 prev consumer"两条分支
   //（只建不清理 = 旧密钥永久可用，轮换白做；只清理不建 = 窗口期旧 token 全断）。
   ['E2E-29 D-48 seed 支持窗口期 prev consumer（BFF_JWT_KEY_ID_PREV）',

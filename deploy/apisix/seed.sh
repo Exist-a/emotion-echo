@@ -486,6 +486,11 @@ TRACE_ID_PLUGIN='
 # X-User-Id（那是服务端注入后的值，暴露无风险）。两处 CORS 均显式 max_age=600
 # （此前白名单块缺该字段 ⇒ APISIX 默认 5s，每次跨域预检都吃限流配额）。
 #
+# E2E-29 遗留项 1（IAB 实测 2026-10-08）：expose_headers 补 **Retry-After + X-RateLimit-***
+# —— 否则跨域响应里浏览器 JS **读不到**这些头（curl / Playwright APIRequest 不受 CORS 限制
+# 会假绿，只有真实浏览器才暴露）。BFF 已在 423 发 Retry-After，但无 expose_headers ⇒
+# 前端 `useApi.ts:getRetryDelayMs` 的"优先读后端 Retry-After"分支恒为死代码。两处 CORS 同修。
+#
 # 写成字面量（bash + curl 即可），不引入 python 依赖。
 CATCHALL_PLUGINS_JSON=$(cat <<EOF
 {
@@ -531,7 +536,7 @@ CATCHALL_PLUGINS_JSON=$(cat <<EOF
     "allow_origins": "$CORS_ALLOW_ORIGINS",
     "allow_methods": "GET,POST,PUT,DELETE,OPTIONS,PATCH",
     "allow_headers": "Content-Type,Authorization,X-Trace-Id",
-    "expose_headers": "X-User-Id,X-Trace-Id",
+    "expose_headers": "X-User-Id,X-Trace-Id,Retry-After,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset",
     "allow_credential": true,
     "max_age": 600
   },
@@ -637,7 +642,7 @@ put_route 100 "/api/v1/*" 6 '["GET","POST","PUT","DELETE","PATCH","OPTIONS","HEA
 AUTH_WHITELIST_PLUGINS=$(cat <<EOF
 {
   "limit-count": {"count": 60, "time_window": 60, "key": "remote_addr", "policy": "$LIMIT_POLICY", "redis_host": "$LIMIT_REDIS_HOST", "redis_port": $LIMIT_REDIS_PORT, "redis_db": $LIMIT_REDIS_DB, "redis_password": "$LIMIT_REDIS_PASSWORD", "redis_timeout": $LIMIT_REDIS_TIMEOUT, "rejected_code": 429},
-  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-Trace-Id", "max_age": 600},
+  "cors": {"allow_origins": "$CORS_ALLOW_ORIGINS", "allow_methods": "GET,POST,PUT,DELETE,OPTIONS", "allow_credential": true, "allow_headers": "Content-Type,Authorization,X-Trace-Id", "expose_headers": "Retry-After,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset", "max_age": 600},
 ${OBSERVABILITY_PLUGINS_JSON},
 ${TRACE_ID_PLUGIN}
 }

@@ -15,7 +15,8 @@
  *   #9/#10 跨用户资源：读/改/删/发消息 一律 403，自己的资源 2xx
  *   #11 宿主直连 BFF 8894 不可达（D-47 收映射）
  *   #13 限流拒绝码 = 429（白名单链）
- *   #15/#16 CORS：恶意 origin 无 ACAO；合法 origin 精确回显；allow_headers 不含 X-User-Id
+ *   #15/#16 CORS：恶意 origin 无 ACAO；合法 origin 精确回显；allow_headers 不含 X-User-Id；
+ *           实际响应暴露 Retry-After（遗留项 1，浏览器 JS 可读）
  *
  * 说明：IAB 截图存在渲染帧与 DOM 不同步的失真（E2E-F-184），故 [V] 类证据由本 spec 的
  * 独立 Chromium 渲染栈产出（与 E2E-27 同范式）。
@@ -247,6 +248,19 @@ test.describe('E2E-29 横切安全回归钉', () => {
     expect(h['access-control-allow-origin']).toBe('http://localhost:3000')
     expect(h['access-control-allow-headers'] ?? '', '#16：allow_headers 不得含 X-User-Id').not.toContain('X-User-Id')
     expect(h['access-control-max-age']).toBe('600')
+
+    // E2E-29 遗留项 1（IAB 实测 2026-10-08）：实际响应必须暴露 Retry-After
+    // —— 否则跨域下浏览器 JS `response.headers.get('Retry-After')` 返回 null
+    //（curl / 本 APIRequest 不受 CORS 限制会假绿；只有真实浏览器才暴露）。
+    const real = await api.fetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { Origin: 'http://localhost:3000', 'Content-Type': 'application/json' },
+      data: { username: 'ee29_probe_expose_headers', password: 'definitely-wrong' },
+    })
+    expect(
+      (real.headers()['access-control-expose-headers'] ?? '').toLowerCase(),
+      '实际响应必须暴露 Retry-After（浏览器 JS 可读）',
+    ).toContain('retry-after')
   })
 
   test('#19 [V] 摄像头失败文案可归因（截图）', async ({ page }) => {

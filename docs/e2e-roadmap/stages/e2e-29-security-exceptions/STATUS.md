@@ -99,11 +99,12 @@
 
 | # | 遗留项 | 状态 | 落地 |
 |---|--------|------|------|
-| 1 | 423 `Retry-After` | ✅ | `authlock.LoginLockStore.RetryAfter` + handler 设头（423 与触发锁定的 401）；运行时 `Retry-After: 900` |
+| 1 | 423 `Retry-After` | ✅ | `authlock.LoginLockStore.RetryAfter` + handler 设头（423 与触发锁定的 401）；**IAB 追加修**两处 CORS `expose_headers`（否则浏览器 JS 读不到）；运行时/IAB 均 `Retry-After: 900` |
 | 2 | `useApi.ts` jti 注释漂移 | ✅ | 注释如实化 + 4 处陈旧 plan 路径修正 |
 | 3 | IDOR 字面参数名白名单 | ✅ | `userIDQuery` 身份别名同守（数字别名不符 → 403）；回归钉 9/9 |
 | 4 | 账本重复行 E2E-F-115/117/119 | ✅ | 删 I 段重复 3 行 + F-119 裁定（保留 H 段）；`E2E-F-179 → ✅`；audit 0 FAIL |
 
 **镜像**：`emotion-echo/web-bff:v0.1.37`（承接遗留项 1+3；`Created=2026-10-08T02:21:27Z`），其余 18 容器沿用 E2E-29 基线。
-**门禁**：go build/vet/test 全绿；audit --all 0 FAIL；4 个仓库守卫 GREEN；vitest 657 / tsc 0 / Playwright `security-boundaries` 9/9。
+**门禁**：go build/vet/test 全绿；audit --all 0 FAIL；4 个仓库守卫 + TDD/ADR 门禁 GREEN；vitest 657 / tsc 0 / Playwright `security-boundaries` 9/9；`seed_test.js` 78/0。
+**IAB 实测（2026-10-08，用户质询后补做）**：抓到 1 个 curl/Playwright 抓不到的半修复（`Retry-After` 未在 CORS `expose_headers` ⇒ 浏览器 JS 读不到，已修 + 复验可读）；5 个报表/我的空间页面真实浏览器加载无 403；登录页第 6 次 toast 显示锁定提示。
 **详档**：[report.md](report.md) §9。**本轨收工三查**：STATUS 已写（本节）→ `deploy/.devmode-session` 已删 → §2.5 三连自检（见收口）。
