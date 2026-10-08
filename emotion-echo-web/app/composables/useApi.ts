@@ -157,8 +157,13 @@ function getTokenJti(token: string | null): string | null {
 /**
  * 刷新 Token（带锁，防止并发）
  * 后端要求回传当前 AccessToken 的 jti，用于黑名单/轮换校验
+ *
+ * E2E-F-207：本函数原先只被「401 + `code===10002`」分支调用，而该分支是**死代码**
+ * （全仓无任何后端下发 `code:10002`）⇒ 从未执行。现改由 `~/lib/tokenRenewal` 的
+ * 调度器在令牌**过期前**调用（sliding renewal，见 `docs/plans/sliding-token-renewal.md`），
+ * 故导出。注意：**过期后无法续期**（D-46 / APISIX 先拒），所以必须提前调用。
  */
-async function refreshToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   // 如果已有刷新在进行中，等待其结果
   if (refreshPromise) {
     return refreshPromise
@@ -298,43 +303,24 @@ export async function request<T = any>(
         return request(url, options, retryAttempt + 1)
       }
 
-      // 处理 401 - Token 过期
+      // 处理 401 - 令牌过期/无效
+      // E2E-F-207：原「`code===10002` → 自动续期 → 重试」分支已移除 —— 死代码
+      // （无任何后端下发 10002；且 APISIX 在过期令牌上先返 401、不带业务 code，
+      // 请求根本到不了 BFF）。续期改为**过期前主动进行**（`~/lib/tokenRenewal`）；
+      // 走到这里说明令牌确已失效 ⇒ 清登录态 + 跳登录。
       if (res.status === 401) {
-        let errorData: ApiResponse
+        let message = '登录已过期'
         try {
-          errorData = await res.json()
+          const errorData: ApiResponse = await res.json()
+          if (errorData?.message) message = errorData.message
         } catch {
-          errorData = { code: 10003, message: 'Token 无效', data: null }
+          // 非 JSON 响应（如网关纯文本）—— 沿用默认文案
         }
-
-        if (errorData.code === 10002) {
-          // Token 过期，尝试刷新
-          const newToken = await refreshToken()
-
-          if (newToken) {
-            // 重试原请求（保持 retryAttempt，401 刷新不计入 429 重试次数）
-            headers['Authorization'] = `Bearer ${newToken}`
-            res = await fetch(fullUrl, {
-              ...options,
-              headers,
-              credentials: 'include',
-            })
-          } else {
-            // 刷新失败，跳转登录
-            clearAuth()
-            if (import.meta.client) {
-              navigateTo('/login', { replace: true })
-            }
-            throw new Error('登录已过期，请重新登录')
-          }
-        } else {
-          // 其他 401 错误
-          clearAuth()
-          if (import.meta.client) {
-            navigateTo('/login', { replace: true })
-          }
-          throw new Error(errorData.message || '登录已过期')
+        clearAuth()
+        if (import.meta.client) {
+          navigateTo('/login', { replace: true })
         }
+        throw new Error(message)
       }
 
       // 处理 204 No Content（如删除接口）
@@ -449,31 +435,20 @@ export function streamRequest(
       signal: controller.signal,
     })
       .then(async (res) => {
-        // 处理 401 - Token 过期
+        // 处理 401 - 令牌过期/无效（同 request()：10002 续期分支已移除，见 E2E-F-207）
         if (res.status === 401) {
-          let errorData: ApiResponse
+          let message = '登录已过期'
           try {
-            errorData = await res.json()
+            const errorData: ApiResponse = await res.json()
+            if (errorData?.message) message = errorData.message
           } catch {
-            errorData = { code: 10003, message: 'Token 无效', data: null }
+            // 非 JSON 响应 —— 沿用默认文案
           }
-
-          if (errorData.code === 10002) {
-            // 尝试刷新 token
-            const newToken = await refreshToken()
-            if (newToken) {
-              // 刷新成功，重试 SSE 请求
-              doFetch(newToken)
-              return
-            }
-          }
-
-          // 刷新失败或其他 401
           clearAuth()
           if (import.meta.client) {
             navigateTo('/login', { replace: true })
           }
-          throw new Error(errorData.message || '登录已过期')
+          throw new Error(message)
         }
 
         if (!res.ok) {

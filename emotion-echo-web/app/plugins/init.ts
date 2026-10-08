@@ -4,6 +4,9 @@ import { installClientErrorReporter } from '~/utils/clientErrorReporter'
 import { useUserStore } from '~/stores/user'
 import { useConversationStore } from '~/stores/conversation'
 import { useMessageStore } from '~/stores/message'
+import { refreshAccessToken } from '~/composables/useApi'
+import { createTokenRenewal } from '~/lib/tokenRenewal'
+import { watch } from 'vue'
 
 /**
  * 应用初始化插件
@@ -44,6 +47,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   const userStore = useUserStore()
   userStore.init()
 
+  // E2E-F-207：滑动续期 —— 令牌仍有效时在其寿命 75% 处主动换新。
+  // ⚠️ **不能** gate 在 isAuthenticated 上：该 computed 还要求 `userInfo.id`，而
+  // userInfo 是页面元数据、此处可能尚未恢复（auth.global.ts v2 同样只看 accessToken，
+  // 否则会把已登录用户踢回登录页）。无令牌时 schedule() 内部直接跳过 ⇒ 无条件调用安全。
+  startTokenRenewal(userStore)
+
   // 应用用户主题设置
   const config = userStore.getUserConfig()
   if (config && config.theme) {
@@ -53,12 +62,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   // 2. 检查登录状态
   if (userStore.isAuthenticated) {
     console.log('✅ 用户已登录')
-
-    // Token 即将过期，提醒刷新
-    if (userStore.isTokenExpired()) {
-      console.warn('⚠️ Token 即将过期，建议刷新')
-      // 这里可以触发自动刷新逻辑
-    }
 
     // 获取最新用户信息
     try {
@@ -125,4 +128,54 @@ function setupVisibilityListener() {
       }
     }
   })
+}
+
+/**
+ * 启动访问令牌滑动续期（E2E-F-207）。
+ *
+ * 触发点：① 应用启动（已登录时）；② 页面重新可见（长时间后台后计时器可能被节流，
+ * 需按当前令牌重算）；③ 每次续期成功后自动重排。
+ * 失败**不登出**：留待真正用到该令牌时由 401 兜底（避免网络抖动把人踢下线）。
+ */
+function startTokenRenewal(userStore: ReturnType<typeof useUserStore>) {
+  if (typeof window === 'undefined') return
+
+  const readToken = (): string | null => {
+    // Pinia setup store 的 computed 取出来已是值；兼容个别场景下的 ref 包装
+    const raw: any = userStore.getAccessToken
+    return typeof raw === 'string' ? raw : (raw?.value ?? null)
+  }
+
+  const renewal = createTokenRenewal({
+    getToken: readToken,
+    renew: async () => {
+      const token = await refreshAccessToken()
+      if (token) console.log('[token-renewal] 续期成功，令牌寿命已重置')
+      return token
+    },
+    onError: (e) => console.warn('[token-renewal] 续期失败（保留登录态，交由 401 兜底）', e),
+  })
+
+  renewal.schedule()
+
+  // 登录 / 续期都会改变 store 中的令牌 ⇒ 重新排程。
+  // 否则"登录后不刷新整页"就永远不排程（本轮 Playwright 实测抓到：SPA 登录不触发
+  // plugin 重跑，调度器一直是未排程态）。
+  watch(
+    () => readToken(),
+    () => renewal.schedule(),
+  )
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') renewal.schedule()
+  })
+
+  // 供 IAB / 自动化验证与排障（仅 dev 构建暴露，生产不挂）
+  if (import.meta.dev) {
+    ;(window as any).__tokenRenewal = {
+      isScheduled: () => renewal.isScheduled(),
+      renewNow: () => refreshAccessToken(),
+      stop: () => renewal.stop(),
+    }
+  }
 }
