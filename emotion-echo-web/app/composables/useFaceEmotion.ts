@@ -7,6 +7,17 @@ import type { FaceEmotionResult } from '~/types/api'
 import { useApi } from './useApi'
 import { useUserStore } from '~/stores/user'
 import { API_ROUTES } from '~/lib/apiRoutes'
+import { reportClientError } from '~/utils/clientErrorReporter'
+
+/**
+ * 运行环境是否具备摄像头采集能力（F-200）。
+ *
+ * 缺 `navigator.mediaDevices` 时 `getUserMedia` 会直接抛 TypeError —— 但这与"预览组件
+ * 还没挂载"是**两回事**：前者刷新页面永远好不了（要换浏览器/退出内嵌/无痕），后者稍候即可。
+ * 原实现把两者混成一句"请刷新页面"，对前者属误导（E2E-F-200）。
+ */
+const hasMediaDevices = (): boolean =>
+  typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 
 export interface UseFaceEmotionOptions {
   captureInterval?: number // 捕获间隔（毫秒），默认2000ms
@@ -77,26 +88,54 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
     } catch (error: any) {
       // F-119（2026-09-22 用户实测）：原笼统提示「无法访问摄像头，请检查权限设置」，
       // 用户无法分辨是权限拒/无设备/被占用。按 error.name 分支抛具体提示。
+      // F-200（E2E-29 #19，2026-10-07 用户实测）：① 把"前置条件未就绪"这个宽兜底**拆开**
+      // ——"环境没有 mediaDevices"与"预览组件未挂载"处置完全不同（前者刷新无用）；
+      // ② 错误消息携带 `error.name`（真因留痕，用户/客服可据此归因）；③ 上报到
+      // `/api/v1/client-error`（服务端可查处，不再是只进 console）。
       console.error('[useFaceEmotion] 无法开启摄像头:', error)
       const name = error?.name || ''
+      const cause = name || 'unknown'
+
+      // 真因留痕：非阻塞上报（未装 reporter 时静默放弃，绝不影响主流程）
+      void reportClientError('error', error, { url: 'useFaceEmotion.startCamera' })
+
       if (name === 'NotAllowedError' || name === 'SecurityError') {
         // 浏览器策略/用户拒权限 —— 指引用户到浏览器设置放行
-        throw new Error('摄像头权限被拒绝，请在浏览器地址栏左侧锁形图标中放行摄像头权限后重试')
+        throw new Error(
+          `摄像头权限被拒绝，请在浏览器地址栏左侧锁形图标中放行摄像头权限后重试［原因：${cause}］`,
+        )
       }
       if (name === 'NotFoundError' || name === 'OverconstrainedError') {
         // 设备不存在或约束不匹配
-        throw new Error('未找到可用的摄像头设备，请确认电脑已连接摄像头')
+        throw new Error(`未找到可用的摄像头设备，请确认电脑已连接摄像头［原因：${cause}］`)
       }
       if (name === 'NotReadableError' || name === 'TrackStartError') {
         // 设备被其他程序独占
-        throw new Error('摄像头正被其他程序占用，请关闭视频会议/直播等软件后重试')
+        throw new Error(
+          `摄像头正被其他程序占用，请关闭视频会议/直播等软件后重试［原因：${cause}］`,
+        )
       }
-      // F-119 修（IAB 实测撞 TypeError）：videoRef null 或 getUserMedia 返回 null
-      // 等"调用前置条件未就绪"类错误，给出可操作的指引
+      // F-119 修（IAB 实测撞 TypeError）+ F-200 拆细：前置条件未就绪分三类，文案各不相同
       if (name === 'TypeError') {
-        throw new Error('摄像头组件未就绪，请刷新页面或稍后重试')
+        if (!hasMediaDevices()) {
+          // ① 环境根本没有 mediaDevices（webview/IAB/无痕/非安全上下文）—— 刷新无用
+          throw new Error(
+            `当前浏览器环境不支持摄像头采集（缺少 mediaDevices API）。请改用桌面版 Chrome/Edge 打开，` +
+              `或退出内嵌浏览器/无痕模式后重试［原因：${cause}］`,
+          )
+        }
+        if (!videoRef) {
+          // ② 预览组件尚未挂载 —— 稍候即可（保留 F-119 的"组件未就绪"语义）
+          throw new Error(
+            `摄像头组件未就绪（预览尚未挂载完成），请稍候再点一次［原因：${cause}］`,
+          )
+        }
+        // ③ 其它前置条件（如 getUserMedia 返回 null 流）
+        throw new Error(
+          `摄像头未能返回视频流（前置条件未就绪），请稍候重试；持续失败请刷新页面［原因：${cause}］`,
+        )
       }
-      throw new Error(`摄像头开启失败：${error?.message || '未知错误'}`)
+      throw new Error(`摄像头开启失败：${error?.message || '未知错误'}［原因：${cause}］`)
     }
   }
 

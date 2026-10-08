@@ -1,4 +1,4 @@
-# E2E-29 横切：异常与安全 — STATUS v2（建档 + L1 轮收工笔记）
+# E2E-29 横切：异常与安全 — STATUS v3（**done** 收口版）
 
 > 本文件是 Lane E 的**本轨进度事实源**（[parallel-tracks.md](../../../_meta/parallel-tracks.md) §五 指定路径）。
 > 格式：已做 ✅ / 未做 ❌ 分列，**禁止美化**。下次 Lane E 会话开工前必读本文件 + [plan.md](plan.md) §0.2 开工复核清单。
@@ -6,8 +6,8 @@
 
 ## 状态
 
-**🚧 in-progress（建档完成 + L1 已修；20 个测试点仍未执行）** —— 2026-10-07 两轮：建档（PR #168/#169）+ L1 修复（本 PR）。
-`report.md` / `screenshots/` / 回归钉 spec **均不存在** —— 阶段远未完成，**不得判 done**。
+**✅ done（2026-10-08）** —— 20/20 测试点 PASS（0 FAIL / 0 BLOCKED / 0 N/A）；回归钉 `e2e/security-boundaries.spec.ts` **9/9 首跑绿**；5 个执行期 [M] 决策点**全部落定**（D-46 / D-47 / D-48 / M4 用户拍板，M5 由证据关闭）；账本本阶段名下 7 条（F-27 后续 / F-28 / F-182 / F-200 / F-201 / F-202 / F-203）**全部 ✅**，新发现 E2E-F-204 按约定**不回挂**；`e2e_stage_audit.py --all` **30 阶段 0 FAIL**；详档 [report.md](report.md)。
+> 状态口径：**执行者不自行宣布 done** —— 本状态经 RUNBOOK §13.3 第二方核对（子代理独立复跑）后落定，核对结论见 report §8。
 
 ## 一、已做 ✅
 

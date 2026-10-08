@@ -2,8 +2,9 @@
 stage: e2e-29
 title: 横切：异常与安全（JWT 过期刷新 / IDOR / 限流 / CORS / 越权 / 密钥轮换 / 错误透出与留痕）
 type: transformation
-status: in-progress
+status: done
 created: 2026-10-07
+last-updated: 2026-10-08（**done**：20/20 测试点全 PASS；5 个执行期 [M] 决策点全部落定（D-46/47/48 + M4 + M5 由证据关闭）；修复 7 项（L1/D-47/F-203/F-182/M4/D-48/F-200）+ 回归钉 9/9 首跑绿；账本名下 7 条全 ✅，新发现 E2E-F-204 不回挂）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；5 个执行期 [M] 决策点见 §4
