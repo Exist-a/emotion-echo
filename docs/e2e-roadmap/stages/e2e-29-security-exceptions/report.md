@@ -142,4 +142,14 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 
 **WARN 的处置**：E2E-F-115/117/119 重复行属既有账本治理债（E2E-F-179 已登记、owner 不回挂），**本阶段不修**（避免范围蔓延），已在 §8 如实记录。
 
-**结论**：FAIL 项修正后**复检通过**（见本节处置 2 的复跑输出）；E2E-29 判 **done**。
+**第二轮复检（同一独立核对方，保留其上下文，2026-10-08）**：结论 **`失真项复检：通过`**（5/5）：
+
+| 复检项 | 判定 | 核对方实测摘要 |
+|--------|------|---------------|
+| 被验镜像 | PASS | `docker inspect` → `emotion-echo/web-bff:v0.1.36  Created=2026-10-08T00:09:54Z`；晚于镜像构建时刻 `2026-10-07T23:35:38Z` ⇒ 确为重建到 v0.1.36 |
+| 匿名 refresh | PASS | `401` + `unauthorized: refresh requires a token`，无 `Set-Cookie`、无 `accessToken` |
+| 登录 cookie | PASS | `Set-Cookie: access_token=…; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax` |
+| 宿主直连 8894 | PASS | `code=000`（exitcode=28 拒连） |
+| §1 表述与实测一致性 | PASS | 报告 §1 与实测**逐字一致**，且如实标注修正前的失真、**明确限定 D-48 窗口证据来自隔离探针容器**（未把窗口态归到主栈），无夸大；§8 如实收录首轮 FAIL 与处置 |
+
+**结论**：第二方核对**两轮完成**——首轮 1 FAIL + 1 WARN → 修正后第二轮 **PASS**（FAIL 已闭环，WARN 为既有治理债并如实登记）。E2E-29 判 **done**。
