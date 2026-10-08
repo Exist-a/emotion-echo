@@ -34,7 +34,7 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 | 2 | 有效令牌调 refresh 正常续期（同一 user_id） | [A] | PASS | 短 TTL 探针（TTL=2s 隔离容器）：未过期 refresh → `200`；TDD 断言续期后解析出**同一** user_id；回归钉 #1 同批 | — |
 | 3 | 受保护端点匿名枚举（逐条，非抽样） | [A] | PASS | **27/27** 受保护端点（由前端 `apiRoutes.ts` 35 条减去 8 条白名单）匿名经网关 → 全部 **401**（`Missing JWT token in request`）；回归钉 #3 覆盖其中 7 条 | 清单来源=前端路由表（唯一来源） |
 | 4 | 令牌类型隔离（双向） | [A] | PASS | reset token 当 access token → 网关 **401**、`/auth/refresh` **401**；access token 当 resetToken → `/auth/reset-password` **401** 且**原口令仍可登录**（未被改写）。回归钉 #4（含"原口令仍 200"断言） | TDD `auth_refresh_guard_test.go` 含 reset token 例 |
-| 5 | 过期语义与续期路径 | [A] | PASS | 短 TTL 探针：过期后 refresh → **401**；过期 token 经网关受保护端点 → **401** `failed to verify jwt`；未过期 refresh → 200 | 前端 `code===10002` 续期分支由回归钉 #1 的 cookie 语义间接覆盖 |
+| 5 | 过期语义与续期路径（**2026-10-08 补验：IAB 实测**） | [A] | PASS | 短 TTL 探针：过期后 refresh → **401**；**签名有效但已过期**的 JWT 经网关受保护端点 → **401** `{"message":"failed to verify jwt"}`（**无 `code` 字段**）；未过期 refresh → 200。**IAB 真实浏览器补验**（browser-use）：过期令牌触发受保护请求 → 应用跳 `/login`（登录表单可见）、**零次 `/auth/refresh` 调用**（截图 `screenshots/expiry-redirect-to-login.png`）；`jwt-expiry.spec.ts` 加严为 2 用例 × 2 project = **4 passed** | **更正（2026-10-08）**：原写"前端 `code===10002` 续期分支由回归钉 #1 的 cookie 语义间接覆盖"**不成立**——实测该分支为**死代码**（全仓无任何后端下发 10002，见 §6 观察项 4 与账本 E2E-F-207）；真实行为是"过期即登出跳登录、不尝试续期"。plan §6 风险表要求的"IAB 实测真实过期场景"本轮**已补做** |
 | 6 | logout 清除 cookie 语义 + 已知边界 | [A] | PASS | `POST /auth/logout` → `Set-Cookie: access_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`；回归钉 #6 断言清空 + SameSite | **已知边界（如实）**：无服务端黑名单 ⇒ 已签发 token 有效至 exp（D-46 已记录的另一议题） |
 | 7 | reports 端点 IDOR 守卫 | [A] | PASS | A 的令牌 + `?user_id=<B>` → **403** `forbidden: user_id mismatch with authenticated user`；无 query → 200（用认证身份）；自己 id → 200；回归钉 #7/#8 | 实现 `analytics_handler.go:47-72` |
 | 8 | 参数别名不构成越权 | [A] | PASS | `?userId=` / `?id=` / `?uid=` / `?user=` → 200 且**响应体 md5 与"不带 query"完全相同**（被忽略、无泄漏）；回归钉断言**逐字相同** | 守卫生效但语义是"字面参数名白名单"（已记录） |
@@ -85,7 +85,7 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 - 新增 spec：`emotion-echo-web/e2e/security-boundaries.spec.ts`（**9 用例**）
   - 首次运行结果：**9 passed**（chromium；`BASE_URL=http://localhost:3000`）
   - 覆盖 #1 / #3 / #4 / #6 / #7+#8 / #9+#10 / #11 / #15+#16 / #19[V]
-- 既有相关 spec 保持绿：`jwt-expiry.spec.ts`（到期跳登录）、`multi-instance-smoke.spec.ts`（E2E-20 跨实例锁定）
+- 既有相关 spec 加严并保持绿：`jwt-expiry.spec.ts`（**2026-10-08 加严**：过期令牌冷启动 → 跳 `/login` + 登录表单可见 + **零次 `/auth/refresh`**；受保护接口返网关真实 401 体 → 登出跳登录 + 零次刷新；2 用例 × chromium/mobile = **4 passed**）、`multi-instance-smoke.spec.ts`（E2E-20 跨实例锁定）
 - 单元层新增：`auth_refresh_guard_test.go`(6) / `auth_trust_test.go`(5) / `auth_cookie_attrs_test.go`(4) / `jwt_multikey_test.go`(6) / `useFaceEmotion.f200.test.ts`(4)
 - 静态守卫（已接 CI `e2e-guards`）：`check_bff_trust_chain.sh`(5+3) / `test_smoke_bff_chat_grpc_contract.sh`(5) / `test_db_backup_restore_contract.sh`(9)；`seed_test.js` 77/0
 
@@ -105,6 +105,8 @@ environment: dev 模式（基线栈重建：infra+apps+compose.dev.yml+--env-fil
 1. 423 响应无 `Retry-After`（前端有指数退避兜底）；
 2. `useApi.ts` 的 `jti` 注释与 BFF 零 jti 实现不一致（注释漂移；jti 黑名单属另一议题）；
 3. 越权"参数名白名单"式守卫（只认字面 `user_id`，别名被忽略）——现状无泄漏，但新增读别名的端点需同守。
+4. **（2026-10-08 补验新增）前端"401 + `code===10002` → 自动续期"分支为死代码**：全仓无任何后端下发 `code:10002`（BFF 一律 `code:1`；网关返 `{"message":"failed to verify jwt"}` 无 code；shared 中间件返 `{"error":"unauthorized"}`），`refreshToken()` 仅被该分支调用 ⇒ 线上从未执行。**行为安全**（过期 → 登出跳登录），但"滑动续期"能力实为缺失。已登记账本 **E2E-F-207**（owner = 决策门，需产品裁定是否实现滑动续期），**本轮不修**（属产品取舍，非缺陷修复）。
+5. **（2026-10-08 补验新增）HttpOnly `access_token` 无法被页面 JS 覆盖/删除**：IAB 实测 `document.cookie = 'access_token=…'` 被浏览器拒绝（同名 HttpOnly 存在），`clearToken()` 的客户端 cookie 清除因此**无效**。**非安全缺陷**：显式登出走 `POST /auth/logout`（服务端 `Set-Cookie` 清除，生效）；`clearAuth()` 仅在 401 时触发，彼时令牌本已失效。记为边界。
 
 ## 7. 收口自检
 

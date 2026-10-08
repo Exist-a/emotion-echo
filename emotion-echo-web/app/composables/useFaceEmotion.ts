@@ -130,7 +130,7 @@ export const useFaceEmotion = (options: UseFaceEmotionOptions = {}) => {
             `摄像头组件未就绪（预览尚未挂载完成），请稍候再点一次［原因：${cause}］`,
           )
         }
-        // ③ 其它前置条件（如 getUserMedia 返回 null 流）
+        // ③ 其它前置条件异常（既非"环境无 mediaDevices"、也非"videoRef 为 null"的 TypeError）
         throw new Error(
           `摄像头未能返回视频流（前置条件未就绪），请稍候重试；持续失败请刷新页面［原因：${cause}］`,
         )

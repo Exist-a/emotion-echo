@@ -230,7 +230,7 @@ func SetDefaults(c *Config) {
 	}
 	if c.Auth.JWTSecret == "" {
 		// Stage 94 PR-5 §P0-10：删 dev-bff-secret 默认值。漏 env 注入时
-		// 保持空 → main.go 调 auth.NewManager(secret, ttl) 时 NewManager
+		// 保持空 → main.go 调 auth.NewManagerMulti(...) 时该构造器
 		// 内部 fail-fast ("auth: JWT secret must not be empty") + log.Fatal。
 		// 这是 §P0-10 修复目标:避免 dev 密钥进生产(所有 JWT 用 dev 密钥签 →
 		// 攻击者可伪造任意 user_id token)。
