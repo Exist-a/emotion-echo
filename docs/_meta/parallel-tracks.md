@@ -158,6 +158,7 @@ T4  E2E 全收口 + §十二拍板 → Lane O 进阶段二（v0.3 四道门）
 | 2026-09-24 | Lane E | `docs/plans/README.md`（索引 +1 行）、本文件 §六 | 新增 `conversation-memory-pending-decision-2026-09-24.md`（会话记忆缺失待决策；用户口头反馈，非 on-device 文件，不触对方独占列） | Lane O 无需跟进；若 v0.2 §十二决策 5「摘要存储」拍板，回读该文档 §D-c |
 | 2026-09-27 | Lane O | `emotion-echo-web/package.json`、`pnpm-lock.yaml` | **T2#3 一次性**：加 `@mlc-ai/web-llm` 到 `optionalDependencies`（白名单 §二）。**production bundle 不打包**契约由 `webllmEngine.dynamicImport.test.ts` 架构测试保证（dynamic import + 无 static 引用）；真实隔离策略（worker 入口 / vite external / CDN）留 T3 IAB 验证时决 | Lane E 无需跟进；E2E-18+ PR 跑 `pnpm install` 时可选依赖正常安装/失败均不阻断（optionalDependencies 语义） |
 | 2026-10-03 | Lane E | `docs/architecture/decisions.md`（行 896 客户端对象 URL 条目） | **E2E-27 收口回填**：D-40 已把 avatar/uploads 迁移完毕、E2E-F-116 ✅ 关闭——该行「归 E2E-27」后续接完成注记（同批：`adr-2026-09-client-object-url-bff-proxy.md` 落地进度回填） | Lane O 无需跟进（端侧 stage1 零触碰对象 URL；仅知会：客户端对象 URL 现一律网关相对） |
+| 2026-10-09 | Lane E | `AGENTS.md §2.4`（smoke 脚本段） | **E2E-30 L1 落地后的文案纠偏**：原写「`scripts/smoke_data_layer.py`（**待建**）」与事实不符（脚本 2026-09-24 已存在）。改写为真实状态 + **基址口径**（2026-10-09 起走 APISIX 网关 `:19080` + Bearer，可用 `SMOKE_BASE` 覆盖；**不得**指宿主直连 BFF 的口）+ 退出码语义（0/1/**2 = 前置不可用，此时无契约结论**）+ 覆盖范围（§1~§4 实测 / §5 由 integration test 覆盖 / §6 按 `KAFKA_ENABLED` 分支）与"尚未接 CI" | Lane O 无需跟进；若后续 lane 要跑 §2.4 smoke，按新基址口径（网关 + Bearer）而非直连 BFF |
 
 ---
 
