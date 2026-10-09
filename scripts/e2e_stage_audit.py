@@ -151,7 +151,17 @@ def find_header(block: str, must_contain: str) -> list[str] | None:
 
 
 def parse_plan_testpoints(text: str) -> set[str]:
-    block = section_lines(text, "测试点清单")
+    """plan 的测试点编号集合。
+
+    E2E-F-180（2026-10-09 实测更正根因）：A3 曾对 e2e-25 报
+    `WARN 未解析到测试点编号，跳过 A3` —— 账本原文把修法写成"识别**子表编号**"，
+    但实测子表里的编号本来就是纯整数（`| 1 | [A] | … |`），真正不被识别的是**章节标题**：
+    全仓 plan 里绝大多数用「测试点清单」，e2e-25 用「测试点总表」（+ 分组子表）。
+    标题不匹配 ⇒ `section_lines` 取到空 ⇒ **A3（AP-07）对该阶段静默失效**。
+    故对两种标题都容错；无关章节仍返回空（WARN 语义保留）。
+    回归钉：`scripts/test_audit_plan_parser.sh`。
+    """
+    block = section_lines(text, "测试点清单") or section_lines(text, "测试点总表")
     return {r[0] for r in table_rows(block, first_col_is_int=True)}
 
 
