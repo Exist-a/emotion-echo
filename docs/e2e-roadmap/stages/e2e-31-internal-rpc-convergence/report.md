@@ -14,6 +14,20 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 
 ---
 
+## 0. 未完成清单（唯一真相源 · 收口时必须逐条销账）
+
+> 本阶段判 `partial`：共 **4 项未完成**（0 项已销账）。
+> 其中 T-1/T-2 是**测试点 #19/#20 的 [M] 裁定**——按 RUNBOOK §4「[M] 必须升级给用户」，**未裁定即不得判 done**。
+
+| 编号 | 未完成事项 | 责任人 / 去向 | 可核验判据 | 现状 |
+|------|-----------|--------------|-----------|------|
+| **T-1** | 测试点 #19：A/B 类 14 处死 RPC 逐条处置（`StreamMessages` / `AnalyzeBatch` / `MentalHealthHistory·Trigger·Trend` / `Logout` / `VerifySecurityAnswer`） | **用户裁定**（三选一） | 用户对「① 保留+注释+守卫 / ② 删除 / ③ 接线」给出裁定，随后账本 E2E-F-208 逐条翻状态 | ⏳ BLOCKED（未裁定） |
+| **T-2** | 测试点 #20：`ai-svc/analyzer/grpc_analyzer.go:193 AnalyzeWithAuth` 与 BFF→assessment dial 残余的处置 | **用户裁定** | 同上；dial 侧现状已由证据说明（BFF 现在真实调用 `:8886`，不再是白 dial） | ⏳ BLOCKED（未裁定） |
+| **T-3** | RUNBOOK §13.3 第二方核对 | 执行者（独立会话） | 独立复跑 20 测试点关键项 + 负向对照（尤其「加回 `assessmentBase` → 回归钉必须红」），产出核对记录追加到本文件 §8 | ⬜ 未做 |
+| **T-4** | 是否需为本轮改动物化 ADR（`docs/architecture/adr/` + `architecture/decisions.md`） | **用户裁定**（口径问题） | 用户答复「需/不需」；若需，补充 ADR 并更新 `decisions.md` 索引 | ⬜ 未做（本轮判断：属"回归决策 4 已定方向"而非新决策，故未立；此判断需用户确认） |
+
+---
+
 ## 1. 环境基线
 
 | 项 | 值 |
