@@ -258,7 +258,8 @@ services:
   # 端口：9000 S3 API / 9001 Web 控制台。
   # =====================================================
   emotion-echo-minio:
-    image: quay.io/minio/minio:latest
+    # E2E-F-188（2026-10-09）：原 `:latest` → 钉 digest（冻结已验收版本，防 latest 漂移）
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     container_name: emotion-echo-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -289,7 +290,8 @@ services:
   # （PR-4c BFF avatar_handler 会写这里）；跑完 exit 0 不再启动。
   # =====================================================
   emotion-echo-minio-init:
-    image: quay.io/minio/mc:latest
+    # E2E-F-188（2026-10-09）：原 `:latest` → 钉 digest
+    image: quay.io/minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     container_name: emotion-echo-minio-init
     depends_on:
       emotion-echo-minio:
@@ -525,7 +527,8 @@ services:
   # 暴露 :9308 metrics,自动发现 consumer group
   # 启动: 随 obs profile 一同启动 (与 prometheus scrape 配套)
   kafka-exporter:
-    image: danielqsj/kafka-exporter:latest
+    # E2E-F-188（2026-10-09）：原 `:latest` → 钉 digest
+    image: danielqsj/kafka-exporter@sha256:a51b280b55a763deaa1bc5024310bc2954995d9160014d7445055dac6a090868
     container_name: emotion-echo-kafka-exporter
     profiles: ["obs"]
     # E2E-22 (2026-09-29 实测 exit 255 根因): kafka-exporter 只做一次性 client 初始化,
