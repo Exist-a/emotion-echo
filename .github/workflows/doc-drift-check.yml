@@ -299,7 +299,7 @@ jobs:
     name: 文档守卫总闸
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [routes-alignment, view-consistency, env-vars-lint, yaml-lint, git-layout, docker-digests, docs-update, bff-jwt-secret, user-oauth-zero-ref, migrations-contract, migrations-no-service-order, soft-assert-scan, apisix-seed-structure, secrets-scan, e2e-stage-audit, tdd-gate, adr-gate, residual-scan, helm-loki-render, ctx-logging-gate, orphan-outputs, helm-prometheus-render, obs-monitoring-contract]
+    needs: [routes-alignment, view-consistency, env-vars-lint, yaml-lint, git-layout, docker-digests, docs-update, bff-jwt-secret, user-oauth-zero-ref, migrations-contract, migrations-no-service-order, soft-assert-scan, apisix-seed-structure, secrets-scan, e2e-stage-audit, tdd-gate, adr-gate, residual-scan, helm-loki-render, ctx-logging-gate, orphan-outputs, helm-prometheus-render, helm-main-render, obs-monitoring-contract]
     # always()：否则任一上游失败时本 job 会被**跳过**（skipped ≠ 通过，GitHub 不会拦），
     # 反而变成"检查失败反而没人拦"的漏洞。
     if: ${{ always() }}
