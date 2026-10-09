@@ -2,9 +2,9 @@
 stage: e2e-30
 title: 数据契约收口（§2.4 六项数据契约 smoke 全绿 + helm template/lint 渲染回归 + 转挂账本收口）
 type: transformation
-status: pending
+status: partial
 created: 2026-10-08
-last-updated: 2026-10-08（建档；**已开工复核**——2026-10-08 起了 dev 栈跑 §0.2，实测补充见 §0.1b；**M3 已由用户裁定转出**：选 ③ 补全走 gRPC ⇒ 立项 E2E-31，本阶段不再含该 [M]）
+last-updated: 2026-10-09（**执行轮（进行中）**：L1/L2/L6 + 测点 #1~#5/#8~#13/#17 已有结论，两个 PR 合并（#190/#191，CI 36/36）；实测回填见 §0.1c。**未收口** —— §0 未完成清单 6 项，其中 §8 口径（新账 E2E-F-215）与 M1/M2/M4/M5/M6 待用户裁定）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §4
@@ -87,6 +87,17 @@ Helm 官方 `helm template` / `helm lint`（本地实测 `helm v3.18.4+gd80839c`
 
 > **§0.2 复核结论**：#1（docker 可用）✅、#2（补跑 smoke）✅ 见 G3、#3（环境基线）⚠️ **部分不达标**——G4 的 BFF unhealthy 使「6 应用服务全部 healthy」不成立（**根因不在本阶段被测面**，已登 F-210）、#4/#5（helm）✅ 见 G1/G2、#6（F2/F3）✅ 见 G3、#7（编号）✅ 见 G6。
 > **开工状态**：`# 状态` 待转 `in-progress`（收口 PR 时统一处理 status 三处一致性）。
+
+### 0.1c 执行期实测补充（2026-10-09，**本轮**；AP-02「以实测为准并回填本节」）
+
+| # | 事实 | 证据 | 与建档期/§0.1b 对比 |
+|---|------|------|------------|
+| **H1** | ✅ **§0.2 七项全部实跑**：#1 docker 可用（19 容器全 healthy）+ 锁无占用（本轮登记 lane-e）/#2 smoke 原样跑 → **rc=2 死在连接被拒**/#3 环境基线（db-migrate ExitCode **0**、Nacos `emotion-echo-dev` **count=6**、网关登录 200）/#4 helm 3039 行/#5 lint 0 failed + 子 chart **23**/#6 8894 → `000`/#7 账本 | 本轮实跑 | §0.1b 的 G3/G4 复核成立 |
+| **H2** | ⚠️ **账本编号口径过期**：任务书 §0.2 #7 写「新登从 **F-210** 起（当前最大 F-209）」——但 E2E-31 已用至 **F-214** ⇒ 实际应从 **F-215** 起 | 账本解析：max=F-214 | **建档期事实过期**（跨阶段并发导致） |
+| **H3** | 🔴 **新发现 E2E-F-215**：smoke §8「镜像新鲜度」判据粗（拿全局最新 commit 比、且读**容器**的 `.Created`/`.Image` 却写成「镜像构建于…」）⇒ 在**非产物提交**上恒红。本轮 8 服务全 STALE，成因 = `809d429`（只改 e2e/docs/scripts）+ `ba64026`（给服务加**注释标记**）。**按服务源码路径逐服务比同样 STALE** ⇒ 判据无法从 git 历史区分「影响产物」与否 | 逐服务 `git log -1 -- <dir>` vs 容器 `.Created` 对照 | **建档期与 §0.1b 均未预见**；阻塞「smoke 全绿」与 M6 |
+| **H4** | ✅ **§契约 1~4 真跑全绿**（smoke 走网关后）：行数 457 / event_type **7 种** / analytics_reader 四视图可读 / reports/daily summary 非空 + emotionDistribution.len=1 | `python scripts/smoke_data_layer.py` | §0.1 F6「六契约零门禁消费」**部分解除**：脚本已可用，接 CI 仍待 M6 |
+| **H5** | ✅ **§契约 5 仍 SKIP、§契约 6 走 Kafka 分支 SKIP** —— 两者需各自的证据形态（integration test / 不加载 dev overlay 的栈） | smoke 输出 | 与建档期一致（测试点 #5/#6/#7 待补） |
+| **H6** | ✅ **主 chart 渲染三不变量成立**：23 子 chart 全部在 Chart.yaml 声明且带 condition；**全开**渲染 24 origin（默认 19 + 默认关的 5：xtts + 可观测 4 件）⇒ 每个子 chart 可证明被渲染 | `scripts/test_helm_main_render.sh`（新） | §0.1 F5「主 chart 零渲染回归」**已解除** |
 
 ### 0.2 开工复核清单（第一天执行，防止任务书事实表过期）
 
