@@ -10,13 +10,13 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 
 > 判定依据：[RUNBOOK.md](../../RUNBOOK.md) §3 六步循环 / §4 判定分级 / §4.1 证据有效性 / §7 收口契约；反例：[anti-patterns.md](../../anti-patterns.md)。
 > 任务书：[plan.md](plan.md)（20 测试点 / 6 TDD 循环 / 5 执行期 [M]）。
-> **本轮结论**：实现与端到端验证完成；**2 个 [M] 裁定点未落定 ⇒ 阶段判 `partial`**（见 §6）。
+> **本轮结论**：实现与端到端验证完成，**20 个测试点全部有结论（20 PASS / 0 FAIL / 0 BLOCKED）**；阶段仍判 `partial` 的**唯一原因 = E2E-F-214**（dev 限流致 E2E 连跑 flaky，去向待定，见 §0）。
 
 ---
 
 ## 0. 未完成清单（唯一真相源 · 收口时必须逐条销账）
 
-> 本阶段判 `partial`：共 **1 项未完成**（3 项已销账）。
+> 本阶段判 `partial`：共 **1 项未完成**（**4 项已销账**：原 T-1/T-2/T-3/T-4）。
 >
 > **已销账（2026-10-09，用户经 AskUserQuestion 裁定 + 当轮实施）**：
 > - **T-1（测点 #19）**：A/B 类死 RPC 裁定 = **保留 + 标注 + 守卫**。用户先质疑「关于 grpc 我不是明确说过要做吗？这么还有预留」，遂**逐条查实**：这 7 处**不是**"业务走 HTTP 把 gRPC 绕开"（那是 assessment 链，已修），而是①功能未接出（analytics `MentalHealth{History,Trigger,Trend}` —— svc 侧实现与 HTTP 路由都在，但 BFF 未暴露、前端未用、无脚本消费）②无业务路径（`StreamMessages` 无流式业务、`AnalyzeBatch` 无批量业务）③业务路径存在但设计上空转（`Logout` 只清 cookie）④族内冗余（`VerifySecurityAnswer` 按 userID 那个；在用者是兄弟方法 `VerifySecurityAnswerByUsername`）。⇒ 启用属**建功能**，已按裁定落地：7 处服务端 + 3 处 BFF 客户端加统一标记 `E2E-31 已知未接线`，并新增守卫 `scripts/check_dead_grpc_inventory.sh` 接入 CI（守卫 23/23，负向对照：删 1 个标记 → RED）。
@@ -26,7 +26,7 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 
 | 编号 | 未完成事项 | 责任人 / 去向 | 可核验判据 | 现状 |
 |------|-----------|--------------|-----------|------|
-| **T-1** | **E2E-F-214**：dev 限流 `60 req/60s` 使 48 条 E2E 一次性连跑必出 ~2 条假红（只 mobile、每次换用例） | **待定去向**：属**测试卫生**（38 条用例的数据准备/断言请求量 × 2 project），不在本阶段"内部 RPC 收敛"的产品范围内 | 归宿二选一：① 本阶段内修（spec 层缓存令牌/加请求预算/分 project 运行脚本化）② **转挂 spec 与 CI 门禁的 owner**（E2E-13/E2E-14 spec 与 E2E-03 门禁）并在账本改归属 | ⚠️ 未解决（已定性 + 规避手法明确：分 project 跑；**推翻了"不归属阶段"的直觉——它确实是本阶段回归钉暴露的**） |
+| **T-5** | **E2E-F-214**：dev 限流 `60 req/60s` 使 48 条 E2E 一次性连跑必出 ~2 条假红（只 mobile、每次换用例） | **待定去向**：属**测试卫生**（用例的数据准备/断言请求量 × 2 project），不在本阶段"内部 RPC 收敛"的产品范围内 | 归宿二选一：① 本阶段内修（spec 层缓存令牌/加请求预算/分 project 运行脚本化）② **转挂 spec 与 CI 门禁的 owner**（E2E-13/E2E-14 spec 与 E2E-03 门禁）并在账本改归属 | ⚠️ 未解决（已定性 + 规避手法明确：分 project 跑；**未用"不归属阶段"糊过去——它确实是本阶段回归钉暴露的**） |
 
 ---
 
@@ -58,7 +58,7 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 | 9 | `SubmitSurvey` 键语义 + 分数不截断 | [A] | PASS | 实测提交 9 题全 3 分 → `totalScore 27 / answered 9 / riskLevel extreme`；GAD-7 7 题 → `21 / severe`；BFF 日志 `SubmitSurvey ... latency=7ms err=<nil>` |
 | 10 | `GetSurveyResult`/`ListMyResults` 字段完整 | [A] | PASS | `agent_server.go` 现在填充 `answers`/`factorScores`/`scoreKind`/`submittedAt`/`userId`；实测结果列表返回 `{"resultId":213,...,"factorScores":{...},"scoreKind":"risk"}` |
 | 11 | BFF `ListResults`/`GetResult` 实现（原为 stub） | [A] | PASS | 两方法由「直接 `return fmt.Errorf(not implemented)`」改为真实 RPC 调用；bufconn 用例 `TestAssessmentGRPC_{ListResults,GetResult}_Implemented` 断言取值；实测 `GET /api/v1/surveys/results?limit=3` 返回 3 条带 `factorScores` 的记录 |
-| 12 | 删除恒真 HTTP 旁路 + 守卫 | [A] | PASS | `grep -c 'assessmentBase != ""' survey_handler.go` → **0**（旁路、5 个 `*HTTP` 方法、`assessmentBase` 字段全删）；回归钉 `TestSurveyHandler_NoHTTPBypass_RegressionNail` 通过，**负向对照已实做**：临时加回字段后该用例 FAIL 并指出行号（`assessmentBase string` / `_ = h.assessmentBase`） |
+| 12 | 删除恒真 HTTP 旁路 + 守卫 | [A] | PASS | **非注释代码零命中**（`grep -rn 'assessmentBase' survey_handler.go` 仅剩 16/20 行注释；旁路、5 个 `*HTTP` 方法、`assessmentBase` 字段全删）。回归钉 `TestSurveyHandler_NoHTTPBypass_RegressionNail` 通过；**负向对照已实做**：临时加回字段后该用例 **FAIL**，输出 `[]string{"assessment","assessmentBase"} should not contain "assessmentBase"` 与 `"assessmentBase string" should not contain …`（**测试文件行号 206/219 + 源码行内容**） |
 | 13 | personality 切回共享 gRPC 客户端 | [A] | PASS | `main.go` 删除 `NewAssessmentClient(Transport: HTTP)` 独立实例，改用 `s.Assessment`；IAB 实测「我的空间」人格雷达五维度均有值（见 #17 截图 07） |
 | 14 | BFF 对外 JSON 形状不变 | [A] | PASS | 实测详情响应 `questions` 仍为**数组**、每题 `{id:"q1", title:..., options:[{id,text,score}]}`；列表为 `{items,total}`；提交体仍为 `{answers:{"q1":score}}` |
 | 15 | Playwright `quiz` + `survey-scoring`（双 project） | [A] | PASS | **chromium 24/24 + mobile 24/24**（各 3 spec 合并计；单 project 跑均全绿 51.8s/54.4s）。**注**：48 条一次性连跑会撞 dev 限流（实测 70 次请求 → 60×200 + 10×429），产生 2 条 flaky 假红（见 E2E-F-214） |
@@ -97,7 +97,7 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 | **L3** 作答键保真 + 结果字段 | 旧 `SubmitSurvey` 把 `"q1"` 数值化；`toProtoSurveyResult` 丢 `factorScores`/`scoreKind`、`int32(TotalScore)` 截断 | 直传 `map[string]int32`；补 4 个字段；`double` 总分 | ✅ |
 | **L4** BFF 客户端补全 + 删旁路 | `assessmentBase` 5 命中（应 0）；`ListResults` 返 error | `assessment_grpc.go` 重写 + `survey_handler.go` 删 5 处旁路与 5 个 `*HTTP` 方法；`main.go` 画像改用共享客户端 | ✅ |
 | **L5** 对外形状不变 | 先钉基线：`questions` 数组 + `{id:"q1",options:[{id,text,score}]}` + `{answers:{"q1":score}}` | `SurveyDetail.Questions` 改 `[]map[string]any`；HTTP 与 gRPC 两实现统一走 `normalizeQuestions`/`fromProtoSurvey` | ✅ |
-| **L6** 守卫 | 无守卫（旁路可无声回归） | `TestSurveyHandler_NoHTTPBypass_RegressionNail`（反射查字段 + 扫非注释行）；**负向对照**：加回字段 → FAIL 并指出行号 | ✅ |
+| **L6** 守卫 | 无守卫（旁路可无声回归） | `TestSurveyHandler_NoHTTPBypass_RegressionNail`（反射查字段 + 扫非注释行）；**负向对照**：加回字段 → FAIL（测试文件行号 206/219 + 源码行内容） | ✅ |
 
 > 被移除的 5 个「HTTP 旁路」用例（`GetSurveyHTTP_QuestionsAsArray` 等）测的是已删除分支，其**断言意图已迁移**到 `internal/downstream/assessment_test.go`、`internal/downstream/assessment_grpc_test.go` 与本文件的 `KeepsDescription`，去向在源码注释中逐条写明（非静默删测）。
 
@@ -133,7 +133,7 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 
 | # | 检查项 | 状态 |
 |---|--------|------|
-| 1 | 20 个测试点全部有结论（四值） | [x] 18 PASS / 0 FAIL / 2 BLOCKED（BLOCKED 10% ≤ 1/3） |
+| 1 | 20 个测试点全部有结论（四值） | [x] **PASS 20 / FAIL 0 / BLOCKED 0 / N/A 0**（与 §2 汇总行一致） |
 | 2 | 范围内缺陷走完 TDD（L1~L6 RED→GREEN） | [x] 见 §4，L1 的 RED 为首次 `go test` build failed（10 处未定义符号） |
 | 3 | 回归钉跑过且绿 | [x] 见 §5（含负向对照） |
 | 4 | 改变用户可见行为的修复已 IAB 实测 | [x] 测点 #17；截图 05~07 且逐张查看 |
@@ -171,3 +171,18 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 - **(d) 服务端直接单测** → 新增 `agent_server_convert_test.go`（5 用例），见 §5 回归钉表。
 
 **核对者无法判定的项（如实记录）**：Playwright 24/24+24/24、IAB 截图 05~07、`totalScore 27` 等**运行时类证据**因核对时未起 dev 栈而无法独立复核（≠ 证伪）。
+
+### 8.1 复核轮（同一独立核对者，2026-10-09，针对上述 4 条件的处置）
+
+**结论**：`有条件通过` —— (a)(c)(d)(e) **满足**；(b) **部分满足**，核对者抓到本报告**内部数字自相矛盾**：
+
+> 原文引用（核对者）：`§7 第 1 行 + header line 13 仍是 18 PASS/2 BLOCKED，与 §2 汇总的 20/0/0 自相矛盾`；`§0 line 19 写"3 项已销账"但实列 4 条`，且唯一未完成项**复用了已销账的标签 T-1**（撞名）。
+
+核对者的独立验证（摘要）：
+- (a) 自行把 `auth_wrapped.go` 改成"算而不传" → `--- FAIL: TestAuthWrappedAnalyzer_NonEmptyAPIKey_InnerCalledWithWrappedCtx` + `Messages: inner 收到的 ctx 应携带 x-internal-api-key 元数据，实际=[]`；用自己 `cp` 的备份还原（md5 `7ea939df…` 一致），`git status --short` 为空。
+- (c) 逐条复跑三个说法：`grep -c` = **1** ✅ / 回归钉确实跳过注释行 ✅ / 负向输出确实是"测试文件行号 + 源码行内容" ✅。
+- (d) 确认新单测**直接调用真实非导出函数**（非 stub）；并构造"当前代码 + 旧行为"对照证明断言咬得住：把 `title` 改回 `m["prompt"]` → `title 错: ""`；把 `Key` 置空 → `顺序/键名错: "" "" ""`（两次均还原，md5 一致）。
+- (e) 守卫 `PASS 10/10` 且确在 `e2e-guards.yml` 守卫 23/23。
+- 另记：`assessment-svc go test -count=1` / `ai-svc analyzer` 全绿；`audit --all` 0 FAIL；核对前后 `git status --short` **均为空**。
+
+**本条条件的处置**：已修 §7 第 1 行（→ `PASS 20 / FAIL 0 / BLOCKED 0 / N/A 0`）、header（删"2 个 [M] 未落定"，改为"唯一原因 = E2E-F-214"）、§0 计数（→"4 项已销账"）并把未完成项标签由 `T-1` 改为 **`T-5`**（消除撞名）；另把 §2 #12 与 §4 L6 的**旧错措辞原文改写**（不再只靠下方批注更正）。
