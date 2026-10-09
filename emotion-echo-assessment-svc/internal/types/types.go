@@ -36,12 +36,13 @@ type GetSurveyReq struct {
 
 // GetSurveyResp 量表详情（含题目）
 type GetSurveyResp struct {
-	ID        uint64         `json:"id"`
-	Code      string         `json:"code"`
-	Title     string         `json:"title"`
-	Category  string         `json:"category"`
-	Version   int            `json:"version"`
-	Questions map[string]any `json:"questions"`
+	ID          uint64         `json:"id"`
+	Code        string         `json:"code"`
+	Title       string         `json:"title"`
+	Description string         `json:"description"`
+	Category    string         `json:"category"`
+	Version     int            `json:"version"`
+	Questions   map[string]any `json:"questions"`
 }
 
 // SubmitSurveyReq POST /api/v1/surveys/:id/submit

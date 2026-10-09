@@ -480,7 +480,9 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	// 业务 handler（各自 Register）
 	handler.NewUserHandler(s.User).Register(r)
 	handler.NewChatHandlerWithIntent(s.Chat, llmIntent).Register(r)
-	handler.NewSurveyHandler(s.Assessment).WithAssessmentBase(c.AssessmentService.BaseURL).Register(r)
+	// E2E-31（2026-10-08）：survey handler 不再注入 assessment HTTP base——
+	// 5 处 `assessmentBase != ""` 恒真旁路已删除，统一走 s.Assessment（gRPC）。
+	handler.NewSurveyHandler(s.Assessment).Register(r)
 	handler.NewAnalyticsHandler(s.Analytics).Register(r)
 	handler.NewMultimodalHandler(s.AI).Register(r)
 	// E2E-F-198（ADR-2026-10 / 架构决策 40）：phonemes 端点经 TTSProvider——
@@ -523,13 +525,11 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	// SSE 流式
 	// Stage 81 PR-2：llm-service ChatCompletion gRPC 上游优先（llmStreamer 非 nil 时）
 	// Stage 89 PR-3：chat client 作为文件消息列表来源（会话内文件持续引用）
-	// E2E-14：人格画像来源注入 system prompt（取数走 HTTP —— gRPC ListResults 未实现，
-	// 与 survey_handler 的 assessmentBase 绕过同因；缺画像时 handler 内部回落基础人设）
-	personalitySrc := downstream.NewPersonalityProfileSource(downstream.NewAssessmentClient(downstream.AssessmentClientOptions{
-		BaseURL:   c.AssessmentService.BaseURL,
-		TimeoutMs: c.AssessmentService.TimeoutMs,
-		Transport: downstream.AssessmentTransportHTTP,
-	}))
+	// E2E-14：人格画像来源注入 system prompt。
+	// E2E-31（2026-10-08）：原先因「gRPC ListResults 未实现」另建了一个
+	// `Transport: HTTP` 的独立客户端；现已补齐 gRPC `ListResults`/`GetResult`
+	// ⇒ 直接复用 `s.Assessment`（同一条 gRPC 连接），不再为画像单开 HTTP 通道。
+	personalitySrc := downstream.NewPersonalityProfileSource(s.Assessment)
 	// E2E-F-122：会话情绪历史来源（face/voice payload 空时回落注入"最近情绪模式"；
 	// s.EmotionQ nil 时 NewEmotionHistorySource 内部 no-op，行为等同 D-14 最小模式）
 	emotionSrc := downstream.NewEmotionHistorySource(s.EmotionQ)

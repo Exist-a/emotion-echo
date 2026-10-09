@@ -6,6 +6,17 @@
 //   与 user.proto 同批推进；assessment-svc HTTP :8889 保留给前端，
 //   内部 BFF 走 gRPC :8886（feature flag: ASSESSMENT_TRANSPORT=grpc|http）。
 //
+// E2E-31（2026-10-08，内部 RPC 收敛）——契约扩展说明：
+//   该通道曾按「决策 4」接线，2026-09-20 因 proto **表达能力不足** 被 HTTP 旁路绕开
+//   （adr-2026-09-survey-http-bypass），此后 BFF 侧零调用（账本 E2E-F-208）。
+//   用户 2026-10-08 裁定「得使用 grpc」⇒ 本文件补足最小充分契约，BFF 切回 gRPC。
+//   扩展原则（用户拍板 M1/M2）：
+//     · 选项 = 新增 `repeated SurveyOption option_items`（**新增字段号**，旧 `options`
+//       保留并标 deprecated ⇒ 无 wire-breaking）
+//     · 作答 = `map<string,int32> answers`（键保真 "q1"；**字段类型变更**，BFF 与
+//       assessment-svc 必须**同批重生成部署**）
+//   其余新增字段（description / key / title / factor_scores / score_kind）均为新增字段号。
+//
 // 端点 1:1 对齐（emotion-echo-web-bff/internal/downstream/assessment.go）：
 //   GET    /api/v1/surveys                  → ListSurveys
 //   GET    /api/v1/surveys/:id              → GetSurvey
@@ -161,6 +172,8 @@ type SurveyItem struct {
 	Version       int32                  `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
 	QuestionCount int32                  `protobuf:"varint,6,opt,name=question_count,json=questionCount,proto3" json:"question_count,omitempty"`
 	CreatedAt     int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// E2E-31 #2：量表描述。缺此字段时列表描述恒空（E2E-14 实测 3 个量表描述全空）
+	Description   string `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -244,6 +257,13 @@ func (x *SurveyItem) GetCreatedAt() int64 {
 	return 0
 }
 
+func (x *SurveyItem) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
 // GetSurveyRequest 单个量表请求
 type GetSurveyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -291,13 +311,15 @@ func (x *GetSurveyRequest) GetSurveyId() int64 {
 
 // Survey 量表详情（含完整题目）
 type Survey struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Code          string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	Category      string                 `protobuf:"bytes,4,opt,name=category,proto3" json:"category,omitempty"`
-	Version       int32                  `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
-	Questions     []*SurveyQuestion      `protobuf:"bytes,6,rep,name=questions,proto3" json:"questions,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Code      string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	Title     string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Category  string                 `protobuf:"bytes,4,opt,name=category,proto3" json:"category,omitempty"`
+	Version   int32                  `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
+	Questions []*SurveyQuestion      `protobuf:"bytes,6,rep,name=questions,proto3" json:"questions,omitempty"`
+	// E2E-31 #2：量表描述（详情页头部）
+	Description   string `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -374,27 +396,111 @@ func (x *Survey) GetQuestions() []*SurveyQuestion {
 	return nil
 }
 
+func (x *Survey) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+// SurveyOption 选项（E2E-31 #1）
+//
+// 依据：DB `emotion_echo_assessment.surveys.questions` 的 JSONB 里，
+// 选项是对象数组 `[{id:int, text:string, score:int}]`；
+// 前端 `q.options.find(o => o.id === selectedId)` 再取 `opt.score` 计分。
+// 旧的 `repeated string` 表达不了该结构 ⇒ 前端 `opt.score` 取不到（E2E-13 根因）。
+type SurveyOption struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int32                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Text  string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	// 计分用 **score** 而非 id：PHQ-9/GAD-7 的选项是 `id 1..4 / score 0..3`（id = score + 1），
+	// 混用会静默虚高或直接 400（E2E-F-97）。
+	Score         int32 `protobuf:"varint,3,opt,name=score,proto3" json:"score,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SurveyOption) Reset() {
+	*x = SurveyOption{}
+	mi := &file_agent_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SurveyOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SurveyOption) ProtoMessage() {}
+
+func (x *SurveyOption) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SurveyOption.ProtoReflect.Descriptor instead.
+func (*SurveyOption) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SurveyOption) GetId() int32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *SurveyOption) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *SurveyOption) GetScore() int32 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
 // SurveyQuestion 单题
 type SurveyQuestion struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	Id           int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	Order        int32                  `protobuf:"varint,2,opt,name=order,proto3" json:"order,omitempty"`
-	Prompt       string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`                                 // 题干
-	QuestionType string                 `protobuf:"bytes,4,opt,name=question_type,json=questionType,proto3" json:"question_type,omitempty"` // "single" / "multiple" / "scale" / "text"
-	// 选项：single/multiple 用 repeated string
+	Prompt       string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`                                 // 题干（历史字段；JSONB 实际键名为 title，见下）
+	QuestionType string                 `protobuf:"bytes,4,opt,name=question_type,json=questionType,proto3" json:"question_type,omitempty"` // "radio" / "scale" / "text"
+	// 旧选项字段：`repeated string` 无法表达 {id,text,score}，E2E-31 起改用 option_items。
+	// 保留字段号避免 wire 断裂；新代码不得再填充/读取。
+	//
+	// Deprecated: Marked as deprecated in agent.proto.
 	Options []string `protobuf:"bytes,5,rep,name=options,proto3" json:"options,omitempty"`
 	// scale 类型：min/max/label（如 1=从不 5=总是）
 	ScaleMin      int32  `protobuf:"varint,6,opt,name=scale_min,json=scaleMin,proto3" json:"scale_min,omitempty"`
 	ScaleMax      int32  `protobuf:"varint,7,opt,name=scale_max,json=scaleMax,proto3" json:"scale_max,omitempty"`
 	ScaleMinLabel string `protobuf:"bytes,8,opt,name=scale_min_label,json=scaleMinLabel,proto3" json:"scale_min_label,omitempty"`
 	ScaleMaxLabel string `protobuf:"bytes,9,opt,name=scale_max_label,json=scaleMaxLabel,proto3" json:"scale_max_label,omitempty"`
+	// E2E-31 #4：题目在 JSONB 里的**键**（"q1"…"qN"）与题干字段名。
+	// 旧实现按 index 重新编号（`q%d`）且服务端遍历 map 无序 ⇒ 顺序与键名都不可靠。
+	Key   string `protobuf:"bytes,10,opt,name=key,proto3" json:"key,omitempty"`
+	Title string `protobuf:"bytes,11,opt,name=title,proto3" json:"title,omitempty"` // 题干（JSONB `title`，与前端 `{{ question.title }}` 对齐）
+	// E2E-31 #1：结构化选项
+	OptionItems   []*SurveyOption `protobuf:"bytes,12,rep,name=option_items,json=optionItems,proto3" json:"option_items,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SurveyQuestion) Reset() {
 	*x = SurveyQuestion{}
-	mi := &file_agent_proto_msgTypes[5]
+	mi := &file_agent_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -406,7 +512,7 @@ func (x *SurveyQuestion) String() string {
 func (*SurveyQuestion) ProtoMessage() {}
 
 func (x *SurveyQuestion) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[5]
+	mi := &file_agent_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -419,7 +525,7 @@ func (x *SurveyQuestion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SurveyQuestion.ProtoReflect.Descriptor instead.
 func (*SurveyQuestion) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{5}
+	return file_agent_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SurveyQuestion) GetId() int64 {
@@ -450,6 +556,7 @@ func (x *SurveyQuestion) GetQuestionType() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in agent.proto.
 func (x *SurveyQuestion) GetOptions() []string {
 	if x != nil {
 		return x.Options
@@ -485,20 +592,46 @@ func (x *SurveyQuestion) GetScaleMaxLabel() string {
 	return ""
 }
 
+func (x *SurveyQuestion) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *SurveyQuestion) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *SurveyQuestion) GetOptionItems() []*SurveyOption {
+	if x != nil {
+		return x.OptionItems
+	}
+	return nil
+}
+
 // SubmitSurveyRequest 提交作答请求
 type SubmitSurveyRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	SurveyId int64                  `protobuf:"varint,1,opt,name=survey_id,json=surveyId,proto3" json:"survey_id,omitempty"`
 	// user_id 通过 metadata "x-user-id" 传（其他 service 一致）
-	Answers       []*Answer `protobuf:"bytes,2,rep,name=answers,proto3" json:"answers,omitempty"`
-	DurationSec   int32     `protobuf:"varint,3,opt,name=duration_sec,json=durationSec,proto3" json:"duration_sec,omitempty"` // 用户答题耗时
+	//
+	// E2E-31 #3：作答契约是 `{questionKey: score}`，键形如 "q1"、值是 **option.score**。
+	// 原 `repeated Answer{question_id int64}` 会把 "q1" 数值化成 `1`、服务端再格式化回
+	// `"1"`，而 scorer 期望 `"q1"` ⇒ 键语义丢失（E2E-13 根因之二）。
+	// **注意：本字段是类型变更（wire 不兼容），BFF 与 assessment-svc 必须同批重生成部署。**
+	Answers       map[string]int32 `protobuf:"bytes,2,rep,name=answers,proto3" json:"answers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	DurationSec   int32            `protobuf:"varint,3,opt,name=duration_sec,json=durationSec,proto3" json:"duration_sec,omitempty"` // 用户答题耗时
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SubmitSurveyRequest) Reset() {
 	*x = SubmitSurveyRequest{}
-	mi := &file_agent_proto_msgTypes[6]
+	mi := &file_agent_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -510,7 +643,7 @@ func (x *SubmitSurveyRequest) String() string {
 func (*SubmitSurveyRequest) ProtoMessage() {}
 
 func (x *SubmitSurveyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[6]
+	mi := &file_agent_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -523,7 +656,7 @@ func (x *SubmitSurveyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitSurveyRequest.ProtoReflect.Descriptor instead.
 func (*SubmitSurveyRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{6}
+	return file_agent_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SubmitSurveyRequest) GetSurveyId() int64 {
@@ -533,7 +666,7 @@ func (x *SubmitSurveyRequest) GetSurveyId() int64 {
 	return 0
 }
 
-func (x *SubmitSurveyRequest) GetAnswers() []*Answer {
+func (x *SubmitSurveyRequest) GetAnswers() map[string]int32 {
 	if x != nil {
 		return x.Answers
 	}
@@ -547,7 +680,9 @@ func (x *SubmitSurveyRequest) GetDurationSec() int32 {
 	return 0
 }
 
-// Answer 单题作答
+// Answer 旧作答结构（E2E-31 起 SubmitSurveyRequest / SurveyResult 改用
+// `map<string,int32>`，本消息无引用）。保留定义避免影响既有序列化产物；
+// 确认全仓零引用后可随死代码清理一并删除（E2E-31 组 E 裁定范围）。
 type Answer struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	QuestionId int64                  `protobuf:"varint,1,opt,name=question_id,json=questionId,proto3" json:"question_id,omitempty"`
@@ -565,7 +700,7 @@ type Answer struct {
 
 func (x *Answer) Reset() {
 	*x = Answer{}
-	mi := &file_agent_proto_msgTypes[7]
+	mi := &file_agent_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +712,7 @@ func (x *Answer) String() string {
 func (*Answer) ProtoMessage() {}
 
 func (x *Answer) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[7]
+	mi := &file_agent_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +725,7 @@ func (x *Answer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Answer.ProtoReflect.Descriptor instead.
 func (*Answer) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{7}
+	return file_agent_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Answer) GetQuestionId() int64 {
@@ -658,23 +793,31 @@ func (*Answer_OptionValue) isAnswer_Value() {}
 
 // SurveyResult 作答结果
 type SurveyResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ResultId      int64                  `protobuf:"varint,1,opt,name=result_id,json=resultId,proto3" json:"result_id,omitempty"`
-	SurveyId      int64                  `protobuf:"varint,2,opt,name=survey_id,json=surveyId,proto3" json:"survey_id,omitempty"`
-	UserId        int64                  `protobuf:"varint,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	TotalScore    int32                  `protobuf:"varint,4,opt,name=total_score,json=totalScore,proto3" json:"total_score,omitempty"`
-	Answered      int32                  `protobuf:"varint,5,opt,name=answered,proto3" json:"answered,omitempty"`                   // 已答题数
-	RiskLevel     string                 `protobuf:"bytes,6,opt,name=risk_level,json=riskLevel,proto3" json:"risk_level,omitempty"` // "low" / "moderate" / "high" / "severe"
-	DurationSec   int32                  `protobuf:"varint,7,opt,name=duration_sec,json=durationSec,proto3" json:"duration_sec,omitempty"`
-	Answers       []*Answer              `protobuf:"bytes,8,rep,name=answers,proto3" json:"answers,omitempty"`
-	SubmittedAt   int64                  `protobuf:"varint,9,opt,name=submitted_at,json=submittedAt,proto3" json:"submitted_at,omitempty"` // unix seconds
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	ResultId int64                  `protobuf:"varint,1,opt,name=result_id,json=resultId,proto3" json:"result_id,omitempty"`
+	SurveyId int64                  `protobuf:"varint,2,opt,name=survey_id,json=surveyId,proto3" json:"survey_id,omitempty"`
+	UserId   int64                  `protobuf:"varint,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// E2E-31 #5：DB 侧是 float64（人格五维度分 / 比例分），int32 会截断。
+	TotalScore  float64 `protobuf:"fixed64,4,opt,name=total_score,json=totalScore,proto3" json:"total_score,omitempty"`
+	Answered    int32   `protobuf:"varint,5,opt,name=answered,proto3" json:"answered,omitempty"`                   // 已答题数
+	RiskLevel   string  `protobuf:"bytes,6,opt,name=risk_level,json=riskLevel,proto3" json:"risk_level,omitempty"` // "low" / "moderate" / "high" / "severe" / "dimension_profile"
+	DurationSec int32   `protobuf:"varint,7,opt,name=duration_sec,json=durationSec,proto3" json:"duration_sec,omitempty"`
+	// E2E-31 #3：结果侧作答同样按问题键保真（原 repeated Answer 会丢 "q1"）
+	Answers     map[string]int32 `protobuf:"bytes,8,rep,name=answers,proto3" json:"answers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	SubmittedAt int64            `protobuf:"varint,9,opt,name=submitted_at,json=submittedAt,proto3" json:"submitted_at,omitempty"` // unix seconds
+	// E2E-31 #5：维度/分量分数（前端雷达图；`riskLevel=="dimension_profile"` 时使用）
+	FactorScores map[string]float64 `protobuf:"bytes,10,rep,name=factor_scores,json=factorScores,proto3" json:"factor_scores,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	// E2E-31 #5：total_score 语义（E2E-F-97）：
+	// "risk"（症状总分，有严重度语义）/ "dimension_sum"（人格五维度之和，**无严重度语义**）/
+	// "ratio"（按满分比例的通用分档）。消费方按此判断，不得默认 total_score 是风险分。
+	ScoreKind     string `protobuf:"bytes,11,opt,name=score_kind,json=scoreKind,proto3" json:"score_kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SurveyResult) Reset() {
 	*x = SurveyResult{}
-	mi := &file_agent_proto_msgTypes[8]
+	mi := &file_agent_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -686,7 +829,7 @@ func (x *SurveyResult) String() string {
 func (*SurveyResult) ProtoMessage() {}
 
 func (x *SurveyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[8]
+	mi := &file_agent_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -699,7 +842,7 @@ func (x *SurveyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SurveyResult.ProtoReflect.Descriptor instead.
 func (*SurveyResult) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{8}
+	return file_agent_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SurveyResult) GetResultId() int64 {
@@ -723,7 +866,7 @@ func (x *SurveyResult) GetUserId() int64 {
 	return 0
 }
 
-func (x *SurveyResult) GetTotalScore() int32 {
+func (x *SurveyResult) GetTotalScore() float64 {
 	if x != nil {
 		return x.TotalScore
 	}
@@ -751,7 +894,7 @@ func (x *SurveyResult) GetDurationSec() int32 {
 	return 0
 }
 
-func (x *SurveyResult) GetAnswers() []*Answer {
+func (x *SurveyResult) GetAnswers() map[string]int32 {
 	if x != nil {
 		return x.Answers
 	}
@@ -765,6 +908,20 @@ func (x *SurveyResult) GetSubmittedAt() int64 {
 	return 0
 }
 
+func (x *SurveyResult) GetFactorScores() map[string]float64 {
+	if x != nil {
+		return x.FactorScores
+	}
+	return nil
+}
+
+func (x *SurveyResult) GetScoreKind() string {
+	if x != nil {
+		return x.ScoreKind
+	}
+	return ""
+}
+
 // ListMyResultsRequest 列我的作答请求
 type ListMyResultsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -776,7 +933,7 @@ type ListMyResultsRequest struct {
 
 func (x *ListMyResultsRequest) Reset() {
 	*x = ListMyResultsRequest{}
-	mi := &file_agent_proto_msgTypes[9]
+	mi := &file_agent_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -788,7 +945,7 @@ func (x *ListMyResultsRequest) String() string {
 func (*ListMyResultsRequest) ProtoMessage() {}
 
 func (x *ListMyResultsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[9]
+	mi := &file_agent_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -801,7 +958,7 @@ func (x *ListMyResultsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMyResultsRequest.ProtoReflect.Descriptor instead.
 func (*ListMyResultsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{9}
+	return file_agent_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListMyResultsRequest) GetLimit() int32 {
@@ -829,7 +986,7 @@ type ListMyResultsResponse struct {
 
 func (x *ListMyResultsResponse) Reset() {
 	*x = ListMyResultsResponse{}
-	mi := &file_agent_proto_msgTypes[10]
+	mi := &file_agent_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -841,7 +998,7 @@ func (x *ListMyResultsResponse) String() string {
 func (*ListMyResultsResponse) ProtoMessage() {}
 
 func (x *ListMyResultsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[10]
+	mi := &file_agent_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +1011,7 @@ func (x *ListMyResultsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMyResultsResponse.ProtoReflect.Descriptor instead.
 func (*ListMyResultsResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{10}
+	return file_agent_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListMyResultsResponse) GetItems() []*SurveyResult {
@@ -881,7 +1038,7 @@ type GetSurveyResultRequest struct {
 
 func (x *GetSurveyResultRequest) Reset() {
 	*x = GetSurveyResultRequest{}
-	mi := &file_agent_proto_msgTypes[11]
+	mi := &file_agent_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -893,7 +1050,7 @@ func (x *GetSurveyResultRequest) String() string {
 func (*GetSurveyResultRequest) ProtoMessage() {}
 
 func (x *GetSurveyResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[11]
+	mi := &file_agent_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -906,7 +1063,7 @@ func (x *GetSurveyResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSurveyResultRequest.ProtoReflect.Descriptor instead.
 func (*GetSurveyResultRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{11}
+	return file_agent_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetSurveyResultRequest) GetResultId() int64 {
@@ -926,7 +1083,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x06offset\x18\x02 \x01(\x05R\x06offset\"d\n" +
 	"\x13ListSurveysResponse\x127\n" +
 	"\x05items\x18\x01 \x03(\v2!.emotion_assessment.v1.SurveyItemR\x05items\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"\xc2\x01\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\xe4\x01\n" +
 	"\n" +
 	"SurveyItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
@@ -936,30 +1093,43 @@ const file_agent_proto_rawDesc = "" +
 	"\aversion\x18\x05 \x01(\x05R\aversion\x12%\n" +
 	"\x0equestion_count\x18\x06 \x01(\x05R\rquestionCount\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\a \x01(\x03R\tcreatedAt\"/\n" +
+	"created_at\x18\a \x01(\x03R\tcreatedAt\x12 \n" +
+	"\vdescription\x18\b \x01(\tR\vdescription\"/\n" +
 	"\x10GetSurveyRequest\x12\x1b\n" +
-	"\tsurvey_id\x18\x01 \x01(\x03R\bsurveyId\"\xbd\x01\n" +
+	"\tsurvey_id\x18\x01 \x01(\x03R\bsurveyId\"\xdf\x01\n" +
 	"\x06Survey\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x14\n" +
 	"\x05title\x18\x03 \x01(\tR\x05title\x12\x1a\n" +
 	"\bcategory\x18\x04 \x01(\tR\bcategory\x12\x18\n" +
 	"\aversion\x18\x05 \x01(\x05R\aversion\x12C\n" +
-	"\tquestions\x18\x06 \x03(\v2%.emotion_assessment.v1.SurveyQuestionR\tquestions\"\x97\x02\n" +
+	"\tquestions\x18\x06 \x03(\v2%.emotion_assessment.v1.SurveyQuestionR\tquestions\x12 \n" +
+	"\vdescription\x18\a \x01(\tR\vdescription\"H\n" +
+	"\fSurveyOption\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x14\n" +
+	"\x05score\x18\x03 \x01(\x05R\x05score\"\x8b\x03\n" +
 	"\x0eSurveyQuestion\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
 	"\x05order\x18\x02 \x01(\x05R\x05order\x12\x16\n" +
 	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12#\n" +
-	"\rquestion_type\x18\x04 \x01(\tR\fquestionType\x12\x18\n" +
-	"\aoptions\x18\x05 \x03(\tR\aoptions\x12\x1b\n" +
+	"\rquestion_type\x18\x04 \x01(\tR\fquestionType\x12\x1c\n" +
+	"\aoptions\x18\x05 \x03(\tB\x02\x18\x01R\aoptions\x12\x1b\n" +
 	"\tscale_min\x18\x06 \x01(\x05R\bscaleMin\x12\x1b\n" +
 	"\tscale_max\x18\a \x01(\x05R\bscaleMax\x12&\n" +
 	"\x0fscale_min_label\x18\b \x01(\tR\rscaleMinLabel\x12&\n" +
-	"\x0fscale_max_label\x18\t \x01(\tR\rscaleMaxLabel\"\x8e\x01\n" +
+	"\x0fscale_max_label\x18\t \x01(\tR\rscaleMaxLabel\x12\x10\n" +
+	"\x03key\x18\n" +
+	" \x01(\tR\x03key\x12\x14\n" +
+	"\x05title\x18\v \x01(\tR\x05title\x12F\n" +
+	"\foption_items\x18\f \x03(\v2#.emotion_assessment.v1.SurveyOptionR\voptionItems\"\xe4\x01\n" +
 	"\x13SubmitSurveyRequest\x12\x1b\n" +
-	"\tsurvey_id\x18\x01 \x01(\x03R\bsurveyId\x127\n" +
-	"\aanswers\x18\x02 \x03(\v2\x1d.emotion_assessment.v1.AnswerR\aanswers\x12!\n" +
-	"\fduration_sec\x18\x03 \x01(\x05R\vdurationSec\"\x9b\x01\n" +
+	"\tsurvey_id\x18\x01 \x01(\x03R\bsurveyId\x12Q\n" +
+	"\aanswers\x18\x02 \x03(\v27.emotion_assessment.v1.SubmitSurveyRequest.AnswersEntryR\aanswers\x12!\n" +
+	"\fduration_sec\x18\x03 \x01(\x05R\vdurationSec\x1a:\n" +
+	"\fAnswersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"\x9b\x01\n" +
 	"\x06Answer\x12\x1f\n" +
 	"\vquestion_id\x18\x01 \x01(\x03R\n" +
 	"questionId\x12!\n" +
@@ -968,19 +1138,29 @@ const file_agent_proto_rawDesc = "" +
 	"\n" +
 	"text_value\x18\x03 \x01(\tH\x00R\ttextValue\x12#\n" +
 	"\foption_value\x18\x04 \x01(\tH\x00R\voptionValueB\a\n" +
-	"\x05value\"\xbc\x02\n" +
+	"\x05value\"\xc7\x04\n" +
 	"\fSurveyResult\x12\x1b\n" +
 	"\tresult_id\x18\x01 \x01(\x03R\bresultId\x12\x1b\n" +
 	"\tsurvey_id\x18\x02 \x01(\x03R\bsurveyId\x12\x17\n" +
 	"\auser_id\x18\x03 \x01(\x03R\x06userId\x12\x1f\n" +
-	"\vtotal_score\x18\x04 \x01(\x05R\n" +
+	"\vtotal_score\x18\x04 \x01(\x01R\n" +
 	"totalScore\x12\x1a\n" +
 	"\banswered\x18\x05 \x01(\x05R\banswered\x12\x1d\n" +
 	"\n" +
 	"risk_level\x18\x06 \x01(\tR\triskLevel\x12!\n" +
-	"\fduration_sec\x18\a \x01(\x05R\vdurationSec\x127\n" +
-	"\aanswers\x18\b \x03(\v2\x1d.emotion_assessment.v1.AnswerR\aanswers\x12!\n" +
-	"\fsubmitted_at\x18\t \x01(\x03R\vsubmittedAt\"D\n" +
+	"\fduration_sec\x18\a \x01(\x05R\vdurationSec\x12J\n" +
+	"\aanswers\x18\b \x03(\v20.emotion_assessment.v1.SurveyResult.AnswersEntryR\aanswers\x12!\n" +
+	"\fsubmitted_at\x18\t \x01(\x03R\vsubmittedAt\x12Z\n" +
+	"\rfactor_scores\x18\n" +
+	" \x03(\v25.emotion_assessment.v1.SurveyResult.FactorScoresEntryR\ffactorScores\x12\x1d\n" +
+	"\n" +
+	"score_kind\x18\v \x01(\tR\tscoreKind\x1a:\n" +
+	"\fAnswersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a?\n" +
+	"\x11FactorScoresEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"D\n" +
 	"\x14ListMyResultsRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x05R\x06offset\"h\n" +
@@ -1008,42 +1188,48 @@ func file_agent_proto_rawDescGZIP() []byte {
 	return file_agent_proto_rawDescData
 }
 
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_agent_proto_goTypes = []any{
 	(*ListSurveysRequest)(nil),     // 0: emotion_assessment.v1.ListSurveysRequest
 	(*ListSurveysResponse)(nil),    // 1: emotion_assessment.v1.ListSurveysResponse
 	(*SurveyItem)(nil),             // 2: emotion_assessment.v1.SurveyItem
 	(*GetSurveyRequest)(nil),       // 3: emotion_assessment.v1.GetSurveyRequest
 	(*Survey)(nil),                 // 4: emotion_assessment.v1.Survey
-	(*SurveyQuestion)(nil),         // 5: emotion_assessment.v1.SurveyQuestion
-	(*SubmitSurveyRequest)(nil),    // 6: emotion_assessment.v1.SubmitSurveyRequest
-	(*Answer)(nil),                 // 7: emotion_assessment.v1.Answer
-	(*SurveyResult)(nil),           // 8: emotion_assessment.v1.SurveyResult
-	(*ListMyResultsRequest)(nil),   // 9: emotion_assessment.v1.ListMyResultsRequest
-	(*ListMyResultsResponse)(nil),  // 10: emotion_assessment.v1.ListMyResultsResponse
-	(*GetSurveyResultRequest)(nil), // 11: emotion_assessment.v1.GetSurveyResultRequest
+	(*SurveyOption)(nil),           // 5: emotion_assessment.v1.SurveyOption
+	(*SurveyQuestion)(nil),         // 6: emotion_assessment.v1.SurveyQuestion
+	(*SubmitSurveyRequest)(nil),    // 7: emotion_assessment.v1.SubmitSurveyRequest
+	(*Answer)(nil),                 // 8: emotion_assessment.v1.Answer
+	(*SurveyResult)(nil),           // 9: emotion_assessment.v1.SurveyResult
+	(*ListMyResultsRequest)(nil),   // 10: emotion_assessment.v1.ListMyResultsRequest
+	(*ListMyResultsResponse)(nil),  // 11: emotion_assessment.v1.ListMyResultsResponse
+	(*GetSurveyResultRequest)(nil), // 12: emotion_assessment.v1.GetSurveyResultRequest
+	nil,                            // 13: emotion_assessment.v1.SubmitSurveyRequest.AnswersEntry
+	nil,                            // 14: emotion_assessment.v1.SurveyResult.AnswersEntry
+	nil,                            // 15: emotion_assessment.v1.SurveyResult.FactorScoresEntry
 }
 var file_agent_proto_depIdxs = []int32{
 	2,  // 0: emotion_assessment.v1.ListSurveysResponse.items:type_name -> emotion_assessment.v1.SurveyItem
-	5,  // 1: emotion_assessment.v1.Survey.questions:type_name -> emotion_assessment.v1.SurveyQuestion
-	7,  // 2: emotion_assessment.v1.SubmitSurveyRequest.answers:type_name -> emotion_assessment.v1.Answer
-	7,  // 3: emotion_assessment.v1.SurveyResult.answers:type_name -> emotion_assessment.v1.Answer
-	8,  // 4: emotion_assessment.v1.ListMyResultsResponse.items:type_name -> emotion_assessment.v1.SurveyResult
-	0,  // 5: emotion_assessment.v1.AssessmentService.ListSurveys:input_type -> emotion_assessment.v1.ListSurveysRequest
-	3,  // 6: emotion_assessment.v1.AssessmentService.GetSurvey:input_type -> emotion_assessment.v1.GetSurveyRequest
-	6,  // 7: emotion_assessment.v1.AssessmentService.SubmitSurvey:input_type -> emotion_assessment.v1.SubmitSurveyRequest
-	9,  // 8: emotion_assessment.v1.AssessmentService.ListMyResults:input_type -> emotion_assessment.v1.ListMyResultsRequest
-	11, // 9: emotion_assessment.v1.AssessmentService.GetSurveyResult:input_type -> emotion_assessment.v1.GetSurveyResultRequest
-	1,  // 10: emotion_assessment.v1.AssessmentService.ListSurveys:output_type -> emotion_assessment.v1.ListSurveysResponse
-	4,  // 11: emotion_assessment.v1.AssessmentService.GetSurvey:output_type -> emotion_assessment.v1.Survey
-	8,  // 12: emotion_assessment.v1.AssessmentService.SubmitSurvey:output_type -> emotion_assessment.v1.SurveyResult
-	10, // 13: emotion_assessment.v1.AssessmentService.ListMyResults:output_type -> emotion_assessment.v1.ListMyResultsResponse
-	8,  // 14: emotion_assessment.v1.AssessmentService.GetSurveyResult:output_type -> emotion_assessment.v1.SurveyResult
-	10, // [10:15] is the sub-list for method output_type
-	5,  // [5:10] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	6,  // 1: emotion_assessment.v1.Survey.questions:type_name -> emotion_assessment.v1.SurveyQuestion
+	5,  // 2: emotion_assessment.v1.SurveyQuestion.option_items:type_name -> emotion_assessment.v1.SurveyOption
+	13, // 3: emotion_assessment.v1.SubmitSurveyRequest.answers:type_name -> emotion_assessment.v1.SubmitSurveyRequest.AnswersEntry
+	14, // 4: emotion_assessment.v1.SurveyResult.answers:type_name -> emotion_assessment.v1.SurveyResult.AnswersEntry
+	15, // 5: emotion_assessment.v1.SurveyResult.factor_scores:type_name -> emotion_assessment.v1.SurveyResult.FactorScoresEntry
+	9,  // 6: emotion_assessment.v1.ListMyResultsResponse.items:type_name -> emotion_assessment.v1.SurveyResult
+	0,  // 7: emotion_assessment.v1.AssessmentService.ListSurveys:input_type -> emotion_assessment.v1.ListSurveysRequest
+	3,  // 8: emotion_assessment.v1.AssessmentService.GetSurvey:input_type -> emotion_assessment.v1.GetSurveyRequest
+	7,  // 9: emotion_assessment.v1.AssessmentService.SubmitSurvey:input_type -> emotion_assessment.v1.SubmitSurveyRequest
+	10, // 10: emotion_assessment.v1.AssessmentService.ListMyResults:input_type -> emotion_assessment.v1.ListMyResultsRequest
+	12, // 11: emotion_assessment.v1.AssessmentService.GetSurveyResult:input_type -> emotion_assessment.v1.GetSurveyResultRequest
+	1,  // 12: emotion_assessment.v1.AssessmentService.ListSurveys:output_type -> emotion_assessment.v1.ListSurveysResponse
+	4,  // 13: emotion_assessment.v1.AssessmentService.GetSurvey:output_type -> emotion_assessment.v1.Survey
+	9,  // 14: emotion_assessment.v1.AssessmentService.SubmitSurvey:output_type -> emotion_assessment.v1.SurveyResult
+	11, // 15: emotion_assessment.v1.AssessmentService.ListMyResults:output_type -> emotion_assessment.v1.ListMyResultsResponse
+	9,  // 16: emotion_assessment.v1.AssessmentService.GetSurveyResult:output_type -> emotion_assessment.v1.SurveyResult
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_agent_proto_init() }
@@ -1051,7 +1237,7 @@ func file_agent_proto_init() {
 	if File_agent_proto != nil {
 		return
 	}
-	file_agent_proto_msgTypes[7].OneofWrappers = []any{
+	file_agent_proto_msgTypes[8].OneofWrappers = []any{
 		(*Answer_ScaleValue)(nil),
 		(*Answer_TextValue)(nil),
 		(*Answer_OptionValue)(nil),
@@ -1062,7 +1248,7 @@ func file_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

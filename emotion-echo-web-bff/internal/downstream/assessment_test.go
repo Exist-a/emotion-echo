@@ -36,9 +36,21 @@ func TestAssessmentClient_ListSurveys_Success(t *testing.T) {
 func TestAssessmentClient_GetSurvey_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/v1/surveys/1", r.URL.Path)
-		_ = json.NewEncoder(w).Encode(SurveyDetail{
-			ID: 1, Code: "SDS", Title: "抑郁量表", Category: "抑郁", Version: 1,
-			Questions: map[string]any{"1": map[string]any{"text": "我感到沮丧"}},
+		// E2E-31：assessment-svc 侧 questions 是 JSONB **map**（键 "q1"…），
+		// 且故意逆序给出，验证客户端归一化时确实按键排序（而非依赖 map 遍历顺序）。
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": 1, "code": "PHQ-9", "title": "抑郁症筛查量表",
+			"description": "过去两周内，以下问题困扰你的频率是多少？",
+			"questions": map[string]any{
+				"q2": map[string]any{
+					"title":   "感到心情低落",
+					"options": []any{map[string]any{"id": 1, "text": "完全没有", "score": 0}},
+				},
+				"q1": map[string]any{
+					"title":   "做事时提不起劲或没有兴趣",
+					"options": []any{map[string]any{"id": 4, "text": "几乎每天", "score": 3}},
+				},
+			},
 		})
 	}))
 	defer srv.Close()
@@ -47,8 +59,18 @@ func TestAssessmentClient_GetSurvey_Success(t *testing.T) {
 	s, err := c.GetSurvey(context.Background(), 1)
 	require.NoError(t, err)
 	require.NotNil(t, s)
-	assert.Equal(t, "SDS", s.Code)
-	assert.NotEmpty(t, s.Questions)
+	assert.Equal(t, "PHQ-9", s.Code)
+	assert.Equal(t, "过去两周内，以下问题困扰你的频率是多少？", s.Description)
+	// 前端契约：questions 是**有序数组**，每题 id = JSONB 键（不是数字下标）
+	require.Len(t, s.Questions, 2)
+	assert.Equal(t, "q1", s.Questions[0]["id"])
+	assert.Equal(t, "q2", s.Questions[1]["id"])
+	assert.Equal(t, "做事时提不起劲或没有兴趣", s.Questions[0]["title"])
+	// 选项必须是 {id,text,score} 结构（前端 `opt.score` 计分）
+	opts, ok := s.Questions[0]["options"].([]any)
+	require.True(t, ok, "options 应为数组，实际 %T", s.Questions[0]["options"])
+	require.Len(t, opts, 1)
+	assert.Equal(t, float64(3), opts[0].(map[string]any)["score"])
 }
 
 func TestAssessmentClient_SubmitSurvey_Success(t *testing.T) {

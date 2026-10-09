@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -34,14 +35,66 @@ type SurveyItem struct {
 	Version     int    `json:"version"`
 }
 
-// SurveyDetail 对应 assessment-svc types.GetSurveyResp（无 description）
+// SurveyDetail 对应 assessment-svc types.GetSurveyResp
+//
+// E2E-31（2026-10-08）：`Questions` 由 `map[string]any` 改为**有序数组** `[]map[string]any`。
+// 起因：前端 `question/[id].vue` 消费的是数组（`data.questions.forEach` / `.length` / `q.id`），
+// 而 assessment-svc 的 HTTP 侧返回 map（键 "q1"…"qN"）。改造前是 BFF handler 里
+// `getSurveyHTTP` 现做 map→数组转换，gRPC 路径没有该转换 ⇒ 两条路径形状不一致。
+// 现在把转换下沉到客户端实现里（两种 transport 都要产出同一形状），handler 只管转发。
 type SurveyDetail struct {
-	ID        uint64         `json:"id"`
-	Code      string         `json:"code"`
-	Title     string         `json:"title"`
-	Category  string         `json:"category"`
-	Version   int            `json:"version"`
-	Questions map[string]any `json:"questions"`
+	ID          uint64           `json:"id"`
+	Code        string           `json:"code"`
+	Title       string           `json:"title"`
+	Description string           `json:"description"`
+	Category    string           `json:"category"`
+	Version     int              `json:"version"`
+	Questions   []map[string]any `json:"questions"`
+}
+
+// normalizeQuestions 把 assessment-svc 的 questions（JSONB map，键 "q1"…"qN"）
+// 转成前端需要的**有序数组**：按键的尾部数字排序，并把键写回 `id` 字段。
+//
+// 前端契约（问题/[id].vue）：每题 `{id:"q1", title:<题干>, options:[{id,text,score}]}`，
+// 作答体 `{answers:{"q1": <option.score>}}`。见 E2E-31 任务书 §0.2。
+func normalizeQuestions(raw map[string]any) []map[string]any {
+	if len(raw) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(raw))
+	for k := range raw {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		ni, nj := trailingKeyNumber(keys[i]), trailingKeyNumber(keys[j])
+		if ni != nj {
+			return ni < nj
+		}
+		return keys[i] < keys[j]
+	})
+	out := make([]map[string]any, 0, len(keys))
+	for _, k := range keys {
+		m, ok := raw[k].(map[string]any)
+		if !ok {
+			continue
+		}
+		m["id"] = k
+		out = append(out, m)
+	}
+	return out
+}
+
+// trailingKeyNumber 取键尾数字（"q12" → 12；无数字 → 0）
+func trailingKeyNumber(s string) int {
+	i := len(s)
+	for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
+		i--
+	}
+	n := 0
+	for _, c := range s[i:] {
+		n = n*10 + int(c-'0')
+	}
+	return n
 }
 
 // SubmitSurveyReq 对应 assessment-svc types.SubmitSurveyReq
@@ -192,11 +245,29 @@ func (c *assessmentHTTPClient) GetSurvey(ctx context.Context, id uint64) (*Surve
 	if resp.StatusCode >= 400 {
 		return nil, readError(resp)
 	}
-	var out SurveyDetail
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	// E2E-31：HTTP 侧返回的 questions 是 JSONB map（键 "q1"…），需归一为前端要的有序数组，
+	// 与 gRPC 实现（fromProtoSurvey）保持同形状。
+	var raw struct {
+		ID          uint64         `json:"id"`
+		Code        string         `json:"code"`
+		Title       string         `json:"title"`
+		Description string         `json:"description"`
+		Category    string         `json:"category"`
+		Version     int            `json:"version"`
+		Questions   map[string]any `json:"questions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("downstream: decode survey resp: %w", err)
 	}
-	return &out, nil
+	return &SurveyDetail{
+		ID:          raw.ID,
+		Code:        raw.Code,
+		Title:       raw.Title,
+		Description: raw.Description,
+		Category:    raw.Category,
+		Version:     raw.Version,
+		Questions:   normalizeQuestions(raw.Questions),
+	}, nil
 }
 
 func (c *assessmentHTTPClient) SubmitSurvey(ctx context.Context, id uint64, req SubmitSurveyReq) (*SubmitSurveyResp, error) {

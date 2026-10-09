@@ -8,6 +8,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
+	"strings"
 	"testing"
 
 	"emotion-echo-web-bff/internal/downstream"
@@ -66,27 +69,24 @@ func TestSurveyHandler_ListSurveys_Success(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"SDS"`)
 }
 
-// TestSurveyHandler_ListSurveys_HTTPSourceKeepsDescription
-// E2E-14 实测评量卡片描述恒为空（3 个量表全空），根因：
-// proto `SurveyItem`（agent.proto:67-75）无 description 字段，列表走 gRPC 时被静默丢弃。
-// 这是 E2E-13 已定性并 ADR 决议"survey 端点走 HTTP 绕过"时漏掉的第 5 个端点。
-// 修复：listSurveys 与其余 4 个端点一致走 HTTP（保留完整 JSON 字段）。
-func TestSurveyHandler_ListSurveys_HTTPSourceKeepsDescription(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/surveys", r.URL.Path)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"items":[{"id":7,"code":"BIG5","title":"人格五因素量表","description":"评估五大人格特质","category":"personality","questionNum":30,"version":1}],"total":1}`))
-	}))
-	defer upstream.Close()
-
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	handler := &SurveyHandler{
-		assessment:     &fakeAssessmentClient{},
-		assessmentBase: upstream.URL,
-		assessmentHTTP: upstream.Client(),
-	}
-	handler.Register(r)
+// TestSurveyHandler_ListSurveys_KeepsDescription
+//
+// E2E-14 实测评量卡片描述恒为空（3 个量表全空），根因：proto `SurveyItem`
+// （agent.proto）无 description 字段，列表走 gRPC 时被静默丢弃。
+// E2E-31（2026-10-08）已为 `SurveyItem` / `Survey` 补 `description` ⇒ 现在
+// **gRPC 路径也必须透传描述**。
+//
+// 本用例取代原 `TestSurveyHandler_ListSurveys_HTTPSourceKeepsDescription`：
+// 后者靠"HTTP 旁路"实现透传，而该旁路（assessmentBase 恒真）已随 E2E-31 删除。
+// 断言口径不变（描述/分类/题数三项），只是被测路径从"旁路"换成"唯一路径"。
+func TestSurveyHandler_ListSurveys_KeepsDescription(t *testing.T) {
+	r := newSurveyRouter(&fakeAssessmentClient{
+		items: []downstream.SurveyItem{{
+			ID: 7, Code: "BIG5", Title: "人格五因素量表",
+			Description: "评估五大人格特质", Category: "personality", QuestionNum: 30, Version: 1,
+		}},
+		total: 1,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/surveys?limit=50", nil)
 	w := httptest.NewRecorder()
@@ -94,7 +94,7 @@ func TestSurveyHandler_ListSurveys_HTTPSourceKeepsDescription(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()
-	assert.Contains(t, body, `"description":"评估五大人格特质"`, "描述必须透传（gRPC 路径会丢弃）")
+	assert.Contains(t, body, `"description":"评估五大人格特质"`, "描述必须透传（历史 gRPC 路径会丢弃）")
 	assert.Contains(t, body, `"category":"personality"`)
 	assert.Contains(t, body, `"questionNum":30`)
 }
@@ -170,117 +170,55 @@ func TestSurveyHandler_GetSurvey_NotFound_Returns404(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "survey not found")
 }
 
-// ==================== HTTP 绕过路径契约测试 ====================
-// E2E-13: 当 assessmentBase 被设置时，handler 走 HTTP 直取而非 gRPC
+// ==================== HTTP 旁路用例的去向（E2E-31）====================
+//
+// 原文件此处有 5 个针对"HTTP 旁路"的用例（newSurveyRouterWithHTTP /
+// GetSurveyHTTP_QuestionsAsArray / SubmitSurveyHTTP_PreservesAnswerKeys /
+// GetResultHTTP_ReturnsRiskLevel / GetSurveyHTTP_QuestionsSortedByKey）。
+// 它们测的是 `assessmentBase != ""` 恒真分支 —— 该分支已随 E2E-31 删除
+// （见本文件顶部说明），故用例随之移除。
+//
+// **意图已迁移，不是丢弃**：
+//   · 「questions 为有序数组 + id 来自 JSONB 键 + options 为 {id,text,score} 对象」
+//     → `internal/downstream/assessment_test.go`（HTTP transport，含逆序输入验证排序）
+//     → `internal/downstream/assessment_grpc_test.go`（gRPC transport，转换层）
+//   · 「answers 键保真 "q1"（不得数值化）」→ 同上 gRPC 用例（服务端侧收到的键）
+//     + `emotion-echo-shared/pkg/emotionassessment/agent_contract_test.go`（序列化往返）
+//   · 「description 必须透传」→ 见上方 TestSurveyHandler_ListSurveys_KeepsDescription
+//   · 端到端（浏览器真实链路）→ E2E-31 §0.3 #8 的 IAB 截图 + Playwright 48/48
 
-// newSurveyRouterWithHTTP 创建带 HTTP 绕过的 survey handler 路由
-func newSurveyRouterWithHTTP(fakeAssessment *httptest.Server) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	h := NewSurveyHandler(&fakeAssessmentClient{})
-	h.WithAssessmentBase(fakeAssessment.URL)
-	h.Register(r)
-	return r
-}
+// TestSurveyHandler_NoHTTPBypass_RegressionNail —— E2E-31 回归钉（静态源扫描）
+//
+// 本包曾用 `if h.assessmentBase != "" { …HTTP… return }` 把 5 个 gRPC 分支**全部绕开**；
+// 而 `assessmentBase` 由 `config.go` 的默认值恒非空 ⇒ 条件恒真 ⇒ BFF→assessment-svc
+// 的 gRPC 通道零调用（账本 E2E-F-208，成因 ADR-2026-09-survey-http-bypass）。
+//
+// 该旁路已随 E2E-31 删除。本守卫扫描本文件所在包的源码，**禁止重新引入**
+// ——把"常量恒真当开关用"这类错误钉在源码层，而不是指望下次集成测试恰好覆盖到。
+func TestSurveyHandler_NoHTTPBypass_RegressionNail(t *testing.T) {
+	// ① 结构体不得再有 HTTP 旁路字段
+	typ := reflect.TypeOf(SurveyHandler{})
+	fieldNames := make([]string, 0, typ.NumField())
+	for i := 0; i < typ.NumField(); i++ {
+		fieldNames = append(fieldNames, typ.Field(i).Name)
+	}
+	for _, forbidden := range []string{"assessmentBase", "assessmentHTTP"} {
+		assert.NotContains(t, fieldNames, forbidden,
+			"SurveyHandler 不得再有 %q 字段 —— 它是恒真旁路的载体", forbidden)
+	}
 
-func TestSurveyHandler_GetSurveyHTTP_QuestionsAsArray(t *testing.T) {
-	// 模拟 assessment-svc 返回 questions 为 map（JSONB 原始格式）
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
-			"id":1,"code":"PHQ-9","title":"PHQ-9","category":"depression","version":1,
-			"questions":{
-				"q1":{"title":"兴趣减退","type":"radio","options":[{"id":1,"text":"没有","score":0},{"id":2,"text":"有","score":1}]},
-				"q2":{"title":"心情低落","type":"radio","options":[{"id":1,"text":"没有","score":0},{"id":2,"text":"有","score":1}]}
-			}
-		}`))
-	}))
-	defer fake.Close()
-
-	r := newSurveyRouterWithHTTP(fake)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/surveys/1", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	body := w.Body.String()
-	// questions 应为数组（非 map）
-	assert.Contains(t, body, `"questions":[`)
-	// 每个 question 应有 id 字段（从 map key 注入）
-	assert.Contains(t, body, `"id":"q1"`)
-	assert.Contains(t, body, `"id":"q2"`)
-	// 响应应被 BFF 包装为 {code:0, data:{...}}
-	assert.Contains(t, body, `"code":0`)
-}
-
-func TestSurveyHandler_SubmitSurveyHTTP_PreservesAnswerKeys(t *testing.T) {
-	// 模拟 assessment-svc，验证收到的 answers key 是 "q1"/"q2"（非数字）
-	var receivedBody string
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(r.Body)
-		receivedBody = buf.String()
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"resultId":1,"surveyId":1,"totalScore":2,"answered":2,"riskLevel":"none"}`))
-	}))
-	defer fake.Close()
-
-	r := newSurveyRouterWithHTTP(fake)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/surveys/1/submit",
-		bytes.NewReader([]byte(`{"answers":{"q1":1,"q2":1}}`)))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	// 验证转发给 assessment-svc 的 body 保留了 "q1"/"q2" key
-	assert.Contains(t, receivedBody, `"q1"`)
-	assert.Contains(t, receivedBody, `"q2"`)
-	assert.NotContains(t, receivedBody, `"1":`) // 不应有数字 key
-}
-
-func TestSurveyHandler_GetResultHTTP_ReturnsRiskLevel(t *testing.T) {
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"resultId":1,"surveyId":1,"userId":48,"totalScore":12,"riskLevel":"moderate","durationSec":60,"answers":{"q1":1},"submittedAt":1789878019}`))
-	}))
-	defer fake.Close()
-
-	r := newSurveyRouterWithHTTP(fake)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/surveys/results/1", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	body := w.Body.String()
-	assert.Contains(t, body, `"riskLevel":"moderate"`)
-	assert.Contains(t, body, `"totalScore":12`)
-	// 响应应被 BFF 包装
-	assert.Contains(t, body, `"code":0`)
-}
-
-func TestSurveyHandler_GetSurveyHTTP_QuestionsSortedByKey(t *testing.T) {
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
-			"id":1,"code":"TEST","title":"Test","category":"test","version":1,
-			"questions":{
-				"q3":{"title":"C","type":"radio","options":[]},
-				"q1":{"title":"A","type":"radio","options":[]},
-				"q2":{"title":"B","type":"radio","options":[]}
-			}
-		}`))
-	}))
-	defer fake.Close()
-
-	r := newSurveyRouterWithHTTP(fake)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/surveys/1", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	idx1 := bytes.Index(w.Body.Bytes(), []byte(`"id":"q1"`))
-	idx2 := bytes.Index(w.Body.Bytes(), []byte(`"id":"q2"`))
-	idx3 := bytes.Index(w.Body.Bytes(), []byte(`"id":"q3"`))
-	assert.True(t, idx1 < idx2, "q1 should come before q2")
-	assert.True(t, idx2 < idx3, "q2 should come before q3")
+	// ② 非注释代码里不得再出现旁路标识符（注释中作为历史说明提及是允许的）
+	src, err := os.ReadFile("survey_handler.go")
+	require.NoError(t, err)
+	for _, line := range strings.Split(string(src), "\n") {
+		code := strings.TrimSpace(line)
+		if code == "" || strings.HasPrefix(code, "//") {
+			continue
+		}
+		for _, forbidden := range []string{"assessmentBase", "WithAssessmentBase", "assessmentHTTP"} {
+			assert.NotContains(t, code, forbidden,
+				"非注释代码不得出现 %q（行：%s）—— 恒真 HTTP 旁路会让 gRPC 通道再次变成死代码",
+				forbidden, code)
+		}
+	}
 }
