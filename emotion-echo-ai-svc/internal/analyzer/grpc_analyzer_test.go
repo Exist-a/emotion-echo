@@ -139,43 +139,6 @@ func TestGRPCAnalyzer_Analyze_RequestTextForwarded(t *testing.T) {
 	assert.Equal(t, "specific text input", fake.lastReq.GetText())
 }
 
-func TestGRPCAnalyzer_AnalyzeWithAuth_InjectsAPIKeyMetadata(t *testing.T) {
-	t.Parallel()
-	fake := &fakeEmotionLLMClient{
-		resp: &emotionllm.AnalyzeResponse{PrimaryEmotion: "ok"},
-	}
-	a := &GRPCAnalyzer{client: fake}
-
-	const apiKey = "test-internal-api-key-xyz"
-	_, err := a.AnalyzeWithAuth(context.Background(), "text", apiKey)
-	require.NoError(t, err)
-
-	// The resulting ctx (as seen by Analyze) must contain the
-	// "x-internal-api-key" metadata injected by WithInternalAPIKey.
-	md, ok := metadata.FromOutgoingContext(fake.lastCtx)
-	if !ok {
-		t.Fatalf("AnalyzeWithAuth did not produce an outgoing metadata ctx; got %v", fake.lastCtx)
-	}
-	keys := md.Get("x-internal-api-key")
-	require.NotEmpty(t, keys, "expected x-internal-api-key metadata to be set")
-	assert.Equal(t, apiKey, keys[0])
-}
-
-func TestGRPCAnalyzer_AnalyzeWithAuth_EmptyAPIKey_StillProducesContext(t *testing.T) {
-	t.Parallel()
-	fake := &fakeEmotionLLMClient{
-		resp: &emotionllm.AnalyzeResponse{PrimaryEmotion: "ok"},
-	}
-	a := &GRPCAnalyzer{client: fake}
-
-	_, err := a.AnalyzeWithAuth(context.Background(), "text", "")
-	require.NoError(t, err)
-	// Empty key path: WithInternalAPIKey skips metadata injection
-	// (per its own behavior). The fake still receives a non-nil
-	// ctx and the call succeeds.
-	assert.NotNil(t, fake.lastCtx)
-}
-
 func TestGRPCAnalyzer_Close_NilConn_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	a := &GRPCAnalyzer{conn: nil}

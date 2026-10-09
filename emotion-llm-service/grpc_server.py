@@ -338,6 +338,12 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
         """Server-streaming 批量分析（Stage 16）。
 
         接收多条消息，对每条独立调用 analyze()，逐条 yield 给 client。
+
+        E2E-31 已知未接线（2026-10-09，用户裁定「保留 + 标注 + 守卫」）：
+        本 RPC 无任何生产调用方 —— ai-svc 生产路径只走单条 Analyze
+        （`grpc_analyzer.go`），且 llm-service 也没有 batch 的 HTTP 端点可供绕过
+        ⇒ 并非"被 HTTP 绕开"，而是**批量业务本身不存在**。启用须建功能 ⇒ 另立项。
+        依据：账本 E2E-F-208、stages/e2e-31-internal-rpc-convergence/report.md §0 T-1。
         """
         try:
             items = list(request.items)

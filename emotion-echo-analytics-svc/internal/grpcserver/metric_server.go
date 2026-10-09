@@ -320,6 +320,13 @@ func (s *analyticsServer) MentalHealthAssessment(ctx context.Context, req *emoti
 }
 
 // MentalHealthHistory 实现 MentalHealthHistory RPC（PR-3.3 阶段简化）
+//
+// E2E-31 已知未接线（2026-10-09，用户裁定「保留 + 标注 + 守卫」）：本 RPC 不是
+// "业务走了 HTTP 把 gRPC 绕开"——analytics-svc 侧确有自己的 HTTP 路由
+// （main.go `/api/v1/mental-health/history`），但**全仓找不到该端点的消费方**
+// （BFF 未暴露 history/trigger/trend 三条、前端 apiRoutes.ts 只留注释、无脚本调用）
+// ⇒ 属"功能未接出"。本实现还是恒返空占位（Records: nil）。启用须建功能 ⇒ 另立项。
+// 依据：账本 E2E-F-208、report.md §0 T-1。
 func (s *analyticsServer) MentalHealthHistory(ctx context.Context, req *emotionanalytics.MentalHealthHistoryRequest) (*emotionanalytics.MentalHealthHistoryResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
@@ -329,6 +336,10 @@ func (s *analyticsServer) MentalHealthHistory(ctx context.Context, req *emotiona
 }
 
 // MentalHealthTrigger 实现 MentalHealthTrigger RPC
+//
+// E2E-31 已知未接线（同上）：服务端实现真实（`MentalHealthTriggerLogic` +
+// `trigger.MentalHealthRunner` + job store，E2E-15 已验），HTTP 路由
+// `/api/v1/mental-health/trigger` 存在，但**全仓无消费方** ⇒ 功能未接出，非被绕开。
 func (s *analyticsServer) MentalHealthTrigger(ctx context.Context, req *emotionanalytics.MentalHealthTriggerRequest) (*emotionanalytics.MentalHealthTriggerResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
@@ -350,6 +361,9 @@ func (s *analyticsServer) MentalHealthTrigger(ctx context.Context, req *emotiona
 }
 
 // MentalHealthTrend 实现 MentalHealthTrend RPC
+//
+// E2E-31 已知未接线（同上）：与 History/Trigger 同族 —— 实现真实、HTTP 路由在
+// （`/api/v1/mental-health/trend`），但全仓无消费方 ⇒ 功能未接出，非被绕开。
 func (s *analyticsServer) MentalHealthTrend(ctx context.Context, req *emotionanalytics.MentalHealthTrendRequest) (*emotionanalytics.MentalHealthTrendResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
