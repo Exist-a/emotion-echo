@@ -2,9 +2,9 @@
 stage: e2e-31
 title: 内部 RPC 收敛（BFF→assessment-svc 切回 gRPC + proto 契约扩展 + 死 RPC 逐条裁定）
 type: transformation
-status: partial
+status: done
 created: 2026-10-08
-last-updated: 2026-10-09（**执行轮收尾**：T-1/T-2 由用户裁定并实施、T-4 裁定不需 ADR、**§13.3 第二方核对已做**（有条件通过 → 4 条件已处置）；**20 PASS / 0 BLOCKED**，阶段仍 `partial` —— 唯一未清项 = **E2E-F-214**（dev 限流致 E2E 连跑 flaky，去向待定，见 [report.md](report.md) §0））
+last-updated: 2026-10-09（**收口轮**：E2E-F-214 按用户裁定「本阶段内修」闭环 —— spec 层请求预算（令牌复用 + 种子数据缓存 + 滑动窗口闸门 BUDGET=55<60）+ CI 守卫 24/24，**产品限流配置未改**；标准单命令连跑 **48/48 × 连续 4 轮**全绿、APISIX 侧 **0 × 429**。**20 PASS / 0 FAIL / 0 BLOCKED**，阶段判 **done**；冷启动 gRPC 首调并账至 E2E-F-115；第二方核对两轮已过（§8/§8.1））
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §5
@@ -106,10 +106,10 @@ related-findings: [E2E-F-208, E2E-F-213, E2E-F-214]
 | P1 proto 契约扩展（L1） | ✅ 完成 | `agent_contract_test.go` 先 RED（`go test` build failed，10 处未定义符号）→ 改 proto + `bash proto/gen.sh` → GREEN |
 | P2 服务端 5 RPC 转换（L2/L3） | ✅ 完成 | `agent_server.go` 重写：有序键 + 结构化选项 + 键保真作答 + 结果四字段；`types.GetSurveyResp` 补 `Description` |
 | P3 BFF 客户端补全 + 删恒真旁路（L4/L5） | ✅ 完成 | 补 `ListResults`/`GetResult`；删 5 处旁路 + 5 个 `*HTTP` 方法 + `assessmentBase`；画像切共享 gRPC 客户端 |
-| P4 端到端回归 + 收口（L6 + §6） | ✅ 完成（**阶段判 partial**） | 回归钉 L6 + 负向对照；Playwright 分 project 24/24 + 24/24；IAB 实测 3 图（05~07）与基线（01~04）对比；`report.md` 已写 |
-| **`report.md`** | ✅ 已写 | [report.md](report.md)：18 PASS / 0 FAIL / **2 BLOCKED**（测点 #19/#20 的 [M] 裁定未落定）⇒ 阶段 `partial`；执行期新登 **E2E-F-214**（限流致回归钉 flaky） |
+| P4 端到端回归 + 收口（L6 + §6） | ✅ 完成 | 回归钉 L6 + 负向对照；Playwright **标准单命令连跑 48/48 × 4 轮**（执行轮为分 project 24/24 + 24/24）；IAB 实测 3 图（05~07）与基线（01~04）对比；`report.md` 已写 |
+| **`report.md`** | ✅ 已写 | [report.md](report.md)：**20 PASS / 0 FAIL / 0 BLOCKED / 0 N/A**；执行期新登 **E2E-F-214**（限流致回归钉 flaky）已于**收口轮闭环**（§9）；阶段判 **done** |
 
-> **一句话状态**：**前置复核与改动前基线（Playwright 48/48 + IAB 4 图）已完成；正式的 proto/RPC 改造尚未开始**——本文档 §3 组 A~E 的测试点结论、§6 收口门槛、`report.md` 均待 P1~P4。
+> **一句话状态**（2026-10-09 收口轮更新）：**P1~P4 全部落地、20 测试点全 PASS、第二方核对两轮已过、E2E-F-214 已闭环**（spec 层请求预算 + CI 守卫 24/24），阶段判 **done**。详见 [report.md](report.md)（执行记录含 §8/§8.1 核对、§9 收口轮）。
 
 ---
 
