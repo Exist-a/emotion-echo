@@ -178,7 +178,7 @@ message SurveyResult {
   int32 duration_sec = 7;
   // E2E-31 #3：结果侧作答同样按问题键保真（原 repeated Answer 会丢 "q1"）
   map<string, int32> answers = 8;
-  int64 submitted_at = 9;             // unix seconds
+  int64 submitted_at = 9;             // unix **milliseconds**（DB 侧即为 ms；原注释误写 seconds，2026-10-08 实测更正）
   // E2E-31 #5：维度/分量分数（前端雷达图；`riskLevel=="dimension_profile"` 时使用）
   map<string, double> factor_scores = 10;
   // E2E-31 #5：total_score 语义（E2E-F-97）：
