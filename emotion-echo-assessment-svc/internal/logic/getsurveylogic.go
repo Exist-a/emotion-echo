@@ -37,11 +37,12 @@ func (l *GetSurveyLogic) GetSurvey(req *types.GetSurveyReq) (resp *types.GetSurv
 	}
 
 	return &types.GetSurveyResp{
-		ID:        s.ID,
-		Code:      s.Code,
-		Title:     s.Title,
-		Category:  s.Category,
-		Version:   s.Version,
-		Questions: s.Questions,
+		ID:          s.ID,
+		Code:        s.Code,
+		Title:       s.Title,
+		Description: s.Description,
+		Category:    s.Category,
+		Version:     s.Version,
+		Questions:   s.Questions,
 	}, nil
 }

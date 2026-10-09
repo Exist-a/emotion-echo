@@ -6,6 +6,17 @@
 //   与 user.proto 同批推进；assessment-svc HTTP :8889 保留给前端，
 //   内部 BFF 走 gRPC :8886（feature flag: ASSESSMENT_TRANSPORT=grpc|http）。
 //
+// E2E-31（2026-10-08，内部 RPC 收敛）——契约扩展说明：
+//   该通道曾按「决策 4」接线，2026-09-20 因 proto **表达能力不足** 被 HTTP 旁路绕开
+//   （adr-2026-09-survey-http-bypass），此后 BFF 侧零调用（账本 E2E-F-208）。
+//   用户 2026-10-08 裁定「得使用 grpc」⇒ 本文件补足最小充分契约，BFF 切回 gRPC。
+//   扩展原则（用户拍板 M1/M2）：
+//     · 选项 = 新增 `repeated SurveyOption option_items`（**新增字段号**，旧 `options`
+//       保留并标 deprecated ⇒ 无 wire-breaking）
+//     · 作答 = `map<string,int32> answers`（键保真 "q1"；**字段类型变更**，BFF 与
+//       assessment-svc 必须**同批重生成部署**）
+//   其余新增字段（description / key / title / factor_scores / score_kind）均为新增字段号。
+//
 // 端点 1:1 对齐（emotion-echo-web-bff/internal/downstream/assessment.go）：
 //   GET    /api/v1/surveys                  → ListSurveys
 //   GET    /api/v1/surveys/:id              → GetSurvey

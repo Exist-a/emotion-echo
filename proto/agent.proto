@@ -6,6 +6,17 @@
 //   与 user.proto 同批推进；assessment-svc HTTP :8889 保留给前端，
 //   内部 BFF 走 gRPC :8886（feature flag: ASSESSMENT_TRANSPORT=grpc|http）。
 //
+// E2E-31（2026-10-08，内部 RPC 收敛）——契约扩展说明：
+//   该通道曾按「决策 4」接线，2026-09-20 因 proto **表达能力不足** 被 HTTP 旁路绕开
+//   （adr-2026-09-survey-http-bypass），此后 BFF 侧零调用（账本 E2E-F-208）。
+//   用户 2026-10-08 裁定「得使用 grpc」⇒ 本文件补足最小充分契约，BFF 切回 gRPC。
+//   扩展原则（用户拍板 M1/M2）：
+//     · 选项 = 新增 `repeated SurveyOption option_items`（**新增字段号**，旧 `options`
+//       保留并标 deprecated ⇒ 无 wire-breaking）
+//     · 作答 = `map<string,int32> answers`（键保真 "q1"；**字段类型变更**，BFF 与
+//       assessment-svc 必须**同批重生成部署**）
+//   其余新增字段（description / key / title / factor_scores / score_kind）均为新增字段号。
+//
 // 端点 1:1 对齐（emotion-echo-web-bff/internal/downstream/assessment.go）：
 //   GET    /api/v1/surveys                  → ListSurveys
 //   GET    /api/v1/surveys/:id              → GetSurvey
@@ -72,6 +83,8 @@ message SurveyItem {
   int32 version = 5;
   int32 question_count = 6;
   int64 created_at = 7;
+  // E2E-31 #2：量表描述。缺此字段时列表描述恒空（E2E-14 实测 3 个量表描述全空）
+  string description = 8;
 }
 
 // GetSurveyRequest 单个量表请求
@@ -87,32 +100,62 @@ message Survey {
   string category = 4;
   int32 version = 5;
   repeated SurveyQuestion questions = 6;
+  // E2E-31 #2：量表描述（详情页头部）
+  string description = 7;
+}
+
+// SurveyOption 选项（E2E-31 #1）
+//
+// 依据：DB `emotion_echo_assessment.surveys.questions` 的 JSONB 里，
+// 选项是对象数组 `[{id:int, text:string, score:int}]`；
+// 前端 `q.options.find(o => o.id === selectedId)` 再取 `opt.score` 计分。
+// 旧的 `repeated string` 表达不了该结构 ⇒ 前端 `opt.score` 取不到（E2E-13 根因）。
+message SurveyOption {
+  int32 id = 1;
+  string text = 2;
+  // 计分用 **score** 而非 id：PHQ-9/GAD-7 的选项是 `id 1..4 / score 0..3`（id = score + 1），
+  // 混用会静默虚高或直接 400（E2E-F-97）。
+  int32 score = 3;
 }
 
 // SurveyQuestion 单题
 message SurveyQuestion {
   int64 id = 1;
   int32 order = 2;
-  string prompt = 3;                  // 题干
-  string question_type = 4;           // "single" / "multiple" / "scale" / "text"
-  // 选项：single/multiple 用 repeated string
-  repeated string options = 5;
+  string prompt = 3;                  // 题干（历史字段；JSONB 实际键名为 title，见下）
+  string question_type = 4;           // "radio" / "scale" / "text"
+  // 旧选项字段：`repeated string` 无法表达 {id,text,score}，E2E-31 起改用 option_items。
+  // 保留字段号避免 wire 断裂；新代码不得再填充/读取。
+  repeated string options = 5 [deprecated = true];
   // scale 类型：min/max/label（如 1=从不 5=总是）
   int32 scale_min = 6;
   int32 scale_max = 7;
   string scale_min_label = 8;
   string scale_max_label = 9;
+  // E2E-31 #4：题目在 JSONB 里的**键**（"q1"…"qN"）与题干字段名。
+  // 旧实现按 index 重新编号（`q%d`）且服务端遍历 map 无序 ⇒ 顺序与键名都不可靠。
+  string key = 10;
+  string title = 11;                  // 题干（JSONB `title`，与前端 `{{ question.title }}` 对齐）
+  // E2E-31 #1：结构化选项
+  repeated SurveyOption option_items = 12;
 }
 
 // SubmitSurveyRequest 提交作答请求
 message SubmitSurveyRequest {
   int64 survey_id = 1;
   // user_id 通过 metadata "x-user-id" 传（其他 service 一致）
-  repeated Answer answers = 2;
+  //
+  // E2E-31 #3：作答契约是 `{questionKey: score}`，键形如 "q1"、值是 **option.score**。
+  // 原 `repeated Answer{question_id int64}` 会把 "q1" 数值化成 `1`、服务端再格式化回
+  // `"1"`，而 scorer 期望 `"q1"` ⇒ 键语义丢失（E2E-13 根因之二）。
+  // **注意：本字段是类型变更（wire 不兼容），BFF 与 assessment-svc 必须同批重生成部署。**
+  map<string, int32> answers = 2;
   int32 duration_sec = 3;             // 用户答题耗时
 }
 
-// Answer 单题作答
+// Answer 旧作答结构（E2E-31 起 SubmitSurveyRequest / SurveyResult 改用
+// `map<string,int32>`，本消息无引用）。保留定义避免影响既有序列化产物；
+// 确认全仓零引用后可随死代码清理一并删除（E2E-31 组 E 裁定范围）。
 message Answer {
   int64 question_id = 1;
   // 作答内容：scale = 整数选项；single/multiple = 字符串选项 ID；text = 文本
@@ -128,12 +171,20 @@ message SurveyResult {
   int64 result_id = 1;
   int64 survey_id = 2;
   int64 user_id = 3;
-  int32 total_score = 4;
+  // E2E-31 #5：DB 侧是 float64（人格五维度分 / 比例分），int32 会截断。
+  double total_score = 4;
   int32 answered = 5;                 // 已答题数
-  string risk_level = 6;              // "low" / "moderate" / "high" / "severe"
+  string risk_level = 6;              // "low" / "moderate" / "high" / "severe" / "dimension_profile"
   int32 duration_sec = 7;
-  repeated Answer answers = 8;
+  // E2E-31 #3：结果侧作答同样按问题键保真（原 repeated Answer 会丢 "q1"）
+  map<string, int32> answers = 8;
   int64 submitted_at = 9;             // unix seconds
+  // E2E-31 #5：维度/分量分数（前端雷达图；`riskLevel=="dimension_profile"` 时使用）
+  map<string, double> factor_scores = 10;
+  // E2E-31 #5：total_score 语义（E2E-F-97）：
+  // "risk"（症状总分，有严重度语义）/ "dimension_sum"（人格五维度之和，**无严重度语义**）/
+  // "ratio"（按满分比例的通用分档）。消费方按此判断，不得默认 total_score 是风险分。
+  string score_kind = 11;
 }
 
 // ListMyResultsRequest 列我的作答请求

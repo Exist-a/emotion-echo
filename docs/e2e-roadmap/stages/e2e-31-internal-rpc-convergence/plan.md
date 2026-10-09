@@ -2,13 +2,13 @@
 stage: e2e-31
 title: 内部 RPC 收敛（BFF→assessment-svc 切回 gRPC + proto 契约扩展 + 死 RPC 逐条裁定）
 type: transformation
-status: pending
+status: partial
 created: 2026-10-08
-last-updated: 2026-10-08（**已开工**：§0.3 复核 8 项全跑完 + Playwright 基线 **48/48** + **IAB 实测 4 张截图已查看**；M1/M2 已拍板；P1~P3 未开始。执行进度见 §0.4）
+last-updated: 2026-10-09（**执行轮**：P1~P4 落地并端到端验证 → 18 PASS / 0 FAIL / **2 BLOCKED**（[M] 裁定未落定）⇒ 判 `partial`；执行记录见 [report.md](report.md)）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §5
-related-findings: [E2E-F-208, E2E-F-213]
+related-findings: [E2E-F-208, E2E-F-213, E2E-F-214]
 ---
 
 # E2E-31 内部 RPC 收敛 — 详档（任务书）
@@ -103,11 +103,11 @@ related-findings: [E2E-F-208, E2E-F-213]
 | §0.3 开工复核 8 项 | ✅ 全跑完 | 见上表；工具链实测 `protoc 32.1` / `protoc-gen-go v1.36.11` / `protoc-gen-go-grpc 1.6.2` / `grpcio-tools` 齐备 |
 | Playwright 基线（测点 #15/#16 的**改动前对照**） | ✅ 48/48 PASS | 首跑 46/48 → 修 **E2E-F-213**（固定 sleep → 条件等待）→ 复跑 **48/48**（PR #183） |
 | **IAB 实测**（测点 #17 的**改动前对照**） | ✅ 已做 | 4 张截图且逐张查看，见 §0.3 #8 与 `screenshots/` |
-| P1 proto 契约扩展（L1） | ⬜ 未开始 | 前置已满足，可直接开工 |
-| P2 服务端 5 RPC 转换（L2/L3） | ⬜ 未开始 | — |
-| P3 BFF 客户端补全 + 删恒真旁路（L4/L5） | ⬜ 未开始 | — |
-| P4 端到端回归 + 收口（L6 + §6） | ⬜ 未开始 | — |
-| **`report.md`** | ⬜ **未写（有意为之）** | 按 [_REPORT_TEMPLATE.md](../_REPORT_TEMPLATE.md)「**执行完成后**」撰写；本文档 20 个测试点中组 A~C 需 P1~P3 落地后才可能有结论，此刻写 report 的汇总行无法四值自洽（审计 A2 要求「汇总计数合计 = 测试点行数」）⇒ 硬写只能把未执行的点标成 N/A，属失真。收口时补 |
+| P1 proto 契约扩展（L1） | ✅ 完成 | `agent_contract_test.go` 先 RED（`go test` build failed，10 处未定义符号）→ 改 proto + `bash proto/gen.sh` → GREEN |
+| P2 服务端 5 RPC 转换（L2/L3） | ✅ 完成 | `agent_server.go` 重写：有序键 + 结构化选项 + 键保真作答 + 结果四字段；`types.GetSurveyResp` 补 `Description` |
+| P3 BFF 客户端补全 + 删恒真旁路（L4/L5） | ✅ 完成 | 补 `ListResults`/`GetResult`；删 5 处旁路 + 5 个 `*HTTP` 方法 + `assessmentBase`；画像切共享 gRPC 客户端 |
+| P4 端到端回归 + 收口（L6 + §6） | ✅ 完成（**阶段判 partial**） | 回归钉 L6 + 负向对照；Playwright 分 project 24/24 + 24/24；IAB 实测 3 图（05~07）与基线（01~04）对比；`report.md` 已写 |
+| **`report.md`** | ✅ 已写 | [report.md](report.md)：18 PASS / 0 FAIL / **2 BLOCKED**（测点 #19/#20 的 [M] 裁定未落定）⇒ 阶段 `partial`；执行期新登 **E2E-F-214**（限流致回归钉 flaky） |
 
 > **一句话状态**：**前置复核与改动前基线（Playwright 48/48 + IAB 4 图）已完成；正式的 proto/RPC 改造尚未开始**——本文档 §3 组 A~E 的测试点结论、§6 收口门槛、`report.md` 均待 P1~P4。
 
