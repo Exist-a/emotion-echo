@@ -197,3 +197,20 @@ jobs:
       # 使闸门被绕开的改动立刻可见，并自带负向对照（注入违规样例必须被抓到）。
       - name: 守卫 24/24 E2E 请求预算闸门不被绕开（E2E-F-214）
         run: bash scripts/test_e2e_gateway_budget.sh
+
+      # E2E-30 L1（账本 E2E-F-209）：§2.4 数据契约 smoke 的基址必须走 APISIX 网关。
+      # 原基址是宿主直连 BFF 的端口，而该映射已被 E2E-29 D-47 ③ 收掉
+      # ⇒ 脚本在 §契约 1 之前就死在"连接被拒"（2026-10-09 实测 rc=2）。
+      # 本守卫静态钉住四件事：不得再指宿主直连口 / 基址必须是网关且可由 SMOKE_BASE 覆盖 /
+      # 必须带 Authorization: Bearer / 前置不得依赖 BFF /health（网关无该路由，E2E-F-211）。
+      # 纯 grep，无 docker 依赖；自带负向对照（注入违规样例必须被抓到）。
+      - name: 守卫 25/25 数据契约 smoke 必须经网关鉴权（E2E-F-209/211）
+        run: bash scripts/check_smoke_gateway.sh
+
+      # E2E-30 测试点 #17（账本 E2E-F-180）：审计器 A3（plan 测试点 ⊆ report，AP-07）
+      # 曾对 e2e-25 静默失效 —— 它只认标题含「测试点清单」的章节，而 e2e-25 用「测试点总表」，
+      # 于是只输出一行 WARN「未解析到测试点编号，跳过 A3」就绕过检查。
+      # 与守卫 10/10（账本解析器无盲区）同型：**审计器自己的解析器也要被守**。
+      # 本守卫含负向对照（无关章节不得被误当测试点，保 WARN 语义）+ 端到端（audit --all 0 FAIL）。
+      - name: 守卫 26/26 审计器计划测试点解析器无盲区（E2E-F-180）
+        run: bash scripts/test_audit_plan_parser.sh
