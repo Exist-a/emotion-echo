@@ -252,6 +252,22 @@ jobs:
       - name: helm template assertions
         run: bash scripts/test_helm_prometheus_render.sh
 
+  # E2E-30 组 B / L6（测试点 #8/#9/#10）：主 chart（charts/emotion-echo，23 子 chart）
+  # 此前**零渲染回归** —— 只有 loki / prometheus 两个子 chart 有断言。
+  # "渲染了但内容是空的"是本项目真实发生过的静默失效形态（E2E-22 空 glob ⇒ 0 条规则零报错）。
+  # 故本守卫断言三条不变量：① 每个子 chart 目录都在 Chart.yaml 声明且带 condition（防孤儿 chart）
+  # ② 全开渲染时每个子 chart 都出现（证明"条件渲染"≠"永不渲染"）③ values.yaml 显式关闭的子 chart
+  # 不得泄漏进默认渲染；另断言 lint 零 ERROR + 关键资源在位，自带负向对照（删 condition ⇒ RED）。
+  helm-main-render:
+    name: 主 chart 渲染回归
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: helm template assertions
+        run: bash scripts/test_helm_main_render.sh
+
   obs-monitoring-contract:
     name: 观测面配置契约
     runs-on: ubuntu-latest
@@ -283,7 +299,7 @@ jobs:
     name: 文档守卫总闸
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [routes-alignment, view-consistency, env-vars-lint, yaml-lint, git-layout, docker-digests, docs-update, bff-jwt-secret, user-oauth-zero-ref, migrations-contract, migrations-no-service-order, soft-assert-scan, apisix-seed-structure, secrets-scan, e2e-stage-audit, tdd-gate, adr-gate, residual-scan, helm-loki-render, ctx-logging-gate, orphan-outputs, helm-prometheus-render, obs-monitoring-contract]
+    needs: [routes-alignment, view-consistency, env-vars-lint, yaml-lint, git-layout, docker-digests, docs-update, bff-jwt-secret, user-oauth-zero-ref, migrations-contract, migrations-no-service-order, soft-assert-scan, apisix-seed-structure, secrets-scan, e2e-stage-audit, tdd-gate, adr-gate, residual-scan, helm-loki-render, ctx-logging-gate, orphan-outputs, helm-prometheus-render, helm-main-render, obs-monitoring-contract]
     # always()：否则任一上游失败时本 job 会被**跳过**（skipped ≠ 通过，GitHub 不会拦），
     # 反而变成"检查失败反而没人拦"的漏洞。
     if: ${{ always() }}

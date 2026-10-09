@@ -1,17 +1,30 @@
 """smoke_data_layer.py — Stage 37-A 数据契约 smoke（§2.4 AGENTS.md）
 
-前置：docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml up -d
-     所有 svc healthy，postgres / kafka / bff 可用。
+前置（RUNBOOK §2.1 铁律：必须带 `--env-file .env.local` 与 `--profile dev`）：
+    cd deploy && docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml \
+      -f compose.dev.yml --env-file .env.local --profile dev up -d
+    所有 svc healthy，postgres / kafka 可用。
+
+基址（E2E-30 L1 修正，账本 E2E-F-209）：
+    业务 HTTP 一律走 **APISIX 网关** `http://localhost:19080`（决策 11/12：网关是唯一业务入口）。
+    宿主**直连 BFF 的口已被 E2E-29 D-47 ③ 收掉**（那是"直连伪造 X-User-Id 绕过网关"的入口，
+    账本 E2E-F-202）⇒ 本脚本**不得**再指 BFF 端口（指它会在 §契约 1 之前就死在连接被拒）。
+    基址可用环境变量 `SMOKE_BASE` 覆盖。
+    身份 = 网关 jwt-auth 解出 sub 后**无条件覆盖**注入的 X-User-Id（deploy/apisix/seed.sh:501），
+    故脚本只带 `Authorization: Bearer <token>`，不自传 X-User-Id。
+    可用性前置 = **登录成功**（网关**没有** BFF health 路由，见账本 E2E-F-211；
+    登录会打穿 网关→BFF→user-svc→PG/Redis 整条链，比 /health 更贴近真实业务路径）。
 
 实现要点：
 - 零 Python 依赖（仅 stdlib + docker CLI + psql）
 - PG 操作走 docker exec（PG 端口未暴露到 host，dev compose 默认）
-- BFF HTTP 走 urllib
+- 业务 HTTP 走网关 + Bearer（urllib）
 - 每次跑会触发 1 条 message + 1 条 conversation，看完整链路数据落地
 
 约定：
 - 退出码 0 = 全 OK
 - 退出码 1 = 至少一项 FAIL（print 表里带详细证据）
+- 退出码 2 = 前置不可用（登录/环境），此时**没有**任何契约结论
 - SKIP = 跳过（需 integration test 覆盖，单 smoke 不可验）
 
 脚本触发场景见 AGENTS.md §2.4，每个 PR 改动 chat-svc / analytics-svc / BFF / schema 都应跑。
@@ -20,6 +33,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -29,7 +43,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 # ====== 配置（dev compose 默认）======
-BFF = "http://localhost:8894"
+# 决策 11/12：APISIX 是唯一业务入口 ⇒ 基址走网关 `:19080`。
+# E2E-29 D-47 ③ 已移除宿主直连 BFF 的口（防"直连伪造 X-User-Id 绕过网关"，账本 E2E-F-202）
+# ⇒ 基址**不得**再指 BFF；指 BFF 会在 §契约 1 之前就死在连接被拒（实测 rc=2）。
+GATEWAY = os.environ.get("SMOKE_BASE", "http://localhost:19080")
+# 登录后填充；http_get/http_post 对 /api/v1/** 自动附加 `Authorization: Bearer`
+TOKEN: str | None = None
 PG_CONTAINER = "emotion-echo-postgres"
 PG_DB = "emotion_echo"
 PG_USER = "postgres"  # superuser，仅 dev；prod 走 analytics_reader
@@ -75,24 +94,38 @@ def docker_exec(container: str, argv: list[str], timeout: int = 10) -> tuple[int
     return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
 
 
+def _auth_headers(path: str, headers: dict[str, str] | None) -> dict[str, str] | None:
+    """对 /api/v1/** 自动附 Bearer（身份由网关侧注入，不传 X-User-Id）。"""
+    h = dict(headers or {})
+    if TOKEN and path.startswith("/api/v1/"):
+        h.setdefault("Authorization", f"Bearer {TOKEN}")
+    return h or None
+
+
 def http_get(path: str, headers: dict[str, str] | None = None) -> dict[str, Any]:
-    req = urllib.request.Request(BFF + path)
-    if headers:
-        for k, v in headers.items():
-            req.add_header(k, v)
+    req = urllib.request.Request(GATEWAY + path)
+    for k, v in (_auth_headers(path, headers) or {}).items():
+        req.add_header(k, v)
     with urllib.request.urlopen(req, timeout=8) as r:
         return json.loads(r.read())
 
 
 def http_post(path: str, body: dict, headers: dict[str, str] | None = None) -> dict[str, Any]:
     data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(BFF + path, data=data, method="POST")
+    req = urllib.request.Request(GATEWAY + path, data=data, method="POST")
     req.add_header("Content-Type", "application/json")
-    if headers:
-        for k, v in headers.items():
-            req.add_header(k, v)
+    for k, v in (_auth_headers(path, headers) or {}).items():
+        req.add_header(k, v)
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read())
+
+
+def http_delete(path: str, headers: dict[str, str] | None = None) -> int:
+    req = urllib.request.Request(GATEWAY + path, method="DELETE")
+    for k, v in (_auth_headers(path, headers) or {}).items():
+        req.add_header(k, v)
+    with urllib.request.urlopen(req, timeout=8) as r:
+        return r.status
 
 
 def unwrap(d: dict) -> dict:
@@ -102,36 +135,30 @@ def unwrap(d: dict) -> dict:
     return d
 
 
-# ====== 0. 前置：BFF /health + 触发业务事件 ======
+# ====== 0. 前置：登录（网关唯一入口 ⇒ "登录 200" 即判 BFF 可用）+ 触发业务事件 ======
 print("=" * 70)
-print("Stage 37-A 数据契约 smoke (AGENTS.md §2.4)")
+print(f"Stage 37-A 数据契约 smoke (AGENTS.md §2.4) — 基址 = {GATEWAY}")
 print("=" * 70)
 
-try:
-    health = http_get("/health")
-    ds = health.get("downstream", {})
-    ok_cnt = sum(1 for v in ds.values() if v.get("status") == "ok")
-    print(f"\n[pre] BFF /health: status={health.get('status')} downstream_ok={ok_cnt}/{len(ds)}")
-    if health.get("status") not in ("ok", "degraded"):
-        print("[FATAL] BFF 状态非 ok/degraded，停止 smoke")
-        sys.exit(2)
-except Exception as e:
-    print(f"[FATAL] BFF /health 不可达: {e}")
-    sys.exit(2)
-
-# 触发业务事件：login → conv → message
+# 可用性前置 = 登录。为什么不是 BFF `/health`：网关没有 BFF health 路由（E2E-F-211），
+# 而宿主直连 BFF 的口已被 D-47 收掉 ⇒ 经网关拿不到 readiness。登录会打穿
+# 网关 jwt-auth → BFF → user-svc → PG/Redis 整条链，更贴近真实业务路径。
 try:
     login_resp = unwrap(http_post("/api/v1/auth/login", LOGIN_BODY))
     user_id = login_resp.get("user", {}).get("id")
-    access_token = login_resp.get("accessToken")
-    if not user_id:
-        print(f"[FATAL] login 失败: {login_resp}")
+    TOKEN = login_resp.get("accessToken")
+    if not user_id or not TOKEN:
+        print(f"[FATAL] login 失败（网关 {GATEWAY} 不可用或凭据无效）: {login_resp}")
         sys.exit(2)
-    print(f"[pre] login user_id={user_id}")
+    print(f"[pre] login OK user_id={user_id}（Bearer 就绪）")
+except Exception as e:
+    print(f"[FATAL] 登录不可达（网关 {GATEWAY}）: {e}")
+    sys.exit(2)
 
+# 触发业务事件：conv → message → DELETE（身份取自令牌，不再自传 X-User-Id）
+try:
     conv_resp = unwrap(http_post("/api/v1/conversations",
-                                  {"title": "smoke data layer"},
-                                  {"X-User-Id": str(user_id)}))
+                                  {"title": "smoke data layer"}))
     conv_id = conv_resp.get("id")
     if not conv_id:
         print(f"[FATAL] conv create 失败: {conv_resp}")
@@ -140,8 +167,7 @@ try:
 
     msg_resp = unwrap(http_post(f"/api/v1/conversations/{conv_id}/messages",
                                  {"role": "user", "content": "smoke 触发业务事件",
-                                  "contentType": "text"},
-                                 {"X-User-Id": str(user_id)}))
+                                  "contentType": "text"}))
     msg_id = msg_resp.get("id")
     if not msg_id:
         print(f"[FATAL] msg send 失败: {msg_resp}")
@@ -150,13 +176,7 @@ try:
 
     # 触发 conversation.closed（DELETE）让 §2 能验 conversation_closed enum
     try:
-        req = urllib.request.Request(
-            BFF + f"/api/v1/conversations/{conv_id}",
-            method="DELETE",
-        )
-        req.add_header("X-User-Id", str(user_id))
-        with urllib.request.urlopen(req, timeout=8) as r:
-            print(f"[pre] DELETE conv: HTTP {r.status}")
+        print(f"[pre] DELETE conv: HTTP {http_delete(f'/api/v1/conversations/{conv_id}')}")
     except Exception as e:
         print(f"[pre] DELETE conv skipped: {e}")
 
@@ -255,8 +275,7 @@ else:
     check("§4 最近 7 天内有 emotion_analysis 数据", True, f"最近数据日={recent_date}")
     try:
         reports = unwrap(http_get(
-            f"/api/v1/reports/daily?user_id={user_id}&date={recent_date}",
-            {"X-User-Id": str(user_id)}))
+            f"/api/v1/reports/daily?user_id={user_id}&date={recent_date}"))
         # ADR-17 修复后 data 形状：{summary, emotionDistribution: [{name, value}], ...}
         if "report" in reports and isinstance(reports["report"], dict):
             reports = reports["report"]
@@ -288,7 +307,7 @@ skip("§5 schema 一致性",
 #   - KAFKA_ENABLED=false → 必须 user_behavior_events 有行(DevEventPublisher 路径)
 #   - KAFKA_ENABLED=true 或未设置 → 必须 §1 + §2 PASS(Kafka 消费者路径)
 print("\n--- §契约 6: KAFKA_ENABLED=false 路径不空跑 (ADR-19) ---")
-import os  # noqa: E402  # 推迟到此处避免顶部 import 顺位歧义
+# os 已在文件顶部 import（E2E-30 L1 修正：基址支持 SMOKE_BASE 覆盖）
 
 # 读 chat-svc 容器环境变量(若容器在跑)
 kafka_enabled_env = "true"  # 默认假设 Kafka 路径

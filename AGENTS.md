@@ -234,7 +234,12 @@ git branch --merged main      # 除 main 外应为空 —— 有输出说明残�
         抓"dev 模式走通但 prod 走通是巧合"类 bug（如 outbox publisher=nil 永远失败）
 ```
 
-**smoke 脚本**：`scripts/smoke_data_layer.py`（待建），按本清单跑全绿才算合并。
+**smoke 脚本**：`scripts/smoke_data_layer.py`（**已存在**，非"待建"），按本清单跑全绿才算合并。
+
+- **基址（2026-10-09 起）**：走 **APISIX 网关** `http://localhost:19080` + `Authorization: Bearer`（决策 11/12：网关是唯一业务入口）。**不得**再指宿主直连 BFF 的端口 —— 那个映射已被 E2E-29 D-47 ③ 收掉（是"直连伪造 X-User-Id 绕过网关"的入口），指它脚本会在 §契约 1 之前死在"连接被拒"。可用环境变量 `SMOKE_BASE` 覆盖。守卫：`scripts/check_smoke_gateway.sh`（已接 CI）。
+- **可用性前置** = 登录成功（网关**没有** BFF health 路由，见账本 E2E-F-211）。
+- **运行**：`python scripts/smoke_data_layer.py`（需 dev 栈：`docker compose … --env-file .env.local --profile dev up -d`）。退出码 0 = 全 OK / 1 = 有 FAIL / **2 = 前置不可用（此时没有任何契约结论）**。
+- **当前覆盖**：§契约 1~4 = 脚本实测；§契约 5 = 由 integration test 覆盖（脚本内 SKIP）；§契约 6 = 按 `KAFKA_ENABLED` 分支实测。**尚未接入 CI**（需容器栈，本地/收口时执行）；门禁形态待定见 [docs/e2e-roadmap/stages/e2e-30-data-contract-closure/plan.md](docs/e2e-roadmap/stages/e2e-30-data-contract-closure/plan.md) §4 M6。
 
 **为什么必须写死**：Stage 36-FU closure 报告 §三 smoke 16/16 全绿，但 dev 模式 4 dashboard `chartData.length === 0`、event_type 全 'conversation'、analytics_reader 视图读不出——**单纯 HTTP 200 smoke 永远抓不到**这些契约 bug。本节把"数据对不对"列入硬门槛，强制 PR 提交方自己先验证。
 
