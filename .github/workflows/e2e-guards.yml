@@ -187,3 +187,13 @@ jobs:
       # E2E-F-208。它不禁止使用，只禁止"静默变更"。负向对照已本地实做（删 1 个标记→RED）。
       - name: 守卫 23/23 已知未接线 RPC 清单不失真（E2E-31 T-1）
         run: bash scripts/check_dead_grpc_inventory.sh
+
+      # E2E-31 T-5（F-214 闭环，2026-10-09）：E2E 连跑必须走**请求预算闸门**。
+      # 原本 24 用例 × 2 project 各登录一次（route110 = 50 次）+ 重复取数 ⇒ route100
+      # 实测某一分钟 72 次 > APISIX `limit-count` 的 60/60s ⇒ 429 ⇒ 页面无数据 ⇒
+      # 断言随机假红（复现：[mobile] personality #4）。修复 = spec 层闸门
+      # （emotion-echo-web/e2e/helpers/gateway.ts：令牌复用 + 种子数据缓存 + 滑动窗口预算）。
+      # 本守卫静态钉住"三个 spec 不得裸调 page.request / 不得自带登录 / BUDGET 必须 < 60"，
+      # 使闸门被绕开的改动立刻可见，并自带负向对照（注入违规样例必须被抓到）。
+      - name: 守卫 24/24 E2E 请求预算闸门不被绕开（E2E-F-214）
+        run: bash scripts/test_e2e_gateway_budget.sh

@@ -22,27 +22,18 @@ import { test, expect } from '@playwright/test'
  * - 种子数据 06-seed-surveys.sql 已执行
  */
 
-const API_BASE = 'http://localhost:19080'
-const WEB_BASE = process.env.BASE_URL ?? 'http://localhost:3000'
-const DEMO = { username: 'echo', password: 'echo123' }
-
-async function loginViaAPI(page: import('@playwright/test').Page) {
-  const resp = await page.request.post(`${API_BASE}/api/v1/auth/login`, { data: DEMO })
-  expect(resp.ok(), 'login API must succeed').toBe(true)
-  const body = await resp.json()
-  const token = body?.data?.accessToken
-  expect(token, 'login response must contain accessToken').toBeTruthy()
-  await page.context().addCookies([{ name: 'access_token', value: token, url: WEB_BASE }])
-  return token as string
-}
+import { gateBrowserRequests, gwGet, loginOnce } from './helpers/gateway'
 
 test.describe('E2E-13 心理测验链路', () => {
+  // 见 e2e/helpers/gateway.ts：把浏览器自身的网关请求纳入请求预算（E2E-F-214）
+  test.beforeEach(async ({ page }) => {
+    await gateBrowserRequests(page)
+  })
+
   // ==================== #1 种子数据 API 验证 ====================
   test('#1 列表 API 返回 ≥ 2 个量表', async ({ page }) => {
-    const token = await loginViaAPI(page)
-    const resp = await page.request.get(`${API_BASE}/api/v1/surveys`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const token = await loginOnce(page)
+    const resp = await gwGet(page, '/api/v1/surveys', token)
     expect(resp.ok()).toBe(true)
     const body = await resp.json()
     const items = body?.data?.items
@@ -52,10 +43,8 @@ test.describe('E2E-13 心理测验链路', () => {
 
   // ==================== #2 种子数据结构正确 ====================
   test('#2 详情 API questions 为数组且含 q1~qN', async ({ page }) => {
-    const token = await loginViaAPI(page)
-    const resp = await page.request.get(`${API_BASE}/api/v1/surveys/1`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const token = await loginOnce(page)
+    const resp = await gwGet(page, '/api/v1/surveys/1', token)
     expect(resp.ok()).toBe(true)
     const body = await resp.json()
     const data = body?.data
@@ -75,7 +64,7 @@ test.describe('E2E-13 心理测验链路', () => {
 
   // ==================== #3 列表页正常加载 ====================
   test('#3 列表页显示量表卡片', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -87,7 +76,7 @@ test.describe('E2E-13 心理测验链路', () => {
 
   // ==================== #4 列表项显示基本信息 ====================
   test('#4 量表卡片显示标题和题数', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -102,7 +91,7 @@ test.describe('E2E-13 心理测验链路', () => {
 
   // ==================== #5 答题页题目渲染 ====================
   test('#5 点击量表进入答题页，题目正确渲染', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -121,7 +110,7 @@ test.describe('E2E-13 心理测验链路', () => {
 
   // ==================== #6+#7+#8+#9 提交全链路 ====================
   test('#6-9 答题→提交→结果弹窗显示 riskLevel（中文）', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -162,7 +151,7 @@ test.describe('E2E-13 心理测验链路', () => {
 
   // ==================== #10 刷新后可再次答题 ====================
   test('#10 刷新列表页后可再次答题', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -178,19 +167,15 @@ test.describe('E2E-13 心理测验链路', () => {
 
   // ==================== #11 结果查询 API ====================
   test('#11 结果查询 API 返回 riskLevel', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     // 先查列表拿 resultId
-    const listResp = await page.request.get(`${API_BASE}/api/v1/surveys/results`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const listResp = await gwGet(page, '/api/v1/surveys/results', token)
     expect(listResp.ok()).toBe(true)
     const listBody = await listResp.json()
     const items = listBody?.data?.items
     if (items && items.length > 0) {
       const resultId = items[0].resultId
-      const resultResp = await page.request.get(`${API_BASE}/api/v1/surveys/results/${resultId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const resultResp = await gwGet(page, `/api/v1/surveys/results/${resultId}`, token)
       expect(resultResp.ok()).toBe(true)
       const resultBody = await resultResp.json()
       expect(resultBody?.data?.riskLevel).toBeDefined()
@@ -200,7 +185,7 @@ test.describe('E2E-13 心理测验链路', () => {
 
   // ==================== #12 不存在的量表 ====================
   test('#12 不存在的量表 ID 返回错误（非白屏）', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question/99999')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(3000)

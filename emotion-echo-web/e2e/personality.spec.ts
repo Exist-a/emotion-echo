@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gateBrowserRequests, gwGet, gwPost, loginOnce } from './helpers/gateway'
 
 /**
  * E2E-14: 人格量表与 AI 提示词定制 Playwright 回归钉
@@ -24,36 +25,17 @@ import { test, expect } from '@playwright/test'
  * - 种子数据 deploy/db/06-seed-surveys.sql 已执行（含 BIG5）
  */
 
-const API_BASE = 'http://localhost:19080'
-const WEB_BASE = process.env.BASE_URL ?? 'http://localhost:3000'
-const DEMO = { username: 'echo', password: 'echo123' }
 /** 阶段证据目录（相对 emotion-echo-web/，与 docs/e2e-roadmap/stages/<stage>/screenshots 对齐） */
 const SHOTS = '../docs/e2e-roadmap/stages/e2e-14-personality-ai-prompt/screenshots'
 /** 截图文件名带 project 名：chromium 与 mobile 两次运行否则会互相覆盖 */
 const shot = (name: string) => `${SHOTS}/${name}-${test.info().project.name}.png`
-
-function authHeaders(token: string) {
-  return { Authorization: `Bearer ${token}` }
-}
-
-async function loginViaAPI(page: import('@playwright/test').Page): Promise<string> {
-  const resp = await page.request.post(`${API_BASE}/api/v1/auth/login`, { data: DEMO })
-  expect(resp.ok(), 'login API must succeed').toBe(true)
-  const body = await resp.json()
-  const token = body?.data?.accessToken
-  expect(token, 'login response must contain accessToken').toBeTruthy()
-  await page.context().addCookies([{ name: 'access_token', value: token, url: WEB_BASE }])
-  return token as string
-}
 
 /** 从列表 API 找人格量表的 id */
 async function findPersonalitySurveyId(
   page: import('@playwright/test').Page,
   token: string,
 ): Promise<number> {
-  const resp = await page.request.get(`${API_BASE}/api/v1/surveys`, {
-    headers: authHeaders(token),
-  })
+  const resp = await gwGet(page, '/api/v1/surveys', token)
   expect(resp.ok()).toBe(true)
   const body = await resp.json()
   const items: any[] = body?.data?.items ?? []
@@ -84,12 +66,15 @@ async function answerAllAndSubmit(page: import('@playwright/test').Page) {
 }
 
 test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
+  // 见 e2e/helpers/gateway.ts：把浏览器自身的网关请求纳入请求预算（E2E-F-214）
+  test.beforeEach(async ({ page }) => {
+    await gateBrowserRequests(page)
+  })
+
   // ==================== #1 种子数据 ====================
   test('#1 列表 API 含 category=personality 的量表', async ({ page }) => {
-    const token = await loginViaAPI(page)
-    const resp = await page.request.get(`${API_BASE}/api/v1/surveys`, {
-      headers: authHeaders(token),
-    })
+    const token = await loginOnce(page)
+    const resp = await gwGet(page, '/api/v1/surveys', token)
     expect(resp.ok()).toBe(true)
     const body = await resp.json()
     const items: any[] = body?.data?.items ?? []
@@ -100,11 +85,9 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
 
   // ==================== #2 种子数据结构 ====================
   test('#2 人格量表详情含 30 题且每题 5 选项', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const id = await findPersonalitySurveyId(page, token)
-    const resp = await page.request.get(`${API_BASE}/api/v1/surveys/${id}`, {
-      headers: authHeaders(token),
-    })
+    const resp = await gwGet(page, `/api/v1/surveys/${id}`, token)
     expect(resp.ok()).toBe(true)
     const body = await resp.json()
     const questions: any[] = body?.data?.questions ?? []
@@ -118,17 +101,14 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
 
   // ==================== #4 提交成功 + 维度分数 ====================
   test('#4 人格量表提交成功并返回五维度分数', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const id = await findPersonalitySurveyId(page, token)
 
     // 全选"中立"（第 3 个选项 = 3 分）→ 每维度应得 18 分
     const answers: Record<string, number> = {}
     for (let i = 1; i <= 30; i++) answers[`q${i}`] = 3
 
-    const resp = await page.request.post(`${API_BASE}/api/v1/surveys/${id}/submit`, {
-      headers: authHeaders(token),
-      data: { answers },
-    })
+    const resp = await gwPost(page, `/api/v1/surveys/${id}/submit`, { token, data: { answers } })
     expect(resp.ok()).toBe(true)
     const body = await resp.json()
     const data = body?.data ?? body
@@ -149,7 +129,7 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
 
   // ==================== #6 tab 分组 ====================
   test('#6 /question 页有两个分类 tab', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -175,7 +155,7 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
   // E2E-13 的 #4 曾断言「标题、描述、题数」通过，但未实际校验描述内容（弱断言）。
   // 修复后此用例钉住"描述必须渲染出文本"。
   test('#3 量表卡片渲染描述文本（非空白行）', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -193,7 +173,7 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
 
   // ==================== #7 tab 筛选 ====================
   test('#7 切换 tab 后列表按类别筛选', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -220,7 +200,7 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
 
   // ==================== #5 结果弹窗展示维度分数 ====================
   test('#5 人格量表结果弹窗展示雷达图 + 五维度明细，不显示等级', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     await page.goto('/question')
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(2000)
@@ -275,14 +255,14 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
 
   // ==================== #11 结果持久化 ====================
   test('#11 人格结果持久化（列表可读回 factorScores）', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const id = await findPersonalitySurveyId(page, token)
 
     const answers: Record<string, number> = {}
     for (let i = 1; i <= 30; i++) answers[`q${i}`] = 5
 
-    const submitResp = await page.request.post(`${API_BASE}/api/v1/surveys/${id}/submit`, {
-      headers: authHeaders(token),
+    const submitResp = await gwPost(page, `/api/v1/surveys/${id}/submit`, {
+      token,
       data: { answers },
     })
     expect(submitResp.ok()).toBe(true)
@@ -291,9 +271,7 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
     // 全 5 分（反向题需反转）→ 逐维度值与提交响应一致即为落库正确
     expect(Object.keys(dims).length).toBe(5)
 
-    const listResp = await page.request.get(`${API_BASE}/api/v1/surveys/results`, {
-      headers: authHeaders(token),
-    })
+    const listResp = await gwGet(page, '/api/v1/surveys/results', token)
     expect(listResp.ok()).toBe(true)
     const items: any[] = (await listResp.json())?.data?.items ?? []
     const mine = items.find(
@@ -303,10 +281,7 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
     expect(mine.factorScores).toEqual(dims)
 
     // 详情接口同样带 factorScores
-    const detailResp = await page.request.get(
-      `${API_BASE}/api/v1/surveys/results/${mine.resultId}`,
-      { headers: authHeaders(token) },
-    )
+    const detailResp = await gwGet(page, `/api/v1/surveys/results/${mine.resultId}`, token)
     expect(detailResp.ok()).toBe(true)
     const detail = (await detailResp.json())?.data
     expect(detail.factorScores).toEqual(dims)
@@ -314,16 +289,13 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
 
   // ==================== #8 user 页人格雷达图 ====================
   test('#8 我的空间展示人格维度雷达图', async ({ page }) => {
-    await loginViaAPI(page)
+    await loginOnce(page)
     // 先确保有人格结果（幂等：全中立提交一次）
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const id = await findPersonalitySurveyId(page, token)
     const answers: Record<string, number> = {}
     for (let i = 1; i <= 30; i++) answers[`q${i}`] = 3
-    await page.request.post(`${API_BASE}/api/v1/surveys/${id}/submit`, {
-      headers: authHeaders(token),
-      data: { answers },
-    })
+    await gwPost(page, `/api/v1/surveys/${id}/submit`, { token, data: { answers } })
 
     await page.goto('/chat/user')
     await page.waitForLoadState('domcontentloaded')
@@ -356,10 +328,10 @@ test.describe('E2E-14 人格量表与 AI 提示词定制', () => {
 
   // ==================== #12 无画像降级：AI 仍正常回复 ====================
   test('#12 AI 对话正常（人格画像查询不阻断聊天链路）', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
 
-    const resp = await page.request.post(`${API_BASE}/api/v1/ai/stream`, {
-      headers: authHeaders(token),
+    const resp = await gwPost(page, '/api/v1/ai/stream', {
+      token,
       data: { message: '我今天有点累', conversationId: '1' },
       timeout: 30000,
     })
