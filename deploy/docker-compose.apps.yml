@@ -747,7 +747,8 @@ services:
   # 直接用容器内 curl 探下游（容器本就在 app-network 内，DNS 可解）。
   # =====================================================
   emotion-echo-apisix-seed:
-    image: curlimages/curl:latest
+    # E2E-F-188（2026-10-09）：原 `:latest` 浮动引用 → 钉 digest（本机 RepoDigest，registry 不可达沿用 D-07 语义）
+    image: curlimages/curl@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
     container_name: emotion-echo-apisix-seed
     restart: "no"
     depends_on:
