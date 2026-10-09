@@ -804,7 +804,7 @@ type SurveyResult struct {
 	DurationSec int32   `protobuf:"varint,7,opt,name=duration_sec,json=durationSec,proto3" json:"duration_sec,omitempty"`
 	// E2E-31 #3：结果侧作答同样按问题键保真（原 repeated Answer 会丢 "q1"）
 	Answers     map[string]int32 `protobuf:"bytes,8,rep,name=answers,proto3" json:"answers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	SubmittedAt int64            `protobuf:"varint,9,opt,name=submitted_at,json=submittedAt,proto3" json:"submitted_at,omitempty"` // unix seconds
+	SubmittedAt int64            `protobuf:"varint,9,opt,name=submitted_at,json=submittedAt,proto3" json:"submitted_at,omitempty"` // unix **milliseconds**（DB 侧即为 ms；原注释误写 seconds，2026-10-08 实测更正）
 	// E2E-31 #5：维度/分量分数（前端雷达图；`riskLevel=="dimension_profile"` 时使用）
 	FactorScores map[string]float64 `protobuf:"bytes,10,rep,name=factor_scores,json=factorScores,proto3" json:"factor_scores,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
 	// E2E-31 #5：total_score 语义（E2E-F-97）：
