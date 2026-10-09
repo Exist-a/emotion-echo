@@ -1,32 +1,33 @@
 ---
 stage: e2e-31
 title: 内部 RPC 收敛（BFF→assessment-svc 切回 gRPC + proto 契约扩展 + 死 RPC 逐条裁定）
-status: partial
+status: done
 created: 2026-10-08
-last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
+last-updated: 2026-10-09（**收口轮**：T-5 销账 —— E2E-F-214 按用户裁定"本阶段内修"闭环，标准单命令连跑 48/48 连续 4 轮全绿）
 ---
 
 # E2E-31 内部 RPC 收敛 — 执行记录（report）
 
 > 判定依据：[RUNBOOK.md](../../RUNBOOK.md) §3 六步循环 / §4 判定分级 / §4.1 证据有效性 / §7 收口契约；反例：[anti-patterns.md](../../anti-patterns.md)。
 > 任务书：[plan.md](plan.md)（20 测试点 / 6 TDD 循环 / 5 执行期 [M]）。
-> **本轮结论**：实现与端到端验证完成，**20 个测试点全部有结论（20 PASS / 0 FAIL / 0 BLOCKED）**；阶段仍判 `partial` 的**唯一原因 = E2E-F-214**（dev 限流致 E2E 连跑 flaky，去向待定，见 §0）。
+> **本轮结论**：**20 个测试点全部有结论（20 PASS / 0 FAIL / 0 BLOCKED / 0 N/A）**；§0 的未完成清单**已全部销账**（T-1~T-5）；用户 2026-10-09 签字判 **done**。收口轮详见 §9。
 
 ---
 
 ## 0. 未完成清单（唯一真相源 · 收口时必须逐条销账）
 
-> 本阶段判 `partial`：共 **1 项未完成**（**4 项已销账**：原 T-1/T-2/T-3/T-4）。
+> **本阶段已收口：0 项未完成**（**5 项全部销账**：T-1~T-5）。
 >
 > **已销账（2026-10-09，用户经 AskUserQuestion 裁定 + 当轮实施）**：
 > - **T-1（测点 #19）**：A/B 类死 RPC 裁定 = **保留 + 标注 + 守卫**。用户先质疑「关于 grpc 我不是明确说过要做吗？这么还有预留」，遂**逐条查实**：这 7 处**不是**"业务走 HTTP 把 gRPC 绕开"（那是 assessment 链，已修），而是①功能未接出（analytics `MentalHealth{History,Trigger,Trend}` —— svc 侧实现与 HTTP 路由都在，但 BFF 未暴露、前端未用、无脚本消费）②无业务路径（`StreamMessages` 无流式业务、`AnalyzeBatch` 无批量业务）③业务路径存在但设计上空转（`Logout` 只清 cookie）④族内冗余（`VerifySecurityAnswer` 按 userID 那个；在用者是兄弟方法 `VerifySecurityAnswerByUsername`）。⇒ 启用属**建功能**，已按裁定落地：7 处服务端 + 3 处 BFF 客户端加统一标记 `E2E-31 已知未接线`，并新增守卫 `scripts/check_dead_grpc_inventory.sh` 接入 CI（守卫 23/23，负向对照：删 1 个标记 → RED）。
 > - **T-2（测点 #20）**：`AnalyzeWithAuth` **已删除**（与 `AuthWrappedAnalyzer.Analyze` 完全同构，后者才是 main.go 在用路径）；BFF→assessment 的 dial **保留**（本次改造后已被真实调用）。删除时**曾连带丢失一条真断言覆盖**（见 §8 条件 (a)），已在同轮补回。
 > - **T-3**：RUNBOOK §13.3 第二方核对 **已做**，结论「有条件通过」，4 个条件已逐条处置，记录见 §8。
 > - **T-4**：用户裁定 **不需要新 ADR**（属"回归决策 4 已定方向"，非新决策）。
+> - **T-5（E2E-F-214）**：用户 2026-10-09 裁定 **「本阶段内修」**（非转挂）→ 已在 **spec 层请求预算**闭环（**不改产品限流配置**）：详见 §9。**账本 E2E-F-214 → ✅ 已解决**。
 
 | 编号 | 未完成事项 | 责任人 / 去向 | 可核验判据 | 现状 |
 |------|-----------|--------------|-----------|------|
-| **T-5** | **E2E-F-214**：dev 限流 `60 req/60s` 使 48 条 E2E 一次性连跑必出 ~2 条假红（只 mobile、每次换用例） | **待定去向**：属**测试卫生**（用例的数据准备/断言请求量 × 2 project），不在本阶段"内部 RPC 收敛"的产品范围内 | 归宿二选一：① 本阶段内修（spec 层缓存令牌/加请求预算/分 project 运行脚本化）② **转挂 spec 与 CI 门禁的 owner**（E2E-13/E2E-14 spec 与 E2E-03 门禁）并在账本改归属 | ⚠️ 未解决（已定性 + 规避手法明确：分 project 跑；**未用"不归属阶段"糊过去——它确实是本阶段回归钉暴露的**） |
+| — | **无**（T-1~T-5 全部销账） | — | — | ✅ 清单为空 |
 
 ---
 
@@ -61,8 +62,8 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 | 12 | 删除恒真 HTTP 旁路 + 守卫 | [A] | PASS | **非注释代码零命中**（`grep -rn 'assessmentBase' survey_handler.go` 仅剩 16/20 行注释；旁路、5 个 `*HTTP` 方法、`assessmentBase` 字段全删）。回归钉 `TestSurveyHandler_NoHTTPBypass_RegressionNail` 通过；**负向对照已实做**：临时加回字段后该用例 **FAIL**，输出 `[]string{"assessment","assessmentBase"} should not contain "assessmentBase"` 与 `"assessmentBase string" should not contain …`（**测试文件行号 206/219 + 源码行内容**） |
 | 13 | personality 切回共享 gRPC 客户端 | [A] | PASS | `main.go` 删除 `NewAssessmentClient(Transport: HTTP)` 独立实例，改用 `s.Assessment`；IAB 实测「我的空间」人格雷达五维度均有值（见 #17 截图 07） |
 | 14 | BFF 对外 JSON 形状不变 | [A] | PASS | 实测详情响应 `questions` 仍为**数组**、每题 `{id:"q1", title:..., options:[{id,text,score}]}`；列表为 `{items,total}`；提交体仍为 `{answers:{"q1":score}}` |
-| 15 | Playwright `quiz` + `survey-scoring`（双 project） | [A] | PASS | **chromium 24/24 + mobile 24/24**（各 3 spec 合并计；单 project 跑均全绿 51.8s/54.4s）。**注**：48 条一次性连跑会撞 dev 限流（实测 70 次请求 → 60×200 + 10×429），产生 2 条 flaky 假红（见 E2E-F-214） |
-| 16 | Playwright `personality`（双 project） | [A] | PASS | 含 `#8 我的空间展示人格维度雷达图` / `#11 人格结果持久化（列表可读回 factorScores）` 在内全绿（同 #15 的分 project 跑法） |
+| 15 | Playwright `quiz` + `survey-scoring`（双 project） | [A] | PASS | **标准单命令一次性连跑 48/48**（`npx playwright test quiz survey-scoring personality`，chromium 24 + mobile 24 = 48）**连续 4 轮全绿**（1.6~1.7m）；单 project 单独跑亦全绿。原 48 条连跑撞 APISIX `limit-count`（60/60s）产生 ~2 条 flaky 假红（**E2E-F-214**），**收口轮已修**（spec 层请求预算，见 §9） |
+| 16 | Playwright `personality`（双 project） | [A] | PASS | 含 `#8 我的空间展示人格维度雷达图` / `#11 人格结果持久化（列表可读回 factorScores）` 在内全绿（与 #15 **同一次标准连跑**，不再需要分 project 跑） |
 | 17 | **IAB 实测测验链路** | [V] | PASS | 内置浏览器黑盒（未注入 JS）：详情页（含新出现的描述文案）+ 结果弹窗 + 我的空间雷达。截图 `screenshots/05`(描述) / `06`(总分 27·极重度) / `07`(五维度雷达)，**逐张查看**；与改动前基线 `01`~`04` 对比 |
 | 18 | 门禁与审计 | [A] | PASS | `go vet` + `go test ./...` 三模块全绿；前端 `vitest 657 passed`（78 文件）；`nuxt typecheck` 0 个 TS 错误；`e2e_stage_audit.py --all` 31 阶段 0 FAIL |
 | 19 | A/B 类死 RPC 逐条裁定（**保留 + 标注 + 守卫**） | [M] | PASS | 用户 2026-10-09 裁定「保留 + 标注 + 守卫」。执行：10 处加统一标记 `E2E-31 已知未接线`（服务端 7：chat/llm/analytics×3/user×2；BFF 客户端 3）；新增守卫 `bash scripts/check_dead_grpc_inventory.sh` → **输出** `PASS: 未接线标记 10/10`，**退出码 0**；**负向对照**：删掉 1 个标记 → **输出** `FAIL: 标记数 9 ≠ 预期 10`，**退出码 1**；守卫接入 CI（`e2e-guards.yml` 守卫 23/23）。查实结论：这 7 处**不是** HTTP 绕开 gRPC（见 §0 说明） |
@@ -111,7 +112,8 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 | Go 契约（HTTP transport 归一化） | `emotion-echo-web-bff/internal/downstream/assessment_test.go`（含逆序输入验证排序） | ✅ |
 | Go 契约（gRPC transport，bufconn 真 server） | `emotion-echo-web-bff/internal/downstream/assessment_grpc_test.go`（4 用例） | ✅ |
 | 静态回归钉 | `emotion-echo-web-bff/internal/handler/survey_handler_test.go::TestSurveyHandler_NoHTTPBypass_RegressionNail` | ✅（含负向对照） |
-| 端到端 | Playwright `quiz` / `survey-scoring` / `personality`（双 project） | ✅ 24/24 + 24/24 |
+| 静态回归钉（E2E 请求预算） | `scripts/test_e2e_gateway_budget.sh`（三 spec 不得裸调 `page.request`／不得自带登录／`BUDGET<60`／缓存正则不得覆盖 `results`；含负向对照） | ✅ 接入 CI `e2e-guards.yml` 守卫 24/24；对真实文件注入→`rc=1`、还原→md5 一致 |
+| 端到端 | Playwright `quiz` / `survey-scoring` / `personality`（双 project，**标准单命令一次性连跑**） | ✅ **48/48 × 连续 4 轮** |
 | 视觉 | `screenshots/05`~`07`（改造后）+ `01`~`04`（改造前基线） | ✅ 逐张查看 |
 
 ---
@@ -124,8 +126,8 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 | M4 | assessment-svc `:8886` 去留 → **已由证据关闭**：BFF 现在真实调用该端口（`[grpc-client] .../ListSurveys target=...:8886 err=<nil>`），**必须保留** | 无需裁定（证据关闭） |
 | M5 | `ASSESSMENT_TRANSPORT=http` 回滚位 → 本轮**保留开关**并修复了 HTTP 实现的形状一致性（`normalizeQuestions`），默认 grpc | 执行者按计划建议落地；如需彻底删除该开关请明示 |
 | **T4（§6 条目，非 §0 未完成项）** | 是否为新 ADR | ✅ **已裁定：不需要**（用户 2026-10-09：属"回归决策 4 已定方向" + ADR-18 §C proto-first 流程，非新决策；`adr-2026-09-survey-http-bypass` 已在 PR #181 加更正记录） |
-| **E2E-F-214** | dev 限流致 E2E 连跑 flaky | ⚠️ **仍挂**，是本阶段判 `partial` 的**唯一**原因（见 §0 T-1：需定去向——本阶段修 or 转挂 spec/CI owner） |
-| 附带 | 冷启动首次 gRPC 调用 `DeadlineExceeded`（重启后首调 5s 超时、重试即 2ms） | 是否并入 E2E-F-115 同型治理 |
+| **E2E-F-214** | dev 限流致 E2E 连跑 flaky | ✅ **已闭环（用户 2026-10-09 裁定「本阶段内修」）** —— spec 层请求预算（令牌复用 + 种子数据缓存 + 滑动窗口闸门 BUDGET=55<60），未改产品限流配置；标准单命令连跑 **48/48 × 4 轮**、APISIX 侧 **0 × 429**、每分钟峰值 54。见 §9 与账本 |
+| 附带 | 冷启动首次 gRPC 调用 `DeadlineExceeded`（重启后首调 5s 超时、重试即 2ms） | ✅ **已定（用户 2026-10-09）：并入 E2E-F-115 同型治理，不新开编号**。已定位机制 = `main.go:376` 跨下游统一兜底 deadline `ClientDialOptions(..., 5*time.Second)` → `ClientTimeoutInterceptor` 在调用方 ctx 无 deadline 时套 5s；assessment 链此前是死代码故从未暴露。已并账至账本 F-115，**不回挂本阶段** |
 
 ---
 
@@ -137,12 +139,12 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 | 2 | 范围内缺陷走完 TDD（L1~L6 RED→GREEN） | [x] 见 §4，L1 的 RED 为首次 `go test` build failed（10 处未定义符号） |
 | 3 | 回归钉跑过且绿 | [x] 见 §5（含负向对照） |
 | 4 | 改变用户可见行为的修复已 IAB 实测 | [x] 测点 #17；截图 05~07 且逐张查看 |
-| 5 | §5 的 M3/M4/M5 已升级并落定 | [x] M3-残余/T-4 已由用户裁定并**当轮实施**（§2 #19/#20）；M4 由证据关闭；M5 按建议落地。**仍未 done 的唯一原因 = E2E-F-214**（见 §0 T-1） |
+| 5 | §5 的 M3/M4/M5 已升级并落定 | [x] M3-残余/T-4 已由用户裁定并**当轮实施**（§2 #19/#20）；M4 由证据关闭；M5 按建议落地。**§0 未完成清单 T-1~T-5 已全部销账**（T-5 = E2E-F-214，收口轮闭环，见 §9） |
 | 6 | 架构改动附 ADR + architecture/decisions.md | [x] 用户裁定**不需要新 ADR**（T-4：属回归决策 4 已定方向）——裁定已记录，非"忘记做" |
 | 7 | 账本对账：E2E-F-208 逐条翻状态或写明仍挂理由 | [x] **E2E-F-208 → ✅ 已解决**：assessment 链切回 gRPC 并实测；剩余 7 处按用户裁定"保留 + 标注 + 守卫"落地（10 处标记 + CI 守卫 23/23） |
 | 8 | `e2e_stage_audit.py --all` 0 FAIL + §13.3 第二方核对 | [x] audit **0 FAIL**；**第二方核对已做**（独立子代理，结论「有条件通过」+ 4 条条件，已逐条处置，记录见 §8） |
 | 9 | §2.5 收口自检三连 + 残留分支/worktree 清理 | [x] 见 PR（本报告的合并动作） |
-| 10 | 改动后 Playwright/IAB 与改动前基线对比 | [x] 48/48（分 project）；IAB 基线 01~04 vs 改造后 05~07 逐项对照，无劣化且详情页新增描述文案 |
+| 10 | 改动后 Playwright/IAB 与改动前基线对比 | [x] **标准单命令连跑 48/48 × 连续 4 轮**（收口轮；执行轮时为分 project 24/24 + 24/24）；IAB 基线 01~04 vs 改造后 05~07 逐项对照，无劣化且详情页新增描述文案 |
 | 11 | **第二方核对提出的 4 条条件已处置** | [x] (a) 补回 apiKey metadata 真断言 + 真负向对照（wrapper 不注入→RED）；(b) report §0/§6 与账本同步到已落地的 T-1/T-2；(c) 更正 §2 #12 的 `grep` 证据与措辞；(d) 补服务端转换直接单测 5 条。详见 §8 |
 
 ---
@@ -186,3 +188,45 @@ last-updated: 2026-10-09（执行轮：P1~P4 落地 + 端到端验证）
 - 另记：`assessment-svc go test -count=1` / `ai-svc analyzer` 全绿；`audit --all` 0 FAIL；核对前后 `git status --short` **均为空**。
 
 **本条条件的处置**：已修 §7 第 1 行（→ `PASS 20 / FAIL 0 / BLOCKED 0 / N/A 0`）、header（删"2 个 [M] 未落定"，改为"唯一原因 = E2E-F-214"）、§0 计数（→"4 项已销账"）并把未完成项标签由 `T-1` 改为 **`T-5`**（消除撞名）；另把 §2 #12 与 §4 L6 的**旧错措辞原文改写**（不再只靠下方批注更正）。
+
+---
+
+## 9. 收口轮（2026-10-09）：E2E-F-214 闭环 + 阶段判 done
+
+> 用户 2026-10-09 经 AskUserQuestion 裁定三条：① **E2E-F-214 去向 = 本阶段内修**（非转挂）；② **E2E-31 = 修完按标准测一遍、没问题即判 `done`**；③ 冷启动 `DeadlineExceeded` **并入 E2E-F-115 同型治理**。
+
+### 9.1 根因复核（含对上一轮归因笔误的更正）
+
+| 项 | 结论 |
+|---|---|
+| 限流位置 | **在 APISIX**（上一轮报告/账本写"BFF 限流"是**归因笔误**，已原文改写）：route100（`/api/v1/*` catch-all）与 route110（auth 白名单）**各挂** `limit-count`：`count=60 / time_window=60 / key=remote_addr`，Redis 键 `plugin-limit-count:v1:/apisix/routes/100:<addr>` |
+| 连跑实测请求量 | route100 **112** 次、route110 **50** 次（= 24 用例 × 2 project **各登录一次** = 48 次登录 + 2）；`GET /api/v1/surveys` 占 42 次、详情 26 次（多为跨用例重复取数） |
+| 触发点 | 某一分钟 route100 达 **72**（> 60）⇒ 429 ⇒ 页面无数据 ⇒ 断言随机假红；**按标准单命令复现**：`47 passed / 1 failed`（`[mobile] personality #4`，提交接口非 200） |
+
+### 9.2 修复（spec 层请求预算；**产品限流配置一字未改**）
+
+新增 `emotion-echo-web/e2e/helpers/gateway.ts`，三个 spec（quiz / survey-scoring / personality）全部接入：
+
+1. **`loginOnce`** —— 登录令牌在 worker 内复用（access token TTL 24h；证据：`jwt.go:84` `ttl = 24 * time.Hour`）。route110 **50 → 2**。
+2. **只读种子数据缓存** —— `GET /api/v1/surveys` 与 `/api/v1/surveys/{id}` 跨用例复用（正则 `^/api/v1/surveys(/\d+)?$`）；**`/surveys/results*` 明确禁止缓存**（每次提交都会变，缓存会读到陈旧数据）。每 project 命中 15 次。
+3. **进程级滑动窗口预算** —— `BUDGET = 55`/60s（低于 APISIX 的 60；且我们限制的是**任意滑动 60s 窗口**，比 APISIX 的固定窗口更保守）。`gwGet`/`gwPost` 覆盖**显式** `page.request` 调用；`gateBrowserRequests`（`page.route('http://localhost:19080/**')`）覆盖**浏览器自身**发出的网关请求 —— `page.request` 不经 `page.route`，两条路径缺一不可。
+
+> **中途真实教训（如实记录，不美化）**：第一版 `BUDGET=50` 时**闸门自身会阻塞**——实测每 project `blocked=5 / waitedMs=14383`（一次等 13.8s）。其中一次阻塞落在**浏览器侧数据请求**上 ⇒ 页面只剩页头、`.question-block` 恒 0、30s 测试超时 ⇒ **制造了一个新的假红形态**（`[chromium] survey-scoring #5`，且当场 APISIX **0 × 429**，与"限流假红"症状相似但成因相反）。修法 = 把预算提到 55 **并**加种子缓存，把需求压到预算之下，使闸门**不再阻塞**。
+
+### 9.3 证据
+
+| 证据 | 值 |
+|---|---|
+| 标准单命令连跑 | `npx playwright test e2e/quiz.spec.ts e2e/survey-scoring.spec.ts e2e/personality.spec.ts`（双 project）→ **48 passed × 4 轮**（1.7m / 1.7m / 1.6m / 1.7m） |
+| 闸门统计（`E2E_GATE_DEBUG=1`，每 project） | `issued=42 blocked=0 waitedMs=0 cacheHits=15`（修前 `issued=57 blocked=5 waitedMs=14383`） |
+| APISIX 侧（独立证据） | 每分钟网关请求峰值 **54**（< 60）；状态码分布 **368×200 + 9×404**；**0 × 429** |
+| 负向对照（守卫） | 对真实 `quiz.spec.ts` 注入裸 `page.request.get(...)` → 守卫 `rc=1`（输出 `含 1 处裸 page.request.`）；还原后 md5 `e26a47bf…` 一致、`rc=0` |
+| 基线（改动前，即负向对照的另一半） | 同一命令 `47 passed / 1 failed`；APISIX 同窗 route100 单分钟 **72** + 429 |
+
+### 9.4 新增/更新产物
+
+- 新增 `emotion-echo-web/e2e/helpers/gateway.ts`（请求预算闸门）
+- 新增 `scripts/test_e2e_gateway_budget.sh`（静态回归钉 + 负向对照）→ 接入 `.github/workflows/e2e-guards.yml` **守卫 24/24**
+- 改造 `emotion-echo-web/e2e/{quiz,survey-scoring,personality}.spec.ts`（接入闸门；**断言一条未改**）
+- 账本：`E2E-F-214 → ✅ 已解决`；冷启动 gRPC 首调并账至 `E2E-F-115`
+- **覆盖度诚实记录**：登录成功的运行时断言由"每用例一次（48 次）"降为"每 worker 一次"（登录端点另有 `login-flow.spec.ts` 与 Go 侧单测覆盖）；种子数据 GET 由"每用例重复取"改为跨用例复用（**只读、值不变**，断言仍逐条执行）。

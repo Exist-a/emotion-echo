@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gateBrowserRequests, gwGet, gwPost, loginOnce } from './helpers/gateway'
 
 /**
  * E2E-F-97 回归钉：症状量表必须按 **option.score** 计分，不能按 option.id。
@@ -22,22 +23,8 @@ import { test, expect } from '@playwright/test'
  * 两端都要测 —— 前者暴露虚高，后者暴露 400。
  */
 
-const API_BASE = 'http://localhost:19080'
-const WEB_BASE = process.env.BASE_URL ?? 'http://localhost:3000'
-const DEMO = { username: 'echo', password: 'echo123' }
-
-async function loginViaAPI(page: import('@playwright/test').Page): Promise<string> {
-  const resp = await page.request.post(`${API_BASE}/api/v1/auth/login`, { data: DEMO })
-  expect(resp.ok(), 'login API must succeed').toBe(true)
-  const token = (await resp.json())?.data?.accessToken as string
-  await page.context().addCookies([{ name: 'access_token', value: token, url: WEB_BASE }])
-  return token
-}
-
 async function surveyIdByCode(page: import('@playwright/test').Page, token: string, code: string) {
-  const resp = await page.request.get(`${API_BASE}/api/v1/surveys`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const resp = await gwGet(page, '/api/v1/surveys', token)
   const items: any[] = (await resp.json())?.data?.items ?? []
   const s = items.find((i) => i.code === code)
   expect(s, `种子数据必须含量表 ${code}`).toBeTruthy()
@@ -52,9 +39,7 @@ async function submitByOptionIndex(
   questionCount: number,
   optionIndex: number,
 ) {
-  const detail = await page.request.get(`${API_BASE}/api/v1/surveys/${surveyId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const detail = await gwGet(page, `/api/v1/surveys/${surveyId}`, token)
   const questions: any[] = (await detail.json())?.data?.questions ?? []
   expect(questions.length).toBe(questionCount)
   // 用种子数据里真实的 option.score（这正是前端**应该**提交的东西）
@@ -63,16 +48,17 @@ async function submitByOptionIndex(
     const opt = q.options[optionIndex]
     answers[q.id] = opt.score
   }
-  const resp = await page.request.post(`${API_BASE}/api/v1/surveys/${surveyId}/submit`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { answers },
-  })
-  return resp
+  return gwPost(page, `/api/v1/surveys/${surveyId}/submit`, { token, data: { answers } })
 }
 
 test.describe('E2E-F-97 症状量表按 score 计分（精确取值断言）', () => {
+  // 见 e2e/helpers/gateway.ts：把浏览器自身的网关请求纳入请求预算（E2E-F-214）
+  test.beforeEach(async ({ page }) => {
+    await gateBrowserRequests(page)
+  })
+
   test('#1 PHQ-9 全选"完全没有"(score=0) → total=0 / none', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const sid = await surveyIdByCode(page, token, 'PHQ-9')
     const resp = await submitByOptionIndex(page, token, sid, 9, 0)
     expect(resp.ok(), '提交必须 200').toBe(true)
@@ -84,7 +70,7 @@ test.describe('E2E-F-97 症状量表按 score 计分（精确取值断言）', (
   })
 
   test('#2 PHQ-9 全选"几乎每天"(score=3) → total=27 / extreme', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const sid = await surveyIdByCode(page, token, 'PHQ-9')
     const resp = await submitByOptionIndex(page, token, sid, 9, 3)
     // 修前此项直接 HTTP 400（提交的是 option.id=4，超出 score 值域 0-3）
@@ -95,7 +81,7 @@ test.describe('E2E-F-97 症状量表按 score 计分（精确取值断言）', (
   })
 
   test('#3 GAD-7 两端同样成立（0/0 与 21/severe）', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const sid = await surveyIdByCode(page, token, 'GAD-7')
 
     const low = await submitByOptionIndex(page, token, sid, 7, 0)
@@ -112,7 +98,7 @@ test.describe('E2E-F-97 症状量表按 score 计分（精确取值断言）', (
   })
 
   test('#4 BIG5 恰好 id==score，两端取值不变（防修复回归）', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const sid = await surveyIdByCode(page, token, 'BIG5')
 
     const low = await submitByOptionIndex(page, token, sid, 30, 0)
@@ -127,7 +113,7 @@ test.describe('E2E-F-97 症状量表按 score 计分（精确取值断言）', (
   })
 
   test('#5 UI 端到端：PHQ-9 每题点最后一档 → 提交成功且弹窗显示极重度', async ({ page }) => {
-    const token = await loginViaAPI(page)
+    const token = await loginOnce(page)
     const sid = await surveyIdByCode(page, token, 'PHQ-9')
     void token
 
