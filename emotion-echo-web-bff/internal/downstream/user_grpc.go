@@ -105,6 +105,9 @@ func (c *userGRPCClient) ResetPassword(ctx context.Context, req ResetPasswordReq
 // Logout gRPC RPC（Sprint F 2026-09-11）
 //
 // 需要 x-user-id metadata（Logout 不在拦截器跳过清单），所以用 withUserID(ctx)。
+//
+// E2E-31 已知未接线（2026-10-09）：**本方法不在 `UserClient` 接口内**，零 handler 调用；
+// 登出路径（`/api/v1/auth/logout`）设计上只清 cookie。保留 + 标注 + 守卫（report §0 T-1）。
 func (c *userGRPCClient) Logout(ctx context.Context) error {
 	cli := emotionuser.NewUserServiceClient(c.conn)
 	_, err := cli.Logout(withUserID(ctx), &emotionuser.LogoutRequest{})
@@ -164,6 +167,10 @@ func (c *userGRPCClient) Register(ctx context.Context, username, password, verif
 }
 
 // VerifySecurityAnswer gRPC RPC（E2E-06，供 D-01=C 找回密码）
+//
+// E2E-31 已知未接线（2026-10-09）：本方法**在 `UserClient` 接口内但零 handler 调用**；
+// 找回密码在用的是兄弟方法 `VerifySecurityAnswerByUsername`（同走 gRPC）。
+// 保留 + 标注 + 守卫（report §0 T-1）；确认无人按 userID 校验后可单独删除。
 func (c *userGRPCClient) VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error {
 	cli := emotionuser.NewUserServiceClient(c.conn)
 	_, err := cli.VerifySecurityAnswer(ctx, &emotionuser.VerifySecurityAnswerRequest{

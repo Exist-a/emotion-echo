@@ -167,6 +167,9 @@ func (c *chatGRPCClient) UpdateConversation(ctx context.Context, conversationID 
 // io.EOF 错误（gRPC 标准行为）。
 //
 // 触发场景：未来多客户端实时协作（多人共编会话）/ 消息撤回广播等。
+//
+// E2E-31 已知未接线（2026-10-09）：**本方法不在 `ChatClient` 接口内**，零调用；
+// 聊天流式走 BFF SSE（非 gRPC streaming）。保留 + 标注 + 守卫（report §0 T-1）。
 func (c *chatGRPCClient) StreamMessages(ctx context.Context, conversationID int64, fromMessageID int64) (<-chan *emotionchat.ChatEvent, error) {
 	cli := emotionchat.NewChatServiceClient(c.conn)
 	stream, err := cli.StreamMessages(withUserID(ctx), &emotionchat.StreamMessagesRequest{

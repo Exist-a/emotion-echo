@@ -188,9 +188,9 @@ func getEnvOrDefault(key, def string) string {
 	return def
 }
 
-// Stage 12 升级：internal svc-to-svc 调用走 API key 鉴权。
-// ai-svc 启动时从 config.LLM.InternalAPIKey 读取 key。
-func (a *GRPCAnalyzer) AnalyzeWithAuth(ctx context.Context, text, apiKey string) (*EmotionResult, error) {
-	authCtx := grpcinterceptor.WithInternalAPIKey(ctx, apiKey)
-	return a.Analyze(authCtx, text)
-}
+// E2E-31 T-2（2026-10-09，用户裁定「删 AnalyzeWithAuth + 保留 dial」）：
+// 此处原有 `AnalyzeWithAuth(ctx, text, apiKey)` —— 它只是把 apiKey 注入 ctx 后调
+// Analyze，与 `AuthWrappedAnalyzer.Analyze`（auth_wrapped.go）**完全同构**，而后者
+// 才是 main.go 实际装配的路径 ⇒ 本方法无任何生产调用方（账本 E2E-F-208 E 类）。
+// 已删除；其两条单测一并移除，等价行为由 `auth_wrapped_test.go` 的 5 条覆盖
+// （含「非空 key → inner 收到带 apiKey 的 ctx」这一条）。

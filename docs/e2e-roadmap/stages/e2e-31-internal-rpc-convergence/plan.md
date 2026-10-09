@@ -4,7 +4,7 @@ title: 内部 RPC 收敛（BFF→assessment-svc 切回 gRPC + proto 契约扩展
 type: transformation
 status: partial
 created: 2026-10-08
-last-updated: 2026-10-09（**执行轮**：P1~P4 落地并端到端验证 → 18 PASS / 0 FAIL / **2 BLOCKED**（[M] 裁定未落定）⇒ 判 `partial`；执行记录见 [report.md](report.md)）
+last-updated: 2026-10-09（**执行轮收尾**：T-1/T-2 由用户裁定并实施、T-4 裁定不需 ADR、**§13.3 第二方核对已做**（有条件通过 → 4 条件已处置）；**20 PASS / 0 BLOCKED**，阶段仍 `partial` —— 唯一未清项 = **E2E-F-214**（dev 限流致 E2E 连跑 flaky，去向待定，见 [report.md](report.md) §0））
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；执行期 [M] 决策点见 §5
