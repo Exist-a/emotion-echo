@@ -83,6 +83,7 @@ last-updated: 2026-10-09（**执行轮（进行中）**：L1/L6 + 测点 #11/#12
 |---|---|
 | [#190](https://github.com/Exist-a/emotion-echo/pull/190) | **第一批**：L1 §2.4 smoke 可跑化（基址→网关 + Bearer + 登录前置）+ 守卫 `check_smoke_gateway.sh`；L6 helm 主 chart 渲染守卫 + CI job；#17 审计器计划解析器标题容错 + 守卫；AGENTS §2.4 文案纠偏（含双轨协议 §六 握手行）。CI 36/36 |
 | [#191](https://github.com/Exist-a/emotion-echo/pull/191) | **第二批**：#13 digest 守卫扩扫 compose `image:` 行 + 钉 4 个浮动 `:latest`（E2E-F-188）。CI 36/36 |
+| [#192](https://github.com/Exist-a/emotion-echo/pull/192) | **状态落地**：阶段转 `partial` + 本 report + STATUS.md + plan §0.1c 实测回填 + 新登 E2E-F-215。CI 36/36 |
 
 新增 CI 守卫：`e2e-guards` **25/25**（smoke 网关契约）、**26/26**（审计器计划解析器）；`doc-drift-check` 新 job **helm-main-render**。
 
