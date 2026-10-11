@@ -109,7 +109,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/   # 期望 200 或
 |------|------|------|
 | 应用 | `http://localhost:3000` | 若 Chrome 拒绝，改用 `http://127.0.0.1:3000`（CORS 已支持双 host） |
 | 网关 | `http://localhost:19080/api/v1` | APISIX 宿主映射 |
-| BFF 直连 | `http://localhost:8894` | dev 覆盖项开放 |
+| ~~BFF 直连~~ | ~~`http://localhost:8894`~~ | **已由 E2E-29 D-47 ③ 收掉**（宿主不再发布；防"直连伪造 X-User-Id 绕过网关"）。宿主 `curl :8894` → `000`（2026-10-09 实测）。业务一律经网关；脚本/探针**不得**再指该口 |
 
 ### 2.4 已知环境坑（执行时先对照）
 
@@ -399,8 +399,14 @@ cd emotion-echo-web && pnpm playwright test
 # Go（某服务）
 cd emotion-echo-<svc> && go test ./...
 
-# 数据契约 smoke（E2E-30 用）
+# 数据契约 smoke（E2E-30 用；基址 = APISIX 网关 :19080 + Bearer，可用 SMOKE_BASE 覆盖）
+# 退出码：0 = 全 OK / 1 = 有 FAIL / 2 = 前置不可用（此时**没有**任何契约结论）
 python scripts/smoke_data_layer.py
+
+# E2E-30 新增的静态守卫（均无 docker 依赖，自带负向对照）
+bash scripts/check_smoke_gateway.sh        # §2.4 smoke 必须经网关鉴权（e2e-guards 守卫 25/25）
+bash scripts/test_helm_main_render.sh      # helm 主 chart 渲染三不变量（doc-drift job helm-main-render）
+bash scripts/test_audit_plan_parser.sh     # 审计器计划测试点解析器无盲区（e2e-guards 守卫 26/26）
 
 # 文档/配置一致性校验（E2E-05 用）
 bash scripts/check_routes_alignment.sh && python scripts/check_view_consistency.py

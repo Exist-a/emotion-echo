@@ -75,5 +75,5 @@
 
 ## 4. 恢复时的下一步
 
-1. 若接着做：**E2E-30 数据契约收口**（roadmap 当前激活）。开工先按 [plan §0.2](../e2e-30-data-contract-closure/plan.md) 复核清单恢复环境基线，**第一件事是 L1**（smoke 基址 `:8894` → 网关 + Bearer，健康前置换判据）。
+1. ~~若接着做：**E2E-30 数据契约收口**……第一件事是 L1（smoke 基址 `:8894` → 网关 + Bearer）~~ → **2026-10-09 已完成**：E2E-30 已开工（`🟡 partial`），§0.2 七项复核 + **L1 smoke 可跑化（PR #190）** 均已落地，见 [E2E-30 STATUS](../e2e-30-data-contract-closure/STATUS.md)。
 2. 注意 E2E-30 开工前需处理 **F-210/F-211**（标准起栈 BFF 必 unhealthy + 网关无 BFF health 路由），否则"环境基线可复现健康"这条无法成立。

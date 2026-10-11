@@ -108,7 +108,7 @@ curl -s -X POST http://localhost:19080/api/v1/auth/verify-security-answer   -H '
 | E2E-12 设置页 | [plan.md](stages/e2e-12-settings/plan.md) | ✅ 已写（阶段已 done） |
 | E2E-13 心理测验链路修复 | [plan.md](stages/e2e-13-quiz/plan.md) | ✅ 已写（阶段已 done） |
 | E2E-14 人格量表与 AI 提示词定制 | [plan.md](stages/e2e-14-personality-ai-prompt/plan.md) | ✅ 已写（阶段已 done） |
-| E2E-15 ~ E2E-30 | — | ⏳ 轮到前补写 |
+| E2E-15 ~ E2E-31 | 各自的 [stages/](stages/) 目录 | ✅ 已写（**31 个阶段全部有 plan.md**，2026-10-09 实测：`ls stages/*/plan.md | wc -l` = 31）。其中 **E2E-30 数据契约收口** 已于 2026-10-09 开工（`🟡 partial`，见 [plan.md](stages/e2e-30-data-contract-closure/plan.md) + [report.md](stages/e2e-30-data-contract-closure/report.md) + [STATUS.md](stages/e2e-30-data-contract-closure/STATUS.md)）|
 
 模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)。
 
