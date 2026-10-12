@@ -59,17 +59,25 @@ func pgContainerDesc(t *testing.T, ctx context.Context) (*pgcontainer.PostgresCo
 		`CREATE SCHEMA IF NOT EXISTS emotion_echo_chat`))
 
 	// 建 conversations / messages 表
+	// 建表须与真实 DDL（deploy/db/02-create-tables-in-schemas.sql + migrations/*）
+	// 的**列集合**一致 —— 否则 GORM 选 model 字段时会 "column ... does not exist"
+	// （§契约 5 的 schema 保真；2026-10-12 补齐 context/closed_at/deleted_at/
+	// metadata/intent/file_name —— 此前缺列使 conversation/message 写入类集成测试
+	// 根本跑不起来）。
 	require.NoError(t, runSQL(ctx, dsn, `
 CREATE TABLE IF NOT EXISTS emotion_echo_chat.conversations (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL,
   title VARCHAR(255),
+  context JSONB,
   message_count INT DEFAULT 0,
   last_message_at TIMESTAMPTZ,
   status SMALLINT DEFAULT 1,
-  pinned BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  closed_at TIMESTAMPTZ,
+  pinned BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_at TIMESTAMPTZ
 )`))
 	require.NoError(t, runSQL(ctx, dsn, `
 CREATE TABLE IF NOT EXISTS emotion_echo_chat.messages (
@@ -79,9 +87,13 @@ CREATE TABLE IF NOT EXISTS emotion_echo_chat.messages (
   role VARCHAR(16) NOT NULL,
   content TEXT NOT NULL,
   content_type VARCHAR(16) DEFAULT 'text',
+  metadata JSONB,
   tokens_used INT DEFAULT 0,
   client_msg_id VARCHAR(64),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  intent VARCHAR(32) NOT NULL DEFAULT '',
+  file_name VARCHAR(255) NOT NULL DEFAULT '',
+  deleted_at TIMESTAMPTZ
 )`))
 
 	// GORM 打开

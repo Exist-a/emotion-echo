@@ -41,7 +41,9 @@ type Message struct {
 	Content        string     `gorm:"column:content"`
 	ContentType    string     `gorm:"column:content_type;size:16;default:text"`
 	// Stage 82 PR-3b：6 类消息意图（§契约 5：allowedIntents 白名单校验，非法落 ''）
-	Intent         string     `gorm:"column:intent;size:16;default:''"`
+	// Stage 89 PR-6（c007_widen_intent_to_32）：DDL 由 VARCHAR(16) 扩到 VARCHAR(32)，
+	// tag 必须同步（§契约 5「DDL ↔ model」一致；由 intent_contract5_test.go 钉住）。
+	Intent         string     `gorm:"column:intent;size:32;default:''"`
 	// Stage 89 PR-2：文件消息原始文件名（migration 006；§契约 5：写入端超 255 截断）
 	FileName       string     `gorm:"column:file_name;size:255;default:''"`
 	TokensUsed     int        `gorm:"column:tokens_used;default:0"`
