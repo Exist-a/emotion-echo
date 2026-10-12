@@ -45,8 +45,9 @@ F-180 / F-187 / F-188 / F-189（本轮分类完成）/ F-204 / F-209 / F-210 / F
 | 2 | ~~**#7（§契约 6）**~~ | ✅ **已做（2026-10-12）**：`KAFKA_ENABLED=false` 真跑 + 两处修复 |
 | 3 | ~~**#19 / #20（组 E）**~~ | ✅ **已做（2026-10-12）**：#19 判据（§9.7）；#20 全量分类（§9.8）；F-192/F-196 已转运维（RUNBOOK §2.4） |
 | 4 | ~~**F-186 storage 可观测**~~ | ✅ 用户裁定**不做**（M2 追认「不翻转」即关闭 F-186） |
-| 5 | **收口** | report §4~§6 补全、plan/roadmap 状态三处一致、§13.3 第二方核对、§2.5 收口自检 |
-| 6 | **§8 全绿未达** | 镜像重建受 **Docker daemon 不稳**（并发构建 → `Unavailable EOF`）影响，逐个重建中；`emotion-echo-web` 前端镜像**无法重建**（`npm install` 失败，预存在环境问题，非本阶段引入）⇒ 按 RUNBOOK §2.1b 应停 web 容器（§8 会 SKIP 它） |
+| 5 | **T-6 收口** | report §8 收口自检勾选、plan/roadmap 状态三处一致（partial→done）、§13.3 第二方核对、§2.5 收口自检 |
+
+> **已知属性（非「未做项」，不计入未做）**：§8 为「致命」判据 ⇒ **任何触及服务源码的提交/合并后 §8 立即 STALE**（需重建镜像才全绿）；`emotion-echo-web` 前端镜像另有**预存在**的 `npm install` 失败（非本阶段引入），按 RUNBOOK §2.1b 停该容器后 §8 会 SKIP 它。
 
 ---
 
@@ -61,6 +62,6 @@ F-180 / F-187 / F-188 / F-189（本轮分类完成）/ F-204 / F-209 / F-210 / F
 
 ## 4. 恢复时的下一步
 
-1. 完成剩余镜像逐个重建 + recreate + 停 `emotion-echo-web`（§2.1b）→ 跑 `python scripts/smoke_data_layer.py` 取 §2.4 六契约 + §8 的实际结论，回填 report §9。
+1. 收口：report §8 收口自检勾选 + plan/roadmap 状态三处一致（partial→done）+ §13.3 第二方核对通过 + §2.5 三连。（smoke 结论已回填 report §9；§8 的「提交后即 STALE」属已裁定语义。）
 2. 推进 #5（integration test）/ #6/#7（`KAFKA_ENABLED=false` 栈）/ #19 / #20。
 3. 收口：report §4~§6 补全 + plan/roadmap 状态三处一致 + 账本全量对账 + `audit --all` 0 FAIL + §13.3 第二方核对 + §2.5 三连。

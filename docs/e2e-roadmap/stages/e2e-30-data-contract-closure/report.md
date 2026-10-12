@@ -3,7 +3,7 @@ stage: e2e-30
 title: 数据契约收口（§2.4 六项数据契约 smoke 全绿 + helm template/lint 渲染回归 + 转挂账本收口）
 status: partial
 created: 2026-10-08
-last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR #194）+ #14/#15/§8/#18 落地（PR #195）+ 裁定按推荐落地待追认 + **§2.4 smoke 实测 24/24 PASS exit 0**；仍 partial —— 剩余 #5/#6/#7、#19/#20、收口）
+last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR #194）+ #14/#15/#18/#6/#7/§8 落地（PR #195/#197/#198）+ **裁定经用户逐条追认**（plan §4.1）+ #19/#20 结论（PR #199）；**§2.4 smoke 实测 24/24 PASS exit 0**（**实测时点 = 05:2x、镜像刚重建后**；此后服务源码提交使 §8 再次 STALE ⇒ 现跑 17/24，§契约 1~4/§7 仍全绿）；仍 partial —— **仅剩 T-6 收口**）
 ---
 
 # E2E-30 数据契约收口 — 执行记录（report）
@@ -62,15 +62,15 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | 13 | **E2E-F-188** digest 守卫扩扫 compose（L2） | [A] | PASS | RED 抓到 4 个浮动 `:latest`（+1 误报）→ 按本机 RepoDigest 钉死 + `scratch` 豁免 → GREEN（`total image 31 / unpinned 0`）；**负向对照**：写回 `:latest` ⇒ RED |
 | 14 | **E2E-F-187** voice `HEAD` + `PutObject` 超时（L3） | [A] | PASS | ✅ **2026-10-12**：`Register` 补 `r.HEAD("/api/v1/voice/audio/:filekey")`（gin 不自动转发 HEAD）；`upload` 的 `PutObject` 加 **3s deadline** + `isStorageUnavailableErr→503`。TDD 3 用例 RED→GREEN。**运行验证**（重建 BFF 后经网关）：`HEAD http://localhost:19080/api/v1/voice/audio/<k>` → `Content-Type: application/json; charset=utf-8` 404（**我们 handler 的 JSON 404**，而非 gin 的 `text/plain "404 page not found"`）⇒ HEAD 已注册。**IAB 实测（2026-10-12）**：真实浏览器登录 → 会话详情页存在语音气泡，其 `<audio>` 从**网关反代 URL**（`http://localhost:19080/api/v1/voice/audio/…webm`）加载完成并播完（`readyState=4` / `duration=1.74s` / `error=null`）；在**浏览器 origin** 下 `fetch` 该 URL 的 **HEAD 与 GET 均 200**（`audio/webm`, 29276B，无 CORS 报错）——curl 覆盖不到的这一层已验 |
 | 15 | **E2E-F-204** svc tracer 初始化有限重试（L4） | [A] | PASS | ✅ **2026-10-12**：新增 `sharedbootstrap.BootstrapSkyWalkingTracerRetry`（有限 attempts + 退避，ctx 取消立即退出，封顶不无限阻塞）；6 调用点（chat/assessment/analytics/user/ai/web-bff）切 `(…, 2s, 5, 2s)`。TDD 3 用例 RED→GREEN；`emotion-echo-shared` 模块 `go test ./...` 全绿 |
-| 16 | **E2E-F-183** Kafka 发布 span 断链（L5） | [A]+[M] | BLOCKED | **M4 裁定 = 转专项（2026-10-12，待追认）**：跨进程 trace 连接需把 trace ctx 持久化进 **outbox 行**再在发布时恢复，属**架构级 + 须 ADR**；E2E-30 为收口末阶段不承载。本阶段只登记不修（F-183 保留 🔴，owner = 专项） |
+| 16 | **E2E-F-183** Kafka 发布 span 断链（L5） | [A]+[M] | BLOCKED | **M4 裁定 = 转专项（2026-10-12，用户追认）**：跨进程 trace 连接需把 trace ctx 持久化进 **outbox 行**再在发布时恢复，属**架构级 + 须 ADR**；E2E-30 为收口末阶段不承载。本阶段只登记不修（F-183 保留 🔴，owner = 专项） |
 | 17 | **E2E-F-180** 审计器 A3 静默失效 | [A] | PASS | RED 3 项 → GREEN 6 PASS；A3 现对全部 **31 阶段**生效且 `audit --all` 0 FAIL。**根因更正**：账本写"子表编号"不准，真因是**章节标题**（e2e-25 用「测试点总表」） |
-| 18 | **E2E-F-186** readiness 是否含 storage | [A]+[M] | PASS | **M2 裁定①（2026-10-12，待追认）**：① xtts 移出 readiness 硬依赖（F-210 ✅，**运行验证**：`/health` deps 含 xtts、`/health/ready` 下游不含 xtts）；② storage **不翻转 readiness**（已验证 `/health/ready` 的 deps 仅 nacos/redis）。**未实现（如实记录）**：storage「只观测」需新增"仅观测、不判就绪"维度 ⇒ F-186 保留 🟡 |
+| 18 | **E2E-F-186** readiness 是否含 storage | [A]+[M] | PASS | **M2 裁定①（2026-10-12，用户追认）**：① xtts 移出 readiness 硬依赖（F-210 ✅，**运行验证**：`/health` deps 含 xtts、`/health/ready` 下游不含 xtts）；② storage **不翻转 readiness**（已验证 `/health/ready` 的 deps 仅 nacos/redis）。**未实现（如实记录）**：storage「只观测」需新增"仅观测、不判就绪"维度 ⇒ F-186 保留 🟡 |
 | 19 | **E2E-F-195/F-197** 时序敏感 spec 稳定性 | [A] | PASS | ✅ **2026-10-12（判据，非"重跑变绿"）**：① 定向跑 `performance-baseline` + `digital-human-tts`（chromium+mobile）→ **F-195 的 #12 与 F-197 相关用例均未复现**；② 对 #12 做 **`--repeat-each=4` × 2 project = 8/8 PASS**，gap = `431/377/456/365/634/532/682/656 ms`（稳定远离 1000ms 阈值）。**判据**：现有 #12 spec 覆盖的是"两段音频衔接"，而 **F-195 的失败形态（段在 pumpQueue 被静默丢弃）需 `new.vue`→`[id].vue` 跨路由实例的 unmount-stop 与段入队交错** —— spec **未覆盖该路径**，其绿不能证伪 F-195（与账本原判"修前 spec #12 在新时序下不可作门禁"一致）。F-197 同理。⇒ 需**专门覆盖该时序的新 spec** 才能复现/作门禁；F-195/F-197 保留 🔴（下一轮）。见 §9.7 |
 | 20 | **E2E-F-189/F-192/F-196** 基线与环境面收口 | [A]+[M] | PASS | ✅ **2026-10-12**：**全量 Playwright 基线实跑**（chromium+mobile）→ **66 failed / 252 passed / 2 skipped（37.6m）**，逐条按根因分类（§9.8）：**本阶段域 0 条**；**26 条同源于"陈旧探针直连 `:8894`"（新登 E2E-F-219）**、2 条环境缺失（Grafana/obs 未起）、4 条夹具缺失（`TEST_USERNAME`）、~26 条负载/时序、4 条 E2E-15 数据断言。**M5**：F-192/F-196 已转运维（RUNBOOK §2.4）。见 §9.8 |
 
 汇总：PASS 19 / FAIL 0 / BLOCKED 1 / N/A 0
 
-> **（2026-10-12 更新）修正**：原汇总写 "PASS 13 / BLOCKED 7"，与本表逐行不符（实为 12/8，20 行）——本轮据逐行重数并更正为 15/5。
+> **（2026-10-12 更新）修正**：原汇总曾写 "PASS 13 / BLOCKED 7"，与本表逐行不符（当时实为 12/8）——本轮据逐行重数并更正（**当前值见上**）。
 
 > **关于 BLOCKED 1/20（5%）**：远低于收口门槛 1/3。**唯一剩余 = #16**（Kafka trace 断链，**已由用户裁定 M4 转专项**、附独立计划文档，本阶段只登记不修）。
 > **关于 §8**：**判据已修**（E2E-F-215）——原判据取错对象（读容器时间）+ 范围错（全局 commit），本轮改为「镜像构建时间 ≥ 该服务源码最近 commit」。重建镜像后的实际结果见 §9。**该修是修正两处真实缺陷，非降级断言**。
@@ -172,7 +172,7 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | 2 | 范围内缺陷走完 TDD（L1~L6） | [ ] 部分：**L1/L2/L3/L4/L6 完成**；**L5 按 M4 裁定转专项**（不在本阶段） |
 | 3 | 回归钉跑过且绿 | [x] 守卫（含负向对照）已接 CI；#14/#15 新增 TDD 用例本地全绿 |
 | 4 | 改变用户可见行为的修复已 IAB 实测 | [x] **已做 IAB 实测（2026-10-12）**：#14 触及语音链路（用户可见）⇒ 真实浏览器实测 —— 登录 → 会话详情 → 语音气泡 `<audio>` 经网关反代**加载并播完**（`readyState=4`/`duration=1.74s`/`error=null`）；浏览器 origin 下 `HEAD`/`GET /api/v1/voice/audio/<k>` **均 200**（CORS 正常）；我的空间页正常渲染。**未覆盖（如实记录）**：真实麦克风**录音→上传**链路（IAB 无法授予麦克风权限）⇒ 上传侧 503 映射未在浏览器内验证（仅单测 + 网关 HEAD 代理） |
-| 5 | §4 的 M2/M4/M5 已升级并落定 | [x] **已落定（2026-10-12，执行者按推荐 + 待用户追认，D-41 先例）**：M1/M2/M4/M5/M6 + T-1/§8，见 plan §4.1 与 §0 T-5 |
+| 5 | §4 的 M2/M4/M5 已升级并落定 | [x] **已落定（2026-10-12，用户经 AskUserQuestion 逐条追认）**：M1/M2/M4/M5/M6 + T-1/§8，见 plan §4.1 与 §0 T-5 |
 | 6 | L5 架构改动附 ADR | [x] **不适用**（L5 已转专项，本阶段不做架构改动） |
 | 7 | 账本对账 | [ ] 部分：✅ = F-180 / F-187 / F-188 / F-204 / F-209 / F-210 / F-215 / F-216；🟡 = F-186（口径已定、可观测未实现）；F-183 转专项；其余（F-184/189/191/192/195/196/197/211/212）待逐条对账 |
 | 8 | AGENTS §2.4 文案纠偏 | [x] 已落地（PR #190） |
@@ -200,7 +200,7 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 
 ### 9.3 §2.4 smoke 实测（**本轮关键结果**）
 
-命令：`python scripts/smoke_data_layer.py`（dev 栈；基址 = APISIX 网关 `:19080`）。**结果：`24/24 PASS, 0 FAIL`，退出码 0**。
+命令：`python scripts/smoke_data_layer.py`（dev 栈；基址 = APISIX 网关 `:19080`）。**结果：`24/24 PASS, 0 FAIL`，退出码 0**（**实测时点 2026-10-12 05:2x**，8 个服务镜像刚重建后）。**⚠️ 该「全绿」不是 standing result**：§8 判据为「镜像构建时间 ≥ 该服务源码最近 commit」，而此后落地的服务源码提交（#195 `abc3369` / #197 `3aeb0c7`）晚于镜像构建时间 ⇒ **现跑 §8 为 7 STALE（smoke 17/24、exit 1）**，§契约 1~4 与 §7 仍全绿。此为用户裁定「§8 保持致命」的**预期表现**（要全绿需重建镜像）。
 
 | 段 | 结果 |
 |---|---|
