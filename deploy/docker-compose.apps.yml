@@ -223,6 +223,12 @@ services:
     depends_on:
       emotion-echo-db-migrate:
         condition: service_completed_successfully
+      # E2E-F-216: analytics-svc 是 chat-events 的消费者，必须在 Kafka 就绪后
+      # 才启动。此前无此依赖 —— 冷启动时与 Kafka 并发起，NewConsumer 连不上
+      # broker 返回 (nil, err)，随后装配期 `nil.WithMaxRetries()` SIGSEGV，
+      # 容器 crash-loop 并把 `docker compose up` 整条依赖链拖成 EXIT=1。
+      kafka:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://localhost:8893/health/ready || exit 1"]
       interval: 30s
