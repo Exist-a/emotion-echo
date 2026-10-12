@@ -1,7 +1,7 @@
 # E2E-30 数据契约收口 — 会话状态（STATUS）
 
 > 用途：AGENTS.md §八「收工三查」第 1 条的**本轨状态记录**。**已做/未做分列，禁止美化。**
-> 快照时间：**2026-10-12**（执行轮续，**阶段未收口**）。任务书：[plan.md](plan.md) · 执行记录：[report.md](report.md)（**§0 未完成清单是唯一真相源**）。
+> 快照时间：**2026-10-12**（执行轮续，**⏸ 已暂停 —— 用户有其他排期**；阶段 **未收口**，停在收口前最后一步）。任务书：[plan.md](plan.md) · 执行记录：[report.md](report.md)（**§0 未完成清单是唯一真相源**）。
 
 ---
 
@@ -13,6 +13,11 @@
 |---|---|---|
 | [#194](https://github.com/Exist-a/emotion-echo/pull/194) | **起栈阻断修复**：`analytics-svc` 冷启动 SIGSEGV（`nil.WithMaxRetries`）→ 拖垮 `docker compose up`；修 nil-guard（TDD）+ compose `depends_on: kafka: service_healthy`。新帐 **E2E-F-216** | 36/36 ✅ 已合并 |
 | [#195](https://github.com/Exist-a/emotion-echo/pull/195) | **执行轮续**：#14（F-187）/ #15（F-204）/ §8 判据（F-215）/ #18（F-210）+ report/STATUS/plan + 账本对账 | 见 PR |
+| [#196](https://github.com/Exist-a/emotion-echo/pull/196) | 用户追认 5 项 [M] 裁定 + **IAB 实测**（语音链路）+ M5 环境坑入 RUNBOOK | 36/36 |
+| [#197](https://github.com/Exist-a/emotion-echo/pull/197) | **#6 §契约 5**：2 列 integration test + `intent` tag 漂移修复（新登 **E2E-F-217**） | 36/36 |
+| [#198](https://github.com/Exist-a/emotion-echo/pull/198) | **#7 §契约 6**：`KAFKA_ENABLED=false` 真跑 + 两处修复（新登 **E2E-F-218**） | 36/36 |
+| [#199](https://github.com/Exist-a/emotion-echo/pull/199) | 收口章节补全（report §4~§7）+ 账本对账修正 + **#19/#20 结论**（新登 **E2E-F-219**） | 36/36 |
+| [#200](https://github.com/Exist-a/emotion-echo/pull/200) | **第二方核对 7 项发现**修复（§13.3 #3 硬违规 + smoke 口径 + 三处矛盾）；核对**末轮 PASS** | 36/36 |
 
 ### 1.2 测试点结论（本轮新增 3 项 PASS）
 
@@ -39,17 +44,15 @@ F-180 / F-187 / F-188 / F-189（本轮分类完成）/ F-204 / F-209 / F-210 / F
 
 ## 2. 未做 ❌
 
-| # | 未做项 | 归属 / 说明 |
-|---|--------|-----------|
-| 1 | ~~**#6（§契约 5）**~~ | ✅ **已做（2026-10-12）**：2 列 integration test + intent tag 漂移修复 |
-| 2 | ~~**#7（§契约 6）**~~ | ✅ **已做（2026-10-12）**：`KAFKA_ENABLED=false` 真跑 + 两处修复 |
-| 3 | ~~**#19 / #20（组 E）**~~ | ✅ **已做（2026-10-12）**：#19 判据（§9.7）；#20 全量分类（§9.8）；F-192/F-196 已转运维（RUNBOOK §2.4） |
-| 4 | ~~**F-186 storage 可观测**~~ | ✅ 用户裁定**不做**（M2 追认「不翻转」即关闭 F-186） |
-| 5 | **T-6 收口** | report §8 收口自检勾选、plan/roadmap 状态三处一致（partial→done）、§13.3 第二方核对、§2.5 收口自检 |
+**唯一剩余 = T-6 收口**（20 个测试点已全部有结论：19 PASS + 1 BLOCKED[#16 已裁定转专项]；0 FAIL）：
 
-> **已知属性（非「未做项」，不计入未做）**：§8 为「致命」判据 ⇒ **任何触及服务源码的提交/合并后 §8 立即 STALE**（需重建镜像才全绿）；`emotion-echo-web` 前端镜像另有**预存在**的 `npm install` 失败（非本阶段引入），按 RUNBOOK §2.1b 停该容器后 §8 会 SKIP 它。
+| # | 未做项 | 说明 |
+|---|--------|------|
+| 1 | **状态三处一致（partial → done）** + **§2.5 收口自检** | **阻塞于用户裁定**（见下） |
 
----
+> **🔴 阻塞点 = 审计器 A5**：「`done` 阶段不得持有归属本阶段的未解决账本条目」，而 E2E-30 名下仍有 **7 条未解决**：`F-184` / `F-191` / `F-195` / `F-197` / `F-212` / `F-217` / `F-219`。**本阶段是最后一个阶段**（无后继可转挂）⇒ 二选一：① **转「专项」**（owner 去阶段编号 + 写明去向，项目既有惯例）⇒ 可翻 `done`；② **保持 `partial`**。**2026-10-12 已向用户提问，用户回「先暂停，有其他排期」** ⇒ 裁定未落，阶段保持 `partial`。
+
+> **已知属性（非未做项）**：§8 为「致命」判据 ⇒ 任何触及服务源码的提交/合并后 §8 立即 STALE（需重建镜像才全绿）；`emotion-echo-web` 前端镜像另有**预存在**的 `npm install` 失败（非本阶段引入）。
 
 ## 3. 环境现状
 
@@ -60,13 +63,13 @@ F-180 / F-187 / F-188 / F-189（本轮分类完成）/ F-204 / F-209 / F-210 / F
 
 ---
 
-## 4. 恢复时的下一步
+## 4. 恢复时的下一步（暂停点）
 
-**唯一剩余 = T-6 收口**（其余 19 项测试点已 PASS、#16 已裁定转专项）：
+**先请用户裁定「A5 阻塞」**（7 条债：转专项 vs 保持 partial），然后：
 
-1. report §8 收口自检逐项勾选；plan / roadmap / report 三处 `status` 一致（partial → done）。
-2. §13.3 第二方核对（**已跑三轮：首轮 FAIL → 修 7 项 → 复验发现 2 项未闭环 + 2 处新矛盾 → 再修 4 处 → 末轮 PASS**，见 PR #200）。
-3. §2.5 收口三连（工作树干净 / main 与 origin 齐平 / 无残留分支与 worktree）。
-4. 收口后：阶段记录迁移到 `docs/stages/`（按 AGENTS §七）。
+1. **若「转专项」**：把 `F-184 / F-191 / F-195 / F-197 / F-212 / F-217 / F-219` 的 owner 由 `E2E-30` 改为「专项」（去掉阶段编号）+ 逐条写明去向与触发条件 ⇒ `e2e_stage_audit.py --all` 应转 0 FAIL（A5 解除）。
+2. **翻状态**：plan / report / roadmap 三处 `status: partial → done` + report §8 收口自检逐项勾选。
+3. **§2.5 收口三连**：工作树干净（当前仅 7 个**非本会话产生**的未跟踪文件：`.zcodeignore` + 6 个 `docs/plans/*.md`）/ main 与 origin 齐平 / 无残留分支与 worktree。
+4. 收口后按 AGENTS §七 把阶段记录迁移到 `docs/stages/`。
 
-> 注：`report §4~§6` 章节、`账本全量对账`、`audit --all 0 FAIL` 均**已完成**（见 §1），不在下一步。
+**环境现状（暂停时）**：17 容器全 healthy；`:3000` 由**本地 `pnpm dev`** 服务（`emotion-echo-web` 容器按 RUNBOOK §2.1b 停用）；网关 `:19080` 登录 200；`chat-svc` 已恢复 `KAFKA_ENABLED=true`；`web-bff` 已重启（容器 IP 变更铁律）。
