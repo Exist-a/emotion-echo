@@ -147,7 +147,11 @@ services:
       GIN_MODE: release
       POSTGRES_DSN:        "host=emotion-echo-postgres port=5432 user=postgres password=postgres dbname=emotion_echo sslmode=disable search_path=emotion_echo_chat"
       KAFKA_BROKERS:       emotion-echo-kafka:9092
-      KAFKA_ENABLED:      "true"
+      # §契约 6（AGENTS §2.4）：须可覆盖成 false 以触发 DevEventPublisher 直写路径
+      # （smoke §契约 6 读本容器的 KAFKA_ENABLED 决定分支）。此前硬编码 "true"
+      # ⇒ 该契约在标准栈上**不可触发**（与 ai-svc 的 ${KAFKA_ENABLED:-true} 不一致）。
+      # 默认仍 true ⇒ 行为不变。
+      KAFKA_ENABLED:      "${KAFKA_ENABLED:-true}"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"
     # Stage 58 PR-GRPC-3：gRPC server 暴露 :8892（BFF gRPC 客户端连这个端口）
