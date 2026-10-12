@@ -22,7 +22,9 @@
 - **T-1（F-215/§8）已修**：判据改为「镜像构建时间 ≥ 该服务源码最近 commit」+ 读**镜像**；同源修 `check_image_freshness.sh`。
 - **#6（§契约 5）PASS**：按权威 DDL 清点「`VARCHAR(32) NOT NULL` 枚举列」= 2 列（`messages.intent` / `fused_emotions.primary_emotion`），各加 testcontainers 真库往返 integration test；顺带修 `model.Message.Intent` tag `size:16`→`32`（DDL↔model 漂移）+ 新登 **E2E-F-217**（`user_oauth` 残留表）。
 - **#7（§契约 6）PASS**：以 `KAFKA_ENABLED=false` 重建 chat-svc 走 `DevEventPublisher` 直写 → smoke §6 `OK: 近 10 分钟内 15 行`。**顺带修**：compose chat-svc `KAFKA_ENABLED` 硬编码 `"true"` → `${KAFKA_ENABLED:-true}`（§6 此前不可触发）；smoke §6 判据 `event_id LIKE 'smoke-%'` 恒 FAIL（event_id 全 UUID）→ 改时间窗（**新登 E2E-F-218**）。
-- 汇总：**PASS 17 / FAIL 0 / BLOCKED 3 / N/A 0**（BLOCKED 15% ≤ 1/3）。
+- **#19（F-195/F-197）PASS（判据）**：定向 + `--repeat-each=4`×2 project **8/8 PASS**（gap 365~682ms）⇒ 未复现；**判据 = 现有 #12/mobile 用例不覆盖缺陷时序路径**（跨路由实例 unmount-stop / `fill` 后事件分发）⇒ 需新写 spec 才能作门禁。
+- **#20（F-189 全量基线）PASS（分类）**：全量实跑 **66 failed / 252 passed / 2 skipped（37.6m）**，**E2E-30 域内 0 条**；**26 条同源于陈旧探针直连 `:8894`（新登 E2E-F-219）**、2 条环境（Grafana）、4 条夹具、~26 条负载/时序、4 条 E2E-15 数据断言。
+- 汇总：**PASS 19 / FAIL 0 / BLOCKED 1 / N/A 0**（BLOCKED 5%）。
 - **IAB 实测（2026-10-12）**：#14 触及语音链路 ⇒ 真实浏览器实测 —— 登录 → 会话详情 → 语音气泡经网关反代**加载并播完**（`readyState=4`/`duration=1.74s`）；**浏览器 origin 下 HEAD/GET 均 200**（CORS 正常）；我的空间页正常渲染。**未覆盖**：真实麦克风录音→上传（IAB 无麦克风权限）。见 [report.md](report.md) §9.4。
 
 ### 1.3 裁定（**用户 2026-10-12 已逐条追认**）
@@ -31,7 +33,7 @@ T-1/§8=**保持致命**；M1=严格非空（证据关闭）；M2=**storage 不�
 
 ### 1.4 账本
 
-F-187 / F-204 / F-210 / F-215 / **F-186**（用户裁定关闭）/ **F-192 / F-196**（转运维、已文档化）→ ✅；**新登 E2E-F-216 / E2E-F-218**（均已 ✅）、**E2E-F-217**（user_oauth 残留表，🔴 只登记）。F-183（#16）按 M4 转专项（独立计划文档已建档）。
+F-180 / F-187 / F-188 / F-189（本轮分类完成）/ F-204 / F-209 / F-210 / F-211 / F-215 / F-216 / F-218 + **F-186**（用户裁定关闭）/ **F-192 / F-196**（转运维）→ ✅；**新登 E2E-F-217**（user_oauth 残留表，🔴 只登记）、**E2E-F-219**（3 个回归钉直连已收掉的 `:8894` ⇒ 全量 26 条失败同源，🔴 只登记）。F-183（#16）按 M4 转专项；F-184 / F-191 / F-195 / F-197 / F-212 保留（见 report §4/§7）。
 
 ---
 
@@ -41,7 +43,7 @@ F-187 / F-204 / F-210 / F-215 / **F-186**（用户裁定关闭）/ **F-192 / F-1
 |---|--------|-----------|
 | 1 | ~~**#6（§契约 5）**~~ | ✅ **已做（2026-10-12）**：2 列 integration test + intent tag 漂移修复 |
 | 2 | ~~**#7（§契约 6）**~~ | ✅ **已做（2026-10-12）**：`KAFKA_ENABLED=false` 真跑 + 两处修复 |
-| 3 | **#19 / #20（组 E）** | F-195/F-197 时序 flaky；F-189/F-192/F-196 基线与环境面（M5 裁定=转运维 runbook，未落地文档） |
+| 3 | ~~**#19 / #20（组 E）**~~ | ✅ **已做（2026-10-12）**：#19 判据（§9.7）；#20 全量分类（§9.8）；F-192/F-196 已转运维（RUNBOOK §2.4） |
 | 4 | ~~**F-186 storage 可观测**~~ | ✅ 用户裁定**不做**（M2 追认「不翻转」即关闭 F-186） |
 | 5 | **收口** | report §4~§6 补全、plan/roadmap 状态三处一致、§13.3 第二方核对、§2.5 收口自检 |
 | 6 | **§8 全绿未达** | 镜像重建受 **Docker daemon 不稳**（并发构建 → `Unavailable EOF`）影响，逐个重建中；`emotion-echo-web` 前端镜像**无法重建**（`npm install` 失败，预存在环境问题，非本阶段引入）⇒ 按 RUNBOOK §2.1b 应停 web 容器（§8 会 SKIP 它） |
