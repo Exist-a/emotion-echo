@@ -60,16 +60,17 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | 11 | 视图定义一致性 | [A] | PASS | `python scripts/check_view_consistency.py` → `4 个 view 全部一致（1 多点 + 3 单点）` |
 | 12 | 迁移 checksum 三层核对 | [A] | PASS | `deploy/db/test_migrations_contract.sh` 全 PASS；`scripts/test_migrations_no_service_order.sh` → 80 pass / 0 fail |
 | 13 | **E2E-F-188** digest 守卫扩扫 compose（L2） | [A] | PASS | RED 抓到 4 个浮动 `:latest`（+1 误报）→ 按本机 RepoDigest 钉死 + `scratch` 豁免 → GREEN（`total image 31 / unpinned 0`）；**负向对照**：写回 `:latest` ⇒ RED |
-| 14 | **E2E-F-187** voice `HEAD` + `PutObject` 超时（L3） | [A] | **PASS** | ✅ **2026-10-12**：`Register` 补 `r.HEAD("/api/v1/voice/audio/:filekey")`（gin 不自动转发 HEAD）；`upload` 的 `PutObject` 加 **3s deadline** + `isStorageUnavailableErr→503`。TDD 3 用例 RED→GREEN。**运行验证**（重建 BFF 后经网关）：`HEAD http://localhost:19080/api/v1/voice/audio/<k>` → `Content-Type: application/json; charset=utf-8` 404（**我们 handler 的 JSON 404**，而非 gin 的 `text/plain "404 page not found"`）⇒ HEAD 已注册 |
-| 15 | **E2E-F-204** svc tracer 初始化有限重试（L4） | [A] | **PASS** | ✅ **2026-10-12**：新增 `sharedbootstrap.BootstrapSkyWalkingTracerRetry`（有限 attempts + 退避，ctx 取消立即退出，封顶不无限阻塞）；6 调用点（chat/assessment/analytics/user/ai/web-bff）切 `(…, 2s, 5, 2s)`。TDD 3 用例 RED→GREEN；`emotion-echo-shared` 模块 `go test ./...` 全绿 |
-| 16 | **E2E-F-183** Kafka 发布 span 断链（L5） | [A]+[M] | **BLOCKED（已裁定 = 转专项）** | **M4 裁定 = 转专项（2026-10-12，待追认）**：跨进程 trace 连接需把 trace ctx 持久化进 **outbox 行**再在发布时恢复，属**架构级 + 须 ADR**；E2E-30 为收口末阶段不承载。本阶段只登记不修（F-183 保留 🔴，owner = 专项） |
+| 14 | **E2E-F-187** voice `HEAD` + `PutObject` 超时（L3） | [A] | PASS | ✅ **2026-10-12**：`Register` 补 `r.HEAD("/api/v1/voice/audio/:filekey")`（gin 不自动转发 HEAD）；`upload` 的 `PutObject` 加 **3s deadline** + `isStorageUnavailableErr→503`。TDD 3 用例 RED→GREEN。**运行验证**（重建 BFF 后经网关）：`HEAD http://localhost:19080/api/v1/voice/audio/<k>` → `Content-Type: application/json; charset=utf-8` 404（**我们 handler 的 JSON 404**，而非 gin 的 `text/plain "404 page not found"`）⇒ HEAD 已注册 |
+| 15 | **E2E-F-204** svc tracer 初始化有限重试（L4） | [A] | PASS | ✅ **2026-10-12**：新增 `sharedbootstrap.BootstrapSkyWalkingTracerRetry`（有限 attempts + 退避，ctx 取消立即退出，封顶不无限阻塞）；6 调用点（chat/assessment/analytics/user/ai/web-bff）切 `(…, 2s, 5, 2s)`。TDD 3 用例 RED→GREEN；`emotion-echo-shared` 模块 `go test ./...` 全绿 |
+| 16 | **E2E-F-183** Kafka 发布 span 断链（L5） | [A]+[M] | BLOCKED | **M4 裁定 = 转专项（2026-10-12，待追认）**：跨进程 trace 连接需把 trace ctx 持久化进 **outbox 行**再在发布时恢复，属**架构级 + 须 ADR**；E2E-30 为收口末阶段不承载。本阶段只登记不修（F-183 保留 🔴，owner = 专项） |
 | 17 | **E2E-F-180** 审计器 A3 静默失效 | [A] | PASS | RED 3 项 → GREEN 6 PASS；A3 现对全部 **31 阶段**生效且 `audit --all` 0 FAIL。**根因更正**：账本写"子表编号"不准，真因是**章节标题**（e2e-25 用「测试点总表」） |
-| 18 | **E2E-F-186** readiness 是否含 storage | [A]+[M] | **PASS（口径落定）/ F-186 保留 🟡** | **M2 裁定①（2026-10-12，待追认）**：① xtts 移出 readiness 硬依赖（F-210 ✅，**运行验证**：`/health` deps 含 xtts、`/health/ready` 下游不含 xtts）；② storage **不翻转 readiness**（已验证 `/health/ready` 的 deps 仅 nacos/redis）。**未实现（如实记录）**：storage「只观测」需新增"仅观测、不判就绪"维度 ⇒ F-186 保留 🟡 |
+| 18 | **E2E-F-186** readiness 是否含 storage | [A]+[M] | PASS | **M2 裁定①（2026-10-12，待追认）**：① xtts 移出 readiness 硬依赖（F-210 ✅，**运行验证**：`/health` deps 含 xtts、`/health/ready` 下游不含 xtts）；② storage **不翻转 readiness**（已验证 `/health/ready` 的 deps 仅 nacos/redis）。**未实现（如实记录）**：storage「只观测」需新增"仅观测、不判就绪"维度 ⇒ F-186 保留 🟡 |
 | 19 | **E2E-F-195/F-197** 时序敏感 spec 稳定性 | [A] | BLOCKED | **未开工**（AP-03）。见 §0 T-3 |
 | 20 | **E2E-F-189/F-192/F-196** 基线与环境面收口 | [A]+[M] | BLOCKED | **未开工 + [M] M5 未裁定**。见 §0 T-3 |
 
-汇总（2026-10-12 更新）：**PASS 15 / FAIL 0 / BLOCKED 5 / N/A 0**
-> **修正**：原汇总写 "PASS 13 / BLOCKED 7"，与本表逐行不符（实为 12/8，20 行）——本轮据逐行重数并更正。
+汇总：PASS 15 / FAIL 0 / BLOCKED 5 / N/A 0
+
+> **（2026-10-12 更新）修正**：原汇总写 "PASS 13 / BLOCKED 7"，与本表逐行不符（实为 12/8，20 行）——本轮据逐行重数并更正为 15/5。
 
 > **关于 BLOCKED 5/20（25%）**：已 ≤ 收口门槛 1/3。剩余 5 项 = **#6/#7**（证据形态：需 integration test / `KAFKA_ENABLED=false` 栈形态）、**#16**（**已裁定转专项**，见 §2 #16 / M4）、**#19/#20**（组 E，[M] M5 裁定 = 转运维 runbook，本阶段未开工）。
 > **关于 §8**：**判据已修**（E2E-F-215）——原判据取错对象（读容器时间）+ 范围错（全局 commit），本轮改为「镜像构建时间 ≥ 该服务源码最近 commit」。重建镜像后的实际结果见 §9。**该修是修正两处真实缺陷，非降级断言**。
