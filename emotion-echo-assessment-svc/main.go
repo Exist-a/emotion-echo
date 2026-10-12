@@ -87,7 +87,7 @@ func main() {
 			svcName = c.Name
 		}
 		// PR-OBS-2: 用 shared BootstrapSkyWalkingTracer 统一 7 svc 行为
-		t, err := sharedbootstrap.BootstrapSkyWalkingTracer(context.Background(), svcName, c.SkyWalking.OAPAddr, 2*time.Second)
+		t, err := sharedbootstrap.BootstrapSkyWalkingTracerRetry(context.Background(), svcName, c.SkyWalking.OAPAddr, 2*time.Second, 5, 2*time.Second)
 		if err != nil {
 			sharedmetrics.IncSkyWalkingInitFailed(svcName)
 			if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("skywalking") {

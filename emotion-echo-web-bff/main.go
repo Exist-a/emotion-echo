@@ -187,7 +187,7 @@ func main() {
 	// 否则 ClientDialOptions 拿到 nil tracer，5+1 下游 gRPC conn 全部不注入 sw8。
 	var tracer *go2sky.Tracer
 	if c.SkyWalking.Enabled {
-		t, err := sharedbootstrap.BootstrapSkyWalkingTracer(context.Background(), c.SkyWalking.ServiceName, c.SkyWalking.OAPAddr, 2*time.Second)
+		t, err := sharedbootstrap.BootstrapSkyWalkingTracerRetry(context.Background(), c.SkyWalking.ServiceName, c.SkyWalking.OAPAddr, 2*time.Second, 5, 2*time.Second)
 		if err != nil {
 			sharedmetrics.IncSkyWalkingInitFailed(c.SkyWalking.ServiceName)
 			if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("skywalking") {
