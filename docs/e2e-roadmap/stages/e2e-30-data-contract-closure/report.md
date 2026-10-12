@@ -60,7 +60,7 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | 11 | 视图定义一致性 | [A] | PASS | `python scripts/check_view_consistency.py` → `4 个 view 全部一致（1 多点 + 3 单点）` |
 | 12 | 迁移 checksum 三层核对 | [A] | PASS | `deploy/db/test_migrations_contract.sh` 全 PASS；`scripts/test_migrations_no_service_order.sh` → 80 pass / 0 fail |
 | 13 | **E2E-F-188** digest 守卫扩扫 compose（L2） | [A] | PASS | RED 抓到 4 个浮动 `:latest`（+1 误报）→ 按本机 RepoDigest 钉死 + `scratch` 豁免 → GREEN（`total image 31 / unpinned 0`）；**负向对照**：写回 `:latest` ⇒ RED |
-| 14 | **E2E-F-187** voice `HEAD` + `PutObject` 超时（L3） | [A] | PASS | ✅ **2026-10-12**：`Register` 补 `r.HEAD("/api/v1/voice/audio/:filekey")`（gin 不自动转发 HEAD）；`upload` 的 `PutObject` 加 **3s deadline** + `isStorageUnavailableErr→503`。TDD 3 用例 RED→GREEN。**运行验证**（重建 BFF 后经网关）：`HEAD http://localhost:19080/api/v1/voice/audio/<k>` → `Content-Type: application/json; charset=utf-8` 404（**我们 handler 的 JSON 404**，而非 gin 的 `text/plain "404 page not found"`）⇒ HEAD 已注册 |
+| 14 | **E2E-F-187** voice `HEAD` + `PutObject` 超时（L3） | [A] | PASS | ✅ **2026-10-12**：`Register` 补 `r.HEAD("/api/v1/voice/audio/:filekey")`（gin 不自动转发 HEAD）；`upload` 的 `PutObject` 加 **3s deadline** + `isStorageUnavailableErr→503`。TDD 3 用例 RED→GREEN。**运行验证**（重建 BFF 后经网关）：`HEAD http://localhost:19080/api/v1/voice/audio/<k>` → `Content-Type: application/json; charset=utf-8` 404（**我们 handler 的 JSON 404**，而非 gin 的 `text/plain "404 page not found"`）⇒ HEAD 已注册。**IAB 实测（2026-10-12）**：真实浏览器登录 → 会话详情页存在语音气泡，其 `<audio>` 从**网关反代 URL**（`http://localhost:19080/api/v1/voice/audio/…webm`）加载完成并播完（`readyState=4` / `duration=1.74s` / `error=null`）；在**浏览器 origin** 下 `fetch` 该 URL 的 **HEAD 与 GET 均 200**（`audio/webm`, 29276B，无 CORS 报错）——curl 覆盖不到的这一层已验 |
 | 15 | **E2E-F-204** svc tracer 初始化有限重试（L4） | [A] | PASS | ✅ **2026-10-12**：新增 `sharedbootstrap.BootstrapSkyWalkingTracerRetry`（有限 attempts + 退避，ctx 取消立即退出，封顶不无限阻塞）；6 调用点（chat/assessment/analytics/user/ai/web-bff）切 `(…, 2s, 5, 2s)`。TDD 3 用例 RED→GREEN；`emotion-echo-shared` 模块 `go test ./...` 全绿 |
 | 16 | **E2E-F-183** Kafka 发布 span 断链（L5） | [A]+[M] | BLOCKED | **M4 裁定 = 转专项（2026-10-12，待追认）**：跨进程 trace 连接需把 trace ctx 持久化进 **outbox 行**再在发布时恢复，属**架构级 + 须 ADR**；E2E-30 为收口末阶段不承载。本阶段只登记不修（F-183 保留 🔴，owner = 专项） |
 | 17 | **E2E-F-180** 审计器 A3 静默失效 | [A] | PASS | RED 3 项 → GREEN 6 PASS；A3 现对全部 **31 阶段**生效且 `audit --all` 0 FAIL。**根因更正**：账本写"子表编号"不准，真因是**章节标题**（e2e-25 用「测试点总表」） |
@@ -98,7 +98,7 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | 1 | 20 个测试点全部有结论（四值） | [ ] **部分（2026-10-12）**：**15 项有结论**（#1~#5、#8~#13、#14、#15、#17、#18）；剩余 #6/#7（证据形态）、#16（已裁定转专项）、#19/#20（组 E） |
 | 2 | 范围内缺陷走完 TDD（L1~L6） | [ ] 部分：**L1/L2/L3/L4/L6 完成**；**L5 按 M4 裁定转专项**（不在本阶段） |
 | 3 | 回归钉跑过且绿 | [x] 守卫（含负向对照）已接 CI；#14/#15 新增 TDD 用例本地全绿 |
-| 4 | 改变用户可见行为的修复已 IAB 实测 | [x] **不适用**（#14 voice HEAD/PutObject 超时、#15 tracer 重试、#18 readiness 口径、§8 判据 均**不改前端用户可见行为**）；#14 已做**网关级**运行验证（HEAD → 我们 handler 的 JSON 404） |
+| 4 | 改变用户可见行为的修复已 IAB 实测 | [x] **已做 IAB 实测（2026-10-12）**：#14 触及语音链路（用户可见）⇒ 真实浏览器实测 —— 登录 → 会话详情 → 语音气泡 `<audio>` 经网关反代**加载并播完**（`readyState=4`/`duration=1.74s`/`error=null`）；浏览器 origin 下 `HEAD`/`GET /api/v1/voice/audio/<k>` **均 200**（CORS 正常）；我的空间页正常渲染。**未覆盖（如实记录）**：真实麦克风**录音→上传**链路（IAB 无法授予麦克风权限）⇒ 上传侧 503 映射未在浏览器内验证（仅单测 + 网关 HEAD 代理） |
 | 5 | §4 的 M2/M4/M5 已升级并落定 | [x] **已落定（2026-10-12，执行者按推荐 + 待用户追认，D-41 先例）**：M1/M2/M4/M5/M6 + T-1/§8，见 plan §4.1 与 §0 T-5 |
 | 6 | L5 架构改动附 ADR | [x] **不适用**（L5 已转专项，本阶段不做架构改动） |
 | 7 | 账本对账 | [ ] 部分：✅ = F-180 / F-187 / F-188 / F-204 / F-209 / F-210 / F-215 / F-216；🟡 = F-186（口径已定、可观测未实现）；F-183 转专项；其余（F-184/189/191/192/195/196/197/211/212）待逐条对账 |
@@ -140,3 +140,19 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | **§8 镜像新鲜度** | **OK 7/7**（web 容器 exited ⇒ SKIP，按 RUNBOOK §2.1b 停用 web 容器走本地 dev server）；**判据修正后逐服务正确归因**（如 user/chat/analytics → 源码 commit `740ddf2`），不再受 docs/scripts-only 提交影响 |
 
 **运行环境坑（如实记录）**：① 并发 `docker compose build` 多个 Go 服务会因内存峰值使 daemon 报 `Failed to receive status: rpc error ... EOF` ⇒ **逐个构建**；② 重建任一 svc 后 **BFF 的 gRPC 连接仍指向旧容器 IP**（`172.18.0.5:8887 connect: connection refused`）⇒ **必须重启 `web-bff`**（运维铁律）；③ 登录被 authlock 锁（Redis `web-bff-auth:fails:echo`）⇒ `redis-cli DEL` 清锁（测试数据准备）；④ `emotion-echo-web` 前端镜像**无法重建**（`npm install` 失败，预存在环境问题，非本阶段引入）。
+
+### 9.4 IAB 实测（真实浏览器，2026-10-12）
+
+用户质询"iab 测了吗"⇒ 本轮补做。**环境**：`docker stop emotion-echo-web`（§2.1b）+ 本地 `pnpm dev --port 3000`（chunk URL 为源码路径形态，确认是真 dev server）；后端栈 + 网关 `:19080`。
+
+| 步骤 | 结果 |
+|---|---|
+| 打开 `http://localhost:3000` | 301 → `/login`，登录页正常渲染（无报错） |
+| 「用演示账号快速体验」登录 | 成功 → `/chat/conversation/new`，侧栏/会话列表/输入区渲染正常 |
+| 打开会话 `#550` | 消息列表完整；输入区含 `添加附件`/`开启摄像头`/`开始录音`/`发送消息`；**存在语音气泡（`▶` + `0:01`）** |
+| 点语音气泡 ▶ | `<audio>` 从 `http://localhost:19080/api/v1/voice/audio/60b58648-….webm` 加载完成并**播完**：`readyState=4` / `duration=1.739994` / `currentTime=1.739994` / `error=null` |
+| 浏览器 origin 下 `fetch` 该 URL | **HEAD 200** + **GET 200**（`content-type: audio/webm`，`content-length: 29276`），无 CORS/网络报错 |
+| 我的空间 `/chat/user` | 正常渲染（用户信息 / 相处记录 / 人格画像 分区；"暂无数据"为预期空态） |
+
+**结论**：#14 的语音反代回放路径在**真实浏览器**下可用，且新增 **HEAD 路由经网关对浏览器 origin 可用**（CORS 正常）——这是 curl/Playwright APIRequest 覆盖不到的一层。
+**未覆盖（如实记录）**：真实**麦克风录音 → 上传**（IAB 无法授予麦克风权限）⇒ #14 的**上传侧** `PutObject` 3s 超时 → 503 映射未在浏览器内验证（证据 = 单测 `TestVoiceHandler_Upload_StorageUnavailable_Returns503` + 网关 HEAD 代理行为）。
