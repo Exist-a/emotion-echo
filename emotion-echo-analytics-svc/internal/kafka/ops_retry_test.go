@@ -70,6 +70,31 @@ func TestConsumer_WithMaxRetries_AlsoUpdatesSharedHolder(t *testing.T) {
 		"WithMaxRetries 后 handler 与 consumer 应一致")
 }
 
+// TestConsumer_WithMaxRetries_NilReceiver_DoesNotPanic 空 receiver 必须安全。
+//
+// 🔴 为什么需要（账本 F-216）：main.go 的装配顺序是
+//
+//	kc, err := kafka.NewConsumer(...)   // broker 不可达 ⇒ (nil, err)
+//	if c.Kafka.MaxRetries > 0 {
+//	    kc.WithMaxRetries(c.Kafka.MaxRetries)  // ← 在任何 err 检查之前
+//	}
+//	if err != nil { log.Printf("consumer init failed ...") }
+//
+// Kafka 未就绪而 analytics-svc 先起时（容器冷启动竞态）NewConsumer 返回
+// nil，`nil.WithMaxRetries(...)` 直接 SIGSEGV ⇒ 容器 crash-loop ⇒
+// `docker compose up` 整条依赖链以 EXIT=1 中止。
+// nil 在本代码库是**受支持的语义**（main.go: "Kafka 未启用时保持 nil，
+// BootNacos 的 applyOps 会退化为只记录不应用"）——builder 必须同样 nil-safe。
+func TestConsumer_WithMaxRetries_NilReceiver_DoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	var c *Consumer
+	assert.NotPanics(t, func() { c.WithMaxRetries(3) },
+		"NewConsumer 失败返回 nil 时 main.go 仍会调 WithMaxRetries —— 必须 nil-safe，"+
+			"否则 Kafka 未就绪会把瞬时依赖延迟放大成永久 crash-loop")
+	assert.Nil(t, c.WithMaxRetries(3), "nil receiver 原样返回 nil")
+}
+
 // newSharedRetries 构造共享同一 atomic 容器的 consumer + handler，
 // 复现生产装配（Consumer.retries 与 chatEventHandler.retries 同一实例）。
 func newSharedRetries(initial int32) (*Consumer, *chatEventHandler) {

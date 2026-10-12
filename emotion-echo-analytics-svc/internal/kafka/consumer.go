@@ -119,7 +119,14 @@ func (h *chatEventHandler) currentMaxRetries() int {
 }
 
 // WithMaxRetries 设置最大重试次数
+//
+// nil receiver 安全：NewConsumer 失败时返回 (nil, err)，而 main.go 的装配
+// 顺序是在检查 err 之前就调本方法（builder 链式风格）。Kafka 未就绪时
+// 若不 guard，`nil.WithMaxRetries(...)` 会 SIGSEGV（账本 F-216）。
 func (c *Consumer) WithMaxRetries(n int) *Consumer {
+	if c == nil {
+		return nil
+	}
 	if n > 0 {
 		c.retries.Store(int32(n))
 		c.consumer = &chatEventHandler{repo: c.repo, topic: c.topic, dlq: c.dlq, retries: c.retries}
