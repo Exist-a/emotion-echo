@@ -59,8 +59,9 @@ var wantRoutes = gin.RoutesInfo{
 	{Method: "POST", Path: "/api/v1/ai/stream"},
 	{Method: "GET", Path: "/api/v1/ai/health"}, // Sprint F2（2026-09-11）
 
-	// ----- voice_handler.go 多 1 条（E2E-F-113 反代）-----
+	// ----- voice_handler.go 多 2 条（E2E-F-113 反代 + E2E-F-187 HEAD）-----
 	{Method: "GET", Path: "/api/v1/voice/audio/:filekey"}, // E2E-F-113：音频反代
+	{Method: "HEAD", Path: "/api/v1/voice/audio/:filekey"}, // E2E-F-187：gin 不自动转发 HEAD
 
 	// ----- user_handler.go (4 条) -----
 	{Method: "GET", Path: "/api/v1/user/profile"},
@@ -465,4 +466,31 @@ func TestRegisterRoutes_WithEmotionQ(t *testing.T) {
 	// 总路由数 = 主 + EmotionQ 3 条
 	wantLen := len(wantRoutes) + len(wantRoutesWithEmotionQ)
 	assert.Len(t, got, wantLen, "EmotionQ 启用时路由总数必须等于 wantRoutes + wantRoutesWithEmotionQ")
+}
+
+// TestReadinessProbeTargets_ExcludesOptionalXTTS E2E-F-210 / M2（E2E-30）/ D-50：
+// xtts 是 `profiles: ["ai"]` 门控的**可选**依赖（用户 2026-10-08 决定暂时停用）。
+// 它必须仍出现在 /health（可观测）但**不得**计入 /health/ready 的硬依赖 ——
+// 否则按 RUNBOOK §2.1 标准命令（不带 ai profile）起栈时 BFF 必然 unhealthy，
+// 并级联 `apisix-seed`（depends_on: web-bff healthy）不运行。
+func TestReadinessProbeTargets_ExcludesOptionalXTTS(t *testing.T) {
+	c := &config.Config{}
+	all := downstreamProbeTargets(c)
+	ready := readinessProbeTargets(c)
+
+	hasName := func(ts []handler.DownstreamTarget, name string) bool {
+		for _, x := range ts {
+			if x.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	assert.True(t, hasName(all, "xtts"),
+		"/health 必须仍含 xtts（可选依赖也要可观测，degraded 可见）")
+	assert.False(t, hasName(ready, "xtts"),
+		"/health/ready 不得含可选依赖 xtts（否则标准起栈必 unhealthy，E2E-F-210）")
+	assert.Len(t, ready, len(all)-1,
+		"readiness 应恰好比 all 少一个可选依赖，all=%d ready=%d", len(all), len(ready))
 }

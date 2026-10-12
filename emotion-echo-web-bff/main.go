@@ -445,32 +445,52 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 // 路径契约（路由清单）：main_test.go 的 wantRoutes + wantRoutesWithEmotionQ 切片。
 // 改路由必须同步更新测试文件 + 在 PR 描述里说明（决策 18 §四.1 结论须附证据）。
 // 调试时临时增减路由也行——但合 PR 前 main_test.go 必须绿。
+// downstreamProbeTargets /health 的下游探针清单（**含**可选依赖，用于可观测）。
+func downstreamProbeTargets(c *config.Config) []handler.DownstreamTarget {
+	return []handler.DownstreamTarget{
+		{Name: "user", BaseURL: c.UserService.BaseURL},
+		{Name: "chat", BaseURL: c.ChatService.BaseURL},
+		{Name: "assessment", BaseURL: c.AssessmentService.BaseURL},
+		{Name: "analytics", BaseURL: c.AnalyticsService.BaseURL},
+		{Name: "ai", BaseURL: c.AIService.HTTPAddr},
+		{Name: "xtts", BaseURL: c.XTTS.BaseURL},
+	}
+}
+
+// readinessProbeTargets /health/ready 的下游探针清单（**不含**可选依赖）。
+//
+// M2（E2E-30）/ E2E-F-210 / D-50：`xtts` 由 `profiles: ["ai"]` 门控，是**可选**依赖
+// （用户 2026-10-08 决定暂时停用，云端 TTS 已接）。把它算作 readiness 硬依赖会使
+// 按 RUNBOOK §2.1 标准命令（不带 `--profile ai`）起栈时 BFF **必然 unhealthy**，
+// 并级联 `apisix-seed`（`depends_on: web-bff: service_healthy`）不运行。
+// 故 readiness 只含必需依赖；`xtts` 仍在 /health 的可观测清单里（degraded 可见）。
+func readinessProbeTargets(c *config.Config) []handler.DownstreamTarget {
+	all := downstreamProbeTargets(c)
+	out := make([]handler.DownstreamTarget, 0, len(all))
+	for _, t := range all {
+		if t.Name == "xtts" {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
 func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmStreamer downstream.LLMChatStreamer, llmIntent downstream.LLMIntentClassifier, authLockStore authlock.LoginLockStore, vcStore authlock.VerificationCodeStore, healthDeps handler.HealthDeps) {
 	// health（聚合下游探测）— 免鉴权（GinAuthMiddleware 白名单已含 /health）
 	// E2E-F-130/F-99：响应里带 version + build_time，便于一眼判定容器跑的是不是
 	// 最新代码（防 dev 跑旧 bundle 类 bug 复发）。Version 优先取 GIT_VERSION env，
 	// 否则 fall back 到 dev-build；BuildTime 为 main 启动时刻。
-	r.GET("/health", handler.NewHealthHandlerWithBuildAndDeps([]handler.DownstreamTarget{
-		{Name: "user", BaseURL: c.UserService.BaseURL},
-		{Name: "chat", BaseURL: c.ChatService.BaseURL},
-		{Name: "assessment", BaseURL: c.AssessmentService.BaseURL},
-		{Name: "analytics", BaseURL: c.AnalyticsService.BaseURL},
-		{Name: "ai", BaseURL: c.AIService.HTTPAddr},
-		{Name: "xtts", BaseURL: c.XTTS.BaseURL},
-	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond, handler.BuildInfo{
+	r.GET("/health", handler.NewHealthHandlerWithBuildAndDeps(downstreamProbeTargets(c),
+		time.Duration(c.Health.TimeoutMs)*time.Millisecond, handler.BuildInfo{
 		Version:   gitVersion(),
 		BuildTime: time.Now().UTC().Format(time.RFC3339),
 	}, healthDeps))
 	// D-29：readiness 端点。下游降级时返 503，供 compose healthcheck 判定 ——
 	// 此前 /health 恒返 200，探针看不到"某下游挂了"。
-	r.GET("/health/ready", handler.NewHealthReadyHandlerWithDeps([]handler.DownstreamTarget{
-		{Name: "user", BaseURL: c.UserService.BaseURL},
-		{Name: "chat", BaseURL: c.ChatService.BaseURL},
-		{Name: "assessment", BaseURL: c.AssessmentService.BaseURL},
-		{Name: "analytics", BaseURL: c.AnalyticsService.BaseURL},
-		{Name: "ai", BaseURL: c.AIService.HTTPAddr},
-		{Name: "xtts", BaseURL: c.XTTS.BaseURL},
-	}, time.Duration(c.Health.TimeoutMs)*time.Millisecond, healthDeps))
+	// M2（E2E-30）/ E2E-F-210：readiness 只算**必需**依赖，可选依赖（xtts）不翻转。
+	r.GET("/health/ready", handler.NewHealthReadyHandlerWithDeps(readinessProbeTargets(c),
+		time.Duration(c.Health.TimeoutMs)*time.Millisecond, healthDeps))
 	r.GET("/metrics", gin.WrapH(sharedmetrics.PromHTTPHandler()))
 
 	// auth（Stage 33 PR-19b：真实登录，注入 UserClient）
