@@ -54,7 +54,7 @@ F-180 / F-187 / F-188 / F-189（本轮分类完成）/ F-204 / F-209 / F-210 / F
 ## 3. 环境现状
 
 - 栈：infra + 6 应用服务；本轮修 F-216 后 **`docker compose up` 可正常完成**（此前冷启动必 EXIT=1）。
-- 镜像：`web-bff:v0.1.37` / `analytics-svc:v0.1.11` / `chat-svc:v0.1.16` / `user-svc:v0.1.5` / `ai-svc:v0.1.10` / `assessment-svc:v0.1.5` 已重建；`emotion-echo-web` 未能重建（见 §2 #6）。
+- 镜像：`web-bff:v0.1.37` / `analytics-svc:v0.1.11` / `chat-svc:v0.1.16` / `user-svc:v0.1.5` / `ai-svc:v0.1.10` / `assessment-svc:v0.1.5` 已重建；`emotion-echo-web` 未能重建（原因见上文「已知属性」）。
 - **已知坑**：并发 `docker compose build` 多个 Go 服务会因内存峰值使 daemon 报 `Failed to receive status: rpc error ... EOF` ⇒ **逐个构建**。
 - `deploy/.devmode-session` 未占用（本会话未登记；如需长跑请按双轨协议登记）。
 
@@ -63,5 +63,5 @@ F-180 / F-187 / F-188 / F-189（本轮分类完成）/ F-204 / F-209 / F-210 / F
 ## 4. 恢复时的下一步
 
 1. 收口：report §8 收口自检勾选 + plan/roadmap 状态三处一致（partial→done）+ §13.3 第二方核对通过 + §2.5 三连。（smoke 结论已回填 report §9；§8 的「提交后即 STALE」属已裁定语义。）
-2. 推进 #5（integration test）/ #6/#7（`KAFKA_ENABLED=false` 栈）/ #19 / #20。
+2. 收口：report §8 收口自检勾选 + plan/roadmap 状态三处一致（partial→done）+ §13.3 第二方核对通过 + §2.5 三连。
 3. 收口：report §4~§6 补全 + plan/roadmap 状态三处一致 + 账本全量对账 + `audit --all` 0 FAIL + §13.3 第二方核对 + §2.5 三连。
