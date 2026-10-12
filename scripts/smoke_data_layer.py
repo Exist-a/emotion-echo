@@ -325,11 +325,17 @@ except Exception:
     pass  # docker 不在/容器未跑 → 跳过
 
 if kafka_enabled_env == "false":
-    # KAFKA_ENABLED=false → 验证 DevEventPublisher 路径
-    # 应有 user_behavior_events 行（chat-svc 同步写,绕开 Kafka）
+    # KAFKA_ENABLED=false → 验证 DevEventPublisher 直写路径
+    #
+    # E2E-F-218（2026-10-12 修正）：原判据用 `WHERE event_id LIKE 'smoke-%'` ——
+    # 但 `user_behavior_events.event_id` 全仓都是 UUID（实测 `smoke-` 前缀 0 行），
+    # 该过滤**永远匹配不到** ⇒ §6 只要真跑就恒 FAIL（假 FAIL，掩盖了"路径其实是好的"）。
+    # 改为按**时间窗**判定：本次 smoke 的 `[pre]` 段刚触发过事件，而 KAFKA_ENABLED=false
+    # 时 chat-svc 不经 Kafka、analytics consumer 收不到东西 ⇒ 近 10 分钟内的唯一写入者
+    # 就是 DevEventPublisher ⇒ 有行即证明该路径生效。
     rc, out, err = docker_psql(
         "SELECT COUNT(*) FROM emotion_echo_analytics.user_behavior_events "
-        "WHERE event_id LIKE 'smoke-%'"
+        "WHERE occurred_at >= NOW() - INTERVAL '10 minutes'"
     )
     row_count = 0
     if rc == 0:
@@ -339,10 +345,10 @@ if kafka_enabled_env == "false":
             row_count = 0
     if row_count >= 1:
         check("§6 KAFKA_ENABLED=false DevEventPublisher 写入",
-              True, f"OK: smoke 触发的事件已写入 user_behavior_events ({row_count} 行)")
+              True, f"OK: 近 10 分钟内 {row_count} 行由 DevEventPublisher 直写（chat-svc 绕开 Kafka）")
     else:
         check("§6 KAFKA_ENABLED=false DevEventPublisher 写入", False,
-              "FAIL: KAFKA_ENABLED=false 但 user_behavior_events 0 行。DevEventPublisher 未生效。")
+              "FAIL: KAFKA_ENABLED=false 且近 10 分钟 user_behavior_events 0 行。DevEventPublisher 未生效。")
 else:
     # KAFKA_ENABLED=true 或未设置 → 旧 §1 路径
     if total >= 1:
