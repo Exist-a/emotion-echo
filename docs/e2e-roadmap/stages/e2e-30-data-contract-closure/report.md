@@ -91,7 +91,80 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 
 ---
 
-## 7. 收口自检（**未完成 —— 阶段未收口**）
+## 4. 发现与分类（账本对账）
+
+> RUNBOOK §10 模板章节。本阶段名下账本逐条对账（**收口契约要求：逐条翻状态或写明仍挂理由**）。
+
+| 账本 | 现象（摘要） | 归属 / 去向 | 状态 |
+|---|---|---|---|
+| **F-180** | 审计器 A3 静默失效（**真因=章节标题**，非账本原写的"子表编号"） | E2E-30 | ✅ 已修（PR #190） |
+| **F-183** | Kafka 发布 span 断链（跨进程 trace 连接） | **转专项** → [docs/plans/outbox-trace-continuity.md](../../../plans/outbox-trace-continuity.md)（用户裁定 M4） | 🟡 转专项 |
+| **F-184** | IAB 渲染帧与 DOM 不同步 ⇒ 截图证据失真 | 工具 / IAB 环境（或上游报） | 🔴 保留（去向已定：[V] 证据改由 Playwright 独立渲染栈产出，IAB 仅作 DOM 级验证） |
+| **F-186** | readiness 不含 storage（MinIO 停不翻转） | E2E-30 | ✅ **关闭**（用户裁定「不翻转」即关闭，M2） |
+| **F-187** | voice 同型两缺口（HEAD 404 / PutObject 无 deadline） | E2E-30 | ✅ 已修（PR #195） |
+| **F-188** | digest 守卫不覆盖 compose `image:` | E2E-30 | ✅ 已修（PR #191） |
+| **F-189** | 全量 Playwright 基线红（失败跨 11 个他阶段 spec） | E2E-30 **#20** | 🔴 → 本轮分类（见 §2 #20） |
+| **F-191** | Grafana TTFT 面板/告警缺失 | E2E-30（记账不修） | 🔴 保留（触发条件：需要该面板/告警时再补，先红后绿） |
+| **F-192** | 宿主→网关间歇 ConnectionReset 簇 | **转运维** | ✅ 已文档化（RUNBOOK §2.4；用户裁定 M5） |
+| **F-195** | TTS 段播放层时序敏感（段被静默丢弃） | E2E-30 **#19** | 🔴 → 本轮复跑定位（见 §2 #19） |
+| **F-196** | dev `:3000` 被 web 容器抢占 | **转运维** | ✅ 已文档化（RUNBOOK §2.4；用户裁定 M5） |
+| **F-197** | mobile 视口 fill 后发送按钮不启用 | E2E-30 **#19** | 🔴 → 本轮复跑定位（见 §2 #19） |
+| **F-204** | svc tracer 初始化无重试（OAP 后起永不上报） | E2E-30 | ✅ 已修（PR #195） |
+| **F-209** | §2.4 smoke 在 dev 不可跑（基址 `:8894` 已被 D-47 收掉） | E2E-30 | ✅ 已修（PR #190） |
+| **F-210** | BFF readiness 硬依赖 profile 门控的 xtts | E2E-30 | ✅ 已修（PR #195，运行验证） |
+| **F-211** | 网关缺 BFF health 路由 ⇒ smoke 健康前置不可复核 | E2E-30 | ✅ **已解决**（L1 采用方案②：登录成功即证 BFF 可用，零新增路由；`check_smoke_gateway.sh` 钉住） |
+| **F-212** | xtts「暂时停用」遗留面（readiness / TTS 回退链 / 编排镜像） | E2E-30 + D-50 | 🟡 **部分**：readiness 摘除已做（= F-210 ✅）；**TTS 回退链的用户可见行为 + 镜像清理未做**（随 D-50 落地） |
+| **F-215** | §8 镜像新鲜度判据粗（非产物提交恒红） | E2E-30 | ✅ 已修（PR #195；用户裁定保持「致命」） |
+| **F-216** | analytics-svc 冷启动 SIGSEGV ⇒ `compose up` EXIT=1 | E2E-30 | ✅ 已修（PR #194） |
+| **F-217** | `user_oauth` 残留表（drop 脚本 initdb-only） | E2E-30 | 🔴 只登记（本轮不改） |
+| **F-218** | smoke §6 判据恒 FAIL（假 FAIL） | E2E-30 | ✅ 已修（PR #198） |
+
+## 5. 修复清单（TDD 记录）
+
+| 循环 / 项 | RED | GREEN | PR |
+|---|---|---|---|
+| **L1** smoke 可跑化 | 静态守卫断言基址 ≠ `:8894`（当前 `:8894` ⇒ 必红） | 改走网关 `:19080` + Bearer + 登录前置 | #190 |
+| **L2** digest 扩扫 compose | 写回未 pin 的 `:latest` ⇒ 守卫 RED | 扩扫 compose `image:` + 钉 4 个 + `scratch` 豁免 | #191 |
+| **L3** voice HEAD / PutObject 超时 | HEAD 404（gin 不转发）/ 存储不可用返 500 且 ctx 无 deadline | 补 `r.HEAD` + 3s deadline + `isStorageUnavailableErr→503` | #195 |
+| **L4** svc tracer 重试 | `undefined: BootstrapSkyWalkingTracerRetry` | 新增 `…TracerRetry`（有限 attempts+退避+ctx 取消即退），6 调用点 | #195 |
+| **L5** Kafka trace 连接 | — | **未做**（M4 裁定转专项，附 ADR 的要求随专项） | — |
+| **L6** helm 主 chart 渲染回归 | `test_helm_main_render.sh` 不存在 | 新增守卫（三不变量 + 负向对照）→ 接 CI job `helm-main-render` | #190 |
+| **#6** 枚举列（非 L 循环） | `model.Message.Intent` tag 含 `size:16` | 改 `size:32` + 2 个 integration test（真库往返） | #197 |
+| **#7** §契约 6（非 L 循环） | §6 判据 `event_id LIKE 'smoke-%'` 恒不匹配 | 改时间窗 + compose `KAFKA_ENABLED` 可覆盖 | #198 |
+| **F-216** nil-guard | `panic … consumer.go:124 addr=0x78`（与生产同址） | `WithMaxRetries` nil-guard + compose `depends_on: kafka: service_healthy` | #194 |
+| **F-180** 审计器 A3 | 解析器不认章节标题 ⇒ 3 项 RED | 标题容错（+ 守卫 26/26） | #190 |
+
+## 6. 回归钉
+
+| 钉 | 类型 | 接入 |
+|---|---|---|
+| `scripts/check_smoke_gateway.sh` | 静态（smoke 基址 ≠ `:8894`、含负向对照） | CI `e2e-guards`（25/25） |
+| `scripts/test_helm_main_render.sh` | 静态（主 chart 三不变量 + 负向对照） | CI `doc-drift-check` job `helm-main-render` |
+| `scripts/test_audit_plan_parser.sh` | 静态（A3 标题容错 + 负向对照） | CI `e2e-guards`（26/26） |
+| `emotion-echo-chat-svc/internal/model/intent_contract5_test.go` | 契约（tag 宽度 == DDL） | `go test` |
+| `emotion-echo-chat-svc/integration_test/intent_enum_integration_test.go` | 集成（真库往返 6 值） | `-tags integration` |
+| `emotion-echo-ai-svc/integration_test/fused_emotion_enum_integration_test.go` | 集成（真库往返 9 情绪） | `-tags integration` |
+| `emotion-echo-analytics-svc/internal/kafka/ops_retry_test.go`（nil receiver 用例） | 契约（nil-safe） | `go test` |
+| `emotion-echo-shared/pkg/bootstrap/tracer_test.go`（retry 3 用例） | 契约（重试/退避/ctx 取消） | `go test` |
+| `emotion-echo-web-bff/internal/handler/voice_handler_test.go`（HEAD / 超时 / 路由契约） | 契约 + 真 server HEAD | `go test` |
+| `emotion-echo-web-bff/main_test.go`（readiness 探针 / 路由契约） | 契约 | `go test` |
+
+> **前端 spec**：本阶段改动**均非用户可见行为**（voice HEAD/超时、tracer、readiness 口径、§8 判据），故未新增 Playwright spec；**IAB 实测**见 [§9.4](#94-iab-实测真实浏览器2026-10-12)。
+
+## 7. 待决策 / 升级项
+
+**已全部落定**：M1 / M2 / M4 / M5 / M6 + T-1/§8 经用户 2026-10-12 逐条追认（见 [plan.md](plan.md) §4.1）。
+
+**遗留待决（下一轮，不阻塞本阶段收口）**：
+
+| 项 | 内容 | 建议去向 |
+|---|---|---|
+| **F-217** | `user_oauth` 残留表修法（DROP 进 migrate.sh 扫描目录，或给 02 补幂等 `DROP TABLE IF EXISTS`） | 下一轮 / 迁移治理 |
+| **F-184** | IAB 渲染帧失真（截图证据不可信） | 工具治理 / 向上游报 |
+| **F-191** | Grafana TTFT 面板/告警 | 触发条件满足时再补 |
+| **F-212** | xtts 停用的 TTS 回退链用户可见行为 + 镜像清理（随 D-50） | 下一轮（D-50 落地） |
+
+## 8. 收口自检（**未完成 —— 阶段未收口**）
 
 | # | 检查项 | 状态 |
 |---|--------|------|
