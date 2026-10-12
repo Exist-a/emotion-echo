@@ -23,7 +23,7 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | ~~T-1~~ | ~~**§8 镜像新鲜度口径**（E2E-F-215）~~ | 执行者按**推荐②**落地，**待用户追认**（D-41 先例） | 判据改为「镜像构建时间 ≥ 该服务源码最近 commit」，并读**镜像**而非容器 | ✅ **已做（2026-10-12）**：两处真实缺陷已修（取错对象 + 范围错，**非降级断言**）；`check_image_freshness.sh` 同源修正。重建后的 §8 结果见 §9 |
 | ~~T-2~~ | ~~**组 D 剩余 4 项**：#14 / #15 / #16 / #18~~ | — | 每条 TDD 循环有 RED→GREEN 记录；[M] 两条有裁定 | ✅ **#14 / #15 / #18 已做**（§9）；**#16 按 M4 裁定 = 转专项**（本阶段只登记不修，Kafka trace 连接属架构级） |
 | **T-3** | **组 E 2 项**：#19（E2E-F-195/F-197 时序敏感 spec 稳定性）/ #20（E2E-F-189/F-192/F-196 全量基线与环境面收口，含 **[M] M5** 去向） | E2E-30 执行者；M5 须先升级 | 连续 `-count`/多 project 复跑有根因或明确判据；#20 逐条分类 + M5 落定 | ⏳ 未开工 |
-| **T-4** | **测点 #2~#7 的形式判定未完成**：§契约 1~4 已实测 PASS（见 §2），但 #5（schema↔写入端一致性）需 **integration test 证据**、#6/#7 需 **`KAFKA_ENABLED=false` 栈形态**验证 | E2E-30 执行者 | #5 有 integration test 断言写入值 ∈ enum；#7 在不加载 dev overlay 的栈上跑通 §契约 1+2 | ⏳ 部分（#2/#3/#4 已 PASS，#5/#6/#7 待补） |
+| **T-4** | **测点 #6/#7 证据形态**：§契约 5（**#6**）需 **integration test 证据**、§契约 6（**#7**）需 **`KAFKA_ENABLED=false` 栈形态**验证 | E2E-30 执行者 | #6 有 integration test 断言写入值 ∈ enum；#7 在不加载 dev overlay 的栈上跑通 §契约 1+2 | ✅ **#6 已做（2026-10-12，§2 #6 / §9.5）**；⏳ **#7 未做**。（**编号更正**：本行原把 §契约 5 标成「#5」，与 §2 表（#6 = §契约 5）矛盾 —— 已按 §2 表更正） |
 | **T-5** | **[M] M1 / M6 裁定** | M1 = 按证据关闭；M6 = 按**推荐③**（不接 required check）；**待用户追认** | 两条各有裁定记录 | ✅ **裁定已落（2026-10-12，待追认）**：**M1** = §契约 4 走「严格非空」判据（实测已 PASS：`summary` 非空 + `emotionDistribution.len=1`）；**M6** = ③「暂不接 CI」——真跑 smoke 需完整 19 容器 dev 栈，GitHub-hosted runner 无栈，设为 required check 会恒失败（既有静态守卫 `check_smoke_gateway.sh` 已接 CI） |
 | **T-6** | **收口未做**：report 补全（§3~§9）/ plan+roadmap 状态三处一致 / **账本 13 条转挂逐条翻状态或写明仍挂理由**（F-180✅/183/184/186/187/188✅/189/191/192/195/196/197/204）+ 本轮新登 F-209✅/210/211/212/215 / §13.3 第二方核对 / §2.5 收口自检 | E2E-30 执行者 | `e2e_stage_audit.py --all` 0 FAIL + 第二方核对通过 + 账本对账干净 | ⏳ 未做 |
 
@@ -52,7 +52,7 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | 3 | §契约 2 `event_type` enum 细分 | [A] | PASS | 真跑 **7 种**：`conversation.closed`/`conversation.created`/`conversation_closed`/`conversation_created`/`message`/`message.created`/`test` |
 | 4 | §契约 3 `analytics_reader` 视图可读 | [A] | PASS | 真跑 `msg_summary_v` / `daily_emotion_v` / `assessment_v` / `user_behavior_events` 四视图**无 permission denied** |
 | 5 | §契约 4 `/reports/daily` 数据真有 | [A] | PASS | 真跑 `date=2026-10-09 summary=「…1 段对话，1 条消息…」 emotionDistribution.len=1` |
-| 6 | §契约 5 schema↔写入端一致性 | [A] | BLOCKED | **未做**（AP-03）：需 **integration test** 断言"每个 `VARCHAR(32) NOT NULL` 枚举列的写入值 ∈ enum 集合"；smoke 内 SKIP。见 §0 T-4 |
+| 6 | §契约 5 schema↔写入端一致性 | [A] | PASS | ✅ **2026-10-12**：按**权威 DDL** 清点「`VARCHAR(32) NOT NULL` 枚举列」= **2 列**（`messages.intent` / `fused_emotions.primary_emotion`；其余同型列 `purpose`/`category`/`risk_level`/`voice|face.primary_emotion` 等**均 nullable**，不属本判据）。各加 **integration test**（testcontainers 真库往返）：`chat-svc/integration_test/intent_enum_integration_test.go`（列宽 32 + NOT NULL + 白名单 6 值逐个原样读回）、`ai-svc/integration_test/fused_emotion_enum_integration_test.go`（列宽 32 + NOT NULL + 9 情绪逐个原样读回）。**顺带修一处真实漂移**：`model.Message.Intent` GORM tag 仍是 `size:16` 而 DDL 已由 c007 扩到 `VARCHAR(32)` ⇒ 改 `size:32` + 新增 `TestMessage_IntentGormTagSize_MatchesDDLWiden` 钉住。**新登 E2E-F-217**（`user_oauth` 残留表）。见 §9.5 |
 | 7 | §契约 6 `KAFKA_ENABLED=false` 路径不空跑 | [A] | BLOCKED | **未做**（AP-03）：需**不加载 dev overlay** 的栈形态（Kafka 关）触发事件后验 §契约 1+2。见 §0 T-4 |
 | 8 | 主 chart 渲染 | [A] | PASS | 默认渲染 **19 origin**（主 chart + 18 默认开子 chart）；守卫断言"每个子 chart 都出现" |
 | 9 | 主 chart lint | [A] | PASS | rc=0，`1 chart(s) linted, 0 chart(s) failed`，零 ERROR |
@@ -68,11 +68,11 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 | 19 | **E2E-F-195/F-197** 时序敏感 spec 稳定性 | [A] | BLOCKED | **未开工**（AP-03）。见 §0 T-3 |
 | 20 | **E2E-F-189/F-192/F-196** 基线与环境面收口 | [A]+[M] | BLOCKED | **未开工 + [M] M5 未裁定**。见 §0 T-3 |
 
-汇总：PASS 15 / FAIL 0 / BLOCKED 5 / N/A 0
+汇总：PASS 16 / FAIL 0 / BLOCKED 4 / N/A 0
 
 > **（2026-10-12 更新）修正**：原汇总写 "PASS 13 / BLOCKED 7"，与本表逐行不符（实为 12/8，20 行）——本轮据逐行重数并更正为 15/5。
 
-> **关于 BLOCKED 5/20（25%）**：已 ≤ 收口门槛 1/3。剩余 5 项 = **#6/#7**（证据形态：需 integration test / `KAFKA_ENABLED=false` 栈形态）、**#16**（**已裁定转专项**，见 §2 #16 / M4）、**#19/#20**（组 E，[M] M5 裁定 = 转运维 runbook，本阶段未开工）。
+> **关于 BLOCKED 4/20（20%）**：已 ≤ 收口门槛 1/3。剩余 4 项 = **#7**（§契约 6，需 `KAFKA_ENABLED=false` 栈形态）、**#16**（**已裁定转专项**，见 §2 #16 / M4）、**#19/#20**（组 E，M5 已裁定转运维 runbook，本阶段未开工）。
 > **关于 §8**：**判据已修**（E2E-F-215）——原判据取错对象（读容器时间）+ 范围错（全局 commit），本轮改为「镜像构建时间 ≥ 该服务源码最近 commit」。重建镜像后的实际结果见 §9。**该修是修正两处真实缺陷，非降级断言**。
 
 ---
@@ -95,7 +95,7 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 
 | # | 检查项 | 状态 |
 |---|--------|------|
-| 1 | 20 个测试点全部有结论（四值） | [ ] **部分（2026-10-12）**：**15 项有结论**（#1~#5、#8~#13、#14、#15、#17、#18）；剩余 #6/#7（证据形态）、#16（已裁定转专项）、#19/#20（组 E） |
+| 1 | 20 个测试点全部有结论（四值） | [ ] **部分（2026-10-12）**：**16 项有结论**（#1~#6、#8~#13、#14、#15、#17、#18）；剩余 **#7**（§契约 6）、#16（已裁定转专项）、#19/#20（组 E） |
 | 2 | 范围内缺陷走完 TDD（L1~L6） | [ ] 部分：**L1/L2/L3/L4/L6 完成**；**L5 按 M4 裁定转专项**（不在本阶段） |
 | 3 | 回归钉跑过且绿 | [x] 守卫（含负向对照）已接 CI；#14/#15 新增 TDD 用例本地全绿 |
 | 4 | 改变用户可见行为的修复已 IAB 实测 | [x] **已做 IAB 实测（2026-10-12）**：#14 触及语音链路（用户可见）⇒ 真实浏览器实测 —— 登录 → 会话详情 → 语音气泡 `<audio>` 经网关反代**加载并播完**（`readyState=4`/`duration=1.74s`/`error=null`）；浏览器 origin 下 `HEAD`/`GET /api/v1/voice/audio/<k>` **均 200**（CORS 正常）；我的空间页正常渲染。**未覆盖（如实记录）**：真实麦克风**录音→上传**链路（IAB 无法授予麦克风权限）⇒ 上传侧 503 映射未在浏览器内验证（仅单测 + 网关 HEAD 代理） |
@@ -156,3 +156,19 @@ last-updated: 2026-10-12（**执行轮续**：起栈阻断 E2E-F-216 修复（PR
 
 **结论**：#14 的语音反代回放路径在**真实浏览器**下可用，且新增 **HEAD 路由经网关对浏览器 origin 可用**（CORS 正常）——这是 curl/Playwright APIRequest 覆盖不到的一层。
 **未覆盖（如实记录）**：真实**麦克风录音 → 上传**（IAB 无法授予麦克风权限）⇒ #14 的**上传侧** `PutObject` 3s 超时 → 503 映射未在浏览器内验证（证据 = 单测 `TestVoiceHandler_Upload_StorageUnavailable_Returns503` + 网关 HEAD 代理行为）。
+
+### 9.5 测点 #6（§契约 5）——枚举列写入值 ∈ enum 的 integration test（2026-10-12）
+
+按**权威 DDL**（`deploy/db/02-create-tables-in-schemas.sql` + 各 svc `migrations/`）清点「`VARCHAR(32) NOT NULL` 枚举列」，结果 = **2 列**（其余同型列 `purpose`/`category`/`risk_level`/`voice|face.primary_emotion` 等**均 nullable**，不属本判据）：
+
+| 列 | 写入端白名单 | integration test |
+|---|---|---|
+| `emotion_echo_chat.messages.intent` | `internal/logic.allowedIntents`（6 类） | `emotion-echo-chat-svc/integration_test/intent_enum_integration_test.go` — 列宽 = VARCHAR(32) NOT NULL；6 个白名单值经真实 repo `AppendMessage` → `ListMessages` **原样读回**；库内值 ∈ 白名单 ∪ {''} |
+| `emotion_echo_ai.fused_emotions.primary_emotion` | `internal/fusion.allowedEmotions`（9 标签） | `emotion-echo-ai-svc/integration_test/fused_emotion_enum_integration_test.go` — 列宽 = VARCHAR(32) NOT NULL；9 情绪经 `PostgresFusedEmotionRepo.Upsert` → `GetByMessageID` **原样读回** |
+
+**顺带修掉一处真实漂移（DDL↔model）**：`model.Message.Intent` 的 GORM tag 仍是 `size:16`，而 `migrations/c007_widen_intent_to_32.sql` 早已把 DDL 扩到 `VARCHAR(32)`。改 tag → `size:32`，新增 `internal/model/intent_contract5_test.go`（RED：tag 含 `size:16` 不含 `size:32` → GREEN）钉住。
+
+**顺带清点出 E2E-F-217**：运行库 `emotion_echo_user.user_oauth` 仍在，而权威 DDL 已删该表 —— `05-drop-user-oauth.sql` 只挂在 postgres 的 `/docker-entrypoint-initdb.d/`（仅空库首次初始化执行）⇒ 老库上从不运行。代码侧 0 引用、功能无影响；已登记，本轮不改。
+
+**跑法**：`TESTCONTAINERS_RYUK_DISABLED=true go test -tags integration ./integration_test/ -run <Test>`（本机 ryuk 清理容器起不来，需禁用以跑通 —— 非测试自身问题）。
+**顺带加固**：chat-svc 的 `pgContainerDesc` 建表此前缺 `context/closed_at/deleted_at/metadata/intent/file_name`，使任何 conversation/message 写入类集成测试**根本跑不起来** —— 已补齐到与真实 DDL 列集合一致（§契约 5 的 schema 保真）。
