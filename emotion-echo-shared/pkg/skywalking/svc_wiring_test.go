@@ -37,10 +37,12 @@ func TestGRPCSvcMains_CallSetTracer(t *testing.T) {
 				"%s/main.go 必须在 tracer 初始化成功分支调用 skywalking.SetTracer(t)——"+
 					"该 svc 的 gRPC server 拦截器取全局 skywalking.Tracer()，不注册则恒 nil（E2E-26 #3 根因）", svc)
 
-			// 顺序：SetTracer 必须发生在 BootstrapSkyWalkingTracer 之后（注册成功产物）
-			bootIdx := strings.Index(body, "BootstrapSkyWalkingTracer(")
+			// 顺序：SetTracer 必须发生在 tracer bootstrap 之后（注册成功产物）
+			// 锚点用**不带括号**的前缀，兼容 `BootstrapSkyWalkingTracer(` 与
+			// `BootstrapSkyWalkingTracerRetry(`（E2E-F-204 引入的重试变体）。
+			bootIdx := strings.Index(body, "BootstrapSkyWalkingTracer")
 			setIdx := strings.Index(body, "skywalking.SetTracer(")
-			require.GreaterOrEqual(t, bootIdx, 0, "%s 必须用 BootstrapSkyWalkingTracer", svc)
+			require.GreaterOrEqual(t, bootIdx, 0, "%s 必须用 BootstrapSkyWalkingTracer[Retry]", svc)
 			assert.Greater(t, setIdx, bootIdx,
 				"%s 的 SetTracer 必须在 BootstrapSkyWalkingTracer 之后（只注册初始化成功的 tracer）", svc)
 		})
