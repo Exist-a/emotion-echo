@@ -62,6 +62,11 @@ F-180 / F-187 / F-188 / F-189（本轮分类完成）/ F-204 / F-209 / F-210 / F
 
 ## 4. 恢复时的下一步
 
-1. 收口：report §8 收口自检勾选 + plan/roadmap 状态三处一致（partial→done）+ §13.3 第二方核对通过 + §2.5 三连。（smoke 结论已回填 report §9；§8 的「提交后即 STALE」属已裁定语义。）
-2. 收口：report §8 收口自检勾选 + plan/roadmap 状态三处一致（partial→done）+ §13.3 第二方核对通过 + §2.5 三连。
-3. 收口：report §4~§6 补全 + plan/roadmap 状态三处一致 + 账本全量对账 + `audit --all` 0 FAIL + §13.3 第二方核对 + §2.5 三连。
+**唯一剩余 = T-6 收口**（其余 19 项测试点已 PASS、#16 已裁定转专项）：
+
+1. report §8 收口自检逐项勾选；plan / roadmap / report 三处 `status` 一致（partial → done）。
+2. §13.3 第二方核对（**已跑三轮：首轮 FAIL → 修 7 项 → 复验发现 2 项未闭环 + 2 处新矛盾 → 再修 4 处 → 末轮 PASS**，见 PR #200）。
+3. §2.5 收口三连（工作树干净 / main 与 origin 齐平 / 无残留分支与 worktree）。
+4. 收口后：阶段记录迁移到 `docs/stages/`（按 AGENTS §七）。
+
+> 注：`report §4~§6` 章节、`账本全量对账`、`audit --all 0 FAIL` 均**已完成**（见 §1），不在下一步。
