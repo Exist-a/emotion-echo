@@ -56,6 +56,44 @@ func BootstrapSkyWalkingTracer(ctx context.Context, serviceName, oapAddr string,
 	return tracer, nil
 }
 
+// BootstrapSkyWalkingTracerRetry 在 BootstrapSkyWalkingTracer 之上加**有限重试 + 退避**。
+//
+// 动机（账本 E2E-F-204）：svc 常先于 OAP 启动。原 BootstrapSkyWalkingTracer 一次失败即返回，
+// 调用方 `warn mode, continue` 后**永不重试** ⇒ OAP 之后起来该 svc 仍永不上报
+// （OAP listServices 长期缺服务，与 E2E-F-137 同族）。本函数最多尝试 attempts 次，
+// 失败后退避 backoff 再试；ctx 取消则立即停止。**封顶 ⇒ 不无限阻塞启动**。
+//
+//   - attempts <= 0 视作 1（至少一次）
+//   - backoff <= 0 视作不等待（立即重试）
+//   - 最后一次仍失败 → 返回最后一次 error（调用方按 fail-fast / warn 决定）
+func BootstrapSkyWalkingTracerRetry(ctx context.Context, serviceName, oapAddr string, dialTimeout time.Duration, attempts int, backoff time.Duration) (*go2sky.Tracer, error) {
+	if attempts < 1 {
+		attempts = 1
+	}
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		tracer, err := BootstrapSkyWalkingTracer(ctx, serviceName, oapAddr, dialTimeout)
+		if err == nil {
+			return tracer, nil
+		}
+		lastErr = err
+		if i == attempts-1 {
+			break
+		}
+		if ctx != nil && ctx.Err() != nil {
+			return nil, lastErr
+		}
+		if backoff > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, lastErr
+			case <-time.After(backoff):
+			}
+		}
+	}
+	return nil, lastErr
+}
+
 // ErrNilContext ctx 为 nil 时返回（fail-fast 不 panic）
 type ErrNilContext struct {
 	Service string

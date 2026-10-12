@@ -423,86 +423,97 @@ for svc in NACOS_SVCS:
 # 依据：discovered-unresolved.md E2E-F-70
 # 独立脚本：scripts/check_image_freshness.sh（可单独运行）
 print("\n" + "=" * 70)
-print("§8 镜像新鲜度校验 — 验证镜像比最新 commit 新（E2E-F-70）")
+print("§8 镜像新鲜度校验 — 验证镜像比该服务最新源码 commit 新（E2E-F-70 / E2E-F-215）")
 print("=" * 70)
 
+# E2E-F-215（2026-10-12）修正两处判据缺陷（原判据在非产物提交上恒红）：
+#   ① 原判据读**容器**的 `{{.Created}}`（容器创建时间）却写成「镜像构建于…」——
+#      取错对象。改为读**镜像**的 Created（docker image inspect）。
+#   ② 原判据拿**全局最新 commit** 比 ⇒ 任何 docs/scripts 提交都会让全部服务判 STALE。
+#      改为按**该服务的源码路径**（+ 共享包）取最近一次 commit。
+# 判据：镜像构建时间 >= 该服务源码的最后一次 commit 时间 ⇒ 新鲜。
 IMAGE_CHECK_SERVICES = [
-    "emotion-echo-user-svc",
-    "emotion-echo-chat-svc",
-    "emotion-echo-analytics-svc",
-    "emotion-echo-assessment-svc",
-    "emotion-llm-service",
-    "emotion-echo-ai-svc",
-    "emotion-echo-web-bff",
-    "emotion-echo-web",
+    ("emotion-echo-user-svc", ["emotion-echo-user-svc", "emotion-echo-shared"]),
+    ("emotion-echo-chat-svc", ["emotion-echo-chat-svc", "emotion-echo-shared"]),
+    ("emotion-echo-analytics-svc", ["emotion-echo-analytics-svc", "emotion-echo-shared"]),
+    ("emotion-echo-assessment-svc", ["emotion-echo-assessment-svc", "emotion-echo-shared"]),
+    ("emotion-llm-service", ["emotion-echo-llm-service", "emotion-echo-shared"]),
+    ("emotion-echo-ai-svc", ["emotion-echo-ai-svc", "emotion-echo-shared"]),
+    ("emotion-echo-web-bff", ["emotion-echo-web-bff", "emotion-echo-shared"]),
+    ("emotion-echo-web", ["emotion-echo-web"]),
 ]
 
-# 获取最新 git commit 时间戳（epoch 秒）
-try:
-    git_proc = subprocess.run(
-        ["git", "log", "-1", "--format=%ct"],
-        capture_output=True, text=True, timeout=10,
-    )
-    latest_commit_ts = int(git_proc.stdout.strip()) if git_proc.returncode == 0 else 0
-    latest_commit_hash = subprocess.run(
-        ["git", "log", "-1", "--format=%h"],
-        capture_output=True, text=True, timeout=10,
-    ).stdout.strip()
-except Exception:
-    latest_commit_ts = 0
-    latest_commit_hash = "unknown"
 
-if latest_commit_ts == 0:
-    check("§8 git commit 时间戳获取", False, "无法获取最新 commit 时间戳（不在 git 仓库中？）")
-else:
-    for svc in IMAGE_CHECK_SERVICES:
-        try:
-            # 检查容器是否在运行
-            inspect_proc = subprocess.run(
-                ["docker", "inspect", "--format", "{{.State.Status}}", svc],
-                capture_output=True, text=True, timeout=10,
-            )
-            if inspect_proc.returncode != 0:
-                skip(f"§8 {svc} 镜像新鲜度", "容器未运行")
-                continue
-            container_state = inspect_proc.stdout.strip()
-            if container_state != "running":
-                skip(f"§8 {svc} 镜像新鲜度", f"容器状态={container_state}")
-                continue
+def _svc_last_commit(paths, fmt):
+    """该服务源码路径集合最后一次 commit 的时间/短哈希。"""
+    try:
+        p = subprocess.run(
+            ["git", "log", "-1", "--format=" + fmt, "--"] + paths,
+            capture_output=True, text=True, timeout=10,
+        )
+        if p.returncode == 0 and p.stdout.strip():
+            return p.stdout.strip()
+    except Exception:
+        pass
+    return ""
 
-            # 获取镜像 Created 时间（ISO 8601）
-            created_proc = subprocess.run(
-                ["docker", "inspect", "--format", "{{.Created}}", svc],
-                capture_output=True, text=True, timeout=10,
-            )
-            if created_proc.returncode != 0:
-                check(f"§8 {svc} 镜像新鲜度", False, "无法获取镜像 Created 时间")
-                continue
 
-            image_created_raw = created_proc.stdout.strip()
-            # Docker 格式: 2026-09-19T18:03:21.000000000Z
-            # 截掉纳秒部分以便 datetime 解析
-            image_created_clean = image_created_raw.split(".")[0] + "+00:00"
-            image_dt = datetime.fromisoformat(image_created_clean)
-            image_epoch = int(image_dt.timestamp())
+for svc, src_paths in IMAGE_CHECK_SERVICES:
+    try:
+        # 检查容器是否在运行
+        inspect_proc = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}}", svc],
+            capture_output=True, text=True, timeout=10,
+        )
+        if inspect_proc.returncode != 0:
+            skip(f"§8 {svc} 镜像新鲜度", "容器未运行")
+            continue
+        container_state = inspect_proc.stdout.strip()
+        if container_state != "running":
+            skip(f"§8 {svc} 镜像新鲜度", f"容器状态={container_state}")
+            continue
 
-            # 获取镜像 ID（短格式）
-            image_id_proc = subprocess.run(
-                ["docker", "inspect", "--format", "{{.Image}}", svc],
-                capture_output=True, text=True, timeout=10,
-            )
-            image_id = image_id_proc.stdout.strip()[7:19] if image_id_proc.returncode == 0 else "unknown"
+        # ① 取容器所用**镜像**引用，再取镜像的构建时间（不是容器创建时间）
+        image_ref_proc = subprocess.run(
+            ["docker", "inspect", "--format", "{{.Image}}", svc],
+            capture_output=True, text=True, timeout=10,
+        )
+        image_ref = image_ref_proc.stdout.strip() if image_ref_proc.returncode == 0 else ""
+        if not image_ref:
+            check(f"§8 {svc} 镜像新鲜度", False, "无法获取容器所用镜像 ID")
+            continue
+        created_proc = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{.Created}}", image_ref],
+            capture_output=True, text=True, timeout=10,
+        )
+        if created_proc.returncode != 0:
+            check(f"§8 {svc} 镜像新鲜度", False, "无法获取镜像 Created 时间")
+            continue
+        image_created_raw = created_proc.stdout.strip()
+        # Docker 格式: 2026-09-19T18:03:21.000000000Z（截掉纳秒以便解析）
+        image_epoch = int(datetime.fromisoformat(
+            image_created_raw.split(".")[0] + "+00:00").timestamp())
+        image_id = image_ref[7:19] if image_ref.startswith("sha256:") else image_ref[:12]
 
-            if image_epoch > latest_commit_ts:
-                check(f"§8 {svc} 镜像新鲜度", True,
-                      f"OK: 镜像 {image_id} 构建于 {image_created_raw[:19]}Z，比 commit {latest_commit_hash} 新")
-            else:
-                check(f"§8 {svc} 镜像新鲜度", False,
-                      f"STALE: 镜像 {image_id} 构建于 {image_created_raw[:19]}Z，"
-                      f"但 commit {latest_commit_hash} 更新。"
-                      f"修复: docker compose -f deploy/docker-compose.apps.yml build {svc}")
-        except Exception as e:
-            check(f"§8 {svc} 镜像新鲜度", False, f"检查失败: {str(e)[:120]}")
+        # ② 按该服务源码路径取最近一次 commit（非全局最新）
+        src_ts_raw = _svc_last_commit(src_paths, "%ct")
+        src_hash = _svc_last_commit(src_paths, "%h") or "unknown"
+        if not src_ts_raw:
+            skip(f"§8 {svc} 镜像新鲜度", f"源码路径无 commit 记录: {src_paths}")
+            continue
+        src_ts = int(src_ts_raw)
+
+        if image_epoch >= src_ts:
+            check(f"§8 {svc} 镜像新鲜度", True,
+                  f"OK: 镜像 {image_id} 构建于 {image_created_raw[:19]}Z ≥ 源码 commit {src_hash}（{src_paths[0]}）")
+        else:
+            check(f"§8 {svc} 镜像新鲜度", False,
+                  f"STALE: 镜像 {image_id} 构建于 {image_created_raw[:19]}Z，"
+                  f"但 {src_paths[0]} 的 commit {src_hash} 更新。"
+                  f"修复: docker compose -f deploy/docker-compose.apps.yml build {svc}")
+    except Exception as e:
+        check(f"§8 {svc} 镜像新鲜度", False, f"检查失败: {str(e)[:120]}")
+
 
 
 # ====== 汇总 ======

@@ -189,26 +189,103 @@ func TestVoiceHandler_Upload_MissingFile_Returns400(t *testing.T) {
 }
 
 func TestVoiceHandler_Register_PathContract(t *testing.T) {
-	// 防御性：保证 register 注册的 2 条路由都对：
+	// 防御性：保证 register 注册的路由都对：
 	//   - POST /api/v1/voice/upload
 	//   - GET  /api/v1/voice/audio/:filekey（E2E-F-113 新增）
+	//   - HEAD /api/v1/voice/audio/:filekey（E2E-F-187：gin 不自动转发 HEAD，缺则网关 HEAD 404）
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	(&VoiceHandler{ai: &fakeAIClient{}}).Register(r)
-	assert.Equal(t, 2, len(r.Routes()), "VoiceHandler 应注册 2 条路由")
+	assert.Equal(t, 3, len(r.Routes()), "VoiceHandler 应注册 3 条路由（含 HEAD）")
 
-	wantPaths := map[string]string{
-		"/api/v1/voice/upload":                 http.MethodPost,
-		"/api/v1/voice/audio/:filekey":         http.MethodGet,
+	wantPaths := map[string]map[string]bool{
+		"/api/v1/voice/upload": {
+			http.MethodPost: true,
+		},
+		"/api/v1/voice/audio/:filekey": {
+			http.MethodGet:  true,
+			http.MethodHead: true,
+		},
 	}
+	seen := map[string]map[string]bool{}
 	for _, ri := range r.Routes() {
 		assert.True(t, strings.HasPrefix(ri.Path, "/api/v1/voice/"),
 			"path 应在 /api/v1/voice/ 下：%s", ri.Path)
 		want, ok := wantPaths[ri.Path]
 		assert.True(t, ok, "未知路由：%s", ri.Path)
-		assert.Equal(t, want, ri.Method, "%s 方法不对", ri.Path)
+		assert.True(t, want[ri.Method], "%s 方法不对：%s", ri.Path, ri.Method)
+		if seen[ri.Path] == nil {
+			seen[ri.Path] = map[string]bool{}
+		}
+		seen[ri.Path][ri.Method] = true
+	}
+	for path, methods := range wantPaths {
+		for m := range methods {
+			assert.True(t, seen[path][m], "必须注册 %s %s（E2E-F-187）", m, path)
+		}
 	}
 }
+
+// TestVoiceHandler_Audio_HEAD_Returns200AndHeaders E2E-F-187 ①：
+// gin 不把 HEAD 自动转发到 GET，未注册 HEAD 时经网关 HEAD 实测 404。
+// 修法 = Register 补 r.HEAD（与 avatar / uploads 同型）。
+//
+// 契约：HEAD 与 GET 同 handler ⇒ 200 + 真实 Content-Type/Content-Length，
+// 且 body 为空（由 net/http 对 HEAD 丢弃 body 保证 ⇒ 用真实 server 而非 Recorder）。
+func TestVoiceHandler_Audio_HEAD_Returns200AndHeaders(t *testing.T) {
+	const fileKey = "head-rec.webm"
+	const wantBody = "fake webm bytes for HEAD"
+	const wantCT = "audio/webm"
+
+	sto := &fakeUploadStorage{getObjBytes: []byte(wantBody), getObjCT: wantCT}
+	r := newVoiceRouter(&fakeAIClient{}, sto)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodHead, srv.URL+"/api/v1/voice/audio/"+fileKey, nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "HEAD 必须 200（E2E-F-187）")
+	assert.Equal(t, wantCT, resp.Header.Get("Content-Type"))
+	assert.Equal(t, strconv.Itoa(len(wantBody)), resp.Header.Get("Content-Length"),
+		"HEAD 仍须带真实 Content-Length（前端 <audio> 依赖它判断时长）")
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, 0, len(body), "HEAD 响应体必须为空（net/http 语义）")
+}
+
+// TestVoiceHandler_Upload_StorageUnavailable_Returns503 E2E-F-187 ②：
+// upload 的 PutObject 此前用裸 request ctx、无 deadline ⇒ MinIO 停机时挂起
+// （与 E2E-27 #4 修前的 avatar/uploads 同型）。修法 = 3s deadline + 连接类失败映射 503。
+func TestVoiceHandler_Upload_StorageUnavailable_Returns503(t *testing.T) {
+	fake := &fakeAIClient{
+		resp: &downstream.MultiModalAnalyzeResp{Kind: "audio", Emotion: "neutral", Confidence: 0.5},
+	}
+	sto := &fakeUploadStorage{err: errors.New("dial tcp 127.0.0.1:9000: connect: connection refused")}
+	r := newVoiceRouter(fake, sto)
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	_ = mw.WriteField("conversationId", "1")
+	fw, _ := mw.CreateFormFile("file", "x.webm")
+	_, _ = io.WriteString(fw, "audio-bytes")
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/voice/upload", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code,
+		"存储不可用必须 503（而非挂起或泛 500），与 avatar/uploads 同型契约")
+	require.NotNil(t, sto.putCtx, "PutObject 必须被调用")
+	_, hasDeadline := sto.putCtx.Deadline()
+	assert.True(t, hasDeadline,
+		"PutObject ctx 必须带 deadline（防 MinIO 停机时挂起 >15s）")
+}
+
 // E2E-F-113：GET /api/v1/voice/audio/:filekey 反代 MinIO StreamObject。
 //
 // 根因（2026-09-22 实测）：audioUrl 由 storage.GetObjectURL 拼成

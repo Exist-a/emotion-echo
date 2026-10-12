@@ -17,11 +17,13 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/session"
@@ -59,6 +61,9 @@ func (h *VoiceHandler) WithStorage(storage storageClient) *VoiceHandler {
 func (h *VoiceHandler) Register(r *gin.Engine) {
 	r.POST("/api/v1/voice/upload", h.upload)
 	r.GET("/api/v1/voice/audio/:filekey", h.audio)
+	// E2E-F-187 ①：gin 不把 HEAD 自动转发到 GET，缺 HEAD 时经网关实测 404。
+	// 与 avatar / uploads 反代端点同型（avatar_handler.go:63 / upload_handler.go:95）。
+	r.HEAD("/api/v1/voice/audio/:filekey", h.audio)
 }
 
 // upload 处理 multipart 上传：conversationId + file → ai-svc → JSON 响应
@@ -129,7 +134,16 @@ func (h *VoiceHandler) upload(c *gin.Context) {
 		return
 	}
 	defer file2.Close()
-	if _, err := h.storage.PutObject(authCtx, voiceKey, file2, fileHeader.Size, "audio/webm"); err != nil {
+	// E2E-F-187 ②：PutObject 必须带 3s deadline —— MinIO 停机时快速失败
+	// （与 avatar/upload 反代端点同型；裸 ctx 无 deadline 会挂起 >15s）。
+	// 连接类失败映射 503（存储不可用），而非泛 500。
+	putCtx, putCancel := context.WithTimeout(authCtx, 3*time.Second)
+	defer putCancel()
+	if _, err := h.storage.PutObject(putCtx, voiceKey, file2, fileHeader.Size, "audio/webm"); err != nil {
+		if isStorageUnavailableErr(err) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "storage unavailable: " + err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "storage put: " + err.Error()})
 		return
 	}

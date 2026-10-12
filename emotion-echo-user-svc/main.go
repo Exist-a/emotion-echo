@@ -100,7 +100,7 @@ func main() {
 		if svcName == "" {
 			svcName = c.Name
 		}
-		t, err := sharedbootstrap.BootstrapSkyWalkingTracer(context.Background(), svcName, c.SkyWalking.OAPAddr, 2*time.Second)
+		t, err := sharedbootstrap.BootstrapSkyWalkingTracerRetry(context.Background(), svcName, c.SkyWalking.OAPAddr, 2*time.Second, 5, 2*time.Second)
 		if err != nil {
 			sharedmetrics.IncSkyWalkingInitFailed(svcName)
 			if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("skywalking") {
