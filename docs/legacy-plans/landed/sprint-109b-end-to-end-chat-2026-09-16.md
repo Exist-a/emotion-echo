@@ -1,9 +1,11 @@
 ---
-status: planned
+status: landed
+landed: 2026-10-13
+landed-evidence: "docs/stages/stage-109b-end-to-end-chat-2026-09-16.md（+ screenshot 目录）已落地；端到端 chat 真通（A8 真根因 = message.ts sendMessage 漏返 data（R-10）+ Authorization 空（R-11））；回归钉 e2e/chat-flow.spec.ts + e2e/chat-core.spec.ts；E2E-10 done 24/24"
 priority: high
 owner: TBD
 created: 2026-09-16
-last-refresh: 2026-09-16
+last-refresh: 2026-10-13
 type: end-to-end-validation
 depends-on:
   - stage-108-sender-architecture-debt-fix-2026-09-16.md (sender 架构债 ✅ FIXED)

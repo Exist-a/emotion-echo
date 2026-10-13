@@ -3,7 +3,7 @@
 > **2026-10-03 修订注记（E2E-26 执行期 · D-37 定性）**：本文所述「OAP 9.x graphql queryDuration 时间格式 bug」**已定性为客户端时间格式错误，非上游缺陷**。证据链：① 官方 apache/skywalking-query-protocol `common.graphqls` 明文 SECOND 步长格式 = `yyyy-MM-dd HHmmss`（**无冒号**）；② E2E-26 容器网实测带冒号查询报 `is malformed at ":30:00"`，与本文记录的 "malformed at :00:00" 同型——OAP 按协议**正确拒绝**了非法输入；③ apache/skywalking issues 检索该 bug 零命中；④ 官方格式查询一切正常（`scripts/query_oap.sh` 已封装合规格式）。本文历史结论保留作记录，**后续以 D-37 为准**。
 
 > **状态**：🟢 **PR-1+PR-2 全收口——单测 13/13 全绿 + main.go wire + 镜像 v0.1.6 bump**
-> **关联**：[`docs/plans/stage-93-analytics-svc-sw8-propagation.md`](../plans/stage-93-analytics-svc-sw8-propagation.md)（本期计划）
+> **关联**：[`docs/plans/stage-93-analytics-svc-sw8-propagation.md`](../legacy-plans/landed/stage-93-analytics-svc-sw8-propagation.md)（本期计划）
 > 来源：[`docs/plans/observability-edge-gaps-from-code-review.md`](../plans/observability-edge-gaps-from-code-review.md) §A-extension（P1 残余）
 > 上游：[Stage 92 收口报告](stage-92-kafka-sw8-propagation-2026-09-14.md) §五残余"A-extension analytics-svc consumer sw8 透传 —— Stage 93 候选"
 
@@ -140,7 +140,7 @@ ok  emotion-echo-analytics-svc/internal/kafka    0.688s
 
 ### 计划 vs 实际
 
-**计划**（[stage-93 plan §PR-2 DoD 第 2 条](../plans/stage-93-analytics-svc-sw8-propagation.md)）：
+**计划**（[stage-93 plan §PR-2 DoD 第 2 条](../legacy-plans/landed/stage-93-analytics-svc-sw8-propagation.md)）：
 > `emotion-llm-service/tests/e2e/stage93_analytics_sw8_verify.py`（仿 Stage 92 同模式）
 > 触发一次 message.created → chat-svc:v0.1.10 producer 发到 `chat-events`
 > kafka-python 消费 `chat-events` topic，抓 sw8 header → 验证 chat-svc producer 写入 sw8

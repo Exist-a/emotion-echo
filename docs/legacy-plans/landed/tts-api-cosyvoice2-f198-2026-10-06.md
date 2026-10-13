@@ -12,8 +12,8 @@ branch: feat/f198-tts-cloud-provider
 # F-198 TTS API 专项：在线 TTS 主链路改接 CosyVoice2（XTTS 降离线回退）
 
 > 本文是 **E2E-F-198** 的实施计划（ADR-2026-10 已 accepted，选型已实测定稿，**仅剩端到端实施**）。
-> 执行纪律继承 [AGENTS.md](../../AGENTS.md)（ALL CODE IS TDD）与
-> [RUNBOOK.md](../e2e-roadmap/RUNBOOK.md)（证据有效性 / 范围外只记账 / 回归钉）。
+> 执行纪律继承 [AGENTS.md../../../AGENTS.md（ALL CODE IS TDD）与
+> [RUNBOOK.md../../e2e-roadmap/RUNBOOK.md（证据有效性 / 范围外只记账 / 回归钉）。
 
 ---
 

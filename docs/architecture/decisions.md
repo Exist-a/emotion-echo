@@ -294,7 +294,7 @@
 > 生产通过 gRPC 调用（决策 5 + 决策 11），HTTP 端仅供 dev 调试，prod 部署如启用必须配置 key。
 > 详见 [`stages/stage-97-round2-p0-closure.md`](../stages/stage-97-round2-p0-closure.md) PR-1。
 
-> **✅ 2026-09-15 Round 0.2 验收 — BFF/APISIX 入口语义已收口**（[`docs/plans/multi-round-iteration-2026-09-15.md`](../plans/multi-round-iteration-2026-09-15.md) §二 Round 0.2）：
+> **✅ 2026-09-15 Round 0.2 验收 — BFF/APISIX 入口语义已收口**（[`docs/plans/multi-round-iteration-2026-09-15.md`](../legacy-plans/landed/multi-round-iteration-2026-09-15.md) §二 Round 0.2）：
 >
 > 决策 9 / 11 / 12 在 "BFF 是否唯一入口" 上的语义冲突**已于 2026-09-10 决策 18 §4.4 / PR-C 正式收口**（本文件 line 189-194 + 196-220 + 228-237 + 267-284 共 4 处关系说明段）。
 > 本决策末尾的关系说明（line 286-293）补 `bff` / `apisix` 关键词引用，

@@ -3,7 +3,7 @@
 > **目标读者**：dev compose 维护者 / QA / 后续开发者
 > **目的**：记录 PR-OBS-1~7 落地的 dev compose 可观测性三层（metrics + logs + traces）
 > + Kafka consumer lag 监控，让任何接手者能在 5 分钟内上手
-> **配合文档**：[observability-sprint-b.md](/docs/plans/observability-sprint-b.md)（plan）/
+> **配合文档**：[observability-sprint-b.md](/docs/legacy-plans/landed/observability-sprint-b.md)（plan）/
 > [stage-43-kafka-reliability-sprint-a.md](/docs/stages/stage-43-kafka-reliability-sprint-a.md)（Kafka Sprint A 收口）
 
 ---
@@ -241,7 +241,7 @@ docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.
 
 ## 六、参考资料
 
-- [observability-sprint-b.md](/docs/plans/observability-sprint-b.md)（Sprint B 完整 plan）
+- [observability-sprint-b.md](/docs/legacy-plans/landed/observability-sprint-b.md)（Sprint B 完整 plan）
 - [stage-43-kafka-reliability-sprint-a.md](/docs/stages/stage-43-kafka-reliability-sprint-a.md)（Kafka Sprint A 收口 + §1.4 lag 监控尾巴）
 - [stage-35-ops-runbook.md](/docs/deployment/runbook/stage-35-ops-runbook.md)（参考 runbook 风格）
 - [stage-34-ops-runbook.md](/docs/deployment/runbook/stage-34-ops-runbook.md)

@@ -1,9 +1,10 @@
 ---
-status: backlog
+status: partial
+partial: "2026-10-13 核查（按真实代码）：R-09/10/11/12 ✅ FIXED；R-15（报表页无法滚动）✅ 已修（nav.vue:266-273 改 overflow-y:auto，注释标 E2E-F-36）；R-16（BFF_APISIX_CIDRS）✅ FIXED（commit bc61896）；R-01/R-02/R-03/R-04/R-05/R-06/R-14 属运维/开发流程类（已缓解，非代码债）；残留：R-13（chat-svc 会话标题异步生成）——核查发现 chat-svc/BFF 当前无 GenerateTitle 实现，条目前提疑似失效，待定性"
 priority: high
 owner: TBD
 created: 2026-09-17
-last-refresh: 2026-09-17
+last-refresh: 2026-10-13
 type: known-issues-backlog
 ---
 

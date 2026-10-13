@@ -12,7 +12,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-1.x-244c5a?style=flat-square&logo=grpc&logoColor=white)](https://grpc.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Stage](https://img.shields.io/badge/Stage-93--ANALYTICS--SW8-blueviolet?style=flat-square)](/docs/stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md)
+[![Stage](https://img.shields.io/badge/Stage-114-blueviolet?style=flat-square)](/docs/stages/)
 
 ---
 
@@ -22,7 +22,7 @@
 
 - 🤖 **AI 情绪疏导对话**：流式输出 + 情绪标签识别
 - 🎙️ **多模态情绪识别**：文本（LLM）/ 语音（SenseVoice）/ 人脸（FER）
-- 🔊 **语音合成回复**：XTTS 流式 TTS
+- 🔊 **语音合成回复**：CosyVoice2（云端主）流式 TTS，XTTS 离线回退
 - 📊 **情绪分析报表**：日报 / 周报 / 月报趋势可视化
 - 📋 **心理测验**：SDS 等专业量表
 - 👤 **3D 数字人**：Three-VRM 数字人形象与语音同步
@@ -31,15 +31,15 @@
 
 ### 1. 完整的微服务化演进（Stage 0 → 30）
 
-从最初的 **Gin 单体**到 **5 个 Go 微服务 + Python gRPC + BFF 网关（替代原 APISIX）+ Kafka 异步管线 + 真实 LLM 接入（DeepSeek 兼容）**的完整迁移过程，每一步都有独立的文档、commit 与验证记录：
+从最初的 **Gin 单体**到 **5 个 Go 微服务 + Python gRPC + APISIX 网关 + BFF 聚合层 + Kafka 异步管线 + 真实 LLM 接入（DeepSeek）**的完整迁移过程，每一步都有独立的文档、commit 与验证记录：
 
 ```
 Gin 单体 → 微服务拆分 → gRPC 同步通信 → Kafka 异步管线
          → Prometheus metrics → mTLS 安全 → AI 模型容器化
-         → 端到端冒烟测试 → 多模态分析 → BFF 网关（替代 APISIX）→ 真实 LLM 接入
+         → 端到端冒烟测试 → 多模态分析 → APISIX 网关 + BFF 聚合层 → 真实 LLM 接入
 ```
 
-📚 完整路线图：[`docs/distributed-roadmap.md`](/docs/architecture/roadmap.md) · 30+ 篇 stage 演进文档
+📚 完整路线图：[`docs/distributed-roadmap.md`](/docs/architecture/roadmap.md) · 160+ 篇 stage 演进文档
 
 ### 2. 严谨的 TDD 工程实践
 
@@ -53,17 +53,17 @@ Gin 单体 → 微服务拆分 → gRPC 同步通信 → Kafka 异步管线
 
 ### 3. 可观测性 + 生产化基座
 
-- **SkyWalking** 链路追踪（HTTP / gRPC / Kafka 全链路）
-- **Prometheus** metrics 采集
-- **BFF**（`emotion-echo-web-bff`）替代原 APISIX — 鉴权透传 + 5 下游聚合 + SSE 编排 + CORS
-- **Kafka** 异步消息队列
+- **SkyWalking** 链路追踪（HTTP / gRPC / Kafka 跨服务调用链）
+- **Prometheus + Grafana + Alertmanager + Loki**：指标采集 + 看板 + 告警 + 日志聚合
+- **APISIX** 网关（唯一业务入口）+ **BFF**（`emotion-echo-web-bff`）聚合层 — 鉴权透传 + 下游聚合 + SSE 编排 + CORS
+- **Kafka** 异步消息队列（outbox + 幂等消费 + DLQ）
 - 完整 **docker-compose** 编排（`deploy/`）
 
 ### 4. AI 多模态集成
 
 | 模型 | 用途 | 技术 |
 |------|------|------|
-| Kimi / OpenAI 兼容 LLM | 文本情绪分析 + 情绪疏导 | gRPC |
+| DeepSeek（OpenAI 兼容） | 文本情绪分析 + 情绪疏导 | gRPC |
 | SenseVoice-small | 语音情绪识别（多语种） | FastAPI |
 | FER | 人脸情绪识别（7 类） | FastAPI + OpenCV |
 | XTTS-v2 | 语音合成（TTS） | FastAPI + Coqui |
@@ -108,13 +108,13 @@ emotion-echo/
 ### 方式一：Docker Compose（推荐）
 
 ```bash
-# Stage 30：APISIX 退役。infra 只剩 PG / Redis / Kafka / SkyWalking（5 容器）
+# infra 层：PG / Redis / Kafka / SkyWalking / APISIX + etcd（Stage 32 起 APISIX 已回归网关层）
 cd deploy
 docker compose -f docker-compose.infra.yml up -d
 # 等待 30~60 秒各容器健康
 
 # 2. 启动 5 个 Go 微服务
-docker compose -f docker-compose.dev.yml -f docker-compose.apps.yml up -d
+docker compose --env-file .env.local -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml up -d --no-build
 
 # 3. （可选）启动 AI profile（TTS / 人脸识别 / 语音识别）
 # 镜像已在 docker.io / 阿里云 ACR（推荐）
@@ -154,9 +154,10 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 | [`docs/architecture/distributed.md`](docs/architecture/distributed.md) | 分布式架构总览 |
 | [`docs/architecture/roadmap.md`](docs/architecture/roadmap.md) | 分布式改造路线图（执行版） |
 | [`docs/deployment/git-layout.md`](/docs/deployment/git-layout.md) | 仓库布局规范 |
-| [`docs/stages/`](docs/stages/) | Stage 0 → 36 共 81 篇演进文档 |
-| [`docs/architecture/adr/`](docs/architecture/adr/) | 6 份编号 ADR |
+| [`docs/stages/`](docs/stages/) | Stage 0 → 114 共 169 篇演进文档 |
+| [`docs/architecture/adr/`](docs/architecture/adr/) | 47 份 ADR |
 | [`docs/plans/`](docs/plans/) | 当前有效的未来排期计划 |
+| [`docs/closure-roadmap/`](docs/closure-roadmap/) | **下一大阶段「闭环」路线图**（用户实测找问题 + 链路闭环；CL-01~10 阶段排序 + 完成判据） |
 | [`docs/legacy-plans/`](docs/legacy-plans/) | 历史计划归档（仅作回顾） |
 
 ---
@@ -167,7 +168,7 @@ python scripts/verify_stage23_endpoints.py --ai-svc http://localhost:8891
 
 1. **[`QUICKSTART.md`](QUICKSTART.md)** — 5 分钟了解如何启动
 2. **[`docs/architecture/distributed.md`](docs/architecture/distributed.md)** — 架构总览
-3. **[`docs/stages/`](docs/stages/)** — 跟随 Stage 0 → 36 演进
+3. **[`docs/stages/`](docs/stages/)** — 跟随 Stage 0 → 114 演进
 4. **[`docs/architecture/decisions.md`](docs/architecture/decisions.md)** — 工程协作规范 + ADR 单一事实源
 4. **[`AGENTS.md`](AGENTS.md)** — 工程协作规范
 5. **看代码**：`emotion-echo-ai-svc/`（最复杂的微服务，含 gRPC + Kafka）

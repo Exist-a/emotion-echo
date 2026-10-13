@@ -1,9 +1,11 @@
 ---
-status: planned
+status: landed
+landed: 2026-10-13
+landed-evidence: "由 E2E-30 数据契约收口承接（无独立 109c stage 文档）；scripts/smoke_data_layer.py 已覆盖 §契约 1/2/3/4/6（脚本 191/213/231/250/301 行），§5 由 integration test 覆盖；实测 smoke 24/24 exit 0"
 priority: high
 owner: TBD
 created: 2026-09-16
-last-refresh: 2026-09-16
+last-refresh: 2026-10-13
 type: data-contract-validation
 depends-on:
   - stage-103-dev-mode-launch-2026-09-16.md (dev 模式 14 容器 healthy)
