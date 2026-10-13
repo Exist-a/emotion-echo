@@ -3,6 +3,28 @@
 > 建立时间：2026-09-17。本目录承载"按功能块分阶段、由浅入深"的长期 E2E 测试治理。
 > 每阶段流程见全局 skill `e2e-stage-testing`（用户级 `~/.agents/skills/e2e-stage-testing/SKILL.md`）。
 
+## ✅ 2026-10-13：E2E 阶段正式收工（决策 [D-52](decisions.md)）
+
+**路线图 31 个阶段：30 `done` + 1 `partial`（E2E-03，owner 裁定**明确不再推进**）。**
+
+| 项 | 内容 |
+|----|------|
+| 收工时间 | 2026-10-13 |
+| 收工依据 | `python scripts/e2e_stage_audit.py --all` → **31 阶段 0 FAIL**（`--selftest` 通过）；`check_stage_todo_section`（`LEGACY_BASELINE=1`）/ `check_residual` / `check_orphan_outputs` / `check_tdd_gate` / `check_soft_asserts` / `check_adr_gate` / `check_secrets` / `check_smoke_gateway` 全 GREEN |
+| **唯一未 done** | **E2E-03 CI 严格化**（8 PASS / 13 BLOCKED = **62% > 1/3**）—— **不再推进**（[D-52](decisions.md)）：CI 检查项过多已影响开发效率，owner 将**整体重构 CI**；其 BLOCKED 点**如实保留，不伪装 `done`**（AGENTS §七） |
+| 收工前最后三轮 | **PR #203** E2E-30 收口 → **#204** 按约束收口 7 个历史 partial（[D-51](decisions.md)）→ **#205** E2E-04 实做收口 / **#206** E2E-07 实做收口 |
+| 账本去向 | 未解决条目一律**二值化**：✅ 已解决，或**转「专项 · <主题>」**（owner 去阶段编号 + 写明**去向与触发条件**）—— 见 [discovered-unresolved.md](discovered-unresolved.md) 各条 owner 列 |
+| 阶段落地记录 | 见 [`docs/stages/`](../stages/)（AGENTS §七）|
+
+**收工 ≠ 无债**（如实边界）：
+
+- **「专项」债**：账本中已转专项的条目（无障碍配色 / 回归钉治理 / 迁移治理 / 文档链接治理 / 测试夹具治理 / 验码端点清理 / TTFT 埋点 / IAB 截图工具 / TTS 回放链 …）仍是开放项，只是**不再归属任何 E2E 阶段**。
+- **R 系列**：见 [remediation.md](remediation.md)（`R-02` 的部分条目已随本轮收口关闭，其余仍在）。
+- **E2E-03 的 13 个 BLOCKED**：**明确不做**（D-52），不是"已做"。
+- **CI 门禁将重构**：E2E-03 的初衷（把校验接进 CI）与"CI 过多拖慢开发"的新判断冲突 ⇒ 由 owner 统一重构，本路线图不再承担。
+
+---
+
 ## 目录结构
 
 | 文件 | 用途 |
@@ -16,7 +38,7 @@
 | [findings/](findings/) | 建档/阶段预探查的代码级发现全景（带文件行号证据） |
 | [stages/](stages/) | 每阶段详档 `plan.md` + 执行记录 `report.md` + 截图 |
 
-## ⚠️ 2026-09-18 状态：路线图被 R 系列阻断
+## ⚠️ 历史：2026-09-18 路线图曾被 R 系列阻断（**已解除**，见顶部收工标注）
 
 对 E2E-01~06 的独立审查发现**五个已标 `done` 的阶段无一完整满足收口契约**，另有 1 个安全级缺陷（BFF 密保校验 fail-open）+ 2 个功能性破坏 + CI 在 main 持续红却拦不住。
 **E2E-07 及以后全部暂缓**，先执行 [remediation.md](remediation.md) 的 R-01 → R-02 → R-03。
@@ -24,7 +46,7 @@
 
 ## 给执行者（大模型或人）的入口顺序
 
-> **⚠️ 2026-09-18：当前不能直接执行 E2E-07 及以后阶段。** 路线图被 R 系列阻断，见下节「交接说明」。
+> **✅ 2026-10-13：路线图已收工，35 阶段全部有结论（30 done / 1 won't-do）。本「入口顺序」保留为历史执行范式。**
 
 1. 读 [RUNBOOK.md](RUNBOOK.md)（执行协议，必读；含 §4.1 证据有效性、§7 收口契约 11 项、§13 收口审计）
 2. 读 [anti-patterns.md](anti-patterns.md)（**14 类已真实发生的失真反例，收口前必读**）
@@ -82,7 +104,7 @@ curl -s -X POST http://localhost:19080/api/v1/auth/verify-security-answer   -H '
 3. **本地改 proto 必须复现原生成方式**：`protoc 32.1` + `protoc-gen-go v1.36.11` + `protoc-gen-go-grpc v1.6.2`，
    且**以文件名 `user.proto`**（非 `proto/user.proto`）调用，否则生成的符号名整体变化。改前先"不加改动重生成并逐字节 diff"。
 
-### 仍未完成（不要误以为已清账）
+### 仍未完成（2026-09-18 时点；**2026-10-13 收工轮已更新**：R-02 欠账随收口关闭，见顶部标注）
 
 - **R-02 #1~#3**：E2E-03/06 的 report 未模板化、`[V]` 截图 0 张、账本对账未做完。
   审计器对 E2E-03/04/05/06 仍报 A1/A2/A3/A4/A6 —— **这是正确信号**（真实未还欠账），需重跑或补真实证据，改文档消不掉。
@@ -108,7 +130,7 @@ curl -s -X POST http://localhost:19080/api/v1/auth/verify-security-answer   -H '
 | E2E-12 设置页 | [plan.md](stages/e2e-12-settings/plan.md) | ✅ 已写（阶段已 done） |
 | E2E-13 心理测验链路修复 | [plan.md](stages/e2e-13-quiz/plan.md) | ✅ 已写（阶段已 done） |
 | E2E-14 人格量表与 AI 提示词定制 | [plan.md](stages/e2e-14-personality-ai-prompt/plan.md) | ✅ 已写（阶段已 done） |
-| E2E-15 ~ E2E-31 | 各自的 [stages/](stages/) 目录 | ✅ 已写（**31 个阶段全部有 plan.md**，2026-10-09 实测：`ls stages/*/plan.md | wc -l` = 31）。其中 **E2E-30 数据契约收口** 已于 2026-10-09 开工（`🟡 partial`，见 [plan.md](stages/e2e-30-data-contract-closure/plan.md) + [report.md](stages/e2e-30-data-contract-closure/report.md) + [STATUS.md](stages/e2e-30-data-contract-closure/STATUS.md)）|
+| E2E-15 ~ E2E-31 | 各自的 [stages/](stages/) 目录 | ✅ 已写（**31 个阶段全部有 plan.md**，2026-10-09 实测：`ls stages/*/plan.md | wc -l` = 31）。**E2E-30 数据契约收口已于 2026-10-13 收口为 `done`**（30 done / 1 won't-do，见顶部收工标注）|
 
 模板见 [stages/_TEMPLATE.md](stages/_TEMPLATE.md)。
 
