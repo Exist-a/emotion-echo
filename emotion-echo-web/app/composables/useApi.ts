@@ -325,6 +325,13 @@ export async function request<T = any>(
         } catch {
           // 非 JSON 响应（如网关纯文本）—— 沿用默认文案
         }
+        // E2E-07 修复：**匿名请求**（未携带令牌）的 401 是业务错误
+        // （如「密保答案错误」——防枚举设计上统一返 401），不是会话过期。
+        // 只有**带了令牌**的 401 才按 D-46 会话失效处理（clearAuth + 跳登录）。
+        // 否则找回密码流程里答错一题就会被踢回登录页（用户可见缺陷）。
+        if (!token) {
+          throw new Error(message)
+        }
         clearAuth()
         if (import.meta.client) {
           navigateTo('/login', { replace: true })

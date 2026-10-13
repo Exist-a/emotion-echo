@@ -1,4 +1,18 @@
 import { test, expect } from '@playwright/test'
+import { join } from 'node:path'
+import { mkdirSync } from 'node:fs'
+
+// E2E-07 [V] 证据：直接落到阶段目录的 screenshots/
+const SHOT_DIR = join(
+  process.cwd(),
+  '..',
+  'docs',
+  'e2e-roadmap',
+  'stages',
+  'e2e-07-password-recovery',
+  'screenshots',
+)
+mkdirSync(SHOT_DIR, { recursive: true })
 
 /**
  * E2E-07: 找回密码流程 Playwright 回归钉
@@ -76,6 +90,12 @@ test.describe('password recovery flow (E2E-07)', () => {
     // 断言密保问题出现（不泄露答案）
     await expect(page.locator('.question-text')).toBeVisible({ timeout: 10_000 })
     await expect(page.locator('.question-text')).toContainText(/宠物|城市|问题/)
+
+    // [V] 证据：密保问题已展示且只回显问题文案（不泄露答案）
+    await page.screenshot({
+      path: join(SHOT_DIR, `02-security-question-${test.info().project.name}.png`),
+      fullPage: false,
+    })
   })
 
   // #3: 不存在的用户名 → 防枚举响应
@@ -92,7 +112,7 @@ test.describe('password recovery flow (E2E-07)', () => {
     await page.waitForTimeout(2000)
 
     // 断言：应有错误提示，但不泄露用户不存在
-    const errorMsg = page.locator('.el-notification, .notify, [role="alert"]')
+    const errorMsg = page.locator('.notify-card')
     await expect(errorMsg).toBeVisible({ timeout: 5000 })
     // 不应出现"用户不存在"字样（防枚举）
     await expect(errorMsg).not.toContainText(/不存在|not found/i)
@@ -141,7 +161,7 @@ test.describe('password recovery flow (E2E-07)', () => {
     // 断言：仍在当前页（未跳转）
     await expect(page).toHaveURL(/\/login\/forget\/verify/)
     // 断言：有错误提示
-    const errorMsg = page.locator('.el-notification, .notify, [role="alert"]')
+    const errorMsg = page.locator('.notify-card')
     await expect(errorMsg).toBeVisible({ timeout: 5000 })
   })
 
@@ -179,7 +199,7 @@ test.describe('password recovery flow (E2E-07)', () => {
 
     // 断言跳转到成功页
     await expect(page).toHaveURL(/\/login\/forget\/success/)
-    await expect(page.getByText('密码已更新')).toBeVisible()
+    await expect(page.getByText('密码已更新').first()).toBeVisible()
   })
 
   // #8: 新密码可登录
@@ -238,12 +258,12 @@ test.describe('password recovery flow (E2E-07)', () => {
     await page.waitForLoadState('networkidle')
 
     // 设置 localStorage 模拟已验证状态
-    await page.evaluate(() => {
+    await page.evaluate((u) => {
       localStorage.setItem('forgetPwdStep', '1')
-      localStorage.setItem('forgetPwdAccount', TEST_USERNAME)
+      localStorage.setItem('forgetPwdAccount', u)
       localStorage.setItem('forgetPwdSecurityVerified', 'true')
-      localStorage.setItem('forgetPwdVerifiedUsername', TEST_USERNAME)
-    })
+      localStorage.setItem('forgetPwdVerifiedUsername', u)
+    }, TEST_USERNAME)
 
     // 刷新页面
     await page.reload()
@@ -259,11 +279,11 @@ test.describe('password recovery flow (E2E-07)', () => {
   test('#12 密码强度校验', async ({ page }) => {
     // 前置：设置已验证状态
     await page.goto('/login/forget/verify')
-    await page.evaluate(() => {
+    await page.evaluate((u) => {
       localStorage.setItem('forgetPwdStep', '1')
       localStorage.setItem('forgetPwdSecurityVerified', 'true')
-      localStorage.setItem('forgetPwdVerifiedUsername', TEST_USERNAME)
-    })
+      localStorage.setItem('forgetPwdVerifiedUsername', u)
+    }, TEST_USERNAME)
 
     await page.goto('/login/forget/modify')
     await page.waitForLoadState('networkidle')
