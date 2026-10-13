@@ -46,6 +46,11 @@ jobs:
           node --version
           go version
           helm version --short
+      # CL-00：原 helm 渲染 job 未装 setup-python（用系统 python，自带 pyyaml）；
+      # 合并后统一用 setup-python 的干净 python，须显式补 pyyaml，否则 helm 渲染脚本
+      # 报 ModuleNotFoundError: yaml ⇒ 连带"子 chart 数 / 渲染回归"误判 FAIL。
+      - name: 安装 python 依赖（helm 渲染脚本需要 pyyaml）
+        run: python -m pip install --quiet pyyaml
 
       # ---- 路径 / 契约 / 卫生 ----
       - name: 1 路径对齐（前端 ⊆ BFF）
