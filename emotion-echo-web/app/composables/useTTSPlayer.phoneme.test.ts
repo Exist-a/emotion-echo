@@ -22,6 +22,8 @@
 //   - 模块里不导出 / 不引用 startRandomLipAnimation
 
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import * as TTSPlayer from './useTTSPlayer'
 
 describe('useTTSPlayer phoneme-driven lip sync helpers (E2E-17 plan §6 step 3)', () => {
@@ -142,9 +144,8 @@ describe('useTTSPlayer phoneme-driven lip sync helpers (E2E-17 plan §6 step 3)'
     it('模块不再导出 / 不引用 startRandomLipAnimation（150ms 假动画已删除）', () => {
       // 读模块源码，断言 startRandomLipAnimation 字符串不存在
       // （死代码 + 150ms 固定节奏 → 必须删除以满足"口型由音频 currentTime 驱动"）
-      const fs = require('node:fs')
-      const src = fs.readFileSync(
-        require('path').resolve(__dirname, './useTTSPlayer.ts'),
+      const src = readFileSync(
+        resolve(__dirname, './useTTSPlayer.ts'),
         'utf8',
       )
       expect(src).not.toMatch(/startRandomLipAnimation/)

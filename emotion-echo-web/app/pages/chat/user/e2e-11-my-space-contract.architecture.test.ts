@@ -215,8 +215,8 @@ describe('E2E-11 · 我的空间前端契约', () => {
   // 因此 data-label 属性不会渲染成标签 —— 弹框里只有裸输入框，用户不知道填什么。
   it('资料表单字段必须有可见标签（不能只靠 data-label 属性）', () => {
     expect(
-      /\.ee-field\b[^{]*\{[\s\S]{0,200}(attr\(data-label\)|::before)/.test(pageSrc) ||
-        /\.profile-form\b[\s\S]{0,200}label/.test(pageSrc) ||
+      /\.ee-field\b[^{]*\{[\s\S]{0,200}(?:attr\(data-label\)|::before)/.test(pageSrc) ||
+        /\.profile-form\b[\s\S]{1,200}label/.test(pageSrc) ||
         /<span[^>]*class="[^"]*field-label/.test(pageSrc),
       'E2E-11: `.ee-field` 全仓无样式定义，`data-label` 属性不会渲染。' +
         '表单字段必须有真实可见的标签元素或本地 CSS（::before + attr(data-label)）。',

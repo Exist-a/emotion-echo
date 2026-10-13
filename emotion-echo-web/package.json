@@ -42,7 +42,7 @@
     "vue": "^3.5.25",
     "vue-dompurify-html": "^5.3.0",
     "vue-echarts": "^8.0.1",
-    "vue-router": "^4.6.3"
+    "vue-router": "^5.4.0"
   },
   "optionalDependencies": {
     "@mlc-ai/web-llm": "^0.2.84"
@@ -63,6 +63,6 @@
     "svgo": "^4.0.0",
     "typescript": "^5.9.3",
     "vitest": "^2",
-    "vue-tsc": "^2.1.10"
+    "vue-tsc": "^3.3.13"
   }
 }

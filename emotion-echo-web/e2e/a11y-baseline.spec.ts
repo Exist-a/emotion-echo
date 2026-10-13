@@ -46,8 +46,15 @@ for (const page of PAGES) {
       console.log(`\n[${page.name}] ${critical.length} critical/serious violations found`)
     }
 
-    // Soft assert: record violations but don't block CI
-    // Uncomment below to enforce:
-    // expect(critical).toEqual([])
+    // 门禁（E2E-04 #7/#8）：critical/serious 必须清零。
+    // 唯一豁免 = color-contrast（需设计/配色改动）——**显式白名单**、可审计，
+    // 已记账本 E2E-F-221（docs/e2e-roadmap/discovered-unresolved.md）。
+    // 注意：这不是 soft-assert —— 白名单外的任何 critical/serious 都会红。
+    const KNOWN_GAPS = ['color-contrast']
+    const blocking = critical.filter((v) => !KNOWN_GAPS.includes(v.id))
+    expect(
+      blocking.map((v) => `${v.id}[${v.impact ?? 'n/a'}]`),
+      `${page.name}(${page.path}) 存在未修复的 critical/serious 无障碍问题`,
+    ).toEqual([])
   })
 }

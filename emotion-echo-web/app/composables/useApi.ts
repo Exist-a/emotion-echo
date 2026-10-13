@@ -294,7 +294,7 @@ export async function request<T = any>(
       const combinedSignal = existingSignal
         ? mergeSignals(existingSignal, timeoutController.signal)
         : timeoutController.signal
-      let res = await fetch(fullUrl, {
+      const res = await fetch(fullUrl, {
         ...options,
         headers,
         credentials: 'include', // 携带 Cookie

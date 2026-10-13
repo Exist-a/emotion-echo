@@ -25,8 +25,11 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      // title: "你的项目标题",
-      // meta: [{ name: "description", content: "项目描述" }]
+      // E2E-04 #7/#8：a11y 基线实测每页命中 html-has-lang / document-title（serious）。
+      // 补全局默认 lang 与 title 使其清零（页面可用 useHead 覆盖 title）。
+      htmlAttrs: { lang: "zh-CN" },
+      title: "情绪回声 Emotion-Echo",
+      meta: [{ name: "description", content: "Emotion-Echo — 多模态情绪陪伴与情绪分析" }],
     },
   },
   compatibilityDate: "2025-07-15",
