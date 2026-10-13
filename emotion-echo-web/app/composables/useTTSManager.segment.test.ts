@@ -8,6 +8,9 @@
  * RED：useTTSManager 尚未接 takeSentenceSegment ⇒ 断言"立即调用"失败。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+// 直接 import 真实 useTTSManager（RED 时它不切段 → 断言红）；vi.mock 由 vitest 提升，
+// 故 import 顺序不影响 mock 生效。import 置顶满足 eslint import/first。
+import { useTTSManager } from './useTTSManager'
 
 const playTextSpy = vi.fn()
 const flushSpy = vi.fn()
@@ -25,8 +28,7 @@ vi.mock('./useDigitalHumanTTS', () => ({
 }))
 
 // 直接替换为不依赖切段实现的 stub？——不：本测试正是要断言切段接线，
-// 故 import 真实 useTTSManager（RED 时它不切段 → 下面断言红）。
-import { useTTSManager } from './useTTSManager'
+// 故 import 真实 useTTSManager（RED 时它不切段 → 下面断言红）。import 见文件顶部。
 
 beforeEach(() => {
   playTextSpy.mockClear()
