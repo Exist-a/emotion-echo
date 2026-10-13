@@ -61,7 +61,8 @@ related:
 
 | 轨 | 阶段 | 分支 / worktree | owner | 开始 | 状态 |
 |---|------|----------------|-------|------|------|
-| _（空，等待登记）_ | | | | | |
+| D | CL-00 CI 瘦身 | `chore/cl-00-ci-slim`（off main） | 本会话 | 2026-10-13 | **待开工**（等 required-checks 确认） |
+| A | CL-04 Prompt 组装层 | 待认领 | — | — | **open**（待另一会话） |
 
 > 示例（不要留真数据）：`| D | CL-00 CI 瘦身 | feat/cl-00-ci-slim | Lane-CL-D | 2026-10-13 | in-progress |`
 
