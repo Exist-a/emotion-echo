@@ -257,8 +257,8 @@ func (f *fakeIntegrationChat) CreateConversation(_ context.Context, _ downstream
 func (f *fakeIntegrationChat) SendMessage(_ context.Context, _ int64, _ downstream.SendMessageReq) (*downstream.MessageView, error) {
 	return &downstream.MessageView{ID: 1, Content: "hi"}, nil
 }
-func (f *fakeIntegrationChat) ListMessages(_ context.Context, _ int64, _ int) ([]downstream.MessageView, error) {
-	return []downstream.MessageView{{ID: 1, Content: "hi"}}, nil
+func (f *fakeIntegrationChat) ListMessages(_ context.Context, _ int64, _ int, _ int64) ([]downstream.MessageView, bool, error) {
+	return []downstream.MessageView{{ID: 1, Content: "hi"}}, false, nil
 }
 func (f *fakeIntegrationChat) DeleteConversation(_ context.Context, _ int64) error { return nil }
 func (f *fakeIntegrationChat) PinConversation(_ context.Context, _ int64, _ bool) error {
