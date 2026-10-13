@@ -2,7 +2,7 @@
 stage: e2e-15
 title: 报表 Dashboard
 type: transformation
-status: partial
+status: done
 created: 2026-09-21
 closed: 2026-09-21
 depends-on: [e2e-10]

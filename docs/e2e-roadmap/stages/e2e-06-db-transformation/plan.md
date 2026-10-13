@@ -2,7 +2,7 @@
 stage: e2e-06
 title: 数据库改造
 type: transformation
-status: partial
+status: done
 created: 2026-09-17
 completed: 2026-09-18
 depends-on: [e2e-03]

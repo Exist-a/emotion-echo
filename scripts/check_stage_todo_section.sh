@@ -31,7 +31,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STAGES_DIR="$REPO_ROOT/docs/e2e-roadmap/stages"
 
 # 允许缺 §0 的历史阶段数量上限。**只能往下调**。
-LEGACY_BASELINE=10
+# 2026-10-13（D-51）：7 个历史 partial（E2E-05/06/08/09/11/15/19）收口为 done ⇒
+# 剩余无 §0 的 partial 仅 E2E-03/04/07 三个 ⇒ 基线同步下调 10 → 3（棘轮收紧）。
+LEGACY_BASELINE=3
 
 fail=0
 pass=0
