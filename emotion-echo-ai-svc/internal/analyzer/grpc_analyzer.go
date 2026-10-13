@@ -74,7 +74,9 @@ func NewGRPCAnalyzer(target string) (*GRPCAnalyzer, error) {
 	// 在 helper 之外单独 append。
 	dialOpts := grpcinterceptor.ClientDialOptions(
 		grpcinterceptor.NewGo2SkyTracer(traceTracer()),
-		3*time.Second,
+		// 2026-10-13：3s → 8s。情绪分析改为走 LLM（deepseek）后单次分类可能 1~3s，
+		// 3s 会让 ai-svc 过早判定超时并回退到关键词桩（neutral）。
+		8*time.Second,
 	)
 	dialOpts = append(dialOpts,
 		grpc.WithChainUnaryInterceptor(grpcinterceptor.ClientRetryInterceptor(grpcinterceptor.DefaultRetryOptions())),

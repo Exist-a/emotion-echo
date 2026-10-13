@@ -79,21 +79,22 @@ func (c *chatGRPCClient) SendMessage(ctx context.Context, conversationID int64, 
 	return fromProtoMessage(resp), nil
 }
 
-// ListMessages RPC
-func (c *chatGRPCClient) ListMessages(ctx context.Context, conversationID int64, limit int) ([]MessageView, error) {
+// ListMessages RPC（2026-10-13：游标分页，返回最新 limit 条 + hasMore）
+func (c *chatGRPCClient) ListMessages(ctx context.Context, conversationID int64, limit int, cursor int64) ([]MessageView, bool, error) {
 	cli := emotionchat.NewChatServiceClient(c.conn)
 	resp, err := cli.ListMessages(withUserID(ctx), &emotionchat.ListMessagesRequest{
 		ConversationId: conversationID,
 		Limit:          int32(limit),
+		Cursor:         cursor,
 	})
 	if err != nil {
-		return nil, wrapGRPCError(err, "chat list messages")
+		return nil, false, wrapGRPCError(err, "chat list messages")
 	}
 	out := make([]MessageView, 0, len(resp.Messages))
 	for _, m := range resp.Messages {
 		out = append(out, *fromProtoMessage(m))
 	}
-	return out, nil
+	return out, resp.GetHasMore(), nil
 }
 
 // ListConversations RPC

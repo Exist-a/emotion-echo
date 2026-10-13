@@ -265,6 +265,14 @@ func (r *limitObservingRepo) ListMessages(ctx context.Context, conversationID in
 	return r.ConversationRepo.ListMessages(ctx, conversationID, limit)
 }
 
+// ListMessagesPage 覆盖新逻辑实际调用的方法（2026-10-13 游标分页）。
+func (r *limitObservingRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {
+	if r.hook != nil {
+		r.hook(limit)
+	}
+	return r.ConversationRepo.ListMessagesPage(ctx, conversationID, limit, cursor)
+}
+
 // callObservingRepo records whether ListMessages was called at all.
 type callObservingRepo struct {
 	repository.ConversationRepo
@@ -276,6 +284,11 @@ func (r *callObservingRepo) ListMessages(ctx context.Context, conversationID int
 	return r.ConversationRepo.ListMessages(ctx, conversationID, limit)
 }
 
+func (r *callObservingRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {
+	r.listMessagesCalled = true
+	return r.ConversationRepo.ListMessagesPage(ctx, conversationID, limit, cursor)
+}
+
 // failingListRepo forces ListMessages to return listErr.
 type failingListRepo struct {
 	repository.ConversationRepo
@@ -284,6 +297,10 @@ type failingListRepo struct {
 
 func (r *failingListRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
 	return nil, r.listErr
+}
+
+func (r *failingListRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {
+	return nil, false, r.listErr
 }
 
 // Compile-time interface guards (per AGENTS.md §1.1 style: explicit

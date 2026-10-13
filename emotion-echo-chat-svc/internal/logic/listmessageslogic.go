@@ -49,12 +49,12 @@ func (l *ListMessagesLogic) ListMessages(req *types.ListMessagesReq) (resp *type
 		limit = 50
 	}
 
-	msgs, err := l.svcCtx.ConversationRepo.ListMessages(l.ctx, req.Id, limit)
+	msgs, hasMore, err := l.svcCtx.ConversationRepo.ListMessagesPage(l.ctx, req.Id, limit, req.Cursor)
 	if err != nil {
 		return nil, err
 	}
 
-	out := &types.ListMessagesResp{Messages: make([]types.MessageView, 0, len(msgs))}
+	out := &types.ListMessagesResp{Messages: make([]types.MessageView, 0, len(msgs)), HasMore: hasMore}
 	for _, m := range msgs {
 		out.Messages = append(out.Messages, types.MessageView{
 			Id:             m.ID,

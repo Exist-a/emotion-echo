@@ -11,6 +11,15 @@ import { getIntentLabel } from './intent'
  */
 export function trendToChartItems(trend: EmotionTrend | null): ChartItem[] {
   if (!trend) return []
+
+  // 无真实数据时不渲染任何图（否则后端为空桶补点会画出「全 0 的空报表」，
+  // 而调用方用 chartData.length>0 判断渲染，导致 0 条时仍显示空白图表）。
+  const hasData =
+    trend.series?.some((s) => s.data?.some((v) => v > 0)) ||
+    trend.emotionDistribution?.some((d) => d.value > 0) ||
+    trend.intentDistribution?.some((d) => d.count > 0)
+  if (!hasData) return []
+
   const items: ChartItem[] = []
 
   // 折线图: 多 series 叠加 → seriesData

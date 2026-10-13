@@ -109,7 +109,7 @@
         </button>
       </div>
       <video
-        v-if="faceEmotion.isCameraOn.value"
+        v-show="faceEmotion.isCameraOn.value"
         ref="cameraVideoRef"
         class="camera-preview"
         autoplay

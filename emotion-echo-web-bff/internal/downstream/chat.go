@@ -90,8 +90,9 @@ type ChatClient interface {
 	CreateConversation(ctx context.Context, req CreateConversationReq) (*ConversationView, error)
 	// SendMessage 发送消息
 	SendMessage(ctx context.Context, conversationID int64, req SendMessageReq) (*MessageView, error)
-	// ListMessages 列出会话消息
-	ListMessages(ctx context.Context, conversationID int64, limit int) ([]MessageView, error)
+	// ListMessages 列出会话消息（2026-10-13：游标分页，返回最新 limit 条 +
+	// 是否还有更旧消息；cursor>0 时取 id < cursor 的更旧一页）。
+	ListMessages(ctx context.Context, conversationID int64, limit int, cursor int64) ([]MessageView, bool, error)
 	// ListConversations Stage 36-A2.2：列出当前用户的会话（用户隔离由 chat-svc 保证）。
 	// 返回值：list + hasMore（取 limit+1 探测）。
 	ListConversations(ctx context.Context, limit, offset int) ([]ConversationView, bool, error)
@@ -240,32 +241,49 @@ func (c *chatHTTPClient) SendMessage(ctx context.Context, conversationID int64, 
 	return wrapped.Message, nil
 }
 
-func (c *chatHTTPClient) ListMessages(ctx context.Context, conversationID int64, limit int) ([]MessageView, error) {
+func (c *chatHTTPClient) ListMessages(ctx context.Context, conversationID int64, limit int, cursor int64) ([]MessageView, bool, error) {
 	url := c.baseURL + "/api/v1/conversations/" + strconv.FormatInt(conversationID, 10) + "/messages"
-	if limit > 0 {
-		url += "?limit=" + strconv.Itoa(limit)
+	q := buildMessageQuery(limit, cursor)
+	if q != "" {
+		url += "?" + q
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	applyAuthHeader(httpReq, ctx)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("downstream: list messages: %w", err)
+		return nil, false, fmt.Errorf("downstream: list messages: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return nil, readError(resp)
+		return nil, false, readError(resp)
 	}
 	var wrapped struct {
 		Messages []MessageView `json:"messages"`
+		HasMore  bool          `json:"hasMore"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&wrapped); err != nil {
-		return nil, fmt.Errorf("downstream: decode messages resp: %w", err)
+		return nil, false, fmt.Errorf("downstream: decode messages resp: %w", err)
 	}
-	return wrapped.Messages, nil
+	return wrapped.Messages, wrapped.HasMore, nil
+}
+
+// buildMessageQuery 组装 limit/cursor 查询串（cursor>0 才带）。
+func buildMessageQuery(limit int, cursor int64) string {
+	q := ""
+	if limit > 0 {
+		q = "limit=" + strconv.Itoa(limit)
+	}
+	if cursor > 0 {
+		if q != "" {
+			q += "&"
+		}
+		q += "cursor=" + strconv.FormatInt(cursor, 10)
+	}
+	return q
 }
 
 // ListConversations Stage 36-A2.2：列出当前用户的会话，按 updated_at desc。

@@ -137,6 +137,10 @@ message ReportsTrendResponse {
   // 此前缺失 ⇒ BFF 硬编码 conversationCount=0 ⇒ 周/月/年报「会话数」恒 0。
   int64 message_count = 4;
   int64 conversation_count = 5;
+  // 2026-10-13 新增：区间**真实**情绪分布（按 primary_emotion 直接聚合整个区间，
+  // 而非"每个时间桶的主导情绪"）。此前 BFF 用桶主导拼接分布，年报因整年只有
+  // 1 个桶而塌成单色（"情绪分布全是中性"）。
+  repeated EmotionDistribution emotion_distribution = 6;
 }
 
 // ============== User Behavior ==============

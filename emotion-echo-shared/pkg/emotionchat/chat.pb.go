@@ -440,8 +440,11 @@ type ListMessagesRequest struct {
 	ConversationId int64                  `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
 	Limit          int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
 	Offset         int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 2026-10-13：游标分页 —— 返回 id < cursor 的消息（0 = 从最新开始）。
+	// 默认返回"最新 limit 条"；上翻历史时把上一页最早一条的 id 作为 cursor。
+	Cursor        int64 `protobuf:"varint,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListMessagesRequest) Reset() {
@@ -495,10 +498,19 @@ func (x *ListMessagesRequest) GetOffset() int32 {
 	return 0
 }
 
+func (x *ListMessagesRequest) GetCursor() int64 {
+	if x != nil {
+		return x.Cursor
+	}
+	return 0
+}
+
 // ListMessagesResponse 列消息响应
 type ListMessagesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Messages      []*Message             `protobuf:"bytes,1,rep,name=messages,proto3" json:"messages,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Messages []*Message             `protobuf:"bytes,1,rep,name=messages,proto3" json:"messages,omitempty"`
+	// 2026-10-13：是否还有更旧的消息（游标翻页用）
+	HasMore       bool `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -538,6 +550,13 @@ func (x *ListMessagesResponse) GetMessages() []*Message {
 		return x.Messages
 	}
 	return nil
+}
+
+func (x *ListMessagesResponse) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
 }
 
 // ListConversationsRequest 列会话请求
@@ -1331,13 +1350,15 @@ const file_chat_proto_rawDesc = "" +
 	"\fcontent_type\x18\b \x01(\tR\vcontentType\x12\x16\n" +
 	"\x06intent\x18\t \x01(\tR\x06intent\x12\x1b\n" +
 	"\tfile_name\x18\n" +
-	" \x01(\tR\bfileName\"l\n" +
+	" \x01(\tR\bfileName\"\x84\x01\n" +
 	"\x13ListMessagesRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\x03 \x01(\x05R\x06offset\"L\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\x12\x16\n" +
+	"\x06cursor\x18\x04 \x01(\x03R\x06cursor\"g\n" +
 	"\x14ListMessagesResponse\x124\n" +
-	"\bmessages\x18\x01 \x03(\v2\x18.emotion_chat.v1.MessageR\bmessages\"H\n" +
+	"\bmessages\x18\x01 \x03(\v2\x18.emotion_chat.v1.MessageR\bmessages\x12\x19\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"H\n" +
 	"\x18ListConversationsRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x05R\x06offset\"i\n" +

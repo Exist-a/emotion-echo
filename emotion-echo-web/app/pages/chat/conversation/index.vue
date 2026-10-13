@@ -181,7 +181,12 @@ const startNewConversation = () => {
 const isLoading = ref(false)
 onMounted(async () => {
   isLoading.value = true
-  await conversationStore.fetchConversations()
+  // 2026-10-13 修复「侧边栏渲染多个相同会话」：此前这里调 fetchConversations()，
+  // 而 store 里 fetchConversations 在 cursor 非空时是**追加**语义；plugins/init.ts
+  // 已先跑过 conversationStore.init()（拉完第一页并把 cursor 设成末条 updatedAt），
+  // 于是页面挂载再 fetchConversations() 会把第一页**再追加一遍** → 侧边栏出现重复项。
+  // 改用 init()（重置 cursor 后重新拉第一页，替换而非追加）。
+  await conversationStore.init()
   isLoading.value = false
 })
 

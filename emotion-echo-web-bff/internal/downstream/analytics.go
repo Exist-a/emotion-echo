@@ -63,6 +63,8 @@ type TrendReport struct {
 	// 2026-09-21 新增：区间消息数 / 会话数（与 DailyReport 同源 msg_summary_v）
 	MessageCount      int64 `json:"messageCount"`
 	ConversationCount int64 `json:"conversationCount"`
+	// 2026-10-13 新增：区间真实情绪分布（proto ReportsTrendResponse.emotion_distribution）
+	EmotionCounts map[string]int64 `json:"emotionCounts,omitempty"`
 }
 
 // InteractionDepth 对应 analytics-svc repository.InteractionDepth

@@ -113,6 +113,14 @@ class AuthInterceptor(grpc.ServerInterceptor):
         self.expected_api_key = expected_api_key
 
     def intercept_service(self, continuation, handler_call_details):
+        # 2026-10-13 修复：健康检查（grpc.health.v1.Health）不做业务鉴权。
+        # 标准 grpc health 探针（含 Go 侧 healthcheck.NewClient().WaitForReady）不会带
+        # 业务 key，若被 AuthInterceptor 拒绝，客户端会一直拿到 UNAUTHENTICATED /
+        # SERVICE_UNKNOWN ⇒ 依赖它的服务（ai-svc 的 gRPC analyzer）健康检查恒失败、
+        # 回退到错误的 HTTP 分析器。health 只暴露 SERVING/NOT_SERVING，无泄露风险。
+        if handler_call_details.method.startswith("/grpc.health.v1.Health/"):
+            return continuation(handler_call_details)
+
         if not self.expected_api_key:
             # auth disabled
             return continuation(handler_call_details)

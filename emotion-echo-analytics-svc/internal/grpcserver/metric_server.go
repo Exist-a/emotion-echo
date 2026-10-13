@@ -165,6 +165,10 @@ func (s *analyticsServer) ReportsTrend(ctx context.Context, req *emotionanalytic
 	if resp == nil || resp.Report == nil {
 		return &emotionanalytics.ReportsTrendResponse{Type: req.Type}, nil
 	}
+	var emoTotal int64
+	for _, c := range resp.Report.EmotionCounts {
+		emoTotal += c
+	}
 	return &emotionanalytics.ReportsTrendResponse{
 		DataPoints:         toProtoChartDataPoints(resp.Report.Points),
 		Type:               resp.Report.Type,
@@ -172,6 +176,8 @@ func (s *analyticsServer) ReportsTrend(ctx context.Context, req *emotionanalytic
 		// 2026-09-21 新增：区间消息数 / 会话数（与 daily 同源 msg_summary_v）
 		MessageCount:      resp.Report.MessageCount,
 		ConversationCount: resp.Report.ConversationCount,
+		// 2026-10-13 新增：区间真实情绪分布（GROUP BY primary_emotion）
+		EmotionDistribution: toProtoEmotionDistribution(resp.Report.EmotionCounts, emoTotal),
 	}, nil
 }
 

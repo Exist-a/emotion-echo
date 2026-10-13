@@ -39,7 +39,7 @@ import (
 // fileMessageLister 会话消息列表来源（downstream.ChatClient 满足此接口）；
 // 独立小接口便于测试 fake（Stage 89 PR-3）
 type fileMessageLister interface {
-	ListMessages(ctx context.Context, conversationID int64, limit int) ([]downstream.MessageView, error)
+	ListMessages(ctx context.Context, conversationID int64, limit int, cursor int64) ([]downstream.MessageView, bool, error)
 }
 
 // personalitySource 用户最新人格画像来源（E2E-14）。
@@ -309,7 +309,7 @@ func (h *AIStreamHandler) collectFileAttachments(ctx context.Context, conversati
 	if err != nil || convID <= 0 {
 		return nil
 	}
-	msgs, err := h.files.ListMessages(ctx, convID, 50)
+	msgs, _, err := h.files.ListMessages(ctx, convID, 50, 0)
 	if err != nil {
 		slog.ErrorContext(ctx, "ai-stream list messages for file context failed", "err", err)
 		return nil

@@ -54,12 +54,12 @@ func (f *fakeChatClient) SendMessage(_ context.Context, conversationID int64, re
 	}
 	return f.msg, nil
 }
-func (f *fakeChatClient) ListMessages(_ context.Context, conversationID int64, limit int) ([]downstream.MessageView, error) {
+func (f *fakeChatClient) ListMessages(_ context.Context, conversationID int64, limit int, cursor int64) ([]downstream.MessageView, bool, error) {
 	f.gotConvID, f.gotLimit = conversationID, limit
 	if f.listErr != nil {
-		return nil, f.listErr
+		return nil, false, f.listErr
 	}
-	return f.messages, nil
+	return f.messages, f.hasMore, nil
 }
 func (f *fakeChatClient) ListConversations(_ context.Context, limit, offset int) ([]downstream.ConversationView, bool, error) {
 	f.gotListLimit, f.gotOffset = limit, offset

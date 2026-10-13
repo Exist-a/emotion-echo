@@ -172,7 +172,7 @@ func TestChatGRPCClient_ListMessages_ReturnsViews(t *testing.T) {
 	defer cleanup()
 
 	client := NewChatGRPCClient(conn)
-	msgs, err := client.ListMessages(context.Background(), 5, 50)
+	msgs, _, err := client.ListMessages(context.Background(), 5, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, msgs, 2)
 	assert.Equal(t, "hi", msgs[0].Content)

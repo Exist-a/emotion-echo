@@ -361,7 +361,7 @@ func main() {
 				if err != nil {
 					slog.Error("llm gRPC dial failed, fallback to HTTP", "err", err)
 					an = analyzer.NewChainedAnalyzer(
-						analyzer.NewHTTPAnalyzer(c.LLM.BaseURL),
+						analyzer.NewHTTPAnalyzer(c.LLM.BaseURL, c.LLM.InternalAPIKey),
 						analyzer.NewKeywordAnalyzer(),
 					)
 				} else {

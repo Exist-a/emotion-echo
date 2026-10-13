@@ -1,6 +1,6 @@
 <template>
   <div class="chat-page">
-    <main ref="mainRef" class="chat-main" aria-live="polite">
+    <main ref="mainRef" class="chat-main" aria-live="polite" @scroll="onMessagesScroll">
       <div class="dialog-list">
         <article
           v-for="item in data"
@@ -208,7 +208,7 @@
         </div>
       </div>
       <video
-        v-if="faceEmotion.isCameraOn.value"
+        v-show="faceEmotion.isCameraOn.value"
         ref="cameraVideoRef"
         class="camera-preview"
         autoplay
@@ -254,6 +254,11 @@ import { marked } from 'marked'
 const DigitalHuman = import.meta.client
   ? defineAsyncComponent(() => import('~/components/digital-human/DigitalHuman.client.vue'))
   : (null as any)
+
+// 切会话不重挂载整页：Nuxt 默认用含 :id 的路由路径做页面 key，切会话时 key 变化会
+// 把整页（含 Three.js 数字人）卸载重建。key 固定为路由名即可复用组件实例；
+// 会话数据的刷新改由下方 watch(route.params.id) 驱动。
+definePageMeta({ key: (route) => route.name as string })
 
 const userStore = useUserStore()
 const userConfig = ref(userStore.getUserConfig())
@@ -515,23 +520,48 @@ const scrollToBottom = () => {
   })
 }
 
+// 2026-10-13：滚到接近顶部时上翻加载更早的消息（游标分页）。
+// 消息默认按时间升序展示，更早的消息在顶部；loadMoreMessages 内部有
+// isLoading/hasMore 守卫，重复触发安全。
+const onMessagesScroll = () => {
+  const el = mainRef.value
+  if (!el) return
+  if (el.scrollTop <= 48) {
+    void messageStore.loadMoreMessages()
+  }
+}
+
 watch(
   () => messageStore.currentMessages.length,
   () => scrollToBottom(),
   { flush: 'post' },
 )
 
-onMounted(async () => {
-  if (!route.params.id) {
+const loadConversation = async (id?: string) => {
+  if (!id) {
     window.alert('获取会话错误')
     return
   }
-  const id = route.params.id as string
   if (messageStore.currentSessionId !== id) {
+    // 切会话时停掉上一个会话可能还在进行的 AI 流（原先由 onUnmounted 触发）
+    conversationSender.cancelAIStream()
     await messageStore.switchSession(id)
   }
   scrollToBottom()
+}
+
+onMounted(() => {
+  void loadConversation(route.params.id as string)
 })
+
+// 页面 key 已固定为路由名（见 definePageMeta），切会话不再重挂载，
+// 因此改用监听路由参数来切换会话数据。
+watch(
+  () => route.params.id,
+  (id) => {
+    void loadConversation(id as string | undefined)
+  },
+)
 
 onUnmounted(() => {
   conversationSender.cancelAIStream()
@@ -713,6 +743,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: min(820px, 100%);
+  min-width: 0;
   padding: 6px 10px;
   margin-bottom: 6px;
   border-radius: 8px;
@@ -720,14 +752,18 @@ onUnmounted(() => {
   font-size: 13px;
 }
 .attachment-name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .attachment-status {
+  flex: none;
   color: var(--color-text-secondary, #888);
 }
 .attachment-remove {
+  flex: none;
   border: none;
   background: none;
   cursor: pointer;
@@ -738,7 +774,8 @@ onUnmounted(() => {
 
 .composer {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 12px 16px 18px;
   background: linear-gradient(to top, var(--ee-bg) 60%, transparent);
 }

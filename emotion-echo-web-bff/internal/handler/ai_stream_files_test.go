@@ -26,11 +26,11 @@ type fakeFileLister struct {
 	err  error
 }
 
-func (f *fakeFileLister) ListMessages(_ context.Context, conversationID int64, limit int) ([]downstream.MessageView, error) {
+func (f *fakeFileLister) ListMessages(_ context.Context, conversationID int64, limit int, cursor int64) ([]downstream.MessageView, bool, error) {
 	if f.err != nil {
-		return nil, f.err
+		return nil, false, f.err
 	}
-	return f.msgs, nil
+	return f.msgs, false, nil
 }
 
 func minioTestConfig() config.Config {

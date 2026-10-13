@@ -145,13 +145,17 @@ func (s *chatServer) ListMessages(ctx context.Context, req *emotionchat.ListMess
 	}
 
 	resp, err := logic.NewListMessagesLogic(ctx, s.svcCtx).ListMessages(&types.ListMessagesReq{
-		Id:    req.GetConversationId(),
-		Limit: int(req.GetLimit()),
+		Id:     req.GetConversationId(),
+		Limit:  int(req.GetLimit()),
+		Cursor: req.GetCursor(),
 	})
 	if err != nil {
 		return nil, mapLogicError(err, "list messages")
 	}
-	out := &emotionchat.ListMessagesResponse{Messages: make([]*emotionchat.Message, 0, len(resp.Messages))}
+	out := &emotionchat.ListMessagesResponse{
+		Messages: make([]*emotionchat.Message, 0, len(resp.Messages)),
+		HasMore:  resp.HasMore,
+	}
 	for _, m := range resp.Messages {
 		out.Messages = append(out.Messages, toProtoMessage(m))
 	}

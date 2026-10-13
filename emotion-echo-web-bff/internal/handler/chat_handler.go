@@ -179,7 +179,14 @@ func (h *ChatHandler) listMessages(c *gin.Context) {
 			limit = n
 		}
 	}
-	msgs, err := h.chat.ListMessages(session.WithRequestAuth(c), id, limit)
+	// 2026-10-13：游标分页（cursor = 上一页最早一条的 id；0/缺省 = 从最新开始）
+	var cursor int64
+	if v := c.Query("cursor"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			cursor = n
+		}
+	}
+	msgs, hasMore, err := h.chat.ListMessages(session.WithRequestAuth(c), id, limit, cursor)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
@@ -188,7 +195,13 @@ func (h *ChatHandler) listMessages(c *gin.Context) {
 	for i := range msgs {
 		items = append(items, toMessageItemVM(&msgs[i]))
 	}
-	OK(c, gin.H{"list": items})
+	// nextCursor = 本页最早一条的 id（消息已按时间升序返回，第一条即最早），
+	// 供前端上翻加载更旧一页；空页时回传请求的 cursor。
+	nextCursor := cursor
+	if len(msgs) > 0 {
+		nextCursor = msgs[0].ID
+	}
+	OK(c, gin.H{"list": items, "cursor": nextCursor, "hasMore": hasMore})
 }
 
 func (h *ChatHandler) deleteConversation(c *gin.Context) {

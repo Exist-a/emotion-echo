@@ -80,4 +80,16 @@ describe('trendToChartItems', () => {
     expect(items.find((i: any) => i.title === '情绪分布')).toBeUndefined()
     expect(items.find((i: any) => i.title === '意图分布')).toBeUndefined()
   })
+
+  it('returns [] when all values are zero (0 条不应渲染空报表)', () => {
+    // 后端会为空桶补点，导致 series/emotionDistribution 非空但全 0；
+    // 此时应返回 []，让页面走 ee-empty「暂无数据」分支，而不是画一张空白图表。
+    const empty: EmotionTrend = {
+      ...baseTrend,
+      series: [{ name: 'neutral', data: [0, 0, 0] }],
+      emotionDistribution: [{ name: 'neutral', value: 0 }],
+      intentDistribution: [],
+    }
+    expect(trendToChartItems(empty)).toEqual([])
+  })
 })

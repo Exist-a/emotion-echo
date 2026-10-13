@@ -37,6 +37,10 @@ type ConversationRepo interface {
 	AppendMessage(ctx context.Context, m *model.Message) error
 	// ListMessages 列出会话的消息
 	ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error)
+	// ListMessagesPage 游标分页列消息（2026-10-13）：返回"最新 limit 条"，
+	// 传入 cursor>0 时返回 id < cursor 的更旧消息。返回升序（时间正序）切片 +
+	// 是否还有更旧消息（用于前端上翻加载历史）。
+	ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error)
 	// GetMessageByClientMsgID Stage 33 PR-18：按 client_msg_id 查消息（幂等查重）。
 	// userID 参与限定避免跨用户冲突；conversationID 进一步限定到指定会话。
 	// 命中返回 *Message，未命中返回 nil, nil（约定与 GetConversationByID 一致）。
@@ -143,6 +147,31 @@ func (r *InMemoryConversationRepo) ListMessages(ctx context.Context, conversatio
 	// and tests asserting on message content order would flake.
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
+}
+
+// ListMessagesPage 内存版游标分页（与 Postgres 版语义一致）。
+func (r *InMemoryConversationRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []model.Message
+	for _, m := range r.messages {
+		if m.ConversationID == conversationID && m.DeletedAt == nil && (cursor == 0 || m.ID < cursor) {
+			out = append(out, *m)
+		}
+	}
+	// id DESC（最新优先）后取 limit+1 探测 hasMore
+	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out, hasMore, nil
 }
 
 // GetMessageByClientMsgID Stage 33 PR-18：内存版按 (user_id, conversation_id, client_msg_id) 查重
@@ -314,6 +343,32 @@ func (r *PostgresConversationRepo) ListMessages(ctx context.Context, conversatio
 		Limit(limit).
 		Find(&out).Error
 	return out, err
+}
+
+// ListMessagesPage 2026-10-13：游标分页，默认取最新 limit 条（id DESC），
+// cursor>0 时取 id < cursor 的更旧消息；取 limit+1 探测 hasMore；最后反转为升序。
+func (r *PostgresConversationRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	q := r.db.WithContext(ctx).
+		Where("conversation_id = ? AND deleted_at IS NULL", conversationID)
+	if cursor > 0 {
+		q = q.Where("id < ?", cursor)
+	}
+	var out []model.Message
+	if err := q.Order("id DESC").Limit(limit + 1).Find(&out).Error; err != nil {
+		return nil, false, err
+	}
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	// 反转成时间升序，供前端直接渲染（最新一条在末尾）
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out, hasMore, nil
 }
 
 // GetMessageByClientMsgID Stage 33 PR-18：Postgres 版按 (user_id, conversation_id, client_msg_id) 查重

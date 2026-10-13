@@ -76,7 +76,7 @@ func TestChatClient_ListMessages_Success(t *testing.T) {
 	defer srv.Close()
 
 	c := NewChatClient(ChatClientOptions{BaseURL: srv.URL, TimeoutMs: 1000})
-	msgs, err := c.ListMessages(context.Background(), 5, 50)
+	msgs, _, err := c.ListMessages(context.Background(), 5, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, msgs, 2)
 	assert.Equal(t, "hi", msgs[0].Content)
@@ -116,7 +116,7 @@ func TestChatClient_Upstream500_ReturnsError(t *testing.T) {
 	defer srv.Close()
 
 	c := NewChatClient(ChatClientOptions{BaseURL: srv.URL, TimeoutMs: 1000})
-	_, err := c.ListMessages(context.Background(), 1, 10)
+	_, _, err := c.ListMessages(context.Background(), 1, 10, 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "db down")
 }

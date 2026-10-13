@@ -27,6 +27,7 @@ import (
 // 响应：{"primaryEmotion": "...", "sentimentScore": ..., "confidence": ..., "model": "..."}
 type HTTPAnalyzer struct {
 	baseURL string
+	apiKey  string
 	client  *http.Client
 }
 
@@ -45,12 +46,21 @@ type llmResponse struct {
 
 // NewHTTPAnalyzer 构造 HTTP analyzer
 //
-// baseURL：LLM 服务根地址，如 "http://localhost:8000"
-func NewHTTPAnalyzer(baseURL string) *HTTPAnalyzer {
+// baseURL：LLM 服务根地址，如 "http://emotion-llm-service:8000"
+// apiKey（可选）：llm-service 内部鉴权 key，会作为 x-internal-api-key 头带上
+//
+// 说明：超时由原来的 3s 抬到 8s —— 情绪分析现已走 LLM（deepseek），
+// 单次分类耗时可能 1~3s，3s 会让 ai-svc 过早判定失败而回退关键词桩。
+func NewHTTPAnalyzer(baseURL string, apiKey ...string) *HTTPAnalyzer {
+	key := ""
+	if len(apiKey) > 0 {
+		key = apiKey[0]
+	}
 	return &HTTPAnalyzer{
 		baseURL: baseURL,
+		apiKey:  key,
 		client: &http.Client{
-			Timeout: 3 * time.Second, // 短超时：LLM 挂了不能阻塞消费
+			Timeout: 8 * time.Second,
 		},
 	}
 }
@@ -70,6 +80,9 @@ func (a *HTTPAnalyzer) Analyze(ctx context.Context, text string) (*EmotionResult
 		return nil, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if a.apiKey != "" {
+		req.Header.Set("x-internal-api-key", a.apiKey)
+	}
 
 	resp, err := a.client.Do(req)
 	if err != nil {
