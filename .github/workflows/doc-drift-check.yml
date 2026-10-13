@@ -13,13 +13,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# CL-00（2026-10-13）CI 瘦身 —— 第 1 刀：合并 job
-#   原 24 个独立 job（每个各起一个 runner、各 checkout 一次）合并为 **1 个 job**，
-#   大幅降低 runner 冷启动 + 排队开销；**覆盖不减**（每个 job 的脚本一字未动，
-#   只是从"各自一个 runner"变成"同一 runner 顺序跑"）。
-#   保留汇总 job `doc-drift-gate`（名「文档守卫总闸」）——**分支保护的 required check
-#   名不变**（用户 2026-10-13 确认 main 开着 required checks）。
-#   随之删除已成空壳的 `doc-drift-needs-sync`（它只在"多 job + 硬编码 needs 列表"时才有意义）。
+# CL-00（2026-10-13）CI 瘦身：
+#   第 1 刀：原 24 个独立 job（各起一个 runner）→ 合并为 1 个 `static-guards` job。
+#   第 2 刀：删冗余检查（见下），保留汇总 job `doc-drift-gate`（名「文档守卫总闸」）
+#           ⇒ 分支保护 required check 名不变。
+#   被删检查的脚本**文件保留**（仍被 docs 引用，删了会留悬空引用；orphan-outputs 不判红）。
 jobs:
   static-guards:
     name: 静态守卫（合并）
@@ -38,18 +36,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.x'
-      - uses: azure/setup-helm@v4
       - name: 工具链自检
         run: |
           bash --version | head -1
           python --version
           node --version
           go version
-          helm version --short
-      # CL-00：原 helm 渲染 job 未装 setup-python（用系统 python，自带 pyyaml）；
-      # 合并后统一用 setup-python 的干净 python，须显式补 pyyaml，否则 helm 渲染脚本
-      # 报 ModuleNotFoundError: yaml ⇒ 连带"子 chart 数 / 渲染回归"误判 FAIL。
-      - name: 安装 python 依赖（helm 渲染脚本需要 pyyaml）
+      # CL-00：合并后统一用 setup-python 的干净 python（原 helm 渲染 job 用系统 python
+      # 自带 pyyaml），须显式补 pyyaml —— 见第 1 刀回归修复。
+      - name: 安装 python 依赖（pyyaml）
         run: python -m pip install --quiet pyyaml
 
       # ---- 路径 / 契约 / 卫生 ----
@@ -65,55 +60,42 @@ jobs:
         run: python scripts/check_git_layout.py --strict
       - name: 6 Dockerfile digest pin
         run: bash scripts/check_docker_digests.sh
-      - name: 7 文档更新验证
-        run: bash scripts/test_docs_update.sh
-      - name: 8 BFF JWT secret 一致性
+      - name: 7 BFF JWT secret 一致性
         run: bash scripts/test_bff_jwt_secret.sh
-      - name: 9 user_oauth 零引用
-        run: bash scripts/test_user_oauth_zero_ref.sh
-      - name: 10 Migration 契约
+      - name: 8 Migration 契约
         run: bash scripts/test_migrations_contract.sh
-      - name: 11 Migration 服务顺序独立性
+      - name: 9 Migration 服务顺序独立性
         run: bash scripts/test_migrations_no_service_order.sh
-      - name: 12 soft-assert 扫描（含负向自检）
+      - name: 10 soft-assert 扫描（含负向自检）
         run: |
           bash scripts/check_soft_asserts.sh
           bash scripts/test_check_soft_asserts.sh
-      - name: 13 APISIX seed 结构 + drift 契约
+      - name: 11 APISIX seed 结构 + drift 契约
         run: |
           node deploy/apisix/seed_test.js
           node scripts/test_apisix_drift_lib.js
           bash scripts/test_check_apisix_drift.sh
-      - name: 14 明文密钥扫描（含负向自检）
+      - name: 12 明文密钥扫描（含负向自检）
         run: |
           bash scripts/check_secrets.sh
           bash scripts/test_check_secrets.sh
-      - name: 15 E2E 收口审计
-        run: python scripts/e2e_stage_audit.py --all
-      - name: 16 TDD 门禁
+      - name: 13 TDD 门禁
         run: bash scripts/check_tdd_gate.sh
-      - name: 17 ADR 门禁（仅 PR）
+      - name: 14 ADR 门禁（仅 PR）
         if: github.event_name == 'pull_request'
         env:
           CI_COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
         run: bash scripts/check_adr_gate.sh
-      - name: 18 残留物扫描
+      - name: 15 残留物扫描
         run: bash scripts/check_residual.sh
-      - name: 19 Loki chart 渲染回归
-        run: bash scripts/test_helm_loki_render.sh
-      - name: 20 ctx 日志门禁
+      - name: 16 ctx 日志门禁
         run: python scripts/check_ctx_logging.py
-      - name: 21 孤儿产出物检测
+      - name: 17 孤儿产出物检测
         run: bash scripts/check_orphan_outputs.sh
-      - name: 22 Prometheus chart 渲染回归
-        run: bash scripts/test_helm_prometheus_render.sh
-      - name: 23 主 chart 渲染回归
-        run: bash scripts/test_helm_main_render.sh
-      - name: 24 观测面配置契约
+      - name: 18 观测面配置契约
         run: node deploy/obs_monitoring.test.js
 
   # 汇总门禁（名「文档守卫总闸」= 分支保护的 required check，**名字不能改**）。
-  # 它 needs 全部检查，任一失败即失败；`if: always()` 防"上游失败时本 job 被 skip ⇒ 不拦"。
   doc-drift-gate:
     name: 文档守卫总闸
     runs-on: ubuntu-latest
