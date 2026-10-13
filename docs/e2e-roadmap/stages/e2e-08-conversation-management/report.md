@@ -1,10 +1,10 @@
 ---
 stage: e2e-08
 title: 历史会话管理
-status: partial
+status: done
 date: 2026-09-19
 verdict: PARTIAL
-superseded-note: 2026-09-19 治理轮：由 done 降为 partial（0 张截图、report 缺 §10 模板必填章节、无汇总行）
+superseded-note: 2026-09-19 治理轮：由 done 降为 partial（0 张截图、report 缺 §10 模板必填章节、无汇总行）；2026-10-13 收口（D-51）：按约束复核后回升 done（BLOCKED ≤1/3、账本归属项转专项）
 ---
 
 # E2E-08 历史会话管理 — 执行报告

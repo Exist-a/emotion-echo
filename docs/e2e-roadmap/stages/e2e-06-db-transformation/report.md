@@ -2,7 +2,7 @@
 stage: e2e-06
 title: 数据库改造
 type: report
-status: partial
+status: done
 created: 2026-09-18
 completed: 2026-09-18
 related-docs:

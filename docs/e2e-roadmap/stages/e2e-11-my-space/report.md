@@ -2,7 +2,7 @@
 stage: e2e-11
 title: 我的空间
 executed: 2026-09-19
-status: partial
+status: done
 environment: dev 模式（17 容器 healthy，docker-compose.infra.yml + docker-compose.apps.yml + compose.dev.yml + .env.local）
 ---
 
