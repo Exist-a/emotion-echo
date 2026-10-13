@@ -113,6 +113,11 @@ func (c *analyticsGRPCClient) TrendReport(ctx context.Context, userID int64, rep
 	for _, ic := range resp.IntentDistribution {
 		intentCounts[ic.Intent] = int64(ic.Count)
 	}
+	// 2026-10-13：区间真实情绪分布透传（proto ReportsTrendResponse.emotion_distribution）
+	emotionCounts := make(map[string]int64, len(resp.EmotionDistribution))
+	for _, ed := range resp.EmotionDistribution {
+		emotionCounts[ed.Emotion] = int64(ed.Count)
+	}
 	return &TrendReport{
 		UserID:       userID,
 		Type:         resp.Type,
@@ -123,6 +128,7 @@ func (c *analyticsGRPCClient) TrendReport(ctx context.Context, userID int64, rep
 		// 2026-09-21 新增：区间消息数 / 会话数（proto ReportsTrendResponse 4/5 字段）
 		MessageCount:      resp.MessageCount,
 		ConversationCount: resp.ConversationCount,
+		EmotionCounts:     emotionCounts,
 	}, nil
 }
 

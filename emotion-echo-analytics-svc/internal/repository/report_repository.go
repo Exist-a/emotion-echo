@@ -89,13 +89,25 @@ type TrendReport struct {
 	// 周/月/年报的「会话数」恒显 0（用户实测反馈）。
 	MessageCount      int64 `json:"messageCount"`
 	ConversationCount int64 `json:"conversationCount"`
+	// 2026-10-13 新增：区间**真实**情绪分布（按 primary_emotion 直接聚合整个
+	// [start,end]，而非"每个时间桶的主导情绪"）。原 BFF 用桶主导拼接分布，
+	// 年报整年只有 1 个桶 ⇒ 分布塌成单色（"年报情绪分布全是中性"）。
+	EmotionCounts map[string]int64 `json:"emotionCounts,omitempty"`
 }
 
 // trendTypeBucket 趋势类型 → 桶大小
+//
+// 2026-10-13 修复：原值 weekly=7d / monthly=30d / yearly=365d —— 与各自的
+// 自然窗口长度相同（周报取 7 天、月报约 30 天、年报 365 天），于是**整段区间
+// 只会落进 1 个桶** ⇒ 趋势折线只有 1 个点、情绪分布只有 1 个扇区（年报"情绪
+// 分布全是中性/单色"的直接原因之一）。改为更细的粒度，让趋势与分布有多个桶：
+//   - weekly  → 1 天（7 天窗口得 7 个点）
+//   - monthly → 1 天（30 天窗口得约 30 个点）
+//   - yearly  → 1 月（365 天窗口得约 12 个点）
 var trendTypeBucket = map[string]time.Duration{
-	"weekly":  7 * 24 * time.Hour,
-	"monthly": 30 * 24 * time.Hour,
-	"yearly":  365 * 24 * time.Hour,
+	"weekly":  24 * time.Hour,
+	"monthly": 24 * time.Hour,
+	"yearly":  30 * 24 * time.Hour,
 }
 
 // TrendBucketSize 给定 trend type 返回桶大小
@@ -340,6 +352,27 @@ WHERE user_id = $1 AND send_time::date BETWEEN $2::date AND $3::date`
 		return nil, err
 	}
 
+	// 2026-10-13：区间真实情绪分布（直接 GROUP BY primary_emotion，不经时间桶，
+	// 与日报的 EmotionDistribution 同源同形）。BFF 用此替换"桶主导拼接"。
+	const qEmotions = `
+SELECT primary_emotion AS emotion, COUNT(*)::bigint AS cnt
+FROM emotion_echo_ai.daily_emotion_v
+WHERE user_id = $1 AND created_at::date BETWEEN $2::date AND $3::date
+GROUP BY 1`
+	var emoRows []struct {
+		Emotion string
+		Cnt     int64
+	}
+	if err := r.db.WithContext(ctx).Raw(qEmotions, userID,
+		start.Format("2006-01-02"), end.Format("2006-01-02"),
+	).Scan(&emoRows).Error; err != nil {
+		return nil, err
+	}
+	emotionCounts := make(map[string]int64, len(emoRows))
+	for _, e := range emoRows {
+		emotionCounts[e.Emotion] = e.Cnt
+	}
+
 	return &TrendReport{
 		UserID:            userID,
 		Type:              trendType,
@@ -349,6 +382,7 @@ WHERE user_id = $1 AND send_time::date BETWEEN $2::date AND $3::date`
 		IntentCounts:      intentCounts,
 		MessageCount:      counts.MessageCount,
 		ConversationCount: counts.ConversationCount,
+		EmotionCounts:     emotionCounts,
 	}, nil
 }
 

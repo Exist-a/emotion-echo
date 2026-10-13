@@ -32,10 +32,14 @@ type HealthResp struct {
 type ListMessagesReq struct {
 	Id    int64 `path:"id"`
 	Limit int   `json:"limit,default=50"`
+	// Cursor 2026-10-13：游标分页 —— 只返回 id < Cursor 的消息（0 = 取最新）
+	Cursor int64 `json:"cursor,default=0"`
 }
 
 type ListMessagesResp struct {
 	Messages []MessageView `json:"messages"`
+	// HasMore 2026-10-13：是否还有更旧的消息
+	HasMore bool `json:"hasMore"`
 }
 
 type MessageView struct {

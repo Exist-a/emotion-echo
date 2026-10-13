@@ -23,6 +23,7 @@ emotion-llm-service · 文本情绪分析微服务
   - 关键词 + 情感词典实现（与 keyword-stub 等价）
   - 未来可换 jieba + SnowNLP / LLM API
 """
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -165,7 +166,10 @@ SENTIMENT_WORDS = {
 
 
 def analyze(text: str) -> AnalyzeResponse:
-    """主分析函数。返回结构与 ai-svc 的 EmotionResult 一致。"""
+    """主分析函数：先尝试 LLM 情绪分类（deepseek），失败/未配则回退关键词。
+
+    返回结构与 ai-svc 的 EmotionResult 一致（model 标识实际使用的分析器）。
+    """
     if not text or not text.strip():
         return AnalyzeResponse(
             primaryEmotion="neutral",
@@ -173,7 +177,77 @@ def analyze(text: str) -> AnalyzeResponse:
             confidence=0.0,
             model="keyword-v1",
         )
+    llm_result = _llm_analyze(text)
+    if llm_result is not None:
+        return llm_result
+    return _keyword_analyze(text)
 
+
+# LLM 情绪分类可选标签（与 ai-svc 侧情绪白名单对齐）
+_EMOTION_LABELS = [
+    "happy", "sad", "angry", "neutral",
+    "calm", "anxious", "surprised", "disgusted", "fearful",
+]
+
+_EMOTION_SYSTEM_PROMPT = (
+    "你是情绪分析器。判断用户这句话体现出的主要情绪。"
+    "只输出一个 JSON 对象，不要任何解释、不要 markdown 代码块："
+    '{"primaryEmotion": "<label>", "sentimentScore": <number>, "confidence": <number>}。'
+    "primaryEmotion 只能取以下之一：" + "、".join(_EMOTION_LABELS) + "。"
+    "sentimentScore 取 -1（非常负面）到 1（非常正面）；confidence 取 0 到 1。"
+)
+
+
+def _llm_analyze(text: str) -> Optional[AnalyzeResponse]:
+    """用 LLM（OpenAI 兼容 chat.completions）做情绪分类。
+
+    复用 chat_completion 的 backend 配置（LLM_BASE_URL/LLM_API_KEY/LLM_MODEL）。
+    任何异常/未配/输出非法都返回 None，由调用方回退关键词，绝不让情绪链路中断。
+    """
+    try:
+        from chat_completion import resolve_backend_config, _default_openai_client
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[analyze] llm module unavailable: %s", e)
+        return None
+
+    config = resolve_backend_config()
+    if not config:
+        # 无 LLM_API_KEY → 离线/CI；保持关键词行为
+        return None
+
+    try:
+        client = _default_openai_client(config)
+        resp = client.chat.completions.create(
+            model=config["model"],
+            messages=[
+                {"role": "system", "content": _EMOTION_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+            temperature=0.0,
+            max_tokens=64,
+        )
+        content = (resp.choices[0].message.content or "").strip()
+        # 容错：剥离可能的 ```json ... ``` 围栏
+        if "{" in content and "}" in content:
+            content = content[content.find("{"): content.rfind("}") + 1]
+        data = json.loads(content)
+        emotion = str(data.get("primaryEmotion", "")).strip().lower()
+        if emotion not in _EMOTION_LABELS:
+            logger.warning("[analyze] llm returned invalid emotion=%r", emotion)
+            return None
+        return AnalyzeResponse(
+            primaryEmotion=emotion,
+            sentimentScore=round(float(data.get("sentimentScore", 0.0)), 3),
+            confidence=round(float(data.get("confidence", 0.5)), 3),
+            model=config["model"],
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[analyze] llm analyze failed, fallback to keyword: %s", e)
+        return None
+
+
+def _keyword_analyze(text: str) -> AnalyzeResponse:
+    """关键词兜底（LLM 不可用时）。返回结构与 ai-svc 的 EmotionResult 一致。"""
     # sentiment_score：情感词命中均值
     score_sum = 0.0
     hits = 0

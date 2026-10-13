@@ -4,6 +4,11 @@
 #  注意：业务应用在 deploy/docker-compose.apps.yml
 # =====================================================
 
+# 2026-10-12: 显式 compose 项目名（默认取父目录名 "deploy"）。
+# 改为 emotion-echo —— Docker Desktop 的项目分组随之显示为 emotion-echo。
+# 数据卷已从 deploy_* 迁移到 emotion-echo_*（同名拷贝，数据保留）。
+name: emotion-echo
+
 x-logging-env: &logging-env
   TZ: Asia/Shanghai
 

@@ -258,14 +258,17 @@ watch(() => route.path, closeSidebar)
   font-weight: 700;
 }
 .page-content {
-  height: calc(100dvh - 88px);
+  flex: 1;
   padding: 12px clamp(24px, 4vw, 64px) 40px;
   display: flex;
   flex-direction: column;
   min-height: 0;
   /* E2E-F-36：原 overflow: hidden 会把超出高度的内容静默裁剪且无法滚动
      （1280×600 实测：内容 676px 装进 496px 容器，底部约 180px 不可达）。
-     改 auto：内容页可滚动；聊天页内容高度恰好等于容器，不会多出滚动条。 */
+     改 auto：内容页可滚动；聊天页内容高度恰好等于容器，不会多出滚动条。
+     2026-10-13：原来用 height 硬编码扣除头部 88px（calc(100dvh - 88px)），但头部
+     声明高度 88px 而实际更高，header+content 会超过 100dvh，在文档层多出一根
+     滚动条（量表页"两个滚动条"）。改用 flex:1 精确填充剩余空间，外壳不再溢出。 */
   overflow-x: hidden;
   overflow-y: auto;
 }

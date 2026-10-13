@@ -191,7 +191,9 @@ func toFrontendTrendReport(r *downstream.TrendReport) *FrontendEmotionTrend {
 		Dates:               dates,
 		Series:              series,
 		Summary:             BuildTrend(r),
-		EmotionDistribution: emotionTotalToSlice(emotionTotal),
+		// 2026-10-13：优先用区间真实分布（analytics 按 primary_emotion 聚合）；
+		// 旧上游无此字段时回落"桶主导拼接"（兼容）。
+		EmotionDistribution: trendEmotionDistribution(r.EmotionCounts, emotionTotal),
 		MessageCount:        messageCount,
 		ConversationCount:   r.ConversationCount,
 		IntentDistribution:  intentCountsToItems(r.IntentCounts),
@@ -226,6 +228,16 @@ func emotionCountsToSlice(m map[string]int64) []EmotionDistributionItem {
 // emotionTotalToSlice 给 trendReport 用（bucket 已聚合）
 func emotionTotalToSlice(m map[string]int64) []EmotionDistributionItem {
 	return emotionCountsToSlice(m)
+}
+
+// trendEmotionDistribution 选趋势报表的情绪分布：优先「区间真实分布」(trueCounts，
+// analytics 按 primary_emotion 直接聚合)，缺省回落「桶主导拼接」(bucketDominants)。
+// 2026-10-13：真实分布修复了年报因整年单桶而塌成单色（全是中性）的问题。
+func trendEmotionDistribution(trueCounts, bucketDominants map[string]int64) []EmotionDistributionItem {
+	if len(trueCounts) > 0 {
+		return emotionCountsToSlice(trueCounts)
+	}
+	return emotionTotalToSlice(bucketDominants)
 }
 
 // ============ E2E-11: user-behavior 前端契约变换 ============
