@@ -11,7 +11,7 @@ owner: zcode-bot
 
 > **性质**：E2E 路线图**最后一个阶段** E2E-30「数据契约收口」的**收口落地记录**
 > （AGENTS §七「阶段记录收口后迁移到 `docs/stages/`」）。
-> **权威详档仍在** [`docs/e2e-roadmap/stages/e2e-30-data-contract-closure/`](../../e2e-roadmap/stages/e2e-30-data-contract-closure/)
+> **权威详档仍在** [`docs/e2e-roadmap/stages/e2e-30-data-contract-closure/`](../e2e-roadmap/stages/e2e-30-data-contract-closure/)
 > （plan / report / STATUS）。本文件**只做落地指针 + 一句话演进**，
 > **不复制内容**（防双源漂移，AP-14 / RUNBOOK §10）。
 
@@ -32,9 +32,9 @@ owner: zcode-bot
 
 ## 关键产物
 
-- 详档：[plan.md](../../e2e-roadmap/stages/e2e-30-data-contract-closure/plan.md) ·
-  [report.md](../../e2e-roadmap/stages/e2e-30-data-contract-closure/report.md) ·
-  [STATUS.md](../../e2e-roadmap/stages/e2e-30-data-contract-closure/STATUS.md)
+- 详档：[plan.md](../e2e-roadmap/stages/e2e-30-data-contract-closure/plan.md) ·
+  [report.md](../e2e-roadmap/stages/e2e-30-data-contract-closure/report.md) ·
+  [STATUS.md](../e2e-roadmap/stages/e2e-30-data-contract-closure/STATUS.md)
 - 账本：`docs/e2e-roadmap/discovered-unresolved.md`
   （F-183/184/186/191/192/195/196/197/212/217/219 → 专项）
 - 收口轮 PR：本 PR
@@ -45,6 +45,6 @@ owner: zcode-bot
   （含 `emotion-echo-web-bff` integration-tagged fake 的 `ListMessages` 签名回归修复，
   CI `static-guards` 转绿）。
 - **遗留**：10 个历史 `partial` 阶段（E2E-03/04/05/06/07/08/09/11/15/19）的 R 系列
-  补账欠账仍在 [remediation.md](../../e2e-roadmap/remediation.md)（不在本收口范围）。
+  补账欠账仍在 [remediation.md](../e2e-roadmap/remediation.md)（不在本收口范围）。
 
 > 最后更新：2026-10-13 by zcode-bot

@@ -514,3 +514,11 @@ CI 侧两组对照已做完并清理干净（`4e02485` 还原，15 项门禁 + �
 | 编号 | 来源 | 现象 | 根因 | 归属阶段 | 状态 |
 |------|------|------|------|---------|------|
 | E2E-F-219 | **E2E-30 #20 全量基线分类（2026-10-12）** | 🔴 **3 个回归钉仍直连 `http://localhost:8894`**：`health-discovery.spec.ts:31`（`BFF_DIRECT`）、`settings.spec.ts`（6+ 处 `page.request.patch('http://localhost:8894/api/v1/users/me')`）、`e2e-16-mobile.spec.ts:15`（`API_URL ?? 'http://localhost:8894'`）。⇒ **全量基线里 26 条失败同源于此**（`settings` 20 + `health-discovery` 4 + `e2e-16-mobile` 2），错误统一为 `AggregateError: apiRequestContext.{get,patch,post}: connect ECONNREFUSED ::1:8894 / 127.0.0.1:8894`。而 **E2E-29 D-47 ③ 已把 BFF 的 8894 宿主映射收掉**（防"直连伪造 X-User-Id 绕过网关"；RUNBOOK §2.3 明确"脚本/探针不得再指该口"） | D-47 收端口时**未同步更新该回归钉**（E2E-23 阶段产物）；该 spec 属"直连 BFF 探针"一类，与网关唯一入口原则冲突 | **专项 · 回归钉治理**（修 3 个直连已收端口的回归钉：health-discovery / settings / mobile-e2e；去向：改用网关 :19080 或 docker exec 判健康；触发：下轮 spec 维护时） | 🔴 未解决（**本轮只分类 + 登记，不改**。修法方向：改用**网关** `:19080` 复核（但网关无 BFF health 路由，见 E2E-F-211）或 `docker exec` 判健康；两者都需改 spec 语义，故不属"只改端口"） |
+
+### V. 文档链接治理（2026-10-13，E2E-F-220）
+
+> 来源：**E2E-30 收口轮 §13.3#12 第二方核对** —— 核对者用 `Path.resolve().exists()` 扫 `docs/e2e-roadmap/**/*.md` 的相对链接，发现**既有**坏链成规模（非本次改动引入）。
+
+| 编号 | 来源 | 现象 | 根因 | 归属阶段 | 状态 |
+|------|------|------|------|---------|------|
+| E2E-F-220 | **E2E-30 收口轮第二方核对（2026-10-13）** | 🟡 **`docs/e2e-roadmap/` 下系统性存在 26 处相对链接解析失败**（实测脚本：遍历全部 `*.md`，`(p.parent/url).resolve().exists()==False`）。典型模式：`stages/<stage>/plan.md` 里写 `[RUNBOOK.md](../RUNBOOK.md)`（解析到 `stages/RUNBOOK.md`，不存在；应为 `../../RUNBOOK.md`）——同类出现在 e2e-10/13/14/15/16/17/18/19/20 的 plan；另有 `roadmap.md` 的 `../../architecture/…`（应为 `../architecture/…`）、`e2e-15/report.md` 的 `adr/…`、`e2e-17/STATUS.md` 深层路径等。**CI 无链接检查器**（§13.3#12 未被机械化为 A1~A11）⇒ 长期零拦截 | 历史批量建档/迁移时相对深度写错，且**无守卫**；§13.3#12 未接入审计器 A1~A11，故一直未暴露 | **专项 · 文档链接治理** | 🔴 未解决（**只登记不修**——范围外既有债，26 处属系统性；修法方向：① 批量修相对深度；② **新增 CI 链接检查守卫**（对 `docs/**` 跑 resolve-exists 扫描 + 负向对照）防复发。触发：下轮文档治理时） |

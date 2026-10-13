@@ -232,7 +232,7 @@ Helm 官方 `helm template` / `helm lint`（本地实测 `helm v3.18.4+gd80839c`
 
 ## 5. 收口门槛
 
-- [x] 20 个测试点全部有结论（PASS/FAIL/BLOCKED/N/A 四值，BLOCKED ≤ 1/3）—— **19 PASS + 1 BLOCKED（#16，[M4](§4.1) 裁定转专项）+ 0 FAIL**（BLOCKED 5%）
+- [x] 20 个测试点全部有结论（PASS/FAIL/BLOCKED/N/A 四值，BLOCKED ≤ 1/3）—— **19 PASS + 1 BLOCKED（#16，M4 裁定转专项）+ 0 FAIL**（BLOCKED 5%）
 - [x] 范围内缺陷走完 TDD（L1~L6 各自 RED→GREEN 记录）—— **L1/L2/L3/L4/L6 完成**；L5 按 M4 裁定转专项（不在本阶段）
 - [x] **回归钉**：守卫（smoke 网关 / helm 主 chart 渲染 / 审计器解析器）+ 契约测试 + integration test，**已接 CI / 本地跑过且绿**（report §6）
 - [x] **凡"改变前端用户可见行为"的修复，必须 IAB 实测真实场景**（E2E-29 教训）—— **已做**（report §9.4；未覆盖项如实记录）
