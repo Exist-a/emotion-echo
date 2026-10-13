@@ -1,54 +1,97 @@
-﻿---
-purpose: 当前有效、未来排期的功能计划
-status: **测试找问题修复阶段** · 2026-09-16 Stage 108 sender 架构债修通 + 新发现 A7 (APISIX jwt-auth 401) 留 Sprint 109a
-last-refresh: 2026-09-23 (端侧化 v0.3 治理轮收口：v1.0 含义明确为"封版非部署"+阶段一可前置与准备期并行+Hybrid 分支策略+删除排期候选/时长/人员配比/稳定期等估算；v0.3 文档与 v0.2 front-matter 同步；索引表 v0.3 行内容更新)
+---
+purpose: 当前有效、未来排期的功能计划（只列**尚未落地**的项；已落地的在 legacy-plans/landed/）
+status: **测试找问题修复阶段** · 2026-10-13 计划清查轮：已做完的 sprint/backlog 计划迁 `legacy-plans/landed/`，本索引重建为"真实待办"
+last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似过期"计划 → 已做完归档 12 份、半成品改 partial 2 份、失效改 superseded 1 份；本表只保留仍未落地的真实待办）
 ---
 
 # 当前有效的计划
 
-> 这些计划**未被任何 stage 取代**，等待排期与实施。
-> 与 `legacy-plans/`（已落地/已偏移/历史价值）不同，这里的文档描述"接下来要做的事"。
+> **📌 下一大阶段 =「闭环」阶段（Phase Closure · CL）** —— 主线"用户实测找问题 + 链路闭环"。**阶段路线图目录**：[`docs/closure-roadmap/`](../closure-roadmap/README.md)（阶段排序 + 每阶段"做到什么程度"见 [roadmap.md](../closure-roadmap/roadmap.md)）。
+>
+> 这些计划**尚未落地**，等待排期与实施。
+> **已落地的计划**在 [`legacy-plans/landed/`](../legacy-plans/landed/)（只作回顾，不在本表）。
+> **核对口径**：本表状态以**真实代码 / 产物**为准（非文档自述）。2026-10-13 清查轮发现的历史"`status: planned` 但其实做完"的项已归档。
 
-## 当前条目（Round 2 迁入）
+## 当前待排期条目（20）
 
-| 文件 | 来源 | 主题 |
-|------|------|------|
-| ~~`sliding-token-renewal.md`~~ | 已 landed 2026-10-08（PR #178）→ [`legacy-plans/landed/sliding-token-renewal.md`](../legacy-plans/landed/sliding-token-renewal.md) | **访问令牌滑动续期**（E2E-F-207 follow-up）：前端原「401 + `code===10002` → 自动续期」是死代码（无后端下发 10002）⇒ 令牌过期即登出。改为**过期前主动续期**（寿命 75% 处），删死分支、导出 `refreshAccessToken`；新增 `app/lib/tokenRenewal.ts`（16 单测）+ `e2e/token-renewal.spec.ts`（回归钉）。**执行期抓到 2 个只在运行时/端到端暴露的问题**（`isAuthenticated` 挡住排程 / SPA 登录后不排程） |
-| `multi-round-iteration-2026-09-15.md` | **已 landed 2026-09-15（Stage 101 + §十六第二轮收口）** | **多轮迭代修复计划**：原估 49 个 open 项（4 周工作量 18-25d），**Stage 100 代码审计修订为 23 项真未落/半落（8-9d）→ §十六收口后 0 项真未落**。Round 0 文档治理 → Round 1 数据层 → Round 2 Kafka → Round 3 LLM 安全 → Round 4 中间件 → Round 5 全量收口 → §十六第二轮 Round 4.4 剩余 2 项收口。**进度（2026-09-15 §十六收口后）**：所有 Round 1-4 子项已落地（含 Round 4.4 PR-1 PR-2）。Stage 100 + Stage 101 + §十六累计 **21 commits**，详见 [`stages/stage-101-multi-round-iteration-closure.md`](../stages/stage-101-multi-round-iteration-closure.md) + [`stages/stage-102-round-4.4-closure.md`](../stages/stage-102-round-4.4-closure.md) + [`plans/multi-round-iteration-2026-09-15.md §十六`](../plans/multi-round-iteration-2026-09-15.md#十六2026-09-15-第二轮收口-commits3-个-push-originmain)。**本轮新增 4 commits（`ce0d7d1` / `168e1f5` / `d6884b5` / `38075eb`）**：ApplyPoolEnv env→SetMax* 副作用测试钉死 + InitRedis 隐性 bug 修（type assertion 永远 false）+ 5 svc main.go 接入 ApplyPoolEnv + InitGORM + Stage 101 assessment-svc fakeRegistry BeatHeartbeat 漂移修 + docs 同步。**§十四.3 真未落：0 项**。**剩余 7 项触发条件型 backlog**（详见 roadmap.md line 1103 + plan §十六.5）：Redis backend / Dockerfile digest 真值 / Kafka D3/D5 attempts + relay / Kafka D7 owner 拍板 / Helm probe / InitRedis 真 caller（Redis 接入触发） |
-| **dev 模式启动 + 测试找问题修复** | **已 landed 2026-09-16（Stage 103）** | dev 模式首次启动实测：14 容器全 healthy + PG 26/26 migration + APISIX 13 routes + browser-use 验证登录 + 聊天页渲染 OK。**12 commits 修复 9 真 bug**：a008 分区 PK（含分区键）/ compose v5.5.1 跨文件 depends_on / Dockerfile digest ARG 模式 / tini v0.19.0 SHA / pip tuna timeout / package-lock 完整性 / a008 幂等守卫 / web-bff JWT secret / web depends_on。**1 已知未修**：聊天发消息无 AI 回复（BFF 日志无 ChatCompletion 调用，session 超时未排查）。**工作模式切换**：从分块开发转为测试找问题修复（实测发现 → 写 RED → 修 → GREEN → commit push）。详见 [`stages/stage-103-dev-mode-launch-2026-09-16.md`](../stages/stage-103-dev-mode-launch-2026-09-16.md) |
-| `ai-response-structured.md` | `.trae/documents/ai-response-structured.md` | AI 回复结构化 + Markdown 渲染 |
-| `three-vrm-usage-reference.md` | `.trae/documents/three-vrm-usage-reference.md` | Three-VRM API 参考手册 |
-| `wechat-qq-login-and-upload.md` | `.trae/documents/微信QQ登录和文件上传实施计划.md` | QQ OAuth + 通用文件上传 |
-| `nacos-enablement-dev.md` | 新增 | Nacos dev 模式从"半启用"到"全链路" |
-| `observability-compose-gap.md` | 新增（2026-09-04） → 已被取代 | dev compose 可观测性三层补齐。**PR 拆分已被 `observability-sprint-b.md` PR-OBS-1~8 取代**，原文件 §一/§二现状作为参考保留 |
-| `db-migration-auto-apply.md` | 新增（2026-09-04） | 13 个服务 migrations 无自动应用机制，dev 库实测一个都没跑过。**本轮已落地**（提交 0d17e85），文件作为方案设计保留 |
-| `todo-pile-2026-09-04.md` | 新增（2026-09-04） | 本轮修复过程中实测暴露的未关闭项汇总：TTS 不可用 / 上传未实现 / 多模态不可用 / 文档失真登记 / dev-prod 端口策略 |
-| `kafka-reliability-gaps.md` | 新增（2026-09-07） → Sprint A 已落地 | Kafka 管线 6 项健壮性缺口汇总。**Sprint A 已 100% 收口**（10 commit on `feat/chat-dev-event-publisher-a1-1-red`,7/7 服务绿），见 [stages/stage-43-kafka-reliability-sprint-a.md](../stages/stage-43-kafka-reliability-sprint-a.md)。Sprint B §1.4 lag 监控已并入 `observability-sprint-b.md` PR-OBS-7（Stage 74 补齐面板 datasource uid + Grafana 端口）；§1.5 Protobuf 迁移 **Stage 73 已落地**（含 eventrow 共享包）。**当前残余 = §1.6 P3**（outbox relay 死信告警接 alertmanager）+ §1.4 可选 consumer 进程级指标 |
-| ~~`grpc-inter-service-migration.md`~~ | 已 landed 2026-09-13 | 后端微服务间调用 HTTP→gRPC 改造：**全线落地**（2026-09-11 Sprint C/D/E/F1/F2 + Sprint G error 映射；2026-09-12 销账 #32/ PinConversation）。决策 4 BFF→4 svc 全方法 100% gRPC 覆盖 + ai-svc 业务 3 方法 gRPC 化（Stage 81 起 BFF→llm-service 也 gRPC 化，超原计划预期）。**唯一残余 = chat-svc StreamMessages**（业务未触发，有意维持 Unimplemented，见决策 4 ADR §八）。详见 `legacy-plans/landed/grpc-inter-service-migration.md` |
-| `bff-grpc-error-mapping-backlog.md` | 已迁 landed Sprint G (commit `f874d3f`) → 详见 `legacy-plans/landed/bff-grpc-error-mapping-backlog.md` | BFF 全局 gRPC error → HTTP code 映射 backlog：Sprint F2 V3 实测发现 tts/synthesize 走 gRPC Unavailable 时 BFF 误返 502（应 503）。5 个 gRPC client 都用 `fmt.Errorf` 简单 wrap，handler 侧硬编码 `http.StatusBadGateway`，需抽 `mapGRPCError` helper（7 类 gRPC code → HTTP code 映射）+ 5 client 改造 + handler 改造 + docker 端到端回归。半天工作量 |
-| `observability-testing-gap.md` | 新增（2026-09-07） → 已被取代 | 可观测性链路测试完善。**PR 拆分已被 `observability-sprint-b.md` PR-OBS-9~16 取代** |
-| `observability-sprint-b.md` | 新增（2026-09-08） → 已落地 | 观测链路 Sprint B 执行源。**16 个 PR-OBS-X + 1 fix = 34 commit 全落地**（2026-09-08），见 [stages/stage-44-observability-sprint-b.md](../stages/stage-44-observability-sprint-b.md)。**PR-OBS-17/18/23/15/19（2026-09-08）§四 B/C 收口**：Stage 45 接口抽象 + Stage 46 HTTP EntrySpan + Stage 47 logging 接入 + Stage 48 err 透传 + Stage 49 gRPC rpc.* tag。**业务功能 6/6 步 100% 收口**。**Stage 50 端到端验证归档**：单元测试 100% PASS + smoke 10/12，具体见 [stages/stage-50-e2e-validation.md](../stages/stage-50-e2e-validation.md)。剩余非业务（sw-oap telemetry / 分支 merge / Nacos / 运维 SQL）见 stage-44 §四 |
-| ~~`gozero-removal.md`~~ | 已 landed 2026-09-07 | go-zero 完全移除收尾（决策 1）：conf→shared/pkg/config + logx→slog 下沉 shared + rest.Middleware 类型清零 + goctl 归档；10 个 TDD PR 全部 merged。详见 `legacy-plans/landed/gozero-removal.md` 与 `stages/stage-41-gozero-removal.md` |
-| ~~`file-understanding-llm.md`~~ | 已 landed 2026-09-13（**Stage 89**） | 文件理解发给 LLM（文件+提问一起发，会话内持续引用）：chat.proto file_name + emotion_llm.proto FileAttachment.files；chat-svc file_name 五处映射 + migration 007 修 intent VARCHAR(16)→32 暗坑；BFF ai-stream 文件收集注入（≤2 条 + URL 重写）；llm-service file_context（pypdf + python-docx + 白名单 SSRF）；前端附件挂输入框 + 三分支发送流。txt 哨兵 e2e + 追问引用全通；PDF 路径注入正常但 DeepSeek 拒读记 residual。详见 `legacy-plans/landed/file-understanding-llm.md` 与 `stages/stage-89-file-understanding-llm-2026-09-13.md` |
-| ~~`stage-92-kafka-sw8-propagation.md`~~ | 已 landed 2026-09-14（**Stage 92**） | Kafka 跨进程 sw8 trace 透传 P1 项：shared Tracer 接口扩 CreateExitSpan/CreateEntrySpan；chat-svc KafkaEventPublisher 注入 sw8 header（v0.1.10）；ai-svc ConsumerGroupHandler 用 CreateEntrySpan 替代 CreateLocalSpan（v0.1.6）。容器 e2e 实证 chat-svc producer 写入完整 sw8（221 chars）。详见 `legacy-plans/landed/stage-92-kafka-sw8-propagation.md` 与 `stages/stage-92-kafka-sw8-propagation-2026-09-14.md` |
-| `observability-edge-gaps-from-code-review.md` | 新增（2026-09-13） → **§A 已 landed 2026-09-14（Stage 92）** | 2026-09-13 会话对可观测链路相关代码（SkyWalking / Prometheus / metrics / Kafka 链路）做细致审查时发现的问题汇总。6 个 issue：(A) Kafka 异步链路 sw8 没透传（P1，✅ Stage 92 全 GREEN）/ (B) consumer.attempts map 缺并发保护（P2） / (C) metrics path "unmatched" 兜底造成潜在指标污染（P2） / (D) GinSkywalking 跳过路径硬编码（P3） / (E) AI 模型客户端 env 静默失败（P2） / (F) consumer.go 文件职责混杂（P3）。每个 issue 含代码佐证 + 修复方案 + DoD + 工作量。**§A 后残余 ≈ 0.5 人天**（B/C/E 优先）。**注意：本计划由外部代码审查发现，非项目演进内部识别** |
-| ~~`stage-93-analytics-svc-sw8-propagation.md`~~ | 已 landed 2026-09-14（**Stage 93**） | analytics-svc consumer 端接入 `Tracer.CreateEntrySpan` 从 `msg.Headers["sw8"]` 重建父 trace（与 ai-svc Stage 92 PR-2 对称）。代码 6 处全落地 + 镜像 v0.1.6 + Round 2 单测 13/13 全绿（实测 0.612s） + 容器 e2e sw8 221 chars + traceID 重建实证。**残余** = 容器 e2e 脚本归档到 Stage 94+ + OAP 9.x graphql queryDuration bug 阻塞 UI 可视化 + extractSw8Header 收敛到 shared/pkg/messaging。详见 [stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md](../stages/stage-93-analytics-svc-sw8-propagation-2026-09-14.md)；索引登记迁 `legacy-plans/landed/observability-edge-gaps-from-code-review.md` landed-parts §A-extension |
-| `code-review-2026-09-14.md` | 新增（2026-09-14） → **已 landed 2026-09-14** | 2026-09-14 用户要求"分析代码找漏洞"任务中，4 个并发子 agent 分别覆盖 **服务注册链路 / 可观测链路 / Kafka 事件管道 / 中间件与基础设施** 4 个技术域的全面代码审查汇总：**10 个 P0 + 28 个 P1 + 25 个 P2 + ~25 个 P3**，含 15 项文档与代码偏移（含 edge-gaps §A"🟢 landed"实际仅"🟡 部分落地"）。**Stage 94 7 个 PR 已 100% 收口 10 个 P0**（累计 7 commits），详见 [`legacy-plans/landed/code-review-2026-09-14.md`](../legacy-plans/landed/code-review-2026-09-14.md) + [`stages/stage-94-code-review-2026-09-14-p0-closure.md`](../stages/stage-94-code-review-2026-09-14-p0-closure.md)（P0 全景收口）。**残余 = 28 个 P1 + 25 个 P2 + ~25 个 P3**（独立 sprint 排期）|
-| `code-review-2026-09-14-round-2.md` | 新增（2026-09-14） → **已 landed 2026-09-15（Stage 97）** | Round 1 后的第二轮补充，覆盖 **前端 / AI 业务层 / 业务数据层 / 构建-CI-部署** 4 个 Round 1 未触及的技术域：**10 个 P0 + 17 个 P1 + 21 个 P2 + 5 个 P3**，含 8 项文档与代码偏移（含 README "compose 自动加载 .env.local" 与代码不符、`stage-91` 强指令性 prompt 副作用、INTERNAL_API_KEY env 名跨 svc 错配等）。最关键 P0：§P0-R2-3 llm-service HTTP 端零鉴权 / §P0-R2-5 ai-svc↔llm-service env 名错配 / §P0-R2-6 daily_emotion_by_modality_v 缺 GRANT（一行 SQL 修复 §契约 3 必抓 bug）/ §P0-R2-8 web 容器以 root 跑 Node.js。**总工作量 ≈ 28-35 人天**（紧凑 18-22）。**注意：本计划由外部代码审查发现，非项目演进内部识别**。**Stage 97 落地 = 10 个 P0 全部 + 顺手 Round 1/2 P1+P2 部分 + Round 2 P3-CI**。**Push 状态**：12 commits 已 push origin/main (`460b814..391f592`)，PR-9e (workflow commit `23419eb`) push blocked by PAT workflow scope——见 [`stages/stage-97-round2-p0-closure.md`](../stages/stage-97-round2-p0-closure.md) §6.1，详见 [`legacy-plans/landed/code-review-2026-09-14-round-2.md`](../legacy-plans/landed/code-review-2026-09-14-round-2.md)。**残余 = P0-R2-1 userInfo localStorage 残余 + Round 2 P1/P2 剩余项** |
-| `sprint-109a-apisix-jwt-401-2026-09-16.md` | 新增（2026-09-16，Sprint 108 收口后发现） | **A7 架构债修复**：APISIX jwt-auth 401 — 所有 /api/v1/* 返 401 但 token 本地验算 OK + consumer OK + route 100 OK。根因 6 个假设（H1 consumer 改 / H2 jwt-auth header 解析 / H3 etcd 缓存 / H4 logger 副作用 / H5 etcd 损坏 / H6 升级）。**critical 优先级** — 阻塞 E2E-2 + X-1 + X-2 + X-4 端到端 + 阶段 2 全部 Playwright + 数据契约 smoke。详见 [`stages/stage-108-sender-architecture-debt-fix-2026-09-16.md` §四](../stages/stage-108-sender-architecture-debt-fix-2026-09-16.md) |
-| `sprint-109b-end-to-end-chat-2026-09-16.md` | 新增（2026-09-16） | **Sprint 109a 修通后端到端 E2E-2 chat 跑通**：浏览器实测看到 AI 回复（POST /conversations + /messages + /ai/stream + SSE 流式）+ chat-svc/ai-svc/llm-service 日志可见对应记录。**high 优先级** — 整体落地硬门槛之一。详细 DoD 见 plan |
-| `sprint-109c-data-contract-smoke-2026-09-16.md` | 新增（2026-09-16） | **数据契约 §1 §2 §5 §6 smoke**（AGENTS.md §2.4 硬门槛）：user_behavior_events 行数 / event_type enum 细分 / schema 一致性 / KAFKA_ENABLED=false 不空跑。**high 优先级** — Sprint 109b 真通后跑。§3 §4 独立排期 |
-| `known-issues-backlog-2026-09-16.md` | 新增（2026-09-16） | **剩余 backlog**：A2 assessment-svc 单测 + A3 reports Playwright + A4 chartData=[] 复测 + A5 OAP 9.x + A6 Stage 44 §四残余 + 顺手 1 字号防抖 + 顺手 2 useApi 401 重试 + Sprint 110-115 推进顺序。**medium 优先级** — 不阻塞 chat 端到端，按 Sprint 109 完成后逐个排期 |
-| `on-device-hybrid-inference-2026-09-23.md` | 新增（2026-09-23，外部 v0.1 方案 × 可行性讨论合并） | **端侧化混合推理大版本方案（v0.2 可行性评估）**：WebLLM 端侧优先 + 云端兜底。可行性已核实（`sendAIStream` 单点插入口 / SSE 流式 / Dexie 地基 / WebLLM `src/config.ts` 源码证据），MindChat 谱系错误降级待验证，新增 §5.5 离线四问题+L0-L2 分层、§6.5 提示词方法论、§6.6 golden set、§十一同类先例、§十二待决策 5 项（决策门）。**medium 优先级 · 排期 = E2E-17~30 收口后开大版本，决策门未拍板前不开工** |
-| `on-device-hybrid-inference-implementation-roadmap-2026-09-23.md` | 新增（2026-09-23，v0.2 可行性评估的实施层） | **端侧化实施路线图（v0.3）**：与 v0.2 配对治理（v0.2 解决"做不做/用什么"，v0.3 解决"何时做/怎么验收"）。增量：§A v1.0 含义明确（封版非部署）+ 阶段一可前置边界 + §B 5 项决策进展登记表（含"阶段前置可行性"列）+ D-26 ADR 立项模板 + §C 阶段一/准备期/二/三/四 + Hybrid 分支策略（PR 合并 main + 特性开关）+ §D 7 模块占用清单 + §E OC-01~OC-13 接口化验收契约 + §F 6 类增量风险 + memory 方法论关联 + §G 收口契约 + audit 器适配。**medium 优先级 · 阻塞 = v1.0 封版 + E2E-30 收口 + §十二拍板 + D-26 立项 · 阶段一可与准备期并行开工不依赖决策门** |
-| `conversation-memory-pending-decision-2026-09-24.md` | 新增（2026-09-24，用户口头反馈） | **会话记忆系统缺失（待决策 · high）**：用户反馈"会话中的记忆系统似乎没有"。代码证据链坐实：BFF `ai_stream_handler.go:409` 每轮只发 system prompt + 当前 1 条消息，同会话历史零注入；跨会话无用户记忆存储（画像来自问卷非对话）；全仓 ADR 无"有意无记忆"决策记录 ⇒ 属缺口非设计。roadmap 30 阶段无对应阶段 ⇒ 按用户指示落本文档。**4 项待拍板**：D-a 要不要 / D-b 同会话历史形态（推荐滑动窗口，`ListMessages` 现成）/ D-c 跨会话形态（建议与 v0.2 §十二决策 5 联动）/ D-d 排期归属。**high 优先级 · 决策未拍板前不开工** |
-| `grafana-dashboard-gaps-2026-09-30.md` | 新增（2026-09-30，用户"我没用过 grafana，分析面板是否有不足"） | **Grafana 面板覆盖度缺口（9 项待排期 · medium）**：现有 2 看板 7 面板**全部返回真实数据**（本轮 7 条 expr 逐条实跑确认），但**对"基础设施活着"够用、对"业务正常"不足** —— 19 个 `emotion_*` 指标只有 3 个被画到面板。**B1 业务链路看板**（最高投入产出比：`fusion_fallback_total` 上涨 = 用户在跟 mock AI 聊天，指标现成无需埋点）/ **B2 有告警无面板**（4 个 critical 指标零图形）/ **B3 观测面自身健康** / **B4 日志侧零面板**（Loki + trace_id 全通却一行没画）/ **B5 APISIX 已采零用**（用户真实流量反而无面板）/ **B6 无 postgres-exporter**（单点全黑，E2E-F-149 属此类查不出）/ **B7 无 recording rules** / **B8 两个新手坑**（UI 改面板 30 秒被覆盖）/ **B9 runbook 全篇 curl 无面板导览 + `:109` 漂移**（promtail 早已改 `docker_sd_configs`，E2E-F-07 已闭环）。**4 项待拍板**（§C）：是否登记 E2E-F 编号 / 归属阶段（E2E-22 已 done，候选 E2E-24·E2E-30·新开）/ CI 两个 helm job 是否清理（k8s 属决策 23 冻结期学习资产，**不是活缺陷**）/ postgres-exporter 内存成本。**medium 优先级 · 拍板前不开工** |
-| `tts-api-cosyvoice2-f198-2026-10-06.md` | 新增（2026-10-06，E2E-28 收口裁定 D-44 / 架构决策 40 的实施层） | **F-198 TTS API 专项：在线 TTS 主链路改接 CosyVoice2（XTTS 降离线回退）**——首声 20~40s → 亚秒级 TTFB（ADR 实测 0.33s / 33 字 1.5s，≈20 倍）。**独立专项，不并入 E2E-29**（后者主题是横切安全，与 TTS 零关联）。20 测试点 + TDD 循环 T1~T8 + 3 个 [M] 决策点。**计划期读码定出 3 条硬约束**（漏掉任一条 = "接了云端反而完全没声音"，比现状更糟）：① `useTTSPlayer.ts:215` 硬校验 `phonemes`+`duration` ⇒ cloud provider 必须服务端自算（XTTS `server.py:330-332` 是 per-char 等分**纯算术**，可 1:1 复刻、口型保真度不降）② `base64ToWavBlob:146` 不建 WAV 头 ⇒ 必须 `response_format=wav` ③ SiliconFlow `sample_rate` 默认 **44100** vs XTTS 24000 ⇒ 必须显式 pin。另含 `volume`(线性)→`gain`(dB) 语义不通、`lint_env_vars.sh` 门禁连带、key 红线（只进 gitignored `.env.local`）。**high 优先级 · M1/M2 裁定后即可开工（前置全就绪）** |
+### A. 对话 / Prompt / 前端体验（"闭环"主线）
 
+| 文件 | 主题 | 优先级 |
+|---|---|---|
+| `prompt-pipeline-redesign.md` | **Prompt 构建流程重构**：现状只发 `[system, 最后一条 user]`（多轮＝无记忆单轮）、无 token 预算、不设 Temperature/MaxTokens、system prompt 硬编码分散 ≥8 处、意图风格注入是死路径。目标 = 统一组装层 + 槽位 + 预算 + 配置化 | high |
+| `user-custom-agent-persona.md` | **用户自定义 Agent（背景/人格 → 提示词约束）**：现状人设由测评五维自动推断、用户不可填。目标 = 用户可设名字/背景/语气/边界 + 注入 prompt（含越狱护栏） | high |
+| `chat-emotion-realtime-display.md` | **对话页「用户当前情绪」实时回显**：融合产物 `fused_emotions` 算了但前端零消费；顶部状态条 + 消息融合标签 + 打通数字人情绪 | high |
+| `frontend-message-cache-offline-resilience.md` | 前端消息链路：游标分页 + 本地缓存（IndexedDB）+ 状态机 + 断网重试。现 `messageCache.ts` 全仓零调用 | high |
+| `fusion-result-consumption.md` | 融合产物 `fused_emotions` 被**统计/图表/报表**消费（`daily_emotion_fused_v` + 日报融合分布 + 注入 prompt） | medium |
+| `conversation-memory-pending-decision-2026-09-24.md` | 会话记忆系统缺失（同会话历史 / 跨会话记忆形态，**待决策**） | high |
+
+### B. 可靠性 / 异步管线
+
+| 文件 | 主题 | 优先级 |
+|---|---|---|
+| `dlq-hardening-and-replay.md` | DLQ 硬化（兜底表）+ 半自动回放。现只有基础 DLQ publisher + `scripts/replay_dlq` | medium |
+| `outbox-trace-continuity.md` | outbox→relay→Kafka 的 trace 断点修复（outbox 无 trace 列 + relay 用 `context.Background()`） | medium |
+| `kafka-pipeline-pending-decisions.md` | Kafka 管线待决策清单 | medium |
+| `known-issues-backlog-runtime-bugs-2026-09-17.md` | **partial**（2026-10-13 核查）：R-09~R-16 / R-01~06 / R-14 已解决或属运维类；**残留 = R-13**（chat-svc 标题异步生成，核查发现当前无 GenerateTitle 实现，条目前提疑似失效） | low |
+
+### C. 可观测性
+
+| 文件 | 主题 | 优先级 |
+|---|---|---|
+| `observability-business-metrics-wiring.md` | 把未接入的业务指标接进 Grafana 面板 + Prometheus 告警（**面板/告警侧**；不改 Go 埋点） | medium |
+| `observability-instrumentation-and-dashboards.md` | **埋点补全（代码侧）**：GORM 埋点错挂 `Raw()` processor（等于全废）+ Redis 埋点零调用 + HTTP 出站零埋点 + DLQ 无 span；含采集增量。与上一行**互补**（那份不改埋点） | medium |
+| `grafana-dashboard-gaps-2026-09-30.md` | Grafana 面板覆盖度缺口分析（B1~B9） | medium |
+| `redis-two-layer-cache.md` | Redis 双层读缓存 | medium |
+
+### D. 架构 / 契约
+
+| 文件 | 主题 | 优先级 |
+|---|---|---|
+| `grpc-deadlink-actualization.md` | **gRPC 死链路坐实与清理**：7 条死 RPC（StreamMessages/Logout/VerifySecurityAnswer/AnalyzeBatch + 3 条 mental-health）逐条裁决"接真/归档/清除"，修正决策 4 的"100% 覆盖"口径，守卫升级 | medium |
+| `known-issues-backlog-2026-09-16.md` | **partial**（2026-10-13 核查）：A2/A3/A4/A5/A6 已解决；**残留 = 顺手1 字号防抖**（代码无 debounce） | low |
+
+### E. 端侧化（Lane O）
+
+| 文件 | 主题 | 优先级 |
+|---|---|---|
+| `on-device-hybrid-inference-2026-09-23.md` | 端侧混合推理方案 v0.2（可行性评估） | medium |
+| `on-device-hybrid-inference-implementation-roadmap-2026-09-23.md` | 端侧实施长期路线图 v0.3 | medium |
+
+### F. backlog / 杂项
+
+| 文件 | 主题 | 优先级 |
+|---|---|---|
+| `todo-pile-2026-09-04.md` | 待办堆栈（dev 未可用 / 未关闭项汇总，**2026-10-13 未逐一核对**） | low |
+| `three-vrm-usage-reference.md` | Three-VRM API 参考手册（持续维护型，非任务） | low |
+
+## 状态为 superseded（4，保留原位）
+
+`e2e-16-audio-facial-testing-boundaries-2026-09-22.md`（发现项已随 E2E-16/17 收口）、`observability-compose-gap.md` / `observability-testing-gap.md`（被 `observability-sprint-b` 取代）、`wechat-qq-login-and-upload.md`。详见各自 front-matter。
+
+## 非计划文档（端侧化报告 / 决策材料）
+
+`on-device-STATUS.md`、`on-device-*.md`（baseline-report / cdn-probe-report / compile-cdn / decision-pack / golden-n13-report / mindchat-survey / model-selection-decision-material / t3-iab-report / t3-lessons-learned）、`on-device-findings.md`（active）。这些是 Lane O 的过程产物，非"待排期计划"。
+
+## 2026-10-13 计划清查轮 · 已归档到 `legacy-plans/landed/`（12 份）
+
+| 文档 | 归档依据（真实代码/产物） |
+|---|---|
+| `sprint-109a-apisix-jwt-401-2026-09-16.md` | stage 文档在；真根因 = BFF 未配 `BFF_APISIX_CIDRS`（R-16 / bc61896） |
+| `sprint-109b-end-to-end-chat-2026-09-16.md` | stage + screenshots；`e2e/chat-flow.spec.ts` + `chat-core.spec.ts`；E2E-10 done |
+| `sprint-109c-data-contract-smoke-2026-09-16.md` | 由 E2E-30 承接；`scripts/smoke_data_layer.py` 覆盖 §1/2/3/4/6（24/24 exit 0） |
+| `sprint-110-a8-a9-a10-fix-2026-09-17.md` | stage 在；A9 `index.vue:407-415`、A10 `[id].vue:859-874` |
+| `known-issues-backlog-append-sprint-109b-2026-09-16.md` | A8 → R-10/R-11；A9/A10 同上；7 个 UI bug 均 ✅ |
+| `pending-browser-tests-2026-09-18.md` | `tests/verify-a8.spec.ts` 存在；A8/A9/A10 全修 |
+| `complete-e2e09-and-cleanup-2026-09-19.md` | roadmap E2E-09 ✅ done；`e2e/registration.spec.ts` |
+| `db-migration-auto-apply.md` | `deploy/db/migrate.sh` + 迁移/诊断测试在（commit 0d17e85 起） |
+| `multi-round-iteration-2026-09-15.md` | Stage 100/101/§十六 收口（README 原有 landing 记录） |
+| `observability-sprint-b.md` | Stage 44~50 全落地（PR-OBS-1~16 + 1 fix） |
+| `stage-93-analytics-svc-sw8-propagation.md` | Stage 93 landed（sw8 透传，镜像 v0.1.6） |
+| `tts-api-cosyvoice2-f198-2026-10-06.md` | F-198 landed；BFF config 默认 `TTS.Provider=auto`（CosyVoice2 主 + XTTS 回退） |
 
 ## 写入规范
 
 - 新增计划时文件名用 kebab-case 英文
 - 文件顶部加 front-matter：`status: planned` / `priority: high|medium|low`
 - 引用 ADR 与相关 stage 时用相对路径
-- 完成后迁移到 `legacy-plans/landed/`
+- 完成后迁移到 [`legacy-plans/landed/`](../legacy-plans/landed/)（**注意**：迁移会使文件内的相对链接深一层，迁移时须同步修正该文件自身内部链接 + 全仓指向它的入站链接）

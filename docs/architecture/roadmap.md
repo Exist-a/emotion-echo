@@ -1049,7 +1049,7 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 > 8 commits (d33e9e1..4ff5a24) 真落地 Round A/B/C/D + e2e 实证 chat-events 6 partition。
 > 7 commits 中 4 个为代码 (`f25d4d4` Round A / `50b9e3e` Round B / `f22c1ce` Round C / `ded2efc` Round D) +
 > 3 个为 docs/evidence/plan (`93cfc4a` Round C e2e / `a0c5b78` 后续 task 痕迹 / `4ff5a24` Round D lockfile 痕迹 / `07a0305` §十五 + kafka-init 注释)。
-> 详见 [`docs/plans/multi-round-iteration-2026-09-15.md` §十五](../plans/multi-round-iteration-2026-09-15.md#十五2026-09-15-本会话真落地-commits6-个-push-originmain)。
+> 详见 [`docs/plans/multi-round-iteration-2026-09-15.md` §十五](../legacy-plans/landed/multi-round-iteration-2026-09-15.md#十五2026-09-15-本会话真落地-commits6-个-push-originmain)。
 
 > **2026-09-16 Stage 103 dev 模式首次启动**（用户原话"启动 dev + 自己浏览器测 + 记问题修复"）：
 > 12 commits (b4f0ef0..881e674) 真落地：
@@ -1116,7 +1116,7 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 
 > **2026-09-15 §十五.5 修订**：roadmap 上"真未落"清单中多项实际已落但 roadmap 未刷新。
 > 已在 plan §十四.1 文档漂移区登记 ✅ 标记（含 grep 实证）。**roadmap.md 本次同步刷新
-> 避免再次漂移**。详见 [docs/plans/multi-round-iteration-2026-09-15.md §15.5](../plans/multi-round-iteration-2026-09-15.md#十五5-十四3-其它项--本会话跳过原因grep-实证)。
+> 避免再次漂移**。详见 [docs/plans/multi-round-iteration-2026-09-15.md §15.5](../legacy-plans/landed/multi-round-iteration-2026-09-15.md#十五5-十四3-其它项--本会话跳过原因grep-实证)。
 
 **剩余触发条件 backlog**（实际仅 7 项触发条件型，全部标 ⏸；其它 4 项已落标 ✅）：
 
@@ -1220,13 +1220,13 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 
 **Round 1 plan 残余**（[code-review-2026-09-14.md §residuals](../legacy-plans/landed/code-review-2026-09-14.md)）：
 - ✅ Stage 101 收口 commit `e2e83c9`：Round 1.2 follow-up（face/voice/fused/voice_transcripts 4 张表 gorm.DeletedAt + repo.Delete）—— 原 §P2-R2-7 deferred
-- ⏳ 6 P1 deferred（P1-1/4/7/9/11/12/14/17/19/23/24/25/26 散落）—— [Round 4.1-4.4 各项](../plans/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)
-- ⏳ 13 P2 deferred —— [Round 4.6 杂项打包](../plans/multi-round-iteration-2026-09-15.md#round-46--杂项1d-round-1-p1-26--round-1-p2-222325--round-2-p2-141720)
+- ⏳ 6 P1 deferred（P1-1/4/7/9/11/12/14/17/19/23/24/25/26 散落）—— [Round 4.1-4.4 各项](../legacy-plans/landed/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)
+- ⏳ 13 P2 deferred —— [Round 4.6 杂项打包](../legacy-plans/landed/multi-round-iteration-2026-09-15.md#round-46--杂项1d-round-1-p1-26--round-1-p2-222325--round-2-p2-141720)
 
 **Round 2 plan 残余**（[code-review-2026-09-14-round-2.md §residuals](../legacy-plans/landed/code-review-2026-09-14-round-2.md)）：
 - ✅ Stage 101 收口 commit `ed39e9e`：Round 3.3 prompt 注入防护（test_prompt_injection_guard_present）—— 原 §P1-R2-6 deferred
 - ✅ Stage 101 收口 commit `ed39e9e`：Round 3.5 跨 svc API key 隔离（AI_LLM_INTERNAL_API_KEY / BFF_LLM_INTERNAL_API_KEY）—— 原 §P2-R2-24 deferred
-- ⏳ 13 P1 + 8 P2 + 4 P3 deferred —— [Round 1-3 详细分布](../plans/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)
+- ⏳ 13 P1 + 8 P2 + 4 P3 deferred —— [Round 1-3 详细分布](../legacy-plans/landed/multi-round-iteration-2026-09-15.md#六round-4--中间件--部署--可观测8-12d)
 
 **todo-pile 残余**（[todo-pile-2026-09-04.md](../plans/todo-pile-2026-09-04.md)）：
 - ⏳ C5 QUICKSTART 端口表措辞 —— 实际 2026-09-10 PR-C 修过（[`QUICKSTART.md:43,60-62`](../QUICKSTART.md)），**仅文档登记**：决策 9/12 末尾的"关系说明"段在 2026-09-10 已加，**本段无需新动作**，仅记录
@@ -1237,7 +1237,7 @@ Stage 50 e2e-validation           ✅ DONE — 0 commit（验证归档）
 
 **其他长期 open**：
 1. SkyWalking OAP 9.x graphql queryDuration 时间格式 bug 修——否则 UI 跨进程 trace 可视化受阻
-2. Kafka consumer 进程级指标（消费速率/处理耗时；lag 告警 Round 4.1 PR-1 已盖）—— [Round 4.4 PR-4](../plans/multi-round-iteration-2026-09-15.md#round-44--pg-连接池预算--skywalking-gormredis-接入--kafka-进程级指标3-4d-round-1-p1-11912--round-1-p1-19--roadmap-2)
+2. Kafka consumer 进程级指标（消费速率/处理耗时；lag 告警 Round 4.1 PR-1 已盖）—— [Round 4.4 PR-4](../legacy-plans/landed/multi-round-iteration-2026-09-15.md#round-44--pg-连接池预算--skywalking-gormredis-接入--kafka-进程级指标3-4d-round-1-p1-11912--round-1-p1-19--roadmap-2)
 3. Nacos 深水区（可选，非近期）：SDK 升级 v2.4.x / Subscribe 动态感知；DB 纳入 fail-fast required 依赖
 4. web 历史 typecheck 错误 96 处（charts/DigitalHuman 等遗留，非新引入，低优先）
 5. prod 独立 bff-client 证书（llm mTLS 现复用 ai-client；纯 prod 部署事项）
