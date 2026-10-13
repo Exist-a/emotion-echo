@@ -21,16 +21,17 @@ related-stage: stage-97, e2e-03, e2e-22, e2e-23
 | `go-test.yml` | push / PR | 6 Go svc + shared 跑 `go test` + `go vet` | ai / analytics / chat / web-bff / assessment / user / shared |
 | `llm-test.yml` | push / PR | emotion-llm-service pytest | /analyze auth + gRPC + file_context + Nacos |
 | `web-test.yml` | push / PR | emotion-echo-web vitest + lint | composables + apiRoutes + auth.global + renderMarkdown |
-| `doc-drift-check.yml` | push / PR | 文档/代码漂移守卫（23 项）+ **汇总门禁** | `docs/**` + `scripts/check_*.sh` |
+| `doc-drift-check.yml` | push / PR | 文档/代码漂移守卫（**合并为 1 个 job**）+ **汇总门禁** | `docs/**` + `scripts/check_*.sh` |
 
-> `doc-drift-check.yml` 里除 23 个检查 job 外还有两个**元 job**（E2E-23 收口轮新增，见 [ADR](../architecture/adr/adr-2026-09-e2e-23-gate-aggregation.md)）：
->
-> - `文档守卫总闸`（`doc-drift-gate`）：`needs` 全部 23 个检查 + `if: always()`，任一失败即失败。
->   **分支保护只填这一条**即可覆盖全部文档守卫 —— 避免 23 条中文 job 名被逐条维护、
->   避免有人改 `name:` 导致门禁**静默失效**（精确匹配不上、不报错、不拦）。
-> - `汇总门禁 needs 覆盖校验`（`doc-drift-needs-sync`）：跑 `scripts/check_doc_drift_gate_needs.sh`，
->   断言 gate 的 `needs` 覆盖全部检查 job 且无失效引用。**它必须独立于 gate 跑** ——
->   校验汇总门禁的 job 不能被汇总门禁覆盖，否则 gate 漏掉自己就没人发现。 |
+> **2026-10-13 CL-00 更新**：原 24 个检查 job **合并为 1 个 `static-guards` job**（同一 runner
+> 顺序跑，脚本一字未动，覆盖不减）；`doc-drift-gate`（名 `文档守卫总闸`）保留、`needs: [static-guards]`。
+> 原**第二个元 job** `doc-drift-needs-sync`（`汇总门禁 needs 覆盖校验`）**随合并退役** ——
+> 它的前提（gate 的 `needs` 是**多 job 硬编码列表、会漂**）在"只剩 1 个 job"后消失，且其脚本
+> `check_doc_drift_gate_needs.sh` 的 `need_count<20` 断言使它**无法再接回**。**决策记录见
+> [ADR §六](../architecture/adr/adr-2026-09-e2e-23-gate-aggregation.md)**（架构改动无 ADR 忌）。
+> `文档守卫总闸` 仍须**独立直连**：分支保护 `required_status_checks` 里那批**旧 doc-drift job 名**
+> 随合并消失，须改为 `文档守卫总闸`，否则 PR 恒 `expected` 卡住。
+> **CL-00 第 2 刀**另删：`e2e-stage-audit`、3× `helm-*-render`、`docs-update`、`user-oauth-zero-ref`。
 | `e2e-guards.yml` | push / PR | 静态守卫（E2E-23 新增） | **19 个**静态守卫（17 个 `scripts/test_*.sh` + 2 个 `scripts/check_*.sh`），**见下方"门禁生效边界"** |
 
 `e2e-guards.yml` 跑的这 19 个守卫（均为纯静态检查，不需要运行中的容器；计数 2026-10-03 更新 +2——E2E-28 C1 perf_baseline 四契约接线（步骤 17）+ E2E-28 #5 check_xtts_cpu_limit 接线（步骤 18，E2E-17 只写未接的 F-h 同型治理）；同日早前 +2 为 E2E-27 #2 MinIO 双守卫接线，当时对账 15 个，此前曾写"7 个"且清单只列 8 行，属"守卫清单漂移"，已修）：
