@@ -343,6 +343,10 @@ PR review 时若发现违反 TDD：
   - 阶段排期 [`roadmap.md`](docs/e2e-roadmap/roadmap.md)（30 阶段 + R 系列补救 + 决策门）、补救排期 [`remediation.md`](docs/e2e-roadmap/remediation.md)、改造决议 [`decisions.md`](docs/e2e-roadmap/decisions.md)、已发现未解决账本 [`discovered-unresolved.md`](docs/e2e-roadmap/discovered-unresolved.md)（E2E-F-xx 编号）、每阶段详档与记录 [`stages/`](docs/e2e-roadmap/stages/)
   - 成果以 `PASS`/`FAIL`/`BLOCKED`/`N/A` 四值记录并附证据（**"已创建/已新增"不算证据**）；`BLOCKED` 超 1/3 不得判 done；禁止用 `N/A` 掩盖未做的工作
   - 纪律：范围外问题只记账不修；每阶段收口必须写 Playwright 回归钉；**账本对账**（属本阶段未解决的 `E2E-F-xx` 存在时阶段只能标 `partial`）；阶段记录收口后迁移到 `docs/stages/`
+- **「闭环」阶段路线图**（2026-10-13 起生效）→ [`docs/closure-roadmap/`](docs/closure-roadmap/)（E2E 收尾后的**下一大阶段：用户实测找问题 + 链路闭环**）：
+  - **开工前必读 [RUNBOOK.md](docs/closure-roadmap/RUNBOOK.md)**（精简自包含版，纪律继承 E2E）+ [roadmap.md](docs/closure-roadmap/roadmap.md)（阶段排序 CL-01~10 + 每阶段"做到什么程度"）。
+  - 账本 `CL-F-xx`、决策 `CL-D-xx`（**不占用** E2E 的 `E2E-F-xx` / `D-NN`）；每阶段详档 `stages/<cl-NN-slug>/`（just-in-time 撰写）。
+  - 判定仍用 `PASS`/`FAIL`/`BLOCKED`/`N/A` 四值 + 证据有效性；范围外只记账；**执行者不得自行宣布阶段 done**。
 
 ---
 
@@ -370,4 +374,4 @@ PR review 时若发现违反 TDD：
 
 ---
 
-> 最后更新：2026-09-24（新增 §八 双轨并行约束）
+> 最后更新：2026-10-13（§七 新增「闭环」阶段路线图 → `docs/closure-roadmap/`）

@@ -1,9 +1,11 @@
 ---
-status: planned
+status: landed
+landed: 2026-10-13
+landed-evidence: "A8（AI 回复不渲染）→ R-10/R-11 已修；A9（fold-btn 露边）→ index.vue:407-415 'Sprint 110 · A9'；A10（voice-btn 样式）→ [id].vue:859-874 'Sprint 111 · A12'；文件内 7 个 UI bug 均 ✅"
 priority: high
 owner: TBD
 created: 2026-09-16
-last-refresh: 2026-09-16
+last-refresh: 2026-10-13
 type: known-issues-backlog
 depends-on:
   - stage-109a-apisix-jwt-401-fix-2026-09-16.md (A7 修通)

@@ -1,9 +1,11 @@
 ---
-status: planned
+status: landed
+landed: 2026-10-13
+landed-evidence: "docs/stages/stage-109a-apisix-jwt-401-fix-2026-09-16.md 已落地；真根因 = BFF 未配 BFF_APISIX_CIDRS 致 isFromTrustedAPISIX 恒 false（非 APISIX jwt-auth 本身），修复见 R-16（commit bc61896）"
 priority: critical
 owner: TBD
 created: 2026-09-16
-last-refresh: 2026-09-16
+last-refresh: 2026-10-13
 type: bug-fix
 depends-on:
   - stage-108-sender-architecture-debt-fix-2026-09-16.md §四 (A7 详细登记)

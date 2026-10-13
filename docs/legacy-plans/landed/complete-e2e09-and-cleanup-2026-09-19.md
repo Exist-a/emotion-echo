@@ -1,7 +1,10 @@
 ---
-status: planned
+status: landed
+landed: 2026-10-13
+landed-evidence: "由 E2E-09 阶段体系收口：roadmap 第 80 行 E2E-09 ✅ done（2026-10-13 D-51，12/14 + 2 BLOCKED）；回归钉 e2e/registration.spec.ts + registration-security-question.test.ts"
 priority: high
 created: 2026-09-19
+last-refresh: 2026-10-13
 type: sprint-plan
 related:
   - e2e-roadmap/stages/e2e-09-registration/plan.md

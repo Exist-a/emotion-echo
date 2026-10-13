@@ -30,7 +30,7 @@ residuals:
 ### 0.1 来源
 
 - 上游 plan：[observability-edge-gaps-from-code-review.md §A-extension](observability-edge-gaps-from-code-review.md)
-- 上游 stage：[stage-92-kafka-sw8-propagation-2026-09-14.md](../stages/stage-92-kafka-sw8-propagation-2026-09-14.md)（chat-svc producer + ai-svc consumer 已落）
+- 上游 stage：[stage-92-kafka-sw8-propagation-2026-09-14.md](../../stages/stage-92-kafka-sw8-propagation-2026-09-14.md)（chat-svc producer + ai-svc consumer 已落）
 - roadmap §当前 open 清单：`🔄 A-extension. analytics-svc consumer sw8 透传 —— Stage 93 候选`
 
 ### 0.2 现状

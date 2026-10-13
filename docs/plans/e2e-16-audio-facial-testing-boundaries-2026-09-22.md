@@ -1,5 +1,6 @@
 ---
-status: proposed
+status: superseded
+superseded-by: "E2E-16 / E2E-17 阶段体系（本文件定义的 [A]/[V]/[M] 边界协议为其运行时依据）；本条发现项 E2E-F-99/110/113/114 已随 E2E-16/17 收口"
 priority: high
 created: 2026-09-22
 type: e2e-testing-plan

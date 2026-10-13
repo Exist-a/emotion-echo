@@ -1,7 +1,10 @@
 ---
-status: pending
+status: landed
+landed: 2026-10-13
+landed-evidence: "IAB 浏览器验收已执行：回归钉 emotion-echo-web/tests/verify-a8.spec.ts 存在；A8/A9/A10 三项均已修（见 known-issues-backlog-append-sprint-109b）"
 priority: high
 created: 2026-09-18
+last-refresh: 2026-10-13
 type: test-plan
 related:
   - sprint-110-a8-a9-a10-fix-2026-09-17.md

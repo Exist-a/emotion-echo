@@ -3,7 +3,7 @@
 > Stage 36-D：本文版对应**当前 Stage 30+ BFF 架构**（6 个 Go 微服务 + Python gRPC + BFF 聚合 + 前端 Nuxt + AI profile）。
 > 历史单体 Gin 已迁移至 `legacy/emotion-echo-gin/`。
 >
-> **Stage 101 收口（2026-09-15）**：多轮迭代修复计划（[multi-round-iteration-2026-09-15.md](../docs/plans/multi-round-iteration-2026-09-15.md)）全部 10 Round 落地，8 commits pushed origin/main。
+> **Stage 101 收口（2026-09-15）**：多轮迭代修复计划（[multi-round-iteration-2026-09-15.md](../docs/legacy-plans/landed/multi-round-iteration-2026-09-15.md)）全部 10 Round 落地，8 commits pushed origin/main。
 > 主要变更：compose health condition 收紧（14 处 service_started → service_healthy）/ ai-svc IP 限流 / ai-svc producer 4 KiB / Nacos BeatInstance 真实实现（HTTP `/instance/beat`）/ web-bff Nacos fail-fast / per-svc INTERNAL_API_KEY 隔离 / ai-api.yaml 字面值 `${VAR:-default}` → `${VAR}` / 5 张表软删除 + i008 migration。详见 [stage-101-multi-round-iteration-closure.md](../docs/stages/stage-101-multi-round-iteration-closure.md)。
 
 ## 目录

@@ -1,9 +1,10 @@
 ---
-status: planned
+status: partial
+partial: "2026-10-13 核查：A2（assessment 单测）✅ 已修（handler/logic 8 个测试文件）；A3（reports Playwright）✅ 已修（e2e/dashboard-reports.spec.ts）；A4（chartData 非空）✅ 随 E2E-15/30 解决；A5（OAP queryDuration）✅ 已关（E2E-26 D-37）；A6（Stage 44 §四残余）≈已由 nacos-enablement-dev（landed）+ sw-oap 移出断言收口；残留：顺手1 字号防抖（代码无 debounce，疑似未做）、顺手2 useApi 401（已随 E2E-F-207 令牌续期重构解决）"
 priority: medium
 owner: TBD
 created: 2026-09-16
-last-refresh: 2026-09-16
+last-refresh: 2026-10-13
 type: known-issues-backlog
 depends-on:
   - stage-26-T-test-backlog.md (历史版格式参考)

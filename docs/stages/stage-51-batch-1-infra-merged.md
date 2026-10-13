@@ -32,7 +32,7 @@ related-tests-result: shared+6svc PASS, smoke 未执行
 
 ## 一、批 1 范围（路线 Z 三批规划中的第 1 批）
 
-按 [observability-sprint-b.md §〇](../../plans/observability-sprint-b.md) 16 PR-OBS-X 拆三批，**第 1 批 = 基础设施层**：
+按 [observability-sprint-b.md §〇](../../legacy-plans/landed/observability-sprint-b.md) 16 PR-OBS-X 拆三批，**第 1 批 = 基础设施层**：
 
 | PR-OBS-X | 主题 | commit 入口 | 状态 |
 |---|---|---|---|
