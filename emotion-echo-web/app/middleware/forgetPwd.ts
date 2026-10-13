@@ -11,6 +11,14 @@ const stepRouteMap = {
 // 核心中间件：适配两个页面
 export default defineNuxtRouteMiddleware(
   (to: RouteLocationNormalized, from: RouteLocationNormalized) => {
+    // E2E-07 修复：**服务端不做步骤判断** —— `useForgetPwdState()` 只在客户端读
+    // localStorage，服务端一律读到空状态 ⇒ 刷新 /login/forget/modify 会被判「步骤不足」
+    // 而跳回 verify，把「步骤持久化」（#11）本身变成永远不成立。
+    // 交给客户端中间件/页面守卫判断（此时 localStorage 可见）。
+    if (import.meta.server) {
+      return
+    }
+
     // 1. 只处理目标路由，其他路由直接放行（避免影响其他页面）
     const targetPaths = Object.keys(stepRouteMap)
     if (!targetPaths.includes(to.path)) {
