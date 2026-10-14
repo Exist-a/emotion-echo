@@ -4,7 +4,7 @@ title: 消息链路闭环（会话列表游标化 + 本地缓存接线 + 状态�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档 → **Phase 1 完成**（T-13）→ **Phase 2a 完成**（T-9/T-10）→ **Phase 2b 完成**（T-11/T-12；全量 673/673 + typecheck 绿）；用户裁定 `CL-D-11`~`CL-D-14` 并锁定范围（[M] 全清）；修正 §A.1 错误断言；补 §6 R12 合并语义陷阱）
+last-updated: 2026-10-14（建档 → **Phase 1 完成**（T-13）→ **Phase 2a 完成**（T-9/T-10）→ **Phase 2b 完成**（T-11/T-12）→ **Phase 3 完成**（T-14/T-15；全量 682/682 + typecheck 绿）⇒ **7/22 测试点有结论**；用户裁定 `CL-D-11`~`CL-D-14` 锁定范围（[M] 全清）；修正 §A.1 错误断言；补 §6 R12 合并语义陷阱）
 depends-on: []           # 不依赖任何阶段；**不阻塞于 T1**（CL-01/02/03）
 blocks: []
 gate: []                 # 无开工前阻塞决策门；3 个 [M] 见 §7
@@ -159,8 +159,8 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | T-11 | **读加速**：`switchSession` 先渲染本地快照，再以服务端覆盖/合并 | [A] | store 单测（断言先读缓存后发请求） | ✅ **PASS**（Phase 2b，2026-10-14）—— 在"发请求那一刻"采样 `currentMessages.length` = 1（证明快照先渲染）；写穿（`loadMoreMessages` 页 / `sendMessage` 行）落缓存；**降级**（缓存读失败不挡服务端）与**跨会话不残留**各有钉。钉 `app/stores/__tests__/message.cache.test.ts` 8/8 绿，见 `report.md §3.4` |
 | T-12 | **合并策略**：服务端覆盖同 id；**本地独有 `failed/pending` 不被服务端快照抹掉** | [A] | store 单测（构造本地 failed + 服务端无该条） | ✅ **PASS**（Phase 2b，2026-10-14）—— 服务端同 id 覆盖；本地 `failed`(99) 与服务端行(1) 并存且 `status` 保持 `failed`；`sortedMessages` 仍按 `sendTime` 升序。⚠️ 实测暴露设计要点：**分页追加不能复用快照替换**（见 §6 R12），已拆成 `mergeServerMessages` / `appendServerPage` 两个纯函数，见 `report.md §3.4` |
 | T-13 | **状态机单一来源**：`MessageStatus` 全仓**仅一处定义**、取值集合唯一 | [A] | 架构测试（`grep` 定义点）+ 类型测试 | ✅ **PASS**（Phase 1，2026-10-14）—— 钉 `app/types/conversation/message-status-single-source.architecture.test.ts` **5/5 绿**；**RED 实测 3 项失败**（2 处定义 / canonical 仅 4 值 / 2 处内联联合），逐项见 `report.md §3.1` |
-| T-14 | **乐观插入**：发送瞬间用户消息 `status === 'sending'`（**现恒 `'sent'` ⇒ RED**）；服务端返回后置 `sent` + 换真实 id | [A] | store 单测 | 待执行 |
-| T-15 | **非法转移被拒**：`sent → sending` 等非法转移不生效 | [A] | 转移表单测 | 待执行 |
+| T-14 | **乐观插入**：发送瞬间用户消息 `status === 'sending'`（**现恒 `'sent'` ⇒ RED**）；服务端返回后置 `sent` + 换真实 id | [A] | store 单测 | ✅ **PASS**（Phase 3，2026-10-14）—— 在 `post` 被调用那一刻采样：占位已在列表且 `sending`；返回后就地替换为真实 id + `sent`（列表不重复）；**未传 `clientMsgId` 时自动生成临时 id 同样成立**；**失败时占位保留为 `failed` 并落缓存**（重试前置条件）。钉 `app/stores/__tests__/message.state.test.ts` 9/9 绿，见 `report.md §3.5` |
+| T-15 | **非法转移被拒**：`sent → sending` 等非法转移不生效 | [A] | 转移表单测 | ✅ **PASS**（Phase 3，2026-10-14）—— `MESSAGE_STATUS_TRANSITIONS` 合法边通过、`sent`/`truncated` 终态无出边、自转移与 `failed→sent` 直跳被拒；store 层 `transitMessage` 对 `sent → sending` 返回 `false` 且状态不变、`failed → sending` 允许（重试路径）。见 `report.md §3.5` |
 | T-16 | **重试计数 + 上限**：失败后 `retryCount` +1；达 `MAX=3` 停自动重试 | [A] | vitest（fake timers） | 待执行（Phase 4） |
 | T-17 | **退避策略**：间隔 = `min(2^n × 1000ms, 30s)` | [A] | vitest（fake timers 断言调用时刻） | 待执行 |
 | T-18 | **断网重连重扫**：离线发送 → 置 `failed`；触发 `online` → 按退避重试、**同一 `clientMsgId`**、成功置 `sent` 并移出待重试集 | [A] | store 单测（模拟 `navigator.onLine` + fake timers） | 待执行 |
@@ -190,7 +190,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | **0** | **基线取证**：起栈（排队）→ curl 走网关 `:19080` 取消息/会话两页现状 → DB 比对；确认 `CHAT_TRANSPORT` 实际值 | 🔴 | —（人工产证据；**未做，见 §A.4**） |
 | **1** | **类型与契约收敛（无行为变更）**：`MessageStatus` 收敛到**单一来源**；补 `cursor/hasMore` 类型；`messageCursor`/`cursor` 是否需导出按需定 | 🟢 | T-13（现状两处定义取值集合不一致 ⇒ **红**）—— ✅ **已完成 2026-10-14**（RED 3 项失败 → GREEN 5/5；全量 vitest 654/654 + typecheck 绿；证据 `report.md §3.1`） |
 | **2** | **缓存层修复 + 接线**：① `db.ts` 升 `version(2)` 补 `[sessionId+status]` + `sendTime` 索引；② 修 `messageCache.ts`（索引可用后不抛错，补 `markFailed/incRetry` 辅助）；③ `stores/message.ts` 接线（`switchSession` 快照→服务端→`saveMessages`；`loadMoreMessages` 落页；`sendMessage` 落条）；④ 合并策略：服务端覆盖同 id、本地 `failed/pending` 保留 | 🟢 | **①（2a）✅ 已完成**（RED 3 红 → GREEN 11/11，`report.md §3.3`）；**③④（2b）✅ 已完成**（RED 6 红 → GREEN 8/8 + 全量 673/673 + typecheck 绿，`report.md §3.4`）—— T-11 / T-12 PASS。**② 的 `markFailed/incRetry` 辅助留到 Phase 4**（重试逻辑落地时才有调用方，避免造无主函数） |
-| **3** | **状态机 + 乐观插入**：单一转移表（`sending→sent/failed`、`streaming→sent/failed`、`failed→sending`、`sent`/`truncated` 终态 + 非法转移守卫）；用户消息先插 `sending`（temp id = `clientMsgId`），服务端返回后换真实 id 并置 `sent` | 🟢 | **T-14（发送瞬间恒 `'sent'` ⇒ 红）** + T-15 |
+| **3** | **状态机 + 乐观插入**：单一转移表（`sending→sent/failed`、`streaming→sent/failed`、`failed→sending`、`sent`/`truncated` 终态 + 非法转移守卫）；用户消息先插 `sending`（temp id = `clientMsgId`），服务端返回后换真实 id 并置 `sent` | 🟢 | **T-14/T-15 ✅ 已完成 2026-10-14**（RED 8 红 → GREEN 9/9 + 全量 682/682 + typecheck 绿，`report.md §3.5`）。⚠️ 落地时被**全量回归**抓出并修掉一个真缺陷：占位行 temp id 未从缓存删除 ⇒ 幽灵 `sending` 行（详见 report §3.5） |
 | **4** | **重试 + 断网重扫**：`retryCount` 自增 + 指数退避 `min(2^n×1000ms,30s)` + `MAX=3`；`stores/message.ts` 新增 `retryFailedMessages()`；`plugins/init.ts` 把 `:105-111` 的 TODO 换成真实调用（`online` 事件 + 启动时 `navigator.onLine`）；**复用 `clientMsgId`** | 🟢 | T-16 / T-17 / T-18（现状 `retryFailedMessages` 无定义 ⇒ **红**） |
 | **5** | **会话列表游标化**（D-B=B1，**需与 C 轨握手 `proto/**`**）：proto `ListConversationsRequest` 增游标字段 → chat-svc `ListConversations` 复合游标 `(updated_at, id)` → BFF `listConversations` 读游标 → 前端 `conversation.ts` 对齐 | 🟢 编码 / 🔴 运行 | T-5（Go 表驱动：同 `updated_at` 边界）+ T-4 / T-6 |
 | **6** | **死路径与降级路径**：① 旧 `ListMessages`（`Order("id ASC")`，`conversation_repository.go:335-346`）**调用方清零**（按 CL-02 口径：删 or 归档 + 桩）；② chat-svc `handler/chat_handler.go:84-106` 读 `cursor` | 🟢 编码 / 🔴 运行 | T-8（架构钉）+ T-7 |
