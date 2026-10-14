@@ -120,10 +120,16 @@ func (h *AIStreamHandler) assembleSystemPrompt(in assembleInput) string {
 
 // assembleMessages 产出完整 messages —— **两条上游路径的唯一组装点**。
 //
-// Phase 1：仍为 `[system, user]` 两条（无历史）；Phase 2 起在两者之间插入同会话历史。
+// 结构（CL-04 Phase 2 起）：
+//
+//	[system(段组装)] + [同会话历史：时间正序，窗口+预算裁剪] + [当前 user]
+//
+// 历史为空（无会话 / 无来源 / 取数失败 / 去重后为空）时退化为 Phase 1 的两条形态。
 func (h *AIStreamHandler) assembleMessages(in assembleInput) []downstream.Message {
-	return []downstream.Message{
-		{Role: "system", Content: h.assembleSystemPrompt(in)},
-		{Role: "user", Content: in.userContent},
-	}
+	history := h.historyMessages(in)
+	msgs := make([]downstream.Message, 0, len(history)+2)
+	msgs = append(msgs, downstream.Message{Role: "system", Content: h.assembleSystemPrompt(in)})
+	msgs = append(msgs, history...)
+	msgs = append(msgs, downstream.Message{Role: "user", Content: clampUserContent(in.ctx, in.userContent)})
+	return msgs
 }
