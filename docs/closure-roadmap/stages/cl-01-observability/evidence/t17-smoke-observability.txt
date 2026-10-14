@@ -14,26 +14,50 @@
 [OK  ] panel expr returns data [kafka-consumer-lag] analytics-svc Consumer Lag (by topic/partition): series=6 expr=kafka_consumergroup_lag{consumergroup="analytics-svc"}
 [OK  ] panel expr returns data [kafka-consumer-lag] DLQ Depth (chat-events-dlq messages) — non-alerting: series=1 expr=sum(kafka_topic_partition_current_offset{topic="chat-events-dlq"}) or vector(0)
 [OK  ] dashboard 'emotion-echo-observability' query panels present: panels_with_expr=3
-[OK  ] panel expr returns data [emotion-echo-observability] Target 健康矩阵（up by job/instance）: series=12 expr=up
+[OK  ] panel expr returns data [emotion-echo-observability] Target 健康矩阵（up by job/instance）: series=18 expr=up
 [OK  ] panel expr returns data [emotion-echo-observability] Down Targets（up==0）: series=1 expr=count(up == 0) or vector(0)
 [OK  ] panel expr returns data [emotion-echo-observability] Firing 告警数（ALERTS）: series=1 expr=count(ALERTS{alertstate="firing"}) or vector(0)
+[OK  ] dashboard 'emotion-echo-business' query panels present: panels_with_expr=11
+[OK  ] panel expr returns data [emotion-echo-business] 融合调用速率（5m）: series=1 expr=sum(increase(emotion_fusion_calls_total[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-business] 融合失败（5m）: series=1 expr=sum(increase(emotion_fusion_calls_total{result="failure"}[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-business] 降级次数（5m）: series=1 expr=sum(increase(emotion_echo_fusion_fallback_total[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-business] Worker tick 速率（5m）: series=1 expr=sum(rate(emotion_echo_fusion_worker_tick_total{outcome="ok"}[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-business] 融合调用（按模态 × 结果）: series=2 expr=sum by (modality, result) (rate(emotion_fusion_calls_total[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-business] 融合回退（按 stage）: series=2 expr=sum by (stage) (rate(emotion_echo_fusion_fallback_total[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-business] LLM 融合调用（按 outcome）: series=1 expr=sum by (outcome) (rate(emotion_echo_fusion_llm_call_total[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-business] LLM 融合 p95 延迟: series=1 expr=histogram_quantile(0.95, sum by (le, outcome) (rate(emotion_echo_fusion_llm_latency_second
+[OK  ] panel expr returns data [emotion-echo-business] 融合耗时 p95（按模态）: series=2 expr=histogram_quantile(0.95, sum by (le, modality) (rate(emotion_fusion_duration_seconds_bucke
+[OK  ] panel expr returns data [emotion-echo-business] 物化视图刷新: series=1 expr=sum(rate(emotion_echo_mv_refresh_success_total[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-business] 物化视图刷新失败: series=1 expr=sum(rate(emotion_echo_mv_refresh_fail_total[5m])) or vector(0)
+[OK  ] dashboard 'emotion-echo-reliability' query panels present: panels_with_expr=10
+[OK  ] panel expr returns data [emotion-echo-reliability] Outbox 死信行: series=1 expr=sum(emotion_echo_outbox_events_dead_total) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-reliability] Outbox 走内存回退: series=1 expr=sum(emotion_echo_outbox_sent_via_fallback_total) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-reliability] DLQ 投递失败（5m）: series=1 expr=sum(increase(emotion_echo_dlq_publish_total{result="failure"}[5m])) + sum(increase(emotion
+[OK  ] panel expr returns data [emotion-echo-reliability] 就绪探针失败（5m）: series=1 expr=sum(increase(emotion_echo_http_requests_total{path="/health/ready",status!~"2.."}[5m])) or
+[OK  ] panel expr returns data [emotion-echo-reliability] HTTP 5xx 速率（按服务）: series=2 expr=sum by (service) (rate(emotion_echo_http_requests_total{status=~"5.."}[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-reliability] HTTP 4xx 速率（按服务）: series=2 expr=sum by (service) (rate(emotion_echo_http_requests_total{status=~"4.."}[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-reliability] DLQ 投递（按结果）: series=2 expr=sum by (result) (rate(emotion_echo_dlq_publish_total[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-reliability] DLQ 投递（analytics，按结果）: series=2 expr=sum by (result) (rate(emotion_echo_analytics_dlq_publish_total[5m])) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-reliability] Tracing 初始化失败（按服务）: series=1 expr=sum by (service) (emotion_echo_skywalking_init_failed_total) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-reliability] 就绪探针通断（按服务 × 状态码）: series=8 expr=sum by (service, status) (increase(emotion_echo_http_requests_total{path="/health/ready"}[
+[OK  ] grafana dashboard 'emotion-echo-logs' has panels (all-loki ok): panels=4 loki=4 prom_exprs=0
 [OK  ] prometheus.yml targets superset of EXPECTED_TARGETS (清单无陈旧项): missing_in_yml=[] yml_targets=['emotion-echo-ai-svc:8891', 'emotion-echo-alertmanager:9093', 'emotion-echo-analytics-svc:8893', 'emotion-echo-apisix:9091', 'emotion-echo-assessment-svc:8889', 'emotion-echo-chat-svc:8890', 'emotion-echo-kafka-exporter:9308', 'emotion-echo-sw-oap:1234', 'emotion-echo-user-svc:8888', 'emotion-echo-web-bff:8894', 'emotion-llm-service:8000', 'localhost:9090']
 [OK  ] every business-svc target is covered by EXPECTED_TARGETS: uncovered=[] (抓到了但常量漏登记 ⇒ 漂移会再次发生)
 [OK  ] runbook observability-compose.md exists + 5 sections: file_len=9051, sections=['启动后第一件事', '看 targets', '看 logs', '看 trace', '故障排查']
-[OK  ] kafka-exporter exposes kafka_consumergroup_lag series: body_len=45836, has_lag=True
+[OK  ] kafka-exporter exposes kafka_consumergroup_lag series: body_len=46474, has_lag=True
 [OK  ] prometheus scrape target 'kafka-exporter' UP: up_jobs=['alertmanager', 'apisix', 'emotion-echo-services', 'kafka-exporter', 'prometheus', 'skywalking-oap']
 [OK  ] grafana dashboard 'kafka-consumer-lag' provisioned (>=3 panels): title='Kafka Consumer Lag', panels=3
 [OK  ] grafana prometheus datasource uid == 'prometheus': uid='prometheus'
-[OK  ] prometheus alert rule 'KafkaConsumerGroupLagHigh' loaded: groups=4, total_rules=7
-[OK  ] prometheus alert rule 'OutboxEventsDead' loaded (Stage 86): loaded_alerts=['AIDLQPublishFailure', 'AlertmanagerClusterDegraded', 'AlertmanagerNotificationFailing', 'AnalyticsDLQPublishFailure', 'KafkaConsumerGroupLagHigh', 'OutboxEventsDead', 'PrometheusTargetDown']
+[OK  ] prometheus alert rule 'KafkaConsumerGroupLagHigh' loaded: groups=6, total_rules=13
+[OK  ] prometheus alert rule 'OutboxEventsDead' loaded (Stage 86): loaded_alerts=['AIDLQPublishFailure', 'AlertmanagerClusterDegraded', 'AlertmanagerNotificationFailing', 'AnalyticsDLQPublishFailure', 'DLQPublishFailing', 'FusionCallFailing', 'FusionFallbackActive', 'FusionWorkerStalled', 'HealthProbeMissing', 'KafkaConsumerGroupLagHigh', 'OutboxEventsDead', 'PrometheusTargetDown', 'ServiceNotReady']
 [OK  ] alertmanager /-/healthy returns 200: HTTP 200: OK
 [OK  ] prometheus discovered alertmanager target: activeAlertmanagers=['http://emotion-echo-alertmanager:9093/api/v2/alerts']
 [OK  ] prometheus exposes emotion_echo_outbox_events_dead_total series: series=1, values=['0']
 [OK  ] loki /ready returns 200: ready
-[OK  ] loki query [job=apisix] returns results (非空，空即 FAIL): streams=1, log_lines=4, query={job="apisix"}
-[OK  ] loki query [job=services] returns results (非空，空即 FAIL): streams=6, log_lines=100, query={job="services"}
-[OK  ] loki 业务日志是结构化 JSON（含 svc/level 字段）: {"time":"2026-10-14T13:39:24.369723853+08:00","level":"INFO","msg":"tick: candidates=0 (msgIDs=[])","module":"fusion","svc":"ai-svc"}
-[OK  ] promtail 未采到 loki/promtail/中间件容器（日志回环 + 噪声）: 新鲜窗口 container 标签集: ['emotion-echo-ai-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff', 'emotion-llm-service']
+[OK  ] loki query [job=apisix] returns results (非空，空即 FAIL): streams=1, log_lines=6, query={job="apisix"}
+[OK  ] loki query [job=services] returns results (非空，空即 FAIL): streams=8, log_lines=100, query={job="services"}
+[OK  ] loki 业务日志是结构化 JSON（含 svc/level 字段）: {"time":"2026-10-14T14:52:14.056041273+08:00","level":"INFO","msg":"tick: candidates=0 (msgIDs=[])","module":"fusion","svc":"ai-svc"}
+[OK  ] promtail 未采到 loki/promtail/中间件容器（日志回环 + 噪声）: 新鲜窗口 container 标签集: ['emotion-echo-ai-svc', 'emotion-echo-assessment-svc', 'emotion-echo-chat-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff', 'emotion-llm-service']
 [OK  ] apisix /tmp/apisix-access.log exists and non-empty: exit=0, stderr=
 
-PASS: 36 check(s)
+PASS: 60 check(s)

@@ -2,9 +2,9 @@
 stage: cl-01
 title: 可观测闭环（埋点真生效 + 采集 → 面板 → 告警真消费）
 type: transformation
-status: in-progress
+status: partial
 created: 2026-10-14
-last-updated: 2026-10-14（建档 B 轨并行开工 → Phase 1 GORM 修复落地 → [M] 裁定回填；**仍未起 dev 栈**，"埋点真生效"待 Phase 0/9 取证，见 §A.4）
+last-updated: 2026-10-14（B 轨全 Phase 走完：埋点五层修复 + 3 看板/6 告警 + 起栈运行时取证；状态 partial —— 名下仍挂未解决 CL-F-14 + D-05 偏差待追认，见 §10 / report.md）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；本阶段 6 个 [M] 决策点见 §7（均不阻塞"代码+单测"部分）
@@ -126,10 +126,10 @@ related-plans:
 | T-01 | GORM 回调注册在**正确的 processor**（Query/Create/Update/Delete/Row） | [A] | Go 单测：`db.Callback().Query().Get("skywalking:begin_query") != nil`（**修前 nil=RED**），5 op 全覆盖 | ✅ 2026-10-14：`go test ./pkg/skywalking/ -count=1` → **ok**；修前 RED 已留痕（负向对照）；另修 raw 单列（`begin_raw`，analytics 22 处 `db.Raw/Exec` 用） |
 | T-02 | **真实 ORM 查询在 SkyWalking UI 出 span**（修前 0 → 修后 >0） | [A] | 起栈触发一次 `.WithContext(ctx)` 的 ORM 查询 → SkyWalking UI/GraphQL 查询 trace 含 `gorm.query` | UI 查询结果/截图（**约束⑤硬证据**） |
 | T-03 | Redis 埋点接线：BFF 装配 `InitRedis` + 真 Redis 命令出 span | [A] | 装配断言（BFF main 调用点存在）+ 起栈后 Redis 命令出 `redis.GET` span | ✅ 2026-10-14：实现迁 `pkg/skywalking/redistrace`（**无 gorm**）；BFF `main.go` 在 `buildRedisClient()` 后调 `redistrace.InitRedis(redisClient)`；hook/joinCmds/nil-safe 单测随包迁移全绿。**待起栈验 `redis.*` span**（受锁） |
-| T-04 | HTTP 出站 `TracingRoundTripper`：建 exit span + 注入 `sw8` | [A] | 单测（httptest server 收 `sw8` 头非空 + span 产生）；**覆盖清单核对**（ai aiclient×3 / http_analyzer / llm_fuser / BFF downstream） | ✅ 2026-10-14：组件+单测（`trace` 包 6 用例）+ **接线 8 处**（ai-svc：fer/sensevoice/xtts/http_analyzer/llm_fuser；BFF：downstream/{ai,analytics,assessment}，即契约 §1.2 划给 B 轨的三处）。**未纳入**：BFF `chat.go`（C 轨）、`llm.go`/`xtts.go`/`tts_provider.go`/`user.go`/`handler/health_handler.go`（未在 B 轨文件面，留待后续） |
-| T-05 | Kafka DLQ 生产建 span（ai / analytics） | [A] | 单测：dlq 发布路径建 `CreateExitSpan` | ✅ 2026-10-14：ai-svc + analytics-svc `publishToDLQ` 建 exit span（opName=`kafka-publish-dlq`）+ **sw8 注入 DLQ headers**；并**把 `kafka-consume` entry span 的 ctx 透传下去**（原实现丢弃该 ctx ⇒ DLQ span 无父会被约束③守卫跳过）。两侧各 2 用例（建 span / nil-DLQ 不建）全绿 |
-| T-06 | fusion 两指标：**接线**（生产路径递增）**或删除定义** | [M] | 按 D-03 结论：接线 → 单测断言 worker 路径递增；删 → 断言定义已移除且无悬空引用 | ✅ 2026-10-14（D-03=接线）：`worker.processOne` 在融合尝试处记 `RecordFusionCall(modality, success\|failure)` + `ObserveFusionDuration`；新增 `fusionModalityLabel`（**低基数、取值限定在文档定义的 text/face/voice/fused 内**：单模态→其名，多模态→fused）；单测断言 counter 递增 + histogram 有样本 |
-| T-07 | web-bff `SetTracer` **对齐**（含纳入守卫）**或记录不设原因** | [M] | 按 D-04：对齐 → 扩展 `svc_wiring_test.go` 含 BFF；不设 → 文档记录 | ✅ 2026-10-14（D-04=对齐）：BFF `main.go` 成功分支调 `sharedtrace.SetTracer(t)`；`svc_wiring_test.go` 扩为表驱动、**含 web-bff**（断言 `sharedtrace.SetTracer(`）；测试全绿 |
+| T-04 | HTTP 出站 `TracingRoundTripper`：建 exit span + 注入 `sw8` | [A] | 单测（httptest server 收 `sw8` 头非空 + span 产生）；**覆盖清单核对**（ai aiclient×3 / http_analyzer / llm_fuser / BFF downstream）；**起栈实测出 span** | ✅ 2026-10-14：组件+单测（`trace` 包 6 用例）+ **接线 8 处**（ai-svc：fer/sensevoice/xtts/http_analyzer/llm_fuser；BFF：downstream/{ai,analytics,assessment}）。**起栈实测 PASS**：经网关 `POST /api/v1/tts/synthesize` → trace `113acc30…` 出现 `emotion-echo-ai-svc` **layer=Http / type=Exit / `http.POST /tts`**（ai-svc→XTTS 那次出站），且**挂在 gRPC entry span 之下**（父链正确）→ `evidence/t04-http-exit-span-trace.json`。**未纳入**：BFF `chat.go`（C 轨）、`llm.go`/`xtts.go`/`tts_provider.go`/`user.go`/`handler/health_handler.go`（未在 B 轨文件面，留待后续） |
+| T-05 | Kafka DLQ 生产建 span（ai / analytics） | [A] | 单测：dlq 发布路径建 `CreateExitSpan`；**起栈实测**：投一条毒消息 → 断言 trace 里出现 DLQ exit span | ✅ 2026-10-14：ai-svc + analytics-svc `publishToDLQ` 建 exit span（opName=`kafka-publish-dlq`）+ **sw8 注入 DLQ headers**；并**把 `kafka-consume` entry span 的 ctx 透传下去**（原实现丢弃该 ctx ⇒ DLQ span 无父会被约束③守卫跳过）。两侧各 2 用例全绿。**起栈实测 PASS**：向 `chat-events` 投一条类型不匹配的毒消息（`messageId` 传字符串）→ 重试 4 次耗尽 → 日志 `consumer handler err after retries → DLQ` → trace `e16a8e29…` 含 **`kafka-consume`(Entry,err=true) → `kafka-publish-dlq`(Exit,err=false)** 父子两 span；`chat-events-dlq` topic 自动创建并收到该消息 → `evidence/t05-dlq-span-trace.json` |
+| T-06 | fusion 两指标：**接线**（生产路径递增）**或删除定义** | [M] | 按 D-03 结论：接线 → 单测断言 worker 路径递增 + **起栈实测 counter>0**；删 → 断言定义已移除 | ✅ 2026-10-14（D-03=接线）：`worker.processOne` 在融合尝试处记 `RecordFusionCall(modality, success|failure)` + `ObserveFusionDuration`；新增 `fusionModalityLabel`（**低基数**：单模态→其名，多模态→fused）；单测断言 counter 递增 + histogram 有样本。**起栈实测 PASS**：向 `chat-events` 投一条合法 `message.created`（messageId=914）→ ai-svc 消费 → 真 LLM 分析（`emotion_analysis` 行 340，`model=deepseek-chat`）→ worker 拾取候选 → `fused_emotions` 行 324（`late_fusion_weighted`）→ Prometheus **`emotion_fusion_calls_total{modality="text",result="success"}=1`** + `emotion_fusion_duration_seconds_count{modality="text"}=1` → `evidence/t06-fusion-metrics.json`。**指标名更正**：真名是 `emotion_fusion_calls_total` / `emotion_fusion_duration_seconds`（**不带** `emotion_echo_` 前缀；带前缀的 `emotion_echo_fusion_*` 是 PR-6/ADR-15 的另外 4 个 collector）—— 建档期笔误已核正 |
+| T-07 | web-bff `SetTracer` **对齐**（含纳入守卫）**或记录不设原因** | [M] | 按 D-04：对齐 → 扩展 `svc_wiring_test.go` 含 BFF；不设 → 文档记录 | ✅ 2026-10-14（D-04=对齐）：BFF `main.go` 成功分支调 `sharedtrace.SetTracer(t)`；`svc_wiring_test.go` 扩为表驱动、**含 web-bff**（断言 `sharedtrace.SetTracer(`）；测试全绿。**起栈实测**：BFF trace 正常出 entry span（`/api/v1/tts/synthesize` 等） |
 | T-08 | 无 ctx 边界：ORM/HTTP 调用无 ctx 时**不硬造根 span** | [A] | 验证 go2sky `CreateExitSpanWithContext` 无父 span 时语义（不建 span/noop）；守卫断言之 | ✅ 2026-10-14：查实 go2sky 默认采样=1.0 ⇒ 无父 span 会**新建根 trace**；已在 `createExitSpan` 加 `ActiveSpan(ctx)==nil` 守卫；单测 `NoSw8_WhenNoParentSpan` 覆盖（HTTP 侧），GORM/Redis 同受该守卫保护 |
 
 ### B 组 · 面板/告警**被真正消费**
@@ -137,20 +137,20 @@ related-plans:
 | # | 测试点 | 判定 | 验证方式 | 证据 |
 |---|--------|------|---------|------|
 | T-09 | 新看板 JSON 落地（business / reliability / observability / logs） | [A] | 文件存在 + Grafana 加载（`GET :13000/api/search` 含新 UID） | ⚙️ 2026-10-14：**observability 看板已落**（`deploy/grafana/dashboards/emotion-echo-observability.json`，3 面板：Target 健康矩阵/Down 计数/Firing 计数）；business/reliability/logs 待 Phase 7（需栈核指标名） |
-| T-10 | **每个面板 expr 返回非空 series** | [A] | 扩展 `scripts/smoke_observability.py`（复用 `_panel_exprs`） | ⚙️ 2026-10-14：smoke 的看板断言列表已加入 `emotion-echo-observability`（3 面板 expr 均用 `or vector(0)` 保证零值时仍非空）；**待起栈实跑验证** |
-| T-11 | 打开 business 看板能答"**是否在降级 / 是否在跟 mock 对话**" | [V] | 人看截图：`fusion_fallback_total` 曲线可见 | 截图（人核）——待 Phase 7 |
-| T-12 | 新告警规则**可加载** | [A] | `promtool check rules`（有则用）或 Prometheus 启动日志无加载错 | 命令输出 |
+| T-10 | **每个面板 expr 返回非空 series** | [A] | 扩展 `scripts/smoke_observability.py`（复用 `_panel_exprs`） | ✅ 2026-10-14：smoke 的看板断言列表已含 `emotion-echo-observability` + Phase 7 新增三面（business/reliability/logs）；**起栈实跑 PASS**：business 11 面板 / reliability 10 面板 **逐 expr 全非空**（`or vector(0)` 保证零值也出 series）；logs 为纯 Loki 看板，smoke 按数据源类型跳过 LogQL（否则是"探针用错"）→ `evidence/t17-smoke-observability.txt` |
+| T-11 | 打开 business 看板能答"**是否在降级 / 是否在跟 mock 对话**" | [V] | 人看截图：`fusion_fallback_total` 曲线可见 | ✅ 2026-10-14 **PASS（IAB 截图人核）**：business 看板四张 stat 显示 `融合调用速率 0 / 融合失败 0 / 降级次数 0 / Worker tick 0.200 ops/s`，折线图例直接读出 `text / success` 与 `llm_to_late` —— **"是否降级"由 `llm_to_late` 这条线回答**；"是否在跟 mock 对话"由 LLM outcome 面板回答（当前无 series = 从未调用 LLM fuser，因 dev `LLM_BASE_URL` 为空，属预期态）→ `evidence/t11-grafana-business-dashboard.png`（另附 reliability / logs 两图）。**注**：此前一度判 BLOCKED（新账 CL-F-13「面板渲染为空」），经复测**证伪** —— 是探针选择器写错，非 Grafana 问题，已销账 |
+| T-12 | 新告警规则**可加载** | [A] | `promtool check rules`（有则用）或 Prometheus 启动日志无加载错 | ✅ 2026-10-14：`promtool check rules /etc/prometheus/rules/cl01-health-business.yml` → **SUCCESS: 6 rules found**；reload 后 `GET :9090/api/v1/rules` 显示 `cl01-business-fusion`(3) + `cl01-reliability`(3) 已加载，**总规则数 7 → 13**；smoke 断言 `OutboxEventsDead` 时列出 13 个 alert 名（含新增 6 个） |
 | T-13 | **一条告警真触发并送达**（负向对照） | [A] | 故意制造条件（如停 target / 触发 fallback）→ 断言 `:9093` Alertmanager 收到 firing | Alertmanager API/截图（**对抗"面板有数据≠告警链路通"**） |
-| T-14 | Loki trace_id 面板实机跑通 | [A] | `{job="services"} \|= "<trace_id>"` 走 **`/query_range`** 返回行 | 查询输出 |
+| T-14 | Loki trace_id 面板实机跑通 | [A] | `{job="services"} \|= "<trace_id>"` 走 **`/query_range`** 返回行 | ✅ 2026-10-14 **PASS**：取 BFF 日志里的 `trace_id=6480f096…`，`GET :3100/loki/api/v1/query_range` 返回 **2 条流**（`container=emotion-echo-web-bff` + `container=emotion-echo-ai-svc`）—— 同一 trace 跨服务命中，正是 CL-01 要的关联能力 → `evidence/t14-loki-trace-query.json`；logs 看板四个 Loki 面板在 IAB 中渲染正常（ERROR 面板里能看到 T-05 的毒消息重试/入 DLQ 日志）→ `evidence/t14-grafana-logs-dashboard.png` |
 
 ### C 组 · 采集与守卫
 
 | # | 测试点 | 判定 | 验证方式 | 证据 |
 |---|--------|------|---------|------|
-| T-15 | 采集增量：`/health` 进监控（scrape 或 blackbox）→ target `up=1` | [M] | 按 D-05：加 job/blackbox → 断言 `up{job=…}=1` | D-05 结论 + smoke 输出 |
-| T-16 | 是否新增 pg/redis exporter（内存红线评估） | [M] | 按 D-02 结论；若加 → 内存实测不击穿 + target up | D-02 结论 |
-| T-17 | `scripts/smoke_observability.py` **全绿**（含 targets 与 prometheus.yml 解析比对） | [A] | 跑脚本、退出码 0 | 脚本输出 |
-| T-18 | 装配守卫仍绿 + BFF 纳入（若 T-07 定对齐） | [A] | `go test ./emotion-echo-shared/pkg/skywalking/...` | 单测输出 |
+| T-15 | 采集增量：`/health` 进监控（scrape 或 blackbox）→ target `up=1` | [M] | 按 D-05：加 job/blackbox → 断言 `up{job=…}=1` | ⚠️ **D-05 按字面实现被实测证伪，已按等价方案落地**：`metrics_path: "/health"` 抓 6 个 svc 得到 **`up=0` × 6**（根因：/health 返 **JSON**，Prometheus 文本解析器报错 ⇒ 判抓取失败）。若留着会让 `PrometheusTargetDown` 长期误报。**改用既有埋点达成同一目标**（零新增容器/代码）：① 进程存活 = `up{job="emotion-echo-services"}`；② 依赖就绪 = `emotion_echo_http_requests_total{path="/health/ready",status=~"5.."}`（status 标签由各 svc HTTP 中间件写入，docker healthcheck 每 30s 打一次）。**落地面**：reliability 看板「就绪探针失败（5m）」「就绪探针通断（按服务×状态码）」两面板（实测 200×120/服务）+ 告警 `ServiceNotReady`/`HealthProbeMissing`。偏差已记 §10.2 **待追认** |
+| T-16 | 是否新增 pg/redis exporter（内存红线评估） | [M] | 按 D-02 结论；若加 → 内存实测不击穿 + target up | ✅ 2026-10-14（D-02="先做免费那一半"）：**不加任何容器**。用现成 `up{job}` + `ALERTS` 建「观测面自身」看板（T-09 的 `emotion-echo-observability`，3 面板）；cAdvisor / redis / pg exporter **记 deferred**（§7 D-02 补注） |
+| T-17 | `scripts/smoke_observability.py` **全绿**（含 targets 与 prometheus.yml 解析比对） | [A] | 跑脚本、退出码 0 | ✅ 2026-10-14：**`PASS: 60 check(s)` / FAIL 0 / exit 0**（较上一轮 36 项增 24 项，全部来自 Phase 7/8 新看板与新告警）→ `evidence/t17-smoke-observability.txt` |
+| T-18 | 装配守卫仍绿 + BFF 纳入（若 T-07 定对齐） | [A] | `go test ./emotion-echo-shared/pkg/skywalking/...` | ✅ 2026-10-14：`go test ./pkg/skywalking/... -count=1` 全绿（含 `svc_wiring_test.go` 表驱动 6 服务 + BFF；`gorm_tracing_test.go` 的 processor 注册断言与"后注册 tracer 仍出 span"回归钉） |
 
 ### D 组 · 范围
 
@@ -262,41 +262,46 @@ related-plans:
 
 ## §9 进度快照（2026-10-14，交接 / 恢复用）
 
-> 本表是"打点"：任何会话（含 12:00 锁释放后回来的自己）据此恢复。
+> 本表是"打点"：任何会话据此恢复。**2026-10-14 全部 Phase 已走完**（见 §10）。
 
 | Phase | 内容 | 状态 |
 |---|---|---|
-| 0 | 基线取证（**需栈**） | ⬜ 未做 —— 等 devmode 锁（A 轨持至 2026-10-14 12:00） |
-| 1 | GORM 埋点修复 | ✅ 完成（RED→GREEN，已 push） |
-| 2 | HTTP 出站埋点（G3） | ✅ **组件 + 接线 8 处完成**（ai-svc 5 + BFF 3）；**含拆出无 gorm 依赖的 `skywalking/trace` 子包**（否则 BFF import skywalking 会拖入 gorm、build 直接失败）。BFF 其余 http client 未纳入（`chat.go` 归 C 轨，余见 §2 T-04） |
-| — | 「免费那一半」观测面看板 + smoke 钉 | ⚙️ 已落地，**待起栈实跑**（T-09/T-10 = ⚙️ 非 ✅） |
-| 3 | Redis 埋点接线（G2） | ✅ 实现迁 `redistrace` 子包 + BFF 装配（**待起栈验 `redis.*` span**） |
-| 4 | DLQ span（G4） | ✅ ai-svc + analytics-svc `publishToDLQ` 建 exit span + sw8 注入（含 entry-ctx 透传） |
-| 5 | fusion 指标接线（G5；D-03 已定=接线） | ✅ `worker.processOne` 接线 + 低基数标签 + 单测 |
-| 6 | BFF SetTracer（G6；D-04 已定=对齐） | ✅ 落地 + 守卫扩含 BFF |
-| 7 | 看板 business/reliability/logs + 告警（**需栈**核指标名） | ⬜（observability 看板已提前落） |
-| 8 | 采集增量 `/health` scrape（**需栈**；D-05 已定=直接 scrape） | ⬜ |
-| 9 | 负向对照 + 收口（**需栈**） | ⬜ |
+| 0 | 基线取证（**需栈**） | ✅ 完成 —— 修前负向对照已留痕（`ReportsDaily` trace 0 个 gorm span / `InitRedis` 零调用 / 无 `/health` target / 2 看板） |
+| 1 | GORM 埋点修复 | ✅ 完成（RED→GREEN）+ **起栈挖出第二层根因**（注册期快照 nil tracer）并修 |
+| 2 | HTTP 出站埋点（G3） | ✅ 组件 + 接线 8 处；**起栈实测出 `Http/Exit` span**（T-04） |
+| 3 | Redis 埋点接线（G2） | ✅ `redistrace` 子包 + BFF 装配；**起栈实测 `redis.hget`/`redis.del` span**（T-03） |
+| 4 | DLQ span（G4） | ✅ ai-svc + analytics-svc 建 exit span + sw8 注入 + entry-ctx 透传；**起栈实测毒消息 → DLQ span**（T-05） |
+| 5 | fusion 指标接线（G5） | ✅ worker 接线 + 低基数标签；**起栈实测 counter/duration 有值**（T-06） |
+| 6 | BFF SetTracer（G6） | ✅ 落地 + 守卫扩含 BFF（T-07） |
+| 7 | 看板 business/reliability/logs + 告警 | ✅ **3 看板 25 面板** + **6 条新告警规则**；smoke 逐 expr 全非空 |
+| 8 | 采集增量（D-05） | ⚠️ **按字面实现被实测证伪**（`up=0`×6），已改用既有 status 标签 + 告警/面板落地（见 §10.2，**待追认**） |
+| 9 | 负向对照 + 收口 | ✅ 告警真送达（T-13）；span 真出现在 SkyWalking（T-02/03/04/05）；smoke 60/60；report 见 `report.md` |
 
-- **恢复点**：Phase 2 接线 → 3 → 4 → 5 → 6（**均不需栈**，可连续做）；Phase 0/7/8/9 待锁释放。
-- **已落地 commit**：见 **PR #211**（建档 / GORM 修复 / HTTP 组件+守卫 / 免费一半看板 / 决策回填）。
-- **门禁现状**：`go test ./pkg/skywalking/` 绿；`obs_monitoring.test.js` 绿；`check_tdd_gate.sh` 绿；`check_orphan_outputs.sh` 绿。
+- **已落地 commit**：见 **PR #211**（draft，含建档 / GORM 双层修复 / HTTP 组件+守卫 / Redis / DLQ / fusion / BFF SetTracer / 免费一半看板 / Phase 7 三看板+告警 / smoke 扩展 / 证据）。
+- **门禁现状**：`go test ./pkg/skywalking/...` 绿；`promtool check rules` 绿（13 规则）；`smoke_observability.py` **60 PASS / 0 FAIL**；`check_tdd_gate.sh` 绿。
 
 ---
 
 ## §10 起栈实跑验证记录（2026-10-14，B 轨持锁窗口）
 
-> 环境：dev + obs profile（26 容器）；验证用镜像 `*-svc:cl01-verify`（**带轨后缀 tag**，不覆盖公共 tag）。
+> 环境：dev + obs profile（27 容器）；验证用镜像 `*-svc:cl01-verify`（**带轨后缀 tag**，不覆盖公共 tag）。
 > 证据文件在 `evidence/`。
 
 | 测试点 | 结论 | 证据 |
 |---|---|---|
 | **T-02** GORM 出 span | ✅ **PASS** | 修前（旧镜像）`ReportsDaily` trace **0 个 gorm span** → 修后 **3 个 `gorm.row`**（peer=`postgres@<unknown>`）→ `evidence/t02-trace-after-gorm-spans.json` |
-| **T-03** Redis 出 span | ✅ **PASS** | 登录 trace 含 `redis.hget` / `redis.del` 两个 Exit span → `evidence/t03-redis-spans-trace.json` |
-| **T-09/T-10/T-11** 观测面看板 | ✅ **PASS** | Grafana 加载 `emotion-echo-observability`（3 面板）；smoke 逐 expr 非空：Target 矩阵 **12 series** / Down **1** / Firing **1** |
-| **T-13** 告警真触发并送达 | ✅ **PASS** | 停 kafka-exporter → `PrometheusTargetDown` **firing**（activeAt 05:32:44Z）→ **Alertmanager 收到**（severity=critical）→ `evidence/t13-*.json` |
-| **T-17** 观测 smoke 全绿 | ✅ **PASS** | `PASS: 36 check(s)` / FAIL 0 → `evidence/t17-smoke-observability.txt` |
+| **T-03** Redis 出 span | ✅ **PASS** | 登录 trace 含 `redis.hget` / `redis.del` 两个 Exit span → `evidence/t03-redis-spans-trace.json`；IAB 里 SkyWalking UI 肉眼可见 → `evidence/t03-skywalking-ui-redis-spans.png` |
+| **T-04** HTTP 出站 exit span | ✅ **PASS** | `POST /api/v1/tts/synthesize` → trace 含 ai-svc **`Http`/`Exit` `http.POST /tts`**，挂在 gRPC entry 之下 → `evidence/t04-http-exit-span-trace.json` |
+| **T-05** DLQ exit span | ✅ **PASS** | 毒消息（`messageId` 传字符串）重试 4 次耗尽 → `kafka-consume`(Entry) → **`kafka-publish-dlq`(Exit)**；DLQ topic 自动建 → `evidence/t05-dlq-span-trace.json` |
+| **T-06** fusion 指标 | ✅ **PASS** | 投合法事件 → 真 LLM 分析（`deepseek-chat`）→ 融合 → **`emotion_fusion_calls_total{text,success}=1`** → `evidence/t06-fusion-metrics.json` |
 | **T-07** BFF SetTracer | ✅ 装配 + 运行时 | 守卫 `svc_wiring_test.go` 已含 web-bff；BFF trace 正常出 entry span |
+| **T-09/T-10** 看板 + 面板 expr | ✅ **PASS** | Grafana 加载 **6 个**看板（新增 business/reliability/logs）；smoke 逐 expr 非空：business 11 / reliability 10 面板全过 |
+| **T-11** 看板可读（降级/mock） | ✅ **PASS** | IAB 截图：stat 读出 `降级次数 0`、`Worker tick 0.200 ops/s`，图例读出 `text / success`、`llm_to_late` → `evidence/t11-grafana-*.png` |
+| **T-12** 告警可加载 | ✅ **PASS** | `promtool check rules` → SUCCESS: 6 rules；总规则 7 → **13** |
+| **T-13** 告警真触发并送达 | ✅ **PASS** | 停 kafka-exporter → `PrometheusTargetDown` **firing**（activeAt 05:32:44Z）→ **Alertmanager 收到**（severity=critical）→ `evidence/t13-*.json` |
+| **T-14** Loki trace_id | ✅ **PASS** | `{job="services"} |= "<trace_id>"` 走 `/query_range` → **2 条流**（web-bff + ai-svc）→ `evidence/t14-loki-trace-query.json` |
+| **T-15** health 进监控 | ⚠️ **改判落地**（D-05 字面被证伪） | 见 §10.2 |
+| **T-17** 观测 smoke 全绿 | ✅ **PASS** | `PASS: 60 check(s)` / FAIL 0 / exit 0 → `evidence/t17-smoke-observability.txt` |
 
 **本轮起栈额外挖出的真根因（已修）**：
 - **GORM 回调在注册期快照了 nil tracer** —— 各 svc `main.go` 的 `openPostgres()` 在 `SetTracer` **之前** 调 `InitGORM`（analytics：db connect @:97 → SetTracer @:178；其余同序）⇒ 回调**永久 noop**。**修法：回调每次查询现读 tracer**（`gormTracerFn`）。这是"修好 processor 后 SkyWalking 仍 0 个 gorm span"才暴露的**第二层** bug —— 正是 CL-01 约束⑤"必须见 span"的价值。
@@ -305,9 +310,19 @@ related-plans:
 - `deploy/.env.local`、`deploy/tls/*`、`deploy/tmp/apisix-access.log` 等 **gitignored 运行态文件在 worktree 缺失** ⇒ Docker 把挂载点建成**目录** ⇒ llm-service/ai-svc/BFF 起不来（TLS 变目录）、promtail 报 `file is a directory`（APISIX 日志采不到、`{job="apisix"}` 空）。修法：从共享目录拷贝 + `rmdir` 掉假目录。**契约 §8.1 规则 10 只写 `--env-file` 不够**（apps.yml 的服务级 `env_file: .env.local` 锚点是**相对路径**，worktree 内必须有该文件）。
 - Docker Desktop 在 BFF 镜像构建期**挂死**（apiproxy 无响应、`docker` CLI 全超时）⇒ `wsl --shutdown` + 重启 Docker Desktop 恢复（沿用 memory 既有手法）。
 
-**本轮未做的验证**：T-04（HTTP exit span 运行时 —— 需多模态/情绪分析出站触发）、T-05（DLQ span 运行时 —— 需毒消息）、T-06（fusion 指标运行时 —— 需一次真融合；当前 worker `candidates=0`）、T-15（`/health` 采集 = Phase 8 未实现）、Phase 7 其余看板（business/reliability/logs）。
-
 ### §10.1 IAB 浏览器实测（2026-10-14）
 
-- ✅ **SkyWalking UI 视觉确认（T-03 的 `[V]`）**：IAB 打开 `http://127.0.0.1:18080` → Trace 页 → 登录 trace 的 span 树里**肉眼可见 `redis.hget` / `redis.del`**（截图 `evidence/t03-skywalking-ui-redis-spans.png`）。同页也证明 **IAB 渲染能力正常**（服务表 + span 树都出）。
-- ⚠️ **Grafana 看板面板渲染为空 → 新账 `CL-F-13`**：`emotion-echo-observability`（本阶段新建）与**既有** `emotion-echo-overview` 的面板**只有标题/边框、无内容**（DOM `Panel content` 计数 = 0）。已排除 5 项：未登录 / 会话过期 / 视口尺寸 / 数据源查询（页面内 `/api/ds/query` 200 有 frames）/ IAB 渲染能力（同浏览器 SkyWalking UI 正常）。⇒ **T-11 的 `[V]` 暂判 `BLOCKED`**（环境侧，**非本阶段看板配置**——既有看板同样为空）。
+- ✅ **SkyWalking UI 视觉确认（T-03 的 `[V]`）**：IAB 打开 `http://127.0.0.1:18080` → Trace 页 → 登录 trace 的 span 树里**肉眼可见 `redis.hget` / `redis.del`**（截图 `evidence/t03-skywalking-ui-redis-spans.png`）。
+- ✅ **Grafana 三面看板视觉确认（T-11 / T-14 的 `[V]`）**：business / reliability / logs 三块看板在 IAB 中**全部正常渲染并带真实数据** —— business 四张 stat 读出 `0 / 0 / 0 / 0.200 ops/s`、折线图例读出 `text / success` 与 `llm_to_late`；reliability 的 5xx/4xx 曲线、DLQ 表、就绪探针表（`200 × 120`）都出；logs 面板直接显示容器日志行（含 T-05 那条毒消息重试日志）与 APISIX 访问日志。截图 `evidence/t11-grafana-business-dashboard.png`、`t11-grafana-reliability-dashboard.png`、`t14-grafana-logs-dashboard.png`。
+- ❌→✅ **`CL-F-13`「Grafana 面板渲染为空」= 假账，当轮自纠**：上一轮的判定依据是 DOM 里 `[data-testid="data-testid Panel content"]` 计数 = 0 —— **Grafana 10.4.2 没有这个 testid**（选择器是臆造的），计数恒 0。复测改用 `canvas`/`svg` 计数 + `body.innerText` 读值，三块看板**都正常**。⇒ 已把该账改判为**探针错误**并销账（见 `discovered-unresolved.md` CL-F-13）。**教训**："同一浏览器里 SkyWalking UI 正常"**不能**证明对 Grafana 的选择器正确 —— 判"UI 坏了"前必须先让探针在**同一页面**读到已知为真的内容。
+
+### §10.2 D-05 偏差：`/health` 直接 scrape 被实测证伪（**待追认**）
+
+- **裁定原文（D-05）**：`/health` 走「**直接 scrape**」，不引入 blackbox_exporter。
+- **实测结果（2026-10-14，非推断）**：在 `prometheus.yml` 加 `metrics_path: "/health"` 的 job 覆盖 6 个 svc → reload 后 `up{job="emotion-echo-health"}` **6 个 target 全为 0**。
+- **根因**：`/health` 返回 **JSON**（`{"status":"ok","dbOk":true,...}`），Prometheus 的文本 exposition 解析器对其报错 ⇒ 该次抓取判失败 ⇒ `up=0`。**这不是"服务不健康"，是格式不匹配**；留着会让 `PrometheusTargetDown` 长期误报（比没有监控更糟）。**已移除该 job**，并在 `prometheus.yml` 原位置留注释说明。
+- **替代方案（同一目标、零新增容器/代码）**：把 health 拆成两条既有信号 ——
+  1. **进程存活** = `up{job="emotion-echo-services"}`（原有）；
+  2. **依赖就绪** = `emotion_echo_http_requests_total{path="/health/ready", status=~"5.."}` —— 各 svc 的 HTTP 中间件**已带 `status` 标签**，docker healthcheck 每 30s 打一次 `/health/ready`，依赖挂掉返 503 时该 series 直接出现。
+- **落地物**：reliability 看板「就绪探针失败（5m）」+「就绪探针通断（按服务 × 状态码）」（实测每服务 1h ≈ 120 次 200）；告警 `ServiceNotReady`（critical）+ `HealthProbeMissing`（warning）。
+- **需要用户裁定的点**：① 接受该替代（= 本阶段 T-15 以"health 就绪状态进了 Prometheus 并可告警"结案）；② 或坚持"要 /health 的语义（如 dbOk 值本身）"→ 则须二选一：给 6 个 svc 加一个 Prometheus 文本格式的健康端点（**代码改动，且 health handler 在别的轨文件面**），或引入 blackbox_exporter（**违背 D-02 内存红线**）。**本阶段按 ① 收口，偏差记此待追认。**
