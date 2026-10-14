@@ -372,6 +372,26 @@ PR review 时若发现违反 TDD：
 6. **收工三查**：写本轨 STATUS.md（已做/未做分列，禁美化）→ 删 `.devmode-session` →
    §2.5 三连自检。
 
+### 8.1 多轨硬化条款（2026-10-14 起生效，CL 转多轨实证）
+
+> **背景**：2026-10-14 CL-04/CL-01/CL-02 三轨并行暴露六类问题（登记只活分支 ⇒ main 占用信息失真 / 多轨同改登记表 /
+> **基于旧 main 的分支会回退别人已合内容** / worktree 缺 gitignored 运行态文件 / 两 worktree 构建同一镜像 tag 互相覆盖 /
+> 本地守卫在 worktree 假红）。**细则与实证、业界做法见 [`docs/_meta/multi-track-parallelism.md`](docs/_meta/multi-track-parallelism.md)**。
+> 以下 4 条为**硬约束**，违反按 §六 处置：
+
+7. **只在自己的分支 / 自己的 PR 上工作**：禁止 push 到他人分支、rebase 他人分支、代他人解冲突、把他人分支的提交合进自己分支。
+   他人分支**只读**（`git log` / `ls-remote` / `merge-tree` / `show <ref>:<path>`，不 checkout）。
+8. **登记独立落地、先落 main 再开工**：占位登记（contract §三）与握手（§四）走**独立小 PR**（纯文档，秒合）；
+   阶段 PR **不改登记表**；登记表 **append-only**——每轨只追加自己那行，冲突时保留双方行。
+9. **合并前三查**：① `git merge-tree --write-tree HEAD origin/main` 必须 **0 冲突**；
+   ② `git diff origin/main...HEAD -- <共享文档>` 必须**为空**（非空 = 你在动别人也在动的文件，先查"我这版是否比 main 旧"）；
+   ③ 镜像/容器须确认是自己的（`docker images` / `docker ps --format '{{.Image}}'`）。任一不过 ⇒ **停手上报**，不硬合。
+   合并 **FIFO 串行**，且**每次合并后**对其余在飞 PR 重跑 ①。
+10. **共享 docker 资源隔离**：两个 worktree 共用同一 daemon ⇒ 镜像 tag / 容器是**共享可变资源**：
+   构建用**带轨后缀的 tag**（不覆盖公共 tag）、`up` **只指名自己的服务**、用栈前在 contract §3.1 排队表登记、
+   **用毕删** `deploy/.devmode-session`。worktree 起栈必须 `--env-file <共享目录>/deploy/.env.local`
+   （worktree 内没有该文件）；改 Go 的验收 = **「worktree 构建镜像 + 共享目录 up 容器」两步**。
+
 ---
 
-> 最后更新：2026-10-13（§七 新增「闭环」阶段路线图 → `docs/closure-roadmap/`）
+> 最后更新：2026-10-14（§8.1 新增多轨硬化条款 7~10；细则 `docs/_meta/multi-track-parallelism.md`）

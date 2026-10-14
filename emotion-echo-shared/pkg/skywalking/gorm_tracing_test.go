@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SkyAPM/go2sky"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -65,34 +68,13 @@ func TestBuildDBPeer_EmptyStatementSafe(t *testing.T) {
 	}
 }
 
-// TestContextOrBg_NilToBackground nil ctx 替换为 Background
-func TestContextOrBg_NilToBackground(t *testing.T) {
-	got := contextOrBg(nil)
-	if got == nil {
-		t.Fatalf("nil ctx should be replaced with non-nil")
-	}
-	if _, ok := got.Deadline(); ok {
-		t.Fatalf("background ctx should have no deadline")
-	}
-}
-
-// TestContextOrBg_NonNilPreserved 非 nil 上下文原样返回
-func TestContextOrBg_NonNilPreserved(t *testing.T) {
-	type k struct{}
-	parent := context.WithValue(context.Background(), k{}, "v")
-	got := contextOrBg(parent)
-	if got.Value(k{}) != "v" {
-		t.Fatalf("non-nil ctx should be preserved")
-	}
-}
-
 // TestMakeCallbacks_NilTracer_ReturnsFuncs 即使 tracer 为 nil，回调函数仍返回
 func TestMakeCallbacks_NilTracer_ReturnsFuncs(t *testing.T) {
-	begin := makeBeginCallback("query", nil)
+	begin := makeBeginCallback("query")
 	if begin == nil {
 		t.Fatalf("begin callback should be non-nil")
 	}
-	end := makeEndCallback(nil)
+	end := makeEndCallback()
 	if end == nil {
 		t.Fatalf("end callback should be non-nil")
 	}
@@ -105,7 +87,7 @@ func TestMakeBeginCallback_NilTracer_RunNoPanic(t *testing.T) {
 			t.Fatalf("nil tracer begin callback should not panic, got %v", r)
 		}
 	}()
-	cb := makeBeginCallback("query", nil)
+	cb := makeBeginCallback("query")
 	d := &gorm.DB{Statement: &gorm.Statement{Table: "users"}}
 	cb(d)
 }
@@ -114,7 +96,7 @@ func TestMakeBeginCallback_NilTracer_RunNoPanic(t *testing.T) {
 func TestMakeBeginCallback_AllOpTypes(t *testing.T) {
 	ops := []string{"create", "query", "update", "delete", "row"}
 	for _, op := range ops {
-		cb := makeBeginCallback(op, nil)
+		cb := makeBeginCallback(op)
 		if cb == nil {
 			t.Fatalf("op=%s: callback should be non-nil", op)
 		}
@@ -130,7 +112,7 @@ func TestMakeEndCallback_NilStatement(t *testing.T) {
 			t.Fatalf("end callback with nil-tracer shouldn't panic, got %v", r)
 		}
 	}()
-	cb := makeEndCallback(nil)
+	cb := makeEndCallback()
 	d := &gorm.DB{Statement: &gorm.Statement{}}
 	cb(d)
 }
@@ -147,4 +129,80 @@ func TestInstrumentGORM_NilDB_NoPanic(t *testing.T) {
 	}()
 	var db *gorm.DB
 	InstrumentGORM(db)
+}
+
+// TestInstrumentGORM_RegistersOnOpProcessors（CL-01 T-01 回归钉）
+//
+// ORM 各 op 的 begin/end 回调必须注册在**对应的 processor**（Create/Query/Update/
+// Delete/Row）上。历史 bug：全部错挂 db.Callback().Raw() —— 而 ORM 的 Create/Find/
+// Updates/Delete 各走自己的 processor，**永不进 Raw** ⇒ 5 svc 的 ORM 查询零 span。
+// 修前本测试 RED（Query().Get("skywalking:begin_query") == nil），修后 GREEN。
+func TestInstrumentGORM_RegistersOnOpProcessors(t *testing.T) {
+	// 源码确认：gorm.Open(nil, …) 中 config.Dialector 保持 nil，Open 仍会
+	// 初始化默认 callbacks 且不触发 Ping ⇒ 返回可用的 *gorm.DB（见 gorm.go Open）。
+	db, err := gorm.Open(nil, &gorm.Config{SkipDefaultTransaction: true})
+	require.NoError(t, err, "gorm.Open(nil) 必须返回可用的 *gorm.DB（callbacks 已在 Open 内初始化）")
+	require.NotNil(t, db)
+
+	InstrumentGORM(db)
+	cbs := db.Callback()
+
+	// 只用 Get 单个方法，避免引用 gorm 未导出的 *callbacks 类型
+	type getter interface {
+		Get(name string) func(*gorm.DB)
+	}
+	cases := []struct {
+		op   string
+		proc getter
+	}{
+		{"create", cbs.Create()},
+		{"query", cbs.Query()},
+		{"update", cbs.Update()},
+		{"delete", cbs.Delete()},
+		{"row", cbs.Row()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.op, func(t *testing.T) {
+			assert.NotNilf(t, tc.proc.Get("skywalking:begin_"+tc.op),
+				"begin 回调必须注册在 %s processor（修前错挂 Raw ⇒ nil）", tc.op)
+			assert.NotNilf(t, tc.proc.Get("skywalking:end_"+tc.op),
+				"end 回调必须注册在 %s processor", tc.op)
+		})
+	}
+
+	// 负向 1：Raw processor 不应再堆 ORM 的 query 回调（原 bug 的形态）
+	assert.Nil(t, cbs.Raw().Get("skywalking:begin_query"),
+		"ORM query 回调不应挂在 Raw processor 上（Raw 只由 db.Raw()/Exec() 触发）")
+	// 负向 2：裸 SQL 仍须有独立埋点（analytics 报表大量用 db.Raw/db.Exec）
+	assert.NotNil(t, cbs.Raw().Get("skywalking:begin_raw"),
+		"裸 SQL 应有一条独立 span（skywalking:begin_raw）")
+}
+
+// TestInstrumentGORM_ReadsTracerAtCallTime_NotAtRegisterTime（CL-01 **真根因**回归钉）
+//
+// 复现各 svc main.go 的真实顺序：**先** openPostgres→InitGORM（全局 tracer 尚未注册），
+// **后** SetTracer（analytics main.go：db connect @:97 → SetTracer @:178）。
+// 旧实现把 tgr 快照进闭包 ⇒ 注册期 nil ⇒ 回调**永久 noop** ⇒ ORM 埋点"注册了却永不出 span"
+// （2026-10-14 起栈实测：修好 processor 后 SkyWalking 仍 0 个 gorm span，才挖出这一层）。
+//
+// 断言手法：替换 gormTracerFn，断言 **注册期 0 次调用 / 调用回调时 ≥1 次** ——
+// 确定性、不依赖 go2sky 的异步 segment 上报（go2sky 在 goroutine 里 Send，单测难同步观察）。
+func TestInstrumentGORM_ReadsTracerAtCallTime_NotAtRegisterTime(t *testing.T) {
+	calls := 0
+	orig := gormTracerFn
+	gormTracerFn = func() *go2sky.Tracer { calls++; return nil } // 返 nil：不真建 span
+	t.Cleanup(func() { gormTracerFn = orig })
+
+	db, err := gorm.Open(nil, &gorm.Config{SkipDefaultTransaction: true})
+	require.NoError(t, err)
+
+	InstrumentGORM(db) // ← 注册期
+	assert.Zero(t, calls, "注册回调时**不得**取 tracer（旧实现正是在此快照 nil）")
+
+	begin := db.Callback().Query().Get("skywalking:begin_query")
+	require.NotNil(t, begin)
+	begin(&gorm.DB{Statement: &gorm.Statement{Context: context.Background()}})
+
+	assert.GreaterOrEqual(t, calls, 1,
+		"回调必须在**调用时**现取 tracer（否则 main 里 SetTracer 晚于 InitGORM ⇒ 永久 noop）")
 }

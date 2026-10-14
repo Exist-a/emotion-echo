@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // SurveyItem 对应 assessment-svc types.SurveyItem
@@ -196,7 +198,7 @@ func NewAssessmentClient(opts AssessmentClientOptions) AssessmentClient {
 	}
 	return &assessmentHTTPClient{
 		baseURL: opts.BaseURL,
-		http:    &http.Client{Timeout: timeout},
+		http:    trace.NewTracedClient(timeout),
 	}
 }
 

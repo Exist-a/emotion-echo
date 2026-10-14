@@ -41,6 +41,8 @@ import (
 	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
+	sharedredistrace "github.com/emotion-echo/shared/pkg/skywalking/redistrace"
+	sharedtrace "github.com/emotion-echo/shared/pkg/skywalking/trace"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
@@ -194,11 +196,21 @@ func main() {
 				log.Fatalf("[skywalking] strict mode + required dep, refusing to start: %v", err)
 			}
 			log.Printf("[skywalking] tracer init failed (warn mode, continue): %v", err)
+			// CL-F-14：启动期失败后**后台持续补挂**（不阻塞启动）。
+			// 否则 OAP 与 svc 同起时该服务**整段生命周期零 span** —— 实测 SkyWalking
+			// 服务列表里整段缺席（5 个 vs 应有 7 个），docker restart 才愈。
+			// 补挂成功时 SetTracer 会同时注册 trace 与 grpcinterceptor 两个全局槽，
+			// gin 中间件 / gRPC server 拦截器按请求现读 ⇒ 入口 span 自动生效。
+			_ = sharedtrace.StartTracerBackgroundRetry(context.Background(), c.SkyWalking.ServiceName, c.SkyWalking.OAPAddr, sharedtrace.TracerBackgroundRetryOptions{})
 		} else {
 			tracer = t
 			// Stage 94 PR-4 §P0-1b：把 tracer 提升为包级 var,让 dialGRPC 通过
 			// ClientDialOptions 挂到 5+1 个下游 gRPC conn 上
 			packageTracer = t
+			// CL-01 D-04：对齐 5 个 svc —— 把 tracer 注册进全局注册表。
+			// 此前 BFF 只有局部 packageTracer，不在 svc_wiring 守卫覆盖内（盲区）。
+			// 用无 gorm 依赖的 pkg/skywalking/trace，避免把 ORM 拖进网关依赖图。
+			sharedtrace.SetTracer(t)
 			log.Printf("[skywalking] tracer initialized (PR-OBS-2 helper)")
 		}
 	}
@@ -280,6 +292,9 @@ func main() {
 	// E2E-23 #5：Redis client 由 main 持有，authLockStore 与 /health 探针**共用**同一个
 	// —— 早先版本让 buildHealthDeps 自建 client，等于多开一个连接池且永不关闭。
 	redisClient := buildRedisClient()
+	// CL-01 G2：给 Redis 客户端接上 SkyWalking 埋点（每条命令一个 exit span）。
+	// nil client（未启用 LOGIN_LOCK_BACKEND=redis）安全返回 false。
+	sharedredistrace.InitRedis(redisClient)
 	authLockStore := buildAuthLockStoreWithClient(redisClient)
 	if closer, ok := authLockStore.(interface{ Close() error }); ok {
 		defer closer.Close() // main 退出时释放（RedisStore Close）

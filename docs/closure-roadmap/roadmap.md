@@ -45,15 +45,21 @@ related:
 > 当多轨主文件面隔离（见 [parallel-contract.md](parallel-contract.md) §一）时，**可各自 `in-progress`**——
 > 当前三轨并行：**A=CL-04 / B=CL-01 / C=CL-02**，唯一串行资源是 dev 栈（单锁排队）与 `proto/**`（C 轨预占）。
 > ⚠️ A/B 两行状态由 **C 轨按事实回填**（其登记原写在各自分支上，main 曾滞后为 `pending`）；合并时以 `parallel-contract.md §三` 为准。
+>
+> **D 轨开工（2026-10-14，Lane-CL-D）**：**CL-05 消息链路闭环** → `in-progress`，为 T2 首块（`depends-on: —`，故**不阻塞于 T1**）。
+> 选取理由：① roadmap §3 已标 `CL-05 ∥ 可并行`；② 主文件面与 B/C 隔离（仅 3 处相交，已在契约 §四 声明排队）；
+> ③ 按「新轨准入规则」自答 🟢 占比——**Phase 1~4（类型收敛 / 缓存接线 / 状态机 / 重试）全为 vitest 级，不需 dev 栈**，
+> 只有 Phase 0/5~7 需栈 ⇒ 属"🟢 先行"轨，准入成立。串行资源排队：dev 栈（**B 持锁 → C → D**）、`proto/**`（C 预占，D 已申请握手）。
+> ⚠️ 本轨**不动** A/B/C 已写的行；仅追加本注与 CL-05 自身行（H3 append-only）。
 
 | CL | 阶段 | 档 | 含待排期计划 | depends-on | 状态 |
 |---|---|---|---|---|---|
 | **CL-00** | **CI 瘦身** | T0 | `.github/workflows/*` + `scripts/` 守卫 | — | ✅ **done**（PR #209） |
-| **CL-01** | **可观测闭环** | T1 | `observability-instrumentation-and-dashboards` → `observability-business-metrics-wiring` → `grafana-dashboard-gaps`；`redis-two-layer-cache` | — | **in-progress**（B 轨 · PR #211 draft） |
+| **CL-01** | **可观测闭环** | T1 | `observability-instrumentation-and-dashboards` → `observability-business-metrics-wiring` → `grafana-dashboard-gaps`；`redis-two-layer-cache` | — | ✅ **done 并已合并**（B 轨 · PR #211 于 2026-10-14 **squash 合并 → `b1f13dc`**，源分支已删；19 测试点全部落在合法四值、起栈运行时证据齐（含 CL-F-14 的 A/B 负向对照）、账本三条已销、落地计划已迁、D-05/D-07 已裁定、**收口契约 7 条全满足**（第 7 条由用户指示的独立子代理两轮核对：首轮 FAIL → 整改 → 第二轮 PASS），见 `stages/cl-01-observability/report.md`） |
 | **CL-02** | gRPC 契约闭环 | T1 | `grpc-deadlink-actualization` | — | **in-progress**（C 轨 · PR #214 draft） |
 | **CL-03** | Kafka/可靠性闭环（合并一次执行） | T1 | `outbox-trace-continuity`、`dlq-hardening-and-replay`、`kafka-pipeline-pending-decisions` | 与 CL-01/02 共享追踪面 | pending |
-| **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign` | — | **in-progress**（A 轨 · PR #213 draft） |
-| **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | pending |
+| **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
+| **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | **in-progress**（D 轨 · draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；🟢 Phase 1~4 不需栈先行，🔴 需栈 Phase 0/5~7 排队在 C 之后） |
 | **CL-06** | 用户自定义 Agent | T3 | `user-custom-agent-persona` | CL-04 | pending |
 | **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | pending |
 | **CL-08a** | 记忆 · 用户事实 | 最后 | `conversation-memory-pending-decision` | CL-04 | pending |

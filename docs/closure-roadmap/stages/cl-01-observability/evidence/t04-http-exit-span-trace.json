@@ -1,0 +1,64 @@
+{
+  "data": {
+    "queryTrace": {
+      "spans": [
+        {
+          "traceId": "113acc30c79911f18f39a626b6fc5194",
+          "spanId": 0,
+          "parentSpanId": -1,
+          "serviceCode": "emotion-echo-web-bff",
+          "startTime": 1791959565818,
+          "endTime": 1791959576041,
+          "endpointName": "/api/v1/tts/synthesize",
+          "type": "Entry",
+          "peer": "",
+          "layer": "Unknown",
+          "component": "Unknown",
+          "isError": true
+        },
+        {
+          "traceId": "113acc30c79911f18f39a626b6fc5194",
+          "spanId": 1,
+          "parentSpanId": 0,
+          "serviceCode": "emotion-echo-web-bff",
+          "startTime": 1791959565819,
+          "endTime": 1791959576015,
+          "endpointName": "client:/emotion_ai.v1.EmotionQueryService/SynthesizeSpeech",
+          "type": "Exit",
+          "peer": "emotion-echo-ai-svc:8892",
+          "layer": "Cache",
+          "component": "ServiceCombMesher",
+          "isError": true
+        },
+        {
+          "traceId": "113acc30c79911f18f39a626b6fc5194",
+          "spanId": 0,
+          "parentSpanId": -1,
+          "serviceCode": "emotion-echo-ai-svc",
+          "startTime": 1791959565974,
+          "endTime": 1791959576001,
+          "endpointName": "/emotion_ai.v1.EmotionQueryService/SynthesizeSpeech",
+          "type": "Entry",
+          "peer": "",
+          "layer": "Cache",
+          "component": "ServiceCombMesher",
+          "isError": true
+        },
+        {
+          "traceId": "113acc30c79911f18f39a626b6fc5194",
+          "spanId": 1,
+          "parentSpanId": 0,
+          "serviceCode": "emotion-echo-ai-svc",
+          "startTime": 1791959565977,
+          "endTime": 1791959575988,
+          "endpointName": "http.POST /tts",
+          "type": "Exit",
+          "peer": "emotion-echo-xtts:8003",
+          "layer": "Http",
+          "component": "Unknown",
+          "isError": true
+        }
+      ]
+    }
+  }
+}

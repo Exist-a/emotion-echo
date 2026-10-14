@@ -18,6 +18,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // TTSStreamReq 流式 TTS 请求
@@ -102,7 +104,7 @@ func NewXTTSClient(opts XTTSClientOptions) XTTSClient {
 	}
 	return &xttsHTTPClient{
 		baseURL: opts.BaseURL,
-		http:    &http.Client{Timeout: timeout},
+		http:    trace.NewTracedClient(timeout),
 	}
 }
 

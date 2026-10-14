@@ -1,0 +1,34 @@
+########## 阶段 A：造条件（停 OAP 重建 chat-svc；**sw-ui 保持运行**）##########
+--- A1 只停 OAP ---
+oap_state=exited
+sw_ui_state=running
+--- A2 用 cl01-verify 镜像重建 chat-svc ---
+ Container emotion-echo-chat-svc Recreated 
+ Container emotion-echo-chat-svc Starting 
+ Container emotion-echo-chat-svc Started 
+image=emotion-echo/chat-svc:cl01-verify
+--- 等 45s 让启动期重试（5×2s）走完并进入后台补挂 ---
+--- A3 断言：日志出现 init failed + 后台补挂失败行 ---
+A3_matching_lines=4  (期望 >=2)
+{"time":"2026-10-14T21:17:29.273930547+08:00","level":"INFO","msg":"[skywalking] tracer init failed (warn mode, continue): dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-14T21:17:31.055477481+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 1 次失败（service=emotion-echo-chat-svc backoff=5s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-14T21:17:38.054024609+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 2 次失败（service=emotion-echo-chat-svc backoff=10s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap: i/o timeout","svc":"chat-svc"}
+{"time":"2026-10-14T21:17:49.815525074+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 3 次失败（service=emotion-echo-chat-svc backoff=20s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+
+########## 阶段 B：验证（起 OAP，不重启 chat-svc）##########
+--- B1 起 OAP ---
+--- 等 OAP 就绪 60s ---
+--- B2 轮询 SkyWalking 服务列表（最多 5 分钟；后台退避 5/10/20/40/60s）---
+[poll 1] rc=1 :: services(1)=['emotion-echo-assessment-svc']
+[poll 2] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 3] rc=0 :: services(6)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-chat-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+B2_exit=0  (期望 0 = FOUND)
+--- B3 日志：后台补挂成功 ---
+B3_成功行数=1  (期望 >=1)
+{"time":"2026-10-14T21:19:49.855436176+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂成功（service=emotion-echo-chat-svc attempt=6）—— 入口 span 自此刻起生效","svc":"chat-svc"}
+
+########## 结论 ##########
+A3(进入补挂路径, 期望 >=2): 4
+B2(自动回归 SkyWalking, 期望 0): 0
+B3(补挂成功日志, 期望 >=1): 1
+RESULT: PASS —— OAP 恢复后 chat-svc 未重启即自动出现在 SkyWalking

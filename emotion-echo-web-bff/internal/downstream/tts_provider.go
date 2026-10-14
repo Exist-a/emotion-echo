@@ -26,6 +26,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // TTSProvider 是 TTS 上游的统一抽象（cloud=CosyVoice2 API / local=XTTS）。
@@ -95,7 +97,7 @@ func NewCloudTTSProvider(opts CloudTTSOptions) TTSProvider {
 		// plan §C：cloud 实测 33 字完整返回 ~1.5s，30s 极宽裕（兜底防呆）
 		timeout = 30 * time.Second
 	}
-	return &cloudTTSProvider{opts: opts, http: &http.Client{Timeout: timeout}}
+	return &cloudTTSProvider{opts: opts, http: trace.NewTracedClient(timeout)}
 }
 
 func (p *cloudTTSProvider) Name() string { return "cloud" }

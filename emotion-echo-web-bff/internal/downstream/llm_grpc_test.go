@@ -96,6 +96,45 @@ func TestLLMGRPCClient_StreamsDeltas(t *testing.T) {
 	assert.Equal(t, "test-internal-key", servicer.gotAPIKey, "必须注入 internal api key")
 }
 
+// CL-04 Phase 3（T-7）：生成参数必须真的**落到 pb 字段**上。
+//
+// 本文件头早已声称覆盖 "temperature/max_tokens 映射"，但此前只断言了 model/messages
+// —— 这正是缺陷 3（handler 从不赋值 ⇒ 上游无输出上限）长期没被发现的空隙。
+// 本钉把"BFF 填了参数 → pb 真有值"这段链路钉住（handler 侧另有 prompt_params_test.go）。
+func TestLLMGRPCClient_StreamChat_MapsGenerationParamsIntoPB(t *testing.T) {
+	servicer := &fakeLLMServiceServicer{deltas: []string{"x"}}
+	c := startFakeLLMServer(t, servicer)
+
+	err := c.StreamChat(context.Background(), LLMStreamRequest{
+		Model:       "deepseek-chat",
+		Messages:    []Message{{Role: "user", Content: "hi"}},
+		Temperature: 0.7,
+		MaxTokens:   1024,
+	}, func(string, string) {})
+	require.NoError(t, err)
+
+	require.NotNil(t, servicer.gotReq)
+	assert.Equal(t, 0.7, servicer.gotReq.GetTemperature(), "Temperature 必须落到 pb")
+	assert.Equal(t, int32(1024), servicer.gotReq.GetMaxTokens(), "MaxTokens 必须落到 pb")
+}
+
+// CL-04 Phase 5（T-11）：`with_intent` 必须落到 pb —— 否则 llm-service 的 inject_style
+// 永不触发（缺陷 5：该分支自 Stage 82 起一直是死路径）。
+func TestLLMGRPCClient_StreamChat_MapsWithIntentIntoPB(t *testing.T) {
+	servicer := &fakeLLMServiceServicer{deltas: []string{"x"}}
+	c := startFakeLLMServer(t, servicer)
+
+	err := c.StreamChat(context.Background(), LLMStreamRequest{
+		Model:      "deepseek-chat",
+		Messages:   []Message{{Role: "user", Content: "hi"}},
+		WithIntent: true,
+	}, func(string, string) {})
+	require.NoError(t, err)
+
+	require.NotNil(t, servicer.gotReq)
+	assert.True(t, servicer.gotReq.GetWithIntent(), "WithIntent 必须落到 pb（否则接回无效）")
+}
+
 func TestLLMGRPCClient_UpstreamError_ReturnsError(t *testing.T) {
 	servicer := &fakeLLMServiceServicer{withError: true}
 	c := startFakeLLMServer(t, servicer)

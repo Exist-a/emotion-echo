@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 
 // Sprint 111 · R-09 architecture regression (static-source)
 //
@@ -22,7 +22,8 @@ import { readFileSync } from 'node:fs'
 // 必须通过 getClientAccessToken() helper, 保证 Authorization header 不为空.
 
 const handlerSrc = readFileSync('./app/composables/useAIStreamHandler.ts', 'utf8')
-const streamSrc = readFileSync('./app/composables/useAIStream.ts', 'utf8')
+// CL-04 Phase 5：`useAIStream.ts` 已作为死路径删除（本项目唯一生产客户端是 useAIStreamHandler），
+// 原断言随之移除；回流防护见下方「死路径不得回流」用例。
 const ttsSrc = readFileSync('./app/composables/useTTSPlayer.ts', 'utf8')
 const helperSrc = readFileSync('./app/lib/clientAccessToken.ts', 'utf8')
 
@@ -35,15 +36,6 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
       'useAIStreamHandler 必须通过 getClientAccessToken() 读 token, ' +
         "不能直接 useCookie('access_token').value (Sprint 111 浏览器实测: " +
         'Authorization 空 → APISIX jwt-auth 401).',
-    ).toBe(true)
-  })
-
-  it('useAIStream MUST call getClientAccessToken() (同 R-09 根因)', () => {
-    const usesGetClientAccessToken = /getClientAccessToken\s*\(/.test(streamSrc)
-    expect(
-      usesGetClientAccessToken,
-      'useAIStream 必须通过 getClientAccessToken() 读 token. ' +
-        'Sprint 111 浏览器实测确认 R-09 在此文件同根因.',
     ).toBe(true)
   })
 
@@ -84,11 +76,10 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
     ).toBe(true)
   })
 
-  it("R-09 修复前 (回归保护): 三个调用点禁止再单独 useCookie('access_token').value 拼 Authorization", () => {
+  it("R-09 修复前 (回归保护): 两个调用点禁止再单独 useCookie('access_token').value 拼 Authorization", () => {
     // 反向钉死: 不准再用 useCookie('access_token').value 作为 Authorization header 唯一来源
     const badPatterns = [
       { name: 'useAIStreamHandler', src: handlerSrc },
-      { name: 'useAIStream', src: streamSrc },
       { name: 'useTTSPlayer', src: ttsSrc },
     ]
     for (const { name, src } of badPatterns) {
@@ -100,6 +91,35 @@ describe('Sprint 111 · R-09 architecture: ai-stream/TTS Authorization header �
         `${name} 不能直接用 useCookie('access_token').value 拼 Authorization (Sprint 111 浏览器实测 401 根因). ` +
           '必须改用 getClientAccessToken().',
       ).toBe(true)
+    }
+  })
+
+  // CL-04 Phase 5（T-12）：死路径清零后的**回流防护**。
+  // 这两条死路径（另一套 OpenAI 兼容 SSE 客户端 / 硬编码 RCT prompt）都容易被当成"备用实现"
+  // 留着 —— 留着就有人接错线；**删除 + 钉死"不得回流"**才算清零。
+  it('死路径不得回流: useAIStream.ts / usePrompt.ts / promptType.ts 必须不存在', () => {
+    expect(
+      existsSync('./app/composables/useAIStream.ts'),
+      'useAIStream.ts 已删（本项目唯一生产客户端是 useAIStreamHandler）；不得回流',
+    ).toBe(false)
+    expect(
+      existsSync('./app/composables/usePrompt.ts'),
+      'usePrompt.ts（含 buildRCTPrompt）已删；不得回流',
+    ).toBe(false)
+    expect(
+      existsSync('./app/types/prompt/promptType.ts'),
+      '仅服务于已删死路径的类型文件一并清除；不得回流',
+    ).toBe(false)
+  })
+
+  it('死路径不得回流: 生产链路不得再出现 buildRCTPrompt 引用', () => {
+    const productionFiles = [
+      './app/composables/useAIStreamHandler.ts',
+      './app/composables/useConversationSender.ts',
+    ]
+    for (const p of productionFiles) {
+      const src = readFileSync(p, 'utf8')
+      expect(/buildRCTPrompt/.test(src), `${p} 不得引用 buildRCTPrompt（已删）`).toBe(false)
     }
   })
 })

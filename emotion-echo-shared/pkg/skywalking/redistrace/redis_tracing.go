@@ -1,0 +1,107 @@
+// Package redistrace 把 go-redis 客户端接上 SkyWalking exit span。
+//
+// 为什么不放在 `pkg/skywalking`：那个包含 GORM 埋点（import gorm.io/gorm），
+// 而 web-bff（API 网关）只想接 Redis 埋点，不该因此把 ORM 拖进依赖图。
+// 本包只依赖 go-redis + pkg/skywalking/trace（后者仅依赖 go2sky）。
+package redistrace
+
+import (
+	"context"
+	"errors"
+
+	"github.com/redis/go-redis/v9"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
+)
+
+// InitRedis 给 *redis.Client 装上 Tracing Hook，返回是否挂载成功。
+//
+// 用途：调用方在拿到 *redis.Client 后立即调一次：
+//
+//	rdb := buildRedisClient()
+//	if redistrace.InitRedis(rdb) { ... }
+//
+// nil-safe：nil client 不 panic，返 false。无 tracer 时 ProcessHook 直接透传，零开销。
+func InitRedis(client *redis.Client) bool {
+	if client == nil {
+		return false
+	}
+	InstrumentRedis(client)
+	return true
+}
+
+// InstrumentRedis 给 *redis.Client 装上 Tracing Hook，让每条 Redis 命令产生一个 ExitSpan。
+func InstrumentRedis(rdb *redis.Client) {
+	// 防御：nil client 不挂 hook（以前会 panic；Stage 26-A 暴露 bug #2）
+	if rdb == nil {
+		return
+	}
+	rdb.AddHook(&redisTracingHook{addr: rdb.Options().Addr})
+}
+
+// redisTracingHook 实现 go-redis Hook 接口
+type redisTracingHook struct {
+	addr string
+}
+
+// DialHook 连接阶段：通常无 trace 必要，直接放行
+func (h *redisTracingHook) DialHook(next redis.DialHook) redis.DialHook {
+	return next
+}
+
+// ProcessHook 单条命令的 hook（GET/SET/DEL 等）
+func (h *redisTracingHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		tgr := trace.Tracer()
+		if tgr == nil {
+			return next(ctx, cmd)
+		}
+		end := trace.CreateExitSpan(ctx, tgr, "redis."+cmd.Name(), "redis@"+h.addr)
+
+		err := next(ctx, cmd)
+		if err != nil && !errors.Is(err, redis.Nil) {
+			end(trace.WithError(err))
+		} else {
+			end()
+		}
+		return err
+	}
+}
+
+// ProcessPipelineHook pipeline 命令（一条 TCP 链多个命令）
+func (h *redisTracingHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		tgr := trace.Tracer()
+		if tgr == nil {
+			return next(ctx, cmds)
+		}
+		end := trace.CreateExitSpan(ctx, tgr, "redis.pipeline", "redis@"+h.addr)
+
+		names := make([]string, 0, len(cmds))
+		for _, c := range cmds {
+			names = append(names, c.Name())
+		}
+		// 把命令列表作为 tag 写到 span
+		err := next(ctx, cmds)
+		if err != nil {
+			end(trace.WithError(err), trace.WithTag("redis.cmds", joinCmds(names)))
+		} else {
+			end(trace.WithTag("redis.cmds", joinCmds(names)))
+		}
+		return err
+	}
+}
+
+func joinCmds(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	out := names[0]
+	for i := 1; i < len(names); i++ {
+		out += "," + names[i]
+	}
+	return out
+}
+
+// 确保 go-redis Hook 接口完整实现
+var _ redis.Hook = (*redisTracingHook)(nil)

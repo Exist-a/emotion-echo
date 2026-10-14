@@ -9,6 +9,11 @@ last-refresh: 2026-09-24
 
 # 双轨并行约束协议（Lane E × Lane O）
 
+> **📌 N 轨并行（≥2 轨，含多 Agent）请同时读 [`multi-track-parallelism.md`](multi-track-parallelism.md)**
+> —— 该文件是 2026-10-14 CL-04/CL-01/CL-02 三轨并行的实证硬化版（硬约束 7~10：**只在自己的分支/PR 上工作** ·
+> 登记独立落地且 append-only · **合并前三查**（`merge-tree` 0 冲突 / 共享文档空 diff / 镜像归属）· 共享 docker 资源隔离），
+> 并附业界做法与出处。AGENTS.md §8.1 是其效力来源。
+
 > **本文件是约束文件**（同 AGENTS.md §〇 定位）：E2E-17 收口前后，E2E 主链路验证与端侧化
 > stage1（[v0.3 §C.1](../plans/on-device-hybrid-inference-implementation-roadmap-2026-09-23.md)）
 > 将在**不同会话、不同分支**并行推进。本文件定义两轨"互不影响"的硬规则。

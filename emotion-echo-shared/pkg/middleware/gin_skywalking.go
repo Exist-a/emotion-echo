@@ -60,6 +60,14 @@ import (
 // nil tracer 安全: 与之前版本一致,直接 c.Next() 不挂 span(测试 PR-OBS-12 5 case 验证)。
 func GinSkywalkingMiddleware(tracer grpcinterceptor.Tracer) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// CL-F-14：构造期拿到的 tracer 为 nil 时，**每次请求现读**全局 tracer。
+		// 背景：svc 可能先于 OAP 启动 ⇒ 构造期 tracer 为 nil；若就此定死，
+		// 之后后台补挂的 tracer 永远进不来，该服务整段生命周期零 span。
+		// 非 nil 时不再覆盖，保持既有「显式注入优先」语义。
+		if tracer == nil {
+			tracer = grpcinterceptor.GlobalTracer()
+		}
+
 		// Round 4.7 §D: SKIP_PATH_LIST env 控制跳过路径（取代硬编码 /health + /internal/）。
 		// 缺省 fallback 到历史行为（向后兼容）。
 		path := c.Request.URL.Path

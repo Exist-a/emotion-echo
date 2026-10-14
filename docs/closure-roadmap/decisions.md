@@ -23,9 +23,14 @@ type: phase-decisions
 | CL-D-08 | CL-02 七条死 RPC 逐条终态（接真/归档/清除） | CL-02 | ✅ **已定（2026-10-14 用户）** | **归档 4**：`StreamMessages`（ADR 决策 4 §四#3「故意不做」）+ 三条 mental-health（ADR chart-contract-alignment §E「5 无消费端点本轮不接，需 UX 设计」）；**清除 3**：`Logout`（ADR jwt-key-rotation「不做 token 黑名单/主动吊销」⇒ 不接真）、`VerifySecurityAnswer`（族内冗余）、`AnalyzeBatch`（无批量业务）。**「接真」零采纳**——两处用户初选「接真」经查与已收口 ADR 冲突后按文档改判（过程留痕见阶段档 §7） |
 | CL-D-09 | ai-svc → FER/SenseVoice/XTTS 是否算「服务间调用」 | CL-02 | ✅ **已定（2026-10-14 用户）** | **不算**：模型推理服务本身以 HTTP/FastAPI 暴露 ⇒ 不纳入「严格走 gRPC」范围，写死为边界 |
 | CL-D-10 | CL-02 新旧守卫形态 | CL-02 | ✅ **已定（2026-10-14 用户）** | **叠加 + 去掉硬编码**：旧守卫保留（守「标记真实性」）但期望值改为从 `scripts/rpc_status.tsv` 推导；新守卫守「每条 RPC 有终态 + live 有调用方」。CI 步骤/job 名不变（不动分支保护） |
+| CL-D-11 | SSE 实时推送收到的 AI 消息，是否也写入本地缓存（IndexedDB） | CL-05 | ✅ **已定（2026-10-14 用户）** | **本期不做** —— 只覆盖「拉取 + 发送」两条路径（与来源计划 §2.2 一致）；SSE 落缓存留作后续增强（需动 `useAIStreamHandler` 流式回调链，冒烟面大） |
+| CL-D-12 | 前端 `sender:'user'\|'AI'` / `contentType:'text'\|'audio'\|'img'` 与上游 DTO（`role` / 含 `image`/`file`/`video`）字段名与取值均不一致，是否本阶段统一 | CL-05 | ✅ **已定（2026-10-14 用户）** | **只登记不动** —— 记入 `CL-F` 账、留后续阶段处理；本阶段不牵动气泡渲染层，避免把「消息链路闭环」扩成大重构 |
+| CL-D-13 | 同名 `MessageWithStatus` 全仓 3 种形态（`CL-F-13`：可选性/字段各不相同）是否本阶段合并 | CL-05 | ✅ **已定（2026-10-14 用户）** | **顺延到 Phase 3 一并评估** —— Phase 3 做状态机本就要动消息形状，届时收敛只跑一轮回归 |
+| CL-D-14 | 用户实测项 `CL-F-10`（发送后不自动滚到底）/ `CL-F-11`（发送并刷新后出现两个对话）是否提前于 Phase 8 处理 | CL-05 | ✅ **已定（2026-10-14 用户）** | **按原计划排 Phase 8** —— 两项均需 dev 栈复现，提前会卡在 B/C 持有的栈锁上；先做完不需栈的 Phase 2b / 3 / 4 |
 
 ## 使用约定
 
 - 新决策：追加行，编号续 **CL-D-xx**（**不占用** E2E 的 `D-NN` 与 `architecture/decisions.md` 的「决策 N」两套编号）。
+- ⚠️ **编号占位须知（2026-10-14 D 轨补记）**：**C 轨（CL-02）已在其分支上占用 `CL-D-08~10`**（7 条死链裁决，见 PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)），**尚未合入 main** ⇒ main 上看得见的最大号是 `CL-D-07`，但**直接续 08 会与 C 轨撞号**。D 轨因此从 **`CL-D-11` 起**编号。**开号前先 `grep -r "CL-D-0" docs/` 并核对在飞 PR**，不要只看本文件。
 - 决策落定后在"结论"列写结论 + 日期，并把 `roadmap.md` 对应阶段从 `blocked` 解除。
 - **各阶段详档（`stages/cl-NN-*/plan.md`）内部的待拍板项**，在进入该阶段时（just-in-time）逐条提出，不在本表预先堆砌。

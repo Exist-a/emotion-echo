@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // UserInfo 对应 user-svc types.UserInfo
@@ -140,7 +142,7 @@ func NewUserClient(opts UserClientOptions) UserClient {
 				conn: opts.GRPCConn,
 				httpFallback: &userHTTPClient{
 					baseURL: opts.BaseURL,
-					http:    &http.Client{Timeout: timeout},
+					http:    trace.NewTracedClient(timeout),
 				},
 			}
 		}
@@ -151,7 +153,7 @@ func NewUserClient(opts UserClientOptions) UserClient {
 	}
 	return &userHTTPClient{
 		baseURL: opts.BaseURL,
-		http:    &http.Client{Timeout: timeout},
+		http:    trace.NewTracedClient(timeout),
 	}
 }
 

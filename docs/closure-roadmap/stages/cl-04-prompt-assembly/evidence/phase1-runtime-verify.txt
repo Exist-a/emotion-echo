@@ -1,0 +1,36 @@
+turn1: persist=200 stream=200 replyChars=86
+turn2: persist=200 stream=200 replyChars=53
+turn3: persist=200 stream=200 replyChars=78
+
+=== PHASE0 SUMMARY (paste into report) ===
+{
+ "base": "http://localhost:19080",
+ "turns": [
+  {
+   "turn": 1,
+   "messagePersistStatus": 200,
+   "streamStatus": 200,
+   "replyChars": 86,
+   "replyHead": "能感觉到那份紧张已经在身体里先一步反应了，心跳快其实是在说这件事对你很重要。面试前有这种情绪很常见，不用急着把它压下去。"
+  },
+  {
+   "turn": 2,
+   "messagePersistStatus": 200,
+   "streamStatus": 200,
+   "replyChars": 53,
+   "replyHead": "被追问细节的那种紧张，我懂——明明自己做过，一被盯着问就像踩进雾里。你愿意说说，最担心他们往哪个方向问吗？"
+  },
+  {
+   "turn": 3,
+   "messagePersistStatus": 200,
+   "streamStatus": 200,
+   "replyChars": 78,
+   "replyHead": "听起来这两个问题在你心里已经转了好几圈了，才会想先把准备做扎实。要不要先跟我说说，是哪个部分让你最没底——是内容本身，还"
+  }
+ ],
+ "login": {
+  "status": 200,
+  "gotToken": true
+ },
+ "conversationId": "669",
+ "conversationMess

@@ -8,80 +8,15 @@
 //
 // 指令写的是**可观察的输出特征**（更主动/不要连珠炮/少用「也许」），
 // 而不是抽象形容词 —— 后者模型只能自行脑补，行为不可控也不可测。
+//
+// CL-04 Phase 4：本文件只保留**生成算法**；适配表 / 护栏文案 / 分档阈值等**文案与契约常量**
+// 已集中到 `prompt_templates.go`（plan §3.4「system 文案集中一处」）。
 package handler
 
 import (
 	"fmt"
 	"strings"
 )
-
-// personalityStyleGuide 一个维度的「联系方式适配」文案。
-// WhenHigh/WhenLow 描述的是「该维度偏高的用户需要 AI 怎么说话」，
-// 而不是「AI 应该具有什么性格」。
-type personalityStyleGuide struct {
-	Key      string
-	Label    string
-	WhenHigh string
-	WhenLow  string
-}
-
-// personalityStyleGuides 五维度适配表。顺序即输出顺序（确定性）。
-//
-// 文案依据 Big Five 的语言学/临床相关性常识：外向性↔互动节奏与话量、
-// 宜人性↔关系和谐敏感度、尽责性↔秩序与标准、开放性↔抽象与具象偏好、
-// 神经质↔情绪唤起度与对确定性的需求。
-var personalityStyleGuides = []personalityStyleGuide{
-	{
-		Key:      "openness",
-		Label:    "开放性",
-		WhenHigh: "可以用一点隐喻或换个更抽象的角度，允许留白；不必事事给可操作步骤。",
-		WhenLow:  "直白说事，少用比喻和抽象概念，落在他能做的事上。",
-	},
-	{
-		Key:      "conscientiousness",
-		Label:    "尽责性",
-		WhenHigh: "回应可以有条理（先…再…），并认可他付出的努力与自我要求。",
-		WhenLow:  "语气放松、不施压，不要给「你应该按步骤做」的任务感或清单。",
-	},
-	{
-		Key:      "extraversion",
-		Label:    "外向性",
-		WhenHigh: "可以更主动、节奏轻快一些，多给回应与互动感，也可以主动开个话题。",
-		WhenLow:  "给足空间，不要连珠炮式追问、不要催他多说；简短的回应是被允许的。",
-	},
-	{
-		Key:      "agreeableness",
-		Label:    "宜人性",
-		WhenHigh: "先认可再表达，语气温和；避免直接下判断或反驳。",
-		WhenLow:  "可以直接给判断和实话，少堆叠客套与附和（铺垫多了他会觉得绕或假）。",
-	},
-	{
-		Key:      "neuroticism",
-		Label:    "神经质",
-		WhenHigh: "先稳住情绪再谈内容；用确定、安定的措辞，少用「也许／可能／大概」；不追问、不引入新的担忧点，也别轻描淡写他的难受。",
-		WhenLow:  "不必反复安抚，可以直接谈内容，他受得住直接的话。",
-	},
-}
-
-// 分档阈值（维度分 6-30，每维 6 题 × Likert 1-5，18 为中性）
-const (
-	personalityHighThreshold = 23 // ≥ 视为明显偏高
-	personalityLowThreshold  = 13 // ≤ 视为明显偏低
-	// personalitySpreadThreshold ipsative 回退的最小极差：低于此视为"平坦画像"，
-	// 此时不应硬凑指令（例如全选 3 ⇒ 五维全 18，确实无信息可用）。
-	personalitySpreadThreshold = 4
-)
-
-// personalityGuideHeader 适配层头部：说明这是「相处说明书」而非 AI 性格设定，
-// 并带上五维数字摘要（给模型量级感，而不只是档位）。
-const personalityGuideHeader = "与这位用户相处的方式（其人格五因素量表得分：%s；每维 6-30，18 为中性。" +
-	"请据此调整**怎么和他说话**，不要点破来源）："
-
-// personalityGuideGuardrail 护栏：防止画像把 AI 变成另一个人 / 冒犯用户。
-const personalityGuideGuardrail = "\n护栏：以上只调整「怎么和他说话」，你的身份与基调不变（温柔共情的陪伴者）。" +
-	"不要点破来源（不说「根据你的测评／你的人格」）；不要给他贴标签（不说「你是个内向的人」，" +
-	"用感受去贴合而不是用标签去定义他）；调整要有感但不过火（不要因为他外向就变成话痨，" +
-	"也不要因为他敏感就只敢说空话）。"
 
 // buildPersonalityGuide 由五维分数产出「联系方式适配」指令文本。
 //
