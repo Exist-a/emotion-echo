@@ -136,9 +136,9 @@ related-plans:
 
 | # | 测试点 | 判定 | 验证方式 | 证据 |
 |---|--------|------|---------|------|
-| T-09 | 新看板 JSON 落地（business / reliability / observability / logs） | [A] | 文件存在 + Grafana 加载（`GET :13000/api/search` 含新 UID） | API 输出 |
-| T-10 | **每个面板 expr 返回非空 series** | [A] | 扩展 `scripts/smoke_observability.py`（复用 `_panel_exprs`） | smoke 输出（非空 series 计数） |
-| T-11 | 打开 business 看板能答"**是否在降级 / 是否在跟 mock 对话**" | [V] | 人看截图：`fusion_fallback_total` 曲线可见 | 截图（人核） |
+| T-09 | 新看板 JSON 落地（business / reliability / observability / logs） | [A] | 文件存在 + Grafana 加载（`GET :13000/api/search` 含新 UID） | ⚙️ 2026-10-14：**observability 看板已落**（`deploy/grafana/dashboards/emotion-echo-observability.json`，3 面板：Target 健康矩阵/Down 计数/Firing 计数）；business/reliability/logs 待 Phase 7（需栈核指标名） |
+| T-10 | **每个面板 expr 返回非空 series** | [A] | 扩展 `scripts/smoke_observability.py`（复用 `_panel_exprs`） | ⚙️ 2026-10-14：smoke 的看板断言列表已加入 `emotion-echo-observability`（3 面板 expr 均用 `or vector(0)` 保证零值时仍非空）；**待起栈实跑验证** |
+| T-11 | 打开 business 看板能答"**是否在降级 / 是否在跟 mock 对话**" | [V] | 人看截图：`fusion_fallback_total` 曲线可见 | 截图（人核）——待 Phase 7 |
 | T-12 | 新告警规则**可加载** | [A] | `promtool check rules`（有则用）或 Prometheus 启动日志无加载错 | 命令输出 |
 | T-13 | **一条告警真触发并送达**（负向对照） | [A] | 故意制造条件（如停 target / 触发 fallback）→ 断言 `:9093` Alertmanager 收到 firing | Alertmanager API/截图（**对抗"面板有数据≠告警链路通"**） |
 | T-14 | Loki trace_id 面板实机跑通 | [A] | `{job="services"} \|= "<trace_id>"` 走 **`/query_range`** 返回行 | 查询输出 |
@@ -227,7 +227,7 @@ related-plans:
 | # | 事项 | 关联 | 结论 |
 |---|------|------|------|
 | D-01 | span 采样策略 | 全局 | ✅ **dev 全采**（生产采样率后议） |
-| D-02 | 是否新增 exporter / 容器监控 | T-16 / G7 | ⏳ **待定**（用户要求先解释；倾向 cAdvisor + redis/pg exporter，见下方补注） |
+| D-02 | 是否新增 exporter / 容器监控 | T-16 / G7 | ✅ **先做"免费那一半"**（**不加任何容器**）：用现成 `up{job}` + `ALERTS` 建「观测面自身」看板；**cAdvisor / redis / pg exporter 记 deferred**（见下方补注） |
 | D-03 | `emotion_fusion_calls_total/duration` 接线 vs 删 | T-06 / G5 | ✅ **接线**（接进 Prometheus→Grafana 看板；属运维视角指标，非终端用户界面） |
 | D-04 | web-bff 是否 `SetTracer` | T-07 / G6 | ✅ **对齐**（BFF 也 `SetTracer`，并把 BFF 纳入 `svc_wiring_test.go`） |
 | D-05 | `/health`：blackbox vs 直接 scrape | T-15 | ✅ **直接 scrape**（不加 blackbox；与 D-02 容器监控方案一并复核） |
@@ -237,7 +237,7 @@ related-plans:
 > ① **免费部分**：Prometheus 现有 `up{job}` 已能给出 9 个 target 的通断（6 应用服务 + APISIX + OAP + llm-service），做「观测面自身」看板即可（= 本计划 T-09/T-11）；
 > ② **全容器部分**：要看全部 19 容器（含 postgres/redis/kafka/minio/nacos/etcd/loki/promtail…）的 CPU/内存/运行状态，标准做法是加 **cAdvisor**（+1 小容器 ≈50–150MB，需挂 `docker.sock`/`sys`/`var_lib_docker`；WSL2 下需实测 cgroup 挂载）；
 > ③ **不可行路线**：Docker 自带 `:9323` metrics **仅引擎级、无 per-container**（Docker 官方文档明示 "you can't currently monitor your application using the Docker target"）⇒ 满足不了本需求。
-> → **待用户拍板**：是否加 cAdvisor（+ 顺带 redis-exporter / postgres-exporter，均几十 MB 级）。
+> → **用户 2026-10-14 裁定**：**先做"免费那一半"**（`up`/`ALERTS` 看板，零新增容器）；**cAdvisor + redis/pg exporter 记 deferred**（不进本阶段，留待后续/backlog）。**本阶段 G7 的采集增量因此收敛为"不加容器的部分"**（`/health` scrape 等）。
 
 ---
 

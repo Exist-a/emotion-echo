@@ -248,7 +248,7 @@ def main() -> int:
                     out.append((p.get("title", "?"), t["expr"]))
         return out, None
 
-    for _uid in ("emotion-echo-overview", "kafka-consumer-lag"):
+    for _uid in ("emotion-echo-overview", "kafka-consumer-lag", "emotion-echo-observability"):
         _exprs, _err = _panel_exprs(_uid)
         if _exprs is None:
             check(f"grafana dashboard '{_uid}' panels readable", False, _err or "unknown")
