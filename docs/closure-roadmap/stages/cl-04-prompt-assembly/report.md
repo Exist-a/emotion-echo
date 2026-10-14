@@ -144,6 +144,25 @@ $ go vet -tags integration ./...                → exit 0（CI 的 build-tag �
 **行为等价性**：段序 `base → personality → emotion` 以 `"\n\n"` 连接，与旧实现 `base + "\n\n" + guide + "\n\n" + emotionSeg` 逐字一致；
 空段直接丢弃（不产生空行）；画像报错时仍打同一条 error 日志并回落基础人设。
 
+**运行时等价（不是只跑单测）**：按 RUNBOOK §2「改完 Go 必须重建镜像再验收」，
+用**新代码**重建 web-bff 并 `--force-recreate`，再跑一遍 3 轮真实对话：
+
+```text
+$ docker image inspect --format '{{.Created}}' emotion-echo/web-bff:v0.1.37
+2026-10-14T00:47:02.77200162Z      ← 本次从 worktree 源码构建（Phase 1 代码）
+$ docker ps --filter name=emotion-echo-web-bff
+emotion-echo-web-bff  Up (healthy)  emotion-echo/web-bff:v0.1.37
+$ node evidence/phase0-capture.mjs        （输出：evidence/phase1-runtime-verify.txt）
+turn1/2/3: persist=200 stream=200 replyChars=86/53/78
+$ docker logs --since 3m emotion-llm-service | grep "ChatCompletion request"
+messages=2 model=deepseek-chat   ×3        ← 与 Phase 0 基线一致：仍两条、仍真上游
+```
+
+⇒ **可观测契约未变**（仍 `[system, user]` 两条 + 真 upstream），符合"换实现不改行为"的口径。
+
+**顺带验证 CL-F-07 ③ 的绕过路径**：`cd <worktree>/deploy && docker compose … --env-file <共享目录>/deploy/.env.local build` **可以成功**（exit 0），
+即"worktree 建镜像 + 共享目录 up 容器"两步法可行 —— 这是并行轨在 worktree 里验证 Go 改动的可行做法（已回填 CL-F-07 用途）。
+
 
 ### 3.6 测试点总表（16 点，逐点状态）
 
