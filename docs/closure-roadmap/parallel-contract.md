@@ -75,9 +75,10 @@ related:
 
 1. 读本文件 → 确认目标轨**无人占用**（占位表无同轨 in-progress）。
 2. **文件面隔离**：`git worktree add -b <分支> ../Emotion-Echo-<slug> <base>`（**不在共享目录切分支**）。
-3. 查 `deploy/.devmode-session`（dev mode 归属锁，有人登记不得强占）。
-4. **登记占位**（§三）。
-5. 按 `RUNBOOK.md` 执行（起环境 / 六步循环 / 收口契约）。
+3. **先开 PR（draft）再开工**（**2026-10-14 起强制**）：分支 push → 建指向 `main` 的 **draft PR** → 在 §三 占位行**一并填 PR 链接**。**无 PR 不得开工**。
+4. 查 `deploy/.devmode-session`（dev mode 归属锁，有人登记不得强占）。
+5. **登记占位**（§三，含 PR 链接）。
+6. 按 `RUNBOOK.md` 执行（起环境 / 六步循环 / 收口契约）。
 
 ## 六、收工（照做）
 
@@ -85,6 +86,7 @@ related:
 2. 跑 AGENTS §2.5 三连：`git status` 干净 / `git status -sb` 与 origin 无 ahead-behind / `git branch --merged main` 无残留。
 3. 删 `.devmode-session`（若是你登记的）。
 4. 阶段状态回写 `roadmap.md`。
+5. **PR 处理**：阶段收口时把 PR 转 ready，按 §四 握手**串行合并**，合并后删源分支（AGENTS §2.5）。
 
 ## 七、与治理体系的关系
 

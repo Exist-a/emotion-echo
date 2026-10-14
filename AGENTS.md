@@ -347,6 +347,7 @@ PR review 时若发现违反 TDD：
   - **开工前必读 [RUNBOOK.md](docs/closure-roadmap/RUNBOOK.md)**（精简自包含版，纪律继承 E2E）+ [roadmap.md](docs/closure-roadmap/roadmap.md)（阶段排序 CL-01~10 + 每阶段"做到什么程度"）。
   - 账本 `CL-F-xx`、决策 `CL-D-xx`（**不占用** E2E 的 `E2E-F-xx` / `D-NN`）；每阶段详档 `stages/<cl-NN-slug>/`（just-in-time 撰写）。
   - 判定仍用 `PASS`/`FAIL`/`BLOCKED`/`N/A` 四值 + 证据有效性；范围外只记账；**执行者不得自行宣布阶段 done**。
+  - **每阶段开工先建 PR（2026-10-14 起强制，用户明令）**：建好阶段分支后**立即开（draft）PR 指向 `main`，并把 PR 链接填进 `parallel-contract.md §三` 占位行**，再开始执行；PR 是阶段的落地载体，收口时转 ready → **串行合并**。**无 PR 不得开工**。
 
 ---
 
@@ -374,4 +375,4 @@ PR review 时若发现违反 TDD：
 
 ---
 
-> 最后更新：2026-10-13（§七 新增「闭环」阶段路线图 → `docs/closure-roadmap/`）
+> 最后更新：2026-10-14（§七 CL 新增「每阶段开工先建 PR」硬约束）· 2026-10-13（§七 新增「闭环」阶段路线图 → `docs/closure-roadmap/`）
