@@ -102,6 +102,7 @@ related:
 | 2026-10-14 | Lane-CL-D | `docs/closure-roadmap/{parallel-contract,roadmap}.md` | D 轨开工：§三 登记占位 + §3.1 排 4 位 + CL-05 翻 in-progress。按 H2/条款 8，登记走**独立小 PR**（本 PR），**不含**阶段产物；本行只追加、不改他人行 | ✅ |
 | 2026-10-14 | Lane-CL-D | **`proto/**`（`proto/chat.proto`）** | D 轨**握手申请**：CL-05 Phase 5「会话列表游标化」（用户 2026-10-13 已定 D-B=B1 游标）需在 `ListConversationsRequest` 增游标字段；**与 C 轨 `proto/**` 预占冲突**。请求：① C 轨确认其 Phase 2/3 改 proto 的**时间窗与文件**；② 约定**串行**（谁先谁改）。D 轨在 C 轨答复前**不动 `proto/**`**，先把 🟢 Phase 1~4 做完 | ⏳ **待 C 轨答复** |
 | 2026-10-14 | Lane-CL-D | `emotion-echo-chat-svc/internal/grpcserver/chat_server.go`、`emotion-echo-web-bff/internal/downstream/chat{,_grpc}.go` | D 轨握手：与 C 轨**同名文件**（C 轨死链治理已删/归档 `chat_server.go` 的 `StreamMessages` 桩；D 轨要改其中的 `ListMessages`/`ListConversations` 透传 + `chat.go` 的 client 接口）。依 §1.2「同名文件串行」⇒ 声明排队，**D 轨等 C 轨该文件落地后再改** | ⏳ **待排队** |
+| 2026-10-14 | Lane-CL-D | **`docs/closure-roadmap/decisions.md`** | D 轨**握手**：登记本阶段 4 项用户裁定（`CL-D-11`~`CL-D-14`：SSE 不落缓存 / 前端 DTO 字段统一只登记 / `MessageWithStatus` 三形态顺延 Phase 3 / `CL-F-10`·`CL-F-11` 按原计划排 Phase 8）。⚠️ **编号从 11 起**：`CL-D-08~10` 已被 **C 轨**在其分支占用（PR #214 未合）⇒ 直接从 08 续会撞号；已在 decisions.md「使用约定」补记该占位事实。本行按 H2 走**独立小 PR**、只追加 | ✅ |
 
 > **C 轨另注**：本轨与 A/B 在 `emotion-echo-web-bff/internal/downstream/` **同目录不同文件**（A 占 `llm*.go`、B 占 `ai.go` 等），
 > 依 §1.2"同名文件串行、不同文件可并"**不构成阻塞**；仅 `proto/**` 为独占脊柱（上表已预占）。
