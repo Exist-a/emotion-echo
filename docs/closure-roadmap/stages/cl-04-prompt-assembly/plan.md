@@ -2,13 +2,13 @@
 stage: cl-04
 title: Prompt 组装层（统一组装 + 同会话历史滑动窗口 + 预算/参数 + 配置化 + 死路径清零）
 type: transformation
-status: pending
+status: in-progress
 created: 2026-10-14
 last-updated: 2026-10-14（建档：A 轨并行开工。仅静态核实——未起 dev 栈、未抓真实 prompt，见 §A.4）
 depends-on: []
 blocks: [cl-06, cl-07]
 gate: []            # 无开工前阻塞决策门；[M] 决策点见 §2 T-16
-planned-source: docs/plans/prompt-pipeline-redesign.md
+source: docs/plans/prompt-pipeline-redesign.md
 related-plans:
   - docs/plans/user-custom-agent-persona.md（CL-06，注入槽位落在本阶段组装层）
   - docs/plans/chat-emotion-realtime-display.md（CL-07，情绪槽位生产/消费两侧）
