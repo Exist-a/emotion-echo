@@ -1,0 +1,150 @@
+{
+ "uid": "emotion-echo-logs",
+ "title": "Emotion-Echo · 日志面（Loki / trace_id 关联）",
+ "tags": [
+  "cl-01",
+  "logs",
+  "loki"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "30s",
+ "editable": true,
+ "graphTooltip": 1,
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "description": "CL-01 Phase 7 · 日志面看板（Loki datasource uid=loki）。\nsmoke_observability.py 只对 prometheus 数据源的面板做 expr 非空断言，Loki 面板跳过（LogQL 不能喂 Prometheus）。",
+ "panels": [
+  {
+   "type": "logs",
+   "title": "全部服务日志（{job=\"services\"}）",
+   "id": 1,
+   "gridPos": {
+    "h": 10,
+    "w": 24,
+    "x": 0,
+    "y": 0
+   },
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "expr": "{job=\"services\"}",
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     }
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending"
+   },
+   "description": "7 个 svc + llm-service 的容器日志（promtail docker_sd 采集）。\n每条 JSON 日志带 trace_id ⇒ 可与 SkyWalking 的 trace 对照。"
+  },
+  {
+   "type": "logs",
+   "title": "ERROR 日志",
+   "id": 2,
+   "gridPos": {
+    "h": 10,
+    "w": 24,
+    "x": 0,
+    "y": 10
+   },
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "expr": "{job=\"services\"} | detected_level=\"error\"",
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     }
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending"
+   },
+   "description": "Loki 3.x 的 detected_level 由 promtail 从 JSON 的 level 字段推断（实测可用，非推断）。"
+  },
+  {
+   "type": "logs",
+   "title": "APISIX 网关访问日志",
+   "id": 3,
+   "gridPos": {
+    "h": 10,
+    "w": 24,
+    "x": 0,
+    "y": 20
+   },
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "expr": "{job=\"apisix\"}",
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     }
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending"
+   },
+   "description": "网关是唯一业务入口 ⇒ 这里是\"用户到底打了哪个端点\"的第一现场。"
+  },
+  {
+   "type": "logs",
+   "title": "跨服务 trace 关联（改 trace_id 过滤）",
+   "id": 4,
+   "gridPos": {
+    "h": 10,
+    "w": 24,
+    "x": 0,
+    "y": 30
+   },
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "expr": "{job=\"services\"} |= \"trace_id\"",
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     }
+    }
+   ],
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending"
+   },
+   "description": "**T-14**：把 `|= \"trace_id\"` 换成具体 trace id（如 SkyWalking UI 里看到的），\n即可一次拉出该请求在**多个服务**里的日志（2026-10-14 实测命中 BFF + ai-svc 两条流）。"
+  }
+ ],
+ "annotations": {
+  "list": []
+ },
+ "links": []
+}
