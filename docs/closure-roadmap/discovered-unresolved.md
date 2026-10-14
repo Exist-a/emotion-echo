@@ -20,6 +20,7 @@ type: phase-ledger
 | CL-F-04 | 建档（2026-10-13） | GORM 埋点错挂 `Raw()` processor（`shared/pkg/skywalking/gorm_tracing.go:28-31`）⇒ ORM 查询零 span | 注册到错误 processor | CL-01 | 待解决 |
 | CL-F-05 | 建档（2026-10-13） | 7 条死 RPC（StreamMessages/Logout/VerifySecurityAnswer/AnalyzeBatch + 3 mental-health）无生产调用方 | proto 预留/未接出 | CL-02 | 待解决 |
 | CL-F-06 | A 轨开工（2026-10-14，worktree 内跑守卫） | `scripts/check_git_layout.py --strict` 在 **git worktree** 下恒红：`.git/ 存在` 判 FAIL（同一命令在主工作区 exit 0） | `check_git_layout.py:55` 用 `git_dir.is_dir()` 判定；worktree 里 `.git` 是 **gitdir 指针文件**而非目录 | CL-00（`.github/workflows/**` + `scripts/**` 面） | 待解决 |
+| CL-F-07 | A 轨开工（2026-10-14，Phase 0 起栈前置） | RUNBOOK §2 的 `cd deploy && … --env-file .env.local` 在 **worktree** 下找不到文件 ⇒ 起栈**缺 LLM key**；历史同型事故 = "聊天链路静默降级 mock"（AGENTS §四红线就是为它立的） | `.gitignore:129` 忽略 `deploy/.env.local`，而 `git worktree` **只物化 tracked 文件** ⇒ 并行契约要求的 worktree 里没有该文件；RUNBOOK §2 命令默认在共享目录执行 | CL-00（并行契约 + RUNBOOK 的 worktree 场景安全做法） | 待解决 |
 
 > 上表为建档期预探查的**种子账**（对应各待排期计划的核心缺口）；用户实测中新增的发现续号追加。
 
