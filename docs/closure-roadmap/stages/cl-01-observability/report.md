@@ -20,8 +20,10 @@ last-updated: 2026-10-14
 - **起栈实测**：27 容器 dev + obs profile，持 `.devmode-session`（owner `lane-cl-b`）。
 - **机器门禁**：`smoke_observability.py` **60 PASS / 0 FAIL**；`promtool check rules` SUCCESS（总规则 7 → 13）；`go test ./pkg/skywalking/...` 绿。
 - **新增产出**：3 个看板（business / reliability / logs，共 25 面板）、1 个告警规则文件（6 条）、1 个共享包（`skywalking/trace`）、1 个共享包（`skywalking/redistrace`）。
-- **新账**：CL-F-13（**假账，当轮销账**）、CL-F-14（tracer 启动竞态，**待裁定**）、CL-F-15（outbox 静默回退，归 CL-03）。
-- **销账**：CL-F-04（GORM 埋点错挂 processor）✅。
+- **新账**：CL-F-13（**假账，当轮销账**）、CL-F-14（tracer 启动竞态 → **已按 D-07 修复**）、CL-F-15（outbox 静默回退，归 CL-03）。
+- **销账**：CL-F-04（GORM 埋点错挂 processor）✅、CL-F-13（探针错误）✅、CL-F-14（代码侧）✅。
+- **裁定**：D-05 追认（接受 `status` 标签替代直接 scrape `/health`）+ **D-07**（CL-F-14 改后台重试）。
+- ⛔ **一处未完成（环境阻塞，非代码）**：CL-F-14 的**起栈运行时验证**做不了 —— D 盘剩余 0 ⇒ `docker_data.vhdx`(298GB) 无法扩展 ⇒ containerd 读 bbolt 页 **SIGBUS** ⇒ `Docker Desktop is unable to start`；压缩 VHDX 需管理员权限。**恢复后须补做**（步骤见 §待办）。
 
 ---
 
@@ -54,6 +56,7 @@ last-updated: 2026-10-14
    **CI 反查补刀**：首次推送后 `文档守卫总闸` 红 —— 根因是 `node deploy/obs_monitoring.test.js` 的「规则名**双向相等**」断言（dev `deploy/prometheus/rules/*.yml` ↔ k8s `charts/emotion-echo/charts/prometheus/templates/configmap-rules.yaml`），我只落了 dev 侧。**修法**：在 k8s ConfigMap 内联同一份规则；`test_helm_prometheus_render.sh` → PASS=8/FAIL=0（「chart 内联告警与 dev 侧 13 条完全一致」）。**这条断言的价值正在于此：改一侧忘另一侧 = k8s 环境那 6 条告警静默不存在。**
 8. **采集增量**（Phase 8）：**D-05 按字面实现被实测证伪**（见 §10.2），改用既有 `status` 标签 + 告警/面板落地。
 9. **负向对照 + 收口**（Phase 9）：告警真触发送达、span 真出现在 SkyWalking、smoke 全绿。
+10. **CL-F-14 修复**（收口后追加，用户 **D-07** 裁定 = 后台重试）：① 新增 `grpcinterceptor.SetGlobalTracer/GlobalTracer`（可后置注册的全局槽）；② `trace.SetTracer` 同时维护两个全局槽（放 `trace` 包，让不依赖 gorm 的 web-bff 复用同一条路径）；③ 入口路径（gin 中间件 + gRPC server 拦截器）从「构造期快照」改为**请求期现读**全局；④ 新增 `trace.StartTracerBackgroundRetry`（指数退避 5s→60s 封顶、可 cancel / 可 MaxAttempts），6 个 svc 的启动失败分支调用它。**不依赖编排层重启策略。**
 
 **起栈额外挖出的第二层真根因（已修）**：GORM 回调在**注册期快照了 nil tracer** —— 各 svc `main.go` 先 `InitGORM` 后 `SetTracer`（analytics：db connect @:97 → SetTracer @:178），旧闭包把 nil 存下来 ⇒ 回调永久 noop。这是"修好 processor 后 SkyWalking 仍 0 个 gorm span"才暴露的，**正是 CL-01 约束⑤"必须见 span"的价值**。
 
@@ -72,6 +75,8 @@ last-updated: 2026-10-14
 | 告警真送达 | 停 kafka-exporter → `PrometheusTargetDown` **firing** → **Alertmanager 收到**（critical） | `evidence/t13-*.json` |
 | Loki trace 关联 | `{job="services"} \|= "<trace_id>"` 走 `/query_range` → **2 条流**（web-bff + ai-svc） | `evidence/t14-loki-trace-query.json` |
 | smoke 全绿 | **`PASS: 60 check(s)` / FAIL 0 / exit 0** | `evidence/t17-smoke-observability.txt` |
+| CL-F-14 修复（单测 + 负向对照） | 回退实现后两条断言**如期变红**：interceptor `"[]" should have 1 item(s), but has 0`；middleware 同型。恢复后 3 包全绿 | `go test ./pkg/skywalking/... ./pkg/middleware/... ./pkg/grpcinterceptor/...` |
+| CL-F-14 修复（起栈运行时） | ⛔ **BLOCKED（环境）**：D 盘 0 剩余 ⇒ containerd **SIGBUS** ⇒ Docker 起不来 | `~/AppData/Local/Docker/log/host/com.docker.backend.exe.log`（SIGBUS 栈） |
 
 ---
 
@@ -111,10 +116,13 @@ last-updated: 2026-10-14
 4. 面板以既有计划为准 —— 按 `observability-business-metrics-wiring.md` 与 `grafana-dashboard-gaps` 的缺口清单落，未重复造。
 5. **诚实性** —— 每个"接了的埋点"都有**起栈运行时证据**（span 真出现在 SkyWalking / 指标真有值 / 告警真送达）。
 
-**为什么是 `partial` 而不是 `done`**：
+**为什么仍不能直接判 `done`**：
 
-- **CL-F-14**（归属 CL-01，未解决）：chat-svc / assessment-svc 在 SkyWalking 里整段缺席 —— 根因是**启动竞态**（OAP 与业务 svc 同时起，tracer 初始化失败后**进程余生不再重试**）。本阶段**只让它可见**（reliability 看板面板），**修法涉及行为变更需用户裁定**（后台重试 vs fail-fast）。
-- **§10.2 D-05 偏差待追认**：`/health` 直接 scrape 实测恒 `up=0`（JSON 格式不匹配），已改用等价方案（`status` 标签 + 告警），需用户确认。
+- **CL-F-14 的起栈运行时验证未做**（唯一实质缺口）：代码侧已按 D-07 修完并有单测 + 负向对照，但 CL-01 的约束⑤要求「**必须见 span 真出现在 SkyWalking**」才算完成。当前因 **D 盘满 → containerd SIGBUS → Docker 起不来**而做不了，属环境阻塞。按 RUNBOOK §4.1 证据有效性，**不得用单测冒充运行时证据**，故本阶段暂不判 `done`。
+- 两项裁定已回填：D-05 追认（接受替代）+ D-07（后台重试）。
+- **第二方核对**（收口契约第 7 条）待另一会话/用户执行。
+
+**CL-F-14 归属裁定（用户授权我定）**：该账**保留在 CL-01 名下并就地修复**（不转 CL-03）—— 因为它的文件面（`shared/pkg/{grpcinterceptor,middleware,skywalking}` + 6 svc `main.go`）全在 B 轨，且根因正是"埋点是否真生效"，与 CL-01 口径同源。⇒ 待运行时验证补做后即可销账，CL-01 随之可判 `done`。
 
 ---
 
@@ -136,18 +144,41 @@ last-updated: 2026-10-14
 | 1 | plan 每个测试点给四值之一 + 证据 | ✅ 19/19（T-19 = N/A，附 D-06 裁定） |
 | 2 | 回归钉已落地且绿 | ✅ Go 单测（`gorm_tracing_test.go` 双层回归钉 / `svc_wiring_test.go` / `dlq_span_test.go` / `fusion_metrics_wiring_test.go`）+ `smoke_observability.py` 60 项 |
 | 3 | `report.md` 用模板（起点/实施/证据/结论/经验） | ✅ 本文件 |
-| 4 | 账本对账 | ⚠️ **本阶段名下仍有未解决 CL-F-14 ⇒ 状态 = `partial`**（符合 §6.4；不判 done） |
-| 5 | 落地计划迁 `docs/legacy-plans/landed/` | ⬜ 未做（两份源计划仍有未落地的部分：`observability-instrumentation-and-dashboards` 的 BFF 其余 http client、`observability-business-metrics-wiring` 的 deferred exporter）→ **保留在 `docs/plans/`** |
+| 4 | 账本对账 | ⚠️ CL-F-14 代码侧已解决、**运行时验证 BLOCKED（环境）** ⇒ 账本状态为「已解决（代码侧）/ 运行时待补」；在补做前**本阶段不判 done** |
+| 5 | 落地计划迁 `docs/legacy-plans/landed/` | ✅ **已做**（两份源计划均迁入 + `status: landed` + 修路径引用 + `docs/plans/README.md` 标已落地）。BFF 其余 HTTP 出站已在收口后补齐 4 个无归属冲突的文件；**唯一豁免** = `downstream/chat.go`（C 轨独占列，随 CL-02） |
 | 6 | roadmap 状态同步 + 分支收口 | ✅ roadmap CL-01 行改 `partial`；PR #211 **保持 draft**（用户 2026-10-14 指示"完成先不要合"） |
-| 7 | 第二方核对 | ⬜ **未做**（需另一会话/用户） |
+| 7 | 第二方核对 | ⬜ **未做**（需另一会话/用户；本轮已做机械复核，见 §自审） |
 
 ---
 
 ## §待决策 / 待追认
 
-| # | 事项 | 需要谁 |
-|---|---|---|
-| 1 | **§10.2 D-05 偏差**：接受"用 `status` 标签替代直接 scrape /health"，还是要求真正的 `/health` 语义（⇒ 需加代码端点或 blackbox 容器，后者违背 D-02） | 用户 |
-| 2 | **CL-F-14 修法**：tracer 启动期失败后「后台重试」还是「fail-fast」（行为变更） | 用户 |
-| 3 | **CL-01 最终状态**：CL-F-14 是否可移到 CL-03/后续阶段，使 CL-01 能判 `done` | 用户 |
-| 4 | PR #211 何时合并（当前 draft，用户指示先不合） | 用户 |
+| # | 事项 | 需要谁 | 状态 |
+|---|---|---|---|
+| 1 | **D-05 偏差**：接受"用 `status` 标签替代直接 scrape /health" | 用户 | ✅ 2026-10-14 **已裁定：接受替代方案** |
+| 2 | **D-07 CL-F-14 修法**：后台重试 vs fail-fast | 用户 | ✅ 2026-10-14 **已裁定：后台重试** |
+| 3 | **CL-F-14 归属**：留在 CL-01 还是转 CL-03 | 用户授权我定 | ✅ **定为留在 CL-01 就地修复**（文件面全在 B 轨，根因同源） |
+| 4 | **D 盘空间**：需**管理员**压缩 `D:\DockerDesktopWSL\disk\docker_data.vhdx`（298GB）以恢复 Docker | 用户（需提权） | ⛔ **阻塞中** |
+| 5 | PR #211 何时合并 | 用户 | ⬜ 当前 draft（用户指示先不合）；合并前须先补 CL-F-14 运行时验证 |
+
+## §待办（环境恢复后立刻补做）
+
+CL-F-14 的**起栈运行时验证**（唯一未完成项，步骤已固化，恢复后照做即可）：
+
+1. 恢复 Docker（管理员压缩 VHDX 或清理宿主空间）。
+2. `docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml -f deploy/docker-compose.cl01-verify.yml build emotion-echo-chat-svc`
+   （override 文件已备好：把 chat-svc 镜像 tag 换成带轨后缀的 `cl01-verify`，不覆盖公共 tag）。
+3. `docker stop emotion-echo-sw-oap` → `docker compose ... up -d --no-deps emotion-echo-chat-svc`（**OAP 停着**重启 chat-svc ⇒ 启动期 tracer 初始化必失败）。
+4. 断言 `getAllServices` **不含** chat-svc（负向对照：确认它真的没在追踪）。
+5. `docker start emotion-echo-sw-oap` → **不重启 chat-svc**，等 ≤90s（退避 5s/10s/20s/40s）。
+6. 断言 `getAllServices` **出现** chat-svc + `docker logs emotion-echo-chat-svc | grep 后台补挂成功`。
+7. 通过则把 CL-F-14 账本行改 `✅ 已解决（含运行时证据）`，CL-01 判 `done`。
+
+## §自审（机械复核，**不是**第二方核对）
+
+收口前对自己报告逐条做的机械回查（第二方核对仍需另一会话/用户）：
+
+- 19 个测试点的"结论"与 `evidence/` 文件**逐一对应**，无"已创建"类存在性措辞。
+- T-02/T-04/T-05/T-06/T-13 的负向对照都留有"修前/触发前"的记录，不是只有正例。
+- CL-F-13 假账已按 `invalid-probe-evidence-pattern` 的教训**销账并写明探针错在哪**（不掩盖）。
+- 所有裁定（D-01~D-07）都能在 `plan.md §7` 找到原始结论，无"我以为是这么裁的"。

@@ -9,8 +9,8 @@ depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；本阶段 6 个 [M] 决策点见 §7（均不阻塞"代码+单测"部分）
 source:
-  - docs/plans/observability-instrumentation-and-dashboards.md（埋点代码侧，主）
-  - docs/plans/observability-business-metrics-wiring.md（面板/告警实施版）
+  - docs/legacy-plans/landed/observability-instrumentation-and-dashboards.md（埋点代码侧，主）
+  - docs/legacy-plans/landed/observability-business-metrics-wiring.md（面板/告警实施版）
   - docs/plans/grafana-dashboard-gaps-2026-09-30.md（缺口 B1~B9）
 related-plans:
   - docs/plans/redis-two-layer-cache.md（roadmap §2 挂在本阶段，但与 §4 范围存在张力 → §7 D-06）
@@ -69,7 +69,7 @@ related-plans:
 - **无** 专覆盖"埋点正确性 / 指标→面板映射"的 ADR（`grep adr-2026-09-…observ|trace|metric|grafana` 仅命中 loki 一篇）⇒ **若本阶段引入架构级改动（如统一 RoundTripper 落点、是否引入 exporter）须补 ADR**（anti-patterns §架构改动无 ADR）。
 - **已查** `docs/closure-roadmap/decisions.md`：CL-D-01/02/03/04/05/06/07 均**已定**；**无门阻塞 CL-01**。本阶段新决策续 **CL-D-xx**（与 E2E 的 `D-NN`、`architecture/decisions.md` 的「决策 N」三套编号隔离）。
 - **已查** `docs/closure-roadmap/roadmap.md` §4 CL-01 约束（写死 5 条）：① 不改指标语义；② 内存红线（**默认不新增容器**）；③ **span 只在有 ctx 时建、不硬造根 span**；④ 面板以既有计划为准（不重复造）；⑤ **诚实性——"埋点接了但没验证"不算完成，必须见 span 真出现在 SkyWalking UI**。
-- **已查** `docs/plans/observability-instrumentation-and-dashboards.md` §7 划界：**埋点代码 = 该计划；面板与告警 = `observability-business-metrics-wiring.md`** —— 本阶段**两者都做**（roadmap §2 已把两份都挂 CL-01），但**严格按此分工落文件**（改 Go 埋点 vs 改面板 JSON/告警 YAML）。
+- **已查** `docs/legacy-plans/landed/observability-instrumentation-and-dashboards.md` §7 划界：**埋点代码 = 该计划；面板与告警 = `observability-business-metrics-wiring.md`** —— 本阶段**两者都做**（roadmap §2 已把两份都挂 CL-01），但**严格按此分工落文件**（改 Go 埋点 vs 改面板 JSON/告警 YAML）。
 - **并行文件面隔离核对（亲核）**：本阶段主文件面 = `emotion-echo-shared/pkg/skywalking/**` + 各 svc `main.go` + BFF `downstream/{ai,analytics,assessment}.go` + `emotion-echo-ai-svc/internal/{aiclient,analyzer,fusion}/**` + `deploy/{prometheus,grafana,alertmanager,loki}/**` + `scripts/smoke_observability.py`。**A 轨（CL-04）文件面** = BFF `handler/ai_stream_handler.go` + `downstream/llm_grpc.go` + `emotion-llm-service/*.py` + 前端 `composables/{useAIStreamHandler,useAIStream,usePrompt}.ts`。**交集 = ∅**（本阶段碰 `downstream/{ai,analytics,assessment}.go`，A 碰 `downstream/llm_grpc.go` —— **不同文件**，符合 parallel-contract §1.2 "同名文件串行、不同文件可并"）。
 
 ### A.3 架构假设清单（本文假设 vs 现状）
@@ -233,6 +233,8 @@ related-plans:
 | D-04 | web-bff 是否 `SetTracer` | T-07 / G6 | ✅ **对齐**（BFF 也 `SetTracer`，并把 BFF 纳入 `svc_wiring_test.go`） |
 | D-05 | `/health`：blackbox vs 直接 scrape | T-15 | ✅ **直接 scrape**（不加 blackbox；与 D-02 容器监控方案一并复核） |
 | D-06 | `redis-two-layer-cache` 是否纳入本阶段 | T-19 | ✅ **本阶段只做 Redis 埋点接线**，双层缓存（cache-aside 特性）另议 |
+| **D-05 追认** | 起栈实测发现"直接 scrape `/health`"恒 `up=0`（端点返 JSON，Prometheus 文本解析器报错 ⇒ 判抓取失败）后的处置 | T-15 | ✅ **用户 2026-10-14 裁定：接受替代方案** —— 用既有的 `emotion_echo_http_requests_total{path="/health/ready",status}`（status 标签由各 svc HTTP 中间件写入，healthcheck 每 30s 打一次）+ 告警 `ServiceNotReady`/`HealthProbeMissing` + reliability 看板两面板代表就绪状态。**零新增容器、零改代码**。原「直接 scrape」的 job 已移除并在 `prometheus.yml` 原位留注释。 |
+| **D-07** | CL-F-14（tracer 启动期失败后不重试 ⇒ 服务整段生命周期零 span）的修法 | CL-F-14 | ✅ **用户 2026-10-14 裁定：改成后台重试**（不 fail-fast）—— 启动期失败后打 warn 继续启动，同时起后台 goroutine 按退避持续补挂，成功即注册到两个全局槽；配合入口路径「按请求现读全局」，gin 中间件 / gRPC 拦截器自动生效。**不依赖编排层重启策略。** |
 
 > **D-02 补注（2026-10-14 用户追问"各容器状态"）**：用户要求把**各容器状态**接进 Prometheus 观测。查证结论：
 > ① **免费部分**：Prometheus 现有 `up{job}` 已能给出 9 个 target 的通断（6 应用服务 + APISIX + OAP + llm-service），做「观测面自身」看板即可（= 本计划 T-09/T-11）；
@@ -248,7 +250,7 @@ related-plans:
 - **BFF**：`emotion-echo-web-bff/main.go`（`:86/:201` tracer、`:282` redisClient、`:375` ClientDialOptions、`:605-615` buildRedisClient）、`internal/downstream/`（目录 + HTTP 降级路径）
 - **ai-svc 出站**：`internal/aiclient/{fer,sensevoice,xtts}.go`、`internal/analyzer/http_analyzer.go`、`internal/fusion/{llm_fuser.go,fusion_metrics.go}`
 - **采集/面板**：`deploy/prometheus/rules/*.yml`、`deploy/grafana/dashboards/*.json`、`deploy/docker-compose.infra.yml`（obs 服务段）、`scripts/smoke_observability.py`
-- **计划对账**：`docs/plans/{observability-instrumentation-and-dashboards,observability-business-metrics-wiring,grafana-dashboard-gaps-2026-09-30,redis-two-layer-cache}.md`
+- **计划对账**：`grafana-dashboard-gaps-2026-09-30.md` / `redis-two-layer-cache.md` 仍在 `docs/plans/`；`observability-instrumentation-and-dashboards.md` 与 `observability-business-metrics-wiring.md` **已随本阶段落地并迁入 `docs/legacy-plans/landed/`**（建档期读的是 `docs/plans/` 下的原路径）
 - **治理**：`docs/closure-roadmap/{roadmap,RUNBOOK,parallel-contract,decisions,discovered-unresolved}.md`、`docs/architecture/adr/adr-2026-09-loki-aggregator-dev.md`
 - **grep 实证**：`InitRedis|InstrumentRedis` 生产 0 命中；`RecordFusionCall|ObserveFusionDuration` 生产 0 命中；`SetTracer(` 命中 5 svc、**不含 web-bff**。
 
