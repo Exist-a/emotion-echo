@@ -74,7 +74,7 @@ describe('MessageStatus 单一来源契约（CL-05 Phase 1 · T-13）', () => {
     expect(canonical, `缺少 canonical 文件 ${CANONICAL}`).toBeTruthy()
     const m = canonical!.src.match(/export\s+type\s+MessageStatus\s*=\s*([^\n]+)/)
     expect(m, 'canonical 文件应声明 MessageStatus 类型').toBeTruthy()
-    const values = [...m![1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]).sort()
+    const values = [...(m?.[1] ?? '').matchAll(/'([a-z]+)'/g)].map((x) => x[1]).sort()
     expect(values, '取值集合应与 5 值超集完全一致').toEqual([...STATUS_VALUES].sort())
   })
 
@@ -83,5 +83,17 @@ describe('MessageStatus 单一来源契约（CL-05 Phase 1 · T-13）', () => {
       (f) => f.rel,
     )
     expect(offenders, `内联重复声明：${offenders.join(', ')}`).toEqual([])
+  })
+
+  // GREEN 步骤补钉（防"删了定义点、却没人真的引用" —— 那样只会在别处再长回来）。
+  it('两个历史重复点必须真的引用单一来源（import 或 re-export）', () => {
+    const REF_RE =
+      /(?:import|export)\s+type\s*\{[^}]*\bMessageStatus\b[^}]*\}\s*from\s*['"][^'"]*conversationMessagesType['"]/
+    const FORMER_DUPLICATES = ['stores/message.ts', 'types/api.ts']
+    for (const rel of FORMER_DUPLICATES) {
+      const f = PROD.find((x) => x.rel === rel)
+      expect(f, `找不到文件 ${rel}（改名了？请同步本钉）`).toBeTruthy()
+      expect(f!.src, `${rel} 必须从单一来源引用 MessageStatus`).toMatch(REF_RE)
+    }
   })
 })

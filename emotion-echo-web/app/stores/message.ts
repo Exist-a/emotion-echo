@@ -4,7 +4,9 @@ import { get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { useConversationStore } from './conversation'
 
-export type MessageStatus = 'sending' | 'sent' | 'failed' | 'streaming' | 'truncated'
+// 消息状态类型已收敛到单一来源（CL-05 Phase 1 · T-13）；
+// 此处仅作转出，保留既有导入路径不破。
+export type { MessageStatus } from '~/types/conversation/conversationMessagesType'
 
 export const useMessageStore = defineStore('message', () => {
   const currentSessionId = ref<string | null>(null)
