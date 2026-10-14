@@ -61,15 +61,44 @@ related:
 
 | 轨 | 阶段 | 分支 / worktree | owner | 开始 | 状态 |
 |---|------|----------------|-------|------|------|
-| A | CL-04 Prompt 组装层 | 待认领 | — | — | **open**（待另一会话） |
+| A | CL-04 Prompt 组装层 | `feat/cl-04-prompt-assembly`（worktree `../Emotion-Echo-cl04`） | Lane-CL-A | 2026-10-14 | **in-progress**（draft PR [#213](https://github.com/Exist-a/emotion-echo/pull/213)；**持 dev 栈锁至 12:00**） |
+| B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | **in-progress**（draft PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)；dev 栈**排队在 A 之后**） |
+| C | CL-02 gRPC 契约闭环 | `feat/cl-02-grpc-contract`（worktree `../Emotion-Echo-cl02`） | Lane-CL-C | 2026-10-14 | **in-progress**（draft PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)；🟢 Phase 先行，🔴 需栈 Phase 排队在 B 之后） |
+
+> **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
+> C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
+> （依据：`feat/cl-04-prompt-assembly` / `feat/cl-01-observability` 分支上的登记 + 各自 draft PR）。**合并时请保留三行**（§四 已约定"冲突时保留双方行"）。
 
 > 示例（不要留真数据）：`| D | CL-00 CI 瘦身 | feat/cl-00-ci-slim | Lane-CL-D | 2026-10-13 | in-progress |`
+
+### 3.1 dev 栈时间片排队（**并行度的真实瓶颈，不是"轨数"**）
+
+> 19 容器一套栈（稳态 ≈6GB，宿主内存上限 ≈8–10GB）⇒ **不可复制第二套**（试过：整栈复制会击穿内存）。
+> 所以并行度由**栈时间片**决定：一条持锁、其余排队。**需栈的 Phase 开工前**必须在下面登记；**不得强占**持锁方。
+
+| 顺序 | 轨 | 需要的栈窗口 | 状态 |
+|---|---|---|---|
+| 1 | A（CL-04） | 至 **2026-10-14 12:00**（`deploy/.devmode-session` owner=`lane-cl-a`） | **持锁中** |
+| 2 | B（CL-01） | A 释放后（Phase 0 基线 / 8 采集 / 9 负向对照） | 排队中 |
+| 3 | C（CL-02） | B 之后（Phase 2 清除验证 / 4 接真 / 6 收口冒烟） | 排队中 |
+
+> **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
+> 三条"待验证"轨 ≈ 极限；若新轨全程需栈 ⇒ **等**，不要加。**纯 🟢 轨（文档/静态守卫）不受此限**。
+
+> **栈使用铁律**（继承 AGENTS §四 与 RUNBOOK §2）：`--env-file .env.local --profile dev` 不可省；**严禁**删除/清空/覆盖 `.env.local`；
+> 用完**删除** `.devmode-session`；改完 Go 必须重建镜像再验收。
 
 ## 四、握手区（共享文件改动）
 
 | 时间 | owner | 文件 | 缘由 | 状态 |
 |------|-------|------|------|------|
-| _（空）_ | | | | |
+| 2026-10-14 | Lane-CL-A | `docs/closure-roadmap/{parallel-contract,roadmap}.md` | A 轨开工：§三 登记占位 + CL-04 翻 in-progress + 补 PR #213 | ✅ |
+| 2026-10-14 | Lane-CL-B | `docs/closure-roadmap/{roadmap,parallel-contract}.md` | B 轨开工：§三 登记占位 + CL-01 翻 in-progress + §2 补并行语义注 | ✅ |
+| 2026-10-14 | Lane-CL-C | `docs/closure-roadmap/{parallel-contract,roadmap}.md`、`docs/plans/grpc-deadlink-actualization.md` | C 轨开工：§三 登记占位（**并回填 A/B 两行**）+ CL-02 翻 in-progress + 来源计划 front-matter 同步 | ✅ |
+| 2026-10-14 | Lane-CL-C | **`proto/**`**（本 PR 暂未改；Phase 2/3 将改） | C 轨**预占声明**：本阶段是当前唯一计划改 `proto/**` 的轨（A/B 均不改）。其他轨若需改 proto，**先与本轨握手** | ⏳ 预占 |
+
+> **C 轨另注**：本轨与 A/B 在 `emotion-echo-web-bff/internal/downstream/` **同目录不同文件**（A 占 `llm*.go`、B 占 `ai.go` 等），
+> 依 §1.2"同名文件串行、不同文件可并"**不构成阻塞**；仅 `proto/**` 为独占脊柱（上表已预占）。
 
 ## 五、开工前置检查（照做）
 
