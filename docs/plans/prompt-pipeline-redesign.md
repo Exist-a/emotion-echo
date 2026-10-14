@@ -1,8 +1,9 @@
 ---
-status: planned
+status: in-progress
 priority: high
-owner: TBD
+owner: lane-cl-a（阶段 CL-04）
 created: 2026-10-13
+last-updated: 2026-10-14（CL-04 A 轨开工：阶段详档 = `docs/closure-roadmap/stages/cl-04-prompt-assembly/{plan,report}.md`；Phase 0 基线取证已完成）
 type: implementation-plan
 source: 2026-10-13 会话（用户："其实这就引出一个最大的问题，目前 prompt 流程。我觉得目前的 prompt 构建流程是有问题的"）
 depends-on: []
