@@ -196,6 +196,12 @@ func main() {
 				log.Fatalf("[skywalking] strict mode + required dep, refusing to start: %v", err)
 			}
 			log.Printf("[skywalking] tracer init failed (warn mode, continue): %v", err)
+			// CL-F-14：启动期失败后**后台持续补挂**（不阻塞启动）。
+			// 否则 OAP 与 svc 同起时该服务**整段生命周期零 span** —— 实测 SkyWalking
+			// 服务列表里整段缺席（5 个 vs 应有 7 个），docker restart 才愈。
+			// 补挂成功时 SetTracer 会同时注册 trace 与 grpcinterceptor 两个全局槽，
+			// gin 中间件 / gRPC server 拦截器按请求现读 ⇒ 入口 span 自动生效。
+			_ = sharedtrace.StartTracerBackgroundRetry(context.Background(), c.SkyWalking.ServiceName, c.SkyWalking.OAPAddr, sharedtrace.TracerBackgroundRetryOptions{})
 		} else {
 			tracer = t
 			// Stage 94 PR-4 §P0-1b：把 tracer 提升为包级 var,让 dialGRPC 通过

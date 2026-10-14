@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/SkyAPM/go2sky"
+
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 )
 
 var (
@@ -25,10 +27,20 @@ var (
 // SetTracer 注册（或清空）全局 tracer；传 nil 清空。
 //
 // 线程安全：启动期写、请求期读，RWMutex 兜底 -race 门禁。
+//
+// CL-F-14：**同时**把接口形态注册到 grpcinterceptor 的全局槽 —— gin 中间件与
+// gRPC server 拦截器构造期若拿到 nil，会按请求现读该槽。两处一起维护，才能让
+// 「启动后才补挂的 tracer」对入口路径生效（否则该服务整段生命周期零 span）。
+// 放在本包而非 pkg/skywalking，是为了让 web-bff（不依赖 gorm）也能用同一条路径。
 func SetTracer(t *go2sky.Tracer) {
 	mu.Lock()
 	tracer = t
 	mu.Unlock()
+	if t == nil {
+		grpcinterceptor.SetGlobalTracer(nil)
+		return
+	}
+	grpcinterceptor.SetGlobalTracer(grpcinterceptor.NewGo2SkyTracer(t))
 }
 
 // Tracer 返回全局 tracer，未注册时返回 nil。

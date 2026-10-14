@@ -10,6 +10,7 @@
 package skywalking
 
 import (
+	"context"
 	"log"
 	"os"
 	"sync"
@@ -41,6 +42,9 @@ var (
 // E2E-26 #3：BootstrapSkyWalkingTracer 成功后必须调用本函数，否则取全局
 // tracer 的 gRPC server/client 全部拿到 nil → noop → 服务端 span 与 sw8
 // 提取静默失效（单测 mock 注入掩盖，运行时全灭）。
+//
+// CL-F-14：两个全局槽（trace 的 *go2sky.Tracer + grpcinterceptor 的 Tracer 接口）
+// 的同步注册已下沉到 `trace.SetTracer` —— 本包只做转发，web-bff 直接用 trace 包。
 func SetTracer(t *go2sky.Tracer) { trace.SetTracer(t) }
 
 // Init 初始化全局 tracer。
@@ -50,6 +54,16 @@ func SetTracer(t *go2sky.Tracer) { trace.SetTracer(t) }
 // bootstrap.BootstrapSkyWalkingTracer + SetTracer。
 func Init() {
 	once.Do(initTracer)
+}
+
+// TracerBackgroundRetryOptions 类型别名 —— 5 个 svc 用 `sharedskywalking.` 前缀引用，
+// 实现留在 trace 包（web-bff 走 sharedtrace 用同一个类型）。
+type TracerBackgroundRetryOptions = trace.TracerBackgroundRetryOptions
+
+// StartTracerBackgroundRetry CL-F-14：启动期 tracer 初始化失败后的**后台持续补挂**。
+// forwarder 到 trace 包（实现与测试都在那里，便于 web-bff 这条不依赖 gorm 的路径复用）。
+func StartTracerBackgroundRetry(ctx context.Context, serviceName, oapAddr string, opts trace.TracerBackgroundRetryOptions) (stop func()) {
+	return trace.StartTracerBackgroundRetry(ctx, serviceName, oapAddr, opts)
 }
 
 // Tracer 返回全局 tracer，未初始化时返回 nil。
