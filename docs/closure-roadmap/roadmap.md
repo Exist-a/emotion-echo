@@ -40,15 +40,15 @@ related:
 
 ## §2 阶段总表（按执行序）
 
-> 状态取值 `pending / in-progress / blocked / done / deferred`（唯一权威=本表）。一次只允许一个主线 `in-progress`。
+> 状态取值 `pending / in-progress / blocked / done / deferred`（唯一权威=本表）。单轨执行时一次只允许一个主线 `in-progress`；**并行执行（见 [parallel-contract.md](parallel-contract.md)）时每轨可各有一个 `in-progress`**，本表状态列同时反映多轨。
 
 | CL | 阶段 | 档 | 含待排期计划 | depends-on | 状态 |
 |---|---|---|---|---|---|
 | **CL-00** | **CI 瘦身** | T0 | `.github/workflows/*` + `scripts/` 守卫 | — | ✅ **done**（PR #209） |
-| **CL-01** | **可观测闭环** | T1 | `observability-instrumentation-and-dashboards` → `observability-business-metrics-wiring` → `grafana-dashboard-gaps`；`redis-two-layer-cache` | — | pending |
+| **CL-01** | **可观测闭环** | T1 | `observability-instrumentation-and-dashboards` → `observability-business-metrics-wiring` → `grafana-dashboard-gaps`；`redis-two-layer-cache` | — | **in-progress**（2026-10-14，B 轨；详档 `stages/cl-01-observability/plan.md`） |
 | **CL-02** | gRPC 契约闭环 | T1 | `grpc-deadlink-actualization` | — | pending |
 | **CL-03** | Kafka/可靠性闭环（合并一次执行） | T1 | `outbox-trace-continuity`、`dlq-hardening-and-replay`、`kafka-pipeline-pending-decisions` | 与 CL-01/02 共享追踪面 | pending |
-| **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign` | — | pending |
+| **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign` | — | **in-progress**（2026-10-14，A 轨；详档 `stages/cl-04-prompt-assembly/plan.md`） |
 | **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | pending |
 | **CL-06** | 用户自定义 Agent | T3 | `user-custom-agent-persona` | CL-04 | pending |
 | **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | pending |

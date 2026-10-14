@@ -61,7 +61,8 @@ related:
 
 | 轨 | 阶段 | 分支 / worktree | owner | 开始 | 状态 |
 |---|------|----------------|-------|------|------|
-| A | CL-04 Prompt 组装层 | 待认领 | — | — | **open**（待另一会话） |
+| A | CL-04 Prompt 组装层 | `feat/cl-04-prompt-assembly`（worktree `../Emotion-Echo-cl04`，off main） | Lane-CL-A | 2026-10-14 | **in-progress**（**draft PR [#213](https://github.com/Exist-a/emotion-echo/pull/213)**；详档 `stages/cl-04-prompt-assembly/plan.md`） |
+| B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`，off main） | Lane-CL-B | 2026-10-14 | **in-progress**（详档 `stages/cl-01-observability/plan.md`；**PR #211** draft） |
 
 > 示例（不要留真数据）：`| D | CL-00 CI 瘦身 | feat/cl-00-ci-slim | Lane-CL-D | 2026-10-13 | in-progress |`
 
@@ -69,7 +70,8 @@ related:
 
 | 时间 | owner | 文件 | 缘由 | 状态 |
 |------|-------|------|------|------|
-| _（空）_ | | | | |
+| 2026-10-14 | Lane-CL-A | `docs/closure-roadmap/parallel-contract.md`、`docs/closure-roadmap/roadmap.md` | A 轨开工：§三 登记占位（open → in-progress）+ CL-04 状态翻 in-progress + 补 draft PR 链接（#213）。**与 B 轨同改本文件 §三/§四** ⇒ `git merge-tree` 实测**唯一冲突文件 = 本文件**（§三 A 行被改 vs B 轨同区插入 B 行；§四 双方各自替换同一空行）。**第二方合并时按「保留双方行」解这 2 处即可**（B 轨握手行亦写明同一规则）；两侧代码面零重叠（B=shared/pkg/skywalking + scripts/smoke_observability.py + grafana dashboards；A=web-bff/llm-service/web-app）。<br>**2026-10-14 冲突消解**：B 轨会话停工后，A 轨把 B 轨**原文**的 B 行与本节握手行一并纳入本分支（见上下两行）⇒ 本文件成为两轨登记的**超集**，两个 PR **任意顺序均可干净合并**，无需再手工解冲突 | ✅ |
+| 2026-10-14 | Lane-CL-B | `docs/closure-roadmap/roadmap.md`、`docs/closure-roadmap/parallel-contract.md` | B 轨开工：§三 登记占位 + CL-01 翻 `in-progress` + §2 注补并行语义。⚠️ 与 A 轨同改这两份（A 已登记）⇒ 合并须**串行**（本行由 B 轨后登记，冲突时保留双方行） | ✅ |
 
 ## 五、开工前置检查（照做）
 
