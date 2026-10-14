@@ -163,9 +163,30 @@ last-updated: 2026-10-14
 
 ## §待办（环境恢复后立刻补做）
 
-CL-F-14 的**起栈运行时验证**（唯一未完成项，步骤已固化，恢复后照做即可）：
+### 0. 先恢复 Docker（**需管理员**；2026-10-14 已穷尽非管理员路径）
 
-1. 恢复 Docker（管理员压缩 VHDX 或清理宿主空间）。
+根因：D 盘剩余 0 → 数据盘 `docker_data.vhdx`（实际 298 GB）无法扩展 → containerd 读
+bbolt 页 **SIGBUS** → `Docker Desktop is unable to start`。
+
+**已备好双击脚本**（放在宿主桌面，不用记命令）：
+`桌面 / 压缩Docker数据盘.cmd` → 调用同目录 `compact-docker-disk.ps1`。
+它会①停 Docker 与 WSL ②提权跑 `diskpart`（attach readonly → compact → detach）
+③打印压缩前后的 VHDX 大小与 D 盘可用空间。
+**第②步会弹 UAC，必须点「是」**（不点即取消，压缩不会发生）。
+
+**为什么不能自动完成（本轮实测排除，非推断）**：
+
+- `Start-Process -Verb RunAs` → `InvalidOperationException: 操作已被用户取消`（UAC 弹窗无人点）。
+  本机 `ConsentPromptBehaviorAdmin=5` + `PromptOnSecureDesktop=1` ⇒ 必然弹窗；当前 shell `isAdmin=False`。
+- `wsl --manage docker-desktop --set-sparse true` → 报成功，但只作用于**发行版自己的**
+  `main\ext4.vhdx`(0.1 GB)，与数据盘无关（D 盘可用 0 → 0.02 GB）。
+- `wsl --mount --vhd ...docker_data.vhdx` 后 `fstrim -v` → 报 **712.6 GiB trimmed**，
+  且 `/sys/block/sde/queue/discard_max_bytes` 非 0，但 `wsl --unmount` 后宿主文件**未缩**
+  （仍是 320,203,653,120 B）⇒ 该挂载路径不把 TRIM 透传到动态 VHDX。
+
+### 1. 然后做 CL-F-14 的起栈运行时验证（唯一未完成项，步骤已固化）
+
+1. 确认 Docker 可用（`docker ps` 有响应）且 D 盘可用 > 5 GB。
 2. `docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml -f deploy/docker-compose.cl01-verify.yml build emotion-echo-chat-svc`
    （override 文件已备好：把 chat-svc 镜像 tag 换成带轨后缀的 `cl01-verify`，不覆盖公共 tag）。
 3. `docker stop emotion-echo-sw-oap` → `docker compose ... up -d --no-deps emotion-echo-chat-svc`（**OAP 停着**重启 chat-svc ⇒ 启动期 tracer 初始化必失败）。
