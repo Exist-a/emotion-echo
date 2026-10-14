@@ -1,12 +1,58 @@
 import type { MessageWithStatus, SendMessageParams } from '~/types/api'
 import type { returnMsgType } from '~/types/commonType'
+import type { MessageStatus } from '~/types/conversation/conversationMessagesType'
 import { get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
+import { getLatestMessages, saveMessage, saveMessages } from '~/utils/messageCache'
 import { useConversationStore } from './conversation'
 
 // 消息状态类型已收敛到单一来源（CL-05 Phase 1 · T-13）；
 // 此处仅作转出，保留既有导入路径不破。
 export type { MessageStatus } from '~/types/conversation/conversationMessagesType'
+
+/** 进入会话时先渲染的本地快照条数上限（读加速用，不是"全部历史"） */
+const SNAPSHOT_LIMIT = 50
+
+/** 只存在于本地、**不允许被服务端快照抹掉**的状态（发失败待重发 / 在途） */
+const LOCAL_ONLY_STATUSES: readonly MessageStatus[] = ['failed', 'sending']
+
+/**
+ * 合并策略 A —— 服务端**快照替换**（`switchSession` 用）：服务端行覆盖同 id；
+ * 本地独有的 `failed`/`sending` 保留，否则"发失败等重发"的消息一刷新就消失（T-12）。
+ */
+export function mergeServerMessages(
+  local: MessageWithStatus[],
+  server: MessageWithStatus[],
+): MessageWithStatus[] {
+  const serverIds = new Set(server.map((m) => m.id))
+  const preserved = local.filter(
+    (m) => !serverIds.has(m.id) && LOCAL_ONLY_STATUSES.includes(m.status as MessageStatus),
+  )
+  return [...preserved, ...server]
+}
+
+/**
+ * 合并策略 B —— 分页**追加**（`loadMoreMessages` 用）：按 id 去重后追加，同 id 以服务端为准。
+ * ⚠️ 不能复用 A：第 2 页里没有第 1 页的行，用 A 会把已加载的旧页整片丢掉。
+ */
+export function appendServerPage(
+  existing: MessageWithStatus[],
+  page: MessageWithStatus[],
+): MessageWithStatus[] {
+  const byId = new Map(existing.map((m) => [m.id, m]))
+  for (const m of page) byId.set(m.id, m)
+  return [...byId.values()]
+}
+
+/**
+ * 缓存写入适配：`messageCache` 入参类型是 `conversationMessageType`，而服务端行是
+ * `types/api.MessageWithStatus` —— 两者字段名与取值集本就不一致（`sender:'user'|'ai'`
+ * vs `'user'|'AI'`、`contentType` 取值集不同）。这正是 **`CL-F-13` / `CL-D-12`** 的现场；
+ * 用户已裁定**顺延**（`CL-D-13` 到 Phase 3、`CL-D-12` 只登记不动）⇒ 此处先用断言过渡。
+ */
+function toCacheRow(m: MessageWithStatus) {
+  return m as unknown as Parameters<typeof saveMessage>[1]
+}
 
 export const useMessageStore = defineStore('message', () => {
   const currentSessionId = ref<string | null>(null)
@@ -29,6 +75,22 @@ export const useMessageStore = defineStore('message', () => {
     currentMessages.value = []
     hasMore.value = true
     messageCursor.value = 0
+
+    // 读加速（T-11）：先用本地快照把界面渲染出来，再向服务端取数。
+    // 缓存是**加速而非依赖** ⇒ 读失败只告警，绝不能挡住服务端取数。
+    try {
+      const snapshot = (await getLatestMessages(
+        sessionId,
+        SNAPSHOT_LIMIT,
+      )) as unknown as MessageWithStatus[]
+      // await 期间会话可能已被切走 ⇒ 别把旧会话的快照写进新会话
+      if (currentSessionId.value !== sessionId) return
+      if (snapshot.length > 0) {
+        currentMessages.value = mergeServerMessages([], snapshot)
+      }
+    } catch (e) {
+      console.warn('[MESSAGE_STORE] 本地快照读取失败（降级为纯服务端）:', e)
+    }
 
     try {
       await loadMoreMessages()
@@ -56,9 +118,7 @@ export const useMessageStore = defineStore('message', () => {
       }>(API_ROUTES.messagesByConv.path.replace(':id', currentSessionId.value || ''), params)
 
       if (data.list.length > 0) {
-        const existingIds = new Set(currentMessages.value.map((m) => m.id))
         const newMessages = data.list
-          .filter((m) => !existingIds.has(m.id))
           // 语音消息落库映射（E2E-16 测试点 #5，2026-09-22 用户实测钉出）：
           // 后端行 content=音频URL、无 audioUrl 字段，而气泡渲染条件是 item.audioUrl
           // （[id].vue v-if）—— 不映射的话即使落库成功，刷新后语音气泡照样消失。
@@ -68,9 +128,20 @@ export const useMessageStore = defineStore('message', () => {
               ? { ...m, audioUrl: row.content }
               : m
           })
-        currentMessages.value = [...currentMessages.value, ...newMessages]
+        // 合并策略 B（分页追加）：按 id 去重，同 id 以服务端为准
+        currentMessages.value = appendServerPage(currentMessages.value, newMessages)
         messageCursor.value = data.cursor
         hasMore.value = data.hasMore
+
+        // 写穿（T-11）：拉到的页落缓存。缓存失败不得影响本次加载。
+        try {
+          await saveMessages(
+            currentSessionId.value,
+            newMessages.map(toCacheRow) as Parameters<typeof saveMessages>[1],
+          )
+        } catch (e) {
+          console.warn('[MESSAGE_STORE] 缓存写入失败（不影响加载）:', e)
+        }
       } else {
         hasMore.value = false
       }
@@ -80,6 +151,15 @@ export const useMessageStore = defineStore('message', () => {
       return { isOk: false, msg: error.message || '加载失败' }
     } finally {
       isLoading.value = false
+    }
+  }
+
+  /** 写穿（T-11）：发送成功的消息落缓存；缓存失败不得影响发送结果与返回体 */
+  const writeThrough = async (m: MessageWithStatus) => {
+    try {
+      await saveMessage(currentSessionId.value as string, toCacheRow(m))
+    } catch (e) {
+      console.warn('[MESSAGE_STORE] 缓存写入失败（不影响发送）:', e)
     }
   }
 
@@ -118,21 +198,16 @@ export const useMessageStore = defineStore('message', () => {
           (m) => m.id === clientMsgId || (m as any).clientMsgId === clientMsgId,
         )
         if (existingIndex >= 0) {
-          currentMessages.value[existingIndex] = {
-            ...message,
-            status: 'sent',
-          }
+          const landed = { ...message, status: 'sent' } as MessageWithStatus
+          currentMessages.value[existingIndex] = landed
+          await writeThrough(landed)
           return { isOk: true, msg: '已存在', data: message }
         }
       }
 
-      currentMessages.value = [
-        ...currentMessages.value,
-        {
-          ...message,
-          status: 'sent',
-        },
-      ]
+      const landed = { ...message, status: 'sent' } as MessageWithStatus
+      currentMessages.value = [...currentMessages.value, landed]
+      await writeThrough(landed)
 
       const conversationStore = useConversationStore()
       const conversation = conversationStore.conversationList.find(

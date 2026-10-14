@@ -99,10 +99,12 @@ describe('message store 本地缓存接线（CL-05 Phase 2b · T-11 / T-12）', 
 
     await store.switchSession(S)
 
-    const byId = new Map(store.currentMessages.map((m) => [m.id, m]))
-    expect([...byId.keys()].sort((a, b) => Number(a) - Number(b))).toEqual([1, 99])
-    expect(byId.get(1)!.content, '服务端同 id 覆盖本地').toBe('fresh')
-    expect((byId.get(99) as any).status, '本地 failed 必须保留').toBe('failed')
+    // id 在类型上是 string（api.MessageItem.id），运行时用例里传的是 number
+    // ⇒ 统一 String() 归一，避免"类型说 string、跑起来是 number"的断言漂移。
+    const byId = new Map(store.currentMessages.map((m) => [String(m.id), m]))
+    expect([...byId.keys()].sort(), '本地 failed(99) 与服务端行(1) 都要在').toEqual(['1', '99'])
+    expect(byId.get('1')!.content, '服务端同 id 覆盖本地').toBe('fresh')
+    expect((byId.get('99') as any).status, '本地 failed 必须保留').toBe('failed')
   })
 
   it('T-12 合并后仍按 sendTime 升序（本地 failed 插在正确位置）', async () => {
