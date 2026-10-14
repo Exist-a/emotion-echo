@@ -51,6 +51,7 @@ last-updated: 2026-10-14
 5. **fusion 指标**（Phase 5）：`worker.processOne` 记 `RecordFusionCall` + `ObserveFusionDuration`，新增低基数 `fusionModalityLabel`。
 6. **BFF SetTracer**（Phase 6）：成功分支调 `sharedtrace.SetTracer(t)`，守卫扩为表驱动含 BFF。
 7. **看板 + 告警**（Phase 7）：新建 business / reliability / logs 三看板 + `cl01-health-business.yml`（6 条规则）。三块看板 JSON 由一次性生成器 [scripts/_gen_cl01_dashboards.py](../../../../scripts/_gen_cl01_dashboards.py) 产出（面板结构统一，手写三份易漂移；生成器同时把「零值也必须出 series」的 `or vector(0)` 约定固化下来）。
+   **CI 反查补刀**：首次推送后 `文档守卫总闸` 红 —— 根因是 `node deploy/obs_monitoring.test.js` 的「规则名**双向相等**」断言（dev `deploy/prometheus/rules/*.yml` ↔ k8s `charts/emotion-echo/charts/prometheus/templates/configmap-rules.yaml`），我只落了 dev 侧。**修法**：在 k8s ConfigMap 内联同一份规则；`test_helm_prometheus_render.sh` → PASS=8/FAIL=0（「chart 内联告警与 dev 侧 13 条完全一致」）。**这条断言的价值正在于此：改一侧忘另一侧 = k8s 环境那 6 条告警静默不存在。**
 8. **采集增量**（Phase 8）：**D-05 按字面实现被实测证伪**（见 §10.2），改用既有 `status` 标签 + 告警/面板落地。
 9. **负向对照 + 收口**（Phase 9）：告警真触发送达、span 真出现在 SkyWalking、smoke 全绿。
 
