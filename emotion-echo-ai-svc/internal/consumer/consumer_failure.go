@@ -14,11 +14,13 @@
 package consumer
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
 	"github.com/IBM/sarama"
 
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	sharedmessaging "github.com/emotion-echo/shared/pkg/messaging"
 
 	"emotion-echo-ai-svc/internal/events"
@@ -29,21 +31,21 @@ import (
 // 预算 = maxRetries+1 次尝试（与旧 DLQ.Attempts=4 对齐）；相邻尝试按
 // backoffFor(attempt) 退避。返回 (实际尝试次数, 最终 error)；成功时 error 为 nil。
 func (h *ConsumerGroupHandler) deliverWithRetry(
-	sess sarama.ConsumerGroupSession,
+	ctx context.Context,
 	evt *events.Event,
 	msg *sarama.ConsumerMessage,
 	maxRetries int,
 ) (int, error) {
 	var err error
 	for attempt := 1; ; attempt++ {
-		if err = h.Handler(sess.Context(), evt); err == nil {
+		if err = h.Handler(ctx, evt); err == nil {
 			return attempt, nil
 		}
 		if attempt > maxRetries {
 			return attempt, err
 		}
 		d := h.backoffFor(attempt)
-		slog.ErrorContext(sess.Context(), "consumer handler err (will retry in-place)",
+		slog.ErrorContext(ctx, "consumer handler err (will retry in-place)",
 			"attempt", attempt, "max_retries", maxRetries, "key", string(msg.Key), "backoff", d, "err", err)
 		time.Sleep(d)
 	}
@@ -65,7 +67,7 @@ func (h *ConsumerGroupHandler) backoffFor(attempt int) time.Duration {
 // publishToDLQ 重试预算耗尽后的兜底：投 DLQ（带诊断 headers + sw8 透传）+ 计数。
 // DLQ 为 nil 时只打日志（调用方无论如何都会 Mark 前进，毒消息不卡分区）。
 func (h *ConsumerGroupHandler) publishToDLQ(
-	sess sarama.ConsumerGroupSession,
+	ctx context.Context,
 	msg *sarama.ConsumerMessage,
 	handlerErr error,
 	attempts int,
@@ -86,16 +88,29 @@ func (h *ConsumerGroupHandler) publishToDLQ(
 			OriginalTopic: msg.Topic,
 			Headers:       dlqHeaders,
 		}
-		if dlqErr := h.DLQ.Publish(sess.Context(), dlqEntry); dlqErr != nil {
+		// CL-01 G4：DLQ 投递建 exit span（挂 kafka-consume entry span 下），并把 sw8
+		// 注入 dlqHeaders（map 引用类型，随 dlqEntry 一并发出）⇒ DLQ 消息可续接同一条 trace。
+		var dlqSpan grpcinterceptor.Span
+		if h.Tracer != nil {
+			injector := func(k, v string) error { dlqHeaders[k] = v; return nil }
+			if _, s, derr := h.Tracer.CreateExitSpan(ctx, "kafka-publish-dlq", msg.Topic, injector); derr == nil {
+				dlqSpan = s
+			}
+		}
+		dlqErr := h.DLQ.Publish(ctx, dlqEntry)
+		if dlqSpan != nil {
+			dlqSpan.EndSpan(dlqErr)
+		}
+		if dlqErr != nil {
 			// Round 2.3 §PR-1：DLQ 投递失败计数（kafka-pipeline-pending-decisions.md §P1-14）。
 			// 业务消息已 MarkMessage 也无法挽回——属于"业务 + DLQ 双失败"黑洞，本 counter 让黑洞可见。
 			IncDLQPublishResult(false)
-			slog.ErrorContext(sess.Context(), "consumer DLQ publish failed (dropping msg)", "err", dlqErr)
+			slog.ErrorContext(ctx, "consumer DLQ publish failed (dropping msg)", "err", dlqErr)
 		} else {
 			IncDLQPublishResult(true)
 		}
 	}
-	slog.ErrorContext(sess.Context(), "consumer handler err after retries → DLQ",
+	slog.ErrorContext(ctx, "consumer handler err after retries → DLQ",
 		"attempts", attempts, "key", string(msg.Key), "err", handlerErr)
 }
 

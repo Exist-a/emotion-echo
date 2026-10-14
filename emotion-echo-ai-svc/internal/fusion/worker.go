@@ -149,6 +149,12 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 	//   - `w.deps.LLMFuser == nil` 是 interface 完全 nil（未注入）
 	//   - `reflect.ValueOf(w.deps.LLMFuser).IsNil()` 是 type+nil value（注入了一个 nil 指针）
 	//   两者必须都检查，否则 nil pointer dereference panic。
+	//
+	// CL-01 G5 / D-03：给"fusion 整体调用"埋点（emotion_fusion_calls_total /
+	// _duration_seconds）。此前这两个指标定义齐全但**全仓 0 生产调用**（"定义了没数据"）。
+	// 只统计**真正的融合尝试**（success/failure）；LRU 跳过不计（那是 fusion_worker_tick）。
+	modality := fusionModalityLabel(snap)
+	start := time.Now()
 	var fused *model.FusedEmotion
 	var err error
 	if w.deps.LLMFuser != nil && !isNilFuser(w.deps.LLMFuser) {
@@ -162,9 +168,13 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 		RecordFallback("llm_to_late")
 		fused, err = w.deps.LateFuser.Fuse(ctx, snap)
 		if err != nil || fused == nil {
+			RecordFusionCall(modality, "failure")
+			ObserveFusionDuration(modality, time.Since(start).Seconds())
 			return errors.New("both LLM and late fusion failed")
 		}
 	}
+	RecordFusionCall(modality, "success")
+	ObserveFusionDuration(modality, time.Since(start).Seconds())
 
 	// 5. 补 user_id / conversation_id（来自 text）
 	if fused.UserID == 0 {
@@ -188,6 +198,31 @@ func (w *FusionWorker) processOne(ctx context.Context, messageID int64) error {
 		w.deps.RateLimit.Add(messageID)
 	}
 	return nil
+}
+
+// fusionModalityLabel 把 snapshot 的可用模态映射为**低基数**指标标签。
+//
+// 取值限定在指标文档定义的 text/face/voice/fused 内（**不改指标语义**）：
+// 单一模态 → 该模态名；多模态 → "fused"。cardinality ≤ 4。
+func fusionModalityLabel(s ModalitySnapshot) string {
+	n := 0
+	only := "fused"
+	if s.Text != nil {
+		n++
+		only = "text"
+	}
+	if s.Face != nil {
+		n++
+		only = "face"
+	}
+	if s.Voice != nil {
+		n++
+		only = "voice"
+	}
+	if n == 1 {
+		return only
+	}
+	return "fused"
 }
 
 // emotionToModality 把 text EmotionAnalysis 转为 ModalityScore。
