@@ -32,7 +32,7 @@ plan: plan.md
 | **3** 状态机 + 乐观插入 | ✅ **完成** | `8f5343a`(RED) → `8b0da09`(GREEN) | **T-14 / T-15 PASS** | 见 §3.5（含全量回归抓出的幽灵行缺陷） |
 | **4** 重试 + 断网重扫 | ✅ **完成** | `0a3db16`(RED) → `819c8de`(GREEN) | **T-16 / T-17 / T-18 PASS** | 见 §3.6（含两处有意偏离与理由） |
 | 5 会话列表游标化 | ⛔ 阻塞（待 C 轨 `proto/**` 落地） | — | T-4/T-5/T-6 | C 轨 proto 改动**已完成但未合 main**；须等 #214 合并后再动 |
-| 6 死路径 + HTTP 降级路径 | ⛔ 阻塞（口径待裁：死方法删/归档） | — | T-7、T-8 | 代码在 chat-svc `repository`/`handler`（本轨面），但处置口径需用户裁定 |
+| **6** 死路径 + HTTP 降级路径 | ✅ **完成**（编码+单测） | `be3282d`(RED) → `b10b945`(GREEN) | **T-8 PASS**；**T-7 PASS（单测）/ 运行验证待栈** | 见 §3.7 |
 | 7 端到端 + ADR + 收口 | ⛔ 未开始（🔴 需栈） | — | T-20 | 等栈窗口 |
 | 8 账本继承（CL-F-10/11） | ⛔ 未开始（🔴 需栈复现） | — | T-21、T-22 | 先定位根因（账本明写"未查代码、不臆断"） |
 
@@ -243,6 +243,46 @@ $ pnpm typecheck                      → 无 error
 
 **测试自纠一处**：首轮把两行都种成 `retryCount: 1` 却断言退避 2s —— 实际下一次尝试是**第 2 次**⇒ 应为 4s。改为种 `0`/`1` 两行并断言 `[retryDelayMs(1), retryDelayMs(2)]`，反而**证明了退避是逐行取曲线**、不是全局常数。
 
+### §3.7 Phase 6 · T-7 / T-8（HTTP 降级路径认 cursor + 删除 ASC 死路径）
+
+**用户裁定（2026-10-14，AskUserQuestion）**：① 旧 `ListMessages(ASC)` → **删掉**；② HTTP 降级路径 → **现在就修**。
+
+**RED**（两个钉单独提交在 `be3282d`）
+
+```
+$ go test ./internal/handler/ -run TestChatHandler_ListMessages_HonorsCursor -count=1
+--- FAIL: TestChatHandler_ListMessages_HonorsCursor
+    Should be empty, but was [m2 ... m3 ...]        ← 带 cursor 却还返回"最新一页"
+
+$ go test ./internal/repository/ -run TestRepository_NoLegacyEarliestFirstListMessages -count=1
+--- FAIL: ... "assert.NotContains" 命中转换后的源码（Order("id ASC") 仍在）
+```
+
+**GREEN**（`b10b945`）
+
+```
+$ go build ./...                                → ok
+$ go vet ./...                                  → ok（首轮报出 6 处残留调用，已全部迁移）
+$ go vet -tags integration ./integration_test/... → ok
+$ go test ./... -count=1                        → 全部包 ok
+```
+
+**改动**
+
+| 面 | 改动 |
+|---|---|
+| handler | `ListMessagesHandler` 解析 `cursor`（>0 生效；语义与 gRPC 主路径 / BFF `buildMessageQuery` 一致） |
+| repository | 删除旧 `ListMessages(ctx, conversationID, limit)`（`Order("id ASC")` 取最早 N 条）：接口声明 + Postgres 实现 + InMemory 实现 |
+| 迁调用方 6 处 | `conversation_repository_test.go`(3)、`sendmessagelogic_test.go`(5)、`listmessageslogic_test.go`(3 个包装器类)、`deleteconversationlogic_test.go`(1)、`integration_test/{intent_enum,health}_integration_test.go`(3) |
+| 架构钉 | `internal/repository/dead_path_guard_test.go`：断言源码内无 `Order("id ASC")` / 旧签名，**并反向断言 `ListMessagesPage` 必须仍在** |
+
+**本轮两次自纠（都发生在自己身上）**
+
+1. **测试断言写错**：初版断言"带 cursor 的第二页为空"，但 3 条消息里 `?limit=2` 的最新页是 `{id 2,3}`、其 min id = 2，`id < 2` **正好还剩 1 条** ⇒ 正确行为是返回 1 条。改为"必须返回 1 条且所有 id < cursor"，这样**忽略 cursor 时（会返回 id≥cursor 的最新页）依旧会红**。
+2. **残留调用点漏迁**：`go vet` 先报 3 处、再报 5 处、再报 4 处（同一方法的不同调用形态：`msgs, err :=` / `msgs, _ :=`）—— **一次 grep 不足以穷尽**，靠 `go vet ./...` 兜底才收敛。教训：删接口方法时，**编译/静态检查比 grep 可靠**。
+
+**范围边界（重要）**：本 Phase **只动 chat-svc `repository`/`handler`**（本轨文件面），**未碰** BFF `downstream/chat*.go` 与 `chat_server.go` —— 那两处在契约 §四 属 **C 轨排队**，留给 Phase 5。
+
 ## §4 结论
 
 - **T-13 = PASS**（§3.1）：`MessageStatus` 现为全仓唯一来源，取值集合 5 值，两处历史重复点改为引用。
@@ -250,8 +290,9 @@ $ pnpm typecheck                      → 无 error
 - **T-11 / T-12 = PASS**（§3.4）：缓存接进真实链路（读加速 + 写穿 + 双合并策略），8 用例绿。
 - **T-14 / T-15 = PASS**（§3.5）：状态机转移表 + 乐观插入（含失败保留为 `failed`）；9 用例绿；并在落地时修掉一个由**全量回归**抓出的真缺陷（幽灵 `sending` 行）。
 - **T-16 / T-17 / T-18 = PASS**（§3.6）：重试计数/上限/退避曲线 + 断网重扫（跨会话、复用 `clientMsgId`、达上限停）；7 用例绿。
-- 五轮都是保守改动（类型收敛 / 加索引 / 加缓存读写与纯函数合并 / 加状态转移与乐观占位 / 加重试与注入式调度）：全量 **654 → 665 → 673 → 682 → 689** 全绿 + `typecheck` 绿 ⇒ **零回归**。
-- **本阶段 🟢 部分（Phase 1~4）已全部完成**：已完成 **10 / 22** 个测试点（T-9~T-15）；其余 12 个要么 🔴 需 dev 栈（T-1~T-3、T-7、T-19~T-22），要么被 C 轨阻塞（T-4~T-6，`proto/**`）。
+- **T-8 = PASS / T-7 = PASS（仅单测部分）**（§3.7）：按用户裁定删除 ASC 死路径（6 处调用方迁移 + 架构钉）、HTTP 降级路径改读 `cursor`；T-7 的**运行验证**（`CHAT_TRANSPORT=http` 真实翻页）待栈，并入 Phase 7。
+- 六轮都是保守改动：全量 **654 → 665 → 673 → 682 → 689** 全绿（前端）+ Go `build/vet/test ./...` 全绿 + `typecheck` 绿 ⇒ **零回归**。
+- **本阶段所有"不需 dev 栈"的编码工作已完成**：22 个测试点里 **12 个有结论**（T-7 仅单测部分，T-8~T-15 完整），其余 10 个**全部卡在外部条件**：T-1~T-3 / T-19 / T-20 / T-21 / T-22 需 **dev 栈**，T-4~T-6 需 **C 轨 `proto/**` 先落地**。
 - 阶段整体状态仍为 `in-progress`，**不得宣布 done**（🔴 项一条运行时证据都没有）。
 - **[M] 决策已全部落定（2026-10-14 用户）**：4 项均按推荐 ⇒ 记为 `CL-D-11`~`CL-D-14`（独立小 PR [#221](https://github.com/Exist-a/emotion-echo/pull/221) 已合 main）。结论：SSE **不**落缓存；前端 DTO 字段**只登记不动**；`MessageWithStatus` 三形态**顺延 Phase 3**；`CL-F-10`/`CL-F-11` **按原计划排 Phase 8**。⇒ 阶段范围就此锁定，无待裁定项。
 - 下一步（🟢，不需栈）：**Phase 2b**（`stores/message.ts` 的读加速 / 写穿 / 合并策略 → T-11 / T-12），随后 Phase 3（状态机 + 乐观插入）、Phase 4（重试 + 断网重扫）。

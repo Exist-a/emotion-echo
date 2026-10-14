@@ -4,7 +4,7 @@ title: 消息链路闭环（会话列表游标化 + 本地缓存接线 + 状态�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档 → **Phase 1 完成**（T-13）→ **Phase 2a 完成**（T-9/T-10）→ **Phase 2b 完成**（T-11/T-12）→ **Phase 3 完成**（T-14/T-15）→ **Phase 4 完成**（T-16/T-17/T-18；全量 689/689 + typecheck 绿）⇒ **10/22 测试点有结论，🟢 部分（Phase 1~4）全部完成**；用户裁定 `CL-D-11`~`CL-D-14` 锁定范围；新增 §6 R12（合并语义陷阱）/R13（缓存未按用户隔离）；修正 §A.1 错误断言）
+last-updated: 2026-10-14（建档 → Phase 1（T-13）→ 2a（T-9/T-10）→ 2b（T-11/T-12）→ 3（T-14/T-15）→ 4（T-16/T-17/T-18）→ **Phase 6（T-8 PASS / T-7 单测 PASS）**；前端全量 689/689 + Go `build/vet/test ./...` 全绿 ⇒ **12/22 测试点有结论，所有不需栈的编码工作已完成**；用户裁定 `CL-D-11`~`CL-D-14` + Phase 6 两项口径；新增 §6 R12/R13）
 depends-on: []           # 不依赖任何阶段；**不阻塞于 T1**（CL-01/02/03）
 blocks: []
 gate: []                 # 无开工前阻塞决策门；3 个 [M] 见 §7
@@ -152,8 +152,8 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | T-4 | **会话列表游标化**：loadMore 带游标 ⇒ 取到第二页、顺序稳定（`updated_at DESC, id DESC`）、无重复 | [A] | curl（会话列表第二页）+ DB 比对 | 待执行 |
 | T-5 | **会话游标为复合键**：同 `updated_at` 的不同会话不丢/不重（边界：并发同秒更新） | [A] | Go 表驱动单测（构造同 `updated_at` 多行） | 待执行 |
 | T-6 | **会话"加载更多"不再重取第一页** | [A] | 前端 store 单测：第二页请求参数 ≠ 第一页；mock 返回第二页 ⇒ 列表长度增加且 id 无交集 | 待执行 |
-| T-7 | **HTTP 降级路径认 cursor**（`CHAT_TRANSPORT=http`） | [A] | 单测（handler 读 `cursor`）+ 运行验证（transport=http 下翻页生效） | 待执行 |
-| T-8 | **旧 ASC 死方法清零**：`Order("id ASC")` 的生产调用方 = 0（删或归档，口径对齐 CL-02） | [A] | `grep` 断言 + 架构测试 | 待执行 |
+| T-7 | **HTTP 降级路径认 cursor**（`CHAT_TRANSPORT=http`） | [A] | 单测（handler 读 `cursor`）+ 运行验证（transport=http 下翻页生效） | ✅ **PASS（单测部分）**（Phase 6，2026-10-14）—— 新钉 `internal/handler/chat_handler_cursor_test.go` 造 3 条消息、带 `cursor` 请求断言只返回更旧页（RED 实测：忽略 cursor 时又返回最新一页）。⏳ **运行验证部分待栈**（`CHAT_TRANSPORT=http` 下真实翻页）⇒ 并入 Phase 7 栈窗口，不在本项申报"已验证" |
+| T-8 | **旧 ASC 死方法清零**：`Order("id ASC")` 的生产调用方 = 0（删或归档，口径对齐 CL-02） | [A] | `grep` 断言 + 架构测试 | ✅ **PASS**（Phase 6，2026-10-14，**用户裁定"删掉"**）—— 接口 + Postgres + InMemory 三处实现删除，6 处调用方（含 5 个测试文件、2 个 integration 文件）迁到 `ListMessagesPage`；架构钉 `internal/repository/dead_path_guard_test.go` 断言源码内无 `Order("id ASC")` / 旧签名，**并反向断言 `ListMessagesPage` 必须仍在**（防"删光即绿"）。`go build/vet/test ./...` 全绿，`go vet -tags integration` 通过。见 `report.md §3.7` |
 | T-9 | **Dexie 索引修复**：`version(2)` 后 `getPendingMessages` / `getFailedMessages` / `trimOldMessages` **不再抛错** | [A] | vitest + `fake-indexeddb`（**修前先红**） | ✅ **PASS**（Phase 2a，2026-10-14）—— 钉 `app/utils/messageCache.test.ts` **11/11 绿**；RED 实测 3 项失败，**其中只有 `trimOldMessages` 是真崩溃**（`SchemaError: KeyPath sendTime on object store messages is not indexed`）。⚠️ **本阶段修正**：`getFailedMessages`/`getPendingMessages` 实测**不抛**（详见 §A.1）；补 `[sessionId+status]` 属效率/契约改进。见 `report.md §3.3` |
 | T-10 | **缓存往返**：`saveMessage` → `getLatestMessages`/`getMessagesBySession` 往返一致（含分页 cursor 语义） | [A] | vitest + `fake-indexeddb` | ✅ **PASS**（Phase 2a，2026-10-14）—— 往返 / 批量 `saveMessages` / `updateMessageStatus` / `getMessagesBySession` 游标分页（两页不重不漏）均绿，见 `report.md §3.3` |
 | T-11 | **读加速**：`switchSession` 先渲染本地快照，再以服务端覆盖/合并 | [A] | store 单测（断言先读缓存后发请求） | ✅ **PASS**（Phase 2b，2026-10-14）—— 在"发请求那一刻"采样 `currentMessages.length` = 1（证明快照先渲染）；写穿（`loadMoreMessages` 页 / `sendMessage` 行）落缓存；**降级**（缓存读失败不挡服务端）与**跨会话不残留**各有钉。钉 `app/stores/__tests__/message.cache.test.ts` 8/8 绿，见 `report.md §3.4` |
@@ -194,7 +194,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | **3** | **状态机 + 乐观插入**：单一转移表（`sending→sent/failed`、`streaming→sent/failed`、`failed→sending`、`sent`/`truncated` 终态 + 非法转移守卫）；用户消息先插 `sending`（temp id = `clientMsgId`），服务端返回后换真实 id 并置 `sent` | 🟢 | **T-14/T-15 ✅ 已完成 2026-10-14**（RED 8 红 → GREEN 9/9 + 全量 682/682 + typecheck 绿，`report.md §3.5`）。⚠️ 落地时被**全量回归**抓出并修掉一个真缺陷：占位行 temp id 未从缓存删除 ⇒ 幽灵 `sending` 行（详见 report §3.5） |
 | **4** | **重试 + 断网重扫**：`retryCount` 自增 + 指数退避 `min(2^n×1000ms,30s)` + `MAX=3`；`stores/message.ts` 新增 `retryFailedMessages()`；`plugins/init.ts` 把 `:105-111` 的 TODO 换成真实调用（`online` 事件 + 启动时 `navigator.onLine`）；**复用 `clientMsgId`** | 🟢 | **T-16/T-17/T-18 ✅ 已完成 2026-10-14**（RED 7 红 → GREEN 7/7 + 全量 689/689 + typecheck 绿，`report.md §3.6`）。⚠️ 两处偏离原计划且已留痕：① **等待走注入 governor 而非 fake timers**（理由见 §3.6）；② **"启动时 `navigator.onLine` 即补发"未接**（缓存未按用户隔离，会串号 ⇒ §6 R13 + 账本 `CL-F-15`） |
 | **5** | **会话列表游标化**（D-B=B1，**需与 C 轨握手 `proto/**`**）：proto `ListConversationsRequest` 增游标字段 → chat-svc `ListConversations` 复合游标 `(updated_at, id)` → BFF `listConversations` 读游标 → 前端 `conversation.ts` 对齐 | 🟢 编码 / 🔴 运行 | T-5（Go 表驱动：同 `updated_at` 边界）+ T-4 / T-6 |
-| **6** | **死路径与降级路径**：① 旧 `ListMessages`（`Order("id ASC")`，`conversation_repository.go:335-346`）**调用方清零**（按 CL-02 口径：删 or 归档 + 桩）；② chat-svc `handler/chat_handler.go:84-106` 读 `cursor` | 🟢 编码 / 🔴 运行 | T-8（架构钉）+ T-7 |
+| **6** | **死路径与降级路径**：① 旧 `ListMessages`（`Order("id ASC")`，`conversation_repository.go:335-346`）**调用方清零**（按 CL-02 口径：删 or 归档 + 桩）；② chat-svc `handler/chat_handler.go:84-106` 读 `cursor` | 🟢 编码 / 🔴 运行 | **✅ 已完成 2026-10-14**（用户裁定：① **删掉** ② **现在就修**；RED 2 红 → GREEN 全绿）。⚠️ 本 Phase **只吃 chat-svc `repository`/`handler`（本轨面）**，**未碰** BFF `downstream/chat*.go` 与 `chat_server.go`（那两处在 C 轨排队中，属 Phase 5 范围） |
 | **7** | **端到端 + 人可见钉 + ADR + 收口**：Playwright `e2e/message-pipeline.spec.ts`（T-20 三连）；补 **ADR** `adr-2026-10-frontend-message-pagination-and-cache.md` + `decisions.md` 索引；`report.md`；来源计划迁 `legacy-plans/landed/`；关 `E2E-F-205/206` | 🔴 | T-20（`[V]`） |
 | **8** | **账本继承项**（**账本已把归属判给 CL-05**，故属本阶段范围）：① 定位并修复 `CL-F-10`（发送后不自动滚到底）；② 定位并修复 `CL-F-11`（刷新后出现两个对话）。两项均**先定位根因**（账本明写"未查代码、不臆断"），再按 TDD 补钉 | 🔴（需栈复现） | T-21 / T-22（先复现 → 再写钉 → 再修） |
 
