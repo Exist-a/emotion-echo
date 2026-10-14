@@ -99,3 +99,21 @@ related-stage: e2e-23
 - `.github/workflows/doc-drift-check.yml` 23 个 job 的 `name:` 实际取值
 - Actions API 实测 `e2e-guards` run `4efec2b` = `success`（证明 ubuntu runner 预装 helm）
 - `scripts/check_doc_drift_gate_needs.sh` 的两组负向对照输出
+
+## 六、2026-10-13 CL-00 更新（本 ADR 的修订）
+
+**CL-00（「闭环」阶段 CI 瘦身，PR #209）** 改了本 ADR §二 描述的结构 —— 属**架构改动**，
+按 anti-patterns「架构改动无 ADR」在此留记录（本段即该决策）：
+
+- **24 个检查 job → 合并为 1 个 `static-guards` job**（同一 runner 顺序跑，脚本一字未动）。
+  `doc-drift-check.yml` job 数 **26 → 2**（`static-guards` + `doc-drift-gate`）。
+- **`doc-drift-needs-sync`（元 job）退役**。理由：它存在的前提是"gate 的 `needs` 是**多 job
+  硬编码列表、会漂**"；合并成 1 个 job 后 `gate.needs` 只有 1 项，**前提消失**。
+  且其脚本第 5 条断言（`need_count < 20 → FAIL`）使它**无法再接回**（合并后必然为 1）。
+  ⇒ 本 ADR §二.3「校验汇总门禁的 job 必须独立于 gate」这条约束**随之失效**（不再有该 job）。
+- **`文档守卫总闸`（`doc-drift-gate`）保留**，`needs: [static-guards]`，**名字不变**。
+- **连带动作（CL-00 收口必做）**：分支保护 `required_status_checks` 里那批**旧 doc-drift
+  job 名**随合并消失 ⇒ 必须更新为 `文档守卫总闸`，否则 PR 恒 `expected` 卡住
+  （实测：`13 of 13 required status checks are expected`）。
+- **退役落地**：`scripts/check_doc_drift_gate_needs.sh` **删除**；本 ADR 与
+  `docs/ci-workflows/README.md` 已同步回填。

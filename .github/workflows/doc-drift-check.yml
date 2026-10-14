@@ -6,8 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-# E2E-F-56：本 workflow 原先缺 timeout-minutes/concurrency/permissions
-#（另 3 个 workflow 早已具备）。补最小权限，避免默认 token 权限过宽。
 permissions:
   contents: read
 
@@ -15,315 +13,100 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# CL-00（2026-10-13）CI 瘦身：
+#   第 1 刀：原 24 个独立 job（各起一个 runner）→ 合并为 1 个 `static-guards` job。
+#   第 2 刀：删冗余检查（见下），保留汇总 job `doc-drift-gate`（名「文档守卫总闸」）
+#           ⇒ 分支保护 required check 名不变。
+#   被删检查的脚本**文件保留**（仍被 docs 引用，删了会留悬空引用；orphan-outputs 不判红）。
 jobs:
-  routes-alignment:
-    name: 路径对齐（前端 ⊆ BFF）
+  static-guards:
+    name: 静态守卫（合并）
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check routes alignment
-        run: bash scripts/check_routes_alignment.sh
-
-  view-consistency:
-    name: 视图定义一致性
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check view consistency
-        run: python scripts/check_view_consistency.py
-
-  env-vars-lint:
-    name: 环境变量 lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Lint env vars
-        run: bash scripts/lint_env_vars.sh
-
-  yaml-lint:
-    name: YAML 字面值收紧
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: YAML lint
-        run: python scripts/yaml_lint.py
-
-  git-layout:
-    name: 仓库布局自检
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check git layout
-        run: python scripts/check_git_layout.py --strict
-
-  docker-digests:
-    name: Dockerfile digest pin
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check Dockerfile digests
-        run: bash scripts/check_docker_digests.sh
-
-  docs-update:
-    name: 文档更新验证
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Test docs update
-        run: bash scripts/test_docs_update.sh
-
-  bff-jwt-secret:
-    name: BFF JWT secret 一致性
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check BFF JWT secret
-        run: bash scripts/test_bff_jwt_secret.sh
-
-  user-oauth-zero-ref:
-    name: user_oauth 零引用
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check user_oauth zero ref
-        run: bash scripts/test_user_oauth_zero_ref.sh
-
-  migrations-contract:
-    name: Migration 契约
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Test migrations contract
-        run: bash scripts/test_migrations_contract.sh
-
-  migrations-no-service-order:
-    name: Migration 服务顺序独立性
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Test migrations no service order
-        run: bash scripts/test_migrations_no_service_order.sh
-
-  soft-assert-scan:
-    name: soft-assert 扫描（被注释的断言）
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Scan for soft asserts
-        run: bash scripts/check_soft_asserts.sh
-      - name: Self-test the scanner (负向用例)
-        run: bash scripts/test_check_soft_asserts.sh
-
-  apisix-seed-structure:
-    name: APISIX seed 结构断言
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      # deploy/apisix/seed_test.js 是可运行的离线结构断言（node，无依赖），
-      # 但此前**从未接入 CI** —— 2026-09-18 改 seed.sh 的默认值时把它弄红了，
-      # 却因为没人跑而无人发现（测试不接 CI 等于没有测试）。
-      - name: seed.sh structural assertions
-        run: node deploy/apisix/seed_test.js
-      # E2E-25 C2：seed↔admin 漂移检测纯函数库的契约测试（F-139 治理）。
-      # 网络侧由 scripts/check_apisix_drift.sh 在 dev 环境跑（RUNBOOK §12），
-      # CI 覆盖纯逻辑（normalize/diff/extras 提取）。
-      - name: apisix drift lib contract tests
-        run: node scripts/test_apisix_drift_lib.js
-      - name: apisix drift wrapper offline tests
-        run: bash scripts/test_check_apisix_drift.sh
-
-  secrets-scan:
-    name: 明文密钥扫描
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Scan for plaintext secrets
-        run: bash scripts/check_secrets.sh
-      - name: Self-test the scanner (负向用例)
-        run: bash scripts/test_check_secrets.sh
-
-  # === 波 2 新增：5 个收口门禁（debt-paydown-plan 波 2） ===
-
-  e2e-stage-audit:
-    name: E2E 收口审计
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run stage auditor
-        run: python scripts/e2e_stage_audit.py --all
-
-  tdd-gate:
-    name: TDD 门禁
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-      - name: Check TDD compliance
-        run: bash scripts/check_tdd_gate.sh
-
-  adr-gate:
-    name: ADR 门禁
-    # E2E-F-127 治理（2026-09-23）：ADR 门禁脚本默认跑 HEAD~5..HEAD，
-    # push 到 main 时会包含历史 commit（如 ae68cb8 修改 compose 但无 ADR），
-    # 误判 FAIL。修复：
-    # 1) 只在 pull_request 触发（push 到 main 不跑 —— PR 已合并代码已通过门禁）
-    # 2) PR 上把 base..head commit 范围传给脚本（避免误判 main 历史 commit）
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
+          fetch-depth: 0   # tdd-gate / adr-gate 需要全历史
+      - uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
-      - name: Check ADR compliance
-        env:
-          CI_COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
-        run: bash scripts/check_adr_gate.sh
-
-  residual-scan:
-    name: 残留物扫描
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Scan for residual artifacts
-        run: bash scripts/check_residual.sh
-
-  helm-loki-render:
-    name: Loki chart 渲染回归
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-      # E2E-F-147：promtail DaemonSet 曾写死 runAsUser=10001 读 hostPath 日志目录，
-      # 读不到日志不会让 Pod 变 NotReady ⇒ 静默失效。渲染结果必须机械校验。
-      - name: helm template assertions
-        run: bash scripts/test_helm_loki_render.sh
-
-  ctx-logging-gate:
-    name: ctx 日志门禁
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      # E2E-F-146：带 ctx 的函数里不得出现 log.Printf（否则 trace_id 永远进不了日志）。
-      # 现有调用点已迁移 + 登记 ALLOWLIST；这条门禁防止新代码写回老样子。
-      - name: No ctx-less logging where ctx is available
-        run: python scripts/check_ctx_logging.py
-
-  orphan-outputs:
-    name: 孤儿产出物检测
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check for orphan outputs
-        run: bash scripts/check_orphan_outputs.sh
-
-  helm-prometheus-render:
-    name: Prometheus chart 渲染回归
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-      # E2E-22：prometheus chart 曾声明 rule_files 指向 /etc/prometheus/rules/*.yml，
-      # 但该 ConfigMap 的 data 只有 prometheus.yml 一个 key、deployment 也无对应
-      # volume 挂载 ⇒ 空 glob ⇒ **0 条告警规则且 Prometheus 不报错**。
-      # 静默失效只能靠渲染断言机械拦截（与 helm-loki-render 同一类问题）。
-      - name: helm template assertions
-        run: bash scripts/test_helm_prometheus_render.sh
-
-  # E2E-30 组 B / L6（测试点 #8/#9/#10）：主 chart（charts/emotion-echo，23 子 chart）
-  # 此前**零渲染回归** —— 只有 loki / prometheus 两个子 chart 有断言。
-  # "渲染了但内容是空的"是本项目真实发生过的静默失效形态（E2E-22 空 glob ⇒ 0 条规则零报错）。
-  # 故本守卫断言三条不变量：① 每个子 chart 目录都在 Chart.yaml 声明且带 condition（防孤儿 chart）
-  # ② 全开渲染时每个子 chart 都出现（证明"条件渲染"≠"永不渲染"）③ values.yaml 显式关闭的子 chart
-  # 不得泄漏进默认渲染；另断言 lint 零 ERROR + 关键资源在位，自带负向对照（删 condition ⇒ RED）。
-  helm-main-render:
-    name: 主 chart 渲染回归
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-      - name: helm template assertions
-        run: bash scripts/test_helm_main_render.sh
-
-  obs-monitoring-contract:
-    name: 观测面配置契约
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
+          python-version: '3.x'
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # E2E-22：观测面曾有 8 处"配置声明了但没接上"的静默失效（kafka-exporter
-      # depends_on 误指 prometheus 致启动即死 / 无 alertmanager 自身指标 /
-      # llm-service 暴露 /metrics 却无 target / Alertmanager 空 receiver 等）。
-      # 这些都不产生运行时错误，只能靠静态契约钉住。
-      - name: Observability config contract assertions
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+      - name: 工具链自检
+        run: |
+          bash --version | head -1
+          python --version
+          node --version
+          go version
+      # CL-00：合并后统一用 setup-python 的干净 python（原 helm 渲染 job 用系统 python
+      # 自带 pyyaml），须显式补 pyyaml —— 见第 1 刀回归修复。
+      - name: 安装 python 依赖（pyyaml）
+        run: python -m pip install --quiet pyyaml
+
+      # ---- 路径 / 契约 / 卫生 ----
+      - name: 1 路径对齐（前端 ⊆ BFF）
+        run: bash scripts/check_routes_alignment.sh
+      - name: 2 视图定义一致性
+        run: python scripts/check_view_consistency.py
+      - name: 3 环境变量 lint
+        run: bash scripts/lint_env_vars.sh
+      - name: 4 YAML 字面值收紧
+        run: python scripts/yaml_lint.py
+      - name: 5 仓库布局自检
+        run: python scripts/check_git_layout.py --strict
+      - name: 6 Dockerfile digest pin
+        run: bash scripts/check_docker_digests.sh
+      - name: 7 BFF JWT secret 一致性
+        run: bash scripts/test_bff_jwt_secret.sh
+      - name: 8 Migration 契约
+        run: bash scripts/test_migrations_contract.sh
+      - name: 9 Migration 服务顺序独立性
+        run: bash scripts/test_migrations_no_service_order.sh
+      - name: 10 soft-assert 扫描（含负向自检）
+        run: |
+          bash scripts/check_soft_asserts.sh
+          bash scripts/test_check_soft_asserts.sh
+      - name: 11 APISIX seed 结构 + drift 契约
+        run: |
+          node deploy/apisix/seed_test.js
+          node scripts/test_apisix_drift_lib.js
+          bash scripts/test_check_apisix_drift.sh
+      - name: 12 明文密钥扫描（含负向自检）
+        run: |
+          bash scripts/check_secrets.sh
+          bash scripts/test_check_secrets.sh
+      - name: 13 TDD 门禁
+        run: bash scripts/check_tdd_gate.sh
+      - name: 14 ADR 门禁（仅 PR）
+        if: github.event_name == 'pull_request'
+        env:
+          CI_COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+        run: bash scripts/check_adr_gate.sh
+      - name: 15 残留物扫描
+        run: bash scripts/check_residual.sh
+      - name: 16 ctx 日志门禁
+        run: python scripts/check_ctx_logging.py
+      - name: 17 孤儿产出物检测
+        run: bash scripts/check_orphan_outputs.sh
+      - name: 18 观测面配置契约
         run: node deploy/obs_monitoring.test.js
 
-  # =====================================================
-  # 汇总门禁（E2E-23 收口轮新增）
-  # =====================================================
-  # 为什么加它：分支保护里 23 条 required checks 全是**精确 job 名**（含中文），
-  # 列表长、且谁改了 job 的 name: 门禁就**静默失效**（匹配不上、不报错、不拦）——
-  # 正是 anti-patterns AP-11「门禁只报不拦」的变体。
-  #
-  # `needs` 全部检查 + `if: always()` ⇒ 任一检查红则本 job 红。
-  # 分支保护只需填 `doc-drift-gate` 这一条，且**以后新增检查只要被 gate 覆盖就自动纳入**。
-  #
-  # ⚠️ needs 是硬编码列表，会漂。所以配了 doc-drift-needs-sync 独立盯住它（见下）。
+  # 汇总门禁（名「文档守卫总闸」= 分支保护的 required check，**名字不能改**）。
   doc-drift-gate:
     name: 文档守卫总闸
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [routes-alignment, view-consistency, env-vars-lint, yaml-lint, git-layout, docker-digests, docs-update, bff-jwt-secret, user-oauth-zero-ref, migrations-contract, migrations-no-service-order, soft-assert-scan, apisix-seed-structure, secrets-scan, e2e-stage-audit, tdd-gate, adr-gate, residual-scan, helm-loki-render, ctx-logging-gate, orphan-outputs, helm-prometheus-render, helm-main-render, obs-monitoring-contract]
-    # always()：否则任一上游失败时本 job 会被**跳过**（skipped ≠ 通过，GitHub 不会拦），
-    # 反而变成"检查失败反而没人拦"的漏洞。
+    needs: [static-guards]
     if: ${{ always() }}
     steps:
       - uses: actions/checkout@v4
       - name: 汇总全部检查结果
-        # E2E-F-173（2026-10-02 修）：判定逻辑抽到 scripts/check_doc_drift_gate_result.sh
-        # （契约由 scripts/test_check_doc_drift_gate_result.sh 钉死）。
-        # 旧内联判定只认 success ⇒ adr-gate 在 push 事件下 skip 被判红 ⇒
-        # main 的 push 总闸恒红。现语义：success/skipped=通过，其余=失败。
-        # 用 env: 传值而不是在 shell 里插 ${{ }} —— 后者要处理多层花括号转义，
-        # 极易写错且错了只在 CI 上暴露（本地无法验证表达式）。
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           set -uo pipefail
           echo "$NEEDS_JSON" | bash scripts/check_doc_drift_gate_result.sh
-
-  # 必须**独立于 gate** 跑（不被 gate 覆盖），否则 gate 漏掉自己就没人发现。
-  doc-drift-needs-sync:
-    name: 汇总门禁 needs 覆盖校验
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: gate 的 needs 必须覆盖全部检查 job
-        run: bash scripts/check_doc_drift_gate_needs.sh

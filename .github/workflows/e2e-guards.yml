@@ -99,13 +99,8 @@ jobs:
       - name: 守卫 9/9 阶段未完成清单完整且数字自洽
         run: bash scripts/check_stage_todo_section.sh
 
-      # 这条守的是**审计器自己**。A5（"阶段判 done 前账本须对账干净"）
-      # 是"未解决账本"的唯一执行者，而旧 parse_ledger 对格数 < 6 的行
-      # **静默 continue** ⇒ 有 4 条跨行的 Markdown 账本行对 A5 完全不可见，
-      # 阶段可以带着一条未解决的账本判 done 而门禁全绿。
-      # E2E-23 当时是**侥幸**没被绕过（那 4 条都不归它）——靠运气不是机制。
-      - name: 守卫 10/10 审计器账本解析器无盲区
-        run: bash scripts/test_audit_ledger_parser.sh
+      # CL-00（2026-10-13）：守卫 10/10（审计器账本解析器自查）随 e2e 审计器退役而移除
+      # （脚本文件保留：仍被 docs 引用）。守卫 14/14 保留——总闸聚合判定仍在用。
 
       # 防"生产死代码回流"（E2E-23 F-163，用户裁定删掉 healthcheck 的 server 侧包装）。
       # 那段 Server/NewServer/RegisterWith/Shutdown/Resume 在生产路径上一次都没被实例化
@@ -207,10 +202,5 @@ jobs:
       - name: 守卫 25/25 数据契约 smoke 必须经网关鉴权（E2E-F-209/211）
         run: bash scripts/check_smoke_gateway.sh
 
-      # E2E-30 测试点 #17（账本 E2E-F-180）：审计器 A3（plan 测试点 ⊆ report，AP-07）
-      # 曾对 e2e-25 静默失效 —— 它只认标题含「测试点清单」的章节，而 e2e-25 用「测试点总表」，
-      # 于是只输出一行 WARN「未解析到测试点编号，跳过 A3」就绕过检查。
-      # 与守卫 10/10（账本解析器无盲区）同型：**审计器自己的解析器也要被守**。
-      # 本守卫含负向对照（无关章节不得被误当测试点，保 WARN 语义）+ 端到端（audit --all 0 FAIL）。
-      - name: 守卫 26/26 审计器计划测试点解析器无盲区（E2E-F-180）
-        run: bash scripts/test_audit_plan_parser.sh
+      # CL-00（2026-10-13）：守卫 26/26（审计器计划测试点解析器自查）随 e2e 审计器退役而移除
+      # （脚本文件保留：仍被 docs 引用）。
