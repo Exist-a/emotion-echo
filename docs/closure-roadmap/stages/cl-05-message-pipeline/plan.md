@@ -4,7 +4,7 @@ title: 消息链路闭环（会话列表游标化 + 本地缓存接线 + 状态�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（D 轨建档：写前功课亲核 → 发现来源计划 §0/§5 已部分滞后，见 §A.3）
+last-updated: 2026-10-14（D 轨建档 → **Phase 1 完成**（T-13 PASS：RED 3 红 → GREEN 5/5 + 全量 654/654 + typecheck 绿）；并入账本继承项 `CL-F-10`/`CL-F-11` 为 T-21/T-22（Phase 8）；更正 `tdd-gate` 纪律写法）
 depends-on: []           # 不依赖任何阶段；**不阻塞于 T1**（CL-01/02/03）
 blocks: []
 gate: []                 # 无开工前阻塞决策门；3 个 [M] 见 §7
@@ -12,7 +12,7 @@ source: docs/plans/frontend-message-cache-offline-resilience.md（主，2026-10-
 related-plans:
   - docs/plans/grpc-deadlink-actualization.md（CL-02/C 轨：`chat_server.go` 与旧 ASC 仓储方法同面，已握手排队）
   - docs/closure-roadmap/parallel-contract.md（D 轨占位 + §3.1 栈排队 + §四 握手区）
-ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）
+ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 / CL-F-11（**账本已把归属判给 CL-05** → 本阶段内解决，见 §2 T-21/T-22）
 ---
 
 # CL-05 · 消息链路闭环 — 执行计划
@@ -142,7 +142,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）
 
 ---
 
-## §2 测试点清单（20 点，逐点独立编号）
+## §2 测试点清单（22 点，逐点独立编号）
 
 | # | 测试点 | 判定 | 验证方式 | 证据 |
 |---|---|---|---|---|
@@ -158,7 +158,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）
 | T-10 | **缓存往返**：`saveMessage` → `getLatestMessages`/`getMessagesBySession` 往返一致（含分页 cursor 语义） | [A] | vitest + `fake-indexeddb` | 待执行 |
 | T-11 | **读加速**：`switchSession` 先渲染本地快照，再以服务端覆盖/合并 | [A] | store 单测（断言先读缓存后发请求） | 待执行 |
 | T-12 | **合并策略**：服务端覆盖同 id；**本地独有 `failed/pending` 不被服务端快照抹掉** | [A] | store 单测（构造本地 failed + 服务端无该条） | 待执行 |
-| T-13 | **状态机单一来源**：`MessageStatus` 全仓**仅一处定义**、取值集合唯一 | [A] | 架构测试（`grep` 定义点）+ 类型测试 | 待执行 |
+| T-13 | **状态机单一来源**：`MessageStatus` 全仓**仅一处定义**、取值集合唯一 | [A] | 架构测试（`grep` 定义点）+ 类型测试 | ✅ **PASS**（Phase 1，2026-10-14）—— 钉 `app/types/conversation/message-status-single-source.architecture.test.ts` **5/5 绿**；**RED 实测 3 项失败**（2 处定义 / canonical 仅 4 值 / 2 处内联联合），逐项见 `report.md §3.1` |
 | T-14 | **乐观插入**：发送瞬间用户消息 `status === 'sending'`（**现恒 `'sent'` ⇒ RED**）；服务端返回后置 `sent` + 换真实 id | [A] | store 单测 | 待执行 |
 | T-15 | **非法转移被拒**：`sent → sending` 等非法转移不生效 | [A] | 转移表单测 | 待执行 |
 | T-16 | **重试计数 + 上限**：失败后 `retryCount` +1；达 `MAX=3` 停自动重试 | [A] | vitest（fake timers） | 待执行 |
@@ -166,10 +166,14 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）
 | T-18 | **断网重连重扫**：离线发送 → 置 `failed`；触发 `online` → 按退避重试、**同一 `clientMsgId`**、成功置 `sent` 并移出待重试集 | [A] | store 单测（模拟 `navigator.onLine` + fake timers） | 待执行 |
 | T-19 | **重试幂等（不重复入库）** | [A] | 运行验证：断网补发后 DB 该 `client_msg_id` 行数为 1（复用 `c002` 唯一索引） | 待执行 |
 | T-20 | **人可见三连**：① 上滚翻到更早页；② 刷新后消息仍在；③ 断网发送 → 联网自动补发成功 | [V] | Playwright（`e2e/message-pipeline.spec.ts`）+ IAB 截图/录屏 | 待执行 |
+| T-21 | **账本继承 · 发送后聊天区不自动滚到底**（`CL-F-10`，用户 2026-10-14 IAB 实测；账本已归属 **CL-05**） | [V] | 先**定位根因**（不臆断——账本明写"未查代码"），再 IAB/Playwright 实测：长回复流式增长时视口跟随到末尾 | 待执行（Phase 8，🔴 需栈） |
+| T-22 | **账本继承 · 发送并刷新后出现两个对话**（`CL-F-11`，用户 2026-10-14 IAB 实测；账本已归属 **CL-05**） | [A] | 先**定位根因**（疑 `createNewConversation` 建会话→navigateTo→落库链路重入），再运行验证：建会话→发送→刷新，会话列表只 +1；根因定后补单测 | 待执行（Phase 8，🔴 需栈） |
 
 > **负向对照（必做，防"钉子不会红"）**：Phase 2 修索引**前**先跑 T-9 必须**红**；Phase 3 落地**前**先跑 T-14 必须**红**（现状恒 `'sent'`）。
 >
-> **关联账本**：本阶段收口须把 **`E2E-F-205`（分页契约错位）** 与 **`E2E-F-206`（缓存/状态机/重试半成品）** 置 ✅（`docs/e2e-roadmap/discovered-unresolved.md:439-440`）。
+> **关联账本（**三处**，收口须逐条对账）**：
+> ① `E2E-F-205`（分页契约错位）与 ② `E2E-F-206`（缓存/状态机/重试半成品）置 ✅（`docs/e2e-roadmap/discovered-unresolved.md:439-440`）；
+> ③ **账本继承项 `CL-F-10` / `CL-F-11` 的归属方就是 CL-05**（2026-10-14 用户 IAB 实测建立）——已并入本阶段为 **T-21 / T-22**（Phase 8），收口时一并置 ✅。
 > 范围外新发现一律登 `docs/closure-roadmap/discovered-unresolved.md`（`CL-F-xx`，**本阶段下一个可用号须现场核对**）。
 
 ---
@@ -182,15 +186,19 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）
 | Phase | 内容 | 栈 | RED 断言 |
 |---|---|---|---|
 | **0** | **基线取证**：起栈（排队）→ curl 走网关 `:19080` 取消息/会话两页现状 → DB 比对；确认 `CHAT_TRANSPORT` 实际值 | 🔴 | —（人工产证据；**未做，见 §A.4**） |
-| **1** | **类型与契约收敛（无行为变更）**：`MessageStatus` 收敛到**单一来源**；补 `cursor/hasMore` 类型；`messageCursor`/`cursor` 是否需导出按需定 | 🟢 | T-13（现状两处定义取值集合不一致 ⇒ **红**） |
+| **1** | **类型与契约收敛（无行为变更）**：`MessageStatus` 收敛到**单一来源**；补 `cursor/hasMore` 类型；`messageCursor`/`cursor` 是否需导出按需定 | 🟢 | T-13（现状两处定义取值集合不一致 ⇒ **红**）—— ✅ **已完成 2026-10-14**（RED 3 项失败 → GREEN 5/5；全量 vitest 654/654 + typecheck 绿；证据 `report.md §3.1`） |
 | **2** | **缓存层修复 + 接线**：① `db.ts` 升 `version(2)` 补 `[sessionId+status]` + `sendTime` 索引；② 修 `messageCache.ts`（索引可用后不抛错，补 `markFailed/incRetry` 辅助）；③ `stores/message.ts` 接线（`switchSession` 快照→服务端→`saveMessages`；`loadMoreMessages` 落页；`sendMessage` 落条）；④ 合并策略：服务端覆盖同 id、本地 `failed/pending` 保留 | 🟢 | **T-9（索引缺失下 `getFailedMessages` 抛错 ⇒ 红）** + T-10 / T-11 / T-12 |
 | **3** | **状态机 + 乐观插入**：单一转移表（`sending→sent/failed`、`streaming→sent/failed`、`failed→sending`、`sent`/`truncated` 终态 + 非法转移守卫）；用户消息先插 `sending`（temp id = `clientMsgId`），服务端返回后换真实 id 并置 `sent` | 🟢 | **T-14（发送瞬间恒 `'sent'` ⇒ 红）** + T-15 |
 | **4** | **重试 + 断网重扫**：`retryCount` 自增 + 指数退避 `min(2^n×1000ms,30s)` + `MAX=3`；`stores/message.ts` 新增 `retryFailedMessages()`；`plugins/init.ts` 把 `:105-111` 的 TODO 换成真实调用（`online` 事件 + 启动时 `navigator.onLine`）；**复用 `clientMsgId`** | 🟢 | T-16 / T-17 / T-18（现状 `retryFailedMessages` 无定义 ⇒ **红**） |
 | **5** | **会话列表游标化**（D-B=B1，**需与 C 轨握手 `proto/**`**）：proto `ListConversationsRequest` 增游标字段 → chat-svc `ListConversations` 复合游标 `(updated_at, id)` → BFF `listConversations` 读游标 → 前端 `conversation.ts` 对齐 | 🟢 编码 / 🔴 运行 | T-5（Go 表驱动：同 `updated_at` 边界）+ T-4 / T-6 |
 | **6** | **死路径与降级路径**：① 旧 `ListMessages`（`Order("id ASC")`，`conversation_repository.go:335-346`）**调用方清零**（按 CL-02 口径：删 or 归档 + 桩）；② chat-svc `handler/chat_handler.go:84-106` 读 `cursor` | 🟢 编码 / 🔴 运行 | T-8（架构钉）+ T-7 |
 | **7** | **端到端 + 人可见钉 + ADR + 收口**：Playwright `e2e/message-pipeline.spec.ts`（T-20 三连）；补 **ADR** `adr-2026-10-frontend-message-pagination-and-cache.md` + `decisions.md` 索引；`report.md`；来源计划迁 `legacy-plans/landed/`；关 `E2E-F-205/206` | 🔴 | T-20（`[V]`） |
+| **8** | **账本继承项**（**账本已把归属判给 CL-05**，故属本阶段范围）：① 定位并修复 `CL-F-10`（发送后不自动滚到底）；② 定位并修复 `CL-F-11`（刷新后出现两个对话）。两项均**先定位根因**（账本明写"未查代码、不臆断"），再按 TDD 补钉 | 🔴（需栈复现） | T-21 / T-22（先复现 → 再写钉 → 再修） |
 
-> **TDD 纪律**：每 Phase 先 `test:`（RED）后 `feat:`/`fix:`（GREEN）；**不同 commit 混测试与实现**会被 CI `tdd-gate` 拦。
+> **TDD 纪律（Phase 1 实跑 `scripts/check_tdd_gate.sh` 后更正）**：RED 先写钉验红、GREEN 再改实现（AGENTS §2.1）。
+> ⚠️ 但 CI `tdd-gate` 是**按 commit 判**的：某 commit **新增 ≥5 行生产代码（`.ts/.vue/.go/.py`）而同一 commit 无测试文件**即 FAIL
+> ⇒ **实现 commit 必须同时带测试文件改动**，"纯 `test:` commit + 纯 `feat:` commit"两刀切**会被拦**。
+> 本轨 Phase 1 的实际落法（可复用）：`test:` commit 加钉验红 → `refactor:` commit 改实现**并同时补钉**（新增"必须真的引用单一来源"断言 + 修 typecheck 严格模式）。
 > **改 Go 必须重建镜像再验收**（RUNBOOK §2）；**改 proto 必须复现原生成方式**（`protoc 32.1` + `protoc-gen-go v1.36.11` + `protoc-gen-go-grpc v1.6.2`）。
 
 ---
