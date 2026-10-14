@@ -11,20 +11,33 @@
 #
 # 本守卫保证「清单不失真」：
 #   · 若有人把某 RPC 接上线（好事）⇒ 他会删掉该处标记 ⇒ 总数 -1 ⇒ **本守卫 RED**，
-#     强制其同步更新本脚本 EXPECTED 与账本 E2E-F-208 —— 即"接线必须是一次显式决策"。
+#     强制其同步更新**清单** scripts/rpc_status.tsv 与账本 E2E-F-208 —— 即"接线必须是一次显式决策"。
 #   · 若标记被误删 / 新加未接线处漏标 ⇒ 同样 RED。
 #
 # 为什么**不**做"断言零调用方"：这些 RPC 一旦真被接上线，那正是期望结果；把它们钉成
 # "永不可调用"是反向约束。本守卫守的是**记录的真实性**，不是禁止使用。
+#
+# ── CL-02 更新（2026-10-14，用户裁定 D6「叠加 + 去掉硬编码」）────────────────
+#   ① 7 条死链已逐条裁决终态（4 归档 + 3 清除）⇒ 标记全部移除（实际数 0）；
+#   ② 期望值不再硬编码，改为**从 scripts/rpc_status.tsv 推导**（Σ marker_sites），
+#      消除"改一处忘改另一处"的同步负担；两条守卫叠加（本条守"标记真实性"，
+#      scripts/check_rpc_status.sh 守"每条 RPC 有终态 + live 有调用方"）。
 
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
 MARKER="E2E-31 已知未接线"
-# 7 个 RPC：服务端 7 处 + BFF 客户端 3 处 = 10（见上表）
-EXPECTED=10
+STATUS_LIST="scripts/rpc_status.tsv"
 
-echo "== 未接线清单守卫（E2E-31 T-1）=="
+# 期望标记数 = 清单中所有行的 marker_sites 之和（唯一事实源）
+if [ -f "$STATUS_LIST" ]; then
+  EXPECTED="$(grep -vE '^#|^$' "$STATUS_LIST" | awk -F'\t' '{s+=$6} END{print s+0}')"
+else
+  echo "FAIL: 状态清单不存在：$STATUS_LIST（期望值无法推导）"
+  exit 2
+fi
+
+echo "== 未接线清单守卫（E2E-31 T-1 · CL-02 起期望值由 rpc_status.tsv 推导）=="
 
 hits="$(grep -rn "$MARKER" --include='*.go' --include='*.py' --include='*.sh' . 2>/dev/null \
   | grep -v '/node_modules/' \
@@ -36,7 +49,9 @@ else
   actual="$(printf '%s\n' "$hits" | wc -l | tr -d ' ')"
 fi
 
-printf '%s\n' "$hits" | sed 's/:[0-9]*:.*//' | sort | uniq -c | sed 's/^/   /'
+if [ -n "$hits" ]; then
+  printf '%s\n' "$hits" | sed 's/:[0-9]*:.*//' | sort | uniq -c | sed 's/^/   /'
+fi
 
 if [ "$actual" != "$EXPECTED" ]; then
   echo "FAIL: 标记数 $actual ≠ 预期 $EXPECTED"

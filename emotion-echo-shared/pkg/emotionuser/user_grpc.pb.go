@@ -51,8 +51,6 @@ const (
 	UserService_Login_FullMethodName                          = "/emotion_user.v1.UserService/Login"
 	UserService_Register_FullMethodName                       = "/emotion_user.v1.UserService/Register"
 	UserService_ResetPassword_FullMethodName                  = "/emotion_user.v1.UserService/ResetPassword"
-	UserService_Logout_FullMethodName                         = "/emotion_user.v1.UserService/Logout"
-	UserService_VerifySecurityAnswer_FullMethodName           = "/emotion_user.v1.UserService/VerifySecurityAnswer"
 	UserService_VerifySecurityAnswerByUsername_FullMethodName = "/emotion_user.v1.UserService/VerifySecurityAnswerByUsername"
 	UserService_GetSecurityQuestionsByUsername_FullMethodName = "/emotion_user.v1.UserService/GetSecurityQuestionsByUsername"
 )
@@ -93,18 +91,10 @@ type UserServiceClient interface {
 	// 当前 Sprint 1 PR-4c-4 后的行为：verificationCode 由 BFF 校验后转发 user-svc，
 	// 这里是 dev mode（user-svc 自己校验 verificationCode 字段）；prod 接入 SMS/Email 后由 BFF 校验。
 	ResetPassword(ctx context.Context, in *ResetPasswordRequest, opts ...grpc.CallOption) (*ResetPasswordResponse, error)
-	// Logout 登出（服务端无状态，主要让客户端清 token；这里返 OK 即可）
-	//
-	// 鉴权：需要 metadata x-user-id（userid 拦截器不跳过此 RPC）。
-	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
-	// VerifySecurityAnswer 验证密保答案（E2E-06，供 D-01=C 找回密码）
-	//
-	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
-	VerifySecurityAnswer(ctx context.Context, in *VerifySecurityAnswerRequest, opts ...grpc.CallOption) (*VerifySecurityAnswerResponse, error)
 	// VerifySecurityAnswerByUsername 按用户名验证密保答案（R-01 #2 真修通）
 	//
 	// 为什么需要：找回密码发起时用户尚未登录，前端只有用户名、没有 user_id，
-	// 故走不了上面的 VerifySecurityAnswer。HTTP transport 侧的
+	// 故只能按用户名校验。HTTP transport 侧的
 	// POST /api/v1/users/verify-security-answer 早已支持按用户名校验，
 	// 但 gRPC 侧此前是"未实现"桩，而 BFF 默认走 gRPC
 	// ⇒ 找回密码在 dev/默认配置下恒 401（端点可达但功能不通）。
@@ -189,26 +179,6 @@ func (c *userServiceClient) ResetPassword(ctx context.Context, in *ResetPassword
 	return out, nil
 }
 
-func (c *userServiceClient) Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LogoutResponse)
-	err := c.cc.Invoke(ctx, UserService_Logout_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *userServiceClient) VerifySecurityAnswer(ctx context.Context, in *VerifySecurityAnswerRequest, opts ...grpc.CallOption) (*VerifySecurityAnswerResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(VerifySecurityAnswerResponse)
-	err := c.cc.Invoke(ctx, UserService_VerifySecurityAnswer_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *userServiceClient) VerifySecurityAnswerByUsername(ctx context.Context, in *VerifySecurityAnswerByUsernameRequest, opts ...grpc.CallOption) (*VerifySecurityAnswerByUsernameResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifySecurityAnswerByUsernameResponse)
@@ -265,18 +235,10 @@ type UserServiceServer interface {
 	// 当前 Sprint 1 PR-4c-4 后的行为：verificationCode 由 BFF 校验后转发 user-svc，
 	// 这里是 dev mode（user-svc 自己校验 verificationCode 字段）；prod 接入 SMS/Email 后由 BFF 校验。
 	ResetPassword(context.Context, *ResetPasswordRequest) (*ResetPasswordResponse, error)
-	// Logout 登出（服务端无状态，主要让客户端清 token；这里返 OK 即可）
-	//
-	// 鉴权：需要 metadata x-user-id（userid 拦截器不跳过此 RPC）。
-	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
-	// VerifySecurityAnswer 验证密保答案（E2E-06，供 D-01=C 找回密码）
-	//
-	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
-	VerifySecurityAnswer(context.Context, *VerifySecurityAnswerRequest) (*VerifySecurityAnswerResponse, error)
 	// VerifySecurityAnswerByUsername 按用户名验证密保答案（R-01 #2 真修通）
 	//
 	// 为什么需要：找回密码发起时用户尚未登录，前端只有用户名、没有 user_id，
-	// 故走不了上面的 VerifySecurityAnswer。HTTP transport 侧的
+	// 故只能按用户名校验。HTTP transport 侧的
 	// POST /api/v1/users/verify-security-answer 早已支持按用户名校验，
 	// 但 gRPC 侧此前是"未实现"桩，而 BFF 默认走 gRPC
 	// ⇒ 找回密码在 dev/默认配置下恒 401（端点可达但功能不通）。
@@ -318,12 +280,6 @@ func (UnimplementedUserServiceServer) Register(context.Context, *RegisterRequest
 }
 func (UnimplementedUserServiceServer) ResetPassword(context.Context, *ResetPasswordRequest) (*ResetPasswordResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResetPassword not implemented")
-}
-func (UnimplementedUserServiceServer) Logout(context.Context, *LogoutRequest) (*LogoutResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Logout not implemented")
-}
-func (UnimplementedUserServiceServer) VerifySecurityAnswer(context.Context, *VerifySecurityAnswerRequest) (*VerifySecurityAnswerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method VerifySecurityAnswer not implemented")
 }
 func (UnimplementedUserServiceServer) VerifySecurityAnswerByUsername(context.Context, *VerifySecurityAnswerByUsernameRequest) (*VerifySecurityAnswerByUsernameResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifySecurityAnswerByUsername not implemented")
@@ -460,42 +416,6 @@ func _UserService_ResetPassword_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _UserService_Logout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LogoutRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(UserServiceServer).Logout(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: UserService_Logout_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(UserServiceServer).Logout(ctx, req.(*LogoutRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _UserService_VerifySecurityAnswer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(VerifySecurityAnswerRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(UserServiceServer).VerifySecurityAnswer(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: UserService_VerifySecurityAnswer_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(UserServiceServer).VerifySecurityAnswer(ctx, req.(*VerifySecurityAnswerRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _UserService_VerifySecurityAnswerByUsername_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VerifySecurityAnswerByUsernameRequest)
 	if err := dec(in); err != nil {
@@ -562,14 +482,6 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResetPassword",
 			Handler:    _UserService_ResetPassword_Handler,
-		},
-		{
-			MethodName: "Logout",
-			Handler:    _UserService_Logout_Handler,
-		},
-		{
-			MethodName: "VerifySecurityAnswer",
-			Handler:    _UserService_VerifySecurityAnswer_Handler,
 		},
 		{
 			MethodName: "VerifySecurityAnswerByUsername",

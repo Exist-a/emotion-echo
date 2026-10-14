@@ -47,19 +47,27 @@ fi
 rows="$(grep -vE '^#|^$' "$LIST")"
 
 # ---- A1 覆盖 ----
+# 语义（2026-10-14 修正）：**proto 里出现的每条 RPC 必须已登记**；反向允许"清单有、proto 无"，
+# 但**仅限 status=deleted**（清除项本就不该留在 proto）——否则说明清单里挂了不存在的 RPC。
 proto_rpcs="$(grep -hE '^[[:space:]]*rpc[[:space:]]+[A-Za-z0-9_]+' proto/*.proto \
   | sed -E 's/.*rpc[[:space:]]+([A-Za-z0-9_]+).*/\1/' | sort)"
 list_rpcs="$(printf '%s\n' "$rows" | cut -f1 | sort)"
 n_proto="$(printf '%s\n' "$proto_rpcs" | grep -c . || true)"
 n_list="$(printf '%s\n' "$list_rpcs" | grep -c . || true)"
+n_del="$(printf '%s\n' "$rows" | awk -F'\t' '$3=="deleted"' | grep -c . || true)"
 
 missing="$(comm -23 <(printf '%s\n' "$proto_rpcs") <(printf '%s\n' "$list_rpcs") | tr '\n' ' ')"
 extra="$(comm -13 <(printf '%s\n' "$proto_rpcs") <(printf '%s\n' "$list_rpcs") | tr '\n' ' ')"
-if [ -n "$missing" ] || [ -n "$extra" ]; then
-  echo "FAIL: A1 覆盖不一致 —— proto 缺登记：[$missing] · 清单多余项：[$extra]"
+extra_bad=""
+for r in $extra; do
+  st="$(printf '%s\n' "$rows" | awk -F'\t' -v n="$r" '$1==n {print $3}')"
+  [ "$st" = "deleted" ] || extra_bad="$extra_bad $r(status=$st)"
+done
+if [ -n "$missing" ] || [ -n "$extra_bad" ]; then
+  echo "FAIL: A1 覆盖不一致 —— proto 缺登记：[$missing] · 清单多出非 deleted 项：[$extra_bad]"
   fail=1
 else
-  echo "PASS: A1 覆盖 $n_list/$n_proto 条 RPC 均已在清单登记"
+  echo "PASS: A1 覆盖 proto $n_proto 条全部已登记；清单 $n_list 条 = proto $n_proto + 已清除 $n_del"
 fi
 
 # ---- A2 live 必有调用方 ----
@@ -107,18 +115,24 @@ if [ -n "$wrong_marker_status" ]; then
 fi
 
 # ---- A4 终态规则 ----
+# 注意（2026-10-14 RED 运行实测暴露的两个缺陷，已修）：
+#   ① deleted 断言原写 `rpc[[:space:]]+${rpc}\(` ⇒ proto 里实际是 `rpc Logout (`（名字与括号间有空格），
+#      断言**永不命中** ⇒ 是"永真断言"。改为 `${rpc}[[:space:]]*\(`。
+#   ② archived 断言原只看**整文件**是否含 reserved/deprecated ⇒ 文件里任何一处出现即通过，
+#      不指向被归档的那条 RPC。改为按清单的 `proto:line` 取**该声明邻域**（+0..+4 行）。
 a4_bad=""
 while IFS=$'\t' read -r rpc proto_line status ev_path ev_sym marker_sites note; do
   pfile="${proto_line%%:*}"
+  pline="${proto_line##*:}"
   case "$status" in
     archived)
       if [ ! -f "$pfile" ]; then a4_bad="$a4_bad $rpc(proto缺失)"; continue; fi
-      if ! grep -qE 'reserved|deprecated' "$pfile"; then
-        a4_bad="$a4_bad $rpc(archived 但 $pfile 无 reserved/deprecated)"
+      if ! sed -n "${pline},$((pline + 4))p" "$pfile" | grep -qE 'deprecated|reserved'; then
+        a4_bad="$a4_bad $rpc(archived 但 $pfile:$pline 邻域无 deprecated/reserved)"
       fi
       ;;
     deleted)
-      if grep -qE "^[[:space:]]*rpc[[:space:]]+${rpc}\(" proto/*.proto 2>/dev/null; then
+      if grep -qE "^[[:space:]]*rpc[[:space:]]+${rpc}[[:space:]]*\(" proto/*.proto 2>/dev/null; then
         a4_bad="$a4_bad $rpc(deleted 但仍在 proto)"
       fi
       ;;

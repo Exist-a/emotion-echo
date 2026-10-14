@@ -546,59 +546,6 @@ func (x *AnalyzeResponse) GetRawResponse() string {
 	return ""
 }
 
-// AnalyzeBatchRequest 批量情绪分析请求
-type AnalyzeBatchRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Items         []*AnalyzeRequest      `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`                 // 多条消息
-	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // 用户 ID（统一鉴权）
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AnalyzeBatchRequest) Reset() {
-	*x = AnalyzeBatchRequest{}
-	mi := &file_emotion_llm_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AnalyzeBatchRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AnalyzeBatchRequest) ProtoMessage() {}
-
-func (x *AnalyzeBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_emotion_llm_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AnalyzeBatchRequest.ProtoReflect.Descriptor instead.
-func (*AnalyzeBatchRequest) Descriptor() ([]byte, []int) {
-	return file_emotion_llm_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *AnalyzeBatchRequest) GetItems() []*AnalyzeRequest {
-	if x != nil {
-		return x.Items
-	}
-	return nil
-}
-
-func (x *AnalyzeBatchRequest) GetUserId() string {
-	if x != nil {
-		return x.UserId
-	}
-	return ""
-}
-
 var File_emotion_llm_proto protoreflect.FileDescriptor
 
 const file_emotion_llm_proto_rawDesc = "" +
@@ -647,13 +594,9 @@ const file_emotion_llm_proto_rawDesc = "" +
 	"confidence\x18\x04 \x01(\x01R\n" +
 	"confidence\x12\x14\n" +
 	"\x05model\x18\x05 \x01(\tR\x05model\x12!\n" +
-	"\fraw_response\x18\x06 \x01(\tR\vrawResponse\"d\n" +
-	"\x13AnalyzeBatchRequest\x124\n" +
-	"\x05items\x18\x01 \x03(\v2\x1e.emotion_llm.v1.AnalyzeRequestR\x05items\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId2\xe4\x02\n" +
+	"\fraw_response\x18\x06 \x01(\tR\vrawResponse2\x8c\x02\n" +
 	"\x11EmotionLLMService\x12J\n" +
-	"\aAnalyze\x12\x1e.emotion_llm.v1.AnalyzeRequest\x1a\x1f.emotion_llm.v1.AnalyzeResponse\x12V\n" +
-	"\fAnalyzeBatch\x12#.emotion_llm.v1.AnalyzeBatchRequest\x1a\x1f.emotion_llm.v1.AnalyzeResponse0\x01\x12T\n" +
+	"\aAnalyze\x12\x1e.emotion_llm.v1.AnalyzeRequest\x1a\x1f.emotion_llm.v1.AnalyzeResponse\x12T\n" +
 	"\x0eChatCompletion\x12%.emotion_llm.v1.ChatCompletionRequest\x1a\x19.emotion_llm.v1.ChatChunk0\x01\x12U\n" +
 	"\x0eClassifyIntent\x12%.emotion_llm.v1.ClassifyIntentRequest\x1a\x1c.emotion_llm.v1.IntentResultB/Z-github.com/emotion-echo/shared/pkg/emotionllmb\x06proto3"
 
@@ -669,7 +612,7 @@ func file_emotion_llm_proto_rawDescGZIP() []byte {
 	return file_emotion_llm_proto_rawDescData
 }
 
-var file_emotion_llm_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_emotion_llm_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_emotion_llm_proto_goTypes = []any{
 	(*ClassifyIntentRequest)(nil), // 0: emotion_llm.v1.ClassifyIntentRequest
 	(*IntentResult)(nil),          // 1: emotion_llm.v1.IntentResult
@@ -679,25 +622,21 @@ var file_emotion_llm_proto_goTypes = []any{
 	(*ChatChunk)(nil),             // 5: emotion_llm.v1.ChatChunk
 	(*AnalyzeRequest)(nil),        // 6: emotion_llm.v1.AnalyzeRequest
 	(*AnalyzeResponse)(nil),       // 7: emotion_llm.v1.AnalyzeResponse
-	(*AnalyzeBatchRequest)(nil),   // 8: emotion_llm.v1.AnalyzeBatchRequest
 }
 var file_emotion_llm_proto_depIdxs = []int32{
 	2, // 0: emotion_llm.v1.ChatCompletionRequest.messages:type_name -> emotion_llm.v1.ChatMessage
 	3, // 1: emotion_llm.v1.ChatCompletionRequest.files:type_name -> emotion_llm.v1.FileAttachment
-	6, // 2: emotion_llm.v1.AnalyzeBatchRequest.items:type_name -> emotion_llm.v1.AnalyzeRequest
-	6, // 3: emotion_llm.v1.EmotionLLMService.Analyze:input_type -> emotion_llm.v1.AnalyzeRequest
-	8, // 4: emotion_llm.v1.EmotionLLMService.AnalyzeBatch:input_type -> emotion_llm.v1.AnalyzeBatchRequest
-	4, // 5: emotion_llm.v1.EmotionLLMService.ChatCompletion:input_type -> emotion_llm.v1.ChatCompletionRequest
-	0, // 6: emotion_llm.v1.EmotionLLMService.ClassifyIntent:input_type -> emotion_llm.v1.ClassifyIntentRequest
-	7, // 7: emotion_llm.v1.EmotionLLMService.Analyze:output_type -> emotion_llm.v1.AnalyzeResponse
-	7, // 8: emotion_llm.v1.EmotionLLMService.AnalyzeBatch:output_type -> emotion_llm.v1.AnalyzeResponse
-	5, // 9: emotion_llm.v1.EmotionLLMService.ChatCompletion:output_type -> emotion_llm.v1.ChatChunk
-	1, // 10: emotion_llm.v1.EmotionLLMService.ClassifyIntent:output_type -> emotion_llm.v1.IntentResult
-	7, // [7:11] is the sub-list for method output_type
-	3, // [3:7] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	6, // 2: emotion_llm.v1.EmotionLLMService.Analyze:input_type -> emotion_llm.v1.AnalyzeRequest
+	4, // 3: emotion_llm.v1.EmotionLLMService.ChatCompletion:input_type -> emotion_llm.v1.ChatCompletionRequest
+	0, // 4: emotion_llm.v1.EmotionLLMService.ClassifyIntent:input_type -> emotion_llm.v1.ClassifyIntentRequest
+	7, // 5: emotion_llm.v1.EmotionLLMService.Analyze:output_type -> emotion_llm.v1.AnalyzeResponse
+	5, // 6: emotion_llm.v1.EmotionLLMService.ChatCompletion:output_type -> emotion_llm.v1.ChatChunk
+	1, // 7: emotion_llm.v1.EmotionLLMService.ClassifyIntent:output_type -> emotion_llm.v1.IntentResult
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_emotion_llm_proto_init() }
@@ -711,7 +650,7 @@ func file_emotion_llm_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_emotion_llm_proto_rawDesc), len(file_emotion_llm_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -4,7 +4,7 @@ title: gRPC 契约闭环（死链逐条裁决 + 守卫升级 + "严格走 gRPC"�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档 C 轨并行开工 → **Phase 1 守卫升级已落地**（清单 + 5 断言 + 负向对照，🟢 不需栈）→ **采纳多轨硬化协议 H1~H9/条款 7~10**（登记拆独立 PR #215；§A.5 三查自检全过）；**未起 dev 栈**，运行时证据待 Phase 2/4/6，见 §A.4）
+last-updated: 2026-10-14（建档 → Phase 1 守卫升级 → **7 项 [M] 全部裁定（§7）→ Phase 2 清除 + Phase 3 归档均已落地**（3 删 / 4 归档，桩重生成，7 模块测试全绿）→ 采纳多轨硬化协议 H1~H9；**仍未起 dev 栈**，剩余 = T-24 CI 接线（🟢）+ T-21/T-23 全栈冒烟（🔴 排 A/B 之后）+ T-20 收口迁移）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；7 条死链裁决 + 1 条模型服务边界共 8 个 [M] 见 §7
@@ -142,6 +142,7 @@ $ docker images | grep ':cl02'  → （无）  # H4③：本轨尚未构建任�
 - **不新增 HTTP→gRPC 迁移**（亲核已零残留，见 §A.1 末）。
 - **不做 CL-03 的异步 trace 连续性与 DLQ**（归 CL-03；B 轨 CL-01 已含 DLQ span 埋点）。
 - **不新登记 E2E-F**（来源计划 §开头明确：仅回填 E2E-F-208 的状态说明）。
+- **模型服务不算服务间调用（D7）**：ai-svc → FER / SenseVoice / XTTS 本身是模型推理服务（FastAPI/HTTP 暴露）⇒ 不纳入"严格走 gRPC"范围，写死为边界。
 
 ---
 
@@ -208,11 +209,11 @@ $ docker images | grep ':cl02'  → （无）  # H4③：本轨尚未构建任�
 |---|---|---|---|
 | **0** | 7 条裁决拍板（§7 D1~D6）+ 模型服务边界（D7） | 🟢 | —（[M]，用户裁定后回填本表） |
 | **1** | **守卫升级（核心）✅ 已落地**：`scripts/rpc_status.tsv`（43 行 × 7 列：`rpc / proto:line / status / evidence_path / evidence_symbol / marker_sites / note`）+ `scripts/check_rpc_status.sh` 五条断言（A1 覆盖 / A2 live 必有证据 / A3 标记数与清单一致 / A4 终态规则 / A5 HTTP 豁免）；**标记预期数改为由清单推导**（取代硬编码 `EXPECTED=10`） | 🟢 | **已证**：A1~A5 现行全绿；负向对照 2 组（改错证据符号 → A2 FAIL；给 live 行挂标记 → A3 双 FAIL）见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md) §4。**A4 当前为空断言**（无 archived/deleted 行），Phase 2/3 后才有实义 |
-| **2** | **清除类**：删 proto/server/client/测试 fake/标记（T-03/T-04 + 裁定为 delete 的项） | 🟢改码 / 🔴验证 | RED：残留 grep 命中 ⇒ 删净后 GREEN；`protoc` 重生成后编译过 |
-| **3** | **归档类**：proto 标 `reserved`/`deprecated` + 注释记录"明确不做"（T-01/T-02 若裁归档） | 🟢 | RED：守卫断 archived 必带标注 ⇒ 未标时 FAIL → 标注后 GREEN |
-| **4** | **接真类**：BFF client + handler + **前端入口**（T-05~T-07 若裁接真） | 🔴 | RED：前端拿不到数据的契约测试 ⇒ 接完 GREEN（**必须到前端，否则改判归档/清除**） |
-| **5** | **口径更正 + 账本回填**（T-18/T-19） | 🟢 | —（文档一致性核对；决策 4 ADR 用"更正记录"先例形式） |
-| **6** | **收口**：迁移来源计划（T-20）+ 全栈冒烟（T-21/T-23）+ 负向对照（T-13 ✅ 已在 Phase 1 证过）+ CI 接线（T-24） | 🔴 | CI job 首次跑须能红（Phase 1 已在本地证过 RED 能力，此处验"接进 CI 后仍生效"） |
+| **2** | **清除类 ✅ 已落地**：Logout / VerifySecurityAnswer / AnalyzeBatch 三条从 **proto + server + BFF client(含 HTTP 实现) + 拦截器跳过清单 + 测试** 全删；桩按原工具链重生成（Go+Python） | 🟢改码 / 🔴验证 | **已证**：RED = 守卫 A4「deleted 但仍在 proto」×3 → 删净后 GREEN；7 模块 `go build`/`go test -count=1` 全绿 + `pytest tests/unit` 208 passed。证据见 [`evidence/phase2-3-terminal-states.md`](evidence/phase2-3-terminal-states.md) |
+| **3** | **归档类 ✅ 已落地**：StreamMessages + 三条 mental-health 标 `option deprecated = true` + 注释写明依据与重启条件（**proto3 不允许在 service 内用 `reserved`——已用 protoc 实测确认**，故用 deprecated） | 🟢 | **已证**：RED = 守卫 A4「archived 但邻域无 deprecated」×4 → 标注后 GREEN |
+| **4** | **接真类 → N/A（无接真项）** | — | 裁定 D1/D2 归档、D3/D4 清除 ⇒ **本阶段无"接真"条目**，Phase 4 整体 N/A（依据见 §7）。故 T-22 一并 N/A |
+| **5** | **口径更正 + 账本回填 ✅ 已落地**（T-18/T-19）：决策 4 ADR 加「更正记录」节；E2E-F-208 状态说明回填 | 🟢 | —（文档一致性核对；沿用 survey-http-bypass ADR 的"更正记录"先例） |
+| **6** | **收口**：迁移来源计划（T-20）+ 全栈冒烟（T-21/T-23，🔴 排 A/B 之后）+ 负向对照（T-13 ✅ 已证）+ CI 接线（T-24） | 🔴（T-24 为 🟢） | T-24：新守卫接入 `e2e-guards.yml` 后**仍能红**（本地已证 RED 能力） |
 
 > **Phase 1 落地方式（修正建档时的预想）**：建档时设想"守卫对现状必红"，实测**不成立**——
 > 因为清单是按现状机械生成后逐条亲核的（43 条全部定位到调用点），A1~A5 是对**现状的完整描述**，
@@ -265,17 +266,19 @@ $ docker images | grep ':cl02'  → （无）  # H4③：本轨尚未构建任�
 
 ---
 
-## §7 [M] 裁定记录（**待用户拍板**，均不阻塞 🟢 部分）
+## §7 [M] 裁定记录（✅ **2026-10-14 用户经 AskUserQuestion 全部拍板**）
 
-| # | 事项 | 建议 | 状态 |
+| # | 事项 | 裁定 | 依据 / 备注 |
 |---|------|------|------|
-| D1 | 三条 mental-health RPC（History/Trigger/Trend）：接真 or 归档 | **先确认前端是否有"评估历史/趋势/立即评估"需求**；有则接真（后端现成），无则归档 | ⏳ 待裁 |
-| D2 | `StreamMessages`：归档 or 清除 | **归档**（ADR 已定"故意不做"，proto 标 `reserved` + 删 BFF 死方法） | ⏳ 待裁 |
-| D3 | `Logout`：接真（服务端登出副作用）or 清除 proto 方法 | 现状只清 cookie、server 无副作用 ⇒ 建议**清除 proto 该方法**（或实现真登出） | ⏳ 待裁 |
-| D4 | `VerifySecurityAnswer` 冗余 & `AnalyzeBatch` 清除 | **清除**（前者与 `…ByUsername` 重复，后者无业务） | ⏳ 待裁 |
-| D5 | 三条 mental-health 的 HTTP 路由（analytics-svc `main.go:335-336`）是否一并处置 | 与 D1 同进同出：归档则连 HTTP 路由一并标"未接出" | ⏳ 待裁 |
-| D6 | 新守卫是**替换**还是**叠加**旧的 `EXPECTED=10` | **叠加**（旧守卫保"标记清单真实"，新守卫保"状态合法"） | ⏳ 待裁 |
-| D7 | ai-svc → FER/SenseVoice/XTTS 是否算"服务间调用"（roadmap 待确认边界） | **不算**（模型服务走 HTTP 属设计；roadmap 倾向） | ⏳ 待裁 |
+| D1 | 三条 mental-health RPC（History/Trigger/Trend） | ✅ **全部归档** | 用户先答"按文档来"→ 查得 **ADR-2026-09-chart-contract-alignment §E**：「5 个无消费端点本轮不接」= 用户决策"暂不接"，理由"单独功能开发，需要 UX 设计，不在契约修复范围"（待办清单里仍挂着未勾选的"接入前端"）⇒ 与"我记得是接入"的记忆冲突时**以文档为准**。归档后另登 backlog 需求（评估历史/趋势入口）。proto 标 `option deprecated = true` + 注释写明重启条件 |
+| D2 | `StreamMessages` | ✅ **归档** | ADR-2026-09-decision-4-closure §四 #3「故意不做」；proto 标 deprecated + 删 BFF 死方法（不在 `ChatClient` 接口内） |
+| D3 | `Logout` | ✅ **清除 proto 该方法**（**不接真**） | 用户先选"接真"，但查得 **ADR-2026-10-jwt-key-rotation-dual-key「不做的事」**明确"不做 token 黑名单/主动吊销"，且 **D-46 备选③**（服务端吊销表）当时因"需动 schema、量大不成比"被否 ⇒ 复问后用户改判"按文档：不实现吊销，改清除"。登出语义仍由 BFF 清 cookie 承担 |
+| D4 | `VerifySecurityAnswer` 冗余 & `AnalyzeBatch` | ✅ **两条都清除** | 用户口径"若是真没接入点就清了"⇒ 动手前已核（`VerifySecurityAnswer` 零 handler 调用；`AnalyzeBatch` 唯一引用是测试 fake），删除后以 grep 复验无残留 |
+| D5 | 三条 mental-health 的 HTTP 路由 | ✅ **与 D1 同进同出** | 归档 ⇒ analytics-svc 的 `/api/v1/mental-health/{history,trigger,trend}` 一并标注"未接出"（路由保留，重启时随 RPC 一起接） |
+| D6 | 新守卫**替换**还是**叠加**旧的 `EXPECTED=10` | ✅ **叠加 + 去掉硬编码** | 旧守卫保留（守"标记真实性"），但期望值改为**从 `scripts/rpc_status.tsv` 推导**（Σ`marker_sites`）⇒ 归档/清除时不必两处同步；CI 步骤名与 job 名不变（不动分支保护） |
+| D7 | ai-svc → FER/SenseVoice/XTTS 是否算"服务间调用" | ✅ **不算**（明确边界） | 模型推理服务本身以 HTTP/FastAPI 暴露，roadmap §4 倾向一致；写入本档 §1 非目标，避免以后反复被当"未坐实" |
+
+> **两条"用户初选 → 文档冲突 → 复问改判"的过程留痕**（D1/D3）：这正是 AGENTS §〇"写前功课"与用户"按文档来、不要看注释"指令的价值——若按记忆或代码注释走，会产出与已收口 ADR 相悖的改动。
 
 ---
 

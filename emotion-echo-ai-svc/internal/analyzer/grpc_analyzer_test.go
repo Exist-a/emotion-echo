@@ -62,12 +62,6 @@ func (f *fakeEmotionLLMClient) Analyze(ctx context.Context, in *emotionllm.Analy
 	return f.resp, f.err
 }
 
-// AnalyzeBatch returns nil + error to satisfy the interface; we don't
-// exercise the batch path in this test surface.
-func (f *fakeEmotionLLMClient) AnalyzeBatch(_ context.Context, _ *emotionllm.AnalyzeBatchRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[emotionllm.AnalyzeResponse], error) {
-	return nil, errors.New("AnalyzeBatch not implemented in fake")
-}
-
 // ChatCompletion Stage 80 后 EmotionLLMService 新增的 RPC（llm-chat-real-pipeline
 // PR-1）；本测试 surface 不覆盖 ChatCompletion 路径，仅补接口合规避免 build fail。
 func (f *fakeEmotionLLMClient) ChatCompletion(_ context.Context, _ *emotionllm.ChatCompletionRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[emotionllm.ChatChunk], error) {

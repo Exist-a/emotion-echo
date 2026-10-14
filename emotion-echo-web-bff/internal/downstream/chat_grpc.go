@@ -156,50 +156,10 @@ func (c *chatGRPCClient) UpdateConversation(ctx context.Context, conversationID 
 	}, nil
 }
 
-// StreamMessages gRPC server stream 客户端（PR-GRPC-5 阶段：架构判断）
-//
-// 架构判断（2026-09-09）：
-//   chat-svc 当前没有"订阅消息流"业务语义——前端聊天走 POST /api/v1/ai/stream
-//   （BFF 直连 LLM），不经 chat-svc 中转。因此 StreamMessages 是预留接口，
-//   chat-svc 端 chatServer.StreamMessages 返 Unimplemented。
-//
-// 当前实现：直接调 gRPC StreamMessages RPC，把 server stream 包装为
-// ChatEvent 通道返回。client 端收到 Unimplemented 时，channel 立即关闭 +
-// io.EOF 错误（gRPC 标准行为）。
-//
-// 触发场景：未来多客户端实时协作（多人共编会话）/ 消息撤回广播等。
-//
-// E2E-31 已知未接线（2026-10-09）：**本方法不在 `ChatClient` 接口内**，零调用；
-// 聊天流式走 BFF SSE（非 gRPC streaming）。保留 + 标注 + 守卫（report §0 T-1）。
-func (c *chatGRPCClient) StreamMessages(ctx context.Context, conversationID int64, fromMessageID int64) (<-chan *emotionchat.ChatEvent, error) {
-	cli := emotionchat.NewChatServiceClient(c.conn)
-	stream, err := cli.StreamMessages(withUserID(ctx), &emotionchat.StreamMessagesRequest{
-		ConversationId:  conversationID,
-		UserId:         uidFromCtx(ctx),
-		FromMessageId:  fromMessageID,
-	})
-	if err != nil {
-		return nil, wrapGRPCError(err, "chat stream messages")
-	}
-
-	out := make(chan *emotionchat.ChatEvent, 16)
-	go func() {
-		defer close(out)
-		for {
-			evt, err := stream.Recv()
-			if err != nil {
-				// io.EOF 或 Unimplemented 时正常退出
-				return
-			}
-			select {
-			case out <- evt:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-	return out, nil
-}
+// ── CL-02 归档（2026-10-14，用户裁定 D2）：原 StreamMessages client 方法已删除
+// （它**不在 `ChatClient` 接口内**、零调用；proto 侧 RPC 保留但标 deprecated）。
+// 聊天流实际走 BFF SSE（POST /api/v1/ai/stream）。重启条件见 proto/chat.proto 注释。
+// ─────────────────────────────────────────────────────────────────────
 
 // ============ proto → types 转换 ============
 
