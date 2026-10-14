@@ -175,7 +175,7 @@ last-updated: 2026-10-14
 | 3 | `report.md` 用模板（起点/实施/证据/结论/经验） | ✅ 本文件 |
 | 4 | 账本对账 | ✅ **本阶段名下无未解决 CL-F-xx**（CL-F-04 / CL-F-13 / CL-F-14 均已销；CL-F-15 归 CL-03） |
 | 5 | 落地计划迁 `docs/legacy-plans/landed/` | ✅ **已做**（两份源计划均迁入 + `status: landed` + 修路径引用 + `docs/plans/README.md` 标已落地）。BFF 其余 HTTP 出站已在收口后补齐 4 个无归属冲突的文件；**唯一豁免** = `downstream/chat.go`（C 轨独占列，随 CL-02） |
-| 6 | roadmap 状态同步 + 分支收口 | ✅ roadmap CL-01 行改 `partial`；PR #211 **保持 draft**（用户 2026-10-14 指示"完成先不要合"） |
+| 6 | roadmap 状态同步 + 分支收口 | ✅ roadmap CL-01 行 → `done`；PR #211 **已 squash 合并 → `b1f13dc`**，源分支 `feat/cl-01-observability` **本地+远端均已删**；`.devmode-session` 已释放；worktree 已回收 |
 | 7 | 第二方核对 | ✅ **已做（两轮独立子代理）**：首轮 FAIL（9 项）→ 逐条整改 → **第二轮 PASS**。见 §第二方核对 |
 
 ---
@@ -188,7 +188,7 @@ last-updated: 2026-10-14
 | 2 | **D-07 CL-F-14 修法**：后台重试 vs fail-fast | 用户 | ✅ 2026-10-14 **已裁定：后台重试** |
 | 3 | **CL-F-14 归属**：留在 CL-01 还是转 CL-03 | 用户授权我定 | ✅ **定为留在 CL-01 就地修复**（文件面全在 B 轨，根因同源） |
 | 4 | **D 盘空间**：需**管理员**压缩 `D:\DockerDesktopWSL\disk\docker_data.vhdx`（298GB）以恢复 Docker | 用户（需提权） | ⛔ **阻塞中** |
-| 5 | PR #211 何时合并 | 用户 | ⬜ 当前 draft（用户指示先不合）；合并前须先补 CL-F-14 运行时验证 |
+| 5 | PR #211 何时合并 | 用户 | ✅ **2026-10-14 已合并**（用户指示「开始收尾、合 PR」）→ squash `b1f13dc`；合并前三查通过（`merge-tree` rc=0 / 共享 spine 只动自己那行 / main 侧未动） |
 
 ## §待办（**已于 2026-10-14 晚完成**，保留供复跑参考）
 
