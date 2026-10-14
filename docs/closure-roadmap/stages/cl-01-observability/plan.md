@@ -306,3 +306,8 @@ related-plans:
 - Docker Desktop 在 BFF 镜像构建期**挂死**（apiproxy 无响应、`docker` CLI 全超时）⇒ `wsl --shutdown` + 重启 Docker Desktop 恢复（沿用 memory 既有手法）。
 
 **本轮未做的验证**：T-04（HTTP exit span 运行时 —— 需多模态/情绪分析出站触发）、T-05（DLQ span 运行时 —— 需毒消息）、T-06（fusion 指标运行时 —— 需一次真融合；当前 worker `candidates=0`）、T-15（`/health` 采集 = Phase 8 未实现）、Phase 7 其余看板（business/reliability/logs）。
+
+### §10.1 IAB 浏览器实测（2026-10-14）
+
+- ✅ **SkyWalking UI 视觉确认（T-03 的 `[V]`）**：IAB 打开 `http://127.0.0.1:18080` → Trace 页 → 登录 trace 的 span 树里**肉眼可见 `redis.hget` / `redis.del`**（截图 `evidence/t03-skywalking-ui-redis-spans.png`）。同页也证明 **IAB 渲染能力正常**（服务表 + span 树都出）。
+- ⚠️ **Grafana 看板面板渲染为空 → 新账 `CL-F-13`**：`emotion-echo-observability`（本阶段新建）与**既有** `emotion-echo-overview` 的面板**只有标题/边框、无内容**（DOM `Panel content` 计数 = 0）。已排除 5 项：未登录 / 会话过期 / 视口尺寸 / 数据源查询（页面内 `/api/ds/query` 200 有 frames）/ IAB 渲染能力（同浏览器 SkyWalking UI 正常）。⇒ **T-11 的 `[V]` 暂判 `BLOCKED`**（环境侧，**非本阶段看板配置**——既有看板同样为空）。
