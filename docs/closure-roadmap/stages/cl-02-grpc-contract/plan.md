@@ -4,7 +4,7 @@ title: gRPC 契约闭环（死链逐条裁决 + 守卫升级 + "严格走 gRPC"�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档 → Phase 1 守卫升级 → **7 项 [M] 全部裁定（§7）→ Phase 2 清除 + Phase 3 归档均已落地**（3 删 / 4 归档，桩重生成，7 模块测试全绿）→ 采纳多轨硬化协议 H1~H9；**仍未起 dev 栈**，剩余 = T-24 CI 接线（🟢）+ T-21/T-23 全栈冒烟（🔴 排 A/B 之后）+ T-20 收口迁移）
+last-updated: 2026-10-15（**运行时验证完成**：Phase 2 清除 + Phase 3 归档落地 → dev 栈 `:cl02-verify` 起栈 → 7/7 healthy + Nacos count:6 + smoke 24/24 → T-15/T-21/T-23 全部转 PASS；**24 点 PASS 22 / N/A 1 / 未做 1（T-20 收口项）/ BLOCKED 0**；剩余 = 收口（T-20 迁移 + 第二方核对））
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；7 条死链裁决 + 1 条模型服务边界共 8 个 [M] 见 §7
@@ -180,7 +180,7 @@ $ docker images | grep ':cl02'  → （无）  # H4③：本轨尚未构建任�
 
 | # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
 |---|--------|------|---------|------|
-| T-15 | 5 个 `*_TRANSPORT` 默认值 = grpc | [A] | 静态断言 + 运行时 env（🔴） | 🟡 **BLOCKED（仅运行时半边）** —— 静态半边 ✅：`config.go:360-373` 五个开关默认分支 = grpc，守卫 A5 断言 5 个开关字符串在位；**运行时 `docker inspect` env 未取**（需 dev 栈，排在 A/B 之后） |
+| T-15 | 5 个 `*_TRANSPORT` 默认值 = grpc | [A] | 静态断言 + 运行时 env（🔴） | ✅ **PASS（两半齐）** —— 静态：`config.go:360-373` 五个开关默认分支 = grpc，守卫 A5 断言在位；**运行时实测**：5 个服务容器 env 均**未设置** `*_TRANSPORT` ⇒ 走代码默认 grpc（[runtime 证据](evidence/phase2-6-runtime-verify.md) §3） |
 | T-16 | 非开关式 HTTP 直连保持零残留 | [A] | grep 断言 + 豁免声明 | ✅ **PASS** —— `grep -rn "http://emotion-\|http://localhost:8" --include='*.go'`（非测试）**零命中**；模型服务豁免由 D7 裁定 + §1 非目标声明 |
 | T-17 | 模型服务是否算"服务间调用" | [M] | 用户裁定 | ✅ **PASS（裁定）** —— D7 = **不算**，已写入 §1 非目标 |
 
@@ -196,13 +196,13 @@ $ docker images | grep ':cl02'  → （无）  # H4③：本轨尚未构建任�
 
 | # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
 |---|--------|------|---------|------|
-| T-21 | 清除后全栈起得来（Nacos `count:6`） | [A] | 起栈 + Nacos 服务列表 | 🔴 **BLOCKED（需栈）** —— 按契约 §3.1 排队在 A/B 之后，**未取证** |
+| T-21 | 清除后全栈起得来（Nacos `count:6`） | [A] | 起栈 + Nacos 服务列表 | ✅ **PASS** —— 7/7 服务 healthy + **Nacos `count:6`** + apisix-seed `6 upstreams + 16 routes` + 网关登录 200（[runtime 证据](evidence/phase2-6-runtime-verify.md) §3 T-21） |
 | T-22 | 接真类 RPC 端到端有数据 | [A]+[V] | BFF handler + 前端 | ✅ **N/A（裁定后无接真项）** —— D1/D2 归档、D3/D4 清除 ⇒ 本阶段 Phase 4 整体 N/A（理由见 §7，非掩盖） |
-| T-23 | 相关功能无回退（§2.4 smoke） | [A] | 走网关 :19080 + Bearer | 🔴 **BLOCKED（需栈）** —— 同 T-21，**未取证** |
+| T-23 | 相关功能无回退（§2.4 smoke） | [A] | 走网关 :19080 + Bearer | ✅ **PASS** —— `smoke_data_layer.py` **24/24 PASS，exit 0**；首跑唯一功能性失败 §4 `/reports/daily` 504 经**重跑即过**排除为 E2E-F-115 冷启动（[runtime 证据](evidence/phase2-6-runtime-verify.md) §3 T-23） |
 | T-24 | 新守卫接入 CI 且**真能红** | [A] | 本地 RED + CI 实测 | ✅ **PASS** —— ① 本地负向对照 3 组（T-13）；② **CI 实测**：临时分支 `test/cl-02-guard-red-proof`（故意改坏证据符号）⇒ `static-guards` job **failure**（见证据档 §6），分支用后即删；③ 本分支 `static-guards` success（守卫 27/27 已接） |
 
-**统计**：24 点中 **PASS 19 / N/A 1 / BLOCKED 3（T-15 半边 + T-21 + T-23，均为"需 dev 栈"）/ 未做 1（T-20 收口项）**。
-BLOCKED 占比 3/24 = 12.5%（< 1/3，未触发 RUNBOOK 硬线）。
+**统计（2026-10-15 运行时验证后）**：24 点中 **PASS 22 / N/A 1 / 未做 1（T-20 收口项）/ BLOCKED 0**。
+⇒ **无需栈阻塞项**；剩余仅 T-20（收口时执行的迁移）与阶段收口本身。
 
 ## §3 分阶段实施（TDD：先 RED 回归钉，再 GREEN）
 
