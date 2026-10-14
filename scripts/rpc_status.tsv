@@ -1,0 +1,57 @@
+# CL-02 · RPC 状态清单（43 条 = proto 全量）
+# 列：rpc <TAB> proto:line <TAB> status <TAB> evidence_path <TAB> evidence_symbol <TAB> marker_sites <TAB> note
+#
+# status ∈ {live, archived, deleted, undecided}
+#   live      = 有生产调用方；evidence_path 内必须出现 evidence_symbol 调用（守卫 A2 校验）
+#   archived  = proto 标 reserved/deprecated，明确不做（守卫 A4）
+#   deleted   = proto/server/client 全清（守卫 A4）
+#   undecided = 尚无终态（须在阶段收口前清零）；marker_sites>0 表示代码里仍带 E2E-31 标记
+# evidence_path/symbol：**该 RPC 的客户端方法在生产代码中的调用点**——RPC 名与客户端方法名
+#   多数不一一对应（如 ReportsTrend→TrendReport、GetEmotionByMessage→ByMessage），故必须登记符号，
+#   不能靠名字 grep（守卫 A2 的失败样例即为此）。
+# marker_sites：该 RPC 在代码里残留的 `E2E-31 已知未接线` 标记数（Σ 必须等于实际标记数；A3）。
+#
+# 生成/核对依据：docs/closure-roadmap/stages/cl-02-grpc-contract/evidence/phase1-scan.md
+ListSurveys	proto/agent.proto:48	live	emotion-echo-web-bff/internal/handler/survey_handler.go	ListSurveys	0	-
+GetSurvey	proto/agent.proto:51	live	emotion-echo-web-bff/internal/handler/survey_handler.go	GetSurvey	0	-
+SubmitSurvey	proto/agent.proto:54	live	emotion-echo-web-bff/internal/handler/survey_handler.go	SubmitSurvey	0	-
+ListMyResults	proto/agent.proto:57	live	emotion-echo-web-bff/internal/handler/survey_handler.go	ListResults	0	RPC 名≠客户端方法名|-
+GetSurveyResult	proto/agent.proto:60	live	emotion-echo-web-bff/internal/handler/survey_handler.go	GetResult	0	RPC 名≠客户端方法名|-
+CreateConversation	proto/chat.proto:38	live	emotion-echo-web-bff/internal/handler/chat_handler.go	CreateConversation	0	-
+SendMessage	proto/chat.proto:41	live	emotion-echo-web-bff/internal/handler/chat_handler.go	SendMessage	0	另 ai_stream_handler.go:262|-
+ListMessages	proto/chat.proto:44	live	emotion-echo-web-bff/internal/handler/chat_handler.go	ListMessages	0	-
+ListConversations	proto/chat.proto:47	live	emotion-echo-web-bff/internal/handler/chat_handler.go	ListConversations	0	-
+DeleteConversation	proto/chat.proto:50	live	emotion-echo-web-bff/internal/handler/chat_handler.go	DeleteConversation	0	-
+PinConversation	proto/chat.proto:53	live	emotion-echo-web-bff/internal/handler/chat_handler.go	PinConversation	0	-
+UpdateConversation	proto/chat.proto:56	live	emotion-echo-web-bff/internal/handler/chat_handler.go	UpdateConversation	0	-
+StreamMessages	proto/chat.proto:65	undecided	-	-	2	待裁 D2（建议归档）；server 恒返 Unimplemented
+Analyze	proto/emotion_llm.proto:13	live	emotion-echo-ai-svc/internal/analyzer/auth_wrapped.go	Analyze	0	服务间（ai-svc→llm-service）
+AnalyzeBatch	proto/emotion_llm.proto:18	undecided	-	-	1	待裁 D4（建议清除）
+ChatCompletion	proto/emotion_llm.proto:26	live	emotion-echo-web-bff/internal/downstream/llm_grpc.go	ChatCompletion	0	业务入口 ai_stream_handler.go:431 h.llm.StreamChat
+ClassifyIntent	proto/emotion_llm.proto:32	live	emotion-echo-web-bff/internal/handler/chat_handler.go	ClassifyIntent	0	-
+GetEmotionByMessage	proto/emotion_query.proto:17	live	emotion-echo-web-bff/internal/handler/emotion_query_handler.go	ByMessage	0	RPC 名≠客户端方法名|-
+GetEmotionByConversation	proto/emotion_query.proto:19	live	emotion-echo-web-bff/internal/handler/emotion_query_handler.go	ByConversation	0	另 emotion_history.go:54|-
+GetFusedEmotion	proto/emotion_query.proto:21	live	emotion-echo-web-bff/internal/handler/emotion_query_handler.go	ByFusedMessage	0	RPC 名≠客户端方法名
+UpsertNeutralEmotion	proto/emotion_query.proto:37	live	emotion-echo-chat-svc/internal/logic/sendmessagelogic.go	UpsertNeutralEmotion	0	服务间（chat-svc→ai-svc）
+MultiModalAnalyze	proto/emotion_query.proto:48	live	emotion-echo-web-bff/internal/handler/multimodal_handler.go	MultiModalAnalyze	0	另 voice_handler.go:102
+SynthesizeSpeech	proto/emotion_query.proto:54	live	emotion-echo-web-bff/internal/handler/tts_handler.go	SynthesizeSpeech	0	-
+AIHealth	proto/emotion_query.proto:60	live	emotion-echo-web-bff/internal/handler/ai_health_handler.go	AIHealth	0	-
+ReportsDaily	proto/metric.proto:41	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	DailyReport	0	RPC 名≠客户端方法名
+ReportsTrend	proto/metric.proto:44	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	TrendReport	0	RPC 名≠客户端方法名
+UserBehaviorDayNight	proto/metric.proto:47	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	DayNightPattern	0	RPC 名≠客户端方法名
+UserBehaviorDepth	proto/metric.proto:50	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	InteractionDepth	0	RPC 名≠客户端方法名
+UserBehaviorFrequency	proto/metric.proto:53	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	FrequencyTrend	0	RPC 名≠客户端方法名
+MentalHealthAssessment	proto/metric.proto:56	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	MentalAssessment	0	RPC 名≠客户端方法名
+MentalHealthHistory	proto/metric.proto:59	undecided	-	-	1	待裁 D1；server 恒返 Records:nil
+MentalHealthTrigger	proto/metric.proto:62	undecided	-	-	1	待裁 D1；server 真实现（E2E-15 已验）
+MentalHealthTrend	proto/metric.proto:65	undecided	-	-	1	待裁 D1；server 真实现
+GetMe	proto/user.proto:41	live	emotion-echo-web-bff/internal/handler/user_handler.go	GetMe	0	另 avatar_handler.go:131
+UpdateProfile	proto/user.proto:46	live	emotion-echo-web-bff/internal/handler/user_handler.go	UpdateMe	0	RPC 名≠客户端方法名
+GetUserById	proto/user.proto:49	live	emotion-echo-web-bff/internal/handler/user_handler.go	GetByID	0	RPC 名≠客户端方法名
+Login	proto/user.proto:57	live	emotion-echo-web-bff/internal/handler/auth_handler.go	Login	0	-
+Register	proto/user.proto:62	live	emotion-echo-web-bff/internal/handler/auth_handler.go	Register	0	易与 Nacos reg.Register 撞名
+ResetPassword	proto/user.proto:69	live	emotion-echo-web-bff/internal/handler/auth_handler.go	ResetPassword	0	-
+Logout	proto/user.proto:74	undecided	-	-	2	待裁 D3（建议清除 proto 该方法）
+VerifySecurityAnswer	proto/user.proto:79	undecided	-	-	2	待裁 D4（族内冗余，建议清除）
+VerifySecurityAnswerByUsername	proto/user.proto:91	live	emotion-echo-web-bff/internal/handler/auth_handler.go	VerifySecurityAnswerByUsername	0	在用者（兄弟 RPC）
+GetSecurityQuestionsByUsername	proto/user.proto:99	live	emotion-echo-web-bff/internal/handler/auth_handler.go	GetSecurityQuestionsByUsername	0	-

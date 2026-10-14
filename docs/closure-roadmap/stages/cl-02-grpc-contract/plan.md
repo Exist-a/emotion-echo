@@ -4,7 +4,7 @@ title: gRPC 契约闭环（死链逐条裁决 + 守卫升级 + "严格走 gRPC"�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档 C 轨并行开工；**未起 dev 栈**，运行时证据待 Phase 2/4/6，见 §A.4）
+last-updated: 2026-10-14（建档 C 轨并行开工 → **Phase 1 守卫升级已落地**（清单 + 5 断言 + 负向对照，🟢 不需栈）；**未起 dev 栈**，运行时证据待 Phase 2/4/6，见 §A.4）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；7 条死链裁决 + 1 条模型服务边界共 8 个 [M] 见 §7
@@ -62,6 +62,11 @@ related-plans:
 
 **亲核的标记点计数**：`grep -rn "E2E-31 已知未接线"` 命中 **10 处**，与守卫脚本 `EXPECTED=10` 一致
 （server 7：`metric_server.go`×3 / `chat_server.go`×1 / `user_server.go`×2 / `grpc_server.py`×1；BFF 3：`chat_grpc.go`×1 / `user_grpc.go`×2）。
+
+**Phase 1 补充亲核（全量 43 条，证据见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md)）**：
+- **43 条 RPC 全部定位到调用点** ⇒ 结论：**7 条死链是完整清单**（未发现第 8 条）；一度怀疑的 `GetEmotionByMessage/…Conversation/…Fused` **经查证为活链**（BFF `emotion_query_handler.go:46/66/102`）。
+- 🔴 **RPC 名 ≠ 客户端方法名（14 条）**：如 `ReportsTrend→TrendReport`、`ListMyResults→ListResults`、`UpdateProfile→UpdateMe`、`GetUserById→GetByID`。⇒ **"live 有调用方"不能靠 RPC 名 grep**（会把 6 条 metric RPC 误判成死链），证据必须登记 `(文件, 符号)`。
+- **同型陷阱**：`SendMessage` 撞 Kafka producer（`ai-svc/consumer/dlq.go:169`）、`Register` 撞 Nacos（`ai-svc/nacos_boot.go:86`）与 BFF 路由注册（`main.go:501`）。
 
 **亲核的"是否还有非开关式 HTTP 直连"**：`grep -rn "http://emotion-\|http://localhost:8"` 在非测试 Go 代码中
 **零命中** ⇒ 服务间"严格走 gRPC"的**主干已成立**，本阶段的活是"**减面 + 坐实留下的**"，不是"再迁一批"。
@@ -177,15 +182,19 @@ related-plans:
 | Phase | 内容 | 栈 | RED 断言 |
 |---|---|---|---|
 | **0** | 7 条裁决拍板（§7 D1~D6）+ 模型服务边界（D7） | 🟢 | —（[M]，用户裁定后回填本表） |
-| **1** | **守卫升级（核心）**：新增 RPC 状态清单（`scripts/rpc_status.tsv`：43 行，列 = `rpc | proto | status | 调用方证据`）+ `scripts/check_rpc_status.sh` 四条断言（T-09~T-12）+ HTTP 豁免（T-14） | 🟢 | **先写守卫再改代码**：脚本先对"现状"跑 ⇒ `archived/deleted` 类必 RED（现状全是"未标注"）→ 随 Phase 2/3 逐条转绿 |
+| **1** | **守卫升级（核心）✅ 已落地**：`scripts/rpc_status.tsv`（43 行 × 7 列：`rpc / proto:line / status / evidence_path / evidence_symbol / marker_sites / note`）+ `scripts/check_rpc_status.sh` 五条断言（A1 覆盖 / A2 live 必有证据 / A3 标记数与清单一致 / A4 终态规则 / A5 HTTP 豁免）；**标记预期数改为由清单推导**（取代硬编码 `EXPECTED=10`） | 🟢 | **已证**：A1~A5 现行全绿；负向对照 2 组（改错证据符号 → A2 FAIL；给 live 行挂标记 → A3 双 FAIL）见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md) §4。**A4 当前为空断言**（无 archived/deleted 行），Phase 2/3 后才有实义 |
 | **2** | **清除类**：删 proto/server/client/测试 fake/标记（T-03/T-04 + 裁定为 delete 的项） | 🟢改码 / 🔴验证 | RED：残留 grep 命中 ⇒ 删净后 GREEN；`protoc` 重生成后编译过 |
 | **3** | **归档类**：proto 标 `reserved`/`deprecated` + 注释记录"明确不做"（T-01/T-02 若裁归档） | 🟢 | RED：守卫断 archived 必带标注 ⇒ 未标时 FAIL → 标注后 GREEN |
 | **4** | **接真类**：BFF client + handler + **前端入口**（T-05~T-07 若裁接真） | 🔴 | RED：前端拿不到数据的契约测试 ⇒ 接完 GREEN（**必须到前端，否则改判归档/清除**） |
 | **5** | **口径更正 + 账本回填**（T-18/T-19） | 🟢 | —（文档一致性核对；决策 4 ADR 用"更正记录"先例形式） |
-| **6** | **收口**：迁移来源计划（T-20）+ 全栈冒烟（T-21/T-23）+ 负向对照（T-13）+ CI 接线（T-24） | 🔴 | CI job 首次跑须能红（T-13 已在 Phase 1 证过，此处验"接进 CI 后仍生效"） |
+| **6** | **收口**：迁移来源计划（T-20）+ 全栈冒烟（T-21/T-23）+ 负向对照（T-13 ✅ 已在 Phase 1 证过）+ CI 接线（T-24） | 🔴 | CI job 首次跑须能红（Phase 1 已在本地证过 RED 能力，此处验"接进 CI 后仍生效"） |
 
-> **Phase 1 是"先钉子后实现"的教科书场景**：守卫先落地并对**当前**代码必红（现状 7 条死链在清单里状态未定），
-> 随后 Phase 2/3/4 逐条把 Red 变 Green。**不得**先删代码再补守卫（违反 TDD 倒置反模式）。
+> **Phase 1 落地方式（修正建档时的预想）**：建档时设想"守卫对现状必红"，实测**不成立**——
+> 因为清单是按现状机械生成后逐条亲核的（43 条全部定位到调用点），A1~A5 是对**现状的完整描述**，
+> 故现行即绿。"钉子能红"的证据改用**负向对照**给出（改错证据符号 → A2 FAIL；给 live 行挂标记 → A3 双 FAIL，
+> 见 [evidence/phase1-scan.md](evidence/phase1-scan.md) §4）——**这比"必红"更强**：它证明断言不是永真式。
+> **红线不变**：Phase 2/3/4 不得先删代码再补守卫（TDD 倒置反模式）；改一条 RPC 的终态**必须同步改清单**，
+> 否则 A1/A3/A4 立刻红（这正是"接线/清除必须是一次显式决策"的机械保证）。
 
 ---
 
@@ -205,9 +214,10 @@ related-plans:
 
 ## §5 回归钉
 
-- **主钉（bash 契约测试）**：`scripts/check_rpc_status.sh`（升级版）+ `scripts/tests/test_check_rpc_status.sh`
-  —— 覆盖 4 个场景：状态合法 / deleted 无残留 / archived 带标注 / live 有调用方，外加 1 个负向对照。
-  （沿用 `e2e-guards.yml` 现有"脚本 + 守卫 job"形态，不引新框架。）
+- **主钉（bash 契约测试）**：`scripts/check_rpc_status.sh`（**已落地**）+ `scripts/rpc_status.tsv`
+  —— 覆盖 5 组断言：A1 覆盖 43/43 / A2 live 有调用方证据 / A3 标记数与清单一致（推导式）/ A4 终态规则 / A5 HTTP 豁免；
+  **负向对照已证能红 2 组**（见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md) §4）。
+  （沿用 `e2e-guards.yml` 现有"脚本 + 守卫 job"形态，不引新框架。旧 `check_dead_grpc_inventory.sh` **保留叠加**，见 §7 D6。）
 - **辅助钉**：清除项的**编译回归**（`go build ./...` + `python -m compileall`）+ `protoc` 重生成幂等性核对。
 - **CI**：接 `e2e-guards.yml` 作为**新守卫 job**（保留 23/23 旧守卫做"清单真实性"叠加，见 §7 D6）。
 
