@@ -138,6 +138,17 @@ const (
 // 因此 `neutral` 与空串一律不注入；等前端真算出情绪（非 neutral）自动生效。
 const defaultTextEmotion = "neutral"
 
+// ---------------------------------------------------------------------------
+// 会话标题生成（T-18，2026-10-14 用户实测后追加）
+// ---------------------------------------------------------------------------
+
+// titleInstruction 标题生成指令。要求"只输出标题"是为了让 sanitizeTitle 少做猜测。
+const titleInstruction = "你是会话标题生成器。根据用户这句话生成一个中文短标题：" +
+	"不超过 12 个字，不写标点与引号，不加「标题：」前缀，只输出标题本身，不要解释。"
+
+// maxTitleRunes 标题长度硬上限（按 rune 计；LLM 越界或规则兜底都受此约束）。
+const maxTitleRunes = 20
+
 // emotionChineseLabels 英文情绪标签 → 中文（避免 prompt 里出现英文枚举值）。
 // 未收录的情绪**原样返回**（不会泄漏系统术语，也不编造中文词）。
 var emotionChineseLabels = map[string]string{

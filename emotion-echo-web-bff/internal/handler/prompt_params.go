@@ -23,6 +23,13 @@ var llmGeneration = struct {
 	MaxTokens:   1024,
 }
 
+// 标题生成专用参数（T-18）：标题要稳定、要短 ⇒ 低温度 + 很小 max_tokens。
+// 与对话参数分开命名，避免被误认为可以拿对话参数去生成标题。
+const (
+	titleTemperature = 0.3
+	titleMaxTokens   = 32
+)
+
 // llmWithIntent（CL-04 Phase 5）：是否让 llm-service 先分类意图、再按意图注入回复风格。
 //
 // 该分支（`intent.inject_style`）自 Stage 82 就存在，但 BFF 从不设置 pb 的 `with_intent`

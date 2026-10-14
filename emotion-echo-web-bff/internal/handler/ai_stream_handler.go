@@ -123,6 +123,8 @@ type AIStreamHandler struct {
 	personality personalitySource
 	// emotion 是会话情绪历史来源（E2E-F-122）；nil = 不回落历史情绪
 	emotion emotionSource
+	// titleUpdater 是会话标题更新能力（T-18）；nil = 不生成标题（默认由 Chat 推断，见构造函数）
+	titleUpdater titleConvUpdater
 }
 
 // AIStreamDeps 是 AIStreamHandler 的依赖集合。
@@ -142,6 +144,9 @@ type AIStreamDeps struct {
 	Personality personalitySource
 	// Emotion 是会话情绪历史来源（E2E-F-122）；nil = face/voice 空时不回落历史情绪
 	Emotion emotionSource
+	// TitleUpdater 是会话标题更新能力（T-18）。通常**不必显式传**：
+	// 构造函数会从 Chat 推断（Chat 已满足该窄接口）；显式传只为测试替身。
+	TitleUpdater titleConvUpdater
 }
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
@@ -153,12 +158,19 @@ func NewAIStreamHandler(cfg config.Config) gin.HandlerFunc {
 // 零值 AIStreamDeps{} 等价于"仅 mock 回复"。
 func NewAIStreamHandlerWithDeps(cfg config.Config, deps AIStreamDeps) gin.HandlerFunc {
 	h := &AIStreamHandler{
-		cfg:         cfg,
-		llm:         deps.LLM,
-		files:       deps.Files,
-		chat:        deps.Chat,
-		personality: deps.Personality,
-		emotion:     deps.Emotion,
+		cfg:          cfg,
+		llm:          deps.LLM,
+		files:        deps.Files,
+		chat:         deps.Chat,
+		personality:  deps.Personality,
+		emotion:      deps.Emotion,
+		titleUpdater: deps.TitleUpdater,
+	}
+	// T-18：未显式传标题更新器时，从 Chat 推断（生产侧 Chat 已满足该窄接口 ⇒ main.go 无需改动装配）
+	if h.titleUpdater == nil {
+		if u, ok := deps.Chat.(titleConvUpdater); ok {
+			h.titleUpdater = u
+		}
 	}
 	return h.ServeHTTP
 }
@@ -272,6 +284,9 @@ type aiStreamReq struct {
 	FaceConfidence float64 `json:"faceConfidence"`
 	VoiceEmotion   string  `json:"voiceEmotion"`
 	VoiceConfidence float64 `json:"voiceConfidence"`
+	// ShouldGenerateTitle T-18：前端显式要求"生成/重命名会话标题"。
+	// 此前该字段**不在结构里** ⇒ 静默丢弃（Phase 0 缺陷 8 的一项）；现接住并参与触发条件。
+	ShouldGenerateTitle bool `json:"shouldGenerateTitle"`
 }
 
 // ServeHTTP 处理 AI 对话流式回复
@@ -366,6 +381,9 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 				flusher0.Flush()
 			}
 			h.saveAIMessage(c, req.ConversationID, llmAccumulated.String())
+			// T-18：第一轮对话后按对话内容生成会话标题（best-effort，不影响已发出的 SSE）
+			h.maybeGenerateTitle(session.WithRequestAuth(c),
+				parseConversationID(req.ConversationID), userContent, req.ShouldGenerateTitle)
 			return
 		}
 		slog.ErrorContext(c.Request.Context(), "ai-stream llm-grpc upstream failed, falling back", "err", err)
@@ -436,6 +454,8 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			flusher.Flush()
 		}
 		h.saveAIMessage(c, req.ConversationID, llmAccumulated.String())
+		h.maybeGenerateTitle(session.WithRequestAuth(c),
+			parseConversationID(req.ConversationID), userContent, req.ShouldGenerateTitle)
 		return
 	}
 
@@ -464,6 +484,8 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 	}
 	// Sprint 109b: 异步保存 AI 回复到 chat-svc (防止刷新后丢失)
 	h.saveAIMessage(c, req.ConversationID, reply)
+	h.maybeGenerateTitle(session.WithRequestAuth(c),
+		parseConversationID(req.ConversationID), userContent, req.ShouldGenerateTitle)
 }
 
 // mockEmpathyReply 按用户消息关键词生成共情回复（mock，真实 LLM 后续替换）
