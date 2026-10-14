@@ -72,57 +72,11 @@ var personalityDimensionLabels = []struct {
 	{"neuroticism", "神经质"},
 }
 
-// buildSystemPrompt 组装 system prompt：基础人设 + （可选）人格「联系方式适配」指令。
-//
-// 无画像 / 画像来源报错 / 画像平坦无信息（见 buildPersonalityGuide）时，
-// 返回与无画像时**逐字相同**的基础人设 —— 不编造、不退化。
-func (h *AIStreamHandler) buildSystemPrompt(ctx context.Context) string {
-	if h.personality == nil {
-		return baseSystemPrompt
-	}
-	dims, err := h.personality.LatestPersonalityProfile(ctx)
-	if err != nil {
-		slog.ErrorContext(ctx, "ai-stream load personality profile failed, using base prompt", "err", err)
-		return baseSystemPrompt
-	}
-	guide := buildPersonalityGuide(dims)
-	if guide == "" {
-		return baseSystemPrompt
-	}
-	return baseSystemPrompt + "\n\n" + guide
-}
-
-// buildSystemPromptWithEmotion 组装 system prompt：基础人设 + （可选）人格段 + （可选）情绪上下文段。
-//
-// D-14（E2E-16 plan §B.10）：前端携带 face / voice 情绪上下文（faceEmotion/voiceEmotion），
-// 拼到 system prompt 让 AI 回复贴合用户当前状态。
-// 三句护栏（与 E2E-F-95 人格画像同款约束）：
-//   - 不点破来源（不出现"摄像头/识别/分析/检测/设备/传感器/面部识别"）
-//   - 不贴标签（不当面称呼"你很happy"等）
-//   - 不过火（情绪描述保持中性、简短）
-// 无情绪上下文时 emotionSeg 为空 → 返回与原 buildSystemPrompt 逐字相同（不污染）。
-//
-// E2E-F-122（emotionSource 高级模式）：face/voice 全空时（摄像头关闭 / 权限被拒 /
-// 3 秒窗口过期）回落 emotionSource 查会话情绪历史，注入"最近情绪模式"段。
-// 前端 payload 优先 —— 实时信号 > 历史统计，非空时不查（省一次 gRPC）。
-func (h *AIStreamHandler) buildSystemPromptWithEmotion(
-	ctx context.Context,
-	conversationID int64,
-	faceEmotion string, faceConfidence float64,
-	voiceEmotion string, voiceConfidence float64,
-) string {
-	base := h.buildSystemPrompt(ctx)
-	emotionSeg := buildEmotionContext(faceEmotion, faceConfidence, voiceEmotion, voiceConfidence)
-	if emotionSeg == "" && h.emotion != nil && conversationID > 0 {
-		if pattern, err := h.emotion.RecentEmotionPattern(ctx, conversationID); err == nil && pattern != "" {
-			emotionSeg = buildEmotionHistoryContext(pattern)
-		}
-	}
-	if emotionSeg == "" {
-		return base
-	}
-	return base + "\n\n" + emotionSeg
-}
+// system prompt 的组装已收敛到 `prompt_assembly.go`（CL-04 Phase 1，缺陷 11）：
+// 段序、段文案与"无信号时逐字回落基础人设"的不变量都在那一处，两条上游路径共用。
+// 相关契约：D-14（face/voice 情绪上下文，E2E-16 plan §B.10；三句护栏：不点破来源 /
+// 不贴标签 / 不过火）、E2E-F-122（payload 空时回落会话情绪历史，前端优先）、
+// E2E-F-95（画像缺时不编造、静默回落基础人设）。
 
 // buildEmotionHistoryContext 拼"最近情绪模式"段（E2E-F-122 回落路径）。
 //
@@ -411,15 +365,15 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 	// llm-service——PR-1；fallback_reason 随 delta 透传给前端日志）。传输失败回落
 	// 既有 Phase D HTTP 直连 / mock。
 	if h.llm != nil {
-		llmMessages := []downstream.Message{
-			{Role: "system", Content: h.buildSystemPromptWithEmotion(
-				session.WithRequestAuth(c),
-				parseConversationID(req.ConversationID),
-				req.FaceEmotion, req.FaceConfidence,
-				req.VoiceEmotion, req.VoiceConfidence,
-			)},
-			{Role: "user", Content: userContent},
-		}
+		llmMessages := h.assembleMessages(assembleInput{
+			ctx:             session.WithRequestAuth(c),
+			conversationID:  parseConversationID(req.ConversationID),
+			faceEmotion:     req.FaceEmotion,
+			faceConfidence:  req.FaceConfidence,
+			voiceEmotion:    req.VoiceEmotion,
+			voiceConfidence: req.VoiceConfidence,
+			userContent:     userContent,
+		})
 		ctx, cancel := context.WithCancel(c.Request.Context())
 		defer cancel()
 		// Stage 89 PR-3：会话内文件持续引用——最新 ≤2 条 file 消息随请求下发，
@@ -474,15 +428,15 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 
 	// Phase D：APIKey 非空时调真实 LLM（DeepSeek / OpenAI 兼容）
 	if h.cfg.LLM.APIKey != "" {
-		llmMessages := []downstream.Message{
-			{Role: "system", Content: h.buildSystemPromptWithEmotion(
-				session.WithRequestAuth(c),
-				parseConversationID(req.ConversationID),
-				req.FaceEmotion, req.FaceConfidence,
-				req.VoiceEmotion, req.VoiceConfidence,
-			)},
-			{Role: "user", Content: userContent},
-		}
+		llmMessages := h.assembleMessages(assembleInput{
+			ctx:             session.WithRequestAuth(c),
+			conversationID:  parseConversationID(req.ConversationID),
+			faceEmotion:     req.FaceEmotion,
+			faceConfidence:  req.FaceConfidence,
+			voiceEmotion:    req.VoiceEmotion,
+			voiceConfidence: req.VoiceConfidence,
+			userContent:     userContent,
+		})
 		llmReq := downstream.LLMChatReq{
 			Model:    h.cfg.LLM.Model,
 			Messages: llmMessages,

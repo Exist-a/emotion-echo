@@ -4,7 +4,7 @@ title: Prompt 组装层 — 执行记录
 type: report
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（Phase 0 基线取证完成；测试点 0/16 有结论 —— 阶段未收口）
+last-updated: 2026-10-14（Phase 0 基线取证 + **Phase 1 统一组装层落地**（3/16 测试点 PASS）；阶段未收口 —— 余 12 点在 Phase 2~7）
 ---
 
 # CL-04 · Prompt 组装层 — 执行记录（report）
@@ -105,18 +105,58 @@ $ docker image inspect --format '{{.Created}}' emotion-echo/web-bff:v0.1.37
 ⇒ plan §A.3 的假设（"取最新 limit 条后反转为升序"）在**运行时成立**，Phase 2 可直接按序拼历史。
 ⚠️ 同时确认 `ai_stream_handler.go:318` 的注释"msgs 按时间倒序（最新在前）"与实现不符（陈旧注释，plan §6 R5）。
 
-### 3.5 测试点总表（16 点，逐点状态）
+### 3.5 Phase 1：统一组装层落地（换实现不改行为）— PASS
+
+**做法**：先用**改造前的旧实现**一次性产出 golden 字面量（临时 `zz_golden_gen_test.go`，生成后即删），
+再用它当 oracle 写 RED 钉子，最后删掉旧实现 —— 这样"零回归"钉的是**旧字节**而非新实现的自证。
+
+RED（先红，证据：编译错误 = 新 API 全部未定义）：
+
+```text
+$ go test ./internal/handler/ -run TestPromptAssembly -count=1
+prompt_assembly_test.go:102:15: c.h.assembleSystemPrompt undefined
+prompt_assembly_test.go:102:36: undefined: assembleInput
+prompt_assembly_test.go:131:24: undefined: segmentKindBase
+... FAIL emotion-echo-web-bff/internal/handler [build failed]
+```
+
+GREEN（落地后）：
+
+```text
+$ go test ./internal/handler/ -run TestPromptAssembly -v -count=1
+--- PASS: TestPromptAssembly_ZeroRegression_GoldenBytes (6 子例全 PASS：无信号 / 仅画像 / 仅情绪 /
+         仅历史 / 画像+情绪 / 画像报错)
+--- PASS: TestPromptAssembly_MessagesAreSystemThenUser
+--- PASS: TestPromptAssembly_SegmentOrderIsFixed (6 子例 + base 恒首 + canonical 子序列不变量)
+--- PASS: TestPromptAssembly_ServeHTTPHasNoInlineSystemMessage
+ok  emotion-echo-web-bff/internal/handler
+
+$ go vet ./...                                  → exit 0
+$ go test ./... -count=1                        → 全部包 ok（10 包）
+$ go vet -tags integration ./...                → exit 0（CI 的 build-tag 编译守卫）
+```
+
+**改动清单**：
+- 新增 `internal/handler/prompt_assembly.go`：`systemSegments`（段序唯一来源）/ `assembleSystemPrompt` / `assembleMessages`（唯一组装点）；
+- `ai_stream_handler.go`：**删** `buildSystemPrompt` + `buildSystemPromptWithEmotion`（缺陷 11 的两处内联调用点收敛为 2 次 `assembleMessages` 调用）；
+- 既有测试 `d14_emotion_context_test.go` / `f122_emotion_history_fallback_test.go` 的调用点机械迁移到新 API（**断言逐条保持不变**）。
+
+**行为等价性**：段序 `base → personality → emotion` 以 `"\n\n"` 连接，与旧实现 `base + "\n\n" + guide + "\n\n" + emotionSeg` 逐字一致；
+空段直接丢弃（不产生空行）；画像报错时仍打同一条 error 日志并回落基础人设。
+
+
+### 3.6 测试点总表（16 点，逐点状态）
 
 | # | 测试点 | 判定 | 本轮状态 |
 |---|---|---|---|
-| T-1 | 组装层零回归（逐字等于旧输出） | [A] | 未执行（Phase 1） |
-| T-2 | 段顺序固定 + 护栏后置 | [A] | 未执行（Phase 1） |
+| T-1 | 组装层零回归（逐字等于旧输出） | [A] | ✅ **PASS**（§3.5，golden 字面量 6 例） |
+| T-2 | 段顺序固定 + 护栏后置 | [A] | ✅ **PASS**（§3.5，段序 6 例 + 2 条不变量） |
 | T-3 | 历史注入生效（时间正序） | [A] | 未执行（Phase 2） |
 | T-4 | 单轮不多喂（长度=2） | [A] | 未执行（Phase 2） |
 | T-5 | 预算裁剪（至少保 1 轮） | [A] | 未执行（Phase 2） |
 | T-6 | userContent 上界（rune 安全） | [A] | 未执行（Phase 2） |
 | T-7 | 参数真下发（Temperature/MaxTokens） | [A] | 未执行（Phase 3） |
-| T-8 | 两处调用点收敛（单一组装函数） | [A] | 未执行（Phase 1） |
+| T-8 | 两处调用点收敛（单一组装函数） | [A] | ✅ **PASS**（§3.5，源码扫描 + 2 调用点） |
 | T-9 | 配置化 + 三处人格文案一致性 | [A] | 未执行（Phase 4） |
 | T-10 | file_context 多附件全输出 | [A] | 未执行（Phase 5） |
 | T-11 | 意图注入接回（with_intent） | [A] | 未执行（Phase 5） |
@@ -129,7 +169,8 @@ $ docker image inspect --format '{{.Created}}' emotion-echo/web-bff:v0.1.37
 ## §4 结论
 
 - **Phase 0 完成**：运行时证据支持"多轮＝无记忆单轮"（3 轮对话 / 会话 6 条消息 / prompt 恒 2 条 / 真实 deepseek 上游）。
-- **阶段状态**：`in-progress`（**未收口**）。测试点 **0/16 有结论**（T-16 为决策项已裁定）。
+- **Phase 1 完成**：统一组装层落地，**行为逐字不变**（T-1 golden 6 例）；两处内联调用点收敛为单一组装点（T-8）。
+- **阶段状态**：`in-progress`（**未收口**）。测试点 **3/16 有 PASS 结论**（T-1/T-2/T-8），另有 T-16 已由用户裁定；其余 12 点在 Phase 2~7。
 - **环境遗留**（交付给下一轮）：
   - dev 栈**在跑**（17 容器）；`xtts` 按用户指示**已停**（TTS 链路预期 502，文本链路不受影响）；
   - dev mode 锁 `deploy/.devmode-session`（owner `lane-cl-a`，until 2026-10-14 12:00）→ **收工须删**；
