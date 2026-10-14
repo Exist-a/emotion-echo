@@ -84,6 +84,7 @@ related-plans:
 | BFF 与 5 svc 同名装配纪律 | ❌ 5 svc 有 `SetTracer` 守卫，**BFF 不在 `svc_wiring_test.go` 覆盖内**且确实没调（G6 盲区）。 |
 | 面板改动可随手在 UI 调 | ❌ provider `allowUiUpdates:true` + `updateIntervalSeconds:30` + 持久卷 ⇒ **UI 改 30s 后被磁盘 JSON 覆盖**，一切改动必须落 `deploy/grafana/dashboards/*.json`。 |
 | 埋点仍是"接了就算完" | ❌ CL-01 约束⑤：**必须见 span 真出现在 SkyWalking UI**，否则不算完成。 |
+| **无 ctx 调用会"硬造根 span"** | ⚠️ go2sky 默认采样率=1.0（`NewDynamicSampler(1)`），ctx 无父 span 时会**新建根 trace** ⇒ 必须显式守卫。本次已在 `createExitSpan` 加 `go2sky.ActiveSpan(ctx)==nil → noop`（约束③/T-08 落地），否则 Phase 1 的 GORM 修复会为无 ctx 的 ORM 调用刷出大量孤立 trace。 |
 
 ### A.4 未跑 smoke / 未取运行时证据声明（诚实性，按 RUNBOOK §4）
 
@@ -125,11 +126,11 @@ related-plans:
 | T-01 | GORM 回调注册在**正确的 processor**（Query/Create/Update/Delete/Row） | [A] | Go 单测：`db.Callback().Query().Get("skywalking:begin_query") != nil`（**修前 nil=RED**），5 op 全覆盖 | ✅ 2026-10-14：`go test ./pkg/skywalking/ -count=1` → **ok**；修前 RED 已留痕（负向对照）；另修 raw 单列（`begin_raw`，analytics 22 处 `db.Raw/Exec` 用） |
 | T-02 | **真实 ORM 查询在 SkyWalking UI 出 span**（修前 0 → 修后 >0） | [A] | 起栈触发一次 `.WithContext(ctx)` 的 ORM 查询 → SkyWalking UI/GraphQL 查询 trace 含 `gorm.query` | UI 查询结果/截图（**约束⑤硬证据**） |
 | T-03 | Redis 埋点接线：BFF 装配 `InitRedis` + 真 Redis 命令出 span | [A] | 装配断言（BFF main 调用点存在）+ 起栈后 Redis 命令出 `redis.GET` span | 单测 + UI span |
-| T-04 | HTTP 出站 `TracingRoundTripper`：建 exit span + 注入 `sw8` | [A] | 单测（httptest server 收 `sw8` 头非空 + span 产生）；**覆盖清单核对**（ai aiclient×3 / http_analyzer / llm_fuser / BFF downstream） | 单测输出 |
+| T-04 | HTTP 出站 `TracingRoundTripper`：建 exit span + 注入 `sw8` | [A] | 单测（httptest server 收 `sw8` 头非空 + span 产生）；**覆盖清单核对**（ai aiclient×3 / http_analyzer / llm_fuser / BFF downstream） | ⚙️ 2026-10-14：**组件 + 单测已落地**（`http_tracing.go` + `http_tracing_test.go` 6 用例全绿）；**各处接线未做**（下一轮） |
 | T-05 | Kafka DLQ 生产建 span（ai / analytics） | [A] | 单测：dlq 发布路径建 `CreateExitSpan` | 单测输出 |
 | T-06 | fusion 两指标：**接线**（生产路径递增）**或删除定义** | [M] | 按 D-03 结论：接线 → 单测断言 worker 路径递增；删 → 断言定义已移除且无悬空引用 | D-03 结论 + 单测 |
 | T-07 | web-bff `SetTracer` **对齐**（含纳入守卫）**或记录不设原因** | [M] | 按 D-04：对齐 → 扩展 `svc_wiring_test.go` 含 BFF；不设 → 文档记录 | D-04 结论 + 守卫 |
-| T-08 | 无 ctx 边界：ORM/HTTP 调用无 ctx 时**不硬造根 span** | [A] | 验证 go2sky `CreateExitSpanWithContext` 无父 span 时语义（不建 span/noop）；守卫断言之 | 单测输出 |
+| T-08 | 无 ctx 边界：ORM/HTTP 调用无 ctx 时**不硬造根 span** | [A] | 验证 go2sky `CreateExitSpanWithContext` 无父 span 时语义（不建 span/noop）；守卫断言之 | ✅ 2026-10-14：查实 go2sky 默认采样=1.0 ⇒ 无父 span 会**新建根 trace**；已在 `createExitSpan` 加 `ActiveSpan(ctx)==nil` 守卫；单测 `NoSw8_WhenNoParentSpan` 覆盖（HTTP 侧），GORM/Redis 同受该守卫保护 |
 
 ### B 组 · 面板/告警**被真正消费**
 

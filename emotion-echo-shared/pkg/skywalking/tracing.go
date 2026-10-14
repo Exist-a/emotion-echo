@@ -24,6 +24,14 @@ func createExitSpan(ctx context.Context, tgr *go2sky.Tracer, name, peer string) 
 	if tgr == nil {
 		return func(...EndOption) {}
 	}
+	ctx = contextOrBg(ctx)
+	// CL-01 约束③ / T-08：**仅当 ctx 已带父 span 时才建 ExitSpan**。
+	// go2sky 默认采样率=1.0（NewDynamicSampler(1)），ctx 无父 span 时会
+	// **新建根 trace**（"硬造根 span"）—— 会为无 ctx 的调用（后台任务等）刷出
+	// 大量孤立 trace。故先探测父 span，无则直接 noop（请求/查询照常执行）。
+	if go2sky.ActiveSpan(ctx) == nil {
+		return func(...EndOption) {}
+	}
 
 	// Use CreateExitSpanWithContext 以拿到带 span 的 ctx
 	span, _, err := tgr.CreateExitSpanWithContext(ctx, name, peer, func(_, _ string) error {
