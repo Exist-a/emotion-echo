@@ -59,9 +59,11 @@ describe('messageCache 契约（CL-05 Phase 2）', () => {
   it('Dexie schema 必须逐项声明缓存在用的索引（源码级契约）', () => {
     // 精确到"逗号分隔的索引条目"，否则 [sessionId+sendTime] 会让裸 'sendTime' 的
     // 子串断言永真（假绿）。
-    const spec = DB_SRC.match(/messages:\s*'([^']+)'/)
-    expect(spec, 'db.ts 应声明 messages 的 stores 规格').toBeTruthy()
-    const indexes = (spec![1] ?? '').split(',').map((s) => s.trim())
+    // ⚠️ 取**最后一份**声明：Dexie 每个 version 都要重述完整 schema，
+    // 生效的是最高版本那份（v1 那份是升级起点，不是最终索引集）。
+    const specs = [...DB_SRC.matchAll(/messages:\s*'([^']+)'/g)].map((m) => m[1] ?? '')
+    expect(specs.length, 'db.ts 应至少声明一份 messages 规格').toBeGreaterThan(0)
+    const indexes = specs[specs.length - 1]!.split(',').map((s) => s.trim())
     expect(indexes, `实际索引：${indexes.join(' | ')}`).toEqual([
       'id',
       'sessionId',
