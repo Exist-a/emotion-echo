@@ -4,7 +4,7 @@ title: Prompt 组装层 — 执行记录
 type: report
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（Phase 0 基线取证 + **Phase 1 统一组装层落地**（3/16 测试点 PASS）；阶段未收口 —— 余 12 点在 Phase 2~7）
+last-updated: 2026-10-14（Phase 0 基线 + Phase 1 统一组装层 + **Phase 2 历史注入**（8/16 测试点 PASS）；阶段未收口 —— 余 6 点 + 人可见钉在 Phase 3~7）
 ---
 
 # CL-04 · Prompt 组装层 — 执行记录（report）
@@ -164,16 +164,63 @@ messages=2 model=deepseek-chat   ×3        ← 与 Phase 0 基线一致：仍�
 即"worktree 建镜像 + 共享目录 up 容器"两步法可行 —— 这是并行轨在 worktree 里验证 Go 改动的可行做法（已回填 CL-F-07 用途）。
 
 
-### 3.6 测试点总表（16 点，逐点状态）
+### 3.6 Phase 2：同会话历史注入 — PASS
+
+**本阶段 [M] 参数（用户 2026-10-14 裁定）**：滑动窗口**默认最近 10 条 / 上限 20 条**（配置夹在 1..20，token 预算只缩不扩）；
+token 预算硬顶 **2000**（中文按 1 字 ≈ 1 token 估算，不引 tokenizer —— plan §3.3"只需防爆"）。
+另设**当前轮输入上界 4000 rune**（防输入炸弹的工程兜底，非产品参数；超出按 rune 边界截断 + WARN）。
+
+**实现**：新增 `internal/handler/prompt_history.go`；`assembleMessages` 结构变为
+`[system] + [历史(时间正序)] + [当前 user]`。取数复用 chat-svc `ListMessages(cursor=0, limit=上限+1)`。
+
+RED（先红）：
+
+```text
+$ go test ./internal/handler/ -run TestHistory -count=1
+prompt_history_test.go:84:18: undefined: maxHistoryMessages
+prompt_history_test.go:175:24: undefined: defaultHistoryMessages
+prompt_history_test.go:198:24: undefined: estimateTokens
+... FAIL [build failed]
+```
+
+GREEN（单测 9 组）：
+
+```text
+--- PASS: TestHistory_InjectedInChronologicalOrderBetweenSystemAndCurrentUser
+--- PASS: TestHistory_DoesNotDuplicateCurrentTurn          ← 前端"先落库再打"⇒ 最新一条即当前轮，按内容去重
+--- PASS: TestHistory_ExcludesFileEmptyAndUnknownRoles     ← file 走 Files 通道 / tool / 空白不进历史
+--- PASS: TestHistory_NoHistorySignals_YieldsExactlyTwoMessages（5 子例：无会话/无来源/空/报错/去重后空）
+--- PASS: TestHistory_WindowKeepsNewestTenByDefault        ← 25 条里取最新 10 条
+--- PASS: TestHistory_TokenBudgetTrimsOldestFirst          ← 3600 token ⇒ 从最旧端裁到 ≤2000
+--- PASS: TestHistory_BudgetNeverDropsBelowOneTurn         ← 单条即超预算也只裁到"最近 1 轮"
+--- PASS: TestHistory_UserContentClampedAtRuneBoundary     ← 4500 rune → 4000，UTF-8 不裂
+--- PASS: TestHistory_UserContentUntouchedWhenWithinLimit  ← 未超上界逐字透传（含首尾空白）
+```
+
+**运行时决定性证据（重建镜像 + force-recreate 后 3 轮真实对话）**：
+
+```text
+$ node evidence/phase0-capture.mjs        （输出：evidence/phase2-runtime-verify.txt）
+turn1/2/3: persist=200 stream=200 replyChars=57/94/114
+
+$ docker logs --since 3m emotion-llm-service | grep "ChatCompletion request"
+messages=2 model=deepseek-chat   ← 第 1 轮（无历史 / 当前轮去重后为空）
+messages=4 model=deepseek-chat   ← 第 2 轮（system + u1 + a1 + u2）
+messages=6 model=deepseek-chat   ← 第 3 轮（system + 4 条历史 + u3）
+```
+
+⇒ **历史真的进了 prompt**（Phase 0 基线是"三轮恒 2"）。窗口 10 / 预算 2000 在此规模未触发，符合预期。
+
+### 3.7 测试点总表（16 点，逐点状态）
 
 | # | 测试点 | 判定 | 本轮状态 |
 |---|---|---|---|
 | T-1 | 组装层零回归（逐字等于旧输出） | [A] | ✅ **PASS**（§3.5，golden 字面量 6 例） |
 | T-2 | 段顺序固定 + 护栏后置 | [A] | ✅ **PASS**（§3.5，段序 6 例 + 2 条不变量） |
-| T-3 | 历史注入生效（时间正序） | [A] | 未执行（Phase 2） |
-| T-4 | 单轮不多喂（长度=2） | [A] | 未执行（Phase 2） |
-| T-5 | 预算裁剪（至少保 1 轮） | [A] | 未执行（Phase 2） |
-| T-6 | userContent 上界（rune 安全） | [A] | 未执行（Phase 2） |
+| T-3 | 历史注入生效（时间正序） | [A] | ✅ **PASS**（§3.6 单测 + 运行时 `messages=2→4→6`） |
+| T-4 | 单轮不多喂（长度=2） | [A] | ✅ **PASS**（§3.6，5 子例） |
+| T-5 | 预算裁剪（至少保 1 轮） | [A] | ✅ **PASS**（§3.6，2 例：裁到 ≤2000 / 单条超预算仍保 1 轮） |
+| T-6 | userContent 上界（rune 安全） | [A] | ✅ **PASS**（§3.6，截断 4500→4000 + 未超时逐字透传） |
 | T-7 | 参数真下发（Temperature/MaxTokens） | [A] | 未执行（Phase 3） |
 | T-8 | 两处调用点收敛（单一组装函数） | [A] | ✅ **PASS**（§3.5，源码扫描 + 2 调用点） |
 | T-9 | 配置化 + 三处人格文案一致性 | [A] | 未执行（Phase 4） |
@@ -182,14 +229,17 @@ messages=2 model=deepseek-chat   ×3        ← 与 Phase 0 基线一致：仍�
 | T-12 | 死路径清零（useAIStream/usePrompt） | [A] | 未执行（Phase 5） |
 | T-13 | 契约对齐（无静默丢弃字段） | [A] | 未执行（Phase 6） |
 | T-14 | IAB 多轮"记得上文" | [V] | 未执行（Phase 7） |
-| T-15 | 负向对照（关历史⇒复现无记忆） | [A] | 未执行（Phase 2/7） |
+| T-15 | 负向对照（关历史⇒复现无记忆） | [A] | ✅ **PASS**（§3.6，`NoHistorySignals` 5 子例含"来源报错/去重后为空"⇒ 退回两条） |
 | T-16 | MaxTokens/Temperature 取值 | [M] | ✅ **已裁定**（1024 / 0.7，用户 2026-10-14） |
 
 ## §4 结论
 
 - **Phase 0 完成**：运行时证据支持"多轮＝无记忆单轮"（3 轮对话 / 会话 6 条消息 / prompt 恒 2 条 / 真实 deepseek 上游）。
 - **Phase 1 完成**：统一组装层落地，**行为逐字不变**（T-1 golden 6 例）；两处内联调用点收敛为单一组装点（T-8）。
-- **阶段状态**：`in-progress`（**未收口**）。测试点 **3/16 有 PASS 结论**（T-1/T-2/T-8），另有 T-16 已由用户裁定；其余 12 点在 Phase 2~7。
+- **Phase 2 完成**：同会话历史注入（窗口 10/上限 20、预算 2000、当前轮去重、file 不进历史、上界保护）；
+  运行时证据 `messages=2→4→6` —— **"多轮＝无记忆单轮"这一核心缺陷已消除**。
+- **阶段状态**：`in-progress`（**未收口**）。测试点 **8/16 有 PASS 结论**（T-1/T-2/T-3/T-4/T-5/T-6/T-8/T-15）+ T-16 已裁定；
+  余 6 点（T-7/T-9/T-10/T-11/T-12/T-13）+ 人可见钉 T-14 在 Phase 3~7。
 - **环境遗留**（交付给下一轮）：
   - dev 栈**在跑**（17 容器）；`xtts` 按用户指示**已停**（TTS 链路预期 502，文本链路不受影响）；
   - dev mode 锁 `deploy/.devmode-session`（owner `lane-cl-a`，until 2026-10-14 12:00）→ **收工须删**；
