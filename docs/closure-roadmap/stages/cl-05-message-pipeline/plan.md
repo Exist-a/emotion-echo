@@ -4,7 +4,7 @@ title: 消息链路闭环（会话列表游标化 + 本地缓存接线 + 状态�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档 → **Phase 1 完成**（T-13 PASS）→ **Phase 2a 完成**（T-9/T-10 PASS：RED 3 红 → GREEN 11/11 + 全量 665/665）；并入账本继承项 `CL-F-10`/`CL-F-11` 为 T-21/T-22（Phase 8）；更正 `tdd-gate` 纪律写法；**修正 §A.1 关于 `where({sessionId,status})` 会抛错的错误断言**（实测不抛，见 report §3.3））
+last-updated: 2026-10-14（建档 → **Phase 1 完成**（T-13）→ **Phase 2a 完成**（T-9/T-10）→ **Phase 2b 完成**（T-11/T-12；全量 673/673 + typecheck 绿）；用户裁定 `CL-D-11`~`CL-D-14` 并锁定范围（[M] 全清）；修正 §A.1 错误断言；补 §6 R12 合并语义陷阱）
 depends-on: []           # 不依赖任何阶段；**不阻塞于 T1**（CL-01/02/03）
 blocks: []
 gate: []                 # 无开工前阻塞决策门；3 个 [M] 见 §7
@@ -156,8 +156,8 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | T-8 | **旧 ASC 死方法清零**：`Order("id ASC")` 的生产调用方 = 0（删或归档，口径对齐 CL-02） | [A] | `grep` 断言 + 架构测试 | 待执行 |
 | T-9 | **Dexie 索引修复**：`version(2)` 后 `getPendingMessages` / `getFailedMessages` / `trimOldMessages` **不再抛错** | [A] | vitest + `fake-indexeddb`（**修前先红**） | ✅ **PASS**（Phase 2a，2026-10-14）—— 钉 `app/utils/messageCache.test.ts` **11/11 绿**；RED 实测 3 项失败，**其中只有 `trimOldMessages` 是真崩溃**（`SchemaError: KeyPath sendTime on object store messages is not indexed`）。⚠️ **本阶段修正**：`getFailedMessages`/`getPendingMessages` 实测**不抛**（详见 §A.1）；补 `[sessionId+status]` 属效率/契约改进。见 `report.md §3.3` |
 | T-10 | **缓存往返**：`saveMessage` → `getLatestMessages`/`getMessagesBySession` 往返一致（含分页 cursor 语义） | [A] | vitest + `fake-indexeddb` | ✅ **PASS**（Phase 2a，2026-10-14）—— 往返 / 批量 `saveMessages` / `updateMessageStatus` / `getMessagesBySession` 游标分页（两页不重不漏）均绿，见 `report.md §3.3` |
-| T-11 | **读加速**：`switchSession` 先渲染本地快照，再以服务端覆盖/合并 | [A] | store 单测（断言先读缓存后发请求） | 待执行 |
-| T-12 | **合并策略**：服务端覆盖同 id；**本地独有 `failed/pending` 不被服务端快照抹掉** | [A] | store 单测（构造本地 failed + 服务端无该条） | 待执行 |
+| T-11 | **读加速**：`switchSession` 先渲染本地快照，再以服务端覆盖/合并 | [A] | store 单测（断言先读缓存后发请求） | ✅ **PASS**（Phase 2b，2026-10-14）—— 在"发请求那一刻"采样 `currentMessages.length` = 1（证明快照先渲染）；写穿（`loadMoreMessages` 页 / `sendMessage` 行）落缓存；**降级**（缓存读失败不挡服务端）与**跨会话不残留**各有钉。钉 `app/stores/__tests__/message.cache.test.ts` 8/8 绿，见 `report.md §3.4` |
+| T-12 | **合并策略**：服务端覆盖同 id；**本地独有 `failed/pending` 不被服务端快照抹掉** | [A] | store 单测（构造本地 failed + 服务端无该条） | ✅ **PASS**（Phase 2b，2026-10-14）—— 服务端同 id 覆盖；本地 `failed`(99) 与服务端行(1) 并存且 `status` 保持 `failed`；`sortedMessages` 仍按 `sendTime` 升序。⚠️ 实测暴露设计要点：**分页追加不能复用快照替换**（见 §6 R12），已拆成 `mergeServerMessages` / `appendServerPage` 两个纯函数，见 `report.md §3.4` |
 | T-13 | **状态机单一来源**：`MessageStatus` 全仓**仅一处定义**、取值集合唯一 | [A] | 架构测试（`grep` 定义点）+ 类型测试 | ✅ **PASS**（Phase 1，2026-10-14）—— 钉 `app/types/conversation/message-status-single-source.architecture.test.ts` **5/5 绿**；**RED 实测 3 项失败**（2 处定义 / canonical 仅 4 值 / 2 处内联联合），逐项见 `report.md §3.1` |
 | T-14 | **乐观插入**：发送瞬间用户消息 `status === 'sending'`（**现恒 `'sent'` ⇒ RED**）；服务端返回后置 `sent` + 换真实 id | [A] | store 单测 | 待执行 |
 | T-15 | **非法转移被拒**：`sent → sending` 等非法转移不生效 | [A] | 转移表单测 | 待执行 |
@@ -189,7 +189,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 |---|---|---|---|
 | **0** | **基线取证**：起栈（排队）→ curl 走网关 `:19080` 取消息/会话两页现状 → DB 比对；确认 `CHAT_TRANSPORT` 实际值 | 🔴 | —（人工产证据；**未做，见 §A.4**） |
 | **1** | **类型与契约收敛（无行为变更）**：`MessageStatus` 收敛到**单一来源**；补 `cursor/hasMore` 类型；`messageCursor`/`cursor` 是否需导出按需定 | 🟢 | T-13（现状两处定义取值集合不一致 ⇒ **红**）—— ✅ **已完成 2026-10-14**（RED 3 项失败 → GREEN 5/5；全量 vitest 654/654 + typecheck 绿；证据 `report.md §3.1`） |
-| **2** | **缓存层修复 + 接线**：① `db.ts` 升 `version(2)` 补 `[sessionId+status]` + `sendTime` 索引；② 修 `messageCache.ts`（索引可用后不抛错，补 `markFailed/incRetry` 辅助）；③ `stores/message.ts` 接线（`switchSession` 快照→服务端→`saveMessages`；`loadMoreMessages` 落页；`sendMessage` 落条）；④ 合并策略：服务端覆盖同 id、本地 `failed/pending` 保留 | 🟢 | **①（2a）✅ 已完成 2026-10-14**（RED 3 红 → GREEN 11/11 + 全量 665/665；证据 `report.md §3.3`）。**②③④（2b）未开始** —— T-11 / T-12 |
+| **2** | **缓存层修复 + 接线**：① `db.ts` 升 `version(2)` 补 `[sessionId+status]` + `sendTime` 索引；② 修 `messageCache.ts`（索引可用后不抛错，补 `markFailed/incRetry` 辅助）；③ `stores/message.ts` 接线（`switchSession` 快照→服务端→`saveMessages`；`loadMoreMessages` 落页；`sendMessage` 落条）；④ 合并策略：服务端覆盖同 id、本地 `failed/pending` 保留 | 🟢 | **①（2a）✅ 已完成**（RED 3 红 → GREEN 11/11，`report.md §3.3`）；**③④（2b）✅ 已完成**（RED 6 红 → GREEN 8/8 + 全量 673/673 + typecheck 绿，`report.md §3.4`）—— T-11 / T-12 PASS。**② 的 `markFailed/incRetry` 辅助留到 Phase 4**（重试逻辑落地时才有调用方，避免造无主函数） |
 | **3** | **状态机 + 乐观插入**：单一转移表（`sending→sent/failed`、`streaming→sent/failed`、`failed→sending`、`sent`/`truncated` 终态 + 非法转移守卫）；用户消息先插 `sending`（temp id = `clientMsgId`），服务端返回后换真实 id 并置 `sent` | 🟢 | **T-14（发送瞬间恒 `'sent'` ⇒ 红）** + T-15 |
 | **4** | **重试 + 断网重扫**：`retryCount` 自增 + 指数退避 `min(2^n×1000ms,30s)` + `MAX=3`；`stores/message.ts` 新增 `retryFailedMessages()`；`plugins/init.ts` 把 `:105-111` 的 TODO 换成真实调用（`online` 事件 + 启动时 `navigator.onLine`）；**复用 `clientMsgId`** | 🟢 | T-16 / T-17 / T-18（现状 `retryFailedMessages` 无定义 ⇒ **红**） |
 | **5** | **会话列表游标化**（D-B=B1，**需与 C 轨握手 `proto/**`**）：proto `ListConversationsRequest` 增游标字段 → chat-svc `ListConversations` 复合游标 `(updated_at, id)` → BFF `listConversations` 读游标 → 前端 `conversation.ts` 对齐 | 🟢 编码 / 🔴 运行 | T-5（Go 表驱动：同 `updated_at` 边界）+ T-4 / T-6 |
@@ -245,6 +245,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | R9 | **改完 Go 未重建镜像 ⇒ 验收假绿** | 历史高频坑 | RUNBOOK §2 铁律；H6：worktree 构建镜像 + 共享目录 `up` 两步 |
 | R10 | **登记表与阶段 PR 混在一起（P1/P2 复发）** | 三轨并行的实证问题 | 本轨**严格分离**：登记走 `docs/cl-05-registry`，阶段 PR 只含 `stages/cl-05-message-pipeline/**` + 来源计划 front-matter |
 | R11 | **`fake-indexeddb` 是新 devDep** | 触 `package.json`（脊柱，追加式） | 按契约 §1.2「追加式」加行；PR 描述显式标注；与 B/C 无同依赖冲突 |
+| R12 | **合并策略"一把梭"会把分页旧页整片丢掉** | "服务端快照替换"（服务端给的是**权威全集**）与"分页追加"（服务端只给**一页**）语义相反。若共用一个合并函数：第 2 页不含第 1 页的行 ⇒ 替换式合并会把已加载的旧页全删，表现为"上滚加载更早消息后，下方消息消失" | 已拆成两个具名纯函数并各自带注释与钉：`mergeServerMessages`（快照替换）/ `appendServerPage`（分页追加）；Phase 3 起复用同一套 |
 
 ---
 

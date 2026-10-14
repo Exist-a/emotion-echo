@@ -28,7 +28,7 @@ plan: plan.md
 | **0** 基线取证 | ⛔ 未开始（🔴） | — | — | 需 dev 栈；`deploy/.devmode-session` 由 **B 轨**持锁（至 18:00），D 轨在契约 §3.1 **排第 4**（B → C → D） |
 | **1** 类型与契约收敛 | ✅ **完成** | `2a2290e`(RED) → `af2eba9`(GREEN) | **T-13 PASS** | 见 §3.1 |
 | **2a** 缓存层：Dexie 索引 | ✅ **完成** | `6328f57`(RED) → `e8be055`(GREEN) | **T-9 / T-10 PASS**（+ G8 治理） | 见 §3.3 |
-| **2b** 缓存层：store 接线 | ⬜ 未开始（🟢 可立即开工） | — | T-11、T-12 | 读加速 / 写穿 / 合并策略 |
+| **2b** 缓存层：store 接线 | ✅ **完成** | `6328f57`… → `2495727`(GREEN) | **T-11 / T-12 PASS** | 见 §3.4 |
 | 3 状态机 + 乐观插入 | ⬜ 未开始（🟢） | — | T-14、T-15 | |
 | 4 重试 + 断网重扫 | ⬜ 未开始（🟢） | — | T-17、T-18 | |
 | 5 会话列表游标化 | ⛔ 阻塞（待 C 轨 `proto/**` 握手答复） | — | T-4/T-5/T-6 | 已向 C 轨 PR #214 发握手请求 |
@@ -144,12 +144,54 @@ $ pnpm typecheck                                 → 无 error
 ⇒ 结论：补 `[sessionId+status]` 是**效率/契约**改进（走索引而非全会话扫描），**不是**修崩溃；本阶段唯一真崩溃点只有 `trimOldMessages`。
 这一条已回填 plan §A.1 / §2 T-9，并作 §5 经验 5 留档。
 
+### §3.4 Phase 2b · T-11 / T-12（本地缓存接进消息链路）
+
+**RED（改 `stores/message.ts` 之前）**
+
+```
+$ pnpm vitest run app/stores/__tests__/message.cache.test.ts
+ Test Files  1 failed (1)      Tests  6 failed | 2 passed (8)
+
+  ✗ 读加速              → 发请求时 currentMessages 长度 0（根本没读快照）
+  ✗ 合并·服务端覆盖同 id  → expected [ 1 ] to deeply equal [ 1, 99 ]（本地 failed 被丢）
+  ✗ 合并·排序            → expected [ 1, 2 ] to deeply equal [ 99, 1, 2 ]
+  ✗ 写穿·loadMoreMessages → 缓存 []（期望 [7]）
+  ✗ 写穿·sendMessage      → 缓存 []（期望 [11]）
+  ✗ 快照不污染（切会话）   → 会话 B 快照为空
+  ✓ 降级（缓存读失败不挡服务端）—— 现状本就无缓存调用 ⇒ **"碰巧通过"**，GREEN 后仍要保住
+  ✓ getFailedMessages 查询
+```
+
+**GREEN**
+
+```
+$ pnpm vitest run app/stores/__tests__/message.cache.test.ts → 8 passed (8)
+$ pnpm vitest run（全量）                                    → Test Files 80 passed (80) / Tests 673 passed (673)
+$ pnpm typecheck                                             → 无 error（首轮报过 2 处 TS2345，见下）
+```
+
+**改动**（`stores/message.ts` +103/-18）
+
+| 能力 | 实现 |
+|---|---|
+| 读加速 | `switchSession` 先 `getLatestMessages(sessionId, 50)` 渲染快照，再调 `loadMoreMessages()`；**读失败只 `console.warn` 并降级**（缓存是加速不是依赖）；`await` 期间会话被切走则不写入旧快照 |
+| 写穿 | `loadMoreMessages` 拉到的页 + `sendMessage` 成功的行（含**幂等命中**分支）落缓存；缓存写失败不影响加载/发送结果 |
+| 合并 A | `mergeServerMessages(local, server)` —— 快照替换：服务端覆盖同 id，本地独有 `failed`/`sending` 保留 |
+| 合并 B | `appendServerPage(existing, page)` —— 分页追加：按 id 去重、同 id 以服务端为准 |
+
+**类型层摩擦（已按用户裁定处理）**：`messageCache` 的入参与服务端行是两套类型（`sender:'user'\|'ai'` vs `'user'\|'AI'`、`contentType` 取值集不同）⇒ 新增 `toCacheRow()` 断言适配并注明"Phase 3 收敛（`CL-D-13`）后应删"。这是 `CL-F-13` / `CL-D-12` 的现场记录，不是新问题。
+
+**typecheck 首轮 2 处 `TS2345`**（在**测试**里）：`byId.get(1)` —— `api.MessageItem.id` 类型是 `string`，而用例传的是 `number`，严格索引检查判红。已统一 `String(m.id)` 归一，并保留一句注释说明"类型说 string、跑起来是 number"的断言漂移风险。
+
+**分流说明**：plan §3 Phase 2 的 ② "补 `markFailed`/`incRetry` 辅助"**刻意不在本轮做** —— 那是重试逻辑的配套，Phase 4 落地时才有调用方；现在写就是"造无主函数"（anti-patterns 孤儿产出物一类）。
+
 ## §4 结论
 
 - **T-13 = PASS**（§3.1）：`MessageStatus` 现为全仓唯一来源，取值集合 5 值，两处历史重复点改为引用。
 - **T-9 / T-10 = PASS**（§3.3）：Dexie 缓存索引补齐（v1→v2 加法式升级）；缓存往返/分页/治理共 11 用例绿。
-- 两轮均为"无行为变更 / 只加索引"的保守改动：全量 654→665 全绿 + typecheck 绿 ⇒ **零回归**。
-- 其余 19 个测试点**未执行**；阶段整体状态仍为 `in-progress`，**不得宣布 done**（§2 中 🔴 项还一条运行时证据都没有）。
+- **T-11 / T-12 = PASS**（§3.4）：缓存接进真实链路（读加速 + 写穿 + 双合并策略），8 用例绿。
+- 三轮都是保守改动（类型收敛 / 只加索引 / 只加缓存读写与纯函数合并）：全量 **654 → 665 → 673** 全绿 + `typecheck` 绿 ⇒ **零回归**。
+- 其余 **17** 个测试点**未执行**；阶段整体状态仍为 `in-progress`，**不得宣布 done**（§2 中 🔴 项还一条运行时证据都没有）。
 - **[M] 决策已全部落定（2026-10-14 用户）**：4 项均按推荐 ⇒ 记为 `CL-D-11`~`CL-D-14`（独立小 PR [#221](https://github.com/Exist-a/emotion-echo/pull/221) 已合 main）。结论：SSE **不**落缓存；前端 DTO 字段**只登记不动**；`MessageWithStatus` 三形态**顺延 Phase 3**；`CL-F-10`/`CL-F-11` **按原计划排 Phase 8**。⇒ 阶段范围就此锁定，无待裁定项。
 - 下一步（🟢，不需栈）：**Phase 2b**（`stores/message.ts` 的读加速 / 写穿 / 合并策略 → T-11 / T-12），随后 Phase 3（状态机 + 乐观插入）、Phase 4（重试 + 断网重扫）。
 
@@ -164,3 +206,5 @@ $ pnpm typecheck                                 → 无 error
 7. **H4 三查有盲区：它证明"我不会回退别人"，证明不了"我不会让别人撞车"**。本轮实测：我按 H2 走独立小 PR（[#221](https://github.com/Exist-a/emotion-echo/pull/221)）登记 4 项决策，**H4 三查全过**（0 冲突 / 0 删除行），但合并后按 **H8** 复验发现 **C 轨 #214 与 main 冲突** —— 因为 C 轨在 `decisions.md` 的 `CL-D-07` 行之后追加 `CL-D-08~10`，我在**同一锚点**追加 `CL-D-11~14`，两侧语义零重叠却**插入点相同**。
    ⇒ 已登 **`CL-F-14`**（归属 CL-00），并按 **H1 上报而非代改**（未 rebase、未碰 C 轨分支，只在 #214 留诊断 + 建议解法）。教训：对**追加式共享文档**，合并前还应往前想一步"**下一轨会不会撞在同一锚点**"；结构性解法 = 每轨一片（`decisions.d/<track>.md`）。
 8. **`pnpm add` 会连带跑 `nuxt prepare`**（输出里混着大量 "Duplicated imports … WARN"）——那些 WARN 是**仓库既有**的 auto-import 重复告警，与本次改动无关，别误读成自己引入的问题。
+9. **"合并"有两种相反语义，必须先拆开再写**（Phase 2b 最容易写错的一处）：服务端返回**权威全集**时用"替换式合并"（同 id 覆盖、本地独有项保留），返回**一页**时只能用"追加式合并"（按 id 去重追加）。两者共用一个函数就必然出事——第 2 页不含第 1 页的行，替换式会把已加载的旧页整片删掉，用户看到的是"上滚加载更早消息后，下面的消息没了"。本轨因此落成两个具名纯函数（`mergeServerMessages` / `appendServerPage`）各带注释，并写进 plan §6 R12。
+10. **`expect` 里传数字、类型里声明 string 会静默通过 vitest 但被 typecheck 拦**。本轮的 `byId.get(1)`（`id` 类型为 `string`）就是这种"测试绿、`pnpm typecheck` 红"的组合 ⇒ **vitest 与 typecheck 必须都跑**（web-test CI job 也是两步都跑）。
