@@ -63,6 +63,7 @@ related:
 |---|------|----------------|-------|------|------|
 | B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | **in-progress**（draft PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)；dev 栈**排队在 A 之后**） |
 | C | CL-02 gRPC 契约闭环 | `feat/cl-02-grpc-contract`（worktree `../Emotion-Echo-cl02`） | Lane-CL-C | 2026-10-14 | **in-progress**（draft PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)；🟢 Phase 先行，🔴 需栈 Phase 排队在 B 之后） |
+| D | CL-05 消息链路闭环 | `feat/cl-05-message-pipeline`（worktree `../Emotion-Echo-cl05`） | Lane-CL-D | 2026-10-14 | **in-progress**（draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；**🟢 先行**：Phase 1~4 全部不需栈；🔴 需栈 Phase 0/5~7 排队在 C 之后） |
 
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
@@ -80,6 +81,7 @@ related:
 | 1 | ~~A（CL-04）~~ | 已于 2026-10-14 阶段收口时**释放**（`deploy/.devmode-session` 已删） | ✅ **已释放**（Phase 0~7 全部完成：15/16 PASS + T-14 IAB 钉绿；B/C 排队位次不变） |
 | 2 | B（CL-01） | A 释放后（Phase 0 基线 / 8 采集 / 9 负向对照） | 排队中 |
 | 3 | C（CL-02） | B 之后（Phase 2 清除验证 / 4 接真 / 6 收口冒烟） | 排队中 |
+| 4 | D（CL-05） | C 之后（Phase 0 基线取证 / 5 会话游标运行验证 / 7 端到端+人可见钉） | 排队中 |
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |
 
 > **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
@@ -97,9 +99,16 @@ related:
 | 2026-10-14 | Lane-CL-C | `docs/closure-roadmap/{parallel-contract,roadmap}.md`、`docs/plans/grpc-deadlink-actualization.md` | C 轨开工：§三 登记占位（**并回填 A/B 两行**）+ CL-02 翻 in-progress + 来源计划 front-matter 同步 | ✅ |
 | 2026-10-14 | Lane-CL-C | **`proto/**`**（本 PR 暂未改；Phase 2/3 将改） | C 轨**预占声明**：本阶段是当前唯一计划改 `proto/**` 的轨（A/B 均不改）。其他轨若需改 proto，**先与本轨握手** | ⏳ 预占 |
 | 2026-10-14 | Lane-CL-A | `AGENTS.md`（§8.1 新增）、`docs/_meta/multi-track-parallelism.md`（新文件）、`docs/_meta/parallel-tracks.md`（加指针） | A 轨收口轮：把三轨并行暴露的**六类问题**（登记只活分支 / 多轨同改登记表 / **基于旧 main 的分支会回退别人已合内容** / worktree 缺 gitignored 运行态文件 / 两 worktree 共用镜像 tag 互相覆盖 / 本地守卫假红）落成**硬约束 7~10**（只在自己的分支与 PR 上工作 · 登记独立落地且 append-only · 合并前三查 · 共享 docker 资源隔离）+ 新增细则文档（含业界做法与出处）。按硬约束 8，本行**只追加**、不改他人行 | ✅ |
+| 2026-10-14 | Lane-CL-D | `docs/closure-roadmap/{parallel-contract,roadmap}.md` | D 轨开工：§三 登记占位 + §3.1 排 4 位 + CL-05 翻 in-progress。按 H2/条款 8，登记走**独立小 PR**（本 PR），**不含**阶段产物；本行只追加、不改他人行 | ✅ |
+| 2026-10-14 | Lane-CL-D | **`proto/**`（`proto/chat.proto`）** | D 轨**握手申请**：CL-05 Phase 5「会话列表游标化」（用户 2026-10-13 已定 D-B=B1 游标）需在 `ListConversationsRequest` 增游标字段；**与 C 轨 `proto/**` 预占冲突**。请求：① C 轨确认其 Phase 2/3 改 proto 的**时间窗与文件**；② 约定**串行**（谁先谁改）。D 轨在 C 轨答复前**不动 `proto/**`**，先把 🟢 Phase 1~4 做完 | ⏳ **待 C 轨答复** |
+| 2026-10-14 | Lane-CL-D | `emotion-echo-chat-svc/internal/grpcserver/chat_server.go`、`emotion-echo-web-bff/internal/downstream/chat{,_grpc}.go` | D 轨握手：与 C 轨**同名文件**（C 轨死链治理已删/归档 `chat_server.go` 的 `StreamMessages` 桩；D 轨要改其中的 `ListMessages`/`ListConversations` 透传 + `chat.go` 的 client 接口）。依 §1.2「同名文件串行」⇒ 声明排队，**D 轨等 C 轨该文件落地后再改** | ⏳ **待排队** |
 
 > **C 轨另注**：本轨与 A/B 在 `emotion-echo-web-bff/internal/downstream/` **同目录不同文件**（A 占 `llm*.go`、B 占 `ai.go` 等），
 > 依 §1.2"同名文件串行、不同文件可并"**不构成阻塞**；仅 `proto/**` 为独占脊柱（上表已预占）。
+>
+> **D 轨另注（2026-10-14）**：本轨主文件面（前端 `stores/utils/composables/pages` + chat-svc `internal/{types,repository,logic}` + BFF `handler/chat_handler.go`）
+> 与 B/C 两轨**不重叠**；与 C 轨仅在 `proto/**`、`chat_svc/internal/grpcserver/chat_server.go`、BFF `downstream/chat*.go` 三处相交（上表已声明排队）。
+> 与 **A 轨（CL-04，已 done）** 同碰前端但**不同文件**（A 占 `composables/{useAIStreamHandler,useAIStream,usePrompt}.ts`，D 占 `stores/**`、`utils/**`、`pages/**`、`plugins/init.ts`）——A 已收口，不再构成并发。
 
 ## 五、开工前置检查（照做）
 
