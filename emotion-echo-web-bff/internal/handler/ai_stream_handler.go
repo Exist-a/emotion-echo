@@ -57,23 +57,11 @@ type emotionSource interface {
 // maxFileAttachments 每次 ai/stream 注入的最新文件消息上限（控制拉取/抽取开销）
 const maxFileAttachments = 2
 
-// baseSystemPrompt 基础人设（无画像时的完整 prompt）
-const baseSystemPrompt = "你是一个温柔、共情的情绪疏导陪伴者。用中文简短回应（2-3 句话），表达理解、不评判、鼓励继续说。"
-
-// personalityDimensionLabels 五维度中文标签（顺序即画像摘要顺序）
-var personalityDimensionLabels = []struct {
-	Key   string
-	Label string
-}{
-	{"openness", "开放性"},
-	{"conscientiousness", "尽责性"},
-	{"extraversion", "外向性"},
-	{"agreeableness", "宜人性"},
-	{"neuroticism", "神经质"},
-}
-
 // system prompt 的组装已收敛到 `prompt_assembly.go`（CL-04 Phase 1，缺陷 11）：
 // 段序、段文案与"无信号时逐字回落基础人设"的不变量都在那一处，两条上游路径共用。
+//
+// **文案与契约常量**（基础人设 / 适配表 / 情绪段句式 / 中文情绪映射）已集中到
+// `prompt_templates.go`（CL-04 Phase 4）；本文件只留"怎么拼"的行为。
 // 相关契约：D-14（face/voice 情绪上下文，E2E-16 plan §B.10；三句护栏：不点破来源 /
 // 不贴标签 / 不过火）、E2E-F-122（payload 空时回落会话情绪历史，前端优先）、
 // E2E-F-95（画像缺时不编造、静默回落基础人设）。
@@ -87,7 +75,7 @@ func buildEmotionHistoryContext(emotion string) string {
 	if emotion == "" {
 		return ""
 	}
-	return "情绪上下文：对方最近的状态多为" + emotionChineseLabel(emotion) + "。请让回应贴合对方最近的状态。"
+	return emotionSegmentPrefix + emotionHistoryPhrase + emotionChineseLabel(emotion) + emotionHistorySuffix
 }
 
 // parseConversationID 把请求体的 conversationId 字符串解析为 int64。
@@ -113,37 +101,12 @@ func buildEmotionContext(faceEmotion string, _ float64, voiceEmotion string, _ f
 	}
 	var parts []string
 	if faceEmotion != "" {
-		parts = append(parts, "对方此刻神情看起来"+emotionChineseLabel(faceEmotion))
+		parts = append(parts, emotionFacePhrase+emotionChineseLabel(faceEmotion))
 	}
 	if voiceEmotion != "" {
-		parts = append(parts, "对方语气听起来"+emotionChineseLabel(voiceEmotion))
+		parts = append(parts, emotionVoicePhrase+emotionChineseLabel(voiceEmotion))
 	}
-	return "情绪上下文：" + strings.Join(parts, "，") + "。请让回应贴合对方此刻的状态。"
-}
-
-// emotionChineseLabel 把英文情绪标签映射为中文（避免在 prompt 里出现英文枚举值）。
-func emotionChineseLabel(emotion string) string {
-	switch emotion {
-	case "happy":
-		return "愉快"
-	case "sad":
-		return "低落"
-	case "angry":
-		return "烦躁"
-	case "anxious":
-		return "不安"
-	case "neutral":
-		return "平静"
-	case "surprise":
-		return "惊讶"
-	case "fear":
-		return "紧张"
-	case "disgust":
-		return "不适"
-	default:
-		// 未知情绪 → 原样返回（不会泄漏系统术语）
-		return emotion
-	}
+	return emotionSegmentPrefix + strings.Join(parts, emotionPhraseJoiner) + emotionNowSuffix
 }
 
 // AIStreamHandler 是 /api/v1/ai/stream 的处理逻辑
