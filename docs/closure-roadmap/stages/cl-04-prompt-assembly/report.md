@@ -4,7 +4,7 @@ title: Prompt 组装层 — 执行记录
 type: report
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（Phase 0 基线 + Phase 1 统一组装层 + **Phase 2 历史注入**（8/16 测试点 PASS）；阶段未收口 —— 余 6 点 + 人可见钉在 Phase 3~7）
+last-updated: 2026-10-14（Phase 0 基线 + Phase 1 统一组装层 + Phase 2 历史注入 + **Phase 3 参数下发**（9/16 测试点 PASS）；阶段未收口 —— 余 5 点 + T-14 在 Phase 4~7）
 ---
 
 # CL-04 · Prompt 组装层 — 执行记录（report）
@@ -211,7 +211,53 @@ messages=6 model=deepseek-chat   ← 第 3 轮（system + 4 条历史 + u3）
 
 ⇒ **历史真的进了 prompt**（Phase 0 基线是"三轮恒 2"）。窗口 10 / 预算 2000 在此规模未触发，符合预期。
 
-### 3.7 测试点总表（16 点，逐点状态）
+### 3.7 Phase 3：生成参数真下发 — PASS
+
+**缺陷 3**：handler 从不给上游请求赋 `Temperature`/`MaxTokens` ⇒ 上游拿到零值 ⇒ **输出长度无上限**。
+
+**实现**：新增 `internal/handler/prompt_params.go`（**单一来源** `llmGeneration`，Go 常量集中 —— roadmap §4 定的载体口径）；
+两条上游路径都赋值；`downstream.LLMChatReq` 补 `Temperature`/`MaxTokens`（带 `omitempty`，未设即不发送）。
+
+RED → GREEN：
+
+```text
+$ go test ./internal/handler/ -run TestLLMParams -count=1
+prompt_params_test.go:68:3: unknown field Temperature in struct literal of type downstream.LLMChatReq
+prompt_params_test.go:69:3: unknown field MaxTokens ...
+FAIL [build failed]
+
+（实现后）
+--- PASS: TestLLMParams_SentOnGRPCPath              ← fake 捕获 0.7 / 1024 + 非零断言（缺陷 3 不复现）
+--- PASS: TestLLMParams_BothUpstreamPathsCarryThem  ← 两条路径都带（计数不依赖 gofmt 对齐）
+--- PASS: TestLLMParams_SerializedIntoUpstreamBody  ← LLMChatReq 序列化真出现 temperature/max_tokens
+--- PASS: TestLLMGRPCClient_StreamChat_MapsGenerationParamsIntoPB  ← 新增 pb 层回归钉
+```
+
+> **顺手补的一个空隙**：`llm_grpc_test.go` 的**文件头早已声称**覆盖 "消息映射（messages/model/temperature/max_tokens）"，
+> 但实际只断言了 `model`/`messages` —— 这正是缺陷 3（零值）长期没被门禁发现的原因。已补 pb 层断言钉。
+
+**运行时 + R1 长度张力核对**（§6 R1 要求"Phase 3 落地后核对是否变啰嗦"）：
+
+```text
+$ node evidence/phase0-capture.mjs      （输出 phase3-runtime-verify.txt）
+turn1/2/3: persist=200 stream=200 replyChars=70/63/90
+$ docker logs emotion-llm-service | grep "ChatCompletion request"  → messages=2/4/6（历史注入仍生效）
+
+$ node evidence/phase3-replylength.mjs 669     （读落库回复全文，零额外 LLM 调用）
+[ai] runes=86 句子数≈3   ← 第 1 轮
+[ai] runes=53 句子数≈2   ← 第 2 轮
+[ai] runes=78 句子数≈3   ← 第 3 轮
+```
+
+⇒ **回复仍是 2~3 句（53~86 字）**，与 Phase 0 基线（63/55/81）同量级 ⇒ **`MaxTokens=1024` 未使回复变啰嗦**
+（模型按 system 人设自我约束，上限没被触及）。§6 R1 的张力**在本样本上未出现**，无需复议。
+另：第 2/3 轮的回复明确在承接上文（"明明自己做过，一被盯着问…" / "这两个问题在你心里已经转了好几圈"）
+—— 历史注入的可读效果（T-14 的 IAB 正式判定仍在 Phase 7）。
+
+**附带发现（T-13 有用）**：读路径的 VM 字段是 `sender`（`"ai"`/`"user"`），写路径是 `role`（`"assistant"`）。
+不是 bug（是刻意的前端 VM），但属"统一字段集"要盘点的差异项。
+
+### 3.8 测试点总表（16 点，逐点状态）
 
 | # | 测试点 | 判定 | 本轮状态 |
 |---|---|---|---|
@@ -221,7 +267,7 @@ messages=6 model=deepseek-chat   ← 第 3 轮（system + 4 条历史 + u3）
 | T-4 | 单轮不多喂（长度=2） | [A] | ✅ **PASS**（§3.6，5 子例） |
 | T-5 | 预算裁剪（至少保 1 轮） | [A] | ✅ **PASS**（§3.6，2 例：裁到 ≤2000 / 单条超预算仍保 1 轮） |
 | T-6 | userContent 上界（rune 安全） | [A] | ✅ **PASS**（§3.6，截断 4500→4000 + 未超时逐字透传） |
-| T-7 | 参数真下发（Temperature/MaxTokens） | [A] | 未执行（Phase 3） |
+| T-7 | 参数真下发（Temperature/MaxTokens） | [A] | ✅ **PASS**（§3.7：handler 侧 3 钉 + pb 层 1 钉） |
 | T-8 | 两处调用点收敛（单一组装函数） | [A] | ✅ **PASS**（§3.5，源码扫描 + 2 调用点） |
 | T-9 | 配置化 + 三处人格文案一致性 | [A] | 未执行（Phase 4） |
 | T-10 | file_context 多附件全输出 | [A] | 未执行（Phase 5） |
@@ -238,8 +284,10 @@ messages=6 model=deepseek-chat   ← 第 3 轮（system + 4 条历史 + u3）
 - **Phase 1 完成**：统一组装层落地，**行为逐字不变**（T-1 golden 6 例）；两处内联调用点收敛为单一组装点（T-8）。
 - **Phase 2 完成**：同会话历史注入（窗口 10/上限 20、预算 2000、当前轮去重、file 不进历史、上界保护）；
   运行时证据 `messages=2→4→6` —— **"多轮＝无记忆单轮"这一核心缺陷已消除**。
-- **阶段状态**：`in-progress`（**未收口**）。测试点 **8/16 有 PASS 结论**（T-1/T-2/T-3/T-4/T-5/T-6/T-8/T-15）+ T-16 已裁定；
-  余 6 点（T-7/T-9/T-10/T-11/T-12/T-13）+ 人可见钉 T-14 在 Phase 3~7。
+- **Phase 3 完成**：生成参数真下发（0.7 / 1024，两条路径 + pb 层各一钉）；顺手补上 `llm_grpc_test.go`
+  声称却缺失的 pb 映射断言；R1 长度张力实测**未出现**（回复仍 2~3 句）。
+- **阶段状态**：`in-progress`（**未收口**）。测试点 **9/16 有 PASS 结论**
+  （T-1/T-2/T-3/T-4/T-5/T-6/T-7/T-8/T-15）+ T-16 已裁定；余 5 点（T-9/T-10/T-11/T-12/T-13）+ T-14 在 Phase 4~7。
 - **环境遗留**（交付给下一轮）：
   - dev 栈**在跑**（17 容器）；`xtts` 按用户指示**已停**（TTS 链路预期 502，文本链路不受影响）；
   - dev mode 锁 `deploy/.devmode-session`（owner `lane-cl-a`，until 2026-10-14 12:00）→ **收工须删**；
