@@ -281,3 +281,28 @@ related-plans:
 - **恢复点**：Phase 2 接线 → 3 → 4 → 5 → 6（**均不需栈**，可连续做）；Phase 0/7/8/9 待锁释放。
 - **已落地 commit**：见 **PR #211**（建档 / GORM 修复 / HTTP 组件+守卫 / 免费一半看板 / 决策回填）。
 - **门禁现状**：`go test ./pkg/skywalking/` 绿；`obs_monitoring.test.js` 绿；`check_tdd_gate.sh` 绿；`check_orphan_outputs.sh` 绿。
+
+---
+
+## §10 起栈实跑验证记录（2026-10-14，B 轨持锁窗口）
+
+> 环境：dev + obs profile（26 容器）；验证用镜像 `*-svc:cl01-verify`（**带轨后缀 tag**，不覆盖公共 tag）。
+> 证据文件在 `evidence/`。
+
+| 测试点 | 结论 | 证据 |
+|---|---|---|
+| **T-02** GORM 出 span | ✅ **PASS** | 修前（旧镜像）`ReportsDaily` trace **0 个 gorm span** → 修后 **3 个 `gorm.row`**（peer=`postgres@<unknown>`）→ `evidence/t02-trace-after-gorm-spans.json` |
+| **T-03** Redis 出 span | ✅ **PASS** | 登录 trace 含 `redis.hget` / `redis.del` 两个 Exit span → `evidence/t03-redis-spans-trace.json` |
+| **T-09/T-10/T-11** 观测面看板 | ✅ **PASS** | Grafana 加载 `emotion-echo-observability`（3 面板）；smoke 逐 expr 非空：Target 矩阵 **12 series** / Down **1** / Firing **1** |
+| **T-13** 告警真触发并送达 | ✅ **PASS** | 停 kafka-exporter → `PrometheusTargetDown` **firing**（activeAt 05:32:44Z）→ **Alertmanager 收到**（severity=critical）→ `evidence/t13-*.json` |
+| **T-17** 观测 smoke 全绿 | ✅ **PASS** | `PASS: 36 check(s)` / FAIL 0 → `evidence/t17-smoke-observability.txt` |
+| **T-07** BFF SetTracer | ✅ 装配 + 运行时 | 守卫 `svc_wiring_test.go` 已含 web-bff；BFF trace 正常出 entry span |
+
+**本轮起栈额外挖出的真根因（已修）**：
+- **GORM 回调在注册期快照了 nil tracer** —— 各 svc `main.go` 的 `openPostgres()` 在 `SetTracer` **之前** 调 `InitGORM`（analytics：db connect @:97 → SetTracer @:178；其余同序）⇒ 回调**永久 noop**。**修法：回调每次查询现读 tracer**（`gormTracerFn`）。这是"修好 processor 后 SkyWalking 仍 0 个 gorm span"才暴露的**第二层** bug —— 正是 CL-01 约束⑤"必须见 span"的价值。
+
+**worktree 起栈的环境坑（已解决，值得沉淀）**：
+- `deploy/.env.local`、`deploy/tls/*`、`deploy/tmp/apisix-access.log` 等 **gitignored 运行态文件在 worktree 缺失** ⇒ Docker 把挂载点建成**目录** ⇒ llm-service/ai-svc/BFF 起不来（TLS 变目录）、promtail 报 `file is a directory`（APISIX 日志采不到、`{job="apisix"}` 空）。修法：从共享目录拷贝 + `rmdir` 掉假目录。**契约 §8.1 规则 10 只写 `--env-file` 不够**（apps.yml 的服务级 `env_file: .env.local` 锚点是**相对路径**，worktree 内必须有该文件）。
+- Docker Desktop 在 BFF 镜像构建期**挂死**（apiproxy 无响应、`docker` CLI 全超时）⇒ `wsl --shutdown` + 重启 Docker Desktop 恢复（沿用 memory 既有手法）。
+
+**本轮未做的验证**：T-04（HTTP exit span 运行时 —— 需多模态/情绪分析出站触发）、T-05（DLQ span 运行时 —— 需毒消息）、T-06（fusion 指标运行时 —— 需一次真融合；当前 worker `candidates=0`）、T-15（`/health` 采集 = Phase 8 未实现）、Phase 7 其余看板（business/reliability/logs）。

@@ -1,0 +1,39 @@
+=== smoke_observability.py (PR-OBS-4) ===
+[OK  ] prometheus scrape targets UP (>= expected count): UP=12/9 (apisix + 7 svc + skywalking-oap)
+[OK  ] observability targets UP (alertmanager + kafka-exporter): both present among 12 UP targets
+[OK  ] grafana health returns 200 + database=ok: database=ok, version=10.4.2
+[OK  ] grafana datasource 'prometheus' auto-registered: datasources=['Loki', 'Prometheus']
+[OK  ] grafana dashboard 'emotion-echo-overview' provisioned: title='Emotion-Echo Overview', panels=4
+[OK  ] dashboard 'emotion-echo-overview' query panels present: panels_with_expr=4
+[OK  ] panel expr returns data [emotion-echo-overview] HTTP Request Rate (req/s, by svc): series=6 expr=sum by (service) (rate(emotion_echo_http_requests_total[1m]))
+[OK  ] panel expr returns data [emotion-echo-overview] HTTP Error Rate (5xx %, by svc): series=6 expr=(sum by (service) (rate(emotion_echo_http_requests_total{status=~"5.."}[1m])) or sum by (s
+[OK  ] panel expr returns data [emotion-echo-overview] HTTP p95 Latency (s, by svc): series=6 expr=histogram_quantile(0.95, sum by (service, le) (rate(emotion_echo_http_request_duration_sec
+[OK  ] panel expr returns data [emotion-echo-overview] Goroutines (by scrape job): series=4 expr=sum by (job) (go_goroutines)
+[OK  ] dashboard 'kafka-consumer-lag' query panels present: panels_with_expr=3
+[OK  ] panel expr returns data [kafka-consumer-lag] ai-svc Consumer Lag (by topic/partition): series=6 expr=kafka_consumergroup_lag{consumergroup="ai-svc"}
+[OK  ] panel expr returns data [kafka-consumer-lag] analytics-svc Consumer Lag (by topic/partition): series=6 expr=kafka_consumergroup_lag{consumergroup="analytics-svc"}
+[OK  ] panel expr returns data [kafka-consumer-lag] DLQ Depth (chat-events-dlq messages) — non-alerting: series=1 expr=sum(kafka_topic_partition_current_offset{topic="chat-events-dlq"}) or vector(0)
+[OK  ] dashboard 'emotion-echo-observability' query panels present: panels_with_expr=3
+[OK  ] panel expr returns data [emotion-echo-observability] Target 健康矩阵（up by job/instance）: series=12 expr=up
+[OK  ] panel expr returns data [emotion-echo-observability] Down Targets（up==0）: series=1 expr=count(up == 0) or vector(0)
+[OK  ] panel expr returns data [emotion-echo-observability] Firing 告警数（ALERTS）: series=1 expr=count(ALERTS{alertstate="firing"}) or vector(0)
+[OK  ] prometheus.yml targets superset of EXPECTED_TARGETS (清单无陈旧项): missing_in_yml=[] yml_targets=['emotion-echo-ai-svc:8891', 'emotion-echo-alertmanager:9093', 'emotion-echo-analytics-svc:8893', 'emotion-echo-apisix:9091', 'emotion-echo-assessment-svc:8889', 'emotion-echo-chat-svc:8890', 'emotion-echo-kafka-exporter:9308', 'emotion-echo-sw-oap:1234', 'emotion-echo-user-svc:8888', 'emotion-echo-web-bff:8894', 'emotion-llm-service:8000', 'localhost:9090']
+[OK  ] every business-svc target is covered by EXPECTED_TARGETS: uncovered=[] (抓到了但常量漏登记 ⇒ 漂移会再次发生)
+[OK  ] runbook observability-compose.md exists + 5 sections: file_len=9051, sections=['启动后第一件事', '看 targets', '看 logs', '看 trace', '故障排查']
+[OK  ] kafka-exporter exposes kafka_consumergroup_lag series: body_len=45836, has_lag=True
+[OK  ] prometheus scrape target 'kafka-exporter' UP: up_jobs=['alertmanager', 'apisix', 'emotion-echo-services', 'kafka-exporter', 'prometheus', 'skywalking-oap']
+[OK  ] grafana dashboard 'kafka-consumer-lag' provisioned (>=3 panels): title='Kafka Consumer Lag', panels=3
+[OK  ] grafana prometheus datasource uid == 'prometheus': uid='prometheus'
+[OK  ] prometheus alert rule 'KafkaConsumerGroupLagHigh' loaded: groups=4, total_rules=7
+[OK  ] prometheus alert rule 'OutboxEventsDead' loaded (Stage 86): loaded_alerts=['AIDLQPublishFailure', 'AlertmanagerClusterDegraded', 'AlertmanagerNotificationFailing', 'AnalyticsDLQPublishFailure', 'KafkaConsumerGroupLagHigh', 'OutboxEventsDead', 'PrometheusTargetDown']
+[OK  ] alertmanager /-/healthy returns 200: HTTP 200: OK
+[OK  ] prometheus discovered alertmanager target: activeAlertmanagers=['http://emotion-echo-alertmanager:9093/api/v2/alerts']
+[OK  ] prometheus exposes emotion_echo_outbox_events_dead_total series: series=1, values=['0']
+[OK  ] loki /ready returns 200: ready
+[OK  ] loki query [job=apisix] returns results (非空，空即 FAIL): streams=1, log_lines=4, query={job="apisix"}
+[OK  ] loki query [job=services] returns results (非空，空即 FAIL): streams=6, log_lines=100, query={job="services"}
+[OK  ] loki 业务日志是结构化 JSON（含 svc/level 字段）: {"time":"2026-10-14T13:39:24.369723853+08:00","level":"INFO","msg":"tick: candidates=0 (msgIDs=[])","module":"fusion","svc":"ai-svc"}
+[OK  ] promtail 未采到 loki/promtail/中间件容器（日志回环 + 噪声）: 新鲜窗口 container 标签集: ['emotion-echo-ai-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff', 'emotion-llm-service']
+[OK  ] apisix /tmp/apisix-access.log exists and non-empty: exit=0, stderr=
+
+PASS: 36 check(s)
