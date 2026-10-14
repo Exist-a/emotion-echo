@@ -4,7 +4,7 @@ title: 消息链路闭环（会话列表游标化 + 本地缓存接线 + 状态�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档 → **Phase 1 完成**（T-13）→ **Phase 2a 完成**（T-9/T-10）→ **Phase 2b 完成**（T-11/T-12）→ **Phase 3 完成**（T-14/T-15；全量 682/682 + typecheck 绿）⇒ **7/22 测试点有结论**；用户裁定 `CL-D-11`~`CL-D-14` 锁定范围（[M] 全清）；修正 §A.1 错误断言；补 §6 R12 合并语义陷阱）
+last-updated: 2026-10-14（建档 → **Phase 1 完成**（T-13）→ **Phase 2a 完成**（T-9/T-10）→ **Phase 2b 完成**（T-11/T-12）→ **Phase 3 完成**（T-14/T-15）→ **Phase 4 完成**（T-16/T-17/T-18；全量 689/689 + typecheck 绿）⇒ **10/22 测试点有结论，🟢 部分（Phase 1~4）全部完成**；用户裁定 `CL-D-11`~`CL-D-14` 锁定范围；新增 §6 R12（合并语义陷阱）/R13（缓存未按用户隔离）；修正 §A.1 错误断言）
 depends-on: []           # 不依赖任何阶段；**不阻塞于 T1**（CL-01/02/03）
 blocks: []
 gate: []                 # 无开工前阻塞决策门；3 个 [M] 见 §7
@@ -161,9 +161,9 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | T-13 | **状态机单一来源**：`MessageStatus` 全仓**仅一处定义**、取值集合唯一 | [A] | 架构测试（`grep` 定义点）+ 类型测试 | ✅ **PASS**（Phase 1，2026-10-14）—— 钉 `app/types/conversation/message-status-single-source.architecture.test.ts` **5/5 绿**；**RED 实测 3 项失败**（2 处定义 / canonical 仅 4 值 / 2 处内联联合），逐项见 `report.md §3.1` |
 | T-14 | **乐观插入**：发送瞬间用户消息 `status === 'sending'`（**现恒 `'sent'` ⇒ RED**）；服务端返回后置 `sent` + 换真实 id | [A] | store 单测 | ✅ **PASS**（Phase 3，2026-10-14）—— 在 `post` 被调用那一刻采样：占位已在列表且 `sending`；返回后就地替换为真实 id + `sent`（列表不重复）；**未传 `clientMsgId` 时自动生成临时 id 同样成立**；**失败时占位保留为 `failed` 并落缓存**（重试前置条件）。钉 `app/stores/__tests__/message.state.test.ts` 9/9 绿，见 `report.md §3.5` |
 | T-15 | **非法转移被拒**：`sent → sending` 等非法转移不生效 | [A] | 转移表单测 | ✅ **PASS**（Phase 3，2026-10-14）—— `MESSAGE_STATUS_TRANSITIONS` 合法边通过、`sent`/`truncated` 终态无出边、自转移与 `failed→sent` 直跳被拒；store 层 `transitMessage` 对 `sent → sending` 返回 `false` 且状态不变、`failed → sending` 允许（重试路径）。见 `report.md §3.5` |
-| T-16 | **重试计数 + 上限**：失败后 `retryCount` +1；达 `MAX=3` 停自动重试 | [A] | vitest（fake timers） | 待执行（Phase 4） |
-| T-17 | **退避策略**：间隔 = `min(2^n × 1000ms, 30s)` | [A] | vitest（fake timers 断言调用时刻） | 待执行 |
-| T-18 | **断网重连重扫**：离线发送 → 置 `failed`；触发 `online` → 按退避重试、**同一 `clientMsgId`**、成功置 `sent` 并移出待重试集 | [A] | store 单测（模拟 `navigator.onLine` + fake timers） | 待执行 |
+| T-16 | **重试计数 + 上限**：失败后 `retryCount` +1；达 `MAX=3` 停自动重试 | [A] | vitest（fake timers） | ✅ **PASS**（Phase 4，2026-10-14）—— 首次失败后缓存行 `retryCount=1`；`canAutoRetry` 对达限行返回 `false`；`retryFailedMessages` 对达限行**不发请求**（`retried=0`）。见 `report.md §3.6` |
+| T-17 | **退避策略**：间隔 = `min(2^n × 1000ms, 30s)` | [A] | vitest（fake timers 断言调用时刻） | ✅ **PASS**（Phase 4，2026-10-14）—— `retryDelayMs` 曲线钉（1→2s / 2→4s / 3→8s / 4→16s / ≥5→**30s 封顶**）；并**实测逐行取曲线**：两行 `retryCount` 0/1 ⇒ 实际等待 2s/4s（证明不是全局常数）。等待走**可注入 governor**（未用 fake timers，理由见 report §3.6） |
+| T-18 | **断网重连重扫**：离线发送 → 置 `failed`；触发 `online` → 按退避重试、**同一 `clientMsgId`**、成功置 `sent` 并移出待重试集 | [A] | store 单测（模拟 `navigator.onLine` + fake timers） | ✅ **PASS**（Phase 4，2026-10-14）—— 扫**全部会话**（2 行跨 2 会话都补发）；POST 的 `clientMsgId` 复用原行 id；成功后 `sent` + 临时 id 行被清（无幽灵行）+ 失败集清空；补发再失败则 `retryCount` 再 +1 并留在失败集；空队列时零请求零等待。`plugins/init.ts` 的 `online` TODO 已换成真实调用。见 `report.md §3.6`。⚠️ **启动时 `navigator.onLine` 那条未接**——理由见 §6 R13（缓存未按用户隔离，登录前自动补发会串号），已登账本 `CL-F-15` |
 | T-19 | **重试幂等（不重复入库）** | [A] | 运行验证：断网补发后 DB 该 `client_msg_id` 行数为 1（复用 `c002` 唯一索引） | 待执行 |
 | T-20 | **人可见三连**：① 上滚翻到更早页；② 刷新后消息仍在；③ 断网发送 → 联网自动补发成功 | [V] | Playwright（`e2e/message-pipeline.spec.ts`）+ IAB 截图/录屏 | 待执行 |
 | T-21 | **账本继承 · 发送后聊天区不自动滚到底**（`CL-F-10`，用户 2026-10-14 IAB 实测；账本已归属 **CL-05**） | [V] | 先**定位根因**（不臆断——账本明写"未查代码"），再 IAB/Playwright 实测：长回复流式增长时视口跟随到末尾 | 待执行（Phase 8，🔴 需栈） |
@@ -173,10 +173,11 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 >
 > **另有（不占测试点编号，属 G8 缓存治理）**：`trimSessionMessages(maxCount)` / `trimOldMessages(keepDays)` / `getCacheStats` 已有钉（`app/utils/messageCache.test.ts`，Phase 2a 已绿）。
 >
-> **关联账本（**三处**，收口须逐条对账）**：
+> **关联账本（**五处**，收口须逐条对账）**：
 > ① `E2E-F-205`（分页契约错位）与 ② `E2E-F-206`（缓存/状态机/重试半成品）置 ✅（`docs/e2e-roadmap/discovered-unresolved.md:439-440`）；
 > ③ **账本继承项 `CL-F-10` / `CL-F-11` 的归属方就是 CL-05**（2026-10-14 用户 IAB 实测建立）——已并入本阶段为 **T-21 / T-22**（Phase 8），收口时一并置 ✅。
-> 范围外新发现一律登 `docs/closure-roadmap/discovered-unresolved.md`（`CL-F-xx`，**本阶段下一个可用号须现场核对**）。
+> ④ **本阶段新登两条、均归 CL-05、均"本阶段顺延/规避"**：`CL-F-13`（`MessageWithStatus` 三形态 → 用户 `CL-D-13` 裁定顺延 Phase 3 之后收敛）、`CL-F-15`（缓存未按用户隔离 → 本阶段已规避：只接 `online` 补发、不接启动即补发，见 §6 R13）；另 `CL-F-14`（追加式共享文档同点插入冲突，归 **CL-00**）。
+> 范围外新发现一律登 `docs/closure-roadmap/discovered-unresolved.md`（`CL-F-xx`，**本阶段下一个可用号须现场核对**——`CL-F-13`~`15` 已由本轨占用）。
 
 ---
 
@@ -191,7 +192,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | **1** | **类型与契约收敛（无行为变更）**：`MessageStatus` 收敛到**单一来源**；补 `cursor/hasMore` 类型；`messageCursor`/`cursor` 是否需导出按需定 | 🟢 | T-13（现状两处定义取值集合不一致 ⇒ **红**）—— ✅ **已完成 2026-10-14**（RED 3 项失败 → GREEN 5/5；全量 vitest 654/654 + typecheck 绿；证据 `report.md §3.1`） |
 | **2** | **缓存层修复 + 接线**：① `db.ts` 升 `version(2)` 补 `[sessionId+status]` + `sendTime` 索引；② 修 `messageCache.ts`（索引可用后不抛错，补 `markFailed/incRetry` 辅助）；③ `stores/message.ts` 接线（`switchSession` 快照→服务端→`saveMessages`；`loadMoreMessages` 落页；`sendMessage` 落条）；④ 合并策略：服务端覆盖同 id、本地 `failed/pending` 保留 | 🟢 | **①（2a）✅ 已完成**（RED 3 红 → GREEN 11/11，`report.md §3.3`）；**③④（2b）✅ 已完成**（RED 6 红 → GREEN 8/8 + 全量 673/673 + typecheck 绿，`report.md §3.4`）—— T-11 / T-12 PASS。**② 的 `markFailed/incRetry` 辅助留到 Phase 4**（重试逻辑落地时才有调用方，避免造无主函数） |
 | **3** | **状态机 + 乐观插入**：单一转移表（`sending→sent/failed`、`streaming→sent/failed`、`failed→sending`、`sent`/`truncated` 终态 + 非法转移守卫）；用户消息先插 `sending`（temp id = `clientMsgId`），服务端返回后换真实 id 并置 `sent` | 🟢 | **T-14/T-15 ✅ 已完成 2026-10-14**（RED 8 红 → GREEN 9/9 + 全量 682/682 + typecheck 绿，`report.md §3.5`）。⚠️ 落地时被**全量回归**抓出并修掉一个真缺陷：占位行 temp id 未从缓存删除 ⇒ 幽灵 `sending` 行（详见 report §3.5） |
-| **4** | **重试 + 断网重扫**：`retryCount` 自增 + 指数退避 `min(2^n×1000ms,30s)` + `MAX=3`；`stores/message.ts` 新增 `retryFailedMessages()`；`plugins/init.ts` 把 `:105-111` 的 TODO 换成真实调用（`online` 事件 + 启动时 `navigator.onLine`）；**复用 `clientMsgId`** | 🟢 | T-16 / T-17 / T-18（现状 `retryFailedMessages` 无定义 ⇒ **红**） |
+| **4** | **重试 + 断网重扫**：`retryCount` 自增 + 指数退避 `min(2^n×1000ms,30s)` + `MAX=3`；`stores/message.ts` 新增 `retryFailedMessages()`；`plugins/init.ts` 把 `:105-111` 的 TODO 换成真实调用（`online` 事件 + 启动时 `navigator.onLine`）；**复用 `clientMsgId`** | 🟢 | **T-16/T-17/T-18 ✅ 已完成 2026-10-14**（RED 7 红 → GREEN 7/7 + 全量 689/689 + typecheck 绿，`report.md §3.6`）。⚠️ 两处偏离原计划且已留痕：① **等待走注入 governor 而非 fake timers**（理由见 §3.6）；② **"启动时 `navigator.onLine` 即补发"未接**（缓存未按用户隔离，会串号 ⇒ §6 R13 + 账本 `CL-F-15`） |
 | **5** | **会话列表游标化**（D-B=B1，**需与 C 轨握手 `proto/**`**）：proto `ListConversationsRequest` 增游标字段 → chat-svc `ListConversations` 复合游标 `(updated_at, id)` → BFF `listConversations` 读游标 → 前端 `conversation.ts` 对齐 | 🟢 编码 / 🔴 运行 | T-5（Go 表驱动：同 `updated_at` 边界）+ T-4 / T-6 |
 | **6** | **死路径与降级路径**：① 旧 `ListMessages`（`Order("id ASC")`，`conversation_repository.go:335-346`）**调用方清零**（按 CL-02 口径：删 or 归档 + 桩）；② chat-svc `handler/chat_handler.go:84-106` 读 `cursor` | 🟢 编码 / 🔴 运行 | T-8（架构钉）+ T-7 |
 | **7** | **端到端 + 人可见钉 + ADR + 收口**：Playwright `e2e/message-pipeline.spec.ts`（T-20 三连）；补 **ADR** `adr-2026-10-frontend-message-pagination-and-cache.md` + `decisions.md` 索引；`report.md`；来源计划迁 `legacy-plans/landed/`；关 `E2E-F-205/206` | 🔴 | T-20（`[V]`） |
@@ -246,6 +247,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | R10 | **登记表与阶段 PR 混在一起（P1/P2 复发）** | 三轨并行的实证问题 | 本轨**严格分离**：登记走 `docs/cl-05-registry`，阶段 PR 只含 `stages/cl-05-message-pipeline/**` + 来源计划 front-matter |
 | R11 | **`fake-indexeddb` 是新 devDep** | 触 `package.json`（脊柱，追加式） | 按契约 §1.2「追加式」加行；PR 描述显式标注；与 B/C 无同依赖冲突 |
 | R12 | **合并策略"一把梭"会把分页旧页整片丢掉** | "服务端快照替换"（服务端给的是**权威全集**）与"分页追加"（服务端只给**一页**）语义相反。若共用一个合并函数：第 2 页不含第 1 页的行 ⇒ 替换式合并会把已加载的旧页全删，表现为"上滚加载更早消息后，下方消息消失" | 已拆成两个具名纯函数并各自带注释与钉：`mergeServerMessages`（快照替换）/ `appendServerPage`（分页追加）；Phase 3 起复用同一套 |
+| R13 | **本地缓存未按用户隔离 ⇒ 登录前自动补发会串号** | `db.ts` 的 Dexie 库名固定 `EmotionEcho`，消息行只有 `sessionId`、**没有 userId**。同一浏览器换账号登录时，A 用户的 `failed` 行仍在库里 ⇒ 若在**登录完成前**（如插件启动时看到 `navigator.onLine`）就自动补发，会拿 B 的令牌去补 A 的消息（后端 `client_msg_id` 唯一索引只保证"不重复入库"，**不保证"归属正确"**） | 本阶段**只接 `online` 事件**（此时用户已登录）而**不接启动即补发**；缺口登账本 **`CL-F-15`**（归属 CL-05）：正解 = 缓存行加 userId（或库名/表名按用户分片）+ 补发前校验当前用户 |
 
 ---
 
