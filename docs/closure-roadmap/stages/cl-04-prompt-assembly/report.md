@@ -486,3 +486,48 @@ $ BASE_URL=http://127.0.0.1:3000 pnpm exec playwright test e2e/cl-04-prompt-memo
    教训：**钉子里的定位必须来自实际快照**（Playwright 的错误信息自己给出了 `exact: true` 的修法），不要凭印象写 accessible name。
 8. **"死路径复活"必须先量代价再宣称收益**：`with_intent` 接回本身一行代码，但真实代价是 TTFT +45% 与回复体量 3~5 倍
    （后者来自另一处文案与人设的矛盾，不在 BFF 侧）。若只按"链路通了"收工，产品侧的变化会被漏报。
+
+---
+
+## §6 收口后追加（2026-10-14，用户实测驱动；#213 合并后另起分支）
+
+### T-18 会话标题自动概括 — PASS
+
+**用户实测**（IAB 验收同轮提出）：会话名没有按第一段对话自动概括（列表显示「对话 #NNN」）——
+"属于功能欠缺，这个要添加"（账本 **CL-F-12**）。同轮用户还指示：**先把文档落地再动代码**，避免代码改动与并行轨合并冲突
+⇒ 本项在 #213 合并**之后**另起分支/PR 实现（分支 `feat/cl-04-fu-title-generation`）。
+
+**三层现状（落地前亲核）**：① 前端 `shouldGenerateTitle` 只有 `[id].vue` 显式传 `false`、新建路径恒 `undefined`；
+② BFF `aiStreamReq` **结构里没有该字段** ⇒ 静默丢弃（Phase 0 缺陷 8 的一项）；
+③ chat-svc 有 `UpdateTitle`/`UpdateConversation` 能力但**无任何调用方**（backlog R-13「当前无 GenerateTitle 实现」实证复活）。
+
+**实现（严格限制在 A 轨文件面内 —— 不碰 chat-svc / `chat_handler.go` / 前端；无 proto、`main.go` 改动）**：
+
+| 环节 | 做法 |
+|---|---|
+| 触发 | 落库后该会话消息数 ≤ 2（= 第一轮对话）**或** 前端显式 `shouldGenerateTitle: true` |
+| 取标题 | LLM（既有 ChatCompletion RPC，`temperature=0.3` / `max_tokens=32`，独立常量不复用对话参数）→ 失败/无 LLM ⇒ **规则兜底**（首条用户消息前 `maxTitleRunes`=20 字） |
+| 落地 | 调用**既有** `ChatClient.UpdateConversation`（窄接口 `titleConvUpdater`，构造时从 `deps.Chat` 推断 ⇒ 生产装配零改动） |
+| 降级 | 全程 best-effort：任一依赖缺失/报错都只是"不改标题"，**不阻断对话**（3 处触发点均在 SSE 完成之后） |
+| 清洗 | `sanitizeTitle`：去换行/包裹引号书名号/「标题：」前缀/句末标点，按 rune 截断 |
+
+**证据**：`go test ./internal/handler/` 7 个新用例（首轮生成 / 非首轮跳过 / 显式标志覆盖计数规则 / 无 LLM 与 LLM 报错均兜底 /
+缺依赖不 panic（3 子例）/ 改名失败不冒泡 / 标题清洗 4 断言）；`go vet ./...` exit 0；`go test ./...` 10 包 0 FAIL；
+**运行时**：见下节 §6.1。
+
+**WIP 期踩到的真 bug（自行修掉并留档）**：测试替身把 `*fakeLLMStreamer(nil)` 传进接口字段 ⇒ 得到**非 nil 接口**，
+`h.llm == nil` 判假、随后在 nil 接收者上调方法 panic（**typed-nil 陷阱**）。修法 = 测试 helper 收**接口**而非具体指针。
+
+#### §6.1 T-18 运行时证据（实测）
+
+```text
+$ node evidence/t18-title-check.mjs          （输出：evidence/t18-title-output.txt）
+conversationId=678  建会话时标题=""
+stream status=200 用时=3326ms 回复字数=171
+回查标题 = "失眠焦虑工作压力"
+是否仍为默认标题 = false
+✅ PASS：标题已按第一轮对话自动概括
+```
+
+⇒ 新建会话首轮交互后，列表标题由默认「对话 #NNN」变为**按对话内容概括的短标题**（LLM 生成 + 清洗后入库）。
+自检脚本同时反证了"触发条件确实是第一轮"（第二轮之后不再触发，见单测 `TestGenerateTitle_NotFirstExchange_Skipped`）。
