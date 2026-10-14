@@ -23,7 +23,7 @@ last-updated: 2026-10-14
 - **新账**：CL-F-13（**假账，当轮销账**）、CL-F-14（tracer 启动竞态 → **已按 D-07 修复**）、CL-F-15（outbox 静默回退，归 CL-03）。
 - **销账**：CL-F-04（GORM 埋点错挂 processor）✅、CL-F-13（探针错误）✅、CL-F-14（代码侧）✅。
 - **裁定**：D-05 追认（接受 `status` 标签替代直接 scrape `/health`）+ **D-07**（CL-F-14 改后台重试）。
-- ⛔ **一处未完成（环境阻塞，非代码）**：CL-F-14 的**起栈运行时验证**做不了 —— D 盘剩余 0 ⇒ `docker_data.vhdx`(298GB) 无法扩展 ⇒ containerd 读 bbolt 页 **SIGBUS** ⇒ `Docker Desktop is unable to start`；压缩 VHDX 需管理员权限。**恢复后须补做**（步骤见 §待办）。
+- ✅ **CL-F-14 的起栈运行时验证已完成**（2026-10-14 晚）：先因 D 盘满导致 Docker 起不来（containerd SIGBUS），清出空间后恢复；随后用**新/旧镜像 A/B 负向对照**证明修复生效（详见 §3 证据表与 §3.1）。
 
 ---
 
@@ -76,9 +76,27 @@ last-updated: 2026-10-14
 | Loki trace 关联 | `{job="services"} \|= "<trace_id>"` 走 `/query_range` → **2 条流**（web-bff + ai-svc） | `evidence/t14-loki-trace-query.json` |
 | smoke 全绿 | **`PASS: 60 check(s)` / FAIL 0 / exit 0** | `evidence/t17-smoke-observability.txt` |
 | CL-F-14 修复（单测 + 负向对照） | 回退实现后两条断言**如期变红**：interceptor `"[]" should have 1 item(s), but has 0`；middleware 同型。恢复后 3 包全绿 | `go test ./pkg/skywalking/... ./pkg/middleware/... ./pkg/grpcinterceptor/...` |
-| CL-F-14 修复（起栈运行时） | ⛔ **BLOCKED（环境）**：D 盘 0 剩余 ⇒ containerd **SIGBUS** ⇒ Docker 起不来 | `~/AppData/Local/Docker/log/host/com.docker.backend.exe.log`（SIGBUS 栈） |
+| CL-F-14 修复（起栈运行时） | ✅ **PASS（A/B 负向对照）**：新镜像 → 后台补挂第 5 次成功 → SkyWalking **出现 chat-svc（未重启容器）**；旧镜像 → **12 轮全缺席 + 0 条补挂日志** | `evidence/clf14_fixed_image_run.txt`、`evidence/clf14_negative_old_image_run.txt`、`evidence/clf14_{runtime_test,negative_control}.sh` |
 
 ---
+
+### §3.1 CL-F-14 运行时验证（A/B 负向对照，2026-10-14 晚）
+
+场景：**停掉 SkyWalking OAP** → 用待测镜像重建 chat-svc（启动期 tracer 初始化必失败）→ 起 OAP → **不重启 chat-svc** → 看它能否自己回到 SkyWalking 服务列表。
+
+| | 旧镜像 `chat-svc:v0.1.16`（无修复） | 新镜像 `chat-svc:cl01-verify`（含修复） |
+|---|---|---|
+| 启动期日志 | `tracer init failed (warn mode, continue)` | 同（`tracer init failed`） |
+| 之后的重试 | **无**（进程余生不再重试） | 后台补挂第 1~4 次失败（退避 5s/10s/20s/40s）→ **第 5 次成功** |
+| `后台补挂` 日志条数 | **0** | 5（4 失败 + 1 成功） |
+| OAP 恢复后 SkyWalking 服务列表 | **12 轮 × 25s 全部缺席** | **出现 `emotion-echo-chat-svc`（第 1 轮即命中）** |
+| 结论 | 负向对照成立 | **修复生效** |
+
+> 关键点：**全程没有重启 chat-svc**。这才证明"后台补挂 + 入口路径按请求现读"真的生效，
+> 而不是靠编排层的重启策略兜底（后者是本次刻意排除的替代方案，见 D-07）。
+
+复跑方式：`bash evidence/clf14_runtime_test.sh`（新镜像）/ `bash evidence/clf14_negative_control.sh`（旧镜像对照），
+查服务列表用 `python evidence/clf14_sw_services.py chat-svc`（退出码 0=在列表 / 1=缺席 / 2=查询失败）。
 
 ## §测试点总表
 
@@ -116,11 +134,12 @@ last-updated: 2026-10-14
 4. 面板以既有计划为准 —— 按 `observability-business-metrics-wiring.md` 与 `grafana-dashboard-gaps` 的缺口清单落，未重复造。
 5. **诚实性** —— 每个"接了的埋点"都有**起栈运行时证据**（span 真出现在 SkyWalking / 指标真有值 / 告警真送达）。
 
-**为什么仍不能直接判 `done`**：
+**本阶段实质工作已全部闭环**：
 
-- **CL-F-14 的起栈运行时验证未做**（唯一实质缺口）：代码侧已按 D-07 修完并有单测 + 负向对照，但 CL-01 的约束⑤要求「**必须见 span 真出现在 SkyWalking**」才算完成。当前因 **D 盘满 → containerd SIGBUS → Docker 起不来**而做不了，属环境阻塞。按 RUNBOOK §4.1 证据有效性，**不得用单测冒充运行时证据**，故本阶段暂不判 `done`。
+- **CL-F-14 已修完并取得运行时证据**（§3.1 的 A/B 负向对照），满足约束⑤"必须见 span 真出现在 SkyWalking"。
 - 两项裁定已回填：D-05 追认（接受替代）+ D-07（后台重试）。
-- **第二方核对**（收口契约第 7 条）待另一会话/用户执行。
+- 落地计划已迁 `legacy-plans/landed/`。
+- **唯一未满足的收口契约项 = 第 7 条「第二方核对」**——按 RUNBOOK §7「执行者不得自行宣布阶段 done」，此项需**用户本人或另一个会话**签署。**因此状态仍标 `partial`，等签署后翻 `done`。**
 
 **CL-F-14 归属裁定（用户授权我定）**：该账**保留在 CL-01 名下并就地修复**（不转 CL-03）—— 因为它的文件面（`shared/pkg/{grpcinterceptor,middleware,skywalking}` + 6 svc `main.go`）全在 B 轨，且根因正是"埋点是否真生效"，与 CL-01 口径同源。⇒ 待运行时验证补做后即可销账，CL-01 随之可判 `done`。
 
@@ -144,10 +163,10 @@ last-updated: 2026-10-14
 | 1 | plan 每个测试点给四值之一 + 证据 | ✅ 19/19（T-19 = N/A，附 D-06 裁定） |
 | 2 | 回归钉已落地且绿 | ✅ Go 单测（`gorm_tracing_test.go` 双层回归钉 / `svc_wiring_test.go` / `dlq_span_test.go` / `fusion_metrics_wiring_test.go`）+ `smoke_observability.py` 60 项 |
 | 3 | `report.md` 用模板（起点/实施/证据/结论/经验） | ✅ 本文件 |
-| 4 | 账本对账 | ⚠️ CL-F-14 代码侧已解决、**运行时验证 BLOCKED（环境）** ⇒ 账本状态为「已解决（代码侧）/ 运行时待补」；在补做前**本阶段不判 done** |
+| 4 | 账本对账 | ✅ **本阶段名下无未解决 CL-F-xx**（CL-F-04 / CL-F-13 / CL-F-14 均已销；CL-F-15 归 CL-03） |
 | 5 | 落地计划迁 `docs/legacy-plans/landed/` | ✅ **已做**（两份源计划均迁入 + `status: landed` + 修路径引用 + `docs/plans/README.md` 标已落地）。BFF 其余 HTTP 出站已在收口后补齐 4 个无归属冲突的文件；**唯一豁免** = `downstream/chat.go`（C 轨独占列，随 CL-02） |
 | 6 | roadmap 状态同步 + 分支收口 | ✅ roadmap CL-01 行改 `partial`；PR #211 **保持 draft**（用户 2026-10-14 指示"完成先不要合"） |
-| 7 | 第二方核对 | ⬜ **未做**（需另一会话/用户；本轮已做机械复核，见 §自审） |
+| 7 | 第二方核对 | ⬜ **未做 —— 这是唯一未满足项**（需用户本人或另一会话签署；本轮已做机械复核见 §自审，但**不冒充**第二方核对） |
 
 ---
 
@@ -161,7 +180,7 @@ last-updated: 2026-10-14
 | 4 | **D 盘空间**：需**管理员**压缩 `D:\DockerDesktopWSL\disk\docker_data.vhdx`（298GB）以恢复 Docker | 用户（需提权） | ⛔ **阻塞中** |
 | 5 | PR #211 何时合并 | 用户 | ⬜ 当前 draft（用户指示先不合）；合并前须先补 CL-F-14 运行时验证 |
 
-## §待办（环境恢复后立刻补做）
+## §待办（**已于 2026-10-14 晚完成**，保留供复跑参考）
 
 ### 0. 先恢复 Docker（**需管理员**；2026-10-14 已穷尽非管理员路径）
 

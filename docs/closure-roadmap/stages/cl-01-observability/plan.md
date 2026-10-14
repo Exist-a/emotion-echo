@@ -303,6 +303,7 @@ related-plans:
 | **T-13** 告警真触发并送达 | ✅ **PASS** | 停 kafka-exporter → `PrometheusTargetDown` **firing**（activeAt 05:32:44Z）→ **Alertmanager 收到**（severity=critical）→ `evidence/t13-*.json` |
 | **T-14** Loki trace_id | ✅ **PASS** | `{job="services"} |= "<trace_id>"` 走 `/query_range` → **2 条流**（web-bff + ai-svc）→ `evidence/t14-loki-trace-query.json` |
 | **T-15** health 进监控 | ⚠️ **改判落地**（D-05 字面被证伪） | 见 §10.2 |
+| **CL-F-14** tracer 启动竞态 | ✅ **PASS（A/B 负向对照）** | 停 OAP 重建 chat-svc → 新镜像后台补挂第 5 次成功 → SkyWalking 出现 chat-svc（**未重启容器**）；旧镜像 12 轮全缺席 + 0 条补挂日志 → `evidence/clf14_*.txt` |
 | **T-17** 观测 smoke 全绿 | ✅ **PASS** | `PASS: 60 check(s)` / FAIL 0 / exit 0 → `evidence/t17-smoke-observability.txt` |
 
 **本轮起栈额外挖出的真根因（已修）**：

@@ -1,0 +1,34 @@
+########## 阶段 A：负向对照（OAP 停着重建 chat-svc）##########
+--- A1 停 OAP ---
+oap_state=exited
+--- A2 用 cl01-verify 镜像重建 chat-svc（OAP 不可达 ⇒ 启动期 tracer 初始化必失败）---
+ Container emotion-echo-chat-svc Recreated 
+ Container emotion-echo-chat-svc Starting 
+ Container emotion-echo-chat-svc Started 
+--- 等 40s 让启动期重试（5×2s）走完 ---
+--- A3 chat-svc 启动日志（应看到 tracer init failed）---
+{"time":"2026-10-14T20:06:05.452664362+08:00","level":"INFO","msg":"[skywalking] tracer init failed (warn mode, continue): dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-14T20:06:07.179324141+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 1 次失败（service=emotion-echo-chat-svc backoff=5s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-14T20:06:14.056311866+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 2 次失败（service=emotion-echo-chat-svc backoff=10s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-14T20:06:25.834249473+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 3 次失败（service=emotion-echo-chat-svc backoff=20s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+--- A4 断言：SkyWalking 服务列表里【没有】chat-svc ---
+QUERY_FAILED: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>
+A4_exit=2  (期望 1 = ABSENT)
+
+########## 阶段 B：修复验证（起 OAP，不重启 chat-svc）##########
+--- B1 起 OAP ---
+--- 等 OAP 就绪 60s ---
+--- B2 轮询 SkyWalking 服务列表（最多 5 分钟，退避 5s/10s/20s/40s/60s）---
+[poll 1] rc=0 :: services(2)=['emotion-echo-chat-svc', 'emotion-echo-user-svc']
+B2_exit=0  (期望 0 = FOUND)
+--- B3 chat-svc 日志：后台补挂成功 ---
+{"time":"2026-10-14T20:06:07.179324141+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 1 次失败（service=emotion-echo-chat-svc backoff=5s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-14T20:06:14.056311866+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 2 次失败（service=emotion-echo-chat-svc backoff=10s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-14T20:06:25.834249473+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 3 次失败（service=emotion-echo-chat-svc backoff=20s）：dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-14T20:06:45.829164393+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂第 4 次失败（service=emotion-echo-chat-svc backoff=40s）：dial emotion-echo-sw-oap:11800: dial tcp 172.18.0.9:11800: connect: connection refused","svc":"chat-svc"}
+{"time":"2026-10-14T20:07:25.857024331+08:00","level":"INFO","msg":"[skywalking] tracer 后台补挂成功（service=emotion-echo-chat-svc attempt=5）—— 入口 span 自此刻起生效","svc":"chat-svc"}
+
+########## 结论 ##########
+A(负向对照,期望 ABSENT=1): 2
+B(修复验证,期望 FOUND=0): 0
+RESULT: NOT PASS —— 见上面日志
