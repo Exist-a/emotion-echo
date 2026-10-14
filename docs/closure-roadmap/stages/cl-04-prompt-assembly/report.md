@@ -338,7 +338,37 @@ $ pnpm lint                                    → 0 error（95 既存 warning�
 $ grep -rn "useAIStream\b|buildRCTPrompt|promptType" app/ e2e/ → 仅新守卫自身
 ```
 
-### 3.11 测试点总表（16 点，逐点状态）
+### 3.12 Phase 6：契约对齐（T-13）+ 基础人设去长度约束（用户裁定）— PASS
+
+**两条用户裁定（2026-10-14，经 AskUserQuestion 收集）**：① 基础人设的"简短"约束**先去掉看效果**；② `emotion` 字段**用起来**。
+
+**① 去掉 `baseSystemPrompt` 的长度约束**（原"用中文简短回应（2-3 句话）"）：
+
+| 变量 | 未接回意图风格（Phase 0/3） | 接回意图风格（Phase 5） | **再去掉简短约束（本 Phase）** |
+|---|---|---|---|
+| TTFT（3 轮均值） | 940ms | 1362ms | **1332ms**（无变化 —— 长度影响在首字之后） |
+| 回复体量 | 53~86 字 / 2~3 句 | 51 / 192 / 278 字 | **657 / 766 / 629 字（≈18 句）**，带编号小标题与加粗 |
+| e2e 用时 | 1.2~1.4s | 1.6~2.9s | **4.4~4.8s** |
+
+取舍：去掉与 `STYLE_INSTRUCTIONS` 矛盾的那条后，回复形态从"简短陪伴"变成**结构化长文（分点建议）**。
+用户要的正是"先看一下效果"——数据与样本见 `evidence/phase6-{ttft,replies}-nobrevity.txt`（含 657 字全文）。
+回归钉：`prompt_contract_test.go::TestBasePersona_NoBrevityConstraint`（钉"不得回潮简短约束"+ 必保语言/身份/三基调）。
+⚠️ **T-1 语义随之变更**：从"逐字等于**改造前旧输出**"→"逐字等于**本次裁定后的基线**"（golden 常量已同步，测试文件头写明）。
+
+**② `emotion` 字段接上（按一手事实落地）**：亲核三项 →
+(a) `sendToExistingConversation(convId, content, emotion = 'neutral', …)` 的 `emotion` **在所有调用点都没传**
+（`new.vue` / `[id].vue` 只传 `faceEmotion`/`voiceEmotion`）⇒ 线上该字段**恒为默认值 `neutral`**；
+(b) 前端 `app/utils/emotion.ts` 只有标签映射，**没有**文本情绪分类器；
+(c) 承载它的 `pages/chat/conversation/[id].vue`、`composables/useConversationSender.ts` 在契约 §1.1 属 **C 轨独占列**。
+
+⇒ BFF 半场落地（零风险 + 向前兼容）：`neutral`/空 = **无信号**（默认值而非测量值；照单注入等于断言每条消息"对方此刻平静"）；
+非 neutral 时注入"对方此刻的话语里透着X"（与 face/voice 同段位、同套不护栏）；face/voice 任一非空则**不叠加**文本信号；
+文本信号**优先于会话历史回落**（省一次 gRPC）。**前端半场未做**（越界需握手；且前端需先有分类器）——记为待握手项。
+
+证据（5 个新用例）：`TestBasePersona_NoBrevityConstraint` · `TestTextEmotion_{InjectedWhenNonNeutral, NeutralOrDefaultIsNoSignal,
+FaceVoiceTakePrecedence, BeatsHistoryFallback}` 全 PASS；`go vet ./...` exit 0；`go test ./...` 10 包 ok / 0 FAIL。
+
+### 3.13 测试点总表（16 点，逐点状态）
 
 | # | 测试点 | 判定 | 本轮状态 |
 |---|---|---|---|
@@ -354,10 +384,11 @@ $ grep -rn "useAIStream\b|buildRCTPrompt|promptType" app/ e2e/ → 仅新守卫�
 | T-10 | file_context 多附件全输出 | [A] | ✅ **PASS**（§3.10：RED 复现"只剩最后一条"→ 修后 3 passed / 全量 211 passed） |
 | T-11 | 意图注入接回（with_intent） | [A] | ✅ **PASS**（§3.10：2 钉 + 运行时 `[intent]` 日志；⚠️ 代价已实测并上报） |
 | T-12 | 死路径清零（useAIStream/usePrompt） | [A] | ✅ **PASS**（§3.10：删 4 文件 + 2 回流防护钉；vitest 649 用例全绿） |
-| T-13 | 契约对齐（无静默丢弃字段） | [A] | 未执行（Phase 6） |
-| T-14 | IAB 多轮"记得上文" | [V] | 未执行（Phase 7） |
+| T-13 | 契约对齐（无静默丢弃字段） | [A] | ✅ **PASS**（§3.12：`emotion` 接上（neutral=无信号）+ 前端半场记为待握手项） |
+| T-14 | IAB 多轮"记得上文" | [V] | 未执行（Phase 7；需用 dev 栈，按 §3.1 排队） |
 | T-15 | 负向对照（关历史⇒复现无记忆） | [A] | ✅ **PASS**（§3.6，`NoHistorySignals` 5 子例含"来源报错/去重后为空"⇒ 退回两条） |
 | T-16 | MaxTokens/Temperature 取值 | [M] | ✅ **已裁定**（1024 / 0.7，用户 2026-10-14） |
+| T-17 | 基础人设长度约束的去留 | [M] | ✅ **已裁定并落地**（2026-10-14：**先去掉**看效果；实测回复 657/766/629 字，见 §3.12） |
 
 ## §4 结论
 
@@ -372,8 +403,10 @@ $ grep -rn "useAIStream\b|buildRCTPrompt|promptType" app/ e2e/ → 仅新守卫�
 - **Phase 5 完成**：① `file_context.py` 多附件缩进 bug 修复（原只输出最后一条）；② 意图风格注入**接回**并运行时确认
   （⚠️ 代价实测：TTFT +45%、**回复 3~5 倍长且变列表体** ⇒ 产品口径待裁定，见 §3.10）；
   ③ 死路径清零（删 `useAIStream`/`usePrompt`/孤儿类型 + 2 条回流防护钉）。
-- **阶段状态**：`in-progress`（**未收口**）。测试点 **13/16 有 PASS 结论**（T-1~T-12 除 T-13/T-14 外全部 + T-15）+ T-16 已裁定；
-  余 **T-13 契约对齐**（Phase 6）与 **T-14 IAB 人可见钉**（Phase 7）。
+- **Phase 6 完成**：契约对齐（`emotion` 接上，`neutral` 视为无信号；前端半场记为待握手项）+
+  **基础人设去掉"简短"约束**（用户裁定）—— 实测回复形态转为结构化长文（657/766/629 字，TTFT 不变）。
+- **阶段状态**：`in-progress`（**未收口**）。测试点 **14/16 有 PASS 结论**（T-1~T-13 全部 + T-15）+ T-16/T-17 已裁定；
+  仅剩 **T-14 IAB 人可见钉**（Phase 7，需 dev 栈）。
 - **环境遗留**（交付给下一轮）：
   - dev 栈**在跑**（17 容器）；`xtts` 按用户指示**已停**（TTS 链路预期 502，文本链路不受影响）；
   - dev mode 锁 `deploy/.devmode-session`（owner `lane-cl-a`，until 2026-10-14 12:00）→ **收工须删**；
