@@ -257,7 +257,41 @@ $ node evidence/phase3-replylength.mjs 669     （读落库回复全文，零额
 **附带发现（T-13 有用）**：读路径的 VM 字段是 `sender`（`"ai"`/`"user"`），写路径是 `role`（`"assistant"`）。
 不是 bug（是刻意的前端 VM），但属"统一字段集"要盘点的差异项。
 
-### 3.8 测试点总表（16 点，逐点状态）
+### 3.9 Phase 4：文案集中 + 三方一致性守卫 — PASS
+
+**Part A 文案集中**（验收 D「system 文案集中一处」）：新增 `internal/handler/prompt_templates.go`，
+把**基础人设 / 人格适配表 + 护栏 + 分档阈值 / 情绪段句式 / 中文情绪映射**全部集中到一处；
+`personality_directive.go` 收缩为"只留 `buildPersonalityGuide` 算法"；`ai_stream_handler.go` 移除
+`baseSystemPrompt`、情绪句式内联与 `emotionChineseLabel`（switch → 表查，未收录原样返回，行为等价）。
+顺手删掉**死变量** `personalityDimensionLabels`（全仓零引用，仅声明）——原属 Phase 5 死路径处置项，提前清掉。
+
+> **零行为变更的证据**：Phase 1 的 golden **字节**钉（6 例）在搬迁后仍全绿 —— 搬迁不动字节。
+> 因是纯搬迁，**未单独重建镜像**（运行时随 Phase 5 一并复验）；判断依据是字节级 golden + 全模块测试，不是自述。
+
+**Part B T-9 三方一致性守卫**：同一份展示契约由三处独立实现（前端 `personality.ts` / BFF 适配表+阈值 /
+assessment `dimensionMap`），而前端那份的**文件头自己写着**"与后端两处实现保持一致，改任一处必须同步改另两处"
+—— 纯靠人记（本项目历史上正是这类人工同步漂移过）。守卫比对：维度序列 / 中文标签 / 满分 / 分档阈值 / 每维题数。
+
+三个设计取舍（写进报告以免被当成"随手写的测试"）：
+
+| 取舍 | 选择 | 理由 |
+|---|---|---|
+| 守卫 vs 单一来源派生（plan §3.4 二选一） | **机器守卫** | 前端要在**运行时**用 label 渲染雷达图，派生要么加接口要么上 codegen；先把漂移变红灯，成本最低 |
+| 放 Go 测试 vs `scripts/` 守卫 | **Go 测试** | 随 `go-test.yml` 自动执行，**不用改 `.github/workflows/**`**（D 轨文件面，且新 job 要动总闸 needs）；CI 整仓 checkout ⇒ 跨模块相对路径同样成立（已核 `go-test.yml`） |
+| 解析不到怎么办 | **判红**，并带解析器自检 | 反"未解析到 ⇒ 跳过"的空跑 PASS（E2E-F-180 同型教训） |
+
+```text
+$ go test ./internal/handler/ -run TestPersonalityContract -v -count=1
+--- PASS: TestPersonalityContract_ThreeWayConsistent   ← BFF ↔ 前端 ↔ assessment 无漂移
+--- PASS: TestPersonalityContract_DriftIsDetected      ← 负向对照 3 例（标签/阈值/维度顺序）全部抓到
+$ go test ./... -count=1    → 全包 ok        $ go vet ./... → exit 0
+```
+
+**顺带发现（并入本阶段 T-13 盘点）**：前端 `personality.ts` 文件头指向的 BFF 函数名 `formatPersonalityContext`
+**在 BFF 里并不存在**（真实实现是 `personality_directive.go` 的适配表 + 阈值）
+⇒ 一例文档漂移（守卫钉的是**值**一致性，函数名漂移不在其范围内）。
+
+### 3.10 测试点总表（16 点，逐点状态）
 
 | # | 测试点 | 判定 | 本轮状态 |
 |---|---|---|---|
@@ -269,7 +303,7 @@ $ node evidence/phase3-replylength.mjs 669     （读落库回复全文，零额
 | T-6 | userContent 上界（rune 安全） | [A] | ✅ **PASS**（§3.6，截断 4500→4000 + 未超时逐字透传） |
 | T-7 | 参数真下发（Temperature/MaxTokens） | [A] | ✅ **PASS**（§3.7：handler 侧 3 钉 + pb 层 1 钉） |
 | T-8 | 两处调用点收敛（单一组装函数） | [A] | ✅ **PASS**（§3.5，源码扫描 + 2 调用点） |
-| T-9 | 配置化 + 三处人格文案一致性 | [A] | 未执行（Phase 4） |
+| T-9 | 配置化 + 三处人格文案一致性 | [A] | ✅ **PASS**（§3.9：文案集中一处 + 三方守卫 2 例含负向对照） |
 | T-10 | file_context 多附件全输出 | [A] | 未执行（Phase 5） |
 | T-11 | 意图注入接回（with_intent） | [A] | 未执行（Phase 5） |
 | T-12 | 死路径清零（useAIStream/usePrompt） | [A] | 未执行（Phase 5） |
@@ -286,8 +320,10 @@ $ node evidence/phase3-replylength.mjs 669     （读落库回复全文，零额
   运行时证据 `messages=2→4→6` —— **"多轮＝无记忆单轮"这一核心缺陷已消除**。
 - **Phase 3 完成**：生成参数真下发（0.7 / 1024，两条路径 + pb 层各一钉）；顺手补上 `llm_grpc_test.go`
   声称却缺失的 pb 映射断言；R1 长度张力实测**未出现**（回复仍 2~3 句）。
-- **阶段状态**：`in-progress`（**未收口**）。测试点 **9/16 有 PASS 结论**
-  （T-1/T-2/T-3/T-4/T-5/T-6/T-7/T-8/T-15）+ T-16 已裁定；余 5 点（T-9/T-10/T-11/T-12/T-13）+ T-14 在 Phase 4~7。
+- **Phase 4 完成**：system 文案集中一处（`prompt_templates.go`）+ 人格契约三方一致性守卫（含负向对照）；
+  顺手清掉死变量 `personalityDimensionLabels`。
+- **阶段状态**：`in-progress`（**未收口**）。测试点 **10/16 有 PASS 结论**
+  （T-1~T-9 全部 + T-15）+ T-16 已裁定；余 3 点（T-10/T-11/T-13）+ T-12 + T-14 在 Phase 5~7。
 - **环境遗留**（交付给下一轮）：
   - dev 栈**在跑**（17 容器）；`xtts` 按用户指示**已停**（TTS 链路预期 502，文本链路不受影响）；
   - dev mode 锁 `deploy/.devmode-session`（owner `lane-cl-a`，until 2026-10-14 12:00）→ **收工须删**；
@@ -306,3 +342,8 @@ $ node evidence/phase3-replylength.mjs 669     （读落库回复全文，零额
 3. **worktree 与 gitignored 运行态文件**：`deploy/.env.local`、`deploy/.devmode-session` 在 worktree 里都不存在 ⇒
    起栈报错、锁失效、且 worktree 的源码无法直接构建成镜像（CL-F-07）。并行契约要求 worktree，二者存在**结构性冲突**，需在契约/RUNBOOK 层给安全做法。
 4. **MSYS 吞多行 `node -e`**：多行内联 node 在 Git Bash 下静默无输出 ⇒ 探针一律落文件再跑（本次已按此改）。
+5. **本机 `gofmt -l` 是全仓假报**（Windows 工作区为 CRLF，gofmt 要 LF）：它会列出**几十个我没碰过的文件**
+   ⇒ **不得把 `gofmt -l` 当门禁**（本机）。判"是否改坏行尾"的正确手法是 `git diff --numstat` 看改动行数是否
+   仍是小值。CI 侧 Go 门禁是 `go vet` + `go test`（`go-test.yml`），不含 gofmt。
+6. **"战役式"推进的节奏经验**：先零回归搬迁（Phase 1）→ 再加能力（Phase 2/3）—— 每加一步都由同一套 golden 字节钉
+   托底，改动面大也不再心虚；反过来若一开始就"重写 + 加历史"，一旦回归很难定位是哪一部分引起的。
