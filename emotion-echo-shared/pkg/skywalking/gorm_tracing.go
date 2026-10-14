@@ -9,27 +9,56 @@ import (
 	"gorm.io/gorm"
 )
 
-// InstrumentGORM 注册 GORM 回调，让 SELECT/INSERT/UPDATE/DELETE 自动产生 ExitSpan。
+// InstrumentGORM 注册 GORM 回调，让 ORM 的 SELECT/INSERT/UPDATE/DELETE 与裸 SQL
+// 各自产生 ExitSpan。
 //
 // 关键设计：
-//   - 在每个 op type（Create/Query/Update/Delete/Row）的最早期注册 Before 钩子，
-//     创建 ExitSpan；在最晚期注册 After 钩子，结束 span。
-//   - 跳过 raw SQL（name = ""）和 transaction-only operations。
-//   - 通过 db.Statement.Context 传递 ctx（GORM 自动用 ctx 注册到 statement）。
-//     这意味着业务代码应使用 db.WithContext(ctx)，trace 才会接上
+//   - 按 op 分派到**正确的 processor**：Create/Query/Update/Delete/Row 各挂自己的
+//     begin（最早）与 end（最晚）回调；裸 SQL（db.Raw/db.Exec）单独挂 Raw。
+//   - 历史 bug（CL-01 修复）：原实现把 5 个 op **全部**注册到 db.Callback().Raw()，
+//     而 ORM 的 Create/Find/Updates/Delete 各走自己的 processor、**永不进 Raw**
+//     ⇒ 5 个 svc 的 ORM 查询零 span（同时 Raw 上堆了 10 个无关回调）。
+//   - 通过 db.Statement.Context 传递 ctx（GORM 自动把 ctx 挂到 statement）：
+//     业务代码用 db.WithContext(ctx) 时 trace 才接上（无 ctx ⇒ 无父 span ⇒ 不建 span）。
 func InstrumentGORM(db *gorm.DB) {
 	// 防御：nil DB 不挂回调（以前会 panic；Stage 26-A 暴露 bug #2）
 	if db == nil {
 		return
 	}
 	tgr := Tracer()
+	cbs := db.Callback()
 
-	for _, opType := range []string{"create", "query", "update", "delete", "row"} {
-		db.Callback().Raw().Before("gorm:"+opType).Register("skywalking:begin_"+opType,
-			makeBeginCallback(opType, tgr))
-		db.Callback().Raw().After("gorm:after_"+opType).Register("skywalking:end_"+opType,
-			makeEndCallback(tgr))
-	}
+	cbs.Create().Before("gorm:create").Register("skywalking:begin_create",
+		makeBeginCallback("create", tgr))
+	cbs.Create().After("gorm:after_create").Register("skywalking:end_create",
+		makeEndCallback(tgr))
+
+	cbs.Query().Before("gorm:query").Register("skywalking:begin_query",
+		makeBeginCallback("query", tgr))
+	cbs.Query().After("gorm:after_query").Register("skywalking:end_query",
+		makeEndCallback(tgr))
+
+	cbs.Update().Before("gorm:update").Register("skywalking:begin_update",
+		makeBeginCallback("update", tgr))
+	cbs.Update().After("gorm:after_update").Register("skywalking:end_update",
+		makeEndCallback(tgr))
+
+	cbs.Delete().Before("gorm:delete").Register("skywalking:begin_delete",
+		makeBeginCallback("delete", tgr))
+	cbs.Delete().After("gorm:after_delete").Register("skywalking:end_delete",
+		makeEndCallback(tgr))
+
+	// Row processor 只有 "gorm:row"（无 gorm:after_row），故 begin/end 都相对它排序。
+	cbs.Row().Before("gorm:row").Register("skywalking:begin_row",
+		makeBeginCallback("row", tgr))
+	cbs.Row().After("gorm:row").Register("skywalking:end_row",
+		makeEndCallback(tgr))
+
+	// 裸 SQL（db.Raw / db.Exec）走 Raw processor —— 单列一条，避免 5 个 op 回调堆在 Raw。
+	cbs.Raw().Before("gorm:raw").Register("skywalking:begin_raw",
+		makeBeginCallback("raw", tgr))
+	cbs.Raw().After("gorm:raw").Register("skywalking:end_raw",
+		makeEndCallback(tgr))
 }
 
 // makeBeginCallback 返回创建 span 的回调

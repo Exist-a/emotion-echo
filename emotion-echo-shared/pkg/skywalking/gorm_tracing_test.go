@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -147,4 +149,51 @@ func TestInstrumentGORM_NilDB_NoPanic(t *testing.T) {
 	}()
 	var db *gorm.DB
 	InstrumentGORM(db)
+}
+
+// TestInstrumentGORM_RegistersOnOpProcessors（CL-01 T-01 回归钉）
+//
+// ORM 各 op 的 begin/end 回调必须注册在**对应的 processor**（Create/Query/Update/
+// Delete/Row）上。历史 bug：全部错挂 db.Callback().Raw() —— 而 ORM 的 Create/Find/
+// Updates/Delete 各走自己的 processor，**永不进 Raw** ⇒ 5 svc 的 ORM 查询零 span。
+// 修前本测试 RED（Query().Get("skywalking:begin_query") == nil），修后 GREEN。
+func TestInstrumentGORM_RegistersOnOpProcessors(t *testing.T) {
+	// 源码确认：gorm.Open(nil, …) 中 config.Dialector 保持 nil，Open 仍会
+	// 初始化默认 callbacks 且不触发 Ping ⇒ 返回可用的 *gorm.DB（见 gorm.go Open）。
+	db, err := gorm.Open(nil, &gorm.Config{SkipDefaultTransaction: true})
+	require.NoError(t, err, "gorm.Open(nil) 必须返回可用的 *gorm.DB（callbacks 已在 Open 内初始化）")
+	require.NotNil(t, db)
+
+	InstrumentGORM(db)
+	cbs := db.Callback()
+
+	// 只用 Get 单个方法，避免引用 gorm 未导出的 *callbacks 类型
+	type getter interface {
+		Get(name string) func(*gorm.DB)
+	}
+	cases := []struct {
+		op   string
+		proc getter
+	}{
+		{"create", cbs.Create()},
+		{"query", cbs.Query()},
+		{"update", cbs.Update()},
+		{"delete", cbs.Delete()},
+		{"row", cbs.Row()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.op, func(t *testing.T) {
+			assert.NotNilf(t, tc.proc.Get("skywalking:begin_"+tc.op),
+				"begin 回调必须注册在 %s processor（修前错挂 Raw ⇒ nil）", tc.op)
+			assert.NotNilf(t, tc.proc.Get("skywalking:end_"+tc.op),
+				"end 回调必须注册在 %s processor", tc.op)
+		})
+	}
+
+	// 负向 1：Raw processor 不应再堆 ORM 的 query 回调（原 bug 的形态）
+	assert.Nil(t, cbs.Raw().Get("skywalking:begin_query"),
+		"ORM query 回调不应挂在 Raw processor 上（Raw 只由 db.Raw()/Exec() 触发）")
+	// 负向 2：裸 SQL 仍须有独立埋点（analytics 报表大量用 db.Raw/db.Exec）
+	assert.NotNil(t, cbs.Raw().Get("skywalking:begin_raw"),
+		"裸 SQL 应有一条独立 span（skywalking:begin_raw）")
 }

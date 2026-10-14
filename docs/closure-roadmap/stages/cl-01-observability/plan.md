@@ -122,7 +122,7 @@ related-plans:
 
 | # | 测试点 | 判定 | 验证方式 | 证据（Phase 完成后回填） |
 |---|--------|------|---------|------|
-| T-01 | GORM 回调注册在**正确的 processor**（Query/Create/Update/Delete/Row） | [A] | Go 单测：`db.Callback().Query().Get("skywalking:begin_query") != nil`（**修前 nil=RED**），5 op 全覆盖 | 单测输出 |
+| T-01 | GORM 回调注册在**正确的 processor**（Query/Create/Update/Delete/Row） | [A] | Go 单测：`db.Callback().Query().Get("skywalking:begin_query") != nil`（**修前 nil=RED**），5 op 全覆盖 | ✅ 2026-10-14：`go test ./pkg/skywalking/ -count=1` → **ok**；修前 RED 已留痕（负向对照）；另修 raw 单列（`begin_raw`，analytics 22 处 `db.Raw/Exec` 用） |
 | T-02 | **真实 ORM 查询在 SkyWalking UI 出 span**（修前 0 → 修后 >0） | [A] | 起栈触发一次 `.WithContext(ctx)` 的 ORM 查询 → SkyWalking UI/GraphQL 查询 trace 含 `gorm.query` | UI 查询结果/截图（**约束⑤硬证据**） |
 | T-03 | Redis 埋点接线：BFF 装配 `InitRedis` + 真 Redis 命令出 span | [A] | 装配断言（BFF main 调用点存在）+ 起栈后 Redis 命令出 `redis.GET` span | 单测 + UI span |
 | T-04 | HTTP 出站 `TracingRoundTripper`：建 exit span + 注入 `sw8` | [A] | 单测（httptest server 收 `sw8` 头非空 + span 产生）；**覆盖清单核对**（ai aiclient×3 / http_analyzer / llm_fuser / BFF downstream） | 单测输出 |
