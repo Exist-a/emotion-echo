@@ -152,6 +152,20 @@ export async function getFailedMessages(sessionId: string): Promise<MessageWithS
   return db.messages.where({ sessionId, status: 'failed' }).toArray()
 }
 
+/**
+ * 获取**全部会话**里发送失败的消息（CL-05 Phase 4 · T-18 断网重扫用）。
+ *
+ * 离线队列是**会话无关**的：用户可能在 A 会话里断网、切到 B 会话才联网 ——
+ * 只扫当前会话会漏掉 A 里那条待重发的消息。
+ * ⚠️ 用 `filter`（全表扫描）而非 `where('status')`：schema 里没有**单列** status 索引
+ * （只有 `[sessionId+status]` 复合索引），`where('status')` 会抛 SchemaError。
+ * 本地待重发队列规模很小，全表扫描代价可接受。
+ */
+export async function getAllFailedMessages(): Promise<MessageWithStatus[]> {
+  const db = await getDb()
+  return db.messages.filter((m: MessageWithStatus) => m.status === 'failed').toArray()
+}
+
 // ==================== 删除和清理操作 ====================
 
 /**
