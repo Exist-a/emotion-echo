@@ -96,6 +96,7 @@ related:
 | 2026-10-14 | Lane-CL-B | `docs/closure-roadmap/{roadmap,parallel-contract}.md` | B 轨开工：§三 登记占位 + CL-01 翻 in-progress + §2 补并行语义注 | ✅ |
 | 2026-10-14 | Lane-CL-C | `docs/closure-roadmap/{parallel-contract,roadmap}.md`、`docs/plans/grpc-deadlink-actualization.md` | C 轨开工：§三 登记占位（**并回填 A/B 两行**）+ CL-02 翻 in-progress + 来源计划 front-matter 同步 | ✅ |
 | 2026-10-14 | Lane-CL-C | **`proto/**`**（本 PR 暂未改；Phase 2/3 将改） | C 轨**预占声明**：本阶段是当前唯一计划改 `proto/**` 的轨（A/B 均不改）。其他轨若需改 proto，**先与本轨握手** | ⏳ 预占 |
+| 2026-10-14 | Lane-CL-A | `AGENTS.md`（§8.1 新增）、`docs/_meta/multi-track-parallelism.md`（新文件）、`docs/_meta/parallel-tracks.md`（加指针） | A 轨收口轮：把三轨并行暴露的**六类问题**（登记只活分支 / 多轨同改登记表 / **基于旧 main 的分支会回退别人已合内容** / worktree 缺 gitignored 运行态文件 / 两 worktree 共用镜像 tag 互相覆盖 / 本地守卫假红）落成**硬约束 7~10**（只在自己的分支与 PR 上工作 · 登记独立落地且 append-only · 合并前三查 · 共享 docker 资源隔离）+ 新增细则文档（含业界做法与出处）。按硬约束 8，本行**只追加**、不改他人行 | ✅ |
 
 > **C 轨另注**：本轨与 A/B 在 `emotion-echo-web-bff/internal/downstream/` **同目录不同文件**（A 占 `llm*.go`、B 占 `ai.go` 等），
 > 依 §1.2"同名文件串行、不同文件可并"**不构成阻塞**；仅 `proto/**` 为独占脊柱（上表已预占）。
