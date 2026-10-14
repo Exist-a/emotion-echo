@@ -291,7 +291,54 @@ $ go test ./... -count=1    → 全包 ok        $ go vet ./... → exit 0
 **在 BFF 里并不存在**（真实实现是 `personality_directive.go` 的适配表 + 阈值）
 ⇒ 一例文档漂移（守卫钉的是**值**一致性，函数名漂移不在其范围内）。
 
-### 3.10 测试点总表（16 点，逐点状态）
+### 3.10 Phase 5：死路径处置 + file_context 修复 — PASS
+
+三件事分开提交（每件都含自己的测试）：
+
+**T-10 修 `file_context.py` 多附件缩进 bug**（`fix(llm-service)`，`58c4a1b`）
+
+```text
+RED（新增 tests/unit/test_file_context_multi_attachment.py，3 附件）：
+  assert 1 == 3  →  输出只剩 "--- 附件 3：ok2.txt"
+  （i/name 泄漏成循环末值、正文只有最后一条）3 例全红
+GREEN：python -m pytest tests/unit → 211 passed（新增 3 例；既有只覆盖单附件，正是本 bug 潜伏的原因）
+```
+
+**T-11 接回意图风格注入**（`feat(bff)`，`cb29ab7`）：`LLMStreamRequest.WithIntent` → pb → 单例常量 `llmWithIntent = true`。
+两条钉（handler 侧 fake 捕获 + downstream 侧 mock servicer 断言 `GetWithIntent()`）。运行时确认交接成功：
+
+```text
+$ docker logs emotion-llm-service | grep "[intent]"
+[intent] career_help (confidence=0.9)   ← 0.9 = LLM 消歧路径的固定置信度 ⇒ 规则式拿不准、确实发生了额外 LLM 调用
+[intent] career_help (confidence=0.9)
+[intent] other (confidence=0.0)
+（基线跑同一脚本时该日志 0 条 ⇒ 端到端确认"接回前真的没触发"）
+```
+
+**⚠️ 接回的代价（实测，非推测）**：
+
+| 指标 | 未接回（基线） | 接回后 | 变化 |
+|---|---|---|---|
+| TTFT（3 轮均值） | 1056 / 1042 / 722 → **940ms** | 1290 / 1212 / 1584 → **1362ms** | **+422ms（+45%）** |
+| 回复长度 | 53~86 字 / 2~3 句 | 51 / **192** / **278** 字（第 2/3 轮 ≈6/13 句） | **3~5 倍，且变成分点列表体** |
+
+第 2/3 轮长回复的直接原因**不是** `MaxTokens`（1024 远未触及），而是 llm-service 的
+`STYLE_INSTRUCTIONS["career_help"]`（"分点给出建议（1. 2. 3.）…关键建议加粗标注"）**压过了基础人设的"2-3 句话简短回应"**
+⇒ 同一份 system 段里出现两条互相矛盾的篇幅指令。**这是产品口径问题，交用户裁定**（选项：①调 `STYLE_INSTRUCTIONS` 与陪伴人设对齐；
+②`llmWithIntent` 翻回 false 放弃该收益；③按意图分流）。证据：`evidence/phase5-ttft-*.txt`、`phase5-replies-withintent.txt`。
+
+**T-12 死路径清零**（`chore(web)`，`ec40e8d`）：删 `useAIStream.ts` / `usePrompt.ts`(+其单测) / 孤儿类型 `types/prompt/promptType.ts`
+（仅被 `usePrompt` 引用 ⇒ 整目录成孤儿，一并清）；同步改 `r09-*.architecture.test.ts`（它用 `readFileSync` 读源码，删文件后该文件所有用例会连带抛错），
+并**新增 2 条回流防护钉**（文件必须不存在 + 生产链路不得再出现 `buildRCTPrompt`）。
+
+```text
+$ pnpm vitest run app/composables/r09-*.test.ts → 8 passed
+$ pnpm vitest run                              → 77 文件 / 649 用例全绿（删除无回归）
+$ pnpm lint                                    → 0 error（95 既存 warning）
+$ grep -rn "useAIStream\b|buildRCTPrompt|promptType" app/ e2e/ → 仅新守卫自身
+```
+
+### 3.11 测试点总表（16 点，逐点状态）
 
 | # | 测试点 | 判定 | 本轮状态 |
 |---|---|---|---|
@@ -304,9 +351,9 @@ $ go test ./... -count=1    → 全包 ok        $ go vet ./... → exit 0
 | T-7 | 参数真下发（Temperature/MaxTokens） | [A] | ✅ **PASS**（§3.7：handler 侧 3 钉 + pb 层 1 钉） |
 | T-8 | 两处调用点收敛（单一组装函数） | [A] | ✅ **PASS**（§3.5，源码扫描 + 2 调用点） |
 | T-9 | 配置化 + 三处人格文案一致性 | [A] | ✅ **PASS**（§3.9：文案集中一处 + 三方守卫 2 例含负向对照） |
-| T-10 | file_context 多附件全输出 | [A] | 未执行（Phase 5） |
-| T-11 | 意图注入接回（with_intent） | [A] | 未执行（Phase 5） |
-| T-12 | 死路径清零（useAIStream/usePrompt） | [A] | 未执行（Phase 5） |
+| T-10 | file_context 多附件全输出 | [A] | ✅ **PASS**（§3.10：RED 复现"只剩最后一条"→ 修后 3 passed / 全量 211 passed） |
+| T-11 | 意图注入接回（with_intent） | [A] | ✅ **PASS**（§3.10：2 钉 + 运行时 `[intent]` 日志；⚠️ 代价已实测并上报） |
+| T-12 | 死路径清零（useAIStream/usePrompt） | [A] | ✅ **PASS**（§3.10：删 4 文件 + 2 回流防护钉；vitest 649 用例全绿） |
 | T-13 | 契约对齐（无静默丢弃字段） | [A] | 未执行（Phase 6） |
 | T-14 | IAB 多轮"记得上文" | [V] | 未执行（Phase 7） |
 | T-15 | 负向对照（关历史⇒复现无记忆） | [A] | ✅ **PASS**（§3.6，`NoHistorySignals` 5 子例含"来源报错/去重后为空"⇒ 退回两条） |
@@ -322,8 +369,11 @@ $ go test ./... -count=1    → 全包 ok        $ go vet ./... → exit 0
   声称却缺失的 pb 映射断言；R1 长度张力实测**未出现**（回复仍 2~3 句）。
 - **Phase 4 完成**：system 文案集中一处（`prompt_templates.go`）+ 人格契约三方一致性守卫（含负向对照）；
   顺手清掉死变量 `personalityDimensionLabels`。
-- **阶段状态**：`in-progress`（**未收口**）。测试点 **10/16 有 PASS 结论**
-  （T-1~T-9 全部 + T-15）+ T-16 已裁定；余 3 点（T-10/T-11/T-13）+ T-12 + T-14 在 Phase 5~7。
+- **Phase 5 完成**：① `file_context.py` 多附件缩进 bug 修复（原只输出最后一条）；② 意图风格注入**接回**并运行时确认
+  （⚠️ 代价实测：TTFT +45%、**回复 3~5 倍长且变列表体** ⇒ 产品口径待裁定，见 §3.10）；
+  ③ 死路径清零（删 `useAIStream`/`usePrompt`/孤儿类型 + 2 条回流防护钉）。
+- **阶段状态**：`in-progress`（**未收口**）。测试点 **13/16 有 PASS 结论**（T-1~T-12 除 T-13/T-14 外全部 + T-15）+ T-16 已裁定；
+  余 **T-13 契约对齐**（Phase 6）与 **T-14 IAB 人可见钉**（Phase 7）。
 - **环境遗留**（交付给下一轮）：
   - dev 栈**在跑**（17 容器）；`xtts` 按用户指示**已停**（TTS 链路预期 502，文本链路不受影响）；
   - dev mode 锁 `deploy/.devmode-session`（owner `lane-cl-a`，until 2026-10-14 12:00）→ **收工须删**；
@@ -347,3 +397,7 @@ $ go test ./... -count=1    → 全包 ok        $ go vet ./... → exit 0
    仍是小值。CI 侧 Go 门禁是 `go vet` + `go test`（`go-test.yml`），不含 gofmt。
 6. **"战役式"推进的节奏经验**：先零回归搬迁（Phase 1）→ 再加能力（Phase 2/3）—— 每加一步都由同一套 golden 字节钉
    托底，改动面大也不再心虚；反过来若一开始就"重写 + 加历史"，一旦回归很难定位是哪一部分引起的。
+7. **并行轨共用 docker daemon（CL-F-09）**：两个 worktree 构建的是**同一批镜像 tag** ⇒ 互相覆盖；修完代码"本地验收通过"
+   不等于"你验的是你的代码"。自查手法：`docker images | grep <tag>` 看构建时刻 + `docker ps --format {{.Image}}` 看容器实际镜像 ID。
+8. **"死路径复活"必须先量代价再宣称收益**：`with_intent` 接回本身一行代码，但真实代价是 TTFT +45% 与回复体量 3~5 倍
+   （后者来自另一处文案与人设的矛盾，不在 BFF 侧）。若只按"链路通了"收工，产品侧的变化会被漏报。
