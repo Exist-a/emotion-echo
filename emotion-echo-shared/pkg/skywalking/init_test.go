@@ -1,10 +1,8 @@
 package skywalking
 
 import (
-	"context"
 	"testing"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 )
@@ -34,31 +32,4 @@ func TestInitGORM_NonNilPositive(t *testing.T) {
 		t.Skipf("gorm.Open(nil) failed (env limitation): %v", err)
 	}
 	assert.GreaterOrEqual(t, InitGORM(db), 1, "非 nil *gorm.DB 必须触发 InstrumentGORM 副作用")
-}
-
-// TestInitRedis_NilSafe nil client 不 panic
-func TestInitRedis_NilSafe(t *testing.T) {
-	assert.False(t, InitRedis(nil))
-}
-
-// TestInitRedis_RealClientRegistersHook Round 4.4 PR-1 caller-wiring 钉死：
-//
-// 真 *redis.Client 传入 InitRedis 必须返回 true，且 hook 必须注册成功
-//（=InstrumentRedis 调用发生过）。当前实现对 *redis.Client type-assert 一个
-// 内部 hookable interface（永远 false）→ 本测试必失败 → 暴露隐性 bug。
-//
-// 设计意图：未来 svc 接入 Redis 时，InitRedis 必须真把 TracingHook 挂上，
-// 否则 Redis 流量无 trace（沉默丢失可观测性）。
-func TestInitRedis_RealClientRegistersHook(t *testing.T) {
-	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"}) // 不真连
-	defer rdb.Close()
-
-	// redis.Client 内部 hook 列表长度不可直接读 —— 我们用 ProcessHook 副作用间接验证
-	// "挂载 hook 后执行命令会经过 hook"。但 hook 需要 Tracer 才能产生 span，
-	// 没有 Tracer 时 ProcessHook 直接透传（见 redis_tracing.go:38-39），无法证伪。
-	//
-	// 更可靠：InitRedis 返回值契约 —— 真 *redis.Client 必须返 true
-	// （即"hook 已注册"信号）。
-	assert.True(t, InitRedis(rdb), "*redis.Client 必须返 true（hook 已注册信号）")
-	_ = context.Background() // 防 unused（保留 ctx import 给未来用例）
 }

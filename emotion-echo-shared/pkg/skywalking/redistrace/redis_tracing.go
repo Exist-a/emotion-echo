@@ -1,4 +1,9 @@
-package skywalking
+// Package redistrace 把 go-redis 客户端接上 SkyWalking exit span。
+//
+// 为什么不放在 `pkg/skywalking`：那个包含 GORM 埋点（import gorm.io/gorm），
+// 而 web-bff（API 网关）只想接 Redis 埋点，不该因此把 ORM 拖进依赖图。
+// 本包只依赖 go-redis + pkg/skywalking/trace（后者仅依赖 go2sky）。
+package redistrace
 
 import (
 	"context"
@@ -9,12 +14,23 @@ import (
 	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
+// InitRedis 给 *redis.Client 装上 Tracing Hook，返回是否挂载成功。
+//
+// 用途：调用方在拿到 *redis.Client 后立即调一次：
+//
+//	rdb := buildRedisClient()
+//	if redistrace.InitRedis(rdb) { ... }
+//
+// nil-safe：nil client 不 panic，返 false。无 tracer 时 ProcessHook 直接透传，零开销。
+func InitRedis(client *redis.Client) bool {
+	if client == nil {
+		return false
+	}
+	InstrumentRedis(client)
+	return true
+}
+
 // InstrumentRedis 给 *redis.Client 装上 Tracing Hook，让每条 Redis 命令产生一个 ExitSpan。
-//
-// 用法（仅需一次）：
-//
-//	rdb := database.NewRedis(...)
-//	skywalking.InstrumentRedis(rdb)
 func InstrumentRedis(rdb *redis.Client) {
 	// 防御：nil client 不挂 hook（以前会 panic；Stage 26-A 暴露 bug #2）
 	if rdb == nil {
