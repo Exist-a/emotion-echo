@@ -128,9 +128,6 @@ func (f *failingDeleteRepo) IncrementMessageCount(ctx context.Context, conversat
 func (f *failingDeleteRepo) AppendMessage(ctx context.Context, m *model.Message) error {
 	return f.inner.AppendMessage(ctx, m)
 }
-func (f *failingDeleteRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	return f.inner.ListMessages(ctx, conversationID, limit)
-}
 func (f *failingDeleteRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {
 	return f.inner.ListMessagesPage(ctx, conversationID, limit, cursor)
 }

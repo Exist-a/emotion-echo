@@ -96,6 +96,14 @@ func ListMessagesHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 				req.Limit = n
 			}
 		}
+		// CL-05 Phase 6 · T-7：HTTP 降级路径（`CHAT_TRANSPORT=http` 回滚开关）也必须认
+		// `cursor`，否则翻页在此路径上**静默失效**（永远返回最新一页，用户上滚看不到历史）。
+		// 语义与 gRPC 主路径 / BFF 的 buildMessageQuery 一致：只在 > 0 时生效，0 = 从最新开始。
+		if cursorStr := c.Query("cursor"); cursorStr != "" {
+			if n, err := strconv.ParseInt(cursorStr, 10, 64); err == nil && n > 0 {
+				req.Cursor = n
+			}
+		}
 		resp, err := logic.NewListMessagesLogic(c.Request.Context(), svcCtx).ListMessages(&req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

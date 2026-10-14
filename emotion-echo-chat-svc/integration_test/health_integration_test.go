@@ -222,7 +222,7 @@ func TestConversationRepo_Integration_RealPostgresCRUD(t *testing.T) {
 	require.NoError(t, repo.AppendMessage(ctx, m))
 	require.Greater(t, m.ID, int64(0))
 
-	msgs, err := repo.ListMessages(ctx, c.ID, 10)
+	msgs, _, err := repo.ListMessagesPage(ctx, c.ID, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
 	require.Equal(t, "hi from integration", msgs[0].Content)

@@ -35,8 +35,6 @@ type ConversationRepo interface {
 	IncrementMessageCount(ctx context.Context, conversationID int64) error
 	// AppendMessage 追加一条消息
 	AppendMessage(ctx context.Context, m *model.Message) error
-	// ListMessages 列出会话的消息
-	ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error)
 	// ListMessagesPage 游标分页列消息（2026-10-13）：返回"最新 limit 条"，
 	// 传入 cursor>0 时返回 id < cursor 的更旧消息。返回升序（时间正序）切片 +
 	// 是否还有更旧消息（用于前端上翻加载历史）。
@@ -131,22 +129,6 @@ func (r *InMemoryConversationRepo) AppendMessage(ctx context.Context, m *model.M
 	}
 	r.messages[m.ID] = m
 	return nil
-}
-
-func (r *InMemoryConversationRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	out := make([]model.Message, 0)
-	for _, m := range r.messages {
-		if m.ConversationID == conversationID && m.DeletedAt == nil {
-			out = append(out, *m)
-		}
-	}
-	// Stable order matching PostgresConversationRepo.ListMessages
-	// (id ASC). Without this, map iteration order is non-deterministic
-	// and tests asserting on message content order would flake.
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return out, nil
 }
 
 // ListMessagesPage 内存版游标分页（与 Postgres 版语义一致）。
@@ -330,19 +312,6 @@ func (r *PostgresConversationRepo) IncrementMessageCount(ctx context.Context, co
 func (r *PostgresConversationRepo) AppendMessage(ctx context.Context, m *model.Message) error {
 	m.ID = 0
 	return r.db.WithContext(ctx).Create(m).Error
-}
-
-func (r *PostgresConversationRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	if limit <= 0 {
-		limit = 50
-	}
-	var out []model.Message
-	err := r.db.WithContext(ctx).
-		Where("conversation_id = ? AND deleted_at IS NULL", conversationID).
-		Order("id ASC").
-		Limit(limit).
-		Find(&out).Error
-	return out, err
 }
 
 // ListMessagesPage 2026-10-13：游标分页，默认取最新 limit 条（id DESC），

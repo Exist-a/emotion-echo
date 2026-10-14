@@ -252,17 +252,10 @@ func newSvcCtxWithRepo(repo repository.ConversationRepo) *svc.ServiceContext {
 	}
 }
 
-// limitObservingRepo records the limit argument passed to ListMessages.
+// limitObservingRepo records the limit argument passed to ListMessagesPage.
 type limitObservingRepo struct {
 	repository.ConversationRepo
 	hook func(limit int)
-}
-
-func (r *limitObservingRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	if r.hook != nil {
-		r.hook(limit)
-	}
-	return r.ConversationRepo.ListMessages(ctx, conversationID, limit)
 }
 
 // ListMessagesPage 覆盖新逻辑实际调用的方法（2026-10-13 游标分页）。
@@ -273,15 +266,10 @@ func (r *limitObservingRepo) ListMessagesPage(ctx context.Context, conversationI
 	return r.ConversationRepo.ListMessagesPage(ctx, conversationID, limit, cursor)
 }
 
-// callObservingRepo records whether ListMessages was called at all.
+// callObservingRepo records whether the list method was called at all.
 type callObservingRepo struct {
 	repository.ConversationRepo
 	listMessagesCalled bool
-}
-
-func (r *callObservingRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	r.listMessagesCalled = true
-	return r.ConversationRepo.ListMessages(ctx, conversationID, limit)
 }
 
 func (r *callObservingRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {
@@ -289,14 +277,10 @@ func (r *callObservingRepo) ListMessagesPage(ctx context.Context, conversationID
 	return r.ConversationRepo.ListMessagesPage(ctx, conversationID, limit, cursor)
 }
 
-// failingListRepo forces ListMessages to return listErr.
+// failingListRepo forces the list call to return listErr.
 type failingListRepo struct {
 	repository.ConversationRepo
 	listErr error
-}
-
-func (r *failingListRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	return nil, r.listErr
 }
 
 func (r *failingListRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {

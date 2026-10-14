@@ -63,7 +63,7 @@ func TestMessagesIntent_Integration_EnumRoundTrip(t *testing.T) {
 		msg := &model.Message{ConversationID: conv.ID, UserID: 1, Role: "user", Content: "x", Intent: want}
 		require.NoError(t, repo.AppendMessage(ctx, msg), "写入 intent=%q 失败", want)
 
-		got, err := repo.ListMessages(ctx, conv.ID, 100)
+		got, _, err := repo.ListMessagesPage(ctx, conv.ID, 100, 0)
 		require.NoError(t, err)
 		var found bool
 		for _, m := range got {
@@ -86,7 +86,7 @@ func TestMessagesIntent_Integration_EnumRoundTrip(t *testing.T) {
 
 func mustList(t *testing.T, repo *repository.PostgresConversationRepo, ctx context.Context, convID int64) []model.Message {
 	t.Helper()
-	msgs, err := repo.ListMessages(ctx, convID, 100)
+	msgs, _, err := repo.ListMessagesPage(ctx, convID, 100, 0)
 	require.NoError(t, err)
 	return msgs
 }
