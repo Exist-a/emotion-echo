@@ -383,9 +383,11 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		// Sprint 109b：累计完整 AI 回复文本，stream 完后异步写库
 		var llmAccumulated strings.Builder
 		err := h.llm.StreamChat(ctx, downstream.LLMStreamRequest{
-			Model:    h.cfg.LLM.Model,
-			Messages: llmMessages,
-			Files:    files,
+			Model:       h.cfg.LLM.Model,
+			Messages:    llmMessages,
+			Files:       files,
+			Temperature: llmGeneration.Temperature,
+			MaxTokens:   llmGeneration.MaxTokens,
 		}, func(delta, model string) {
 			llmAccumulated.WriteString(delta)
 			if writeErr := writeDelta0(delta); writeErr != nil {
@@ -438,8 +440,10 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			userContent:     userContent,
 		})
 		llmReq := downstream.LLMChatReq{
-			Model:    h.cfg.LLM.Model,
-			Messages: llmMessages,
+			Model:       h.cfg.LLM.Model,
+			Messages:    llmMessages,
+			Temperature: llmGeneration.Temperature,
+			MaxTokens:   llmGeneration.MaxTokens,
 		}
 		llmClient := downstream.NewLLMClient(downstream.LLMOptions{
 			BaseURL: h.cfg.LLM.BaseURL,

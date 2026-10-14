@@ -29,12 +29,17 @@ type fakeLLMStreamer struct {
 	gotModel string
 	gotMsgs  []downstream.Message
 	gotFiles []downstream.FileAttachment // Stage 89 PR-3
+	// CL-04 Phase 3：生成参数（缺陷 3：handler 从不赋值 ⇒ 上游无输出长度上限）
+	gotTemperature float64
+	gotMaxTokens   int32
 }
 
 func (f *fakeLLMStreamer) StreamChat(_ context.Context, req downstream.LLMStreamRequest, onDelta func(delta, model string)) error {
 	f.gotModel = req.Model
 	f.gotMsgs = req.Messages
 	f.gotFiles = req.Files
+	f.gotTemperature = req.Temperature
+	f.gotMaxTokens = req.MaxTokens
 	if f.err != nil {
 		return f.err
 	}
