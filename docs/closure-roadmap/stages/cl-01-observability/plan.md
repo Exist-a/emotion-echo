@@ -4,7 +4,7 @@ title: 可观测闭环（埋点真生效 + 采集 → 面板 → 告警真消费
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档：B 轨并行开工。**仅静态核实**——未起 dev 栈、未抓真实 span、未跑 obs smoke，见 §A.4）
+last-updated: 2026-10-14（建档 B 轨并行开工 → Phase 1 GORM 修复落地 → [M] 裁定回填；**仍未起 dev 栈**，"埋点真生效"待 Phase 0/9 取证，见 §A.4）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；本阶段 6 个 [M] 决策点见 §7（均不阻塞"代码+单测"部分）
@@ -221,16 +221,22 @@ related-plans:
 
 ---
 
-## §7 [M] 待用户裁定（6 项，均**不阻塞** Phase 1–6 的代码+单测）
+## §7 [M] 裁定记录（2026-10-14 用户）
 
-| # | 事项 | 关联 | 建议（按推荐，需用户拍板） |
+| # | 事项 | 关联 | 结论 |
 |---|------|------|------|
-| D-01 | span 采样策略 | 全局 | 建议 **dev 先全采**，生产再评估采样率 |
-| D-02 | 是否新增 pg/redis/node exporter | T-16 / G7 | **内存红线**下建议**仅评估 redis-exporter**（BFF 有 Redis）；pg 用现有指标替代或缓做 |
-| D-03 | `emotion_fusion_calls_total/duration` 接线 vs 删 | T-06 / G5 | 若 fusion 有关注价值则**接线**，否则**删定义**（避免"定义了没数据"假象） |
-| D-04 | web-bff 是否 `SetTracer` | T-07 / G6 | 建议**对齐**（消除守卫盲区），并把 BFF 纳入 `svc_wiring_test.go` |
-| D-05 | `/health`：blackbox vs 直接 scrape | T-15 | blackbox 更标准但**要新容器**；直接 scrape 更省（建议**先直接 scrape**，与 D-02 一致） |
-| D-06 | `redis-two-layer-cache` 是否纳入本阶段 | T-19 | roadmap §2 挂 CL-01、§4 只说"Redis 埋点接线" —— 建议**本阶段只做埋点接线**，双层缓存（cache-aside 特征）**另议**（单独阶段或并入后续） |
+| D-01 | span 采样策略 | 全局 | ✅ **dev 全采**（生产采样率后议） |
+| D-02 | 是否新增 exporter / 容器监控 | T-16 / G7 | ⏳ **待定**（用户要求先解释；倾向 cAdvisor + redis/pg exporter，见下方补注） |
+| D-03 | `emotion_fusion_calls_total/duration` 接线 vs 删 | T-06 / G5 | ✅ **接线**（接进 Prometheus→Grafana 看板；属运维视角指标，非终端用户界面） |
+| D-04 | web-bff 是否 `SetTracer` | T-07 / G6 | ✅ **对齐**（BFF 也 `SetTracer`，并把 BFF 纳入 `svc_wiring_test.go`） |
+| D-05 | `/health`：blackbox vs 直接 scrape | T-15 | ✅ **直接 scrape**（不加 blackbox；与 D-02 容器监控方案一并复核） |
+| D-06 | `redis-two-layer-cache` 是否纳入本阶段 | T-19 | ✅ **本阶段只做 Redis 埋点接线**，双层缓存（cache-aside 特性）另议 |
+
+> **D-02 补注（2026-10-14 用户追问"各容器状态"）**：用户要求把**各容器状态**接进 Prometheus 观测。查证结论：
+> ① **免费部分**：Prometheus 现有 `up{job}` 已能给出 9 个 target 的通断（6 应用服务 + APISIX + OAP + llm-service），做「观测面自身」看板即可（= 本计划 T-09/T-11）；
+> ② **全容器部分**：要看全部 19 容器（含 postgres/redis/kafka/minio/nacos/etcd/loki/promtail…）的 CPU/内存/运行状态，标准做法是加 **cAdvisor**（+1 小容器 ≈50–150MB，需挂 `docker.sock`/`sys`/`var_lib_docker`；WSL2 下需实测 cgroup 挂载）；
+> ③ **不可行路线**：Docker 自带 `:9323` metrics **仅引擎级、无 per-container**（Docker 官方文档明示 "you can't currently monitor your application using the Docker target"）⇒ 满足不了本需求。
+> → **待用户拍板**：是否加 cAdvisor（+ 顺带 redis-exporter / postgres-exporter，均几十 MB 级）。
 
 ---
 
