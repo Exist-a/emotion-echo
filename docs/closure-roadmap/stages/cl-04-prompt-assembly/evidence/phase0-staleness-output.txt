@@ -1,0 +1,9 @@
+GET /messages            status=200 data keys=["list"]
+  hasMore 键存在 = false  cursor 键存在 = false
+GET /messages?limit=2    status=200 返回 2 条 ids=[854,855]
+  全量最后两条 ids=[854,855]
+
+=== 判定 ===
+运行栈含 827f654 的"游标分页"契约（data 有 hasMore）: false
+?limit=2 取到的是"最新两条"(newest-first 语义): true
+⇒ 运行镜像确实缺该改动（守卫真红），重建前不得用其运行时行为作证据
