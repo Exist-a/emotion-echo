@@ -105,3 +105,37 @@ $ python -m compileall grpc_server.py emotion_llm_pb2.py emotion_llm_pb2_grpc.py
 - **T-20 来源计划迁移**：留到阶段收口时做。
 - **`gofmt -l` 在本机对未改动文件同样报红**（CRLF 工作区）⇒ 本次以"只对改动文件看 `gofmt` 输出 + `git diff` 只含预期行"判定，未把它当门禁。
 - **归档 ≠ 可调用**：`MentalHealthTrigger`/`Trend` 的 server 是**真实现**，`StreamMessages` 仍返 `Unimplemented`；归档只表示"proto 保留 + 明确不做 + 状态可查"，**不表示可用**。
+
+## 6. T-24 实测：守卫接入 CI 后**真能红**（2026-10-14）
+
+**为什么必须实测**：本仓 5 个 workflow 的触发条件都是 `push/PR → main` ⇒ **单纯推分支不会跑 CI**，
+所以"接进 CI 后仍生效"只能靠一次真实的 PR 运行来证；否则就是"门禁只报不拦"（anti-patterns 之一）。
+
+**做法**：临时分支 `test/cl-02-guard-red-proof`（从本轨 HEAD 切出）把一条 `live` 行的**证据符号**
+改成不存在的名字（`NoSuchMethod_CI_PROOF`），开 **draft PR #218**（标注"勿合并"）触发 CI。
+
+**结果**（PR #218 head `363023e`，`GET /commits/363023e/check-runs`）：
+
+```console
+completed    success    文档守卫总闸
+completed    success    静态守卫（合并）
+completed    failure    static-guards      <<< 只有它红
+completed    success    web-test-frontend
+completed    success    shared-test
+completed    success    llm-service-pytest
+completed    success    test (emotion-echo-{user,chat,assessment,web-bff,ai,analytics}-svc)   # 6 个全 success
+```
+
+`GET /check-runs/115676826454/annotations` 返回：`annotation_level=failure`，
+`message="Process completed with exit code 1."`。
+
+**证据链（如实说明强度）**：
+- 该 PR 的**唯一改动**就是那一行 TSV；同一输入在本地跑守卫 **rc=1**（`FAIL: A2 live 但调用方证据不足`）；
+- CI 上只有 `static-guards` 红、其余 11 个 job 全绿 ⇒ 失败**隔离在那条守卫步骤**，非连带故障；
+- **未取到步骤级日志**（job log 需鉴权，本 token 无）⇒ 本行标注为"**job 级失败 + 隔离证据**"，
+  **不宣称**"日志里逐字出现 `守卫 27/27 FAIL`"。
+- 对照：本轨正式分支（head `4134a27`）的 `static-guards` = **success** ⇒ 同一守卫
+  "清单正确则绿、清单错则红"，两侧都实测过。
+
+**清理**：PR #218 已关闭（未合并）+ 源分支已删（本地 + 远端）。
+

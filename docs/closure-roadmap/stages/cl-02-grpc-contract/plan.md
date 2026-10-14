@@ -146,60 +146,63 @@ $ docker images | grep ':cl02'  → （无）  # H4③：本轨尚未构建任�
 
 ---
 
-## §2 测试点清单（每点标 `[A]`/`[V]`/`[M]`）
+## §2 测试点清单（每点标 `[A]`/`[V]`/`[M]`）· **含执行结果（2026-10-14）**
 
-> 判定与证据口径见 [RUNBOOK §4](../../RUNBOOK.md)。`[M]` = 需用户裁定，**不阻塞"代码 + 守卫"部分**。
+> 判定与证据口径见 [RUNBOOK §4](../../RUNBOOK.md)。`[M]` = 需用户裁定（**已全部拍板**，见 §7）。
+> **结果四值**：`PASS / FAIL / BLOCKED / N/A`；证据 = 执行输出（命令/退出码/diff），**"已创建"不算证据**。
+> 全部证据汇总见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md) 与 [`evidence/phase2-3-terminal-states.md`](evidence/phase2-3-terminal-states.md)。
 
 ### A 组 · 死链逐条裁决落地（G1）
 
-| # | 测试点 | 判定 | 验证方式 | 证据 |
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
 |---|--------|------|---------|------|
-| T-01 | `StreamMessages` 裁决落地（建议**归档**：ADR 已"故意不做"） | [M]→[A] | proto 加 `reserved`/注释 + 删 BFF 死方法 `chat_grpc.go:172` + 守卫状态=archived | commit + 守卫输出 |
-| T-02 | `Logout` 裁决落地（建议**清除 proto 该方法**或实现真登出） | [M]→[A] | 按裁定：删 proto+server+client 三处，或接真后 grep 到调用方 | commit + 守卫输出 |
-| T-03 | `VerifySecurityAnswer`（族内冗余）**清除** | [A] | 删 proto/server/client + 保留在用的 `…ByUsername`（`auth_handler.go:485`） | 编译过 + 全仓 grep 无残留 |
-| T-04 | `AnalyzeBatch` **清除**（无批量业务） | [A] | 删 proto/server + 测试 fake（`grpc_analyzer_test.go:67`） | 编译过 + grep 无残留 |
-| T-05 | `MentalHealthHistory` 裁决落地（接真 or 归档） | [M]→[A] | 按裁定 | commit + 证据 |
-| T-06 | `MentalHealthTrigger` 裁决落地（接真 or 归档；server 真实现现成） | [M]→[A] | 按裁定 | commit + 证据 |
-| T-07 | `MentalHealthTrend` 裁决落地（同上） | [M]→[A] | 按裁定 | commit + 证据 |
-| T-08 | 清除类**无残留引用**（proto/server/client/测试 fake/文档） | [A] | 全仓 grep（含 `--include=*.py/*.ts`） | grep 输出为空 |
+| T-01 | `StreamMessages` 归档落地 | [M]→[A] | proto 标 deprecated + 注释 + 删 BFF 死方法 + 守卫状态=archived | ✅ **PASS** —— `proto/chat.proto:65` 邻域含 `option deprecated = true`；BFF `chat_grpc.go` 死方法删除（grep 无 `func (c *chatGRPCClient) StreamMessages`）；守卫 A4 PASS |
+| T-02 | `Logout` 清除落地 | [M]→[A] | 删 proto+server+client 三处 | ✅ **PASS** —— proto 无 `rpc Logout (`（守卫 A4 deleted 断言 PASS）；`user_server.go` / `user_grpc.go` / HTTP 实现 / 拦截器跳过清单 均已删；`user_server_sprint_e_test.go` 对应用例移除 |
+| T-03 | `VerifySecurityAnswer`（族内冗余）清除 | [A] | 删 proto/server/client + 保留在用者 | ✅ **PASS** —— 同上；在用者 `VerifySecurityAnswerByUsername` 保留（`auth_handler.go:485` 调用，守卫 A2 证据链 PASS） |
+| T-04 | `AnalyzeBatch` 清除 | [A] | 删 proto/server + 测试 fake | ✅ **PASS** —— `proto/emotion_llm.proto` 无该 RPC；`grpc_server.py` 实现删除；`grpc_analyzer_test.go` fake 删除；桩重生成后 7 模块编译过 |
+| T-05 | `MentalHealthHistory` 归档落地 | [M]→[A] | 按裁定 | ✅ **PASS** —— `proto/metric.proto:59` 邻域含 deprecated + ADR §E 依据注释 |
+| T-06 | `MentalHealthTrigger` 归档落地 | [M]→[A] | 按裁定 | ✅ **PASS** —— `metric.proto:62` 邻域含 deprecated（注释标明 server 是真实现、重启可直接接） |
+| T-07 | `MentalHealthTrend` 归档落地 | [M]→[A] | 按裁定 | ✅ **PASS** —— `metric.proto:65` 邻域含 deprecated |
+| T-08 | 清除类无残留引用（含 `.py`/`.ts`） | [A] | 全仓 grep | ✅ **PASS** —— 三处名称在全仓仅剩**留痕注释**（`grep -rn "\bLogout\b"` 等仅命中 proto/server/BFF 的说明段）；`go build`/`go vet` 7/7、守卫 A1/A4 PASS |
 
 ### B 组 · 守卫升级（G3/G4）
 
-| # | 测试点 | 判定 | 验证方式 | 证据 |
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
 |---|--------|------|---------|------|
-| T-09 | 状态清单**覆盖全部 43 条 RPC**（不重不漏） | [A] | 守卫断言：proto 实际 `rpc` 集合 ⊆/= 清单键集合 | 守卫 PASS 输出 |
-| T-10 | `deleted` 的 RPC **不得出现在 proto/server/client** | [A] | 守卫对每条 deleted 做三处 grep 断言 | 守卫 PASS 输出 |
-| T-11 | `archived` 的 RPC **必带** `reserved`/`deprecated` 标注 | [A] | 守卫断言 proto 对应行邻域含标注 | 守卫 PASS 输出 |
-| T-12 | `live` 的 RPC **必须有调用方证据**（清单内登记 file:line，守卫校验该处确含调用） | [A] | 守卫逐条读"调用方证据"列并断言文件存在 + 含客户端方法名 | 守卫 PASS 输出 |
-| T-13 | **负向对照**：故意造一条"标 live 但无调用方" → 守卫必须 **FAIL** | [A] | 临时改清单跑守卫，须 RED，再还原 | RED 输出 + 还原后 GREEN 输出 |
-| T-14 | HTTP fallback **豁免**：`*_TRANSPORT=http` 不被判死链 | [A] | 守卫内显式豁免清单（5 个开关）+ 负向对照（若误判则 FAIL） | 守卫输出 |
+| T-09 | 状态清单覆盖全部 RPC（不重不漏） | [A] | 守卫 A1 | ✅ **PASS** —— `PASS: A1 覆盖 proto 40 条全部已登记；清单 43 条 = proto 40 + 已清除 3` |
+| T-10 | `deleted` 不得出现在 proto | [A] | 守卫 A4 | ✅ **PASS** —— `PASS: A4 终态规则…当前 archived/deleted 行数：7` |
+| T-11 | `archived` 必带 deprecated 标注 | [A] | 守卫 A4（按 `proto:line` 邻域） | ✅ **PASS** —— 同上；RED 时该断言曾对 4 条正确报错（证明非永真） |
+| T-12 | `live` 必须有调用方证据 | [A] | 守卫 A2 | ✅ **PASS** —— `PASS: A2 live 36 条 RPC 均有已登记且可校验的调用方证据` |
+| T-13 | 负向对照（守卫必须能 FAIL） | [A] | 临时改坏 → 须 RED → 还原 | ✅ **PASS** —— 3 组：① 改错证据符号 → A2 FAIL；② `deleted` 改 `live` → A1 FAIL；③ 插未登记标记 → 旧守卫 FAIL。还原后两条守卫均 `exit=0` |
+| T-14 | HTTP fallback 豁免（`*_TRANSPORT=http` 不算死链） | [A] | 守卫 A5 + 负向对照 | ✅ **PASS** —— `PASS: A5 HTTP 回滚开关豁免声明在位`；RED 运行暴露并修掉守卫自身两个缺陷（见证据档 §2） |
 
 ### C 组 · "严格走 gRPC"成色（roadmap 核心口径）
 
-| # | 测试点 | 判定 | 验证方式 | 证据 |
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
 |---|--------|------|---------|------|
-| T-15 | 5 个 `*_TRANSPORT` 默认值 = **grpc** | [A] | 静态断言 `config.go:360-373` 默认分支 + 运行时 `docker inspect` env（🔴 需栈） | 代码 + env 输出 |
-| T-16 | 非开关式 HTTP 直连**保持零残留**（模型服务豁免） | [A] | grep 断言（初查零命中，本点=**守成**）+ 豁免清单声明 | grep 输出 |
-| T-17 | ai-svc → FER/SenseVoice/XTTS 是否算"服务间调用" | [M] | 用户裁定（roadmap §4 倾向：**不算**，模型服务走 HTTP 属设计） | 裁定记录 |
+| T-15 | 5 个 `*_TRANSPORT` 默认值 = grpc | [A] | 静态断言 + 运行时 env（🔴） | 🟡 **BLOCKED（仅运行时半边）** —— 静态半边 ✅：`config.go:360-373` 五个开关默认分支 = grpc，守卫 A5 断言 5 个开关字符串在位；**运行时 `docker inspect` env 未取**（需 dev 栈，排在 A/B 之后） |
+| T-16 | 非开关式 HTTP 直连保持零残留 | [A] | grep 断言 + 豁免声明 | ✅ **PASS** —— `grep -rn "http://emotion-\|http://localhost:8" --include='*.go'`（非测试）**零命中**；模型服务豁免由 D7 裁定 + §1 非目标声明 |
+| T-17 | 模型服务是否算"服务间调用" | [M] | 用户裁定 | ✅ **PASS（裁定）** —— D7 = **不算**，已写入 §1 非目标 |
 
 ### D 组 · 口径与文档一致（G2）
 
-| # | 测试点 | 判定 | 验证方式 | 证据 |
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
 |---|--------|------|---------|------|
-| T-18 | 决策 4 ADR 的"100% 覆盖"已加**更正记录**（含 `Logout`） | [A] | 读 ADR diff，须含更正段 + 日期 + 触发原因 | commit diff |
-| T-19 | E2E-F-208 说明回填（"保留+标注"→"已逐条裁决"） | [A] | `discovered-unresolved.md` diff（**保留原行**，只改状态说明） | diff |
-| T-20 | 来源计划迁 `docs/legacy-plans/landed/` 且入站链接同步修 | [A] | 迁移后 grep 断链检查（RUNBOOK 收口契约 5） | grep 输出 |
+| T-18 | 决策 4 ADR 加「更正记录」 | [A] | 读 ADR diff | ✅ **PASS** —— `adr-2026-09-decision-4-closure.md` 末尾新增「更正记录（2026-10-14）」节（含更正对象/为什么偏乐观/处置），沿用 survey-http-bypass 先例形式 |
+| T-19 | E2E-F-208 说明回填 | [A] | `discovered-unresolved.md` diff | ✅ **PASS** —— 原行**保留**，状态说明追加 ④（7 条已逐条裁决终态 + 守卫升级），并更新「已解决」的含义 |
+| T-20 | 来源计划迁 `legacy-plans/landed/` | [A] | 迁移后断链检查 | ⏳ **未做（收口项）** —— 按 §3 Phase 6 与 RUNBOOK 收口契约第 5 条，在**阶段收口时**执行（现在阶段未收口）；**非跳过**，已在此显式登记 |
 
 ### E 组 · 端到端与 CI（🔴 需栈 / 需 CI 运行）
 
-| # | 测试点 | 判定 | 验证方式 | 证据 |
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
 |---|--------|------|---------|------|
-| T-21 | 清除后**全栈起得来**且服务注册齐全（Nacos `count:6`） | [A] | `docker compose … --profile dev up -d` + Nacos 服务列表 | 命令 + 输出 |
-| T-22 | 接真类 RPC（若 D1 裁"接真"）**端到端有数据** | [A]+[V] | BFF handler 测试 + 前端真实可调用（curl/截图） | 输出 + 截图 |
-| T-23 | 相关功能**无回退**（登出/找回密码/聊天/情绪分析 smoke） | [A] | §2.4 数据契约 smoke（走网关 :19080 + Bearer） | smoke 退出码 |
-| T-24 | 新版守卫接入 CI 且**真能红** | [A] | 本地 RED 复现 + CI job 输出 | 两次输出对照 |
+| T-21 | 清除后全栈起得来（Nacos `count:6`） | [A] | 起栈 + Nacos 服务列表 | 🔴 **BLOCKED（需栈）** —— 按契约 §3.1 排队在 A/B 之后，**未取证** |
+| T-22 | 接真类 RPC 端到端有数据 | [A]+[V] | BFF handler + 前端 | ✅ **N/A（裁定后无接真项）** —— D1/D2 归档、D3/D4 清除 ⇒ 本阶段 Phase 4 整体 N/A（理由见 §7，非掩盖） |
+| T-23 | 相关功能无回退（§2.4 smoke） | [A] | 走网关 :19080 + Bearer | 🔴 **BLOCKED（需栈）** —— 同 T-21，**未取证** |
+| T-24 | 新守卫接入 CI 且**真能红** | [A] | 本地 RED + CI 实测 | ✅ **PASS** —— ① 本地负向对照 3 组（T-13）；② **CI 实测**：临时分支 `test/cl-02-guard-red-proof`（故意改坏证据符号）⇒ `static-guards` job **failure**（见证据档 §6），分支用后即删；③ 本分支 `static-guards` success（守卫 27/27 已接） |
 
----
+**统计**：24 点中 **PASS 19 / N/A 1 / BLOCKED 3（T-15 半边 + T-21 + T-23，均为"需 dev 栈"）/ 未做 1（T-20 收口项）**。
+BLOCKED 占比 3/24 = 12.5%（< 1/3，未触发 RUNBOOK 硬线）。
 
 ## §3 分阶段实施（TDD：先 RED 回归钉，再 GREEN）
 
