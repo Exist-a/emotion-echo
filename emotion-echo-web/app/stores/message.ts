@@ -3,7 +3,7 @@ import type { returnMsgType } from '~/types/commonType'
 import type { MessageStatus } from '~/types/conversation/conversationMessagesType'
 import { get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
-import { getLatestMessages, saveMessage, saveMessages } from '~/utils/messageCache'
+import { getLatestMessages, saveMessage, saveMessages, deleteMessage } from '~/utils/messageCache'
 import { useConversationStore } from './conversation'
 
 // 消息状态类型已收敛到单一来源（CL-05 Phase 1 · T-13）；
@@ -52,6 +52,28 @@ export function appendServerPage(
  */
 function toCacheRow(m: MessageWithStatus) {
   return m as unknown as Parameters<typeof saveMessage>[1]
+}
+
+/**
+ * 消息状态**转移表**（CL-05 Phase 3 · T-15，单一来源）。
+ *
+ * - `sending`（已发出待确认）→ `sent` | `failed`
+ * - `streaming`（AI 流式进行中）→ `sent` | `failed`
+ * - `failed`（可重试）→ `sending`（重试触发）
+ * - `sent` / `truncated` = **终态**，无出边 —— 禁止"已发出的消息被回退成 sending"
+ *   这类脏状态（曾让状态机名不副实）。
+ */
+export const MESSAGE_STATUS_TRANSITIONS: Record<MessageStatus, readonly MessageStatus[]> = {
+  sending: ['sent', 'failed'],
+  streaming: ['sent', 'failed'],
+  failed: ['sending'],
+  sent: [],
+  truncated: [],
+}
+
+/** 该状态转移是否被允许（终态/非法转移返回 false） */
+export function canTransition(from: MessageStatus, to: MessageStatus): boolean {
+  return (MESSAGE_STATUS_TRANSITIONS[from] ?? []).includes(to)
 }
 
 export const useMessageStore = defineStore('message', () => {
@@ -163,6 +185,24 @@ export const useMessageStore = defineStore('message', () => {
     }
   }
 
+  /**
+   * 状态转移（T-15）：**非法转移一律拒绝**并告警，返回是否真的发生了转移。
+   * 与 `MESSAGE_STATUS_TRANSITIONS` 是同一套规则，避免散落的 `status = '...'` 赋值绕过守卫。
+   */
+  const transitMessage = (messageId: string, to: MessageStatus): boolean => {
+    const idx = currentMessages.value.findIndex((m) => String(m.id) === String(messageId))
+    if (idx === -1) return false
+    const current = currentMessages.value[idx]!
+    // 缺省当作 sent：消息一旦落过服务端就有终态语义，不该被随意回退
+    const from = (current.status ?? 'sent') as MessageStatus
+    if (!canTransition(from, to)) {
+      console.warn(`[MESSAGE_STORE] 非法状态转移被拒：${from} → ${to}（id=${messageId}）`)
+      return false
+    }
+    currentMessages.value[idx] = { ...current, status: to } as MessageWithStatus
+    return true
+  }
+
   const sendMessage = async (
     content: string,
     emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral',
@@ -176,7 +216,27 @@ export const useMessageStore = defineStore('message', () => {
       return { isOk: false, msg: '无法发送消息' }
     }
 
+    const sessionId = currentSessionId.value as string
     isSending.value = true
+
+    // 乐观插入（T-14a）：先插一条 `sending` 占位，让用户**立刻**看到自己那句话，
+    // 不必等网络往返。临时 id 优先用 `clientMsgId` —— 它同时是后端的幂等键，
+    // 同值便于"服务端返回后按 id 就地替换"。
+    const tempId = clientMsgId || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const optimistic = {
+      id: tempId,
+      conversationId: sessionId,
+      sender: 'user',
+      content,
+      contentType: contentType || 'text',
+      sendTime: Date.now(),
+      createdAt: Date.now(),
+      status: 'sending',
+      ...(emotionTag ? { emotionTag } : {}),
+      ...(fileName ? { fileName } : {}),
+    } as unknown as MessageWithStatus
+    currentMessages.value = [...currentMessages.value, optimistic]
+    await writeThrough(optimistic)
 
     try {
       const params: SendMessageParams = {
@@ -188,31 +248,33 @@ export const useMessageStore = defineStore('message', () => {
       if (fileName) params.fileName = fileName
 
       const message = await post<MessageWithStatus>(
-        API_ROUTES.sendMessage.path.replace(':id', currentSessionId.value || ''),
+        API_ROUTES.sendMessage.path.replace(':id', sessionId),
         params,
       )
 
-      // 幂等保护：若该 clientMsgId 已有消息，update 而非 push
-      if (clientMsgId) {
-        const existingIndex = currentMessages.value.findIndex(
-          (m) => m.id === clientMsgId || (m as any).clientMsgId === clientMsgId,
-        )
-        if (existingIndex >= 0) {
-          const landed = { ...message, status: 'sent' } as MessageWithStatus
-          currentMessages.value[existingIndex] = landed
-          await writeThrough(landed)
-          return { isOk: true, msg: '已存在', data: message }
+      // 服务端真身**就地替换**乐观占位：换真实 id、置终态 sent。
+      // （原"幂等命中则 update 而非 push"的分支已被此路径覆盖：占位 id 就是 clientMsgId。）
+      const landed = { ...message, status: 'sent' } as MessageWithStatus
+      const idx = currentMessages.value.findIndex((m) => String(m.id) === String(tempId))
+      if (idx >= 0) {
+        currentMessages.value[idx] = landed
+      } else {
+        currentMessages.value = [...currentMessages.value, landed]
+      }
+      // 临时占位行必须**从缓存里删掉**：否则刷新后会看到一条永远 sending 的幽灵行，
+      // 且 Phase 4 的"待重发扫描"（找 sending/failed）会把它当成在途消息反复重发。
+      // 🩸 这条是 2026-10-14 Phase 3 落地后由**全量回归**（Phase 2b 的写穿钉）抓出来的。
+      if (String(tempId) !== String(landed.id)) {
+        try {
+          await deleteMessage(tempId)
+        } catch (e) {
+          console.warn('[MESSAGE_STORE] 清理乐观占位缓存失败（不影响发送）:', e)
         }
       }
-
-      const landed = { ...message, status: 'sent' } as MessageWithStatus
-      currentMessages.value = [...currentMessages.value, landed]
       await writeThrough(landed)
 
       const conversationStore = useConversationStore()
-      const conversation = conversationStore.conversationList.find(
-        (c) => c.id === currentSessionId.value,
-      )
+      const conversation = conversationStore.conversationList.find((c) => c.id === sessionId)
       if (conversation) {
         conversation.lastMessage = content.slice(0, 100)
         conversation.lastMessageTime = Date.now()
@@ -221,6 +283,18 @@ export const useMessageStore = defineStore('message', () => {
 
       return { isOk: true, msg: '发送成功', data: message }
     } catch (error: any) {
+      // 失败：占位**保留**并置 failed，**不静默丢弃** —— 列表里没有这条，
+      // Phase 4 的「断网重发」就无从重试（这是重试链路的前置条件）。
+      // 走守卫而非直接赋值：若占位已被别处置为终态，则保持原状。
+      const idx = currentMessages.value.findIndex((m) => String(m.id) === String(tempId))
+      if (idx >= 0) {
+        const current = currentMessages.value[idx]!
+        if (canTransition((current.status ?? 'sending') as MessageStatus, 'failed')) {
+          const failed = { ...current, status: 'failed' } as MessageWithStatus
+          currentMessages.value[idx] = failed
+          await writeThrough(failed)
+        }
+      }
       return { isOk: false, msg: error.message || '发送失败' }
     } finally {
       isSending.value = false
@@ -269,6 +343,7 @@ export const useMessageStore = defineStore('message', () => {
     switchSession,
     loadMoreMessages,
     sendMessage,
+    transitMessage,
     reset,
     updateMessage,
     addMessage,

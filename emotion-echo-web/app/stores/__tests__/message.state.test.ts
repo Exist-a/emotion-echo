@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useMessageStore, canTransition, MESSAGE_STATUS_TRANSITIONS } from '~/stores/message'
-import { getFailedMessages } from '~/utils/messageCache'
+import { getFailedMessages, getLatestMessages } from '~/utils/messageCache'
 import { getDb } from '~/utils/db'
 import type { MessageStatus } from '~/types/conversation/conversationMessagesType'
 
@@ -84,30 +84,39 @@ describe('消息状态机 + 乐观插入（CL-05 Phase 3 · T-14 / T-15）', () 
 
   describe('T-14 乐观插入', () => {
     it('点发送立刻出现 sending 占位；服务端返回后换成真实 id 并置 sent（不重复）', async () => {
-      let resolvePost: (v: unknown) => void = () => {}
-      postMock.mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolvePost = resolve
-          }),
-      )
+      // 在 "post 被调用的那一刻" 采样（而不是自己造 deferred + 猜时机：
+      // 乐观插入后还 await 了一次缓存写入，手动 resolve 会与调用点竞争 ⇒ 死等到超时）
+      let idsAtPost: string[] = []
+      let statusAtPost: string | undefined
+      postMock.mockImplementation(async () => {
+        idsAtPost = store.currentMessages.map((m) => String(m.id))
+        statusAtPost = statusOf(store, 'cid-1')
+        return serverMsg('42', 4200, '你好')
+      })
 
       const store = useMessageStore()
       store.currentSessionId = S
-      const inflight = store.sendMessage('你好', undefined, 'cid-1')
+      await store.sendMessage('你好', undefined, 'cid-1')
 
-      // 服务端还没返回：占位必须已经在列表里，且状态是 sending（而非 sent）
-      expect(
-        store.currentMessages.map((m) => String(m.id)),
-        '发送瞬间就该看到自己那条（乐观插入）',
-      ).toEqual(['cid-1'])
-      expect(statusOf(store, 'cid-1'), '占位状态必须是 sending').toBe('sending')
-
-      resolvePost(serverMsg('42', 4200, '你好'))
-      await inflight
+      expect(idsAtPost, 'post 发出时占位必须已在列表里（乐观插入）').toEqual(['cid-1'])
+      expect(statusAtPost, '占位状态必须是 sending（而非 sent）').toBe('sending')
 
       expect(store.currentMessages.map((m) => String(m.id)), '占位被真实 id 替换').toEqual(['42'])
       expect(statusOf(store, '42')).toBe('sent')
+    })
+
+    it('成功发送后缓存里不得残留临时占位行（幽灵 sending 会被重发扫描反复重发）', async () => {
+      // 🩸 钉住 2026-10-14 Phase 3 落地后由全量回归抓出的真缺陷：占位行的 temp id
+      // 与服务端真身 id 不同，只在内存里替换、不删缓存 ⇒ 缓存里留一条永远 sending
+      // 的幽灵行（刷新后可见 + Phase 4 待重发扫描会把它当在途消息反复重发）。
+      postMock.mockResolvedValue(serverMsg('42', 4200, 'hi'))
+      const store = useMessageStore()
+      store.currentSessionId = S
+
+      await store.sendMessage('hi', undefined, 'cid-1')
+
+      const cached = await getLatestMessages(S, 10)
+      expect(cached.map((m) => String(m.id)), '缓存里只应有服务端真身行').toEqual(['42'])
     })
 
     it('未传 clientMsgId 时也乐观插入（自动临时 id），返回后替换为真实 id', async () => {
