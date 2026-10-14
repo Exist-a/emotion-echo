@@ -133,8 +133,10 @@ describe('重试 + 断网重扫（CL-05 Phase 4 · T-16 / T-17 / T-18）', () =>
 
   describe('T-18 断网重连重扫', () => {
     it('联网后补发缓存里全部会话的 failed 行，复用原 id 作 clientMsgId，成功后转 sent', async () => {
-      // 模拟"刷新后仍在"的离线队列：直接落缓存（不经过内存列表）
-      await saveMessage(S, failedRow('cid-9', 1, '断网时发的'))
+      // 模拟"刷新后仍在"的离线队列：直接落缓存（不经过内存列表）。
+      // 故意给不同的 retryCount（0 / 1）⇒ 下一次尝试是第 1 / 2 次，退避应分别是 2s / 4s，
+      // 这样能证明退避是**逐行按各自已失败次数**算的，而不是一个全局常数。
+      await saveMessage(S, failedRow('cid-9', 0, '断网时发的'))
       await saveMessage('c2', failedRow('cid-other', 1, '另一会话断网时发的'))
 
       postMock.mockImplementation(async (_url: string, body: any) =>
@@ -152,8 +154,8 @@ describe('重试 + 断网重扫（CL-05 Phase 4 · T-16 / T-17 / T-18）', () =>
       const sentKeys = postMock.mock.calls.map((c) => (c[1] as any).clientMsgId).sort()
       expect(sentKeys).toEqual(['cid-9', 'cid-other'])
 
-      // 退避真的被用上（每个目标一次）
-      expect(sleepCalls.sort((a, b) => a - b)).toEqual([2000, 2000])
+      // 退避真的被用上，且按各行"已失败次数"取曲线：retryCount 0 → 2s、1 → 4s
+      expect(sleepCalls.sort((a, b) => a - b)).toEqual([retryDelayMs(1), retryDelayMs(2)])
 
       // 失败集清空；当前会话的内存里出现真身行
       expect(await getAllFailedMessages()).toEqual([])

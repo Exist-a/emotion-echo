@@ -3,7 +3,13 @@ import type { returnMsgType } from '~/types/commonType'
 import type { MessageStatus } from '~/types/conversation/conversationMessagesType'
 import { get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
-import { getLatestMessages, saveMessage, saveMessages, deleteMessage } from '~/utils/messageCache'
+import {
+  getLatestMessages,
+  getAllFailedMessages,
+  saveMessage,
+  saveMessages,
+  deleteMessage,
+} from '~/utils/messageCache'
 import { useConversationStore } from './conversation'
 
 // 消息状态类型已收敛到单一来源（CL-05 Phase 1 · T-13）；
@@ -74,6 +80,42 @@ export const MESSAGE_STATUS_TRANSITIONS: Record<MessageStatus, readonly MessageS
 /** 该状态转移是否被允许（终态/非法转移返回 false） */
 export function canTransition(from: MessageStatus, to: MessageStatus): boolean {
   return (MESSAGE_STATUS_TRANSITIONS[from] ?? []).includes(to)
+}
+
+/**
+ * 本地消息形态 = 服务端行 + **仅本地有**的队列元数据。
+ * `retryCount` 由 Phase 4 引入（来源计划 D-E）；`CL-F-13` 三形态统一已由用户
+ * `CL-D-13` 裁定顺延 ⇒ 此处先用交叉类型过渡，收敛时一并处理。
+ */
+export type StoreMessage = MessageWithStatus & { retryCount?: number }
+
+/** 自动重试上限（来源计划 D-E：MAX=3；超限停自动重试，留手动重发） */
+export const MAX_RETRY = 3
+
+/** 退避曲线：`min(2^n × 1000ms, 30s)`，n = 已失败次数 */
+export function retryDelayMs(retryCount: number): number {
+  return Math.min(2 ** retryCount * 1000, 30_000)
+}
+
+/** 该行是否还应被**自动**重试（failed 且未达上限） */
+export function canAutoRetry(m: { status?: MessageStatus; retryCount?: number }): boolean {
+  return m.status === 'failed' && (m.retryCount ?? 0) < MAX_RETRY
+}
+
+/** 重试所需的时间/等待抽象 —— 走注入而非直接 `Date.now()`/`setTimeout`（AGENTS §3.2/§3.3） */
+export interface RetryGovernor {
+  now(): number
+  sleep(ms: number): Promise<void>
+}
+
+let retryGovernor: RetryGovernor = {
+  now: () => Date.now(),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+}
+
+/** 注入重试调度实现（**仅测试使用**：让单测不真睡 2/4/8 秒） */
+export function setRetryGovernor(governor: RetryGovernor) {
+  retryGovernor = governor
 }
 
 export const useMessageStore = defineStore('message', () => {
@@ -203,6 +245,38 @@ export const useMessageStore = defineStore('message', () => {
     return true
   }
 
+  /**
+   * 投递一条**已在本地占位**的消息（`sendMessage` 与断网补发共用）：
+   * POST → 就地替换为服务端真身（真实 id + 终态 `sent`）→ 清掉临时 id 的缓存行 → 真身写穿。
+   *
+   * ⚠️ 清临时行这步不能省：占位 temp id 与服务端真身 id **不同**，只在内存替换的话
+   * 缓存里会留一条永远 `sending` 的**幽灵行**（刷新后可见；且待重发扫描会把它当在途消息
+   * **反复重发**）。🩸 该缺陷由 Phase 3 落地后的**全量回归**抓出。
+   * 内存里找不到占位（例如补发的是**别的会话**的行）时不触碰内存列表。
+   */
+  const deliver = async (
+    tempId: string,
+    payload: SendMessageParams,
+    sessionId: string,
+  ): Promise<MessageWithStatus> => {
+    const message = await post<MessageWithStatus>(
+      API_ROUTES.sendMessage.path.replace(':id', sessionId),
+      payload,
+    )
+    const landed = { ...message, status: 'sent' } as MessageWithStatus
+    const idx = currentMessages.value.findIndex((m) => String(m.id) === String(tempId))
+    if (idx >= 0) currentMessages.value[idx] = landed
+    if (String(tempId) !== String(landed.id)) {
+      try {
+        await deleteMessage(tempId)
+      } catch (e) {
+        console.warn('[MESSAGE_STORE] 清理乐观占位缓存失败（不影响发送）:', e)
+      }
+    }
+    await saveMessage(sessionId, toCacheRow(landed))
+    return message
+  }
+
   const sendMessage = async (
     content: string,
     emotionTag?: 'happy' | 'sad' | 'angry' | 'anxious' | 'neutral',
@@ -247,31 +321,8 @@ export const useMessageStore = defineStore('message', () => {
       if (clientMsgId) params.clientMsgId = clientMsgId
       if (fileName) params.fileName = fileName
 
-      const message = await post<MessageWithStatus>(
-        API_ROUTES.sendMessage.path.replace(':id', sessionId),
-        params,
-      )
-
-      // 服务端真身**就地替换**乐观占位：换真实 id、置终态 sent。
-      // （原"幂等命中则 update 而非 push"的分支已被此路径覆盖：占位 id 就是 clientMsgId。）
-      const landed = { ...message, status: 'sent' } as MessageWithStatus
-      const idx = currentMessages.value.findIndex((m) => String(m.id) === String(tempId))
-      if (idx >= 0) {
-        currentMessages.value[idx] = landed
-      } else {
-        currentMessages.value = [...currentMessages.value, landed]
-      }
-      // 临时占位行必须**从缓存里删掉**：否则刷新后会看到一条永远 sending 的幽灵行，
-      // 且 Phase 4 的"待重发扫描"（找 sending/failed）会把它当成在途消息反复重发。
-      // 🩸 这条是 2026-10-14 Phase 3 落地后由**全量回归**（Phase 2b 的写穿钉）抓出来的。
-      if (String(tempId) !== String(landed.id)) {
-        try {
-          await deleteMessage(tempId)
-        } catch (e) {
-          console.warn('[MESSAGE_STORE] 清理乐观占位缓存失败（不影响发送）:', e)
-        }
-      }
-      await writeThrough(landed)
+      // 服务端真身**就地替换**乐观占位（换真实 id、置终态 sent、清临时缓存行）
+      const message = await deliver(tempId, params, sessionId)
 
       const conversationStore = useConversationStore()
       const conversation = conversationStore.conversationList.find((c) => c.id === sessionId)
@@ -290,7 +341,12 @@ export const useMessageStore = defineStore('message', () => {
       if (idx >= 0) {
         const current = currentMessages.value[idx]!
         if (canTransition((current.status ?? 'sending') as MessageStatus, 'failed')) {
-          const failed = { ...current, status: 'failed' } as MessageWithStatus
+          const failed = {
+            ...current,
+            status: 'failed',
+            // T-16：失败即自增 —— 退避与"达上限停自动重试"都依赖它
+            retryCount: ((current as StoreMessage).retryCount ?? 0) + 1,
+          } as unknown as StoreMessage
           currentMessages.value[idx] = failed
           await writeThrough(failed)
         }
@@ -299,6 +355,79 @@ export const useMessageStore = defineStore('message', () => {
     } finally {
       isSending.value = false
     }
+  }
+
+  /**
+   * 断网重连重扫（T-18）：把缓存里**全部会话**的 `failed` 行按退避补发。
+   *
+   * 三个要点：
+   * ① 扫**全部会话**而非当前会话 —— 离线队列是会话无关的（用户可能在 A 会话断网、
+   *    切到 B 才联网，只扫当前会话会漏发）；
+   * ② **复用原行 id 作 `clientMsgId`** ⇒ 命中后端 `client_msg_id` 唯一索引，
+   *    重复补发不会重复入库（幂等复用，不重造）；
+   * ③ 达 `MAX_RETRY` 的行直接跳过（转手动重发），不退化成"无限重试"。
+   */
+  const retryFailedMessages = async (): Promise<{ retried: number; succeeded: number }> => {
+    let pending: StoreMessage[] = []
+    try {
+      pending = (await getAllFailedMessages()) as unknown as StoreMessage[]
+    } catch (e) {
+      console.warn('[MESSAGE_STORE] 读取待重发队列失败（不影响后续）:', e)
+      return { retried: 0, succeeded: 0 }
+    }
+
+    const targets = pending.filter((m) => canAutoRetry(m))
+    let succeeded = 0
+
+    for (const row of targets) {
+      const rowSessionId = (row as { sessionId?: string }).sessionId
+      if (!rowSessionId) continue
+      const tempId = String(row.id)
+      const attempts = (row.retryCount ?? 0) + 1
+
+      // 退避：第 n 次尝试前先等 min(2^n × 1000ms, 30s)
+      await retryGovernor.sleep(retryDelayMs(attempts))
+
+      const inCurrentSession = rowSessionId === currentSessionId.value
+      if (inCurrentSession) transitMessage(tempId, 'sending')
+
+      try {
+        await deliver(
+          tempId,
+          {
+            content: row.content ?? '',
+            contentType: row.contentType as SendMessageParams['contentType'],
+            clientMsgId: tempId,
+          },
+          rowSessionId,
+        )
+        succeeded += 1
+      } catch (error: any) {
+        const bumped = {
+          ...row,
+          status: 'failed',
+          retryCount: attempts,
+        } as unknown as StoreMessage
+        try {
+          await saveMessage(rowSessionId, toCacheRow(bumped))
+        } catch (e) {
+          console.warn('[MESSAGE_STORE] 重试失败后写缓存失败:', e)
+        }
+        if (inCurrentSession) {
+          const idx = currentMessages.value.findIndex((m) => String(m.id) === tempId)
+          if (idx >= 0) currentMessages.value[idx] = bumped
+        }
+        if (attempts >= MAX_RETRY) {
+          console.warn(
+            `[MESSAGE_STORE] 已达重试上限（${MAX_RETRY}），停止自动重试（留手动重发）：${tempId}`,
+          )
+        } else {
+          console.warn(`[MESSAGE_STORE] 补发失败（第 ${attempts} 次），留待下次联网：${tempId}`, error)
+        }
+      }
+    }
+
+    return { retried: targets.length, succeeded }
   }
 
   const reset = () => {
@@ -344,6 +473,7 @@ export const useMessageStore = defineStore('message', () => {
     loadMoreMessages,
     sendMessage,
     transitMessage,
+    retryFailedMessages,
     reset,
     updateMessage,
     addMessage,
