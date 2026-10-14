@@ -21,13 +21,13 @@ package trace
 import (
 	"context"
 	"errors"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/SkyAPM/go2sky"
 
 	"github.com/emotion-echo/shared/pkg/bootstrap"
+	"github.com/emotion-echo/shared/pkg/logging"
 )
 
 // errTracerNil 初始化返回 (nil, nil) 时的兜底错误（不该发生，但别当成功）。
@@ -83,13 +83,13 @@ func StartTracerBackgroundRetry(ctx context.Context, serviceName, oapAddr string
 			t, err := tracerBootstrapFn(inner, serviceName, oapAddr, o.DialTimeout)
 			if err == nil && t != nil {
 				SetTracer(t)
-				log.Printf("[skywalking] tracer 后台补挂成功（service=%s attempt=%d）—— 入口 span 自此刻起生效", serviceName, attempt)
+				logging.PrintfContext(inner, "[skywalking] tracer 后台补挂成功（service=%s attempt=%d）—— 入口 span 自此刻起生效", serviceName, attempt)
 				return
 			}
 			if err == nil {
 				err = errTracerNil
 			}
-			log.Printf("[skywalking] tracer 后台补挂第 %d 次失败（service=%s backoff=%s）：%v", attempt, serviceName, backoff, err)
+			logging.PrintfContext(inner, "[skywalking] tracer 后台补挂第 %d 次失败（service=%s backoff=%s）：%v", attempt, serviceName, backoff, err)
 
 			select {
 			case <-inner.Done():
@@ -103,7 +103,7 @@ func StartTracerBackgroundRetry(ctx context.Context, serviceName, oapAddr string
 				}
 			}
 		}
-		log.Printf("[skywalking] tracer 后台补挂已达尝试上限 %d 次，放弃（service=%s）", o.MaxAttempts, serviceName)
+		logging.PrintfContext(inner, "[skywalking] tracer 后台补挂已达尝试上限 %d 次，放弃（service=%s）", o.MaxAttempts, serviceName)
 	}()
 
 	var once sync.Once
