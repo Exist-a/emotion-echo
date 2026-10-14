@@ -20,7 +20,7 @@ GetSurveyResult	proto/agent.proto:60	live	emotion-echo-web-bff/internal/handler/
 CreateConversation	proto/chat.proto:38	live	emotion-echo-web-bff/internal/handler/chat_handler.go	CreateConversation	0	-
 SendMessage	proto/chat.proto:41	live	emotion-echo-web-bff/internal/handler/chat_handler.go	SendMessage	0	另 ai_stream_handler.go:262|-
 ListMessages	proto/chat.proto:44	live	emotion-echo-web-bff/internal/handler/chat_handler.go	ListMessages	0	-
-ListConversations	proto/chat.proto:47	live	emotion-echo-web-bff/internal/handler/chat_handler.go	ListConversations	0	-
+ListConversations	proto/chat.proto:47	live	emotion-echo-web-bff/internal/handler/chat_handler.go	NoSuchMethod_CI_PROOF	0	-
 DeleteConversation	proto/chat.proto:50	live	emotion-echo-web-bff/internal/handler/chat_handler.go	DeleteConversation	0	-
 PinConversation	proto/chat.proto:53	live	emotion-echo-web-bff/internal/handler/chat_handler.go	PinConversation	0	-
 UpdateConversation	proto/chat.proto:56	live	emotion-echo-web-bff/internal/handler/chat_handler.go	UpdateConversation	0	-
