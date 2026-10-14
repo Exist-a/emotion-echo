@@ -1,11 +1,12 @@
 ---
-status: planned
-priority: medium
-owner: TBD
+status: in-progress
+priority: high
+owner: lane-cl-c
 created: 2026-10-13
 type: implementation-plan
 source: 2026-10-13 会话（用户："grpc 这个说很久了，改很多次都没坐实"）
 depends-on: []
+stage: CL-02（docs/closure-roadmap/stages/cl-02-grpc-contract/plan.md）
 related-plans:
   - prompt-pipeline-redesign.md（同批）
 ---
@@ -15,7 +16,10 @@ related-plans:
 > **只描述要做的事，不含代码改动。**
 > 现状：43 个 RPC 里有 **7 个是"死"的**（server 实现存在、无生产调用方），当前处置是"**保留 + 标注 + 守卫**"（E2E-F-208 已标"已解决"）。但这种处置在面试/审阅视角**不算"坐实"**——它只钉了"清单真实"，没让任何一条真正可用或真正消失。本计划把每条死链**二选一裁决为"接真"或"清除/归档"**，并升级守卫从"标记计数"到"每条 RPC 有明确状态"。
 
-> **⚠︎ 与 E2E 路线图的关系**：本计划是 **E2E-F-208 的后续**（F-208 完成了"清点 + 保留标注 + 守卫"，但用户认为"没坐实"）。**不新登记 E2E-F、不归属阶段**；若需回填账本，仅更新 F-208 的状态说明。
+> **⚠︎ 与 E2E 路线图的关系**：本计划是 **E2E-F-208 的后续**（F-208 完成了"清点 + 保留标注 + 守卫"，但用户认为"没坐实"）。**不新登记 E2E-F**；若需回填账本，仅更新 F-208 的状态说明。
+
+> **执行状态（2026-10-14）**：本计划**已排入阶段 CL-02**（roadmap §2 挂靠），由 **C 轨**（`feat/cl-02-grpc-contract`，工作副本 `../Emotion-Echo-cl02`，draft PR #214）执行。
+> **执行计划 = 阶段详档** [docs/closure-roadmap/stages/cl-02-grpc-contract/plan.md](../closure-roadmap/stages/cl-02-grpc-contract/plan.md)——**它把本计划 §4 的 7 个 Phase 细化为「🟢 不需栈 / 🔴 需栈」并补齐测试点与守卫设计**；本文档继续作为**设计与裁决依据**，两者冲突时以阶段详档为准。
 
 ---
 
