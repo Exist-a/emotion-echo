@@ -29,15 +29,20 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// ① 基础人设：不留"简短/2-3 句话"约束（用户 2026-10-14 裁定）
+// ① 基础人设：不留"简短（2-3 句话）"硬约束，但要有**适中**的长度指引
+//    （用户 2026-10-14 两次裁定：先去掉硬约束看效果 → 再由 A 轨按实测定"适中"）
 // ---------------------------------------------------------------------------
 
-func TestBasePersona_NoBrevityConstraint(t *testing.T) {
-	for _, banned := range []string{"2-3 句话", "简短", "3 句"} {
-		assert.NotContains(t, baseSystemPrompt, banned,
-			"用户 2026-10-14 裁定去掉基础人设的简短约束（与意图风格注入不再互相矛盾）")
-	}
-	// 保留项：语言 / 身份 / 三条行为基调（不得因去掉长度约束而被误删）
+func TestBasePersona_HasModerateLengthGuidance(t *testing.T) {
+	// 不得回潮为当初那条与意图风格互相矛盾的硬约束
+	assert.NotContains(t, baseSystemPrompt, "用中文简短回应",
+		"不得回潮为当初那条与 STYLE_INSTRUCTIONS 矛盾的硬约束（2026-10-14 裁定）")
+
+	// 必须有"适中"的长度指引：硬上限 + 分场景（倾诉更短 / 需要建议才展开）
+	assert.Contains(t, baseSystemPrompt, "300 字", "必须有全文硬上限（实测：无约束时回复达 657/766/629 字）")
+	assert.Contains(t, baseSystemPrompt, "倾诉", "必须区分「倾诉时更短」（否则重回长文）")
+
+	// 保留项：语言 / 身份 / 三条行为基调（不得因调长度而被误删）
 	assert.Contains(t, baseSystemPrompt, "中文", "必须保留语言约束")
 	assert.Contains(t, baseSystemPrompt, "情绪疏导陪伴", "必须保留身份")
 	for _, keep := range []string{"理解", "不评判", "鼓励"} {

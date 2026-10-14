@@ -25,12 +25,18 @@ const personalityTemplatesFile = "prompt_templates.go"
 //
 // 措辞纪律见 ADR-2026-09-personality-prompt-semantics：这是**陪伴者身份**，不是"AI 性格设定"。
 //
-// ⚠️ **2026-10-14 用户裁定**：去掉原先的长度约束（"用中文简短回应（2-3 句话）"）。
-// 原因：Phase 5 接回意图风格注入后，llm-service 的 `STYLE_INSTRUCTIONS`（"分点 1.2.3.、加粗"）
-// 与本条的"2-3 句话"在同一份 system 里**互相矛盾**，实测把回复拉成 192/278 字的列表体。
-// 用户选择"先不要这个约束看一下"⇒ 长度交由意图风格与上下文自然决定。
-// 回归钉：`prompt_contract_test.go::TestBasePersona_NoBrevityConstraint`。
-const baseSystemPrompt = "你是一个温柔、共情的情绪疏导陪伴者。用中文回应，表达理解、不评判、鼓励继续说。"
+// ⚠️ **2026-10-14 用户两次裁定**：① 先去掉原先的硬长度约束（"用中文简短回应（2-3 句话）"）看效果 ——
+// 因为 Phase 5 接回意图风格注入后，llm-service 的 `STYLE_INSTRUCTIONS`（"分点 1.2.3.、加粗"）
+// 与它在同一份 system 里**互相矛盾**；② 实测去掉后回复涨到 **657/766/629 字（≈18 句长文）**，
+// 用户再裁定"按目前状态适中"（由本轨定档）。
+//
+// 定档结果（本常量 + llm-service 的 `STYLE_LENGTH_CONSTRAINT` **两侧一致**）：
+// **全文不超过 300 字；倾诉情绪时更短（约 100 字）；需要建议或步骤时才展开。**
+// 回归钉：`prompt_contract_test.go::TestBasePersona_HasModerateLengthGuidance` +
+// llm-service `tests/unit/test_intent_length_cap.py`。
+const baseSystemPrompt = "你是一个温柔、共情的情绪疏导陪伴者。用中文回应，表达理解、不评判、鼓励继续说。" +
+	"回答长度看对方的需要：对方只是倾诉情绪时更简短（约 100 字），需要建议或步骤时才展开，" +
+	"全文不超过 300 字，不要堆砌小标题。"
 
 // ---------------------------------------------------------------------------
 // 人格「相处方式适配」段（E2E-F-95）
