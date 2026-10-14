@@ -23,9 +23,14 @@ const personalityTemplatesFile = "prompt_templates.go"
 
 // baseSystemPrompt 基础人设（无画像 / 无情绪 / 无历史时的完整 system）。
 //
-// 措辞纪律见 ADR-2026-09-personality-prompt-semantics：这是**陪伴者身份**，不是"AI 性格设定"；
-// "2-3 句话"是与用户约定的回复长度（也是 Stage 113 回复变长的对照基线）。
-const baseSystemPrompt = "你是一个温柔、共情的情绪疏导陪伴者。用中文简短回应（2-3 句话），表达理解、不评判、鼓励继续说。"
+// 措辞纪律见 ADR-2026-09-personality-prompt-semantics：这是**陪伴者身份**，不是"AI 性格设定"。
+//
+// ⚠️ **2026-10-14 用户裁定**：去掉原先的长度约束（"用中文简短回应（2-3 句话）"）。
+// 原因：Phase 5 接回意图风格注入后，llm-service 的 `STYLE_INSTRUCTIONS`（"分点 1.2.3.、加粗"）
+// 与本条的"2-3 句话"在同一份 system 里**互相矛盾**，实测把回复拉成 192/278 字的列表体。
+// 用户选择"先不要这个约束看一下"⇒ 长度交由意图风格与上下文自然决定。
+// 回归钉：`prompt_contract_test.go::TestBasePersona_NoBrevityConstraint`。
+const baseSystemPrompt = "你是一个温柔、共情的情绪疏导陪伴者。用中文回应，表达理解、不评判、鼓励继续说。"
 
 // ---------------------------------------------------------------------------
 // 人格「相处方式适配」段（E2E-F-95）
@@ -112,10 +117,20 @@ const (
 	emotionVoicePhrase  = "对方语气听起来"
 	emotionNowSuffix    = "。请让回应贴合对方此刻的状态。"
 	emotionPhraseJoiner = "，"
+	// 文本情绪段（当前轮用户消息的情绪标签）
+	emotionTextPhrase = "对方此刻的话语里透着"
 	// 历史段
 	emotionHistoryPhrase = "对方最近的状态多为"
 	emotionHistorySuffix = "。请让回应贴合对方最近的状态。"
 )
+
+// defaultTextEmotion 前端 `emotion` 字段的默认值 —— 视作**无信号**。
+//
+// 事实（2026-10-14 亲核）：前端 `sendToExistingConversation(convId, content, emotion = 'neutral', …)`
+// 的第三个参数**在所有调用点都没传**（new.vue / [id].vue 只传 faceEmotion/voiceEmotion）
+// ⇒ 该字段线上恒为 `'neutral'`，不是测量值。若照单注入，会对每条消息断言"对方此刻平静"（假陈述）。
+// 因此 `neutral` 与空串一律不注入；等前端真算出情绪（非 neutral）自动生效。
+const defaultTextEmotion = "neutral"
 
 // emotionChineseLabels 英文情绪标签 → 中文（避免 prompt 里出现英文枚举值）。
 // 未收录的情绪**原样返回**（不会泄漏系统术语，也不编造中文词）。

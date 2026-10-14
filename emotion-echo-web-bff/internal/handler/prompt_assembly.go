@@ -53,6 +53,9 @@ type assembleInput struct {
 	faceConfidence  float64
 	voiceEmotion    string
 	voiceConfidence float64
+	// textEmotion 当前轮用户消息的情绪标签（前端 `emotion` 字段，CL-04 Phase 6 接上）。
+	// `neutral` / 空 = 无信号（见 defaultTextEmotion —— 线上该字段目前恒为默认值）。
+	textEmotion string
 	// userContent 当前轮用户输入（Phase 2 后历史会排在它之前）
 	userContent string
 }
@@ -90,10 +93,17 @@ func (h *AIStreamHandler) personalitySegment(ctx context.Context) string {
 
 // emotionSegment 产出情绪上下文段。
 //
-// 优先级（E2E-F-122 D-14）：**前端 payload（此刻信号）优先于会话情绪历史（统计）** ——
-// payload 非空时不查历史（省一次 gRPC）。历史查询报错/为空 → 返回 ""（增强不是依赖）。
+// 优先级（同为"当前轮信号"，按可靠度排）：
+//
+//	face/voice（多模态实时）→ textEmotion（当前轮文本标签）→ 会话情绪历史（统计回落）
+//
+// 前两者**不叠加**：face/voice 任一非空时不再用文本信号（避免把"神情"与"话语"拼成可能矛盾的描述）。
+// 历史查询报错/为空 → 返回 ""（增强不是依赖）。
 func (h *AIStreamHandler) emotionSegment(in assembleInput) string {
 	if seg := buildEmotionContext(in.faceEmotion, in.faceConfidence, in.voiceEmotion, in.voiceConfidence); seg != "" {
+		return seg
+	}
+	if seg := buildTextEmotionContext(in.textEmotion); seg != "" {
 		return seg
 	}
 	if h.emotion == nil || in.conversationID <= 0 {
@@ -104,6 +114,18 @@ func (h *AIStreamHandler) emotionSegment(in assembleInput) string {
 		return ""
 	}
 	return buildEmotionHistoryContext(pattern)
+}
+
+// buildTextEmotionContext 拼"文本情绪"段（当前轮用户消息的情绪标签）。
+//
+// `neutral` 与空 = 无信号（`defaultTextEmotion` 的由来见 prompt_templates.go 注释）——
+// 该值目前是前端默认值而非测量值，照单注入等于对每条消息断言"对方此刻平静"。
+func buildTextEmotionContext(emotion string) string {
+	e := strings.TrimSpace(emotion)
+	if e == "" || e == defaultTextEmotion {
+		return ""
+	}
+	return emotionSegmentPrefix + emotionTextPhrase + emotionChineseLabel(e) + emotionNowSuffix
 }
 
 // assembleSystemPrompt 把有序段拼成完整 system 串（空段已在上游丢弃）。

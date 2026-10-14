@@ -335,6 +335,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			faceConfidence:  req.FaceConfidence,
 			voiceEmotion:    req.VoiceEmotion,
 			voiceConfidence: req.VoiceConfidence,
+			textEmotion:     strings.TrimSpace(req.Emotion), // CL-04 Phase 6：文本情绪（neutral=无信号）
 			userContent:     userContent,
 		})
 		ctx, cancel := context.WithCancel(c.Request.Context())
@@ -401,6 +402,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			faceConfidence:  req.FaceConfidence,
 			voiceEmotion:    req.VoiceEmotion,
 			voiceConfidence: req.VoiceConfidence,
+			textEmotion:     strings.TrimSpace(req.Emotion), // CL-04 Phase 6：文本情绪（neutral=无信号）
 			userContent:     userContent,
 		})
 		llmReq := downstream.LLMChatReq{
