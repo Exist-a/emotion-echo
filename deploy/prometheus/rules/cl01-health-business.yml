@@ -1,0 +1,127 @@
+# CL-01 Phase 7/8：业务（fusion）与健康（/health/ready）告警
+#
+# 为什么有这个文件（CL-01 §4 约束①"不改指标语义"+ 约束⑤"埋点接了但没验证不算完成"）：
+#   本阶段把 fusion 两指标接进了生产路径（T-06），把 health 就绪状态纳入了采集面（T-15）。
+#   但"面板上有曲线"≠"出问题会响" —— 该文件让这两类指标**被告警真正消费**，
+#   闭合 roadmap §4 CL-01 的口径："每个自定义指标都要在面板/告警上被真正消费到"。
+#
+# 指标名来源（2026-10-14 起栈实测 `GET :9090/api/v1/label/__name__/values` 核对，非凭记忆）：
+#   - emotion_echo_fusion_fallback_total{stage=llm_to_late|late_to_skip}
+#   - emotion_echo_fusion_worker_tick_total{outcome=ok|error|skipped_lru}
+#   - emotion_echo_fusion_llm_call_total{outcome=success|json_parse_err|timeout|http_5xx|invalid_output|circuit_open|other}
+#   - emotion_echo_dlq_publish_total{result=success|failure}（ai-svc）
+#   - emotion_echo_analytics_dlq_publish_total{result=...}（analytics-svc）
+#   - emotion_echo_http_requests_total{path,status,service,method}
+#
+# 负向对照（T-13 同法）：本文件任一 alert 都能用"停容器 / 造条件"实测触发并送达
+#   Alertmanager（2026-10-14 已用 PrometheusTargetDown 走通全链）。
+#
+# severity 约定：
+#   - critical：用户可见的功能已坏（就绪探针连续失败 = 依赖挂了，服务实际不可用）
+#   - warning ：功能降级但仍在跑（融合走了 late 回退、DLQ 投递失败、tick 停摆）
+
+groups:
+  # ---------------------------------------------------------------
+  # 业务面：融合链路是否在"降级运行"
+  # ---------------------------------------------------------------
+  - name: cl01-business-fusion
+    interval: 30s
+    rules:
+      # fusion 整体调用失败（成功路径见 T-06；失败路径此前完全不可见）
+      - alert: FusionCallFailing
+        expr: increase(emotion_fusion_calls_total{result="failure"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          component: ai
+        annotations:
+          summary: "融合调用失败（modality={{ $labels.modality }}）"
+          description: |
+            近 10 分钟有 {{ $value | printf "%.0f" }} 次融合以 failure 收尾。
+            融合失败会让 /reports/* 的情绪分布退化为"只有文本"甚至空。
+            排查: docker logs emotion-echo-ai-svc --since 10m | grep -i fusion
+
+      # 降级信号：LLM 融合不可用 → 回退到 late fusion（"是否在跟 mock/回退对话"的可观测化）
+      - alert: FusionFallbackActive
+        expr: increase(emotion_echo_fusion_fallback_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          component: ai
+        annotations:
+          summary: "融合走了回退路径（stage={{ $labels.stage }}）"
+          description: |
+            近 10 分钟 fusion 回退 {{ $value | printf "%.0f" }} 次，stage={{ $labels.stage }}。
+            llm_to_late  = LLM fuser 不可用（如 LLM_BASE_URL 为空）→ 用加权 late fusion 兜底；
+            late_to_skip = 连 late fusion 都不可用 → 跳过融合。
+            **dev 环境 LLM_BASE_URL 为空时这是预期态**（见 ai-svc 启动日志
+            "LLM fuser disabled"）；生产出现该告警须查 LLM 上游。
+
+      # worker 停摆：tick 计数在 10 分钟窗口内零增长（进程活着但循环死了 / 没起来）
+      # `or vector(0)` 是刻意的：series 完全消失（ai-svc 挂掉）时也要能判"停摆"，
+      # 否则 `increase()` 无 series ⇒ 表达式为空 ⇒ 告警**静默不响**（Prometheus 经典坑）。
+      - alert: FusionWorkerStalled
+        expr: (increase(emotion_echo_fusion_worker_tick_total{outcome="ok"}[10m]) or vector(0)) == 0
+        for: 10m
+        labels:
+          severity: warning
+          component: ai
+        annotations:
+          summary: "FusionWorker 10 分钟无成功 tick"
+          description: |
+            ai-svc 的 FusionWorker 每 5s 应产生一次 outcome=ok 的 tick。
+            10 分钟零增长说明循环停摆（或 ai-svc 整体已挂，此时 up{job="emotion-echo-services"} 也会红）。
+            排查: docker logs emotion-echo-ai-svc --since 10m | grep "tick fired"
+
+  # ---------------------------------------------------------------
+  # 可靠性面：DLQ 与就绪
+  # ---------------------------------------------------------------
+  - name: cl01-reliability
+    interval: 30s
+    rules:
+      # DLQ 投递本身失败 = "毒消息既进不了主流程也进不了 DLQ"的黑洞（比 DLQ 有消息更严重）
+      - alert: DLQPublishFailing
+        expr: |
+          increase(emotion_echo_dlq_publish_total{result="failure"}[10m]) > 0
+          or increase(emotion_echo_analytics_dlq_publish_total{result="failure"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "DLQ 投递失败（instance={{ $labels.instance }}）"
+          description: |
+            近 10 分钟 DLQ 投递失败 {{ $value | printf "%.0f" }} 次。业务消息已被 MarkMessage
+            前进且 DLQ 也没收到 ⇒ 该事件**彻底丢失**（业务 + DLQ 双失败黑洞）。
+            排查: docker logs {{ $labels.instance }} | grep -i "DLQ publish failed"
+
+      # T-15 / D-05：就绪探针失败（依赖不可用 → /health/ready 返 503）
+      # 这是"直接 scrape /health 得到 up=0"的可用替代：指标名与语义均来自既有埋点，
+      # status 标签由各 svc 的 HTTP 中间件写入（见 prometheus.yml 中 D-05 的偏差说明）。
+      - alert: ServiceNotReady
+        expr: increase(emotion_echo_http_requests_total{path="/health/ready",status!~"2.."}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: health
+        annotations:
+          summary: "服务就绪探针失败：{{ $labels.service }}（HTTP {{ $labels.status }}）"
+          description: |
+            {{ $labels.service }} 的 /health/ready 近 5 分钟返回非 2xx 共
+            {{ $value | printf "%.0f" }} 次。readiness 语义 = 依赖（DB/Redis/Kafka）可用性，
+            503 表示该实例**实际不可用**（即使进程还在跑、up 仍为 1）。
+            排查: docker logs {{ $labels.instance }} --since 5m | grep -i "health"
+
+      # 就绪探针**停摆**：10 分钟没有任何 200（探针本身没了 / 服务卡死不再响应）
+      - alert: HealthProbeMissing
+        expr: (increase(emotion_echo_http_requests_total{path="/health/ready",status="200"}[10m]) or vector(0)) == 0
+        for: 10m
+        labels:
+          severity: warning
+          component: health
+        annotations:
+          summary: "就绪探针 10 分钟无成功样本：{{ $labels.service }}"
+          description: |
+            compose healthcheck 每 30s 打一次 /health/ready，10 分钟窗口内应远多于 0 次。
+            零增长说明 healthcheck 被摘掉、或服务已卡死不再处理请求。
+            （注意：容器被 recreate 后 counter 归零，本告警带 for: 10m 以避开该瞬态。）

@@ -1,0 +1,528 @@
+{
+ "uid": "emotion-echo-business",
+ "title": "Emotion-Echo · 业务面（融合链路）",
+ "tags": [
+  "cl-01",
+  "business",
+  "fusion"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "30s",
+ "editable": true,
+ "graphTooltip": 1,
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "description": "CL-01 Phase 7 · 业务面看板。回答两个问题：① 融合链路是否在跑；② 是否处于降级/mock 态（T-11）。\n指标口径见 deploy/prometheus/rules/cl01-health-business.yml 顶部注释。",
+ "panels": [
+  {
+   "type": "stat",
+   "title": "融合调用速率（5m）",
+   "id": 1,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(emotion_fusion_calls_total[5m])) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "fusion 整体调用次数（T-06 接线的 emotion_fusion_calls_total）。\n为 0 = 融合链路根本没跑（worker candidates=0）。"
+  },
+  {
+   "type": "stat",
+   "title": "融合失败（5m）",
+   "id": 2,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 6,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(emotion_fusion_calls_total{result=\"failure\"}[5m])) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "失败会让 /reports/* 的情绪分布退化为只有文本。"
+  },
+  {
+   "type": "stat",
+   "title": "降级次数（5m）",
+   "id": 3,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 12,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(emotion_echo_fusion_fallback_total[5m])) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "**T-11 核心**：>0 说明融合正在走回退（llm_to_late / late_to_skip）。\ndev 环境 LLM_BASE_URL 为空 ⇒ 这是预期态，不是故障。"
+  },
+  {
+   "type": "stat",
+   "title": "Worker tick 速率（5m）",
+   "id": 4,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 18,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(rate(emotion_echo_fusion_worker_tick_total{outcome=\"ok\"}[5m])) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ops",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "FusionWorker 每 5s 一次 tick ⇒ 正常约 0.2/s。为 0 = 循环停摆。"
+  },
+  {
+   "type": "timeseries",
+   "title": "融合调用（按模态 × 结果）",
+   "id": 5,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 5
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (modality, result) (rate(emotion_fusion_calls_total[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "{{modality}} / {{result}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": "modality ∈ text|face|voice|fused（低基数，由 fusionModalityLabel 归一）。"
+  },
+  {
+   "type": "timeseries",
+   "title": "融合回退（按 stage）",
+   "id": 6,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 5
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (stage) (rate(emotion_echo_fusion_fallback_total[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "{{stage}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": "llm_to_late = LLM fuser 不可用→加权 late fusion 兜底；late_to_skip = 连兜底都不可用→跳过融合。"
+  },
+  {
+   "type": "timeseries",
+   "title": "LLM 融合调用（按 outcome）",
+   "id": 7,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 13
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (outcome) (rate(emotion_echo_fusion_llm_call_total[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "{{outcome}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": "**回答\"是否在跟 mock/降级对话\"**：outcome 里出现 timeout / circuit_open / http_5xx\n即 LLM 上游有问题；只有 success 才是真 LLM 融合。\n（无 series = 从未调用过 LLM fuser，如 dev LLM_BASE_URL 为空。）"
+  },
+  {
+   "type": "timeseries",
+   "title": "LLM 融合 p95 延迟",
+   "id": 8,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 13
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(emotion_echo_fusion_llm_latency_seconds_bucket[5m]))) or vector(0)",
+     "refId": "A",
+     "legendFormat": "{{outcome}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": ""
+  },
+  {
+   "type": "timeseries",
+   "title": "融合耗时 p95（按模态）",
+   "id": 9,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 21
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "histogram_quantile(0.95, sum by (le, modality) (rate(emotion_fusion_duration_seconds_bucket[5m]))) or vector(0)",
+     "refId": "A",
+     "legendFormat": "{{modality}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": ""
+  },
+  {
+   "type": "timeseries",
+   "title": "物化视图刷新",
+   "id": 10,
+   "gridPos": {
+    "h": 8,
+    "w": 6,
+    "x": 12,
+    "y": 21
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(rate(emotion_echo_mv_refresh_success_total[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "success"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": "报表读的 *_v 视图由定时刷新维护；成功/失败应同时看。"
+  },
+  {
+   "type": "timeseries",
+   "title": "物化视图刷新失败",
+   "id": 11,
+   "gridPos": {
+    "h": 8,
+    "w": 6,
+    "x": 18,
+    "y": 21
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(rate(emotion_echo_mv_refresh_fail_total[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "fail"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": ">0 = 报表数据可能陈旧。"
+  }
+ ],
+ "annotations": {
+  "list": []
+ },
+ "links": []
+}

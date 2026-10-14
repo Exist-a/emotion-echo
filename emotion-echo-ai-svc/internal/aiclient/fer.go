@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // FERClient 面部表情识别客户端（Stage 22-A.1）。
@@ -55,7 +57,7 @@ func NewFERClient(c Config) *FERClient {
 	}
 	return &FERClient{
 		baseURL: c.BaseURL,
-		hc:      &http.Client{Timeout: defaultHTTPTimeout},
+		hc:      trace.NewTracedClient(defaultHTTPTimeout),
 		timeout: time.Duration(timeout) * time.Second,
 	}
 }

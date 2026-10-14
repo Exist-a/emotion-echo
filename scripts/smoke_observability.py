@@ -236,25 +236,47 @@ def main() -> int:
             headers={"Authorization": f"Basic {grafana_auth}"},
         )
         if st != 200:
-            return None, f"HTTP {st}"
+            return None, f"HTTP {st}", {}
         try:
             panels = json.loads(bd).get("dashboard", {}).get("panels", [])
         except (json.JSONDecodeError, KeyError, TypeError) as e:
-            return None, f"{type(e).__name__}: {e}"
+            return None, f"{type(e).__name__}: {e}", {}
         out = []
+        loki_panels = 0
         for p in panels:
+            # CL-01 Phase 7：日志面看板（emotion-echo-logs）的 panel 是 Loki 数据源，
+            # expr 是 LogQL —— 喂给 Prometheus /api/v1/query 必然解析失败（series=-1），
+            # 那是**探针用错**而不是面板坏了。故按数据源类型跳过非 prometheus 的面板。
+            # 用"显式 loki 才跳过"（而非"只认 prometheus"）以免漏掉未声明 datasource 的旧面板。
+            if (p.get("datasource") or {}).get("type") == "loki":
+                loki_panels += 1
+                continue
             for t in p.get("targets", []):
                 if t.get("expr"):
                     out.append((p.get("title", "?"), t["expr"]))
-        return out, None
+        return out, None, {"panels": len(panels), "loki": loki_panels}
 
-    for _uid in ("emotion-echo-overview", "kafka-consumer-lag"):
-        _exprs, _err = _panel_exprs(_uid)
+    for _uid in (
+        "emotion-echo-overview",
+        "kafka-consumer-lag",
+        "emotion-echo-observability",
+        # CL-01 Phase 7 新增三面
+        "emotion-echo-business",
+        "emotion-echo-reliability",
+        "emotion-echo-logs",
+    ):
+        _exprs, _err, _stats = _panel_exprs(_uid)
         if _exprs is None:
             check(f"grafana dashboard '{_uid}' panels readable", False, _err or "unknown")
             continue
         if not _exprs:
-            check(f"grafana dashboard '{_uid}' has query panels", False, "no expr found")
+            # 纯 Loki 看板（日志面）没有 prometheus expr 是**设计如此**，不是缺口。
+            # 但仍必须真的有面板 —— 零面板的空看板仍判 FAIL。
+            check(
+                f"grafana dashboard '{_uid}' has panels (all-loki ok)",
+                _stats.get("panels", 0) >= 1 and _stats.get("loki", 0) >= 1,
+                f"panels={_stats.get('panels')} loki={_stats.get('loki')} prom_exprs=0",
+            )
             continue
         check(f"dashboard '{_uid}' query panels present", True, f"panels_with_expr={len(_exprs)}")
 

@@ -1,0 +1,489 @@
+{
+ "uid": "emotion-echo-reliability",
+ "title": "Emotion-Echo · 可靠性面（DLQ / Outbox / 就绪）",
+ "tags": [
+  "cl-01",
+  "reliability"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "30s",
+ "editable": true,
+ "graphTooltip": 1,
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "description": "CL-01 Phase 7 · 可靠性面看板。覆盖 DLQ 黑洞、outbox 静默回退、就绪探针、5xx 速率。\n注意 `outbox_sent_via_fallback_total > 0` 是**下游全链路静默失效**的早期信号。",
+ "panels": [
+  {
+   "type": "stat",
+   "title": "Outbox 死信行",
+   "id": 1,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(emotion_echo_outbox_events_dead_total) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "chat-svc outbox 重试耗尽的行数。>0 = 有事件永远发不出去。"
+  },
+  {
+   "type": "stat",
+   "title": "Outbox 走内存回退",
+   "id": 2,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 6,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(emotion_echo_outbox_sent_via_fallback_total) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "**重要**：>0 表示 Kafka producer 初始化失败、outbox 静默改投内存 ⇒\n**后续事件不会进 Kafka，下游 consumer 全部收不到**（2026-10-14 实测该值为 1）。"
+  },
+  {
+   "type": "stat",
+   "title": "DLQ 投递失败（5m）",
+   "id": 3,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 12,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(emotion_echo_dlq_publish_total{result=\"failure\"}[5m])) + sum(increase(emotion_echo_analytics_dlq_publish_total{result=\"failure\"}[5m])) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "业务消息已 MarkMessage 前进、DLQ 也没收到 = 事件彻底丢失（双失败黑洞）。"
+  },
+  {
+   "type": "stat",
+   "title": "就绪探针失败（5m）",
+   "id": 4,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 18,
+    "y": 0
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(emotion_echo_http_requests_total{path=\"/health/ready\",status!~\"2..\"}[5m])) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "**T-15 / D-05**：/health/ready 返非 2xx 的次数。readiness=依赖可用性，\n503 表示实例实际不可用（进程还在、up 仍为 1）。"
+  },
+  {
+   "type": "timeseries",
+   "title": "HTTP 5xx 速率（按服务）",
+   "id": 5,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 5
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (service) (rate(emotion_echo_http_requests_total{status=~\"5..\"}[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "{{service}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": ""
+  },
+  {
+   "type": "timeseries",
+   "title": "HTTP 4xx 速率（按服务）",
+   "id": 6,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 5
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (service) (rate(emotion_echo_http_requests_total{status=~\"4..\"}[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "{{service}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": ""
+  },
+  {
+   "type": "timeseries",
+   "title": "DLQ 投递（按结果）",
+   "id": 7,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 13
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (result) (rate(emotion_echo_dlq_publish_total[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "ai-svc {{result}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": ""
+  },
+  {
+   "type": "timeseries",
+   "title": "DLQ 投递（analytics，按结果）",
+   "id": 8,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 13
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (result) (rate(emotion_echo_analytics_dlq_publish_total[5m])) or vector(0)",
+     "refId": "A",
+     "legendFormat": "analytics-svc {{result}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": ""
+  },
+  {
+   "type": "table",
+   "title": "Tracing 初始化失败（按服务）",
+   "id": 9,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 21
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (service) (emotion_echo_skywalking_init_failed_total) or vector(0)",
+     "refId": "A",
+     "instant": true,
+     "format": "table",
+     "legendFormat": "{{instance}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "filterable": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true
+   },
+   "description": "**>0 = 该服务当前完全没有链路追踪**（tracer 初始化失败后不再重试，\nSkyWalking UI 的服务列表里会缺这个服务）。2026-10-14 实测 chat-svc / assessment-svc = 1，\n重启两容器后归零（OAP 当时未就绪 ⇒ 启动竞态）。"
+  },
+  {
+   "type": "table",
+   "title": "就绪探针通断（按服务 × 状态码）",
+   "id": 10,
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 21
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (service, status) (increase(emotion_echo_http_requests_total{path=\"/health/ready\"}[1h])) or vector(0)",
+     "refId": "A",
+     "instant": true,
+     "format": "table",
+     "legendFormat": "{{service}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "filterable": true
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true
+   },
+   "description": "健康检查每 30s 一次 ⇒ 1h 约 120 次 200。\n出现 503 行 = 该服务曾因依赖不可用被判 not ready。"
+  }
+ ],
+ "annotations": {
+  "list": []
+ },
+ "links": []
+}

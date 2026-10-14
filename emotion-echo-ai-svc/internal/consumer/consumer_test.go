@@ -632,11 +632,17 @@ func (t *mockTracer) CreateEntrySpan(
 }
 
 // CreateExitSpan Stage 92 PR-2：mock（接口合规所需）
+//
+// CL-01 G4：改为**真调 injector**（写 "sw8" → "mock-sw8"），让 DLQ span 测试能断言
+// sw8 被注入 DLQ headers（trace 续接）。此前 mock 忽略 injector，无法验证该行为。
 func (t *mockTracer) CreateExitSpan(
 	ctx context.Context, opName, peer string,
 	injector func(string, string) error,
 ) (context.Context, grpcinterceptor.Span, error) {
 	t.exitOpCalls = append(t.exitOpCalls, opName)
+	if injector != nil {
+		_ = injector("sw8", "mock-sw8")
+	}
 	return ctx, t.exitSpan, t.exitErr
 }
 
