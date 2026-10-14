@@ -8,7 +8,7 @@ last-updated: 2026-10-14（A 轨：Phase 0~6 已落地并运行时验证（14/16
 depends-on: []
 blocks: [cl-06, cl-07]
 gate: []            # 无开工前阻塞决策门；[M] 决策点见 §2 T-16
-source: docs/plans/prompt-pipeline-redesign.md
+source: docs/legacy-plans/landed/prompt-pipeline-redesign.md（已落地）
 related-plans:
   - docs/plans/user-custom-agent-persona.md（CL-06，注入槽位落在本阶段组装层）
   - docs/plans/chat-emotion-realtime-display.md（CL-07，情绪槽位生产/消费两侧）
@@ -184,6 +184,6 @@ related-plans:
 ## §7 调研依据（本次实读）
 
 - **代码**：`ai_stream_handler.go`、`downstream/{llm_grpc.go,chat.go,chat_grpc.go}`、`personality_directive.go`、`chat-svc/internal/{repository/conversation_repository.go,logic/listmessageslogic.go}`、`llm-service/{grpc_server.py,intent.py,file_context.py}`、前端 `composables/{useAIStreamHandler,useConversationSender,useAIStream,usePrompt}.ts`、测试 `ai_stream_handler_llmgrpc_test.go` —— 共 14 个文件（见 §A.1）。
-- **文档**：`docs/plans/prompt-pipeline-redesign.md`（来源计划）、`docs/closure-roadmap/{roadmap.md,parallel-contract.md,RUNBOOK.md,decisions.md,stages/_TEMPLATE.md}`、`adr-2026-09-personality-prompt-injection.md`、`adr-2026-09-personality-prompt-semantics.md`。
+- **文档**：`docs/legacy-plans/landed/prompt-pipeline-redesign.md`（来源计划，已落地）、`docs/closure-roadmap/{roadmap.md,parallel-contract.md,RUNBOOK.md,decisions.md,stages/_TEMPLATE.md}`、`adr-2026-09-personality-prompt-injection.md`、`adr-2026-09-personality-prompt-semantics.md`。
 - **`grep` 断言**：`useAIStream` 生产零调用（仅架构测试）；`buildRCTPrompt` 仅单测引用；`req.Emotion|req.Model|req.Stream` 在 handler 内零命中；`with_intent` 仅 proto/py 侧存在、BFF 侧未设置。
 - **未执行**：dev 栈未起、真实 prompt 未抓、§2.4 smoke 未跑（§A.4 声明）。

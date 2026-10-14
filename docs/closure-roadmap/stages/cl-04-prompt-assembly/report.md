@@ -4,7 +4,7 @@ title: Prompt 组装层 — 执行记录
 type: report
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（Phase 0 基线 + Phase 1 统一组装层 + Phase 2 历史注入 + **Phase 3 参数下发**（9/16 测试点 PASS）；阶段未收口 —— 余 5 点 + T-14 在 Phase 4~7）
+last-updated: 2026-10-14（**Phase 0~7 全部完成**：15/16 PASS + T-16/T-17 [M] 已裁定并落地；收口契约自检见 §4。阶段待第二方核对转 done）
 ---
 
 # CL-04 · Prompt 组装层 — 执行记录（report）
@@ -380,7 +380,34 @@ $ grep -rn "useAIStream\b|buildRCTPrompt|promptType" app/ e2e/ → 仅新守卫�
 证据（5 个新用例）：`TestBasePersona_NoBrevityConstraint` · `TestTextEmotion_{InjectedWhenNonNeutral, NeutralOrDefaultIsNoSignal,
 FaceVoiceTakePrecedence, BeatsHistoryFallback}` 全 PASS；`go vet ./...` exit 0；`go test ./...` 10 包 ok / 0 FAIL。
 
-### 3.13 测试点总表（16 点，逐点状态）
+### 3.14 Phase 7：T-14 IAB 人可见钉（多轮"记得上文"）— PASS [V]
+
+**人可见验收**（真实浏览器 + 本地前端 `pnpm dev`，走网关 `:19080`）：演示账号登录 → 第 1 轮埋入
+「我叫**小林**，下周四要参加一场**后端开发岗**的技术面试，一想到被追问项目细节就睡不好」→
+第 2 轮**只问**「你还记得我叫什么、面的是什么岗位吗？」。AI 回答：
+
+> **当然记得，小林。你面的是后端开发岗，下周四。**
+> 而且你提到最担心的是被追问项目细节，甚至影响到睡眠——这点我一直记着。
+> 要不要挑一个你最没底的项目，我们一起把它捋顺？
+
+⇒ 准确复述第 1 轮三条信息（姓名 / 岗位 / 下周四 + 担忧点）⇒ **"AI 记得你上一句说了什么"在真实 UI 里成立**。
+截图（[V] 人核用）：`evidence/iab-t14-multiturn.png`（同时可见第 1 轮的结构化回复形态 = "适中档"）。
+同一轮里还观察到：发送后输入框 placeholder 由「请输入想倾诉的内容，按发送按钮提交...」变为「想说点什么？」、发送按钮由「发送」变为「发送消息」（**钻取 spec 的定位要按状态取名**，见 §5 经验 9）。
+
+**回归钉（本阶段第 4 类钉，补上 Playwright）**：`emotion-echo-web/e2e/cl-04-prompt-memory.spec.ts`
+—— 同一路径自动化：演示账号登录 → 第 1 轮埋信息 → 第 2 轮只问"是否记得" → 断言最新一条 AI 回复含姓名 + 岗位弱匹配。
+
+```text
+$ BASE_URL=http://127.0.0.1:3000 pnpm exec playwright test e2e/cl-04-prompt-memory.spec.ts --project=chromium
+  ok 1 [chromium] › CL-04/T-14 · AI 记得上文（多轮对话） › 第二轮回复必须复述第一轮埋入的姓名与岗位 (39.8s)
+  1 passed (3.6m)
+```
+
+**本轮 IAB 还顺手发现一条范围外问题**：**发送消息后聊天区未自动滚动到最底部**（用户实测指出）⇒
+已记账 **CL-F-10**（归属 CL-05，**用户指示本轮只记录不修**；该文件在契约 §1.1 属 C 轨独占列，改动须先握手）。
+根因**未定位**（不臆断）。
+
+### 3.15 测试点总表（16 点 + 追加 1 点，逐点状态）
 
 | # | 测试点 | 判定 | 本轮状态 |
 |---|---|---|---|
@@ -397,7 +424,7 @@ FaceVoiceTakePrecedence, BeatsHistoryFallback}` 全 PASS；`go vet ./...` exit 0
 | T-11 | 意图注入接回（with_intent） | [A] | ✅ **PASS**（§3.10：2 钉 + 运行时 `[intent]` 日志；⚠️ 代价已实测并上报） |
 | T-12 | 死路径清零（useAIStream/usePrompt） | [A] | ✅ **PASS**（§3.10：删 4 文件 + 2 回流防护钉；vitest 649 用例全绿） |
 | T-13 | 契约对齐（无静默丢弃字段） | [A] | ✅ **PASS**（§3.12：`emotion` 接上（neutral=无信号）+ 前端半场记为待握手项） |
-| T-14 | IAB 多轮"记得上文" | [V] | 未执行（Phase 7；需用 dev 栈，按 §3.1 排队） |
+| T-14 | IAB 多轮"记得上文" | [V] | ✅ **PASS**（§3.14：人工取证截图 + Playwright 回归钉 1 passed） |
 | T-15 | 负向对照（关历史⇒复现无记忆） | [A] | ✅ **PASS**（§3.6，`NoHistorySignals` 5 子例含"来源报错/去重后为空"⇒ 退回两条） |
 | T-16 | MaxTokens/Temperature 取值 | [M] | ✅ **已裁定**（1024 / 0.7，用户 2026-10-14） |
 | T-17 | 基础人设长度约束的去留 | [M] | ✅ **已裁定并落地**（2026-10-14：**先去掉**看效果；实测回复 657/766/629 字，见 §3.12） |
@@ -417,8 +444,17 @@ FaceVoiceTakePrecedence, BeatsHistoryFallback}` 全 PASS；`go vet ./...` exit 0
   ③ 死路径清零（删 `useAIStream`/`usePrompt`/孤儿类型 + 2 条回流防护钉）。
 - **Phase 6 完成**：契约对齐（`emotion` 接上，`neutral` 视为无信号；前端半场记为待握手项）+
   **基础人设去掉"简短"约束**（用户裁定）—— 实测回复形态转为结构化长文（657/766/629 字，TTFT 不变）。
-- **阶段状态**：`in-progress`（**未收口**）。测试点 **14/16 有 PASS 结论**（T-1~T-13 全部 + T-15）+ T-16/T-17 已裁定；
-  仅剩 **T-14 IAB 人可见钉**（Phase 7，需 dev 栈）。
+- **Phase 7 完成**：T-14 IAB 人可见钉 PASS（多轮「记得上文」在真实 UI 成立 + Playwright 回归钉绿）。
+- **阶段状态**：**待第二方核对后转 done**（执行者不自行宣布 done —— RUNBOOK 收口契约第 7 项）。
+  测试点 **15/16 PASS**（T-1~T-15 全部）+ **T-16/T-17 两条 [M] 均已裁定并落地** ⇒ 16 点全部有结论。
+- **收口契约自检（RUNBOOK §6 七项）**：
+  1. ✅ plan 每点四值 + 证据（§3.1~§3.14 + §3.15 表）
+  2. ✅ 回归钉四类齐（Go 契约/架构 · pytest · vitest · **Playwright 人可见钉**）
+  3. ✅ report 用模板（起点 / 实施 / 证据 / 结论 / 经验）
+  4. ✅ 账本对账：本阶段无归属 CL-04 的未解决账（CL-F-06~10 均归 CL-00 / CL-05 并写明触发条件）
+  5. ✅ 落地计划迁 `legacy-plans/landed/`（入站链接全量修正 + 文件头 redirect 说明）
+  6. ⏳ roadmap 状态 + 占位/锁收口（本提交内完成；分支/worktree 在 PR 合并后按 AGENTS §2.5 清理）
+  7. ⏳ 第二方核对（过渡期由用户/另会话按本清单核）
 - **环境遗留**（交付给下一轮）：
   - dev 栈**在跑**（17 容器）；`xtts` 按用户指示**已停**（TTS 链路预期 502，文本链路不受影响）；
   - dev mode 锁 `deploy/.devmode-session`（owner `lane-cl-a`，until 2026-10-14 12:00）→ **收工须删**；
@@ -444,5 +480,9 @@ FaceVoiceTakePrecedence, BeatsHistoryFallback}` 全 PASS；`go vet ./...` exit 0
    托底，改动面大也不再心虚；反过来若一开始就"重写 + 加历史"，一旦回归很难定位是哪一部分引起的。
 7. **并行轨共用 docker daemon（CL-F-09）**：两个 worktree 构建的是**同一批镜像 tag** ⇒ 互相覆盖；修完代码"本地验收通过"
    不等于"你验的是你的代码"。自查手法：`docker images | grep <tag>` 看构建时刻 + `docker ps --format {{.Image}}` 看容器实际镜像 ID。
+9. **Playwright 钉子的定位要“按状态取名”**：本轮钉子首跑失败**不是产品 bug**，而是我写的定位二义——
+   `getByRole('heading', {name:'对话'})` 同时匹配 h1「对话」与 h3「最近的对话」，strict mode 直接判失败；
+   且聊天输入框 placeholder 与发送按钮文案**随会话状态变化**（首条前「请输入想倾诉的内容…」/「发送」→ 之后「想说点什么？」/「发送消息」）。
+   教训：**钉子里的定位必须来自实际快照**（Playwright 的错误信息自己给出了 `exact: true` 的修法），不要凭印象写 accessible name。
 8. **"死路径复活"必须先量代价再宣称收益**：`with_intent` 接回本身一行代码，但真实代价是 TTFT +45% 与回复体量 3~5 倍
    （后者来自另一处文案与人设的矛盾，不在 BFF 侧）。若只按"链路通了"收工，产品侧的变化会被漏报。

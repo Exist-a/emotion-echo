@@ -61,7 +61,6 @@ related:
 
 | 轨 | 阶段 | 分支 / worktree | owner | 开始 | 状态 |
 |---|------|----------------|-------|------|------|
-| A | CL-04 Prompt 组装层 | `feat/cl-04-prompt-assembly`（worktree `../Emotion-Echo-cl04`） | Lane-CL-A | 2026-10-14 | **in-progress**（draft PR [#213](https://github.com/Exist-a/emotion-echo/pull/213)；**持 dev 栈锁至 12:00**） |
 | B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | **in-progress**（draft PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)；dev 栈**排队在 A 之后**） |
 | C | CL-02 gRPC 契约闭环 | `feat/cl-02-grpc-contract`（worktree `../Emotion-Echo-cl02`） | Lane-CL-C | 2026-10-14 | **in-progress**（draft PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)；🟢 Phase 先行，🔴 需栈 Phase 排队在 B 之后） |
 
@@ -78,7 +77,7 @@ related:
 
 | 顺序 | 轨 | 需要的栈窗口 | 状态 |
 |---|---|---|---|
-| 1 | A（CL-04） | 至 **2026-10-14 15:00**（`deploy/.devmode-session` owner=`lane-cl-a`） | **持锁中**（用户裁定：A 阶段**未收尾**，继续持有；余 T-13 契约对齐 + T-14 IAB 人可见钉，收口后删锁。B 轨已停工，C 轨若急用请先与本轨握手） |
+| 1 | ~~A（CL-04）~~ | 已于 2026-10-14 阶段收口时**释放**（`deploy/.devmode-session` 已删） | ✅ **已释放**（Phase 0~7 全部完成：15/16 PASS + T-14 IAB 钉绿；B/C 排队位次不变） |
 | 2 | B（CL-01） | A 释放后（Phase 0 基线 / 8 采集 / 9 负向对照） | 排队中 |
 | 3 | C（CL-02） | B 之后（Phase 2 清除验证 / 4 接真 / 6 收口冒烟） | 排队中 |
 
