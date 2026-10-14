@@ -63,7 +63,7 @@ related:
 |---|------|----------------|-------|------|------|
 | B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | **in-progress**（draft PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)；dev 栈**排队在 A 之后**） |
 | C | CL-02 gRPC 契约闭环 | `feat/cl-02-grpc-contract`（worktree `../Emotion-Echo-cl02`） | Lane-CL-C | 2026-10-14 | **in-progress**（draft PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)；🟢 Phase 先行，🔴 需栈 Phase 排队在 B 之后） |
-| D | CL-05 消息链路闭环 | `feat/cl-05-message-pipeline`（worktree `../Emotion-Echo-cl05`） | Lane-CL-D | 2026-10-14 | **in-progress**（draft PR STAGE_PR；**🟢 先行**：Phase 1~4 全部不需栈；🔴 需栈 Phase 0/5~7 排队在 C 之后） |
+| D | CL-05 消息链路闭环 | `feat/cl-05-message-pipeline`（worktree `../Emotion-Echo-cl05`） | Lane-CL-D | 2026-10-14 | **in-progress**（draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；**🟢 先行**：Phase 1~4 全部不需栈；🔴 需栈 Phase 0/5~7 排队在 C 之后） |
 
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行

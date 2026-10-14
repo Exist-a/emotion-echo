@@ -59,7 +59,7 @@ related:
 | **CL-02** | gRPC 契约闭环 | T1 | `grpc-deadlink-actualization` | — | **in-progress**（C 轨 · PR #214 draft） |
 | **CL-03** | Kafka/可靠性闭环（合并一次执行） | T1 | `outbox-trace-continuity`、`dlq-hardening-and-replay`、`kafka-pipeline-pending-decisions` | 与 CL-01/02 共享追踪面 | pending |
 | **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
-| **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | **in-progress**（D 轨 · draft PR STAGE_PR；🟢 Phase 1~4 不需栈先行，🔴 需栈 Phase 0/5~7 排队在 C 之后） |
+| **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | **in-progress**（D 轨 · draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；🟢 Phase 1~4 不需栈先行，🔴 需栈 Phase 0/5~7 排队在 C 之后） |
 | **CL-06** | 用户自定义 Agent | T3 | `user-custom-agent-persona` | CL-04 | pending |
 | **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | pending |
 | **CL-08a** | 记忆 · 用户事实 | 最后 | `conversation-memory-pending-decision` | CL-04 | pending |
