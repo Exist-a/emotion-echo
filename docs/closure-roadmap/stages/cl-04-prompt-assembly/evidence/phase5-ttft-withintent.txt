@@ -1,0 +1,6 @@
+turn1: ttft=1290ms e2e=1655ms replyChars=51
+turn2: ttft=1212ms e2e=2304ms replyChars=192
+turn3: ttft=1584ms e2e=2865ms replyChars=278
+
+conversationId=673  rounds=3
+ttft: [1290, 1212, 1584] ms   平均 1362ms

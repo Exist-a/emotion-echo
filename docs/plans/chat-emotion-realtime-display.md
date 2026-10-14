@@ -8,7 +8,7 @@ source: 2026-10-13 会话（用户：面试反馈"闭环程度不够"→ 挑最�
 depends-on: []
 related-plans:
   - fusion-result-consumption.md（融合产物的统计/图表/报表消费；本计划是它的**前端实时回显**补充，见 §7）
-  - prompt-pipeline-redesign.md（"实时情绪"也是 prompt 的情绪槽位来源，见 §7）
+  - legacy-plans/landed/prompt-pipeline-redesign.md（已落地）（"实时情绪"也是 prompt 的情绪槽位来源，见 §7）
 ---
 
 # Plan — 对话页「用户当前情绪」实时回显 + 消息级融合标签
@@ -90,7 +90,7 @@ related-plans:
 
 - **不改融合算法 / 不改 FusionWorker 频率**（只做消费端与展示）。
 - **不做报表/聚合消费**（融合情绪的日报分布、趋势图、融合方法占比——那是 `fusion-result-consumption.md` §2.1/§2.2 的范围）。
-- **不做 AI 回复的情绪分类**（AI 回复落库带不带 emotion 是后端契约问题，见 `fusion-result-consumption.md` 与 `prompt-pipeline-redesign.md`；本计划只在 G4 里消费"已有/可算"的情绪）。
+- **不做 AI 回复的情绪分类**（AI 回复落库带不带 emotion 是后端契约问题，见 `fusion-result-consumption.md` 与 `../legacy-plans/landed/prompt-pipeline-redesign.md`；本计划只在 G4 里消费"已有/可算"的情绪）。
 - 不登记 E2E-F、不挂阶段。
 
 ---
@@ -173,7 +173,7 @@ related-plans:
 ## §7 与既有计划的关系
 
 - **`fusion-result-consumption.md`（planned）**：那份管**后端聚合/报表/AI 闭环**（`daily_emotion_fused_v`、日报融合分布、注入 prompt）。本计划管**前端实时回显 UI**。**重叠点**：那份的 G4「消息级标签」= 本计划的 G2——**以本计划为准实现一次**，落地时同步该文件状态避免两处各做。**不重复**：报表/图表归那份。
-- **`prompt-pipeline-redesign.md`（本批新增）**：本计划产出的"当前融合情绪"正是那份重构后 prompt 的情绪槽位来源之一（情绪注入的消费者与生产者对齐）。
+- **`../legacy-plans/landed/prompt-pipeline-redesign.md`（本批新增）**：本计划产出的"当前融合情绪"正是那份重构后 prompt 的情绪槽位来源之一（情绪注入的消费者与生产者对齐）。
 - **`frontend-message-cache-offline-resilience.md`（planned）**：消息渲染层若同时大改，需协调挂载点（都动 `[id].vue`）。
 
 ---

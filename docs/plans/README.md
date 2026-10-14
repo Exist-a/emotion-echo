@@ -18,7 +18,6 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 
 | 文件 | 主题 | 优先级 |
 |---|---|---|
-| `prompt-pipeline-redesign.md` | **Prompt 构建流程重构**：现状只发 `[system, 最后一条 user]`（多轮＝无记忆单轮）、无 token 预算、不设 Temperature/MaxTokens、system prompt 硬编码分散 ≥8 处、意图风格注入是死路径。目标 = 统一组装层 + 槽位 + 预算 + 配置化 | high |
 | `user-custom-agent-persona.md` | **用户自定义 Agent（背景/人格 → 提示词约束）**：现状人设由测评五维自动推断、用户不可填。目标 = 用户可设名字/背景/语气/边界 + 注入 prompt（含越狱护栏） | high |
 | `chat-emotion-realtime-display.md` | **对话页「用户当前情绪」实时回显**：融合产物 `fused_emotions` 算了但前端零消费；顶部状态条 + 消息融合标签 + 打通数字人情绪 | high |
 | `frontend-message-cache-offline-resilience.md` | 前端消息链路：游标分页 + 本地缓存（IndexedDB）+ 状态机 + 断网重试。现 `messageCache.ts` 全仓零调用 | high |
@@ -72,7 +71,7 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 
 `on-device-STATUS.md`、`on-device-*.md`（baseline-report / cdn-probe-report / compile-cdn / decision-pack / golden-n13-report / mindchat-survey / model-selection-decision-material / t3-iab-report / t3-lessons-learned）、`on-device-findings.md`（active）。这些是 Lane O 的过程产物，非"待排期计划"。
 
-## 2026-10-13 计划清查轮 · 已归档到 `legacy-plans/landed/`（12 份）
+## 2026-10-13 计划清查轮 · 已归档到 `legacy-plans/landed/`（13 份）
 
 | 文档 | 归档依据（真实代码/产物） |
 |---|---|
@@ -88,6 +87,7 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 | `observability-sprint-b.md` | Stage 44~50 全落地（PR-OBS-1~16 + 1 fix） |
 | `stage-93-analytics-svc-sw8-propagation.md` | Stage 93 landed（sw8 透传，镜像 v0.1.6） |
 | `tts-api-cosyvoice2-f198-2026-10-06.md` | F-198 landed；BFF config 默认 `TTS.Provider=auto`（CosyVoice2 主 + XTTS 回退） |
+| `prompt-pipeline-redesign.md` | **CL-04 落地**（PR #213，2026-10-14）：统一组装层 + 同会话历史滑动窗口 + 参数下发 + 文案集中 + 死路径清零；证据见 `docs/closure-roadmap/stages/cl-04-prompt-assembly/report.md` |
 
 ## 写入规范
 

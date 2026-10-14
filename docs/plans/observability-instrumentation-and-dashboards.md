@@ -10,7 +10,7 @@ related-plans:
   - observability-business-metrics-wiring.md（**面板/告警实施版**——本计划与之互补：那份**不改 Go 埋点**，本计划**正是改埋点代码**，见 §7）
   - grafana-dashboard-gaps-2026-09-30.md（缺口分析 B1~B9；本计划承接其 B5/B6/B7 的**代码/采集侧**增量）
   - outbox-trace-continuity.md（异步 trace 断点，本计划 §2.5 引用不再重复设计）
-  - prompt-pipeline-redesign.md（同批）
+  - legacy-plans/landed/prompt-pipeline-redesign.md（已落地）（同批）
 ---
 
 # Plan — 可观测埋点补全（代码侧）+ 面板/采集增量

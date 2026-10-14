@@ -54,7 +54,8 @@ STYLE_INSTRUCTIONS: dict[str, str] = {
     "emotional_support": (
         "回复要求：1.像朋友一样自然对话，语气温暖共情；"
         "2.不要用序号或列表，保持流畅自然；3.适当使用换行分段；"
-        "4.体现理解和支持，先接住情绪再轻引导。"
+        "4.体现理解和支持，先接住情绪再轻引导；"
+        "5.这是情绪倾诉场景：优先简短共情（约 100 字），不要给清单或长篇建议。"
     ),
     "study_help": (
         "回复要求：1.用清晰的步骤说明（1. 2. 3.）；"
@@ -105,9 +106,17 @@ def classify_intent(text: str) -> tuple[str, float]:
     return best, round(confidence, 2)
 
 
+# 篇幅上限（CL-04 · T-17 定档）：与 BFF `baseSystemPrompt` 的长度指引**两侧一致**，
+# 否则风格一侧会把回复顶回长文（实测：只去掉 BFF 侧硬约束、风格侧无上限 ⇒ 657/766/629 字、e2e 4.4~4.8s）。
+STYLE_LENGTH_CONSTRAINT = (
+    "篇幅：全文不超过 300 字；对方只是倾诉情绪时更短（约 100 字）；"
+    "需要给建议或步骤时才展开，分点不超过 4 条，不要堆砌小标题。"
+)
+
+
 def style_instruction(intent: str) -> str:
-    """按意图取回复风格指令；未知意图按 other 处理"""
-    return STYLE_INSTRUCTIONS.get(intent, STYLE_INSTRUCTIONS["other"])
+    """按意图取回复风格指令（**统一附加篇幅上限**）；未知意图按 other 处理"""
+    return STYLE_INSTRUCTIONS.get(intent, STYLE_INSTRUCTIONS["other"]) + "\n" + STYLE_LENGTH_CONSTRAINT
 
 
 def inject_style(messages: list[dict], intent: str) -> list[dict]:

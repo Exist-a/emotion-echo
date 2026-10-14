@@ -1,0 +1,35 @@
+turn1: persist=200 stream=200 replyChars=63
+turn2: persist=200 stream=200 replyChars=92
+turn3: persist=200 stream=200 replyChars=69
+
+=== PHASE0 SUMMARY (paste into report) ===
+{
+ "base": "http://localhost:19080",
+ "turns": [
+  {
+   "turn": 1,
+   "messagePersistStatus": 200,
+   "streamStatus": 200,
+   "replyChars": 63,
+   "replyHead": "能感觉到这件事在你心里占了不少分量，一想到就心跳加速，是很自然的反应。先陪你把这份紧张说出来吧——你最担心面试里的哪个环"
+  },
+  {
+   "turn": 2,
+   "messagePersistStatus": 200,
+   "streamStatus": 200,
+   "replyChars": 92,
+   "replyHead": "我懂那种感觉——明明是自己做过的事，一到被追问细节，脑子就像蒙了一层雾，对吗？先别急着否定自己，愿意提前想这件事，说明你"
+  },
+  {
+   "turn": 3,
+   "messagePersistStatus": 200,
+   "streamStatus": 200,
+   "replyChars": 69,
+   "replyHead": "听起来你对那两个问题挺在意的，这份在意本身就说明你想认真对待。要不先说说它们具体是什么，我们一起把思路理一理——你觉得哪"
+  }
+ ],
+ "login": {
+  "status": 200,
+  "gotToken": true
+ },
+ "conversationId": "668

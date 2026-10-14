@@ -189,11 +189,14 @@ def build_file_context_text(attachments, cfg: FetchConfig | None = None) -> str:
     for i, att in enumerate(attachments, start=1):
         name = (att.get("name") or att.get("url", "").rsplit("/", 1)[-1]) or f"attachment-{i}"
         text, reason = fetch_and_extract(att.get("url", ""), name, cfg)
-    if text is not None:
-        # P1-R2-6: 用 <file_attachment> 标签包裹附件内容，建立不可信数据边界
-        sections.append(f"--- 附件 {i}：{name} ---\n<file_attachment>\n{text}\n</file_attachment>")
-    else:
-        sections.append(f"--- 附件 {i}：{name}（未能读取：{reason}）---")
+        # CL-04 Phase 5（T-10）：下面这段原被**缩进在循环之外** ⇒ N 个附件只输出最后一条
+        # （且 i/name 泄漏为循环末值）。"多附件全输出"是契约，回归钉见
+        # tests/unit/test_file_context_multi_attachment.py。
+        if text is not None:
+            # P1-R2-6: 用 <file_attachment> 标签包裹附件内容，建立不可信数据边界
+            sections.append(f"--- 附件 {i}：{name} ---\n<file_attachment>\n{text}\n</file_attachment>")
+        else:
+            sections.append(f"--- 附件 {i}：{name}（未能读取：{reason}）---")
     # Stage 91 PR-1 GREEN：prompt 头从描述性改指令性。
     # 原因：Stage 89/90 两次位置改造后 PDF 短文本哨兵仍部分拒读——
     # 原措辞"可参考/如实说明"是描述性，LLM 把附件判作"可选噪声"。

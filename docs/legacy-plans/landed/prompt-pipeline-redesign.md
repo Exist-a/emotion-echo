@@ -1,8 +1,10 @@
 ---
-status: planned
+status: landed
 priority: high
-owner: TBD
+owner: lane-cl-a（阶段 CL-04）
 created: 2026-10-13
+landed: 2026-10-14（阶段 CL-04 · PR #213；推进方式与逐点证据见 `docs/closure-roadmap/stages/cl-04-prompt-assembly/{plan,report}.md`）
+last-updated: 2026-10-14（**落地归档**：CL-04 收口，本文件自 `docs/plans/` 迁入 `docs/legacy-plans/landed/`；引用旧路径的文档请改指本文件）
 type: implementation-plan
 source: 2026-10-13 会话（用户："其实这就引出一个最大的问题，目前 prompt 流程。我觉得目前的 prompt 构建流程是有问题的"）
 depends-on: []

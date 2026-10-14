@@ -31,6 +31,10 @@ type LLMChatReq struct {
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
 	Stream   bool      `json:"stream,omitempty"`
+	// CL-04 Phase 3：生成参数（缺陷 3 —— 原实现从不赋值 ⇒ 上游无输出长度上限）。
+	// 用 omitempty 保持"未设即不发送"的语义，避免零值把上游参数覆盖成 0。
+	Temperature float64 `json:"temperature,omitempty"`
+	MaxTokens   int32   `json:"max_tokens,omitempty"`
 }
 
 // Message OpenAI 消息

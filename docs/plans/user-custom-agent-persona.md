@@ -6,9 +6,9 @@ created: 2026-10-13
 type: implementation-plan
 source: 2026-10-13 会话（用户：面试官建议"让用户预设属于自己的 agent —— 大改就是添加背景，将这些作为提示词约束"）
 depends-on:
-  - prompt-pipeline-redesign.md（用户自定义 agent 是重构后 prompt 组装层的一个**槽位**；两部应协同落地）
+  - legacy-plans/landed/prompt-pipeline-redesign.md（已落地）（用户自定义 agent 是重构后 prompt 组装层的一个**槽位**；两部应协同落地）
 related-plans:
-  - prompt-pipeline-redesign.md（提示词组装层，见 §7）
+  - legacy-plans/landed/prompt-pipeline-redesign.md（已落地）（提示词组装层，见 §7）
   - chat-emotion-realtime-display.md（情绪槽位的消费侧）
 ---
 
@@ -52,7 +52,7 @@ related-plans:
 |---|---|
 | 已有用户级配置存储可扩展 | ✅ `users.config JSONB`（但当前 schema 是扁平 UI 项，需设计嵌套/新表，见 §3.1） |
 | 已有"用户可控内容进 prompt"的防御范式 | ✅ `file_context.py` 的 `_PROMPT_INJECTION_GUARD` |
-| prompt 组装有单一落点可挂新槽位 | ⚠️ **当前无**——落点是 BFF `buildSystemPromptWithEmotion`，但硬编码分散、无槽位抽象 → **本计划依赖 `prompt-pipeline-redesign.md` 先建立统一组装层** |
+| prompt 组装有单一落点可挂新槽位 | ⚠️ **当前无**——落点是 BFF `buildSystemPromptWithEmotion`，但硬编码分散、无槽位抽象 → **本计划依赖 `../legacy-plans/landed/prompt-pipeline-redesign.md` 先建立统一组装层** |
 | 测评画像会与用户自设冲突 | ✅ 是——须定义优先级（§3.3） |
 
 ---
@@ -61,7 +61,7 @@ related-plans:
 
 一句话：**Agent 的"人设"是千人一面、服务端强加、用户不可控的**——所有人共享同一句硬编码 `baseSystemPrompt`，唯一的个性化是"按测评自动推断"，用户想给 AI 设定名字/背景/语气/边界**无处可填**。
 
-面试视角：这是把项目从"一个通用情绪聊天机器人"变成"**用户的专属陪伴者**"的关键差异点，也让"prompt 工程"从服务端单向注入升级为**用户参与的可配置约束**——但前提是 prompt 组装流程先能承载它（见 `prompt-pipeline-redesign.md`）。
+面试视角：这是把项目从"一个通用情绪聊天机器人"变成"**用户的专属陪伴者**"的关键差异点，也让"prompt 工程"从服务端单向注入升级为**用户参与的可配置约束**——但前提是 prompt 组装流程先能承载它（见 `../legacy-plans/landed/prompt-pipeline-redesign.md`）。
 
 ---
 
@@ -97,14 +97,14 @@ related-plans:
 
 ### 3.2 提示词槽位
 
-用户自设映射为 prompt 的一段**独立槽位**（与"人格适配段""情绪段"并列，由统一组装层拼装——见 `prompt-pipeline-redesign.md`）：
+用户自设映射为 prompt 的一段**独立槽位**（与"人格适配段""情绪段"并列，由统一组装层拼装——见 `../legacy-plans/landed/prompt-pipeline-redesign.md`）：
 
 ```
 [基础人设 base]
 [用户自定义 Agent 段]   ← 本计划新增
 [人格适配段（测评五维）]
 [情绪上下文段]
-[对话历史]              ← prompt-pipeline-redesign.md 新增
+[对话历史]              ← legacy-plans/landed/prompt-pipeline-redesign.md（已落地） 新增
 ```
 
 ### 3.3 优先级 / 冲突消解
@@ -132,7 +132,7 @@ related-plans:
 
 | Phase | 内容 | RED 断言 |
 |---|---|---|
-| 0 | 前置：确认 `prompt-pipeline-redesign.md` 的统一组装层已就绪（或并行开工；否则本计划只能改硬编码点，仍可做但会二次返工） | — |
+| 0 | 前置：确认 `../legacy-plans/landed/prompt-pipeline-redesign.md` 的统一组装层已就绪（或并行开工；否则本计划只能改硬编码点，仍可做但会二次返工） | — |
 | 1 | 数据模型：`user_agent_profile` 表 + 迁移 + 软删除 | 迁移可重跑幂等；repo CRUD 单测（枚举/边界） |
 | 2 | user-svc gRPC：Get/Upsert Agent Profile | Go 契约测试：写入读回一致；超长/空值校验 |
 | 3 | BFF：读 agent profile → 组"用户自定义 Agent 段" | 契约测试：有设定注入段、无设定**逐字等于**现状 base |
@@ -160,16 +160,16 @@ related-plans:
 | **Prompt 注入 / 越狱** | 用户可控文本进 system prompt，是**安全敏感面** | 长度上限 + 明确分隔 + 注入过滤 + 系统护栏后置不可覆盖（§3.4） |
 | **冒充真人 / 宣称资质** | "你是一位有 20 年经验的心理医生" 会被当真 | 越界过滤 + 语义 ADR 纪律（不宣称资质、不冒充真人） |
 | **与测评画像冲突** | 两套人格指令打架 | 明确优先级（用户设定 > 测评，边界最高）+ 冲突回退测试 |
-| **三处人格文案同步债** | 现有 `personality_directive.go` / 前端 `configs/personality.ts` / assessment 三处人工同步 | 借 `prompt-pipeline-redesign.md` §模板配置化一并收敛 |
+| **三处人格文案同步债** | 现有 `personality_directive.go` / 前端 `configs/personality.ts` / assessment 三处人工同步 | 借 `../legacy-plans/landed/prompt-pipeline-redesign.md` §模板配置化一并收敛 |
 | **敏感信息存储** | 用户背景可能含隐私 | 走现有软删除 + 若涉隐私评估脱敏/加密（§8 D2） |
-| **prompt 膨胀** | 人设+画像+情绪+历史叠加超长 | 依赖 prompt 预算机制（`prompt-pipeline-redesign.md` §G3） |
+| **prompt 膨胀** | 人设+画像+情绪+历史叠加超长 | 依赖 prompt 预算机制（`../legacy-plans/landed/prompt-pipeline-redesign.md` §G3） |
 | **依赖未落地的组装层** | 组装层没做就改，会二次返工 | Phase 0 前置；或本计划先"最小可注入点"实现，落地后并入组装层 |
 
 ---
 
 ## §7 与既有计划的关系
 
-- **`prompt-pipeline-redesign.md`（本批新增，强依赖）**：那份建立**统一 prompt 组装层 + 槽位 + 预算 + 模板配置化**；本计划是它之上的**一个槽位实现**。**建议先合流设计再分别落地**，否则本计划会改到"将被重构掉的硬编码点"。
+- **`../legacy-plans/landed/prompt-pipeline-redesign.md`（本批新增，强依赖）**：那份建立**统一 prompt 组装层 + 槽位 + 预算 + 模板配置化**；本计划是它之上的**一个槽位实现**。**建议先合流设计再分别落地**，否则本计划会改到"将被重构掉的硬编码点"。
 - **`adr-2026-09-personality-prompt-injection.md` / `personality-prompt-semantics.md`**：注入落点与措辞纪律的上游依据。
 - **`chat-emotion-realtime-display.md`（本批新增）**：情绪槽位的消费侧，与本计划并列在同一组装层。
 

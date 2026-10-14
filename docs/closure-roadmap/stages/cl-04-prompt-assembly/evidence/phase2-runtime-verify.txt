@@ -1,0 +1,5 @@
+turn1: persist=200 stream=200 replyChars=57
+turn2: persist=200 stream=200 replyChars=94
+turn3: persist=200 stream=200 replyChars=114
+
+=== PHASE0 SUMMARY (paste into report) ===
