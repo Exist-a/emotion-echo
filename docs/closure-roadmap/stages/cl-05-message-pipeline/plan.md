@@ -4,7 +4,7 @@ title: 消息链路闭环（会话列表游标化 + 本地缓存接线 + 状态�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（D 轨建档 → **Phase 1 完成**（T-13 PASS：RED 3 红 → GREEN 5/5 + 全量 654/654 + typecheck 绿）；并入账本继承项 `CL-F-10`/`CL-F-11` 为 T-21/T-22（Phase 8）；更正 `tdd-gate` 纪律写法）
+last-updated: 2026-10-14（建档 → **Phase 1 完成**（T-13 PASS）→ **Phase 2a 完成**（T-9/T-10 PASS：RED 3 红 → GREEN 11/11 + 全量 665/665）；并入账本继承项 `CL-F-10`/`CL-F-11` 为 T-21/T-22（Phase 8）；更正 `tdd-gate` 纪律写法；**修正 §A.1 关于 `where({sessionId,status})` 会抛错的错误断言**（实测不抛，见 report §3.3））
 depends-on: []           # 不依赖任何阶段；**不阻塞于 T1**（CL-01/02/03）
 blocks: []
 gate: []                 # 无开工前阻塞决策门；3 个 [M] 见 §7
@@ -56,7 +56,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | `emotion-echo-web/app/stores/message.ts` | `messageCursor` `:15`；`loadMoreMessages` `:38-82`（`:46-48` 发 `params.cursor`、`:50-54` 读 `{list,cursor,hasMore}`、`:70-71` 更新）；`switchSession` `:21-36`；`sendMessage` `:84-151` 直接置 `status:'sent'`（`:121`/`:131`）—— **`sending` 从未被赋值、无乐观插入**；`MessageStatus` 本文件另有一份定义 `:7`（5 值，含 `truncated`） |
 | `emotion-echo-web/app/stores/conversation.ts` | `cursor = ref<string>('')` `:14`；`fetchConversations` `:91-137` **发 `params.cursor = lastItem.updatedAt`**（`:100-103`、`:119-123`）但只读 `{list, hasMore}`（`:105`）；BFF 读的是 `offset` ⇒ **参数名对不上、offset 恒 0 ⇒ "加载更多"重取第一页并可能重复**。`loadMore` `:142-147` |
 | `emotion-echo-web/app/utils/db.ts` | Dexie 单例；**唯一定义 **`version(1).stores({ messages: 'id, sessionId, [sessionId+sendTime]' })`（`:20-22`）⇒ **无 `status`、无独立 `sendTime` 索引**；SSR-safe 懒初始化（`:9-28`） |
-| `emotion-echo-web/app/utils/messageCache.ts` | 完整 CRUD（267 行）但**全仓零调用**；`getPendingMessages` `:141-144` / `getFailedMessages` `:150-153` 用 `where({ sessionId, status })` ⇒ **需 `[sessionId+status]` 复合索引，缺失 ⇒ 一调用即抛 SchemaError**；`trimOldMessages` `:204-218` 用 `where('sendTime')` ⇒ **需 `sendTime` 索引，缺失 ⇒ 抛错**；`exportSessionMessages` `:247-250` `.sortBy('sendTime')` 同风险；`retryCount` 恒置 0（`:37`/`:56`） |
+| `emotion-echo-web/app/utils/messageCache.ts` | 完整 CRUD（267 行）但**全仓零调用**；`getPendingMessages` `:141-144` / `getFailedMessages` `:150-153` 用 `where({ sessionId, status })`；`trimOldMessages` `:204-218` 用 `where('sendTime')`；`exportSessionMessages` `:247-250` `.sortBy('sendTime')`；`retryCount` 恒置 0（`:37`/`:56`）。**⚠️ 2026-10-14 Phase 2a 实测修正**：此前（含来源计划）记为"这些查询一调用即抛 SchemaError"——**只对 `where('sendTime')` 成立**（真抛 `KeyPath sendTime ... is not indexed`）；`where({sessionId,status})` 与 `sortBy('sendTime')` 实测**都不抛**（Dexie 分别用 `sessionId` 索引 + 内存过滤、内存排序兜住）⇒ 补 `[sessionId+status]` 属**效率/契约**改进而非修崩溃 |
 | `emotion-echo-web/app/plugins/init.ts` | `setupNetworkListener` `:99-116`：`online` 监听**只有 `console.log` + TODO 注释**（`:105-111`），`retryFailedMessages` 全仓**无定义**；`init.ts:47/77-82` 初始化 user/conversation store，**不触 message store，也不触 messageCache** |
 | `emotion-echo-web/app/pages/chat/conversation/[id].vue` | `@scroll="onMessagesScroll"`（`:3`）；`onMessagesScroll` `:524-532`：`scrollTop <= 48` ⇒ `loadMoreMessages()`（`:529-530`）⇒ **翻页触发点已存在**（非"无触发点"）；`scrollToBottom` `:517-519`；`switchSession` `:548` |
 | `emotion-echo-web/app/types/conversation/conversationMessagesType.ts` | `MessageStatus` 第二份定义 `:4`（**4 值，无 `truncated`**）；`conversationMessageType` 用 `sender: 'user' \| 'AI'`（`:8`）与 `contentType: 'text'\|'audio'\|'img'`（`:11`）—— 与上游 DTO（`role`、`image`/`file`/`video`）**字段名与取值均不一致** |
@@ -154,14 +154,14 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | T-6 | **会话"加载更多"不再重取第一页** | [A] | 前端 store 单测：第二页请求参数 ≠ 第一页；mock 返回第二页 ⇒ 列表长度增加且 id 无交集 | 待执行 |
 | T-7 | **HTTP 降级路径认 cursor**（`CHAT_TRANSPORT=http`） | [A] | 单测（handler 读 `cursor`）+ 运行验证（transport=http 下翻页生效） | 待执行 |
 | T-8 | **旧 ASC 死方法清零**：`Order("id ASC")` 的生产调用方 = 0（删或归档，口径对齐 CL-02） | [A] | `grep` 断言 + 架构测试 | 待执行 |
-| T-9 | **Dexie 索引修复**：`version(2)` 后 `getPendingMessages` / `getFailedMessages` / `trimOldMessages` **不再抛错** | [A] | vitest + `fake-indexeddb`（**修前先红**） | 待执行 |
-| T-10 | **缓存往返**：`saveMessage` → `getLatestMessages`/`getMessagesBySession` 往返一致（含分页 cursor 语义） | [A] | vitest + `fake-indexeddb` | 待执行 |
+| T-9 | **Dexie 索引修复**：`version(2)` 后 `getPendingMessages` / `getFailedMessages` / `trimOldMessages` **不再抛错** | [A] | vitest + `fake-indexeddb`（**修前先红**） | ✅ **PASS**（Phase 2a，2026-10-14）—— 钉 `app/utils/messageCache.test.ts` **11/11 绿**；RED 实测 3 项失败，**其中只有 `trimOldMessages` 是真崩溃**（`SchemaError: KeyPath sendTime on object store messages is not indexed`）。⚠️ **本阶段修正**：`getFailedMessages`/`getPendingMessages` 实测**不抛**（详见 §A.1）；补 `[sessionId+status]` 属效率/契约改进。见 `report.md §3.3` |
+| T-10 | **缓存往返**：`saveMessage` → `getLatestMessages`/`getMessagesBySession` 往返一致（含分页 cursor 语义） | [A] | vitest + `fake-indexeddb` | ✅ **PASS**（Phase 2a，2026-10-14）—— 往返 / 批量 `saveMessages` / `updateMessageStatus` / `getMessagesBySession` 游标分页（两页不重不漏）均绿，见 `report.md §3.3` |
 | T-11 | **读加速**：`switchSession` 先渲染本地快照，再以服务端覆盖/合并 | [A] | store 单测（断言先读缓存后发请求） | 待执行 |
 | T-12 | **合并策略**：服务端覆盖同 id；**本地独有 `failed/pending` 不被服务端快照抹掉** | [A] | store 单测（构造本地 failed + 服务端无该条） | 待执行 |
 | T-13 | **状态机单一来源**：`MessageStatus` 全仓**仅一处定义**、取值集合唯一 | [A] | 架构测试（`grep` 定义点）+ 类型测试 | ✅ **PASS**（Phase 1，2026-10-14）—— 钉 `app/types/conversation/message-status-single-source.architecture.test.ts` **5/5 绿**；**RED 实测 3 项失败**（2 处定义 / canonical 仅 4 值 / 2 处内联联合），逐项见 `report.md §3.1` |
 | T-14 | **乐观插入**：发送瞬间用户消息 `status === 'sending'`（**现恒 `'sent'` ⇒ RED**）；服务端返回后置 `sent` + 换真实 id | [A] | store 单测 | 待执行 |
 | T-15 | **非法转移被拒**：`sent → sending` 等非法转移不生效 | [A] | 转移表单测 | 待执行 |
-| T-16 | **重试计数 + 上限**：失败后 `retryCount` +1；达 `MAX=3` 停自动重试 | [A] | vitest（fake timers） | 待执行 |
+| T-16 | **重试计数 + 上限**：失败后 `retryCount` +1；达 `MAX=3` 停自动重试 | [A] | vitest（fake timers） | 待执行（Phase 4） |
 | T-17 | **退避策略**：间隔 = `min(2^n × 1000ms, 30s)` | [A] | vitest（fake timers 断言调用时刻） | 待执行 |
 | T-18 | **断网重连重扫**：离线发送 → 置 `failed`；触发 `online` → 按退避重试、**同一 `clientMsgId`**、成功置 `sent` 并移出待重试集 | [A] | store 单测（模拟 `navigator.onLine` + fake timers） | 待执行 |
 | T-19 | **重试幂等（不重复入库）** | [A] | 运行验证：断网补发后 DB 该 `client_msg_id` 行数为 1（复用 `c002` 唯一索引） | 待执行 |
@@ -170,6 +170,8 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | T-22 | **账本继承 · 发送并刷新后出现两个对话**（`CL-F-11`，用户 2026-10-14 IAB 实测；账本已归属 **CL-05**） | [A] | 先**定位根因**（疑 `createNewConversation` 建会话→navigateTo→落库链路重入），再运行验证：建会话→发送→刷新，会话列表只 +1；根因定后补单测 | 待执行（Phase 8，🔴 需栈） |
 
 > **负向对照（必做，防"钉子不会红"）**：Phase 2 修索引**前**先跑 T-9 必须**红**；Phase 3 落地**前**先跑 T-14 必须**红**（现状恒 `'sent'`）。
+>
+> **另有（不占测试点编号，属 G8 缓存治理）**：`trimSessionMessages(maxCount)` / `trimOldMessages(keepDays)` / `getCacheStats` 已有钉（`app/utils/messageCache.test.ts`，Phase 2a 已绿）。
 >
 > **关联账本（**三处**，收口须逐条对账）**：
 > ① `E2E-F-205`（分页契约错位）与 ② `E2E-F-206`（缓存/状态机/重试半成品）置 ✅（`docs/e2e-roadmap/discovered-unresolved.md:439-440`）；
@@ -187,7 +189,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 |---|---|---|---|
 | **0** | **基线取证**：起栈（排队）→ curl 走网关 `:19080` 取消息/会话两页现状 → DB 比对；确认 `CHAT_TRANSPORT` 实际值 | 🔴 | —（人工产证据；**未做，见 §A.4**） |
 | **1** | **类型与契约收敛（无行为变更）**：`MessageStatus` 收敛到**单一来源**；补 `cursor/hasMore` 类型；`messageCursor`/`cursor` 是否需导出按需定 | 🟢 | T-13（现状两处定义取值集合不一致 ⇒ **红**）—— ✅ **已完成 2026-10-14**（RED 3 项失败 → GREEN 5/5；全量 vitest 654/654 + typecheck 绿；证据 `report.md §3.1`） |
-| **2** | **缓存层修复 + 接线**：① `db.ts` 升 `version(2)` 补 `[sessionId+status]` + `sendTime` 索引；② 修 `messageCache.ts`（索引可用后不抛错，补 `markFailed/incRetry` 辅助）；③ `stores/message.ts` 接线（`switchSession` 快照→服务端→`saveMessages`；`loadMoreMessages` 落页；`sendMessage` 落条）；④ 合并策略：服务端覆盖同 id、本地 `failed/pending` 保留 | 🟢 | **T-9（索引缺失下 `getFailedMessages` 抛错 ⇒ 红）** + T-10 / T-11 / T-12 |
+| **2** | **缓存层修复 + 接线**：① `db.ts` 升 `version(2)` 补 `[sessionId+status]` + `sendTime` 索引；② 修 `messageCache.ts`（索引可用后不抛错，补 `markFailed/incRetry` 辅助）；③ `stores/message.ts` 接线（`switchSession` 快照→服务端→`saveMessages`；`loadMoreMessages` 落页；`sendMessage` 落条）；④ 合并策略：服务端覆盖同 id、本地 `failed/pending` 保留 | 🟢 | **①（2a）✅ 已完成 2026-10-14**（RED 3 红 → GREEN 11/11 + 全量 665/665；证据 `report.md §3.3`）。**②③④（2b）未开始** —— T-11 / T-12 |
 | **3** | **状态机 + 乐观插入**：单一转移表（`sending→sent/failed`、`streaming→sent/failed`、`failed→sending`、`sent`/`truncated` 终态 + 非法转移守卫）；用户消息先插 `sending`（temp id = `clientMsgId`），服务端返回后换真实 id 并置 `sent` | 🟢 | **T-14（发送瞬间恒 `'sent'` ⇒ 红）** + T-15 |
 | **4** | **重试 + 断网重扫**：`retryCount` 自增 + 指数退避 `min(2^n×1000ms,30s)` + `MAX=3`；`stores/message.ts` 新增 `retryFailedMessages()`；`plugins/init.ts` 把 `:105-111` 的 TODO 换成真实调用（`online` 事件 + 启动时 `navigator.onLine`）；**复用 `clientMsgId`** | 🟢 | T-16 / T-17 / T-18（现状 `retryFailedMessages` 无定义 ⇒ **红**） |
 | **5** | **会话列表游标化**（D-B=B1，**需与 C 轨握手 `proto/**`**）：proto `ListConversationsRequest` 增游标字段 → chat-svc `ListConversations` 复合游标 `(updated_at, id)` → BFF `listConversations` 读游标 → 前端 `conversation.ts` 对齐 | 🟢 编码 / 🔴 运行 | T-5（Go 表驱动：同 `updated_at` 边界）+ T-4 / T-6 |

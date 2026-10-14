@@ -18,7 +18,7 @@ import {
 import { getDb } from '~/utils/db'
 import type { MessageStatus } from '~/types/conversation/conversationMessagesType'
 
-// CL-05 Phase 2 · T-9 / T-10 / T-16：本地缓存层的**契约**测试。
+// CL-05 Phase 2 · T-9 / T-10（+ G8 缓存治理）：本地缓存层的**契约**测试。
 //
 // 现状（2026-10-14 亲核）：`utils/messageCache.ts`（267 行完整 CRUD）**全仓零调用**，
 // 且它依赖的两个索引在 `db.ts` 里**根本没建** ⇒ 一旦真被调用就抛 SchemaError：
@@ -155,7 +155,7 @@ describe('messageCache 契约（CL-05 Phase 2）', () => {
     })
   })
 
-  describe('T-16 缓存治理', () => {
+  describe('缓存治理（G8 / 来源计划 D-F；非 T-16）', () => {
     it('trimSessionMessages 只保留最新 maxCount 条', async () => {
       await saveMessages(
         SESSION,

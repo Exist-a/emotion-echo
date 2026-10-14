@@ -27,7 +27,8 @@ plan: plan.md
 |---|---|---|---|---|
 | **0** 基线取证 | ⛔ 未开始（🔴） | — | — | 需 dev 栈；`deploy/.devmode-session` 由 **B 轨**持锁（至 18:00），D 轨在契约 §3.1 **排第 4**（B → C → D） |
 | **1** 类型与契约收敛 | ✅ **完成** | `2a2290e`(RED) → `af2eba9`(GREEN) | **T-13 PASS** | 见 §3.1 |
-| 2 缓存层修复 + 接线 | ⬜ 未开始（🟢 可立即开工） | — | T-9~T-12、T-16 | 需新增 `fake-indexeddb` devDep（`package.json` 追加式，契约 §1.2） |
+| **2a** 缓存层：Dexie 索引 | ✅ **完成** | `6328f57`(RED) → `e8be055`(GREEN) | **T-9 / T-10 PASS**（+ G8 治理） | 见 §3.3 |
+| **2b** 缓存层：store 接线 | ⬜ 未开始（🟢 可立即开工） | — | T-11、T-12 | 读加速 / 写穿 / 合并策略 |
 | 3 状态机 + 乐观插入 | ⬜ 未开始（🟢） | — | T-14、T-15 | |
 | 4 重试 + 断网重扫 | ⬜ 未开始（🟢） | — | T-17、T-18 | |
 | 5 会话列表游标化 | ⛔ 阻塞（待 C 轨 `proto/**` 握手答复） | — | T-4/T-5/T-6 | 已向 C 轨 PR #214 发握手请求 |
@@ -95,14 +96,61 @@ $ pnpm typecheck             # 首轮报过 1 个 TS2532，修后无 error
 
 - **Phase 0 基线未取**：dev 栈由 **B 轨**持有（`deploy/.devmode-session`，`until 2026-10-14 18:00`），D 轨排第 4，**未强占** ⇒ 无一条运行时证据（无 curl 翻页输出、无 DB 比对、无真实 prompt 抓包）。
 - **无 Go / Playwright 证据**：Phase 1 是纯前端类型层，未触 Go / proto / e2e。
-- 因此 §2 中 T-1~T-12、T-14~T-22 **全部仍是"待执行"**，不得因 Phase 1 绿而整体乐观。
+- 因此 §2 中 T-1~T-8、T-11~T-12、T-14~T-15、T-17~T-22 **仍是"待执行"**，不得因已完成项绿而整体乐观。
+
+### §3.3 Phase 2a · T-9 / T-10（Dexie 缓存索引）
+
+**RED（commit `6328f57`，改 db.ts 之前）**
+
+```
+$ pnpm vitest run app/utils/messageCache.test.ts
+ Test Files  1 failed (1)
+      Tests  3 failed | 8 passed (11)
+
+  ✗ Dexie schema 必须逐项声明缓存在用的索引
+    → 实际索引：id | sessionId | [sessionId+sendTime]（缺 sendTime、[sessionId+status]）
+  ✗ schema 以**增量** version(2) 升级
+    → Dexie 版本应为 2: expected 1 to be 2
+  ✗ trimOldMessages 不应抛错
+    → SchemaError: KeyPath sendTime on object store messages is not indexed
+```
+
+**GREEN（commit `e8be055`）**
+
+```
+$ pnpm vitest run app/utils/messageCache.test.ts → 11 passed (11)
+$ pnpm vitest run（全量）                        → Test Files 79 passed (79) / Tests 665 passed (665)
+$ pnpm typecheck                                 → 无 error
+```
+
+**改动**：`app/utils/db.ts` 新增 `version(2)` 声明，`messages` 索引
+`'id, sessionId, [sessionId+sendTime]'` → `'id, sessionId, sendTime, [sessionId+sendTime], [sessionId+status]'`；
+**v1 声明保留**（加法式升级 ⇒ Dexie 自动迁移，不删旧 store、不丢用户本地缓存，钉已锁"v1 与 v2 声明都在且 verno=2"）。
+新增依赖：`fake-indexeddb ^6.2.5`（devDep，`package.json` 追加式）；`tests-setup.ts` **首行** `import 'fake-indexeddb/auto'`。
+
+**⚠️ 本轮**修正**了一个此前的**错误断言**（文档与来源计划都写错了）
+
+来源计划 §1 第 7 条与 plan §A.1 原文写：
+> `getPendingMessages`/`getFailedMessages` 用 `where({sessionId,status})`、`trimOldMessages` 用 `where('sendTime')` —— **一旦真被调用会直接抛错**（Dexie 要求查询用到的复合键必须有对应索引）。
+
+**实测结果否掉了一半**：
+
+| 查询 | 实测 | 原因 |
+|---|---|---|
+| `where('sendTime')`（`trimOldMessages`） | **真抛** `SchemaError: KeyPath sendTime ... is not indexed` | Dexie 的 `where(key)` 必须命真实索引 |
+| `where({sessionId, status})`（`getPendingMessages`/`getFailedMessages`） | **不抛**（返回结果正确） | Dexie 用存在的 `sessionId` 索引取集，剩余条件在内存里过滤 |
+| `where('sessionId').sortBy('sendTime')`（`exportSessionMessages`） | **不抛** | Dexie 在内存中排序（不强制该字段有索引） |
+
+⇒ 结论：补 `[sessionId+status]` 是**效率/契约**改进（走索引而非全会话扫描），**不是**修崩溃；本阶段唯一真崩溃点只有 `trimOldMessages`。
+这一条已回填 plan §A.1 / §2 T-9，并作 §5 经验 5 留档。
 
 ## §4 结论
 
-- **T-13 = PASS**（证据见 §3.1）：`MessageStatus` 现为全仓唯一来源，取值集合 5 值，两处历史重复点改为引用。
-- Phase 1 是"无行为变更"的收敛轮：全量 654/654 + typecheck 绿 ⇒ **零回归**。
-- 其余 21 个测试点**未执行**；阶段整体状态仍为 `in-progress`，**不得宣布 done**。
-- 下一步（🟢，不需栈）：Phase 2（缓存层修复 + 接线）—— 需先加 `fake-indexeddb` devDep 并**先让 T-9 红**。
+- **T-13 = PASS**（§3.1）：`MessageStatus` 现为全仓唯一来源，取值集合 5 值，两处历史重复点改为引用。
+- **T-9 / T-10 = PASS**（§3.3）：Dexie 缓存索引补齐（v1→v2 加法式升级）；缓存往返/分页/治理共 11 用例绿。
+- 两轮均为"无行为变更 / 只加索引"的保守改动：全量 654→665 全绿 + typecheck 绿 ⇒ **零回归**。
+- 其余 19 个测试点**未执行**；阶段整体状态仍为 `in-progress`，**不得宣布 done**（§2 中 🔴 项还一条运行时证据都没有）。
+- 下一步（🟢，不需栈）：**Phase 2b**（`stores/message.ts` 的读加速 / 写穿 / 合并策略 → T-11 / T-12），随后 Phase 3（状态机 + 乐观插入）、Phase 4（重试 + 断网重扫）。
 
 ## §5 经验（可复用）
 
@@ -110,3 +158,5 @@ $ pnpm typecheck             # 首轮报过 1 个 TS2532，修后无 error
 2. **`pnpm typecheck`（`nuxt typecheck`）开着严格索引检查**：`m![1].matchAll(...)` 这种"非空断言 + 下标访问"会被判 `TS2532 Object is possibly 'undefined'`。写静态扫描型测试时用 `(m?.[1] ?? '')` 之类先收敛为 `string`。**vitest 绿 ≠ typecheck 绿**，两者都要跑。
 3. **写 plan 前要把*两份*账本都 grep 一遍**（E2E 侧 `discovered-unresolved.md` 的 `E2E-F-xx` + CL 侧 `discovered-unresolved.md` 的 `CL-F-xx`）。本轮建档只查了 `E2E-F-205/206`，**漏掉 `CL-F-10`/`CL-F-11` 已被判归 CL-05** ⇒ 计划首版少了两条**用户实测**来的测试点，靠本轮补回。
 4. **worktree 必须独立 `pnpm install`**（`node_modules` 不随 worktree 物化）；`--prefer-offline` 走本机 store，秒级完成。
+5. **"看起来必然抛错"的推断必须实测过再写进文档**。本轮抓到自己的一处错：来源计划与 plan 都断言 `where({sessionId,status})` 会抛 `SchemaError`，实测**不抛**（Dexie 用存在的 `sessionId` 索引兜住，其余条件走内存过滤）。若照抄，就会把"效率改进"说成"修崩溃"，并把 RED 的失败项数算错。**凡"缺 X 必然 Y"的结论，先写一个最小复现**。
+6. **测试点编号与自己写的注释要对账**。本轮一度把 `describe('T-16 ...')` 写成"缓存治理"（真 T-16 是"重试计数 + 上限"）⇒ 已在测试与 plan 双向更正，并把治理类断言明确标为"不占测试点编号（属 G8）"。**编号是审计的锚，注释写错等于制造审计假阳/假阴**。
