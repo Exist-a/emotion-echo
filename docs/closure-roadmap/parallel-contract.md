@@ -61,12 +61,9 @@ related:
 
 | 轨 | 阶段 | 分支 / worktree | owner | 开始 | 状态 |
 |---|------|----------------|-------|------|------|
-| B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | **in-progress**（draft PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)；dev 栈**排队在 A 之后**） |
+| B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | ✅ **done 并已合并**（squash → `b1f13dc`，PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)，**源分支已删**）；dev 栈已用毕释放（`.devmode-session` 已删） |
 | C | CL-02 gRPC 契约闭环 | `feat/cl-02-grpc-contract`（worktree `../Emotion-Echo-cl02`） | Lane-CL-C | 2026-10-14 | **in-progress**（draft PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)；🟢 部分已完成（Phase 1/2/3/5 + 守卫接 CI）；**🔵 2026-10-15 06:36 起持 dev 栈锁**做 Phase 2/6 运行时验证） |
 | D | CL-05 消息链路闭环 | `feat/cl-05-message-pipeline`（worktree `../Emotion-Echo-cl05`） | Lane-CL-D | 2026-10-14 | **in-progress**（draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；**🟢 先行**：Phase 1~4 全部不需栈；🔴 需栈 Phase 0/5~7 排队在 C 之后） |
-
-> **本表待清理一行（2026-10-15 C 轨注）**：**B 行已过时** —— B（CL-01）已于 2026-10-15 06:25 收口（收口契约 7 条全满足、状态翻 `done`）并释放栈锁（见 §3.1 第 2 行）。
-> 按 **H3「登记表 append-only，不得改动他人行」**，本轨**不代删** B 行；待 #211 合并时由其收工动作移除（或下一轮统一清理）。
 
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
