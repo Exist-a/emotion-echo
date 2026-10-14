@@ -1,7 +1,6 @@
 package skywalking
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,27 +63,6 @@ func TestBuildDBPeer_EmptyStatementSafe(t *testing.T) {
 	got := buildDBPeer(d)
 	if got != "db" {
 		t.Logf("got %q", got)
-	}
-}
-
-// TestContextOrBg_NilToBackground nil ctx 替换为 Background
-func TestContextOrBg_NilToBackground(t *testing.T) {
-	got := contextOrBg(nil)
-	if got == nil {
-		t.Fatalf("nil ctx should be replaced with non-nil")
-	}
-	if _, ok := got.Deadline(); ok {
-		t.Fatalf("background ctx should have no deadline")
-	}
-}
-
-// TestContextOrBg_NonNilPreserved 非 nil 上下文原样返回
-func TestContextOrBg_NonNilPreserved(t *testing.T) {
-	type k struct{}
-	parent := context.WithValue(context.Background(), k{}, "v")
-	got := contextOrBg(parent)
-	if got.Value(k{}) != "v" {
-		t.Fatalf("non-nil ctx should be preserved")
 	}
 }
 

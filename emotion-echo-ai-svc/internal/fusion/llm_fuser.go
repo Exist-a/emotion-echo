@@ -26,6 +26,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
+
 	"emotion-echo-ai-svc/internal/model"
 )
 
@@ -77,7 +79,7 @@ func NewLLMFuser(cfg LLMConfig) *LLMFuser {
 	}
 	return &LLMFuser{
 		cfg: cfg,
-		cli: &http.Client{Timeout: timeout},
+		cli: trace.NewTracedClient(timeout),
 	}
 }
 

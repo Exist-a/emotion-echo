@@ -1,12 +1,13 @@
 package skywalking
 
 import (
-	"context"
 	"path"
 	"strings"
 
 	"github.com/SkyAPM/go2sky"
 	"gorm.io/gorm"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // InstrumentGORM 注册 GORM 回调，让 ORM 的 SELECT/INSERT/UPDATE/DELETE 与裸 SQL
@@ -25,7 +26,7 @@ func InstrumentGORM(db *gorm.DB) {
 	if db == nil {
 		return
 	}
-	tgr := Tracer()
+	tgr := trace.Tracer()
 	cbs := db.Callback()
 
 	cbs.Create().Before("gorm:create").Register("skywalking:begin_create",
@@ -67,8 +68,6 @@ func makeBeginCallback(op string, tgr *go2sky.Tracer) func(*gorm.DB) {
 		if tgr == nil {
 			return
 		}
-		ctx := contextOrBg(d.Statement.Context)
-
 		// peer 形如 postgres@db:5432（更易在 UI 按 DB 类型过滤）
 		peer := buildDBPeer(d)
 
@@ -78,7 +77,8 @@ func makeBeginCallback(op string, tgr *go2sky.Tracer) func(*gorm.DB) {
 			name = "gorm." + op + " " + d.Statement.Table
 		}
 
-		end := createExitSpan(ctx, tgr, name, peer)
+		// ctx 直接取 Statement.Context（nil 由 trace.CreateExitSpan 内部兜底）
+		end := trace.CreateExitSpan(d.Statement.Context, tgr, name, peer)
 		// GORM Statement 是单次操作级共享的临时对象，存 end 引用在 Statement 上读不到，
 		// 所以改用 map 缓存：d.InstanceGet/Set("skywalking:span")
 		d.InstanceSet("skywalking:end", end)
@@ -94,10 +94,10 @@ func makeEndCallback(tgr *go2sky.Tracer) func(*gorm.DB) {
 		}
 		// 取出 begin 时存的 end 闭包并执行
 		if v, ok := d.InstanceGet("skywalking:end"); ok {
-			if end, ok := v.(func(...EndOption)); ok {
+			if end, ok := v.(func(...trace.EndOption)); ok {
 				// 错误时打 error tag
 				if d.Error != nil && d.Error != gorm.ErrRecordNotFound {
-					end(WithError(d.Error))
+					end(trace.WithError(d.Error))
 				} else {
 					end()
 				}
@@ -126,11 +126,4 @@ func buildDBPeer(d *gorm.DB) string {
 		return dialect + "@" + schemaName
 	}
 	return "db"
-}
-
-func contextOrBg(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
 }

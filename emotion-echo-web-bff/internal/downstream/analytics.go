@@ -26,6 +26,7 @@ import (
 
 	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // DailyReport 对应 analytics-svc repository.DailyReport
@@ -170,7 +171,7 @@ func NewAnalyticsClient(opts AnalyticsClientOptions) AnalyticsClient {
 	}
 	client := &analyticsHTTPClient{
 		baseURL: opts.BaseURL,
-		http:    &http.Client{Timeout: timeout},
+		http:    trace.NewTracedClient(timeout),
 	}
 	if opts.BaseURL == "" && opts.Resolver != nil {
 		host, port, err := opts.Resolver.Resolve(context.Background(), svcName)

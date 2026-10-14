@@ -16,6 +16,8 @@ import (
 
 	"github.com/SkyAPM/go2sky"
 	"github.com/SkyAPM/go2sky/reporter"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 const (
@@ -26,25 +28,20 @@ const (
 	defaultServiceName = "emotion-echo-gin"
 )
 
+// 注：全局 tracer 注册表已拆到 pkg/skywalking/trace（**无 gorm/redis 依赖**，
+// 供 web-bff 等轻量调用方使用）。本包保留 SetTracer/Tracer forwarder，既有 svc 零改动。
 var (
-	once   sync.Once
-	mu     sync.RWMutex
-	tracer *go2sky.Tracer
-	rep    go2sky.Reporter
+	once sync.Once
+	rep  go2sky.Reporter
 )
 
-// SetTracer 注册（或清空）全局 tracer，供 Tracer() 读取。
+// SetTracer 注册（或清空）全局 tracer，供 Tracer() 读取 —— forwarder 到
+// pkg/skywalking/trace（注册表已拆到该无 gorm 依赖的包）。
 //
 // E2E-26 #3：BootstrapSkyWalkingTracer 成功后必须调用本函数，否则取全局
 // tracer 的 gRPC server/client 全部拿到 nil → noop → 服务端 span 与 sw8
 // 提取静默失效（单测 mock 注入掩盖，运行时全灭）。
-//
-// 线程安全：启动期写、请求期读，RWMutex 兜底 -race 门禁；传 nil 清空。
-func SetTracer(t *go2sky.Tracer) {
-	mu.Lock()
-	tracer = t
-	mu.Unlock()
-}
+func SetTracer(t *go2sky.Tracer) { trace.SetTracer(t) }
 
 // Init 初始化全局 tracer。
 // 调用完成后才能使用 Tracer()。
@@ -56,11 +53,7 @@ func Init() {
 }
 
 // Tracer 返回全局 tracer，未初始化时返回 nil。
-func Tracer() *go2sky.Tracer {
-	mu.RLock()
-	defer mu.RUnlock()
-	return tracer
-}
+func Tracer() *go2sky.Tracer { return trace.Tracer() }
 
 // Shutdown 释放 reporter 连接。
 func Shutdown() {
@@ -98,7 +91,7 @@ func initTracer() {
 		rep = nil
 		return
 	}
-	tracer = tr
+	SetTracer(tr)
 
 	log.Printf("[skywalking] tracer initialized, oap=%s service=%s\n", oapAddr, serviceName)
 }

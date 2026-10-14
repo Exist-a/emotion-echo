@@ -126,7 +126,7 @@ related-plans:
 | T-01 | GORM 回调注册在**正确的 processor**（Query/Create/Update/Delete/Row） | [A] | Go 单测：`db.Callback().Query().Get("skywalking:begin_query") != nil`（**修前 nil=RED**），5 op 全覆盖 | ✅ 2026-10-14：`go test ./pkg/skywalking/ -count=1` → **ok**；修前 RED 已留痕（负向对照）；另修 raw 单列（`begin_raw`，analytics 22 处 `db.Raw/Exec` 用） |
 | T-02 | **真实 ORM 查询在 SkyWalking UI 出 span**（修前 0 → 修后 >0） | [A] | 起栈触发一次 `.WithContext(ctx)` 的 ORM 查询 → SkyWalking UI/GraphQL 查询 trace 含 `gorm.query` | UI 查询结果/截图（**约束⑤硬证据**） |
 | T-03 | Redis 埋点接线：BFF 装配 `InitRedis` + 真 Redis 命令出 span | [A] | 装配断言（BFF main 调用点存在）+ 起栈后 Redis 命令出 `redis.GET` span | 单测 + UI span |
-| T-04 | HTTP 出站 `TracingRoundTripper`：建 exit span + 注入 `sw8` | [A] | 单测（httptest server 收 `sw8` 头非空 + span 产生）；**覆盖清单核对**（ai aiclient×3 / http_analyzer / llm_fuser / BFF downstream） | ⚙️ 2026-10-14：**组件 + 单测已落地**（`http_tracing.go` + `http_tracing_test.go` 6 用例全绿）；**各处接线未做**（下一轮） |
+| T-04 | HTTP 出站 `TracingRoundTripper`：建 exit span + 注入 `sw8` | [A] | 单测（httptest server 收 `sw8` 头非空 + span 产生）；**覆盖清单核对**（ai aiclient×3 / http_analyzer / llm_fuser / BFF downstream） | ✅ 2026-10-14：组件+单测（`trace` 包 6 用例）+ **接线 8 处**（ai-svc：fer/sensevoice/xtts/http_analyzer/llm_fuser；BFF：downstream/{ai,analytics,assessment}，即契约 §1.2 划给 B 轨的三处）。**未纳入**：BFF `chat.go`（C 轨）、`llm.go`/`xtts.go`/`tts_provider.go`/`user.go`/`handler/health_handler.go`（未在 B 轨文件面，留待后续） |
 | T-05 | Kafka DLQ 生产建 span（ai / analytics） | [A] | 单测：dlq 发布路径建 `CreateExitSpan` | 单测输出 |
 | T-06 | fusion 两指标：**接线**（生产路径递增）**或删除定义** | [M] | 按 D-03 结论：接线 → 单测断言 worker 路径递增；删 → 断言定义已移除且无悬空引用 | D-03 结论 + 单测 |
 | T-07 | web-bff `SetTracer` **对齐**（含纳入守卫）**或记录不设原因** | [M] | 按 D-04：对齐 → 扩展 `svc_wiring_test.go` 含 BFF；不设 → 文档记录 | D-04 结论 + 守卫 |
@@ -209,6 +209,7 @@ related-plans:
 
 | 风险 | 说明 | 规避 |
 |---|---|---|
+| **BFF 被拖入 gorm 依赖** | `shared/pkg/skywalking` 含 GORM/Redis 埋点 ⇒ BFF（网关）import 它会把 gorm 拖进模块图（实测 build 报 missing go.sum entry；BFF go.sum 里 gorm 条目数原为 0） | ✅ 已解：拆出**无 gorm 依赖**的 `shared/pkg/skywalking/trace` 子包（注册表 + span 助手 + HTTP RoundTripper）；BFF 只引该子包，`go.sum` gorm 条目仍为 0。**该子包同时解掉 Phase 3（Redis 接线）与 Phase 6（SetTracer）的同一堵墙** |
 | **改埋点放大 span 量** | 每次 ORM/HTTP/Redis 都建 span | 遵守约束③：仅在 `.WithContext(ctx)` 有 ctx 时建；无 ctx 不硬造根 span（T-08 钉死） |
 | **GORM 版本差异** | processor 名（`gorm:query` 等）随版本变 | 改前 `grep gorm.io/gorm` 版本核对；回归钉以 `Callback().Get(name)` 断言而非依赖内部名 |
 | **HTTP 出站改法分散易漏** | 多处裸 client | 统一 helper + **守卫扫描"裸 client 无 Transport"**；T-04 覆盖清单逐处核对 |
@@ -256,3 +257,27 @@ related-plans:
 - go2sky `CreateExitSpanWithContext` 在**无父 span 的 ctx** 下的确切行为（T-08 验证）；
 - 内存余量是否够任一 exporter（D-02）；
 - `sw8` 在 BFF downstream HTTP 降级路径上是否与 gRPC 路径的 trace 头冲突（Phase 2 核）。
+
+---
+
+## §9 进度快照（2026-10-14，交接 / 恢复用）
+
+> 本表是"打点"：任何会话（含 12:00 锁释放后回来的自己）据此恢复。
+
+| Phase | 内容 | 状态 |
+|---|---|---|
+| 0 | 基线取证（**需栈**） | ⬜ 未做 —— 等 devmode 锁（A 轨持至 2026-10-14 12:00） |
+| 1 | GORM 埋点修复 | ✅ 完成（RED→GREEN，已 push） |
+| 2 | HTTP 出站埋点（G3） | ✅ **组件 + 接线 8 处完成**（ai-svc 5 + BFF 3）；**含拆出无 gorm 依赖的 `skywalking/trace` 子包**（否则 BFF import skywalking 会拖入 gorm、build 直接失败）。BFF 其余 http client 未纳入（`chat.go` 归 C 轨，余见 §2 T-04） |
+| — | 「免费那一半」观测面看板 + smoke 钉 | ⚙️ 已落地，**待起栈实跑**（T-09/T-10 = ⚙️ 非 ✅） |
+| 3 | Redis 埋点接线（G2） | ⬜ |
+| 4 | DLQ span（G4） | ⬜ |
+| 5 | fusion 指标接线（G5；D-03 已定=接线） | ⬜ |
+| 6 | BFF SetTracer（G6；D-04 已定=对齐） | ⬜ |
+| 7 | 看板 business/reliability/logs + 告警（**需栈**核指标名） | ⬜（observability 看板已提前落） |
+| 8 | 采集增量 `/health` scrape（**需栈**；D-05 已定=直接 scrape） | ⬜ |
+| 9 | 负向对照 + 收口（**需栈**） | ⬜ |
+
+- **恢复点**：Phase 2 接线 → 3 → 4 → 5 → 6（**均不需栈**，可连续做）；Phase 0/7/8/9 待锁释放。
+- **已落地 commit**：见 **PR #211**（建档 / GORM 修复 / HTTP 组件+守卫 / 免费一半看板 / 决策回填）。
+- **门禁现状**：`go test ./pkg/skywalking/` 绿；`obs_monitoring.test.js` 绿；`check_tdd_gate.sh` 绿；`check_orphan_outputs.sh` 绿。

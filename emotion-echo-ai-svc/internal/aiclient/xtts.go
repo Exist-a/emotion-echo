@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // XTTSClient 语音克隆 TTS 客户端（Stage 22-A.3）。
@@ -73,7 +75,7 @@ func NewXTTSClient(c Config, language string, speed float64) *XTTSClient {
 	}
 	return &XTTSClient{
 		baseURL:  c.BaseURL,
-		hc:       &http.Client{Timeout: defaultHTTPTimeout},
+		hc:       trace.NewTracedClient(defaultHTTPTimeout),
 		timeout:  time.Duration(timeout) * time.Second,
 		language: language,
 		speed:    speed,
