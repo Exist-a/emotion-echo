@@ -4,7 +4,7 @@ title: gRPC 契约闭环（死链逐条裁决 + 守卫升级 + "严格走 gRPC"�
 type: transformation
 status: in-progress
 created: 2026-10-14
-last-updated: 2026-10-14（建档 C 轨并行开工 → **Phase 1 守卫升级已落地**（清单 + 5 断言 + 负向对照，🟢 不需栈）；**未起 dev 栈**，运行时证据待 Phase 2/4/6，见 §A.4）
+last-updated: 2026-10-14（建档 C 轨并行开工 → **Phase 1 守卫升级已落地**（清单 + 5 断言 + 负向对照，🟢 不需栈）→ **采纳多轨硬化协议 H1~H9/条款 7~10**（登记拆独立 PR #215；§A.5 三查自检全过）；**未起 dev 栈**，运行时证据待 Phase 2/4/6，见 §A.4）
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；7 条死链裁决 + 1 条模型服务边界共 8 个 [M] 见 §7
@@ -33,6 +33,16 @@ related-plans:
 > 文件面：与 A/B 在 `emotion-echo-web-bff/internal/downstream/` **同目录但不同文件**（契约 §1.2 允许并行的情形）；
 > 唯一**独占**的脊柱是 `proto/**`（当前无其他轨占用）。**dev 栈单锁**：A 轨持 `deploy/.devmode-session` 至 2026-10-14 12:00，
 > B 轨排队在后 ⇒ 本阶段"需栈"的 Phase 排在更后（§3 Phase 2/4/6 的运行时部分）。
+>
+> **并行协议（2026-10-14 起，必读）**：[`docs/_meta/multi-track-parallelism.md`](../../../_meta/multi-track-parallelism.md)（H1~H9 细则 + 本轮实证）
+> + [`AGENTS.md §8.1`](../../../../AGENTS.md) 硬约束 7~10。本轨的遵从情况：
+> - **H1/条款7 只在自己的分支工作**：未 push/rebase 他人分支，他人分支仅 `git show <ref>:<path>` 只读。
+> - **H2/条款8 登记独立落地**：占位登记走**独立小 PR [#215](https://github.com/Exist-a/emotion-echo/pull/215)**（已合 main）；
+>   **本阶段 PR 不含登记表改动**（见下"自检"）。
+> - **H3 登记表 append-only**：今后只追加本轨行，不改他人行。
+> - **H4/条款9 合并前三查**：本阶段 PR 自检结果见 §A.5。
+> - **H5/H6/条款10 docker 隔离**：本阶段构建镜像一律用 **`emotion-echo/<svc>:cl02`** 后缀 tag、`up` 只指名自己的服务、
+>   用栈前在契约 §3.1 排队表登记、用毕删锁；worktree 起栈 `--env-file <共享目录>/deploy/.env.local`。
 
 ---
 
@@ -98,6 +108,21 @@ related-plans:
 本详档为**建档期产物**，**未起 dev 栈**（A 轨持锁至 12:00，且本阶段前段为 🟢 不需栈）。
 因此：**"清除后全栈起得来""接真后端到端有数据""CI 通知"三类结论目前无运行时证据**，
 均为待取项（§3 Phase 2/4/6 的 🔴 部分）。§3 每个 Phase 均标 🟢/🔴，**🔴 未取证前不得判 PASS**。
+
+### A.5 多轨协议遵从自检（H4「合并前三查」，2026-10-14 实测）
+
+```console
+$ git merge-tree --write-tree HEAD origin/main   → 0 冲突                                    # H4①
+$ git diff --stat origin/main...HEAD -- docs/closure-roadmap/parallel-contract.md \
+      docs/closure-roadmap/roadmap.md AGENTS.md docs/_meta/   → （空）                       # H4②
+$ git diff --stat origin/main...HEAD -- scripts/  → 只新增 check_rpc_status.sh / rpc_status.tsv
+      （未修改 B 轨的 smoke_observability.py 等他人脚本；属"同名脚本串行"里的不同名情形）
+$ git diff --stat origin/main...HEAD              → 4 files：stages/cl-02-grpc-contract/{plan.md,
+      evidence/phase1-scan.md} + scripts/{check_rpc_status.sh,rpc_status.tsv}                # 本 PR 全量
+$ docker images | grep ':cl02'  → （无）  # H4③：本轨尚未构建任何镜像 ⇒ 无 tag 归属风险
+```
+
+⇒ **H4 三查全过**；本阶段 PR 的 diff 中**不含登记表/共享文档**（登记已由独立 PR #215 落地）。
 
 ---
 
@@ -231,10 +256,11 @@ related-plans:
 | **"接真"变半环** | 只接 BFF 没接前端 = 又一个半环（本阶段要消灭的正是这个） | 接真判据**必须到前端可见**；否则退回归档/清除 |
 | **守卫过严误报** | `*_TRANSPORT=http` 回滚开关被误判死链 | Phase 1 就内置豁免清单（T-14）+ 负向对照 |
 | **守卫"只报不拦"** | 脚本写了但没接 CI / 接了不真跑 | T-24 要求"接进 CI 后仍能红"，不接受"已创建脚本"当证据（RUNBOOK §4） |
-| **worktree 缺 `.env.local`** | 本 worktree 无 gitignored 的 `deploy/.env.local` ⇒ 起栈会中断；且 worktree 源码**不能直接 build 成镜像** | 已知（CL-F-07，A 轨登账）；本阶段 🔴 Phase 走 A 轨验证过的绕过路径「worktree build + 共享目录 up」，或与 A/B 协商窗口 |
+| **worktree 缺 `.env.local` / 锁不可见** | 本 worktree 无 gitignored 的 `deploy/.env.local` ⇒ 起栈中断；`.devmode-session` 在 worktree 不可见 ⇒ 可静默双占 | **H6/条款10**：起栈 `--env-file <共享目录>/deploy/.env.local`；锁只看**共享目录**；改 Go 的验收 = 「worktree 构建镜像 + 共享目录 up 容器」两步（CL-F-07 解法） |
 | **worktree 下守卫假红** | `check_git_layout.py:55` 用 `is_dir()` 判 `.git` ⇒ worktree 恒红（CL-F-06） | 已知，不在本阶段修（范围外只记账） |
 | **镜像新鲜度守卫假红** | `check_image_freshness.sh` 纯时间比较（CL-F-08） | 🔴 Phase 判"改完是否生效"须**看行为证据**，不只看时间戳 |
-| **dev 栈排队** | A 轨持锁至 12:00，B 轨排队在后 ⇒ 本阶段 🔴 Phase 排更后 | 🟢 Phase（1/3/5/6 的文档与守卫）先推；🔴 部分在占位行登记排队 |
+| **镜像 tag 互相覆盖** | 两 worktree 共用 docker daemon ⇒ 同 tag "后者赢"，可能**验了别人的代码**（CL-F-09，AP 级失真） | **H5/条款10**：本阶段镜像一律 `emotion-echo/<svc>:cl02`；验收前 `docker ps --format '{{.Image}}'` 复核跑的是不是我的 |
+| **dev 栈排队** | A 轨持锁至 12:00，B 轨排队在后 ⇒ 本阶段 🔴 Phase 排更后 | 🟢 Phase（1/3/5/6 的文档与守卫）先推；🔴 部分按契约 **§3.1 排队表**登记（H5/条款10） |
 | **ADR 翻案成本** | 决策 4 已收口 | 只加**更正记录**（沿用 survey-bypass ADR 先例），不重写历史 |
 
 ---
