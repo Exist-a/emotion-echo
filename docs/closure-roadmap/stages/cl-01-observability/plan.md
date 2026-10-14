@@ -33,6 +33,8 @@ related-plans:
 >
 > **并行**：本阶段为 **B 轨**，与 **A 轨（CL-04）** 并行。文件面冲突经亲核为**零**（§A.2 末尾）；
 > 唯一共享资源是 dev 栈 —— A 轨持 `deploy/.devmode-session` 到 **2026-10-14 12:00**，本阶段"需栈"的 Phase 排在锁释放后（§3 Phase 0/9）。
+>
+> **阶段 PR**：[#211](https://github.com/Exist-a/emotion-echo/pull/211)（draft）—— 按「每阶段开工先建 PR」约束（AGENTS §七 / RUNBOOK §1 前置检查 ④）创建。
 
 ---
 
