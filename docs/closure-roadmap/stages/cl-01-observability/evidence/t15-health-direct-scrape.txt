@@ -1,0 +1,28 @@
+=== CL-01 T-15 证据：metrics_path: /health 直接 scrape 的结果 ===
+时间: 2026-10-14T13:24:25Z
+配置: 临时给 prometheus.yml 加 job_name=emotion-echo-health, metrics_path=/health, 6 个 svc target
+
+--- up{job="emotion-echo-health"} ---
+series: 6
+  emotion-echo-ai-svc:8891         up=0
+  emotion-echo-analytics-svc:8893  up=0
+  emotion-echo-assessment-svc:8889 up=0
+  emotion-echo-chat-svc:8890       up=0
+  emotion-echo-user-svc:8888       up=0
+  emotion-echo-web-bff:8894        up=0
+
+全部为 0 的 target 数 = 6 / 6
+
+--- 对照：同一时刻 /metrics 的 job 是 up=1 ---
+series: 7  全为1 = True
+
+--- 根因：/health 返回的是 JSON，不是 Prometheus 文本格式 ---
+{"status":"ok","time":1791984267657,"service":"emotion-echo-user-svc","version":"0.1.1","dbOk":true}
+
+--- Prometheus 抓取错误（同一 target）---
+  http://emotion-echo-assessment-svc:8889/health | health= down | lastError= expected equal, got ":" ("INVALID") while parsing: "{\"status\":"
+  http://emotion-echo-analytics-svc:8893/health | health= down | lastError= expected equal, got ":" ("INVALID") while parsing: "{\"status\":"
+  http://emotion-echo-ai-svc:8891/health | health= down | lastError= expected equal, got ":" ("INVALID") while parsing: "{\"status\":"
+  http://emotion-echo-web-bff:8894/health | health= down | lastError= expected equal, got ":" ("INVALID") while parsing: "{\"status\":"
+  http://emotion-echo-user-svc:8888/health | health= down | lastError= expected equal, got ":" ("INVALID") while parsing: "{\"status\":"
+  http://emotion-echo-chat-svc:8890/health | health= down | lastError= expected equal, got ":" ("INVALID") while parsing: "{\"status\":"

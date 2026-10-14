@@ -1,4 +1,4 @@
-# CL-01 本地验证用 override（**不入库**：仅本轮起栈实验用，用完即删）
+# CL-01 起栈验证用 override（**已入库**：`report.md §待办` 的复跑流程引用它，故保留在仓库里）
 #
 # 作用：把待验证服务的镜像 tag 换成本轨后缀 `cl01-verify`，
 # 避免覆盖 compose 里的公共 tag（AGENTS §8.1 条款 10：共享 docker 资源隔离）。

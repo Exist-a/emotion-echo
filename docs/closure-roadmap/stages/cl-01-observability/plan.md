@@ -147,7 +147,7 @@ related-plans:
 
 | # | 测试点 | 判定 | 验证方式 | 证据 |
 |---|--------|------|---------|------|
-| T-15 | 采集增量：`/health` 进监控（scrape 或 blackbox）→ target `up=1` | [M] | 按 D-05：加 job/blackbox → 断言 `up{job=…}=1` | ⚠️ **D-05 按字面实现被实测证伪，已按等价方案落地**：`metrics_path: "/health"` 抓 6 个 svc 得到 **`up=0` × 6**（根因：/health 返 **JSON**，Prometheus 文本解析器报错 ⇒ 判抓取失败）。若留着会让 `PrometheusTargetDown` 长期误报。**改用既有埋点达成同一目标**（零新增容器/代码）：① 进程存活 = `up{job="emotion-echo-services"}`；② 依赖就绪 = `emotion_echo_http_requests_total{path="/health/ready",status=~"5.."}`（status 标签由各 svc HTTP 中间件写入，docker healthcheck 每 30s 打一次）。**落地面**：reliability 看板「就绪探针失败（5m）」「就绪探针通断（按服务×状态码）」两面板（实测 200×120/服务）+ 告警 `ServiceNotReady`/`HealthProbeMissing`。偏差已记 §10.2 **待追认** |
+| T-15 | 采集增量：`/health` 进监控（scrape 或 blackbox）→ target `up=1` | [M] | 按 D-05：加 job/blackbox → 断言 `up{job=…}=1` | ✅ **PASS**（D-05 字面被证伪 → 用户追认替代方案）：⚠️ **D-05 按字面实现被实测证伪，已按等价方案落地**：`metrics_path: "/health"` 抓 6 个 svc 得到 **`up=0` × 6**（根因：/health 返 **JSON**，Prometheus 文本解析器报错 ⇒ 判抓取失败）。若留着会让 `PrometheusTargetDown` 长期误报。**改用既有埋点达成同一目标**（零新增容器/代码）：① 进程存活 = `up{job="emotion-echo-services"}`；② 依赖就绪 = `emotion_echo_http_requests_total{path="/health/ready",status=~"5.."}`（status 标签由各 svc HTTP 中间件写入，docker healthcheck 每 30s 打一次）。**落地面**：reliability 看板「就绪探针失败（5m）」「就绪探针通断（按服务×状态码）」两面板（实测 200×120/服务）+ 告警 `ServiceNotReady`/`HealthProbeMissing`。偏差已记 §10.2 **待追认** |
 | T-16 | 是否新增 pg/redis exporter（内存红线评估） | [M] | 按 D-02 结论；若加 → 内存实测不击穿 + target up | ✅ 2026-10-14（D-02="先做免费那一半"）：**不加任何容器**。用现成 `up{job}` + `ALERTS` 建「观测面自身」看板（T-09 的 `emotion-echo-observability`，3 面板）；cAdvisor / redis / pg exporter **记 deferred**（§7 D-02 补注） |
 | T-17 | `scripts/smoke_observability.py` **全绿**（含 targets 与 prometheus.yml 解析比对） | [A] | 跑脚本、退出码 0 | ✅ 2026-10-14：**`PASS: 60 check(s)` / FAIL 0 / exit 0**（较上一轮 36 项增 24 项，全部来自 Phase 7/8 新看板与新告警）→ `evidence/t17-smoke-observability.txt` |
 | T-18 | 装配守卫仍绿 + BFF 纳入（若 T-07 定对齐） | [A] | `go test ./emotion-echo-shared/pkg/skywalking/...` | ✅ 2026-10-14：`go test ./pkg/skywalking/... -count=1` 全绿（含 `svc_wiring_test.go` 表驱动 6 服务 + BFF；`gorm_tracing_test.go` 的 processor 注册断言与"后注册 tracer 仍出 span"回归钉） |
@@ -270,13 +270,13 @@ related-plans:
 |---|---|---|
 | 0 | 基线取证（**需栈**） | ✅ 完成 —— 修前负向对照已留痕（`ReportsDaily` trace 0 个 gorm span / `InitRedis` 零调用 / 无 `/health` target / 2 看板） |
 | 1 | GORM 埋点修复 | ✅ 完成（RED→GREEN）+ **起栈挖出第二层根因**（注册期快照 nil tracer）并修 |
-| 2 | HTTP 出站埋点（G3） | ✅ 组件 + 接线 8 处；**起栈实测出 `Http/Exit` span**（T-04） |
+| 2 | HTTP 出站埋点（G3） | ✅ 组件 + 接线 **13 处**（ai-svc 5 + BFF 8；BFF 的 8 处含收口后补齐的 `downstream/{llm,tts_provider,user×2,xtts}.go`）；**起栈实测出 `Http/Exit` span**（T-04） |
 | 3 | Redis 埋点接线（G2） | ✅ `redistrace` 子包 + BFF 装配；**起栈实测 `redis.hget`/`redis.del` span**（T-03） |
 | 4 | DLQ span（G4） | ✅ ai-svc + analytics-svc 建 exit span + sw8 注入 + entry-ctx 透传；**起栈实测毒消息 → DLQ span**（T-05） |
 | 5 | fusion 指标接线（G5） | ✅ worker 接线 + 低基数标签；**起栈实测 counter/duration 有值**（T-06） |
 | 6 | BFF SetTracer（G6） | ✅ 落地 + 守卫扩含 BFF（T-07） |
 | 7 | 看板 business/reliability/logs + 告警 | ✅ **3 看板 25 面板** + **6 条新告警规则**；smoke 逐 expr 全非空 |
-| 8 | 采集增量（D-05） | ⚠️ **按字面实现被实测证伪**（`up=0`×6），已改用既有 status 标签 + 告警/面板落地（见 §10.2，**待追认**） |
+| 8 | 采集增量（D-05） | ✅ **按字面实现被实测证伪**（`up=0`×6，证据 `evidence/t15-health-direct-scrape.txt`），改用既有 status 标签 + 告警/面板落地；**用户 2026-10-14 已追认**（见 §7 D-05 追认 + §10.2） |
 | 9 | 负向对照 + 收口 | ✅ 告警真送达（T-13）；span 真出现在 SkyWalking（T-02/03/04/05）；smoke 60/60；report 见 `report.md` |
 
 - **已落地 commit**：见 **PR #211**（draft，含建档 / GORM 双层修复 / HTTP 组件+守卫 / Redis / DLQ / fusion / BFF SetTracer / 免费一半看板 / Phase 7 三看板+告警 / smoke 扩展 / 证据）。
@@ -300,9 +300,9 @@ related-plans:
 | **T-09/T-10** 看板 + 面板 expr | ✅ **PASS** | Grafana 加载 **6 个**看板（新增 business/reliability/logs）；smoke 逐 expr 非空：business 11 / reliability 10 面板全过 |
 | **T-11** 看板可读（降级/mock） | ✅ **PASS** | IAB 截图：stat 读出 `降级次数 0`、`Worker tick 0.200 ops/s`，图例读出 `text / success`、`llm_to_late` → `evidence/t11-grafana-*.png` |
 | **T-12** 告警可加载 | ✅ **PASS** | `promtool check rules` → SUCCESS: 6 rules；总规则 7 → **13** |
-| **T-13** 告警真触发并送达 | ✅ **PASS** | 停 kafka-exporter → `PrometheusTargetDown` **firing**（activeAt 05:32:44Z）→ **Alertmanager 收到**（severity=critical）→ `evidence/t13-*.json` |
+| **T-13** 告警真触发并送达 | ✅ **PASS** | 停 kafka-exporter → `PrometheusTargetDown` **firing**（activeAt **05:40:44Z**，按证据文件 `t13-prometheus-firing.json` 更正；此前误写 05:32:44Z）→ **Alertmanager 收到**（severity=critical）→ `evidence/t13-*.json` |
 | **T-14** Loki trace_id | ✅ **PASS** | `{job="services"} |= "<trace_id>"` 走 `/query_range` → **2 条流**（web-bff + ai-svc）→ `evidence/t14-loki-trace-query.json` |
-| **T-15** health 进监控 | ⚠️ **改判落地**（D-05 字面被证伪） | 见 §10.2 |
+| **T-15** health 进监控 | ✅ **PASS** | D-05 字面被证伪（`up=0`×6）→ 用户追认替代方案；证据 `evidence/t15-health-direct-scrape.txt`；见 §10.2 |
 | **CL-F-14** tracer 启动竞态 | ✅ **PASS（A/B 负向对照）** | 停 OAP 重建 chat-svc → 新镜像后台补挂第 5 次成功 → SkyWalking 出现 chat-svc（**未重启容器**）；旧镜像 12 轮全缺席 + 0 条补挂日志 → `evidence/clf14_*.txt` |
 | **T-17** 观测 smoke 全绿 | ✅ **PASS** | `PASS: 60 check(s)` / FAIL 0 / exit 0 → `evidence/t17-smoke-observability.txt` |
 
@@ -319,7 +319,11 @@ related-plans:
 - ✅ **Grafana 三面看板视觉确认（T-11 / T-14 的 `[V]`）**：business / reliability / logs 三块看板在 IAB 中**全部正常渲染并带真实数据** —— business 四张 stat 读出 `0 / 0 / 0 / 0.200 ops/s`、折线图例读出 `text / success` 与 `llm_to_late`；reliability 的 5xx/4xx 曲线、DLQ 表、就绪探针表（`200 × 120`）都出；logs 面板直接显示容器日志行（含 T-05 那条毒消息重试日志）与 APISIX 访问日志。截图 `evidence/t11-grafana-business-dashboard.png`、`t11-grafana-reliability-dashboard.png`、`t14-grafana-logs-dashboard.png`。
 - ❌→✅ **`CL-F-13`「Grafana 面板渲染为空」= 假账，当轮自纠**：上一轮的判定依据是 DOM 里 `[data-testid="data-testid Panel content"]` 计数 = 0 —— **Grafana 10.4.2 没有这个 testid**（选择器是臆造的），计数恒 0。复测改用 `canvas`/`svg` 计数 + `body.innerText` 读值，三块看板**都正常**。⇒ 已把该账改判为**探针错误**并销账（见 `discovered-unresolved.md` CL-F-13）。**教训**："同一浏览器里 SkyWalking UI 正常"**不能**证明对 Grafana 的选择器正确 —— 判"UI 坏了"前必须先让探针在**同一页面**读到已知为真的内容。
 
-### §10.2 D-05 偏差：`/health` 直接 scrape 被实测证伪（**待追认**）
+### §10.2 D-05 偏差：`/health` 直接 scrape 被实测证伪（**用户已追认替代方案**）
+
+> **归档证据**：`evidence/t15-health-direct-scrape.txt`（2026-10-14 复现）—— 6/6 target `up=0`；
+> 同刻 `up{job="emotion-echo-services"}` 7/7 为 1；Prometheus 抓取错误原文
+> `expected equal, got ":" ("INVALID") while parsing: "{\"status\":"` ⇒ 坐实"JSON 不是 exposition 文本格式"这一根因。
 
 - **裁定原文（D-05）**：`/health` 走「**直接 scrape**」，不引入 blackbox_exporter。
 - **实测结果（2026-10-14，非推断）**：在 `prometheus.yml` 加 `metrics_path: "/health"` 的 job 覆盖 6 个 svc → reload 后 `up{job="emotion-echo-health"}` **6 个 target 全为 0**。

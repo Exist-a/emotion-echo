@@ -1,47 +1,48 @@
 #!/bin/bash
-# CL-F-14 运行时验证（负向对照 + 修复验证）
+# CL-F-14 运行时验证（**修正版**：不再停 sw-ui —— 它是 GraphQL 查询代理，
+#   停了会让断言本身查不通。2026-10-14 首版就踩了这个坑，导致证据文件自述
+#   "QUERY_FAILED / A4_exit=2 / RESULT: NOT PASS" 而被误当 PASS 引用）。
 #
 # 流程：
-#   A 负向对照：停 OAP → 用 cl01-verify 镜像重建 chat-svc（启动期 tracer 必失败）
-#              → 断言 SkyWalking 服务列表里**没有** chat-svc
-#   B 修复验证：起 OAP → **不重启 chat-svc** → 等后台补挂 → 断言 chat-svc **自动出现**
+#   A 造条件：停 OAP → 用 cl01-verify 镜像重建 chat-svc（启动期 tracer 必失败）
+#            → 断言日志里出现 "tracer init failed" + "后台补挂第 N 次失败"（证明进了补挂路径）
+#   B 验证  ：起 OAP → **不重启 chat-svc** → 轮询 SkyWalking 服务列表 → 断言出现 chat-svc
 #
-# 关键：B 步不许重启 chat-svc —— 这才证明"后台补挂 + 入口路径现读"真的生效，
-#       而不是靠编排层重启兜底。
+# 关键：B 步不许重启 chat-svc —— 这才证明"后台补挂 + 入口路径现读"真生效，
+#       而不是靠编排层重启兜底（D-07 刻意排除的替代方案）。
 set -uo pipefail
 
 cd /d/源码/Emotion-Echo-cl01/deploy || exit 1
-SWPY=/d/源码/Emotion-Echo-cl01/docs/closure-roadmap/stages/cl-01-observability/evidence/_sw_services.py
+EV=/d/源码/Emotion-Echo-cl01/docs/closure-roadmap/stages/cl-01-observability/evidence
+SWPY=$EV/clf14_sw_services.py
 COMPOSE="docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml -f docker-compose.cl01-verify.yml --env-file .env.local --profile dev --profile obs"
 
-echo "########## 阶段 A：负向对照（OAP 停着重建 chat-svc）##########"
-echo "--- A1 停 OAP ---"
+echo "########## 阶段 A：造条件（停 OAP 重建 chat-svc；**sw-ui 保持运行**）##########"
+echo "--- A1 只停 OAP ---"
 docker stop emotion-echo-sw-oap >/dev/null 2>&1
-docker stop emotion-echo-sw-ui  >/dev/null 2>&1
 sleep 5
 echo "oap_state=$(docker inspect -f '{{.State.Status}}' emotion-echo-sw-oap 2>/dev/null)"
+echo "sw_ui_state=$(docker inspect -f '{{.State.Status}}' emotion-echo-sw-ui 2>/dev/null)"
 
-echo "--- A2 用 cl01-verify 镜像重建 chat-svc（OAP 不可达 ⇒ 启动期 tracer 初始化必失败）---"
+echo "--- A2 用 cl01-verify 镜像重建 chat-svc ---"
 $COMPOSE up -d --force-recreate --no-deps emotion-echo-chat-svc 2>&1 | tail -3
-echo "--- 等 40s 让启动期重试（5×2s）走完 ---"
-sleep 40
+docker inspect -f 'image={{.Config.Image}}' emotion-echo-chat-svc
+echo "--- 等 45s 让启动期重试（5×2s）走完并进入后台补挂 ---"
+sleep 45
 
-echo "--- A3 chat-svc 启动日志（应看到 tracer init failed）---"
-docker logs emotion-echo-chat-svc --since 2m 2>&1 | grep -iE "skywalking|tracer" | tail -6
-
-echo "--- A4 断言：SkyWalking 服务列表里【没有】chat-svc ---"
-python "$SWPY" chat-svc; A_RC=$?
-echo "A4_exit=$A_RC  (期望 1 = ABSENT)"
+echo "--- A3 断言：日志出现 init failed + 后台补挂失败行 ---"
+A_LOG=$(docker logs emotion-echo-chat-svc --since 3m 2>&1 | grep -cE "tracer init failed|后台补挂第 [0-9]+ 次失败")
+echo "A3_matching_lines=$A_LOG  (期望 >=2)"
+docker logs emotion-echo-chat-svc --since 3m 2>&1 | grep -iE "skywalking" | tail -4
 
 echo ""
-echo "########## 阶段 B：修复验证（起 OAP，不重启 chat-svc）##########"
+echo "########## 阶段 B：验证（起 OAP，不重启 chat-svc）##########"
 echo "--- B1 起 OAP ---"
 docker start emotion-echo-sw-oap >/dev/null 2>&1
-docker start emotion-echo-sw-ui  >/dev/null 2>&1
 echo "--- 等 OAP 就绪 60s ---"
 sleep 60
 
-echo "--- B2 轮询 SkyWalking 服务列表（最多 5 分钟，退避 5s/10s/20s/40s/60s）---"
+echo "--- B2 轮询 SkyWalking 服务列表（最多 5 分钟；后台退避 5/10/20/40/60s）---"
 B_RC=1
 for i in $(seq 1 12); do
   sleep 25
@@ -52,15 +53,18 @@ for i in $(seq 1 12); do
 done
 echo "B2_exit=$B_RC  (期望 0 = FOUND)"
 
-echo "--- B3 chat-svc 日志：后台补挂成功 ---"
-docker logs emotion-echo-chat-svc --since 10m 2>&1 | grep -iE "后台补挂" | tail -5
+echo "--- B3 日志：后台补挂成功 ---"
+B_OK=$(docker logs emotion-echo-chat-svc --since 15m 2>&1 | grep -c "后台补挂成功")
+echo "B3_成功行数=$B_OK  (期望 >=1)"
+docker logs emotion-echo-chat-svc --since 15m 2>&1 | grep "后台补挂成功" | tail -2
 
 echo ""
 echo "########## 结论 ##########"
-echo "A(负向对照,期望 ABSENT=1): $A_RC"
-echo "B(修复验证,期望 FOUND=0): $B_RC"
-if [ "$A_RC" -eq 1 ] && [ "$B_RC" -eq 0 ]; then
-  echo "RESULT: PASS —— 修复生效（OAP 恢复后 chat-svc 未重启即自动出现在 SkyWalking）"
+echo "A3(进入补挂路径, 期望 >=2): $A_LOG"
+echo "B2(自动回归 SkyWalking, 期望 0): $B_RC"
+echo "B3(补挂成功日志, 期望 >=1): $B_OK"
+if [ "$A_LOG" -ge 2 ] && [ "$B_RC" -eq 0 ] && [ "$B_OK" -ge 1 ]; then
+  echo "RESULT: PASS —— OAP 恢复后 chat-svc 未重启即自动出现在 SkyWalking"
 else
   echo "RESULT: NOT PASS —— 见上面日志"
 fi
