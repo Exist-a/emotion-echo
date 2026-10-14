@@ -34,7 +34,8 @@ related-plans:
 > **并行**：本阶段为 **B 轨**，与 **A 轨（CL-04）** 并行。文件面冲突经亲核为**零**（§A.2 末尾）；
 > 唯一共享资源是 dev 栈 —— A 轨持 `deploy/.devmode-session` 到 **2026-10-14 12:00**，本阶段"需栈"的 Phase 排在锁释放后（§3 Phase 0/9）。
 >
-> **阶段 PR**：[#211](https://github.com/Exist-a/emotion-echo/pull/211)（draft）—— 按「每阶段开工先建 PR」约束（AGENTS §七 / RUNBOOK §1 前置检查 ④）创建。
+> **阶段 PR**：[#211](https://github.com/Exist-a/emotion-echo/pull/211) —— 按「每阶段开工先建 PR」约束（AGENTS §七 / RUNBOOK §1 前置检查 ④）创建；
+> **2026-10-14 已 squash 合并 → `b1f13dc`**（26 commits / 84 files），源分支 `feat/cl-01-observability` 已删。
 
 ---
 
@@ -279,7 +280,7 @@ related-plans:
 | 8 | 采集增量（D-05） | ✅ **按字面实现被实测证伪**（`up=0`×6，证据 `evidence/t15-health-direct-scrape.txt`），改用既有 status 标签 + 告警/面板落地；**用户 2026-10-14 已追认**（见 §7 D-05 追认 + §10.2） |
 | 9 | 负向对照 + 收口 | ✅ 告警真送达（T-13）；span 真出现在 SkyWalking（T-02/03/04/05）；smoke 60/60；report 见 `report.md` |
 
-- **已落地 commit**：见 **PR #211**（draft，含建档 / GORM 双层修复 / HTTP 组件+守卫 / Redis / DLQ / fusion / BFF SetTracer / 免费一半看板 / Phase 7 三看板+告警 / smoke 扩展 / 证据）。
+- **已落地 commit**：**`b1f13dc`**（PR #211 squash 合并，2026-10-14；含建档 / GORM 双层修复 / HTTP 组件+守卫 / Redis / DLQ / fusion / BFF SetTracer / 免费一半看板 / Phase 7 三看板+告警 / CL-F-14 修复 / smoke 扩展 / 证据）。
 - **门禁现状**：`go test ./pkg/skywalking/...` 绿；`promtool check rules` 绿（13 规则）；`smoke_observability.py` **60 PASS / 0 FAIL**；`check_tdd_gate.sh` 绿。
 
 ---

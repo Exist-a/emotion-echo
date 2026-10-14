@@ -61,7 +61,7 @@ related:
 
 | 轨 | 阶段 | 分支 / worktree | owner | 开始 | 状态 |
 |---|------|----------------|-------|------|------|
-| B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | **in-progress**（draft PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)；dev 栈**排队在 A 之后**） |
+| B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | ✅ **done 并已合并**（squash → `b1f13dc`，PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)，**源分支已删**）；dev 栈已用毕释放（`.devmode-session` 已删） |
 | C | CL-02 gRPC 契约闭环 | `feat/cl-02-grpc-contract`（worktree `../Emotion-Echo-cl02`） | Lane-CL-C | 2026-10-14 | **in-progress**（draft PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)；🟢 Phase 先行，🔴 需栈 Phase 排队在 B 之后） |
 | D | CL-05 消息链路闭环 | `feat/cl-05-message-pipeline`（worktree `../Emotion-Echo-cl05`） | Lane-CL-D | 2026-10-14 | **in-progress**（draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；**🟢 先行**：Phase 1~4 全部不需栈；🔴 需栈 Phase 0/5~7 排队在 C 之后） |
 
@@ -79,7 +79,7 @@ related:
 | 顺序 | 轨 | 需要的栈窗口 | 状态 |
 |---|---|---|---|
 | 1 | ~~A（CL-04）~~ | 已于 2026-10-14 阶段收口时**释放**（`deploy/.devmode-session` 已删） | ✅ **已释放**（Phase 0~7 全部完成：15/16 PASS + T-14 IAB 钉绿；B/C 排队位次不变） |
-| 2 | B（CL-01） | A 释放后（Phase 0 基线 / 8 采集 / 9 负向对照） | 排队中 |
+| 2 | B（CL-01） | A 释放后（Phase 0 基线 / 8 采集 / 9 负向对照） | ✅ **已用毕释放**（2026-10-14；含 CL-F-14 起栈验证） |
 | 3 | C（CL-02） | B 之后（Phase 2 清除验证 / 4 接真 / 6 收口冒烟） | 排队中 |
 | 4 | D（CL-05） | C 之后（Phase 0 基线取证 / 5 会话游标运行验证 / 7 端到端+人可见钉） | 排队中 |
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |

@@ -55,7 +55,7 @@ related:
 | CL | 阶段 | 档 | 含待排期计划 | depends-on | 状态 |
 |---|---|---|---|---|---|
 | **CL-00** | **CI 瘦身** | T0 | `.github/workflows/*` + `scripts/` 守卫 | — | ✅ **done**（PR #209） |
-| **CL-01** | **可观测闭环** | T1 | `observability-instrumentation-and-dashboards` → `observability-business-metrics-wiring` → `grafana-dashboard-gaps`；`redis-two-layer-cache` | — | ✅ **done**（B 轨 · PR #211 **draft**，合并时机待用户决定；19 测试点全部落在合法四值、起栈运行时证据齐（含 CL-F-14 的 A/B 负向对照）、账本三条已销、落地计划已迁、D-05/D-07 已裁定、**收口契约 7 条全满足**（第 7 条由用户指示的独立子代理两轮核对：首轮 FAIL → 整改 → 第二轮 PASS），见 `stages/cl-01-observability/report.md`） |
+| **CL-01** | **可观测闭环** | T1 | `observability-instrumentation-and-dashboards` → `observability-business-metrics-wiring` → `grafana-dashboard-gaps`；`redis-two-layer-cache` | — | ✅ **done 并已合并**（B 轨 · PR #211 于 2026-10-14 **squash 合并 → `b1f13dc`**，源分支已删；19 测试点全部落在合法四值、起栈运行时证据齐（含 CL-F-14 的 A/B 负向对照）、账本三条已销、落地计划已迁、D-05/D-07 已裁定、**收口契约 7 条全满足**（第 7 条由用户指示的独立子代理两轮核对：首轮 FAIL → 整改 → 第二轮 PASS），见 `stages/cl-01-observability/report.md`） |
 | **CL-02** | gRPC 契约闭环 | T1 | `grpc-deadlink-actualization` | — | **in-progress**（C 轨 · PR #214 draft） |
 | **CL-03** | Kafka/可靠性闭环（合并一次执行） | T1 | `outbox-trace-continuity`、`dlq-hardening-and-replay`、`kafka-pipeline-pending-decisions` | 与 CL-01/02 共享追踪面 | pending |
 | **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
