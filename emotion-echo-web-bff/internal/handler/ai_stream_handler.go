@@ -351,6 +351,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			Files:       files,
 			Temperature: llmGeneration.Temperature,
 			MaxTokens:   llmGeneration.MaxTokens,
+			WithIntent:  llmWithIntent, // CL-04 Phase 5：接回意图风格注入（缺陷 5）
 		}, func(delta, model string) {
 			llmAccumulated.WriteString(delta)
 			if writeErr := writeDelta0(delta); writeErr != nil {

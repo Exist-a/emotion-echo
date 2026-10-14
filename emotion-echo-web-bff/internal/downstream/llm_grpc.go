@@ -42,6 +42,9 @@ type LLMStreamRequest struct {
 	MaxTokens   int32
 	// Files 附件引用（Stage 89 PR-3）：≤2 条；空 = 本会话无文件上下文
 	Files []FileAttachment
+	// WithIntent（CL-04 Phase 5）：让 llm-service 先分类意图并按意图注入回复风格。
+	// 该分支自 Stage 82 起就在 llm-service 里，但 BFF 从不设置 ⇒ 一直是死路径（缺陷 5）。
+	WithIntent bool
 }
 
 // LLMChatStreamer 对话流式上游接口（handler 依赖此接口，便于测试与后续替换）
@@ -150,7 +153,8 @@ func (c *LLMGRPCClient) StreamChat(ctx context.Context, req LLMStreamRequest, on
 		Messages:    pbMessages,
 		Temperature: req.Temperature,
 		MaxTokens:   req.MaxTokens,
-		Files:       pbFiles, // Stage 89 PR-3
+		WithIntent:  req.WithIntent, // CL-04 Phase 5：接回意图风格注入
+		Files:       pbFiles,        // Stage 89 PR-3
 	})
 	if err != nil {
 		return fmt.Errorf("llm chat completion rpc: %w", err)

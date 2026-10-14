@@ -22,3 +22,14 @@ var llmGeneration = struct {
 	Temperature: 0.7,
 	MaxTokens:   1024,
 }
+
+// llmWithIntent（CL-04 Phase 5）：是否让 llm-service 先分类意图、再按意图注入回复风格。
+//
+// 该分支（`intent.inject_style`）自 Stage 82 就存在，但 BFF 从不设置 pb 的 `with_intent`
+// ⇒ **从未在生产触发**（缺陷 5 死路径）。roadmap §4 的处置是「**接回**」，故这里置 true。
+//
+// ⚠️ 成本（Phase 5 收口须实测 TTFT）：llm-service 侧规则式分类拿不准时（实测样例 8 条中 6 条）
+// 会用 LLM 消歧（≤5s，**在首字之前**）。若 TTFT 明显劣化，可选优化 = 在 llm-service 加
+// text→intent 短 TTL 缓存（同一句话刚被 `ClassifyIntent` 分过，可命中），或改为把已分类结果
+// 透传下来（需改 proto，属跨轨 spine 文件，须先握手）。
+const llmWithIntent = true

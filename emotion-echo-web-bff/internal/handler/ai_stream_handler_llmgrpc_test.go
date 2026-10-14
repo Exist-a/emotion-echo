@@ -32,6 +32,8 @@ type fakeLLMStreamer struct {
 	// CL-04 Phase 3：生成参数（缺陷 3：handler 从不赋值 ⇒ 上游无输出长度上限）
 	gotTemperature float64
 	gotMaxTokens   int32
+	// CL-04 Phase 5：意图风格注入开关（缺陷 5：从不设置 ⇒ inject_style 死路径）
+	gotWithIntent bool
 }
 
 func (f *fakeLLMStreamer) StreamChat(_ context.Context, req downstream.LLMStreamRequest, onDelta func(delta, model string)) error {
@@ -40,6 +42,7 @@ func (f *fakeLLMStreamer) StreamChat(_ context.Context, req downstream.LLMStream
 	f.gotFiles = req.Files
 	f.gotTemperature = req.Temperature
 	f.gotMaxTokens = req.MaxTokens
+	f.gotWithIntent = req.WithIntent
 	if f.err != nil {
 		return f.err
 	}
