@@ -48,3 +48,32 @@ groups:
             analytics-svc DLQ.Publish 失败率 = {{ $value }}/s。
             user_behavior_events 落库失败的毒消息 + DLQ 双失败。
             查 analytics-svc 日志 "DLQ publish failed (dropping msg)" 找 broker 错误。
+
+      # CL-03 Phase 4a: 堆积告警 —— 四问题之四「堆积不告警」
+      #
+      # DLQ 无常驻 consumer（设计上人工回放）⇒ 任何**进入** DLQ 的消息都处于堆积态，
+      # 入口速率即堆积增长速率。故用 topic offset 的增长表达"有新消息进来"：
+      #   - 不能用 kafka_consumergroup_lag：DLQ 无消费组 ⇒ 该 series 恒不存在
+      #     （这正是 E2E-F-150「面板永远 No data」的根因，别重犯）
+      #   - 不用 offset 绝对值：current_offset 是"累计写入"而非"当前深度"
+      #
+      # ⚠️ 已知限制（如实登记，勿当已闭合）：本告警表达"有新消息进入 DLQ"，
+      #    **不等于**"当前还有多少条未处理"。真正的深度需要
+      #    kafka_topic_partition_oldest_offset（kafka-exporter 标准指标之一，
+      #    但本栈此前未在任何规则/面板中使用 ⇒ 可采性未验证，需起栈实测后再定）。
+      - alert: DLQMessagesAccumulating
+        expr: sum(increase(kafka_topic_partition_current_offset{topic="chat-events-dlq"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "chat-events-dlq 近 10 分钟有新消息进入（DLQ 无消费者 ⇒ 进入即堆积）"
+          description: |
+            近 10 分钟 chat-events-dlq 写入增长 = {{ $value }} 条。
+            DLQ 无常驻 consumer（人工回放设计）⇒ 进入即堆积，需查看并择机回放。
+            处置：
+              1. 看板 kafka-consumer-lag → "DLQ" 面板（同源于本 expr）
+              2. 找失败原因：ai-svc / analytics-svc 日志 grep "DLQ publish failed"
+              3. 回放：go run ./scripts/replay_dlq -brokers <addr> -limit 0
+                 （幂等靠消费端 ON CONFLICT(event_id, occurred_at) DO NOTHING）

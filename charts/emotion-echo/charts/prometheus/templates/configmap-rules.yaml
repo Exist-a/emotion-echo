@@ -95,6 +95,20 @@ data:
                 user_behavior_events 落库失败的毒消息 + DLQ 双失败。
                 查 analytics-svc 日志 "DLQ publish failed (dropping msg)" 找 broker 错误。
 
+          # CL-03 Phase 4a: 堆积告警（DLQ 无 consumer ⇒ 进入即堆积；非"剩余深度"）
+          - alert: DLQMessagesAccumulating
+            expr: sum(increase(kafka_topic_partition_current_offset{topic="chat-events-dlq"}[10m])) > 0
+            for: 0m
+            labels:
+              severity: warning
+              component: kafka
+            annotations:
+              summary: "chat-events-dlq 近 10 分钟有新消息进入（DLQ 无消费者 ⇒ 进入即堆积）"
+              description: |
+                近 10 分钟 chat-events-dlq 写入增长 = {{ `{{ $value }}` }} 条。
+                DLQ 无常驻 consumer（人工回放设计）⇒ 进入即堆积，需查看并择机回放。
+                处置：看板 kafka-consumer-lag 的 DLQ 面板 → grep 服务日志 → replay_dlq 回放。
+
   # --- 与 deploy/prometheus/rules/observability-self.yml 保持一致（E2E-22 新增）---
   # 注: k8s 侧 PrometheusTargetDown 依赖 up 指标，kubernetes-pods SD job 下同样有效
   #     （被 scrape 的 Pod 挂掉后 Pod 对象仍在，target 变 down）。
