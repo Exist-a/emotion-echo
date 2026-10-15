@@ -144,6 +144,11 @@ func (f *failingDeleteRepo) ListConversations(ctx context.Context, userID int64,
 	return f.inner.ListConversations(ctx, userID, limit, offset)
 }
 
+// CL-05 Phase 5：补 ListConversationsPage 透传（接口新增方法 ⇒ 手写 stub 必须跟上）。
+func (f *failingDeleteRepo) ListConversationsPage(ctx context.Context, userID int64, limit int, cursorUpdatedAt time.Time, cursorID int64) ([]model.Conversation, bool, error) {
+	return f.inner.ListConversationsPage(ctx, userID, limit, cursorUpdatedAt, cursorID)
+}
+
 // Stage 72：补 SetPinned/UpdateTitle 透传，让 failingDeleteRepo 仍满足 interface。
 func (f *failingDeleteRepo) SetPinned(ctx context.Context, id int64, pinned bool) error {
 	return f.inner.SetPinned(ctx, id, pinned)

@@ -72,6 +72,9 @@ func ListConversationsHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 				req.Offset = n
 			}
 		}
+		// CL-05 Phase 5：HTTP 降级路径（`CHAT_TRANSPORT=http` 回滚开关）也必须认 `cursor`，
+		// 否则翻页在此路径上**静默失效**（与 Phase 6 给 /messages 补 cursor 同一理由）。
+		req.Cursor = c.Query("cursor")
 		resp, err := logic.NewListConversationsLogic(c.Request.Context(), svcCtx).ListConversations(req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

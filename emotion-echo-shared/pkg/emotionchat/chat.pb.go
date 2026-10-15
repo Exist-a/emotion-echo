@@ -561,9 +561,16 @@ func (x *ListMessagesResponse) GetHasMore() bool {
 
 // ListConversationsRequest 列会话请求
 type ListConversationsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`
-	Offset        int32                  `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Limit  int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset int32                  `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	// 2026-10-16（CL-05 Phase 5）：**不透明游标**（keyset 分页）。
+	// 会话列表的稳定序是 `updated_at DESC, id DESC`；单靠 updated_at 无法区分
+	// **同一时刻**更新的多个会话（同一事务 NOW() 相同 / 种子数据相同）
+	// ⇒ 翻页会漏行或重复，故游标必须是**复合键**。
+	// 编码由 chat-svc 独占（`<unixMicros>:<id>`），BFF / 前端只做**原样回传**。
+	// 空串 = 首页（从最新开始）；非空时 offset 被忽略。
+	Cursor        string `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -612,11 +619,20 @@ func (x *ListConversationsRequest) GetOffset() int32 {
 	return 0
 }
 
+func (x *ListConversationsRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
 // ListConversationsResponse 列会话响应
 type ListConversationsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	List          []*Conversation        `protobuf:"bytes,1,rep,name=list,proto3" json:"list,omitempty"`
-	HasMore       bool                   `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	List    []*Conversation        `protobuf:"bytes,1,rep,name=list,proto3" json:"list,omitempty"`
+	HasMore bool                   `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	// 下一页游标（本页最后一条的复合键）；空串 = 没有更多。
+	NextCursor    string `protobuf:"bytes,3,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -663,6 +679,13 @@ func (x *ListConversationsResponse) GetHasMore() bool {
 		return x.HasMore
 	}
 	return false
+}
+
+func (x *ListConversationsResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
 }
 
 // DeleteConversationRequest 删除会话请求
@@ -1358,13 +1381,16 @@ const file_chat_proto_rawDesc = "" +
 	"\x06cursor\x18\x04 \x01(\x03R\x06cursor\"g\n" +
 	"\x14ListMessagesResponse\x124\n" +
 	"\bmessages\x18\x01 \x03(\v2\x18.emotion_chat.v1.MessageR\bmessages\x12\x19\n" +
-	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"H\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"`\n" +
 	"\x18ListConversationsRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\x02 \x01(\x05R\x06offset\"i\n" +
+	"\x06offset\x18\x02 \x01(\x05R\x06offset\x12\x16\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\x8a\x01\n" +
 	"\x19ListConversationsResponse\x121\n" +
 	"\x04list\x18\x01 \x03(\v2\x1d.emotion_chat.v1.ConversationR\x04list\x12\x19\n" +
-	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"D\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\x12\x1f\n" +
+	"\vnext_cursor\x18\x03 \x01(\tR\n" +
+	"nextCursor\"D\n" +
 	"\x19DeleteConversationRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\"F\n" +
 	"\x1aDeleteConversationResponse\x12\x18\n" +
