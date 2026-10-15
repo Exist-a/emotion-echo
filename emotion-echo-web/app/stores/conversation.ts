@@ -102,7 +102,7 @@ export const useConversationStore = defineStore('conversation', () => {
           params.cursor = cursor.value
         }
 
-        const data = await get<{ list: ConversationItem[]; hasMore: boolean }>(
+        const data = await get<{ list: ConversationItem[]; hasMore: boolean; cursor?: string | null }>(
           API_ROUTES.conversations.path,
           params,
         )
@@ -116,13 +116,12 @@ export const useConversationStore = defineStore('conversation', () => {
         }
 
         hasMore.value = data.hasMore
-        // 更新 cursor 为最后一条的 updatedAt
-        if (data.list.length > 0) {
-          const lastItem = data.list[data.list.length - 1]
-          if (lastItem) {
-            cursor.value = lastItem.updatedAt
-          }
-        }
+        // CL-05 Phase 5：游标必须用**服务端**返回的那个（不透明复合键 `<unixMicros>:<id>`）。
+        // 旧实现用 `lastItem.updatedAt` 本地推导：① 服务端根本不认这个参数
+        // （Phase 0 基线实测：第 2 页响应 = 第 1 页）；② RFC3339 只到**秒**，
+        // 同一秒更新的多个会话无法区分 ⇒ 会漏行/重复。
+        // 服务端没给游标（= 没有更多）时留空，loadMore 由 hasMore 拦住。
+        cursor.value = data.cursor ?? ''
 
         return { isOk: true, msg: '获取成功' }
       } catch (error: any) {
