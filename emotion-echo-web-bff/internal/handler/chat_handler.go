@@ -116,16 +116,21 @@ func (h *ChatHandler) listConversations(c *gin.Context) {
 			offset = n
 		}
 	}
-	convs, hasMore, err := h.chat.ListConversations(session.WithRequestAuth(c), limit, offset)
+	// CL-05 Phase 5：游标翻页。`cursor` 是 chat-svc 编码的**不透明**游标
+	// （复合键 `<unixMicros>:<id>`），BFF 只透传，不解析。
+	cursor := c.Query("cursor")
+	page, err := h.chat.ListConversations(session.WithRequestAuth(c), limit, offset, cursor)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
 	}
-	items := make([]ConversationItemVM, 0, len(convs))
-	for i := range convs {
-		items = append(items, toConversationItemVM(&convs[i]))
+	items := make([]ConversationItemVM, 0, len(page.List))
+	for i := range page.List {
+		items = append(items, toConversationItemVM(&page.List[i]))
 	}
-	OK(c, gin.H{"list": items, "hasMore": hasMore})
+	// 响应键 `cursor` 与消息列表端点（listMessages）同形：它是**下一页游标**
+	// （空 = 没有更多），不是回显请求值。
+	OK(c, gin.H{"list": items, "hasMore": page.HasMore, "cursor": page.NextCursor})
 }
 
 func (h *ChatHandler) createConversation(c *gin.Context) {

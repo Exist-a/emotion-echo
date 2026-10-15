@@ -36,6 +36,8 @@ type fakeChatClient struct {
 	gotLimit     int
 	gotOffset    int
 	gotListLimit int
+	gotCursor    string // CL-05 Phase 5：捕获透传给下游的游标
+	nextCursor   string // CL-05 Phase 5：下游回的下一页游标
 	gotTitle     string
 	gotIsPinned  bool
 }
@@ -61,12 +63,12 @@ func (f *fakeChatClient) ListMessages(_ context.Context, conversationID int64, l
 	}
 	return f.messages, f.hasMore, nil
 }
-func (f *fakeChatClient) ListConversations(_ context.Context, limit, offset int) ([]downstream.ConversationView, bool, error) {
-	f.gotListLimit, f.gotOffset = limit, offset
+func (f *fakeChatClient) ListConversations(_ context.Context, limit, offset int, cursor string) (downstream.ConversationPage, error) {
+	f.gotListLimit, f.gotOffset, f.gotCursor = limit, offset, cursor
 	if f.listErr != nil {
-		return nil, false, f.listErr
+		return downstream.ConversationPage{}, f.listErr
 	}
-	return f.convs, f.hasMore, nil
+	return downstream.ConversationPage{List: f.convs, HasMore: f.hasMore, NextCursor: f.nextCursor}, nil
 }
 func (f *fakeChatClient) DeleteConversation(_ context.Context, conversationID int64) error {
 	f.gotConvID = conversationID
@@ -211,6 +213,42 @@ func TestChatHandler_ListConversations_PassesThroughDownstream(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"hasMore":true`)
 	assert.Contains(t, w.Body.String(), `"alpha"`)
 	assert.Contains(t, w.Body.String(), `"beta"`)
+}
+
+// CL-05 Phase 5 · T-4（HTTP 层）：listConversations 必须把 `cursor` 原样透传给下游，
+// 并把下游回的下一页游标以响应键 `cursor` 回给前端（与 listMessages 同形）。
+// 这是「前端 loadMore 带游标 ⇒ 取到第二页」在前端之前的最后一跳；
+// Phase 0 基线实测过：本跳缺失时请求体的 cursor **被完全忽略**，第 2 页 = 第 1 页。
+func TestChatHandler_ListConversations_PassesCursorBothWays(t *testing.T) {
+	fc := &fakeChatClient{
+		convs:      []downstream.ConversationView{{ID: 2, Title: "beta"}},
+		hasMore:    true,
+		nextCursor: "1760594400123456:2",
+	}
+	r := newChatRouter(fc)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/conversations?limit=10&cursor=1760594460000000:3", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "1760594460000000:3", fc.gotCursor,
+		"请求里的 cursor 必须**原样**透传给下游（BFF 不解析游标内容）")
+	assert.Contains(t, w.Body.String(), `"cursor":"1760594400123456:2"`,
+		"响应必须回传下游给出的**下一页**游标（不是回显请求值）")
+}
+
+// 首页不传 cursor 时，透传值必须是空串（否则会把空串当游标传下去）。
+func TestChatHandler_ListConversations_NoCursorPassesEmpty(t *testing.T) {
+	fc := &fakeChatClient{convs: []downstream.ConversationView{{ID: 1, Title: "a"}}}
+	r := newChatRouter(fc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations?limit=10", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "", fc.gotCursor, "首页必须传空串游标（= 从最新开始）")
+	assert.Contains(t, w.Body.String(), `"cursor":""`, "没有更多时 nextCursor 为空串")
 }
 
 // TestChatHandler_ListConversations_UpstreamError_Returns500

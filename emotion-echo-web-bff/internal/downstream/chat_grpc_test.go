@@ -186,18 +186,21 @@ func TestChatGRPCClient_ListConversations_ReturnsViewsAndHasMore(t *testing.T) {
 				{Id: 1, UserId: 7, Title: "a", MsgCount: 3},
 				{Id: 2, UserId: 7, Title: "b", MsgCount: 0},
 			},
-			HasMore: true,
+			HasMore:    true,
+			NextCursor: "1760594400123456:2", // CL-05 Phase 5
 		},
 	}
 	conn, cleanup := startMockBufConn(t, mock)
 	defer cleanup()
 
 	client := NewChatGRPCClient(conn)
-	convs, hasMore, err := client.ListConversations(context.Background(), 20, 0)
+	page, err := client.ListConversations(context.Background(), 20, 0, "")
 	require.NoError(t, err)
-	assert.Len(t, convs, 2)
-	assert.True(t, hasMore)
-	assert.Equal(t, "a", convs[0].Title)
+	assert.Len(t, page.List, 2)
+	assert.True(t, page.HasMore)
+	assert.Equal(t, "a", page.List[0].Title)
+	assert.Equal(t, "1760594400123456:2", page.NextCursor,
+		"chat-svc 给出的不透明游标必须被 BFF **原样回传**（BFF 不解析游标内容）")
 }
 
 func TestChatGRPCClient_DeleteConversation_Success(t *testing.T) {
