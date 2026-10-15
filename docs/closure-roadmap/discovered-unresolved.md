@@ -32,6 +32,8 @@ type: phase-ledger
 
 | CL-F-16 | **C 轨起栈实测**（2026-10-15，CL-02 Phase 6 运行时验证） | **重建服务若早于其依赖就绪，则 readiness 永久 503 且不自愈**：三个服务（user/chat/analytics-svc）在 postgres 尚未就绪时启动 ⇒ `/health/ready` 恒 503；postgres 起来后**仍不恢复**，必须 `--force-recreate` 才 healthy。同轮还观察到 `xtts` 由 `profiles:["ai"]` 门控 ⇒ 不带该 profile 起栈时 xtts 缺失 | `/health/ready` 是**启动期快照**语义：DB 连接为**单次尝试**（`user-svc/internal/logic/healthlogic.go` 自述"repo 为 nil 本身就是依赖不可用，必须如实报 false"）⇒ 失败后 repo 永久 nil，无重试/自愈 | **CL-09**（backlog：RUNBOOK §2 应补"重建服务必须在依赖就绪之后"的运维提示；或按需给 health 加惰性重连） | 待解决（**已定位**；本次绕法 = 依赖就绪后 `--force-recreate`）。**已做的对照（2026-10-15）**：postgres 变 healthy 后**继续观察**，三个服务仍恒 503（未自愈）⇒ 反证"非瞬时抖动"；随后 `--force-recreate` 即全部 healthy。**未做**：postgres 重启后是否自愈的直接对照（第二方核对 E4 指出控制实验不充分，如实登记） |
 
+| CL-F-17 | **用户手动测试**（2026-10-15，全栈手动测） | **数字人 VRM 头像加载失败**：控制台 `[DigitalHuman] Scene is not initialized!` + `TypeError: Cannot read properties of null (reading 'add')`（`loadVRM` 内 `scene.add(...)`）⇒ 3D 形象不显示 | **初始化竞态**：`loadVRM` 由模板 ref 回调（`DigitalHuman.client.vue:523` → post-flush 队列）触发，可能早于 `initScene` 完成 ⇒ `scene` 仍为 null；代码虽在 `:372` 有 "Scene is not initialized!" 早退检查，但后续重试路径（Attempt 1…）仍走到 `scene.add` ⇒ 抛错。**已排除**：模型资源本身正常（`public/3d-models/digital-human.vrm` 26.7MB，前端 dev `HTTP 200`） | **待定**（数字人/前端体验专项立项时；或用户复现频次高时优先） | 待解决（**已定位到代码位置**，未就地修） |
+
 > 上表为建档期预探查的**种子账**（对应各待排期计划的核心缺口）；用户实测中新增的发现续号追加。
 
 ## 使用约定
