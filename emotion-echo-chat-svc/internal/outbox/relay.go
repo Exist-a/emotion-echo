@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/emotion-echo/shared/pkg/logging"
 	"time"
 
@@ -43,6 +44,50 @@ type Relay struct {
 	MaxAttempts int
 	// Ops 运营参数容器（Nacos 推送写入）。nil 时行为与热更前完全一致。
 	Ops *Ops
+	// Tracer CL-03 Phase 3：用于把 outbox 行存的 trace_sw8 恢复成父 ctx。
+	//
+	// 可注入（单测）；**nil 时回落到 grpcinterceptor.GlobalTracer()** ——
+	// 与 CL-F-14「请求期现读全局」一致：svc 先于 OAP 启动时 tracer 是后台补挂上的，
+	// 构造期快照会漏掉它。全线为 nil（SkyWalking 关闭）⇒ 不建 span，行为与改前一致。
+	Tracer grpcinterceptor.Tracer
+}
+
+// activeTracer 返回本次发布应使用的 tracer：优先显式注入，否则读全局（可后置补挂）。
+func (r *Relay) activeTracer() grpcinterceptor.Tracer {
+	if r.Tracer != nil {
+		return r.Tracer
+	}
+	return grpcinterceptor.GlobalTracer()
+}
+
+// resumeTraceCtx 用 outbox 行里存的 sw8 在（后台根）ctx 上恢复父 trace。
+//
+// 背景（CL-03 建档实测）：relay 跑在 main.go 的 relayCtx（WithCancel(Background())）上，
+// 直接发布会让 kafka_publisher 的 CreateExitSpan 建出「根」span ⇒ 一条消息的 trace
+// 断在 outbox→relay 处。写入行时身处请求 ctx，已把当时的 sw8 存进 trace_sw8 列；
+// 这里用 CreateEntrySpan + extractor 把它接回去。
+//
+// 返回的 end 必须被调用（把发布 err 透传，让 OAP 标记这一跳）。
+// sw8 为空（历史行 / tracer=nil）⇒ 原样返回 ctx + no-op end，行为与改前逐字一致。
+func (r *Relay) resumeTraceCtx(ctx context.Context, sw8 string) (context.Context, func(error)) {
+	if sw8 == "" {
+		return ctx, func(error) {}
+	}
+	tr := r.activeTracer()
+	if tr == nil {
+		return ctx, func(error) {}
+	}
+	nCtx, span, err := tr.CreateEntrySpan(ctx, "outbox-relay", func(key string) (string, error) {
+		if key == grpcinterceptor.SW8HeaderName {
+			return sw8, nil
+		}
+		return "", nil
+	})
+	if err != nil || span == nil {
+		// 建 span 失败不阻塞投递（与 kafka_publisher / grpc interceptor 的降级语义一致）
+		return ctx, func(error) {}
+	}
+	return nCtx, func(publishErr error) { span.EndSpan(publishErr) }
 }
 
 // currentMaxAttempts 返回本轮 flush 应当使用的重试上限。
@@ -146,5 +191,10 @@ func (r *Relay) publishOne(ctx context.Context, e repository.OutboxEvent) error 
 	if r.publisher == nil {
 		return errors.New("outbox-relay: publisher is nil")
 	}
-	return r.publisher.Publish(ctx, e.Topic, evt)
+	// CL-03 Phase 3：用写入行时存下的 sw8 恢复父 ctx，把 relay 这一跳接回原始请求的 trace。
+	// 空列 / 无 tracer 时 pubCtx == ctx（行为与改前逐字一致）。
+	pubCtx, endSpan := r.resumeTraceCtx(ctx, e.TraceSW8)
+	err = r.publisher.Publish(pubCtx, e.Topic, evt)
+	endSpan(err)
+	return err
 }
