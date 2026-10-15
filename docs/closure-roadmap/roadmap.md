@@ -60,6 +60,15 @@ related:
 > ③ 按「新轨准入规则」自答 🟢 占比 —— **Phase 1~6（trace 列 / 写侧捕获 / relay 恢复 / DLQ 硬化 / 遗留项收尾）
 > 全为 Go 单测 + 静态契约级**，只有 Phase 0/7 需栈 ⇒ 准入成立。串行资源排队：dev 栈（**D 持锁中 → F 第 5 位**）、`chat-svc/main.go`（待 D 确认）。
 > ⚠️ 本轨**不动** A/B/C/D 已写的行；仅追加本注与 CL-03 自身行（H3 append-only）。
+>
+> **G 轨开工（2026-10-16，Lane-CL-G，接手原 C 会话位）**：**CL-07 情绪回显+融合消费 → `in-progress`（局部：仅"后端切片"）**。
+> 背景：原 **C 轨（CL-02）已 done 并撤会话**；用户指示**接手 C 会话位**继续推进。选 **CL-07 后端切片**（`fusion-result-consumption` 计划 Phase 1~3）而非整阶段：
+> ① `depends-on: CL-04` **已 done**（#213）⇒ 依赖满足；
+> ② **整阶段不可并行**——F 轨注已判定 CL-07 整阶段要动 `pages/chat/conversation/[id].vue` + `stores/message.ts`，与在飞 D 轨（CL-05）直接冲突；故**只取后端半**（聚合视图 → analytics-svc 报表 → `proto/metric.proto`/BFF 透传），这些文件与 D/F **零同名冲突**（仅 `proto/**` 为同属脊柱但**不同文件**：G 动 `metric.proto`、D 动 `chat.proto` ⇒ §1.2「不同文件可并」）；
+> ③ 按「新轨准入规则」自答 🟢 占比——**Phase 1~3（视图 / repo+装配 / proto+BFF 透传）全为 🟢 不需栈 + Go 单测/契约级**，端到端数据契约实拍才需栈 ⇒ 准入成立。
+> 串行资源排队：dev 栈（**D 持锁中 → F 第 5 → G 第 6**）、`proto/metric.proto`（D 用 `chat.proto`，**不同文件**）。
+> **前端半**（顶部状态条 / 消息气泡标签 / 数字人情绪）**待 D 释放 `[id].vue` 后另开**，不在本轮。
+> ⚠️ 本轨**不动** A/B/C/D/F 已写的行；仅追加本注与 CL-07 自身行（H3 append-only）。
 
 | CL | 阶段 | 档 | 含待排期计划 | depends-on | 状态 |
 |---|---|---|---|---|---|
@@ -70,7 +79,7 @@ related:
 | **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
 | **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | **in-progress**（D 轨 · draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；🟢 Phase 1~4 不需栈先行，🔴 需栈 Phase 0/5~7 排队在 C 之后） |
 | **CL-06** | 用户自定义 Agent | T3 | `user-custom-agent-persona` | CL-04 | pending |
-| **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | pending |
+| **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | **in-progress（局部：后端切片）**（G 轨，接手原 C 会话位；**只做后端半** `fusion-result-consumption` Phase 1~3：融合聚合视图 / analytics-svc 报表消费 / proto+BFF 透传；**前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）待 D 释放后另开，见 §2 G 轨注） |
 | **CL-08a** | 记忆 · 用户事实 | 最后 | `conversation-memory-pending-decision` | CL-04 | pending |
 | **CL-08b** | 记忆 · 情绪模式 | 最后 | 同上 | CL-08a | pending |
 | **CL-08c** | 记忆 · 情节 + RAG | 最后 | 同上 | CL-08a | pending |
