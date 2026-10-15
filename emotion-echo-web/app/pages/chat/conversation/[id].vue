@@ -248,7 +248,7 @@ import { useFaceEmotion } from '~/composables/useFaceEmotion'
 import { useFileUpload } from '~/composables/useFileUpload'
 import { useDigitalHumanStore } from '~/stores/digitalHuman'
 import { useUserStore } from '~/stores/user'
-import { chatScrollSnapshot, isTailGrowth, type ChatScrollItem } from '~/utils/chatScroll'
+import { shouldFollowToBottom, chatScrollSnapshot, type ChatScrollItem } from '~/utils/chatScroll'
 import { marked } from 'marked'
 
 // DigitalHuman uses Three.js (WebGL) — client-only, wrapped in <ClientOnly> in template
@@ -550,7 +550,7 @@ watch(
   () => messageStore.currentMessages,
   (list) => {
     const next = chatScrollSnapshot(list as unknown as ChatScrollItem[])
-    if (isTailGrowth(scrollSnapshot.value, next) && isNearBottom()) {
+    if (shouldFollowToBottom(scrollSnapshot.value, next, isNearBottom())) {
       scrollToBottom()
     }
     scrollSnapshot.value = next

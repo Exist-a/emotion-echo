@@ -19,6 +19,7 @@
 export interface ChatScrollItem {
   id: string
   content?: string
+  sender?: string
 }
 
 export interface ChatScrollSnapshot {
@@ -30,6 +31,8 @@ export interface ChatScrollSnapshot {
   lastId: string
   /** 末条 content 长度 —— 流式增长的代理量（条数不变时唯一能观察到的变化） */
   lastTailLen: number
+  /** 末条的发送方（`user` / `ai`…）—— 决定"是否用户自己发的" */
+  lastSender: string
 }
 
 /** 取当前列表的快照（纯函数，不改动入参）。 */
@@ -42,6 +45,7 @@ export function chatScrollSnapshot(list: readonly ChatScrollItem[] | undefined):
     firstId: first ? String(first.id) : '',
     lastId: last ? String(last.id) : '',
     lastTailLen: last?.content ? last.content.length : 0,
+    lastSender: last?.sender ? String(last.sender) : '',
   }
 }
 
@@ -64,4 +68,25 @@ export function isTailGrowth(prev: ChatScrollSnapshot, next: ChatScrollSnapshot)
   }
   // next.count < prev.count：条数变少（如删除/切会话）—— 不在这里跟随
   return false
+}
+
+/**
+ * 最终判据：这一次变化**要不要**把视口带到末尾。
+ *
+ * 两条规则（缺一不可）：
+ *  1. **用户自己刚发出一条**（末条 sender==='user'）⇒ **无条件**跟随。
+ *     用户按发送就是一个明确意图"我要看这条的回复"；此时若因为
+ *     "他刚才往上翻了历史"而不跟随，用户看到的是**自己的消息都没滚进来**
+ *     （浏览器实测：滚动条停在 1519px 之外 —— 这正是本函数第二个入参存在的原因）。
+ *  2. **其他尾部增长**（AI 回复流式变长 / 末条被替换）⇒ 只在
+ *     `nearBottom`（用户原本就在底部附近）时跟随，避免把正在看历史的用户拽走。
+ */
+export function shouldFollowToBottom(
+  prev: ChatScrollSnapshot,
+  next: ChatScrollSnapshot,
+  nearBottom: boolean,
+): boolean {
+  if (!isTailGrowth(prev, next)) return false
+  if (next.lastSender === 'user') return true
+  return nearBottom
 }
