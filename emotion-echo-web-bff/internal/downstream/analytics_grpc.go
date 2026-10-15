@@ -71,6 +71,27 @@ func (c *analyticsGRPCClient) DailyReport(ctx context.Context, userID int64, dat
 	for _, d := range resp.IntentDistribution {
 		intents[d.Intent] = int64(d.Count)
 	}
+	// CL-07：融合产物映射（仅当服务端有融合数据时构造，避免造空结构）
+	var fused *FusedEmotionDistribution
+	if len(resp.FusedEmotionDistribution) > 0 || len(resp.FusionMethodBreakdown) > 0 {
+		byEmotion := make(map[string]int64, len(resp.FusedEmotionDistribution))
+		var total int64
+		for _, d := range resp.FusedEmotionDistribution {
+			byEmotion[d.Emotion] = int64(d.Count)
+			total += int64(d.Count)
+		}
+		byMethod := make(map[string]int64, len(resp.FusionMethodBreakdown))
+		for _, m := range resp.FusionMethodBreakdown {
+			byMethod[m.Method] = int64(m.Count)
+		}
+		fused = &FusedEmotionDistribution{
+			ByEmotion:  byEmotion,
+			ByMethod:   byMethod,
+			FaceRatio:  resp.FusedFaceRatio,
+			VoiceRatio: resp.FusedVoiceRatio,
+			Total:      total,
+		}
+	}
 	return &DailyReport{
 		UserID:            userID,
 		Date:              date,
@@ -78,6 +99,7 @@ func (c *analyticsGRPCClient) DailyReport(ctx context.Context, userID int64, dat
 		MessageCount:      int64(resp.MessageCount),
 		ConversationCount: int64(resp.ConversationCount),
 		IntentCounts:      intents, // Stage 82 PR-3b
+		FusedEmotionDistribution: fused, // CL-07
 	}, nil
 }
 

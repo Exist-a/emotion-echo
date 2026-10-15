@@ -48,6 +48,15 @@ func emptyFusedDistribution() *FusedEmotionDistribution {
 	}
 }
 
+// fusedDayKey 把时间归一到"日历日"（UTC 零点）。
+//
+// 必要性：time.Time 作 map key 时**含时区** —— logic 层用 time.Local 解析日期，
+// 测试/调用方可能用 time.UTC 存，二者日历日相同但 Time 不相等 ⇒ 查不到。
+// 统一归一到 UTC 零点，使查找对时区不敏感（只认日历日，与 SQL `day` 语义一致）。
+func fusedDayKey(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
 // =====================================================
 // InMemoryFusedReportRepo（测试替身）
 // =====================================================
@@ -67,6 +76,14 @@ func NewInMemoryFusedReportRepo() *InMemoryFusedReportRepo {
 // SetErr 注入错误（测试错误传播路径）。
 func (r *InMemoryFusedReportRepo) SetErr(err error) { r.err = err }
 
+// SetDaily 注入某用户某日的融合分布（测试用；仿 InMemoryReportRepo.SetDaily）。
+func (r *InMemoryFusedReportRepo) SetDaily(userID int64, date time.Time, d *FusedEmotionDistribution) {
+	if r.data[userID] == nil {
+		r.data[userID] = make(map[time.Time]*FusedEmotionDistribution)
+	}
+	r.data[userID][fusedDayKey(date)] = d
+}
+
 func (r *InMemoryFusedReportRepo) GetDailyFusedEmotion(_ context.Context, userID int64, date time.Time) (*FusedEmotionDistribution, error) {
 	if r.err != nil {
 		return nil, r.err
@@ -75,7 +92,7 @@ func (r *InMemoryFusedReportRepo) GetDailyFusedEmotion(_ context.Context, userID
 	if !ok {
 		return emptyFusedDistribution(), nil
 	}
-	d, ok := ud[date]
+	d, ok := ud[fusedDayKey(date)]
 	if !ok || d == nil {
 		return emptyFusedDistribution(), nil
 	}

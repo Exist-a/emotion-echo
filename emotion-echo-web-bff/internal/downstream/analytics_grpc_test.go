@@ -28,10 +28,16 @@ type mockAnalyticsServer struct {
 	emotionanalytics.UnimplementedAnalyticsServiceServer
 
 	trendResp *emotionanalytics.ReportsTrendResponse
+	dailyResp *emotionanalytics.ReportsDailyResponse // CL-07
 }
 
 func (m *mockAnalyticsServer) ReportsTrend(_ context.Context, _ *emotionanalytics.ReportsTrendRequest) (*emotionanalytics.ReportsTrendResponse, error) {
 	return m.trendResp, nil
+}
+
+// ReportsDaily CL-07：日报（含融合产物字段）
+func (m *mockAnalyticsServer) ReportsDaily(_ context.Context, _ *emotionanalytics.ReportsDailyRequest) (*emotionanalytics.ReportsDailyResponse, error) {
+	return m.dailyResp, nil
 }
 
 func startMockAnalyticsBufConn(t *testing.T, mock emotionanalytics.AnalyticsServiceServer) (*grpc.ClientConn, func()) {

@@ -134,6 +134,33 @@ func (s *analyticsServer) ReportsDaily(ctx context.Context, req *emotionanalytic
 	}
 	// Stage 82 PR-3b：意图分布映射（确定性顺序便于测试断言）
 	intentDist := intentDistToProto(r.IntentCounts)
+
+	// CL-07：融合产物消费映射（fused 分布 / 融合方法占比 / 多模态占比）。
+	// FusedEmotionDistribution=nil（无融合数据 / 未接线）⇒ 留空，不报错。
+	fusedDist := make([]*emotionanalytics.EmotionDistribution, 0)
+	fusedMethod := make([]*emotionanalytics.FusionMethodBreakdown, 0)
+	var fusedFaceRatio, fusedVoiceRatio float64
+	if f := r.FusedEmotionDistribution; f != nil {
+		var fTotal int64
+		for _, c := range f.ByEmotion {
+			fTotal += c
+		}
+		fusedDist = toProtoEmotionDistribution(f.ByEmotion, fTotal)
+		for method, cnt := range f.ByMethod {
+			var pct float64
+			if f.Total > 0 {
+				pct = float64(cnt) / float64(f.Total) * 100
+			}
+			fusedMethod = append(fusedMethod, &emotionanalytics.FusionMethodBreakdown{
+				Method:     method,
+				Count:      int32(cnt),
+				Percentage: pct,
+			})
+		}
+		fusedFaceRatio = f.FaceRatio
+		fusedVoiceRatio = f.VoiceRatio
+	}
+
 	return &emotionanalytics.ReportsDailyResponse{
 		Summary:            fmt.Sprintf("情绪分布 %d 类，消息 %d 条", len(r.EmotionCounts), r.MessageCount),
 		EmotionDistribution: toProtoEmotionDistribution(r.EmotionCounts, totalEmotions),
@@ -142,6 +169,11 @@ func (s *analyticsServer) ReportsDaily(ctx context.Context, req *emotionanalytic
 		ConversationCount: int32(r.ConversationCount),
 		IntentDistribution: intentDist,
 		Date:              req.Date,
+		// CL-07：融合产物
+		FusedEmotionDistribution: fusedDist,
+		FusionMethodBreakdown:    fusedMethod,
+		FusedFaceRatio:           fusedFaceRatio,
+		FusedVoiceRatio:          fusedVoiceRatio,
 	}, nil
 }
 
