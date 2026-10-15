@@ -248,6 +248,7 @@ import { useFaceEmotion } from '~/composables/useFaceEmotion'
 import { useFileUpload } from '~/composables/useFileUpload'
 import { useDigitalHumanStore } from '~/stores/digitalHuman'
 import { useUserStore } from '~/stores/user'
+import { chatScrollSnapshot, isTailGrowth, type ChatScrollItem } from '~/utils/chatScroll'
 import { marked } from 'marked'
 
 // DigitalHuman uses Three.js (WebGL) — client-only, wrapped in <ClientOnly> in template
@@ -531,10 +532,30 @@ const onMessagesScroll = () => {
   }
 }
 
+// CL-05 Phase 8 · T-21（账本 CL-F-10，用户实测"发送后不自动滚到底"）：
+// 旧实现只 `watch(currentMessages.length)`，而流式回复是**同一个对象在长大**
+// （`useConversationSender.ts`: `tempAiMessage.content += delta`）——条数不变 ⇒
+// watcher 永不触发 ⇒ 新内容长到视口外也不跟随。
+// 现改为"**尾部增长**"判据（追加 / 流式变长 / 末条被替换都为真；**前插不算**），
+// 再与"用户当前是否在底部附近"取交集 —— 这样既跟随流式，又不会把
+// 正在上翻看历史的用户硬拽回底部。
+const scrollSnapshot = ref(chatScrollSnapshot(messageStore.currentMessages))
+const NEAR_BOTTOM_PX = 120
+const isNearBottom = () => {
+  const el = mainRef.value
+  if (!el) return true
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX
+}
 watch(
-  () => messageStore.currentMessages.length,
-  () => scrollToBottom(),
-  { flush: 'post' },
+  () => messageStore.currentMessages,
+  (list) => {
+    const next = chatScrollSnapshot(list as unknown as ChatScrollItem[])
+    if (isTailGrowth(scrollSnapshot.value, next) && isNearBottom()) {
+      scrollToBottom()
+    }
+    scrollSnapshot.value = next
+  },
+  { deep: true, flush: 'post' },
 )
 
 const loadConversation = async (id?: string) => {
