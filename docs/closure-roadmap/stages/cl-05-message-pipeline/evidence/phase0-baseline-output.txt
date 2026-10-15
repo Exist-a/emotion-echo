@@ -1,0 +1,44 @@
+========================================================================
+CL-05 Phase 0 基线 — 基址 http://localhost:19080
+========================================================================
+[0] login -> HTTP 200
+    user_id=1 token_len=217
+
+--- A. 会话列表 /api/v1/conversations ---
+A1  limit=2 -> HTTP 200  len=2  hasMore=True
+    data 顶层键 = ['hasMore', 'list']
+      id=684 updatedAt=2026-10-15T19:35:48+08:00 title='无法生成标题'
+      id=683 updatedAt=2026-10-15T19:29:09+08:00 title='打招呼'
+A2  cursor=2026-10-15T19:29:09+08:00 -> HTTP 200  len=2  hasMore=True
+      page1 ids=['684', '683']
+      page2 ids=['684', '683']
+      *** 交集（>0 即 cursor 被忽略 / 重复翻页） = ['683', '684']
+      *** 并集大小 = 2（期望 = 全量；重复会 < 全量）
+
+--- B. 消息列表 /api/v1/conversations/{id}/messages ---
+B1  conv=684 limit=2 -> HTTP 200  len=1  hasMore=False  cursor=921
+      id=921 sender=ai content='我在呢，看到你发来的这串乱码，像是心里有点乱，或者只是随手敲了敲。\n\n不管是哪种'
+B2  cursor=921 -> HTTP 200  len=0  hasMore=False  cursor=921
+      page1 ids=[921]
+      page2 ids=[]
+      *** 交集 = []（应为空）
+      *** page2 是否全部 < 921 = True（应为 True）
+
+--- C. 环境 ---
+C1  CHAT_TRANSPORT 未设置 ⇒ BFF 走 **gRPC** 路径（HTTP 路径是回滚开关，见 config.go:362）
+
+================================================================================
+环境记录（2026-10-16 06:2x，D 轨 :cl05 镜像）
+================================================================================
+- 镜像：chat-svc:cl05 / web-bff:cl05（本轨 e148bc6 构建，H5 带轨后缀 tag）
+- 起容器前发现 user-svc (CL-F-16 degraded start) ⇒ repo nil ⇒ 登录 502 invalid username or password
+  真因由 BFF 日志暴露：[grpc-client] UserService/Login err=rpc error: code=Unavailable
+  desc = user-svc repository not initialized (degraded start)
+  按 CL-F-16 记载的绕法处理：依赖（postgres）healthy 后 --force-recreate user-svc ⇒ 立即 healthy
+- 该现象与 CL-F-16 完全一致（重建服务早于依赖就绪 ⇒ 永久不自愈），本轮**又一次复现**
+- CHAT_TRANSPORT 未设置 ⇒ BFF 走 gRPC 路径（HTTP 是回滚开关，config.go:362）
+
+结论（改动前基线）：
+- 会话列表：cursor 参数**被完全忽略** ⇒ 第 2 页 = 第 1 页（交集 {683,684}）⇒ E2E-F-205 实证
+- 响应体只有 {list, hasMore} —— **没有**可供前端推进的 nextCursor 字段
+- 消息列表：cursor **生效**（page2 全部 < min(page1) 且无交集）

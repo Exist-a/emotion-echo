@@ -1,0 +1,31 @@
+# CL-05 起栈验证用 override（AGENTS §8.1 条款 10 / H5：**带轨后缀 tag，不覆盖公共 tag**）
+#
+# 用途：把本轨改过代码的服务指向 `:cl05` 镜像，其余服务不动。
+# 为什么需要：compose 里 `image:` 是**写死的公共 tag**（无变量插值），两条轨同时构建会互相覆盖
+#   （账本 CL-F-09：后者赢 ⇒ 可能"验了别人的代码"）。
+#
+# 用法（H6：「worktree 构建镜像 + 共享目录 up 容器」两步）：
+#   # ① 构建（在 worktree 里，build context 解析为本 worktree 根 ⇒ 验的是本轨代码）
+#   cd <worktree> && docker compose -f deploy/docker-compose.infra.yml \
+#     -f deploy/docker-compose.apps.yml -f deploy/compose.dev.yml \
+#     -f deploy/docker-compose.cl05-verify.yml \
+#     --env-file <共享目录>/deploy/.env.local build \
+#     emotion-echo-chat-svc emotion-echo-web-bff
+#   # ② 只重建自己的服务（不整栈 up）
+#   cd <共享目录>/deploy && docker compose -f docker-compose.infra.yml \
+#     -f docker-compose.apps.yml -f compose.dev.yml \
+#     -f <worktree>/deploy/docker-compose.cl05-verify.yml \
+#     --env-file .env.local up -d --force-recreate --no-deps \
+#     emotion-echo-chat-svc emotion-echo-web-bff
+#
+# 覆盖范围 = 本阶段改过代码的服务：
+#   chat-svc（Go：handler 认 cursor / 删 Order("id ASC") 死路径 / Phase 5 会话复合游标）
+#   web-bff（Go：Phase 5 会话列表游标透传）
+# 前置（CL-F-07 ④）：本 worktree 无需 `deploy/tls`（chat-svc / web-bff 的 Dockerfile **不 COPY** 它）。
+# 前端不走本 override：Phase 7/8 的 UI 验证用 `pnpm dev`（worktree 源码直出，避免 web 镜像陈旧），
+#   见 memory「dev 容器跑旧代码」教训。
+services:
+  emotion-echo-chat-svc:
+    image: emotion-echo/chat-svc:cl05
+  emotion-echo-web-bff:
+    image: emotion-echo/web-bff:cl05
