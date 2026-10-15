@@ -1004,3 +1004,23 @@ Stage 33 P0 修复+BFF净化 █████████████████
 ### 决策 41：JWT 密钥轮换 = **双密钥并存窗口（key-id 路由 + 网关双 consumer）**（2026-10-07 用户拍板 · D-48）
 
 > 🟢 **accepted**（2026-10-07 用户经 AskUserQuestion 拍板「双密钥并存窗口」；详见 ADR `docs/architecture/adr/adr-2026-10-jwt-key-rotation-dual-key.md`）。**背景**（账本 E2E-F-28）：`BFF_JWT_SECRET` 由 BFF 签发侧与 APISIX consumer 验签侧共用，**单密钥下轮换必然让所有在途 token 失效**（全员被踢回登录），而"密钥泄露/人员变动时能轮换"是必须有的能力；既有 `test_bff_jwt_secret.sh` 只是"三处默认值一致"的静态检查，不是轮换机制。**决策**：① BFF 持"当前 + 上一把"两套 `(keyID, secret)`，签发用当前并把 keyID 写进 token 的 `key`/`user` claim，验签按 claim 选密钥（未知/缺失则依次试），`exp` 过期语义**不放宽**；② APISIX 侧窗口期为上一把 keyID 额外建一条 consumer（`emotion_echo_bff_prev`）——一个 consumer 只有一个 secret，故靠 key claim 路由；③ 收尾清 `_PREV` 并重跑 seed，脚本**自动删除** prev consumer（把"忘记收尾"变成可自愈）。**备选被否**：一次性原子轮换（用户可感知且编排下"原子"难保证，D-48 已否决）、改 APISIX 插件支持多 secret（引入自维护分支）、外部 KMS（超 dev/单机范围）。**落地**：`auth.NewManagerMulti` + 三个 env（`BFF_JWT_KEY_ID`/`BFF_JWT_SECRET_PREV`/`BFF_JWT_KEY_ID_PREV`）+ seed.sh Step 2.6 + `scripts/rotate_jwt_secret.sh`；**向后兼容**（不配 keyID 时缺省 `user`，既有 token 与 consumer 继续可用）。
+
+### 决策 42：消息链路 = **不透明复合游标（chat-svc 独占编码）+ 分场景合并语义 + 双向滚动判据**（2026-10-16 CL-05 落地）
+
+> 🟢 **accepted**（2026-10-16 CL-05「消息链路闭环」Phase 5/8 落地；详见 ADR `docs/architecture/adr/adr-2026-10-frontend-message-pagination-and-cache.md`）。
+> **背景**：走网关实测基线抓到三处独立缺陷 —— ① 会话列表 `cursor` **被后端完全忽略**
+> ⇒ 第 2 页 = 第 1 页（账本 `E2E-F-205`）；② 本地缓存/状态机/重试是半成品
+> （`E2E-F-206`：`messageCache` 零调用方、Dexie 缺 `sendTime` 索引一调即抛、用户消息恒 `sent`）；
+> ③ 用户实测"发送后不自动滚到底"（`CL-F-10`）。
+> **决策**：① 会话游标 = **复合键**（`updated_at` + `id` tie-break）**微秒**精度的
+> **不透明字符串**（`<unixMicros>:<id>`），**由 chat-svc 独占编码**，BFF/前端只原样回传；
+> 单值游标（或毫秒截断）会让"同一时刻更新的多个会话"**整批漏行**（已用库内同刻多行实测反证）。
+> 非法游标回 **400**，不得静默退回首页。② 缓存合并**按场景分函数**：快照替换 vs 分页追加
+> （语义相反，合用会把已加载旧页整片删掉）。③ 滚动跟随**双向判据**：用户自己发的
+> **无条件**跟随；AI 流式增长仅当原本在底部附近时跟随（只加"底部守卫"会让用户上翻后
+> 发送时**看不见自己的消息** —— Playwright 实测视口停在 1519px 之外）。
+> **落地**：proto `ListConversationsRequest.cursor` / `Response.next_cursor`、
+> `ListConversationsPage`（keyset）、`app/utils/chatScroll.ts`、`messageCache` 接线 + `db.version(2)`、
+> 状态机与指数退避重试、Playwright 人可见钉 `e2e/message-pipeline.spec.ts`（4/5 绿，1 项因数据前置跳过）。
+> **未做**：`CL-F-11`（刷新后双对话）在 `/new` 表单路径上**未复现** ⇒ 根因仍未定位，**不宣称修复**；
+> 缓存按用户隔离（`CL-F-20`）顺延。

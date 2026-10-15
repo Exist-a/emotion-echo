@@ -313,3 +313,67 @@ $ go test ./... -count=1                        → 全部包 ok
 11. **只跑"本轮新写的测试文件"会漏掉跨模块回归**。Phase 3 单跑新文件 8/8 全绿，跑全量时**上一轮的写穿钉**才红了——它抓出了"乐观占位的 temp id 未从缓存删除 ⇒ 幽灵 sending 行 ⇒ 会被 Phase 4 重发扫描反复重发"这个真缺陷。**每轮必须跑全量**；新钉只证明新功能，旧钉才守得住老契约。
 12. **测试里别用"自造 deferred + 手动 resolve"来测中间态**：乐观插入与其后的一次缓存写入都是 `await`，手动 resolve 会与调用点竞争（`postMock` 还没被调用就 resolve ⇒ 死等到 15s 超时）。改为在 mock 的实现体内**采样调用时刻的状态**，确定性且不猜时序。
 13. **接"自动补发"之前先问"这个队列是谁的"**。Phase 4 原计划还要接"启动时若 `navigator.onLine` 就补发"，亲核后**主动没接**：Dexie 库名固定、消息行只有 `sessionId` 没有 `userId` ⇒ 同一浏览器换账号时，上一账号的 `failed` 行还在库里，登录前补发就会**拿新账号的令牌补旧账号的消息**（后端 `client_msg_id` 唯一索引只保证"不重复入库"、**不保证归属正确**）。已登账本 **`CL-F-20`** + plan §6 **R13**。**"功能能跑"与"跑的是谁的"是两个问题**，后者在本地持久化场景里必须先答。
+
+---
+
+## §3.8 Phase 0 基线取证（2026-10-16，🔴 栈窗口）
+
+**环境**：本轨镜像 `chat-svc:cl05` / `web-bff:cl05`（H5 带轨后缀 tag）+ 网关 `:19080` + Bearer。
+**脚本**：`evidence/phase0-baseline.py`；**输出**：`evidence/phase0-baseline-output.txt`。
+
+| 观测 | 结果 |
+|---|---|
+| 会话列表 `limit=2` | ids `['684','683']`，`hasMore=true` |
+| 会话列表 `limit=2&cursor=<末条 updatedAt>` | ids **仍是 `['684','683']`** ⇒ **交集 `{683,684}`** ⇒ cursor **被完全忽略** |
+| 会话列表响应体键 | 只有 `{list, hasMore}` —— **没有** nextCursor |
+| 消息列表 `limit=2&cursor=<min id>` | 第二页全部 `< min(page1)` 且**交集为空** ⇒ cursor 生效 |
+| `CHAT_TRANSPORT` | 未设置 ⇒ 走 **gRPC** 路径（HTTP 是回滚开关） |
+
+**环境插曲（如实记）**：起容器后登录恒 502，BFF 日志暴露
+`UserService/Login err = user-svc repository not initialized (degraded start)` ⇒
+**`CL-F-16` 又一次复现**（重建服务早于依赖就绪 ⇒ 永久不自愈）。按账本记载的绕法
+"依赖（postgres）healthy 后 `--force-recreate`" ⇒ 立即恢复。
+
+## §3.9 Phase 5 / 7 / 8（2026-10-16）
+
+**Phase 5（会话列表游标化）**
+- proto：`ListConversationsRequest.cursor`（string）+ `Response.next_cursor`；生成前先跑 `proto/gen.sh` 确认 **0 diff 可复现**，再改 → 只 `chat.pb.go` 变化。
+- 游标 = **不透明复合键** `<unixMicros>:<id>`，**chat-svc 独占编码**（BFF/前端只透传）。为什么不能单值 / 不能毫秒：见 ADR §Context 2。
+- 仓库 `ListConversationsPage`（keyset，`limit+1` 探测）；logic 三条路径（游标 / 首页 / 旧 offset 兼容）；types + grpcserver + BFF + 前端对齐。
+- **运行验证 17/17 PASS × 2 条路径**（gRPC 与 `CHAT_TRANSPORT=http`）：`evidence/phase5-verify-{grpc,http-fallback}-path.txt`。
+  其中会话侧"翻 13 页 506/506 == 全量、无重复"，消息侧与 **DB 全量对账**（conv 550，22/22）。
+- **一处路径漂移（本轮实测发现并修）**：非法游标在 gRPC 路径 400、在 HTTP 降级路径 **500**
+  （chat-svc HTTP handler 对 logic 错误一律 500）⇒ 补 `statusForLogicErr`（`validation:` → 400）对齐两条路径 + 加钉。
+
+**Phase 8（账本继承项）**
+- **`CL-F-10` 根因（亲核）**：`[id].vue` 只 `watch(currentMessages.length)`，而 AI 流式回复是**同一对象在长大**
+  （`useConversationSender.ts:183-186`）⇒ 条数不变 ⇒ watcher 永不触发。
+  修法：纯函数 `app/utils/chatScroll.ts`（`chatScrollSnapshot` / `isTailGrowth` / `shouldFollowToBottom`）。
+- **`CL-F-10` 首版修复被回归钉抓出反例**：只加"用户是否在底部附近"守卫 ⇒ 用户**上翻后发送**时视口停在
+  **1519px** 之外、连自己的消息都看不见。⇒ 判据拆成两条：**用户发的无条件跟随**；远端流式仅在底部附近跟随。
+  这是一次"钉子抓住实现"的正面样本，故在报告里显式留痕。
+- **`CL-F-11` 未能复现**：Playwright T-22 实测 `/new` 一次发送恰好建 **1** 个会话、刷新后仍为 **1**
+  ⇒ 根因**未定位**，**不宣称修复**，账本保持 open（见 §4 结论的诚实边界）。
+
+**Phase 7（人可见钉 + ADR）**
+- `emotion-echo-web/e2e/message-pipeline.spec.ts`：**4 passed / 1 skipped**（`evidence/phase7-playwright-run.txt`）。
+  跳过项 T-20① 为**数据前置不满足**（近 5 个会话均 ≤20 条消息 ⇒ 首屏已取全、上滚无从观察），
+  且消息翻页已由 T-2 在 API 层与 DB 对账证明 —— 如实跳过，不调参凑绿。
+- 钉自身修掉两处**自造假红**并留痕：① 用 `limit=10` 数会话 ⇒ 长度被封顶（账号 ~500 会话）⇒ 改「新增 id 集合」；
+  ② 逐会话探测 + 每 test 各登一次 ⇒ 打爆网关 limit-count（60/60s，E2E-31 F-214）⇒ 改 token 全文件复用 + 429 重试 + 最多探 5 个。
+- ADR `docs/architecture/adr/adr-2026-10-frontend-message-pagination-and-cache.md` + `docs/architecture/decisions.md` 决策 42。
+
+## §4 结论与本轮边界（**不自行宣布 done**）
+
+**已取得可复核证据的部分（PASS）**：T-1~T-6、T-7、T-8、T-9~T-18、T-19、T-21；
+T-20 为 partial（②③ PASS、① 因数据前置跳过）；T-22 钉通过但**对应缺陷未复现**。
+
+**诚实边界（不得被读成"阶段已完成"）**：
+1. `CL-F-11` 根因**未定位**（未复现）⇒ 保持 open；
+2. 缓存未按用户隔离（`CL-F-20`）⇒ 只接 `online` 补发；
+3. `E2E-F-205/206` 已置 ✅（有运行证据）；
+4. 来源计划迁移 `legacy-plans/landed/`、`roadmap.md` 状态、占位删除与**最终签署**未做 ⇒ 阶段状态**不由执行者宣布**。
+
+**收口实况**：dev 栈锁（`deploy/.devmode-session`）由本轨 `lane-cl-d` 写入并用毕删除；
+`frontend vitest 84 文件 / 706 用例全绿`、`chat-svc / web-bff go build+vet+test 全绿`、`nuxt typecheck exit 0`、
+`scripts/check_tdd_gate.sh` GREEN。
