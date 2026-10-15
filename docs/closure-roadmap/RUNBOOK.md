@@ -35,11 +35,12 @@ pending ──(开工)──> in-progress ──(判据全过 + 回归钉)──
                         └──(被决策门阻塞)──> blocked ──(决策落定)──> pending
 ```
 
-**开工前置检查（三项全过才允许改 `in-progress`）**：
+**开工前置检查（四项全过才允许改 `in-progress`）**：
 
 1. `depends-on` 列出的阶段状态均为 `done`
 2. 该阶段不在决策门阻塞列表（roadmap §5）
 3. `stages/<cl-NN>/plan.md` 存在且"前置条件"满足
+4. **已建立阶段 PR（draft）**，且链接登记在 `parallel-contract.md §三` 占位行（**2026-10-14 起强制：先开 PR 再开工**；登记本身按 H2 走独立小 PR 先落 main）
 
 > 端侧 CL-10 为 **deferred 独立轨**（本阶段先不做），不占用主线 `in-progress` 名额；主线一次只允许一个 `in-progress`。
 

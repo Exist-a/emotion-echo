@@ -132,7 +132,8 @@ related:
 | 2026-10-15 | Lane-CL-D | **`docs/closure-roadmap/decisions.md`** | D 轨**勘误**：该文件 `CL-D-13` 行内的交叉引用写作 `CL-F-13`，而本轨该条已因与 B 轨同号而**改号为 `CL-F-18`**（见账本 `discovered-unresolved.md`）⇒ 就地改**本轨自己那条**的交叉引用（**不动他人行**）。随本独立小 PR 落地 | ✅ |
 | 2026-10-16 | Lane-CL-F | `docs/closure-roadmap/{parallel-contract,roadmap}.md` | F 轨开工：§三 登记占位 + §3.1 排 5 位 + §1.1 新增 F 行 + 轨字母对照纠偏 + CL-03 翻 in-progress。按 **H2/条款 8**，登记走**独立小 PR**（本 PR），**不含**阶段产物（阶段 PR = [#229](https://github.com/Exist-a/emotion-echo/pull/229)）；本行只追加、不改他人行 | ✅ |
 | 2026-10-16 | Lane-CL-F | **`emotion-echo-chat-svc/main.go`**（脊柱）+ `emotion-echo-shared/pkg/grpcinterceptor/{tracing.go,tracing_go2sky.go}`（**仅在 M1 裁 A 时**） | F 轨**握手申请**：① CL-03 Phase 1~3 要加 outbox `trace_sw8` 列并在 relay 发布前恢复父 ctx ⇒ 落地动作含 `migrations/` 新文件 + `internal/repository/outbox.go` + `internal/outbox/relay.go` + 三条 `internal/logic/*conversationlogic.go` + `main.go`（relay 构造/fallback 段）；② 若裁定给 shared `Tracer` 接口加 sw8 原语，会动 **7 个 svc 共享**的接口与其余实现（含接口契约测试）。**D 轨（CL-05）若也需改 `main.go`，请在本行下回复协商**；F 轨按 §1.2「脊柱串行」，**先做不需 main.go 的 Phase 1 迁移，改 `main.go` 前再确认** | ⏳ **待 D 轨确认** |
-| 2026-10-16 | Lane-CL-F | `deploy/prometheus/rules/*.yml` + `deploy/grafana/dashboards/*.json` + **`charts/emotion-echo/charts/prometheus/templates/configmap-rules.yaml`**（内联副本） | F 轨握手：CL-03 Phase 4 要新增 **DLQ 堆积告警**（DLQ 硬化四问题之四）。该面属 **B 轨（CL-01）文件面**，B 已收口（#211）⇒ 依 §1.2「同名文件串行」声明占用；新增告警**必须同步 k8s 内联副本**，否则 `deploy/obs_monitoring.test.js` group ⑤ 的双向相等断言会红（现成机器守卫） | ⏳ **声明占用** |
+| 2026-10-16 | Lane-CL-F | `deploy/prometheus/rules/*.yml` + `deploy/grafana/dashboards/*.json` + **`charts/emotion-echo/charts/prometheus/templates/configmap-rules.yaml`**（内联副本） | F 轨握手：CL-03 Phase 4 要新增 **DLQ 堆积告警**（DLQ 硬化四问题之四）。该面属 **B 轨（CL-01）文件面**，B 已收口（#211）⇒ 依 §1.2「同名文件串行」声明占用；新增告警**必须同步 k8s 内联副本**，否则 `deploy/obs_monitoring.test.js` group ⑤ 的双向相等断言会红（现成机器守卫）；**已落地**（commit `ddb576c`：obs 契约测试全过 + helm 渲染守卫 8/8） | ✅ |
+| 2026-10-16 | Lane-CL-F | **`AGENTS.md`**（§七 bullet + 页脚）、**`docs/closure-roadmap/RUNBOOK.md`**（§1 开工前置检查）、本文件 §五/§六 | **文档治理重新落地**：`#212`（「每阶段开工先建 PR」三处对齐，用户明令）因其 base 过期在 `AGENTS.md` 产生**真内容冲突**；按 **H1「禁止 rebase 他人分支 / 代他人解冲突」**，F 轨不碰其分支，改为**在最新 main 上重新落地同一意图**（本 PR），并在 #212 留评论指向后继 | ✅ |
 | 2026-10-16 | Lane-CL-G | `docs/closure-roadmap/{parallel-contract,roadmap}.md` | G 轨**接手原 C 会话位**开工（C/CL-02 已 done、会话已撤）：本次接手 **CL-07 后端切片**。§1.1 新增 G 行 + §三 占位 + §3.1 排 6 位 + CL-07 翻 in-progress（**局部**）。按 **H2/条款 8**，登记走**独立小 PR**（本 PR），不含阶段产物；本行只追加、不改他人行 | ✅ |
 | 2026-10-16 | Lane-CL-G | **`proto/metric.proto`**（**仅此文件**；**非** `proto/chat.proto`） | G 轨**握手声明**：Phase 3 要在 `ReportsDailyResponse` 增 `fused_emotion_distribution` + `fusion_method_breakdown`，并**重新生成** `emotion-echo-shared/pkg/emotionanalytics/metric{,_grpc}.pb.go`（protoc 32.1 + protoc-gen-go v1.36.11 + protoc-gen-go-grpc v1.6.2，RUNBOOK §2）。D 轨在改 `proto/chat.proto` ⇒ **不同文件**，依 §1.2「不同文件可并」**不构成阻塞**；此处仅登记，D/F 无需动作 | ⏳ **声明占用** |
 | 2026-10-16 | Lane-CL-G | analytics-svc `internal/{repository,logic,svc}/**`（新增 `fused_report_repository.go`；改 `reports_daily_logic.go` / `servicecontext.go`）+ ai-svc `migrations/**`（新视图）+ BFF `internal/downstream/analytics{,_grpc}.go`、`internal/handler/analytics_view.go` | G 轨**握手声明**：与 **F 轨**在 analytics-svc 同服务下**不同子包**（F 占 `internal/kafka/**`；G 占 `internal/{repository,logic,svc}`），ai-svc 下也不同域（F 占 `internal/consumer/**`；G 占 `migrations/**`）；与 **D 轨**在 BFF 同目录**不同文件**（D 占 `downstream/chat*.go`、`handler/chat_handler.go`；G 占 `downstream/analytics*.go`、`handler/analytics_view.go`）。依 §1.2「同名文件串行、不同文件可并」⇒ **不构成阻塞** | ⏳ **声明占用** |
@@ -141,9 +142,11 @@ related:
 
 1. 读本文件 → 确认目标轨**无人占用**（占位表无同轨 in-progress）。
 2. **文件面隔离**：`git worktree add -b <分支> ../Emotion-Echo-<slug> <base>`（**不在共享目录切分支**）。
-3. 查 `deploy/.devmode-session`（dev mode 归属锁，有人登记不得强占）。
-4. **登记占位**（§三）。
-5. 按 `RUNBOOK.md` 执行（起环境 / 六步循环 / 收口契约）。
+3. **先开 PR（draft）再开工**（**2026-10-14 起强制，用户明令**）：`git push` 分支 → 建指向 `main` 的 **draft PR** → 在 §三 占位行**一并填 PR 链接**。**无 PR 不得开工**。
+   （顺序说明：占位登记按 H2 走**独立小 PR 先落 main**，故首次登记的 PR 链接可能后补——以 §三 行为准。）
+4. 查 `deploy/.devmode-session`（dev mode 归属锁，有人登记不得强占）。
+5. **登记占位**（§三，含 PR 链接）。
+6. 按 `RUNBOOK.md` 执行（起环境 / 六步循环 / 收口契约）。
 
 ## 六、收工（照做）
 
@@ -151,6 +154,7 @@ related:
 2. 跑 AGENTS §2.5 三连：`git status` 干净 / `git status -sb` 与 origin 无 ahead-behind / `git branch --merged main` 无残留。
 3. 删 `.devmode-session`（若是你登记的）。
 4. 阶段状态回写 `roadmap.md`。
+5. **PR 处理**：阶段收口时把 PR 转 ready，按 §四 握手**串行合并**（H8），合并后删源分支（AGENTS §2.5）。
 
 ## 七、与治理体系的关系
 
