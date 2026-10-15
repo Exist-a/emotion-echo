@@ -81,7 +81,7 @@ related:
 | 1 | ~~A（CL-04）~~ | 已于 2026-10-14 阶段收口时**释放**（`deploy/.devmode-session` 已删） | ✅ **已释放**（Phase 0~7 全部完成：15/16 PASS + T-14 IAB 钉绿；B/C 排队位次不变） |
 | 2 | B（CL-01） | A 释放后（Phase 0 基线 / 8 采集 / 9 负向对照） | ✅ **已用毕释放（2026-10-15 06:25）** —— 收口契约 7 条全满足、第二轮独立核对 PASS、状态翻 `done`；`deploy/.devmode-session` 已删 |
 | 3 | C（CL-02） | B 之后（Phase 2 清除验证 / 6 收口冒烟；"4 接真"已由裁定改判 N/A） | ✅ **已用毕释放（2026-10-15 07:40）** —— 06:36 取锁 → 7/7 healthy + Nacos count:6 + smoke 24/24 → 删 `deploy/.devmode-session`；**队列下一位 = D（CL-05）**。注意：栈仍开着，跑的是本轨 `:cl02-verify` 镜像，D 接手时按 H5 用自己后缀 tag 重建 |
-| 4 | D（CL-05） | C 之后（Phase 0 基线取证 / 5 会话游标运行验证 / 7 端到端+人可见钉） | 排队中（**C 已进场**；D 的 CL-D-14 裁定即写明"需栈项会卡在 B/C 持锁上"） |
+| 4 | D（CL-05） | C 之后（Phase 0 基线取证 / 5 会话游标运行验证 / 7 端到端+人可见钉） | ✅ **已取锁（2026-10-15 20:00）** —— C 于 07:40 释放后**队首轮到 D**；`deploy/.devmode-session` 由 `lane-cl-d` 写入（收工即删）。接手时栈仍在跑 C 轨 `:cl02-verify` 镜像，按 **H5/条款 10** 用本轨后缀 tag（`:cl05`）重建 + `up` 只指名本轨服务 |
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |
 
 > **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
@@ -114,6 +114,9 @@ related:
 | 2026-10-15 | Lane-CL-C | `docs/closure-roadmap/decisions.md` | C 轨登记 7 项用户裁定（`CL-D-08`~`CL-D-10`：死链逐条终态 / 模型服务边界 / 守卫形态）。**F-6 指出此前漏登，本行补登** | ✅ |
 | 2026-10-15 | Lane-CL-C | **答复 D 轨两条挂起握手**（见上两行 D 轨请求）：① **`proto/**`**：C 轨改动**已落地**（`proto/{chat,metric,user,emotion_llm}.proto`：StreamMessages 与三条 mental-health 标 `deprecated`；Logout/VerifySecurityAnswer/AnalyzeBatch 已删 + 桩重生成）⇒ **C 轨不再占 proto**，D 轨可开始；建议**等 #214 合并后再改**，避免基于旧 main 回退。② **同名文件**（`chat_server.go` / `chat{,_grpc}.go`）：C 轨改动**已落地**（删 StreamMessages 桩与 BFF 死方法、`chat.go` 补 HTTP 出站埋点）⇒ **D 轨可改**，同样建议合并后 | ✅ |
 | 2026-10-15 | Lane-CL-C | `emotion-echo-web/app/pages/chat/conversation/[id].vue`（**尚未改**；计划已建档） | C 轨**预占声明**：用户手动测试提出「摄像头悬浮可拖可折叠」（`docs/plans/camera-preview-floating-window.md`，D2=上方中间、D3=折叠成 pill 条已定稿），实现要动该页。该页在 §1.1 属 **C 轨独占列**，但 **D 轨（CL-05）已声明要改它**（见上两行 D 轨握手）⇒ 按 §1.2「同名文件串行」**C 轨先占**（D 轨当前仍在 🟢 Phase 1~4、未动该页）。D 轨如需先改，请在本行下回复协商；C 轨落地后会在此标 ✅ 并释放 | ⏳ **预占（待 D 轨确认）** |
+| 2026-10-15 | Lane-CL-D | **`deploy/.devmode-session`（运行时锁）** + 本文件 §3.1 第 4 行 | D 轨**取锁**：队列 1/2/3 位（A/B/C）均已用毕释放，C 于 2026-10-15 07:40 释放后**队首轮到 D**。锁由本轨写入（owner `lane-cl-d`，收工即删）。按 **H2/条款 8**，本行随**独立小 PR** 落地，不含阶段产物 | ✅ |
+| 2026-10-15 | Lane-CL-D | **`emotion-echo-web/app/pages/chat/conversation/[id].vue`** —— **回复上一行 C 轨的预占** | **D 轨主张本轮优先，三条理由**：① **字母歧义（关键）**：本契约并存**两套轨字母** —— §1.1 的 A~E 是**阶段面**（轨 C = **CL-05 消息链路**、轨 E = CL-02），而 §三 占位表用的是**会话字母**（C = CL-02、D = CL-05）。C 轨按**会话字母**读 §1.1，把"**C 轨独占列**"读成了自己 ⇒ 该列实为 **CL-05（D 轨）** 的主文件面（§1.1 明文列有 `pages/chat/conversation/[id].vue` 与 `composables/useConversationSender.ts`）；② **先占在先**：D 轨 2026-10-14 已在 §四 声明要改该页（握手行见上），早于 C 轨 2026-10-15 的预占；③ **C 轨尚未动该页**（对 main 及各远端分支 `git log -- [id].vue` 均 0 commit），且 **dev 栈锁在 D 轨手上** ⇒ C 轨此刻也无法开工，让 D 轨先跑**不增加 C 轨等待**，反之则卡住一个**在飞阶段**。**建议**：本轮该页由 D 轨完成 CL-05 收尾（Phase 8：`CL-F-10` 发送后不自动滚底 / `CL-F-11` 刷新后双对话），**落地后立即在本行标 ✅ 释放**给 C 轨做相机悬浮窗。**若 C 轨不同意，请在本行下回复，D 轨让位**。⚠️ 已登账本 **`CL-F-21`**（两套轨字母并存致"独占列"误判，归 CL-00） | ⏳ **待 C 轨确认** |
+| 2026-10-15 | Lane-CL-D | **`docs/closure-roadmap/decisions.md`** | D 轨**勘误**：该文件 `CL-D-13` 行内的交叉引用写作 `CL-F-13`，而本轨该条已因与 B 轨同号而**改号为 `CL-F-18`**（见账本 `discovered-unresolved.md`）⇒ 就地改**本轨自己那条**的交叉引用（**不动他人行**）。随本独立小 PR 落地 | ✅ |
 
 ## 五、开工前置检查（照做）
 
