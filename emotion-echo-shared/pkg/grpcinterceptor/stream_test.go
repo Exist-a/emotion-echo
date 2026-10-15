@@ -53,7 +53,7 @@ func TestServerStreamLogging_LogsStartAndEnd(t *testing.T) {
 	gs := grpc.NewServer(
 		grpc.ChainStreamInterceptor(NewServerStreamLoggingInterceptor()),
 	)
-	emotionllm.RegisterEmotionLLMServiceServer(gs, &mockBatchServer{
+	emotionllm.RegisterEmotionLLMServiceServer(gs, &mockStreamServer{
 		items: 3,
 	})
 	lis := bufconn.Listen(1024 * 64)
@@ -68,15 +68,9 @@ func TestServerStreamLogging_LogsStartAndEnd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := cli.AnalyzeBatch(ctx, &emotionllm.AnalyzeBatchRequest{
-		Items: []*emotionllm.AnalyzeRequest{
-			{MessageId: "1", Text: "happy"},
-			{MessageId: "2", Text: "sad"},
-			{MessageId: "3", Text: "calm"},
-		},
-	})
+	stream, err := cli.ChatCompletion(ctx, &emotionllm.ChatCompletionRequest{})
 	if err != nil {
-		t.Fatalf("AnalyzeBatch err: %v", err)
+		t.Fatalf("ChatCompletion err: %v", err)
 	}
 
 	count := 0
@@ -117,8 +111,9 @@ func TestServerStreamRecovery_PanicIsRecovered(t *testing.T) {
 			NewServerStreamRecoveryInterceptor(),
 		),
 	)
-	emotionllm.RegisterEmotionLLMServiceServer(gs, &mockBatchServer{
-		panicAfterMsg: 1, // 发 1 条后 panic
+	emotionllm.RegisterEmotionLLMServiceServer(gs, &mockStreamServer{
+		items:         1, // 发 1 条后 panic
+		panicAfterMsg: 1,
 	})
 	lis := bufconn.Listen(1024 * 64)
 	go func() { _ = gs.Serve(lis) }()
@@ -130,11 +125,9 @@ func TestServerStreamRecovery_PanicIsRecovered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := cli.AnalyzeBatch(ctx, &emotionllm.AnalyzeBatchRequest{
-		Items: []*emotionllm.AnalyzeRequest{{MessageId: "1", Text: "x"}},
-	})
+	stream, err := cli.ChatCompletion(ctx, &emotionllm.ChatCompletionRequest{})
 	if err != nil {
-		t.Fatalf("AnalyzeBatch err: %v", err)
+		t.Fatalf("ChatCompletion err: %v", err)
 	}
 
 	// 第一条成功
@@ -161,7 +154,7 @@ func TestClientStreamLogging_LogsStartEndAndMsgCount(t *testing.T) {
 	gs := grpc.NewServer(
 		grpc.ChainStreamInterceptor(),
 	)
-	emotionllm.RegisterEmotionLLMServiceServer(gs, &mockBatchServer{items: 3})
+	emotionllm.RegisterEmotionLLMServiceServer(gs, &mockStreamServer{items: 3})
 	lis := bufconn.Listen(1024 * 64)
 	go func() { _ = gs.Serve(lis) }()
 	t.Cleanup(func() { gs.Stop() })
@@ -178,24 +171,22 @@ func TestClientStreamLogging_LogsStartEndAndMsgCount(t *testing.T) {
 	// 走底层 NewStream 而非 typed client（grpc 1.80 的 ServerStreamingClient[T]
 	// 走 interceptor 行为有兼容性问题）
 	streamDesc := &grpc.StreamDesc{
-		StreamName:    "AnalyzeBatch",
+		StreamName:    "ChatCompletion",
 		ServerStreams: true,
 		ClientStreams: false,
 	}
-	cs, err := conn.NewStream(ctx, streamDesc, "/emotion_llm.v1.EmotionLLMService/AnalyzeBatch")
+	cs, err := conn.NewStream(ctx, streamDesc, "/emotion_llm.v1.EmotionLLMService/ChatCompletion")
 	if err != nil {
 		t.Fatalf("NewStream err: %v", err)
 	}
-	if err := cs.SendMsg(&emotionllm.AnalyzeBatchRequest{
-		Items: []*emotionllm.AnalyzeRequest{{MessageId: "1", Text: "happy"}},
-	}); err != nil {
+	if err := cs.SendMsg(&emotionllm.ChatCompletionRequest{}); err != nil {
 		t.Fatalf("SendMsg err: %v", err)
 	}
 	if err := cs.CloseSend(); err != nil {
 		t.Fatalf("CloseSend err: %v", err)
 	}
 	for {
-		var resp emotionllm.AnalyzeResponse
+		var resp emotionllm.ChatChunk
 		if err := cs.RecvMsg(&resp); err != nil {
 			if err == io.EOF {
 				break
@@ -221,7 +212,7 @@ func TestClientStreamTimeout_StopsSlowStream(t *testing.T) {
 	gs := grpc.NewServer(
 		grpc.ChainStreamInterceptor(),
 	)
-	emotionllm.RegisterEmotionLLMServiceServer(gs, &slowBatchServer{
+	emotionllm.RegisterEmotionLLMServiceServer(gs, &slowStreamServer{
 		delay: 500 * time.Millisecond, // 每条都慢
 		count: 10,
 	})
@@ -235,11 +226,9 @@ func TestClientStreamTimeout_StopsSlowStream(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	stream, err := cli.AnalyzeBatch(ctx, &emotionllm.AnalyzeBatchRequest{
-		Items: []*emotionllm.AnalyzeRequest{{MessageId: "1", Text: "x"}},
-	})
+	stream, err := cli.ChatCompletion(ctx, &emotionllm.ChatCompletionRequest{})
 	if err != nil {
-		t.Fatalf("AnalyzeBatch err: %v", err)
+		t.Fatalf("ChatCompletion err: %v", err)
 	}
 
 	// ctx 已 100ms 超时，server 慢 500ms/条
@@ -264,31 +253,21 @@ func TestClientStreamTimeout_StopsSlowStream(t *testing.T) {
 // mock service implementations
 // =====================================================
 
-type mockBatchServer struct {
+type mockStreamServer struct {
 	emotionllm.UnimplementedEmotionLLMServiceServer
-	items        int
+	items         int
 	panicAfterMsg int
 }
 
-func (m *mockBatchServer) Analyze(ctx context.Context, req *emotionllm.AnalyzeRequest) (*emotionllm.AnalyzeResponse, error) {
+func (m *mockStreamServer) Analyze(ctx context.Context, req *emotionllm.AnalyzeRequest) (*emotionllm.AnalyzeResponse, error) {
 	return &emotionllm.AnalyzeResponse{MessageId: req.MessageId, PrimaryEmotion: "happy", SentimentScore: 0.5}, nil
 }
 
-func (m *mockBatchServer) AnalyzeBatch(req *emotionllm.AnalyzeBatchRequest, stream grpc.ServerStreamingServer[emotionllm.AnalyzeResponse]) error {
-	count := len(req.Items)
-	if m.items > 0 {
-		count = m.items
-	}
-	for i := 0; i < count; i++ {
-		msgID := ""
-		if i < len(req.Items) {
-			msgID = req.Items[i].MessageId
-		}
-		if err := stream.Send(&emotionllm.AnalyzeResponse{
-			MessageId:      msgID,
-			PrimaryEmotion: "happy",
-			SentimentScore: 0.5,
-		}); err != nil {
+// ChatCompletion 是当前 EmotionLLMService 唯一的 server-streaming RPC
+// （原 AnalyzeBatch 已于 CL-02 清除，D4）⇒ 本文件所有 stream 拦截器用例改用它作载体。
+func (m *mockStreamServer) ChatCompletion(_ *emotionllm.ChatCompletionRequest, stream grpc.ServerStreamingServer[emotionllm.ChatChunk]) error {
+	for i := 0; i < m.items; i++ {
+		if err := stream.Send(&emotionllm.ChatChunk{DeltaContent: "chunk", Model: "mock"}); err != nil {
 			return err
 		}
 		// 在 send 完 N 条之后 panic（让 client 收到 N 条 + 1 个 Internal error）
@@ -309,24 +288,24 @@ func (c *countingServer) Analyze(ctx context.Context, req *emotionllm.AnalyzeReq
 	return &emotionllm.AnalyzeResponse{MessageId: req.MessageId, PrimaryEmotion: "x", SentimentScore: 0}, nil
 }
 
-func (c *countingServer) AnalyzeBatch(req *emotionllm.AnalyzeBatchRequest, stream grpc.ServerStreamingServer[emotionllm.AnalyzeResponse]) error {
+func (c *countingServer) ChatCompletion(_ *emotionllm.ChatCompletionRequest, _ grpc.ServerStreamingServer[emotionllm.ChatChunk]) error {
 	return nil
 }
 
-type slowBatchServer struct {
+type slowStreamServer struct {
 	emotionllm.UnimplementedEmotionLLMServiceServer
 	delay time.Duration
 	count int
 }
 
-func (s *slowBatchServer) Analyze(ctx context.Context, req *emotionllm.AnalyzeRequest) (*emotionllm.AnalyzeResponse, error) {
+func (s *slowStreamServer) Analyze(ctx context.Context, req *emotionllm.AnalyzeRequest) (*emotionllm.AnalyzeResponse, error) {
 	return &emotionllm.AnalyzeResponse{MessageId: req.MessageId, PrimaryEmotion: "x", SentimentScore: 0}, nil
 }
 
-func (s *slowBatchServer) AnalyzeBatch(req *emotionllm.AnalyzeBatchRequest, stream grpc.ServerStreamingServer[emotionllm.AnalyzeResponse]) error {
+func (s *slowStreamServer) ChatCompletion(_ *emotionllm.ChatCompletionRequest, stream grpc.ServerStreamingServer[emotionllm.ChatChunk]) error {
 	for i := 0; i < s.count; i++ {
 		time.Sleep(s.delay)
-		if err := stream.Send(&emotionllm.AnalyzeResponse{MessageId: "x", PrimaryEmotion: "x"}); err != nil {
+		if err := stream.Send(&emotionllm.ChatChunk{DeltaContent: "x"}); err != nil {
 			return err
 		}
 	}

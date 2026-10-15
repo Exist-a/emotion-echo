@@ -68,11 +68,6 @@ func (f *fakeAvatarUserClient) ResetPassword(ctx context.Context, req downstream
 	return nil, nil
 }
 
-// E2E-06: fake VerifySecurityAnswer
-func (f *fakeAvatarUserClient) VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error {
-	return nil
-}
-
 // R-01 #1: fake VerifySecurityAnswerByUsername
 func (f *fakeAvatarUserClient) VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error {
 	return nil

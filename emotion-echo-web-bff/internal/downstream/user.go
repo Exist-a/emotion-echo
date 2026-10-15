@@ -90,7 +90,6 @@ type UserClient interface {
 	// E2E-06: 新增 securityQuestions 参数（必填，1~2 个密保问题）
 	Register(ctx context.Context, username, password, verificationCode string, securityQuestions []SecurityQuestion) (*UserInfo, error)
 	// E2E-06: 验证密保答案（供 D-01=C 找回密码）
-	VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error
 	// R-01 #1: 按用户名验证密保答案（不需要先获取 userID）
 	VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error
 	// E2E-07: 按用户名获取密保问题列表（不含答案）
@@ -220,28 +219,8 @@ func (c *userHTTPClient) Register(ctx context.Context, username, password, verif
 	return c.doUserRequest(httpReq)
 }
 
-// E2E-06: VerifySecurityAnswer 验证密保答案
-func (c *userHTTPClient) VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error {
-	body, _ := json.Marshal(map[string]any{
-		"userId":       userID,
-		"questionOrder": questionOrder,
-		"answer":       answer,
-	})
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/users/verify-security-answer", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	resp, err := c.http.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("downstream: verify security answer: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return readError(resp)
-	}
-	return nil
-}
+// CL-02 清除（2026-10-14，用户裁定 D4）：按 user_id 的 VerifySecurityAnswer 的 HTTP 实现
+// 一并删除（gRPC 与 HTTP 两条 transport 行为对齐——该 RPC 已从 proto 删除）。
 
 // R-01 #1: VerifySecurityAnswerByUsername 按用户名验证密保答案
 func (c *userHTTPClient) VerifySecurityAnswerByUsername(ctx context.Context, username string, questionOrder int, answer string) error {

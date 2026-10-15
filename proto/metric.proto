@@ -56,13 +56,30 @@ service AnalyticsService {
   rpc MentalHealthAssessment (MentalHealthAssessmentRequest) returns (MentalHealthAssessmentResponse);
 
   // MentalHealthHistory 心理健康历史
-  rpc MentalHealthHistory (MentalHealthHistoryRequest) returns (MentalHealthHistoryResponse);
+  //
+  // ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：**明确不做**，声明保留但标 deprecated。
+  //    依据：ADR-2026-09-chart-contract-alignment §E「5 个无消费端点本轮不接」——用户决策
+  //    「暂不接」，理由是「单独功能开发，需要 UX 设计，不在契约修复范围」。
+  //    重启条件：'我的空间' 增加「评估历史」入口（UX 定稿）时；server 侧实现为占位（恒返空）。
+  rpc MentalHealthHistory (MentalHealthHistoryRequest) returns (MentalHealthHistoryResponse) {
+    option deprecated = true;
+  }
 
   // MentalHealthTrigger 心理健康触发器（手动触发评估）
-  rpc MentalHealthTrigger (MentalHealthTriggerRequest) returns (MentalHealthTriggerResponse);
+  //
+  // ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：同上（ADR chart-contract-alignment §E）。
+  //    注意：server 侧是**真实现**（trigger runner + job store，E2E-15 已验），重启时可直接接。
+  rpc MentalHealthTrigger (MentalHealthTriggerRequest) returns (MentalHealthTriggerResponse) {
+    option deprecated = true;
+  }
 
   // MentalHealthTrend 心理健康趋势
-  rpc MentalHealthTrend (MentalHealthTrendRequest) returns (MentalHealthTrendResponse);
+  //
+  // ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：同上（ADR chart-contract-alignment §E）。
+  //    server 侧为真实现（`MentalHealthTrendLogic.GetTrend`）。
+  rpc MentalHealthTrend (MentalHealthTrendRequest) returns (MentalHealthTrendResponse) {
+    option deprecated = true;
+  }
 }
 
 // ============== Common ==============

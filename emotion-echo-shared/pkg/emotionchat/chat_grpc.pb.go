@@ -77,6 +77,7 @@ type ChatServiceClient interface {
 	PinConversation(ctx context.Context, in *PinConversationRequest, opts ...grpc.CallOption) (*PinConversationResponse, error)
 	// UpdateConversation 更新会话（当前仅支持 title；Stage 72 决策 4 ADR §八 收口）
 	UpdateConversation(ctx context.Context, in *UpdateConversationRequest, opts ...grpc.CallOption) (*UpdateConversationResponse, error)
+	// Deprecated: Do not use.
 	// StreamMessages 流式接收消息（gRPC server stream）——替代 SSE 聊天流
 	//
 	// 设计动机：BFF 当前用 SSE（HTTP）转给浏览器，链路长且需要 APISIX 兼容 SSE。
@@ -84,6 +85,12 @@ type ChatServiceClient interface {
 	// 段是结构化流（无 SSE 兼容问题）。
 	//
 	// 鉴权：user_id 通过 metadata "x-user-id" 传（与 emotion_query.proto 一致）
+	//
+	// ⚠️ CL-02 归档（2026-10-14 用户裁定 D2）：本 RPC **明确不做**，声明保留但标 deprecated。
+	//
+	//	依据：ADR-2026-09-decision-4-closure §四 #3「故意不做」——聊天流实际走 BFF SSE。
+	//	重启条件：多客户端实时协作 / 消息撤回广播等流式业务立项时。
+	//	状态由 scripts/rpc_status.tsv 管理，守卫 scripts/check_rpc_status.sh 校验。
 	StreamMessages(ctx context.Context, in *StreamMessagesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatEvent], error)
 }
 
@@ -165,6 +172,7 @@ func (c *chatServiceClient) UpdateConversation(ctx context.Context, in *UpdateCo
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *chatServiceClient) StreamMessages(ctx context.Context, in *StreamMessagesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ChatService_ServiceDesc.Streams[0], ChatService_StreamMessages_FullMethodName, cOpts...)
@@ -207,6 +215,7 @@ type ChatServiceServer interface {
 	PinConversation(context.Context, *PinConversationRequest) (*PinConversationResponse, error)
 	// UpdateConversation 更新会话（当前仅支持 title；Stage 72 决策 4 ADR §八 收口）
 	UpdateConversation(context.Context, *UpdateConversationRequest) (*UpdateConversationResponse, error)
+	// Deprecated: Do not use.
 	// StreamMessages 流式接收消息（gRPC server stream）——替代 SSE 聊天流
 	//
 	// 设计动机：BFF 当前用 SSE（HTTP）转给浏览器，链路长且需要 APISIX 兼容 SSE。
@@ -214,6 +223,12 @@ type ChatServiceServer interface {
 	// 段是结构化流（无 SSE 兼容问题）。
 	//
 	// 鉴权：user_id 通过 metadata "x-user-id" 传（与 emotion_query.proto 一致）
+	//
+	// ⚠️ CL-02 归档（2026-10-14 用户裁定 D2）：本 RPC **明确不做**，声明保留但标 deprecated。
+	//
+	//	依据：ADR-2026-09-decision-4-closure §四 #3「故意不做」——聊天流实际走 BFF SSE。
+	//	重启条件：多客户端实时协作 / 消息撤回广播等流式业务立项时。
+	//	状态由 scripts/rpc_status.tsv 管理，守卫 scripts/check_rpc_status.sh 校验。
 	StreamMessages(*StreamMessagesRequest, grpc.ServerStreamingServer[ChatEvent]) error
 	mustEmbedUnimplementedChatServiceServer()
 }

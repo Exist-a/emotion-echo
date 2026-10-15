@@ -1,0 +1,298 @@
+---
+stage: cl-02
+title: gRPC 契约闭环（死链逐条裁决 + 守卫升级 + "严格走 gRPC"坐实）
+type: transformation
+status: done
+created: 2026-10-14
+last-updated: 2026-10-15（**阶段收口完成**：第二方核对三轮 PASS → 状态 done。运行时验证完成：Phase 2 清除 + Phase 3 归档落地 → dev 栈 `:cl02-verify` 起栈 → 7/7 healthy + Nacos count:6 + smoke 24/24 → T-15/T-21/T-23 全部转 PASS；**24 点 PASS 22 / N/A 1 / 未做 1（T-20 收口项）/ BLOCKED 0**；剩余 = 收口（T-20 迁移 + 第二方核对））
+depends-on: []
+blocks: []
+gate: []            # 无开工前阻塞决策门；7 条死链裁决 + 1 条模型服务边界共 8 个 [M] 见 §7
+source:
+  - docs/legacy-plans/landed/grpc-deadlink-actualization.md（主，本阶段完整承载；2026-10-15 落地后自 `docs/plans/` 迁入）
+related-plans:
+  - docs/plans/observability-instrumentation-and-dashboards.md（CL-01，共享 `downstream/**` 目录但不同文件）
+  - docs/plans/prompt-pipeline-redesign.md（CL-04，共享 `downstream/llm*.go` 同目录不同文件）
+---
+
+# CL-02 · gRPC 契约闭环 — 执行计划
+
+> **核心口径（roadmap §4 CL-02）**：后端**各服务间调用严格走 gRPC**；**HTTP 仅作显式降级**
+> （`*_TRANSPORT=http` 回滚开关）——降级**可接受**，不算违规。用户原话："gRPC 搞了很久，本阶段要把它**坐实**。"
+>
+> **现状一句话**：**主干已 gRPC 化（默认值即 grpc），但有 7 条 RPC"挂着没站着"** ——
+> server 实现存在、全仓无生产调用方，唯一处置是"注释 + 计数守卫"（E2E-31 T-1，用户 2026-10-09 裁定"保留 + 标注"）。
+> **标注 ≠ 可用 ≠ 消失**：审阅者问"这接口谁在用"，答案仍是"没人调"。
+> 本阶段把每条**二选一裁决为"接真"或"归档/清除"**，并把守卫从"标记数=10"升级为"**每条 RPC 有明确状态 + live 必有调用方**"。
+>
+> **执行协议**：[RUNBOOK.md](../../RUNBOOK.md)（六步循环 / 证据有效性 / 收口契约）
+> + [parallel-contract.md](../../parallel-contract.md)（**C 轨**占位与文件面隔离）
+> + [anti-patterns.md](../../../e2e-roadmap/anti-patterns.md)（14 类失真反例）。
+>
+> **并行**：本阶段为 **C 轨**，与 **A 轨（CL-04）**、**B 轨（CL-01）** 并行。
+> 文件面：与 A/B 在 `emotion-echo-web-bff/internal/downstream/` **同目录但不同文件**（契约 §1.2 允许并行的情形）；
+> 唯一**独占**的脊柱是 `proto/**`（当前无其他轨占用）。**dev 栈单锁**：A 轨持 `deploy/.devmode-session` 至 2026-10-14 12:00，
+> B 轨排队在后 ⇒ 本阶段"需栈"的 Phase 排在更后（§3 Phase 2/4/6 的运行时部分）。
+>
+> **并行协议（2026-10-14 起，必读）**：[`docs/_meta/multi-track-parallelism.md`](../../../_meta/multi-track-parallelism.md)（H1~H9 细则 + 本轮实证）
+> + [`AGENTS.md §8.1`](../../../../AGENTS.md) 硬约束 7~10。本轨的遵从情况：
+> - **H1/条款7 只在自己的分支工作**：未 push/rebase 他人分支，他人分支仅 `git show <ref>:<path>` 只读。
+> - **H2/条款8 登记独立落地**：占位登记走**独立小 PR [#215](https://github.com/Exist-a/emotion-echo/pull/215)**（已合 main）；
+>   **本阶段 PR 不含登记表改动**（见下"自检"）。
+> - **H3 登记表 append-only**：今后只追加本轨行，不改他人行。
+> - **H4/条款9 合并前三查**：本阶段 PR 自检结果见 §A.5。
+> - **H5/H6/条款10 docker 隔离**：本阶段构建镜像一律用 **`emotion-echo/<svc>:cl02`** 后缀 tag、`up` 只指名自己的服务、
+>   用栈前在契约 §3.1 排队表登记、用毕删锁；worktree 起栈 `--env-file <共享目录>/deploy/.env.local`。
+
+---
+
+## §A 上下文（★ 写前功课，按 AGENTS.md §〇）
+
+### A.1 已读代码（真实文件，本次实读亲核）
+
+| 文件 | 关键事实（亲核结论） |
+|---|---|
+| `proto/chat.proto:65` | `rpc StreamMessages (…) returns (stream ChatEvent)` —— 注释 `:58` 自述"替代 SSE 聊天流"，实际从未启用 |
+| `proto/user.proto:74 / :79 / :91` | `Logout` / `VerifySecurityAnswer` / `VerifySecurityAnswerByUsername` 三者并存（**族内冗余**已确认） |
+| `proto/metric.proto:56-65` | 心理健康四兄弟：`Assessment`（在用）/ `History` / `Trigger` / `Trend` |
+| `proto/emotion_llm.proto:18` | `rpc AnalyzeBatch (…) returns (stream AnalyzeResponse)`，注释标"Stage 16" |
+| `proto/*.proto` 全量 | **43 条 RPC**（chat 8 / user 10 / metric 9 / agent 5 / emotion_query 7 / emotion_llm 4） |
+| `emotion-echo-web-bff/internal/downstream/chat.go:88-105` | `ChatClient` 接口 **7 个方法，无 `StreamMessages`** ⇒ `chat_grpc.go:172` 的死方法不在接口内，零调用 |
+| `emotion-echo-web-bff/internal/downstream/chat_grpc.go:172-176` | `StreamMessages` 方法体存在且带 `E2E-31 已知未接线` 标记 |
+| `emotion-echo-chat-svc/internal/grpcserver/chat_server.go:298-302` | **恒返 `codes.Unimplemented`**（明确"无流式订阅业务"）—— 热链是 BFF SSE |
+| `emotion-echo-web-bff/internal/downstream/analytics.go:105-118` | `AnalyticsClient` 接口 **6 个方法，无任何 `MentalHealth*`** |
+| `emotion-echo-analytics-svc/internal/grpcserver/metric_server.go:336-341` | `MentalHealthHistory` **恒返 `Records: nil`**（占位实现） |
+| `emotion-echo-analytics-svc/internal/grpcserver/metric_server.go:349-368` | `MentalHealthTrigger` **真实现**（`TriggerAssessment` + job store，E2E-15 已验） |
+| `emotion-echo-analytics-svc/internal/grpcserver/metric_server.go:373-` | `MentalHealthTrend` **真实现**（`GetTrend`，`ErrNotFound` 归零） |
+| `emotion-echo-web-bff/internal/downstream/user_grpc.go:109 / :171` | 两处 `E2E-31` 标记：`Logout`（不在 `UserClient` 接口）+ `VerifySecurityAnswer`（在接口内但零 handler 调用） |
+| `scripts/check_dead_grpc_inventory.sh` | `MARKER="E2E-31 已知未接线"`（`:23`）、`EXPECTED=10`（`:25`）；`:12-18` 自述"**不守零调用，只守清单真实性**"⇒ 正是本阶段要升级的对象 |
+| `.github/workflows/e2e-guards.yml:183-184` | 守卫 23/23 已接 CI（`bash scripts/check_dead_grpc_inventory.sh`） |
+| `emotion-echo-web-bff/internal/config/config.go:360-373` | 5 个 `*_TRANSPORT` 开关（USER/CHAT/ASSESSMENT/ANALYTICS/AI），默认值 = **grpc** |
+| `emotion-echo-web-bff/main.go:504` + `handler/survey_handler.go:16-20` | assessment 的 `assessmentBase != ""` 恒真旁路 **E2E-31 已删**，统一走 `AssessmentClient`（gRPC） |
+
+**亲核的标记点计数**：`grep -rn "E2E-31 已知未接线"` 命中 **10 处**，与守卫脚本 `EXPECTED=10` 一致
+（server 7：`metric_server.go`×3 / `chat_server.go`×1 / `user_server.go`×2 / `grpc_server.py`×1；BFF 3：`chat_grpc.go`×1 / `user_grpc.go`×2）。
+
+**Phase 1 补充亲核（全量 43 条，证据见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md)）**：
+- **43 条 RPC 全部定位到调用点** ⇒ 结论：**7 条死链是完整清单**（未发现第 8 条）；一度怀疑的 `GetEmotionByMessage/…Conversation/…Fused` **经查证为活链**（BFF `emotion_query_handler.go:46/66/102`）。
+- 🔴 **RPC 名 ≠ 客户端方法名（14 条）**：如 `ReportsTrend→TrendReport`、`ListMyResults→ListResults`、`UpdateProfile→UpdateMe`、`GetUserById→GetByID`。⇒ **"live 有调用方"不能靠 RPC 名 grep**（会把 6 条 metric RPC 误判成死链），证据必须登记 `(文件, 符号)`。
+- **同型陷阱**：`SendMessage` 撞 Kafka producer（`ai-svc/consumer/dlq.go:169`）、`Register` 撞 Nacos（`ai-svc/nacos_boot.go:86`）与 BFF 路由注册（`main.go:501`）。
+
+**亲核的"是否还有非开关式 HTTP 直连"**：`grep -rn "http://emotion-\|http://localhost:8"` 在非测试 Go 代码中
+**零命中** ⇒ 服务间"严格走 gRPC"的**主干已成立**，本阶段的活是"**减面 + 坐实留下的**"，不是"再迁一批"。
+
+### A.2 相关 ADR / 决策（已查）
+
+| 文档 | 结论（对本阶段的约束） |
+|---|---|
+| `adr-2026-09-incremental-rpc-adoption.md`（ADR-18） | §A 新增一律 gRPC；§B 已有 HTTP"**非阻塞** backlog"；§C proto-first；§F HTTP 不主动废弃 → **"proto 预留不算 must-fix"的官方依据**，本阶段**不推翻** |
+| `adr-2026-09-decision-4-closure.md` | 决策 4 宣称 gRPC **覆盖 21/21=100%**（§四）；§八 backlog 列 `StreamMessages` 为低优先 → **本阶段须加更正记录**（该口径把"client 方法存在"当"已接线"，漏了 `Logout` 这类"有 client 无 handler 调用"） |
+| `adr-2026-09-survey-http-bypass.md` | survey 5 端点曾 HTTP 绕过 gRPC，**已修**（main.go:504 统一走 gRPC）；该 ADR 含"更正记录"先例 → 本阶段更正决策 4 时**沿用此先例形式** |
+| `adr-2026-09-mental-health-trigger-save.md` | `MentalHealthTrigger` 的 server 为何"真实现"（写入链 = trigger runner 末尾 Save，E2E-15 已验） |
+| `docs/closure-roadmap/decisions.md` | **无 CL-D-xx** 与本阶段冲突；本阶段新决策沿用 `CL-D-xx` 续号 |
+| `docs/_meta/parallel-tracks.md` §二 资源 2 | **main PR 合并窗口串行** + 每次合并后跑 `e2e_stage_audit.py --all` 确认 0 FAIL —— `proto/**` 变更影响面大于普通文件，本阶段合并更须遵守 |
+
+### A.3 架构假设清单（本文假设 vs 现状）
+
+| 假设 | 现状核对 |
+|---|---|
+| "死 RPC" = server 在、无生产调用方 | ✅ 亲核 7 处均符合 |
+| "保留 + 标注 + 计数守卫" 已算坐实 | ❌ 用户不认（"改很多次都没坐实"）——**标注 ≠ 可用 ≠ 消失** |
+| `*_TRANSPORT=http` 是死代码 | ❌ **是 (a) 类回滚开关，不是死链**；守卫升级必须显式豁免，否则误伤（G4） |
+| 服务间仍存在 HTTP 直连待迁 | ❌ 亲核**零命中**；assessment 旁路已删 ⇒ 假设**不成立**，本阶段不重做这项 |
+| 删除 proto 方法 = 只删一行 | ❌ 波及生成桩 / 测试 fake / 其他 proto import / 生成工具链（memory：改 proto 必须复现原生成方式 `protoc 32.1` + `protoc-gen-go v1.36.11` + `protoc-gen-go-grpc v1.6.2`，**以文件名调用**） |
+| 三条 mental-health RPC 有前端需求 | ❓ **未知**（`apiRoutes.ts` 只留注释、BFF 未暴露三条端点）⇒ 属 §7 D1/D5，**须用户裁定** |
+
+### A.4 未跑 smoke / 未取运行时证据声明（诚实性，按 RUNBOOK §4）
+
+本详档为**建档期产物**，**未起 dev 栈**（A 轨持锁至 12:00，且本阶段前段为 🟢 不需栈）。
+因此：**"清除后全栈起得来""接真后端到端有数据""CI 通知"三类结论目前无运行时证据**，
+均为待取项（§3 Phase 2/4/6 的 🔴 部分）。§3 每个 Phase 均标 🟢/🔴，**🔴 未取证前不得判 PASS**。
+
+### A.5 多轨协议遵从自检（H4「合并前三查」，2026-10-14 实测）
+
+```console
+$ git merge-tree --write-tree HEAD origin/main   → 0 冲突                                    # H4①
+$ git diff --stat origin/main...HEAD -- docs/closure-roadmap/parallel-contract.md \
+      docs/closure-roadmap/roadmap.md AGENTS.md docs/_meta/   → （空）                       # H4②
+$ git diff --stat origin/main...HEAD -- scripts/  → 只新增 check_rpc_status.sh / rpc_status.tsv
+      （未修改 B 轨的 smoke_observability.py 等他人脚本；属"同名脚本串行"里的不同名情形）
+$ git diff --stat origin/main...HEAD              → 4 files：stages/cl-02-grpc-contract/{plan.md,
+      evidence/phase1-scan.md} + scripts/{check_rpc_status.sh,rpc_status.tsv}                # 本 PR 全量
+$ docker images | grep ':cl02'  → （无）  # H4③：本轨尚未构建任何镜像 ⇒ 无 tag 归属风险
+```
+
+⇒ **H4 三查全过**；本阶段 PR 的 diff 中**不含登记表/共享文档**（登记已由独立 PR #215 落地）。
+
+---
+
+## §1 目标与非目标
+
+### 目标（对齐 roadmap §4 与来源计划 §2）
+
+- **G1 逐条裁决**：7 条死链每条落地 **三选一** —— **接真（wire-in）** / **归档（archive，proto 标 `reserved/deprecated`）** / **清除（delete，proto+server+client+标记一并删）**。
+- **G2 修正口径**：更正决策 4 收口 ADR 的"100% 覆盖"表述（**以"更正记录"形式，不重写历史**），使文档与代码一致。
+- **G3 升级守卫**：从"标记数 = 10"升级为 **"43 条 RPC 每条有明确状态（live/archived/deleted）+ `live` 必须有调用方证据"**，可机械校验。
+- **G4 声明 HTTP fallback 边界**：守卫/文档显式声明 "`*_TRANSPORT=http` 是回滚开关，**不算死链**"，避免误伤（防"守卫过严"反模式）。
+
+### 非目标
+
+- **不推翻 ADR-18**（proto-first、不主动废弃 HTTP 的既定框架不动）。
+- **不重构活链路**（43 - 7 = 36 条活 RPC 不动）。
+- **不新增 HTTP→gRPC 迁移**（亲核已零残留，见 §A.1 末）。
+- **不做 CL-03 的异步 trace 连续性与 DLQ**（归 CL-03；B 轨 CL-01 已含 DLQ span 埋点）。
+- **不新登记 E2E-F**（来源计划 §开头明确：仅回填 E2E-F-208 的状态说明）。
+- **模型服务不算服务间调用（D7）**：ai-svc → FER / SenseVoice / XTTS 本身是模型推理服务（FastAPI/HTTP 暴露）⇒ 不纳入"严格走 gRPC"范围，写死为边界。
+
+---
+
+## §2 测试点清单（每点标 `[A]`/`[V]`/`[M]`）· **含执行结果（2026-10-14）**
+
+> 判定与证据口径见 [RUNBOOK §4](../../RUNBOOK.md)。`[M]` = 需用户裁定（**已全部拍板**，见 §7）。
+> **结果四值**：`PASS / FAIL / BLOCKED / N/A`；证据 = 执行输出（命令/退出码/diff），**"已创建"不算证据**。
+> 全部证据汇总见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md) 与 [`evidence/phase2-3-terminal-states.md`](evidence/phase2-3-terminal-states.md)。
+
+### A 组 · 死链逐条裁决落地（G1）
+
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
+|---|--------|------|---------|------|
+| T-01 | `StreamMessages` 归档落地 | [M]→[A] | proto 标 deprecated + 注释 + 删 BFF 死方法 + 守卫状态=archived | ✅ **PASS** —— `proto/chat.proto:65` 邻域含 `option deprecated = true`；BFF `chat_grpc.go` 死方法删除（grep 无 `func (c *chatGRPCClient) StreamMessages`）；守卫 A4 PASS |
+| T-02 | `Logout` 清除落地 | [M]→[A] | 删 proto+server+client 三处 | ✅ **PASS** —— proto 无 `rpc Logout (`（守卫 A4 deleted 断言 PASS）；`user_server.go` / `user_grpc.go` / HTTP 实现 / 拦截器跳过清单 均已删；`user_server_sprint_e_test.go` 对应用例移除 |
+| T-03 | `VerifySecurityAnswer`（族内冗余）清除 | [A] | 删 proto/server/client + 保留在用者 | ✅ **PASS** —— 同上；在用者 `VerifySecurityAnswerByUsername` 保留（`auth_handler.go:485` 调用，守卫 A2 证据链 PASS） |
+| T-04 | `AnalyzeBatch` 清除 | [A] | 删 proto/server + 测试 fake | ✅ **PASS** —— `proto/emotion_llm.proto` 无该 RPC；`grpc_server.py` 实现删除；`grpc_analyzer_test.go` fake 删除；桩重生成后 7 模块编译过 |
+| T-05 | `MentalHealthHistory` 归档落地 | [M]→[A] | 按裁定 | ✅ **PASS** —— `proto/metric.proto:59` 邻域含 deprecated + ADR §E 依据注释 |
+| T-06 | `MentalHealthTrigger` 归档落地 | [M]→[A] | 按裁定 | ✅ **PASS** —— `metric.proto:62` 邻域含 deprecated（注释标明 server 是真实现、重启可直接接） |
+| T-07 | `MentalHealthTrend` 归档落地 | [M]→[A] | 按裁定 | ✅ **PASS** —— `metric.proto:65` 邻域含 deprecated |
+| T-08 | 清除类无残留引用（含 `.py`/`.ts`） | [A] | 全仓 grep | ✅ **PASS（口径按第二方核对 F-4 收紧）** —— **proto / server / BFF client 面零残留**；测试里 3 处**死 fake**（`avatar_handler_test.go` / `user_handler_test.go` / `integration_test/bff_integration_test.go`）已删。**两处如实说明**：① 仍存在**同名但不同层**的标识（BFF handler 方法名、`security_answer_handler_test.go` 的用例名含 `VerifySecurityAnswer`），它们走的是**保留的 `…ByUsername` 路径**，非被删 RPC；② `legacy/emotion-echo-gin/**`（归档旧实现，不参与构建）另有同名函数，不在本阶段范围。`go build`/`go vet` 7/7 |
+
+### B 组 · 守卫升级（G3/G4）
+
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
+|---|--------|------|---------|------|
+| T-09 | 状态清单覆盖全部 RPC（不重不漏） | [A] | 守卫 A1 | ✅ **PASS** —— `PASS: A1 覆盖 proto 40 条全部已登记；清单 43 条 = proto 40 + 已清除 3` |
+| T-10 | `deleted` 不得出现在 proto | [A] | 守卫 A4 | ✅ **PASS** —— `PASS: A4 终态规则…当前 archived/deleted 行数：7` |
+| T-11 | `archived` 必带 deprecated 标注 | [A] | 守卫 A4（按 `proto:line` 邻域） | ✅ **PASS** —— 同上；RED 时该断言曾对 4 条正确报错（证明非永真） |
+| T-12 | `live` 必须有调用方证据 | [A] | 守卫 A2 | ✅ **PASS** —— `PASS: A2 live 36 条 RPC 均有已登记且可校验的调用方证据` |
+| T-13 | 负向对照（守卫必须能 FAIL） | [A] | 临时改坏 → 须 RED → 还原 | ✅ **PASS** —— 3 组：① 改错证据符号 → A2 FAIL；② `deleted` 改 `live` → A1 FAIL；③ 插未登记标记 → 旧守卫 FAIL。还原后两条守卫均 `exit=0` |
+| T-14 | HTTP fallback 豁免（`*_TRANSPORT=http` 不算死链） | [A] | 守卫 A5 + 负向对照 | ✅ **PASS** —— `PASS: A5 HTTP 回滚开关豁免声明在位`；RED 运行暴露并修掉守卫自身两个缺陷（见证据档 §2） |
+
+### C 组 · "严格走 gRPC"成色（roadmap 核心口径）
+
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
+|---|--------|------|---------|------|
+| T-15 | 5 个 `*_TRANSPORT` 默认值 = grpc | [A] | 静态断言 + 运行时 env（🔴） | ✅ **PASS（两半齐）** —— 静态：`config.go:360-373` 五个开关默认分支 = grpc，守卫 A5 断言在位；**运行时实测**：5 个服务容器 env 均**未设置** `*_TRANSPORT` ⇒ 走代码默认 grpc（[runtime 证据](evidence/phase2-6-runtime-verify.md) §3） |
+| T-16 | 非开关式 HTTP 直连保持零残留 | [A] | grep 断言 + 豁免声明 | ✅ **PASS** —— `grep -rn "http://emotion-\|http://localhost:8" --include='*.go'`（非测试）**零命中**；模型服务豁免由 D7 裁定 + §1 非目标声明 |
+| T-17 | 模型服务是否算"服务间调用" | [M] | 用户裁定 | ✅ **PASS（裁定）** —— D7 = **不算**，已写入 §1 非目标 |
+
+### D 组 · 口径与文档一致（G2）
+
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
+|---|--------|------|---------|------|
+| T-18 | 决策 4 ADR 加「更正记录」 | [A] | 读 ADR diff | ✅ **PASS** —— `adr-2026-09-decision-4-closure.md` 末尾新增「更正记录（2026-10-14）」节（含更正对象/为什么偏乐观/处置），沿用 survey-http-bypass 先例形式 |
+| T-19 | E2E-F-208 说明回填 | [A] | `discovered-unresolved.md` diff | ✅ **PASS** —— 原行**保留**，状态说明追加 ④（7 条已逐条裁决终态 + 守卫升级），并更新「已解决」的含义 |
+| T-20 | 来源计划迁 `legacy-plans/landed/` | [A] | 迁移后断链检查 | ✅ **PASS** —— 已迁 `docs/legacy-plans/landed/grpc-deadlink-actualization.md`（`status: landed`）+ 修 4 处入站引用；全仓无指向旧路径的活引用（仅 `parallel-contract.md` 握手区历史日志保留旧路径，按约定豁免） |
+
+### E 组 · 端到端与 CI（🔴 需栈 / 需 CI 运行）
+
+| # | 测试点 | 判定 | 验证方式 | 结果（四值 + 证据） |
+|---|--------|------|---------|------|
+| T-21 | 清除后全栈起得来（Nacos `count:6`） | [A] | 起栈 + Nacos 服务列表 | ✅ **PASS** —— 7/7 服务 healthy + **Nacos `count:6`** + apisix-seed `6 upstreams + 16 routes` + 网关登录 200（[runtime 证据](evidence/phase2-6-runtime-verify.md) §3 T-21） |
+| T-22 | 接真类 RPC 端到端有数据 | [A]+[V] | BFF handler + 前端 | ✅ **N/A（裁定后无接真项）** —— D1/D2 归档、D3/D4 清除 ⇒ 本阶段 Phase 4 整体 N/A（理由见 §7，非掩盖） |
+| T-23 | 相关功能无回退（§2.4 smoke） | [A] | 走网关 :19080 + Bearer | ✅ **PASS** —— `smoke_data_layer.py` **24/24 PASS，exit 0**；首跑唯一功能性失败 §4 `/reports/daily` 504 经**重跑即过**排除为 E2E-F-115 冷启动（[runtime 证据](evidence/phase2-6-runtime-verify.md) §3 T-23） |
+| T-24 | 新守卫接入 CI 且**真能红** | [A] | 本地 RED + CI 实测 | ✅ **PASS** —— ① 本地负向对照 3 组（T-13）；② **CI 实测**：临时分支 `test/cl-02-guard-red-proof`（故意改坏证据符号）⇒ `static-guards` job **failure**（见证据档 §6），分支用后即删；③ 本分支 `static-guards` success（守卫 27/27 已接） |
+
+**统计（2026-10-15 收口后）**：24 点中 **PASS 23 / N/A 1 / 未做 0 / BLOCKED 0**。
+⇒ **无阻塞项、无未做项**；剩余 = 阶段收口本身（第二方核对 + 合并）。
+
+## §3 分阶段实施（TDD：先 RED 回归钉，再 GREEN）
+
+> **栈依赖标注**：🟢 = 不需栈（worktree 内可做） / 🔴 = 需 dev 栈（受 `.devmode-session` 约束，排在 A/B 之后）。
+
+| Phase | 内容 | 栈 | RED 断言 |
+|---|---|---|---|
+| **0** | 7 条裁决拍板（§7 D1~D6）+ 模型服务边界（D7） | 🟢 | —（[M]，用户裁定后回填本表） |
+| **1** | **守卫升级（核心）✅ 已落地**：`scripts/rpc_status.tsv`（43 行 × 7 列：`rpc / proto:line / status / evidence_path / evidence_symbol / marker_sites / note`）+ `scripts/check_rpc_status.sh` **六条断言**（A1 覆盖 / A2 live 必有**非注释**证据 / A3 标记数与清单一致 / A4 终态规则（按 rpc 声明块）/ A5 HTTP 豁免 / **A6 锚点自检**）；**标记预期数改为由清单推导**（取代硬编码 `EXPECTED=10`） | 🟢 | **已证**：A1~A6 现行全绿；负向对照 2 组（改错证据符号 → A2 FAIL；给 live 行挂标记 → A3 双 FAIL）见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md) §4。**A4 当前为空断言**（无 archived/deleted 行），Phase 2/3 后才有实义 |
+| **2** | **清除类 ✅ 已落地**：Logout / VerifySecurityAnswer / AnalyzeBatch 三条从 **proto + server + BFF client(含 HTTP 实现) + 拦截器跳过清单 + 测试** 全删；桩按原工具链重生成（Go+Python） | 🟢改码 / 🔴验证 | **已证**：RED = 守卫 A4「deleted 但仍在 proto」×3 → 删净后 GREEN；7 模块 `go build`/`go test -count=1` 全绿 + `pytest tests/unit` 208 passed。证据见 [`evidence/phase2-3-terminal-states.md`](evidence/phase2-3-terminal-states.md) |
+| **3** | **归档类 ✅ 已落地**：StreamMessages + 三条 mental-health 标 `option deprecated = true` + 注释写明依据与重启条件（**proto3 不允许在 service 内用 `reserved`——已用 protoc 实测确认**，故用 deprecated） | 🟢 | **已证**：RED = 守卫 A4「archived 但邻域无 deprecated」×4 → 标注后 GREEN |
+| **4** | **接真类 → N/A（无接真项）** | — | 裁定 D1/D2 归档、D3/D4 清除 ⇒ **本阶段无"接真"条目**，Phase 4 整体 N/A（依据见 §7）。故 T-22 一并 N/A |
+| **5** | **口径更正 + 账本回填 ✅ 已落地**（T-18/T-19）：决策 4 ADR 加「更正记录」节；E2E-F-208 状态说明回填 | 🟢 | —（文档一致性核对；沿用 survey-http-bypass ADR 的"更正记录"先例） |
+| **6** | **收口**：迁移来源计划（T-20）+ 全栈冒烟（T-21/T-23，🔴 排 A/B 之后）+ 负向对照（T-13 ✅ 已证）+ CI 接线（T-24） | 🔴（T-24 为 🟢） | T-24：新守卫接入 `e2e-guards.yml` 后**仍能红**（本地已证 RED 能力） |
+
+> **Phase 1 落地方式（修正建档时的预想）**：建档时设想"守卫对现状必红"，实测**不成立**——
+> 因为清单是按现状机械生成后逐条亲核的（43 条全部定位到调用点），A1~A6 是对**现状的完整描述**，
+> 故现行即绿。"钉子能红"的证据改用**负向对照**给出（改错证据符号 → A2 FAIL；给 live 行挂标记 → A3 双 FAIL，
+> 见 [evidence/phase1-scan.md](evidence/phase1-scan.md) §4）——**这比"必红"更强**：它证明断言不是永真式。
+> **红线不变**：Phase 2/3/4 不得先删代码再补守卫（TDD 倒置反模式）；改一条 RPC 的终态**必须同步改清单**，
+> 否则 A1/A3/A4 立刻红（这正是"接线/清除必须是一次显式决策"的机械保证）。
+
+---
+
+## §4 收口判据（"做到什么程度"，对齐 roadmap §4 DoD）
+
+**功能判据**
+- 7 条死链**每条都有终态**：要么真被业务调用（接真到前端），要么在 proto 里明确 `reserved`（归档），要么全仓消失（清除）。**不存在"仍在 proto 里挂着但没人用"的第八条**。
+- 守卫能回答"任意一条 RPC 现在是什么状态、谁在调它"。
+
+**机器判据**
+- `scripts/check_rpc_status.sh` 覆盖 43/43 条 RPC；6 条断言（A1~A6）全绿；**负向对照（T-13）已证能红**。
+- 全仓 grep：清除类零残留；archived 类必带标注。
+- 决策 4 ADR 有更正记录；E2E-F-208 状态说明回填。
+- 全栈起得来（Nacos `count:6`）+ §2.4 数据契约 smoke 退出码 0。
+
+---
+
+## §5 回归钉
+
+- **主钉（bash 契约测试）**：`scripts/check_rpc_status.sh`（**已落地**）+ `scripts/rpc_status.tsv`
+  —— 覆盖 6 组断言：A1 覆盖 / A2 live 有**非注释**调用方证据 / A3 标记数与清单一致（推导式）/ A4 终态规则（按 rpc 声明块）/ A5 HTTP 豁免 / A6 锚点自检；
+  **负向对照已证能红 2 组**（见 [`evidence/phase1-scan.md`](evidence/phase1-scan.md) §4）。
+  （沿用 `e2e-guards.yml` 现有"脚本 + 守卫 job"形态，不引新框架。旧 `check_dead_grpc_inventory.sh` **保留叠加**，见 §7 D6。）
+- **辅助钉**：清除项的**编译回归**（`go build ./...` + `python -m compileall`）+ `protoc` 重生成幂等性核对。
+- **CI**：接 `e2e-guards.yml` 作为**新守卫 job**（保留 23/23 旧守卫做"清单真实性"叠加，见 §7 D6）。
+
+---
+
+## §6 风险与坑
+
+| 风险 | 说明 | 规避 |
+|---|---|---|
+| **删除误伤** | proto 删除波及生成桩 / 测试 fake / 其他 proto import / 生成工具链 | 先全仓 grep（含 `.py`/`.ts`）+ **复现原生成方式**（`protoc 32.1` + 两个插件，**以文件名调用**）；改完必重建镜像再验收（RUNBOOK §2） |
+| **"接真"变半环** | 只接 BFF 没接前端 = 又一个半环（本阶段要消灭的正是这个） | 接真判据**必须到前端可见**；否则退回归档/清除 |
+| **守卫过严误报** | `*_TRANSPORT=http` 回滚开关被误判死链 | Phase 1 就内置豁免清单（T-14）+ 负向对照 |
+| **守卫"只报不拦"** | 脚本写了但没接 CI / 接了不真跑 | T-24 要求"接进 CI 后仍能红"，不接受"已创建脚本"当证据（RUNBOOK §4） |
+| **worktree 缺 `.env.local` / 锁不可见** | 本 worktree 无 gitignored 的 `deploy/.env.local` ⇒ 起栈中断；`.devmode-session` 在 worktree 不可见 ⇒ 可静默双占 | **H6/条款10**：起栈 `--env-file <共享目录>/deploy/.env.local`；锁只看**共享目录**；改 Go 的验收 = 「worktree 构建镜像 + 共享目录 up 容器」两步（CL-F-07 解法） |
+| **worktree 下守卫假红** | `check_git_layout.py:55` 用 `is_dir()` 判 `.git` ⇒ worktree 恒红（CL-F-06） | 已知，不在本阶段修（范围外只记账） |
+| **镜像新鲜度守卫假红** | `check_image_freshness.sh` 纯时间比较（CL-F-08） | 🔴 Phase 判"改完是否生效"须**看行为证据**，不只看时间戳 |
+| **镜像 tag 互相覆盖** | 两 worktree 共用 docker daemon ⇒ 同 tag "后者赢"，可能**验了别人的代码**（CL-F-09，AP 级失真） | **H5/条款10**：本阶段镜像一律 `emotion-echo/<svc>:cl02`；验收前 `docker ps --format '{{.Image}}'` 复核跑的是不是我的 |
+| **dev 栈排队** | A 轨持锁至 12:00，B 轨排队在后 ⇒ 本阶段 🔴 Phase 排更后 | 🟢 Phase（1/3/5/6 的文档与守卫）先推；🔴 部分按契约 **§3.1 排队表**登记（H5/条款10） |
+| **ADR 翻案成本** | 决策 4 已收口 | 只加**更正记录**（沿用 survey-bypass ADR 先例），不重写历史 |
+
+---
+
+## §7 [M] 裁定记录（✅ **2026-10-14 用户经 AskUserQuestion 全部拍板**）
+
+| # | 事项 | 裁定 | 依据 / 备注 |
+|---|------|------|------|
+| D1 | 三条 mental-health RPC（History/Trigger/Trend） | ✅ **全部归档** | 用户先答"按文档来"→ 查得 **ADR-2026-09-chart-contract-alignment §E**：「5 个无消费端点本轮不接」= 用户决策"暂不接"，理由"单独功能开发，需要 UX 设计，不在契约修复范围"（待办清单里仍挂着未勾选的"接入前端"）⇒ 与"我记得是接入"的记忆冲突时**以文档为准**。归档后另登 backlog 需求（评估历史/趋势入口）。proto 标 `option deprecated = true` + 注释写明重启条件 |
+| D2 | `StreamMessages` | ✅ **归档** | ADR-2026-09-decision-4-closure §四 #3「故意不做」；proto 标 deprecated + 删 BFF 死方法（不在 `ChatClient` 接口内） |
+| D3 | `Logout` | ✅ **清除 proto 该方法**（**不接真**） | 用户先选"接真"，但查得 **ADR-2026-10-jwt-key-rotation-dual-key「不做的事」**明确"不做 token 黑名单/主动吊销"，且 **D-46 备选③**（服务端吊销表）当时因"需动 schema、量大不成比"被否 ⇒ 复问后用户改判"按文档：不实现吊销，改清除"。登出语义仍由 BFF 清 cookie 承担 |
+| D4 | `VerifySecurityAnswer` 冗余 & `AnalyzeBatch` | ✅ **两条都清除** | 用户口径"若是真没接入点就清了"⇒ 动手前已核（`VerifySecurityAnswer` 零 handler 调用；`AnalyzeBatch` 唯一引用是测试 fake），删除后以 grep 复验无残留 |
+| D5 | 三条 mental-health 的 HTTP 路由 | ✅ **与 D1 同进同出** | 归档 ⇒ analytics-svc 的 `/api/v1/mental-health/{history,trigger,trend}` 一并标注"未接出"（路由保留，重启时随 RPC 一起接） |
+| D6 | 新守卫**替换**还是**叠加**旧的 `EXPECTED=10` | ✅ **叠加 + 去掉硬编码** | 旧守卫保留（守"标记真实性"），但期望值改为**从 `scripts/rpc_status.tsv` 推导**（Σ`marker_sites`）⇒ 归档/清除时不必两处同步；CI 步骤名与 job 名不变（不动分支保护） |
+| D7 | ai-svc → FER/SenseVoice/XTTS 是否算"服务间调用" | ✅ **不算**（明确边界） | 模型推理服务本身以 HTTP/FastAPI 暴露，roadmap §4 倾向一致；写入本档 §1 非目标，避免以后反复被当"未坐实" |
+
+> **两条"用户初选 → 文档冲突 → 复问改判"的过程留痕**（D1/D3）：这正是 AGENTS §〇"写前功课"与用户"按文档来、不要看注释"指令的价值——若按记忆或代码注释走，会产出与已收口 ADR 相悖的改动。
+
+---
+
+## §8 调研依据（本次实读，不凭记忆）
+
+- **proto**：`proto/{chat,user,metric,emotion_llm}.proto`（RPC 逐条核对；全量 43 条经 `grep -c "^\s*rpc "` 计数）
+- **server**：`emotion-echo-chat-svc/internal/grpcserver/chat_server.go`、`emotion-echo-analytics-svc/internal/grpcserver/metric_server.go`、`emotion-echo-user-svc/internal/grpcserver/user_server.go`、`emotion-echo-ai-svc/internal/grpcserver/server.go`、`emotion-echo-assessment-svc/internal/grpcserver/agent_server.go`、`emotion-llm-service/grpc_server.py`
+- **BFF**：`internal/downstream/{chat.go,chat_grpc.go,user.go,user_grpc.go,analytics.go,assessment.go,ai.go,llm_grpc.go}`、`internal/config/config.go:360-373`、`main.go:504`、`internal/handler/survey_handler.go`
+- **守卫与 CI**：`scripts/check_dead_grpc_inventory.sh`、`.github/workflows/e2e-guards.yml:183-184`（守卫 23/23）
+- **ADR**：`adr-2026-09-{incremental-rpc-adoption,decision-4-closure,survey-http-bypass,mental-health-trigger-save}.md`
+- **账本与清点**：`docs/e2e-roadmap/discovered-unresolved.md`（E2E-F-208）、`docs/e2e-roadmap/findings/2026-10-08-dead-grpc-inventory.md`
+- **来源计划**：`docs/legacy-plans/landed/grpc-deadlink-actualization.md`（§0 全清单 + §3 逐条建议 + §8 待拍板；**已落地归档**）
+
+**未能确认**（需决策或实机）：三条 mental-health RPC 的前端业务需求（D1/D5）；删 `Logout` proto 方法对前端登出流程的影响（D3）；`protoc` 重生成在本机是否一次成功（Phase 2 实测）。

@@ -209,53 +209,13 @@ func (s *userServer) ResetPassword(ctx context.Context, req *emotionuser.ResetPa
 	return &emotionuser.ResetPasswordResponse{User: toProtoUser(resp.User)}, nil
 }
 
-// Logout 实现 Logout RPC（Sprint F 2026-09-11）
-//
-// 服务端无状态（mock auth 模式），主要让客户端清 token。这里仅返 success=true。
-// 鉴权：userid 拦截器**不跳过**此 RPC，调用方需带 metadata x-user-id。
-//
-// E2E-31 已知未接线（2026-10-09，用户裁定「保留 + 标注 + 守卫」）：登出**业务路径存在**
-// （`/api/v1/auth/logout`），但该路径设计上只清 cookie（服务端无会话/黑名单可清），
-// 故本 RPC 零调用、且调用它也是空转 ⇒ 非"被 HTTP 绕开"。依据：账本 E2E-F-208、report §0 T-1。
-func (s *userServer) Logout(ctx context.Context, req *emotionuser.LogoutRequest) (*emotionuser.LogoutResponse, error) {
-	if err := s.ensureRepo(); err != nil {
-		return nil, err
-	}
-	// 鉴权拦截器已从 ctx 注入 user_id，这里无需再读（mock 模式不做服务端黑名单）
-	return &emotionuser.LogoutResponse{Success: true}, nil
-}
-
-// VerifySecurityAnswer 实现 VerifySecurityAnswer RPC（E2E-06，供 D-01=C 找回密码）
-//
-// 错误映射：
-//   - ErrNotFound → codes.NotFound（用户无密保问题）
-//   - ErrValidation → codes.InvalidArgument（questionOrder 不合法）
-//   - ErrSecurityAnswerMismatch → codes.PermissionDenied（答案错误）
-//
-// E2E-31 已知未接线（2026-10-09，用户裁定「保留 + 标注 + 守卫」）：找回密码**在用**
-// 的是**兄弟方法** `VerifySecurityAnswerByUsername`（同样走 gRPC，`auth_handler.go:485`
-// 调用，R-01 修通）⇒ 本方法（按 userID）是**族内冗余**，非"gRPC 未被使用"。
-// 若后续确认无人按 userID 校验，可单独删除（需同步 proto 与 UserClient 接口）。
-func (s *userServer) VerifySecurityAnswer(ctx context.Context, req *emotionuser.VerifySecurityAnswerRequest) (*emotionuser.VerifySecurityAnswerResponse, error) {
-	if err := s.ensureRepo(); err != nil {
-		return nil, err
-	}
-	err := logic.NewAuthLogic(ctx, s.svcCtx).VerifySecurityAnswer(
-		req.GetUserId(),
-		int(req.GetQuestionOrder()),
-		req.GetAnswer(),
-	)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "security answers not found")
-		}
-		if errors.Is(err, logic.ErrSecurityAnswerMismatch) {
-			return nil, status.Error(codes.PermissionDenied, "security answer mismatch")
-		}
-		return nil, grpcerr.MapToError(err, "verifySecurityAnswer")
-	}
-	return &emotionuser.VerifySecurityAnswerResponse{Success: true}, nil
-}
+// ── CL-02 清除（2026-10-14，用户裁定 D3/D4）：Logout 与 VerifySecurityAnswer 的
+// server 实现已删除，与 proto/user.proto 的删除同步（proto 侧留有完整依据说明）：
+//   · Logout（D3）：服务端无副作用、全仓零调用方；「真登出」需 token 吊销，而
+//     ADR-2026-10-jwt-key-rotation-dual-key 明确「不做」⇒ 按文档不接真，清除。
+//   · VerifySecurityAnswer（D4）：与下方 ByUsername 版族内冗余、零 handler 调用。
+// 状态由 scripts/rpc_status.tsv 管理（status=deleted）；守卫断言 deleted 不残留于 proto。
+// ─────────────────────────────────────────────────────────────────────
 
 // VerifySecurityAnswerByUsername 实现 VerifySecurityAnswerByUsername RPC（R-01 #2）
 //

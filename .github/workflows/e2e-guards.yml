@@ -204,3 +204,16 @@ jobs:
 
       # CL-00（2026-10-13）：守卫 26/26（审计器计划测试点解析器自查）随 e2e 审计器退役而移除
       # （脚本文件保留：仍被 docs 引用）。
+
+      # CL-02（2026-10-14，用户裁定 D6「叠加 + 去掉硬编码」）：RPC 状态守卫。
+      # 把「gRPC 面是否坐实」从注释升级为**可机械校验的状态**：43 条 RPC 在
+      # scripts/rpc_status.tsv 里各有终态（live / archived / deleted），
+      # 断言 A1 覆盖（proto 出现的必须已登记；清单多出的只能是 deleted）、
+      # A2 live 必须有已登记的调用方证据（文件+符号，**不能靠 RPC 名 grep**——
+      #   如 ReportsTrend→TrendReport 共 14 条不同名）、A3 标记数与清单推导值一致、
+      # A4 终态规则（archived 邻域须标 deprecated；deleted 不得残留 proto）、
+      # A5 五个 *_TRANSPORT 回滚开关豁免在位（HTTP 降级 ≠ 死链）。
+      # 与守卫 23/23 **叠加**（那条守"标记真实性"，其期望值已改为从本清单推导）。
+      # 负向对照已在本地实做 3 组（改错证据符号 / deleted 改 live / 插未登记标记 → 均 RED）。
+      - name: 守卫 27/27 RPC 状态清单（每条 RPC 有终态 + live 有调用方，CL-02）
+        run: bash scripts/check_rpc_status.sh

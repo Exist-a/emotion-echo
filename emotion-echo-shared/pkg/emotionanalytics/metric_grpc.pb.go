@@ -79,11 +79,28 @@ type AnalyticsServiceClient interface {
 	UserBehaviorFrequency(ctx context.Context, in *UserBehaviorRequest, opts ...grpc.CallOption) (*UserBehaviorFrequencyResponse, error)
 	// MentalHealthAssessment 心理健康评估（综合日报）
 	MentalHealthAssessment(ctx context.Context, in *MentalHealthAssessmentRequest, opts ...grpc.CallOption) (*MentalHealthAssessmentResponse, error)
+	// Deprecated: Do not use.
 	// MentalHealthHistory 心理健康历史
+	//
+	// ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：**明确不做**，声明保留但标 deprecated。
+	//
+	//	依据：ADR-2026-09-chart-contract-alignment §E「5 个无消费端点本轮不接」——用户决策
+	//	「暂不接」，理由是「单独功能开发，需要 UX 设计，不在契约修复范围」。
+	//	重启条件：'我的空间' 增加「评估历史」入口（UX 定稿）时；server 侧实现为占位（恒返空）。
 	MentalHealthHistory(ctx context.Context, in *MentalHealthHistoryRequest, opts ...grpc.CallOption) (*MentalHealthHistoryResponse, error)
+	// Deprecated: Do not use.
 	// MentalHealthTrigger 心理健康触发器（手动触发评估）
+	//
+	// ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：同上（ADR chart-contract-alignment §E）。
+	//
+	//	注意：server 侧是**真实现**（trigger runner + job store，E2E-15 已验），重启时可直接接。
 	MentalHealthTrigger(ctx context.Context, in *MentalHealthTriggerRequest, opts ...grpc.CallOption) (*MentalHealthTriggerResponse, error)
+	// Deprecated: Do not use.
 	// MentalHealthTrend 心理健康趋势
+	//
+	// ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：同上（ADR chart-contract-alignment §E）。
+	//
+	//	server 侧为真实现（`MentalHealthTrendLogic.GetTrend`）。
 	MentalHealthTrend(ctx context.Context, in *MentalHealthTrendRequest, opts ...grpc.CallOption) (*MentalHealthTrendResponse, error)
 }
 
@@ -155,6 +172,7 @@ func (c *analyticsServiceClient) MentalHealthAssessment(ctx context.Context, in 
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *analyticsServiceClient) MentalHealthHistory(ctx context.Context, in *MentalHealthHistoryRequest, opts ...grpc.CallOption) (*MentalHealthHistoryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MentalHealthHistoryResponse)
@@ -165,6 +183,7 @@ func (c *analyticsServiceClient) MentalHealthHistory(ctx context.Context, in *Me
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *analyticsServiceClient) MentalHealthTrigger(ctx context.Context, in *MentalHealthTriggerRequest, opts ...grpc.CallOption) (*MentalHealthTriggerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MentalHealthTriggerResponse)
@@ -175,6 +194,7 @@ func (c *analyticsServiceClient) MentalHealthTrigger(ctx context.Context, in *Me
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *analyticsServiceClient) MentalHealthTrend(ctx context.Context, in *MentalHealthTrendRequest, opts ...grpc.CallOption) (*MentalHealthTrendResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MentalHealthTrendResponse)
@@ -206,11 +226,28 @@ type AnalyticsServiceServer interface {
 	UserBehaviorFrequency(context.Context, *UserBehaviorRequest) (*UserBehaviorFrequencyResponse, error)
 	// MentalHealthAssessment 心理健康评估（综合日报）
 	MentalHealthAssessment(context.Context, *MentalHealthAssessmentRequest) (*MentalHealthAssessmentResponse, error)
+	// Deprecated: Do not use.
 	// MentalHealthHistory 心理健康历史
+	//
+	// ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：**明确不做**，声明保留但标 deprecated。
+	//
+	//	依据：ADR-2026-09-chart-contract-alignment §E「5 个无消费端点本轮不接」——用户决策
+	//	「暂不接」，理由是「单独功能开发，需要 UX 设计，不在契约修复范围」。
+	//	重启条件：'我的空间' 增加「评估历史」入口（UX 定稿）时；server 侧实现为占位（恒返空）。
 	MentalHealthHistory(context.Context, *MentalHealthHistoryRequest) (*MentalHealthHistoryResponse, error)
+	// Deprecated: Do not use.
 	// MentalHealthTrigger 心理健康触发器（手动触发评估）
+	//
+	// ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：同上（ADR chart-contract-alignment §E）。
+	//
+	//	注意：server 侧是**真实现**（trigger runner + job store，E2E-15 已验），重启时可直接接。
 	MentalHealthTrigger(context.Context, *MentalHealthTriggerRequest) (*MentalHealthTriggerResponse, error)
+	// Deprecated: Do not use.
 	// MentalHealthTrend 心理健康趋势
+	//
+	// ⚠️ CL-02 归档（2026-10-14 用户裁定 D1）：同上（ADR chart-contract-alignment §E）。
+	//
+	//	server 侧为真实现（`MentalHealthTrendLogic.GetTrend`）。
 	MentalHealthTrend(context.Context, *MentalHealthTrendRequest) (*MentalHealthTrendResponse, error)
 	mustEmbedUnimplementedAnalyticsServiceServer()
 }

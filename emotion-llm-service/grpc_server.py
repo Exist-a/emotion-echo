@@ -342,46 +342,9 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
             context.set_details(str(e))
             return
 
-    def AnalyzeBatch(self, request, context):
-        """Server-streaming 批量分析（Stage 16）。
-
-        接收多条消息，对每条独立调用 analyze()，逐条 yield 给 client。
-
-        E2E-31 已知未接线（2026-10-09，用户裁定「保留 + 标注 + 守卫」）：
-        本 RPC 无任何生产调用方 —— ai-svc 生产路径只走单条 Analyze
-        （`grpc_analyzer.go`），且 llm-service 也没有 batch 的 HTTP 端点可供绕过
-        ⇒ 并非"被 HTTP 绕开"，而是**批量业务本身不存在**。启用须建功能 ⇒ 另立项。
-        依据：账本 E2E-F-208、stages/e2e-31-internal-rpc-convergence/report.md §0 T-1。
-        """
-        try:
-            items = list(request.items)
-            logger.info(
-                f"AnalyzeBatch request: items={len(items)} user_id={request.user_id}"
-            )
-            emitted = 0
-            for item in items:
-                text = item.text
-                http_resp = http_analyze(text)
-                resp = emotion_llm_pb2.AnalyzeResponse(
-                    message_id=item.message_id,
-                    primary_emotion=http_resp.primaryEmotion,
-                    sentiment_score=http_resp.sentimentScore,
-                    confidence=http_resp.confidence,
-                    model=http_resp.model,
-                    raw_response="",
-                )
-                logger.info(
-                    f"AnalyzeBatch emit: msg_id={resp.message_id} emotion={resp.primary_emotion}"
-                )
-                emitted += 1
-                yield resp
-            # Stage 20-P0-2: 业务指标（按 emit 数计）
-            GRPC_REQUESTS_TOTAL.labels(method="AnalyzeBatch", status="ok").inc(emitted)
-        except Exception as e:
-            logger.error(f"AnalyzeBatch error: {e}", exc_info=True)
-            GRPC_REQUESTS_TOTAL.labels(method="AnalyzeBatch", status="err").inc()
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
+    # ── CL-02 清除（2026-10-14，用户裁定 D4）：AnalyzeBatch 已删除 ──
+    # 无批量业务（全仓唯一引用是 Go 侧测试 fake）；proto/emotion_llm.proto 同步删除该 RPC。
+    # 状态由 scripts/rpc_status.tsv 管理（status=deleted）。如需批量分析请先立 ADR。
 
 
 # =====================================================

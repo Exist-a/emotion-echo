@@ -1402,7 +1402,7 @@ const file_chat_proto_rawDesc = "" +
 	"new_status\x18\x02 \x01(\x05R\tnewStatus\x12\x1c\n" +
 	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\".\n" +
 	"\x0eHeartbeatEvent\x12\x1c\n" +
-	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp2\xa1\x06\n" +
+	"\ttimestamp\x18\x01 \x01(\x03R\ttimestamp2\xa6\x06\n" +
 	"\vChatService\x12_\n" +
 	"\x12CreateConversation\x12*.emotion_chat.v1.CreateConversationRequest\x1a\x1d.emotion_chat.v1.Conversation\x12L\n" +
 	"\vSendMessage\x12#.emotion_chat.v1.SendMessageRequest\x1a\x18.emotion_chat.v1.Message\x12[\n" +
@@ -1410,8 +1410,8 @@ const file_chat_proto_rawDesc = "" +
 	"\x11ListConversations\x12).emotion_chat.v1.ListConversationsRequest\x1a*.emotion_chat.v1.ListConversationsResponse\x12m\n" +
 	"\x12DeleteConversation\x12*.emotion_chat.v1.DeleteConversationRequest\x1a+.emotion_chat.v1.DeleteConversationResponse\x12d\n" +
 	"\x0fPinConversation\x12'.emotion_chat.v1.PinConversationRequest\x1a(.emotion_chat.v1.PinConversationResponse\x12m\n" +
-	"\x12UpdateConversation\x12*.emotion_chat.v1.UpdateConversationRequest\x1a+.emotion_chat.v1.UpdateConversationResponse\x12V\n" +
-	"\x0eStreamMessages\x12&.emotion_chat.v1.StreamMessagesRequest\x1a\x1a.emotion_chat.v1.ChatEvent0\x01B0Z.github.com/emotion-echo/shared/pkg/emotionchatb\x06proto3"
+	"\x12UpdateConversation\x12*.emotion_chat.v1.UpdateConversationRequest\x1a+.emotion_chat.v1.UpdateConversationResponse\x12[\n" +
+	"\x0eStreamMessages\x12&.emotion_chat.v1.StreamMessagesRequest\x1a\x1a.emotion_chat.v1.ChatEvent\"\x03\x88\x02\x010\x01B0Z.github.com/emotion-echo/shared/pkg/emotionchatb\x06proto3"
 
 var (
 	file_chat_proto_rawDescOnce sync.Once

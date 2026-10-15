@@ -22,6 +22,7 @@ import (
 
 	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 
 	"google.golang.org/grpc"
 )
@@ -162,7 +163,10 @@ func NewChatClient(opts ChatClientOptions) ChatClient {
 	}
 	client := &chatHTTPClient{
 		baseURL: opts.BaseURL,
-		http:    &http.Client{Timeout: timeout},
+		// CL-02 收口（2026-10-15）：HTTP 出站埋点补齐 —— 本文件属 C 轨独占列，
+		// CL-01 收口时明确豁免并移交本阶段（见 cl-01 report §收口自检 第 5 项）。
+		// 与 ai.go/analytics.go 等一致：exit span + sw8 注入（无父 span 时不硬造根 span）。
+		http: trace.NewTracedClient(timeout),
 	}
 	if opts.BaseURL == "" && opts.Resolver != nil {
 		host, port, err := opts.Resolver.Resolve(context.Background(), svcName)
