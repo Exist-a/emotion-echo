@@ -113,6 +113,7 @@ related:
 | 2026-10-15 | Lane-CL-C | `deploy/docker-compose.cl02-verify.yml`（新增） | C 轨起栈验证用 override（H5/条款10：把 7 个服务的镜像 tag 换成 `:cl02-verify`，不覆盖公共 tag）。**第二方核对 F-6 指出此前漏登，本行补登** | ✅ |
 | 2026-10-15 | Lane-CL-C | `docs/closure-roadmap/decisions.md` | C 轨登记 7 项用户裁定（`CL-D-08`~`CL-D-10`：死链逐条终态 / 模型服务边界 / 守卫形态）。**F-6 指出此前漏登，本行补登** | ✅ |
 | 2026-10-15 | Lane-CL-C | **答复 D 轨两条挂起握手**（见上两行 D 轨请求）：① **`proto/**`**：C 轨改动**已落地**（`proto/{chat,metric,user,emotion_llm}.proto`：StreamMessages 与三条 mental-health 标 `deprecated`；Logout/VerifySecurityAnswer/AnalyzeBatch 已删 + 桩重生成）⇒ **C 轨不再占 proto**，D 轨可开始；建议**等 #214 合并后再改**，避免基于旧 main 回退。② **同名文件**（`chat_server.go` / `chat{,_grpc}.go`）：C 轨改动**已落地**（删 StreamMessages 桩与 BFF 死方法、`chat.go` 补 HTTP 出站埋点）⇒ **D 轨可改**，同样建议合并后 | ✅ |
+| 2026-10-15 | Lane-CL-C | `emotion-echo-web/app/pages/chat/conversation/[id].vue`（**尚未改**；计划已建档） | C 轨**预占声明**：用户手动测试提出「摄像头悬浮可拖可折叠」（`docs/plans/camera-preview-floating-window.md`，D2=上方中间、D3=折叠成 pill 条已定稿），实现要动该页。该页在 §1.1 属 **C 轨独占列**，但 **D 轨（CL-05）已声明要改它**（见上两行 D 轨握手）⇒ 按 §1.2「同名文件串行」**C 轨先占**（D 轨当前仍在 🟢 Phase 1~4、未动该页）。D 轨如需先改，请在本行下回复协商；C 轨落地后会在此标 ✅ 并释放 | ⏳ **预占（待 D 轨确认）** |
 
 ## 五、开工前置检查（照做）
 
