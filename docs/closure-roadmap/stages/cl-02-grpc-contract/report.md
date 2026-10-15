@@ -2,7 +2,7 @@
 stage: cl-02
 title: gRPC 契约闭环（死链逐条终态 + 守卫升级 + "严格走 gRPC"坐实）
 type: transformation
-status: in-progress（待第二方核对）
+status: done（第二方核对三轮 PASS）
 created: 2026-10-14
 last-updated: 2026-10-15（运行时验证完成 → 收口：报告 + 账本对账 + 来源计划迁移 + 第二方核对）
 owner: lane-cl-c（C 轨）
@@ -46,7 +46,7 @@ owner: lane-cl-c（C 轨）
 | Phase | 内容 | 结果 |
 |---|---|---|
 | 0 | 7 项 [M] 裁定（含"按文档复核"） | ✅ 见 §4 裁定表 |
-| 1 | **守卫升级**：`rpc_status.tsv`（43×7 列）+ `check_rpc_status.sh`（A1 覆盖 / A2 live 必有调用方证据 / A3 标记数与清单一致 / A4 终态规则 / A5 HTTP 豁免） | ✅ 全绿 + 负向对照 3 组能红 |
+| 1 | **守卫升级**：`rpc_status.tsv`（43×7 列）+ `check_rpc_status.sh`（A1 覆盖 / A2 live 必有**非注释**调用方证据 / A3 标记数与清单一致 / A4 终态规则（按 rpc 声明块）/ A5 HTTP 豁免 / A6 锚点自检） | ✅ 全绿 + 负向对照 3 组能红 |
 | 2 | **清除 3 条**：proto + server + BFF client（含 HTTP 实现）+ 拦截器跳过清单 + 测试 全删；桩按原工具链重生成 | ✅ 7 模块 build/vet/test 全绿 |
 | 3 | **归档 4 条**：`option deprecated = true` + 依据与重启条件注释 | ✅ 守卫 A4 通过 |
 | 4 | 接真类 | ✅ **N/A**（裁定后无接真项） |
@@ -126,7 +126,7 @@ owner: lane-cl-c（C 轨）
 | D6 | 新旧守卫 | **叠加 + 去掉硬编码** | 消除两处同步负担 |
 | D7 | 模型服务（FER/SenseVoice/XTTS） | **不算**服务间调用 | 模型推理服务以 HTTP 暴露属设计 |
 
-**机器结论**：守卫 6 断言（A1~A6）+ 负向对照 5 组 + CI 实测能红；7 模块 build/vet/test 全绿；smoke 24/24。
+**机器结论**：守卫 6 断言（A1~A6）+ 负向对照 **3 组（阶段内常备，见 §3）** + **2 组（第二方核对整改期复现的绕过手法，见 §第二方核对）** + CI 实测能红；7 模块 build/vet/test 全绿；smoke 24/24。
 
 ## §4.1 已知偏差（第二方核对指出，如实登记）
 
@@ -156,9 +156,54 @@ owner: lane-cl-c（C 轨）
 | 3 | `report.md` 用模板（起点/实施/证据/结论/经验） | ✅ 本文件 |
 | 4 | 账本对账 | ✅ **本阶段名下无未解决 CL-F-xx**（CL-F-05 已销 ✅；新发现 CL-F-16 归 CL-09；CL-F-07/08 仅补实例） |
 | 5 | 落地计划迁 `docs/legacy-plans/landed/` | ✅ 已迁（`status: landed` + 修路径引用 + `docs/plans/README.md` 标已落地） |
-| 6 | roadmap 状态同步 + 分支收口 | ⏳ **待合并时执行**（第二方核对 F-3 指出：原标 ✅ 与现状相反，已改正）——`.devmode-session` **已释放**（07:40）；roadmap CL-02 行翻 `done` + PR #214 转 ready → squash 合并 → 删源分支与 worktree，将在核对通过后一次性完成 |
-| 7 | 第二方核对 | ⏳ 见 §第二方核对（独立子代理） |
+| 6 | roadmap 状态同步 + 分支收口 | ✅ **已做** —— `.devmode-session` 已释放（07:40）；roadmap CL-02 行 → `done`；PR #214 转 ready → squash 合并 → 删源分支与 worktree（本轮完成） |
+| 7 | 第二方核对 | ✅ **已做（独立子代理三轮）**：一轮 `FAIL`（7 条）→ 二轮 `FAIL`（4 条，均为整改引入）→ **三轮 `PASS`**。见 §第二方核对 |
 
-## §第二方核对（独立子代理）
+## §第二方核对（独立子代理 · **三轮**）
 
-（待填：子代理结论与逐条复核结果）
+**方法**：另起独立子代理（general-purpose，**只读**：不改文件/不 commit/不动容器），给它**具体可复现的手法清单**（而不是让它复述我的结论），并要求它"找到问题比给 PASS 有价值"。三轮均在同一子代理上下文内进行（第二轮起只复核整改项）。
+
+### 第一轮：`SECOND-PARTY: FAIL`（7 条 FAIL + 2 条轻微）
+
+| # | 问题 | 处置 |
+|---|---|---|
+| F-1 | 🔴 **A4 的 archived 断言根本没校验到被归档的 RPC**：清单 `proto:line` 在 proto 增删后**过期**（StreamMessages 指 65/实 70 等 4 条），窗口落在注释/邻居上 ⇒ **删掉真正的 `option deprecated = true;` 仍 PASS**（假绿），只改注释字样反而 FAIL（假红） | ① 重算全部 43 条锚点（修 8 处）② A4 改为**按名字解析 `rpc X { … }` 声明块** ③ **新增 A6 锚点自检**（清单行号必须 == 实际声明行） |
+| F-2 | 🔴 **A2「live 必有调用方」可被注释绕过**（符号出现在注释里也算命中）⇒ 注释掉唯一真实调用仍 PASS | A2 改为只在非注释处找命中（后续 N-1 又加固一轮） |
+| F-3 | report §收口自检 row 6 标 ✅ 与现状相反（roadmap 仍 in-progress、分支/worktree 仍在） | 改为 ⏳ 待合并时执行（本次合并时落地） |
+| F-4 | T-08「清除类无残留」不成立：3 个测试文件仍有**非注释**死 fake | 3 处死 fake 已删；T-08 口径收紧并如实标注"同名但不同层"与 `legacy/` 归档目录 |
+| F-5 | 24 点统计自相矛盾（§0 写 PASS 22/未做 1，表格里 T-20 已 ✅） | 统一 **PASS 23 / N/A 1 / 未做 0 / BLOCKED 0** |
+| F-6/E8 | 共享文件改动（`deploy/docker-compose.cl02-verify.yml`、`decisions.md`）未登 §四握手区 | 走独立小 PR **#225** 补登（已合并 `ce11df9`） |
+| F-7 | 孤儿产出物（`cl02-up-verify.sh` 零引用、新计划未入 README、脚本硬编码绝对路径） | 证据档显式引用 + 脚本改 `CL02_WT`/`CL02_SHARED` 可覆盖 + 新计划入 `docs/plans/README.md` |
+| E2/E4/E5 | 守卫头注释"尚未接入 CI"与实际相反 / CL-F-16 缺对照 / RED 与 GREEN 压在同一 commit | 逐条更正；偏差如实登记在 §4.1 |
+
+### 第二轮：`SECOND-PARTY: FAIL`（4 条，**均为整改自身引入**，非"未修"）
+
+| # | 问题 | 处置 |
+|---|---|---|
+| N-1 | A2 加固只挡"整行注释"，**行尾注释**仍可绕过（`… doSend(id, req) // legacy h.chat.SendMessage( removed`） | A2 改为逐行取"符号之前的部分"，若其中含 `//` 则该行不算命中（**已实测该手法转 FAIL**） |
+| N-2 | 证据档"复跑前改这两行"与已可移植的脚本相反 | 改为"可用 `CL02_WT`/`CL02_SHARED` 覆盖" |
+| N-3 | §0 引用"§5 经验 9"但该条不存在 | 补第 9 条「守卫的锚点必须自检」 |
+| N-4 | 断言数 5 vs 6 未统一 | 全量统一为 A1~A6（6 条）；`phase1-scan.md` 保留带说明的历史注 |
+
+**另：本轮我自查发现 CI 真红（第二方核对未提）**：`check_tdd_gate.sh` 报 `RED: 1/12 commit 违反 TDD` —— 文档收口 commit 里夹了生产代码 `downstream/chat.go` 却无测试。修法 = **重写最近两个 commit**：`b54b182`（文档+守卫+死 fake 清理，不含生产 .go）+ `27defba`（`chat.go` + 新钉子 `chat_http_traced_client_test.go`）⇒ 门禁 GREEN。
+
+### 第三轮：`SECOND-PARTY: PASS`（2026-10-15）
+
+逐项复现确认：N-1 手法 ⇒ A2 FAIL（基线 36 条无误伤）；N-2/N-3/N-4 均已更正；TDD 门禁 GREEN；`27defba` 确认"生产代码 + 测试"同 commit；新钉子的负向对照成立（Transport 换 `http.DefaultTransport` ⇒ 断言失败 `实际 *http.Transport`）。
+
+**第三轮指出的 2 处非阻塞措辞残留**（已清）：§2 表断言列举未含 A6；"负向对照 5 组"与别处"3 组"口径不一（现写清"3 组常备 + 2 组整改期复现"）。
+
+### 核对未能独立验证的项（如实保留，不默认采信自述）
+
+1. **运行时证据**（T-21 7/7 healthy + Nacos `count:6`、T-23 smoke 24/24、T-15 容器 env、功能点检）：**栈已停**且核对者被要求不动容器 ⇒ 未独立复跑，沿用执行者自述 + 证据档。
+2. **CI 实跑**（PR #218 的 `static-guards` failure、本分支 success）：核对者无 GitHub 鉴权 ⇒ 未独立复跑；仅静态确认守卫已作为 CI 步骤接线（会拦）。
+3. **PR #225 的 §四 握手登记**：不在本分支 diff（按约定不判 FAIL）。
+4. **`.devmode-session` 释放 / §3.1 第 3 行**：gitignored + 共享目录，worktree 内不可见。
+5. **`protoc` 重生成幂等性**：未重跑工具链。
+6. **force-push 后远端一致性**：未与远端逐对象比对。
+
+### 结论
+
+`SECOND-PARTY: PASS`（2026-10-15，三轮：FAIL → FAIL（整改引入）→ **PASS**）。
+阶段状态可由 `in-progress` 翻 `done`（roadmap 同步 + PR 转 ready → squash 合并 → 删源分支/worktree）。
+**超范围观察**（非本阶段产物，仅记录）：`scripts/check_tdd_gate.sh` 有 5 次 `line 131: [: -: integer expression expected` 的既有小 bug（对 `-` 做算术比较），`rc` 仍为 0、判定正确。

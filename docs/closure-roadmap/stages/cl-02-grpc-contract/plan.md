@@ -2,9 +2,9 @@
 stage: cl-02
 title: gRPC 契约闭环（死链逐条裁决 + 守卫升级 + "严格走 gRPC"坐实）
 type: transformation
-status: in-progress
+status: done
 created: 2026-10-14
-last-updated: 2026-10-15（**运行时验证完成**：Phase 2 清除 + Phase 3 归档落地 → dev 栈 `:cl02-verify` 起栈 → 7/7 healthy + Nacos count:6 + smoke 24/24 → T-15/T-21/T-23 全部转 PASS；**24 点 PASS 22 / N/A 1 / 未做 1（T-20 收口项）/ BLOCKED 0**；剩余 = 收口（T-20 迁移 + 第二方核对））
+last-updated: 2026-10-15（**阶段收口完成**：第二方核对三轮 PASS → 状态 done。运行时验证完成：Phase 2 清除 + Phase 3 归档落地 → dev 栈 `:cl02-verify` 起栈 → 7/7 healthy + Nacos count:6 + smoke 24/24 → T-15/T-21/T-23 全部转 PASS；**24 点 PASS 22 / N/A 1 / 未做 1（T-20 收口项）/ BLOCKED 0**；剩余 = 收口（T-20 迁移 + 第二方核对））
 depends-on: []
 blocks: []
 gate: []            # 无开工前阻塞决策门；7 条死链裁决 + 1 条模型服务边界共 8 个 [M] 见 §7
