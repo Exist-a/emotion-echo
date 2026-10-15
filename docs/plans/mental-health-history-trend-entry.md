@@ -7,7 +7,7 @@ type: implementation-plan
 source: CL-02（2026-10-14 用户裁定 D1）—— 三条 mental-health RPC 归档时另登的 backlog 需求
 depends-on: []
 related-plans:
-  - grpc-deadlink-actualization.md（CL-02 来源计划；本需求是它归档项的重启路径）
+  - ../legacy-plans/landed/grpc-deadlink-actualization.md（CL-02 来源计划，已落地；本需求是它归档项的重启路径）
 ---
 
 # Plan — 「我的空间」评估历史 / 趋势 / 立即评估入口

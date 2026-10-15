@@ -14,12 +14,15 @@
 #             （标记串从 check_dead_grpc_inventory.sh 读取；此处不写字面量，避免被旧守卫扫到）
 #             （取代硬编码 EXPECTED=10：数字由清单推导，改一处不必两处同步）；
 #             marker_sites>0 的行只能是 undecided（标记 = 未决，不许挂在已定态上）
-#   A4 终态   archived 必带 reserved/deprecated 注释；deleted 不得残留于 proto
+#   A4 终态   archived 的 **rpc 声明块内**必带 `option deprecated = true`；deleted 不得残留于 proto
 #   A5 豁免   5 个 `*_TRANSPORT` 回滚开关声明在位（HTTP 降级 ≠ 死链，见 CL-02 plan G4）
+#   A6 锚点   清单 `proto:line` 必须**等于实际声明行**（否则 A4 会校验到注释/邻居 ⇒ 假绿，见 F-1）
 #
 # 退出码：0 = 全绿；1 = 有 FAIL；2 = 前置缺失（清单不存在等）
 #
-# 注意：本脚本**尚未接入 CI**（CL-02 Phase 6 才接线，见 plan §3 与 T-24）。
+# CI：**已接入**（`.github/workflows/e2e-guards.yml` 的「守卫 27/27 RPC 状态清单」步骤，
+#     2026-10-15 用临时 PR #218 实测过"接进 CI 仍能红"）。
+#     （2026-10-15 第二方核对 E2 指出：本行此前误写"尚未接入 CI"，与实际相反，已更正。）
 
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
@@ -84,8 +87,28 @@ while IFS=$'\t' read -r rpc proto_line status ev_path ev_sym marker_sites note; 
     a2_bad="$a2_bad $rpc(文件不存在:$ev_path)"
     continue
   fi
-  if ! grep -qE "[^A-Za-z0-9_]${ev_sym}\(" "$ev_path"; then
-    a2_bad="$a2_bad $rpc(调用点${ev_path}无${ev_sym}( )"
+  # 只在**非注释**处找**方法调用形态**（`.符号(`）的命中。
+  # 加固史（两次都由第二方核对逼出来）：
+  #   F-2（一轮）：原实现把"符号出现在注释里"也算命中 ⇒ 注释掉唯一真实调用后仍 PASS。
+  #   N-1（二轮）：只挡"整行注释"、或只要求 `.符号(` 形态，**行尾注释**仍可绕过
+  #        （`_ = doSend(id, req) // legacy h.chat.SendMessage( removed` —— 注释里同样带 `.SendMessage(`）。
+  #        ⇒ 现改为：逐行取"符号之前的部分"，若其中出现 `//`（即注释在符号之前）则该行不算命中。
+  # 已知边界：若同一行里符号之前有 `//`（如 URL 字面量 `http://`），该行会被误判为注释 ⇒ 漏命中（假红）。
+  #   本仓 36 条 live 证据行均无此形态；如未来出现，改这条判据。
+  a2_hit=0
+  while IFS= read -r ln; do
+    [ -n "$ln" ] || continue
+    code="${ln#*:}"
+    before="${code%%${ev_sym}*}"
+    stripped="${before%%//*}"
+    if [ "${#before}" -ne "${#stripped}" ]; then
+      continue                      # `//` 出现在符号之前 ⇒ 命中落在注释里
+    fi
+    a2_hit=1
+    break
+  done <<< "$(grep -nE "\.${ev_sym}\(" "$ev_path" 2>/dev/null || true)"
+  if [ "$a2_hit" != "1" ]; then
+    a2_bad="$a2_bad $rpc(调用点${ev_path}无非注释的 .${ev_sym}( 调用)"
   fi
 done <<< "$rows"
 if [ -n "$a2_bad" ]; then
@@ -115,11 +138,15 @@ if [ -n "$wrong_marker_status" ]; then
 fi
 
 # ---- A4 终态规则 ----
-# 注意（2026-10-14 RED 运行实测暴露的两个缺陷，已修）：
+# 历次加固（每次都由"断言自己能红吗"逼出来，见证据档）：
 #   ① deleted 断言原写 `rpc[[:space:]]+${rpc}\(` ⇒ proto 里实际是 `rpc Logout (`（名字与括号间有空格），
 #      断言**永不命中** ⇒ 是"永真断言"。改为 `${rpc}[[:space:]]*\(`。
-#   ② archived 断言原只看**整文件**是否含 reserved/deprecated ⇒ 文件里任何一处出现即通过，
-#      不指向被归档的那条 RPC。改为按清单的 `proto:line` 取**该声明邻域**（+0..+4 行）。
+#   ② archived 断言原只看**整文件**是否含 reserved/deprecated ⇒ 文件里任何一处出现即通过。
+#   ③ **2026-10-15 第二方核对 F-1**：②的修法（按清单 `proto:line` 取 +0..+4 邻域）**仍不成立** ——
+#      清单里的行号当时是**过期**的（proto 增删后未回填），窗口落在注释/邻居 RPC 上 ⇒
+#      **删掉真正的 `option deprecated = true;` 守卫依旧 PASS**（假绿），而只改注释字样反而 FAIL（假红）。
+#      ⇒ 现改为**按名字解析该 RPC 自己的声明块**（从 `rpc X (` 到其收尾 `}`），在块内要求
+#      `option deprecated = true`；并新增 A6 自检（清单 `proto:line` 必须等于实际声明行）。
 a4_bad=""
 while IFS=$'\t' read -r rpc proto_line status ev_path ev_sym marker_sites note; do
   pfile="${proto_line%%:*}"
@@ -127,8 +154,9 @@ while IFS=$'\t' read -r rpc proto_line status ev_path ev_sym marker_sites note; 
   case "$status" in
     archived)
       if [ ! -f "$pfile" ]; then a4_bad="$a4_bad $rpc(proto缺失)"; continue; fi
-      if ! sed -n "${pline},$((pline + 4))p" "$pfile" | grep -qE 'deprecated|reserved'; then
-        a4_bad="$a4_bad $rpc(archived 但 $pfile:$pline 邻域无 deprecated/reserved)"
+      blk="$(awk -v n="$rpc" '$0 ~ ("^[[:space:]]*rpc[[:space:]]+" n "[[:space:]]*\\(") {f=1} f{print} f && $0 ~ /^[[:space:]]*}/ {exit}' "$pfile")"
+      if ! printf '%s' "$blk" | grep -qE 'option[[:space:]]+deprecated[[:space:]]*=[[:space:]]*true'; then
+        a4_bad="$a4_bad $rpc(archived 但 $pfile 的 rpc 块内无 option deprecated = true)"
       fi
       ;;
     deleted)
@@ -152,6 +180,30 @@ for sw in USER_TRANSPORT CHAT_TRANSPORT ASSESSMENT_TRANSPORT ANALYTICS_TRANSPORT
   grep -q "\"$sw\"" "$cfg" 2>/dev/null || { exempt_ok=0; echo "FAIL: A5 豁免开关 $sw 未在 $cfg 找到（豁免声明须与实际一致）"; fail=1; }
 done
 [ "$exempt_ok" = "1" ] && echo "PASS: A5 HTTP 回滚开关豁免声明在位（*_TRANSPORT=http 是降级开关，不算死链）"
+
+# ---- A6 清单锚点自检（2026-10-15 新增，根因来自第二方核对 F-1） ----
+# 为什么需要：A4 依赖清单里的 `proto:line`。proto 增删后若忘了回填行号，A4 就会去校验
+# **注释或邻居 RPC** ⇒ 删掉真正的 option deprecated 也 PASS（假绿）。此自检把"锚点是否仍指向
+# 该 RPC 的声明行"变成显式断言，从机制上堵住该类假绿。
+a6_bad=""
+while IFS=$'\t' read -r rpc proto_line status ev_path ev_sym marker_sites note; do
+  [ "$status" = "deleted" ] && continue      # 已清除的 RPC 不在 proto 里，锚点仅作历史
+  pfile="${proto_line%%:*}"
+  pline="${proto_line##*:}"
+  [ -f "$pfile" ] || { a6_bad="$a6_bad $rpc(proto缺失)"; continue; }
+  actual="$(grep -nE "^[[:space:]]*rpc[[:space:]]+${rpc}[[:space:]]*\(" "$pfile" | head -1 | cut -d: -f1)"
+  if [ -z "$actual" ]; then
+    a6_bad="$a6_bad $rpc(proto 里找不到声明)"
+  elif [ "$actual" != "$pline" ]; then
+    a6_bad="$a6_bad $rpc(锚点 ${pfile}:${pline} ≠ 实际声明行 ${actual})"
+  fi
+done <<< "$rows"
+if [ -n "$a6_bad" ]; then
+  echo "FAIL: A6 清单锚点过期（会导致 A4 校验到错误位置）——$a6_bad"
+  fail=1
+else
+  echo "PASS: A6 清单 proto:line 锚点全部指向实际声明行"
+fi
 
 # ---- 报告：undecided（收口前须清零；本守卫只报不拦，收口判据拦） ----
 undecided_n="$(printf '%s\n' "$rows" | awk -F'\t' '$3=="undecided"' | grep -c . || true)"

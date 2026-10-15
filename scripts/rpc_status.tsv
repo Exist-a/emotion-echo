@@ -24,11 +24,11 @@ ListConversations	proto/chat.proto:47	live	emotion-echo-web-bff/internal/handler
 DeleteConversation	proto/chat.proto:50	live	emotion-echo-web-bff/internal/handler/chat_handler.go	DeleteConversation	0	-
 PinConversation	proto/chat.proto:53	live	emotion-echo-web-bff/internal/handler/chat_handler.go	PinConversation	0	-
 UpdateConversation	proto/chat.proto:56	live	emotion-echo-web-bff/internal/handler/chat_handler.go	UpdateConversation	0	-
-StreamMessages	proto/chat.proto:65	archived	-	-	0	用户裁定 D2：归档（ADR 决策 4 §四「故意不做」）
+StreamMessages	proto/chat.proto:70	archived	-	-	0	用户裁定 D2：归档（ADR 决策 4 §四「故意不做」）
 Analyze	proto/emotion_llm.proto:13	live	emotion-echo-ai-svc/internal/analyzer/auth_wrapped.go	Analyze	0	服务间（ai-svc→llm-service）
 AnalyzeBatch	proto/emotion_llm.proto:18	deleted	-	-	0	用户裁定 D4：清除（无批量业务）
-ChatCompletion	proto/emotion_llm.proto:26	live	emotion-echo-web-bff/internal/downstream/llm_grpc.go	ChatCompletion	0	业务入口 ai_stream_handler.go:431 h.llm.StreamChat
-ClassifyIntent	proto/emotion_llm.proto:32	live	emotion-echo-web-bff/internal/handler/chat_handler.go	ClassifyIntent	0	-
+ChatCompletion	proto/emotion_llm.proto:29	live	emotion-echo-web-bff/internal/downstream/llm_grpc.go	ChatCompletion	0	业务入口 ai_stream_handler.go:431 h.llm.StreamChat
+ClassifyIntent	proto/emotion_llm.proto:35	live	emotion-echo-web-bff/internal/handler/chat_handler.go	ClassifyIntent	0	-
 GetEmotionByMessage	proto/emotion_query.proto:17	live	emotion-echo-web-bff/internal/handler/emotion_query_handler.go	ByMessage	0	RPC 名≠客户端方法名|-
 GetEmotionByConversation	proto/emotion_query.proto:19	live	emotion-echo-web-bff/internal/handler/emotion_query_handler.go	ByConversation	0	另 emotion_history.go:54|-
 GetFusedEmotion	proto/emotion_query.proto:21	live	emotion-echo-web-bff/internal/handler/emotion_query_handler.go	ByFusedMessage	0	RPC 名≠客户端方法名
@@ -42,9 +42,9 @@ UserBehaviorDayNight	proto/metric.proto:47	live	emotion-echo-web-bff/internal/ha
 UserBehaviorDepth	proto/metric.proto:50	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	InteractionDepth	0	RPC 名≠客户端方法名
 UserBehaviorFrequency	proto/metric.proto:53	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	FrequencyTrend	0	RPC 名≠客户端方法名
 MentalHealthAssessment	proto/metric.proto:56	live	emotion-echo-web-bff/internal/handler/analytics_handler.go	MentalAssessment	0	RPC 名≠客户端方法名
-MentalHealthHistory	proto/metric.proto:59	archived	-	-	0	用户裁定 D1：归档（ADR chart-contract-alignment §E「5 无消费端点本轮不接，需 UX 设计」）
-MentalHealthTrigger	proto/metric.proto:62	archived	-	-	0	用户裁定 D1：归档（同上；server 真实现，重启时可直接接）
-MentalHealthTrend	proto/metric.proto:65	archived	-	-	0	用户裁定 D1：归档（同上；server 真实现）
+MentalHealthHistory	proto/metric.proto:64	archived	-	-	0	用户裁定 D1：归档（ADR chart-contract-alignment §E「5 无消费端点本轮不接，需 UX 设计」）
+MentalHealthTrigger	proto/metric.proto:72	archived	-	-	0	用户裁定 D1：归档（同上；server 真实现，重启时可直接接）
+MentalHealthTrend	proto/metric.proto:80	archived	-	-	0	用户裁定 D1：归档（同上；server 真实现）
 GetMe	proto/user.proto:41	live	emotion-echo-web-bff/internal/handler/user_handler.go	GetMe	0	另 avatar_handler.go:131
 UpdateProfile	proto/user.proto:46	live	emotion-echo-web-bff/internal/handler/user_handler.go	UpdateMe	0	RPC 名≠客户端方法名
 GetUserById	proto/user.proto:49	live	emotion-echo-web-bff/internal/handler/user_handler.go	GetByID	0	RPC 名≠客户端方法名
@@ -53,5 +53,5 @@ Register	proto/user.proto:62	live	emotion-echo-web-bff/internal/handler/auth_han
 ResetPassword	proto/user.proto:69	live	emotion-echo-web-bff/internal/handler/auth_handler.go	ResetPassword	0	-
 Logout	proto/user.proto:74	deleted	-	-	0	用户裁定 D3：清除（ADR jwt-key-rotation「不做 token 黑名单/主动吊销」⇒ 不接真）
 VerifySecurityAnswer	proto/user.proto:79	deleted	-	-	0	用户裁定 D4：清除（族内冗余，在用者=VerifySecurityAnswerByUsername）
-VerifySecurityAnswerByUsername	proto/user.proto:91	live	emotion-echo-web-bff/internal/handler/auth_handler.go	VerifySecurityAnswerByUsername	0	在用者（兄弟 RPC）
-GetSecurityQuestionsByUsername	proto/user.proto:99	live	emotion-echo-web-bff/internal/handler/auth_handler.go	GetSecurityQuestionsByUsername	0	-
+VerifySecurityAnswerByUsername	proto/user.proto:94	live	emotion-echo-web-bff/internal/handler/auth_handler.go	VerifySecurityAnswerByUsername	0	在用者（兄弟 RPC）
+GetSecurityQuestionsByUsername	proto/user.proto:102	live	emotion-echo-web-bff/internal/handler/auth_handler.go	GetSecurityQuestionsByUsername	0	-

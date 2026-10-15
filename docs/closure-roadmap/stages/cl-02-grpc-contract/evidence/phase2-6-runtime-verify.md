@@ -6,6 +6,10 @@
 
 ---
 
+> 本文档步骤的**可复跑脚本**：[`cl02-up-verify.sh`](cl02-up-verify.sh)（起栈 → 等 healthy → 复核镜像归属 → 重跑 apisix-seed → Nacos 计数 → env 检查）。
+> 镜像 tag 覆盖定义：[`deploy/docker-compose.cl02-verify.yml`](../../../../deploy/docker-compose.cl02-verify.yml)。
+> 脚本路径**可用环境变量覆盖**：`CL02_WT`（默认由 `git rev-parse --show-toplevel` 推导）/ `CL02_SHARED`（默认取 `$CL02_WT/../Emotion-Echo`）。（第二方核对 F-7 指出原为硬编码绝对路径，已改为可覆盖；二轮 N-2 指出本警告当时未同步，已更正。）
+
 ## 1. 做了什么（H6 两步法）
 
 ```console

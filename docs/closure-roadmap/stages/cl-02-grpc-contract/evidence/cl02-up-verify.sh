@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # CL-02 起栈验证：用本轨 :cl02-verify 镜像重建 6 个服务（H5/条款10：不整栈 up、不覆盖公共 tag）
 set -u
-SHARED="D:/源码/Emotion-Echo"
-WT="D:/源码/Emotion-Echo-cl02"
+# 路径可覆盖（第二方核对 F-7：原为硬编码绝对路径 ⇒ 不可移植）
+WT="${CL02_WT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+SHARED="${CL02_SHARED:-$WT/../Emotion-Echo}"
 cd "$SHARED/deploy" || exit 2
 COMPOSE="docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml -f $WT/deploy/docker-compose.cl02-verify.yml --env-file .env.local"
 SVCS="emotion-echo-user-svc emotion-echo-chat-svc emotion-echo-analytics-svc emotion-echo-ai-svc emotion-echo-web-bff emotion-llm-service"

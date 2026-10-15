@@ -46,7 +46,8 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 
 | 文件 | 主题 | 优先级 |
 |---|---|---|
-| `grpc-deadlink-actualization.md` | **gRPC 死链路坐实与清理**：7 条死 RPC（StreamMessages/Logout/VerifySecurityAnswer/AnalyzeBatch + 3 条 mental-health）逐条裁决"接真/归档/清除"，修正决策 4 的"100% 覆盖"口径，守卫升级 | medium |
+| `grpc-deadlink-actualization.md` | **CL-02 落地**（PR #214，2026-10-15）：7 条死 RPC 逐条终态（**清除 3**：Logout/VerifySecurityAnswer/AnalyzeBatch；**归档 4**：StreamMessages + 三条 mental-health）+ 守卫升级（`check_rpc_status.sh`）+ 决策 4 口径更正；证据见 `docs/closure-roadmap/stages/cl-02-grpc-contract/report.md` | medium |
+| `mental-health-history-trend-entry.md` | **CL-02 归档项的重启路径**（2026-10-14 用户裁定 D1 时另登）：在「我的空间」提供评估历史 / 趋势 / 立即评估入口，数据经 BFF → analytics-svc（gRPC）；三条 RPC 现为归档态（proto 标 deprecated），重启时先去标记 | low |
 | `known-issues-backlog-2026-09-16.md` | **partial**（2026-10-13 核查）：A2/A3/A4/A5/A6 已解决；**残留 = 顺手1 字号防抖**（代码无 debounce） | low |
 
 ### E. 端侧化（Lane O）

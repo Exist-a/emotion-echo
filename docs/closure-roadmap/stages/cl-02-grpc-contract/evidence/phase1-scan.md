@@ -86,7 +86,7 @@ emotion-echo-web-bff/internal/history...  emotion_history.go:54: rows, _, err :=
 
 ## 4. 守卫落地与负向对照（T-09~T-14）
 
-产物：`scripts/rpc_status.tsv`（43 行，7 列）+ `scripts/check_rpc_status.sh`（A1~A5）。
+产物：`scripts/rpc_status.tsv`（43 行，7 列）+ `scripts/check_rpc_status.sh`（当时 A1~A5；**收口时新增 A6 锚点自检**，见 report §5 经验 9）。
 
 ```console
 $ bash scripts/check_rpc_status.sh
