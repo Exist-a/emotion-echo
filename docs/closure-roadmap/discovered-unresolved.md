@@ -34,6 +34,8 @@ type: phase-ledger
 
 | CL-F-17 | **用户手动测试**（2026-10-15，全栈手动测） | **数字人 VRM 头像加载失败**：控制台 `[DigitalHuman] Scene is not initialized!` + `TypeError: Cannot read properties of null (reading 'add')`（`loadVRM` 内 `scene.add(...)`）⇒ 3D 形象不显示 | **初始化竞态**：`loadVRM` 由模板 ref 回调（`DigitalHuman.client.vue:523` → post-flush 队列）触发，可能早于 `initScene` 完成 ⇒ `scene` 仍为 null；代码虽在 `:372` 有 "Scene is not initialized!" 早退检查，但后续重试路径（Attempt 1…）仍走到 `scene.add` ⇒ 抛错。**已排除**：模型资源本身正常（`public/3d-models/digital-human.vrm` 26.7MB，前端 dev `HTTP 200`） | **待定**（数字人/前端体验专项立项时；或用户复现频次高时优先） | 待解决（**已定位到代码位置**，未就地修） |
 
+| CL-F-24 | **CL-07 后端切片期发现**（2026-10-16，Lane-CL-G；读码 + 接线核对） | **`EmotionDistributionByModality`（按模态情绪分布，Stage 34）算了但从不出现**：日报 logic 已装配 `ModalityReportRepo` 结果，但 ① `emotion-echo-analytics-svc/main.go` **从未给 `svcCtx.ModalityReportRepo` 赋值**（全仓无 `NewPostgresModalityReportRepo` 生产调用）⇒ 恒 nil ⇒ 字段恒缺失；② 即便接线，`internal/grpcserver/metric_server.go` 的 `ReportsDaily` **也不映射** `EmotionDistributionByModality` 到 proto（`ReportsDailyResponse` 无该字段）⇒ 跨 gRPC 边界会丢 | 两处独立断点：**生产未接线 + proto 无该字段**（与 CL-07 的 fused 同型"只算不消费"，但属 Stage 34 modality 面） | **CL-09**（backlog 清销；或 CL-07 前端半一并补 modality 透传） | 待解决（**已定位**；本次按"范围外只记账"**未就地修**——CL-07 后端切片只做 fused，不动 modality 语义） |
+
 > 上表为建档期预探查的**种子账**（对应各待排期计划的核心缺口）；用户实测中新增的发现续号追加。
 
 ## 使用约定
