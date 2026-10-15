@@ -150,6 +150,23 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 
 ---
 
+### 2.1 执行结果（滚动更新 · 逐点四值）
+
+> 四值口径见 RUNBOOK §4；证据以"命令 + 输出"为准（"已创建"不算证据）。完整输出见 [report.md](report.md)。
+
+| # | 结果 | 证据（2026-10-16） |
+|---|---|---|
+| T-01 | ✅ **PASS** | Phase 1：`migrations/c010_add_trace_sw8_to_outbox.sql` + `TestC010_TraceSw8Migration_*` 4 项绿；`go test ./migrations/` ok |
+| T-02 | ⏸ **PENDING**（等 M1 裁定） | 写侧捕获 sw8 需先定原语落点（plan §7 M1）；未动代码 |
+| T-03 | ⏸ **PENDING**（等 M1 裁定） | relay 恢复父 ctx 同上 |
+| T-05 | 🟡 **PARTIAL** | 已验：InMemory repo 空值合法（`TestOutboxEvent_TraceSw8_EmptyIsAllowed` 绿）；**未验**：relay 侧空列时行为逐字不变（需 Phase 3 落地后才有对象可测） |
+| T-08 | ✅ **PASS** | Phase 4a：`node deploy/obs_monitoring.test.js` group ⑦ 6/6 绿（含 k8s 内联同步 + 面板标签）+ `bash scripts/test_helm_prometheus_render.sh` **PASS=8 FAIL=0**（两侧 14 条告警一致） |
+| T-14 | ✅ **PASS** | Phase 6：`kafka-pipeline-pending-decisions.md` D8 行/两处摘要更正为"已收敛"，附 `shared/pkg/messaging/sw8_header.go:23` 等行号证据 |
+| T-15 | ✅ **PASS** | Phase 6：新增「CL-03 处置」表 —— D1 并入 CL-F-15 / D2·D4 ✅ / D3·D5·D6 登记触发条件 / D7 等产品语义拍板 / D8 ✅ 全部落地（无"待定"残留） |
+| T-04 / T-06 / T-07 / T-09 / T-10 / T-11 / T-12 / T-13 / T-16 | ⏸ **PENDING** | T-04/T-09/T-11/T-16 需栈（排队第 5 位）；T-06/T-07/T-10 等 M2/M3 裁定；T-12/T-13 等 M4 裁定 |
+
+**Phase 4a 附带新账**：`CL-F-22`（内联 DDL 缺 `idx_outbox_attempts`）· `CL-F-23`（DLQ 无真实深度指标，`oldest_offset` 可采性未实测）—— 均已登 `discovered-unresolved.md`。
+
 ## §3 分阶段实施（TDD：先 RED 回归钉，再 GREEN）
 
 > 铁律：**先写会失败的测试**（RED）→ 最小实现（GREEN）→ 重构。每个 Phase 一个 TDD 循环，一个 PR 内多个 commit。

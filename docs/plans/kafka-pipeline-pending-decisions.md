@@ -351,15 +351,30 @@ B：1-1.5h
 | **D5** | 🟡 P2 | 0.25h（承诺）/ 2-3h（SKIP LOCKED）| ⏳ **待触发** | relay 多副本互斥前置；触发条件 = chat-svc 决定扩副本的那个 stage。当前单副本 + ADR-19 "单副本承诺" 登记已含 |
 | **D6** | 🟢 P3 | 1-1.5h | ⏳ **未变** | outbox payload JSONB ↔ Protobuf 双 schema 转换链；Round 2.2 反射枚举护栏只覆盖"加 EventType 时漏 switch case"侧，**双 schema 转换链本身的 stage-73 备份策略仍 open**（下次动 schema 时一起收）|
 | **D7** | 🟢 P3 | 0.25h（登记）/ 3h+（改行为）| ⏳ **owner 拍板** | 删除会话生命周期不一致（消息没了情绪数据还在）；owner 从产品语义出发拍板。Stage 101 仍 backlog（语义决策非纯技术）|
-| **D8** | 🟢 P3 | ~1h | 🟡 **部分落地** | D8-1 peer=topic 拓扑约定注释 ✅ Round 2.2 commit `6d6c3b1`（kafka_publisher.go:119 注释解释 + 切换路径）；D8-3 EventType 双处镜像反射枚举护栏 ✅ Round 2.2 commit `6d6c3b1`（chat-svc proto_marshal_test.go + eventrow mapper_test.go）；D8-2 extractSw8Header 双份 ⏳ 仍 open（ai-svc/analytics-svc 各一份，未收敛到 shared/pkg/messaging）|
+| **D8** | 🟢 P3 | ~1h | ✅ **全部落地** | D8-1 peer=topic 拓扑约定注释 ✅ Round 2.2 commit `6d6c3b1`（kafka_publisher.go:119 注释解释 + 切换路径）；D8-3 EventType 双处镜像反射枚举护栏 ✅ Round 2.2 commit `6d6c3b1`（chat-svc proto_marshal_test.go + eventrow mapper_test.go）；**D8-2 extractSw8Header 双份 ✅ 已收敛**（CL-03 实测 2026-10-16：真实现 = `emotion-echo-shared/pkg/messaging/sw8_header.go:23`，`ai-svc/internal/consumer/consumer_failure.go:125-127` 与 `analytics-svc/internal/kafka/consumer.go:368-370` **只剩转发的薄包装**）—— ⚠️ 本行原写"⏳ 仍 open"是**文档漂移**，Lane-CL-F 已按代码事实更正 |
 
 **Round 2 收口摘要**（[stage-99-round-2-closure.md](../stages/stage-99-round-2-closure.md)）：
 - ✅ D2: outbox sent/dead 清理 — Round 2.1
 - 🟡 D8: peer=topic 注释 + EventType 反射枚举 — Round 2.2（部分：D8-2 extractSw8Header 双份仍 open）
+  > **2026-10-16 CL-03 更正**：D8-2 **已收敛**（见下「CL-03 处置」），本行的"仍 open"是当时的真实状态、现已过期。
 
 **Stage 101 收口摘要**（[stage-101-multi-round-iteration-closure.md](../stages/stage-101-multi-round-iteration-closure.md)）：
 - D3/D5/D7 仍 backlog（触发条件=多副本/上 prod/owner 拍板，单轮 TDD 不可独立完成）
 - D8-2 extractSw8Header 双份：可作 D6/D8 收口的 sub-task，下次动 schema 时一起收
+  > **2026-10-16 CL-03 更正**：该 sub-task **无需再做** —— 代码已收敛到 `shared/pkg/messaging`，本项关闭。
+
+**CL-03 处置（2026-10-16，Lane-CL-F · 逐条终态，不留"待定"）**：
+
+| # | 终态 | 依据 |
+|---|---|---|
+| D1 | **并入 `CL-F-15`**，由 CL-03 修（候选：Kafka 初始化后台重试 + 不假 sent；待用户追认 M4）| `main.go:164-173` fallback 仍在；ADR-19「D1 fallback 路径登记」段待回写 |
+| D2 | ✅ 已落（无需本阶段动作）| `internal/outbox/cleanup.go` + `OUTBOX_CLEANUP_ENABLED`（默认 false）|
+| D3 | ⏳ **登记触发条件**（本阶段不做）| 触发条件 = ai-svc / analytics-svc **扩多副本**部署；当前单副本无影响 |
+| D4 | ✅ 已落（无需本阶段动作）| analytics-svc `Kafka.MaxRetries` + `KAFKA_MAX_RETRIES` env |
+| D5 | ⏳ **登记触发条件**（本阶段不做）| 触发条件 = chat-svc 决定扩副本的那个 stage；前置 = `FOR UPDATE SKIP LOCKED`（本阶段只保留登记）|
+| D6 | ⏳ **登记触发条件**（本阶段不做）| 双 schema（JSONB ↔ Protobuf）转换链的 stage-73 备份策略；触发条件 = **下次动 Kafka 事件 schema 时**一并收 |
+| D7 | ⏳ **等产品语义拍板**（本阶段不动）| 删除会话生命周期不一致（消息删了、ai schema 的情绪数据还在）—— 属**语义决策**而非纯技术，owner = 用户/产品 |
+| D8 | ✅ **全部落地**（含 D8-2，见上表行）| D8-1/D8-3 Round 2.2；D8-2 CL-03 实测已收敛 |
 
 **Stage 97 调研结论**（代码事实）：
 - D2 现状：`emotion-echo-chat-svc/migrations/c001_create_outbox_events.sql` 仅有 `idx_outbox_pending` (partial status=pending) + `idx_outbox_attempts`；`outbox/relay.go` 仅处理 pending；无 cleanup/retention/vacuum

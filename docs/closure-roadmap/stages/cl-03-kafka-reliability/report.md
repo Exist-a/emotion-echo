@@ -139,6 +139,19 @@ $ python yaml/json 可解析性 → kafka-dlq.yml: [AIDLQPublishFailure, Analyti
 
 > 🔴 **仍需栈**：告警 expr 是否真能返回非空 series、以及真触发一次 `firing` → 送达（T-09），要起栈造堆积，排队等 dev 栈锁。
 
+### Phase 6 · 文档漂移修正 + 账本登记（🟢 不需栈）—— 2026-10-16
+
+**改了什么**
+
+| 文件 | 改动 |
+|---|---|
+| `docs/plans/kafka-pipeline-pending-decisions.md` | ① `D8` 行 `⏳ 仍 open` → **✅ 已收敛**（附 `shared/pkg/messaging/sw8_header.go:23` + 两个薄包装行号），并标注原状态是**文档漂移**；② 两处收口摘要里的"D8-2 仍 open"各加一条更正注（**保留原文 + 更正**，不涂改历史）；③ 新增「**CL-03 处置**」表：D1~D8 **逐条终态**（D1 并入 CL-F-15 / D2·D4 ✅ 已落 / D3·D5·D6 登记触发条件 / D7 等产品语义拍板 / D8 ✅），不留"待定" |
+| `docs/closure-roadmap/discovered-unresolved.md` | 新增 **`CL-F-22`**（outbox DDL 两份事实源漂移：内联版缺 `idx_outbox_attempts`）与 **`CL-F-23`**（DLQ 无真实"深度"指标；`oldest_offset` 可采性未实测）—— 6 列硬契约、归属均写 CL-03 并附触发条件 |
+
+**为什么"保留原文 + 加更正注"而不是直接删**：账本与计划文档的价值在于可追溯；涂掉"D8-2 仍 open"会让"当时的判断为什么错"永久丢失。RUNBOOK 的 anti-patterns 要求**报告与代码一致**，而一致性应当通过显式更正达成，不是通过抹除历史。
+
+**证据**：`git diff` 三处 hunk；`D8` 行新状态引用的行号均来自本次实读（`sw8_header.go:23` / `consumer_failure.go:125-127` / `consumer.go:368-370`）。
+
 ## §3 待办（下一步）
 
 - **§7 [M] 四项裁定（2026-10-16 已问、用户未答复）** —— M1 sw8 存取原语 / M2 DLQ 投递失败语义 / M3 回放程度 / M4 `CL-F-15` fallback 改法。

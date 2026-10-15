@@ -39,6 +39,10 @@ type: phase-ledger
 
 | CL-F-21 | D 轨取锁轮（2026-10-16，回复 C 轨 `[id].vue` 预占时核出） | **契约并存两套轨字母 ⇒ 「独占列」被误判**：§1.1 的 A~E 是**阶段面**（轨 C = **CL-05 消息链路**、轨 E = CL-02），而 §三 占位表用的是**会话字母**（C = CL-02、D = CL-05）。C 轨按**会话字母**读 §1.1，把「C 轨独占列」读成了自己 ⇒ 实际该列是 **CL-05（D 轨）** 的主文件面（§1.1 明文列有 `pages/chat/conversation/[id].vue`、`composables/useConversationSender.ts`）。A/B 两轨因两套字母**恰好一致**（A=CL-04、B=CL-01）而从未暴露 | 同一份契约里两套字母并存、且**没有任何一处说明二者关系** ⇒ 按字母查「独占列」会得到相反结论；这类误判不会报错，只会让人**改到别人的文件**或**误以为自己被占** | **CL-00**（并行契约需统一字母或显式标注两套体系；已在 `parallel-contract.md` §四 由 D 轨就地说明） | 待解决（本轮 D 轨按 §1.1 的事实主张优先，并在 §四 留了「C 轨不同意则让位」的协商口） |
 
+| CL-F-22 | **CL-03 建档实读**（2026-10-16，Lane-CL-F） | **outbox_events 的 DDL 有两份事实源且已漂移**：`migrations/c001_create_outbox_events.sql` 建了 `idx_outbox_pending` + `idx_outbox_attempts` 两个索引，而 `emotion-echo-chat-svc/main.go:452 runOutboxMigration` 内联的那份 `CREATE TABLE` **只有 `idx_outbox_pending`**（缺 `idx_outbox_attempts`）。两条路径建出的表结构不一致（哪条生效取决于有没有跑过 db-migrate 容器） | chat-svc 早期用「启动期 gorm Exec 内联 SQL」自建表（Stage 30-C A3），后来才引入 `migrations/` + db-migrate 容器，两份没收敛 | **CL-03**（本阶段已处置"新列必须两侧同步"= `TestC010_TraceSw8_InlineDDLNotDrifted`；**索引漂移尚未收敛**，留待本阶段后续或 CL-09） | 待解决（**已定位**；CL-03 Phase 1 只按 TDD 最小实现补了 `trace_sw8`，索引漂移与"两份事实源是否合并"未动） |
+
+| CL-F-23 | **CL-03 Phase 4a**（2026-10-16，Lane-CL-F 新增 DLQ 堆积告警时） | **DLQ 的"真实堆积深度"无指标可用**：新加的 `DLQMessagesAccumulating` 只能表达「近 10 分钟有新消息进入 DLQ」（topic offset 增长），**不能**表达「当前还剩多少条未处理」 | DLQ（`chat-events-dlq`）**无常驻 consumer** ⇒ `kafka_consumergroup_lag` 恒无 series（E2E-F-150 的老坑）。真实深度需要 `kafka_topic_partition_oldest_offset` —— 它是 kafka-exporter 的标准指标之一，但**本栈此前从未在任何规则/面板中使用过 ⇒ 可采性未经实测**，故不写死、不臆断 | **CL-03**（触发条件 = 本轨拿到 dev 栈窗口时实测 `kafka_topic_partition_oldest_offset` 是否存在：存在则补"深度"告警，不存在则维持"入口即堆积"口径并在规则注释里保留限制说明） | 待解决（**已登记限制**：`deploy/prometheus/rules/kafka-dlq.yml` 的规则注释里已如实写明，防被读成"堆积已完全闭环"） |
+
 > 上表为建档期预探查的**种子账**（对应各待排期计划的核心缺口）；用户实测中新增的发现续号追加。
 
 ## 使用约定
