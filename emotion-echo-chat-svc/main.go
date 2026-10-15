@@ -449,6 +449,11 @@ func openPostgres(dsn string, maxOpen, maxIdle int) (repository.ConversationRepo
 // runOutboxMigration 跑 migrations/001_create_outbox_events.sql（Stage 30-C A3）
 //
 // 简单实现：用 gorm 直接 Exec 文件内容。生产应该用 migrate 工具；当前学习/开发期 OK。
+//
+// CL-03 Phase 1：本函数内联的 DDL 是 outbox_events 的**第二份事实源**（第一份 =
+// migrations/c0NN_*.sql，由 db-migrate 容器按 checksum 应用）。两者必须同步，
+// migrations/c010_trace_sw8_migration_test.go 的 TestC010_TraceSw8_InlineDDLNotDrifted
+// 钉死"内联版不得漏列"。新增列时请同时改这里与 migrations/ 下的迁移文件。
 func runOutboxMigration(db *gorm.DB) error {
 	const sql = `
 CREATE SCHEMA IF NOT EXISTS emotion_echo_chat;
@@ -463,8 +468,14 @@ CREATE TABLE IF NOT EXISTS emotion_echo_chat.outbox_events (
     attempts    INT NOT NULL DEFAULT 0,
     last_error  TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    sent_at     TIMESTAMPTZ
+    sent_at     TIMESTAMPTZ,
+    trace_sw8   VARCHAR(512)
 );
+
+-- CL-03 Phase 1：老环境里表已存在 ⇒ 上面的 CREATE TABLE IF NOT EXISTS 不会补列，
+-- 故本路径也必须显式幂等补列（与 migrations/c010_add_trace_sw8_to_outbox.sql 同义）。
+ALTER TABLE emotion_echo_chat.outbox_events
+    ADD COLUMN IF NOT EXISTS trace_sw8 VARCHAR(512);
 
 CREATE INDEX IF NOT EXISTS idx_outbox_pending
     ON emotion_echo_chat.outbox_events(created_at)
