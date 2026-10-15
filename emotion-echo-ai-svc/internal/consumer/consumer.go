@@ -123,6 +123,7 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			//   - Tracer=nil → 完全跳过 span 创建 (Stage 25-F 原行为)
 			// Stage 94 PR-2a §P0-3：span 提到 case 顶、不用 defer，case 末尾立刻 EndSpan
 			var span grpcinterceptor.Span
+			msgCtx := sess.Context() // 无 tracer / 建 span 失败时退回 session ctx
 			if h.Tracer != nil {
 				sw8Header := extractSw8Header(msg.Headers)
 				extractor := func(key string) (string, error) {
@@ -131,9 +132,13 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 					}
 					return "", nil
 				}
-				_, s, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
+				nCtx, s, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
 				if err != nil {
 					slog.WarnContext(sess.Context(), "create entry span failed (continuing without trace)", "err", err)
+				} else if nCtx != nil {
+					// CL-01 G4：把带 entry span 的 ctx 往下传 —— handler 与 DLQ 投递都挂到
+					// 这条 kafka-consume trace 下（此前丢弃 nCtx ⇒ DLQ span 无父会被守卫跳过）。
+					msgCtx = nCtx
 				}
 				span = s
 				if span != nil {
@@ -146,9 +151,9 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			// 调业务。E2E-F-174：失败原地重试（预算 = maxRetries+1 次尝试），
 			// 预算耗尽 → DLQ（若配置）+ Mark 前进。
 			// Stage 94 PR-2a：handlerErr 透传给 span.EndSpan，让 OAP 标记失败
-			attempts, handlerErr := h.deliverWithRetry(sess, evt, msg, maxRetries)
+			attempts, handlerErr := h.deliverWithRetry(msgCtx, evt, msg, maxRetries)
 			if handlerErr != nil {
-				h.publishToDLQ(sess, msg, handlerErr, attempts)
+				h.publishToDLQ(msgCtx, msg, handlerErr, attempts)
 			}
 			// 落库成功 或 重试预算耗尽（已投 DLQ / DLQ 未配置）→ 都 Mark 前进
 			sess.MarkMessage(msg, "")

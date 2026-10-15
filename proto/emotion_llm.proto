@@ -12,10 +12,13 @@ service EmotionLLMService {
   // Analyze 单条消息情绪分析
   rpc Analyze (AnalyzeRequest) returns (AnalyzeResponse);
 
-  // AnalyzeBatch 批量分析（server stream，Stage 16）
-  //
-  // 适用：AI 一次推多条消息，server 流式返回每条结果（首字节延迟低）
-  rpc AnalyzeBatch (AnalyzeBatchRequest) returns (stream AnalyzeResponse);
+  // ── CL-02 清除（2026-10-14 用户裁定 D4）────────────────────────────────
+  // AnalyzeBatch（批量分析，server stream，Stage 16）已**删除**，连带其 AnalyzeBatchRequest 消息。
+  //   理由：全仓无批量业务；唯一引用是测试 fake（`ai-svc/internal/analyzer/grpc_analyzer_test.go`）。
+  //   流式用例的承载者改为 ChatCompletion（server stream，真在用）。
+  // 状态由 scripts/rpc_status.tsv 管理（status=deleted）；守卫 check_rpc_status.sh 断言
+  // 「deleted 的 RPC 不得残留于 proto」。如需批量分析，请先立 ADR（含调用方与压测口径）。
+  // ─────────────────────────────────────────────────────────────────────
 
   // ChatCompletion 流式对话（Stage 80 · llm-chat-real-pipeline PR-1）
   //
@@ -97,8 +100,5 @@ message AnalyzeResponse {
   string raw_response = 6;        // 原始响应（调试用）
 }
 
-// AnalyzeBatchRequest 批量情绪分析请求
-message AnalyzeBatchRequest {
-  repeated AnalyzeRequest items = 1;  // 多条消息
-  string user_id = 2;                 // 用户 ID（统一鉴权）
-}
+// ── CL-02 清除（2026-10-14，用户裁定 D4）：AnalyzeBatchRequest 随其 RPC 一并删除 ──
+// 消息名与字段号不得被无关新消息复用（避免线上旧客户端误解析）。

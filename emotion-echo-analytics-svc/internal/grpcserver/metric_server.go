@@ -327,12 +327,10 @@ func (s *analyticsServer) MentalHealthAssessment(ctx context.Context, req *emoti
 
 // MentalHealthHistory 实现 MentalHealthHistory RPC（PR-3.3 阶段简化）
 //
-// E2E-31 已知未接线（2026-10-09，用户裁定「保留 + 标注 + 守卫」）：本 RPC 不是
-// "业务走了 HTTP 把 gRPC 绕开"——analytics-svc 侧确有自己的 HTTP 路由
-// （main.go `/api/v1/mental-health/history`），但**全仓找不到该端点的消费方**
-// （BFF 未暴露 history/trigger/trend 三条、前端 apiRoutes.ts 只留注释、无脚本调用）
-// ⇒ 属"功能未接出"。本实现还是恒返空占位（Records: nil）。启用须建功能 ⇒ 另立项。
-// 依据：账本 E2E-F-208、report.md §0 T-1。
+// CL-02 已归档（2026-10-14，用户裁定 D1）：**明确不做**，proto 侧已标 deprecated。
+// 依据：ADR-2026-09-chart-contract-alignment §E「5 个无消费端点本轮不接」——用户决策
+// 「暂不接」，理由「单独功能开发，需要 UX 设计，不在契约修复范围」。
+// 本实现为恒返空占位（Records: nil）；重启条件 = '我的空间' 增加「评估历史」入口（UX 定稿）。
 func (s *analyticsServer) MentalHealthHistory(ctx context.Context, req *emotionanalytics.MentalHealthHistoryRequest) (*emotionanalytics.MentalHealthHistoryResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
@@ -343,9 +341,9 @@ func (s *analyticsServer) MentalHealthHistory(ctx context.Context, req *emotiona
 
 // MentalHealthTrigger 实现 MentalHealthTrigger RPC
 //
-// E2E-31 已知未接线（同上）：服务端实现真实（`MentalHealthTriggerLogic` +
-// `trigger.MentalHealthRunner` + job store，E2E-15 已验），HTTP 路由
-// `/api/v1/mental-health/trigger` 存在，但**全仓无消费方** ⇒ 功能未接出，非被绕开。
+// CL-02 已归档（2026-10-14，用户裁定 D1）：同上（ADR chart-contract-alignment §E）。
+// 注意：本实现是**真实现**（`MentalHealthTriggerLogic` + `trigger.MentalHealthRunner`
+// + job store，E2E-15 已验）⇒ 重启时可直接接，无需补后端。
 func (s *analyticsServer) MentalHealthTrigger(ctx context.Context, req *emotionanalytics.MentalHealthTriggerRequest) (*emotionanalytics.MentalHealthTriggerResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")
@@ -368,8 +366,8 @@ func (s *analyticsServer) MentalHealthTrigger(ctx context.Context, req *emotiona
 
 // MentalHealthTrend 实现 MentalHealthTrend RPC
 //
-// E2E-31 已知未接线（同上）：与 History/Trigger 同族 —— 实现真实、HTTP 路由在
-// （`/api/v1/mental-health/trend`），但全仓无消费方 ⇒ 功能未接出，非被绕开。
+// CL-02 已归档（2026-10-14，用户裁定 D1）：同上（ADR chart-contract-alignment §E）。
+// 实现为真实现（`MentalHealthTrendLogic.GetTrend`），重启时可直接接。
 func (s *analyticsServer) MentalHealthTrend(ctx context.Context, req *emotionanalytics.MentalHealthTrendRequest) (*emotionanalytics.MentalHealthTrendResponse, error) {
 	if s.svcCtx == nil || s.svcCtx.EventRepo == nil {
 		return nil, status.Error(codes.Unavailable, "analytics-svc repository not initialized (degraded start)")

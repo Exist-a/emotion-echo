@@ -128,7 +128,8 @@ func New(svcCtx *svc.ServiceContext, port int) *Server {
 				// HTTP 端（user-svc/main.go 的 noAuth.POST）都把它定义为匿名。
 				// 此前这里漏配 ⇒ 不带 x-user-id 调用被拦截器以 Unauthenticated 拒掉，
 				// 即"契约说匿名、实现要求带身份"，密保校验在 gRPC 路径上实际不可用。
-				emotionuser.UserService_VerifySecurityAnswer_FullMethodName,
+				// CL-02（2026-10-14 D4）：按 user_id 的 VerifySecurityAnswer 已清除，
+				// 跳过清单里随之移除（保留按用户名版——它才是找回密码实际走的路径）。
 				emotionuser.UserService_VerifySecurityAnswerByUsername_FullMethodName,
 				// E2E-07：获取密保问题（找回密码流程，调用者未登录）
 				emotionuser.UserService_GetSecurityQuestionsByUsername_FullMethodName,

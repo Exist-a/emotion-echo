@@ -1,0 +1,36 @@
+{
+  "data": {
+    "queryTrace": {
+      "spans": [
+        {
+          "traceId": "e16a8e29c79911f1ae853af78e277095",
+          "spanId": 0,
+          "parentSpanId": -1,
+          "serviceCode": "emotion-echo-ai-svc",
+          "startTime": 1791959915097,
+          "endTime": 1791959929405,
+          "endpointName": "kafka-consume",
+          "type": "Entry",
+          "peer": "",
+          "layer": "Unknown",
+          "component": "Unknown",
+          "isError": true
+        },
+        {
+          "traceId": "e16a8e29c79911f1ae853af78e277095",
+          "spanId": 1,
+          "parentSpanId": 0,
+          "serviceCode": "emotion-echo-ai-svc",
+          "startTime": 1791959929106,
+          "endTime": 1791959929405,
+          "endpointName": "kafka-publish-dlq",
+          "type": "Exit",
+          "peer": "chat-events",
+          "layer": "Unknown",
+          "component": "Unknown",
+          "isError": false
+        }
+      ]
+    }
+  }
+}

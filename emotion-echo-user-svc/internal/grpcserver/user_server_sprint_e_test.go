@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -224,24 +223,5 @@ func TestUserServer_ResetPassword_ThenLogin(t *testing.T) {
 	require.NotNil(t, resp.User)
 }
 
-// TestUserServer_Logout_Success 断言 Logout 返 OK（鉴权要求 x-user-id）
-func TestUserServer_Logout_Success(t *testing.T) {
-	conn, cleanup := startUserTestServerWithCtx(t, newMockSvcCtx())
-	defer cleanup()
-
-	client := emotionuser.NewUserServiceClient(conn)
-
-	// 带 x-user-id metadata（Logout 是需鉴权调用）
-	ctx := metadata.NewOutgoingContext(context.Background(),
-		metadata.Pairs("x-user-id", "1"))
-
-	resp, err := client.Logout(ctx, &emotionuser.LogoutRequest{})
-	if err != nil {
-		st, _ := status.FromError(err)
-		assert.NotEqual(t, codes.Unimplemented, st.Code(),
-			"Logout 不应返 Unimplemented，实际 code=%s msg=%s", st.Code(), st.Message())
-	}
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.True(t, resp.Success)
-}
+// CL-02 清除（2026-10-14，用户裁定 D3）：Logout RPC 已删除（proto + server + BFF client 同步），
+// 其 gRPC 测试随之移除。登出语义由 BFF 清 cookie 承担，见 proto/user.proto service 段说明。

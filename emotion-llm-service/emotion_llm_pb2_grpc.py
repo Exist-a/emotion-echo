@@ -43,11 +43,6 @@ class EmotionLLMServiceStub:
                 request_serializer=emotion__llm__pb2.AnalyzeRequest.SerializeToString,
                 response_deserializer=emotion__llm__pb2.AnalyzeResponse.FromString,
                 _registered_method=True)
-        self.AnalyzeBatch = channel.unary_stream(
-                '/emotion_llm.v1.EmotionLLMService/AnalyzeBatch',
-                request_serializer=emotion__llm__pb2.AnalyzeBatchRequest.SerializeToString,
-                response_deserializer=emotion__llm__pb2.AnalyzeResponse.FromString,
-                _registered_method=True)
         self.ChatCompletion = channel.unary_stream(
                 '/emotion_llm.v1.EmotionLLMService/ChatCompletion',
                 request_serializer=emotion__llm__pb2.ChatCompletionRequest.SerializeToString,
@@ -74,17 +69,16 @@ class EmotionLLMServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def AnalyzeBatch(self, request, context):
-        """AnalyzeBatch 批量分析（server stream，Stage 16）
-
-        适用：AI 一次推多条消息，server 流式返回每条结果（首字节延迟低）
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def ChatCompletion(self, request, context):
-        """ChatCompletion 流式对话（Stage 80 · llm-chat-real-pipeline PR-1）
+        """── CL-02 清除（2026-10-14 用户裁定 D4）────────────────────────────────
+        AnalyzeBatch（批量分析，server stream，Stage 16）已**删除**，连带其 AnalyzeBatchRequest 消息。
+        理由：全仓无批量业务；唯一引用是测试 fake（`ai-svc/internal/analyzer/grpc_analyzer_test.go`）。
+        流式用例的承载者改为 ChatCompletion（server stream，真在用）。
+        状态由 scripts/rpc_status.tsv 管理（status=deleted）；守卫 check_rpc_status.sh 断言
+        「deleted 的 RPC 不得残留于 proto」。如需批量分析，请先立 ADR（含调用方与压测口径）。
+        ─────────────────────────────────────────────────────────────────────
+
+        ChatCompletion 流式对话（Stage 80 · llm-chat-real-pipeline PR-1）
 
         OpenAI chat.completions 兼容语义：消息数组入、增量 chunk 流出。
         上游 LLM 由 env 决定（LLM_BASE_URL/LLM_API_KEY/LLM_MODEL，DeepSeek 等
@@ -111,11 +105,6 @@ def add_EmotionLLMServiceServicer_to_server(servicer, server):
             'Analyze': grpc.unary_unary_rpc_method_handler(
                     servicer.Analyze,
                     request_deserializer=emotion__llm__pb2.AnalyzeRequest.FromString,
-                    response_serializer=emotion__llm__pb2.AnalyzeResponse.SerializeToString,
-            ),
-            'AnalyzeBatch': grpc.unary_stream_rpc_method_handler(
-                    servicer.AnalyzeBatch,
-                    request_deserializer=emotion__llm__pb2.AnalyzeBatchRequest.FromString,
                     response_serializer=emotion__llm__pb2.AnalyzeResponse.SerializeToString,
             ),
             'ChatCompletion': grpc.unary_stream_rpc_method_handler(
@@ -159,33 +148,6 @@ class EmotionLLMService:
             target,
             '/emotion_llm.v1.EmotionLLMService/Analyze',
             emotion__llm__pb2.AnalyzeRequest.SerializeToString,
-            emotion__llm__pb2.AnalyzeResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def AnalyzeBatch(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            '/emotion_llm.v1.EmotionLLMService/AnalyzeBatch',
-            emotion__llm__pb2.AnalyzeBatchRequest.SerializeToString,
             emotion__llm__pb2.AnalyzeResponse.FromString,
             options,
             channel_credentials,

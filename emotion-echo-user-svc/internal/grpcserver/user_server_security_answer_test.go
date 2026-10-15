@@ -116,35 +116,7 @@ func TestUserServer_VerifySecurityAnswerByUsername_UnknownUser_NotDistinguishabl
 		"用户不存在应与答案错误同码（PermissionDenied），不得用 NotFound 泄露用户名是否存在")
 }
 
-// TestUserServer_VerifySecurityAnswer_Anonymous_NotRejectedByInterceptor
-// 钉住拦截器漏配：proto 与 HTTP 端都把该 RPC 定义为匿名，
-// 不带 x-user-id 时必须能走到业务逻辑（答案错 → PermissionDenied，
-// 而不是拦截器的 Unauthenticated）。
-func TestUserServer_VerifySecurityAnswer_Anonymous_NotRejectedByInterceptor(t *testing.T) {
-	conn, cleanup := startUserTestServerWithCtx(t, newSecurityAnswerSvcCtx())
-	defer cleanup()
-	client := emotionuser.NewUserServiceClient(conn)
-
-	registerUserWithSecurityAnswer(t, client, "security_user_byid", "blue")
-
-	// 先拿 user_id：用 Login（同样匿名）
-	loginResp, err := client.Login(context.Background(), &emotionuser.LoginRequest{
-		Username: "security_user_byid",
-		Password: "Password123",
-	})
-	require.NoError(t, err)
-	require.NotNil(t, loginResp.GetUser())
-
-	_, err = client.VerifySecurityAnswer(context.Background(),
-		&emotionuser.VerifySecurityAnswerRequest{
-			UserId:        loginResp.GetUser().GetId(),
-			QuestionOrder: 1,
-			Answer:        "WRONG", // 故意用错答案，才能区分"业务拒绝"与"拦截器拒绝"
-		})
-
-	require.Error(t, err)
-	st, _ := status.FromError(err)
-	assert.NotEqual(t, codes.Unauthenticated, st.Code(),
-		"匿名调用不应被 userid 拦截器拒绝（拦截器需跳过本 RPC）")
-	assert.Equal(t, codes.PermissionDenied, st.Code())
-}
+// CL-02 清除（2026-10-14，用户裁定 D4）：按 user_id 的 VerifySecurityAnswer RPC 已删除
+// （族内冗余；找回密码流程用不上——发起时用户尚未登录），其匿名/拦截器测试随之移除。
+// 「匿名调用不被 userid 拦截器拒绝」这一契约仍由本文件上方 3 个 ByUsername 用例覆盖
+// （CorrectAnswer_Anonymous_Success / WrongAnswer_Denied / UnknownUser_NotDistinguishable）。

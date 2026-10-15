@@ -1,8 +1,10 @@
 ---
-status: in-progress
+status: landed
 priority: high
-owner: lane-cl-c
+owner: lane-cl-c（阶段 CL-02）
 created: 2026-10-13
+landed: 2026-10-15（阶段 CL-02 · PR #214；逐条终态与证据见 `docs/closure-roadmap/stages/cl-02-grpc-contract/{plan,report}.md`）
+last-updated: 2026-10-15（**落地归档**：CL-02 收口，本文件自 `docs/plans/` 迁入 `docs/legacy-plans/landed/`；引用旧路径的文档请改指本文件）
 type: implementation-plan
 source: 2026-10-13 会话（用户："grpc 这个说很久了，改很多次都没坐实"）
 depends-on: []
@@ -19,7 +21,7 @@ related-plans:
 > **⚠︎ 与 E2E 路线图的关系**：本计划是 **E2E-F-208 的后续**（F-208 完成了"清点 + 保留标注 + 守卫"，但用户认为"没坐实"）。**不新登记 E2E-F**；若需回填账本，仅更新 F-208 的状态说明。
 
 > **执行状态（2026-10-14）**：本计划**已排入阶段 CL-02**（roadmap §2 挂靠），由 **C 轨**（`feat/cl-02-grpc-contract`，工作副本 `../Emotion-Echo-cl02`，draft PR #214）执行。
-> **执行计划 = 阶段详档** [docs/closure-roadmap/stages/cl-02-grpc-contract/plan.md](../closure-roadmap/stages/cl-02-grpc-contract/plan.md)——**它把本计划 §4 的 7 个 Phase 细化为「🟢 不需栈 / 🔴 需栈」并补齐测试点与守卫设计**；本文档继续作为**设计与裁决依据**，两者冲突时以阶段详档为准。
+> **执行计划 = 阶段详档** [docs/closure-roadmap/stages/cl-02-grpc-contract/plan.md](../../closure-roadmap/stages/cl-02-grpc-contract/plan.md)——**它把本计划 §4 的 7 个 Phase 细化为「🟢 不需栈 / 🔴 需栈」并补齐测试点与守卫设计**；本文档继续作为**设计与裁决依据**，两者冲突时以阶段详档为准。
 
 ---
 

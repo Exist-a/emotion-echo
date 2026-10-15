@@ -20,6 +20,9 @@ type: phase-decisions
 | CL-D-05 | CL-07（情绪回显）是否提前到 T2 | CL-07 时机 | ✅ **已定（2026-10-13）** | **保持 T3**（不提前；平台优先） |
 | CL-D-06 | 排期顺序：端侧延期；T1=可观测/gRPC/Kafka；T2=Prompt 组装/消息链路；其余 T3；跨会话记忆放最后 | 全阶段 | ✅ **已定（2026-10-13 用户）** | 见 `roadmap.md §1` |
 | CL-D-07 | 融合情绪注入 prompt 的存储设计 | CL-04（读侧）/ CL-07（写侧） | ✅ **已定（2026-10-13 用户）** | **PG + Redis 两边都放**（PG=历史/真相；Redis=热点最新）。Redis **用户级、每用户一份**（`emotion:latest:user:{id}`），**TTL 24h**；**双/三/纯文本融合都落**；写侧 best-effort（Redis 挂不影响融合）、**写侧 owner=TBD**；**读时机 = 发消息拼 prompt 时**；取不到→优雅降级；**会话首条取不到情绪 = 已知边界（接受）** |
+| CL-D-08 | CL-02 七条死 RPC 逐条终态（接真/归档/清除） | CL-02 | ✅ **已定（2026-10-14 用户）** | **归档 4**：`StreamMessages`（ADR 决策 4 §四#3「故意不做」）+ 三条 mental-health（ADR chart-contract-alignment §E「5 无消费端点本轮不接，需 UX 设计」）；**清除 3**：`Logout`（ADR jwt-key-rotation「不做 token 黑名单/主动吊销」⇒ 不接真）、`VerifySecurityAnswer`（族内冗余）、`AnalyzeBatch`（无批量业务）。**「接真」零采纳**——两处用户初选「接真」经查与已收口 ADR 冲突后按文档改判（过程留痕见阶段档 §7） |
+| CL-D-09 | ai-svc → FER/SenseVoice/XTTS 是否算「服务间调用」 | CL-02 | ✅ **已定（2026-10-14 用户）** | **不算**：模型推理服务本身以 HTTP/FastAPI 暴露 ⇒ 不纳入「严格走 gRPC」范围，写死为边界 |
+| CL-D-10 | CL-02 新旧守卫形态 | CL-02 | ✅ **已定（2026-10-14 用户）** | **叠加 + 去掉硬编码**：旧守卫保留（守「标记真实性」）但期望值改为从 `scripts/rpc_status.tsv` 推导；新守卫守「每条 RPC 有终态 + live 有调用方」。CI 步骤/job 名不变（不动分支保护） |
 | CL-D-11 | SSE 实时推送收到的 AI 消息，是否也写入本地缓存（IndexedDB） | CL-05 | ✅ **已定（2026-10-14 用户）** | **本期不做** —— 只覆盖「拉取 + 发送」两条路径（与来源计划 §2.2 一致）；SSE 落缓存留作后续增强（需动 `useAIStreamHandler` 流式回调链，冒烟面大） |
 | CL-D-12 | 前端 `sender:'user'\|'AI'` / `contentType:'text'\|'audio'\|'img'` 与上游 DTO（`role` / 含 `image`/`file`/`video`）字段名与取值均不一致，是否本阶段统一 | CL-05 | ✅ **已定（2026-10-14 用户）** | **只登记不动** —— 记入 `CL-F` 账、留后续阶段处理；本阶段不牵动气泡渲染层，避免把「消息链路闭环」扩成大重构 |
 | CL-D-13 | 同名 `MessageWithStatus` 全仓 3 种形态（`CL-F-13`：可选性/字段各不相同）是否本阶段合并 | CL-05 | ✅ **已定（2026-10-14 用户）** | **顺延到 Phase 3 一并评估** —— Phase 3 做状态机本就要动消息形状，届时收敛只跑一轮回归 |

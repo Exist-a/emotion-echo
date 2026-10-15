@@ -1,8 +1,10 @@
 ---
-status: planned
+status: landed
 priority: medium
-owner: TBD
+owner: lane-cl-b（阶段 CL-01）
 created: 2026-10-13
+landed: 2026-10-14（阶段 CL-01 · PR #211；GORM 双层修复 / Redis 接线 / HTTP 出站 12 处 / DLQ span / fusion 指标 / BFF SetTracer 全部落地。**一处豁免**：BFF `downstream/chat.go` 的 HTTP 出站属 C 轨独占列（契约 §1.1），随 CL-02 落地；证据见 `docs/closure-roadmap/stages/cl-01-observability/{plan,report}.md`）
+last-updated: 2026-10-14（**落地归档**：CL-01 收口，本文件自 `docs/plans/` 迁入 `docs/legacy-plans/landed/`；引用旧路径的文档请改指本文件）
 type: implementation-plan
 source: 2026-10-13 会话（用户："还有关于埋点和可视化面板的问题"）
 depends-on: []

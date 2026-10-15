@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // SenseVoiceClient 语音 ASR + 情绪识别客户端（Stage 22-A.2）。
@@ -50,7 +52,7 @@ func NewSenseVoiceClient(c Config) *SenseVoiceClient {
 	}
 	return &SenseVoiceClient{
 		baseURL: c.BaseURL,
-		hc:      &http.Client{Timeout: defaultHTTPTimeout},
+		hc:      trace.NewTracedClient(defaultHTTPTimeout),
 		timeout: time.Duration(timeout) * time.Second,
 	}
 }

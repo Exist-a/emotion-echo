@@ -228,6 +228,7 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 			// （让 4 个 messaging.* tag 用精确值，不用 msg.Topic 兜底）
 			// span 提到 case 顶,不用 defer —— 避免 N 条消息 span 累积到 ConsumeClaim 退出
 			var span grpcinterceptor.Span
+			msgCtx := sess.Context() // 无 tracer / 建 span 失败时退回 session ctx
 			if h.Tracer != nil {
 				evt, decodeErr := DecodeChatEvent(msg.Value, saramaHeaders(msg))
 				if decodeErr == nil {
@@ -238,9 +239,13 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 						}
 						return "", nil
 					}
-					_, s, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
+					nCtx, s, err := h.Tracer.CreateEntrySpan(sess.Context(), "kafka-consume", extractor)
 					if err != nil {
 						log.Printf("[kafka-consumer] create entry span failed (continuing without trace): %v", err)
+					} else if nCtx != nil {
+						// CL-01 G4：把带 entry span 的 ctx 传下去 —— DLQ 投递挂到这条
+						// kafka-consume trace 下（此前丢弃 nCtx ⇒ DLQ span 无父被守卫跳过）。
+						msgCtx = nCtx
 					}
 					span = s
 					if span != nil {
@@ -255,7 +260,7 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 			}
 			attempts, handlerErr := h.deliverWithRetry(msg)
 			if handlerErr != nil {
-				h.publishToDLQ(sess, msg, handlerErr, attempts)
+				h.publishToDLQ(msgCtx, msg, handlerErr, attempts)
 			}
 			// 落库成功 或 重试预算耗尽（已进 DLQ）→ 都 Mark 前进，
 			// 分区消费不因单条消息停滞。
@@ -308,7 +313,7 @@ func (h *chatEventHandler) backoffFor(attempt int) time.Duration {
 
 // publishToDLQ 重试预算耗尽后的兜底：投 DLQ（带诊断 headers + sw8 透传）+ 计数。
 // 无论 DLQ 是否配置（Noop），调用方都必须 Mark 前进 —— 由 ConsumeClaim 统一处理。
-func (h *chatEventHandler) publishToDLQ(sess sarama.ConsumerGroupSession, msg *sarama.ConsumerMessage, lastErr error, attempts int) {
+func (h *chatEventHandler) publishToDLQ(ctx context.Context, msg *sarama.ConsumerMessage, lastErr error, attempts int) {
 	if h.dlq != nil {
 		// P1-2 (Round 1): 透传原 headers（含 sw8），让 OAP 端能继续追 trace。
 		dlqHeaders := make(map[string]string, len(msg.Headers))
@@ -324,15 +329,28 @@ func (h *chatEventHandler) publishToDLQ(sess sarama.ConsumerGroupSession, msg *s
 			OriginalTopic: msg.Topic,
 			Headers:       dlqHeaders,
 		}
-		if dlqErr := h.dlq.Publish(sess.Context(), dlqEntry); dlqErr != nil {
+		// CL-01 G4：DLQ 投递建 exit span（挂 kafka-consume entry span 下），并把 sw8
+		// 注入 dlqHeaders（map 引用类型，随 dlqEntry 一并发出）⇒ DLQ 消息可续接 trace。
+		var dlqSpan grpcinterceptor.Span
+		if h.Tracer != nil {
+			injector := func(k, v string) error { dlqHeaders[k] = v; return nil }
+			if _, s, derr := h.Tracer.CreateExitSpan(ctx, "kafka-publish-dlq", msg.Topic, injector); derr == nil {
+				dlqSpan = s
+			}
+		}
+		dlqErr := h.dlq.Publish(ctx, dlqEntry)
+		if dlqSpan != nil {
+			dlqSpan.EndSpan(dlqErr)
+		}
+		if dlqErr != nil {
 			// Round 2.3 §PR-1: analytics-svc DLQ 投递失败计数（kafka-pipeline-pending-decisions.md §P1-14）。
 			IncDLQPublishResult(false)
-			log.Printf("[kafka-consumer] DLQ publish failed (dropping msg): %v", dlqErr)
+			logging.PrintfContext(ctx, "[kafka-consumer] DLQ publish failed (dropping msg): %v", dlqErr)
 		} else {
 			IncDLQPublishResult(true)
 		}
 	}
-	log.Printf("[kafka-consumer] handle %s failed after %d attempts → DLQ: %v",
+	logging.PrintfContext(ctx, "[kafka-consumer] handle %s failed after %d attempts → DLQ: %v",
 		string(msg.Key), attempts, lastErr)
 }
 

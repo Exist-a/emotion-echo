@@ -140,3 +140,92 @@ data:
               description: |
                 alertmanager_cluster_members = {{ `{{ $value }}` }}，应至少为 1。
                 为 0 表示 gossip 环未建立，Alertmanager 无法在接收方之间复制告警。
+
+  # --- 与 deploy/prometheus/rules/cl01-health-business.yml 保持一致（CL-01 新增）---
+  # 口径: 业务（fusion 融合链路）+ 可靠性（DLQ 投递）+ 健康（/health/ready 就绪）。
+  # 注: /health/ready 的就绪信号取自 emotion_echo_http_requests_total 的 status 标签
+  #     （各 svc HTTP 中间件写入）；k8s 侧 readinessProbe 打的是同一端点 ⇒ 同样有效。
+  cl01-health-business.yml: |
+    groups:
+      - name: cl01-business-fusion
+        interval: 30s
+        rules:
+          - alert: FusionCallFailing
+            expr: increase(emotion_fusion_calls_total{result="failure"}[10m]) > 0
+            for: 0m
+            labels:
+              severity: warning
+              component: ai
+            annotations:
+              summary: "融合调用失败（modality={{ `{{ $labels.modality }}` }}）"
+              description: |
+                近 10 分钟有 {{ `{{ $value | printf "%.0f" }}` }} 次融合以 failure 收尾。
+                融合失败会让 /reports/* 的情绪分布退化为"只有文本"甚至空。
+
+          - alert: FusionFallbackActive
+            expr: increase(emotion_echo_fusion_fallback_total[10m]) > 0
+            for: 0m
+            labels:
+              severity: warning
+              component: ai
+            annotations:
+              summary: "融合走了回退路径（stage={{ `{{ $labels.stage }}` }}）"
+              description: |
+                近 10 分钟 fusion 回退 {{ `{{ $value | printf "%.0f" }}` }} 次，stage={{ `{{ $labels.stage }}` }}。
+                llm_to_late = LLM fuser 不可用 → 加权 late fusion 兜底；
+                late_to_skip = 连兜底都不可用 → 跳过融合。
+
+          - alert: FusionWorkerStalled
+            expr: (increase(emotion_echo_fusion_worker_tick_total{outcome="ok"}[10m]) or vector(0)) == 0
+            for: 10m
+            labels:
+              severity: warning
+              component: ai
+            annotations:
+              summary: "FusionWorker 10 分钟无成功 tick"
+              description: |
+                ai-svc 的 FusionWorker 每 5s 应产生一次 outcome=ok 的 tick。
+                10 分钟零增长说明循环停摆（`or vector(0)` 让 series 消失时也能判停摆）。
+
+      - name: cl01-reliability
+        interval: 30s
+        rules:
+          - alert: DLQPublishFailing
+            expr: |
+              increase(emotion_echo_dlq_publish_total{result="failure"}[10m]) > 0
+              or increase(emotion_echo_analytics_dlq_publish_total{result="failure"}[10m]) > 0
+            for: 0m
+            labels:
+              severity: critical
+              component: kafka
+            annotations:
+              summary: "DLQ 投递失败（instance={{ `{{ $labels.instance }}` }}）"
+              description: |
+                近 10 分钟 DLQ 投递失败 {{ `{{ $value | printf "%.0f" }}` }} 次。
+                业务消息已 MarkMessage 前进且 DLQ 也没收到 ⇒ 该事件**彻底丢失**。
+
+          - alert: ServiceNotReady
+            expr: increase(emotion_echo_http_requests_total{path="/health/ready",status!~"2.."}[5m]) > 0
+            for: 0m
+            labels:
+              severity: critical
+              component: health
+            annotations:
+              summary: "服务就绪探针失败：{{ `{{ $labels.service }}` }}（HTTP {{ `{{ $labels.status }}` }}）"
+              description: |
+                {{ `{{ $labels.service }}` }} 的 /health/ready 近 5 分钟返回非 2xx 共
+                {{ `{{ $value | printf "%.0f" }}` }} 次。readiness 语义 = 依赖可用性，
+                503 表示该实例**实际不可用**（即使进程还在跑、up 仍为 1）。
+
+          - alert: HealthProbeMissing
+            expr: (increase(emotion_echo_http_requests_total{path="/health/ready",status="200"}[10m]) or vector(0)) == 0
+            for: 10m
+            labels:
+              severity: warning
+              component: health
+            annotations:
+              summary: "就绪探针 10 分钟无成功样本：{{ `{{ $labels.service }}` }}"
+              description: |
+                就绪探针每 30s 打一次 /health/ready，10 分钟窗口内应远多于 0 次。
+                零增长说明探针被摘掉、或服务已卡死不再处理请求。
+                （Pod 重建后 counter 归零，故带 for: 10m 避开该瞬态。）

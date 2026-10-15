@@ -291,10 +291,10 @@ func (s *chatServer) UpdateConversation(ctx context.Context, req *emotionchat.Up
 // 收到 codes.Unimplemented 时 fallback 到现有路径（暂无 fallback，因为
 // BFF 没有用 StreamMessages 的调用点）。
 //
-// E2E-31 已知未接线（2026-10-09，用户裁定「保留 + 标注 + 守卫」）：本 RPC 不是
-// "业务走了 HTTP 把 gRPC 绕开"，而是**全仓无业务路径**（聊天用 SSE，非 gRPC streaming），
-// 决策 4 §四「故意不做」亦明列它属 proto 预留。启用须先有流式业务 ⇒ 属建功能、另立项。
-// 依据：账本 E2E-F-208、stages/e2e-31-internal-rpc-convergence/report.md §0 T-1。
+// CL-02 已归档（2026-10-14，用户裁定 D2）：本 RPC **明确不做**，proto 侧已标 deprecated。
+// 依据：ADR-2026-09-decision-4-closure §四 #3「故意不做」——聊天流实际走 BFF SSE。
+// 原 E2E-31 的「保留 + 标注 + 计数守卫」已升级为"每条 RPC 有终态"（scripts/rpc_status.tsv，
+// 守卫 scripts/check_rpc_status.sh）。实现保留（返 Unimplemented）以便重启时直接接。
 func (s *chatServer) StreamMessages(req *emotionchat.StreamMessagesRequest, stream emotionchat.ChatService_StreamMessagesServer) error {
 	if s.svcCtx == nil || s.svcCtx.ConversationRepo == nil {
 		return status.Error(codes.Unavailable, "chat-svc repository not initialized (degraded start)")

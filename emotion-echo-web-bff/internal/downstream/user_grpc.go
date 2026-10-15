@@ -12,10 +12,11 @@
 // proto 类型：直接复用 shared/pkg/emotionuser 生成代码
 // 鉴权：metadata x-user-id（与 emotion_query.proto / emotion_chat.proto 一致）
 //
-// Sprint E + F（2026-09-11）：扩 proto user.proto 加 Login / Register / ResetPassword / Logout RPC；
+// Sprint E + F（2026-09-11）：扩 proto user.proto 加 Login / Register / ResetPassword RPC；
 // user-svc gRPC server 实现；userid 拦截器跳过 Login/Register/ResetPassword 3 个匿名调用。
 // accessToken 仍由 BFF jwt.Manager 签发。
-// **所有 7 个 UserClient 方法（Login/Register/ResetPassword/Logout/GetMe/UpdateProfile/GetUserById）全走 gRPC**。
+// **UserClient 接口的 5 个方法（Login/Register/ResetPassword/GetMe/UpdateProfile/GetUserById
+// 中除 UpdateProfile 别名外的全部）全走 gRPC**；Logout 已于 CL-02 清除（D3，proto 同步删除）。
 package downstream
 
 import (
@@ -102,21 +103,6 @@ func (c *userGRPCClient) ResetPassword(ctx context.Context, req ResetPasswordReq
 	return fromProtoUserInfo(resp.GetUser()), nil
 }
 
-// Logout gRPC RPC（Sprint F 2026-09-11）
-//
-// 需要 x-user-id metadata（Logout 不在拦截器跳过清单），所以用 withUserID(ctx)。
-//
-// E2E-31 已知未接线（2026-10-09）：**本方法不在 `UserClient` 接口内**，零 handler 调用；
-// 登出路径（`/api/v1/auth/logout`）设计上只清 cookie。保留 + 标注 + 守卫（report §0 T-1）。
-func (c *userGRPCClient) Logout(ctx context.Context) error {
-	cli := emotionuser.NewUserServiceClient(c.conn)
-	_, err := cli.Logout(withUserID(ctx), &emotionuser.LogoutRequest{})
-	if err != nil {
-		return wrapGRPCError(err, "user logout")
-	}
-	return nil
-}
-
 // Login gRPC RPC（Sprint E 2026-09-11）
 //
 // 注意：Login 是匿名调用，**不传** metadata x-user-id（user-svc 拦截器跳过 Login）。
@@ -166,23 +152,9 @@ func (c *userGRPCClient) Register(ctx context.Context, username, password, verif
 	return fromProtoUserInfo(resp.GetUser()), nil
 }
 
-// VerifySecurityAnswer gRPC RPC（E2E-06，供 D-01=C 找回密码）
-//
-// E2E-31 已知未接线（2026-10-09）：本方法**在 `UserClient` 接口内但零 handler 调用**；
-// 找回密码在用的是兄弟方法 `VerifySecurityAnswerByUsername`（同走 gRPC）。
-// 保留 + 标注 + 守卫（report §0 T-1）；确认无人按 userID 校验后可单独删除。
-func (c *userGRPCClient) VerifySecurityAnswer(ctx context.Context, userID int64, questionOrder int, answer string) error {
-	cli := emotionuser.NewUserServiceClient(c.conn)
-	_, err := cli.VerifySecurityAnswer(ctx, &emotionuser.VerifySecurityAnswerRequest{
-		UserId:        userID,
-		QuestionOrder: int32(questionOrder),
-		Answer:        answer,
-	})
-	if err != nil {
-		return wrapGRPCError(err, "user verifySecurityAnswer")
-	}
-	return nil
-}
+// ── CL-02 清除（2026-10-14，用户裁定 D3/D4）：Logout 与 VerifySecurityAnswer 两个
+// client 方法已删除（与 proto / user-svc server 同步）。依据见 proto/user.proto service 段。
+// ─────────────────────────────────────────────────────────────────────
 
 // VerifySecurityAnswerByUsername 按用户名验证密保答案（R-01 #2 真修通）
 //

@@ -47,8 +47,8 @@ func (w *wrappedServerStream) SendMsg(m interface{}) error {
 //
 // 输出格式：
 //
-//	[stream-server] method=/.../AnalyzeBatch stream-start
-//	[stream-server] method=/.../AnalyzeBatch stream-end duration=120ms sent=3 recv=0 code=OK
+//	[stream-server] method=/.../ChatCompletion stream-start
+//	[stream-server] method=/.../ChatCompletion stream-end duration=120ms sent=3 recv=0 code=OK
 func NewServerStreamLoggingInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		start := time.Now()

@@ -1,8 +1,10 @@
 ---
-status: planned
+status: landed
 priority: medium
-owner: TBD
+owner: lane-cl-b（阶段 CL-01）
 created: 2026-10-11
+landed: 2026-10-14（阶段 CL-01 · PR #211；四块看板 A/B/C/D + 6 条告警规则全部落地，推进方式与逐点证据见 `docs/closure-roadmap/stages/cl-01-observability/{plan,report}.md`）
+last-updated: 2026-10-14（**落地归档**：CL-01 收口，本文件自 `docs/plans/` 迁入 `docs/legacy-plans/landed/`；引用旧路径的文档请改指本文件）
 type: implementation-plan
 source: 2026-10-11 会话（用户："把没接入的业务指标接入一下，整理文档就行"）；承接 2026-10-11 健康检查/面板核查 + 2026-09-30 缺口分析
 depends-on: []

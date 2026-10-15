@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"emotion_fusion_calls_total","instance":"emotion-echo-ai-svc:8891","job":"emotion-echo-services","modality":"text","monitor":"emotion-echo-dev","result":"success"},"value":[1791959783.394,"1"]}]}}

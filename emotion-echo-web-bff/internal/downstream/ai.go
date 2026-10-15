@@ -25,6 +25,7 @@ import (
 
 	bffdiscovery "emotion-echo-web-bff/internal/discovery"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 
 	"google.golang.org/grpc"
 )
@@ -189,7 +190,7 @@ func newAIHTTPClient(opts AIClientOptions) AIClient {
 	}
 	client := &aiHTTPClient{
 		baseURL:    opts.BaseURL,
-		http:       &http.Client{Timeout: timeout},
+		http:       trace.NewTracedClient(timeout),
 		resolver:   opts.Resolver,
 		svcName:    svcName,
 		resolveCtx: context.Background(),

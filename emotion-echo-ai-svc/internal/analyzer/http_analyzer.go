@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"log/slog"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // HTTPAnalyzer 通过 HTTP 调用 LLM 服务
@@ -59,9 +61,7 @@ func NewHTTPAnalyzer(baseURL string, apiKey ...string) *HTTPAnalyzer {
 	return &HTTPAnalyzer{
 		baseURL: baseURL,
 		apiKey:  key,
-		client: &http.Client{
-			Timeout: 8 * time.Second,
-		},
+		client: trace.NewTracedClient(8 * time.Second),
 	}
 }
 
