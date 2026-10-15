@@ -225,12 +225,14 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 
 | 编号 | 事项 | 选项 | 我的建议 |
 |---|---|---|---|
-| **M1** | sw8 存取原语的落点 | A. 给 shared `Tracer` 接口加 `EncodeSW8`/`ContextWithSW8`（+ 同步实现与接口契约测试）<br>B. 用 `CreateExitSpan` 的 injector 旁路捕获（零接口改动，多一个无用 span） | **A**（语义干净；接口变更成本一次，7 个 svc 共享） |
-| **M2** | DLQ 投递失败时的语义 | A. **不 `MarkMessage`**（消息留待重投，靠消费端幂等去重）<br>B. 仍然 Mark，但落库/落 counter 成"可逐条观测的黑洞" | **A**（"不丢"优先；风险=重投次数不可控）|
-| **M3** | 回放"半自动"到什么程度 | A. 保持人工工具（只补文档/守卫）<br>B. 加一个"一键回放全部积压"的脚本 + 回放计数指标<br>C. 做定时自动回放 | **B**（C 有二次投毒风险，不建议）|
-| **M4** | CL-F-15 fallback 改法 | A. Kafka 初始化**后台重试**（对齐 CL-F-14 tracer 补挂模式）<br>B. init 失败时**不让 relay MarkSent**（行留 pending）<br>C. A+B 都做 | **C**（A 恢复能力 + B 兜底不丢）|
+| **M1** | sw8 存取原语的落点 | A. 给 shared `Tracer` 接口加 `EncodeSW8`/`ContextWithSW8`（+ 同步实现与接口契约测试）<br>B. 用 `CreateExitSpan` 的 injector 旁路捕获（零接口改动，多一个无用 span） | ✅ **裁定 = A**（多轮追问后由用户拍板，见 `CL-D-15`） |
+| **M2** | DLQ 投递失败时的语义 | A. **不 `MarkMessage`**（消息留待重投，靠消费端幂等去重）<br>B. 仍然 Mark，但落库/落 counter 成"可逐条观测的黑洞" | ✅ **裁定 = A**（见 `CL-D-16`；落地前须逐 handler 核实幂等）|
+| **M3** | 回放"半自动"到什么程度 | A. 保持人工工具（只补文档/守卫）<br>B. 加一个"一键回放全部积压"的脚本 + 回放计数指标<br>C. 做定时自动回放 | ✅ **裁定 = B**（见 `CL-D-17`；不做 C，防二次投毒）|
+| **M4** | CL-F-15 fallback 改法 | A. Kafka 初始化**后台重试**（对齐 CL-F-14 tracer 补挂模式）<br>B. init 失败时**不让 relay MarkSent**（行留 pending）<br>C. A+B 都做 | ✅ **裁定 = C**（见 `CL-D-18`；须回写 ADR-19）|
 
-> 裁定后入 `docs/closure-roadmap/decisions.md`（编号从 **`CL-D-15`** 起 —— 开号前须 `grep -r "CL-D-" docs/` 核对在飞 PR，避免撞号）。
+> **裁定状态（2026-10-16）**：四项**均已由用户拍板**（全部采纳推荐项），已登记为 `CL-D-15`~`CL-D-18`。
+> 编号前已按 `decisions.md 使用约定` 执行 `grep` 核对（main 最大号为 14；在飞分支 #219/#231/#229 均未占用 15+）。
+> ⇒ **Phase 2/3/4b/4c/5 解除阻塞，可开工**。
 
 ---
 
