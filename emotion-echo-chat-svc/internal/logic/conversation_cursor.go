@@ -34,7 +34,9 @@ func encodeConversationCursor(updatedAt time.Time, id int64) string {
 }
 
 // decodeConversationCursor 解码游标；空串 ⇒ 零值 + id 0（= 首页），**不是**错误。
-// 非法格式返回错误（由 handler 映射成 400），避免静默退化成"首页"而让翻页悄悄重来。
+// 非法格式返回错误（经 grpcerr 前缀表 `validation` → codes.InvalidArgument → BFF 400），
+// 避免静默退化成"首页"而让翻页悄悄重来（前端无法察觉）。所以消息**必须**以
+// `validation: ` 开头 —— 这是 shared/pkg/grpcerr 的字符串前缀约定。
 func decodeConversationCursor(s string) (time.Time, int64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -42,15 +44,15 @@ func decodeConversationCursor(s string) (time.Time, int64, error) {
 	}
 	parts := strings.Split(s, conversationCursorSep)
 	if len(parts) != 2 {
-		return time.Time{}, 0, fmt.Errorf("invalid conversation cursor %q: want <unixMicros>:<id>", s)
+		return time.Time{}, 0, fmt.Errorf("validation: invalid conversation cursor %q: want <unixMicros>:<id>", s)
 	}
 	us, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
-		return time.Time{}, 0, fmt.Errorf("invalid conversation cursor %q: bad timestamp part", s)
+		return time.Time{}, 0, fmt.Errorf("validation: invalid conversation cursor %q: bad timestamp part", s)
 	}
 	id, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
-		return time.Time{}, 0, fmt.Errorf("invalid conversation cursor %q: bad id part", s)
+		return time.Time{}, 0, fmt.Errorf("validation: invalid conversation cursor %q: bad id part", s)
 	}
 	return time.UnixMicro(us).UTC(), id, nil
 }

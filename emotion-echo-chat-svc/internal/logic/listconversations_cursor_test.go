@@ -51,6 +51,10 @@ func TestConversationCursor_InvalidIsErrorNotSilentFirstPage(t *testing.T) {
 	for _, bad := range []string{"abc", "1:2:3", "x:1", "1:y", ":"} {
 		_, _, err := decodeConversationCursor(bad)
 		assert.Error(t, err, "非法游标 %q 必须报错", bad)
+		// 前缀必须是 `validation:` —— grpcerr 靠它映射成 codes.InvalidArgument，
+		// BFF 再映射成 HTTP 400。若退化成别的文案，客户端拿到的是 500（"服务端坏了"），
+		// 而归因应是"请求里的游标非法"。
+		assert.ErrorContains(t, err, "validation:", "错误消息必须以 validation: 开头（grpcerr 前缀表约定）")
 	}
 }
 

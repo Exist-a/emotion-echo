@@ -541,3 +541,23 @@ func TestListConversationsHandler_NoUserID_Returns401(t *testing.T) {
 	r.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusUnauthorized, rec.Code, "body=%s", rec.Body.String())
 }
+
+// TestListConversationsHandler_InvalidCursor_Returns400（CL-05 Phase 5 · T-7）
+//
+// 为什么单独钉：**HTTP 降级路径**（CHAT_TRANSPORT=http）此前对所有 logic 错误
+// 一律回 500；而 gRPC 路径靠 grpcerr 的 `validation:` 前缀表得到 400 ⇒
+// **同一个错误在两条路径上状态码不同**。这条路径平时无人跑，这种漂移不会自己暴露
+// （Phase 5 实测：gRPC 400 / HTTP 500），所以此处把 HTTP 侧的状态码钉死。
+func TestListConversationsHandler_InvalidCursor_Returns400(t *testing.T) {
+	svcCtx := newTestSVC()
+	r := newPR2Router(svcCtx)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations?limit=2&cursor=not-a-cursor", nil)
+	req.Header.Set("X-User-Id", "7")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code,
+		"非法游标是**客户端非法输入** ⇒ 400（不能 500，也不能静默退回首页）body=%s", rec.Body.String())
+	require.Contains(t, rec.Body.String(), "validation:")
+}

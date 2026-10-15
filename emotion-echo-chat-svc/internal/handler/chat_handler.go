@@ -14,6 +14,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// statusForLogicErr 把 logic 层错误映射成 HTTP 状态码。
+//
+// 与 gRPC 路径**对齐**：`shared/pkg/grpcerr` 的字符串前缀约定里 `validation:` ⇒
+// codes.InvalidArgument ⇒ BFF 400。而 HTTP 降级路径（CHAT_TRANSPORT=http）此前
+// 一律回 500 ⇒ **同一个错误在两条路径上状态码不同**，回滚开关一拨归因就变了。
+// 这条路径平时无人跑，正是这类漂移最容易潜伏的地方（CL-05 Phase 5 实测：
+// 非法游标在 gRPC 路径 400、在 HTTP 路径 500）。
+func statusForLogicErr(err error) int {
+	if strings.HasPrefix(err.Error(), "validation:") {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
+}
+
 // CreateConversationHandler POST /api/v1/conversations
 func CreateConversationHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -77,7 +91,9 @@ func ListConversationsHandler(svcCtx *svc.ServiceContext) gin.HandlerFunc {
 		req.Cursor = c.Query("cursor")
 		resp, err := logic.NewListConversationsLogic(c.Request.Context(), svcCtx).ListConversations(req)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			// CL-05 Phase 5：非法游标属于**客户端非法输入** ⇒ 400（不是 500）。
+			// 与 gRPC 路径靠 grpcerr 前缀表得到的状态码保持一致。
+			c.JSON(statusForLogicErr(err), gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, resp)
