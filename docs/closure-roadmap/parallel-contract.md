@@ -36,8 +36,14 @@ related:
 | **C** | **CL-05** 消息链路 | 前端 `stores/{message,conversation}.ts`、`utils/{db,messageCache}.ts`、`composables/useConversationSender.ts`、`pages/chat/conversation/[id].vue`、`plugins/init.ts` + chat-svc `internal/{types,repository,logic,grpcserver}` + BFF `downstream/chat*.go`、`handler/chat_handler.go` + **`proto/chat.proto`** | 独立于 T1 |
 | **D** | **CL-00** CI 瘦身 | `.github/workflows/**` + `scripts/**` | 独立于业务代码 |
 | **E** | **CL-02** gRPC 契约 | **`proto/**`** + 各 svc `internal/grpcserver/**` + BFF `internal/downstream/**` + `scripts/check_dead_grpc_inventory.sh` | 独立，可搭任一轮 |
+| **F** | **CL-03** Kafka/可靠性闭环 | chat-svc `internal/{config,events,outbox}`、`internal/repository/outbox.go`、`migrations/**`、`main.go` + ai-svc `internal/consumer/**` + analytics-svc `internal/kafka/**` + `emotion-echo-shared/pkg/{messaging,eventrow,grpcinterceptor}` + `deploy/{prometheus,grafana}` + `charts/.../prometheus/templates/configmap-rules.yaml`（内联副本） | 承接 CL-01 追踪面（B 已 done）；**不碰** 前端 / BFF / `proto/**` |
 
 > **不能并行**：CL-06 / CL-07（依赖 CL-04）；CL-08a~e（自身有序）。
+>
+> **轨字母对照纠偏（2026-10-16，F 轨补记）**：本表 A~E 是"建议轨"，实际各会话按 **Lane-CL-<字母>** 自命名，**与阶段号不一一对应** ——
+> 实测 **Lane-CL-C 跑的是 CL-02（本表 E 行）**、**Lane-CL-D 跑的是 CL-05（本表 C 行）**。新增 **F = CL-03**（与前缀无歧义）。
+> B 行备注写的"CL-01 + CL-03 同追踪面 ⇒ 建议同轨"**已不适用**：CL-01 已收口（#211），CL-03 独立成 F 轨开（理由见 `roadmap.md §2` 末注）。
+> 该问题已由 D 轨登账 **`CL-F-21`**（两套轨字母并存致「独占列」误判，归 CL-00）；**本注只补具体对照**，不重复记账。
 
 ### 1.2 共享 spine 文件（**多轨都碰 ⇒ 必须串行 + 握手登记**）
 
@@ -64,6 +70,7 @@ related:
 | B | CL-01 可观测闭环 | `feat/cl-01-observability`（worktree `../Emotion-Echo-cl01`） | Lane-CL-B | 2026-10-14 | ✅ **done 并已合并**（squash → `b1f13dc`，PR [#211](https://github.com/Exist-a/emotion-echo/pull/211)，**源分支已删**）；dev 栈已用毕释放（`.devmode-session` 已删） |
 | C | CL-02 gRPC 契约闭环 | `feat/cl-02-grpc-contract`（worktree `../Emotion-Echo-cl02`） | Lane-CL-C | 2026-10-14 | **in-progress**（draft PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)；🟢 部分已完成（Phase 1/2/3/5 + 守卫接 CI）；**🔵 2026-10-15 06:36 起持 dev 栈锁**做 Phase 2/6 运行时验证） |
 | D | CL-05 消息链路闭环 | `feat/cl-05-message-pipeline`（worktree `../Emotion-Echo-cl05`） | Lane-CL-D | 2026-10-14 | **in-progress**（draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；**🟢 先行**：Phase 1~4 全部不需栈；🔴 需栈 Phase 0/5~7 排队在 C 之后） |
+| F | CL-03 Kafka/可靠性闭环 | `feat/cl-03-kafka-reliability`（worktree `../Emotion-Echo-cl03`） | Lane-CL-F | 2026-10-16 | **in-progress**（draft PR [#229](https://github.com/Exist-a/emotion-echo/pull/229)；**🟢 先行**：Phase 1~6（trace 列 / 写侧捕获 / relay 恢复 / DLQ 硬化 / 遗留项）全为 Go 单测 + 静态契约级；🔴 Phase 0/7（端到端 trace 贯通 + 堆积告警 firing）**排队在 D 之后**） |
 
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
@@ -83,6 +90,7 @@ related:
 | 3 | C（CL-02） | B 之后（Phase 2 清除验证 / 6 收口冒烟；"4 接真"已由裁定改判 N/A） | ✅ **已用毕释放（2026-10-15 07:40）** —— 06:36 取锁 → 7/7 healthy + Nacos count:6 + smoke 24/24 → 删 `deploy/.devmode-session`；**队列下一位 = D（CL-05）**。注意：栈仍开着，跑的是本轨 `:cl02-verify` 镜像，D 接手时按 H5 用自己后缀 tag 重建 |
 | 4 | D（CL-05） | C 之后（Phase 0 基线取证 / 5 会话游标运行验证 / 7 端到端+人可见钉） | ✅ **已取锁（2026-10-15 20:00）** —— C 于 07:40 释放后**队首轮到 D**；`deploy/.devmode-session` 由 `lane-cl-d` 写入（收工即删）。接手时栈仍在跑 C 轨 `:cl02-verify` 镜像，按 **H5/条款 10** 用本轨后缀 tag（`:cl05`）重建 + `up` 只指名本轨服务 |
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |
+| 5 | F（CL-03） | D 之后（Phase 0 基线取证：现状 trace 断点的实拍证据 / Phase 7 端到端 trace 贯通 + DLQ 堆积告警 firing） | 排队中（**D 持锁中**——2026-10-16 06:16 取锁，18 容器栈在跑；F 轨先做 🟢 Phase 1~6，**不排队不占栈**） |
 
 > **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
 > 三条"待验证"轨 ≈ 极限；若新轨全程需栈 ⇒ **等**，不要加。**纯 🟢 轨（文档/静态守卫）不受此限**。
@@ -117,6 +125,9 @@ related:
 | 2026-10-15 | Lane-CL-D | **`deploy/.devmode-session`（运行时锁）** + 本文件 §3.1 第 4 行 | D 轨**取锁**：队列 1/2/3 位（A/B/C）均已用毕释放，C 于 2026-10-15 07:40 释放后**队首轮到 D**。锁由本轨写入（owner `lane-cl-d`，收工即删）。按 **H2/条款 8**，本行随**独立小 PR** 落地，不含阶段产物 | ✅ |
 | 2026-10-15 | Lane-CL-D | **`emotion-echo-web/app/pages/chat/conversation/[id].vue`** —— **回复上一行 C 轨的预占** | **D 轨主张本轮优先，三条理由**：① **字母歧义（关键）**：本契约并存**两套轨字母** —— §1.1 的 A~E 是**阶段面**（轨 C = **CL-05 消息链路**、轨 E = CL-02），而 §三 占位表用的是**会话字母**（C = CL-02、D = CL-05）。C 轨按**会话字母**读 §1.1，把"**C 轨独占列**"读成了自己 ⇒ 该列实为 **CL-05（D 轨）** 的主文件面（§1.1 明文列有 `pages/chat/conversation/[id].vue` 与 `composables/useConversationSender.ts`）；② **先占在先**：D 轨 2026-10-14 已在 §四 声明要改该页（握手行见上），早于 C 轨 2026-10-15 的预占；③ **C 轨尚未动该页**（对 main 及各远端分支 `git log -- [id].vue` 均 0 commit），且 **dev 栈锁在 D 轨手上** ⇒ C 轨此刻也无法开工，让 D 轨先跑**不增加 C 轨等待**，反之则卡住一个**在飞阶段**。**建议**：本轮该页由 D 轨完成 CL-05 收尾（Phase 8：`CL-F-10` 发送后不自动滚底 / `CL-F-11` 刷新后双对话），**落地后立即在本行标 ✅ 释放**给 C 轨做相机悬浮窗。**若 C 轨不同意，请在本行下回复，D 轨让位**。⚠️ 已登账本 **`CL-F-21`**（两套轨字母并存致"独占列"误判，归 CL-00） | ⏳ **待 C 轨确认** |
 | 2026-10-15 | Lane-CL-D | **`docs/closure-roadmap/decisions.md`** | D 轨**勘误**：该文件 `CL-D-13` 行内的交叉引用写作 `CL-F-13`，而本轨该条已因与 B 轨同号而**改号为 `CL-F-18`**（见账本 `discovered-unresolved.md`）⇒ 就地改**本轨自己那条**的交叉引用（**不动他人行**）。随本独立小 PR 落地 | ✅ |
+| 2026-10-16 | Lane-CL-F | `docs/closure-roadmap/{parallel-contract,roadmap}.md` | F 轨开工：§三 登记占位 + §3.1 排 5 位 + §1.1 新增 F 行 + 轨字母对照纠偏 + CL-03 翻 in-progress。按 **H2/条款 8**，登记走**独立小 PR**（本 PR），**不含**阶段产物（阶段 PR = [#229](https://github.com/Exist-a/emotion-echo/pull/229)）；本行只追加、不改他人行 | ✅ |
+| 2026-10-16 | Lane-CL-F | **`emotion-echo-chat-svc/main.go`**（脊柱）+ `emotion-echo-shared/pkg/grpcinterceptor/{tracing.go,tracing_go2sky.go}`（**仅在 M1 裁 A 时**） | F 轨**握手申请**：① CL-03 Phase 1~3 要加 outbox `trace_sw8` 列并在 relay 发布前恢复父 ctx ⇒ 落地动作含 `migrations/` 新文件 + `internal/repository/outbox.go` + `internal/outbox/relay.go` + 三条 `internal/logic/*conversationlogic.go` + `main.go`（relay 构造/fallback 段）；② 若裁定给 shared `Tracer` 接口加 sw8 原语，会动 **7 个 svc 共享**的接口与其余实现（含接口契约测试）。**D 轨（CL-05）若也需改 `main.go`，请在本行下回复协商**；F 轨按 §1.2「脊柱串行」，**先做不需 main.go 的 Phase 1 迁移，改 `main.go` 前再确认** | ⏳ **待 D 轨确认** |
+| 2026-10-16 | Lane-CL-F | `deploy/prometheus/rules/*.yml` + `deploy/grafana/dashboards/*.json` + **`charts/emotion-echo/charts/prometheus/templates/configmap-rules.yaml`**（内联副本） | F 轨握手：CL-03 Phase 4 要新增 **DLQ 堆积告警**（DLQ 硬化四问题之四）。该面属 **B 轨（CL-01）文件面**，B 已收口（#211）⇒ 依 §1.2「同名文件串行」声明占用；新增告警**必须同步 k8s 内联副本**，否则 `deploy/obs_monitoring.test.js` group ⑤ 的双向相等断言会红（现成机器守卫） | ⏳ **声明占用** |
 
 ## 五、开工前置检查（照做）
 
