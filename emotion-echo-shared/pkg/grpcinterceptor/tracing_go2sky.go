@@ -196,3 +196,45 @@ func (t *Go2SkyTracer) CreateEntrySpan(
 	}
 	return nCtx, &Go2SkySpan{span: span}, nil
 }
+
+// sw8EncodePeer 是 EncodeSW8 内部「为编码而建的 exit span」的 peer 值。
+//
+// 必须非空：go2sky 校验 exit span 的 peer（`trace.go:156`：`peer == ""` → errParameter
+// "parameter are nil"）。而本 span 不指向任何真实对端 ⇒ 用固定哨兵便于在 UI 上识别。
+//
+// 为什么不能改成更"干净"的做法（2026-10-16 实测确认，非推断）：
+//   - go2sky 的 `Span` 接口不暴露 SpanContext；`ReportedSpan.Context()` 返回的是
+//     `*SegmentContext`（≠ propagation.SpanContext），其 `EncodeSW8` 在 SpanContext 上；
+//   - 自己拼 SpanContext 需要 `t.service` / `t.instance`（`trace.go:181-182`），
+//     二者是 go2sky.Tracer 的**私有字段**，包外不可读 ⇒ 外部无法复刻编码；
+//   - 故唯一可行路径 = 借 go2sky 自己的 `CreateExitSpanWithContext` 编码（本文件实现）。
+//
+// 代价（如实登记）：trace 里会多一个约 0 时长的 exit span（operationName 由调用方给，
+// 如 "outbox-enqueue"），拓扑图上出现指向该哨兵 peer 的边。语义仍成立 ——
+// "把 trace 上下文写进异步载体"确实是一次出站动作。
+const sw8EncodePeer = "trace-context"
+
+// EncodeSW8 implements Tracer：取出当前 ctx 所在 span 的 sw8（CL-03 / CL-D-15=A）。
+//
+// 实现路径与代价见 sw8EncodePeer 的注释（go2sky v1.5.0 限制所迫）。
+// 编码后**立即 EndSpan**（不留悬挂 span —— 同 Stage 94 PR-1 在 kafka_publisher
+// 踩过的"未 EndSpan 导致 duration 失真"坑）。
+//
+// 降级：nil receiver / nil tracer（SkyWalking 关闭）⇒ ("", nil)。调用方据此不写
+// trace_sw8 列，业务路径零影响。
+func (t *Go2SkyTracer) EncodeSW8(ctx context.Context, operationName string) (string, error) {
+	if t == nil || t.tracer == nil {
+		return "", nil
+	}
+	var sw8 string
+	_, span, err := t.CreateExitSpan(ctx, operationName, sw8EncodePeer, func(key, value string) error {
+		if key == SW8HeaderName && value != "" {
+			sw8 = value
+		}
+		return nil
+	})
+	if span != nil {
+		span.EndSpan(err)
+	}
+	return sw8, err
+}

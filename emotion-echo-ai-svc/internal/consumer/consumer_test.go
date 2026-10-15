@@ -608,6 +608,11 @@ func (t *mockTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 	return ctx, t.localSpan, t.localErr
 }
 
+// EncodeSW8 CL-03 / CL-D-15=A — mock 满足 Tracer 接口（本服务不写 outbox，返回空串）
+func (t *mockTracer) EncodeSW8(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
 // CreateEntrySpan Stage 92 PR-2：从 msg.Headers 抽 sw8 → 重建父 trace
 // Stage 94 PR-2 §P0-3 扩展：entryFn 非 nil 时优先走自定义（每次返回新 mockSpan，
 // 让 PR-2 新加的"span 在 case 末尾 EndSpan"测试可观测多消息 span 独立生命周期）。
