@@ -80,7 +80,7 @@ related:
 |---|---|---|---|
 | 1 | ~~A（CL-04）~~ | 已于 2026-10-14 阶段收口时**释放**（`deploy/.devmode-session` 已删） | ✅ **已释放**（Phase 0~7 全部完成：15/16 PASS + T-14 IAB 钉绿；B/C 排队位次不变） |
 | 2 | B（CL-01） | A 释放后（Phase 0 基线 / 8 采集 / 9 负向对照） | ✅ **已用毕释放（2026-10-15 06:25）** —— 收口契约 7 条全满足、第二轮独立核对 PASS、状态翻 `done`；`deploy/.devmode-session` 已删 |
-| 3 | C（CL-02） | B 之后（Phase 2 清除验证 / 6 收口冒烟；**"4 接真"已由裁定改判 N/A**） | 🔵 **持锁中（lane-cl-c）** —— 2026-10-15 06:36 取锁，`until 2026-10-15 10:30`；验证项 = 清除/归档后全栈可起 + §2.4 数据契约 smoke + `*_TRANSPORT` 运行时 env |
+| 3 | C（CL-02） | B 之后（Phase 2 清除验证 / 6 收口冒烟；"4 接真"已由裁定改判 N/A） | ✅ **已用毕释放（2026-10-15 07:40）** —— 06:36 取锁 → 7/7 healthy + Nacos count:6 + smoke 24/24 → 删 `deploy/.devmode-session`；**队列下一位 = D（CL-05）**。注意：栈仍开着，跑的是本轨 `:cl02-verify` 镜像，D 接手时按 H5 用自己后缀 tag 重建 |
 | 4 | D（CL-05） | C 之后（Phase 0 基线取证 / 5 会话游标运行验证 / 7 端到端+人可见钉） | 排队中（**C 已进场**；D 的 CL-D-14 裁定即写明"需栈项会卡在 B/C 持锁上"） |
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |
 
@@ -110,6 +110,9 @@ related:
 > **D 轨另注（2026-10-14）**：本轨主文件面（前端 `stores/utils/composables/pages` + chat-svc `internal/{types,repository,logic}` + BFF `handler/chat_handler.go`）
 > 与 B/C 两轨**不重叠**；与 C 轨仅在 `proto/**`、`chat_svc/internal/grpcserver/chat_server.go`、BFF `downstream/chat*.go` 三处相交（上表已声明排队）。
 > 与 **A 轨（CL-04，已 done）** 同碰前端但**不同文件**（A 占 `composables/{useAIStreamHandler,useAIStream,usePrompt}.ts`，D 占 `stores/**`、`utils/**`、`pages/**`、`plugins/init.ts`）——A 已收口，不再构成并发。
+| 2026-10-15 | Lane-CL-C | `deploy/docker-compose.cl02-verify.yml`（新增） | C 轨起栈验证用 override（H5/条款10：把 7 个服务的镜像 tag 换成 `:cl02-verify`，不覆盖公共 tag）。**第二方核对 F-6 指出此前漏登，本行补登** | ✅ |
+| 2026-10-15 | Lane-CL-C | `docs/closure-roadmap/decisions.md` | C 轨登记 7 项用户裁定（`CL-D-08`~`CL-D-10`：死链逐条终态 / 模型服务边界 / 守卫形态）。**F-6 指出此前漏登，本行补登** | ✅ |
+| 2026-10-15 | Lane-CL-C | **答复 D 轨两条挂起握手**（见上两行 D 轨请求）：① **`proto/**`**：C 轨改动**已落地**（`proto/{chat,metric,user,emotion_llm}.proto`：StreamMessages 与三条 mental-health 标 `deprecated`；Logout/VerifySecurityAnswer/AnalyzeBatch 已删 + 桩重生成）⇒ **C 轨不再占 proto**，D 轨可开始；建议**等 #214 合并后再改**，避免基于旧 main 回退。② **同名文件**（`chat_server.go` / `chat{,_grpc}.go`）：C 轨改动**已落地**（删 StreamMessages 桩与 BFF 死方法、`chat.go` 补 HTTP 出站埋点）⇒ **D 轨可改**，同样建议合并后 | ✅ |
 
 ## 五、开工前置检查（照做）
 
