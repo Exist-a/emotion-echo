@@ -53,7 +53,7 @@ export function appendServerPage(
 /**
  * 缓存写入适配：`messageCache` 入参类型是 `conversationMessageType`，而服务端行是
  * `types/api.MessageWithStatus` —— 两者字段名与取值集本就不一致（`sender:'user'|'ai'`
- * vs `'user'|'AI'`、`contentType` 取值集不同）。这正是 **`CL-F-13` / `CL-D-12`** 的现场；
+ * vs `'user'|'AI'`、`contentType` 取值集不同）。这正是 **`CL-F-18` / `CL-D-12`** 的现场；
  * 用户已裁定**顺延**（`CL-D-13` 到 Phase 3、`CL-D-12` 只登记不动）⇒ 此处先用断言过渡。
  */
 function toCacheRow(m: MessageWithStatus) {
@@ -84,7 +84,7 @@ export function canTransition(from: MessageStatus, to: MessageStatus): boolean {
 
 /**
  * 本地消息形态 = 服务端行 + **仅本地有**的队列元数据。
- * `retryCount` 由 Phase 4 引入（来源计划 D-E）；`CL-F-13` 三形态统一已由用户
+ * `retryCount` 由 Phase 4 引入（来源计划 D-E）；`CL-F-18` 三形态统一已由用户
  * `CL-D-13` 裁定顺延 ⇒ 此处先用交叉类型过渡，收敛时一并处理。
  */
 export type StoreMessage = MessageWithStatus & { retryCount?: number }

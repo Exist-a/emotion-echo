@@ -119,3 +119,27 @@
 - `docs/stages/stage-63-bff-grpc-wiring.md`（V1-V4 端到端实测表）
 - `proto/*.proto`（6 个 proto 文件 + gen.sh 脚本）
 - `emotion-echo-shared/pkg/grpcinterceptor/`（9 个拦截器套件）
+
+---
+
+## 更正记录（2026-10-14 · CL-02 gRPC 契约闭环）
+
+> 沿用本仓先例（`adr-2026-09-survey-http-bypass.md` 的「更正记录」节）：**不改写历史结论，只追加更正**。
+
+**更正对象**：本 ADR §四「BFF → 4 svc 全方法 **100%**」与 §表 #7 把 `UserService.Logout` 计为**已接线**。
+
+**为什么偏乐观**：该口径按「**server 实现存在 + client 方法存在**」计数，把两类「挂空」状态一并算成了已接线：
+
+| 实例 | 实际状态 | 本 ADR 原口径 |
+|---|---|---|
+| `Logout` | BFF client 方法**不在 `UserClient` 接口内** ⇒ 零 handler 调用；server 只返 `success=true`、无副作用 | 计为 ✅ 已接线（因有 server 实现） |
+| `VerifySecurityAnswer` | 在接口内但**零 handler 调用**（找回密码实际走 `VerifySecurityAnswerByUsername`） | 计为 ✅ |
+| `StreamMessages` | 全仓无业务路径（聊天走 BFF SSE） | 计为 proto 预留（§八 backlog，口径尚可） |
+
+**更正结论**：§四「100%」应读作「**方法面已具备**」，**不等于「每条 RPC 都有生产调用方」**。
+
+**处置（CL-02，2026-10-14 用户裁定 D1~D4）**：
+- `Logout` / `VerifySecurityAnswer` / `AnalyzeBatch` ⇒ **清除**（proto + server + BFF client 全删）；
+- `StreamMessages` + 三条 mental-health ⇒ **归档**（proto 保留但标 `option deprecated = true`，注释写明依据与重启条件）；
+- 新增守卫 `scripts/check_rpc_status.sh`（A1 覆盖 / A2 `live` 必有调用方证据 / A3 标记数与清单一致 / A4 终态规则 / A5 HTTP 回滚开关豁免）+ 状态清单 `scripts/rpc_status.tsv`，**把「接线与否」从注释变成可机械校验的状态**。
+- 依据与证据：`docs/closure-roadmap/stages/cl-02-grpc-contract/{plan.md,evidence/phase2-3-terminal-states.md}`。

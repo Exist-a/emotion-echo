@@ -16,6 +16,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/emotion-echo/shared/pkg/skywalking/trace"
 )
 
 // LLMOptions 构造选项
@@ -81,7 +83,7 @@ func NewLLMClient(opts LLMOptions) LLMClient {
 		baseURL: strings.TrimRight(opts.BaseURL, "/"),
 		apiKey:  opts.APIKey,
 		model:   opts.Model,
-		client: &http.Client{Timeout: timeout},
+		client: trace.NewTracedClient(timeout),
 	}
 }
 

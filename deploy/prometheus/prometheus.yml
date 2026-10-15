@@ -74,6 +74,22 @@ scrape_configs:
         labels:
           component: "prometheus"
 
+  # === CL-01 Phase 8 (T-15 / D-05): 为什么这里**没有**独立的 /health scrape job ===
+  # 用户裁定 D-05 = "直接 scrape"（不引入 blackbox_exporter 容器，与 D-02 内存红线一致）。
+  # 但 2026-10-14 实测（非推断）: 直接 `metrics_path: "/health"` 抓 6 个 svc 得到
+  #   up{job="emotion-echo-health"} == 0   ← 全部 6 个 target 恒 DOWN
+  # 根因: /health 返回 **JSON**（`{"status":"ok","dbOk":true,...}`），Prometheus 的
+  #   文本 exposition 解析器对其报 parse error ⇒ 该次抓取判失败 ⇒ up=0。
+  #   这不是"服务不健康"，是"格式不匹配"——留着会让 PrometheusTargetDown 长期误报。
+  #
+  # 因此本阶段改用**既有埋点**达成同一目标（health 进监控 + 可告警），零新增容器/代码:
+  #   ① 进程存活: up{job="emotion-echo-services"}（现有）
+  #   ② 依赖就绪: emotion_echo_http_requests_total{path="/health/ready", status=~"5.."}
+  #      —— 各 svc 的 HTTP 中间件已带 status 标签，docker healthcheck 每 30s 打
+  #      /health/ready，返 503 时该 series 直接出现。见 rules/cl01-health-business.yml。
+  # 若未来要拿 dbOk 这类**语义**，须 blackbox_exporter 或让 svc 暴露 /metrics 化健康指标
+  #   （两者都超本阶段 D-02/D-05 的裁定范围）⇒ 已作为偏差记入 plan §10 待追认。
+
   # === PR-OBS-7: Kafka exporter (consumer lag) ===
   # danielqsj/kafka-exporter 自动发现 consumer group,暴露 kafka_consumergroup_lag series
   - job_name: "kafka-exporter"

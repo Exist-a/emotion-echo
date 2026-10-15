@@ -222,9 +222,6 @@ func (f *fakeIntegrationUser) Login(_ context.Context, _, _ string) (*downstream
 func (f *fakeIntegrationUser) Register(_ context.Context, _, _, _ string, _ []downstream.SecurityQuestion) (*downstream.UserInfo, error) {
 	panic("fakeIntegrationUser.Register should not be called in this suite")
 }
-func (f *fakeIntegrationUser) VerifySecurityAnswer(_ context.Context, _ int64, _ int, _ string) error {
-	panic("fakeIntegrationUser.VerifySecurityAnswer should not be called in this suite")
-}
 func (f *fakeIntegrationUser) VerifySecurityAnswerByUsername(_ context.Context, _ string, _ int, _ string) error {
 	panic("fakeIntegrationUser.VerifySecurityAnswerByUsername should not be called in this suite")
 }

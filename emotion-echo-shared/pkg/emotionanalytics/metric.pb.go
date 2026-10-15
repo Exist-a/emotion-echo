@@ -1341,17 +1341,17 @@ const file_metric_proto_rawDesc = "" +
 	"\vscore_trend\x18\x01 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\n" +
 	"scoreTrend\x12C\n" +
 	"\n" +
-	"risk_trend\x18\x02 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\triskTrend2\xb5\b\n" +
+	"risk_trend\x18\x02 \x03(\v2$.emotion_analytics.v1.ChartDataPointR\triskTrend2\xc4\b\n" +
 	"\x10AnalyticsService\x12e\n" +
 	"\fReportsDaily\x12).emotion_analytics.v1.ReportsDailyRequest\x1a*.emotion_analytics.v1.ReportsDailyResponse\x12e\n" +
 	"\fReportsTrend\x12).emotion_analytics.v1.ReportsTrendRequest\x1a*.emotion_analytics.v1.ReportsTrendResponse\x12u\n" +
 	"\x14UserBehaviorDayNight\x12).emotion_analytics.v1.UserBehaviorRequest\x1a2.emotion_analytics.v1.UserBehaviorDayNightResponse\x12o\n" +
 	"\x11UserBehaviorDepth\x12).emotion_analytics.v1.UserBehaviorRequest\x1a/.emotion_analytics.v1.UserBehaviorDepthResponse\x12w\n" +
 	"\x15UserBehaviorFrequency\x12).emotion_analytics.v1.UserBehaviorRequest\x1a3.emotion_analytics.v1.UserBehaviorFrequencyResponse\x12\x83\x01\n" +
-	"\x16MentalHealthAssessment\x123.emotion_analytics.v1.MentalHealthAssessmentRequest\x1a4.emotion_analytics.v1.MentalHealthAssessmentResponse\x12z\n" +
-	"\x13MentalHealthHistory\x120.emotion_analytics.v1.MentalHealthHistoryRequest\x1a1.emotion_analytics.v1.MentalHealthHistoryResponse\x12z\n" +
-	"\x13MentalHealthTrigger\x120.emotion_analytics.v1.MentalHealthTriggerRequest\x1a1.emotion_analytics.v1.MentalHealthTriggerResponse\x12t\n" +
-	"\x11MentalHealthTrend\x12..emotion_analytics.v1.MentalHealthTrendRequest\x1a/.emotion_analytics.v1.MentalHealthTrendResponseB5Z3github.com/emotion-echo/shared/pkg/emotionanalyticsb\x06proto3"
+	"\x16MentalHealthAssessment\x123.emotion_analytics.v1.MentalHealthAssessmentRequest\x1a4.emotion_analytics.v1.MentalHealthAssessmentResponse\x12\x7f\n" +
+	"\x13MentalHealthHistory\x120.emotion_analytics.v1.MentalHealthHistoryRequest\x1a1.emotion_analytics.v1.MentalHealthHistoryResponse\"\x03\x88\x02\x01\x12\x7f\n" +
+	"\x13MentalHealthTrigger\x120.emotion_analytics.v1.MentalHealthTriggerRequest\x1a1.emotion_analytics.v1.MentalHealthTriggerResponse\"\x03\x88\x02\x01\x12y\n" +
+	"\x11MentalHealthTrend\x12..emotion_analytics.v1.MentalHealthTrendRequest\x1a/.emotion_analytics.v1.MentalHealthTrendResponse\"\x03\x88\x02\x01B5Z3github.com/emotion-echo/shared/pkg/emotionanalyticsb\x06proto3"
 
 var (
 	file_metric_proto_rawDescOnce sync.Once

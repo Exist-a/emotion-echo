@@ -37,8 +37,8 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 
 | 文件 | 主题 | 优先级 |
 |---|---|---|
-| `observability-business-metrics-wiring.md` | 把未接入的业务指标接进 Grafana 面板 + Prometheus 告警（**面板/告警侧**；不改 Go 埋点） | medium |
-| `observability-instrumentation-and-dashboards.md` | **埋点补全（代码侧）**：GORM 埋点错挂 `Raw()` processor（等于全废）+ Redis 埋点零调用 + HTTP 出站零埋点 + DLQ 无 span；含采集增量。与上一行**互补**（那份不改埋点） | medium |
+| ~~`observability-business-metrics-wiring.md`~~ | ✅ **已落地**（阶段 CL-01，2026-10-14）→ [legacy-plans/landed/](../legacy-plans/landed/observability-business-metrics-wiring.md) | — |
+| ~~`observability-instrumentation-and-dashboards.md`~~ | ✅ **已落地**（阶段 CL-01，2026-10-14）→ [legacy-plans/landed/](../legacy-plans/landed/observability-instrumentation-and-dashboards.md)（一处豁免：BFF `downstream/chat.go` 属 C 轨，随 CL-02） | — |
 | `grafana-dashboard-gaps-2026-09-30.md` | Grafana 面板覆盖度缺口分析（B1~B9） | medium |
 | `redis-two-layer-cache.md` | Redis 双层读缓存 | medium |
 
@@ -46,7 +46,9 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 
 | 文件 | 主题 | 优先级 |
 |---|---|---|
-| `grpc-deadlink-actualization.md` | **gRPC 死链路坐实与清理**：7 条死 RPC（StreamMessages/Logout/VerifySecurityAnswer/AnalyzeBatch + 3 条 mental-health）逐条裁决"接真/归档/清除"，修正决策 4 的"100% 覆盖"口径，守卫升级 | medium |
+| `grpc-deadlink-actualization.md` | **CL-02 落地**（PR #214，2026-10-15）：7 条死 RPC 逐条终态（**清除 3**：Logout/VerifySecurityAnswer/AnalyzeBatch；**归档 4**：StreamMessages + 三条 mental-health）+ 守卫升级（`check_rpc_status.sh`）+ 决策 4 口径更正；证据见 `docs/closure-roadmap/stages/cl-02-grpc-contract/report.md` | medium |
+| `camera-preview-floating-window.md` | **用户手动测试（2026-10-15）新登**：摄像头预览改悬浮层（固定定位 + 可拖动 + 顶部把手点击折叠）；**设计已定稿**（D2=屏幕上方中间【用户拍板】/ D3=折叠成 pill 条 / D1 持久化 / D5 窄视口默认折叠）；§四 已登记握手预占 | medium |
+| `mental-health-history-trend-entry.md` | **CL-02 归档项的重启路径**（2026-10-14 用户裁定 D1 时另登）：在「我的空间」提供评估历史 / 趋势 / 立即评估入口，数据经 BFF → analytics-svc（gRPC）；三条 RPC 现为归档态（proto 标 deprecated），重启时先去标记 | low |
 | `known-issues-backlog-2026-09-16.md` | **partial**（2026-10-13 核查）：A2/A3/A4/A5/A6 已解决；**残留 = 顺手1 字号防抖**（代码无 debounce） | low |
 
 ### E. 端侧化（Lane O）

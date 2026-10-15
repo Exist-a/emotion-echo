@@ -1,0 +1,27 @@
+########## 负向对照：旧镜像 v0.1.16（无 CL-F-14 修复）##########
+--- 停 OAP（保留 sw-ui 以便之后查询）---
+--- 用旧镜像重建 chat-svc ---
+ Container emotion-echo-chat-svc Recreated 
+ Container emotion-echo-chat-svc Starting 
+ Container emotion-echo-chat-svc Started 
+image=emotion-echo/chat-svc:v0.1.16
+--- 旧镜像的启动日志（应只有 init failed，**没有**后台补挂行）---
+{"time":"2026-10-14T20:09:34.95734543+08:00","level":"INFO","msg":"[skywalking] tracer init failed (warn mode, continue): dial emotion-echo-sw-oap:11800: dial tcp: lookup emotion-echo-sw-oap on 127.0.0.11:53: no such host","svc":"chat-svc"}
+--- 起 OAP，等 60s ---
+--- 轮询 5 分钟：旧镜像下 chat-svc 应【始终缺席】---
+[poll 1] rc=1 :: services(1)=['emotion-echo-ai-svc']
+[poll 2] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 3] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 4] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 5] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 6] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 7] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 8] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 9] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 10] rc=1 :: services(5)=['emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 11] rc=1 :: services(6)=['APISIX', 'emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+[poll 12] rc=1 :: services(6)=['APISIX', 'emotion-echo-ai-svc', 'emotion-echo-analytics-svc', 'emotion-echo-assessment-svc', 'emotion-echo-user-svc', 'emotion-echo-web-bff']
+negative_exit=1  (期望 1 = 始终 ABSENT)
+--- 旧镜像 10 分钟日志里有没有'后台补挂'字样 ---
+0
+RESULT: NEGATIVE-CONTROL OK（旧镜像确实不恢复）

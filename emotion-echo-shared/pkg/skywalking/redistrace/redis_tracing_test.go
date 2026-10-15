@@ -1,4 +1,4 @@
-package skywalking
+package redistrace
 
 import (
 	"context"
@@ -9,22 +9,19 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// TestJoinCmds 空切片返回空字符串
+// TestJoinCmds_Empty 空切片返回空字符串
 func TestJoinCmds_Empty(t *testing.T) {
-	got := joinCmds(nil)
-	if got != "" {
+	if got := joinCmds(nil); got != "" {
 		t.Fatalf("empty list: want '' got %q", got)
 	}
-	got = joinCmds([]string{})
-	if got != "" {
+	if got := joinCmds([]string{}); got != "" {
 		t.Fatalf("empty slice: want '' got %q", got)
 	}
 }
 
 // TestJoinCmds_Single 单元素无逗号
 func TestJoinCmds_Single(t *testing.T) {
-	got := joinCmds([]string{"GET"})
-	if got != "GET" {
+	if got := joinCmds([]string{"GET"}); got != "GET" {
 		t.Fatalf("single: want 'GET' got %q", got)
 	}
 }
@@ -40,8 +37,7 @@ func TestJoinCmds_TableDriven(t *testing.T) {
 		{[]string{"MULTI", "EXEC", "DISCARD"}, "MULTI,EXEC,DISCARD"},
 	}
 	for _, tc := range cases {
-		got := joinCmds(tc.in)
-		if got != tc.want {
+		if got := joinCmds(tc.in); got != tc.want {
 			t.Fatalf("in=%v want=%q got=%q", tc.in, tc.want, got)
 		}
 	}
@@ -81,16 +77,15 @@ func TestRedisTracingHook_ProcessHook_NilTracer_PassesThrough(t *testing.T) {
 	}
 	wrapped := h.ProcessHook(original)
 	cmd := redis.NewCmd(context.Background(), "GET", "k")
-	got := wrapped(context.Background(), cmd)
+	if got := wrapped(context.Background(), cmd); got != wantErr {
+		t.Fatalf("error should be passed through, got %v", got)
+	}
 	if !called {
 		t.Fatalf("ProcessHook should call next under nil tracer")
 	}
-	if got != wantErr {
-		t.Fatalf("error should be passed through, got %v", got)
-	}
 }
 
-// TestRedisTracingHook_ProcessHook_RedisNil_PassesThrough
+// TestRedisTracingHook_ProcessHook_RedisNil_PassesThrough redis.Nil 语义保留
 func TestRedisTracingHook_ProcessHook_RedisNil_PassesThrough(t *testing.T) {
 	h := &redisTracingHook{addr: "redis:6379"}
 	called := false
@@ -100,12 +95,11 @@ func TestRedisTracingHook_ProcessHook_RedisNil_PassesThrough(t *testing.T) {
 	}
 	wrapped := h.ProcessHook(original)
 	cmd := redis.NewCmd(context.Background(), "GET", "missing")
-	got := wrapped(context.Background(), cmd)
+	if got := wrapped(context.Background(), cmd); got != redis.Nil {
+		t.Fatalf("redis.Nil should be preserved, got %v", got)
+	}
 	if !called {
 		t.Fatalf("next should be called")
-	}
-	if got != redis.Nil {
-		t.Fatalf("redis.Nil should be preserved, got %v", got)
 	}
 }
 
@@ -123,19 +117,31 @@ func TestRedisTracingHook_ProcessPipelineHook_NilTracer_PassesThrough(t *testing
 		redis.NewCmd(context.Background(), "GET", "a"),
 		redis.NewCmd(context.Background(), "SET", "b", "1"),
 	}
-	got := wrapped(context.Background(), cmds)
+	if got := wrapped(context.Background(), cmds); got != wantErr {
+		t.Fatalf("err should pass through, got %v", got)
+	}
 	if !called {
 		t.Fatalf("next should be called")
 	}
-	if got != wantErr {
-		t.Fatalf("err should pass through, got %v", got)
+}
+
+// TestInitRedis_NilSafe nil client 不 panic 且返 false
+func TestInitRedis_NilSafe(t *testing.T) {
+	if InitRedis(nil) {
+		t.Fatalf("InitRedis(nil) should return false")
 	}
 }
 
-// TestInstrumentRedis_NilClient_NoPanic **Stage 26-N 修复后**：传 nil client 不得 panic
-//
-// 历史：Stage 26-A 暴露此 bug 并以 t.Logf 记录，N 批实现加 nil client 防御。
-// 本测试同步更新为 NoPanic 断言（实现已修）。
+// TestInitRedis_RealClientRegistersHook 真 *redis.Client → 返 true（hook 已注册）
+func TestInitRedis_RealClientRegistersHook(t *testing.T) {
+	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"}) // 不真连
+	defer rdb.Close()
+	if !InitRedis(rdb) {
+		t.Fatalf("*redis.Client 必须返 true（hook 已注册信号）")
+	}
+}
+
+// TestInstrumentRedis_NilClient_NoPanic 传 nil client 不得 panic
 func TestInstrumentRedis_NilClient_NoPanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {

@@ -1,0 +1,40 @@
+# CL-02 起栈验证用 override（AGENTS §8.1 条款 10 / H5：**带轨后缀 tag，不覆盖公共 tag**）
+#
+# 用途：把本轨改过代码的 6 个服务指向 `:cl02-verify` 镜像，其余服务不动。
+# 为什么需要：compose 里 `image:` 是写死的公共 tag；两条轨同时构建会互相覆盖
+#   （账本 CL-F-09：后者赢 ⇒ 可能"验了别人的代码"）。
+#
+# 用法（H6：「worktree 构建镜像 + 共享目录 up 容器」两步）：
+#   # ① 构建（在 worktree 里，context 解析为 worktree 根 ⇒ 验的是本轨代码）
+#   cd <worktree> && docker compose -f deploy/docker-compose.infra.yml \
+#     -f deploy/docker-compose.apps.yml -f deploy/compose.dev.yml \
+#     -f deploy/docker-compose.cl02-verify.yml \
+#     --env-file <共享目录>/deploy/.env.local build \
+#     emotion-echo-user-svc emotion-echo-chat-svc emotion-echo-analytics-svc \
+#     emotion-echo-ai-svc emotion-echo-web-bff emotion-llm-service
+#   # ② 只重建自己的服务（不整栈 up）
+#   cd <共享目录>/deploy && docker compose -f docker-compose.infra.yml \
+#     -f docker-compose.apps.yml -f compose.dev.yml \
+#     -f <worktree>/deploy/docker-compose.cl02-verify.yml \
+#     --env-file .env.local up -d --no-deps <同上 6 个服务名>
+#
+# 覆盖范围 = 本阶段改过代码的服务（proto 桩重生成 + 清除/归档落地的下游）：
+#   user/chat/analytics/ai-svc（Go，各自依赖被改的 proto 桩）、web-bff（Go，BFF client 删方法）、
+#   llm-service（Python，删 AnalyzeBatch + 重生成 pb2 ⇒ 需验证新桩与镜像内 grpc 版本兼容）。
+# 补入 assessment-svc（2026-10-15 实测发现）：本轨未改它，但 B 轨合并（b1f13dc）改了它的
+# `main.go`（+6 行）⇒ 其运行镜像陈旧，smoke §8「镜像新鲜度」报 STALE。既然整栈要一致，一并重建。
+services:
+  emotion-echo-user-svc:
+    image: emotion-echo/user-svc:cl02-verify
+  emotion-echo-chat-svc:
+    image: emotion-echo/chat-svc:cl02-verify
+  emotion-echo-analytics-svc:
+    image: emotion-echo/analytics-svc:cl02-verify
+  emotion-echo-ai-svc:
+    image: emotion-echo/ai-svc:cl02-verify
+  emotion-echo-assessment-svc:
+    image: emotion-echo/assessment-svc:cl02-verify
+  emotion-echo-web-bff:
+    image: emotion-echo/web-bff:cl02-verify
+  emotion-llm-service:
+    image: emotion-echo/llm-service:cl02-verify

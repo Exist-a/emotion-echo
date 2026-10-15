@@ -156,6 +156,11 @@ func NewServerTracingInterceptor(tracer Tracer) grpc.UnaryServerInterceptor {
 		// 否则会形成"APM 没开 ⇒ 日志也没 trace_id"的隐蔽耦合。
 		ctx = ctxWithTraceIDFromMetadata(ctx)
 
+		// CL-F-14：构造期 tracer 为 nil 时现读全局（后台补挂的 tracer 才能生效，
+		// 否则 svc 先于 OAP 启动 ⇒ 该进程整段生命周期零入口 span）。
+		if tracer == nil {
+			tracer = GlobalTracer()
+		}
 		if tracer == nil {
 			return handler(ctx, req)
 		}
