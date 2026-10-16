@@ -130,6 +130,24 @@ type Tracer interface {
 	// operationName: e.g. "kafka-consume"
 	CreateEntrySpan(ctx context.Context, operationName string,
 		extractor func(key string) (string, error)) (context.Context, Span, error)
+
+	// EncodeSW8 取出**当前 ctx 所在 span** 的 sw8 传播头（CL-03 / CL-D-16=A）。
+	//
+	// 用途：把 trace 上下文存进**异步载体**，让之后在别处（abort 的后台 goroutine）
+	// 继续这条 trace。典型场景 = outbox：写入 outbox 行时身处请求 ctx（有入口 span），
+	// 存下 sw8；relay 跑在后台根 ctx 上，发布前用它恢复父 ctx。
+	// 恢复侧**无需新方法** —— 用既有 CreateEntrySpan + extractor 即可。
+	//
+	// ⚠️ 实现形态说明（go2sky v1.5.0 限制）：`Span` 接口不暴露 SpanContext，
+	// 只有 CreateExitSpanWithContext 的 injector 能拿到编码后的 sw8 ⇒ 本方法内部
+	// **会创建并立即结束**一个名为 operationName 的 exit span 来完成编码。
+	// 该 span 会（短暂）出现在 trace 里，语义 = "把 trace 上下文写入异步载体"。
+	//
+	// 返回约定：无 tracer（SkyWalking 关闭）/ nil receiver ⇒ 返回 ("", nil) 表示
+	// "无 trace 上下文"，**不报错**（调用方据此不写该列，业务零影响）。
+	//
+	// operationName: e.g. "outbox-enqueue"
+	EncodeSW8(ctx context.Context, operationName string) (string, error)
 }
 
 // NewServerTracingInterceptor creates a server-side tracing interceptor.

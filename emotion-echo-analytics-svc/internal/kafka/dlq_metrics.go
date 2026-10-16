@@ -30,3 +30,15 @@ func IncDLQPublishResult(success bool) {
 	}
 	DLQPublishTotal.WithLabelValues(r).Inc()
 }
+
+// DLQUnconfiguredTotal DLQ **未配置 / Noop**（无处投递）时的计数（CL-03 T-07）。
+//
+// analytics-svc 的 NewConsumer 默认装配 NoopDLQPublisher（Publish 返回 nil = 成功语义）
+// ⇒ 此前"毒消息被丢弃"与"投递成功"在指标上无法区分，属静默。
+var DLQUnconfiguredTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "emotion_echo_analytics_dlq_unconfigured_total",
+	Help: "analytics-svc messages dropped because no DLQ is configured (no replay possible).",
+})
+
+// IncDLQUnconfigured 递增"DLQ 未配置"计数。
+func IncDLQUnconfigured() { DLQUnconfiguredTotal.Inc() }

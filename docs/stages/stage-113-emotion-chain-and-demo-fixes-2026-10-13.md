@@ -8,8 +8,8 @@ type: stage-landing
 related-plans:
   - docs/legacy-plans/landed/frontend-message-cache-offline-resilience.md （游标分页本轮部分落地；前端本地缓存仍未接线）
   - docs/legacy-plans/landed/observability-business-metrics-wiring.md （Grafana 业务/可靠性/日志看板仍未建）
-  - docs/plans/dlq-hardening-and-replay.md （未动）
-  - docs/plans/outbox-trace-continuity.md （未动）
+  - docs/legacy-plans/landed/dlq-hardening-and-replay.md （未动）
+  - docs/legacy-plans/landed/outbox-trace-continuity.md （未动）
 ---
 
 # Stage 113 — 情绪分析主链路修复 + 演示环境/前端修复（面试演示准备轮）

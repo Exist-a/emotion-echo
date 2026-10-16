@@ -10,6 +10,7 @@ import (
 
 	"emotion-echo-chat-svc/internal/events"
 	"emotion-echo-chat-svc/internal/model"
+	"emotion-echo-chat-svc/internal/outbox"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
@@ -129,6 +130,8 @@ func (l *CreateConversationLogic) persistWithOutbox(uid int64, conv *model.Conve
 					EventType: evt.Type,
 					Topic:     events.TopicChatEvents,
 					Payload:   payload,
+					// CL-03 Phase 2：存下 sw8 供 relay 恢复父 ctx（详见 outbox.EncodeTraceSW8）
+					TraceSW8: outbox.EncodeTraceSW8(l.ctx, "outbox-enqueue-conversation-created"),
 				})
 			}
 			// OutboxRepo nil（prod 不该出现）→ 事务提交后 best-effort Publish

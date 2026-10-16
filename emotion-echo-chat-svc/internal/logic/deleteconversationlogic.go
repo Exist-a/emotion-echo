@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"emotion-echo-chat-svc/internal/events"
+	"emotion-echo-chat-svc/internal/outbox"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
@@ -104,6 +105,8 @@ func (l *DeleteConversationLogic) persistWithOutbox(uid, convID int64, now time.
 				EventType: evt.Type,
 				Topic:     events.TopicChatEvents,
 				Payload:   payload,
+				// CL-03 Phase 2：存下 sw8 供 relay 恢复父 ctx
+				TraceSW8: outbox.EncodeTraceSW8(l.ctx, "outbox-enqueue-conversation-closed"),
 			})
 		})
 	}
@@ -119,6 +122,8 @@ func (l *DeleteConversationLogic) persistWithOutbox(uid, convID int64, now time.
 			EventType: evt.Type,
 			Topic:     events.TopicChatEvents,
 			Payload:   payload,
+			// CL-03 Phase 2：存下 sw8 供 relay 恢复父 ctx
+			TraceSW8: outbox.EncodeTraceSW8(l.ctx, "outbox-enqueue-conversation-closed"),
 		})
 	}
 

@@ -1,0 +1,47 @@
+CL-03 / T-07 修复前 RED 证据 —— 证明「只判 h.DLQ == nil」在生产装配下是**死代码**
+采集时间：2026-10-16（dev 栈同机；ai-svc 单测，非起栈）
+
+背景（第二方核对首轮发现 #2）：生产装配 emotion-echo-ai-svc/main.go:388 是
+    var dlq consumer.DLQPublisher = consumer.NoopDLQPublisher{}   ← **非 nil 的接口值**
+修复前的 publishToDLQ 只在 h.DLQ == nil 时计数 ⇒ 生产路径永远不计数 = 死代码。
+
+方法：把 consumer_failure.go 临时回退到修复前（git checkout 49ca08e^ -- ...），
+      跑新增的两例「生产装配形态」测试 ⇒ 应**红**；随后恢复修复版 ⇒ 应**绿**。
+
+$ git checkout 49ca08e^ -- emotion-echo-ai-svc/internal/consumer/consumer_failure.go
+$ go test ./internal/consumer/ -run 'TestPublishToDLQ_NoopPublisher' -count=1
+=== RUN   TestPublishToDLQ_NoopPublisher_IncrementsCounter
+2026/10/16 14:14:38 ERROR consumer handler err after retries → DLQ attempts=4 key=evt-noop-prod err=boom
+    dlq_unconfigured_test.go:44: 
+        	Error Trace:	D:/源码/Emotion-Echo-cl03/emotion-echo-ai-svc/internal/consumer/dlq_unconfigured_test.go:44
+        	Error:      	Not equal: 
+        	            	expected: 1
+        	            	actual  : 0
+        	Test:       	TestPublishToDLQ_NoopPublisher_IncrementsCounter
+        	Messages:   	生产装配形态（NoopDLQPublisher 非 nil）下必须递增 —— 否则该 counter 是死代码
+--- FAIL: TestPublishToDLQ_NoopPublisher_IncrementsCounter (0.06s)
+=== RUN   TestPublishToDLQ_NoopPublisherPointer_IncrementsCounter
+2026/10/16 14:14:38 ERROR consumer handler err after retries → DLQ attempts=4 key=evt-noop-ptr err=boom
+    dlq_unconfigured_test.go:58: 
+        	Error Trace:	D:/源码/Emotion-Echo-cl03/emotion-echo-ai-svc/internal/consumer/dlq_unconfigured_test.go:58
+        	Error:      	Not equal: 
+        	            	expected: 1
+        	            	actual  : 0
+        	Test:       	TestPublishToDLQ_NoopPublisherPointer_IncrementsCounter
+--- FAIL: TestPublishToDLQ_NoopPublisherPointer_IncrementsCounter (0.00s)
+FAIL
+FAIL	emotion-echo-ai-svc/internal/consumer	7.234s
+FAIL
+
+===== 恢复修复版（git 工作区版本）后 =====
+$ go test ./internal/consumer/ -run 'TestPublishToDLQ_NoopPublisher' -count=1 -v
+=== RUN   TestPublishToDLQ_NoopPublisher_IncrementsCounter
+2026/10/16 14:14:59 WARN consumer DLQ 未配置（Noop）：毒消息无处投递、不可回放 attempts=4 key=evt-noop-prod err=boom
+2026/10/16 14:14:59 ERROR consumer handler err after retries → DLQ attempts=4 key=evt-noop-prod err=boom
+--- PASS: TestPublishToDLQ_NoopPublisher_IncrementsCounter (0.06s)
+=== RUN   TestPublishToDLQ_NoopPublisherPointer_IncrementsCounter
+2026/10/16 14:14:59 WARN consumer DLQ 未配置（Noop）：毒消息无处投递、不可回放 attempts=4 key=evt-noop-ptr err=boom
+2026/10/16 14:14:59 ERROR consumer handler err after retries → DLQ attempts=4 key=evt-noop-ptr err=boom
+--- PASS: TestPublishToDLQ_NoopPublisherPointer_IncrementsCounter (0.00s)
+PASS
+ok  	emotion-echo-ai-svc/internal/consumer	7.130s

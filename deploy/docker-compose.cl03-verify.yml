@@ -1,0 +1,44 @@
+# CL-03 起栈验证用 override（AGENTS §8.1 条款 10 / H5：**带轨后缀 tag，不覆盖公共 tag**）
+#
+# 用途：把本轨改过代码的服务指向 `:cl03` 镜像，其余服务不动。
+# 为什么需要：compose 里 `image:` 是**写死的公共 tag**（无变量插值），多轨同时构建会互相覆盖
+#   （账本 CL-F-09：后者赢 ⇒ 可能"验了别人的代码"）。
+#
+# 用法（H6：「worktree 构建镜像 + 共享目录 up 容器」两步）：
+#   # ① 构建（在 worktree 里，build context 解析为本 worktree 根 ⇒ 验的是本轨代码）
+#   cd <worktree> && docker compose -f deploy/docker-compose.infra.yml \
+#     -f deploy/docker-compose.apps.yml -f deploy/compose.dev.yml \
+#     -f deploy/docker-compose.cl03-verify.yml \
+#     --env-file <共享目录>/deploy/.env.local build \
+#     emotion-echo-chat-svc emotion-echo-ai-svc emotion-echo-analytics-svc
+#   # ② 只重建自己的服务（不整栈 up）
+#   cd <共享目录>/deploy && docker compose -f docker-compose.infra.yml \
+#     -f docker-compose.apps.yml -f compose.dev.yml \
+#     -f <worktree>/deploy/docker-compose.cl03-verify.yml \
+#     --env-file .env.local up -d --force-recreate --no-deps \
+#     emotion-echo-chat-svc emotion-echo-ai-svc emotion-echo-analytics-svc
+#
+# 覆盖范围 = 本阶段改过代码的服务：
+#   chat-svc       （Go：outbox trace_sw8 列读写 / relay 恢复父 ctx / 写侧接线 / fallback 改造）
+#   ai-svc         （Go：consumer 在 DLQ 投递失败时不 Mark）
+#   analytics-svc  （Go：同上）
+#   三者都 `replace github.com/emotion-echo/shared => ../emotion-echo-shared` ⇒ 也含本轨对
+#   shared `Tracer` 新增 `EncodeSW8` 的改动。
+#
+# 前置（CL-F-07 ④）：本 worktree 需 `deploy/tls/`（ai-svc 的 Dockerfile COPY ai-client.key）
+#   ⇒ 起栈前从共享目录 `cp -r <共享目录>/deploy/tls <worktree>/deploy/tls`
+#   （gitignored，不污染版本库）。
+#
+# 引用：本文件在阶段档中被引用（`docs/closure-roadmap/stages/cl-03-kafka-reliability/plan.md` §A 起栈口径
+#   + `report.md` §6.3「产物索引」），非孤儿产出物。路径占位符 `<worktree>` / `<共享目录>` 与
+#   cl01/cl02/cl05 的同类 override 一致（不写机器专属绝对路径）。
+#
+# 不在覆盖范围：user-svc / assessment-svc / BFF / llm-service（本轨未改其代码路径；
+#   shared 的接口新增方法对其为编译期兼容、无行为变化）。
+services:
+  emotion-echo-chat-svc:
+    image: emotion-echo/chat-svc:cl03
+  emotion-echo-ai-svc:
+    image: emotion-echo/ai-svc:cl03
+  emotion-echo-analytics-svc:
+    image: emotion-echo/analytics-svc:cl03

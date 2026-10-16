@@ -255,6 +255,9 @@ func (t *captureSw8Tracer) CreateExitSpan(
 func (t *captureSw8Tracer) CreateEntrySpan(ctx context.Context, _ string, _ func(string) (string, error)) (context.Context, grpcinterceptor.Span, error) {
 	return ctx, &captureSw8Span{}, nil
 }
+func (t *captureSw8Tracer) EncodeSW8(_ context.Context, _ string) (string, error) {
+	return t.sw8ToInject, nil
+}
 
 // 编译期断言 captureSw8Tracer 满足 grpcinterceptor.Tracer 接口
 var _ grpcinterceptor.Tracer = (*captureSw8Tracer)(nil)

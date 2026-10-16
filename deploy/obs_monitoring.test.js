@@ -226,6 +226,64 @@ group('⑥ 文档漂移 (验收误导源)', () => {
 });
 
 // -----------------------------------------------------------------------------
+// CL-03 Phase 4a: DLQ 堆积可告警
+// 背景 (kafka-pipeline-pending-decisions 四问题之四「堆积不告警」):
+//   DLQ (chat-events-dlq) 无常驻 consumer（设计上人工回放）⇒ 任何**进入**的消息
+//   都无人处理。但 ① 规则里一条 depth/ingress 告警都没有; ② Grafana 面板 title 显式
+//   标 "— non-alerting"; ③ kafka-lag.yml 头部注释还写着 "DLQ 不告警"。
+//   ⇒ 毒消息进了 DLQ，除人工翻面板外没有任何人会知道。
+group('⑦ DLQ 堆积可告警 (CL-03)', () => {
+  const ALERT = 'DLQMessagesAccumulating';
+  const ANCHOR = 'kafka_topic_partition_current_offset{topic="chat-events-dlq"}';
+
+  const dlqRules = read('deploy/prometheus/rules/kafka-dlq.yml');
+  if (!dlqRules) return fail('deploy/prometheus/rules/kafka-dlq.yml 未找到');
+
+  const names = (dlqRules.match(/^\s*- alert:\s*(\S+)/gm) || [])
+    .map((s) => s.replace(/^\s*- alert:\s*/, ''));
+  names.includes(ALERT)
+    ? pass(`kafka-dlq.yml 含 ${ALERT}`)
+    : fail(`kafka-dlq.yml 缺 ${ALERT} —— DLQ 有新消息进入时无任何告警`);
+
+  dlqRules.includes(ANCHOR)
+    ? pass('告警 expr 锚定 chat-events-dlq 的 topic offset')
+    : fail(`告警 expr 未锚定 chat-events-dlq（期望含 ${ANCHOR}）—— 抄别的主题会永不触发`);
+
+  // k8s 内联副本必须同步（组⑤只比 alert 名集合；这里额外钉住 expr 锚点，
+  // 防止"名字同步了但表达式被改写/留空"这类半同步）
+  if (!k8sCmRules) {
+    fail('configmap-rules.yaml 未找到 —— 无法校验 k8s 侧新告警');
+  } else {
+    k8sCmRules.includes(ALERT) && k8sCmRules.includes(ANCHOR)
+      ? pass('k8s 内联副本含同名告警 + 同 anchor')
+      : fail('k8s 内联副本未同步该告警（名字或 anchor 缺）—— k8s 环境此告警不会响');
+  }
+
+  // 面板不得再声称 non-alerting（有告警了就必须如实反映，CL-01 D-05 同类教训）
+  const dash = read('deploy/grafana/dashboards/kafka-consumer-lag.json');
+  if (!dash) {
+    fail('kafka-consumer-lag.json 未找到');
+  } else {
+    /non-alerting/.test(dash)
+      ? fail('DLQ 面板仍标 "non-alerting" —— 已有堆积告警，标签与事实不符')
+      : pass('DLQ 面板不再声称 non-alerting');
+    dash.includes(ALERT)
+      ? pass('DLQ 面板引用告警名，便于值班从看板跳到规则')
+      : fail(`DLQ 面板未引用 ${ALERT} —— 看板与规则脱钩`);
+  }
+
+  // 旧注释漂移：kafka-lag.yml 头部曾写 "DLQ 不告警"
+  const lagRules = read('deploy/prometheus/rules/kafka-lag.yml');
+  if (!lagRules) {
+    fail('deploy/prometheus/rules/kafka-lag.yml 未找到');
+  } else {
+    /DLQ[^\n]*不告警/.test(lagRules)
+      ? fail('kafka-lag.yml 头部仍写 "DLQ 不告警" —— 与新增的堆积告警矛盾')
+      : pass('kafka-lag.yml 不再声称 DLQ 不告警');
+  }
+});
+
+// -----------------------------------------------------------------------------
 let failed = 0;
 for (const [name, fn] of groups) {
   console.log('\n' + name);

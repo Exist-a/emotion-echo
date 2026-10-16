@@ -104,7 +104,7 @@ last-updated: 2026-10-13（**收口轮 → ✅ done**：E2E-30 数据契约收�
 | 账本 | 现象（摘要） | 归属 / 去向 | 状态 |
 |---|---|---|---|
 | **F-180** | 审计器 A3 静默失效（**真因=章节标题**，非账本原写的"子表编号"） | E2E-30 | ✅ 已修（PR #190） |
-| **F-183** | Kafka 发布 span 断链（跨进程 trace 连接） | **转专项** → [docs/plans/outbox-trace-continuity.md](../../../plans/outbox-trace-continuity.md)（用户裁定 M4） | 🟡 转专项 |
+| **F-183** | Kafka 发布 span 断链（跨进程 trace 连接） | **转专项** → [docs/legacy-plans/landed/outbox-trace-continuity.md](../../../legacy-plans/landed/outbox-trace-continuity.md)（用户裁定 M4） | 🟡 转专项 |
 | **F-184** | IAB 渲染帧与 DOM 不同步 ⇒ 截图证据失真 | 工具 / IAB 环境（或上游报） | 🔴 保留（去向已定：[V] 证据改由 Playwright 独立渲染栈产出，IAB 仅作 DOM 级验证） |
 | **F-186** | readiness 不含 storage（MinIO 停不翻转） | E2E-30 | ✅ **关闭**（用户裁定「不翻转」即关闭，M2） |
 | **F-187** | voice 同型两缺口（HEAD 404 / PutObject 无 deadline） | E2E-30 | ✅ 已修（PR #195） |

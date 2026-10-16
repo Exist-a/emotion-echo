@@ -65,14 +65,29 @@ func (h *ConsumerGroupHandler) backoffFor(attempt int) time.Duration {
 }
 
 // publishToDLQ 重试预算耗尽后的兜底：投 DLQ（带诊断 headers + sw8 透传）+ 计数。
-// DLQ 为 nil 时只打日志（调用方无论如何都会 Mark 前进，毒消息不卡分区）。
+//
+// 返回值（CL-03 Phase 4b / CL-D-17=A）：
+//   - nil：消息已安全落到 DLQ（或被 Noop/未配置 DLQ "接受"）⇒ 调用方 Mark 前进
+//   - err：DLQ 投递**真的失败** ⇒ 调用方**不得 Mark**，否则"业务 + DLQ 双失败 = 消息永久丢失"
+//
+// DLQ 为 nil（未配置，dev）时返回 nil：无处可投但也不能卡死消费（与改前一致）。
 func (h *ConsumerGroupHandler) publishToDLQ(
 	ctx context.Context,
 	msg *sarama.ConsumerMessage,
 	handlerErr error,
 	attempts int,
-) {
+) error {
 	if h.DLQ != nil {
+		// CL-03 T-07：**Noop 也要可见**。生产装配（main.go）在未配 DLQ 时传的是
+		// `consumer.NoopDLQPublisher{}`（**非 nil**）⇒ 若只在 `h.DLQ == nil` 分支计数，
+		// counter 在真实装配下**永不递增**（第二方核对 2026-10-16 抓到的真缺陷）。
+		// 故这里按"行为"判定：Noop 的 Publish 恒返回 nil（"成功"语义）但其实什么都没做。
+		switch h.DLQ.(type) {
+		case NoopDLQPublisher, *NoopDLQPublisher:
+			IncDLQUnconfigured()
+			slog.WarnContext(ctx, "consumer DLQ 未配置（Noop）：毒消息无处投递、不可回放",
+				"attempts", attempts, "key", string(msg.Key), "err", handlerErr)
+		}
 		// P1-2 (Round 1): 把原消息 headers 透传到 DLQ，便于 OAP 上能追到 sw8/trace_id。
 		// 否则 DLQ 消息在 OAP 上是孤儿，与上游 producer trace 断链。
 		dlqHeaders := make(map[string]string, len(msg.Headers))
@@ -103,15 +118,25 @@ func (h *ConsumerGroupHandler) publishToDLQ(
 		}
 		if dlqErr != nil {
 			// Round 2.3 §PR-1：DLQ 投递失败计数（kafka-pipeline-pending-decisions.md §P1-14）。
-			// 业务消息已 MarkMessage 也无法挽回——属于"业务 + DLQ 双失败"黑洞，本 counter 让黑洞可见。
+			//
+			// CL-03 Phase 4b 语义修正：此处**不再**是"可观测的黑洞"——调用方拿到本 err 后
+			// 会停止 Mark 并结束本次 claim，消息留待下次 session 重投（幂等由
+			// emotion_analysis.event_id UNIQUE + ON CONFLICT DO NOTHING 保证）。
 			IncDLQPublishResult(false)
-			slog.ErrorContext(ctx, "consumer DLQ publish failed (dropping msg)", "err", dlqErr)
+			slog.ErrorContext(ctx, "consumer DLQ publish failed (will NOT mark; message stays for redelivery)", "err", dlqErr)
 		} else {
 			IncDLQPublishResult(true)
 		}
+		slog.ErrorContext(ctx, "consumer handler err after retries → DLQ",
+			"attempts", attempts, "key", string(msg.Key), "err", handlerErr)
+		return dlqErr
 	}
-	slog.ErrorContext(ctx, "consumer handler err after retries → DLQ",
+	// CL-03 T-07：DLQ **未配置**（dev 常见）⇒ 毒消息无处可去、不可回放。
+	// 此前这里只打一条与"已投 DLQ"完全同款的日志 ⇒ 读者无法区分，属**静默丢弃**。
+	IncDLQUnconfigured()
+	slog.WarnContext(ctx, "consumer DLQ 未配置：毒消息无处投递，预算耗尽后已丢弃（不可回放）",
 		"attempts", attempts, "key", string(msg.Key), "err", handlerErr)
+	return nil
 }
 
 // attemptKey 已删除（E2E-F-174）：旧"按 msg.Key 计数"语义失真，见文件头。
@@ -125,4 +150,3 @@ func (h *ConsumerGroupHandler) publishToDLQ(
 func extractSw8Header(headers []*sarama.RecordHeader) string {
 	return sharedmessaging.ExtractSw8Header(headers)
 }
-
