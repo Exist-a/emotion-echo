@@ -119,6 +119,7 @@ related:
 | G | CL-07 情绪回显+融合消费（**后端切片**） | `feat/cl-07-fusion-consumption`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **后端切片 done 并已合并**（squash → `bf401350`，PR [#234](https://github.com/Exist-a/emotion-echo/pull/234)，**源分支已删**）；**9/9 测试点 PASS + 第二方核对 PASS**（含 4 组突变实验）。⚠️ **CL-07 整体仍 in-progress** —— **前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）**待 D 释放该页后另开**；本轨已不再占用 dev 栈与 `proto/**` |
 | H | CL-07 情绪回显（**前端半**） | `feat/cl-07-emotion-display`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **done 并已合并**（squash → `349c9615`，PR [#243](https://github.com/Exist-a/emotion-echo/pull/243)，**源分支已删**）；9/10 PASS（T-10 待 CL-F-17）+ 第二方核对 PASS；**不再占用** `[id].vue` / dev 栈 / `proto` |
 
+| P2 | **CL 遗留清销 Wave 2**（CL-F-16/22/23/24/26） | `feat/cl-paydown-wave2` | Lane-CL-P | 2026-10-16 | **in-progress**：Wave 1/2 批已合并（#245/#246/#247）；本轨做**需 dev 栈**的剩余 5 条。已取 `deploy/.devmode-session`（前一位 CL-07 已释放）。镜像一律带轨后缀 `:clp2`（§1.3 R1）。触碰面：`emotion-echo-chat-svc/migrations/**` + `main.go`（CL-F-22）、`proto/metric.proto` + analytics-svc + BFF（CL-F-26）、`deploy/{prometheus,grafana}/**`（CL-F-23/24）、`emotion-echo-*/internal/logic/healthlogic.go`（CL-F-16，**待实验后才定**） |
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
 > （依据：`feat/cl-04-prompt-assembly` / `feat/cl-01-observability` 分支上的登记 + 各自 draft PR）。**合并时请保留三行**（§四 已约定"冲突时保留双方行"）。
@@ -139,6 +140,8 @@ related:
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |
 | 5 | ~~F（CL-03）~~ | 已于 2026-10-16 用毕**释放**（Phase 0/7 运行时取证 + 告警 firing + Phase 5 停机/恢复 A/B + 收口复核轮的证据重采；`deploy/.devmode-session` 已删） | ✅ **已释放**（栈上跑的是本轨 `:cl03` 镜像的 chat/ai/analytics 三服务；**队列下一位 = G（CL-07）**。注：栈在 2026-10-16 15:1x 已被整体停掉，与 F 轨无关） |
 | 6 | G（CL-07 **后端切片**） | D → F 之后（数据契约实拍） | ✅ **已用毕释放（2026-10-16）** —— 取锁 → worktree 构建 `:cl07` 镜像（analytics-svc/web-bff）→ 20 容器 healthy + `db-migrate` 应用 `i010`/`a011` OK + Nacos `count:7` → **T-9 端到端实拍 PASS**（登录 → 建会话 705 → 发消息 951 → `emotion_analysis`/`fused_emotions` 各 +1 → 报表 `fusedEmotion.total=27`；空态日期字段缺省）→ **已删 `deploy/.devmode-session`**。栈仍开着（跑本轨 `:cl07` 镜像）。**结论=9/9 测试点 PASS → **第二方核对 PASS** ⇒ 后端切片 done 并已合并（`bf401350`，PR #234）** |
+
+| 7 | P2（CL 遗留清销 Wave 2） | **已取锁（2026-10-16）** —— 栈本就在运行（CL-07 用毕未关，20 容器 healthy、Nacos `count:7`）；本轨重建镜像用 `:clp2` 后缀（不覆盖公共 tag），用毕删 `deploy/.devmode-session` | 🔒 **持锁中** |
 
 > **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
 > 三条"待验证"轨 ≈ 极限；若新轨全程需栈 ⇒ **等**，不要加。**纯 🟢 轨（文档/静态守卫）不受此限**。
