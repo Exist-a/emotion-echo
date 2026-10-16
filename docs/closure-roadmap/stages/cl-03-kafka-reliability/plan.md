@@ -105,7 +105,7 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 
 ### A.4 未跑 smoke 声明（如适用）
 
-**起栈口径（H5/H6）**：本轨改过代码的三个服务用**带轨后缀的 tag** `:cl03`，由 [`deploy/docker-compose.cl03-verify.yml`](../../../deploy/docker-compose.cl03-verify.yml) 承载（用法与前置见该文件头注释；不覆盖公共 tag）。
+**起栈口径（H5/H6）**：本轨改过代码的三个服务用**带轨后缀的 tag** `:cl03`，由 [`deploy/docker-compose.cl03-verify.yml`](../../../../deploy/docker-compose.cl03-verify.yml) 承载（用法与前置见该文件头注释；不覆盖公共 tag）。
 
 **本轮建档未起栈、未跑 `scripts/smoke_data_layer.py`**。原因：dev 栈由 **D 轨（CL-05）持锁运行中**（`deploy/.devmode-session` owner=`lane-cl-d`，2026-10-16 06:16 取锁），并行契约 §3.1 明确「不得强占持锁方」。
 ⇒ 本文所有现状结论**均来自实读代码 / 配置 / 既有测试文件**（上表逐条附 file:line），**不含运行时观测**；凡需运行时证据的测试点一律标 🔴 并排队等栈。

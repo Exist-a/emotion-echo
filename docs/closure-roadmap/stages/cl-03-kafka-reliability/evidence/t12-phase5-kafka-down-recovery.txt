@@ -1,21 +1,20 @@
 CL-03 / T-12（CL-F-15）A/B 证据 —— Kafka 停机 ⇒ 不假 sent；恢复 ⇒ 自动重发
-采集时间：2026-10-16 14:01~14:12（dev 栈；chat-svc 镜像 emotion-echo/chat-svc:cl03）
+采集时间：2026-10-16 14:01–14:12（dev 栈；chat-svc 镜像 emotion-echo/chat-svc:cl03）
 方法：① 停 Kafka → 重建 chat-svc（producer init 失败 ⇒ UnavailablePublisher + 后台重试）
       ② 停机窗口内经网关发 1 会话 + 1 消息 ⇒ outbox 应留 pending、attempts 不涨、无假 sent
       ③ 恢复 Kafka ⇒ 后台重试成功 ⇒ 行自动重发、pending 归零
 
-⚠️ 本文件含**两轮**，第二轮是第一轮抓出真缺陷后的复验（同一 A/B，不改判据）：
+⚠️ 本文件含**两轮同一 A/B**（判据不变），第二轮是第一轮抓出真缺陷后的复验：
 
-  【第一轮 14:01–14:02】执行 A/B —— 停机侧全部符合预期；**但恢复侧抓到真缺陷**：
-      Kafka 恢复瞬间 chat-svc **panic 退出**、容器重启（`RestartCount=1`），
-      原因是 `PublisherHolder.Set` 往 `atomic.Value` 里存**接口值**，而热替换会换具体类型
+  【第一轮】14:01–14:02 —— 停机侧全部符合预期；**恢复侧抓到真缺陷**：
+      Kafka 恢复瞬间 chat-svc **panic 退出**、容器重启（`RestartCount=1`，见「步骤 7」）。
+      根因：`PublisherHolder.Set` 往 `atomic.Value` 存**接口值**，而热替换会换具体类型
       （`*UnavailablePublisher` → `*KafkaEventPublisher`）⇒
       `panic: sync/atomic: store of inconsistently typed value into Value`。
       行虽被重启后的新进程补发（pending 仍归零），但**"同进程热替换"路径从未走通**。
-      ⇒ 已 TDD 修复（`publisherBox` 让 atomic.Value 具体类型恒定）+ 单测 RED→GREEN。
+      ⇒ 已 TDD 修复（新增 `publisherBox` 使 atomic.Value 具体类型恒定）+ 单测 RED→GREEN。
 
-  【第二轮 14:11–14:12】修复后**原样复跑** —— 热替换成功、**无 panic**、`RestartCount=0`、
-      同进程 0.2s 内补发。
+  【第二轮】14:11–14:12 —— 修复后**原样复跑**：热替换成功、无 panic、同一进程 0.2s 内补发。
 
 ======================================================================
 【第一轮】14:01–14:02 —— 停机侧符合预期；恢复侧抓到 panic 真缺陷
@@ -85,7 +84,6 @@ $ docker logs emotion-echo-chat-svc | grep 'publisher 未就绪' | tail -4
 $ curl -s localhost:8894/metrics | grep outbox_sent_via_fallback_total   # 语义已变：= '启动时 Kafka 不可用，进入后台重试'
 (chat-svc 容器内无 wget；见步骤 5 的 outbox 计数为准)
 
-
 ### 步骤 5：恢复后 —— 后台重试成功 + 行自动重发
 $ docker logs emotion-echo-chat-svc | grep -E '后台重试成功|producer 已就绪' | tail -3
 {"time":"2026-10-16T14:02:55.990508678+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 5 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
@@ -112,8 +110,6 @@ $ psql -c "SELECT status, COUNT(*) FROM emotion_echo_chat.outbox_events GROUP BY
  sent   |  1776
 (1 row)
 
-
-
 ### 步骤 6：指标语义（经 Prometheus 查；chat-svc 容器内无 wget/curl）
 $ curl -s 'http://localhost:9090/api/v1/query?query=emotion_echo_outbox_sent_via_fallback_total'
 query: emotion_echo_outbox_sent_via_fallback_total
@@ -121,84 +117,10 @@ result: [{"metric": {"__name__": "emotion_echo_outbox_sent_via_fallback_total", 
   （该 counter 语义已变：现在表示「启动时 Kafka 不可用 ⇒ 进入后台重试」，**不再**表示「事件被静默丢进内存」；
    语义变更已回写 ADR-19「D1 fallback 路径登记」段。）
 
-======================================================================
-### 复跑（修复 PublisherHolder 热替换 panic 后，2026-10-16 14:2x）
-背景：首轮复跑抓到真缺陷 —— Kafka 恢复瞬间 chat-svc panic（atomic.Value 换类型）
-      ⇒ 本轮验证「同进程热替换、容器不重启」
-======================================================================
-
-### 复跑步骤 0：基线（含容器 RestartCount）
-$ docker inspect emotion-echo-chat-svc --format 'RestartCount={{.RestartCount}}'
-RestartCount=1
-$ psql -c "SELECT status, COUNT(*) FROM emotion_echo_chat.outbox_events GROUP BY 1"
- status | count 
---------+-------
- sent   |  1776
-(1 row)
-
-
-$ docker stop emotion-echo-kafka
-emotion-echo-kafka
- Container emotion-echo-chat-svc Recreate 
- Container emotion-echo-chat-svc Recreated 
- Container emotion-echo-chat-svc Starting 
- Container emotion-echo-chat-svc Started 
-
-### 复跑步骤 1：停机窗口（producer init 失败 ⇒ 后台重试 + UnavailablePublisher）
-{"time":"2026-10-16T14:11:28.516012649+08:00","level":"INFO","msg":"[kafka] producer init failed: kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.0.0.11:53: no such host —— 进入后台重试；outbox 行将保持 pending（不再改投内存）","svc":"chat-svc"}
-{"time":"2026-10-16T14:11:28.518186432+08:00","level":"INFO","msg":"[outbox-relay] started: interval=1s batchSize=100","svc":"chat-svc"}
-
-$ python /tmp/cl03-send.py
-login OK user_id=1
-conv_id=700
-msg_id=946
-
-$ psql -c "SELECT id,event_type,status,attempts FROM emotion_echo_chat.outbox_events ORDER BY id DESC LIMIT 2"
-  id  |      event_type      | status  | attempts 
-------+----------------------+---------+----------
- 1781 | message.created      | pending |        0
- 1780 | conversation.created | pending |        0
-(2 rows)
-
-$ psql -c "SELECT COUNT(*) AS sent_in_last_30s FROM emotion_echo_chat.outbox_events WHERE status='sent' AND sent_at > now()-interval '30 seconds'"
- sent_in_last_30s 
-------------------
-                0
-(1 row)
-
-
-$ docker start emotion-echo-kafka
-emotion-echo-kafka
-kafka healthy after ~20s
-
-### 复跑步骤 2：恢复后（期望：同进程热替换成功、**无 panic**、RestartCount 不变、行自动重发）
-$ docker logs emotion-echo-chat-svc | grep -E '后台重试成功|producer 已就绪' | tail -2
-{"time":"2026-10-16T14:12:26.308769013+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 4 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
-{"time":"2026-10-16T14:12:26.308804009+08:00","level":"INFO","msg":"[kafka] producer 已就绪（后台重试成功）—— outbox 恢复真实投递","svc":"chat-svc"}
-
-$ docker logs emotion-echo-chat-svc | grep -c 'panic'
-0
-  （0 = 无 panic）
-$ docker inspect emotion-echo-chat-svc --format 'RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}}'
-RestartCount=0 StartedAt=2026-10-16T06:11:20.768343265Z
-
-$ psql -c "SELECT id,event_type,status,attempts,sent_at FROM emotion_echo_chat.outbox_events ORDER BY id DESC LIMIT 2"
-  id  |      event_type      | status | attempts |            sent_at            
-------+----------------------+--------+----------+-------------------------------
- 1781 | message.created      | sent   |        0 | 2026-10-16 06:12:26.536453+00
- 1780 | conversation.created | sent   |        0 | 2026-10-16 06:12:26.527717+00
-(2 rows)
-
-$ psql -c "SELECT COUNT(*) AS pending FROM emotion_echo_chat.outbox_events WHERE status='pending'"
- pending 
----------
-       0
-(1 row)
-
-
+### 步骤 7：缺陷取证 —— 热替换 panic 与容器重启
 $ docker inspect emotion-echo-chat-svc --format 'RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}} FinishedAt={{.State.FinishedAt}}'
 RestartCount=1 StartedAt=2026-10-16T06:02:56.251216433Z FinishedAt=2026-10-16T06:02:56.012313182Z
-  （RestartCount=1：旧进程 14:02:56.012 退出、新进程 14:02:56.251 起来）
+  （旧进程 14:02:56.012 退出、新进程 14:02:56.251 起来 —— 中间相隔 0.24s，非我手动重启）
 
 $ docker logs emotion-echo-chat-svc | sed -n '/14:02:55.990/,/14:02:56.5/p'
 （节选；完整见 chat-svc 容器日志）
@@ -219,8 +141,17 @@ emotion-echo-chat-svc/internal/events.StartKafkaPublisherBackgroundRetry.func3()
 created by emotion-echo-chat-svc/internal/events.StartKafkaPublisherBackgroundRetry in goroutine 1
 	emotion-echo-chat-svc/internal/events/publisher_unavailable.go:124 +0x1f1
 
+  （栈帧 `publisher_unavailable.go:81` 正对应**修复前**的 `Set`：`h.v.Store(p)` 直接存接口值。
+    修复后该行变为 `h.v.Store(&publisherBox{p: p})`。）
+
+### 步骤 8：为什么单测没抓到（已读测试源码确认）
+既有 `TestPublisherHolder_SetGet_RaceFree` 反复 `Set(NewInMemoryEventPublisher())` —— **同一具体类型**，
+`atomic.Value` 的类型不一致 panic 永不触发。故新增
+`TestPublisherHolder_Set_DifferentConcreteTypes_NoPanic`（先存 `*UnavailablePublisher`、再存另一类型），
+未修时如实 panic（RED）、修后绿（GREEN）。
+
 ======================================================================
-【第二轮】14:11–14:12 —— 修复后原样复跑：同进程热替换成功、无 panic、容器不重启
+【第二轮】14:11–14:12 —— 修复后原样复跑：同进程热替换成功、无 panic
 ======================================================================
 
 ### 复跑步骤 0：基线（含容器 RestartCount）
@@ -267,7 +198,7 @@ $ docker start emotion-echo-kafka
 emotion-echo-kafka
 kafka healthy after ~20s
 
-### 复跑步骤 2：恢复后（期望：同进程热替换成功、**无 panic**、RestartCount 不变、行自动重发）
+### 复跑步骤 2：恢复后（期望：同进程热替换成功、**无 panic**、`StartedAt` 未被刷新、行自动重发）
 $ docker logs emotion-echo-chat-svc | grep -E '后台重试成功|producer 已就绪' | tail -2
 {"time":"2026-10-16T14:12:26.308769013+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 4 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
 {"time":"2026-10-16T14:12:26.308804009+08:00","level":"INFO","msg":"[kafka] producer 已就绪（后台重试成功）—— outbox 恢复真实投递","svc":"chat-svc"}
@@ -293,6 +224,9 @@ $ psql -c "SELECT COUNT(*) AS pending FROM emotion_echo_chat.outbox_events WHERE
 
 
 （结论）
-- 停机侧：2 行 `pending / attempts=0`；近 30s `sent` 行数 = 0 ⇒ **没有假 sent**。
-- 恢复侧：「后台重试成功（第 4 次）」+「producer 已就绪（后台重试成功）」⇒ 0.2s 后两行自动 `sent`、`pending=0`。
-- `grep -c panic` = 0；`RestartCount=0`、`StartedAt` 仍为重建时刻 ⇒ **同一进程内热替换，无重启**。
+- 停机侧（两轮一致）：2 行 `pending / attempts=0`；近 30s `sent` 行数 = 0 ⇒ **没有假 sent**。
+- 恢复侧（第二轮）：「后台重试成功（第 4 次）」+「producer 已就绪（后台重试成功）」⇒ 0.2s 后两行自动
+  `sent`、`pending=0`。
+- **「无重启」的判据 = ① `grep -c panic` = 0；② `StartedAt` 仍是本轮重建时刻 `06:11:20Z`（未被刷新）。**
+  注：`RestartCount=0` 本身**不具区分力** —— 该容器是 `--force-recreate` 出来的新容器，计数结构性从 0 起。
+- 两轮的停机侧结论一致，差别只在恢复侧（第一轮 panic 重启后由新进程补发；第二轮同进程热替换补发）。

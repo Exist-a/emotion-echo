@@ -1,11 +1,14 @@
 CL-03 §2.4 数据契约 smoke 证据（AGENTS §2.4 合并前必跑）
-采集时间：2026-10-16 14:1x–14:2x（dev 栈；基址 = APISIX 网关 http://localhost:19080 + Bearer）
+采集时间：2026-10-16 14:00–14:25（dev 栈；基址 = APISIX 网关 http://localhost:19080 + Bearer）
 命令：python scripts/smoke_data_layer.py   （退出码 1；脚本对 FAIL 一律 rc=1）
 
 结论（逐条口径）：
 - **§2.4 契约项全绿**：§1（user_behavior_events 行数）/ §2（event_type enum 细分）/ §3（analytics_reader 四个视图）/
   §4（emotion_analysis 有数据 + /reports/daily summary 非空 & emotionDistribution.len>0）/ §7（5 业务 svc Nacos 注册）全部 OK。
-- **6 项 FAIL 全部是 §8「镜像新鲜度」**，属**判据测量伪影**（E2E-F-215 未关闭），不是数据契约失败。逐项归因见文末。
+- **6 项 FAIL 全部是 §8「镜像新鲜度」**，语义是「这些镜像比它们的源码旧、应当重建」——
+  **确由本轨提交触发**（不是"非本轨所致"，也不是"判据过粗"：该判据把 `emotion-echo-shared` 计入每个服务的
+  src_paths，且"源码变就该重建"是 2026-10-12 的**有意裁定**，账本 `E2E-F-215` **✅ 已解决**）。
+  它不是数据契约失败。逐项归因见文末。
 
 ======================================================================
 Stage 37-A 数据契约 smoke (AGENTS.md §2.4) — 基址 = http://localhost:19080
@@ -98,18 +101,26 @@ src_paths 对**每个**服务都包含 `emotion-echo-shared`（`smoke_data_layer
    （`git diff origin/main...HEAD --name-only` 可证这四个目录**确无**本轨改动。）
    本轨**未**重建这四个镜像（不属本阶段产物面）⇒ 保持 STALE，如实登记，不当作已解决。
 
-② 2 项落在"本轨改了、且本轨**刚刚重建过**"的服务：ai-svc / analytics-svc
-   —— 重建后**镜像 ID 已变**，但 `Created` **未前进**（Docker 沿用了缓存层的 config 时间）：
+② 2 项落在"本轨改了、且本轨**重建过**"的服务：ai-svc / analytics-svc
+   —— 重建**前/后**两次 smoke 自己记录的镜像 ID 与 Created（同一台机、同一判据）：
 
-     $ docker image inspect emotion-echo/ai-svc:cl03        --format '{{.Created}} {{.Id}}'
-     2026-10-16T05:13:02.3272778Z sha256:37289f56540c...   ← Created 与 smoke 记录的完全一致
-     $ docker image inspect emotion-echo/analytics-svc:cl03 --format '{{.Created}} {{.Id}}'
-     2026-10-16T05:14:30.046350675Z sha256:0d57c0f25c23...
-     $ docker image inspect emotion-echo/chat-svc:cl03      --format '{{.Created}} {{.Id}}'
-     2026-10-16T06:10:56.397189857Z sha256:6aa71301dea0...  ← 该服务 Go 层变了，Created 前进 ⇒ 判 OK
+     重建前（14:0x 那一轮 smoke）：
+       [OK  ] §8 emotion-echo-ai-svc 镜像新鲜度: OK: 镜像 8307c409bf65 构建于 2026-10-16T05:13:02Z ≥ 源码 commit 0ee1d1e
+     本轨 `docker compose ... build emotion-echo-ai-svc` 之后：
+       [FAIL] §8 emotion-echo-ai-svc 镜像新鲜度: STALE: 镜像 37289f56540c 构建于 2026-10-16T05:13:02Z，但 commit 49ca08e 更新
+     直接查镜像：
+       $ docker image inspect emotion-echo/ai-svc:cl03        --format '{{.Created}} {{.Id}}'
+       2026-10-16T05:13:02.3272778Z sha256:37289f56540c...
+       $ docker image inspect emotion-echo/analytics-svc:cl03 --format '{{.Created}} {{.Id}}'
+       2026-10-16T05:14:30.046350675Z sha256:0d57c0f25c23...
+       $ docker image inspect emotion-echo/chat-svc:cl03      --format '{{.Created}} {{.Id}}'
+       2026-10-16T06:10:56.397189857Z sha256:6aa71301dea0...  ← 该服务 Go 层变了，Created 前进 ⇒ 判 OK
 
-   ⇒ 事实层面：**重建过的镜像也可能被判 STALE**（`Created` 未随内容前进）。
-     本阶段**不改判据**（判据属 E2E-30 面、已裁定为致命），只如实登记该观察。
+   ⇒ 可核实的观察：ai-svc 的**镜像 ID 由 `8307c409bf65` 变为 `37289f56540c`（确实重建了），
+     但 `Created` 两次都是 `05:13:02Z`** ⇒ 判据据 `Created` 仍判 STALE。
+     **机制未证实**（未进一步定位 Docker 为何不推进 Created），故只登记该观察，不写因果结论。
+     另一条更简单的读法同时成立：`Created`(13:13:02 本地) 早于触及该服务源码的提交 `49ca08e`(13:35:08 本地)
+     ⇒ 按判据本就该判 STALE。两种读法都指向同一处置：**本阶段不改判据**（属 E2E-30 面、已裁定为致命）。
 
 ③ 过程中另有一次**瞬时** §4 FAIL（`/reports/daily` HTTP 503 `downstream: analytics dailyReport: upstream unavailable`）：
    发生在"重建 analytics-svc 之后、重启 web-bff 之前"，与仓内既有运维铁律一致

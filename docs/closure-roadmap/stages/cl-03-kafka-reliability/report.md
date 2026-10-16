@@ -260,7 +260,7 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 | 4 | 账本对账（属本阶段未解决的 CL-F 存在 ⇒ 只能 partial） | ✅ | `CL-F-15` **✅ 已解决**（Phase 5，含 A/B 运行时证据）。`CL-F-22`/`CL-F-23` 是**本阶段工作直接暴露的残留**（一个出自 Phase 1 实读 outbox DDL、一个出自 Phase 4a 加 DLQ 告警；复核轮指出原写"范围外"定性偏松，已收紧），按账本规则**改挂 `CL-09`（backlog，未 done）+ 明确触发条件**（账本约定：不挂已 done 阶段）⇒ 本阶段无"属本阶段未解决"的账 ⇒ 可判 `done`。**该改挂已在账本行内写明理由** |
 | 5 | 落地计划迁 `legacy-plans/landed/` | ✅ | `outbox-trace-continuity.md`、`dlq-hardening-and-replay.md` 已迁（`kafka-pipeline-pending-decisions.md` 属 pending-decision 清单而非落地计划，其条目已逐条终态，留在原处并在文内标注） |
 | 6 | roadmap 状态同步 + 分支/工作区收口 | ✅ | roadmap CL-03 → `done`（注：本 PR 只声明「收口轮转 ready → 串行合并」这一**动作**，不预先声明「已合并」，见 §6.5 #1）；**登记表（`parallel-contract.md`）本 PR 不动**（§8.1 条款 8），收口登记改走独立小 PR |
-| 7 | 第二方核对通过 | ❌（**两轮均 FAIL**）→ 见 §6.6 | 独立子代理核对（只读、不得改文件）**两轮**：① 首轮 **FAIL**：9 项（含 1 项真缺陷）；② 复核轮 **FAIL**：13 项（含本轮修出来的 1 项真缺陷 —— 热替换 panic）。逐条处置见 **§6.5**（首轮）与 **§6.6**（复核轮）。**本行不写「✅」**：第三轮（对最终 diff）的结论见 §6.6 末「第三轮」行 |
+| 7 | 第二方核对通过 | ❌（**两轮均 FAIL**）→ 见 §6.6 | 独立子代理核对（只读、不得改文件）**两轮**：① 首轮 **FAIL**：9 项（含 1 项真缺陷）；② 复核轮 **FAIL**：13 项（含本轮修出来的 1 项真缺陷 —— 热替换 panic）；③ 第三轮 **FAIL**：7 项（纯文档/证据整理，无代码缺陷）。逐条处置见 **§6.5**（首轮）/ **§6.6**（复核轮）/ **§6.7**（第三轮）。**本行不写「✅」**——三轮均未给出 PASS |
 
 ### 6.3 证据索引（`evidence/`）
 
@@ -270,6 +270,7 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 | `t09-t11-dlq-alert-firing.txt` | T-09 / T-11 / T-16 |
 | `t12-phase5-kafka-down-recovery.txt` | T-12（单窗口 A/B × 两轮：第一轮抓到热替换 panic、第二轮修复后复验；含 outage/recovery 两侧 psql 输出与 panic 栈） |
 | `smoke-section24-2026-10-16.txt` | §2.4 数据契约 smoke 完整输出（最终一轮 18/24）+ §8 六项 FAIL 的逐项归因 |
+| `deploy/docker-compose.cl03-verify.yml`（**非 evidence/ 下，在 deploy/**） | 本轨起栈 override（H5：`:cl03` 带轨后缀 tag）—— §6.1 全部运行时证据都由它起栈取得；用法与前置见该文件头注释 |
 | `t07-ai-svc-noop-deadcode-RED.txt` | T-07 修复前 RED（单测证明修复前 counter 不动 = 死代码） |
 | `t07-ai-svc-noop-runtime.txt` | T-07 **生产装配形态运行时**（空 DLQ topic + 毒消息 ⇒ counter 0→1 + WARN） |
 | `t10-t16-phase4c-replay-and-panels.txt` | T-10 / T-16（回放落 PG 2 行 + 两个面板经 Grafana 代理取数） |
@@ -322,7 +323,7 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 | 6 | 🟡 流程 | 本轨改了脊柱 `chat-svc/main.go`，而 `parallel-contract §四` 握手行仍是 `⏳ 待 D 轨确认`，`CL-D-16` 却写"已与 D 轨握手" | `CL-D-16` 措辞改为"已**登记申请**"；**§四 行状态更新走合并后的独立登记小 PR**（§8.1 条款 8：阶段 PR 不改登记表）。事实补充：D 轨已于 2026-10-16 收口、**未提异议** | `docs/closure-roadmap/decisions.md` `CL-D-16` |
 | 7 | 🟡 状态不一致 | Phase 1「决策 22 checklist」第 7 行仍 `⏳ 集成测试…排队等栈`，与已 `done` 的阶段状态矛盾 | 改为 ✅ + 残留说明（§8 6 项 FAIL） | `report.md` Phase 1 checklist |
 | 8 | 🔵 注释错标 | mock 注释写 `CL-D-18=A`（应为 `CL-D-16`） | 已改 | `emotion-echo-shared/pkg/middleware/gin_skywalking_test.go:284` |
-| 9 | 🔵 孤儿产出物 | `deploy/docker-compose.cl03-verify.yml` 在文档中**零引用**，且含机器专属绝对路径 | ① 在 plan §A「起栈口径」+ 本文件 §6.1/§6.2 引用；② 绝对路径改为 `<worktree>`/`<共享目录>` 占位（与 cl01/cl02/cl05 同类文件一致） | `deploy/docker-compose.cl03-verify.yml`、`plan.md:108` |
+| 9 | 🔵 孤儿产出物 | `deploy/docker-compose.cl03-verify.yml` 在文档中**零引用**，且含机器专属绝对路径 | ① 在 plan §A「起栈口径」+ 本文件 **§6.3「产物索引」**引用（第三轮指出原写"§6.1/§6.2"不成立，已纠正）；② 绝对路径改为 `<worktree>`/`<共享目录>` 占位（与 cl01/cl02/cl05 同类文件一致） | `deploy/docker-compose.cl03-verify.yml`、`plan.md:108`（链接层级亦已由 `../../../` 修为 `../../../../`） |
 | 10 | 🔵 凭据面 | Grafana provisioning 新增 PostgreSQL 数据源含明文 `postgres/postgres`，**全环境生效** | **未改**（超出 CL-03 文件面，属可观测栈配置债）；`scripts/check_secrets.sh` **GREEN**（1159 文件）⇒ 如实登记为偏差 | §6.4 #5 |
 | 11 | 🔵 措辞夸大 | T-10 写"一键回放（`-limit 0`）"，但 `-limit 0 = 全部` 的语义**本已存在**（diff 中是未改的上下文行） | 改为"本阶段新增的是 `-record`；`-limit 0` 语义本已存在" | `plan.md` §2.1 T-10 |
 | 12 | 🔵 措辞夸大 | T-16 写面板与告警"**同源**"，实际面板是**累计** offset、告警是**增量** `increase` | 改为"**同指标族但不同量**"，并注明防误读 | `plan.md` §2.1 T-16 |
@@ -341,4 +342,42 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 - **运行时复验**：修复后原样复跑 A/B —— 热替换成功、`grep -c panic`=0、`RestartCount=0`、同进程 0.2s 内补发。
 - **教训**：这是"单测全绿 ≠ 生产正确"的又一例（同 §2 经验里的假绿信号家族）。**只在起栈实测才暴露**。
 
-**第三轮（对最终 diff）**：见 §6.7。
+**第三轮（对最终 diff）**：**FAIL：7 项**（全部为文档/证据整理层面，**无遗留代码缺陷**）—— 见 §6.7。
+
+### 6.7 第二方核对·第三轮（对最终 diff）：FAIL 7 项 —— 全为文档/证据整理，无代码缺陷
+
+> 核对方：同一独立子代理（只读、不得改文件），对 `d7246ee` 后的最终 diff 核对。
+> 其结论原话：**"无任何遗留代码缺陷 —— 本轮新修的 `PublisherHolder` 热替换 panic 是真缺陷且修复正确（实跑为绿，且旧实现会红）；13 项处置里 9 项完全成立"**；
+> FAIL 由 4 项"声称已完成但实际不成立"驱动，**全部在文档/证据文件层面**。
+
+| # | 严重度 | 发现 | 处置 | 落点 |
+|---|---|---|---|---|
+| 1 | 🟡 | **悬空引用链**：§6.2 #7 与 §6.6 末行都指向"第三轮结论"，但报告**根本没有 §6.7** | 建立本节 §6.7，并把 §6.2 #7 改为直接列三轮结论（不再指向不存在的节） | §6.2 #7、§6.6 末行、本节 |
+| 2 | 🟡 | **新写的 smoke 证据自相矛盾**：同一文件既称 §8 FAIL 是"判据测量伪影（E2E-F-215 **未关闭**）"，又称"E2E-F-215 **✅ 已解决**"；且"镜像 ID 已变"的断言**被自己粘贴的输出否证**（只贴了重建后的 ID） | ① 头部改为"**确由本轨提交触发**、判据是有意裁定、账本 E2E-F-215 已解决"；② ② 段补**重建前/后两个 smoke 自己记录的 ID 对照**（`8307c409bf65` → `37289f56540c`，`Created` 两次都是 `05:13:02Z`）作为"ID 变而 Created 未前进"的证据；③ **明示"机制未证实"**，并给出更简单的读法（`Created` 早于 `49ca08e` ⇒ 本就该判 STALE） | `evidence/smoke-section24-2026-10-16.txt` 头部与 ② 段 |
+| 3 | 🟡 | **重写后的 t12 仍有"重复段 + 错标题 + 占位时间戳"**：`### 复跑（…14:2x）` 之下其实是第一轮崩溃取证，随后 `【第二轮】` 又完整重复同一批步骤（相似度 0.821）；只读中段会被读成"修复后仍 panic"，与结论相反 | **按两轮重新组装**（脚本按边界切片，不再整段套整段）：第一轮 = 步骤 0–6 + 步骤 7「缺陷取证」+ 步骤 8「为何单测没抓到」；第二轮 = 复跑步骤 0–2 + 结论。**无重复段、无占位时间戳、标题与内容一致** | `evidence/t12-phase5-kafka-down-recovery.txt` |
+| 4 | 🟡 | **§6.6 #9 的"已引用"不成立**：声称在"§6.1/§6.2 引用"，实际只有 §6.3 一行（且当时**未提交**）；且 HEAD 上 `plan.md:108` 的链接写作 `../../../` ⇒ 解析为不存在的 `docs/deploy/` | ① 措辞改为"**§6.3「产物索引」**引用"；② 链接修为 `../../../../deploy/...`（已用脚本验证真实可解析） | §6.6 #9、`plan.md:108` |
+| 5 | 🔵 | 证据文件头留**未填占位**（t12 `14:2x`、smoke `14:1x–14:2x`） | 填真实时间（smoke `14:00–14:25`；t12 两轮 `14:01–14:02` / `14:11–14:12`，无占位） | 两个证据文件 |
+| 6 | 🔵 | t12 结论把 `RestartCount=0` 当"无重启"的证据 —— 该容器是 `--force-recreate` 出来的**新**容器，计数**结构性恒 0**、无区分力 | 结论改判据：**① `grep -c panic` = 0；② `StartedAt` 未被刷新（仍是本轮重建时刻 `06:11:20Z`）**，并显式注明 `RestartCount=0` 不具区分力 | `evidence/t12-phase5-kafka-down-recovery.txt` 结论段 |
+| 7 | 🔵 | **工作区不干净**（plan/report 有未提交编辑）⇒ 被核对产物 ≠ HEAD | 本轮整改的全部编辑**一并提交**，使被核对产物 = HEAD | 本次提交 |
+
+**第三轮无法核实项（核对方声明）**：T-04/T-09/T-10/T-11/T-16 的运行时结论需 dev 栈/OAP/Alertmanager/Grafana/PG 才能亲验（核对方本轮未起栈）；
+t12 的运行时事实由"文件内自洽性 + 代码 + 镜像/RestartCount 佐证"间接复核，**未亲验容器**。
+本报告如实保留该边界：**这三项运行时证据的原始采集者与核对者是同一执行方**，独立复核只到"文件自洽 + 代码一致"这一层。
+
+---
+
+## §7 收口三连自检（AGENTS §2.5）
+
+```
+$ git status                     # 见提交后工作区（本轮整改已全部提交）
+$ git status -sb                 # main 与 origin/main 无 ahead/behind；本轨分支已 push
+$ git branch --merged main       # 除 main 外为空
+```
+
+**残留分支清点（2026-10-16，如实登记）**：本地 **16** 个、远端 **4** 个非 main 分支。
+逐个用 `git diff --stat origin/main...<branch>` 检查：**全部都有未并入 main 的内容**（不是"squash 后残留的空分支"），
+其中含他轨在飞分支（`feat/cl-04-prompt-assembly`、`feat/cl-07-fusion-consumption`）与历史端侧分支。
+⇒ 依并行契约 **H1「他人分支只读」**，**本轮不代删**，只列证据留 owner 处置（不把"看着像已合并"当成已合并）。
+本轨自己的 `feat/cl-03-kafka-reliability` 在合并后按 §2.5 立即删除（本地 + 远端）。
+
+**dev 栈锁**：本轨用毕已释放（`deploy/.devmode-session` 已删，2026-10-16；含收口复核轮的一次短窗口取锁/释放）。
