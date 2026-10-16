@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: partial
 priority: high
 created: 2026-10-16
 type: backlog-paydown-plan
@@ -14,6 +14,9 @@ related:
 
 > **范围**：只清 **「闭环」阶段账本 `docs/closure-roadmap/discovered-unresolved.md`（CL-F-xx）** 的未解决项。
 > **不含** `docs/e2e-roadmap/` 的 `E2E-F-xx`（用户 2026-10-16 明示「e2e 残留不用」）。
+> **收口（2026-10-16）**：第 1 批（PR [#245](https://github.com/Exist-a/emotion-echo/pull/245) → `2a3301cf`）与第 2 批（PR [#246](https://github.com/Exist-a/emotion-echo/pull/246) → `9059735a`）**均已合并**。
+> 本计划**未 fully done** —— **Wave 2（需 dev 栈的 5 条）尚待起栈窗口执行**，故 `status: partial`。
+
 > **口径**：沿用 `docs/e2e-roadmap/debt-paydown-plan.md` 的单一判据 ——
 > **必要 = 现在不做的确会造成未被发现的危害；不必 = 只是账面整洁，当前无实际危害。**
 > 并遵守反自欺三规则（P1 不许改措辞消账 / P2 复核后发现没解决就退回未解决 / P3 补账≠重跑）。
