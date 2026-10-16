@@ -1,5 +1,5 @@
 ---
-status: partial（代码 [A] 项全绿；浏览器 [V] 项 BLOCKED —— 环境 dev 客户端不 hydration）
+status: 9/10 PASS（[A] 全绿 + 浏览器 [V] T-8/T-9 PASS）；T-10 BLOCKED（既有账 CL-F-17 数字人 VRM 加载失败）
 stage: CL-07（前端半）
 slug: cl-07-emotion-display
 scope: 情绪实时回显（顶部状态条 / 消息融合角标 / 数字人情绪）
@@ -9,10 +9,12 @@ created: 2026-10-16
 
 # CL-07（前端半）· 执行记录（report）
 
-> **结论：partial** —— 7/10 测试点 [A] 全绿（含全量 730 前端单测）；**T-8/T-9/T-10（浏览器 [V]）BLOCKED**：
-> 本环境的 Nuxt **dev 客户端在 IAB webview 下不 hydration**（`#__nuxt.__vue_app__ === false`），
-> 表单/点击走**原生提交**、Vue 处理器不执行 ⇒ 无法做真实浏览器验收。
-> **对照实验证明与本改动无关**（见 §证据）：未改动的主目录（`main`）同一环境**同样不 hydration**。
+> **结论：9/10 PASS** —— [A] 7/7 全绿（含全量 730 前端单测 + 突变实验）；**浏览器 [V]：T-8/T-9 PASS**（截图 + DOM），
+> **T-10 BLOCKED**（数字人自身加载失败 = 既有账 **CL-F-17** VRM 竞态，非本改动）。
+>
+> **实测口径**：宿主 `pnpm dev` 在本环境 IAB 下**不 hydration**（`#__nuxt.__vue_app__ === false`；dev 的 `@fs` 模块 URL 内嵌**中文仓库路径**）。
+> **对照实验**：未改动的 `main` 同环境**同样不 hydration** ⇒ 非本改动。**绕过**：`pnpm build` 产**生产构建**（哈希资源名、无中文路径）
+> → `node .output/server/index.mjs` → **成功 hydration**，完成 [V] 验收。
 
 ## 起点
 
@@ -57,6 +59,31 @@ created: 2026-10-16
 4. 客户端入口脚本 `/_nuxt/@vite/client`、`/_nuxt/.../entry.async.js` 均 **HTTP 200**（服务端无编译错误；dev 日志仅 WARN）。
 5. **对照实验（决定性）**：以**未改动的主目录**（`main`，`D:/源码/Emotion-Echo`）在 `:3010` 起同样 dev ⇒ **`__vue_app__` 同样为 false**。⇒ **不是本改动引入**。
 6. 根因**假设**（未证实）：Nuxt dev 的 `@fs` 模块 URL 内嵌**中文仓库路径**（`D:/源码/...`），该 IAB webview 未能执行该模块链。生产构建产物是哈希资源名、不含中文路径 ⇒ 预期可绕过（**未验证**：需 `pnpm build`，而项目记录过"web 构建 + 19 容器 ⇒ 内存击穿冻结"，本轮**未冒险**）。
+
+## 浏览器实测（IAB · 生产构建）—— T-8/T-9 PASS，并抓到 2 个真缺陷
+
+### 结果（`/chat/conversation/705`，最新用户消息 951 有融合行）
+
+| 项 | 证据 |
+|---|---|
+| T-8 顶部状态条 | DOM：`.current-emotion-bar` 文本 = **「此刻的状态：开心 文本」**；截图可见（琥珀色点 + 文案） |
+| T-8 气泡角标 | DOM：`<span class="emotion-chip">开心</span>`，位于用户气泡左侧；截图可见 |
+| T-9 负向对照（纯文本不夸大） | 该消息 `available_modalities=["text"]` ⇒ 模态标签为「**文本**」，**未**标「综合」 |
+| T-10 数字人情绪 | ⛔ **BLOCKED** —— 数字人显示「3D模型加载失败」（既有账 **CL-F-17** VRM 初始化竞态），无法观察表情；接线与架构钉已在码内 |
+
+### 实测抓到并修复的 2 个真缺陷（单元测试测不到，只有真浏览器能暴露）
+
+1. **[高] BFF `/api/v1/emotion/*` 整族端点恒 502** —— 三个 handler 直接传 `c.Request.Context()`，**未包 `session.WithRequestAuth(c)`**（其余 10 个 handler 都包了）⇒ 下游 gRPC 缺 `x-user-id` metadata ⇒ ai-svc 返 `Unauthenticated`。
+   **端到端复现**（同一 token）：`/conversations/*` → 200，`/reports/*` → 200，而 `/emotion/message/951/fused` 与 `/emotion/conversation/705` → **502 `missing x-user-id metadata`**。
+   这是 **E2E-F-125 同型**缺陷，且**让 CL-07 前端回显根本不可能出数**。
+   修复：三处改用 `session.WithRequestAuth(c)`；钉 `emotion_query_handler_userid_test.go`（断言下游 ctx 带 user id + 无头时不伪造身份）。
+2. **[中] `[id].vue` 的 `v-memo` 依赖列表缺 `byMessage[item.id]`** —— `v-memo` 按固定依赖缓存子树，角标数据**异步**到达后**永不重渲染**（页面看起来"没实现"）。
+   修复：依赖列表补 `byMessage[item.id]`；钉 `cl07-emotion-chip.architecture.test.ts`（**突变实验证明能红**）。
+
+### 环境口径（记录）
+
+- 宿主 `pnpm dev` → IAB 下不 hydration（中文路径假设）；**生产构建**可绕过。
+- **web 镜像无法重建**：`package.json` 声明 `vue-router@^5.4.0` 而 Nuxt 4.2.2 要求 `^4.6.3` ⇒ Dockerfile 里的 `npm install` **ERESOLVE 失败**（宿主走 pnpm-lock 所以无碍）。**属既有缺陷，未就地修**（改 `package.json` 影响面大，另议）。
 
 ## 结论
 

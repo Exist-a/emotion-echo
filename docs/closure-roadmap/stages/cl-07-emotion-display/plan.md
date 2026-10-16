@@ -53,7 +53,8 @@ related:
 
 ### A.4 起栈与实测声明
 
-✅ **已跑**：`npx vitest run`（全量前端）；🔴 **浏览器实测（IAB）** 见 Phase 6 —— 栈已在本轨手上（`:cl07`，20 容器），**前端用宿主机 `pnpm dev`**（RUNBOOK §2：非容器预构建）。
+✅ **已跑**：`npx vitest run`（全量前端）+ **浏览器实测（IAB）**。
+⚠️ **实测口径修正**：宿主 `pnpm dev` 在本环境 IAB 下**不 hydration**（dev 的 `@fs` 模块 URL 含中文仓库路径；**对照实验**：未改动的 main 同现象）⇒ 改用 **`pnpm build` 生产产物**（`node .output/server/index.mjs`），**成功 hydration** 并完成 [V] 验收。
 
 ## §1 目标与非目标
 
@@ -76,9 +77,9 @@ related:
 | T-5 | 消息级缓存：不重复拉、失败也缓存 null、cap 防 N+1 | [A] | 同上 | PASS |
 | T-6 | 组件：`state=null` 整块不渲染；有值渲染文案 + 模态标签 | [A] | `CurrentEmotionBar.test.ts` | PASS |
 | T-7 | 路由登记：新路径 ⊆ `API_ROUTES`（全仓字面量契约） | [A] | `apiRoutes.test.ts` | PASS |
-| T-8 | **浏览器实测**：发消息 → 顶部状态条出现 + 气泡角标出现 | [V] | IAB（宿主 `pnpm dev`） | 待跑 |
-| T-9 | **负向对照**：纯文本消息**不**被标成「综合」 | [V] | IAB | 待跑 |
-| T-10 | 数字人 `setEmotion` 收到非 undefined 情绪 | [V] | IAB（控制台/组件态） | 待跑 |
+| T-8 | **浏览器实测**：顶部状态条出现 + 气泡角标出现 | [V] | IAB + **生产构建**（dev 不 hydration，见 §A.4/report） | ✅ **PASS**：`此刻的状态：开心` + 角标 `开心`（截图 + DOM） |
+| T-9 | **负向对照**：纯文本消息**不**被标成「综合」 | [V] | IAB | ✅ **PASS**：该消息 `available_modalities=["text"]` ⇒ 标签为「**文本**」非「综合」 |
+| T-10 | 数字人 `setEmotion` 收到非 undefined 情绪 | [V] | IAB | ⛔ **BLOCKED**：数字人本身**加载失败**（`3D模型加载失败`，既有账 **CL-F-17** VRM 竞态）⇒ 无法观察其表情；接线已在码内（`syncEmotionToDigitalHuman` + 架构钉），待 CL-F-17 修复后补验 |
 
 ## §3 分阶段实施（TDD）
 
@@ -88,7 +89,7 @@ related:
 | 3 | `components/emotion/CurrentEmotionBar.vue` | 组件不存在 ⇒ 无法 mount | ✅ GREEN（5 用例） |
 | 4 | `[id].vue` 气泡角标（消费消息级缓存） | —（模板接线，浏览器验） | ✅ GREEN（编译 + 单测） |
 | 5 | `[id].vue` 数字人情绪（方案 A + 补拉窗口） | —（同上） | ✅ GREEN（编译 + 单测） |
-| 6 | 浏览器实测（IAB）+ 负向对照 | — | ⏳ |
+| 6 | 浏览器实测（IAB，**生产构建**）+ 负向对照 | — | ✅ **PASS（9/10）**；T-10 被 CL-F-17 阻塞 |
 
 > **TDD 说明（诚实）**：Phase 2/3 的测试与实现**同批写入**（非严格先红后绿）；已用 `apiRoutes.test.ts` 全仓契约测试兜底，Phase 6 的**突变实验**（见 report）证明测试非空断言。
 
