@@ -81,6 +81,13 @@ export const API_ROUTES = {
   // PR-4 落地：BFF voice_handler + ai-svc multimodal kind=audio
   voiceUpload: { method: 'POST', path: '/voice/upload' } as ApiRoute,
 
+  // ============ Emotion query (BFF: emotion_query_handler.go) ============
+  // CL-07 前端半（情绪回显）：按消息取**融合**情绪（顶部状态条 / 气泡角标 / 数字人情绪）。
+  // BFF 路由：GET /api/v1/emotion/message/:messageId/fused → gRPC GetFusedEmotion。
+  // 注意：融合产物是按**消息**粒度（fused_emotions.message_id UNIQUE），
+  // 与会话级 `/emotion/conversation/:id`（未融合，走 emotion_analysis）不同。
+  emotionFusedByMessage: { method: 'GET', path: '/emotion/message/:messageId/fused' } as ApiRoute,
+
   // ============ Uploads（Stage 58 PR-UP-1/2：通用上传）============
   // BFF: POST /api/v1/uploads/:kind（kind ∈ image|video|file）
   // Sprint 1 PR-2 时本路径是 orphan（前端 /upload/* 单数 + BFF /uploads/* 复数错位），
