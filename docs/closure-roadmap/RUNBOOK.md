@@ -61,6 +61,21 @@ cd deploy && docker compose \
 - ⚠️ **改完 Go 必须重建镜像再验收**（否则 curl 仍是旧行为）；改 proto 必须复现原生成方式（`protoc 32.1` + `protoc-gen-go v1.36.11` + `protoc-gen-go-grpc v1.6.2`，以文件名调用）。
 - ⚠️ **改 seed/路由后须在 BFF 起后重跑 `apisix-seed`**（否则 upstream 节点 TCP 为空 → 502）。
 
+### 2.1 在 `git worktree` 里起栈的安全做法（2026-10-16 收口 `CL-F-07`）
+
+> `git worktree` **只物化 tracked 文件** ⇒ `deploy/` 下**全部 gitignored 运行时文件都不在** worktree 里。
+> 直接照 §2 起栈会**当场报错中断**（loud），但**绕错的解法会把 loud 失败换成 silent 降级**（更危险）。
+
+| # | 缺什么 | 症状 | **正确**做法 | ⛔ 错误做法（会造成未被发现的危害） |
+|---|---|---|---|---|
+| W1 | `deploy/.env.local` | 服务级锚点 `env_file: [".env.local"]` 起栈**直接报错中断** | 从**共享主工作区**把 `deploy/` 下 gitignored 运行态文件**链/拷**进 worktree（gitignored，不污染版本库） | 用 `--env-file` 指向别处来"绕开报错" —— **服务级 `env_file` 仍然缺**，而 `LLM_API_KEY` 是"只从 `env_file` 读、不从 host 覆盖"（`deploy/docker-compose.apps.yml:329/:405`）⇒ **静默降级 mock**，"聊天链路看着通了其实在跟桩说话" |
+| W2 | `deploy/tls/`（`ca.crt` / `ai-client.crt` / `ai-client.key`） | `docker build ai-svc` **直接失败**（Dockerfile `COPY deploy/tls/ai-client.key` → `not found`） | 同上，从共享目录 `cp -r deploy/tls` 到 worktree | 改 Dockerfile 取消 COPY（**改坏生产构建**） |
+| W3 | `deploy/.devmode-session` | dev 栈归属锁**看不见** ⇒ 各会话 cwd 不同、互不可见 ⇒ **可静默双占** | 取锁/释锁**以共享目录为准**（`<共享目录>/deploy/.devmode-session`），并在契约 §3.1 播报 | 各自在自己 worktree 建锁文件（等于没锁） |
+| W4 | 构建上下文 | `docker compose build` 的上下文**按 compose 文件位置解析** ⇒ **worktree 里改的源码无法直接构建成镜像**（会构建到共享目录的旧代码） | **两步**：① 在 worktree 里 `build`（用带轨后缀 tag，见契约 §1.3 R1）；② 到**共享目录** `up` | 在 worktree 里 `up --build` 就验收（跑的是共享目录的旧代码 —— E2E-F-70 同型陷阱） |
+
+> 🔴 **判真"起栈成功"的门槛**：Nacos `count:6`（§2）+ 镜像新鲜度（`scripts/check_image_freshness.sh`，见其 §8 判据限制）
+> + **一次真实的 LLM 往返**（不是 mock 回显）。
+
 ---
 
 ## 3. 执行循环（六步）
