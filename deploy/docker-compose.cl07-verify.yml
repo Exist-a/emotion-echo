@@ -14,13 +14,19 @@
 #   cd <worktree>
 #   docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
 #     -f deploy/compose.dev.yml -f deploy/docker-compose.cl07-verify.yml \
-#     --env-file .env.local \
-#     build emotion-echo-analytics-svc emotion-echo-web-bff emotion-echo-web
+#     --env-file <共享目录>/deploy/.env.local \
+#     build emotion-echo-analytics-svc emotion-echo-web-bff
 #   # 再整栈 up（从 worktree 起，使 db-migrate 挂到本 worktree 的 migrations）：
 #   docker compose ... --profile dev up -d
+#   ⚠️ `--env-file` 的相对路径按 **cwd** 解析（不是 compose 文件目录）⇒ 简法是把共享
+#      `.env.local` **cp 到 cwd**（worktree 根）再用 `--env-file .env.local`；**严禁**删改共享那份。
 #
-# 前置：本 worktree 需 `deploy/tls/`（ai-svc Dockerfile COPY deploy/tls/*）—— 已从共享目录 cp 来。
-#   `.env.local` 需位于 compose 解析到的 cwd。
+# ⚠️ **`emotion-echo-web: image: emotion-echo/web:cl07` 目前不可用**（2026-10-16 实测）：
+#    该镜像**无法构建** —— `package.json` 的 `vue-router@^5.4.0` 与 Dockerfile 里
+#    `npm install` 走的 `package-lock.json`（`nuxt@4.2.2` 要求 `vue-router@^4.6.3`）冲突 ⇒ ERESOLVE。
+#    ⇒ 该行是**悬空引用**，按本文件整栈 `up` 会因镜像缺失失败；前端 [V] 验收改用
+#    `pnpm build` 生产产物（`node .output/server/index.mjs`，见阶段档 report §浏览器实测）。
+#    要整栈 up，先把该行**注释掉**（或在修好依赖后重建镜像）。
 # 引用：docs/closure-roadmap/stages/cl-07-{fusion-consumption,emotion-display}/report.md。
 services:
   emotion-echo-analytics-svc:

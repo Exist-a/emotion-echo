@@ -29,6 +29,11 @@ describe('CL-07 情绪回显：对话页接线契约', () => {
     expect(src).toContain('syncEmotionToDigitalHuman')
   })
 
+  it('三处 onFinish（语音链 / 附件链 / 文本链）都接了数字人情绪（只接一处不算）', () => {
+    const calls = src.match(/void syncEmotionToDigitalHuman\(aiEmotion\)/g) ?? []
+    expect(calls.length).toBe(3)
+  })
+
   it('G2 消息级角标已移除（用户裁定 2026-10-16）：不得再出现 emotion-chip', () => {
     expect(src).not.toContain('emotion-chip')
   })
