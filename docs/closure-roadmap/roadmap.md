@@ -71,6 +71,7 @@ related:
 > 串行资源排队：dev 栈（**D 持锁中 → F 第 5 → G 第 6**）、`proto/metric.proto`（D 用 `chat.proto`，**不同文件**）。
 > **前端半**（顶部状态条 / 消息气泡标签 / 数字人情绪）**待 D 释放 `[id].vue` 后另开**，不在本轮。
 > ⚠️ 本轨**不动** A/B/C/D/F 已写的行；仅追加本注与 CL-07 自身行（H3 append-only）。
+> **G 轨续做（2026-10-16，Lane-CL-G）：CL-07 前端半 → `in-progress`**。后端切片已 done 并合并（`bf401350`）；**D 轨（CL-05）已 done 并释放 `pages/chat/conversation/[id].vue`** ⇒ 前端半（顶部情绪状态条 / 消息融合标签 / 数字人情绪）现在**无并发持有者**，可开工。主文件面：前端 `components/emotion/**`（新）、`composables/useCurrentEmotion.ts`（新）、`pages/chat/conversation/{new.vue,[id].vue}`、`utils/emotion.ts`、`types/api.ts`、`configs/apiRoutes.ts`。🟢 大部分为 vitest 级；🔴 浏览器实测需栈（本轨已持 `:cl07` 栈）。**不动** G 轨已写的后端行。
 
 | CL | 阶段 | 档 | 含待排期计划 | depends-on | 状态 |
 |---|---|---|---|---|---|
@@ -81,7 +82,7 @@ related:
 | **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
 | **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | ✅ **done（2026-10-16 收口）** —— 22 个测试点全部落四值（T-1~T-21 PASS；**T-22 PASS 但注明「这不是已修复」**）；Playwright 人可见钉 4 passed/1 skipped（跳过项由 IAB 补齐）+ ADR + 决策 42；`E2E-F-205/206` 已置 ✅；来源计划已迁 `legacy-plans/landed/`。**依据**：用户 2026-10-16 裁定 `CL-D-15`（`CL-F-11` 两次未复现 ⇒ 关闭不再阻塞，并判 done）。⚠️ 残留见 `stages/cl-05-message-pipeline/report.md §6.3`（`CL-F-11` **未修复**、`CL-F-20` 缓存未按用户隔离、Postgres keyset SQL 无测试直接执行 等） |
 | **CL-06** | 用户自定义 Agent | T3 | `user-custom-agent-persona` | CL-04 | pending |
-| **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | **in-progress（后端切片 done 并已合并；前端半待 D 释放 `[id].vue`）**（G 轨，接手原 C 会话位；`fusion-result-consumption` Phase 1~3 + **T-9 端到端实拍 PASS** + **第二方核对 PASS**（4 组突变实验 + 5 条发现已处置），并入 main `bf401350`（PR #234）；**前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）**另开**，见 `stages/cl-07-fusion-consumption/report.md`） |
+| **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | **in-progress（后端切片 done 并已合并；前端半待 D 释放 `[id].vue`）**（G 轨，接手原 C 会话位；`fusion-result-consumption` Phase 1~3 + **T-9 端到端实拍 PASS** + **第二方核对 PASS**（4 组突变实验 + 5 条发现已处置），并入 main `bf401350`（PR #234）；**前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）**in-progress（H 轨，2026-10-16 开工）**，见 `stages/cl-07-fusion-consumption/report.md`） |
 | **CL-08a** | 记忆 · 用户事实 | 最后 | `conversation-memory-pending-decision` | CL-04 | pending |
 | **CL-08b** | 记忆 · 情绪模式 | 最后 | 同上 | CL-08a | pending |
 | **CL-08c** | 记忆 · 情节 + RAG | 最后 | 同上 | CL-08a | pending |
