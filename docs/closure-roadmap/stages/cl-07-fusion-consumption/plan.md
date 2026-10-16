@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: 后端切片 done（第二方核对 PASS）；CL-07 整体 in-progress（前端半另开）
 stage: CL-07
 slug: cl-07-fusion-consumption
 scope: 后端切片（fusion 消费）—— 前端半（[id].vue 回显）不在本轮
@@ -50,15 +50,15 @@ related:
 | fused 可按 user×day 高效聚合 | ✅ `idx_fused_user_time(user_id, created_at DESC)` |
 | 融合是实时产生的 | ❌ FusionWorker 5s 批处理 ⇒ 秒级延迟；日报按天聚合不受影响（计划 §5 已记） |
 | 日报链路已有 proto→analytics→BFF 通道 | ✅ 通道在；**但新字段须逐层加**（proto/生成桩/gRPC 映射/BFF DTO/前端契约） |
-| 新视图的 analytics_reader 授权可加进 a004 | ❌ a004 已应用，改它触发 `migrate.sh` checksum `die` ⇒ **必须新增独立迁移 a011** |
+| 新视图的 analytics_reader 授权可加进 a004 | ❌ a004 已应用，改它触发 `migrate.sh` checksum `die` ⇒ **必须新增独立迁移 a012** |
 | 生产已接线 modality 维度 | ❌ **未接线**（新登 CL-F-26） |
 
-### A.4 未跑 smoke 声明
+### A.4 起栈与实拍声明
 
-✅ **已跑**（本轮，仅 🟢 单测/契约级，**未起 dev 栈** —— 栈被 D 轨持有）：
-`go test ./...`（analytics-svc / web-bff / shared 全绿）、`bash proto/gen.sh metric.proto`（未改 proto 时**逐字节复现**）、
-`python scripts/check_proto_layout.py`（通过）。
-🔴 **未跑**（需栈，排第 6 位）：`smoke_data_layer.py` 端到端数据契约实拍（§契约 1~4）。
+✅ **已跑**（本轮）：
+- **🟢 单测/契约级**：`go test ./...`（analytics-svc / web-bff / shared 全绿）、`bash proto/gen.sh metric.proto`（未改 proto 时**逐字节复现**）、`python scripts/check_proto_layout.py`（通过）。
+- **🔴 dev 栈实拍（T-9）**：本轨取锁后在 worktree 构建 `:cl07` 镜像并**整栈起**（20 容器 healthy / `db-migrate` 应用 `i010`+`a012` / Nacos `count:7`）⇒ 端到端实拍 PASS（实时触发消息 → `fused_emotions` +1 → 报表 `fusedEmotion.total=27`；空态日期字段缺省）。详见 `report.md` §证据 与 `evidence/`。
+- **未跑**：`smoke_data_layer.py` 的**全量** §契约 1~4（本轨只自验了"报表返回非空融合分布"这一条）。
 
 ## §1 目标与非目标
 
@@ -73,7 +73,7 @@ related:
 | # | 测试点 | 判定 | 验证方式 | 证据 |
 |---|--------|------|---------|------|
 | T-1 | 视图 i010 幂等 + 只读 fused + 过滤软删除 + 含 fusion_method 维度 | [A] | `go test ./migrations/ -run TestI010`（字面量契约钉） | PASS（1/1） |
-| T-2 | 新视图授权 analytics_reader（防 A4 型 permission denied） | [A] | `go test ./migrations/ -run TestA011` | PASS（1/1） |
+| T-2 | 新视图授权 analytics_reader（防 A4 型 permission denied） | [A] | `go test ./migrations/ -run TestA012` | PASS（1/1） |
 | T-3 | `FusedReportRepo`（InMemory）空态/预置/多用户/错误/ping/接口一致 | [A] | `go test ./internal/repository/ -run TestFusedReport` | PASS（6/6） |
 | T-4 | 日报 logic 装配 fused（有值装配 / nil 跳过 / 错误冒泡） | [A] | `go test ./internal/logic/ -run TestReportsDailyLogic` | PASS |
 | T-5 | gRPC `ReportsDaily` 映射 fused（分布/方法占比/多模态占比）+ 无数据不报错 | [A] | `go test ./internal/grpcserver/ -run 'ReportsDaily.*Fused'` | PASS |
@@ -86,7 +86,7 @@ related:
 
 | Phase | 内容 | RED 断言 | 状态 |
 |---|---|---|---|
-| 1 | migration：`daily_emotion_fused_v`（i010）+ analytics_reader 授权（a011） | 视图/授权契约钉失败（文件缺失） | ✅ GREEN |
+| 1 | migration：`daily_emotion_fused_v`（i010）+ analytics_reader 授权（a012） | 视图/授权契约钉失败（文件缺失） | ✅ GREEN |
 | 2 | analytics-svc `FusedReportRepo`（接口+InMemory+Postgres）+ svcCtx + 日报装配 + main 接线 | logic 测试断言字段被装配 → 失败 | ✅ GREEN |
 | 3 | proto `ReportsDailyResponse` 融合字段 + 重新生成 + gRPC 映射 + BFF DTO/前端契约 | gRPC/BFF 测试断言 fused 存在 → 编译失败/断言失败 | ✅ GREEN |
 
@@ -100,8 +100,8 @@ related:
 
 ## §5 回归钉
 
-- Go 契约/单元钉（本阶段新增 6 个测试函数 + 3 个文件）：
-  `i010_..._test.go` · `a011_..._test.go` · `fused_report_repository_test.go` ·
+- Go 契约/单元钉（本阶段新增 7 个测试文件）：
+  `i010_..._test.go` · `a012_..._test.go` · `fused_report_repository_test.go` ·
   `reports_daily_logic_fused_test.go` · `metric_server_fused_test.go` ·
   `analytics_grpc_fused_test.go` · `analytics_view_fused_test.go`。
 - 前端 Playwright 钉：**不在本轮**（无前端改动）。
@@ -110,11 +110,11 @@ related:
 
 | 风险 | 说明 | 规避 |
 |---|---|---|
-| 改已应用迁移触发 checksum `die` | `migrate.sh` rc=2 直接 die | 授权走**新迁移 a011**，不改 a004 |
+| 改已应用迁移触发 checksum `die` | `migrate.sh` rc=2 直接 die | 授权走**新迁移 a012**，不改 a004 |
 | proto 生成方式不一致 ⇒ 全量 diff | 工具链版本漂移 | 先跑 `gen.sh` 在**未改 proto** 时逐字节复现再改（已验） |
 | `available_modalities` 是 JSONB | `?` 操作符需 `::jsonb` | 视图显式转换（i010） |
 | InMemory 替身时区键不匹配 | `time.Time` 作 key 含时区 | 归一到 UTC 零点（`fusedDayKey`）—— **本阶段 TDD 实际抓到并修复** |
-| 跨 schema 读需 GRANT | 缺授权 = A4 型 permission denied | 新迁移 a011 授权 + 契约钉 |
+| 跨 schema 读需 GRANT | 缺授权 = A4 型 permission denied | 新迁移 a012 授权 + 契约钉 |
 
 ## §7 调研依据（本次实读）
 

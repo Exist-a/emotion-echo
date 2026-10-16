@@ -1,4 +1,4 @@
--- migrations/a011_grant_daily_emotion_fused_v.sql
+-- migrations/a012_grant_daily_emotion_fused_v.sql
 --
 -- CL-07（后端切片）Phase 1 配套：把新视图 daily_emotion_fused_v 授权给只读 role。
 --
@@ -8,7 +8,7 @@
 --
 -- 顺序安全：
 --   migrate.sh 按服务字典序应用（chat < ai < analytics）；role 定义（a004）与本文件
---   同在 analytics-svc/migrations/、字典序 a004 < a011 ⇒ 本文件执行时
+--   同在 analytics-svc/migrations/、字典序 a004 < a012 ⇒ 本文件执行时
 --   analytics_reader 必已存在；ai-svc 的 i010（建视图）在 ai 目录先于 analytics 应用
 --   ⇒ 视图也已存在。GRANT 幂等，可重复执行。
 
