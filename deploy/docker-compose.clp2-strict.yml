@@ -1,0 +1,14 @@
+# CL-F-16 strict 自愈实验用 override（**实验配置，非生产默认**）
+#
+# 打开 STARTUP_STRICT ⇒ Postgres 不可用时重试耗尽即退出启动，交给 compose 的
+# `restart: on-failure` 重试；依赖就绪后容器自动恢复（实测 ~30s 内 /health/ready=200）。
+# 证据：docs/closure-roadmap/stages/cl-09-backlog-paydown/evidence/clf16-strict-selfheal-ab.txt
+#
+# 用法：在 `-f docker-compose.clp2.yml` 之后再叠本文件，只起 user-svc：
+#   docker compose ... -f deploy/docker-compose.clp2-strict.yml --env-file deploy/.env.local \
+#     up -d --no-deps --force-recreate emotion-echo-user-svc
+services:
+  emotion-echo-user-svc:
+    environment:
+      STARTUP_STRICT: "true"
+      STARTUP_STRICT_DEPS: "postgres"

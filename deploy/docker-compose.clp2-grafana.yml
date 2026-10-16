@@ -1,0 +1,8 @@
+# CL-F-24 实验用 override：**故意不给** GF_PG_USER/GF_PG_PASSWORD，
+# 用来验证"漏配凭据时 provisioning 是 loud 失败还是静默空口令"。
+services:
+  grafana:
+    environment:
+      GF_PG_USER: ""
+      GF_PG_PASSWORD: ""
+    ports: ["13001:3000"]

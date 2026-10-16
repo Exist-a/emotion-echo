@@ -1,0 +1,22 @@
+CL-F-22 运行时 A/B 负向对照（2026-10-16，Lane-CL-P · dev 栈）
+============================================================
+目的：证明"内联 DDL 漏索引"是真缺陷，且补索引后该路径真的建出索引。
+方法：从 git HEAD（旧）与工作副本（新）各自**抽取 main.go 里 runOutboxMigration 的
+      内联 DDL 原文**，在 dev postgres 的 emotion_echo 库上先后执行（每次先 DROP 该索引）。
+
+A（旧文本，`git show HEAD:emotion-echo-chat-svc/main.go`）：
+  CREATE INDEX IF NOT EXISTS 清单 = ['idx_outbox_pending']            ← 缺 idx_outbox_attempts
+  DROP INDEX idx_outbox_attempts → 执行旧文本 → 查 pg_indexes：
+  idx_outbox_attempts present? **False**   ⇒ 漂移复现（走 svc 自建表路径的环境缺该索引）
+
+B（新文本，工作副本）：
+  CREATE INDEX IF NOT EXISTS 清单 = ['idx_outbox_pending', 'idx_outbox_attempts']
+  DROP INDEX idx_outbox_attempts → 执行新文本 → 查 pg_indexes：
+  idx_outbox_attempts present? **True**    ⇒ 修复生效
+
+备注：dev 库本身（经 db-migrate 跑 c001）**一直有两个索引** —— 漂移只在
+      "没有 db-migrate 容器、仅靠 chat-svc 自建表"的路径上咬人（如 SKIP_MIGRATION
+      或全新环境先起 svc）。故本实验刻意针对**内联文本**做，而不是查 dev 库现状。
+
+机器守卫：emotion-echo-chat-svc/migrations/c011_outbox_ddl_parity_test.go
+（列 + 索引集合**双向相等**；RED 时内联=1/迁移=2）。

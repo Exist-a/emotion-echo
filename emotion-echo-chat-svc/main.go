@@ -107,6 +107,12 @@ func main() {
 	convRepo, db := pg.repo, pg.db
 	if err != nil {
 		log.Printf("[postgres] connect failed after %d attempts: %v", dbconnect.DefaultAttempts, err)
+		// CL-F-16：strict 模式下 postgres 是必需依赖 ⇒ 退出启动，交给 compose 的
+		// `restart: on-failure` 重试（依赖就绪后自然恢复 = 自愈）。
+		// dev（默认非 strict）保持"降级启动 + /health/ready 如实报 degraded"（但**不自愈**）。
+		if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("postgres") {
+			log.Fatalf("[postgres] strict mode + required dep, refusing to start: %v", err)
+		}
 	} else {
 		log.Printf("[postgres] connected")
 	}
@@ -488,9 +494,12 @@ func openPostgres(dsn string, maxOpen, maxIdle int) (repository.ConversationRepo
 // 简单实现：用 gorm 直接 Exec 文件内容。生产应该用 migrate 工具；当前学习/开发期 OK。
 //
 // CL-03 Phase 1：本函数内联的 DDL 是 outbox_events 的**第二份事实源**（第一份 =
-// migrations/c0NN_*.sql，由 db-migrate 容器按 checksum 应用）。两者必须同步，
-// migrations/c010_trace_sw8_migration_test.go 的 TestC010_TraceSw8_InlineDDLNotDrifted
-// 钉死"内联版不得漏列"。新增列时请同时改这里与 migrations/ 下的迁移文件。
+// migrations/c0NN_*.sql，由 db-migrate 容器按 checksum 应用）。两者必须同步。
+//
+// CL-F-22（2026-10-16）：守卫从"不得漏**列**"扩到"**列与索引集合双向相等**" ——
+// 实测内联版曾缺 `idx_outbox_attempts`（c001 有、这里没有）⇒ 走"svc 自建表"路径
+// 的环境少一个索引。现由 `migrations/c011_outbox_ddl_parity_test.go` 机器钉住。
+// 新增**列或索引**时请同时改这里与 migrations/ 下的迁移文件。
 func runOutboxMigration(db *gorm.DB) error {
 	const sql = `
 CREATE SCHEMA IF NOT EXISTS emotion_echo_chat;
@@ -514,9 +523,16 @@ CREATE TABLE IF NOT EXISTS emotion_echo_chat.outbox_events (
 ALTER TABLE emotion_echo_chat.outbox_events
     ADD COLUMN IF NOT EXISTS trace_sw8 VARCHAR(512);
 
+-- relay 拉 pending 时按 created_at ASC；partial index 减少索引体积
 CREATE INDEX IF NOT EXISTS idx_outbox_pending
     ON emotion_echo_chat.outbox_events(created_at)
     WHERE status = 'pending';
+
+-- CL-F-22：本索引原本只在 migrations/c001 里建（内联版漏了）⇒ 补齐，与 c001 一致。
+-- attempts > 0 的行（失败过）便于运维查询。
+CREATE INDEX IF NOT EXISTS idx_outbox_attempts
+    ON emotion_echo_chat.outbox_events(attempts)
+    WHERE attempts > 0;
 `
 	return db.Exec(sql).Error
 }

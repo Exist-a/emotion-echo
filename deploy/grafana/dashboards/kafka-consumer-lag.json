@@ -121,7 +121,7 @@
     },
     {
       "type": "stat",
-      "title": "DLQ Depth (chat-events-dlq messages) — alerting: DLQMessagesAccumulating",
+      "title": "DLQ Depth (chat-events-dlq messages) — alerting: DLQDepthHigh / DLQMessagesAccumulating",
       "id": 3,
       "gridPos": {
         "h": 8,
@@ -136,7 +136,7 @@
       },
       "targets": [
         {
-          "expr": "sum(kafka_topic_partition_current_offset{topic=\"chat-events-dlq\"}) or vector(0)",
+          "expr": "sum(kafka_topic_partition_current_offset{topic=\"chat-events-dlq\"} - kafka_topic_partition_oldest_offset{topic=\"chat-events-dlq\"}) or vector(0)",
           "refId": "A",
           "legendFormat": "{{consumergroup}}"
         }

@@ -36,18 +36,28 @@ datasources:
   # CL-03 Phase 4c（CL-D-18=B）：PostgreSQL 数据源 —— 给「DLQ 回放记录」面板用。
   # 为什么需要：回放工具是人工 CLI（无 /metrics 端点）⇒ 回放结果落 PG 表
   #   emotion_echo_analytics.dlq_replay_runs，本数据源让 Grafana 直接 SQL 读它。
-  # 只读用途：dev 沿用 compose 口径的 postgres 账号（prod 应换只读账号）。
+  #
+  # 🔴 CL-F-24（2026-10-16）：凭据一律**环境注入**（`${GF_PG_USER}` / `${GF_PG_PASSWORD}`），
+  #   **本文件不得再出现字面量用户名/口令** —— 原因：provisioning 文件 dev 与 prod **是同一份**，
+  #   写死 dev 口令（postgres/postgres）等于让 prod 也用超级用户只读查库。
+  #   · dev：compose 的 grafana 服务给了 dev 默认值（与全栈 postgres/postgres 一致）；
+  #   · prod：必须由 secret/CI 注入，且账号应为**只读**（MR-4 的 `analytics_reader`，
+  #     见 AGENTS §2.4）；**本文件故意不给默认值** —— 实测漏配时的行为是：
+  #     数据源**仍会注册**（Grafana 不校凭据），但它的**健康检查立刻报错**
+  #     （`pq: no PostgreSQL user name specified in startup packet`，/health 返 status=ERROR），
+  #     即"loud 但延迟到健康检查"而非静默可用。
+  #   守卫：`deploy/obs_monitoring.test.js` 新增组 ⑧ 钉住"不得含字面量口令"。
   - name: PostgreSQL
     uid: postgres
     type: postgres
     access: proxy
     url: postgres:5432
     database: emotion_echo
-    user: postgres
+    user: ${GF_PG_USER}
     editable: true
     jsonData:
       sslmode: disable
       postgresVersion: 1500
       timescaledb: false
     secureJsonData:
-      password: postgres
+      password: ${GF_PG_PASSWORD}

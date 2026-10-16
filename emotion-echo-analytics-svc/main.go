@@ -101,6 +101,12 @@ func main() {
 	if dbErr != nil {
 		log.Printf("[postgres] connect failed after %d attempts: %v (EventRepo = nil)", dbconnect.DefaultAttempts, dbErr)
 		evtRepo = nil
+		// CL-F-16：strict 模式下 postgres 是必需依赖 ⇒ 退出启动，交给 compose 的
+		// `restart: on-failure` 重试（依赖就绪后自然恢复 = 自愈）。
+		// dev（默认非 strict）保持"降级启动 + /health/ready 如实报 degraded"（但**不自愈**）。
+		if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("postgres") {
+			log.Fatalf("[postgres] strict mode + required dep, refusing to start: %v", dbErr)
+		}
 	} else {
 		log.Printf("[postgres] connected")
 		evtRepo = repository.NewPostgresEventRepo(db)

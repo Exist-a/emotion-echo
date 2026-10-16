@@ -74,6 +74,34 @@ cd deploy && docker compose \
 | W4 | 构建上下文 | `docker compose build` 的上下文**按 compose 文件位置解析** ⇒ **worktree 里改的源码无法直接构建成镜像**（会构建到共享目录的旧代码） | **两步**：① 在 worktree 里 `build`（用带轨后缀 tag，见契约 §1.3 R1）；② 到**共享目录** `up` | 在 worktree 里 `up --build` 就验收（跑的是共享目录的旧代码 —— E2E-F-70 同型陷阱） |
 
 > 🔴 **判真"起栈成功"的门槛**：Nacos `count:6`（§2）+ 镜像新鲜度（`scripts/check_image_freshness.sh`，见其 §8 判据限制）
+> **+ 一次真实的 LLM 往返**（不是 mock 回显）。
+
+### 2.2 依赖后起 / 服务恒 503 时的自愈（2026-10-16 收口 `CL-F-16`）
+
+**问题（CL-F-16 控制实验实测，证据 `stages/cl-09-backlog-paydown/evidence/clf16-readiness-selfheal-ab.txt`）**：
+服务若在 **Postgres 就绪之前**启动，会带 nil repo **降级启动**；此后 **不会自愈** ——
+postgres 变 healthy 后继续观察 **300s，`/health/ready` 恒 503**（只有 `docker restart` / `--force-recreate` 才好）。
+
+**修复（2026-10-16，Lane-CL-P）**：三条线同时收：
+
+| # | 线 | 行为 |
+|---|---|---|
+| ① | **启动期有限次退避重试** | user-svc 也接上共享 `dbconnect.ConnectWithRetry`（原本是裸单次连接）；与 ai / analytics / assessment 同范式。盖过"依赖稍后就绪"的启动竞态 |
+| ② | **strict 模式 fail-fast** | 重试耗尽后 `ShouldFailFast() && IsRequired("postgres")` ⇒ **退出启动**，交给 compose 的 `restart: on-failure` 重试 ⇒ 依赖就绪后**自动恢复**（实测：postgres 起来后 ~30s 内 `/health/ready=200`） |
+| ③ | **dev（默认非 strict）保持降级启动** | 仍有 `/health/ready` 如实报 `degraded`（D-29 契约），但**不自愈** ⇒ 需运维在依赖就绪后重启本服务 |
+
+**怎么开 strict（生产/想自愈时）**：给容器设 `STARTUP_STRICT=true` + `STARTUP_STRICT_DEPS=postgres`
+（与既有 `ShouldFailFast`/`IsRequired` 机制同一套 env）。**⚠️ 目前 compose 未把这些 env 传给任何容器** ⇒
+机制默认休眠；生产起栈时应显式下发（`deploy/compose.prod.yml` 侧）。
+
+**运维速查**：
+```bash
+# 谁在降级？
+docker ps --filter health=unhealthy --format '{{.Names}}	{{.Status}}'
+docker exec emotion-echo-<svc> wget -qO- http://localhost:<port>/health/ready   # 看 status/dbOk
+# 依赖已就绪后仍 503 ⇒ 重启该服务（服务侧无自愈时这是唯一正解）
+docker restart emotion-echo-<svc>
+```
 > + **一次真实的 LLM 往返**（不是 mock 回显）。
 
 ---

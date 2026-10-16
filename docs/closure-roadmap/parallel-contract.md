@@ -194,6 +194,7 @@ related:
 | 2026-10-16 | Lane-CL-G | `deploy/docker-compose.cl07-verify.yml`（新增） | G 轨起栈验证用 override（H5/条款10：把 analytics-svc / web-bff 的镜像 tag 换成 `:cl07`，不覆盖公共 tag）。**本行补登**（登记 PR #232 时该文件尚未产出） | ✅ |
 
 | 2026-10-16 | Lane-CL-P | `docs/closure-roadmap/{parallel-contract,discovered-unresolved,}.md`、`scripts/check_git_layout.py` + 新增 `scripts/test_check_git_layout.py`、`.github/workflows/doc-drift-check.yml`（**仅加一个 step**）、前端 `app/{utils/{messageCache,db}.ts,stores/message.ts,types/**,components/digital-human/**}` | P 轨（**CL 遗留清销第 1 批**）开工：① §1.0 新增「字母体系（唯一权威）」收口 `CL-F-21`；② §三 登记占位；③ 账本翻正 `CL-F-01/03`、关闭 `CL-F-06/17/18/20`。**无并发持有者**（A~H 轨均已 done 并合并；CL-02 的 `proto/**` 预占已随 #214 释放）。按 §1.2「不同文件可并」不构成阻塞；本行只追加、不改他人行 | ✅ |
+| 2026-10-16 | Lane-CL-P | `deploy/docker-compose.clp2.yml`（新增）、`deploy/docker-compose.clp2-grafana.yml`（新增） | P2 轨起栈验证用 override（§1.3 R1：**带轨后缀 tag `:clp2`，不覆盖公共 tag**）。`clp2.yml` 给 user/chat/analytics-svc 换 `:clp2` 镜像（不含 strict）；`clp2-strict.yml` 是 CL-F-16 的 **strict 自愈实验**配置；`clp2-grafana.yml` 给 CL-F-24 做"**故意置空 `GF_PG_*`**"的负向对照。三者均为**实验/验证产物**，非生产配置（我这次误把本行插到了 §三，已在解 `CL-F-19` 同点冲突时就地改投 §四） | ✅ |
 | 2026-10-16 | Lane-CL-G | 前端 `pages/chat/conversation/{new.vue,[id].vue}` + `components/emotion/**`（新）+ `composables/useCurrentEmotion.ts`（新）+ `utils/emotion.ts` + `types/api.ts` + `configs/apiRoutes.ts` | G 轨**续 CL-07 前端半**（H 轨登记）：这些文件属 D 轨（CL-05）此前主张的 `[id].vue` 面，**D 轨已 done 并释放该页**（roadmap CL-05 已翻 done）⇒ 现无并发持有者。依 §1.2 声明占用；纯前端 + 新文件为主 | ⏳ **声明占用** |
 
 ## 五、开工前置检查（照做）

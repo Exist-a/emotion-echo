@@ -1,0 +1,32 @@
+# CL-F-16 strict 模式自愈 A/B（严谨版 2026-10-17T00:09:24）
+# 与前两版的差别：(a) **--force-recreate** 保证跑的是新进程；(b) 每轮**先断言 postgres 真的不在运行**；
+#                    (c) 记录完整 postgres 分支日志，避免再把'重试成功'误读成'fail-fast'
+
+[1] stop postgres -> emotion-echo-postgres；postgres.Running=False（断言 False）
+[2] force-recreate user-svc(strict,:clp2)；期间 postgres.Running=False
+    t+  0s  state=running/starting  postgres.Running=False
+    t+ 21s  state=running/starting  postgres.Running=False
+    t+ 41s  state=running/starting  postgres.Running=False
+    t+ 62s  state=running/starting  postgres.Running=False
+    t+ 83s  state=running/starting  postgres.Running=False
+    t+104s  state=running/starting  postgres.Running=False
+    t+124s  state=running/starting  postgres.Running=False
+    t+140s  state=running/starting  postgres.Running=False
+    t+161s  state=running/starting  postgres.Running=False
+    t+182s  state=restarting/unhealthy  postgres.Running=False
+    t+182s  state=restarting/unhealthy  <== 容器已退出/重启退避（fail-fast 生效）
+[3] postgres 分支日志（全部）：
+      {"time":"2026-10-17T00:11:00.489394527+08:00","level":"INFO","msg":"[postgres] connect failed after 10 attempts: failed to connect to `user=postgres database=emotion_echo`: hostname resolving error: l
+      {"time":"2026-10-17T00:11:00.48941431+08:00","level":"INFO","msg":"[postgres] strict mode + required dep, refusing to start: failed to connect to `user=postgres database=emotion_echo`: hostname resolv
+      {"time":"2026-10-17T00:11:30.819849975+08:00","level":"INFO","msg":"[postgres] connect failed after 10 attempts: failed to connect to `user=postgres database=emotion_echo`: hostname resolving error: l
+      {"time":"2026-10-17T00:11:30.819869949+08:00","level":"INFO","msg":"[postgres] strict mode + required dep, refusing to start: failed to connect to `user=postgres database=emotion_echo`: hostname resol
+      {"time":"2026-10-17T00:12:01.60742787+08:00","level":"INFO","msg":"[postgres] connect failed after 10 attempts: failed to connect to `user=postgres database=emotion_echo`: hostname resolving error: lo
+      {"time":"2026-10-17T00:12:01.607452723+08:00","level":"INFO","msg":"[postgres] strict mode + required dep, refusing to start: failed to connect to `user=postgres database=emotion_echo`: hostname resol
+      {"time":"2026-10-17T00:12:31.94509572+08:00","level":"INFO","msg":"[postgres] connect failed after 10 attempts: failed to connect to `user=postgres database=emotion_echo`: hostname resolving error: lo
+      {"time":"2026-10-17T00:12:31.945125041+08:00","level":"INFO","msg":"[postgres] strict mode + required dep, refusing to start: failed to connect to `user=postgres database=emotion_echo`: hostname resol
+[4] 退出判定：✔ 容器已退出（fail-fast 生效）
+[5] start postgres -> emotion-echo-postgres
+[6] postgres healthy (~12s)；postgres.Running=True
+    t+  0s  state=running/healthy  /health/ready=200
+
+结论：fail-fast=生效（容器在 postgres 不可用时退出）；restart:on-failure 自愈=成功，约 0s 内 /health/ready=200
