@@ -119,7 +119,7 @@ related:
 | G | CL-07 情绪回显+融合消费（**后端切片**） | `feat/cl-07-fusion-consumption`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **后端切片 done 并已合并**（squash → `bf401350`，PR [#234](https://github.com/Exist-a/emotion-echo/pull/234)，**源分支已删**）；**9/9 测试点 PASS + 第二方核对 PASS**（含 4 组突变实验）。⚠️ **CL-07 整体仍 in-progress** —— **前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）**待 D 释放该页后另开**；本轨已不再占用 dev 栈与 `proto/**` |
 | H | CL-07 情绪回显（**前端半**） | `feat/cl-07-emotion-display`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **done 并已合并**（squash → `349c9615`，PR [#243](https://github.com/Exist-a/emotion-echo/pull/243)，**源分支已删**）；9/10 PASS（T-10 待 CL-F-17）+ 第二方核对 PASS；**不再占用** `[id].vue` / dev 栈 / `proto` |
 
-| 2026-10-16 | Lane-CL-P | `deploy/docker-compose.clp2.yml`（新增）、`deploy/docker-compose.clp2-grafana.yml`（新增） | P2 轨起栈验证用 override（§1.3 R1：**带轨后缀 tag `:clp2`，不覆盖公共 tag**）。前者给 user/chat/analytics-svc 换 `:clp2` 镜像 + **实验用** `STARTUP_STRICT=true`；后者**故意置空** `GF_PG_*` 做 CL-F-24 的负向对照。二者均为**实验/验证产物**，非生产配置 | ✅ |
+| P2 | **CL 遗留清销 Wave 2**（CL-F-16/22/23/24/26） | `feat/cl-paydown-wave2` | Lane-CL-P | 2026-10-16 | **in-progress**：Wave 1/2 批已合并（#245/#246/#247）；本轨做**需 dev 栈**的剩余 5 条。已取 `deploy/.devmode-session`（前一位 CL-07 已释放）。镜像一律带轨后缀 `:clp2`（§1.3 R1）。触碰面：`emotion-echo-chat-svc/migrations/**` + `main.go`（CL-F-22）、`proto/metric.proto` + analytics-svc + BFF（CL-F-26）、`deploy/{prometheus,grafana}/**`（CL-F-23/24）、`emotion-echo-*/internal/logic/healthlogic.go`（CL-F-16，**待实验后才定**） |
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
 > （依据：`feat/cl-04-prompt-assembly` / `feat/cl-01-observability` 分支上的登记 + 各自 draft PR）。**合并时请保留三行**（§四 已约定"冲突时保留双方行"）。
@@ -140,6 +140,8 @@ related:
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |
 | 5 | ~~F（CL-03）~~ | 已于 2026-10-16 用毕**释放**（Phase 0/7 运行时取证 + 告警 firing + Phase 5 停机/恢复 A/B + 收口复核轮的证据重采；`deploy/.devmode-session` 已删） | ✅ **已释放**（栈上跑的是本轨 `:cl03` 镜像的 chat/ai/analytics 三服务；**队列下一位 = G（CL-07）**。注：栈在 2026-10-16 15:1x 已被整体停掉，与 F 轨无关） |
 | 6 | G（CL-07 **后端切片**） | D → F 之后（数据契约实拍） | ✅ **已用毕释放（2026-10-16）** —— 取锁 → worktree 构建 `:cl07` 镜像（analytics-svc/web-bff）→ 20 容器 healthy + `db-migrate` 应用 `i010`/`a011` OK + Nacos `count:7` → **T-9 端到端实拍 PASS**（登录 → 建会话 705 → 发消息 951 → `emotion_analysis`/`fused_emotions` 各 +1 → 报表 `fusedEmotion.total=27`；空态日期字段缺省）→ **已删 `deploy/.devmode-session`**。栈仍开着（跑本轨 `:cl07` 镜像）。**结论=9/9 测试点 PASS → **第二方核对 PASS** ⇒ 后端切片 done 并已合并（`bf401350`，PR #234）** |
+
+| 7 | P2（CL 遗留清销 Wave 2） | **已取锁（2026-10-16）** —— 栈本就在运行（CL-07 用毕未关，20 容器 healthy、Nacos `count:7`）；本轨重建镜像用 `:clp2` 后缀（不覆盖公共 tag），用毕删 `deploy/.devmode-session` | 🔒 **持锁中** |
 
 > **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
 > 三条"待验证"轨 ≈ 极限；若新轨全程需栈 ⇒ **等**，不要加。**纯 🟢 轨（文档/静态守卫）不受此限**。
@@ -192,6 +194,7 @@ related:
 | 2026-10-16 | Lane-CL-G | `deploy/docker-compose.cl07-verify.yml`（新增） | G 轨起栈验证用 override（H5/条款10：把 analytics-svc / web-bff 的镜像 tag 换成 `:cl07`，不覆盖公共 tag）。**本行补登**（登记 PR #232 时该文件尚未产出） | ✅ |
 
 | 2026-10-16 | Lane-CL-P | `docs/closure-roadmap/{parallel-contract,discovered-unresolved,}.md`、`scripts/check_git_layout.py` + 新增 `scripts/test_check_git_layout.py`、`.github/workflows/doc-drift-check.yml`（**仅加一个 step**）、前端 `app/{utils/{messageCache,db}.ts,stores/message.ts,types/**,components/digital-human/**}` | P 轨（**CL 遗留清销第 1 批**）开工：① §1.0 新增「字母体系（唯一权威）」收口 `CL-F-21`；② §三 登记占位；③ 账本翻正 `CL-F-01/03`、关闭 `CL-F-06/17/18/20`。**无并发持有者**（A~H 轨均已 done 并合并；CL-02 的 `proto/**` 预占已随 #214 释放）。按 §1.2「不同文件可并」不构成阻塞；本行只追加、不改他人行 | ✅ |
+| 2026-10-16 | Lane-CL-P | `deploy/docker-compose.clp2.yml`（新增）、`deploy/docker-compose.clp2-grafana.yml`（新增） | P2 轨起栈验证用 override（§1.3 R1：**带轨后缀 tag `:clp2`，不覆盖公共 tag**）。`clp2.yml` 给 user/chat/analytics-svc 换 `:clp2` 镜像（不含 strict）；`clp2-strict.yml` 是 CL-F-16 的 **strict 自愈实验**配置；`clp2-grafana.yml` 给 CL-F-24 做"**故意置空 `GF_PG_*`**"的负向对照。三者均为**实验/验证产物**，非生产配置（我这次误把本行插到了 §三，已在解 `CL-F-19` 同点冲突时就地改投 §四） | ✅ |
 | 2026-10-16 | Lane-CL-G | 前端 `pages/chat/conversation/{new.vue,[id].vue}` + `components/emotion/**`（新）+ `composables/useCurrentEmotion.ts`（新）+ `utils/emotion.ts` + `types/api.ts` + `configs/apiRoutes.ts` | G 轨**续 CL-07 前端半**（H 轨登记）：这些文件属 D 轨（CL-05）此前主张的 `[id].vue` 面，**D 轨已 done 并释放该页**（roadmap CL-05 已翻 done）⇒ 现无并发持有者。依 §1.2 声明占用；纯前端 + 新文件为主 | ⏳ **声明占用** |
 
 ## 五、开工前置检查（照做）
