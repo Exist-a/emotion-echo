@@ -36,6 +36,35 @@ def check(ok: bool, label: str) -> None:
         FAILS.append(label)
 
 
+
+def docker_out(args: list[str]) -> str:
+    """跑一句 docker 命令取输出（用于让本证据**自证**环境，而不是靠人贴标题）。"""
+    import subprocess
+    r = subprocess.run(["docker", *args], capture_output=True, text=True)
+    if r.returncode != 0:
+        return f"<err: {r.stderr.strip()[:120]}>"
+    return r.stdout.strip()
+
+
+def path_fingerprint() -> list[str]:
+    """本证据测的是哪条传输路径 —— 必须由**证据自己**给出。
+
+    为什么：核对方（2026-10-16）指出此前 gRPC 与 HTTP 两份输出**除手写标题外逐字节相同**
+    ⇒ "两条路径各 17/17" 这条结论**不可核**。修法 = 把 BFF 容器实际的
+    `CHAT_TRANSPORT`（以及两个相关镜像）打进输出，让每份证据自带身份。
+    """
+    transport = docker_out(["exec", "emotion-echo-web-bff", "sh", "-c",
+                            "printenv CHAT_TRANSPORT || echo UNSET"]) or "UNSET"
+    path = "http(降级路径)" if transport.strip().lower() == "http" else "grpc(默认)"
+    return [
+        f"BFF CHAT_TRANSPORT = {transport!r}  ⇒  实际走 {path}",
+        "BFF image          = " + docker_out(["inspect", "--format", "{{.Config.Image}}", "emotion-echo-web-bff"]),
+        "BFF image ID       = " + docker_out(["inspect", "--format", "{{.Image}}", "emotion-echo-web-bff"])[:19],
+        "chat-svc image     = " + docker_out(["inspect", "--format", "{{.Config.Image}}", "emotion-echo-chat-svc"]),
+        "chat-svc image ID  = " + docker_out(["inspect", "--format", "{{.Image}}", "emotion-echo-chat-svc"])[:19],
+    ]
+
+
 def _req(path: str, method: str = "GET", body: dict | None = None) -> tuple[int, Any]:
     data = json.dumps(body).encode("utf-8") if body is not None else None
     r = urllib.request.Request(GATEWAY + path, data=data, method=method)
@@ -94,6 +123,12 @@ def main() -> int:
     print("=" * 72)
     print(f"CL-05 Phase 5 运行验证（T-4 会话列表游标） — {GATEWAY}")
     print("=" * 72)
+
+    # ---- P 路径指纹（先打，让整份输出自带身份）----
+    print("")
+    print("--- P. 路径指纹（本证据自证：测的是哪条传输路径）---")
+    for line in path_fingerprint():
+        print("  " + line)
 
     st, raw = _req("/api/v1/auth/login", "POST", LOGIN_BODY)
     if st != 200:
