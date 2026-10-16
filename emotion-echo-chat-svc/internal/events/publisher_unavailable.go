@@ -50,6 +50,14 @@ func (p *UnavailablePublisher) Publish(context.Context, string, *Event) error {
 // Close 无副作用。
 func (p *UnavailablePublisher) Close() error { return nil }
 
+// publisherBox 让 `atomic.Value` 的**具体类型恒定**（恒为 `*publisherBox`）。
+//
+// 为什么不能直接存接口值：`atomic.Value` 要求同一个 Value 始终存同一具体类型，而生产装配
+// 会在 `*UnavailablePublisher`（init 失败）→ `*KafkaEventPublisher`（后台重试成功热替换）
+// 之间换类型 ⇒ 直接存会 **panic: sync/atomic: store of inconsistently typed value into Value**
+// （起栈实测 2026-10-16 14:02:56：Kafka 恢复瞬间 chat-svc panic 退出、容器重启）。
+type publisherBox struct{ p EventPublisher }
+
 // PublisherHolder 线程安全地持有"当前 publisher"，供后台重试成功后**热替换**。
 //
 // 为什么需要它：relay 与后台重试 goroutine 并发读写同一个 publisher ⇒ 直接改字段是
@@ -68,17 +76,20 @@ func NewPublisherHolder(p EventPublisher) *PublisherHolder {
 // Get 返回当前 publisher；未设置时为 nil（调用方按"未就绪"处理）。
 func (h *PublisherHolder) Get() EventPublisher {
 	if v := h.v.Load(); v != nil {
-		if p, ok := v.(EventPublisher); ok {
-			return p
+		if b, ok := v.(*publisherBox); ok && b != nil {
+			return b.p
 		}
 	}
 	return nil
 }
 
 // Set 安装 publisher（nil 忽略，避免把 holder 打回未设置）。
+//
+// 存的是 `*publisherBox`（类型恒定）而非接口值本身 —— 见 publisherBox 的说明：
+// 直接存接口值在"换具体类型"时会 panic。
 func (h *PublisherHolder) Set(p EventPublisher) {
 	if p != nil {
-		h.v.Store(p)
+		h.v.Store(&publisherBox{p: p})
 	}
 }
 

@@ -81,7 +81,7 @@ ok 包数 = 11　FAIL 行数 = 0
 | 4 `internal/types/types.go` | **N/A** | 该列不出现在 gRPC/HTTP DTO |
 | 5 `proto/chat.proto` | **N/A** | 同上（且本轨按文件面隔离**不碰 proto**） |
 | 6 跨域影响评估 | ✅ | 无影响：不进 Kafka payload、无视图依赖、无前端字段 ⇒ 详见迁移注释 |
-| 7 集成测试 | ⏳ | 本轨只跑了 chat-svc 全仓；跨 svc 集成（ai-svc/analytics-svc/BFF）+ smoke 属 🔴 需栈，排队等栈 |
+| 7 集成测试 | ✅ | **收口轮补齐**（Phase 1 当时为 ⏳）：跨 svc 集成由 ai-svc / analytics-svc / shared / replay_dlq 四模块全仓单测覆盖；端到端由 §2.4 smoke 覆盖（§1/§2/§3/§4/§7 契约项全 OK，见 `evidence/smoke-section24-2026-10-16.txt`）与 T-04 trace 全链（`evidence/t04-trace-full-chain.json`）。**残留**：§8 镜像新鲜度 6 项 FAIL（判据面，见 §6.6 #1） |
 | 8 跨域 regression 守护 | ✅ | 本阶段新增的 `TestC010_TraceSw8_InlineDDLNotDrifted` 即"schema 漂移检测"（v1：钉内联 DDL 不漏列） |
 | 9 文档同步 | ✅ | ADR §2.3 已更新（本 ADR）；另本阶段修 D8-2/D4/D2 三处文档漂移（Phase 6） |
 
@@ -247,7 +247,7 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 | Phase | 内容 | 关键证据 |
 |---|---|---|
 | **4c** | 一键回放（`-limit 0`）+ 回放结果落 PG（新表 `dlq_replay_runs`，迁移 `a011`）+ Grafana PostgreSQL 数据源 + 「DLQ 回放记录」面板 | 网内跑工具 2 次（dry-run 4 条 / 真回放 1 条）⇒ 表 2 行、operator 有值；面板 SQL 经 Grafana 代理返回 2 行 5 列 |
-| **5** | `UnavailablePublisher` + `PublisherHolder` + `StartKafkaPublisherBackgroundRetry`；relay 对"未就绪"不 MarkSent 且不计 attempts；ADR-19 回写 | **停 Kafka → 重建 chat-svc**：init 失败进后台重试、期间 2 行 `pending/attempts=0`、近 30s 无假 sent；**恢复 Kafka** ⇒「后台重试成功（第 4 次）」⇒ 2 行自动重发、pending 归零（`evidence/t12-phase5-kafka-down-recovery.txt`） |
+| **5** | `UnavailablePublisher` + `PublisherHolder` + `StartKafkaPublisherBackgroundRetry`；relay 对"未就绪"不 MarkSent 且不计 attempts；ADR-19 回写 | **停 Kafka → 重建 chat-svc**：init 失败进后台重试、期间 2 行 `pending/attempts=0`、近 30s 无假 sent ✅。**恢复 Kafka 侧曾抓到真缺陷**（第一轮 14:02:56）：热替换瞬间 `PublisherHolder.Set` 往 `atomic.Value` 存**接口值**、而换具体类型 ⇒ **panic: store of inconsistently typed value** ⇒ 进程退出、容器重启（`RestartCount=1`）；行虽被重启后的新进程补发（pending 仍归零）但"同进程热替换"从未走通。**已 TDD 修复**（`publisherBox` 恒定具体类型），第二轮 14:12 **原样复跑**：热替换成功、`grep -c panic`=0、`RestartCount=0`、同进程 0.2s 内补发（`evidence/t12-phase5-kafka-down-recovery.txt`，含两轮与 panic 栈） |
 | **T-07** | 两侧 `*_dlq_unconfigured_total` + 明确文案（未配置/Noop ⇒ 已丢弃、不可回放）+ 看板面板 + 启动日志报**装配种类**（none/noop/kafka，取代会误报的「接口非空」判断） | 单测 6 例绿；**运行时（生产装配形态）实测**：把 DLQ topic 置空装配起来 + 投毒消息 ⇒ `emotion_echo_dlq_unconfigured_total` 0→1 且出现 WARN「DLQ 未配置（Noop）：毒消息无处投递、不可回放」；启动日志 `dlq=noop`（`evidence/t07-ai-svc-noop-runtime.txt`）；面板 expr 经 **Grafana 代理**返回非空 series（`t10-t16-phase4c-replay-and-panels.txt`） |
 
 ### 6.2 收口契约自检（RUNBOOK §6 七条）
@@ -255,12 +255,12 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 | # | 条 | 结果 | 说明 |
 |---|---|---|---|
 | 1 | plan 每个测试点四值 + 证据 | ✅ | 16/16 **PASS**，逐点附运行时/单测证据（plan §2.1） |
-| 2 | 回归钉落地且绿 | ✅（**含一处如实偏差**） | Go 单测（chat 11 / ai 15 / analytics 11 / shared 23 / replay_dlq 1 包全绿，`-count=1`）· obs 契约测试 group ⑦ · helm 渲染守卫 8/8 · 接线守卫（`main_publisher_wiring_test.go`、`main_dlq_kind_wiring_test.go`）。**偏差**：本阶段**无前端改动** ⇒ 未写 Playwright 钉（纪律要求"每阶段收口必须写 Playwright 回归钉"）；等价机器钉为上述四项。**如实登记，不当作已满足** |
+| 2 | 回归钉落地且绿 | ✅（**含一处如实偏差**） | Go 单测（chat 11 / ai 15 / analytics 11 / shared 23 / replay_dlq 1 包全绿，`-count=1`）· obs 契约测试 group ⑦ · helm 渲染守卫 8/8 · 接线守卫（`main_publisher_wiring_test.go`、`main_dlq_kind_wiring_test.go`）· **收口轮新增** `TestPublisherHolder_Set_DifferentConcreteTypes_NoPanic`（RED→GREEN，见 §6.1 Phase 5）。**偏差**：本阶段**无前端改动** ⇒ 未写 Playwright 钉（纪律要求"每阶段收口必须写 Playwright 回归钉"）；等价机器钉为上述四项。**如实登记，不当作已满足** |
 | 3 | report 用模板 | ✅ | 起点 / 实施 / 证据 / 结论 / 经验（§1~§6） |
-| 4 | 账本对账（属本阶段未解决的 CL-F 存在 ⇒ 只能 partial） | ✅ | `CL-F-15` **✅ 已解决**（Phase 5，含 A/B 运行时证据）。`CL-F-22`/`CL-F-23` 是本阶段**范围外**发现的小残留，按账本规则**改挂 `CL-09`（backlog，未 done）+ 明确触发条件**（账本约定：不挂已 done 阶段）⇒ 本阶段无"属本阶段未解决"的账 ⇒ 可判 `done`。**该改挂已在账本行内写明理由** |
+| 4 | 账本对账（属本阶段未解决的 CL-F 存在 ⇒ 只能 partial） | ✅ | `CL-F-15` **✅ 已解决**（Phase 5，含 A/B 运行时证据）。`CL-F-22`/`CL-F-23` 是**本阶段工作直接暴露的残留**（一个出自 Phase 1 实读 outbox DDL、一个出自 Phase 4a 加 DLQ 告警；复核轮指出原写"范围外"定性偏松，已收紧），按账本规则**改挂 `CL-09`（backlog，未 done）+ 明确触发条件**（账本约定：不挂已 done 阶段）⇒ 本阶段无"属本阶段未解决"的账 ⇒ 可判 `done`。**该改挂已在账本行内写明理由** |
 | 5 | 落地计划迁 `legacy-plans/landed/` | ✅ | `outbox-trace-continuity.md`、`dlq-hardening-and-replay.md` 已迁（`kafka-pipeline-pending-decisions.md` 属 pending-decision 清单而非落地计划，其条目已逐条终态，留在原处并在文内标注） |
 | 6 | roadmap 状态同步 + 分支/工作区收口 | ✅ | roadmap CL-03 → `done`（注：本 PR 只声明「收口轮转 ready → 串行合并」这一**动作**，不预先声明「已合并」，见 §6.5 #1）；**登记表（`parallel-contract.md`）本 PR 不动**（§8.1 条款 8），收口登记改走独立小 PR |
-| 7 | 第二方核对通过 | ❌→✅（**首轮 FAIL**） | 独立子代理核对（只读、不得改文件）**已执行，返回 FAIL：9 项发现（含 1 项真缺陷）**；逐条处置见 **§6.5**。修完后由同一子代理复核（见 §6.5 末行） |
+| 7 | 第二方核对通过 | ❌（**两轮均 FAIL**）→ 见 §6.6 | 独立子代理核对（只读、不得改文件）**两轮**：① 首轮 **FAIL**：9 项（含 1 项真缺陷）；② 复核轮 **FAIL**：13 项（含本轮修出来的 1 项真缺陷 —— 热替换 panic）。逐条处置见 **§6.5**（首轮）与 **§6.6**（复核轮）。**本行不写「✅」**：第三轮（对最终 diff）的结论见 §6.6 末「第三轮」行 |
 
 ### 6.3 证据索引（`evidence/`）
 
@@ -268,7 +268,8 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 |---|---|
 | `t04-trace-full-chain.json` | T-04（13 span 一条链） |
 | `t09-t11-dlq-alert-firing.txt` | T-09 / T-11 / T-16 |
-| `t12-phase5-kafka-down-recovery.txt` | T-12（含 outage/recovery 两侧的 **psql 全量输出**） |
+| `t12-phase5-kafka-down-recovery.txt` | T-12（单窗口 A/B × 两轮：第一轮抓到热替换 panic、第二轮修复后复验；含 outage/recovery 两侧 psql 输出与 panic 栈） |
+| `smoke-section24-2026-10-16.txt` | §2.4 数据契约 smoke 完整输出（最终一轮 18/24）+ §8 六项 FAIL 的逐项归因 |
 | `t07-ai-svc-noop-deadcode-RED.txt` | T-07 修复前 RED（单测证明修复前 counter 不动 = 死代码） |
 | `t07-ai-svc-noop-runtime.txt` | T-07 **生产装配形态运行时**（空 DLQ topic + 毒消息 ⇒ counter 0→1 + WARN） |
 | `t10-t16-phase4c-replay-and-panels.txt` | T-10 / T-16（回放落 PG 2 行 + 两个面板经 Grafana 代理取数） |
@@ -277,8 +278,9 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 
 1. **无 Playwright 钉**：本阶段改动面是 Kafka/outbox/consumer 后端链路，无 UI 路径；纪律要求"每阶段收口必须写 Playwright 回归钉"未满足 ⇒ 已如实登记（见 §6.2 #2）。
 2. **T-04 的运行时负向对照未取得**：尝试用 OAP `queryBasicTraces` 定位"trace_sw8 为空 ⇒ 发布成独立根 trace"的那条，但该查询在近 15 分钟窗口返回 0 条（OAP 索引/条件问题），**未定位到**；"链路因列而连"的判据改由**进程内反向对照单测**（`TestSW8RoundTrip_EncodeThenRestore_SameTraceID` 的反向断言）+ 主证据里 `outbox-relay` 的 `refs` 指向写侧编码 span 支撑。**该次尝试的中间产物未归档**（当时引用的 `t04-negative-control-basic-traces.json` 实际不存在，第二方核对 #3 已指出并删除引用）。
-3. **`CL-F-22`/`CL-F-23` 未在本阶段解决**（已改挂 CL-09，附触发条件）。
-4. **本地残留分支清理**（22 个，多数为 squash 合并后未删的源分支）在收口时一并处理（§2.5）。
+3. **`CL-F-22`/`CL-F-23` 未在本阶段解决**（本阶段工作直接暴露的残留；处置 = 改挂 CL-09 + 附触发条件）。
+4. **本地残留分支清理**：见 §6.6 #13 与文末「收口三连自检」——只删**可证已并入 main** 的分支，其余 16 个（含他人/他轨在飞分支）**列出证据留待 owner 处置**，不代删。
+5. **Grafana PostgreSQL 数据源含明文 `user/password = postgres`**（`deploy/grafana/provisioning/datasources/datasource.yaml`，复核轮 🔵 项）：与全栈 dev 口令一致，`bash scripts/check_secrets.sh` **GREEN**（扫描 1159 文件未报）；但**全环境生效**（含 prod），prod 应换只读账号。本阶段**未改**（超出 CL-03 文件面，属可观测栈配置债）⇒ **如实登记**，不当作已解决。
 
 ### 6.5 第二方核对：发现项与处置（首轮 FAIL → 整改）
 
@@ -300,6 +302,43 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 **整改轮自纠（非核对发现，本轨自查）**：
 
 - **启动日志 `dlq=true` 误报**：`main.go` 用「接口非空」判断 DLQ 是否就绪，而 Noop 装配（非 nil）下恒 `true` ⇒ 与 T-07 要表达的"未配置"事实相反（正是本报告 §2 经验里点名的那类**假绿信号**）。修法：新增 `consumer.DLQKind()`（none/noop/kafka）+ 启动日志改用之，配 `TestDLQKind` 4 例 + 源契约接线钉 1 例。运行时实证：`dlq=noop`（`evidence/t07-ai-svc-noop-runtime.txt`）。
-- **回归全量重跑**：`chat 11 / ai 15 / analytics 11 / shared 23 / replay_dlq 1` 包全绿（`-count=1`）；obs 契约测试全过；helm 渲染守卫 `PASS=8 FAIL=0`；§2.4 smoke **20/24**（4 项 FAIL 全为 §8 镜像新鲜度，且全部落在**本轨未改**的服务上 —— `user-svc`/`assessment-svc`/`llm-service`/`web-bff`；系 E2E-F-215 判据过粗的已知产物，非本轨改动所致；本轨改过的 chat/ai/analytics 三服务 §8 均 OK）。
+- **回归全量重跑**：`chat 11 / ai 15 / analytics 11 / shared 23 / replay_dlq 1` 包全绿（`-count=1`）；obs 契约测试全过；helm 渲染守卫 `PASS=8 FAIL=0`。§2.4 smoke 的**归因在复核轮被指出有误**，已按实测重写 —— 见 **§6.6 #1** 与 `evidence/smoke-section24-2026-10-16.txt`（最终一轮 **18/24**：§1/§2/§3/§4/§7 契约项**全 OK**，6 项 FAIL 全为 §8 镜像新鲜度，且**确实由本轨改动触发**，非"非本轨所致"）。
 
-**复核**：整改后由**同一独立子代理**对最终 diff 再做一轮只读核对，结论见下方「复核结论」行。
+**复核**：整改后由**同一独立子代理**对最终 diff 再做一轮只读核对 ⇒ **返回 FAIL：13 项**（详见 §6.6）。
+
+### 6.6 第二方核对·复核轮：发现项与处置（第二轮 FAIL：13 项）
+
+> 核对方：**同一独立子代理**（只读、不得改文件），对整改后的 diff 复核。
+> 结论：**FAIL** —— 13 项发现。其中 **1 项是本轮整改时实测抓到的真缺陷**（复核方未能发现，因为它需要起栈）。
+> 处置逐条如下；**不含"已处置"的口头承诺**，每条给落点。
+
+| # | 严重度 | 发现 | 处置 | 落点 / 证据 |
+|---|---|---|---|---|
+| 1 | 🟡 失真 | §6.5 把 §2.4 smoke 的 4 项 §8 FAIL 归因为"全落在本轨未改的服务 ⇒ 非本轨改动所致；系 E2E-F-215 判据过粗" | **两处都不成立**：§8 判据对**每个**服务都把 `emotion-echo-shared` 计入 src_paths（`scripts/smoke_data_layer.py:442-449`），而本轨**正改了 shared** ⇒ 该 4 项**确由本轨触发**；且该判据"源码变就该重建"是 2026-10-12 的**有意裁定**（E2E-F-215 ✅），不是"过粗"。已按实测重写 | `evidence/smoke-section24-2026-10-16.txt`（逐项归因）+ §6.5 自纠 bullet |
+| 2 | 🟡 自我认证 | §6.2 #7 写成 `❌→✅`，并引用"复核结论行"——该行**并不存在**（文件止于末行） | 改为 **`❌`（两轮均 FAIL）**，指向 §6.5/§6.6；悬空引用行替换为真实的复核结论（FAIL：13 项） | §6.2 #7、§6.5 末行、本节 |
+| 3 | 🟡 无证据 | smoke「20/24」只出现在正文，**无任何归档**（plan §A 又写"未跑 smoke"） | 归档完整输出（最终一轮 **18/24**）+ 逐项 §8 归因 + 瞬时 §4-503 的处置说明 | `evidence/smoke-section24-2026-10-16.txt` |
+| 4 | 🟡 漂移（本次引入） | 改了 DLQ 投递失败日志文案，但 `kafka-dlq.yml` 与 **k8s 内联副本**两条告警的处置说明仍 grep 旧串；且其语义"事件已 MarkMessage 也无法挽回"与 `CL-D-17=A`（不 Mark）**相反** | 两处同步改写：日志串换成新文案，并把语义改为"CL-D-17=A 起不 Mark、留待重投" | `deploy/prometheus/rules/kafka-dlq.yml:37,50` + `charts/.../configmap-rules.yaml:83,96`；obs 契约测试 + helm 渲染守卫复跑绿 |
+| 5 | 🟡 证据不自证 | `t12` 把两个时刻（12:06 与 12:53）的日志**混编**成一段"停机→恢复"叙事；psql 输出被 `...` 节选；文件**无标题行**；而 §6.3 称其含"psql **全量**输出" | **整文件重写**：单窗口 A/B × 两轮（第一轮 = 抓缺陷、第二轮 = 修复后复验），带标题、方法、完整 psql 输出（无省略）、panic 栈 | `evidence/t12-phase5-kafka-down-recovery.txt`；§6.3 该行改为"含 psql 输出" |
+| 6 | 🟡 流程 | 本轨改了脊柱 `chat-svc/main.go`，而 `parallel-contract §四` 握手行仍是 `⏳ 待 D 轨确认`，`CL-D-16` 却写"已与 D 轨握手" | `CL-D-16` 措辞改为"已**登记申请**"；**§四 行状态更新走合并后的独立登记小 PR**（§8.1 条款 8：阶段 PR 不改登记表）。事实补充：D 轨已于 2026-10-16 收口、**未提异议** | `docs/closure-roadmap/decisions.md` `CL-D-16` |
+| 7 | 🟡 状态不一致 | Phase 1「决策 22 checklist」第 7 行仍 `⏳ 集成测试…排队等栈`，与已 `done` 的阶段状态矛盾 | 改为 ✅ + 残留说明（§8 6 项 FAIL） | `report.md` Phase 1 checklist |
+| 8 | 🔵 注释错标 | mock 注释写 `CL-D-18=A`（应为 `CL-D-16`） | 已改 | `emotion-echo-shared/pkg/middleware/gin_skywalking_test.go:284` |
+| 9 | 🔵 孤儿产出物 | `deploy/docker-compose.cl03-verify.yml` 在文档中**零引用**，且含机器专属绝对路径 | ① 在 plan §A「起栈口径」+ 本文件 §6.1/§6.2 引用；② 绝对路径改为 `<worktree>`/`<共享目录>` 占位（与 cl01/cl02/cl05 同类文件一致） | `deploy/docker-compose.cl03-verify.yml`、`plan.md:108` |
+| 10 | 🔵 凭据面 | Grafana provisioning 新增 PostgreSQL 数据源含明文 `postgres/postgres`，**全环境生效** | **未改**（超出 CL-03 文件面，属可观测栈配置债）；`scripts/check_secrets.sh` **GREEN**（1159 文件）⇒ 如实登记为偏差 | §6.4 #5 |
+| 11 | 🔵 措辞夸大 | T-10 写"一键回放（`-limit 0`）"，但 `-limit 0 = 全部` 的语义**本已存在**（diff 中是未改的上下文行） | 改为"本阶段新增的是 `-record`；`-limit 0` 语义本已存在" | `plan.md` §2.1 T-10 |
+| 12 | 🔵 措辞夸大 | T-16 写面板与告警"**同源**"，实际面板是**累计** offset、告警是**增量** `increase` | 改为"**同指标族但不同量**"，并注明防误读 | `plan.md` §2.1 T-16 |
+| 13 | 🔵 定性偏松 | 账本称 `CL-F-22`/`CL-F-23` 为"本阶段**范围外**发现"，实际两者都是本阶段工作**直接暴露** | 收紧为"本阶段工作直接暴露的残留"（处置本身合规） | `report.md` §6.2 #4、§6.4 #3 |
+
+**本轮整改时实测抓到的真缺陷（复核方无法发现——需起栈）：`PublisherHolder` 热替换 panic**
+
+- **现象**（`evidence/t12-phase5-kafka-down-recovery.txt` 第一轮）：Kafka 恢复瞬间 chat-svc
+  `panic: sync/atomic: store of inconsistently typed value into Value` → 进程退出、容器重启（`RestartCount=1`）。
+  根因：`PublisherHolder.Set` 直接往 `atomic.Value` 存**接口值**，而热替换换具体类型
+  （`*UnavailablePublisher` → `*KafkaEventPublisher`）；`atomic.Value` 要求类型恒定。
+- **为什么单测没抓到**：既有 `TestPublisherHolder_SetGet_RaceFree` 反复 Set 的都是**同一**具体类型
+  （`*InMemoryEventPublisher`）⇒ 永远不会触发类型不一致。
+- **修复（TDD）**：新增 `publisherBox` 让 `atomic.Value` 的具体类型恒定（恒为 `*publisherBox`）；
+  RED = `TestPublisherHolder_Set_DifferentConcreteTypes_NoPanic`（未修时如实 panic）→ GREEN。
+- **运行时复验**：修复后原样复跑 A/B —— 热替换成功、`grep -c panic`=0、`RestartCount=0`、同进程 0.2s 内补发。
+- **教训**：这是"单测全绿 ≠ 生产正确"的又一例（同 §2 经验里的假绿信号家族）。**只在起栈实测才暴露**。
+
+**第三轮（对最终 diff）**：见 §6.7。

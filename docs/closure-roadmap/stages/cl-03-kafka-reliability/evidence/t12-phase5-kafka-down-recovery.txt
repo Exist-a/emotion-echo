@@ -1,37 +1,298 @@
-### 步骤1：停 Kafka
+CL-03 / T-12（CL-F-15）A/B 证据 —— Kafka 停机 ⇒ 不假 sent；恢复 ⇒ 自动重发
+采集时间：2026-10-16 14:01~14:12（dev 栈；chat-svc 镜像 emotion-echo/chat-svc:cl03）
+方法：① 停 Kafka → 重建 chat-svc（producer init 失败 ⇒ UnavailablePublisher + 后台重试）
+      ② 停机窗口内经网关发 1 会话 + 1 消息 ⇒ outbox 应留 pending、attempts 不涨、无假 sent
+      ③ 恢复 Kafka ⇒ 后台重试成功 ⇒ 行自动重发、pending 归零
+
+⚠️ 本文件含**两轮**，第二轮是第一轮抓出真缺陷后的复验（同一 A/B，不改判据）：
+
+  【第一轮 14:01–14:02】执行 A/B —— 停机侧全部符合预期；**但恢复侧抓到真缺陷**：
+      Kafka 恢复瞬间 chat-svc **panic 退出**、容器重启（`RestartCount=1`），
+      原因是 `PublisherHolder.Set` 往 `atomic.Value` 里存**接口值**，而热替换会换具体类型
+      （`*UnavailablePublisher` → `*KafkaEventPublisher`）⇒
+      `panic: sync/atomic: store of inconsistently typed value into Value`。
+      行虽被重启后的新进程补发（pending 仍归零），但**"同进程热替换"路径从未走通**。
+      ⇒ 已 TDD 修复（`publisherBox` 让 atomic.Value 具体类型恒定）+ 单测 RED→GREEN。
+
+  【第二轮 14:11–14:12】修复后**原样复跑** —— 热替换成功、**无 panic**、`RestartCount=0`、
+      同进程 0.2s 内补发。
+
+======================================================================
+【第一轮】14:01–14:02 —— 停机侧符合预期；恢复侧抓到 panic 真缺陷
+======================================================================
+
+### 步骤 0：停机前基线
+$ docker exec emotion-echo-postgres psql -U postgres -d emotion_echo -c "SELECT status, COUNT(*) FROM emotion_echo_chat.outbox_events GROUP BY 1 ORDER BY 1"
+ status | count 
+--------+-------
+ sent   |  1774
+(1 row)
+
+
+$ docker stop emotion-echo-kafka
 emotion-echo-kafka
-### 步骤2：重启 chat-svc（:cl03 含 Phase 5）
-emotion-echo-chat-svc
-### 步骤3：chat-svc 启动日志（publisher 相关）
-   {"time":"2026-10-16T12:06:48.051660093+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1768（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in pr
-   {"time":"2026-10-16T12:06:48.051709851+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1769（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in pr
-   {"time":"2026-10-16T12:06:49.051978948+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1768（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in pr
-   {"time":"2026-10-16T12:06:49.052021191+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1769（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in pr
-   {"time":"2026-10-16T12:06:50.051585578+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1768（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in pr
-   {"time":"2026-10-16T12:06:50.051630269+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1769（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in pr
-   {"time":"2026-10-16T12:06:51.051397106+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1768（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in pr
-   {"time":"2026-10-16T12:06:51.051521749+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1769（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in pr
-   {"time":"2026-10-16T12:06:51.126156273+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 4 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
-   {"time":"2026-10-16T12:53:49.677351723+08:00","level":"INFO","msg":"[kafka] producer init failed: kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.
-   {"time":"2026-10-16T12:53:57.153790071+08:00","level":"INFO","msg":"[kafka] producer 后台重试第 1 次失败（backoff=5s）：kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-ka
-   {"time":"2026-10-16T12:54:09.656789249+08:00","level":"INFO","msg":"[kafka] producer 后台重试第 2 次失败（backoff=10s）：kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-k
-### 步骤4：停机期间发消息
-   conv=696 msg=942
-### 步骤5：停机期间的 outbox 行（psql 输出）
-  SELECT id,event_type,status,attempts,coalesce(last_error,'') ... LIMIT 3
-   1771 | message.created | pending | attempts=0 | err=
-   1770 | conversation.created | pending | attempts=0 | err=
-   1769 | message.created | sent | attempts=0 | err=
-  pending 行数 = 2
-  近 30s 新 sent 行数 = 0
-### 步骤6：恢复 Kafka
+
+### 步骤 1：重建 chat-svc（Kafka 不可达 ⇒ producer init 失败）
+ Container emotion-echo-chat-svc Recreate 
+ Container emotion-echo-chat-svc Recreated 
+ Container emotion-echo-chat-svc Starting 
+ Container emotion-echo-chat-svc Started 
+
+$ docker logs emotion-echo-chat-svc | grep -E 'producer init failed|outbox-relay' | tail -5
+{"time":"2026-10-16T14:01:10.796397977+08:00","level":"INFO","msg":"[kafka] producer init failed: kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.0.0.11:53: no such host —— 进入后台重试；outbox 行将保持 pending（不再改投内存）","svc":"chat-svc"}
+{"time":"2026-10-16T14:01:10.798909756+08:00","level":"INFO","msg":"[outbox-relay] started: interval=1s batchSize=100","svc":"chat-svc"}
+
+$ docker inspect --format '{{.State.Health.Status}}' emotion-echo-chat-svc
+healthy
+
+### 步骤 2：停机窗口内经网关触发业务事件（1 会话 + 1 消息）
+$ python /tmp/cl03-send.py
+login OK user_id=1
+conv_id=699
+msg_id=945
+
+### 步骤 3：停机窗口内 outbox 状态（应 pending / attempts 不涨 / 无假 sent）
+$ psql -c "SELECT id,event_type,status,attempts,coalesce(last_error,'') AS last_error,created_at FROM emotion_echo_chat.outbox_events ORDER BY id DESC LIMIT 4"
+  id  |      event_type      | status  | attempts | last_error |          created_at           
+------+----------------------+---------+----------+------------+-------------------------------
+ 1779 | message.created      | pending |        0 |            | 2026-10-16 06:01:40.172501+00
+ 1778 | conversation.created | pending |        0 |            | 2026-10-16 06:01:39.091074+00
+ 1777 | conversation.closed  | sent    |        0 |            | 2026-10-16 05:29:55.96388+00
+ 1776 | message.created      | sent    |        0 |            | 2026-10-16 05:29:55.869457+00
+(4 rows)
+
+
+$ psql -c "SELECT COUNT(*) AS pending FROM emotion_echo_chat.outbox_events WHERE status='pending'"
+ pending 
+---------
+       2
+(1 row)
+
+
+$ psql -c "SELECT COUNT(*) AS sent_in_last_30s FROM emotion_echo_chat.outbox_events WHERE status='sent' AND sent_at > now() - interval '30 seconds'"
+ sent_in_last_30s 
+------------------
+                0
+(1 row)
+
+
+$ docker logs emotion-echo-chat-svc | grep 'publisher 未就绪' | tail -4
+{"time":"2026-10-16T14:02:03.796223963+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1778（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in progress): kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-16T14:02:03.796277174+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1779（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in progress): kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-16T14:02:04.795880706+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1778（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in progress): kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.0.0.11:53: no such host","svc":"chat-svc"}
+{"time":"2026-10-16T14:02:04.795932916+08:00","level":"INFO","msg":"[outbox-relay] publisher 未就绪，本轮跳过 id=1779（留 pending 等后台重试）: events: kafka publisher unavailable (init failed; background retry in progress): kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.0.0.11:53: no such host","svc":"chat-svc"}
+
+$ curl -s localhost:8894/metrics | grep outbox_sent_via_fallback_total   # 语义已变：= '启动时 Kafka 不可用，进入后台重试'
+(chat-svc 容器内无 wget；见步骤 5 的 outbox 计数为准)
+
+
+### 步骤 5：恢复后 —— 后台重试成功 + 行自动重发
+$ docker logs emotion-echo-chat-svc | grep -E '后台重试成功|producer 已就绪' | tail -3
+{"time":"2026-10-16T14:02:55.990508678+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 5 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
+
+$ psql -c "SELECT id,event_type,status,attempts,sent_at FROM emotion_echo_chat.outbox_events ORDER BY id DESC LIMIT 3"
+  id  |      event_type      | status | attempts |            sent_at            
+------+----------------------+--------+----------+-------------------------------
+ 1779 | message.created      | sent   |        0 | 2026-10-16 06:02:57.555767+00
+ 1778 | conversation.created | sent   |        0 | 2026-10-16 06:02:57.548273+00
+ 1777 | conversation.closed  | sent   |        0 | 2026-10-16 05:29:56.178265+00
+(3 rows)
+
+
+$ psql -c "SELECT COUNT(*) AS pending FROM emotion_echo_chat.outbox_events WHERE status='pending'"
+ pending 
+---------
+       0
+(1 row)
+
+
+$ psql -c "SELECT status, COUNT(*) FROM emotion_echo_chat.outbox_events GROUP BY 1 ORDER BY 1"
+ status | count 
+--------+-------
+ sent   |  1776
+(1 row)
+
+
+
+### 步骤 6：指标语义（经 Prometheus 查；chat-svc 容器内无 wget/curl）
+$ curl -s 'http://localhost:9090/api/v1/query?query=emotion_echo_outbox_sent_via_fallback_total'
+query: emotion_echo_outbox_sent_via_fallback_total
+result: [{"metric": {"__name__": "emotion_echo_outbox_sent_via_fallback_total", "instance": "emotion-echo-chat-svc:8890", "job": "emotion-echo-services", "monitor": "emotion-echo-dev"}, "value": [1792130634.029, "0"]}]
+  （该 counter 语义已变：现在表示「启动时 Kafka 不可用 ⇒ 进入后台重试」，**不再**表示「事件被静默丢进内存」；
+   语义变更已回写 ADR-19「D1 fallback 路径登记」段。）
+
+======================================================================
+### 复跑（修复 PublisherHolder 热替换 panic 后，2026-10-16 14:2x）
+背景：首轮复跑抓到真缺陷 —— Kafka 恢复瞬间 chat-svc panic（atomic.Value 换类型）
+      ⇒ 本轮验证「同进程热替换、容器不重启」
+======================================================================
+
+### 复跑步骤 0：基线（含容器 RestartCount）
+$ docker inspect emotion-echo-chat-svc --format 'RestartCount={{.RestartCount}}'
+RestartCount=1
+$ psql -c "SELECT status, COUNT(*) FROM emotion_echo_chat.outbox_events GROUP BY 1"
+ status | count 
+--------+-------
+ sent   |  1776
+(1 row)
+
+
+$ docker stop emotion-echo-kafka
 emotion-echo-kafka
-### 步骤7：恢复后的 chat-svc 日志
-   {"time":"2026-10-16T12:06:53.519446802+08:00","level":"INFO","msg":"[kafka] published: topic=chat-events id=76dfb5bb-4ada-4940-bc7b-7bfea6f1b3bf type=conversation.created","svc":"chat-svc"}
-   {"time":"2026-10-16T12:06:53.524769669+08:00","level":"INFO","msg":"[kafka] published: topic=chat-events id=a2754860-e26c-4e5e-a197-a348730879f6 type=message.created","svc":"chat-svc"}
-   {"time":"2026-10-16T12:54:43.883628296+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 4 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
-   {"time":"2026-10-16T12:54:45.358843644+08:00","level":"INFO","msg":"[kafka] published: topic=chat-events id=16e2ea78-bb3b-4b3a-813d-828948552610 type=conversation.created","svc":"chat-svc"}
-   {"time":"2026-10-16T12:54:45.367306731+08:00","level":"INFO","msg":"[kafka] published: topic=chat-events id=47fd5954-91ae-4bb2-9b5a-5f5c57a6a495 type=message.created","svc":"chat-svc"}
-### 步骤8：恢复后的 outbox 状态（psql 输出）
-   sent x 1768
-  pending 行数 = 0
+ Container emotion-echo-chat-svc Recreate 
+ Container emotion-echo-chat-svc Recreated 
+ Container emotion-echo-chat-svc Starting 
+ Container emotion-echo-chat-svc Started 
+
+### 复跑步骤 1：停机窗口（producer init 失败 ⇒ 后台重试 + UnavailablePublisher）
+{"time":"2026-10-16T14:11:28.516012649+08:00","level":"INFO","msg":"[kafka] producer init failed: kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.0.0.11:53: no such host —— 进入后台重试；outbox 行将保持 pending（不再改投内存）","svc":"chat-svc"}
+{"time":"2026-10-16T14:11:28.518186432+08:00","level":"INFO","msg":"[outbox-relay] started: interval=1s batchSize=100","svc":"chat-svc"}
+
+$ python /tmp/cl03-send.py
+login OK user_id=1
+conv_id=700
+msg_id=946
+
+$ psql -c "SELECT id,event_type,status,attempts FROM emotion_echo_chat.outbox_events ORDER BY id DESC LIMIT 2"
+  id  |      event_type      | status  | attempts 
+------+----------------------+---------+----------
+ 1781 | message.created      | pending |        0
+ 1780 | conversation.created | pending |        0
+(2 rows)
+
+$ psql -c "SELECT COUNT(*) AS sent_in_last_30s FROM emotion_echo_chat.outbox_events WHERE status='sent' AND sent_at > now()-interval '30 seconds'"
+ sent_in_last_30s 
+------------------
+                0
+(1 row)
+
+
+$ docker start emotion-echo-kafka
+emotion-echo-kafka
+kafka healthy after ~20s
+
+### 复跑步骤 2：恢复后（期望：同进程热替换成功、**无 panic**、RestartCount 不变、行自动重发）
+$ docker logs emotion-echo-chat-svc | grep -E '后台重试成功|producer 已就绪' | tail -2
+{"time":"2026-10-16T14:12:26.308769013+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 4 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
+{"time":"2026-10-16T14:12:26.308804009+08:00","level":"INFO","msg":"[kafka] producer 已就绪（后台重试成功）—— outbox 恢复真实投递","svc":"chat-svc"}
+
+$ docker logs emotion-echo-chat-svc | grep -c 'panic'
+0
+  （0 = 无 panic）
+$ docker inspect emotion-echo-chat-svc --format 'RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}}'
+RestartCount=0 StartedAt=2026-10-16T06:11:20.768343265Z
+
+$ psql -c "SELECT id,event_type,status,attempts,sent_at FROM emotion_echo_chat.outbox_events ORDER BY id DESC LIMIT 2"
+  id  |      event_type      | status | attempts |            sent_at            
+------+----------------------+--------+----------+-------------------------------
+ 1781 | message.created      | sent   |        0 | 2026-10-16 06:12:26.536453+00
+ 1780 | conversation.created | sent   |        0 | 2026-10-16 06:12:26.527717+00
+(2 rows)
+
+$ psql -c "SELECT COUNT(*) AS pending FROM emotion_echo_chat.outbox_events WHERE status='pending'"
+ pending 
+---------
+       0
+(1 row)
+
+
+$ docker inspect emotion-echo-chat-svc --format 'RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}} FinishedAt={{.State.FinishedAt}}'
+RestartCount=1 StartedAt=2026-10-16T06:02:56.251216433Z FinishedAt=2026-10-16T06:02:56.012313182Z
+  （RestartCount=1：旧进程 14:02:56.012 退出、新进程 14:02:56.251 起来）
+
+$ docker logs emotion-echo-chat-svc | sed -n '/14:02:55.990/,/14:02:56.5/p'
+（节选；完整见 chat-svc 容器日志）
+{"time":"2026-10-16T14:02:55.990508678+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 5 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
+panic: sync/atomic: store of inconsistently typed value into Value
+
+goroutine 82 [running]:
+sync/atomic.(*Value).Store(0x2ed03f9b2450, {0x1937820, 0x2ed03fea2c60})
+	sync/atomic/value.go:78 +0xd2
+emotion-echo-chat-svc/internal/events.(*PublisherHolder).Set(...)
+	emotion-echo-chat-svc/internal/events/publisher_unavailable.go:81
+main.main.func3({0x1c46878?, 0x2ed03fea2c60?})
+	emotion-echo-chat-svc/main.go:176 +0x5a
+main.main.func5(0x2ed03fea2c60?)
+	emotion-echo-chat-svc/main.go:199 +0xa2
+emotion-echo-chat-svc/internal/events.StartKafkaPublisherBackgroundRetry.func3()
+	emotion-echo-chat-svc/internal/events/publisher_unavailable.go:133 +0x31e
+created by emotion-echo-chat-svc/internal/events.StartKafkaPublisherBackgroundRetry in goroutine 1
+	emotion-echo-chat-svc/internal/events/publisher_unavailable.go:124 +0x1f1
+
+======================================================================
+【第二轮】14:11–14:12 —— 修复后原样复跑：同进程热替换成功、无 panic、容器不重启
+======================================================================
+
+### 复跑步骤 0：基线（含容器 RestartCount）
+$ docker inspect emotion-echo-chat-svc --format 'RestartCount={{.RestartCount}}'
+RestartCount=1
+$ psql -c "SELECT status, COUNT(*) FROM emotion_echo_chat.outbox_events GROUP BY 1"
+ status | count 
+--------+-------
+ sent   |  1776
+(1 row)
+
+
+$ docker stop emotion-echo-kafka
+emotion-echo-kafka
+ Container emotion-echo-chat-svc Recreate 
+ Container emotion-echo-chat-svc Recreated 
+ Container emotion-echo-chat-svc Starting 
+ Container emotion-echo-chat-svc Started 
+
+### 复跑步骤 1：停机窗口（producer init 失败 ⇒ 后台重试 + UnavailablePublisher）
+{"time":"2026-10-16T14:11:28.516012649+08:00","level":"INFO","msg":"[kafka] producer init failed: kafka: client has run out of available brokers to talk to: dial tcp: lookup emotion-echo-kafka on 127.0.0.11:53: no such host —— 进入后台重试；outbox 行将保持 pending（不再改投内存）","svc":"chat-svc"}
+{"time":"2026-10-16T14:11:28.518186432+08:00","level":"INFO","msg":"[outbox-relay] started: interval=1s batchSize=100","svc":"chat-svc"}
+
+$ python /tmp/cl03-send.py
+login OK user_id=1
+conv_id=700
+msg_id=946
+
+$ psql -c "SELECT id,event_type,status,attempts FROM emotion_echo_chat.outbox_events ORDER BY id DESC LIMIT 2"
+  id  |      event_type      | status  | attempts 
+------+----------------------+---------+----------
+ 1781 | message.created      | pending |        0
+ 1780 | conversation.created | pending |        0
+(2 rows)
+
+$ psql -c "SELECT COUNT(*) AS sent_in_last_30s FROM emotion_echo_chat.outbox_events WHERE status='sent' AND sent_at > now()-interval '30 seconds'"
+ sent_in_last_30s 
+------------------
+                0
+(1 row)
+
+
+$ docker start emotion-echo-kafka
+emotion-echo-kafka
+kafka healthy after ~20s
+
+### 复跑步骤 2：恢复后（期望：同进程热替换成功、**无 panic**、RestartCount 不变、行自动重发）
+$ docker logs emotion-echo-chat-svc | grep -E '后台重试成功|producer 已就绪' | tail -2
+{"time":"2026-10-16T14:12:26.308769013+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 4 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}
+{"time":"2026-10-16T14:12:26.308804009+08:00","level":"INFO","msg":"[kafka] producer 已就绪（后台重试成功）—— outbox 恢复真实投递","svc":"chat-svc"}
+
+$ docker logs emotion-echo-chat-svc | grep -c 'panic'
+0
+  （0 = 无 panic）
+$ docker inspect emotion-echo-chat-svc --format 'RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}}'
+RestartCount=0 StartedAt=2026-10-16T06:11:20.768343265Z
+
+$ psql -c "SELECT id,event_type,status,attempts,sent_at FROM emotion_echo_chat.outbox_events ORDER BY id DESC LIMIT 2"
+  id  |      event_type      | status | attempts |            sent_at            
+------+----------------------+--------+----------+-------------------------------
+ 1781 | message.created      | sent   |        0 | 2026-10-16 06:12:26.536453+00
+ 1780 | conversation.created | sent   |        0 | 2026-10-16 06:12:26.527717+00
+(2 rows)
+
+$ psql -c "SELECT COUNT(*) AS pending FROM emotion_echo_chat.outbox_events WHERE status='pending'"
+ pending 
+---------
+       0
+(1 row)
+
+
+（结论）
+- 停机侧：2 行 `pending / attempts=0`；近 30s `sent` 行数 = 0 ⇒ **没有假 sent**。
+- 恢复侧：「后台重试成功（第 4 次）」+「producer 已就绪（后台重试成功）」⇒ 0.2s 后两行自动 `sent`、`pending=0`。
+- `grep -c panic` = 0；`RestartCount=0`、`StartedAt` 仍为重建时刻 ⇒ **同一进程内热替换，无重启**。

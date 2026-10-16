@@ -61,6 +61,30 @@ func TestPublisherHolder_SetGet_RaceFree(t *testing.T) {
 	assert.NotNil(t, h.Get())
 }
 
+// TestPublisherHolder_Set_DifferentConcreteTypes_NoPanic ★ CL-03 收口运行时实拍的缺陷 ★
+//
+// 生产装配序列是「init 失败先装 `*UnavailablePublisher` → 后台重试成功 → 热替换成
+// `*KafkaEventPublisher`」，这是**两个不同具体类型**。`atomic.Value` 要求同一个 Value
+// 始终存同一具体类型，否则 **panic: sync/atomic: store of inconsistently typed value into Value**。
+//
+// 起栈实测（2026-10-16 14:02:56）：Kafka 恢复瞬间 chat-svc **直接 panic 退出**、容器重启
+// （`RestartCount=1`），行虽被重启后的新进程补发，但"热替换"路径实际从未走通。
+func TestPublisherHolder_Set_DifferentConcreteTypes_NoPanic(t *testing.T) {
+	h := NewPublisherHolder(nil)
+
+	require.NotPanics(t, func() {
+		h.Set(NewUnavailablePublisher(errors.New("init failed")))
+	}, "装配 UnavailablePublisher 不得 panic")
+
+	require.NotPanics(t, func() {
+		h.Set(NewInMemoryEventPublisher())
+	}, "热替换成另一种具体类型不得 panic —— 生产里这就是 Kafka 恢复时的热替换路径")
+
+	got := h.Get()
+	require.NotNil(t, got, "热替换后 Get 应返回新 publisher，而不是 nil")
+	assert.IsType(t, &InMemoryEventPublisher{}, got, "Get 应返回最后一次 Set 的那个 publisher")
+}
+
 // TestPublisherHolder_EmptyReturnsNil 未设置时返回 nil（调用方据此判"未就绪"）。
 func TestPublisherHolder_EmptyReturnsNil(t *testing.T) {
 	h := &PublisherHolder{}

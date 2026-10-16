@@ -6,15 +6,15 @@
 #
 # 用法（H6：「worktree 构建镜像 + 共享目录 up 容器」两步）：
 #   # ① 构建（在 worktree 里，build context 解析为本 worktree 根 ⇒ 验的是本轨代码）
-#   cd D:/源码/Emotion-Echo-cl03 && docker compose -f deploy/docker-compose.infra.yml \
+#   cd <worktree> && docker compose -f deploy/docker-compose.infra.yml \
 #     -f deploy/docker-compose.apps.yml -f deploy/compose.dev.yml \
 #     -f deploy/docker-compose.cl03-verify.yml \
-#     --env-file D:/源码/Emotion-Echo/deploy/.env.local build \
+#     --env-file <共享目录>/deploy/.env.local build \
 #     emotion-echo-chat-svc emotion-echo-ai-svc emotion-echo-analytics-svc
 #   # ② 只重建自己的服务（不整栈 up）
-#   cd D:/源码/Emotion-Echo/deploy && docker compose -f docker-compose.infra.yml \
+#   cd <共享目录>/deploy && docker compose -f docker-compose.infra.yml \
 #     -f docker-compose.apps.yml -f compose.dev.yml \
-#     -f D:/源码/Emotion-Echo-cl03/deploy/docker-compose.cl03-verify.yml \
+#     -f <worktree>/deploy/docker-compose.cl03-verify.yml \
 #     --env-file .env.local up -d --force-recreate --no-deps \
 #     emotion-echo-chat-svc emotion-echo-ai-svc emotion-echo-analytics-svc
 #
@@ -26,8 +26,12 @@
 #   shared `Tracer` 新增 `EncodeSW8` 的改动。
 #
 # 前置（CL-F-07 ④）：本 worktree 需 `deploy/tls/`（ai-svc 的 Dockerfile COPY ai-client.key）
-#   ⇒ 起栈前从共享目录 `cp -r D:/源码/Emotion-Echo/deploy/tls D:/源码/Emotion-Echo-cl03/deploy/tls`
+#   ⇒ 起栈前从共享目录 `cp -r <共享目录>/deploy/tls <worktree>/deploy/tls`
 #   （gitignored，不污染版本库）。
+#
+# 引用：本文件在阶段档中被引用（`docs/closure-roadmap/stages/cl-03-kafka-reliability/plan.md` §A 起栈口径
+#   + `report.md` §6.1/§6.2），非孤儿产出物。路径占位符 `<worktree>` / `<共享目录>` 与
+#   cl01/cl02/cl05 的同类 override 一致（不写机器专属绝对路径）。
 #
 # 不在覆盖范围：user-svc / assessment-svc / BFF / llm-service（本轨未改其代码路径；
 #   shared 的接口新增方法对其为编译期兼容、无行为变化）。
