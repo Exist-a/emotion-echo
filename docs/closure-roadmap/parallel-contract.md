@@ -37,8 +37,11 @@ related:
 | **D** | **CL-00** CI 瘦身 | `.github/workflows/**` + `scripts/**` | 独立于业务代码 |
 | **E** | **CL-02** gRPC 契约 | **`proto/**`** + 各 svc `internal/grpcserver/**` + BFF `internal/downstream/**` + `scripts/check_dead_grpc_inventory.sh` | 独立，可搭任一轮 |
 | **F** | **CL-03** Kafka/可靠性闭环 | chat-svc `internal/{config,events,outbox}`、`internal/repository/outbox.go`、`migrations/**`、`main.go` + ai-svc `internal/consumer/**` + analytics-svc `internal/kafka/**` + `emotion-echo-shared/pkg/{messaging,eventrow,grpcinterceptor}` + `deploy/{prometheus,grafana}` + `charts/.../prometheus/templates/configmap-rules.yaml`（内联副本） | 承接 CL-01 追踪面（B 已 done）；**不碰** 前端 / BFF / `proto/**` |
+| **G** | **CL-07** 情绪回显+融合消费（**后端切片**：fusion 消费） | ai-svc `migrations/**`（新聚合视图）+ analytics-svc `internal/{repository,logic,svc}` + `proto/metric.proto` + BFF `internal/downstream/analytics{,_grpc}.go`、`internal/handler/analytics_view.go` + `emotion-echo-shared/pkg/emotionanalytics/**`（生成物） | **接手原 C 会话位**（CL-02 已 done、会话已撤）；**只做后端半**，前端半（`pages/chat/conversation/[id].vue` + `stores/message.ts`）**待 D 释放** ⇒ **不碰** |
 
-> **不能并行**：CL-06 / CL-07（依赖 CL-04）；CL-08a~e（自身有序）。
+> **不能并行**：CL-06（依赖 CL-04，且整阶段动 `[id].vue`/`stores/message.ts`）；CL-08a~e（自身有序）。
+> **CL-07 例外（2026-10-16，G 轨）**：CL-07 **整阶段**与 D 轨前端面直接冲突（`[id].vue`/`stores/message.ts`）⇒ 不可并行；
+> 但 **CL-07 后端切片**（融合产物消费：聚合视图 → analytics-svc 报表 → proto/BFF 透传）**不碰** 那些文件，文件面与 D/F 隔离 ⇒ 作为 **G 轨**单独开（理由见 `roadmap.md §2` 末注）。
 >
 > **轨字母对照纠偏（2026-10-16，F 轨补记）**：本表 A~E 是"建议轨"，实际各会话按 **Lane-CL-<字母>** 自命名，**与阶段号不一一对应** ——
 > 实测 **Lane-CL-C 跑的是 CL-02（本表 E 行）**、**Lane-CL-D 跑的是 CL-05（本表 C 行）**。新增 **F = CL-03**（与前缀无歧义）。
@@ -71,6 +74,7 @@ related:
 | C | CL-02 gRPC 契约闭环 | `feat/cl-02-grpc-contract`（worktree `../Emotion-Echo-cl02`） | Lane-CL-C | 2026-10-14 | **in-progress**（draft PR [#214](https://github.com/Exist-a/emotion-echo/pull/214)；🟢 部分已完成（Phase 1/2/3/5 + 守卫接 CI）；**🔵 2026-10-15 06:36 起持 dev 栈锁**做 Phase 2/6 运行时验证） |
 | D | CL-05 消息链路闭环 | `feat/cl-05-message-pipeline`（worktree `../Emotion-Echo-cl05`） | Lane-CL-D | 2026-10-14 | **in-progress**（draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；**🟢 先行**：Phase 1~4 全部不需栈；🔴 需栈 Phase 0/5~7 排队在 C 之后） |
 | F | CL-03 Kafka/可靠性闭环 | `feat/cl-03-kafka-reliability`（worktree `../Emotion-Echo-cl03`） | Lane-CL-F | 2026-10-16 | **in-progress**（draft PR [#229](https://github.com/Exist-a/emotion-echo/pull/229)；**🟢 先行**：Phase 1~6（trace 列 / 写侧捕获 / relay 恢复 / DLQ 硬化 / 遗留项）全为 Go 单测 + 静态契约级；🔴 Phase 0/7（端到端 trace 贯通 + 堆积告警 firing）**排队在 D 之后**） |
+| G | CL-07 情绪回显+融合消费（**后端切片**） | `feat/cl-07-fusion-consumption`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**，CL-02 已 done、会话已撤） | 2026-10-16 | **in-progress**（登记 PR [#232](https://github.com/Exist-a/emotion-echo/pull/232) / 阶段 PR [#234](https://github.com/Exist-a/emotion-echo/pull/234)（draft）；**Phase 1~3 代码全绿（8/9 测试点 PASS），T-9 端到端实拍待栈（D 持锁，排第 6）**；**🟢 先行**：Phase 1~3（`daily_emotion_fused_v` 聚合视图 / analytics-svc `FusedReportRepo`+装配 / `proto/metric.proto`+BFF 透传）全为 🟢 不需栈 + Go 单测/契约级；🔴 端到端数据契约实拍需栈，排 **D→F 之后第 6 位**。**不碰** `[id].vue`（前端半待 D 释放）、**不碰** BFF `downstream/chat*.go`、**不碰** analytics-svc `internal/kafka/**`） |
 
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
@@ -91,6 +95,7 @@ related:
 | 4 | D（CL-05） | C 之后（Phase 0 基线取证 / 5 会话游标运行验证 / 7 端到端+人可见钉） | ✅ **已用毕释放（2026-10-16 07:4x）** —— 取锁 2026-10-15 20:00 → 本轨镜像 `:cl05`（H5 带轨后缀，不覆盖公共 tag）→ Phase 0 基线 / Phase 5 会话游标运行验证（gRPC 与 `CHAT_TRANSPORT=http` 两条路径各 17/17）/ Phase 7 Playwright 人可见钉（4 passed / 1 skipped）→ **已删 `deploy/.devmode-session`**。⚠️ 本轨**阶段未 done**（`CL-F-11` 未复现/根因未定位；来源计划迁移与最终签署待办）⇒ 下一位可用锁。**注意**：栈仍开着，跑的是本轨 `:cl05` 镜像（chat-svc / web-bff） |
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |
 | 5 | F（CL-03） | D 之后（Phase 0 基线取证：现状 trace 断点的实拍证据 / Phase 7 端到端 trace 贯通 + DLQ 堆积告警 firing） | 排队中（**D 持锁中**——2026-10-16 06:16 取锁，18 容器栈在跑；F 轨先做 🟢 Phase 1~6，**不排队不占栈**） |
+| 6 | G（CL-07 **后端切片**） | D → F 之后（数据契约实拍：`daily_emotion_fused_v` 有行 + `/api/v1/reports/daily` 返回非空 `fusedEmotionDistribution`） | 排队中（**D 持锁中**；G 轨先做 🟢 Phase 1~3，**不排队不占栈**） |
 
 > **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
 > 三条"待验证"轨 ≈ 极限；若新轨全程需栈 ⇒ **等**，不要加。**纯 🟢 轨（文档/静态守卫）不受此限**。
@@ -130,6 +135,9 @@ related:
 | 2026-10-16 | Lane-CL-F | **`emotion-echo-chat-svc/main.go`**（脊柱）+ `emotion-echo-shared/pkg/grpcinterceptor/{tracing.go,tracing_go2sky.go}`（**仅在 M1 裁 A 时**） | F 轨**握手申请**：① CL-03 Phase 1~3 要加 outbox `trace_sw8` 列并在 relay 发布前恢复父 ctx ⇒ 落地动作含 `migrations/` 新文件 + `internal/repository/outbox.go` + `internal/outbox/relay.go` + 三条 `internal/logic/*conversationlogic.go` + `main.go`（relay 构造/fallback 段）；② 若裁定给 shared `Tracer` 接口加 sw8 原语，会动 **7 个 svc 共享**的接口与其余实现（含接口契约测试）。**D 轨（CL-05）若也需改 `main.go`，请在本行下回复协商**；F 轨按 §1.2「脊柱串行」，**先做不需 main.go 的 Phase 1 迁移，改 `main.go` 前再确认** | ⏳ **待 D 轨确认** |
 | 2026-10-16 | Lane-CL-F | `deploy/prometheus/rules/*.yml` + `deploy/grafana/dashboards/*.json` + **`charts/emotion-echo/charts/prometheus/templates/configmap-rules.yaml`**（内联副本） | F 轨握手：CL-03 Phase 4 要新增 **DLQ 堆积告警**（DLQ 硬化四问题之四）。该面属 **B 轨（CL-01）文件面**，B 已收口（#211）⇒ 依 §1.2「同名文件串行」声明占用；新增告警**必须同步 k8s 内联副本**，否则 `deploy/obs_monitoring.test.js` group ⑤ 的双向相等断言会红（现成机器守卫）；**已落地**（commit `ddb576c`：obs 契约测试全过 + helm 渲染守卫 8/8） | ✅ |
 | 2026-10-16 | Lane-CL-F | **`AGENTS.md`**（§七 bullet + 页脚）、**`docs/closure-roadmap/RUNBOOK.md`**（§1 开工前置检查）、本文件 §五/§六 | **文档治理重新落地**：`#212`（「每阶段开工先建 PR」三处对齐，用户明令）因其 base 过期在 `AGENTS.md` 产生**真内容冲突**；按 **H1「禁止 rebase 他人分支 / 代他人解冲突」**，F 轨不碰其分支，改为**在最新 main 上重新落地同一意图**（本 PR），并在 #212 留评论指向后继 | ✅ |
+| 2026-10-16 | Lane-CL-G | `docs/closure-roadmap/{parallel-contract,roadmap}.md` | G 轨**接手原 C 会话位**开工（C/CL-02 已 done、会话已撤）：本次接手 **CL-07 后端切片**。§1.1 新增 G 行 + §三 占位 + §3.1 排 6 位 + CL-07 翻 in-progress（**局部**）。按 **H2/条款 8**，登记走**独立小 PR**（本 PR），不含阶段产物；本行只追加、不改他人行 | ✅ |
+| 2026-10-16 | Lane-CL-G | **`proto/metric.proto`**（**仅此文件**；**非** `proto/chat.proto`） | G 轨**握手声明**：Phase 3 要在 `ReportsDailyResponse` 增 `fused_emotion_distribution` + `fusion_method_breakdown`，并**重新生成** `emotion-echo-shared/pkg/emotionanalytics/metric{,_grpc}.pb.go`（protoc 32.1 + protoc-gen-go v1.36.11 + protoc-gen-go-grpc v1.6.2，RUNBOOK §2）。D 轨在改 `proto/chat.proto` ⇒ **不同文件**，依 §1.2「不同文件可并」**不构成阻塞**；此处仅登记，D/F 无需动作 | ⏳ **声明占用** |
+| 2026-10-16 | Lane-CL-G | analytics-svc `internal/{repository,logic,svc}/**`（新增 `fused_report_repository.go`；改 `reports_daily_logic.go` / `servicecontext.go`）+ ai-svc `migrations/**`（新视图）+ BFF `internal/downstream/analytics{,_grpc}.go`、`internal/handler/analytics_view.go` | G 轨**握手声明**：与 **F 轨**在 analytics-svc 同服务下**不同子包**（F 占 `internal/kafka/**`；G 占 `internal/{repository,logic,svc}`），ai-svc 下也不同域（F 占 `internal/consumer/**`；G 占 `migrations/**`）；与 **D 轨**在 BFF 同目录**不同文件**（D 占 `downstream/chat*.go`、`handler/chat_handler.go`；G 占 `downstream/analytics*.go`、`handler/analytics_view.go`）。依 §1.2「同名文件串行、不同文件可并」⇒ **不构成阻塞** | ⏳ **声明占用** |
 
 ## 五、开工前置检查（照做）
 
