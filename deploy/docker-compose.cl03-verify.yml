@@ -30,7 +30,7 @@
 #   （gitignored，不污染版本库）。
 #
 # 引用：本文件在阶段档中被引用（`docs/closure-roadmap/stages/cl-03-kafka-reliability/plan.md` §A 起栈口径
-#   + `report.md` §6.1/§6.2），非孤儿产出物。路径占位符 `<worktree>` / `<共享目录>` 与
+#   + `report.md` §6.3「产物索引」），非孤儿产出物。路径占位符 `<worktree>` / `<共享目录>` 与
 #   cl01/cl02/cl05 的同类 override 一致（不写机器专属绝对路径）。
 #
 # 不在覆盖范围：user-svc / assessment-svc / BFF / llm-service（本轨未改其代码路径；

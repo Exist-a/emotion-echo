@@ -84,6 +84,11 @@ $ docker logs emotion-echo-chat-svc | grep 'publisher 未就绪' | tail -4
 $ curl -s localhost:8894/metrics | grep outbox_sent_via_fallback_total   # 语义已变：= '启动时 Kafka 不可用，进入后台重试'
 (chat-svc 容器内无 wget；见步骤 5 的 outbox 计数为准)
 
+### 步骤 4：恢复 Kafka
+$ docker start emotion-echo-kafka
+emotion-echo-kafka
+kafka healthy after 20s
+
 ### 步骤 5：恢复后 —— 后台重试成功 + 行自动重发
 $ docker logs emotion-echo-chat-svc | grep -E '后台重试成功|producer 已就绪' | tail -3
 {"time":"2026-10-16T14:02:55.990508678+08:00","level":"INFO","msg":"[kafka] producer 后台重试成功（第 5 次）—— outbox relay 自此刻起恢复真实投递","svc":"chat-svc"}

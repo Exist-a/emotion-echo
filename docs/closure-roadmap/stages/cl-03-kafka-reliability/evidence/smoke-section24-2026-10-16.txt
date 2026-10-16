@@ -104,7 +104,8 @@ src_paths 对**每个**服务都包含 `emotion-echo-shared`（`smoke_data_layer
 ② 2 项落在"本轨改了、且本轨**重建过**"的服务：ai-svc / analytics-svc
    —— 重建**前/后**两次 smoke 自己记录的镜像 ID 与 Created（同一台机、同一判据）：
 
-     重建前（14:0x 那一轮 smoke）：
+     重建前（2026-10-16 14:00–14:05 那一轮，**完整输出已归档**见
+       `evidence/smoke-section24-before-rebuild.txt`）：
        [OK  ] §8 emotion-echo-ai-svc 镜像新鲜度: OK: 镜像 8307c409bf65 构建于 2026-10-16T05:13:02Z ≥ 源码 commit 0ee1d1e
      本轨 `docker compose ... build emotion-echo-ai-svc` 之后：
        [FAIL] §8 emotion-echo-ai-svc 镜像新鲜度: STALE: 镜像 37289f56540c 构建于 2026-10-16T05:13:02Z，但 commit 49ca08e 更新
