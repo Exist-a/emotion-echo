@@ -93,6 +93,19 @@ git push origin main
 - **散落的 pb 文件**：`/*.pb.go`（P1-D 规范化前的临时方案）
 - **工具链二进制**：`protoc-dist/`、`protoc.zip`
 
+### 4.1 模型权重的落盘位置（**必须在 D 盘**）
+
+模型权重不进仓（见上表），但**放磁盘哪个分区**同样有硬约束：**一律落 D 盘，不要放 C 盘（系统盘）**。
+
+| 用途 | 位置 | 说明 |
+|---|---|---|
+| XTTS v2（构建上下文） | `emotion-echo-models/XTTS/AI-ModelScope/XTTS-v2/` | 构建期 `COPY` 进 `emotion-echo/xtts` 镜像；`model.pth` 1.86GB |
+| SenseVoiceSmall（构建上下文） | `emotion-echo-models/sensevoice-small/`（及 `SV-fastbuild/`） | `model.pt` 936MB，构建期 COPY 进镜像 |
+| XTTS 运行时挂载卷 | `/d/DockerData/coqui_model` | **vendor 时代残留**；仓内 `server.py` 不读 `/model`，实际无效 |
+| 宿主包管理器缓存 | `MODELSCOPE_CACHE` / `HF_HOME` | 默认写 `~/.cache/modelscope`、`~/.cache/huggingface`（**C 盘**）——用前先 export 到 D 盘 |
+
+排查记录（2026-10-17）：宿主 `C:\Users\LENVOV\.cache\modelscope\` 曾留存 **2.9GB** 的 XTTS-v2 + SenseVoiceSmall **重复副本**（仓库构建上下文里已有同尺寸、同 `hash.md5` 的正本，且无任何代码/compose/脚本读取该宿主缓存），已删除。**新增模型一律下到仓库构建上下文或 D 盘缓存，勿在 C 盘留副本。**
+
 ---
 
 ## 五、演进约定
