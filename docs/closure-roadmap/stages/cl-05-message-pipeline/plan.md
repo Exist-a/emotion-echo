@@ -8,7 +8,7 @@ last-updated: 2026-10-14（建档 → Phase 1（T-13）→ 2a（T-9/T-10）→ 2
 depends-on: []           # 不依赖任何阶段；**不阻塞于 T1**（CL-01/02/03）
 blocks: []
 gate: []                 # 无开工前阻塞决策门；3 个 [M] 见 §7
-source: docs/plans/frontend-message-cache-offline-resilience.md（主，2026-10-11）
+source: docs/legacy-plans/landed/frontend-message-cache-offline-resilience.md（主，2026-10-11）
 related-plans:
   - docs/plans/grpc-deadlink-actualization.md（CL-02/C 轨：`chat_server.go` 与旧 ASC 仓储方法同面，已握手排队）
   - docs/closure-roadmap/parallel-contract.md（D 轨占位 + §3.1 栈排队 + §四 握手区）
@@ -167,7 +167,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | T-19 | **重试幂等（不重复入库）** | [A] | 运行验证：断网补发后 DB 该 `client_msg_id` 行数为 1（复用 `c002` 唯一索引） | ✅ **PASS**（运行，Playwright）—— `e2e/message-pipeline.spec.ts` T-20③：拦掉发送请求 → 触发 `online` → 补发后同一标记内容在 DB/接口里**只有 1 行**（复用 `client_msg_id` 唯一索引）。证据 `evidence/phase7-playwright-run.txt` |
 | T-20 | **人可见三连**：① 上滚翻到更早页；② 刷新后消息仍在；③ 断网发送 → 联网自动补发成功 | [V] | Playwright（`e2e/message-pipeline.spec.ts`）+ IAB 截图/录屏 | ✅ **PASS**（①②③ 全部取得证据）—— ②③ 由 Playwright 实测通过（`evidence/phase7-playwright-run.txt`：刷新不丢 / 断网补发**幂等**）；① Playwright 因**数据前置**（近若干会话都 ≤20 条消息 ⇒ 首屏一页已取全、上翻无从观察）跳过，**改由 IAB 补齐**：会话 550（22 条 > 首屏 20）真人滚到顶 `.dialog` **20→22**、首条换成会话开头那句、视口停在顶部未被拽走（`evidence/iab-round-2026-10-16.md`） |
 | T-21 | **账本继承 · 发送后聊天区不自动滚到底**（`CL-F-10`，用户 2026-10-14 IAB 实测；账本已归属 **CL-05**） | [V] | 先**定位根因**（不臆断——账本明写"未查代码"），再 IAB/Playwright 实测：长回复流式增长时视口跟随到末尾 | ✅ **PASS**（运行，Playwright，浏览器实测）—— 发送后视口停在底部（gap ≤ 160）。⚠️ **首版修复被本钉抓出反例**：只加「用户是否在底部附近」守卫 ⇒ 用户上翻后发送时视口停在 1519px 外、**连自己的消息都看不见** ⇒ 判据改成两条（用户发的无条件跟随 / 远端流式仅在底部跟随）。证据同上 + `app/utils/chatScroll.test.ts` 13/13 |
-| T-22 | **账本继承 · 发送并刷新后出现两个对话**（`CL-F-11`，用户 2026-10-14 实测；账本已归属 **CL-05**） | [A] | 先**定位根因**（疑 `createNewConversation` 建会话→navigateTo→落库链路重入），再运行验证：建会话→发送→刷新，会话列表只 +1；根因定后补单测 | ⛔ **BLOCKED（缺陷未复现 ⇒ 根因未定位）**（Phase 8，2026-10-16）—— ① Playwright `T-22`：`/new` 一次发送**恰好建 1 个会话**、刷新后仍为 1（用「新增 id 集合」断言，非条数差——后者被 `limit` 封顶）；② **IAB 按用户给的确切步骤复测**（新建页输入 + **点发送按钮** → 刷新）：DB 只新建 691 一条、总数 512→513、刷新后仍 513、侧边栏只一条；③ **连点两次**按钮变体亦未造出第二个（第一次点击后按钮即置灰）。⇒ **本阶段不宣称修复**，账本 `CL-F-11` 保持 open。详见 `evidence/{phase7-playwright-run.txt,iab-round-2026-10-16.md}` |
+| T-22 | **账本继承 · 发送并刷新后出现两个对话**（`CL-F-11`，用户 2026-10-14 实测；账本已归属 **CL-05**） | [A] | 先**定位根因**（疑 `createNewConversation` 建会话→navigateTo→落库链路重入），再运行验证：建会话→发送→刷新，会话列表只 +1；根因定后补单测 | ✅ **PASS（可观察要求已验；缺陷不可复现 ⇒ 根因无从定位，按用户 `CL-D-15` 裁定不再追）** —— ① Playwright `T-22`：`/new` 一次发送**恰好建 1 个会话**、刷新后仍为 1（用「新增 id 集合」断言，非条数差）；② **IAB 按用户确切步骤复测**（新建页输入 + **点发送按钮** → 刷新）：DB 只新建 691、总数 512→513、刷新后仍 513；③ **连点两次**变体亦未造出第二个。⚠️ **注意读法：这不是「已修复」** —— 本阶段**没有**对 `CL-F-11` 做任何修复，而是「缺陷在当前构建上两次忠实复现均不成立」⇒ 由用户裁定关闭（详见 `CL-D-15` / 账本 `CL-F-11`） |
 
 > **负向对照（必做，防"钉子不会红"）**：Phase 2 修索引**前**先跑 T-9 必须**红**；Phase 3 落地**前**先跑 T-14 必须**红**（现状恒 `'sent'`）。
 >
@@ -255,7 +255,7 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 
 - **代码（14 个文件，本次实读亲核）**：`proto/chat.proto`；chat-svc `internal/{repository/conversation_repository.go, logic/{listmessageslogic.go,listconversationslogic.go,sendmessagelogic.go}, grpcserver/chat_server.go, handler/chat_handler.go, model/conversation.go}` + `migrations/c002_add_client_msg_id.sql`；BFF `internal/{downstream/{chat.go,chat_grpc.go}, handler/chat_handler.go}`；前端 `app/{stores/{message.ts,conversation.ts}, utils/{db.ts,messageCache.ts}, plugins/init.ts, pages/chat/conversation/[id].vue, types/conversation/conversationMessagesType.ts}`（明细见 §A.1）。
 - **测试现状**：chat-svc / BFF / vitest / Playwright 四层清单见 §A.1 末行（关键结论：`messageCache`/`retryCount` **零引用**；e2e 无 `cursor`/`hasMore`/`clientMsgId` 断言）。
-- **文档**：`docs/plans/frontend-message-cache-offline-resilience.md`（来源计划）、`docs/closure-roadmap/{roadmap.md,RUNBOOK.md,parallel-contract.md,decisions.md,stages/_TEMPLATE.md}`、`docs/_meta/{parallel-tracks.md,multi-track-parallelism.md}`、`AGENTS.md §〇/§2.4/§八/§8.1`、`docs/e2e-roadmap/{discovered-unresolved.md（:439-440 = E2E-F-205/206）,anti-patterns.md}`、`stages/cl-04-prompt-assembly/plan.md`（体例参照）。
+- **文档**：`docs/legacy-plans/landed/frontend-message-cache-offline-resilience.md`（来源计划）、`docs/closure-roadmap/{roadmap.md,RUNBOOK.md,parallel-contract.md,decisions.md,stages/_TEMPLATE.md}`、`docs/_meta/{parallel-tracks.md,multi-track-parallelism.md}`、`AGENTS.md §〇/§2.4/§八/§8.1`、`docs/e2e-roadmap/{discovered-unresolved.md（:439-440 = E2E-F-205/206）,anti-patterns.md}`、`stages/cl-04-prompt-assembly/plan.md`（体例参照）。
 - **`grep` 断言**：`messageCache` 全仓仅自身文件命中（零调用方）；ADR 无分页/缓存覆盖；`cursor|hasMore|clientMsgId` 在 `e2e/*.spec.ts` 零命中；`MessageStatus` 两处定义（取值集合 5 vs 4）。
 - **未执行（建档期声明，已于 2026-10-16 补齐）**：建档期 dev 栈未起（B 持锁）、§2.4 smoke 未跑、运行时翻页未抓。**2026-10-16 更新**：Phase 0 基线已取（`evidence/phase0-baseline-output.txt`）、两条传输路径的运行时翻页已抓（`evidence/phase5-verify-*.txt`）⇒ 本条**已作废**；§2.4 smoke 仍未跑（本阶段不涉数据契约 6 条）。
 

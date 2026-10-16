@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: landed
 priority: high
 owner: lane-cl-d
 created: 2026-10-11
@@ -8,7 +8,7 @@ source: 2026-10-11 会话（用户："第二条前端缓存部分是想到补的
 depends-on: []
 related-plans: []
 stage: docs/closure-roadmap/stages/cl-05-message-pipeline/plan.md
-stale-notice: 2026-10-14（D 轨建档时亲核）——本计划 §0.3 A2/A3、§5 proto 字段、§2.1 G2 已**部分滞后**：消息游标分页（proto `cursor`/`has_more`）与前端翻页触发点（`[id].vue` 滚动）**均已落地**。**以阶段详档 §A.3 为准**，勿照抄本文件。
+landed-notice: 2026-10-16 迁入 landed —— 本计划已由 CL-05 阶段落地（收口记录见 docs/closure-roadmap/stages/cl-05-message-pipeline/report.md）。原 stale-notice 保留： 2026-10-14（D 轨建档时亲核）——本计划 §0.3 A2/A3、§5 proto 字段、§2.1 G2 已**部分滞后**：消息游标分页（proto `cursor`/`has_more`）与前端翻页触发点（`[id].vue` 滚动）**均已落地**。**以阶段详档 §A.3 为准**，勿照抄本文件。
 ---
 
 # Plan — 前端消息链路：游标分页 + 本地缓存 + 状态机 + 断网重试

@@ -20,7 +20,7 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 |---|---|---|
 | `user-custom-agent-persona.md` | **用户自定义 Agent（背景/人格 → 提示词约束）**：现状人设由测评五维自动推断、用户不可填。目标 = 用户可设名字/背景/语气/边界 + 注入 prompt（含越狱护栏） | high |
 | `chat-emotion-realtime-display.md` | **对话页「用户当前情绪」实时回显**：融合产物 `fused_emotions` 算了但前端零消费；顶部状态条 + 消息融合标签 + 打通数字人情绪 | high |
-| `frontend-message-cache-offline-resilience.md` | 前端消息链路：游标分页 + 本地缓存（IndexedDB）+ 状态机 + 断网重试。现 `messageCache.ts` 全仓零调用 | high |
+| `../legacy-plans/landed/frontend-message-cache-offline-resilience.md`（**已落地**） | 前端消息链路：游标分页 + 本地缓存（IndexedDB）+ 状态机 + 断网重试。现 `messageCache.ts` 全仓零调用 | high |
 | `fusion-result-consumption.md` | 融合产物 `fused_emotions` 被**统计/图表/报表**消费（`daily_emotion_fused_v` + 日报融合分布 + 注入 prompt） | medium |
 | `conversation-memory-pending-decision-2026-09-24.md` | 会话记忆系统缺失（同会话历史 / 跨会话记忆形态，**待决策**） | high |
 
