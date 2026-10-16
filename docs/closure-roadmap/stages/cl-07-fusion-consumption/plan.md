@@ -80,7 +80,7 @@ related:
 | T-6 | BFF gRPC 客户端映射 fused 进 DTO + 无数据 nil | [A] | `go test ./internal/downstream/ -run 'DailyReport_MapsFused'` | PASS |
 | T-7 | BFF 前端契约 `toFrontendDailyReport` 透传 fused（倒序/空态/nil） | [A] | `go test ./internal/handler/ -run Fused` | PASS |
 | T-8 | 生产接线：svcCtx.FusedReportRepo 在 main.go 赋值 | [A] | 源码断言（main.go:196 起） | PASS（代码审查） |
-| T-9 | **端到端数据契约实拍**：dev 栈下 `/api/v1/reports/daily` 返回非空 `fusedEmotionDistribution` | [A] | `smoke_data_layer.py` / curl（**需栈，排第 6 位**） | **BLOCKED**（D 持栈；非"未做"） |
+| T-9 | **端到端数据契约实拍**：真实消息 → `fused_emotions` 有行 → `/api/v1/reports/daily` 返回非空 `fusedEmotion` | [A] | 网关 `:19080` 登录 → 发消息 → 查报表（`--profile dev` 栈 + `:cl07` 镜像） | ✅ **PASS**：`fusedEmotion.total=27`（实时触发 +1）；空态日期字段缺省；证据 `evidence/` |
 
 ## §3 分阶段实施（TDD：先 RED 再 GREEN）
 
@@ -95,8 +95,8 @@ related:
 ## §4 收口判据
 
 - **功能**：融合产物从 DB → 视图 → 报表 API → （前端图表可接）**全链贯通**；无融合数据时优雅降级（字段缺失）。
-- **机器**：上表 T-1~T-8 全绿；`go build ./...`（3 模块）；`go vet`；proto 生成未改时逐字节复现；`check_proto_layout.py` 通过。
-- **诚实边界**：T-9（端到端实拍）**未做**（栈锁在 D），阶段判 **partial**、**不得判 done**。
+- **机器**：上表 T-1~T-9 全绿；`go build ./...`（3 模块）；`go vet`；proto 生成未改时逐字节复现；`check_proto_layout.py` 通过。
+- **仅存边界**：前端半不在本轮（另开）；阶段 final `done` 须经**第二方核对**（RUNBOOK §6.7，执行者不得自行宣布）。
 
 ## §5 回归钉
 
