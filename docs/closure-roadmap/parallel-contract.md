@@ -84,6 +84,24 @@ related:
 
 > **一句话**：主文件面基本隔离，但 **`proto` / `main.go` / `downstream` / `scripts` / `go.mod|package.json` 是脊柱**——改它们 = **先握手、后串行**。
 
+### 1.3 共享 docker 资源（**镜像 tag / 容器** —— 2026-10-16 收口 `CL-F-09`）
+
+> **背景（`CL-F-09`）**：`git worktree` **只隔离工作区，不隔离 docker daemon**。
+> 而 compose 里自建服务用的是**固定 tag**（`emotion-echo/web-bff:v0.1.37` 这类，正是"自建镜像豁免 digest 门禁"的来源）
+> ⇒ 两个 worktree 先后 build **同一个 tag**，谁后构建 tag 就指向谁；下一个人 `up -d --force-recreate`
+> **就跑上了"最后构建者"的代码**。实测：A 轨 10:10 的构建把 web-bff tag 指向 A 轨代码（运行中的容器仍是旧镜像 ID）。
+
+**四条硬规则**（worktree / 多会话并行时必须遵守）：
+
+| # | 规则 | 做法 |
+|---|---|---|
+| R1 | **构建用带轨后缀的 tag**，不覆盖公共 tag | 用 `deploy/docker-compose.<track>-verify.yml` override 把 `image:` 改成 `emotion-echo/<svc>:<track>`（先例：`docker-compose.cl02-verify.yml` / `cl03` / `cl05` / `cl07`） |
+| R2 | **`up` 只指名自己的服务** | `docker compose -f ... -f <override> up -d <svc> ...`，**不要**整栈 `up -d`（会把别人的服务也换成你的镜像） |
+| R3 | **用前在 §3.1 播报**、并确认自己跑的是自己的镜像 | `docker ps --format '{{.Names}}	{{.Image}}'`；★ 改 Go 的验收 = **「worktree 构建镜像 + 共享目录 up 容器」两步** |
+| R4 | **用毕删锁 + 说明栈上跑的是谁的镜像** | 删 `deploy/.devmode-session`，并在 §3.1 那行写清"栈仍开着，跑的是 `:<track>` 镜像" |
+
+> **镜像不是"我的文件"，是"共享可变资源"** —— 与 `proto/**`、`main.go` 同等对待：**先声明、后使用、用完交代清楚**。
+
 ## 二、共享文件（改动前必须在下"握手区"登记一行）
 
 `deploy/**docker-compose*.yml**` · `AGENTS.md` · `docs/closure-roadmap/decisions.md` · 顶层 `README.md` · 其他轨独占列以外的公共脚本。
@@ -100,7 +118,7 @@ related:
 | F | CL-03 Kafka/可靠性闭环 | `feat/cl-03-kafka-reliability`（worktree `../Emotion-Echo-cl03`，**已删**） | Lane-CL-F | 2026-10-16 | ✅ **done 并已合并**（阶段 PR [#229](https://github.com/Exist-a/emotion-echo/pull/229) **squash 合并 → `c88653b`**，源分支已删、worktree 已删）；16/16 测试点 PASS；dev 栈已用毕释放（`.devmode-session` 已删，**队列下一位 = G（CL-07）**）；第二方核对**五轮**（首轮 FAIL 9 → 复核轮 FAIL 13 → 第三轮 FAIL 7 → 第四轮 FAIL 1+3 → 第五轮 PASS；前四轮抓出 2 项真缺陷并修复）见 `stages/cl-03-kafka-reliability/report.md §6` |
 | G | CL-07 情绪回显+融合消费（**后端切片**） | `feat/cl-07-fusion-consumption`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **后端切片 done 并已合并**（squash → `bf401350`，PR [#234](https://github.com/Exist-a/emotion-echo/pull/234)，**源分支已删**）；**9/9 测试点 PASS + 第二方核对 PASS**（含 4 组突变实验）。⚠️ **CL-07 整体仍 in-progress** —— **前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）**待 D 释放该页后另开**；本轨已不再占用 dev 栈与 `proto/**` |
 | H | CL-07 情绪回显（**前端半**） | `feat/cl-07-emotion-display`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **done 并已合并**（squash → `349c9615`，PR [#243](https://github.com/Exist-a/emotion-echo/pull/243)，**源分支已删**）；9/10 PASS（T-10 待 CL-F-17）+ 第二方核对 PASS；**不再占用** `[id].vue` / dev 栈 / `proto` |
-| P | **CL 遗留清销（第 1 批）** | `chore/cl-legacy-paydown` | Lane-CL-P | 2026-10-16 | **in-progress**（draft→ready PR [#245](https://github.com/Exist-a/emotion-echo/pull/245)）：修 CL-F-06/17/18/20 + 文档收口 CL-F-21 + 账本对账 CL-F-01/03。**纯 🟢（不需 dev 栈）**，只碰 `scripts/**`、`.github/workflows/**`（加一个 step，不改 job 名）、前端 `app/**`、`docs/**`；**不碰** `proto/**`、`deploy/**`、任何 Go 服务 |
+| P | **CL 遗留清销** | `chore/cl-legacy-paydown`（第 1 批，**已合并**）· `docs/cl-legacy-paydown-wave3`（第 2 批） | Lane-CL-P | 2026-10-16 | **第 1 批 ✅ done 并已合并**（squash → `2a3301cf`，PR [#245](https://github.com/Exist-a/emotion-echo/pull/245)，源分支已删）：修 CL-F-06/17/18/20 + 文档 CL-F-21 + 对账 CL-F-01/03。**第 2 批 in-progress**（PR [#247](https://github.com/Exist-a/emotion-echo/pull/247)，**纯文档**）：CL-F-07/09 关闭 + CL-F-08 降级 + CL-F-19 转 `CL-D-20`。**纯 🟢（不需 dev 栈）**；**不碰** `proto/**` / `deploy/**` / 任何 Go 服务 / 前端源码 |
 
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
