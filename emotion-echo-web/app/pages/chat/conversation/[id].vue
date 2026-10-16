@@ -7,7 +7,7 @@
         <article
           v-for="item in data"
           :key="item.id"
-          v-memo="[item.id, item.content, item.status, item.contentType]"
+          v-memo="[item.id, item.content, item.status, item.contentType, byMessage[item.id]]"
           class="dialog"
           :class="item.sender === 'user' ? 'dialog-user' : 'dialog-ai'"
         >
