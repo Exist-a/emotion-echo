@@ -7,7 +7,7 @@
         <article
           v-for="item in data"
           :key="item.id"
-          v-memo="[item.id, item.content, item.status, item.contentType, byMessage[item.id]]"
+          v-memo="[item.id, item.content, item.status, item.contentType]"
           class="dialog"
           :class="item.sender === 'user' ? 'dialog-user' : 'dialog-ai'"
         >
@@ -48,11 +48,6 @@
           >
             <span class="quiet-pulse" aria-label="正在回复" />
           </div>
-          <!-- CL-07 G2：用户消息的融合情绪角标（无融合数据 / 未取到则不渲染） -->
-          <span
-            v-if="item.sender === 'user' && byMessage[item.id]"
-            class="emotion-chip"
-          >{{ byMessage[item.id]?.label }}</span>
         </article>
         <div v-if="conversationSender.isStreaming.value" class="breath-line" aria-hidden="true">
           <span />
@@ -301,15 +296,13 @@ const conversationSender = useConversationSender({
   onEmotionChange: (emotion) => digitalHumanRef.value?.setEmotion(emotion),
 })
 
-// ===== CL-07 前端半（情绪回显 G1~G4）=====
+// ===== CL-07 前端半（情绪回显 G1/G3/G4）=====
 // 「增强非依赖」纪律：取不到融合情绪就隐藏/保持默认，**绝不阻塞主对话、绝不抛错**
 // （与画像注入同款；见 composables/useCurrentEmotion.ts 注释）。
-const {
-  current: currentEmotionState,
-  byMessage,
-  refreshForMessage: refreshCurrentEmotion,
-  ensureMessages,
-} = useCurrentEmotion()
+//
+// ⚠️ G2（**消息级融合角标**）**用户裁定不做**（2026-10-16）⇒ 本页只保留顶部状态条 + 数字人情绪。
+const { current: currentEmotionState, refreshForMessage: refreshCurrentEmotion } =
+  useCurrentEmotion()
 
 // 顶部状态条 / 数字人情绪的取数锚点 = 会话里**最新一条用户消息**
 // （融合产物按消息粒度：fused_emotions.message_id）
@@ -345,14 +338,14 @@ const syncEmotionToDigitalHuman = async (aiEmotion?: string) => {
   }
 }
 
-// 消息列表变化 ⇒ ① 补齐气泡角标（只拉最新 N 条、已缓存不重复）；② 刷新顶部状态条
+// 消息列表变化 ⇒ 刷新顶部状态条（锚点 = 最新一条用户消息）
+// （G2 消息级角标已按用户裁定移除 ⇒ 不再逐条取数）
 watch(
   () => (messageStore.sortedMessages ?? []).map((m: any) => `${m?.sender}:${m?.id}`).join(','),
   () => {
     const userIds = ((messageStore.sortedMessages ?? []) as Array<{ id?: string; sender?: string }>)
       .filter((m) => m?.sender === 'user' && m.id)
       .map((m) => String(m.id))
-    void ensureMessages(userIds)
     void refreshCurrentEmotion(userIds.length ? userIds[userIds.length - 1] : '')
   },
   { immediate: true },
@@ -1009,22 +1002,6 @@ onUnmounted(() => {
 .camera-status strong {
   color: var(--ee-primary);
   margin: 0 4px;
-}
-
-/* CL-07 G2：用户消息的融合情绪角标（order:-1 ⇒ 显示在气泡左侧） */
-.emotion-chip {
-  order: -1;
-  flex: none;
-  align-self: flex-end;
-  margin: 0 8px 6px 0;
-  padding: 1px 8px;
-  color: var(--ee-text-muted);
-  background: var(--ee-surface-muted, rgba(0, 0, 0, 0.04));
-  border: 1px solid var(--ee-border);
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 1.7;
-  white-space: nowrap;
 }
 
 .send-btn {

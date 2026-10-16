@@ -60,6 +60,11 @@ created: 2026-10-16
 5. **对照实验（决定性）**：以**未改动的主目录**（`main`，`D:/源码/Emotion-Echo`）在 `:3010` 起同样 dev ⇒ **`__vue_app__` 同样为 false**。⇒ **不是本改动引入**。
 6. 根因**假设**（未证实）：Nuxt dev 的 `@fs` 模块 URL 内嵌**中文仓库路径**（`D:/源码/...`），该 IAB webview 未能执行该模块链。生产构建产物是哈希资源名、不含中文路径 ⇒ 预期可绕过（**未验证**：需 `pnpm build`，而项目记录过"web 构建 + 19 容器 ⇒ 内存击穿冻结"，本轮**未冒险**）。
 
+> **用户裁定变更（2026-10-16，实测之后）**：**G2 消息级融合角标不做** —— 用户看到实测效果后明确「消息左侧的角标不需要」。
+> 已移除：`[id].vue` 的角标 DOM/CSS、`v-memo` 中为角标加的依赖、`useCurrentEmotion` 的 `byMessage`/`ensureMessages`（含 4 个用例）、旧角标回归钉；
+> 新增**反向**回归钉 `cl07-emotion-display.architecture.test.ts`（断言页面**不得**再出现 `emotion-chip`/`byMessage`，`v-memo` 回到原 4 项）。
+> 保留：顶部状态条（G1/G3/G5）+ 数字人情绪（G4）。
+
 ## 浏览器实测（IAB · 生产构建）—— T-8/T-9 PASS，并抓到 2 个真缺陷
 
 ### 结果（`/chat/conversation/705`，最新用户消息 951 有融合行）

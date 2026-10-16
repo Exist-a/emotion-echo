@@ -92,8 +92,6 @@ function defaultFetcher(): FusedEmotionFetcher {
 export function useCurrentEmotion(fetcher?: FusedEmotionFetcher) {
   const current = ref<CurrentEmotionState | null>(null)
   const loading = ref(false)
-  /** 消息级缓存：messageId → 状态（null = 确认无融合，避免重复拉取） */
-  const byMessage = ref<Record<string, CurrentEmotionState | null>>({})
   const fetchFused = fetcher ?? defaultFetcher()
 
   /**
@@ -118,36 +116,9 @@ export function useCurrentEmotion(fetcher?: FusedEmotionFetcher) {
     }
   }
 
-  /**
-   * 批量补齐消息级情绪（气泡角标用）。
-   *
-   * 防放大：① 只取**最新 cap 条**；② 已缓存的（含"确认无融合"）不重复拉；
-   * ③ 失败也写入 `null` 缓存，避免每轮渲染反复打请求（计划 §6 的 N+1 风险）。
-   */
-  async function ensureMessages(messageIds: (string | number)[], cap = 12): Promise<void> {
-    const targets = messageIds
-      .map((v) => String(v ?? '').trim())
-      .filter((id) => id.length > 0)
-      .slice(-cap)
-      .filter((id) => !(id in byMessage.value))
-    if (targets.length === 0) return
-    await Promise.all(
-      targets.map(async (id) => {
-        let state: CurrentEmotionState | null = null
-        try {
-          state = toCurrentEmotionState(await fetchFused(id))
-        } catch {
-          state = null
-        }
-        byMessage.value = { ...byMessage.value, [id]: state }
-      }),
-    )
-  }
-
   function clear(): void {
     current.value = null
-    byMessage.value = {}
   }
 
-  return { current, loading, byMessage, refreshForMessage, ensureMessages, clear }
+  return { current, loading, refreshForMessage, clear }
 }
