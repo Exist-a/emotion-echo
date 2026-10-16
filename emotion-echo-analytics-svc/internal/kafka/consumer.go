@@ -329,7 +329,9 @@ func (h *chatEventHandler) publishToDLQ(ctx context.Context, msg *sarama.Consume
 	if h.dlq != nil {
 		// CL-03 T-07：NoopDLQPublisher 返回 nil（"成功"语义）但其实**什么都没做** ⇒
 		// 显式标出"未配置/Noop + 已丢弃"，否则与真实投递成功无法区分（静默丢弃）。
-		if _, isNoop := h.dlq.(NoopDLQPublisher); isNoop {
+		// 值形态与指针形态同判：装配方写 &NoopDLQPublisher{} 时不得漏。
+		switch h.dlq.(type) {
+		case NoopDLQPublisher, *NoopDLQPublisher:
 			IncDLQUnconfigured()
 			logging.PrintfContext(ctx, "[kafka-consumer] DLQ 未配置（Noop）：毒消息无处投递、不可回放，key=%s err=%v",
 				string(msg.Key), lastErr)

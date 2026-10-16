@@ -1,0 +1,26 @@
+CL-03 / T-07 —— ai-svc Noop DLQ「不再静默」的生产装配形态运行时验证
+采集时间：2026-10-16 13:15（dev 栈，镜像 emotion-echo/ai-svc:cl03）
+
+## 为什么必须这样验（第二方核对发现 #2）
+生产装配 main.go:388 是 `var dlq consumer.DLQPublisher = consumer.NoopDLQPublisher{}`
+—— 接口值**非 nil**。只判 `h.DLQ == nil` 的修复在生产里是死代码。
+本验证把「未配 DLQ」这一装配形态真实跑起来：
+  - 挂载改过的 etc/ai-api.yaml（DLQTopic: ""）
+  - NACOS_ENABLED=false（否则 Nacos 热更把 DLQTopic 填回 chat-events-dlq）
+  - 毒消息：chat-events 投一条 message.created，其 data.messageId 为**字符串**
+    ⇒ handler 在第 2 步 json.Unmarshal 失败（合法 JSON、非法 schema）
+
+## ① 启动日志：DLQ 装配种类不再误报（修复前恒 dlq=true）
+{"time":"2026-10-16T13:14:51.454976325+08:00","level":"INFO","msg":"consumer started: brokers=[emotion-echo-kafka:9092] topics=[chat-events] groupID=ai-svc dlq=noop maxRetries=3","module":"kafka","svc":"ai-svc"}
+
+## ② 毒消息处理链（原地重试 3 次，退避 2s/4s/8s → 预算耗尽 → Noop 分支）
+{"time":"2026-10-16T13:15:14.679635506+08:00","level":"ERROR","msg":"consumer handler err (will retry in-place)","attempt":1,"max_retries":3,"key":"","backoff":2000000000,"err":"unmarshal data: json: cannot unmarshal string into Go struct field MessageCreatedData.messageId of type int64","svc":"ai-svc"}
+{"time":"2026-10-16T13:15:16.679924515+08:00","level":"ERROR","msg":"consumer handler err (will retry in-place)","attempt":2,"max_retries":3,"key":"","backoff":4000000000,"err":"unmarshal data: json: cannot unmarshal string into Go struct field MessageCreatedData.messageId of type int64","svc":"ai-svc"}
+{"time":"2026-10-16T13:15:20.680327745+08:00","level":"ERROR","msg":"consumer handler err (will retry in-place)","attempt":3,"max_retries":3,"key":"","backoff":8000000000,"err":"unmarshal data: json: cannot unmarshal string into Go struct field MessageCreatedData.messageId of type int64","svc":"ai-svc"}
+{"time":"2026-10-16T13:15:28.680879877+08:00","level":"WARN","msg":"consumer DLQ 未配置（Noop）：毒消息无处投递、不可回放","attempts":4,"key":"","err":"unmarshal data: json: cannot unmarshal string into Go struct field MessageCreatedData.messageId of type int64","svc":"ai-svc"}
+{"time":"2026-10-16T13:15:28.680963625+08:00","level":"ERROR","msg":"consumer handler err after retries → DLQ","attempts":4,"key":"","err":"unmarshal data: json: cannot unmarshal string into Go struct field MessageCreatedData.messageId of type int64","svc":"ai-svc"}
+
+## ③ 指标：emotion_echo_dlq_unconfigured_total 由 0 → 1
+# HELP emotion_echo_dlq_unconfigured_total Messages dropped because no DLQ is configured (no replay possible).
+# TYPE emotion_echo_dlq_unconfigured_total counter
+emotion_echo_dlq_unconfigured_total 1

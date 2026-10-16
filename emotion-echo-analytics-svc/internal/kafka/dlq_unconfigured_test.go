@@ -38,3 +38,17 @@ func TestPublishToDLQ_RealDLQ_DoesNotIncrementUnconfigured(t *testing.T) {
 
 	assert.Equal(t, before, testutil.ToFloat64(DLQUnconfiguredTotal))
 }
+
+// TestPublishToDLQ_NoopPointer_IncrementsCounter 装配方可能写 &NoopDLQPublisher{}（指针形态）
+// —— 与值形态必须同判，否则同型缺陷会从"指针装配"这一侧重新漏回来。
+func TestPublishToDLQ_NoopPointer_IncrementsCounter(t *testing.T) {
+	before := testutil.ToFloat64(DLQUnconfiguredTotal)
+
+	h := &chatEventHandler{dlq: &NoopDLQPublisher{}}
+	msg := &sarama.ConsumerMessage{Topic: "chat-events", Key: []byte("evt93-noop-ptr"), Value: []byte("x")}
+
+	assert.NoError(t, h.publishToDLQ(context.Background(), msg, errors.New("boom"), 3))
+
+	assert.Equal(t, before+1, testutil.ToFloat64(DLQUnconfiguredTotal),
+		"指针形态 Noop DLQ 也必须递增 counter")
+}

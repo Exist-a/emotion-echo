@@ -78,6 +78,16 @@ func (h *ConsumerGroupHandler) publishToDLQ(
 	attempts int,
 ) error {
 	if h.DLQ != nil {
+		// CL-03 T-07：**Noop 也要可见**。生产装配（main.go）在未配 DLQ 时传的是
+		// `consumer.NoopDLQPublisher{}`（**非 nil**）⇒ 若只在 `h.DLQ == nil` 分支计数，
+		// counter 在真实装配下**永不递增**（第二方核对 2026-10-16 抓到的真缺陷）。
+		// 故这里按"行为"判定：Noop 的 Publish 恒返回 nil（"成功"语义）但其实什么都没做。
+		switch h.DLQ.(type) {
+		case NoopDLQPublisher, *NoopDLQPublisher:
+			IncDLQUnconfigured()
+			slog.WarnContext(ctx, "consumer DLQ 未配置（Noop）：毒消息无处投递、不可回放",
+				"attempts", attempts, "key", string(msg.Key), "err", handlerErr)
+		}
 		// P1-2 (Round 1): 把原消息 headers 透传到 DLQ，便于 OAP 上能追到 sw8/trace_id。
 		// 否则 DLQ 消息在 OAP 上是孤儿，与上游 producer trace 断链。
 		dlqHeaders := make(map[string]string, len(msg.Headers))

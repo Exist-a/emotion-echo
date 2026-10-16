@@ -1,0 +1,12 @@
+        	Messages:   	生产装配形态（NoopDLQPublisher 非 nil）下必须递增 —— 否则该 counter 是死代码
+2026/10/16 12:52:53 ERROR consumer handler err after retries → DLQ attempts=4 key=evt-noop-ptr err=boom
+--- FAIL: TestPublishToDLQ_NoopPublisherPointer_IncrementsCounter (0.00s)
+    dlq_unconfigured_test.go:58: 
+        	Error Trace:	D:/源码/Emotion-Echo-cl03/emotion-echo-ai-svc/internal/consumer/dlq_unconfigured_test.go:58
+        	Error:      	Not equal: 
+        	            	expected: 1
+        	            	actual  : 0
+        	Test:       	TestPublishToDLQ_NoopPublisherPointer_IncrementsCounter
+FAIL
+FAIL	emotion-echo-ai-svc/internal/consumer	4.740s
+FAIL

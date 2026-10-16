@@ -165,13 +165,13 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 | T-15 | ✅ **PASS** | Phase 6：新增「CL-03 处置」表 —— D1 并入 CL-F-15 / D2·D4 ✅ / D3·D5·D6 登记触发条件 / D7 等产品语义拍板 / D8 ✅ 全部落地（无"待定"残留） |
 | T-06 | ✅ **PASS** | Phase 4b（`CL-D-17`=A）：两侧各 3 例绿（不 Mark / 不跳过后续 / Noop 与"未配置"仍 Mark）；**幂等已逐 handler 取证**（ai-svc `ON CONFLICT (event_id)`、analytics `ON CONFLICT (event_id, occurred_at)`） |
 | T-04 | ✅ **PASS** | **运行时（起栈实测）**：一条消息的 trace 在 OAP 里 13 个 span 连成一条 —— `BFF 入站 → client:SendMessage → chat-svc 入站 → gorm.* → outbox-enqueue-message → outbox-relay(ref→编码 span) → kafka-publish → analytics/ai 两侧 kafka-consume`，全 span 同 `traceId`。证据 `evidence/t04-trace-full-chain.json` |
-| T-07 | ✅ **PASS** | 两侧各加 `*_dlq_unconfigured_total` + 明确文案（"未配置/Noop ⇒ 已丢弃、不可回放"）；单测 4 例绿（Noop/未配置 → counter+1；真 DLQ → 不动）；**运行时**：两服务 `/metrics` 均已暴露该指标（各 3 行）；看板新增「DLQ 未配置时的丢弃计数」面板。⚠️ 本栈 DLQ **已配置** ⇒ 触发路径不可达，运行时只验"接线可见"，行为由单测覆盖 |
+| T-07 | ✅ **PASS** | 两侧各加 `*_dlq_unconfigured_total` + 明确文案（"未配置/Noop ⇒ 已丢弃、不可回放"）；单测 **6 例**绿（含**生产装配形态**：`NoopDLQPublisher` **值/指针两形态** → counter+1；真 DLQ → 不动）；**运行时（生产装配形态）实测**：把 DLQ topic 置空真装配起来 + 投毒消息 ⇒ `emotion_echo_dlq_unconfigured_total` **0→1** + WARN「DLQ 未配置（Noop）」；启动日志新增 `dlq=none/noop/kafka` 装配种类（取代会误报的「接口非空」判断）。看板新增「DLQ 未配置时的丢弃计数」面板（expr 经 Grafana 代理返回非空 series）。证据 `evidence/t07-ai-svc-noop-runtime.txt`、`t07-ai-svc-noop-deadcode-RED.txt`、`t10-t16-phase4c-replay-and-panels.txt` |
 | T-09 | ✅ **PASS** | **运行时**：往 `chat-events-dlq` 灌 3 条 ⇒ Prometheus `DLQMessagesAccumulating` **state=firing**（severity=warning）⇒ Alertmanager 收到 `status.state=active`（**送达**）。证据 `evidence/t09-t11-dlq-alert-firing.txt` |
-| T-10 | ✅ **PASS** | Phase 4c：`-record` 落 PG（`emotion_echo_analytics.dlq_replay_runs`，迁移 `a011` 已 apply）+ Grafana PostgreSQL 数据源 + 「DLQ 回放记录」面板。**运行时**：网内跑工具两次（dry-run 全量 4 条 / 真回放 1 条）⇒ 表里 2 行且 operator 有值；面板 SQL 经 Grafana 代理返回 2 行 5 列 |
+| T-10 | ✅ **PASS** | Phase 4c：`-record` 落 PG（`emotion_echo_analytics.dlq_replay_runs`，迁移 `a011` 已 apply）+ Grafana PostgreSQL 数据源 + 「DLQ 回放记录」面板。**运行时**：网内跑工具两次（dry-run 全量 4 条 / 真回放 1 条）⇒ 表里 2 行且 operator 有值；面板 SQL 经 Grafana 代理返回 2 行 5 列。证据 `evidence/t10-t16-phase4c-replay-and-panels.txt` |
 | T-11 | ✅ **PASS** | **运行时**：`sum(increase(kafka_topic_partition_current_offset{topic="chat-events-dlq"}[10m]))` 返回**非空 series**（值 3.3565），即规则 expr 真被数据喂到 |
 | T-12 | ✅ **PASS** | Phase 5：`UnavailablePublisher` + `PublisherHolder` + 后台重试；relay 对"未就绪"**不 MarkSent 且不累加 attempts**。**运行时**：停 Kafka → 重建 chat-svc ⇒ init 失败进入后台重试、期间发的 2 行 `pending/attempts=0`、近 30s 无假 `sent`；恢复 Kafka ⇒ 「后台重试成功（第 4 次）」⇒ 2 行**自动重发**、pending 归零。证据 `evidence/t12-phase5-kafka-down-recovery.txt` |
 | T-13 | ✅ **PASS** | ADR-19 追加「D1 fallback 路径**收紧**」段：改前/改后对照表 + 指标语义变更说明 + 测试清单 + 仍未做（D5） |
-| T-16 | ✅ **PASS** | **运行时**：Grafana 线上看板 `kafka-consumer-lag` 含本阶段三个面板（DLQ Depth **标题已改**为 `— alerting: DLQMessagesAccumulating`、DLQ 回放记录、DLQ 未配置计数），其中 DLQ Depth 的 expr 与告警**同源** ⇒ 指标真被"看"到 |
+| T-16 | ✅ **PASS** | **运行时**：Grafana 线上看板 `kafka-consumer-lag` 含本阶段三个面板（DLQ Depth **标题已改**为 `— alerting: DLQMessagesAccumulating`、DLQ 回放记录、DLQ 未配置计数），其中 DLQ Depth 的 expr 与告警**同源** ⇒ 指标真被"看"到；「回放记录」与「未配置计数」两面板经 **Grafana 代理**（`/api/ds/query`）实测返回非空 frames。证据 `evidence/t10-t16-phase4c-replay-and-panels.txt` |
 
 **Phase 4a 附带新账**：`CL-F-22`（内联 DDL 缺 `idx_outbox_attempts`）· `CL-F-23`（DLQ 无真实深度指标，`oldest_offset` 可采性未实测）—— 均已登 `discovered-unresolved.md`。
 
@@ -233,7 +233,7 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 
 | 编号 | 事项 | 选项 | 我的建议 |
 |---|---|---|---|
-| **M1** | sw8 存取原语的落点 | A. 给 shared `Tracer` 接口加 `EncodeSW8`/`ContextWithSW8`（+ 同步实现与接口契约测试）<br>B. 用 `CreateExitSpan` 的 injector 旁路捕获（零接口改动，多一个无用 span） | ✅ **裁定 = A**（多轮追问后由用户拍板，见 `CL-D-16`） |
+| **M1** | sw8 存取原语的落点 | A. 给 shared `Tracer` 接口加 `EncodeSW8`/`ContextWithSW8`（+ 同步实现与接口契约测试）<br>B. 用 `CreateExitSpan` 的 injector 旁路捕获（零接口改动，多一个无用 span） | ✅ **裁定 = A**（多轮追问后由用户拍板，见 `CL-D-16`）。**落地差异**：只加了 `EncodeSW8`；恢复侧复用 `CreateEntrySpan`，**未加 `ContextWithSW8`**（见 report §6.5 #8） |
 | **M2** | DLQ 投递失败时的语义 | A. **不 `MarkMessage`**（消息留待重投，靠消费端幂等去重）<br>B. 仍然 Mark，但落库/落 counter 成"可逐条观测的黑洞" | ✅ **裁定 = A**（见 `CL-D-17`；落地前须逐 handler 核实幂等）|
 | **M3** | 回放"半自动"到什么程度 | A. 保持人工工具（只补文档/守卫）<br>B. 加一个"一键回放全部积压"的脚本 + 回放计数指标<br>C. 做定时自动回放 | ✅ **裁定 = B**（见 `CL-D-18`；不做 C，防二次投毒）|
 | **M4** | CL-F-15 fallback 改法 | A. Kafka 初始化**后台重试**（对齐 CL-F-14 tracer 补挂模式）<br>B. init 失败时**不让 relay MarkSent**（行留 pending）<br>C. A+B 都做 | ✅ **裁定 = C**（见 `CL-D-19`；须回写 ADR-19）|
