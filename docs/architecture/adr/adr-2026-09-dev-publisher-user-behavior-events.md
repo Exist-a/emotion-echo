@@ -244,3 +244,31 @@ if err != nil {
 - [kafka-pipeline-pending-decisions.md §D1](../plans/kafka-pipeline-pending-decisions.md)
 - [stage-94-code-review-2026-09-14-p0-closure.md](../stages/stage-94-code-review-2026-09-14-p0-closure.md) PR-3 §P0-5
 - [emotion-echo-chat-svc/internal/outbox/metrics.go](../../emotion-echo-chat-svc/internal/outbox/metrics.go)
+
+---
+
+## D1 fallback 路径**收紧**（2026-10-16 CL-03 收口 · `CL-D-19`=C / `CL-F-15`）
+
+> 上一节把「init 失败 ⇒ 改投内存」登记为**短期选项 C**，并把「relay 收紧（选项 B）」列为未做。
+> 本节记录 **B 落地**：2026-10-14 起栈实测（B 轨 CL-01 T-06 触发时）确认那个黑洞是**真实发生**的
+> ——经网关发消息 914 后，outbox 行 `status=sent`，但 `chat-events` topic 里**没有该事件**、
+> ai-svc 也**没消费**（账本 `CL-F-15`）。"outbox 全 sent"是**假绿信号**。
+
+**新行为（已实现 + 有测试）**
+
+| 环节 | 改前（选项 C） | 改后（选项 B） |
+|---|---|---|
+| init 失败时的 publisher | `InMemoryEventPublisher`（Publish 返 nil = 成功语义） | **`UnavailablePublisher`**（Publish 返 `events.ErrPublisherUnavailable`） |
+| relay 对 pending 行 | 照常 `MarkSent` ⇒ 事件只进内存（丢） | **不 MarkSent**（行留 pending），且**不累加 attempts**（避免长时间故障把行推成 `dead` —— dead 不再被扫描 = 另一种丢） |
+| 自愈 | 无（进程余生不可用，需重启） | **后台指数退避重试**（`StartKafkaPublisherBackgroundRetry`，默认 5s→60s，对齐 CL-F-14 tracer 后台补挂）⇒ 成功后**热替换**（`PublisherHolder`，atomic）⇒ relay 下一轮自然重发 pending 行 |
+| 指标语义 | `emotion_echo_outbox_sent_via_fallback_total` = 「事件被丢进内存」 | 同名指标语义改为「**启动时 Kafka 不可用，已进入后台重试 + 暂停投递**」（**指标名不变**以免打断 CL-01 已落地的看板/告警；语义变更以本节为准） |
+
+**为什么保留指标名不改**：CL-01 的 reliability 看板与告警规则按该名字引用；改名会静默打断
+既有告警（"埋了没人看"）。语义变更以本 ADR 段为准，规则文案见 `deploy/prometheus/rules/`。
+
+**测试**：`internal/events/publisher_retry_test.go`（Unavailable/Holder 并发/重试成功与取消）·
+`internal/outbox/relay_unavailable_test.go`（未就绪留 pending 不计 attempts / 就绪后自然重发 /
+真失败仍计 attempts）· `internal/outbox/main_publisher_wiring_test.go`（**接线守卫**：Kafka 分支内
+不得再出现 `NewInMemoryEventPublisher()`）。
+
+**仍未做**：relay 多副本互斥（`FOR UPDATE SKIP LOCKED`，D5）——触发条件 = chat-svc 扩副本。

@@ -895,6 +895,7 @@ Stage 33 P0 修复+BFF净化 █████████████████
 | 2026-09-22 | SenseVoice 模型服务的运行时约束与镜像分发 | 语音链路五个独立缺陷叠加（torch/funasr 漂移、VAD 请求期下载、无预热、healthcheck 假绿、runtime 缺 ffmpeg）+ 内存限额按旧 torch 估 → **torch/funasr 成对锁定 + 模型与 VAD 全烘焙 + 启动预热 + healthcheck 校验 model_loaded + runtime 含 ffmpeg + 限额按峰值 3072M + ACR 双层同 tag** | [adr-2026-09-sensevoice-runtime-constraints.md](adr/adr-2026-09-sensevoice-runtime-constraints.md)；账本 E2E-F-106/111/112；实测 /analyze 0.84s + 端到端 200 + IAB 语音气泡；**只有浏览器实测（真实 webm）才同时暴露五条** |
 | 2026-09-22 | 客户端对象 URL 的下发方式 | 存储 `PublicBaseURL` 绝对地址（`http://localhost:9000/...`）→ **网关相对路径 + BFF 反代 MinIO 流式输出** | [adr-2026-09-client-object-url-bff-proxy.md](adr/adr-2026-09-client-object-url-bff-proxy.md)；账本 E2E-F-113（非宿主视角 `<audio>` 永不可达）；存量 avatar/uploads 同型债 E2E-F-116 归 E2E-27 —— **2026-10-03 回填：E2E-27/D-40 已迁移 avatar+uploads（GET/HEAD 反代 + 前端解析 + 存量惰性兼容），E2E-F-116 ✅ 关闭** |
 | 2026-09-23 | APISIX upstream timeout（web-bff）+ BFF XTTS timeout | APISIX upstream 6 默认 60s 撞底 + BFF yaml `TimeoutMs: 30000` 与 config.go SetDefaults 90000 漂移（E2E-F-127 真 bug，yaml 不为 0 时 SetDefaults 不覆盖）→ **APISIX upstream 6 (web-bff) timeout 180s 持久化 seed.sh + BFF yaml 改 90000 + config_test.go 钉守卫** | [adr-2026-09-apisix-upstream-timeout-web-bff.md](adr/adr-2026-09-apisix-upstream-timeout-web-bff.md)；账本 E2E-F-127；Playwright 双 project 6/6 PASS；bind-mount + docker restart 是 build 撞 daemon 时的分钟级快路径 |
+| 2026-10-16 | outbox 承载 trace 上下文（异步链路 trace 断点） | relay 跑在后台根 ctx ⇒ exit span 无父、trace 断在 **outbox→relay** → **`outbox_events` 加 `trace_sw8` 列 + shared `Tracer` 加 `EncodeSW8` 原语（写入侧存）+ relay 用既有 `CreateEntrySpan` 恢复父 ctx（发布侧接回）** | [adr-2026-10-outbox-trace-context.md](adr/adr-2026-10-outbox-trace-context.md)；`CL-D-16`（原语落点=A）；走**决策 22** 的字段变更 9 步 checklist；账本 `CL-F-22`（outbox DDL 两份事实源未合并） |
 
 ---
 
@@ -1004,3 +1005,30 @@ Stage 33 P0 修复+BFF净化 █████████████████
 ### 决策 41：JWT 密钥轮换 = **双密钥并存窗口（key-id 路由 + 网关双 consumer）**（2026-10-07 用户拍板 · D-48）
 
 > 🟢 **accepted**（2026-10-07 用户经 AskUserQuestion 拍板「双密钥并存窗口」；详见 ADR `docs/architecture/adr/adr-2026-10-jwt-key-rotation-dual-key.md`）。**背景**（账本 E2E-F-28）：`BFF_JWT_SECRET` 由 BFF 签发侧与 APISIX consumer 验签侧共用，**单密钥下轮换必然让所有在途 token 失效**（全员被踢回登录），而"密钥泄露/人员变动时能轮换"是必须有的能力；既有 `test_bff_jwt_secret.sh` 只是"三处默认值一致"的静态检查，不是轮换机制。**决策**：① BFF 持"当前 + 上一把"两套 `(keyID, secret)`，签发用当前并把 keyID 写进 token 的 `key`/`user` claim，验签按 claim 选密钥（未知/缺失则依次试），`exp` 过期语义**不放宽**；② APISIX 侧窗口期为上一把 keyID 额外建一条 consumer（`emotion_echo_bff_prev`）——一个 consumer 只有一个 secret，故靠 key claim 路由；③ 收尾清 `_PREV` 并重跑 seed，脚本**自动删除** prev consumer（把"忘记收尾"变成可自愈）。**备选被否**：一次性原子轮换（用户可感知且编排下"原子"难保证，D-48 已否决）、改 APISIX 插件支持多 secret（引入自维护分支）、外部 KMS（超 dev/单机范围）。**落地**：`auth.NewManagerMulti` + 三个 env（`BFF_JWT_KEY_ID`/`BFF_JWT_SECRET_PREV`/`BFF_JWT_KEY_ID_PREV`）+ seed.sh Step 2.6 + `scripts/rotate_jwt_secret.sh`；**向后兼容**（不配 keyID 时缺省 `user`，既有 token 与 consumer 继续可用）。
+
+### 决策 42：消息链路 = **不透明复合游标（chat-svc 独占编码）+ 分场景合并语义 + 双向滚动判据**（2026-10-16 CL-05 落地）
+
+> 🟢 **accepted**（2026-10-16 CL-05「消息链路闭环」Phase 5/8 落地；详见 ADR `docs/architecture/adr/adr-2026-10-frontend-message-pagination-and-cache.md`）。
+> **背景**：走网关实测基线抓到三处独立缺陷 —— ① 会话列表 `cursor` **被后端完全忽略**
+> ⇒ 第 2 页 = 第 1 页（账本 `E2E-F-205`）；② 本地缓存/状态机/重试是半成品
+> （`E2E-F-206`：`messageCache` 零调用方、Dexie 缺 `sendTime` 索引一调即抛、用户消息恒 `sent`）；
+> ③ 用户实测"发送后不自动滚到底"（`CL-F-10`）。
+> **决策**：① 会话游标 = **复合键**（`updated_at` + `id` tie-break）**微秒**精度的
+> **不透明字符串**（`<unixMicros>:<id>`），**由 chat-svc 独占编码**，BFF/前端只原样回传；
+> 单值游标（或毫秒截断）会让"同一时刻更新的多个会话"**整批漏行**（已用库内同刻多行实测反证）。
+> 非法游标回 **400**，不得静默退回首页。② 缓存合并**按场景分函数**：快照替换 vs 分页追加
+> （语义相反，合用会把已加载旧页整片删掉）。③ 滚动跟随**双向判据**：用户自己发的
+> **无条件**跟随；AI 流式增长仅当原本在底部附近时跟随（只加"底部守卫"会让用户上翻后
+> 发送时**看不见自己的消息** —— Playwright 实测视口停在 1519px 之外）。
+> **落地**：proto `ListConversationsRequest.cursor` / `Response.next_cursor`、
+> `ListConversationsPage`（keyset）、`app/utils/chatScroll.ts`、`messageCache` 接线 + `db.version(2)`、
+> 状态机与指数退避重试、Playwright 人可见钉 `e2e/message-pipeline.spec.ts`（4/5 绿，1 项因数据前置跳过）。
+> **未做**：`CL-F-11`（刷新后双对话）在 `/new` 表单路径上**未复现** ⇒ 根因仍未定位，**不宣称修复**；
+> 缓存按用户隔离（`CL-F-20`）顺延。
+### 决策 43：outbox 承载 trace 上下文 = **`trace_sw8` 列 + `EncodeSW8` 原语 + relay 恢复父 ctx**（2026-10-16 CL-03 · CL-D-16=A）
+
+> 🟢 **accepted**（`CL-D-16` 用户经 AskUserQuestion 拍板「给 shared `Tracer` 接口加方法」；完整 ADR 见 [`docs/architecture/adr/adr-2026-10-outbox-trace-context.md`](adr/adr-2026-10-outbox-trace-context.md)）。
+> **背景（CL-03 建档实读）**：relay 跑在 `main.go:245` 的后台根 ctx 上 ⇒ `kafka_publisher.go:133` 的 `CreateExitSpan` 建的是**根** span，一条消息的 trace 断在 outbox→relay（消费端从 Kafka header 往后是连的）。
+> **决策**：① `outbox_events` 新增 `trace_sw8 VARCHAR(512) NULL`（迁移 `c010`，幂等，走决策 22 的 9 步）；② shared `Tracer` 新增 `EncodeSW8(ctx, opName)`，写入侧统一走 `chat-svc/internal/outbox.EncodeTraceSW8`（读 **`GlobalTracer()`** —— 采纳 CL-F-14「请求期现读全局」语义）；③ relay 用**既有** `CreateEntrySpan` + extractor 恢复父 ctx（不加第二个方法），空列/无 tracer 时行为与改前**逐字一致**。
+> **实现约束（go2sky v1.5.0 实测）**：`Span` 接口不暴露 `SpanContext`，`ReportedSpan.Context()` 给的是 `*SegmentContext`，自拼 `SpanContext` 需 `tracer` 私有字段 `service`/`instance` ⇒ 只能借一次 exit span 编码（哨兵 peer `"trace-context"`，因 go2sky 校验 peer 非空）。代价 = 每条 trace 多两个短 span + 拓扑图上指向哨兵的边，**已知并接受**。
+> **被否**：`CL-D-16` 的 B 方案（调用点用 injector 旁路捕获，语义散落三处 business logic）；只存 trace_id（无法恢复父子关系）；复制 go2sky 编码（私有字段不可达）；relay 造 local 假父（违 AGENTS §四「不硬造根 span」）。

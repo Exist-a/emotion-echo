@@ -14,7 +14,7 @@ source:
   - docs/plans/grafana-dashboard-gaps-2026-09-30.md（缺口 B1~B9）
 related-plans:
   - docs/plans/redis-two-layer-cache.md（roadmap §2 挂在本阶段，但与 §4 范围存在张力 → §7 D-06）
-  - docs/plans/outbox-trace-continuity.md（异步 trace 断点 = CL-03，本阶段只做"埋点本身真生效"）
+  - docs/legacy-plans/landed/outbox-trace-continuity.md（异步 trace 断点 = CL-03，本阶段只做"埋点本身真生效"）
 ---
 
 # CL-01 · 可观测闭环 — 执行计划

@@ -55,6 +55,7 @@
     "@types/node": "^24.10.4",
     "@vue/test-utils": "^2",
     "eslint": "^9.0.0",
+    "fake-indexeddb": "^6.2.5",
     "fast-glob": "^3.3.3",
     "gh-pages": "^6.3.0",
     "happy-dom": "^20.10.6",

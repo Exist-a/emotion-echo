@@ -62,6 +62,22 @@ type NoopDLQPublisher struct{}
 // Publish no-op
 func (NoopDLQPublisher) Publish(_ context.Context, _ DLQEntry) error { return nil }
 
+// DLQKind 返回 DLQ 装配种类的可读名（启动日志 / 诊断用）：none / noop / kafka。
+//
+// 为什么不能直接 `dlq != nil`：未配 DLQ 时装配的是 `NoopDLQPublisher{}`，
+// 接口值**非 nil** ⇒ `dlq != nil` 恒 true，会把"Noop（毒消息无处投递、不可回放）"
+// 报成"DLQ 已就绪"（CL-03 T-07 运行时实测到该误导）。
+func DLQKind(p DLQPublisher) string {
+	switch p.(type) {
+	case nil:
+		return "none"
+	case NoopDLQPublisher, *NoopDLQPublisher:
+		return "noop"
+	default:
+		return "kafka"
+	}
+}
+
 // =====================================================
 // InMemoryDLQPublisher（测试替身）
 // =====================================================

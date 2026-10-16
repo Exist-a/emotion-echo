@@ -35,8 +35,6 @@ type ConversationRepo interface {
 	IncrementMessageCount(ctx context.Context, conversationID int64) error
 	// AppendMessage 追加一条消息
 	AppendMessage(ctx context.Context, m *model.Message) error
-	// ListMessages 列出会话的消息
-	ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error)
 	// ListMessagesPage 游标分页列消息（2026-10-13）：返回"最新 limit 条"，
 	// 传入 cursor>0 时返回 id < cursor 的更旧消息。返回升序（时间正序）切片 +
 	// 是否还有更旧消息（用于前端上翻加载历史）。
@@ -53,6 +51,16 @@ type ConversationRepo interface {
 	// Stage 36-A2.1：按用户列出最近会话，按 updated_at desc 排序。
 	// limit<=0 视为 20，offset<0 视为 0。
 	ListConversations(ctx context.Context, userID int64, limit, offset int) ([]model.Conversation, error)
+
+	// ListConversationsPage CL-05 Phase 5（2026-10-16）：会话列表 **keyset 游标分页**。
+	//
+	// 稳定序 = `updated_at DESC, id DESC`。游标是**复合键** `(cursorUpdatedAt, cursorID)`：
+	// 返回**严格早于**该键的下一页。为什么不能只用 updated_at —— 同一时刻（同一事务
+	// NOW() / 种子数据）更新的多个会话会在翻页时被整批跳过（`updated_at < cursor` 恒假）。
+	//
+	// cursorUpdatedAt.IsZero() 且 cursorID==0 ⇒ 首页（从最新开始）。
+	// limit<=0 视为 20。返回本页 + 是否还有更多（内部 limit+1 探测，末位丢弃）。
+	ListConversationsPage(ctx context.Context, userID int64, limit int, cursorUpdatedAt time.Time, cursorID int64) ([]model.Conversation, bool, error)
 
 	// Stage 72：置顶/取消置顶会话（PinConversation RPC）；同时刷新 updated_at
 	SetPinned(ctx context.Context, id int64, pinned bool) error
@@ -131,22 +139,6 @@ func (r *InMemoryConversationRepo) AppendMessage(ctx context.Context, m *model.M
 	}
 	r.messages[m.ID] = m
 	return nil
-}
-
-func (r *InMemoryConversationRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	out := make([]model.Message, 0)
-	for _, m := range r.messages {
-		if m.ConversationID == conversationID && m.DeletedAt == nil {
-			out = append(out, *m)
-		}
-	}
-	// Stable order matching PostgresConversationRepo.ListMessages
-	// (id ASC). Without this, map iteration order is non-deterministic
-	// and tests asserting on message content order would flake.
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return out, nil
 }
 
 // ListMessagesPage 内存版游标分页（与 Postgres 版语义一致）。
@@ -281,6 +273,52 @@ func (r *InMemoryConversationRepo) ListConversations(ctx context.Context, userID
 	return out, nil
 }
 
+// ListConversationsPage CL-05 Phase 5：内存版 keyset 分页（与 Postgres 版语义一致）。
+// 游标是复合键 (updated_at, id)：只有**严格早于**它的行才属于下一页。
+func (r *InMemoryConversationRepo) ListConversationsPage(ctx context.Context, userID int64, limit int, cursorUpdatedAt time.Time, cursorID int64) ([]model.Conversation, bool, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	hasCursor := !cursorUpdatedAt.IsZero() || cursorID != 0
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make([]model.Conversation, 0, limit+1)
+	for _, c := range r.conversations {
+		if c.UserID != userID || c.DeletedAt != nil {
+			continue
+		}
+		if hasCursor && !conversationBeforeCursor(*c, cursorUpdatedAt, cursorID) {
+			continue
+		}
+		out = append(out, *c)
+	}
+	// updated_at desc，同刻 id desc 兜底（与 ListConversations 同一比较器）
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
+			return out[i].ID > out[j].ID
+		}
+		return out[i].UpdatedAt.After(out[j].UpdatedAt)
+	})
+
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	return out, hasMore, nil
+}
+
+// conversationBeforeCursor 判定会话 c 是否**严格早于**复合游标 (cursorAt, cursorID)。
+// 序是 updated_at DESC, id DESC ⇒ "更早" = updated_at 更小，或 updated_at 相同而 id 更小。
+// 这一条 tie-break 就是"同一时刻更新的多个会话不会被跳过"的全部依据。
+func conversationBeforeCursor(c model.Conversation, cursorAt time.Time, cursorID int64) bool {
+	if c.UpdatedAt.Before(cursorAt) {
+		return true
+	}
+	return c.UpdatedAt.Equal(cursorAt) && c.ID < cursorID
+}
+
 // =====================================================
 // PostgresConversationRepo（生产实现）
 // =====================================================
@@ -330,19 +368,6 @@ func (r *PostgresConversationRepo) IncrementMessageCount(ctx context.Context, co
 func (r *PostgresConversationRepo) AppendMessage(ctx context.Context, m *model.Message) error {
 	m.ID = 0
 	return r.db.WithContext(ctx).Create(m).Error
-}
-
-func (r *PostgresConversationRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	if limit <= 0 {
-		limit = 50
-	}
-	var out []model.Message
-	err := r.db.WithContext(ctx).
-		Where("conversation_id = ? AND deleted_at IS NULL", conversationID).
-		Order("id ASC").
-		Limit(limit).
-		Find(&out).Error
-	return out, err
 }
 
 // ListMessagesPage 2026-10-13：游标分页，默认取最新 limit 条（id DESC），
@@ -429,6 +454,32 @@ func (r *PostgresConversationRepo) ListConversations(ctx context.Context, userID
 		Offset(offset).
 		Find(&out).Error
 	return out, err
+}
+
+// ListConversationsPage CL-05 Phase 5：Postgres 版 keyset 分页（**复合游标**）。
+//
+// `(updated_at, id) < (cursor_at, cursor_id)` 的手写形式 —— 与 InMemory 版
+// conversationBeforeCursor 逐字对应。**不可**退化成只比 updated_at：
+// 同一时刻（同一事务 NOW() / 种子数据）更新的多行会被整批跳过。
+func (r *PostgresConversationRepo) ListConversationsPage(ctx context.Context, userID int64, limit int, cursorUpdatedAt time.Time, cursorID int64) ([]model.Conversation, bool, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	q := r.db.WithContext(ctx).Where("user_id = ? AND deleted_at IS NULL", userID)
+	if !cursorUpdatedAt.IsZero() || cursorID != 0 {
+		q = q.Where("(updated_at < ? OR (updated_at = ? AND id < ?))", cursorUpdatedAt, cursorUpdatedAt, cursorID)
+	}
+	var out []model.Conversation
+	// 取 limit+1 探测 hasMore（与 logic 层既有口径一致）
+	err := q.Order("updated_at DESC, id DESC").Limit(limit + 1).Find(&out).Error
+	if err != nil {
+		return nil, false, err
+	}
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	return out, hasMore, nil
 }
 
 // SetPinned Stage 72：Postgres 版置顶/取消置顶（同时刷新 updated_at）。

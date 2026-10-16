@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	neturl "net/url"
 	"strconv"
 	"time"
 
@@ -85,6 +86,16 @@ type SendMessageReq struct {
 	FileName     string  `json:"fileName,omitempty"` // Stage 89 PR-3：文件原始名（contentType=file 时）
 }
 
+// ConversationPage 会话列表一页（CL-05 Phase 5 · keyset 分页）。
+//
+// NextCursor 是**不透明**的下一页游标（由 chat-svc 编码），BFF 只回传不解析；
+// 空串 = 没有更多（前端的终止条件）。
+type ConversationPage struct {
+	List       []ConversationView
+	HasMore    bool
+	NextCursor string
+}
+
 // ChatClient BFF → chat-svc HTTP 客户端
 type ChatClient interface {
 	// CreateConversation 新建会话
@@ -95,8 +106,11 @@ type ChatClient interface {
 	// 是否还有更旧消息；cursor>0 时取 id < cursor 的更旧一页）。
 	ListMessages(ctx context.Context, conversationID int64, limit int, cursor int64) ([]MessageView, bool, error)
 	// ListConversations Stage 36-A2.2：列出当前用户的会话（用户隔离由 chat-svc 保证）。
-	// 返回值：list + hasMore（取 limit+1 探测）。
-	ListConversations(ctx context.Context, limit, offset int) ([]ConversationView, bool, error)
+	//
+	// CL-05 Phase 5（2026-10-16）：`cursor` 是 chat-svc 独占编码的**不透明游标**
+	// （复合键 `<unixMicros>:<id>`）；BFF 只做**原样透传/回传**，不解析其内容。
+	// 空串 = 首页。返回体带 `NextCursor` 供前端推进下一页（空 = 没有更多）。
+	ListConversations(ctx context.Context, limit, offset int, cursor string) (ConversationPage, error)
 	// DeleteConversation 删除会话
 	DeleteConversation(ctx context.Context, conversationID int64) error
 	// PinConversation 置顶/取消置顶会话（Stage 72 chat-svc RPC 已落地）
@@ -292,9 +306,9 @@ func buildMessageQuery(limit int, cursor int64) string {
 
 // ListConversations Stage 36-A2.2：列出当前用户的会话，按 updated_at desc。
 //
-// chat-svc 端点返回 ListConversationsResp{list, hasMore}，下游已做 limit+1 探测，
-// BFF 这层只透传并把 list 转成下游 ConversationView 切片 + hasMore 标志。
-func (c *chatHTTPClient) ListConversations(ctx context.Context, limit, offset int) ([]ConversationView, bool, error) {
+// CL-05 Phase 5：`cursor`（不透明，空=首页）原样透传给 chat-svc，
+// 并把 chat-svc 返回的 `nextCursor` 原样回传（BFF **不**解析游标内容）。
+func (c *chatHTTPClient) ListConversations(ctx context.Context, limit, offset int, cursor string) (ConversationPage, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -302,31 +316,35 @@ func (c *chatHTTPClient) ListConversations(ctx context.Context, limit, offset in
 		offset = 0
 	}
 	url := fmt.Sprintf("%s/api/v1/conversations?limit=%d&offset=%d", c.baseURL, limit, offset)
+	if cursor != "" {
+		url += "&cursor=" + neturl.QueryEscape(cursor)
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, false, err
+		return ConversationPage{}, err
 	}
 	applyAuthHeader(httpReq, ctx)
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		return nil, false, fmt.Errorf("downstream: list conversations: %w", err)
+		return ConversationPage{}, fmt.Errorf("downstream: list conversations: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return nil, false, readError(resp)
+		return ConversationPage{}, readError(resp)
 	}
 	var wrapped struct {
-		List    []ConversationView `json:"list"`
-		HasMore bool               `json:"hasMore"`
+		List       []ConversationView `json:"list"`
+		HasMore    bool               `json:"hasMore"`
+		NextCursor string             `json:"nextCursor"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&wrapped); err != nil {
-		return nil, false, fmt.Errorf("downstream: decode conversations resp: %w", err)
+		return ConversationPage{}, fmt.Errorf("downstream: decode conversations resp: %w", err)
 	}
 	if wrapped.List == nil {
 		wrapped.List = []ConversationView{}
 	}
-	return wrapped.List, wrapped.HasMore, nil
+	return ConversationPage{List: wrapped.List, HasMore: wrapped.HasMore, NextCursor: wrapped.NextCursor}, nil
 }
 
 func (c *chatHTTPClient) DeleteConversation(ctx context.Context, conversationID int64) error {

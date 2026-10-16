@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 
+	"emotion-echo-chat-svc/internal/model"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
@@ -47,15 +48,31 @@ func (l *ListConversationsLogic) ListConversations(req *types.ListConversationsR
 		offset = 0
 	}
 
-	// 取 limit+1 探测 hasMore
-	convs, err := l.svcCtx.ConversationRepo.ListConversations(l.ctx, uid, limit+1, offset)
+	// CL-05 Phase 5：三条路径 ——
+	//   ① 带游标             ⇒ keyset 分页（主路径）
+	//   ② 无游标且 offset==0 ⇒ keyset **首页**（与 ① 共用实现 ⇒ NextCursor 一定给得出）
+	//   ③ 无游标且 offset>0  ⇒ 既有 offset 分页（向后兼容旧客户端）
+	cursorAt, cursorID, err := decodeConversationCursor(req.Cursor)
 	if err != nil {
 		return nil, err
 	}
 
-	hasMore := len(convs) > limit
-	if hasMore {
-		convs = convs[:limit]
+	var convs []model.Conversation
+	var hasMore bool
+	if req.Cursor == "" && offset > 0 {
+		convs, err = l.svcCtx.ConversationRepo.ListConversations(l.ctx, uid, limit+1, offset)
+		if err != nil {
+			return nil, err
+		}
+		hasMore = len(convs) > limit
+		if hasMore {
+			convs = convs[:limit]
+		}
+	} else {
+		convs, hasMore, err = l.svcCtx.ConversationRepo.ListConversationsPage(l.ctx, uid, limit, cursorAt, cursorID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	out := &types.ListConversationsResp{
@@ -73,6 +90,12 @@ func (l *ListConversationsLogic) ListConversations(req *types.ListConversationsR
 			CreatedAt: c.CreatedAt.UnixMilli(),
 			UpdatedAt: c.UpdatedAt.UnixMilli(),
 		})
+	}
+	// 下一页游标 = 本页**最后一条**的复合键（序为 updated_at DESC ⇒ 末行即本页最旧）。
+	// 没有更多时留空 —— 前端一眼判定"到底了"，不必再靠 hasMore 推断。
+	if hasMore && len(convs) > 0 {
+		last := convs[len(convs)-1]
+		out.NextCursor = encodeConversationCursor(last.UpdatedAt, last.ID)
 	}
 	return out, nil
 }

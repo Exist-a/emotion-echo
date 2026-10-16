@@ -128,9 +128,6 @@ func (f *failingDeleteRepo) IncrementMessageCount(ctx context.Context, conversat
 func (f *failingDeleteRepo) AppendMessage(ctx context.Context, m *model.Message) error {
 	return f.inner.AppendMessage(ctx, m)
 }
-func (f *failingDeleteRepo) ListMessages(ctx context.Context, conversationID int64, limit int) ([]model.Message, error) {
-	return f.inner.ListMessages(ctx, conversationID, limit)
-}
 func (f *failingDeleteRepo) ListMessagesPage(ctx context.Context, conversationID int64, limit int, cursor int64) ([]model.Message, bool, error) {
 	return f.inner.ListMessagesPage(ctx, conversationID, limit, cursor)
 }
@@ -145,6 +142,11 @@ func (f *failingDeleteRepo) Ping(ctx context.Context) error { return f.inner.Pin
 // Stage 36-A2.1：补 ListConversations 透传，让 failingDeleteRepo 仍满足 interface。
 func (f *failingDeleteRepo) ListConversations(ctx context.Context, userID int64, limit, offset int) ([]model.Conversation, error) {
 	return f.inner.ListConversations(ctx, userID, limit, offset)
+}
+
+// CL-05 Phase 5：补 ListConversationsPage 透传（接口新增方法 ⇒ 手写 stub 必须跟上）。
+func (f *failingDeleteRepo) ListConversationsPage(ctx context.Context, userID int64, limit int, cursorUpdatedAt time.Time, cursorID int64) ([]model.Conversation, bool, error) {
+	return f.inner.ListConversationsPage(ctx, userID, limit, cursorUpdatedAt, cursorID)
 }
 
 // Stage 72：补 SetPinned/UpdateTitle 透传，让 failingDeleteRepo 仍满足 interface。

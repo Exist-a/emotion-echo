@@ -171,13 +171,15 @@ func (s *chatServer) ListConversations(ctx context.Context, req *emotionchat.Lis
 	resp, err := logic.NewListConversationsLogic(ctx, s.svcCtx).ListConversations(&types.ListConversationsReq{
 		Limit:  int(req.GetLimit()),
 		Offset: int(req.GetOffset()),
+		Cursor: req.GetCursor(), // CL-05 Phase 5：不透明游标（复合键）原样透传
 	})
 	if err != nil {
 		return nil, mapLogicError(err, "list conversations")
 	}
 	out := &emotionchat.ListConversationsResponse{
-		List:    make([]*emotionchat.Conversation, 0, len(resp.List)),
-		HasMore: resp.HasMore,
+		List:       make([]*emotionchat.Conversation, 0, len(resp.List)),
+		HasMore:    resp.HasMore,
+		NextCursor: resp.NextCursor, // CL-05 Phase 5
 	}
 	for _, c := range resp.List {
 		out.List = append(out.List, toProtoConversation(c))

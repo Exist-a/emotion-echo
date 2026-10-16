@@ -1,3 +1,9 @@
+// CL-05 Phase 2：Dexie 单测需要 IndexedDB。happy-dom **不提供** indexedDB，
+// 用 fake-indexeddb 的 auto 垫片补上（memory「TDD 契约 vs 行为测试」：依赖浏览器
+// 真实 API 时优先用真实现/垫片，而不是 stub 假装）。
+// ⚠️ 必须在任何构造 Dexie 的代码之前执行 ⇒ 放文件首行。
+import 'fake-indexeddb/auto'
+
 // vitest setup:让 Node 环境下能解析 Nuxt 的 auto-import(ref/computed)。
 // emotion-echo-web/app/{composables,components,pages}/*.vue 在 Nuxt 编译期
 // 由 @nuxt/imports 注入 ref/computed/watch 等响应式工具;vitest 不经 Nuxt 注入,

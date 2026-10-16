@@ -260,7 +260,16 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 			}
 			attempts, handlerErr := h.deliverWithRetry(msg)
 			if handlerErr != nil {
-				h.publishToDLQ(msgCtx, msg, handlerErr, attempts)
+				if dlqErr := h.publishToDLQ(msgCtx, msg, handlerErr, attempts); dlqErr != nil {
+					// CL-03 Phase 4b（CL-D-17=A）：DLQ 也失败 ⇒ **不 Mark**（否则业务+DLQ 双失败=丢失）。
+					// 必须结束本次 claim：sarama 提交"已 Mark 的最高 offset"，若继续 Mark 后续消息
+					// 会把这条隐式跳过；结束 claim 后分区下次 session 从上次提交位点重投。
+					// 重投安全性：写入端 ON CONFLICT (event_id, occurred_at) DO NOTHING ⇒ 幂等。
+					if span != nil {
+						span.EndSpan(handlerErr)
+					}
+					return nil
+				}
 			}
 			// 落库成功 或 重试预算耗尽（已进 DLQ）→ 都 Mark 前进，
 			// 分区消费不因单条消息停滞。
@@ -312,9 +321,21 @@ func (h *chatEventHandler) backoffFor(attempt int) time.Duration {
 }
 
 // publishToDLQ 重试预算耗尽后的兜底：投 DLQ（带诊断 headers + sw8 透传）+ 计数。
-// 无论 DLQ 是否配置（Noop），调用方都必须 Mark 前进 —— 由 ConsumeClaim 统一处理。
-func (h *chatEventHandler) publishToDLQ(ctx context.Context, msg *sarama.ConsumerMessage, lastErr error, attempts int) {
+//
+// 返回值（CL-03 Phase 4b / CL-D-17=A）：
+//   - nil：消息已安全落到 DLQ（或 Noop/未配置 DLQ 的"接受"语义）⇒ 调用方 Mark 前进
+//   - err：DLQ 投递**真的失败** ⇒ 调用方**不得 Mark**，否则"业务 + DLQ 双失败 = 消息永久丢失"
+func (h *chatEventHandler) publishToDLQ(ctx context.Context, msg *sarama.ConsumerMessage, lastErr error, attempts int) error {
 	if h.dlq != nil {
+		// CL-03 T-07：NoopDLQPublisher 返回 nil（"成功"语义）但其实**什么都没做** ⇒
+		// 显式标出"未配置/Noop + 已丢弃"，否则与真实投递成功无法区分（静默丢弃）。
+		// 值形态与指针形态同判：装配方写 &NoopDLQPublisher{} 时不得漏。
+		switch h.dlq.(type) {
+		case NoopDLQPublisher, *NoopDLQPublisher:
+			IncDLQUnconfigured()
+			logging.PrintfContext(ctx, "[kafka-consumer] DLQ 未配置（Noop）：毒消息无处投递、不可回放，key=%s err=%v",
+				string(msg.Key), lastErr)
+		}
 		// P1-2 (Round 1): 透传原 headers（含 sw8），让 OAP 端能继续追 trace。
 		dlqHeaders := make(map[string]string, len(msg.Headers))
 		for _, hd := range msg.Headers {
@@ -344,14 +365,20 @@ func (h *chatEventHandler) publishToDLQ(ctx context.Context, msg *sarama.Consume
 		}
 		if dlqErr != nil {
 			// Round 2.3 §PR-1: analytics-svc DLQ 投递失败计数（kafka-pipeline-pending-decisions.md §P1-14）。
+			// CL-03 Phase 4b 语义修正：调用方拿到本 err 后停止 Mark + 结束本次 claim，
+			// 消息留待重投（幂等由 user_behavior_events 的 ON CONFLICT (event_id, occurred_at) 保证）。
 			IncDLQPublishResult(false)
-			logging.PrintfContext(ctx, "[kafka-consumer] DLQ publish failed (dropping msg): %v", dlqErr)
+			logging.PrintfContext(ctx, "[kafka-consumer] DLQ publish failed (will NOT mark; message stays for redelivery): %v", dlqErr)
 		} else {
 			IncDLQPublishResult(true)
 		}
+		logging.PrintfContext(ctx, "[kafka-consumer] handle %s failed after %d attempts → DLQ: %v",
+			string(msg.Key), attempts, lastErr)
+		return dlqErr
 	}
 	logging.PrintfContext(ctx, "[kafka-consumer] handle %s failed after %d attempts → DLQ: %v",
 		string(msg.Key), attempts, lastErr)
+	return nil
 }
 
 // extractSw8Header 从 sarama RecordHeader 列表抽 sw8 header value

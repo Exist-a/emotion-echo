@@ -1,0 +1,88 @@
+CL-03 §2.4 smoke —— **本轨重建镜像之前**的那一轮（用于 §6.6 #1 / §6.7 #2 的「重建前/后」对照）
+采集时间：2026-10-16 14:00–14:05（dev 栈；基址 = APISIX 网关 http://localhost:19080 + Bearer）
+命令：python scripts/smoke_data_layer.py
+
+⚠️ 为什么留这份：本轨随后执行了
+   `docker compose ... build emotion-echo-ai-svc emotion-echo-analytics-svc`
+   （把带 DLQKind 修复的镜像换成新构建）。要证明「**镜像 ID 变了、但 `Created` 没前进**」，
+   必须同时留下**重建前**与**重建后**两次 smoke 自己记录的镜像 ID —— 只留一侧无法核实。
+   （第四轮核对正是因此判定该断言"无档案可核"，故补档本文件。）
+
+重建前的相关记录（本轮 smoke 输出原文）：
+  [OK  ] §8 emotion-echo-ai-svc 镜像新鲜度: OK: 镜像 8307c409bf65 构建于 2026-10-16T05:13:02Z ≥ 源码 commit 0ee1d1e
+  [OK  ] §8 emotion-echo-analytics-svc 镜像新鲜度: OK: 镜像 f226f1aec4b1 构建于 2026-10-16T05:14:30Z ≥ 源码 commit 0ee1d1e
+  [OK  ] §8 emotion-echo-chat-svc 镜像新鲜度: OK: 镜像 5815dcd205d9 构建于 2026-10-16T04:04:13Z ≥ 源码 commit 187560d
+
+对照（重建后，见 smoke-section24-2026-10-16.txt）：
+  [FAIL] §8 emotion-echo-ai-svc 镜像新鲜度: STALE: 镜像 37289f56540c 构建于 2026-10-16T05:13:02Z，但 commit 49ca08e 更新
+
+================ 以下是本轮 smoke 的完整原始输出 ================
+
+======================================================================
+Stage 37-A 数据契约 smoke (AGENTS.md §2.4) — 基址 = http://localhost:19080
+======================================================================
+[pre] login OK user_id=1（Bearer 就绪）
+[pre] conv_id=698
+[pre] msg_id=944
+[pre] DELETE conv: HTTP 200
+[pre] sleep 5s 等待 outbox relay + consumer...
+
+--- §契约 1: user_behavior_events 行数 ---
+[OK  ] §1 行数 ≥ 1（dev 模式应有数据）: actual=831 (期望 ≥ 1，0 = analytics-svc consumer 未消费)
+[SKIP] §1 诊断 outbox→events 比: outbox_sent=1774 events=831 (正常)
+
+--- §契约 2: event_type enum 细分 ---
+[OK  ] §2 event_type enum 细分: distinct_types=7 types=['conversation.closed', 'conversation.created', 'conversation_closed', 'conversation_created', 'message', 'message.created', 'test'] (期望 ≥ 2 种，含 message + conversation_created/closed)
+
+--- §契约 3: analytics_reader 视图可读 ---
+[OK  ] §3 analytics_reader 读 msg_summary_v: OK
+[OK  ] §3 analytics_reader 读 daily_emotion_v: OK
+[OK  ] §3 analytics_reader 读 assessment_v: OK
+[OK  ] §3 analytics_reader 读 user_behavior_events: OK
+
+--- §契约 4: /reports/daily 数据真有 (最近 7 天窗) ---
+[OK  ] §4 最近 7 天内有 emotion_analysis 数据: 最近数据日=2026-10-16
+[OK  ] §4 /reports/daily 数据真有: date=2026-10-16 summary='2026-10-16，你共有 9 段对话，11 条消息。主要情绪是 平静（19 次），整体心境 平稳。今天继续和 Echo 聊聊吧。' emotionDistribution.len=2 (期望 summary 非空 + len>0)
+
+--- §契约 5: schema 一致性 (待 integration test) ---
+[SKIP] §5 schema 一致性: 需 integration test 覆盖（PR-A1.1 / A2.1 / A3.1 的 RED 测试自动覆盖）
+
+--- §契约 6: KAFKA_ENABLED=false 路径不空跑 (ADR-19) ---
+[SKIP] §6 dev 模式消费链路: §1 已 PASS,KAFKA_ENABLED=true 走 Kafka 路径
+
+======================================================================
+§7 Nacos service registry — 5 业务 svc 实例数
+======================================================================
+[OK  ] §7 emotion-echo-user-svc ≥ 1 instance (ephemeral=True): count=1 ips=['172.18.0.18']
+[OK  ] §7 emotion-echo-chat-svc ≥ 1 instance (ephemeral=True): count=1 ips=['172.18.0.4']
+[OK  ] §7 emotion-echo-analytics-svc ≥ 1 instance (ephemeral=True): count=1 ips=['172.18.0.11']
+[OK  ] §7 emotion-echo-assessment-svc ≥ 1 instance (ephemeral=True): count=1 ips=['172.18.0.6']
+[OK  ] §7 emotion-echo-ai-svc ≥ 1 instance (ephemeral=True): count=1 ips=['172.18.0.19']
+
+======================================================================
+§8 镜像新鲜度校验 — 验证镜像比该服务最新源码 commit 新（E2E-F-70 / E2E-F-215）
+======================================================================
+[FAIL] §8 emotion-echo-user-svc 镜像新鲜度: STALE: 镜像 257114927841 构建于 2026-10-14T22:58:57Z，但 emotion-echo-user-svc 的 commit 06354e3 更新。修复: docker compose -f deploy/docker-compose.apps.yml build emotion-echo-user-svc
+[OK  ] §8 emotion-echo-chat-svc 镜像新鲜度: OK: 镜像 5815dcd205d9 构建于 2026-10-16T04:04:13Z ≥ 源码 commit 187560d（emotion-echo-chat-svc）
+[OK  ] §8 emotion-echo-analytics-svc 镜像新鲜度: OK: 镜像 f226f1aec4b1 构建于 2026-10-16T05:14:30Z ≥ 源码 commit 0ee1d1e（emotion-echo-analytics-svc）
+[FAIL] §8 emotion-echo-assessment-svc 镜像新鲜度: STALE: 镜像 10f95660a841 构建于 2026-10-14T23:36:15Z，但 emotion-echo-assessment-svc 的 commit 06354e3 更新。修复: docker compose -f deploy/docker-compose.apps.yml build emotion-echo-assessment-svc
+[FAIL] §8 emotion-llm-service 镜像新鲜度: STALE: 镜像 4544fbcf1c69 构建于 2026-10-14T23:08:11Z，但 emotion-echo-llm-service 的 commit 06354e3 更新。修复: docker compose -f deploy/docker-compose.apps.yml build emotion-llm-service
+[OK  ] §8 emotion-echo-ai-svc 镜像新鲜度: OK: 镜像 8307c409bf65 构建于 2026-10-16T05:13:02Z ≥ 源码 commit 0ee1d1e（emotion-echo-ai-svc）
+[FAIL] §8 emotion-echo-web-bff 镜像新鲜度: STALE: 镜像 7b01595e9e2b 构建于 2026-10-15T22:53:57Z，但 emotion-echo-web-bff 的 commit 06354e3 更新。修复: docker compose -f deploy/docker-compose.apps.yml build emotion-echo-web-bff
+[SKIP] §8 emotion-echo-web 镜像新鲜度: 容器状态=exited
+
+======================================================================
+汇总: 20/24 PASS, 4 FAIL
+======================================================================
+
+失败项汇总（按 A1-A4 修复顺序排列）：
+  - §8 emotion-echo-user-svc 镜像新鲜度
+      STALE: 镜像 257114927841 构建于 2026-10-14T22:58:57Z，但 emotion-echo-user-svc 的 commit 06354e3 更新。修复: docker compose -f deploy/docker-compose.apps.yml build emotion-echo-user-svc
+  - §8 emotion-echo-assessment-svc 镜像新鲜度
+      STALE: 镜像 10f95660a841 构建于 2026-10-14T23:36:15Z，但 emotion-echo-assessment-svc 的 commit 06354e3 更新。修复: docker compose -f deploy/docker-compose.apps.yml build emotion-echo-assessment-svc
+  - §8 emotion-llm-service 镜像新鲜度
+      STALE: 镜像 4544fbcf1c69 构建于 2026-10-14T23:08:11Z，但 emotion-echo-llm-service 的 commit 06354e3 更新。修复: docker compose -f deploy/docker-compose.apps.yml build emotion-llm-service
+  - §8 emotion-echo-web-bff 镜像新鲜度
+      STALE: 镜像 7b01595e9e2b 构建于 2026-10-15T22:53:57Z，但 emotion-echo-web-bff 的 commit 06354e3 更新。修复: docker compose -f deploy/docker-compose.apps.yml build emotion-echo-web-bff
+
+参考：[stage-37-fixes-roadmap.md](/docs/stages/stage-37-fixes-roadmap.md)

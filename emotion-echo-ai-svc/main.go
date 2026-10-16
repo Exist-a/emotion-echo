@@ -401,8 +401,10 @@ func main() {
 			}
 
 			go func() {
-				logging.Printf("[kafka] consumer started: brokers=%v topics=%v groupID=%s dlq=%v maxRetries=%d",
-					kafkaBrokersList, c.Kafka.Topics, c.Kafka.GroupID, dlq != nil, maxRetries)
+				// dlq=%s 用装配种类（none/noop/kafka）而非"接口非空"判断：
+				// 未配 DLQ 时装配的是 NoopDLQPublisher（接口值非 nil）⇒ 会被报成"已就绪"。
+				logging.Printf("[kafka] consumer started: brokers=%v topics=%v groupID=%s dlq=%s maxRetries=%d",
+					kafkaBrokersList, c.Kafka.Topics, c.Kafka.GroupID, consumer.DLQKind(dlq), maxRetries)
 				if err := kc.Consume(context.Background(), c.Kafka.Topics,
 					func(ctx context.Context, evt *events.Event) error {
 						return createdHandler.Handle(ctx, evt)

@@ -161,23 +161,53 @@ func main() {
 	}
 
 	// 2.5 Kafka publisher（tracer 初始化后构造，可注入）
-	var pub events.EventPublisher = events.NewInMemoryEventPublisher()
+	//
+	// CL-03 Phase 5（CL-D-19=C / CL-F-15）：**不再静默改投内存**。
+	// 修复前：init 失败 ⇒ pub = InMemoryEventPublisher ⇒ relay 照常 MarkSent，事件只进
+	// 进程内存（起栈实测：topic 里没有该事件、消费端也没收到，"outbox 全 sent"是假绿）。
+	// 修复后：init 失败 ⇒ 装 UnavailablePublisher（Publish 报错）⇒ relay **不 MarkSent**
+	// （行留 pending，且不累加 attempts）+ 后台指数退避重试 ⇒ 成功后热替换成真 publisher
+	// ⇒ pending 行自然重发（对齐 CL-F-14 tracer 后台补挂的自愈思路）。
+	pubHolder := events.NewPublisherHolder(nil)
+	var pub events.EventPublisher
+	// pubSetter 把 publisher 同时写进 holder（relay 每轮现读）与本地变量（ServiceContext 用）。
+	pubSetter := func(p events.EventPublisher) {
+		pub = p
+		pubHolder.Set(p)
+	}
 	if kafkaEnabled {
 		kp, err := events.NewKafkaEventPublisher(kafkaBrokersList)
 		if err != nil {
-			// Stage 94 PR-3 §P0-5：fallback 必须显式递增 counter（kafka-pipeline-pending-decisions.md
-			// D1 短期 C 修复）—— 让黑洞变成可见。后续 MarkSent 行不再递增（事件级黑洞不可逐条观测，
-			// 需用 Kafka 消息数 vs MarkSent 行数对账）。推荐 prometheus 告警:
-			//   emotion_echo_outbox_sent_via_fallback_total > 0 持续 1m → page
-			log.Printf("[kafka] producer init failed: %v (fallback to in-memory)", err)
+			// 语义修正（CL-03 Phase 5）：本 counter 现在表示「启动时 Kafka 不可用，已进入
+			// 后台重试 + 暂停投递」，**不再**表示「事件被静默丢进内存」。
+			// 指标名保持不变以免打断既有看板/告警（CL-01 的 reliability 面板与规则引用它）；
+			// 语义变更已回写 ADR-19「D1 fallback 路径登记」段。
+			log.Printf("[kafka] producer init failed: %v —— 进入后台重试；outbox 行将保持 pending（不再改投内存）", err)
 			outbox.IncSentViaFallback()
+			pubSetter(events.NewUnavailablePublisher(err))
+			// 后台重试：成功后挂 tracer + 热替换（relay 下一轮即用真 publisher）
+			stopRetry := events.StartKafkaPublisherBackgroundRetry(context.Background(),
+				events.KafkaPublisherRetryOptions{
+					Logf: log.Printf,
+					Try: func() (*events.KafkaEventPublisher, error) {
+						return events.NewKafkaEventPublisher(kafkaBrokersList)
+					},
+					OnSuccess: func(kp *events.KafkaEventPublisher) {
+						if tracer != nil {
+							kp.WithTracer(sharedgrpc.NewGo2SkyTracer(tracer))
+						}
+						pubSetter(kp)
+						log.Printf("[kafka] producer 已就绪（后台重试成功）—— outbox 恢复真实投递")
+					},
+				})
+			defer stopRetry()
 		} else {
 			// Stage 92 PR-1：注入 SkyWalking tracer → Publish 时写 sw8 header
 			if tracer != nil {
 				kp.WithTracer(sharedgrpc.NewGo2SkyTracer(tracer))
 				log.Printf("[kafka] producer + tracer wired (Stage 92 PR-1: sw8 propagation enabled)")
 			}
-			pub = kp
+			pubSetter(kp)
 			log.Printf("[kafka] producer connected, brokers=%v", kafkaBrokersList)
 			defer func() { _ = kp.Close() }()
 		}
@@ -186,11 +216,15 @@ func main() {
 		// 同步写 user_behavior_events（dev-only，prod 不会命中此分支）。
 		// db 为 nil 时仍 fallback 到 InMemoryEventPublisher（向后兼容）。
 		if sqlDB, derr := db.DB(); derr == nil {
-			pub = events.NewDevEventPublisher(sqlDB)
+			pubSetter(events.NewDevEventPublisher(sqlDB))
 			log.Printf("[events] using DevEventPublisher (KAFKA_ENABLED=false, dev-only path)")
 		} else {
+			pubSetter(events.NewInMemoryEventPublisher())
 			log.Printf("[events] dev publisher init failed (gorm.DB() returned err=%v, fallback to in-memory)", derr)
 		}
+	} else {
+		// 既无 Kafka 也无 DB：dev/单测形态，沿用内存 publisher（历史行为）
+		pubSetter(events.NewInMemoryEventPublisher())
 	}
 
 	// 4. ServiceContext（Stage 30-C A3: 注入 DB + OutboxRepo + Stage 36-A3.2: AIClient）
@@ -245,6 +279,9 @@ func main() {
 		relayCtx, relayCancel := context.WithCancel(context.Background())
 		defer relayCancel()
 		relay := outbox.NewRelay(outboxRepo, pub, 1*time.Second, 100)
+		// CL-03 Phase 5：relay **每轮现读**当前 publisher（后台重试成功后热替换）。
+		// 未就绪时 publisher 是 UnavailablePublisher ⇒ 行留 pending、不计 attempts（见 relay.FlushOnce）。
+		relay.PublisherFn = pubHolder.Get
 		// Stage 86：dead 阈值走配置（yaml/OUTBOX_MAX_ATTEMPTS env，默认 100，0=关闭 dead 状态机）
 		//
 		// E2E-23 E 组（D-32）：引入 Ops 容器承载 4 个可热更的运营参数。
@@ -449,6 +486,11 @@ func openPostgres(dsn string, maxOpen, maxIdle int) (repository.ConversationRepo
 // runOutboxMigration 跑 migrations/001_create_outbox_events.sql（Stage 30-C A3）
 //
 // 简单实现：用 gorm 直接 Exec 文件内容。生产应该用 migrate 工具；当前学习/开发期 OK。
+//
+// CL-03 Phase 1：本函数内联的 DDL 是 outbox_events 的**第二份事实源**（第一份 =
+// migrations/c0NN_*.sql，由 db-migrate 容器按 checksum 应用）。两者必须同步，
+// migrations/c010_trace_sw8_migration_test.go 的 TestC010_TraceSw8_InlineDDLNotDrifted
+// 钉死"内联版不得漏列"。新增列时请同时改这里与 migrations/ 下的迁移文件。
 func runOutboxMigration(db *gorm.DB) error {
 	const sql = `
 CREATE SCHEMA IF NOT EXISTS emotion_echo_chat;
@@ -463,8 +505,14 @@ CREATE TABLE IF NOT EXISTS emotion_echo_chat.outbox_events (
     attempts    INT NOT NULL DEFAULT 0,
     last_error  TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    sent_at     TIMESTAMPTZ
+    sent_at     TIMESTAMPTZ,
+    trace_sw8   VARCHAR(512)
 );
+
+-- CL-03 Phase 1：老环境里表已存在 ⇒ 上面的 CREATE TABLE IF NOT EXISTS 不会补列，
+-- 故本路径也必须显式幂等补列（与 migrations/c010_add_trace_sw8_to_outbox.sql 同义）。
+ALTER TABLE emotion_echo_chat.outbox_events
+    ADD COLUMN IF NOT EXISTS trace_sw8 VARCHAR(512);
 
 CREATE INDEX IF NOT EXISTS idx_outbox_pending
     ON emotion_echo_chat.outbox_events(created_at)

@@ -1,0 +1,27 @@
+CL-03 T-10 / T-16 运行时证据（2026-10-16）—— 回放计数落 PG + 面板真被消费
+
+[1] PG：回放结果表 emotion_echo_analytics.dlq_replay_runs（T-10 计数载体 = 落 PG）
+ id |    dlq_topic    | target_topic | replayed | failed | dry_run |          operator          |          started_at           
+----+-----------------+--------------+----------+--------+---------+----------------------------+-------------------------------
+  1 | chat-events-dlq | chat-events  |        4 |      0 | t       | lane-cl-f/CL-03-T10-dryrun | 2026-10-16 04:21:55.043378+00
+  2 | chat-events-dlq | chat-events  |        1 |      0 | f       | lane-cl-f/CL-03-T10-real   | 2026-10-16 04:23:21.04786+00
+(2 rows)
+
+
+[2] Grafana 代理执行「DLQ 回放记录」面板 SQL（datasource uid=postgres）—— 面板真取到数（T-16）
+status: 200
+frames: 1
+values: [[1792124601047, 1792124515043], [1, 4], [0, 0], [false, true], ["lane-cl-f/CL-03-T10-real", "lane-cl-f/CL-03-T10-dryrun"]]
+
+[3] Grafana 代理执行「DLQ 未配置时的丢弃计数」面板 expr（T-07 面板真被消费）
+  expr: sum(emotion_echo_dlq_unconfigured_total) or vector(0)
+   status: 200 frames: 1 values: [[[1792128671762], [0]]]
+  expr: sum(emotion_echo_analytics_dlq_unconfigured_total) or vector(0)
+   status: 200 frames: 1 values: [[[1792128672144], [0]]]
+
+补充（如实登记）：
+- [3] 两个 counter 当前值 = 0：ai-svc / analytics-svc 现已恢复"DLQ 已配置"装配（进程重启后 counter 归零）。
+  面板 expr 返回的是**非空 series（值 0）**，证明"埋了有人看"的接线成立；
+  counter 由 0→1 的实测见 `t07-ai-svc-noop-runtime.txt`。
+- 本文件 [2]/[3] 均走 **Grafana 代理**（`POST /api/ds/query`，uid=postgres / prometheus），
+  而非直连 PG/Prometheus —— 证明的是**面板**这条路径可用（T-16 口径），不是"底层数据在"。

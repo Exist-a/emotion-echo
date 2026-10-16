@@ -40,16 +40,25 @@ const (
 
 // OutboxEvent 是 outbox_events 表对应 model
 type OutboxEvent struct {
-	ID           int64
-	EventID      string // 业务事件 ID（UUID）— 与事件 payload 内 ID 字段一致，用于 A1 幂等去重
-	EventType    string
-	Topic        string
-	Payload      []byte // 已序列化的事件 JSON
-	Status       string
-	Attempts     int
-	LastError    string
-	CreatedAt    time.Time
-	SentAt       *time.Time
+	ID        int64
+	EventID   string // 业务事件 ID（UUID）— 与事件 payload 内 ID 字段一致，用于 A1 幂等去重
+	EventType string
+	Topic     string
+	Payload   []byte // 已序列化的事件 JSON
+	// TraceSW8 CL-03 Phase 1：写入本行时所在请求 ctx 的 sw8 传播头。
+	//
+	// 为什么要存：relay 跑在后台根 ctx 上（main.go 的 relayCtx = WithCancel(Background())），
+	// 直接 Publish 会让 kafka_publisher 的 CreateExitSpan 建出「根」span ⇒ 一条消息的
+	// trace 断在 outbox→relay 处。写入时身处请求 ctx（有入口 span）⇒ 存下 sw8，
+	// relay 发布前用它恢复父 ctx，异步链路才能连成一条。
+	//
+	// 空值合法（不报错）：历史行没有该值；tracer=nil（dev / 单测）与非请求路径也不写。
+	TraceSW8  string `gorm:"column:trace_sw8"`
+	Status    string
+	Attempts  int
+	LastError string
+	CreatedAt time.Time
+	SentAt    *time.Time
 }
 
 // TableName 显式 schema 名（与 chat-svc 其他表一致）

@@ -96,6 +96,13 @@ func (t *mockTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 	return outCtx, t.localSpan, t.localErr
 }
 
+// EncodeSW8 CL-03 / CL-D-16=A：mock 返回 exitFakeSw8（与 CreateExitSpan 注入值同源），
+// 便于上层单测断言"存下来的 sw8"非空且与预期一致。
+func (t *mockTracer) EncodeSW8(ctx context.Context, opName string) (string, error) {
+	t.exitOpCalls = append(t.exitOpCalls, opName)
+	return t.exitFakeSw8, nil
+}
+
 // Stage 92 PR-1: Tracer 接口扩 CreateExitSpan（用于 Kafka producer 注入 sw8）
 // + CreateEntrySpan（用于 Kafka consumer 从 sw8 header 重建父 trace）。
 // mockTracer 必须实现这两个方法才能满足编译期 Tracer 接口断言。

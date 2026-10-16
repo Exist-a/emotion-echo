@@ -1,0 +1,12 @@
+# CL-05 Phase 5 · T-7 运行验证专用 override（**临时**，跑完即不再使用）
+#
+# 目的：把 BFF → chat-svc 的传输切到 **HTTP 降级路径**（`CHAT_TRANSPORT=http`，
+# Stage 63 的回滚开关），验证 **Phase 6 给 /messages 补的 cursor** 与
+# **Phase 5 给 /conversations 补的 cursor** 在**这条路径上同样生效** ——
+# 否则该路径上翻页会**静默失效**（dev 栈默认走 gRPC，这条路径平时无人跑）。
+#
+# 用法：与 docker-compose.cl05-verify.yml 叠加 up，验完**必须**不带它重建回来。
+services:
+  emotion-echo-web-bff:
+    environment:
+      CHAT_TRANSPORT: "http"

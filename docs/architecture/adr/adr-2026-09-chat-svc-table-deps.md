@@ -66,6 +66,8 @@ chat-svc 拥有 `emotion_echo_chat` schema 的 3 张表（`conversations / messa
 
 **DDL 来源**：`emotion-echo-chat-svc/migrations/001_create_outbox_events.sql`（chat-svc 自治，不在集中 initdb），由 `chat-svc/main.go:296-318 runOutboxMigration` 在启动期 apply
 
+> ⚠️ **两份事实源**：除迁移文件外，`runOutboxMigration` 还内联了一份 DDL（供"没有 db-migrate 容器"的路径兜底）。两处必须同步 —— `migrations/c010_trace_sw8_migration_test.go::TestC010_TraceSw8_InlineDDLNotDrifted` 钉死"内联版不得漏列"。
+
 | 字段 | 类型 | 用途 | 跨域引用方 |
 |---|---|---|---|
 | `id` | BIGSERIAL PK | outbox 行 ID | — |
@@ -77,6 +79,7 @@ chat-svc 拥有 `emotion_echo_chat` schema 的 3 张表（`conversations / messa
 | `attempts` | INT DEFAULT 0 | Publish 失败次数 | chat-svc relay 内部 |
 | `last_error` | TEXT | 最近失败原因 | debug |
 | `created_at` / `sent_at` | TIMESTAMPTZ | relay 排序 / 成功时间 | chat-svc relay 内部 |
+| `trace_sw8` | VARCHAR(512) NULL（migration `c010`，2026-10-16 CL-03）| 写入本行时所在请求 ctx 的 sw8 传播头；relay 发布前据此恢复父 ctx，让「入站 → outbox → relay → Kafka → 消费端」连成一条 trace。可空（历史行 / tracer=nil）| chat-svc relay 内部（不进明文 payload / proto / 视图）|
 
 **索引**：`UNIQUE(event_id)`、`idx_outbox_pending(created_at) WHERE status='pending'`、`idx_outbox_attempts(attempts) WHERE attempts>0`
 

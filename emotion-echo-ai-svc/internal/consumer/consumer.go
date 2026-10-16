@@ -149,11 +149,28 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 				}
 			}
 			// 调业务。E2E-F-174：失败原地重试（预算 = maxRetries+1 次尝试），
-			// 预算耗尽 → DLQ（若配置）+ Mark 前进。
+			// 预算耗尽 → DLQ（若配置）。
 			// Stage 94 PR-2a：handlerErr 透传给 span.EndSpan，让 OAP 标记失败
 			attempts, handlerErr := h.deliverWithRetry(msgCtx, evt, msg, maxRetries)
 			if handlerErr != nil {
-				h.publishToDLQ(msgCtx, msg, handlerErr, attempts)
+				if dlqErr := h.publishToDLQ(msgCtx, msg, handlerErr, attempts); dlqErr != nil {
+					// CL-03 Phase 4b（CL-D-17=A）：DLQ 也投递失败 ⇒ **不 Mark**，
+					// 否则"业务 + DLQ 双失败"= 消息永久丢失。
+					//
+					// 为什么必须结束本次 claim（而不是仅跳过本条继续下一条）：
+					// sarama 提交的是**已 Mark 的最高 offset** ⇒ 若继续消费并 Mark 后续消息，
+					// 这条未 Mark 的会被隐式跳过（committed offset 前进），重投保证失效。
+					// 结束 claim 后分区在下次 session 从上次提交位点重投本条。
+					//
+					// 重投安全性：handler 唯一变更面是 repo.Create（ON CONFLICT
+					// (event_id) DO NOTHING）⇒ 幂等，不产生重复数据。
+					// 代价（如实登记）：DLQ 故障期间该分区**停滞**，由
+					// AIDLQPublishFailure / DLQMessagesAccumulating 告警暴露。
+					if span != nil {
+						span.EndSpan(handlerErr)
+					}
+					return nil
+				}
 			}
 			// 落库成功 或 重试预算耗尽（已投 DLQ / DLQ 未配置）→ 都 Mark 前进
 			sess.MarkMessage(msg, "")

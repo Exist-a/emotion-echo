@@ -1,0 +1,225 @@
+{
+  "traceId": "641b9587c91411f18f9d9639d0847208",
+  "spanCount": 13,
+  "spans": [
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "641b9631c91411f18f9d9639d0847208",
+      "spanId": 0,
+      "parentSpanId": -1,
+      "serviceCode": "emotion-echo-web-bff",
+      "endpointName": "/api/v1/conversations/:id/messages",
+      "type": "Entry",
+      "peer": "",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122484125,
+      "endTime": 1792122484922,
+      "refs": []
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "641b9631c91411f18f9d9639d0847208",
+      "spanId": 1,
+      "parentSpanId": 0,
+      "serviceCode": "emotion-echo-web-bff",
+      "endpointName": "client:/emotion_chat.v1.ChatService/SendMessage",
+      "type": "Exit",
+      "peer": "172.18.0.4:8892",
+      "layer": "Cache",
+      "isError": false,
+      "startTime": 1792122484917,
+      "endTime": 1792122484922,
+      "refs": []
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64948743c91411f194926aa5b0471da3",
+      "spanId": 0,
+      "parentSpanId": -1,
+      "serviceCode": "emotion-echo-chat-svc",
+      "endpointName": "/emotion_chat.v1.ChatService/SendMessage",
+      "type": "Entry",
+      "peer": "",
+      "layer": "Cache",
+      "isError": false,
+      "startTime": 1792122484918,
+      "endTime": 1792122484922,
+      "refs": [
+        {
+          "traceId": "641b9587c91411f18f9d9639d0847208",
+          "parentSegmentId": "641b9631c91411f18f9d9639d0847208",
+          "parentSpanId": 1
+        }
+      ]
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64948743c91411f194926aa5b0471da3",
+      "spanId": 1,
+      "parentSpanId": 0,
+      "serviceCode": "emotion-echo-chat-svc",
+      "endpointName": "gorm.query conversations",
+      "type": "Exit",
+      "peer": "postgres@Conversation",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122484918,
+      "endTime": 1792122484918,
+      "refs": []
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64948743c91411f194926aa5b0471da3",
+      "spanId": 2,
+      "parentSpanId": 0,
+      "serviceCode": "emotion-echo-chat-svc",
+      "endpointName": "gorm.create messages",
+      "type": "Exit",
+      "peer": "postgres@Message",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122484918,
+      "endTime": 1792122484919,
+      "refs": []
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64948743c91411f194926aa5b0471da3",
+      "spanId": 3,
+      "parentSpanId": 0,
+      "serviceCode": "emotion-echo-chat-svc",
+      "endpointName": "gorm.raw",
+      "type": "Exit",
+      "peer": "postgres@<unknown>",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122484919,
+      "endTime": 1792122484919,
+      "refs": []
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64948743c91411f194926aa5b0471da3",
+      "spanId": 4,
+      "parentSpanId": 0,
+      "serviceCode": "emotion-echo-chat-svc",
+      "endpointName": "outbox-enqueue-message",
+      "type": "Exit",
+      "peer": "trace-context",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122484919,
+      "endTime": 1792122484919,
+      "refs": []
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64e8bec1c91411f194926aa5b0471da3",
+      "spanId": 0,
+      "parentSpanId": -1,
+      "serviceCode": "emotion-echo-chat-svc",
+      "endpointName": "outbox-relay",
+      "type": "Entry",
+      "peer": "",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122485469,
+      "endTime": 1792122485471,
+      "refs": [
+        {
+          "traceId": "641b9587c91411f18f9d9639d0847208",
+          "parentSegmentId": "64948743c91411f194926aa5b0471da3",
+          "parentSpanId": 4
+        }
+      ]
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64e8bec1c91411f194926aa5b0471da3",
+      "spanId": 1,
+      "parentSpanId": 0,
+      "serviceCode": "emotion-echo-chat-svc",
+      "endpointName": "kafka-publish",
+      "type": "Exit",
+      "peer": "chat-events",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122485469,
+      "endTime": 1792122485471,
+      "refs": []
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64e90b3cc91411f19e8ae268ddeeb281",
+      "spanId": 0,
+      "parentSpanId": -1,
+      "serviceCode": "emotion-echo-analytics-svc",
+      "endpointName": "kafka-consume",
+      "type": "Entry",
+      "peer": "",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122485471,
+      "endTime": 1792122485477,
+      "refs": [
+        {
+          "traceId": "641b9587c91411f18f9d9639d0847208",
+          "parentSegmentId": "64e8bec1c91411f194926aa5b0471da3",
+          "parentSpanId": 1
+        }
+      ]
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64e91969c91411f1844b6a93fde74043",
+      "spanId": 0,
+      "parentSpanId": -1,
+      "serviceCode": "emotion-echo-ai-svc",
+      "endpointName": "kafka-consume",
+      "type": "Entry",
+      "peer": "",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122485472,
+      "endTime": 1792122486569,
+      "refs": [
+        {
+          "traceId": "641b9587c91411f18f9d9639d0847208",
+          "parentSegmentId": "64e8bec1c91411f194926aa5b0471da3",
+          "parentSpanId": 1
+        }
+      ]
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64e91969c91411f1844b6a93fde74043",
+      "spanId": 1,
+      "parentSpanId": 0,
+      "serviceCode": "emotion-echo-ai-svc",
+      "endpointName": "client:/emotion_llm.v1.EmotionLLMService/Analyze",
+      "type": "Exit",
+      "peer": "emotion-llm-service:50051",
+      "layer": "Cache",
+      "isError": false,
+      "startTime": 1792122485472,
+      "endTime": 1792122486567,
+      "refs": []
+    },
+    {
+      "traceId": "641b9587c91411f18f9d9639d0847208",
+      "segmentId": "64e91969c91411f1844b6a93fde74043",
+      "spanId": 2,
+      "parentSpanId": 0,
+      "serviceCode": "emotion-echo-ai-svc",
+      "endpointName": "gorm.create emotion_analysis",
+      "type": "Exit",
+      "peer": "postgres@EmotionAnalysis",
+      "layer": "Unknown",
+      "isError": false,
+      "startTime": 1792122486567,
+      "endTime": 1792122486569,
+      "refs": []
+    }
+  ]
+}

@@ -55,3 +55,16 @@ func IncDLQPublishResult(success bool) {
 	}
 	DLQPublishTotal.WithLabelValues(r).Inc()
 }
+
+// DLQUnconfiguredTotal DLQ **未配置**（无处投递）时的计数。
+//
+// CL-03 Phase 4b/4c（T-07「Noop 静默」）：此前 DLQ 未配置时只打一条与"已投 DLQ"
+// 同款的日志 ⇒ 读者无法区分"进了 DLQ"还是"被丢弃"，属静默丢弃。
+// 本 counter 让"dev/未配 DLQ 环境正在丢毒消息"变成可观测事实。
+var DLQUnconfiguredTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "emotion_echo_dlq_unconfigured_total",
+	Help: "Messages dropped because no DLQ is configured (no replay possible).",
+})
+
+// IncDLQUnconfigured 递增"DLQ 未配置"计数。
+func IncDLQUnconfigured() { DLQUnconfiguredTotal.Inc() }

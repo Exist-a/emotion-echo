@@ -104,6 +104,11 @@ func (t *mockTracer93) CreateLocalSpan(ctx context.Context, opName string) (cont
 	return ctx, &mockSpan93{}, nil
 }
 
+// EncodeSW8 CL-03 / CL-D-16=A — mock 满足 Tracer 接口（消费侧不写 outbox，返回空串）
+func (t *mockTracer93) EncodeSW8(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
 // CreateEntrySpan Stage 93 — 从 msg.Headers 抽 sw8 → 重建父 trace
 //
 // Stage 94 PR-2b §P0-3 扩展：entryFn 非 nil 时优先走自定义（每次返回新 mockSpan,
