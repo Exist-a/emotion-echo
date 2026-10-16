@@ -6,7 +6,7 @@ created: 2026-10-13
 last-refresh: 2026-10-13
 type: stage-landing
 related-plans:
-  - docs/plans/frontend-message-cache-offline-resilience.md （游标分页本轮部分落地；前端本地缓存仍未接线）
+  - docs/legacy-plans/landed/frontend-message-cache-offline-resilience.md （游标分页本轮部分落地；前端本地缓存仍未接线）
   - docs/legacy-plans/landed/observability-business-metrics-wiring.md （Grafana 业务/可靠性/日志看板仍未建）
   - docs/plans/dlq-hardening-and-replay.md （未动）
   - docs/plans/outbox-trace-continuity.md （未动）
@@ -156,7 +156,7 @@ related-plans:
 ### P2（本轮识别、未处理）
 5. **回归钉不全**：仅给"趋势全 0 不渲染"补了 1 个钉子；其余 8 项前端修复与后端改动**未补专门测试**（本轮按"很急、不走 E2E"处理）。
 6. **Grafana 看板仅 2 个**（Overview + Kafka Lag）；业务/可靠性/日志看板仍在 `docs/legacy-plans/landed/observability-business-metrics-wiring.md`（planned）。
-7. **前端本地缓存（IndexedDB `messageCache.ts`）仍未接线**（`docs/plans/frontend-message-cache-offline-resilience.md`）；本轮只落地了服务端游标 + 前端翻页触发。
+7. **前端本地缓存（IndexedDB `messageCache.ts`）仍未接线**（`docs/legacy-plans/landed/frontend-message-cache-offline-resilience.md`）；本轮只落地了服务端游标 + 前端翻页触发。
 8. **工作区未提交**：本轮全部改动（proto 重生成、compose 改名与 TLS env、6 个 Go svc、web 前端、两份新 memory）**均未 commit**。
 9. **proto 契约兼容性**：`chat.proto`/`metric.proto` 为**新增字段**（向后兼容），但**两侧生成物需同 PR**（已在本轮一并重生成）。
 

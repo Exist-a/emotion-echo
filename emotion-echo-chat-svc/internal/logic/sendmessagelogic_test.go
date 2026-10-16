@@ -78,7 +78,8 @@ func TestSendMessageLogic_HappyPath_PersistsAndPublishes(t *testing.T) {
 	assert.Equal(t, "我今天心情很低落", resp.Message.Content)
 
 	// Message persisted
-	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	// CL-05 Phase 6：旧 ListMessages(ASC) 已按用户裁定删除，改走游标分页
+	msgs, _, err := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "我今天心情很低落", msgs[0].Content)
@@ -129,7 +130,7 @@ func TestSendMessageLogic_NoUserID_ReturnsUnauthorized(t *testing.T) {
 
 	// No side effects
 	assert.Empty(t, pub.Events(events.TopicChatEvents))
-	msgs, _ := repo.ListMessages(context.Background(), 1, 50)
+	msgs, _, _ := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	assert.Empty(t, msgs)
 }
 
@@ -152,7 +153,7 @@ func TestSendMessageLogic_EmptyContent_ReturnsValidationError(t *testing.T) {
 	assert.Contains(t, strings.ToLower(err.Error()), "content")
 
 	assert.Empty(t, pub.Events(events.TopicChatEvents))
-	msgs, _ := repo.ListMessages(context.Background(), 1, 50)
+	msgs, _, _ := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	assert.Empty(t, msgs)
 }
 
@@ -179,7 +180,7 @@ func TestSendMessageLogic_UnknownRole_ReturnsValidationError(t *testing.T) {
 	assert.Contains(t, err.Error(), "role")
 
 	assert.Empty(t, pub.Events(events.TopicChatEvents))
-	msgs, _ := repo.ListMessages(context.Background(), 1, 50)
+	msgs, _, _ := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	assert.Empty(t, msgs)
 }
 
@@ -250,7 +251,7 @@ func TestSendMessageLogic_WrongOwner_ReturnsForbidden(t *testing.T) {
 	assert.Contains(t, err.Error(), "forbidden")
 
 	assert.Empty(t, pub.Events(events.TopicChatEvents))
-	msgs, _ := repo.ListMessages(context.Background(), 1, 50)
+	msgs, _, _ := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	assert.Empty(t, msgs)
 }
 
@@ -287,7 +288,8 @@ func TestSendMessageLogic_PublisherError_DoesNotFailRequest(t *testing.T) {
 	assert.Equal(t, int64(1), resp.Message.ConversationId)
 
 	// Message persisted (no silent loss)
-	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	// CL-05 Phase 6：旧 ListMessages(ASC) 已按用户裁定删除，改走游标分页
+	msgs, _, err := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, msgs, 1)
 }
@@ -423,7 +425,8 @@ func TestSendMessageLogic_DuplicateClientMsgID_ReturnsOriginal(t *testing.T) {
 	assert.Equal(t, resp1.Message.Content, resp2.Message.Content)
 
 	// repo 中仅 1 条
-	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	// CL-05 Phase 6：旧 ListMessages(ASC) 已按用户裁定删除，改走游标分页
+	msgs, _, err := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, msgs, 1, "duplicate client_msg_id must NOT create new message")
 
@@ -458,7 +461,8 @@ func TestSendMessageLogic_DifferentClientMsgID_CreatesNew(t *testing.T) {
 
 	assert.NotEqual(t, resp1.Message.Id, resp2.Message.Id, "different client_msg_id must create new message")
 
-	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	// CL-05 Phase 6：旧 ListMessages(ASC) 已按用户裁定删除，改走游标分页
+	msgs, _, err := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, msgs, 2)
 
@@ -489,7 +493,8 @@ func TestSendMessageLogic_EmptyClientMsgID_NoUniqueCheck(t *testing.T) {
 
 	assert.NotEqual(t, resp1.Message.Id, resp2.Message.Id)
 
-	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	// CL-05 Phase 6：旧 ListMessages(ASC) 已按用户裁定删除，改走游标分页
+	msgs, _, err := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, msgs, 2)
 }

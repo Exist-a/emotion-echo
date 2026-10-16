@@ -88,12 +88,17 @@ type DeleteConversationResp struct {
 type ListConversationsReq struct {
 	Limit  int `json:"limit,default=20"`
 	Offset int `json:"offset,default=0"`
+	// Cursor CL-05 Phase 5：不透明游标（`<unixMicros>:<id>`，复合键）。
+	// 空串 = 首页；非空时 Offset 被忽略。
+	Cursor string `json:"cursor"`
 }
 
 // ListConversationsResp 列表响应 + hasMore（取 limit+1 探测）
 type ListConversationsResp struct {
 	List    []ConversationView `json:"list"`
 	HasMore bool               `json:"hasMore"`
+	// NextCursor 下一页游标（本页末行的复合键）；没有更多时为空串。
+	NextCursor string `json:"nextCursor"`
 }
 
 // PinConversationReq POST /api/v1/conversations/:id/pin（Stage 72）

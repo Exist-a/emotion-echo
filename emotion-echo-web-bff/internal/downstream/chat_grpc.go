@@ -97,21 +97,22 @@ func (c *chatGRPCClient) ListMessages(ctx context.Context, conversationID int64,
 	return out, resp.GetHasMore(), nil
 }
 
-// ListConversations RPC
-func (c *chatGRPCClient) ListConversations(ctx context.Context, limit, offset int) ([]ConversationView, bool, error) {
+// ListConversations RPC（CL-05 Phase 5：cursor 不透明透传 + nextCursor 原样回传）
+func (c *chatGRPCClient) ListConversations(ctx context.Context, limit, offset int, cursor string) (ConversationPage, error) {
 	cli := emotionchat.NewChatServiceClient(c.conn)
 	resp, err := cli.ListConversations(withUserID(ctx), &emotionchat.ListConversationsRequest{
 		Limit:  int32(limit),
 		Offset: int32(offset),
+		Cursor: cursor,
 	})
 	if err != nil {
-		return nil, false, wrapGRPCError(err, "chat list conversations")
+		return ConversationPage{}, wrapGRPCError(err, "chat list conversations")
 	}
 	out := make([]ConversationView, 0, len(resp.List))
 	for _, c := range resp.List {
 		out = append(out, *fromProtoConversation(c))
 	}
-	return out, resp.HasMore, nil
+	return ConversationPage{List: out, HasMore: resp.HasMore, NextCursor: resp.GetNextCursor()}, nil
 }
 
 // DeleteConversation RPC

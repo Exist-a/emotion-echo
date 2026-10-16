@@ -105,9 +105,10 @@ function setupNetworkListener() {
   window.addEventListener('online', () => {
     console.log('📡 网络已恢复')
 
-    // TODO: 实现离线消息重试机制
-    // const messageStore = useMessageStore();
-    // messageStore.retryFailedMessages?.();
+    // CL-05 Phase 4 · T-18：联网后自动补发本机**全部会话**里失败的消息。
+    // 复用原 clientMsgId ⇒ 命中后端 client_msg_id 唯一索引，重复补发不会重复入库。
+    // 不 await：补发是后台行为，不该阻塞 online 回调；失败已在 store 内部告警并留待下次。
+    void useMessageStore().retryFailedMessages()
   })
 
   window.addEventListener('offline', () => {

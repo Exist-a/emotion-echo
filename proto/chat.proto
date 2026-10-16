@@ -148,12 +148,21 @@ message ListMessagesResponse {
 message ListConversationsRequest {
   int32 limit = 1;
   int32 offset = 2;
+  // 2026-10-16（CL-05 Phase 5）：**不透明游标**（keyset 分页）。
+  // 会话列表的稳定序是 `updated_at DESC, id DESC`；单靠 updated_at 无法区分
+  // **同一时刻**更新的多个会话（同一事务 NOW() 相同 / 种子数据相同）
+  // ⇒ 翻页会漏行或重复，故游标必须是**复合键**。
+  // 编码由 chat-svc 独占（`<unixMicros>:<id>`），BFF / 前端只做**原样回传**。
+  // 空串 = 首页（从最新开始）；非空时 offset 被忽略。
+  string cursor = 3;
 }
 
 // ListConversationsResponse 列会话响应
 message ListConversationsResponse {
   repeated Conversation list = 1;
   bool has_more = 2;
+  // 下一页游标（本页最后一条的复合键）；空串 = 没有更多。
+  string next_cursor = 3;
 }
 
 // DeleteConversationRequest 删除会话请求

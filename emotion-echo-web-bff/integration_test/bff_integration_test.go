@@ -244,7 +244,13 @@ type fakeIntegrationChat struct{}
 // ListConversations 是 E2E-11（会话列表侧栏标题）之后加进 ChatClient 的方法。
 // 同型：生产接口长方法、集成测试替身没跟着长，被 build tag 藏了两个阶段。
 // 本文件用例不覆盖会话列表，故 panic —— 静默返回空切片会把"没走到"变成绿灯。
-func (f *fakeIntegrationChat) ListConversations(_ context.Context, _, _ int) ([]downstream.ConversationView, bool, error) {
+//
+// CL-05 Phase 5（2026-10-16）：签名随生产接口变更（新增 `cursor string`、
+// 返回改 `ConversationPage`）。**这次又是同一个坑**：改接口的人（本轨）只更新了
+// 非 tag 的假体，漏了这个被 `//go:build integration` 藏起来的 ⇒ 本地
+// `go test ./...` 全绿而 CI `static-guards` 红。
+// 守卫：`scripts/test_integration_tag_compiles.sh` —— 改任何 `ChatClient` 这类接口后**必须**跑。
+func (f *fakeIntegrationChat) ListConversations(_ context.Context, _, _ int, _ string) (downstream.ConversationPage, error) {
 	panic("fakeIntegrationChat.ListConversations should not be called in this suite")
 }
 

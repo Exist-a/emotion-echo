@@ -1,5 +1,6 @@
 // types/api.ts - API 类型定义
 import type { fontSizePxType, themeType, ttsSpeedType } from '~/types/userConfig/userConfigType'
+import type { MessageStatus } from '~/types/conversation/conversationMessagesType'
 
 /**
  * 通用 API 响应
@@ -193,7 +194,8 @@ export interface MessageItem {
  * 带状态的消息
  */
 export interface MessageWithStatus extends MessageItem {
-  status?: 'sending' | 'sent' | 'streaming' | 'failed' | 'truncated'
+  // CL-05 Phase 1 · T-13：引用单一来源，不再内联字面量联合
+  status?: MessageStatus
 }
 
 /**

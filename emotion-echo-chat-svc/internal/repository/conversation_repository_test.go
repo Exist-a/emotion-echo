@@ -56,7 +56,9 @@ func TestConversationRepo_AppendAndListMessages(t *testing.T) {
 		Content:        "你好！",
 	}))
 
-	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	// CL-05 Phase 6：旧 ListMessages(ASC) 已按用户裁定删除，改走游标分页
+	// （cursor=0 = 从最新开始，返回升序）。此处只断言取到的条数与顺序，与分页语义无关。
+	msgs, _, err := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, msgs, 2)
 	assert.Equal(t, "你好", msgs[0].Content)
@@ -105,7 +107,9 @@ func TestConversationRepo_DeleteConversation_RemovesConvAndMessages(t *testing.T
 	require.NoError(t, err)
 	assert.Nil(t, got, "会话应已删除")
 
-	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	// CL-05 Phase 6：旧 ListMessages(ASC) 已按用户裁定删除，改走游标分页
+	// （cursor=0 = 从最新开始，返回升序）。此处只断言取到的条数与顺序，与分页语义无关。
+	msgs, _, err := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	require.NoError(t, err)
 	assert.Empty(t, msgs, "会话消息应级联删除")
 }
@@ -203,7 +207,9 @@ func TestConversationRepo_SoftDelete_ListMessages_ExcludesDeleted(t *testing.T) 
 	// 删除会话（级联软删消息）
 	require.NoError(t, repo.DeleteConversation(context.Background(), 1))
 
-	msgs, err := repo.ListMessages(context.Background(), 1, 50)
+	// CL-05 Phase 6：旧 ListMessages(ASC) 已按用户裁定删除，改走游标分页
+	// （cursor=0 = 从最新开始，返回升序）。此处只断言取到的条数与顺序，与分页语义无关。
+	msgs, _, err := repo.ListMessagesPage(context.Background(), 1, 50, 0)
 	require.NoError(t, err)
 	assert.Empty(t, msgs, "软删除会话的消息不应出现在列表中")
 }

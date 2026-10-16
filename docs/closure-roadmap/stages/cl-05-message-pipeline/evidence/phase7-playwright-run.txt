@@ -1,0 +1,16 @@
+# CL-05 Phase 7/8 · Playwright 人可见钉实测记录
+# 2026-10-16 07:33  命令：BASE_URL=http://localhost:3000 npx playwright test e2e/message-pipeline.spec.ts --project=chromium
+
+npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm.
+npm warn Unknown project config "node-linker". This will stop working in the next major version of npm.
+
+Running 5 tests using 1 worker
+
+  -  1 [chromium] › e2e\message-pipeline.spec.ts:159:3 › CL-05 消息链路人可见钉 › T-20① 上滚到顶 → 自动加载更早一页（消息条数增加）
+  ok 2 [chromium] › e2e\message-pipeline.spec.ts:178:3 › CL-05 消息链路人可见钉 › T-20② 刷新后消息仍在（不丢） (4.7s)
+  ok 3 [chromium] › e2e\message-pipeline.spec.ts:195:3 › CL-05 消息链路人可见钉 › T-21 发送后聊天区**自动滚到底**（CL-F-10 回归钉） (3.8s)
+  ok 4 [chromium] › e2e\message-pipeline.spec.ts:221:3 › CL-05 消息链路人可见钉 › T-22 建会话→发送→刷新 ⇒ 会话列表只 +1（CL-F-11 回归钉） (5.2s)
+  ok 5 [chromium] › e2e\message-pipeline.spec.ts:250:3 › CL-05 消息链路人可见钉 › T-20③ 断网发送 → 恢复 → 自动补发且**不重复入库**（含 T-19 幂等） (18.3s)
+
+  1 skipped
+  4 passed (48.2s)
