@@ -81,7 +81,7 @@ related:
 | **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
 | **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | ✅ **done（2026-10-16 收口）** —— 22 个测试点全部落四值（T-1~T-21 PASS；**T-22 PASS 但注明「这不是已修复」**）；Playwright 人可见钉 4 passed/1 skipped（跳过项由 IAB 补齐）+ ADR + 决策 42；`E2E-F-205/206` 已置 ✅；来源计划已迁 `legacy-plans/landed/`。**依据**：用户 2026-10-16 裁定 `CL-D-15`（`CL-F-11` 两次未复现 ⇒ 关闭不再阻塞，并判 done）。⚠️ 残留见 `stages/cl-05-message-pipeline/report.md §6.3`（`CL-F-11` **未修复**、`CL-F-20` 缓存未按用户隔离、Postgres keyset SQL 无测试直接执行 等） |
 | **CL-06** | 用户自定义 Agent | T3 | `user-custom-agent-persona` | CL-04 | pending |
-| **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | **in-progress（后端切片：9/9 测试点 PASS，待第二方核对）**（G 轨，接手原 C 会话位；`fusion-result-consumption` Phase 1~3 全绿 + **T-9 端到端实拍 PASS**（`:cl07` 栈，实时触发 +1 / 报表 `fusedEmotion.total=27` / 空态对照）；**前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）待 D 释放后另开，见 §2 G 轨注与 `stages/cl-07-fusion-consumption/report.md`） |
+| **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | **in-progress（后端切片 done 并已合并；前端半待 D 释放 `[id].vue`）**（G 轨，接手原 C 会话位；`fusion-result-consumption` Phase 1~3 + **T-9 端到端实拍 PASS** + **第二方核对 PASS**（4 组突变实验 + 5 条发现已处置），并入 main `bf401350`（PR #234）；**前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）**另开**，见 `stages/cl-07-fusion-consumption/report.md`） |
 | **CL-08a** | 记忆 · 用户事实 | 最后 | `conversation-memory-pending-decision` | CL-04 | pending |
 | **CL-08b** | 记忆 · 情绪模式 | 最后 | 同上 | CL-08a | pending |
 | **CL-08c** | 记忆 · 情节 + RAG | 最后 | 同上 | CL-08a | pending |
