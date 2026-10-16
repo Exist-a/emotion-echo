@@ -1,0 +1,29 @@
+CL-F-24 运行时验证（2026-10-16，Lane-CL-P · dev 栈）
+=====================================================
+问题（CL-03 收口复核轮登记）：`deploy/grafana/provisioning/datasources/datasource.yaml` 的
+PostgreSQL 数据源写死了 `user: postgres / password: postgres`，而 provisioning 文件
+**dev 与 prod 是同一份** ⇒ prod 也会拿超级用户做"只读查面板"。
+
+修复：凭据改**环境注入** `${GF_PG_USER}` / `${GF_PG_PASSWORD}`（本文件不再含字面量）；
+compose 的 grafana 服务给 dev 默认值（postgres/postgres，与全栈口径一致），prod 注入只读账号。
+
+A（正向｜正常凭据，compose dev 默认）—— 起 grafana 实测：
+  · GET /api/datasources        → postgres | PostgreSQL | grafana-postgresql-datasource | user=postgres
+  · POST /api/datasources/uid/postgres/health → {"message":"Database Connection OK","status":"OK"}
+  · POST /api/ds/query（真查面板用的表）
+      SELECT count(*) FROM emotion_echo_analytics.dlq_replay_runs  →  [[2]]
+    ⇒ 环境变量插值生效、面板数据路径仍通（修复没有把面板弄坏）
+
+B（负向对照｜故意不给凭据，override 置空 GF_PG_USER/GF_PG_PASSWORD）：
+  · 数据源**仍被注册**（Grafana 不校凭据）——所以"不给默认值"**不等于** provisioning 失败
+  · 但健康检查立刻 ERROR：{"message":"pq: no PostgreSQL user name specified in startup packet","status":"ERROR"}
+  ⇒ 如实结论：漏配是 **loud（延迟到健康检查）**，不是"静默可用"。
+     数据源注释已按此实测结论改写（原先我写的"provisioning 直接失败"是**未经验证的断言**，已纠正）。
+
+机器守卫：`deploy/obs_monitoring.test.js` 组 ⑧（新增）—— 钉住 PG 数据源两字段必须是
+`${GF_PG_*}` 引用、段内不得再出现字面量 user/password、compose 必须下发这两个 env。
+负向对照：把 `user: ${GF_PG_USER}` 改回 `user: postgres` ⇒ 组 ⑧ 立即 2 条 ✗（已实测）。
+
+复现命令：
+  docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.clp2-grafana.yml     --profile obs --env-file deploy/.env.local up -d --no-deps grafana   # B 场景
+  docker compose -f deploy/docker-compose.infra.yml     --profile obs --env-file deploy/.env.local up -d --no-deps grafana   # A 场景

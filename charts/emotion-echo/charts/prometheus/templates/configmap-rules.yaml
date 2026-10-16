@@ -96,7 +96,8 @@ data:
                 user_behavior_events 落库失败的毒消息 + DLQ 双失败（同上：CL-D-17=A 起**不 Mark**，消息留待重投）。
                 查 analytics-svc 日志 "DLQ publish failed (will NOT mark; message stays for redelivery)" 找 broker 错误。
 
-          # CL-03 Phase 4a: 堆积告警（DLQ 无 consumer ⇒ 进入即堆积；非"剩余深度"）
+          # CL-03 Phase 4a: 堆积告警（DLQ 无 consumer ⇒ 进入即堆积）
+          # CL-F-23（2026-10-16）: 另有 DLQDepthHigh 表达"真实剩余深度"
           - alert: DLQMessagesAccumulating
             expr: sum(increase(kafka_topic_partition_current_offset{topic="chat-events-dlq"}[10m])) > 0
             for: 0m
@@ -109,6 +110,18 @@ data:
                 近 10 分钟 chat-events-dlq 写入增长 = {{ `{{ $value }}` }} 条。
                 DLQ 无常驻 consumer（人工回放设计）⇒ 进入即堆积，需查看并择机回放。
                 处置：看板 kafka-consumer-lag 的 DLQ 面板 → grep 服务日志 → replay_dlq 回放。
+          # CL-F-23: 真实堆积深度（= Σ current − oldest；起栈实测该指标可采）
+          - alert: DLQDepthHigh
+            expr: sum(kafka_topic_partition_current_offset{topic="chat-events-dlq"} - kafka_topic_partition_oldest_offset{topic="chat-events-dlq"}) > 50
+            for: 30m
+            labels:
+              severity: warning
+              component: kafka
+            annotations:
+              summary: "chat-events-dlq 真实堆积深度 > 50 条（持续 30m）"
+              description: |
+                当前未处理深度 = {{ `{{ $value }}` }} 条（= Σ current − oldest）。
+                DLQ 无常驻 consumer ⇒ 深度不降 = 没人回放。处置同 DLQMessagesAccumulating。
 
   # --- 与 deploy/prometheus/rules/observability-self.yml 保持一致（E2E-22 新增）---
   # 注: k8s 侧 PrometheusTargetDown 依赖 up 指标，kubernetes-pods SD job 下同样有效

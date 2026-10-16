@@ -1,0 +1,30 @@
+# CL-F-16 控制实验（2026-10-16T23:38:21）
+# 目的：回答第二方核对 E4 指出的'控制实验不充分' —— postgres 就绪后，降级启动的服务**是否自愈**
+
+[1] stop postgres -> emotion-echo-postgres
+[2] restart user-svc（在 postgres 不可用时启动）-> emotion-echo-user-svc
+[3] postgres 仍停：user-svc /health/ready = 503  body=
+[4] start postgres -> emotion-echo-postgres
+[5] postgres healthy after ~12s
+    t+  0s  /health/ready = 503  body=
+    t+ 15s  /health/ready = 503  body=
+    t+ 30s  /health/ready = 503  body=
+    t+ 45s  /health/ready = 503  body=
+    t+ 61s  /health/ready = 503  body=
+    t+ 76s  /health/ready = 503  body=
+    t+ 91s  /health/ready = 503  body=
+    t+106s  /health/ready = 503  body=
+    t+121s  /health/ready = 503  body=
+    t+137s  /health/ready = 503  body=
+    t+152s  /health/ready = 503  body=
+    t+167s  /health/ready = 503  body=
+    t+182s  /health/ready = 503  body=
+    t+197s  /health/ready = 503  body=
+    t+213s  /health/ready = 503  body=
+    t+228s  /health/ready = 503  body=
+    t+243s  /health/ready = 503  body=
+    t+258s  /health/ready = 503  body=
+    t+274s  /health/ready = 503  body=
+    t+289s  /health/ready = 503  body=
+
+结论：**观察 300s 未自愈** —— postgres 已 healthy，服务仍非 200 ⇒ 印证账本 CL-F-16 的'启动期快照、失败后永久 nil'

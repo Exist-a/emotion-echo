@@ -284,6 +284,47 @@ group('⑦ DLQ 堆积可告警 (CL-03)', () => {
 });
 
 // -----------------------------------------------------------------------------
+// CL-F-24 (2026-10-16, Lane-CL-P): Grafana provisioning 的 PG 数据源不得含明文口令
+//
+// 背景: datasource.yaml 由 provisioning 装载, **dev 与 prod 是同一份**。
+//   CL-03 Phase 4c 为「DLQ 回放记录」面板加 PG 数据源时写死了 user/password: postgres
+//   ⇒ prod 也会用超级用户查库(而该文件只作只读用途)。修复 = 凭据走
+//   ${GF_PG_USER} / ${GF_PG_PASSWORD} 环境注入(compose dev 给默认值, prod 注入只读账号)。
+// 本组钉住"不许再写回字面量"。回退实现会让本组变红。
+group('⑧ Grafana PG 凭据无字面量 (CL-F-24)', () => {
+  const src = read('deploy/grafana/provisioning/datasources/datasource.yaml');
+  if (!src) return fail('datasource.yaml 未找到');
+
+  // 只查 PostgreSQL 数据源段(避免误伤 prometheus/loki 的 url 这类非凭据字段)
+  const i = src.indexOf('- name: PostgreSQL');
+  if (i < 0) return fail('datasource.yaml 里找不到 PostgreSQL 数据源');
+  const seg = src.slice(i);
+
+  /user:\s*\$\{GF_PG_USER\}/.test(seg)
+    ? pass('PG 数据源 user 走 ${GF_PG_USER} 环境注入')
+    : fail('PG 数据源 user 未走环境注入(CL-F-24 回归: 明文账号会全环境生效)');
+
+  /password:\s*\$\{GF_PG_PASSWORD\}/.test(seg)
+    ? pass('PG 数据源 password 走 ${GF_PG_PASSWORD} 环境注入')
+    : fail('PG 数据源 password 未走环境注入(CL-F-24 回归: 明文口令会全环境生效)');
+
+  // 反向: 段内不得再出现任何 `user: <字面量>` / `password: <字面量>`
+  const literalUser = /^\s*user:\s*(?!\$\{)\S+/m.test(seg);
+  const literalPass = /^\s*password:\s*(?!\$\{)\S+/m.test(seg);
+  literalUser ? fail('PG 数据源仍含字面量 user') : pass('PG 数据源无字面量 user');
+  literalPass ? fail('PG 数据源仍含字面量 password') : pass('PG 数据源无字面量 password');
+
+  // compose 侧必须给 dev 默认值,否则 dev 起栈时 provisioning 直接失败(loud,但会挡住新同学)
+  const infra = read('deploy/docker-compose.infra.yml');
+  if (!infra) return fail('docker-compose.infra.yml 未找到');
+  const gi = infra.indexOf('emotion-echo-grafana');
+  const gseg = gi >= 0 ? infra.slice(gi, gi + 4000) : '';
+  /GF_PG_USER/.test(gseg) && /GF_PG_PASSWORD/.test(gseg)
+    ? pass('compose 的 grafana 服务下发了 GF_PG_USER/GF_PG_PASSWORD')
+    : fail('compose 未下发 GF_PG_USER/GF_PG_PASSWORD —— dev 起栈时 provisioning 会失败');
+});
+
+// -----------------------------------------------------------------------------
 let failed = 0;
 for (const [name, fn] of groups) {
   console.log('\n' + name);

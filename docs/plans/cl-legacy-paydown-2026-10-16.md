@@ -25,14 +25,18 @@ related:
 
 ## §0 一句话结论
 
-CL 账本共 **26 条**，两批清销后：**已解决 / 已关闭 20 条**、
+CL 账本共 **26 条**，三批清销后：**已解决 / 已关闭 24 条**、
 **2 条如实降级为「已知限制」/「待用户裁定」**（CL-F-08 / CL-F-19）、
-**仅剩 5 条未解决**（CL-F-16 / 22 / 23 / 24 / 26 —— 全部**需要 dev 栈** = Wave 2，待起栈窗口执行）。
+**仅剩 1 条未解决**（**CL-F-26** —— 需 proto 重新生成 + analytics/BFF 三层透传，本轮未取，见 §2 Wave 2 说明）。
 
 - **第 1 批**（PR [#245](https://github.com/Exist-a/emotion-echo/pull/245)，已合并 `2a3301cf`）：修 CL-F-06 / 17 / 18 / 20；
   文档收口 CL-F-21；账本对账翻正 CL-F-01 / 03。
 - **第 2 批**（PR #246）：流程硬化 —— CL-F-07（RUNBOOK §2.1）/ CL-F-09（契约 §1.3）关闭；
   CL-F-08 降级为已知限制（附核对程序）；CL-F-19 转 `CL-D-20` 待用户裁定。
+- **第 3 批（Wave 2，本轨 P2，取 dev 栈锁执行）**：CL-F-16 / 22 / 23 / 24 **关闭**（均含运行时证据）。
+
+> ⚠️ **口径修正（2026-10-16 用户指出）**：此前把 Wave 2 记作"阻塞：需要 dev 栈"，实为**误判** ——
+> dev 栈本就开着（20 容器 healthy、`deploy/.devmode-session` 空锁），"需要栈"只是**排队**而不是阻塞。
 
 ---
 
@@ -98,7 +102,23 @@ CL 账本共 **26 条**，两批清销后：**已解决 / 已关闭 20 条**、
 CL-F-06 · CL-F-17 · CL-F-18 · CL-F-20 + 文档 CL-F-21 + 对账 CL-F-01/03。
 **共同特征**：纯仓库/前端，`vitest` + `python unittest` 可测，不碰生产链路。
 
-### Wave 2（需 dev 栈 / 碰生产链路，须按 RUNBOOK 取锁）：CL-F-16 · 22 · 23 · 24 · 26
+### Wave 2（需 dev 栈）—— 4/5 已完成（第 3 批，PR #249）
+
+| 编号 | 结果 | 运行时证据 |
+|---|---|---|
+| **CL-F-22** | ✅ 关闭：内联 DDL 补 `idx_outbox_attempts`；守卫升级为**列+索引双向相等** | 抽内联 DDL 原文在 dev PG 上 A/B：旧文本→索引不存在 / 新文本→存在（`evidence/clf22-outbox-ddl-parity-ab.txt`） |
+| **CL-F-16** | ✅ 关闭：① 补上第二方核对缺失的**控制实验**（300s 不自愈）② user-svc 接 `ConnectWithRetry` ③ 三服务接 fail-fast（strict ⇒ 退出 ⇒ `restart: on-failure` 自愈）④ RUNBOOK §2.2 运维速查 | `clf16-readiness-selfheal-ab.txt`（不自愈）+ `clf16-strict-selfheal-ab.txt`（strict 下 ~30s 自愈 200） |
+| **CL-F-23** | ✅ 关闭：实测 `kafka_topic_partition_oldest_offset` **可采**（59 series）⇒ 新增 `DLQDepthHigh` + k8s 内联同步 + 面板改真实深度 | `clf23-dlq-depth-metric-available.txt`；`promtool check rules` SUCCESS |
+| **CL-F-24** | ✅ 关闭：Grafana PG 凭据改**环境注入**（仓库内无字面量）+ 机器守卫组 ⑧ | `clf24-grafana-pg-cred-runtime.txt`（正/负向 + `Database Connection OK` + 真查表） |
+| **CL-F-26** | ⏳ **未取（唯一剩余）** | 见下 |
+
+**CL-F-26 为何本轮不做（如实说明，非"阻塞"）**：它要同时改 **proto（`metric.proto` 加字段并重新生成 pb.go）** + analytics-svc 生产装配 + gRPC 映射 + BFF 透传 + 报表消费，
+是**跨三层**的改动，且 proto 重新生成需固定工具链（RUNBOOK §2 的 protoc 32.1 + protoc-gen-go v1.36.11 + protoc-gen-go-grpc v1.6.2）；
+只做①生产接线而不做②proto 字段 = 仍然"不出现"，属半成品。
+**账本给的另一个可选归属**是"CL-07 前端半一并补 modality 透传"（`chat-emotion-realtime-display` 计划），
+故它更适合**作为独立小阶段**做，而不是塞进清销批次。
+
+#### 原 Wave 2 计划（供追溯）
 建议**一次取锁跑完**（同一栈窗口）：
 1. **CL-F-22**（DDL 收敛）先做 —— 它会动 `migrations/`，与 CL-F-23/26 的起栈验证共用一次迁移；
 2. **CL-F-26**（modality 透传）—— 生产接线 + proto 字段，属"只算不消费"同族，与 CL-F-07 的融合面一致；

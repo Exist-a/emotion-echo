@@ -1,0 +1,24 @@
+# CL 遗留清销 Wave 2 用 override（AGENTS §8.1 条款 10 / 契约 §1.3 R1：**带轨后缀 tag，不覆盖公共 tag**）
+#
+# 覆盖范围 = 本轨改过代码的服务：
+#   user-svc      （CL-F-16：Postgres 连接改走 ConnectWithRetry + fail-fast 装配）
+#   chat-svc      （CL-F-16：fail-fast 装配；CL-F-22：outbox 内联 DDL 补 idx_outbox_attempts）
+#   analytics-svc （CL-F-16：fail-fast 装配）
+#
+# 用法（H6「worktree 构建镜像 + up 容器」；本轨在主工作区，直接两步即可）：
+#   docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
+#     -f deploy/compose.dev.yml -f deploy/docker-compose.clp2.yml \
+#     --env-file deploy/.env.local build emotion-echo-user-svc emotion-echo-chat-svc emotion-echo-analytics-svc
+#   docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
+#     -f deploy/compose.dev.yml -f deploy/docker-compose.clp2.yml \
+#     --env-file deploy/.env.local up -d --no-deps emotion-echo-user-svc ...
+#
+# ⚠️ 本文件**只换 tag**（保持 dev 默认行为）。CL-F-16 的 strict 自愈实验见
+#    `docker-compose.clp2-strict.yml`（把 user-svc 打开 STARTUP_STRICT，属**实验配置**）。
+services:
+  emotion-echo-user-svc:
+    image: emotion-echo/user-svc:clp2
+  emotion-echo-chat-svc:
+    image: emotion-echo/chat-svc:clp2
+  emotion-echo-analytics-svc:
+    image: emotion-echo/analytics-svc:clp2

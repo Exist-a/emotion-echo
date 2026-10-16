@@ -81,12 +81,30 @@ func main() {
 	sharedconfig.MustLoad(*configFile, &c, func() { config.SetDefaults(&c) })
 	applyEnvOverrides(&c)
 
-	// === 1. Postgres 连接（单次连接，失败降级 nil repo——dev 阶段不阻断，但 health 接口会显示 dbOk=false） ===
+	// === 1. Postgres 连接 ===
+	//
+	// CL-F-16（2026-10-16）：原实现是**裸的单次连接** —— 失败即带 nil repo 降级启动，
+	// 且**此后永不自愈**。控制实验实测：停 postgres → 重启本服务（降级启动）→
+	// 起 postgres（~12s 后 healthy）→ 观察 300s，/health/ready **恒 503**。
+	// 证据：docs/closure-roadmap/stages/cl-09-backlog-paydown/evidence/clf16-readiness-selfheal-ab.txt
+	//
+	// 两条修复线：
+	//   ① 走共享 `dbconnect.ConnectWithRetry`（与 ai/analytics/assessment 同范式）——
+	//      盖过"依赖稍后就绪"的启动竞态；
+	//   ② 重试耗尽后按 STARTUP_STRICT 决定：strict ⇒ **退出启动**，交给 compose 的
+	//      `restart: on-failure` 重试（依赖就绪时自然恢复 = 真自愈）；
+	//      dev（默认非 strict）⇒ 保持"降级启动 + /health/ready 如实报 degraded"，
+	//      但**不自愈** ⇒ 需运维在依赖就绪后重启本服务（见 RUNBOOK §2.2）。
 	var userRepo repository.UserRepo
 	var securityAnswerRepo repository.SecurityAnswerRepo
-	db, err := openPostgresDB(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	db, err := dbconnect.ConnectWithRetry(func() (*gorm.DB, error) {
+		return openPostgresDB(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
+	}, dbconnect.DefaultAttempts, dbconnect.DefaultBackoff, time.Sleep)
 	if err != nil {
-		log.Printf("[postgres] connect failed: %v", err)
+		log.Printf("[postgres] connect failed after %d attempts: %v", dbconnect.DefaultAttempts, err)
+		if sharedbootstrap.ShouldFailFast() && sharedbootstrap.IsRequired("postgres") {
+			log.Fatalf("[postgres] strict mode + required dep, refusing to start: %v", err)
+		}
 	} else {
 		userRepo = repository.NewPostgresUserRepo(db)
 		securityAnswerRepo = repository.NewPostgresSecurityAnswerRepo(db)

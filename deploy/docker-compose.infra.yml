@@ -572,6 +572,11 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "true"  # dev mode 默认匿名可读,prod 必须改 false
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      # CL-F-24：PG 数据源凭据（datasource.yaml 里是 ${GF_PG_USER}/${GF_PG_PASSWORD}）。
+      # dev 默认 = 全栈口径的 postgres/postgres；**prod 必须覆盖为只读账号**
+      # （`analytics_reader`，AGENTS §2.4）并由 secret 注入，勿沿用此处默认值。
+      GF_PG_USER: ${GF_PG_USER:-postgres}
+      GF_PG_PASSWORD: ${GF_PG_PASSWORD:-postgres}
     ports:
       # Stage 74: 宿主 13000 —— 让位给 web 前端 3000（apps.yml/compose.dev.yml，
       # CORS 默认 http://localhost:3000）。二者曾同为 3000，无法同时起

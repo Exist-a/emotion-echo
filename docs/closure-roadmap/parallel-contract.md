@@ -119,6 +119,7 @@ related:
 | G | CL-07 情绪回显+融合消费（**后端切片**） | `feat/cl-07-fusion-consumption`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **后端切片 done 并已合并**（squash → `bf401350`，PR [#234](https://github.com/Exist-a/emotion-echo/pull/234)，**源分支已删**）；**9/9 测试点 PASS + 第二方核对 PASS**（含 4 组突变实验）。⚠️ **CL-07 整体仍 in-progress** —— **前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）**待 D 释放该页后另开**；本轨已不再占用 dev 栈与 `proto/**` |
 | H | CL-07 情绪回显（**前端半**） | `feat/cl-07-emotion-display`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **done 并已合并**（squash → `349c9615`，PR [#243](https://github.com/Exist-a/emotion-echo/pull/243)，**源分支已删**）；9/10 PASS（T-10 待 CL-F-17）+ 第二方核对 PASS；**不再占用** `[id].vue` / dev 栈 / `proto` |
 
+| 2026-10-16 | Lane-CL-P | `deploy/docker-compose.clp2.yml`（新增）、`deploy/docker-compose.clp2-grafana.yml`（新增） | P2 轨起栈验证用 override（§1.3 R1：**带轨后缀 tag `:clp2`，不覆盖公共 tag**）。前者给 user/chat/analytics-svc 换 `:clp2` 镜像 + **实验用** `STARTUP_STRICT=true`；后者**故意置空** `GF_PG_*` 做 CL-F-24 的负向对照。二者均为**实验/验证产物**，非生产配置 | ✅ |
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
 > （依据：`feat/cl-04-prompt-assembly` / `feat/cl-01-observability` 分支上的登记 + 各自 draft PR）。**合并时请保留三行**（§四 已约定"冲突时保留双方行"）。
