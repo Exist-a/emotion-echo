@@ -95,7 +95,7 @@ related:
 | 4 | D（CL-05） | C 之后（Phase 0 基线取证 / 5 会话游标运行验证 / 7 端到端+人可见钉） | ✅ **已用毕释放（2026-10-16 07:4x）** —— 取锁 2026-10-15 20:00 → 本轨镜像 `:cl05`（H5 带轨后缀，不覆盖公共 tag）→ Phase 0 基线 / Phase 5 会话游标运行验证（gRPC 与 `CHAT_TRANSPORT=http` 两条路径各 17/17）/ Phase 7 Playwright 人可见钉（4 passed / 1 skipped）→ **已删 `deploy/.devmode-session`**。⚠️ 本轨**阶段未 done**（`CL-F-11` 未复现/根因未定位；来源计划迁移与最终签署待办）⇒ 下一位可用锁。**注意**：栈仍开着，跑的是本轨 `:cl05` 镜像（chat-svc / web-bff）。**【补记 2026-10-16 08:0x–08:4x】又取了**一次短窗口**做 IAB（内置浏览器）补验（T-20① 上翻更早页 / CL-F-11 复现尝试），**已再次释放**（`deploy/.devmode-session` 已删）；本轮结束态：锁为空、栈仍开、前端 dev 已停 |
 | — | A（CL-04 **收口后追加** T-18 标题） | 2026-10-14 11:5x–12:0x 短窗口（运行时验证 T-18：重建 web-bff + 建会话首轮 → 查标题） | ✅ **已用毕释放**（`deploy/.devmode-session` 已删；位次不影响 B/C 排队） |
 | 5 | ~~F（CL-03）~~ | 已于 2026-10-16 用毕**释放**（Phase 0/7 运行时取证 + 告警 firing + Phase 5 停机/恢复 A/B + 收口复核轮的证据重采；`deploy/.devmode-session` 已删） | ✅ **已释放**（栈上跑的是本轨 `:cl03` 镜像的 chat/ai/analytics 三服务；**队列下一位 = G（CL-07）**。注：栈在 2026-10-16 15:1x 已被整体停掉，与 F 轨无关） |
-| 6 | G（CL-07 **后端切片**） | D → F 之后（数据契约实拍：`daily_emotion_fused_v` 有行 + `/api/v1/reports/daily` 返回非空 `fusedEmotionDistribution`） | 排队中（**D 持锁中**；G 轨先做 🟢 Phase 1~3，**不排队不占栈**） |
+| 6 | G（CL-07 **后端切片**） | D → F 之后（数据契约实拍） | ✅ **已用毕释放（2026-10-16）** —— 取锁 → worktree 构建 `:cl07` 镜像（analytics-svc/web-bff）→ 20 容器 healthy + `db-migrate` 应用 `i010`/`a011` OK + Nacos `count:7` → **T-9 端到端实拍 PASS**（登录 → 建会话 705 → 发消息 951 → `emotion_analysis`/`fused_emotions` 各 +1 → 报表 `fusedEmotion.total=27`；空态日期字段缺省）→ **已删 `deploy/.devmode-session`**。栈仍开着（跑本轨 `:cl07` 镜像）。**结论=9/9 测试点 PASS，待第二方核对** |
 
 > **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
 > 三条"待验证"轨 ≈ 极限；若新轨全程需栈 ⇒ **等**，不要加。**纯 🟢 轨（文档/静态守卫）不受此限**。
@@ -144,6 +144,8 @@ related:
 
 | 2026-10-16 | Lane-CL-D | **本文件 §三 占位（D 轨 · CL-05）+ §四 握手行** | D 轨**收口**：按 §六 删除/关闭本轨占位、清理握手行；阶段状态回写 `roadmap.md`（`CL-05 → done`）。同时按 **H2/条款 8** 把收口依据（用户裁定 `CL-D-15`）与**残留清单**（`CL-F-11` **未修复**仅关闭、`CL-F-20`、Postgres keyset SQL 无测试直接执行 等）一并写明，避免「done」被读成「无债」。本行随**独立小 PR** 落地 | ✅ |
 | 2026-10-16 | Lane-CL-F | **本文件 §三 登记行（F 轨 · CL-03）+ §3.1 第 5 位 + 握手行状态** | F 轨**收口登记**（按 H2/条款 8 走**独立小 PR**，不含阶段产物）：CL-03 阶段 PR [#229] **squash 合并 → `c88653b`**，源分支与 worktree 均已删；§三 F 行由 `in-progress` 翻 `done 并已合并`；§3.1 第 5 位标「已用毕释放」（**队列下一位 = G**）；本轨那条 `chat-svc/main.go` 脊柱握手申请标 **已落地**（D 轨 CL-05 已收口、全程未提异议；本轨改动随 #229 进 main）。**本行只追加**，未改他人行 | ✅ |
+
+| 2026-10-16 | Lane-CL-G | `deploy/docker-compose.cl07-verify.yml`（新增） | G 轨起栈验证用 override（H5/条款10：把 analytics-svc / web-bff 的镜像 tag 换成 `:cl07`，不覆盖公共 tag）。**本行补登**（登记 PR #232 时该文件尚未产出） | ✅ |
 
 ## 五、开工前置检查（照做）
 
