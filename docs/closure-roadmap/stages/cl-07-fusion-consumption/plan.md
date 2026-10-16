@@ -31,7 +31,7 @@ related:
 | `emotion-echo-analytics-svc/internal/repository/modality_report_repository.go` | 既有"跨 schema 视图消费"范式：接口 + InMemory 替身 + Postgres 实现（本阶段照此复制） |
 | `emotion-echo-analytics-svc/internal/logic/reports_daily_logic.go` | 日报装配：`ModalityReportRepo` 可选（nil 跳过）；本阶段并列新增 fused 装配 |
 | `emotion-echo-analytics-svc/internal/grpcserver/metric_server.go` | `ReportsDaily` RPC 映射 `EmotionCounts`→proto；**此前 modality/fused 均不跨 gRPC** |
-| `emotion-echo-analytics-svc/main.go:109-113,196-199` | svcCtx 生产装配点；`ModalityReportRepo` **从未在此赋值**（另登账 CL-F-24） |
+| `emotion-echo-analytics-svc/main.go:109-113,196-199` | svcCtx 生产装配点；`ModalityReportRepo` **从未在此赋值**（另登账 CL-F-26） |
 | `proto/metric.proto:121-137` | `ReportsDailyResponse`（原仅 summary/emotion_distribution/message_count/conversation_count/intent_distribution） |
 | `emotion-echo-web-bff/internal/downstream/analytics{,_grpc}.go` | BFF 侧 `DailyReport` DTO + gRPC 映射 |
 | `emotion-echo-web-bff/internal/handler/analytics_view.go` | `toFrontendDailyReport` 前端契约变换 |
@@ -51,7 +51,7 @@ related:
 | 融合是实时产生的 | ❌ FusionWorker 5s 批处理 ⇒ 秒级延迟；日报按天聚合不受影响（计划 §5 已记） |
 | 日报链路已有 proto→analytics→BFF 通道 | ✅ 通道在；**但新字段须逐层加**（proto/生成桩/gRPC 映射/BFF DTO/前端契约） |
 | 新视图的 analytics_reader 授权可加进 a004 | ❌ a004 已应用，改它触发 `migrate.sh` checksum `die` ⇒ **必须新增独立迁移 a011** |
-| 生产已接线 modality 维度 | ❌ **未接线**（新登 CL-F-24） |
+| 生产已接线 modality 维度 | ❌ **未接线**（新登 CL-F-26） |
 
 ### A.4 未跑 smoke 声明
 
