@@ -11,6 +11,7 @@ import (
 
 	"emotion-echo-chat-svc/internal/events"
 	"emotion-echo-chat-svc/internal/model"
+	"emotion-echo-chat-svc/internal/outbox"
 	"emotion-echo-chat-svc/internal/repository"
 	"emotion-echo-chat-svc/internal/svc"
 	"emotion-echo-chat-svc/internal/types"
@@ -204,6 +205,9 @@ func (l *SendMessageLogic) persistWithOutbox(
 				EventType: evt.Type,
 				Topic:     events.TopicChatEvents,
 				Payload:   payload,
+				// CL-03 Phase 2：存下当前请求 ctx 的 sw8，relay 发布时用它恢复父 ctx
+				// （否则 relay 在后台根 ctx 上发布 ⇒ trace 断在 outbox→relay）
+				TraceSW8: outbox.EncodeTraceSW8(l.ctx, "outbox-enqueue-message"),
 			})
 		}); err != nil {
 			return err
