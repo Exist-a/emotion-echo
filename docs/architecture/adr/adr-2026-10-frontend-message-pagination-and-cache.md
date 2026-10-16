@@ -92,4 +92,4 @@ CL-05 执行期走**网关实测基线**（`evidence/phase0-baseline-output.txt`
   `docs/e2e-roadmap/discovered-unresolved.md`（`E2E-F-205`/`E2E-F-206`）
 - 计划与记录：`docs/closure-roadmap/stages/cl-05-message-pipeline/{plan,report}.md`
 - 证据：`…/evidence/{phase0-baseline-output,phase5-verify-grpc-path,phase5-verify-http-fallback-path,phase7-playwright-run}.txt`
-- 决策：`docs/closure-roadmap/decisions.md`（`CL-D-11`~`CL-D-15`）、`决策 42`
+- 决策：`docs/closure-roadmap/decisions.md`（`CL-D-11`~`CL-D-14`）、`决策 42`
