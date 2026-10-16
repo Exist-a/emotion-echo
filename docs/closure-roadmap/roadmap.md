@@ -51,17 +51,35 @@ related:
 > ③ 按「新轨准入规则」自答 🟢 占比——**Phase 1~4（类型收敛 / 缓存接线 / 状态机 / 重试）全为 vitest 级，不需 dev 栈**，
 > 只有 Phase 0/5~7 需栈 ⇒ 属"🟢 先行"轨，准入成立。串行资源排队：dev 栈（**B 持锁 → C → D**）、`proto/**`（C 预占，D 已申请握手）。
 > ⚠️ 本轨**不动** A/B/C 已写的行；仅追加本注与 CL-05 自身行（H3 append-only）。
+>
+> **F 轨开工（2026-10-16，Lane-CL-F）**：**CL-03 Kafka/可靠性闭环** → `in-progress`，为 **T1 最后一块**
+> （`depends-on` 写的"与 CL-01/02 共享追踪面"**两者均已 done**：CL-01 #211 / CL-02 #214 ⇒ 依赖满足）。
+> 选取理由：① 排期上 T1 先于 T3 —— **CL-06/CL-07 虽已随 CL-04 解锁，但两者都要动 `pages/chat/conversation/[id].vue`
+> 与 `stores/message.ts`，与运行中的 D 轨（CL-05）前端面直接冲突**（且 C 轨对该页有摄像头悬浮窗预占），故不选；
+> ② 主文件面与 D 轨基本隔离 —— 交集仅 `chat-svc/main.go` 一处，已在契约 §四 声明握手；
+> ③ 按「新轨准入规则」自答 🟢 占比 —— **Phase 1~6（trace 列 / 写侧捕获 / relay 恢复 / DLQ 硬化 / 遗留项收尾）
+> 全为 Go 单测 + 静态契约级**，只有 Phase 0/7 需栈 ⇒ 准入成立。串行资源排队：dev 栈（**D 持锁中 → F 第 5 位**）、`chat-svc/main.go`（待 D 确认）。
+> ⚠️ 本轨**不动** A/B/C/D 已写的行；仅追加本注与 CL-03 自身行（H3 append-only）。
+>
+> **G 轨开工（2026-10-16，Lane-CL-G，接手原 C 会话位）**：**CL-07 情绪回显+融合消费 → `in-progress`（局部：仅"后端切片"）**。
+> 背景：原 **C 轨（CL-02）已 done 并撤会话**；用户指示**接手 C 会话位**继续推进。选 **CL-07 后端切片**（`fusion-result-consumption` 计划 Phase 1~3）而非整阶段：
+> ① `depends-on: CL-04` **已 done**（#213）⇒ 依赖满足；
+> ② **整阶段不可并行**——F 轨注已判定 CL-07 整阶段要动 `pages/chat/conversation/[id].vue` + `stores/message.ts`，与在飞 D 轨（CL-05）直接冲突；故**只取后端半**（聚合视图 → analytics-svc 报表 → `proto/metric.proto`/BFF 透传），这些文件与 D/F **零同名冲突**（仅 `proto/**` 为同属脊柱但**不同文件**：G 动 `metric.proto`、D 动 `chat.proto` ⇒ §1.2「不同文件可并」）；
+> ③ 按「新轨准入规则」自答 🟢 占比——**Phase 1~3（视图 / repo+装配 / proto+BFF 透传）全为 🟢 不需栈 + Go 单测/契约级**，端到端数据契约实拍才需栈 ⇒ 准入成立。
+> 串行资源排队：dev 栈（**D 持锁中 → F 第 5 → G 第 6**）、`proto/metric.proto`（D 用 `chat.proto`，**不同文件**）。
+> **前端半**（顶部状态条 / 消息气泡标签 / 数字人情绪）**待 D 释放 `[id].vue` 后另开**，不在本轮。
+> ⚠️ 本轨**不动** A/B/C/D/F 已写的行；仅追加本注与 CL-07 自身行（H3 append-only）。
 
 | CL | 阶段 | 档 | 含待排期计划 | depends-on | 状态 |
 |---|---|---|---|---|---|
 | **CL-00** | **CI 瘦身** | T0 | `.github/workflows/*` + `scripts/` 守卫 | — | ✅ **done**（PR #209） |
 | **CL-01** | **可观测闭环** | T1 | `observability-instrumentation-and-dashboards` → `observability-business-metrics-wiring` → `grafana-dashboard-gaps`；`redis-two-layer-cache` | — | ✅ **done 并已合并**（B 轨 · PR #211 于 2026-10-14 **squash 合并 → `b1f13dc`**，源分支已删；19 测试点全部落在合法四值、起栈运行时证据齐（含 CL-F-14 的 A/B 负向对照）、账本三条已销、落地计划已迁、D-05/D-07 已裁定、**收口契约 7 条全满足**（第 7 条由用户指示的独立子代理两轮核对：首轮 FAIL → 整改 → 第二轮 PASS），见 `stages/cl-01-observability/report.md`） |
 | **CL-02** | gRPC 契约闭环 | T1 | `grpc-deadlink-actualization` | — | ✅ **done**（2026-10-15 收口：**清除 3 + 归档 4** + 守卫升级 A1~A6 + 运行时验证 7/7 healthy / Nacos `count:6` / smoke 24/24；**第二方核对三轮 PASS**；PR #214） |
-| **CL-03** | Kafka/可靠性闭环（合并一次执行） | T1 | `outbox-trace-continuity`、`dlq-hardening-and-replay`、`kafka-pipeline-pending-decisions` | 与 CL-01/02 共享追踪面 | pending |
+| **CL-03** | Kafka/可靠性闭环（合并一次执行） | T1 | `outbox-trace-continuity`、`dlq-hardening-and-replay`、`kafka-pipeline-pending-decisions` | 与 CL-01/02 共享追踪面 | **in-progress**（F 轨 · draft PR [#229](https://github.com/Exist-a/emotion-echo/pull/229)；🟢 Phase 1~6 不需栈先行，🔴 Phase 0/7 需栈排队在 D 之后） |
 | **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
 | **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | **in-progress**（D 轨 · draft PR [#219](https://github.com/Exist-a/emotion-echo/pull/219)；🟢 Phase 1~4 不需栈先行，🔴 需栈 Phase 0/5~7 排队在 C 之后） |
 | **CL-06** | 用户自定义 Agent | T3 | `user-custom-agent-persona` | CL-04 | pending |
-| **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | pending |
+| **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`、`fusion-result-consumption` | CL-04 | **in-progress（局部：后端切片）**（G 轨，接手原 C 会话位；**只做后端半** `fusion-result-consumption` Phase 1~3：融合聚合视图 / analytics-svc 报表消费 / proto+BFF 透传；**前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）待 D 释放后另开，见 §2 G 轨注） |
 | **CL-08a** | 记忆 · 用户事实 | 最后 | `conversation-memory-pending-decision` | CL-04 | pending |
 | **CL-08b** | 记忆 · 情绪模式 | 最后 | 同上 | CL-08a | pending |
 | **CL-08c** | 记忆 · 情节 + RAG | 最后 | 同上 | CL-08a | pending |
