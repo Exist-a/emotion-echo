@@ -9,7 +9,7 @@ import (
 	"github.com/IBM/sarama"
 )
 
-// ===== CL-03 Phase 4b（CL-D-16=A）analytics-svc 侧：DLQ 投递失败 ⇒ 不 Mark =====
+// ===== CL-03 Phase 4b（CL-D-17=A）analytics-svc 侧：DLQ 投递失败 ⇒ 不 Mark =====
 //
 // 修复前：`consumer.go` 无条件 `sess.MarkMessage` ⇒ 业务 + DLQ 双失败 = 消息永久丢失。
 // 修复后：只有 DLQ.Publish 真返回错误时才"不 Mark + 结束本次 claim"（原因见 ai-svc

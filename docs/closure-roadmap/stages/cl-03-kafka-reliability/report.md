@@ -154,14 +154,14 @@ $ python yaml/json 可解析性 → kafka-dlq.yml: [AIDLQPublishFailure, Analyti
 
 ### Phase 2 / Phase 3 · trace 贯通（🟢 不需栈）—— 2026-10-16
 
-**做了什么（按 `CL-D-15` = A）**
+**做了什么（按 `CL-D-16` = A）**
 
 | 环节 | 改动 | 文件 |
 |---|---|---|
 | 原语 | shared `Tracer` 新增 `EncodeSW8(ctx, opName)`（**只加这一个方法**：恢复侧用既有 `CreateEntrySpan` 即可，无需第二个） | `emotion-echo-shared/pkg/grpcinterceptor/{tracing.go,tracing_go2sky.go}` + 6 处 mock 同步 |
 | 写侧 | `outbox.EncodeTraceSW8(ctx, op)`（读 `GlobalTracer()`，CL-F-14 语义）+ 4 处 `CreateInTx` 调用点接线 | `chat-svc/internal/outbox/sw8.go`、`internal/logic/{send,create,delete}*logic.go` |
 | 读侧 | `relay.resumeTraceCtx(ctx, sw8)` + `publishOne` 在恢复后的 ctx 上发布、err 透传 `EndSpan` | `chat-svc/internal/outbox/relay.go` |
-| 架构 | **ADR 决策 42**：`docs/architecture/adr/adr-2026-10-outbox-trace-context.md`（含被否备选 5 条、代价与已知限制） | + `docs/architecture/decisions.md` 索引/变更记录 |
+| 架构 | **ADR 决策 43**：`docs/architecture/adr/adr-2026-10-outbox-trace-context.md`（含被否备选 5 条、代价与已知限制）——⚠️ 提交时编号取的是 42，**2026-10-16 与 D 轨 CL-05 收口的「决策 42」撞号后改号 43** | + `docs/architecture/decisions.md` 索引/变更记录 |
 
 **关键证据**
 
@@ -205,12 +205,12 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 
 ## §3 待办（下一步）
 
-- ✅ **§7 [M] 四项裁定已落定（2026-10-16 用户，全部采纳推荐项）** → 登记为 `CL-D-15`~`CL-D-18`（见 `decisions.md`）
+- ✅ **§7 [M] 四项裁定已落定（2026-10-16 用户，全部采纳推荐项）** → 登记为 `CL-D-16`~`CL-D-19`（见 `decisions.md`）
   ⇒ **Phase 2/3 已完成**（见上）；**4b / 4c / 5 解除阻塞**，可按裁定开工：
-  - **Phase 2/3**：给 shared `Tracer` 接口加 `EncodeSW8` / `ContextWithSW8`（`CL-D-15` = A）→ 写侧捕获 + relay 恢复父 ctx；**须配 ADR**（动 7 svc 共享接口）
-  - **Phase 4b**：DLQ 投递失败不 `MarkMessage`（`CL-D-16` = A）—— 落地前**逐 handler 核实幂等**，非幂等者单独处置
-  - **Phase 4c**：一键回放全部积压 + 回放计数（`CL-D-17` = B）；不做定时自动回放
-  - **Phase 5**：Kafka 初始化后台重试 + relay 不假 `sent`（`CL-D-18` = C）+ 回写 ADR-19
+  - **Phase 2/3**：给 shared `Tracer` 接口加 `EncodeSW8` / `ContextWithSW8`（`CL-D-16` = A）→ 写侧捕获 + relay 恢复父 ctx；**须配 ADR**（动 7 svc 共享接口）
+  - **Phase 4b**：DLQ 投递失败不 `MarkMessage`（`CL-D-17` = A）—— 落地前**逐 handler 核实幂等**，非幂等者单独处置
+  - **Phase 4c**：一键回放全部积压 + 回放计数（`CL-D-18` = B）；不做定时自动回放
+  - **Phase 5**：Kafka 初始化后台重试 + relay 不假 `sent`（`CL-D-19` = C）+ 回写 ADR-19
 - 🔴 需栈项（Phase 0 基线取证 / Phase 7 端到端 trace 贯通 + 告警 firing）：dev 栈由 **D 轨（CL-05）持锁**（2026-10-16 06:16 取锁），本轨排队第 5 位。
 
 ## §5 本轮并行的治理处置（2026-10-16，非本阶段产物）

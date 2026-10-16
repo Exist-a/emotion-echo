@@ -281,7 +281,7 @@ func (t *stubTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 	return ctx, &stubSpan{}, nil
 }
 
-// EncodeSW8 CL-03 / CL-D-15=A — stub 满足 Tracer 接口(中间件测试不验证编码细节)
+// EncodeSW8 CL-03 / CL-D-18=A — stub 满足 Tracer 接口(中间件测试不验证编码细节)
 func (t *stubTracer) EncodeSW8(ctx context.Context, operationName string) (string, error) {
 	return "", nil
 }

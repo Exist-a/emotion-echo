@@ -17,7 +17,7 @@ import (
 	"github.com/emotion-echo/shared/pkg/logging"
 )
 
-// EncodeTraceSW8 取当前 ctx 所在 trace 的 sw8（CL-03 Phase 2 / CL-D-15=A）。
+// EncodeTraceSW8 取当前 ctx 所在 trace 的 sw8（CL-03 Phase 2 / CL-D-16=A）。
 //
 // 读的是 **grpcinterceptor.GlobalTracer()**，不是构造期快照的 tracer ——
 // 与 CL-F-14「请求期现读全局」一致：svc 先于 OAP 启动时，tracer 是后台补挂上的，

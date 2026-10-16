@@ -154,7 +154,7 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			attempts, handlerErr := h.deliverWithRetry(msgCtx, evt, msg, maxRetries)
 			if handlerErr != nil {
 				if dlqErr := h.publishToDLQ(msgCtx, msg, handlerErr, attempts); dlqErr != nil {
-					// CL-03 Phase 4b（CL-D-16=A）：DLQ 也投递失败 ⇒ **不 Mark**，
+					// CL-03 Phase 4b（CL-D-17=A）：DLQ 也投递失败 ⇒ **不 Mark**，
 					// 否则"业务 + DLQ 双失败"= 消息永久丢失。
 					//
 					// 为什么必须结束本次 claim（而不是仅跳过本条继续下一条）：

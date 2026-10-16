@@ -608,7 +608,7 @@ func (t *mockTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 	return ctx, t.localSpan, t.localErr
 }
 
-// EncodeSW8 CL-03 / CL-D-15=A — mock 满足 Tracer 接口（本服务不写 outbox，返回空串）
+// EncodeSW8 CL-03 / CL-D-16=A — mock 满足 Tracer 接口（本服务不写 outbox，返回空串）
 func (t *mockTracer) EncodeSW8(_ context.Context, _ string) (string, error) {
 	return "", nil
 }

@@ -131,7 +131,7 @@ type Tracer interface {
 	CreateEntrySpan(ctx context.Context, operationName string,
 		extractor func(key string) (string, error)) (context.Context, Span, error)
 
-	// EncodeSW8 取出**当前 ctx 所在 span** 的 sw8 传播头（CL-03 / CL-D-15=A）。
+	// EncodeSW8 取出**当前 ctx 所在 span** 的 sw8 传播头（CL-03 / CL-D-16=A）。
 	//
 	// 用途：把 trace 上下文存进**异步载体**，让之后在别处（abort 的后台 goroutine）
 	// 继续这条 trace。典型场景 = outbox：写入 outbox 行时身处请求 ctx（有入口 span），

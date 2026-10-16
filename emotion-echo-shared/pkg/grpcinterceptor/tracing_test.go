@@ -96,7 +96,7 @@ func (t *mockTracer) CreateLocalSpan(ctx context.Context, opName string) (contex
 	return outCtx, t.localSpan, t.localErr
 }
 
-// EncodeSW8 CL-03 / CL-D-15=A：mock 返回 exitFakeSw8（与 CreateExitSpan 注入值同源），
+// EncodeSW8 CL-03 / CL-D-16=A：mock 返回 exitFakeSw8（与 CreateExitSpan 注入值同源），
 // 便于上层单测断言"存下来的 sw8"非空且与预期一致。
 func (t *mockTracer) EncodeSW8(ctx context.Context, opName string) (string, error) {
 	t.exitOpCalls = append(t.exitOpCalls, opName)

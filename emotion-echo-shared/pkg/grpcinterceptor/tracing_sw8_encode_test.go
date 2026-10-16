@@ -7,7 +7,7 @@
 // context.WithCancel(context.Background())）⇒ kafka_publisher 的 CreateExitSpan
 // 建的是「根」span，一条消息的 trace 断在 outbox→relay 处。
 //
-// 为什么只加**一个**方法（用户裁定 CL-D-15 选项 A 的最小落地）：
+// 为什么只加**一个**方法（用户裁定 CL-D-16 选项 A 的最小落地）：
 //   - 「存」需要新原语：go2sky v1.5.0 的 `Span` 接口**不暴露 SpanContext**
 //     （只有 CreateExitSpanWithContext 的 injector 能拿到编码后的 sw8）⇒ 必须借
 //     一次 exit span 编码，故封装成 EncodeSW8；
@@ -30,7 +30,7 @@ func TestTracerInterface_HasEncodeSW8(t *testing.T) {
 	it := reflect.TypeOf((*Tracer)(nil)).Elem()
 	_, ok := it.MethodByName("EncodeSW8")
 	assert.True(t, ok,
-		"Tracer 接口缺 EncodeSW8 —— CL-03 需要它把「当前 ctx 的 sw8」取出存进 outbox 行（CL-D-15=A）")
+		"Tracer 接口缺 EncodeSW8 —— CL-03 需要它把「当前 ctx 的 sw8」取出存进 outbox 行（CL-D-16=A）")
 }
 
 // newRealTracer 造一个**带 reporter** 的 go2sky tracer —— 这样 initFlag=1，

@@ -1,10 +1,10 @@
 # ADR · 2026-10 · outbox 承载 trace 上下文（trace_sw8 列 + relay 恢复父 ctx）
 
-- **编号**：决策 42
+- **编号**：决策 43
 - **日期**：2026-10-16
 - **状态**：✅ **Accepted**
 - **触发**：CL-03「Kafka/可靠性闭环」的核心判据 —— 一条消息的 trace 必须从**入站 → outbox → relay → Kafka → 消费端**连成一条（可结合 SkyWalking UI 查看）
-- **关联决策**：`CL-D-15`（sw8 存取原语落点：给 shared `Tracer` 加方法）、`CL-D-16`（DLQ 失败不 Mark）、`CL-D-18`（fallback 后台重试）
+- **关联决策**：`CL-D-16`（sw8 存取原语落点：给 shared `Tracer` 加方法）、`CL-D-17`（DLQ 失败不 Mark）、`CL-D-19`（fallback 后台重试）
 - **关联 ADR**：[决策 22 chat-svc 表依赖清单 + 字段变更契约](adr-2026-09-chat-svc-table-deps.md)（本 ADR 新增的列走它的 9 步 checklist）、[ADR-19 DevEventPublisher / D1 fallback 登记](adr-2026-09-dev-publisher-user-behavior-events.md)
 - **阶段档**：`docs/closure-roadmap/stages/cl-03-kafka-reliability/{plan.md,report.md}`
 
@@ -91,7 +91,7 @@ nCtx, span, err := tr.CreateEntrySpan(ctx, "outbox-relay", func(key string) (str
    前者的 peer 是哨兵 `"trace-context"` ⇒ 拓扑图上会出现指向该哨兵的边。语义上仍成立
    （"把 trace 上下文写进异步载体"确实是一次出站动作），但**是观测噪音**。
 2. **接口变更外溢**：`Tracer` 加方法后，6 处测试 mock（跨 5 个模块）必须同步实现
-   —— 这是 `CL-D-15=A` 的已知代价，已一次性付清（同一提交内）。
+   —— 这是 `CL-D-16=A` 的已知代价，已一次性付清（同一提交内）。
 3. **列可空 ⇒ 存在"有行无 trace"的状态**（历史行、SkyWalking 关闭、编码失败）。
    消费方（relay / 排查者）必须按"可空"处理，不得假定非空。
 
@@ -111,7 +111,7 @@ nCtx, span, err := tr.CreateEntrySpan(ctx, "outbox-relay", func(key string) (str
 
 | 备选 | 为什么否决 |
 |---|---|
-| **A. 在调用点用 `CreateExitSpan` 的 injector 旁路捕获 sw8**（即 `CL-D-15` 的 B 选项） | 语义散落在 3 个业务 logic 里、易漂移；同一 hack 会被写三遍。用户裁定取 A（封装成接口原语） |
+| **A. 在调用点用 `CreateExitSpan` 的 injector 旁路捕获 sw8**（即 `CL-D-16` 的 B 选项） | 语义散落在 3 个业务 logic 里、易漂移；同一 hack 会被写三遍。用户裁定取 A（封装成接口原语） |
 | **B. 只存 trace_id（不存 sw8）** | 只有 trace_id **无法恢复父子关系**（还缺 segment/span id 与 service/instance）⇒ relay 仍会起根 span |
 | **C. 复制 go2sky 的编码逻辑自己拼 `SpanContext`** | 需要 `tracer.service` / `tracer.instance` 私有字段（`trace.go:181-182`）⇒ 包外不可行（已实测） |
 | **D. relay 用 `CreateLocalSpan` 造"假父"** | 违背 `AGENTS §四`「不硬造根 span」，且 local span 无传播头可注入 ⇒ 消费端仍接不上 |

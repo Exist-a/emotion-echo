@@ -261,7 +261,7 @@ func (h *chatEventHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim 
 			attempts, handlerErr := h.deliverWithRetry(msg)
 			if handlerErr != nil {
 				if dlqErr := h.publishToDLQ(msgCtx, msg, handlerErr, attempts); dlqErr != nil {
-					// CL-03 Phase 4b（CL-D-16=A）：DLQ 也失败 ⇒ **不 Mark**（否则业务+DLQ 双失败=丢失）。
+					// CL-03 Phase 4b（CL-D-17=A）：DLQ 也失败 ⇒ **不 Mark**（否则业务+DLQ 双失败=丢失）。
 					// 必须结束本次 claim：sarama 提交"已 Mark 的最高 offset"，若继续 Mark 后续消息
 					// 会把这条隐式跳过；结束 claim 后分区下次 session 从上次提交位点重投。
 					// 重投安全性：写入端 ON CONFLICT (event_id, occurred_at) DO NOTHING ⇒ 幂等。
@@ -322,7 +322,7 @@ func (h *chatEventHandler) backoffFor(attempt int) time.Duration {
 
 // publishToDLQ 重试预算耗尽后的兜底：投 DLQ（带诊断 headers + sw8 透传）+ 计数。
 //
-// 返回值（CL-03 Phase 4b / CL-D-16=A）：
+// 返回值（CL-03 Phase 4b / CL-D-17=A）：
 //   - nil：消息已安全落到 DLQ（或 Noop/未配置 DLQ 的"接受"语义）⇒ 调用方 Mark 前进
 //   - err：DLQ 投递**真的失败** ⇒ 调用方**不得 Mark**，否则"业务 + DLQ 双失败 = 消息永久丢失"
 func (h *chatEventHandler) publishToDLQ(ctx context.Context, msg *sarama.ConsumerMessage, lastErr error, attempts int) error {

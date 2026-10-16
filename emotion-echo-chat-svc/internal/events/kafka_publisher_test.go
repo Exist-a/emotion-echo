@@ -313,7 +313,7 @@ func (m *sw8MockTracer) CreateExitSpan(
 	return ctx, m.outSpan, nil
 }
 
-// EncodeSW8 CL-03 / CL-D-15=A：与 CreateExitSpan 同源返回 fakeSw8，
+// EncodeSW8 CL-03 / CL-D-16=A：与 CreateExitSpan 同源返回 fakeSw8，
 // 让"写 outbox 行时存下 sw8"的断言可用同一个假值对照。
 func (m *sw8MockTracer) EncodeSW8(_ context.Context, _ string) (string, error) {
 	return m.fakeSw8, nil

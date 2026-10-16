@@ -87,7 +87,7 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 
 - 已查：[`adr-2026-09-chat-svc-table-deps.md`](../../../architecture/adr/adr-2026-09-chat-svc-table-deps.md)（**决策 22**）—— chat-svc 拥有 `outbox_events`；**§四 定死「字段变更 checklist」9 步**（migration / 集中 initdb / model / types / proto / 跨域影响 / 集成测试 / 回归守护 / 文档同步），**任何加列都必须按它走**。
 - 已查：[`adr-2026-09-dev-publisher-user-behavior-events.md`](../../../architecture/adr/adr-2026-09-dev-publisher-user-behavior-events.md)（**ADR-19**）—— D1 fallback 的**已登记**状态 + 长期项 B。
-- 已查：`docs/closure-roadmap/decisions.md` —— 相关只有 `CL-D-04`（合并执行）；`CL-D-08~10` 属 C 轨（已随 #214 落地），**本阶段新裁定从 `CL-D-15` 起**。
+- 已查：`docs/closure-roadmap/decisions.md` —— 相关只有 `CL-D-04`（合并执行）；`CL-D-08~10` 属 C 轨（已随 #214 落地），**本阶段新裁定从 `CL-D-16` 起**。
 - 已查：`docs/closure-roadmap/discovered-unresolved.md` —— **CL-F-15** 归本阶段；`CL-F-16`（health readiness）归 CL-09、`CL-F-17`（数字人 VRM 竞态）待立项，**均不属本阶段**。
 
 ### A.3 架构假设清单（本文假设 vs 现状核对）
@@ -163,7 +163,7 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 | T-08 | ✅ **PASS** | Phase 4a：`node deploy/obs_monitoring.test.js` group ⑦ 6/6 绿（含 k8s 内联同步 + 面板标签）+ `bash scripts/test_helm_prometheus_render.sh` **PASS=8 FAIL=0**（两侧 14 条告警一致） |
 | T-14 | ✅ **PASS** | Phase 6：`kafka-pipeline-pending-decisions.md` D8 行/两处摘要更正为"已收敛"，附 `shared/pkg/messaging/sw8_header.go:23` 等行号证据 |
 | T-15 | ✅ **PASS** | Phase 6：新增「CL-03 处置」表 —— D1 并入 CL-F-15 / D2·D4 ✅ / D3·D5·D6 登记触发条件 / D7 等产品语义拍板 / D8 ✅ 全部落地（无"待定"残留） |
-| T-06 | ✅ **PASS** | Phase 4b（`CL-D-16`=A）：两侧各 3 例绿（不 Mark / 不跳过后续 / Noop 与"未配置"仍 Mark）；**幂等已逐 handler 取证**（ai-svc `ON CONFLICT (event_id)`、analytics `ON CONFLICT (event_id, occurred_at)`） |
+| T-06 | ✅ **PASS** | Phase 4b（`CL-D-17`=A）：两侧各 3 例绿（不 Mark / 不跳过后续 / Noop 与"未配置"仍 Mark）；**幂等已逐 handler 取证**（ai-svc `ON CONFLICT (event_id)`、analytics `ON CONFLICT (event_id, occurred_at)`） |
 | T-04 / T-07 / T-09 / T-10 / T-11 / T-12 / T-13 / T-16 | ⏸ **PENDING**（各有明确前置，非"待定"） | **需要栈**：T-04/T-09/T-11/T-16（排队第 5 位）；**需先定落点**：T-07（Noop 可见化的指标载体）、T-10（"回放计数"在 CLI 工具里的落点）；**待 D 轨握手答复**：T-12/T-13（都要改 `chat-svc/main.go`，脊柱） |
 
 **Phase 4a 附带新账**：`CL-F-22`（内联 DDL 缺 `idx_outbox_attempts`）· `CL-F-23`（DLQ 无真实深度指标，`oldest_offset` 可采性未实测）—— 均已登 `discovered-unresolved.md`。
@@ -226,12 +226,12 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 
 | 编号 | 事项 | 选项 | 我的建议 |
 |---|---|---|---|
-| **M1** | sw8 存取原语的落点 | A. 给 shared `Tracer` 接口加 `EncodeSW8`/`ContextWithSW8`（+ 同步实现与接口契约测试）<br>B. 用 `CreateExitSpan` 的 injector 旁路捕获（零接口改动，多一个无用 span） | ✅ **裁定 = A**（多轮追问后由用户拍板，见 `CL-D-15`） |
-| **M2** | DLQ 投递失败时的语义 | A. **不 `MarkMessage`**（消息留待重投，靠消费端幂等去重）<br>B. 仍然 Mark，但落库/落 counter 成"可逐条观测的黑洞" | ✅ **裁定 = A**（见 `CL-D-16`；落地前须逐 handler 核实幂等）|
-| **M3** | 回放"半自动"到什么程度 | A. 保持人工工具（只补文档/守卫）<br>B. 加一个"一键回放全部积压"的脚本 + 回放计数指标<br>C. 做定时自动回放 | ✅ **裁定 = B**（见 `CL-D-17`；不做 C，防二次投毒）|
-| **M4** | CL-F-15 fallback 改法 | A. Kafka 初始化**后台重试**（对齐 CL-F-14 tracer 补挂模式）<br>B. init 失败时**不让 relay MarkSent**（行留 pending）<br>C. A+B 都做 | ✅ **裁定 = C**（见 `CL-D-18`；须回写 ADR-19）|
+| **M1** | sw8 存取原语的落点 | A. 给 shared `Tracer` 接口加 `EncodeSW8`/`ContextWithSW8`（+ 同步实现与接口契约测试）<br>B. 用 `CreateExitSpan` 的 injector 旁路捕获（零接口改动，多一个无用 span） | ✅ **裁定 = A**（多轮追问后由用户拍板，见 `CL-D-16`） |
+| **M2** | DLQ 投递失败时的语义 | A. **不 `MarkMessage`**（消息留待重投，靠消费端幂等去重）<br>B. 仍然 Mark，但落库/落 counter 成"可逐条观测的黑洞" | ✅ **裁定 = A**（见 `CL-D-17`；落地前须逐 handler 核实幂等）|
+| **M3** | 回放"半自动"到什么程度 | A. 保持人工工具（只补文档/守卫）<br>B. 加一个"一键回放全部积压"的脚本 + 回放计数指标<br>C. 做定时自动回放 | ✅ **裁定 = B**（见 `CL-D-18`；不做 C，防二次投毒）|
+| **M4** | CL-F-15 fallback 改法 | A. Kafka 初始化**后台重试**（对齐 CL-F-14 tracer 补挂模式）<br>B. init 失败时**不让 relay MarkSent**（行留 pending）<br>C. A+B 都做 | ✅ **裁定 = C**（见 `CL-D-19`；须回写 ADR-19）|
 
-> **裁定状态（2026-10-16）**：四项**均已由用户拍板**（全部采纳推荐项），已登记为 `CL-D-15`~`CL-D-18`。
+> **裁定状态（2026-10-16）**：四项**均已由用户拍板**（全部采纳推荐项），已登记为 `CL-D-16`~`CL-D-19`。
 > 编号前已按 `decisions.md 使用约定` 执行 `grep` 核对（main 最大号为 14；在飞分支 #219/#231/#229 均未占用 15+）。
 > ⇒ **Phase 2/3/4b/4c/5 解除阻塞，可开工**。
 

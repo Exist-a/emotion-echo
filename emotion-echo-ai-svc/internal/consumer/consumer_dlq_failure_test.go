@@ -11,7 +11,7 @@ import (
 	"github.com/IBM/sarama"
 )
 
-// ===== CL-03 Phase 4b（CL-D-16=A）：DLQ 投递失败 ⇒ 不 Mark、不丢消息 =====
+// ===== CL-03 Phase 4b（CL-D-17=A）：DLQ 投递失败 ⇒ 不 Mark、不丢消息 =====
 //
 // 修复前：`consumer.go` 无条件 `sess.MarkMessage` ⇒ **业务 + DLQ 双失败 = 消息彻底丢失**
 // （只有 counter 可见，属"可观测的黑洞"）。

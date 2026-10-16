@@ -66,7 +66,7 @@ func (h *ConsumerGroupHandler) backoffFor(attempt int) time.Duration {
 
 // publishToDLQ 重试预算耗尽后的兜底：投 DLQ（带诊断 headers + sw8 透传）+ 计数。
 //
-// 返回值（CL-03 Phase 4b / CL-D-16=A）：
+// 返回值（CL-03 Phase 4b / CL-D-17=A）：
 //   - nil：消息已安全落到 DLQ（或被 Noop/未配置 DLQ "接受"）⇒ 调用方 Mark 前进
 //   - err：DLQ 投递**真的失败** ⇒ 调用方**不得 Mark**，否则"业务 + DLQ 双失败 = 消息永久丢失"
 //
