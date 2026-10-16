@@ -1,8 +1,10 @@
 ---
-status: planned
+status: landed
 priority: medium
-owner: TBD
+owner: lane-cl-f（阶段 CL-03）
 created: 2026-10-11
+landed: 2026-10-16（阶段 CL-03 · Kafka/可靠性闭环；逐点证据见 `docs/closure-roadmap/stages/cl-03-kafka-reliability/{plan,report}.md` 与 `evidence/`）
+last-updated: 2026-10-16（**落地归档**：CL-03 收口，本文件自 `docs/plans/` 迁入 `docs/legacy-plans/landed/`；引用旧路径的文档请改指本文件）
 type: implementation-plan
 source: 2026-10-11 会话（用户："关于 kafka 的观测链路断了这件事也落地一个计划文档"）；问题源自 2026-10-03 E2E-26 #4 运行时观察
 depends-on: []

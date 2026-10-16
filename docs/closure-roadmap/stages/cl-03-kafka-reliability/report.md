@@ -205,6 +205,9 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 
 ## §3 待办（下一步）
 
+> ⚠️ 本节写于阶段中期；**收口后的最终状态见 §6**（所有前置已满足、测试点全有结论）。
+
+
 - ✅ **§7 [M] 四项裁定已落定（2026-10-16 用户，全部采纳推荐项）** → 登记为 `CL-D-16`~`CL-D-19`（见 `decisions.md`）
   ⇒ **Phase 2/3 已完成**（见上）；**4b / 4c / 5 解除阻塞**，可按裁定开工：
   - **Phase 2/3**：给 shared `Tracer` 接口加 `EncodeSW8` / `ContextWithSW8`（`CL-D-16` = A）→ 写侧捕获 + relay 恢复父 ctx；**须配 ADR**（动 7 svc 共享接口）
@@ -233,3 +236,44 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 
 - **文档漂移是本阶段第一批"发现"**：三份计划里有三处已落地项仍写着 open（D8-2/D4/D2）——建档期实读代码是唯一可靠的判据（AGENTS §〇 的价值再次验证）。
 - **`MarkMessage` 无条件前进**这类"假绿信号"（offset 前进 = 表面成功）与 CL-01 发现的 `outbox status=sent` 假绿是**同一类陷阱**：只看状态字段会把"丢消息"读成"成功"。
+
+
+---
+
+## §6 收口（2026-10-16）
+
+### 6.1 后半程实施记录（Phase 4c / Phase 5 / T-07）
+
+| Phase | 内容 | 关键证据 |
+|---|---|---|
+| **4c** | 一键回放（`-limit 0`）+ 回放结果落 PG（新表 `dlq_replay_runs`，迁移 `a011`）+ Grafana PostgreSQL 数据源 + 「DLQ 回放记录」面板 | 网内跑工具 2 次（dry-run 4 条 / 真回放 1 条）⇒ 表 2 行、operator 有值；面板 SQL 经 Grafana 代理返回 2 行 5 列 |
+| **5** | `UnavailablePublisher` + `PublisherHolder` + `StartKafkaPublisherBackgroundRetry`；relay 对"未就绪"不 MarkSent 且不计 attempts；ADR-19 回写 | **停 Kafka → 重建 chat-svc**：init 失败进后台重试、期间 2 行 `pending/attempts=0`、近 30s 无假 sent；**恢复 Kafka** ⇒「后台重试成功（第 4 次）」⇒ 2 行自动重发、pending 归零（`evidence/t12-phase5-kafka-down-recovery.txt`） |
+| **T-07** | 两侧 `*_dlq_unconfigured_total` + 明确文案（未配置/Noop ⇒ 已丢弃、不可回放）+ 看板面板 | 单测 4 例绿；运行时两服务 `/metrics` 均暴露该指标（触发路径在本栈不可达——DLQ 已配置，行为由单测覆盖） |
+
+### 6.2 收口契约自检（RUNBOOK §6 七条）
+
+| # | 条 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | plan 每个测试点四值 + 证据 | ✅ | 16/16 **PASS**，逐点附运行时/单测证据（plan §2.1） |
+| 2 | 回归钉落地且绿 | ✅（**含一处如实偏差**） | Go 单测（chat 11 / ai 15 / analytics 11 / shared 23 包全绿）· obs 契约测试 group ⑦ · helm 渲染守卫 8/8 · 接线守卫（`main_publisher_wiring_test.go`）。**偏差**：本阶段**无前端改动** ⇒ 未写 Playwright 钉（纪律要求"每阶段收口必须写 Playwright 回归钉"）；等价机器钉为上述四项。**如实登记，不当作已满足** |
+| 3 | report 用模板 | ✅ | 起点 / 实施 / 证据 / 结论 / 经验（§1~§6） |
+| 4 | 账本对账（属本阶段未解决的 CL-F 存在 ⇒ 只能 partial） | ✅ | `CL-F-15` **✅ 已解决**（Phase 5，含 A/B 运行时证据）。`CL-F-22`/`CL-F-23` 是本阶段**范围外**发现的小残留，按账本规则**改挂 `CL-09`（backlog，未 done）+ 明确触发条件**（账本约定：不挂已 done 阶段）⇒ 本阶段无"属本阶段未解决"的账 ⇒ 可判 `done`。**该改挂已在账本行内写明理由** |
+| 5 | 落地计划迁 `legacy-plans/landed/` | ✅ | `outbox-trace-continuity.md`、`dlq-hardening-and-replay.md` 已迁（`kafka-pipeline-pending-decisions.md` 属 pending-decision 清单而非落地计划，其条目已逐条终态，留在原处并在文内标注） |
+| 6 | roadmap 状态同步 + 分支/工作区收口 | ✅ | roadmap CL-03 → `done`；阶段 PR 转 ready 串行合并、源分支删除（AGENTS §2.5） |
+| 7 | 第二方核对通过 | ⏳→✅ | 独立子代理核对（只读、不得改文件）；发现项已逐条处置（见 §6.4） |
+
+### 6.3 证据索引（`evidence/`）
+
+| 文件 | 对应测试点 |
+|---|---|
+| `t04-trace-full-chain.json` | T-04（13 span 一条链） |
+| `t04-negative-control-basic-traces.json` | T-04 负向对照的**中间产物**（OAP basic-traces 查询；**未定位到对照 trace**，如实保留） |
+| `t09-t11-dlq-alert-firing.txt` | T-09 / T-11 / T-16 |
+| `t12-phase5-kafka-down-recovery.txt` | T-12 |
+
+### 6.4 与纪律的偏差 / 未做项（如实登记，不掩盖）
+
+1. **无 Playwright 钉**：本阶段改动面是 Kafka/outbox/consumer 后端链路，无 UI 路径；纪律要求"每阶段收口必须写 Playwright 回归钉"未满足 ⇒ 已如实登记（见 §6.2 #2）。
+2. **T-04 的运行时负向对照未取得**：尝试用 OAP `queryBasicTraces` 定位"trace_sw8 为空 ⇒ 发布成独立根 trace"的那条，但该查询在近 15 分钟窗口返回 0 条（OAP 索引/条件问题），**未定位到**；"链路因列而连"的判据改由**进程内反向对照单测**（`TestSW8RoundTrip_EncodeThenRestore_SameTraceID` 的反向断言）+ 主证据里 `outbox-relay` 的 `refs` 指向写侧编码 span 支撑。中间产物保留在 `evidence/`。
+3. **`CL-F-22`/`CL-F-23` 未在本阶段解决**（已改挂 CL-09，附触发条件）。
+4. **本地残留分支清理**（22 个，多数为 squash 合并后未删的源分支）在收口时一并处理（§2.5）。

@@ -8,7 +8,7 @@ last-updated: 2026-10-16（建档：§A 实读 14 个文件 + 1 个只读盘点 
 depends-on: []           # roadmap §2 写的"与 CL-01/02 共享追踪面"——两者均已 done（CL-01 #211 / CL-02 #214）
 blocks: []
 gate: []                 # 无开工阻塞决策门；[M] 项见 §7
-source: docs/plans/outbox-trace-continuity.md（主）+ docs/plans/dlq-hardening-and-replay.md + docs/plans/kafka-pipeline-pending-decisions.md
+source: docs/legacy-plans/landed/outbox-trace-continuity.md（主）+ docs/legacy-plans/landed/dlq-hardening-and-replay.md + docs/plans/kafka-pipeline-pending-decisions.md
 related-plans:
   - docs/closure-roadmap/parallel-contract.md（F 轨占位 + §3.1 栈排队 + §四 握手区）
 ledger: CL-F-15（outbox 静默改投内存，归本阶段）
@@ -164,7 +164,14 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 | T-14 | ✅ **PASS** | Phase 6：`kafka-pipeline-pending-decisions.md` D8 行/两处摘要更正为"已收敛"，附 `shared/pkg/messaging/sw8_header.go:23` 等行号证据 |
 | T-15 | ✅ **PASS** | Phase 6：新增「CL-03 处置」表 —— D1 并入 CL-F-15 / D2·D4 ✅ / D3·D5·D6 登记触发条件 / D7 等产品语义拍板 / D8 ✅ 全部落地（无"待定"残留） |
 | T-06 | ✅ **PASS** | Phase 4b（`CL-D-17`=A）：两侧各 3 例绿（不 Mark / 不跳过后续 / Noop 与"未配置"仍 Mark）；**幂等已逐 handler 取证**（ai-svc `ON CONFLICT (event_id)`、analytics `ON CONFLICT (event_id, occurred_at)`） |
-| T-04 / T-07 / T-09 / T-10 / T-11 / T-12 / T-13 / T-16 | ⏸ **PENDING**（各有明确前置，非"待定"） | **需要栈**：T-04/T-09/T-11/T-16（排队第 5 位）；**需先定落点**：T-07（Noop 可见化的指标载体）、T-10（"回放计数"在 CLI 工具里的落点）；**待 D 轨握手答复**：T-12/T-13（都要改 `chat-svc/main.go`，脊柱） |
+| T-04 | ✅ **PASS** | **运行时（起栈实测）**：一条消息的 trace 在 OAP 里 13 个 span 连成一条 —— `BFF 入站 → client:SendMessage → chat-svc 入站 → gorm.* → outbox-enqueue-message → outbox-relay(ref→编码 span) → kafka-publish → analytics/ai 两侧 kafka-consume`，全 span 同 `traceId`。证据 `evidence/t04-trace-full-chain.json` |
+| T-07 | ✅ **PASS** | 两侧各加 `*_dlq_unconfigured_total` + 明确文案（"未配置/Noop ⇒ 已丢弃、不可回放"）；单测 4 例绿（Noop/未配置 → counter+1；真 DLQ → 不动）；**运行时**：两服务 `/metrics` 均已暴露该指标（各 3 行）；看板新增「DLQ 未配置时的丢弃计数」面板。⚠️ 本栈 DLQ **已配置** ⇒ 触发路径不可达，运行时只验"接线可见"，行为由单测覆盖 |
+| T-09 | ✅ **PASS** | **运行时**：往 `chat-events-dlq` 灌 3 条 ⇒ Prometheus `DLQMessagesAccumulating` **state=firing**（severity=warning）⇒ Alertmanager 收到 `status.state=active`（**送达**）。证据 `evidence/t09-t11-dlq-alert-firing.txt` |
+| T-10 | ✅ **PASS** | Phase 4c：`-record` 落 PG（`emotion_echo_analytics.dlq_replay_runs`，迁移 `a011` 已 apply）+ Grafana PostgreSQL 数据源 + 「DLQ 回放记录」面板。**运行时**：网内跑工具两次（dry-run 全量 4 条 / 真回放 1 条）⇒ 表里 2 行且 operator 有值；面板 SQL 经 Grafana 代理返回 2 行 5 列 |
+| T-11 | ✅ **PASS** | **运行时**：`sum(increase(kafka_topic_partition_current_offset{topic="chat-events-dlq"}[10m]))` 返回**非空 series**（值 3.3565），即规则 expr 真被数据喂到 |
+| T-12 | ✅ **PASS** | Phase 5：`UnavailablePublisher` + `PublisherHolder` + 后台重试；relay 对"未就绪"**不 MarkSent 且不累加 attempts**。**运行时**：停 Kafka → 重建 chat-svc ⇒ init 失败进入后台重试、期间发的 2 行 `pending/attempts=0`、近 30s 无假 `sent`；恢复 Kafka ⇒ 「后台重试成功（第 4 次）」⇒ 2 行**自动重发**、pending 归零。证据 `evidence/t12-phase5-kafka-down-recovery.txt` |
+| T-13 | ✅ **PASS** | ADR-19 追加「D1 fallback 路径**收紧**」段：改前/改后对照表 + 指标语义变更说明 + 测试清单 + 仍未做（D5） |
+| T-16 | ✅ **PASS** | **运行时**：Grafana 线上看板 `kafka-consumer-lag` 含本阶段三个面板（DLQ Depth **标题已改**为 `— alerting: DLQMessagesAccumulating`、DLQ 回放记录、DLQ 未配置计数），其中 DLQ Depth 的 expr 与告警**同源** ⇒ 指标真被"看"到 |
 
 **Phase 4a 附带新账**：`CL-F-22`（内联 DDL 缺 `idx_outbox_attempts`）· `CL-F-23`（DLQ 无真实深度指标，`oldest_offset` 可采性未实测）—— 均已登 `discovered-unresolved.md`。
 

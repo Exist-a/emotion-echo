@@ -221,7 +221,7 @@ Helm 官方 `helm template` / `helm lint`（本地实测 `helm v3.18.4+gd80839c`
 | **M1** | ② §契约 4 走「严格非空」判据（触发 AI 分析后断言） | ✅ 实测已 PASS（`summary` 非空 + `emotionDistribution.len=1`），**按证据关闭** |
 | **M2** | storage **不翻转 readiness**（xtts 已摘除） | ✅ **关闭 F-186**：xtts 摘除已落地 + 运行验证（F-210 ✅）；**用户裁定不新增 storage 可观测维度**（理由：上传已快速 503 + MinIO 自身 healthcheck/告警） |
 | **M3** | （已于 2026-10-08 由用户裁定转出至 E2E-31） | ✅ 转出 |
-| **M4** | 转专项（Kafka trace 跨进程连接属架构级，须 ADR） | ✅ **已有独立计划文档** [docs/plans/outbox-trace-continuity.md](../../../plans/outbox-trace-continuity.md)（2026-10-11 建档）；本阶段只登记不修；#16 判 BLOCKED（已裁定） |
+| **M4** | 转专项（Kafka trace 跨进程连接属架构级，须 ADR） | ✅ **已有独立计划文档** [docs/legacy-plans/landed/outbox-trace-continuity.md](../../../legacy-plans/landed/outbox-trace-continuity.md)（2026-10-11 建档）；本阶段只登记不修；#16 判 BLOCKED（已裁定） |
 | **M5** | 转运维 runbook（F-192 宿主端口 RST / F-196 :3000 抢占） | ✅ **已补**：两条写入 [RUNBOOK.md §2.4](../../RUNBOOK.md) 已知环境坑表；账本 F-192/F-196 标「已文档化/转运维」 |
 | **M6** | 暂不接 CI（真跑 smoke 需 19 容器 dev 栈，GitHub-hosted runner 无栈） | ✅ 追认；既有静态守卫 `check_smoke_gateway.sh` 保持接 CI |
 | **T-1/§8** | 改判据口径（见 E2E-F-215） | ✅ 已落地；**用户裁定保持「致命」**（不降为告警）——代价：任何触及服务源码的提交/合并后 §8 立即 STALE，需重建才绿 |
