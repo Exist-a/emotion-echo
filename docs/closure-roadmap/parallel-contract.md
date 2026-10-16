@@ -27,9 +27,33 @@ related:
 > **现实核对（2026-10-13）**：各阶段的**大部分文件不同**，但有一层「**脊柱文件**」多轨都会碰（§1.2）。**这些脊柱文件必须串行 + 握手**，不能真并行改。
 > 冲突时按 AGENTS §八 走"文件面硬隔离 + 共享文件握手行"。
 
+### 1.0 字母体系（**唯一权威 · 2026-10-16 收口 CL-F-21**）
+
+> **背景（`CL-F-21`）**：本契约历史上并存**两套轨字母**且**没有任何一处说明二者关系**：
+> · §1.1 表用的是「**阶段面字母**」A~G（按阶段划主文件面，是**当初的建议轨名**）；
+> · §三 占位表/§四 握手区用的是「**会话字母**」即各会话自命的 `Lane-CL-<X>`（按**谁在跑**命名）。
+> 两套字母在 A/B 上**恰好一致**，从未暴露；到 C/D 就**完全相反** —— 按"会话字母"去 §1.1 查「C 轨独占列」
+> 会读到 `pages/chat/conversation/[id].vue`（那是 **CL-05** 的面），而跑 CL-02 的会话也叫 C ⇒
+> 一次误判就能让人**改到别人的文件**或**误以为自己被占**（C 轨 2026-10-15 实际发生过）。
+
+**判定「独占列」的唯一口径**：**认「阶段号」，不认字母**。查 §1.1 时先按下表把字母换成阶段，再读那一行的主文件面。
+
+| 阶段面字母（§1.1） | 阶段 | 会话字母（`Lane-CL-<X>`，§三/§四） | 状态 |
+|---|---|---|---|
+| A | CL-04 Prompt 组装层 | **A** | ✅ done（#213） |
+| B | CL-01 可观测 | **B** | ✅ done（#211） |
+| C | CL-05 消息链路 | **D**（⚠️ 与 C 相反） | ✅ done |
+| D | CL-00 CI 瘦身 | — | ✅ done（#209） |
+| E | CL-02 gRPC 契约 | **C**（⚠️ 与 E 相反） | ✅ done（#214） |
+| F | CL-03 Kafka/可靠性 | **F** | ✅ done（#229） |
+| G | CL-07 情绪回显+融合消费 | **G / H**（后端切片 / 前端半） | ✅ 后端 #234 · 前端 #243 |
+
+> **新轨开工请只用「阶段号」登记**（如"CL-09 遗留清销"），避免再引入第三套字母。
+> §1.1 表头已同步标注为「阶段面字母」。本块只**追加**，未改任何人的行。
+
 ### 1.1 各轨主文件面（main face）
 
-| 轨 | 阶段 | 主文件面 | 备注 |
+| 轨（**阶段面字母**，见 §1.0） | 阶段 | 主文件面 | 备注 |
 |---|---|---|---|
 | **A** | **CL-04** Prompt 组装层 | BFF `handler/ai_stream_handler.go`、`downstream/llm_grpc.go` + `emotion-llm-service/*.py` + 前端 `composables/{useAIStreamHandler,useAIStream,usePrompt}.ts` | 解锁 CL-06/07；**尽早做** |
 | **B** | **CL-01** 可观测（+ **CL-03**） | `shared/pkg/skywalking/**` + 各 svc `main.go` + BFF `downstream/{ai,analytics,assessment}.go` + `deploy/{prometheus,grafana,alertmanager,loki}` + `scripts/smoke_observability.py` | CL-01+CL-03 **同追踪面 ⇒ 建议同轨** |
@@ -76,6 +100,7 @@ related:
 | F | CL-03 Kafka/可靠性闭环 | `feat/cl-03-kafka-reliability`（worktree `../Emotion-Echo-cl03`，**已删**） | Lane-CL-F | 2026-10-16 | ✅ **done 并已合并**（阶段 PR [#229](https://github.com/Exist-a/emotion-echo/pull/229) **squash 合并 → `c88653b`**，源分支已删、worktree 已删）；16/16 测试点 PASS；dev 栈已用毕释放（`.devmode-session` 已删，**队列下一位 = G（CL-07）**）；第二方核对**五轮**（首轮 FAIL 9 → 复核轮 FAIL 13 → 第三轮 FAIL 7 → 第四轮 FAIL 1+3 → 第五轮 PASS；前四轮抓出 2 项真缺陷并修复）见 `stages/cl-03-kafka-reliability/report.md §6` |
 | G | CL-07 情绪回显+融合消费（**后端切片**） | `feat/cl-07-fusion-consumption`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **后端切片 done 并已合并**（squash → `bf401350`，PR [#234](https://github.com/Exist-a/emotion-echo/pull/234)，**源分支已删**）；**9/9 测试点 PASS + 第二方核对 PASS**（含 4 组突变实验）。⚠️ **CL-07 整体仍 in-progress** —— **前端半**（`[id].vue` 顶部状态条 / 气泡标签 / 数字人情绪）**待 D 释放该页后另开**；本轨已不再占用 dev 栈与 `proto/**` |
 | H | CL-07 情绪回显（**前端半**） | `feat/cl-07-emotion-display`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **done 并已合并**（squash → `349c9615`，PR [#243](https://github.com/Exist-a/emotion-echo/pull/243)，**源分支已删**）；9/10 PASS（T-10 待 CL-F-17）+ 第二方核对 PASS；**不再占用** `[id].vue` / dev 栈 / `proto` |
+| P | **CL 遗留清销（第 1 批）** | `chore/cl-legacy-paydown` | Lane-CL-P | 2026-10-16 | **in-progress**（draft→ready PR [#245](https://github.com/Exist-a/emotion-echo/pull/245)）：修 CL-F-06/17/18/20 + 文档收口 CL-F-21 + 账本对账 CL-F-01/03。**纯 🟢（不需 dev 栈）**，只碰 `scripts/**`、`.github/workflows/**`（加一个 step，不改 job 名）、前端 `app/**`、`docs/**`；**不碰** `proto/**`、`deploy/**`、任何 Go 服务 |
 
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
@@ -148,6 +173,7 @@ related:
 
 | 2026-10-16 | Lane-CL-G | `deploy/docker-compose.cl07-verify.yml`（新增） | G 轨起栈验证用 override（H5/条款10：把 analytics-svc / web-bff 的镜像 tag 换成 `:cl07`，不覆盖公共 tag）。**本行补登**（登记 PR #232 时该文件尚未产出） | ✅ |
 
+| 2026-10-16 | Lane-CL-P | `docs/closure-roadmap/{parallel-contract,discovered-unresolved,}.md`、`scripts/check_git_layout.py` + 新增 `scripts/test_check_git_layout.py`、`.github/workflows/doc-drift-check.yml`（**仅加一个 step**）、前端 `app/{utils/{messageCache,db}.ts,stores/message.ts,types/**,components/digital-human/**}` | P 轨（**CL 遗留清销第 1 批**）开工：① §1.0 新增「字母体系（唯一权威）」收口 `CL-F-21`；② §三 登记占位；③ 账本翻正 `CL-F-01/03`、关闭 `CL-F-06/17/18/20`。**无并发持有者**（A~H 轨均已 done 并合并；CL-02 的 `proto/**` 预占已随 #214 释放）。按 §1.2「不同文件可并」不构成阻塞；本行只追加、不改他人行 | ✅ |
 | 2026-10-16 | Lane-CL-G | 前端 `pages/chat/conversation/{new.vue,[id].vue}` + `components/emotion/**`（新）+ `composables/useCurrentEmotion.ts`（新）+ `utils/emotion.ts` + `types/api.ts` + `configs/apiRoutes.ts` | G 轨**续 CL-07 前端半**（H 轨登记）：这些文件属 D 轨（CL-05）此前主张的 `[id].vue` 面，**D 轨已 done 并释放该页**（roadmap CL-05 已翻 done）⇒ 现无并发持有者。依 §1.2 声明占用；纯前端 + 新文件为主 | ⏳ **声明占用** |
 
 ## 五、开工前置检查（照做）

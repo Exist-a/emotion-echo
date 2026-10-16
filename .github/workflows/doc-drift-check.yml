@@ -58,6 +58,8 @@ jobs:
         run: python scripts/yaml_lint.py
       - name: 5 仓库布局自检
         run: python scripts/check_git_layout.py --strict
+      - name: 5b 布局自检的回归钉（worktree 场景，CL-F-06）
+        run: python scripts/test_check_git_layout.py
       - name: 6 Dockerfile digest pin
         run: bash scripts/check_docker_digests.sh
       - name: 7 BFF JWT secret 一致性

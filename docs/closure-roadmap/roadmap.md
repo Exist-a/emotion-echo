@@ -88,6 +88,12 @@ related:
 | **CL-08c** | 记忆 · 情节 + RAG | 最后 | 同上 | CL-08a | pending |
 | **CL-08d** | 记忆 · 管理页（查看/删除） | 最后 | 同上 | CL-08a~c | pending |
 | **CL-08e** | 记忆 · 风险信号（安全） | 最后 | 同上 | — | pending |
+> **P 轨开工（2026-10-16，Lane-CL-P · CL 遗留清销第 1 批）**：清 **CL 账本（CL-F-xx）** 的未解决项（**不含** E2E-F，用户明示）。
+> 本轮修 4 条（CL-F-06/17/18/20）+ 文档收口 1 条（CL-F-21）+ 对账翻正 2 条（CL-F-01/03）；**纯 🟢 轨**（不需 dev 栈）。
+> 余 9 条按 **Wave 2（需栈：CL-F-16/22/23/24/26）/ Wave 3（流程硬化：CL-F-07/08/09/19）** 排入计划。
+> 落地载体 = 阶段 PR [#245](https://github.com/Exist-a/emotion-echo/pull/245)；计划见 `docs/plans/cl-legacy-paydown-2026-10-16.md`。
+> ⚠️ 本注只追加，未改 A~H 已写的行（H3 append-only）。
+
 | **CL-09** | backlog 清销（常驻） | 常驻 | `known-issues-backlog-2026-09-16`、`…runtime-bugs-2026-09-17`、`todo-pile-2026-09-04`、`three-vrm-usage-reference` | — | pending（插空） |
 | **CL-10** | 端侧（Lane O） | deferred | `on-device-hybrid-inference`(+`…implementation-roadmap`) | 端侧决策门 | **deferred** |
 

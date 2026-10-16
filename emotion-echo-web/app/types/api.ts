@@ -191,7 +191,14 @@ export interface MessageItem {
 }
 
 /**
- * 带状态的消息
+ * 带状态的消息 —— **API/DTO 侧**形态（`CL-F-18`）。
+ *
+ * ⚠️ 边界（**与存储行形态不是同一个东西，暂不可合并**）：本类型以 `MessageItem` 为基
+ * （`sender: 'user' | 'ai'`、`conversationId` 必填、`contentType` 含 `image/file/video`），
+ * 而 `types/conversation/conversationMessagesType.ts` 的**同名**类型以 `StoredMessage` 为基
+ * （`sender: 'user' | 'AI'`、本地缓存语义）。两者 `sender` 取值**大小写不同** ⇒ 结构性不等价；
+ * 合并须先统一 `sender` 拼写，该改动被用户裁定 **`CL-D-12`「只登记不动」** 阻塞。
+ * 契约钉：`app/types/message-with-status-single-source.architecture.test.ts`
  */
 export interface MessageWithStatus extends MessageItem {
   // CL-05 Phase 1 · T-13：引用单一来源，不再内联字面量联合

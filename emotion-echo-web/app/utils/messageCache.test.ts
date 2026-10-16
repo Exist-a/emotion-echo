@@ -67,17 +67,21 @@ describe('messageCache 契约（CL-05 Phase 2）', () => {
     expect(indexes, `实际索引：${indexes.join(' | ')}`).toEqual([
       'id',
       'sessionId',
+      // CL-F-20：归属用户 + [userId+status] 复合索引（按用户隔离查询/补发）
+      'userId',
       'sendTime',
       '[sessionId+sendTime]',
       '[sessionId+status]',
+      '[userId+status]',
     ])
   })
 
-  it('schema 以**增量** version(2) 升级（保留 v1 声明 ⇒ Dexie 自动迁移，不丢旧缓存）', async () => {
+  it('schema 以**增量** version 升级（保留旧声明 ⇒ Dexie 自动迁移，不丢旧缓存）', async () => {
     const db = await getDb()
-    expect(db.verno, 'Dexie 版本应为 2').toBe(2)
+    expect(db.verno, 'Dexie 版本应为 3（CL-F-20 引入 userId）').toBe(3)
     expect(DB_SRC, 'v1 声明必须保留（加法式升级，不是重写）').toMatch(/version\(1\)\.stores\(/)
-    expect(DB_SRC, 'v2 声明应存在').toMatch(/version\(2\)\.stores\(/)
+    expect(DB_SRC, 'v2 声明应保留').toMatch(/version\(2\)\.stores\(/)
+    expect(DB_SRC, 'v3 声明应存在').toMatch(/version\(3\)\.stores\(/)
   })
 
   describe('T-9 索引可用性（修前必红）', () => {
@@ -174,7 +178,12 @@ describe('messageCache 契约（CL-05 Phase 2）', () => {
       await saveMessage(SESSION, msg(3, 3000, 'sent'))
 
       const stats = await getCacheStats()
-      expect(stats).toMatchObject({ totalMessages: 3, totalSessions: 1, sendingCount: 1, failedCount: 1 })
+      expect(stats).toMatchObject({
+        totalMessages: 3,
+        totalSessions: 1,
+        sendingCount: 1,
+        failedCount: 1,
+      })
     })
   })
 })

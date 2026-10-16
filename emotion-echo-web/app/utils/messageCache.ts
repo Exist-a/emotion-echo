@@ -12,11 +12,10 @@ async function getDexieKeys() {
   return { minKey: Dexie.minKey, maxKey: Dexie.maxKey }
 }
 
-// 带状态的消息类型
-interface MessageWithStatus extends StoredMessage {
-  status?: MessageStatus
-  retryCount?: number
-}
+// CL-F-18：这里曾有一份文件内私有 `interface MessageWithStatus extends StoredMessage`，
+// 逐字等于已导出的 `StoredMessage`（`status?` / `retryCount?` 本就可选）⇒ 已删除，
+// 统一改用公共存储行类型 `StoredMessage`。契约钉：
+// app/types/message-with-status-single-source.architecture.test.ts
 
 // ==================== 基础CRUD操作 ====================
 
@@ -24,15 +23,18 @@ interface MessageWithStatus extends StoredMessage {
  * 保存单条消息（自动关联当前会话）
  * @param sessionId 会话ID
  * @param message 消息对象（可选包含status）
+ * @param userId 归属用户（CL-F-20：用于按用户隔离，换账号后不误补上一账号的消息）
  */
 export async function saveMessage(
   sessionId: string,
   message: conversationMessageType & { status?: MessageStatus; retryCount?: number },
+  userId?: string,
 ): Promise<void> {
   const db = await getDb()
-  const stored: MessageWithStatus = {
+  const stored: StoredMessage = {
     ...message,
     sessionId,
+    ...(userId ? { userId } : {}),
     status: message.status || 'sent',
     retryCount: message.retryCount || 0,
   }
@@ -43,15 +45,18 @@ export async function saveMessage(
  * 批量保存消息
  * @param sessionId 会话ID
  * @param messages 消息数组
+ * @param userId 归属用户（CL-F-20）
  */
 export async function saveMessages(
   sessionId: string,
   messages: (conversationMessageType & { status?: MessageStatus })[],
+  userId?: string,
 ): Promise<void> {
   const db = await getDb()
   const stored = messages.map((msg) => ({
     ...msg,
     sessionId,
+    ...(userId ? { userId } : {}),
     status: msg.status || 'sent',
     retryCount: 0,
   }))
@@ -97,7 +102,7 @@ export async function getMessagesBySession(
   sessionId: string,
   pageSize: number,
   beforeSendTime?: number,
-): Promise<MessageWithStatus[]> {
+): Promise<StoredMessage[]> {
   const db = await getDb()
   const { minKey, maxKey } = await getDexieKeys()
   const query = db.messages
@@ -115,10 +120,7 @@ export async function getMessagesBySession(
  * @param limit 限制数量
  * @returns 消息列表
  */
-export async function getLatestMessages(
-  sessionId: string,
-  limit = 50,
-): Promise<MessageWithStatus[]> {
+export async function getLatestMessages(sessionId: string, limit = 50): Promise<StoredMessage[]> {
   const db = await getDb()
   return db.messages.where('sessionId').equals(sessionId).reverse().limit(limit).toArray()
 }
@@ -129,7 +131,7 @@ export async function getLatestMessages(
  */
 export async function getMessageById(
   messageId: string | number,
-): Promise<MessageWithStatus | undefined> {
+): Promise<StoredMessage | undefined> {
   const db = await getDb()
   return db.messages.get(messageId)
 }
@@ -137,19 +139,29 @@ export async function getMessageById(
 /**
  * 获取发送中的消息（用于断网重连后重试）
  * @param sessionId 会话ID
+ * @param userId 归属用户（CL-F-20；不传则不限用户）
  */
-export async function getPendingMessages(sessionId: string): Promise<MessageWithStatus[]> {
+export async function getPendingMessages(
+  sessionId: string,
+  userId?: string,
+): Promise<StoredMessage[]> {
   const db = await getDb()
-  return db.messages.where({ sessionId, status: 'sending' }).toArray()
+  const rows = await db.messages.where({ sessionId, status: 'sending' }).toArray()
+  return userId ? rows.filter((m: StoredMessage) => m.userId === userId) : rows
 }
 
 /**
  * 获取发送失败的消息
  * @param sessionId 会话ID
+ * @param userId 归属用户（CL-F-20；不传则不限用户）
  */
-export async function getFailedMessages(sessionId: string): Promise<MessageWithStatus[]> {
+export async function getFailedMessages(
+  sessionId: string,
+  userId?: string,
+): Promise<StoredMessage[]> {
   const db = await getDb()
-  return db.messages.where({ sessionId, status: 'failed' }).toArray()
+  const rows = await db.messages.where({ sessionId, status: 'failed' }).toArray()
+  return userId ? rows.filter((m: StoredMessage) => m.userId === userId) : rows
 }
 
 /**
@@ -160,10 +172,17 @@ export async function getFailedMessages(sessionId: string): Promise<MessageWithS
  * ⚠️ 用 `filter`（全表扫描）而非 `where('status')`：schema 里没有**单列** status 索引
  * （只有 `[sessionId+status]` 复合索引），`where('status')` 会抛 SchemaError。
  * 本地待重发队列规模很小，全表扫描代价可接受。
+ *
+ * **CL-F-20（按用户隔离）**：传了 `userId` 就只返回**该用户自己的**失败行 ——
+ * 换账号登录后，上一账号留在同一浏览器库里的 `failed` 行**看不见也补不了**，
+ * 否则会拿新账号的令牌去补旧账号的消息。不传 `userId` 时保留旧的全量语义，
+ * 仅用于"未登录/遗留行"的兜底查询；自动补发路径**必须**传 userId（见 stores/message.ts）。
  */
-export async function getAllFailedMessages(): Promise<MessageWithStatus[]> {
+export async function getAllFailedMessages(userId?: string): Promise<StoredMessage[]> {
   const db = await getDb()
-  return db.messages.filter((m: MessageWithStatus) => m.status === 'failed').toArray()
+  return db.messages
+    .filter((m: StoredMessage) => m.status === 'failed' && (!userId || m.userId === userId))
+    .toArray()
 }
 
 // ==================== 删除和清理操作 ====================
@@ -258,7 +277,7 @@ export async function getCacheStats(): Promise<{
  * 导出某个会话的所有消息（用于备份或迁移）
  * @param sessionId 会话ID
  */
-export async function exportSessionMessages(sessionId: string): Promise<MessageWithStatus[]> {
+export async function exportSessionMessages(sessionId: string): Promise<StoredMessage[]> {
   const db = await getDb()
   return db.messages.where('sessionId').equals(sessionId).sortBy('sendTime')
 }
@@ -270,7 +289,7 @@ export async function exportSessionMessages(sessionId: string): Promise<MessageW
  */
 export async function importSessionMessages(
   sessionId: string,
-  messages: MessageWithStatus[],
+  messages: StoredMessage[],
 ): Promise<void> {
   const db = await getDb()
   const messagesWithSession = messages.map((m) => ({

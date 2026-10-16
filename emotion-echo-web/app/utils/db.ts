@@ -31,6 +31,15 @@ export async function getDb() {
       db.version(2).stores({
         messages: 'id, sessionId, sendTime, [sessionId+sendTime], [sessionId+status]',
       })
+      // CL-F-20：缓存行补 `userId`（归属用户）并建索引。
+      //   · userId           —— 按用户隔离查询（换账号后不误补上一账号的消息）；
+      //   · [userId+status]  —— getAllFailedMessages(userId) 走索引而非全表扫描。
+      // 加法式升级：v1/v2 声明均保留，Dexie 自动迁移；旧行没有 userId ⇒ 查不到，
+      // 语义 = "归属未知的行不自动补发"（宁可不发，不拿错令牌发）。
+      db.version(3).stores({
+        messages:
+          'id, sessionId, userId, sendTime, [sessionId+sendTime], [sessionId+status], [userId+status]',
+      })
       _db = db
       return db
     })()
