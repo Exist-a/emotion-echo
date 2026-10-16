@@ -327,6 +327,13 @@ func (h *chatEventHandler) backoffFor(attempt int) time.Duration {
 //   - err：DLQ 投递**真的失败** ⇒ 调用方**不得 Mark**，否则"业务 + DLQ 双失败 = 消息永久丢失"
 func (h *chatEventHandler) publishToDLQ(ctx context.Context, msg *sarama.ConsumerMessage, lastErr error, attempts int) error {
 	if h.dlq != nil {
+		// CL-03 T-07：NoopDLQPublisher 返回 nil（"成功"语义）但其实**什么都没做** ⇒
+		// 显式标出"未配置/Noop + 已丢弃"，否则与真实投递成功无法区分（静默丢弃）。
+		if _, isNoop := h.dlq.(NoopDLQPublisher); isNoop {
+			IncDLQUnconfigured()
+			logging.PrintfContext(ctx, "[kafka-consumer] DLQ 未配置（Noop）：毒消息无处投递、不可回放，key=%s err=%v",
+				string(msg.Key), lastErr)
+		}
 		// P1-2 (Round 1): 透传原 headers（含 sw8），让 OAP 端能继续追 trace。
 		dlqHeaders := make(map[string]string, len(msg.Headers))
 		for _, hd := range msg.Headers {

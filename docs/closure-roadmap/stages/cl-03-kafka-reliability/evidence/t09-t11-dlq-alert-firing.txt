@@ -1,0 +1,22 @@
+CL-03 T-09 / T-11 / T-16 运行时证据（2026-10-16）
+
+方法：往 chat-events-dlq 灌 3 条（topic 已存在，offset 0→4）→ 等 Prometheus 评估。
+
+[1] 告警表达式实际取值
+    sum(increase(kafka_topic_partition_current_offset{topic="chat-events-dlq"}[10m])) = 3.3565  (非空 series ✓ T-11)
+
+[2] Prometheus 告警状态
+    DLQMessagesAccumulating  state=firing  severity=warning
+    summary="chat-events-dlq 近 10 分钟有新消息进入（DLQ 无消费者 ⇒ 进入即堆积）"
+
+[3] Alertmanager 收到
+    DLQMessagesAccumulating  status.state=active     （送达 ✓）
+
+[4] Grafana 线上看板（T-16，与告警同源被消费）
+    面板标题 = "DLQ Depth (chat-events-dlq messages) — alerting: DLQMessagesAccumulating"
+    expr    = sum(kafka_topic_partition_current_offset{topic="chat-events-dlq"}) or vector(0)
+
+补充说明（如实登记）：
+- Prometheus/Grafana 必须**从 worktree 起栈**才会挂到本轨改过的规则/看板（bind mount 按 compose 文件所在目录解析）。
+  首次从共享目录起栈时 kafka-dlq 组里**没有** DLQMessagesAccumulating（只有两条旧告警）—— 这正是 H6 语义的体现。
+- DLQ topic 起初不存在（produce 报 UNKNOWN_TOPIC_OR_PARTITION），显式建 topic 后才灌入成功。

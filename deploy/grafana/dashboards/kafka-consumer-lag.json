@@ -174,6 +174,79 @@
         "orientation": "auto",
         "textMode": "auto"
       }
+    },
+    {
+      "type": "table",
+      "title": "DLQ 回放记录（最近 10 次，CL-03 Phase 4c）",
+      "id": 4,
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT started_at AS 开始, finished_at AS 结束, replayed AS 成功, failed AS 失败, dry_run AS 演练, operator AS 操作者\nFROM emotion_echo_analytics.dlq_replay_runs\nORDER BY started_at DESC\nLIMIT 10"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "DLQ 未配置时的丢弃计数（CL-03 T-07）",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(emotion_echo_dlq_unconfigured_total) or vector(0)",
+          "legendFormat": "ai-svc"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(emotion_echo_analytics_dlq_unconfigured_total) or vector(0)",
+          "legendFormat": "analytics-svc"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     }
   ],
   "refresh": "30s",

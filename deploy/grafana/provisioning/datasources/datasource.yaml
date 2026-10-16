@@ -32,3 +32,22 @@ datasources:
     editable: true
     jsonData:
       maxLines: 1000
+
+  # CL-03 Phase 4c（CL-D-18=B）：PostgreSQL 数据源 —— 给「DLQ 回放记录」面板用。
+  # 为什么需要：回放工具是人工 CLI（无 /metrics 端点）⇒ 回放结果落 PG 表
+  #   emotion_echo_analytics.dlq_replay_runs，本数据源让 Grafana 直接 SQL 读它。
+  # 只读用途：dev 沿用 compose 口径的 postgres 账号（prod 应换只读账号）。
+  - name: PostgreSQL
+    uid: postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: emotion_echo
+    user: postgres
+    editable: true
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+      timescaledb: false
+    secureJsonData:
+      password: postgres

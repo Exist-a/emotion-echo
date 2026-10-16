@@ -121,7 +121,10 @@ func (h *ConsumerGroupHandler) publishToDLQ(
 			"attempts", attempts, "key", string(msg.Key), "err", handlerErr)
 		return dlqErr
 	}
-	slog.ErrorContext(ctx, "consumer handler err after retries → DLQ",
+	// CL-03 T-07：DLQ **未配置**（dev 常见）⇒ 毒消息无处可去、不可回放。
+	// 此前这里只打一条与"已投 DLQ"完全同款的日志 ⇒ 读者无法区分，属**静默丢弃**。
+	IncDLQUnconfigured()
+	slog.WarnContext(ctx, "consumer DLQ 未配置：毒消息无处投递，预算耗尽后已丢弃（不可回放）",
 		"attempts", attempts, "key", string(msg.Key), "err", handlerErr)
 	return nil
 }

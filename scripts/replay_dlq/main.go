@@ -21,6 +21,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -67,7 +68,12 @@ func main() {
 	limit := flag.Int("limit", 0, "最多回放条数，0 = 全部")
 	dryRun := flag.Bool("dry-run", false, "只打印回放计划，不实际发布")
 	timeout := flag.Int("timeout-sec", 30, "读取 DLQ 的空闲超时（秒）")
+	// CL-03 Phase 4c（CL-D-18=B）：回放结果落 PG，供事后查询与 Grafana 面板消费。
+	record := flag.Bool("record", true, "把本次回放结果写进 emotion_echo_analytics.dlq_replay_runs（best-effort，失败不影响回放）")
+	operator := flag.String("operator", "", "操作者标识（写进回放记录；建议填 人名/工单号）")
 	flag.Parse()
+
+	startedAt := time.Now()
 
 	brokerList := splitBrokers(*brokers)
 
@@ -121,6 +127,11 @@ func main() {
 				i+1, e.target, string(e.key), len(e.value), len(e.headers))
 		}
 		fmt.Println("[replay] dry-run：未实际发布")
+		maybeRecord(*record, runRecord{
+			StartedAt: startedAt, FinishedAt: time.Now(),
+			DLQTopic: *dlqTopic, TargetTopic: *fallbackTopic,
+			Replayed: len(entries), Failed: 0, DryRun: true, Operator: *operator,
+		})
 		return
 	}
 
@@ -147,6 +158,28 @@ func main() {
 		ok++
 	}
 	fmt.Printf("[replay] 完成：成功 %d / 失败 %d（目标=%s）。死信在 DLQ topic 中保留为历史（offset 累计），处置账面见 report\n", ok, fail, *fallbackTopic)
+
+	// CL-03 Phase 4c：把本次结果落 PG（best-effort：记账失败只 warn，不让回放报错）
+	maybeRecord(*record, runRecord{
+		StartedAt: startedAt, FinishedAt: time.Now(),
+		DLQTopic: *dlqTopic, TargetTopic: *fallbackTopic,
+		Replayed: ok, Failed: fail, DryRun: false, Operator: *operator,
+	})
+}
+
+// maybeRecord 按开关记录本次回放结果；任何失败都只 warn（不改变回放本身的成败）。
+func maybeRecord(enabled bool, rec runRecord) {
+	if !enabled {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := recordRun(ctx, pgDSNFromEnv(os.Getenv), rec); err != nil {
+		fmt.Fprintf(os.Stderr, "[replay] 警告：回放结果未能落库（不影响本次回放）: %v\n", err)
+		return
+	}
+	fmt.Printf("[replay] 已记录本次回放：成功 %d / 失败 %d（dry_run=%v）→ emotion_echo_analytics.dlq_replay_runs\n",
+		rec.Replayed, rec.Failed, rec.DryRun)
 }
 
 func saramaConfig() *sarama.Config {
