@@ -14,6 +14,7 @@ import (
 	"strconv"
 
 	"emotion-echo-web-bff/internal/downstream"
+	"emotion-echo-web-bff/internal/session"
 
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc/status"
@@ -43,7 +44,7 @@ func (h *EmotionQueryHandler) byMessage(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid message id")
 		return
 	}
-	e, err := h.query.ByMessage(c.Request.Context(), id)
+	e, err := h.query.ByMessage(session.WithRequestAuth(c), id)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return
@@ -63,7 +64,7 @@ func (h *EmotionQueryHandler) byFusedMessage(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid message id")
 		return
 	}
-	f, err := h.query.ByFusedMessage(c.Request.Context(), id)
+	f, err := h.query.ByFusedMessage(session.WithRequestAuth(c), id)
 	if err != nil {
 		// gRPC status 错误优先映射
 		if st, ok := status.FromError(err); ok {
@@ -99,7 +100,7 @@ func (h *EmotionQueryHandler) byConversation(c *gin.Context) {
 			limit = n
 		}
 	}
-	items, total, err := h.query.ByConversation(c.Request.Context(), id, limit)
+	items, total, err := h.query.ByConversation(session.WithRequestAuth(c), id, limit)
 	if err != nil {
 		Fail(c, statusFor(err), 1, err.Error())
 		return

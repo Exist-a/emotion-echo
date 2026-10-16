@@ -1,10 +1,14 @@
-# CL-07 后端切片 起栈验证用 override（AGENTS §8.1 条款 10 / H5：**带轨后缀 tag，不覆盖公共 tag**）
+# CL-07 起栈验证用 override（AGENTS §8.1 条款 10 / H5：**带轨后缀 tag，不覆盖公共 tag**）
 #
 # 覆盖范围 = 本阶段改过代码的服务：
-#   analytics-svc  （Go：FusedReportRepo + svcCtx 接线 + reports_daily 装配 + gRPC 映射）
-#   web-bff        （Go：downstream DailyReport DTO + gRPC 客户端映射 + analytics_view 透传）
-#   ai-svc         **无需重建**（本轨只加迁移 i010，不改 Go 代码）—— 但其 migrations 目录
-#                  必须被 db-migrate 挂载（worktree 内起栈即自动指向本 worktree 的 migrations）
+#   后端切片（已 done/合并）：
+#     analytics-svc  （Go：FusedReportRepo + svcCtx 接线 + reports_daily 装配 + gRPC 映射）
+#     web-bff        （Go：downstream DailyReport DTO + gRPC 客户端映射 + analytics_view 透传）
+#     ai-svc         **无需重建**（只加迁移 i010，不改 Go 代码）—— 其 migrations 目录由
+#                    db-migrate 挂载（worktree 内起栈即指向本 worktree 的 migrations）
+#   前端半（CL-07 情绪回显）：emotion-echo-web（Nuxt）
+#     ⚠️ 前端必须用**容器镜像**验证：宿主 `pnpm dev` 在本环境 IAB webview 下不 hydration
+#        （dev 的 @fs 模块 URL 内嵌中文仓库路径 `D:/源码/...`）；容器内构建是 ASCII 路径。
 #
 # 用法（H6：「worktree 构建镜像 + up 容器」）：
 #   cd <worktree>
@@ -14,11 +18,20 @@
 #     build emotion-echo-analytics-svc emotion-echo-web-bff
 #   # 再整栈 up（从 worktree 起，使 db-migrate 挂到本 worktree 的 migrations）：
 #   docker compose ... --profile dev up -d
+#   ⚠️ `--env-file` 的相对路径按 **cwd** 解析（不是 compose 文件目录）⇒ 简法是把共享
+#      `.env.local` **cp 到 cwd**（worktree 根）再用 `--env-file .env.local`；**严禁**删改共享那份。
 #
-# 前置：本 worktree 需 `deploy/tls/`（ai-svc Dockerfile COPY deploy/tls/*）—— 已从共享目录 cp 来。
-# 引用：docs/closure-roadmap/stages/cl-07-fusion-consumption/report.md。
+# ⚠️ **`emotion-echo-web: image: emotion-echo/web:cl07` 目前不可用**（2026-10-16 实测）：
+#    该镜像**无法构建** —— `package.json` 的 `vue-router@^5.4.0` 与 Dockerfile 里
+#    `npm install` 走的 `package-lock.json`（`nuxt@4.2.2` 要求 `vue-router@^4.6.3`）冲突 ⇒ ERESOLVE。
+#    ⇒ 该行是**悬空引用**，按本文件整栈 `up` 会因镜像缺失失败；前端 [V] 验收改用
+#    `pnpm build` 生产产物（`node .output/server/index.mjs`，见阶段档 report §浏览器实测）。
+#    要整栈 up，先把该行**注释掉**（或在修好依赖后重建镜像）。
+# 引用：docs/closure-roadmap/stages/cl-07-{fusion-consumption,emotion-display}/report.md。
 services:
   emotion-echo-analytics-svc:
     image: emotion-echo/analytics-svc:cl07
   emotion-echo-web-bff:
     image: emotion-echo/web-bff:cl07
+  emotion-echo-web:
+    image: emotion-echo/web:cl07

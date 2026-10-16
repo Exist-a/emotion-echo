@@ -1,5 +1,7 @@
 <template>
   <div class="chat-page">
+    <!-- CL-07 前端半：当前状态回显（无融合数据时整块不渲染，不占位） -->
+    <CurrentEmotionBar :state="currentEmotionState" />
     <main ref="mainRef" class="chat-main" aria-live="polite" @scroll="onMessagesScroll">
       <div class="dialog-list">
         <article
@@ -242,6 +244,8 @@
 
 <script setup lang="ts">
 import VoiceMessage from '~/components/voice/VoiceMessage.vue'
+import CurrentEmotionBar from '~/components/emotion/CurrentEmotionBar.vue'
+import { useCurrentEmotion } from '~/composables/useCurrentEmotion'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { useVoiceRecorder } from '~/composables/useVoiceRecorder'
 import { useFaceEmotion } from '~/composables/useFaceEmotion'
@@ -292,6 +296,61 @@ const conversationSender = useConversationSender({
   onEmotionChange: (emotion) => digitalHumanRef.value?.setEmotion(emotion),
 })
 
+// ===== CL-07 前端半（情绪回显 G1/G3/G4）=====
+// 「增强非依赖」纪律：取不到融合情绪就隐藏/保持默认，**绝不阻塞主对话、绝不抛错**
+// （与画像注入同款；见 composables/useCurrentEmotion.ts 注释）。
+//
+// ⚠️ G2（**消息级融合角标**）**用户裁定不做**（2026-10-16）⇒ 本页只保留顶部状态条 + 数字人情绪。
+const { current: currentEmotionState, refreshForMessage: refreshCurrentEmotion } =
+  useCurrentEmotion()
+
+// 顶部状态条 / 数字人情绪的取数锚点 = 会话里**最新一条用户消息**
+// （融合产物按消息粒度：fused_emotions.message_id）
+const latestUserMessageId = computed(() => {
+  const list = (messageStore.sortedMessages ?? []) as Array<{ id?: string; sender?: string }>
+  for (let i = list.length - 1; i >= 0; i--) {
+    const it = list[i]
+    if (it?.sender === 'user' && it.id) return String(it.id)
+  }
+  return ''
+})
+
+/**
+ * G4：把真实情绪交给数字人。
+ *
+ * 融合是 FusionWorker 的 **5s 批处理**（发消息后不会立刻有结果）⇒ 流刚结束就拉大概率落空。
+ * 故：先立即拉一次，再等一个窗口补拉一次；仍拿不到就**保持默认表情**（不硬等、不报错）。
+ * `aiEmotion`（SSE 第二参）若有值则优先（后续若走"方案 B"SSE 回传，这里天然兼容）。
+ */
+const syncEmotionToDigitalHuman = async (aiEmotion?: string) => {
+  if (aiEmotion) {
+    digitalHumanRef.value?.setEmotion(aiEmotion)
+    return
+  }
+  for (const delay of [0, 4500]) {
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
+    await refreshCurrentEmotion(latestUserMessageId.value)
+    const emotion = currentEmotionState.value?.emotion
+    if (emotion) {
+      digitalHumanRef.value?.setEmotion(emotion)
+      return
+    }
+  }
+}
+
+// 消息列表变化 ⇒ 刷新顶部状态条（锚点 = 最新一条用户消息）
+// （G2 消息级角标已按用户裁定移除 ⇒ 不再逐条取数）
+watch(
+  () => (messageStore.sortedMessages ?? []).map((m: any) => `${m?.sender}:${m?.id}`).join(','),
+  () => {
+    const userIds = ((messageStore.sortedMessages ?? []) as Array<{ id?: string; sender?: string }>)
+      .filter((m) => m?.sender === 'user' && m.id)
+      .map((m) => String(m.id))
+    void refreshCurrentEmotion(userIds.length ? userIds[userIds.length - 1] : '')
+  },
+  { immediate: true },
+)
+
 const toggleCamera = async () => {
   try {
     if (faceEmotion.isCameraOn.value) {
@@ -337,9 +396,9 @@ const handleVoiceStreamResponse = async (
     transcript,
     'neutral',
     {
-      onFinish: (messageId, aiEmotion) => {
-        if (aiEmotion) digitalHumanRef.value?.setEmotion(aiEmotion)
+      onFinish: (_messageId, aiEmotion) => {
         conversationSender.flushTTS()
+        void syncEmotionToDigitalHuman(aiEmotion)
       },
       onError: (error) => {
         window.alert(`AI 回复失败：${error}`)
@@ -380,9 +439,9 @@ const handleSubmit = async () => {
       '请帮我看看这个文件，用中文简短说明它的内容要点。',
       'neutral',
       {
-        onFinish: (messageId, aiEmotion) => {
-          if (aiEmotion) digitalHumanRef.value?.setEmotion(aiEmotion)
+        onFinish: (_messageId, aiEmotion) => {
           conversationSender.flushTTS()
+          void syncEmotionToDigitalHuman(aiEmotion)
         },
         onError: (error) => {
           window.alert(`AI 回复失败：${error}`)
@@ -396,9 +455,9 @@ const handleSubmit = async () => {
   message.value = ''
   if (pendingAttachment.value && !(await sendAttachmentMessage())) return
   await conversationSender.sendToExistingConversation(conversationIdRef.value, value, 'neutral', {
-    onFinish: (messageId, aiEmotion) => {
-      if (aiEmotion) digitalHumanRef.value?.setEmotion(aiEmotion)
+    onFinish: (_messageId, aiEmotion) => {
       conversationSender.flushTTS()
+      void syncEmotionToDigitalHuman(aiEmotion)
     },
     onError: (error) => {
       window.alert(`AI 回复失败：${error}`)
