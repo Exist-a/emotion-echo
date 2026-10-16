@@ -186,6 +186,23 @@ shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10�
 
 **如实说明证据边界**：写侧调用点用的是**源契约断言**（无法在单测里造真实 gorm 事务，仓内同型先例见 `createconversationlogic_test.go:141`）；**"SkyWalking UI 里连成一条"的端到端证据归 Phase 7（🔴 需栈）**，本档不声称已取得。
 
+### Phase 4b · DLQ 投递失败不再静默丢消息（🟢 不需栈）—— 2026-10-16
+
+**RED → GREEN**：两侧各新增 3 例（RED 时 `marked=1` vs 期望 `0`）：
+`DLQPublishFails_DoesNotMarkMessage`（核心）/ `_DoesNotSkipLaterMessages` / `NoopDLQ_StillMarks`（防误伤）。
+
+**实现**：`publishToDLQ` 改为返回 error；`ConsumeClaim` 在 `dlqErr != nil` 时**不 Mark + EndSpan(handlerErr) + return nil**（结束本次 claim）。
+
+**两条关键设计论证（都写进了代码注释）**
+1. **为什么必须结束 claim 而不能"只跳过本条"**：sarama 提交的是**已 Mark 的最高 offset** ⇒ 若继续消费并 Mark 后续消息，这条未 Mark 的会被**隐式跳过**，重投保证失效。
+2. **区分三种情形**：DLQ 未配置（dev，无处可投）与 Noop（返回 nil="成功语义"）**都不算投递失败** ⇒ 照旧 Mark（否则 dev 直接卡死）——这两条各有测试钉住。
+
+**裁定要求的"逐 handler 核实幂等"（已取证）**：ai-svc 唯一变更面 = `logic/consumehandler.go:88 repo.Create` → `emotion_repository.go:220-228 ON CONFLICT (event_id) DO NOTHING`；analytics-svc = `ON CONFLICT (event_id, occurred_at) DO NOTHING`（分区表 UNIQUE）⇒ 重投不产生重复数据。
+
+**代价（如实登记）**：DLQ 故障期间该分区**停滞**（offset 不前进），由既有 `AIDLQPublishFailure` / `DLQPublishFailing` 告警暴露 —— "不丢优先"的有意取舍。
+
+**证据**：`go test ./...` ai-svc **15 包 ok / 0 FAIL**、analytics-svc **11 包 ok / 0 FAIL**，`go vet` 干净。
+
 ## §3 待办（下一步）
 
 - ✅ **§7 [M] 四项裁定已落定（2026-10-16 用户，全部采纳推荐项）** → 登记为 `CL-D-15`~`CL-D-18`（见 `decisions.md`）

@@ -163,7 +163,8 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 | T-08 | ✅ **PASS** | Phase 4a：`node deploy/obs_monitoring.test.js` group ⑦ 6/6 绿（含 k8s 内联同步 + 面板标签）+ `bash scripts/test_helm_prometheus_render.sh` **PASS=8 FAIL=0**（两侧 14 条告警一致） |
 | T-14 | ✅ **PASS** | Phase 6：`kafka-pipeline-pending-decisions.md` D8 行/两处摘要更正为"已收敛"，附 `shared/pkg/messaging/sw8_header.go:23` 等行号证据 |
 | T-15 | ✅ **PASS** | Phase 6：新增「CL-03 处置」表 —— D1 并入 CL-F-15 / D2·D4 ✅ / D3·D5·D6 登记触发条件 / D7 等产品语义拍板 / D8 ✅ 全部落地（无"待定"残留） |
-| T-04 / T-06 / T-07 / T-09 / T-10 / T-11 / T-12 / T-13 / T-16 | ⏸ **PENDING** | T-04/T-09/T-11/T-16 需栈（排队第 5 位）；T-06/T-07/T-10 等 M2/M3 裁定；T-12/T-13 等 M4 裁定 |
+| T-06 | ✅ **PASS** | Phase 4b（`CL-D-16`=A）：两侧各 3 例绿（不 Mark / 不跳过后续 / Noop 与"未配置"仍 Mark）；**幂等已逐 handler 取证**（ai-svc `ON CONFLICT (event_id)`、analytics `ON CONFLICT (event_id, occurred_at)`） |
+| T-04 / T-07 / T-09 / T-10 / T-11 / T-12 / T-13 / T-16 | ⏸ **PENDING**（各有明确前置，非"待定"） | **需要栈**：T-04/T-09/T-11/T-16（排队第 5 位）；**需先定落点**：T-07（Noop 可见化的指标载体）、T-10（"回放计数"在 CLI 工具里的落点）；**待 D 轨握手答复**：T-12/T-13（都要改 `chat-svc/main.go`，脊柱） |
 
 **Phase 4a 附带新账**：`CL-F-22`（内联 DDL 缺 `idx_outbox_attempts`）· `CL-F-23`（DLQ 无真实深度指标，`oldest_offset` 可采性未实测）—— 均已登 `discovered-unresolved.md`。
 
