@@ -21,6 +21,7 @@ package outbox
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	"github.com/emotion-echo/shared/pkg/logging"
@@ -50,6 +51,15 @@ type Relay struct {
 	// 与 CL-F-14「请求期现读全局」一致：svc 先于 OAP 启动时 tracer 是后台补挂上的，
 	// 构造期快照会漏掉它。全线为 nil（SkyWalking 关闭）⇒ 不建 span，行为与改前一致。
 	Tracer grpcinterceptor.Tracer
+	// PublisherFn CL-03 Phase 5（CL-F-15）：按次解析"当前 publisher"。
+	//
+	// 为什么需要：Kafka producer 初始化失败时不能再静默改投内存，而是装
+	// UnavailablePublisher（Publish 报错）并后台重试；重试成功后要**热替换**成真
+	// publisher ⇒ relay 必须每轮现读，不能构造期快照（同 CL-F-14 的道理）。
+	//
+	// 返回 nil 或返回 UnavailablePublisher ⇒ 视为"未就绪"：行留 pending，
+	// **不计 attempts**（见 FlushOnce）。非 nil 时优先于 publisher 字段。
+	PublisherFn func() events.EventPublisher
 }
 
 // activeTracer 返回本次发布应使用的 tracer：优先显式注入，否则读全局（可后置补挂）。
@@ -150,6 +160,14 @@ func (r *Relay) FlushOnce(ctx context.Context) error {
 	}
 	for _, e := range entries {
 		if err := r.publishOne(ctx, e); err != nil {
+			// CL-03 Phase 5（CL-F-15）：publisher **未就绪**（Kafka 初始化失败、后台重试中）
+			// ⇒ 行原样留 pending，且**不累加 attempts**。
+			// 为什么不计 attempts：长时间故障下 attempts 会一路涨到 MaxAttempts ⇒ 全部转 dead，
+			// 而 dead 行不再被 ListPending 扫描 = 另一种形式的丢消息。
+			if errors.Is(err, events.ErrPublisherUnavailable) {
+				logging.PrintfContext(ctx, "[outbox-relay] publisher 未就绪，本轮跳过 id=%d（留 pending 等后台重试）: %v", e.ID, err)
+				continue
+			}
 			// ADR-19 PR-A6.1: 失败先 MarkFailed（attempts+1），
 			// 再判断 attempts 是否超阈值 → MarkDead 把行置为 dead 状态
 			// 不再被 ListPending 扫描,避免永久无限重试毒消息。
@@ -188,13 +206,25 @@ func (r *Relay) publishOne(ctx context.Context, e repository.OutboxEvent) error 
 	if err != nil {
 		return err
 	}
-	if r.publisher == nil {
+	if r.publisher == nil && r.PublisherFn == nil {
+		// 保持原语义：**没注入任何 publisher** = 配置/装配错误（不是"暂时未就绪"）
+		// ⇒ 走 attempts/dead 状态机，让问题可见。
 		return errors.New("outbox-relay: publisher is nil")
+	}
+	// CL-03 Phase 5：每轮现读"当前 publisher"（后台重试成功后热替换）。
+	pub := r.publisher
+	if r.PublisherFn != nil {
+		if p := r.PublisherFn(); p != nil {
+			pub = p
+		} else {
+			// holder 尚未被后台重试填上 ⇒ **未就绪**（可自愈），不是发布失败
+			return fmt.Errorf("%w: PublisherFn 返回 nil（后台重试尚未成功）", events.ErrPublisherUnavailable)
+		}
 	}
 	// CL-03 Phase 3：用写入行时存下的 sw8 恢复父 ctx，把 relay 这一跳接回原始请求的 trace。
 	// 空列 / 无 tracer 时 pubCtx == ctx（行为与改前逐字一致）。
 	pubCtx, endSpan := r.resumeTraceCtx(ctx, e.TraceSW8)
-	err = r.publisher.Publish(pubCtx, e.Topic, evt)
+	err = pub.Publish(pubCtx, e.Topic, evt)
 	endSpan(err)
 	return err
 }
