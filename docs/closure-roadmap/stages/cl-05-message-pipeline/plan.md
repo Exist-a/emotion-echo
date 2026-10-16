@@ -94,13 +94,16 @@ ledger: E2E-F-205 / E2E-F-206（本阶段收口时关闭，见 §4）+ CL-F-10 /
 | （未记）前端类型与上游 DTO 不一致 | **新发现**：`sender:'user'\|'AI'`（前端）vs `role`（DTO）、`contentType:'text'\|'audio'\|'img'` vs 上游含 `image`/`file`/`video` | 🆕 进 §7 [M] 裁定**是否本阶段统一**（可能牵动多处渲染） |
 | 会话列表游标**键** | 排序是 `updated_at DESC, id DESC`（`conversation_repository.go:427`）⇒ **单一 `id` 游标不成立**（新消息会顶起 `updated_at`，行会"跳页"）⇒ 必须**复合游标 `(updated_at, id)`** | ⚠️ **对 D-B 的细化**：用户已定"B1 游标"，此处只需落实为**复合键**（非新决策，但是落地必须写死的一条） |
 
-### A.4 未跑 smoke / 未取运行时证据声明（诚实性，按 RUNBOOK §4）
+### A.4 未跑 smoke / 未取运行时证据声明（建档期 → ⛔ **已作废，2026-10-16**）
 
-**本次建档只做静态核实**：**未启动 dev 栈**（19 容器）——
-`deploy/.devmode-session` 现由 **B 轨（`owner: lane-cl-b`，`until: 2026-10-14 18:00`）持有**，按契约 §3.1「不得强占」，D 轨排在 **C 之后**；
-**未跑** `scripts/smoke_data_layer.py`（§2.4 数据契约 smoke），**未抓** 一次真实 `/api/v1/conversations/:id/messages` 的翻页请求。
-⇒ 因此 **Phase 0（基线取证）尚未执行**；本文所有"现状"结论依据均为**源码**（§A.1 的 file:line）而非运行时观测。
-**Phase 0 完成后必须回填真实证据**（网关 `:19080` + Bearer 的 curl 输出 / DB 行）；若与源码结论冲突，**以运行时为准并回改本文**。
+> ⚠️ **本节写于 2026-10-14 建档期，其结论已被后续工作推翻，保留只为留痕。**
+> 原文声称「**未启动 dev 栈**（B 轨持锁）… 因此 **Phase 0（基线取证）尚未执行**」——
+> **已不成立**：2026-10-16 本轨按契约 §3.1 取锁并完成 Phase 0 基线取证
+> （证据 `evidence/phase0-baseline-output.txt`，其中**实测**到会话列表 `cursor` 被完全忽略）、
+> 两条传输路径的运行时翻页**均已实测**（`evidence/phase5-verify-{grpc-path,http-fallback-path}.txt`，
+> 两份各自带**路径指纹**自证）。**以 `plan.md §2` 与 `report.md §3.8~§3.10` 为准。**
+>
+> **仍未做**：`scripts/smoke_data_layer.py`（§2.4 数据契约 smoke）—— 本阶段不涉其 6 条契约，故未跑（如实记）。
 
 ### A.5 并行协议遵从自检（H1~H9 / AGENTS §8.1 条款 7~10）
 

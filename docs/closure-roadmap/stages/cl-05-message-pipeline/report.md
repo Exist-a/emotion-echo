@@ -96,6 +96,191 @@ $ pnpm typecheck             # 首轮报过 1 个 TS2532，修后无 error
 > ⚠️ **本节写于 2026-10-14 建档期，内容已被后续工作推翻，保留只为留痕**。
 > 原文声称「Phase 0 基线未取（B 轨持锁）」「T-1~T-22 仍是待执行」等 —— **均已不成立**：Phase 0 已取（`evidence/phase0-baseline-output.txt`）、两条传输路径的运行时翻页已实测（`evidence/phase5-verify-*.txt`）、22 个测试点已全部落四值（见 `plan.md §2`）。**请以 §3.8~§3.10 与 §4 为准**。
 
+### §3.3 Phase 2a · T-9 / T-10（Dexie 缓存索引）
+
+**RED（commit `6328f57`，改 db.ts 之前）**
+
+```
+$ pnpm vitest run app/utils/messageCache.test.ts
+ Test Files  1 failed (1)
+      Tests  3 failed | 8 passed (11)
+
+  ✗ Dexie schema 必须逐项声明缓存在用的索引
+    → 实际索引：id | sessionId | [sessionId+sendTime]（缺 sendTime、[sessionId+status]）
+  ✗ schema 以**增量** version(2) 升级
+    → Dexie 版本应为 2: expected 1 to be 2
+  ✗ trimOldMessages 不应抛错
+    → SchemaError: KeyPath sendTime on object store messages is not indexed
+```
+
+**GREEN（commit `e8be055`）**
+
+```
+$ pnpm vitest run app/utils/messageCache.test.ts → 11 passed (11)
+$ pnpm vitest run（全量）                        → Test Files 79 passed (79) / Tests 665 passed (665)
+$ pnpm typecheck                                 → 无 error
+```
+
+**改动**：`app/utils/db.ts` 新增 `version(2)` 声明，`messages` 索引
+`'id, sessionId, [sessionId+sendTime]'` → `'id, sessionId, sendTime, [sessionId+sendTime], [sessionId+status]'`；
+**v1 声明保留**（加法式升级 ⇒ Dexie 自动迁移，不删旧 store、不丢用户本地缓存，钉已锁"v1 与 v2 声明都在且 verno=2"）。
+新增依赖：`fake-indexeddb ^6.2.5`（devDep，`package.json` 追加式）；`tests-setup.ts` **首行** `import 'fake-indexeddb/auto'`。
+
+**⚠️ 本轮**修正**了一个此前的**错误断言**（文档与来源计划都写错了）
+
+来源计划 §1 第 7 条与 plan §A.1 原文写：
+> `getPendingMessages`/`getFailedMessages` 用 `where({sessionId,status})`、`trimOldMessages` 用 `where('sendTime')` —— **一旦真被调用会直接抛错**（Dexie 要求查询用到的复合键必须有对应索引）。
+
+**实测结果否掉了一半**：
+
+| 查询 | 实测 | 原因 |
+|---|---|---|
+| `where('sendTime')`（`trimOldMessages`） | **真抛** `SchemaError: KeyPath sendTime ... is not indexed` | Dexie 的 `where(key)` 必须命真实索引 |
+| `where({sessionId, status})`（`getPendingMessages`/`getFailedMessages`） | **不抛**（返回结果正确） | Dexie 用存在的 `sessionId` 索引取集，剩余条件在内存里过滤 |
+| `where('sessionId').sortBy('sendTime')`（`exportSessionMessages`） | **不抛** | Dexie 在内存中排序（不强制该字段有索引） |
+
+⇒ 结论：补 `[sessionId+status]` 是**效率/契约**改进（走索引而非全会话扫描），**不是**修崩溃；本阶段唯一真崩溃点只有 `trimOldMessages`。
+这一条已回填 plan §A.1 / §2 T-9，并作 §5 经验 5 留档。
+
+### §3.4 Phase 2b · T-11 / T-12（本地缓存接进消息链路）
+
+**RED（改 `stores/message.ts` 之前）**
+
+```
+$ pnpm vitest run app/stores/__tests__/message.cache.test.ts
+ Test Files  1 failed (1)      Tests  6 failed | 2 passed (8)
+
+  ✗ 读加速              → 发请求时 currentMessages 长度 0（根本没读快照）
+  ✗ 合并·服务端覆盖同 id  → expected [ 1 ] to deeply equal [ 1, 99 ]（本地 failed 被丢）
+  ✗ 合并·排序            → expected [ 1, 2 ] to deeply equal [ 99, 1, 2 ]
+  ✗ 写穿·loadMoreMessages → 缓存 []（期望 [7]）
+  ✗ 写穿·sendMessage      → 缓存 []（期望 [11]）
+  ✗ 快照不污染（切会话）   → 会话 B 快照为空
+  ✓ 降级（缓存读失败不挡服务端）—— 现状本就无缓存调用 ⇒ **"碰巧通过"**，GREEN 后仍要保住
+  ✓ getFailedMessages 查询
+```
+
+**GREEN**
+
+```
+$ pnpm vitest run app/stores/__tests__/message.cache.test.ts → 8 passed (8)
+$ pnpm vitest run（全量）                                    → Test Files 80 passed (80) / Tests 673 passed (673)
+$ pnpm typecheck                                             → 无 error（首轮报过 2 处 TS2345，见下）
+```
+
+**改动**（`stores/message.ts` +103/-18）
+
+| 能力 | 实现 |
+|---|---|
+| 读加速 | `switchSession` 先 `getLatestMessages(sessionId, 50)` 渲染快照，再调 `loadMoreMessages()`；**读失败只 `console.warn` 并降级**（缓存是加速不是依赖）；`await` 期间会话被切走则不写入旧快照 |
+| 写穿 | `loadMoreMessages` 拉到的页 + `sendMessage` 成功的行（含**幂等命中**分支）落缓存；缓存写失败不影响加载/发送结果 |
+| 合并 A | `mergeServerMessages(local, server)` —— 快照替换：服务端覆盖同 id，本地独有 `failed`/`sending` 保留 |
+| 合并 B | `appendServerPage(existing, page)` —— 分页追加：按 id 去重、同 id 以服务端为准 |
+
+**类型层摩擦（已按用户裁定处理）**：`messageCache` 的入参与服务端行是两套类型（`sender:'user'\|'ai'` vs `'user'\|'AI'`、`contentType` 取值集不同）⇒ 新增 `toCacheRow()` 断言适配并注明"Phase 3 收敛（`CL-D-13`）后应删"。这是 `CL-F-18` / `CL-D-12` 的现场记录，不是新问题。
+
+**typecheck 首轮 2 处 `TS2345`**（在**测试**里）：`byId.get(1)` —— `api.MessageItem.id` 类型是 `string`，而用例传的是 `number`，严格索引检查判红。已统一 `String(m.id)` 归一，并保留一句注释说明"类型说 string、跑起来是 number"的断言漂移风险。
+
+**分流说明**：plan §3 Phase 2 的 ② "补 `markFailed`/`incRetry` 辅助"**刻意不在本轮做** —— 那是重试逻辑的配套，Phase 4 落地时才有调用方；现在写就是"造无主函数"（anti-patterns 孤儿产出物一类）。
+
+### §3.5 Phase 3 · T-14 / T-15（状态机 + 乐观插入，含一个全量回归抓出的真缺陷）
+
+**RED**（改 `stores/message.ts` 之前）
+
+```
+$ pnpm vitest run app/stores/__tests__/message.state.test.ts
+ Test Files  1 failed (1)      Tests  8 failed | 0 passed (8)
+
+  ✗ canTransition is not a function / MESSAGE_STATUS_TRANSITIONS undefined（转移表零实现）
+  ✗ 乐观插入           → 发送瞬间列表为空：expected [] to deeply equal [ 'cid-1' ]
+  ✗ 自动临时 id         → 无 sending 占位
+  ✗ 失败保留 failed     → 失败后列表空、缓存无该行
+  ✗ store.transitMessage is not a function
+  ✗ failed → sending 重试路径不可用
+```
+
+**GREEN**
+
+```
+$ pnpm vitest run（两个缓存/状态文件）→ 17 passed (17)
+$ pnpm vitest run（全量）             → Test Files 81 passed (81) / Tests 682 passed (682)
+$ pnpm typecheck                      → 无 error
+```
+
+**🩸 落地时被全量回归抓出的真缺陷（已修 + 已补钉）**
+
+1. GREEN 后单跑 Phase 3 新文件 8/8 全绿，但**跑全量时 Phase 2b 的"写穿"钉红了** —— 正是这条跨轮次的红，暴露了：
+2. **缺陷**：乐观占位的 `temp id`（`cid-1` / `local-xxx`）与服务端真身 id（`42`）**不同**。原实现只在**内存**里把占位替换成真身，**没删缓存里那条 temp 行** ⇒ 缓存残留一条永远 `sending` 的**幽灵行**。两个后果：① 刷新后界面多出一条永远"发送中"的消息；② **Phase 4 的"待重发扫描"（找 `sending`/`failed`）会把它当成在途消息反复重发**。
+3. **修法**：替换时按 temp id `deleteMessage(tempId)`（仅当与真身 id 不同），并把失败包在 try/catch 里（清缓存失败不得影响发送结果）。
+4. **钉**：`message.state.test.ts` 新增「成功发送后缓存里不得残留临时占位行」；同时保留 Phase 2b 原有那条写穿钉（它才是抓到本缺陷的那根钉子）。
+
+> 教训：**只跑"本轮新写的测试文件"会漏掉跨模块回归**。本轮的缺陷恰恰由*上一轮*的钉抓到 —— 每轮都跑全量是硬要求（web-test CI 也是全量）。
+
+**其它**：测试里刻意**不用"自造 deferred + 手动 resolve"** 的写法（乐观插入后还有一次 `await` 缓存写入，手动 resolve 会与调用点竞争 ⇒ 测试死等到 15s 超时）。改为在 `postMock` 的实现里**采样调用时刻的状态**，确定性且无时序猜测。
+
+### §3.6 Phase 4 · T-16 / T-17 / T-18（重试计数 + 退避 + 断网重扫）
+
+**RED**（改实现之前）：`message.retry.test.ts` **7 项全失败** —— `setRetryGovernor` / `retryDelayMs` / `canAutoRetry` 均不存在、`retryFailedMessages` 未定义、`retryCount` 未自增。
+
+**GREEN**：`message.retry.test.ts` **7/7**；全量 **82 files / 689 tests** 绿；`typecheck` 无 error。
+
+**实现**（`stores/message.ts` +184/-34、`messageCache.ts`、`plugins/init.ts`）
+
+| 能力 | 实现 |
+|---|---|
+| 上限 | `MAX_RETRY = 3`；`canAutoRetry(m)` = `failed` 且 `retryCount < MAX_RETRY` |
+| 退避 | `retryDelayMs(n) = min(2^n × 1000, 30_000)`；补发时**逐行**按各自已失败次数取值 |
+| 补发 | `retryFailedMessages()`：扫 `getAllFailedMessages()`（**全部会话**）→ 退避 → 复用原 id 作 `clientMsgId` → 成功转 `sent` 并清临时行；达上限跳过 |
+| 复用 | 抽出 `deliver()` 供 `sendMessage` 与补发**共用**，避免两处各写一遍"POST + 替换 + 清临时行 + 写穿" |
+| 接线 | `plugins/init.ts` 的 `online` TODO → `void useMessageStore().retryFailedMessages()` |
+
+**两处有意偏离原计划（均留痕）**
+
+1. **等待走注入 `RetryGovernor` 而非 fake timers**（原计划写"fake timers"）。理由：本测试要同时跑 **fake-indexeddb**（Dexie 的异步调度依赖真实微/宏任务），把 `setTimeout/Date` 整体 fake 掉容易让 IndexedDB 调用挂死 —— 那是"测试基础设施互相打架"，不是被测行为。改用注入更贴合本仓 AGENTS **§3.2**（时钟必须通过接口暴露、禁止直接 `Date.now()`）与 **§3.3**（永不睡眠），且断言的是"**给 sleep 的毫秒数**"这一更强的契约（fake timers 只能验"等过"，验不了"等多久"）。
+2. **"启动时 `navigator.onLine` 即补发"未接**。亲核发现：Dexie 库名固定 `EmotionEcho`、消息行**只有 `sessionId` 没有 userId** ⇒ 同浏览器换账号登录时，上一账号的 `failed` 行还在库里；若在**登录完成前**自动补发，会拿新账号的令牌去补旧账号的消息（后端唯一索引只保证"不重复入库"，**不保证"归属正确"**）。⇒ 本阶段只接 `online` 事件（此时已登录），缺口登账本 **`CL-F-20`**（归属 CL-05）+ plan §6 **R13**。
+
+**测试自纠一处**：首轮把两行都种成 `retryCount: 1` 却断言退避 2s —— 实际下一次尝试是**第 2 次**⇒ 应为 4s。改为种 `0`/`1` 两行并断言 `[retryDelayMs(1), retryDelayMs(2)]`，反而**证明了退避是逐行取曲线**、不是全局常数。
+
+### §3.7 Phase 6 · T-7 / T-8（HTTP 降级路径认 cursor + 删除 ASC 死路径）
+
+**用户裁定（2026-10-14，AskUserQuestion）**：① 旧 `ListMessages(ASC)` → **删掉**；② HTTP 降级路径 → **现在就修**。
+
+**RED**（两个钉单独提交在 `be3282d`）
+
+```
+$ go test ./internal/handler/ -run TestChatHandler_ListMessages_HonorsCursor -count=1
+--- FAIL: TestChatHandler_ListMessages_HonorsCursor
+    Should be empty, but was [m2 ... m3 ...]        ← 带 cursor 却还返回"最新一页"
+
+$ go test ./internal/repository/ -run TestRepository_NoLegacyEarliestFirstListMessages -count=1
+--- FAIL: ... "assert.NotContains" 命中转换后的源码（Order("id ASC") 仍在）
+```
+
+**GREEN**（`b10b945`）
+
+```
+$ go build ./...                                → ok
+$ go vet ./...                                  → ok（首轮报出 6 处残留调用，已全部迁移）
+$ go vet -tags integration ./integration_test/... → ok
+$ go test ./... -count=1                        → 全部包 ok
+```
+
+**改动**
+
+| 面 | 改动 |
+|---|---|
+| handler | `ListMessagesHandler` 解析 `cursor`（>0 生效；语义与 gRPC 主路径 / BFF `buildMessageQuery` 一致） |
+| repository | 删除旧 `ListMessages(ctx, conversationID, limit)`（`Order("id ASC")` 取最早 N 条）：接口声明 + Postgres 实现 + InMemory 实现 |
+| 迁调用方 6 处 | `conversation_repository_test.go`(3)、`sendmessagelogic_test.go`(5)、`listmessageslogic_test.go`(3 个包装器类)、`deleteconversationlogic_test.go`(1)、`integration_test/{intent_enum,health}_integration_test.go`(3) |
+| 架构钉 | `internal/repository/dead_path_guard_test.go`：断言源码内无 `Order("id ASC")` / 旧签名，**并反向断言 `ListMessagesPage` 必须仍在** |
+
+**本轮两次自纠（都发生在自己身上）**
+
+1. **测试断言写错**：初版断言"带 cursor 的第二页为空"，但 3 条消息里 `?limit=2` 的最新页是 `{id 2,3}`、其 min id = 2，`id < 2` **正好还剩 1 条** ⇒ 正确行为是返回 1 条。改为"必须返回 1 条且所有 id < cursor"，这样**忽略 cursor 时（会返回 id≥cursor 的最新页）依旧会红**。
+2. **残留调用点漏迁**：`go vet` 先报 3 处、再报 5 处、再报 4 处（同一方法的不同调用形态：`msgs, err :=` / `msgs, _ :=`）—— **一次 grep 不足以穷尽**，靠 `go vet ./...` 兜底才收敛。教训：删接口方法时，**编译/静态检查比 grep 可靠**。
+
+**范围边界（重要）**：本 Phase **只动 chat-svc `repository`/`handler`**（本轨文件面），**未碰** BFF `downstream/chat*.go` 与 `chat_server.go` —— 那两处在契约 §四 属 **C 轨排队**，留给 Phase 5。
+
 ## §3.8 Phase 0 基线取证（2026-10-16，🔴 栈窗口）
 
 **环境**：本轨镜像 `chat-svc:cl05` / `web-bff:cl05`（H5 带轨后缀 tag）+ 网关 `:19080` + Bearer。
@@ -265,4 +450,31 @@ IAB **界面登录**（IAB 不支持注入 cookie），登录按钮用**坐标�
 
 ### 6.4 第二方复核结论
 
-（见下方「6.4 回填」—— 由独立复核代理给出后回填；未回填前**不得**把本阶段视为已通过收口契约第 7 条。）
+**结论：通过（7 项中 6 项通过、1 项"通过但带新缺陷"—— 该缺陷已由本节 6.5 修复）。**
+
+独立第二方复核（只读、不采信执行者自述）逐项复现结论：
+
+| 复核项 | 判定 | 其自行复现的关键证据 |
+|---|---|---|
+| CI 阻断项是否真修好 | ✅ | 本地 `test_integration_tag_compiles.sh` → `PASS 7 / FAIL 0 / GREEN`；远端 CI `12/12 success`（含 `static-guards`），两个 HEAD 都查过 |
+| 两份 phase5 证据可区分 | ✅ | `diff` 7 行：`'UNSET' ⇒ grpc(默认)` vs `'http' ⇒ http(降级路径)` —— 不止标题不同 |
+| plan §2 四值收敛为单值 | ✅ | 22 行全部恰好 `✅ PASS`；§2 范围内无 🟡/partial/待执行 |
+| report 结构 | ⚠️ **通过但引入新缺陷** | §4 唯一、陈旧段落已标作废、§3.8~3.10 在 §5 前；**但它查出：返工把 §3.3~§3.7 整段删了**，留下 17 处悬空引用 ⇒ 见 6.5 |
+| 账本与决策 | ⚠️ 部分 | `CL-F-11` 措辞准确（**未修复**仅关闭）✅；`E2E-F-205/206` 无并存标记 ✅；ADR 不再引 `CL-D-15` ✅；`CL-D-15` 当时只在未合的 #237 分支上 ⇒ 合入后即解除 |
+| 来源计划迁移 | ✅ | 旧路径不存在、新路径 `status: landed`、全仓 grep 旧路径为空 |
+| 不得有假 done | ✅ | done 附依据 `CL-D-15`；§6.3 残留清单**逐项如实**（含 `CL-F-11` 未修复、Postgres keyset SQL 无测试直接执行、T-20① 无截图） |
+
+**总评（原文摘）**：「收口基本诚实、自洽、可核……**没有发现假 PASS / 假 done / 用 N/A 掩盖类造假**。」
+
+### 6.5 复核后修复（我自己在返工中造成的缺陷）
+
+复核第 4 项抓到一处**我引入的真缺陷**：`56fbc00`（"report 去自相矛盾"那次）用于删旧 §4 的脚本
+**连带删掉了 `report.md` 的 §3.3~§3.7**（Phase 2a/2b/3/4/6 的证据正文），
+留下 `report.md` 与 `plan.md` 共 **17 处**指向不存在章节的悬空引用。
+讽刺的是我当时**打印过标题顺序**（§3.2 后直接跳到 §3.8）却没看出来 —— 这正是"复核不能省"的实证。
+
+- **已修**：从返工前 commit `8ded110` 取回 §3.3~§3.7 原样回插（184 行），标题顺序恢复为
+  §1 / §2 / §3 / §3.1~§3.10 / §4 / §5 / §6；§3.3~§3.7 的引用与标题**逐一对上**。
+- **已修**：`plan.md §A.4` 当时仍无标注地断言"Phase 0 尚未执行"（我上一轮的 §A.4 修补正则没匹配到该标题），
+  现改为**⛔ 已作废**并写明 2026-10-16 已完成的实际证据与"仍未做"的 smoke。
+
