@@ -19,6 +19,7 @@ type ServiceContext struct {
 	MentalHealthRepo   repository.MentalHealthRepo    // Round 3 part 1
 	TriggerQueue       *trigger.TriggerQueue          // Round 3 part 2
 	ModalityReportRepo repository.ModalityReportRepo // Stage 34
+	FusedReportRepo    repository.FusedReportRepo    // CL-07（融合产物消费）
 }
 
 // NewServiceContext 用最少的依赖构造 svcCtx（向后兼容 Round 0）。

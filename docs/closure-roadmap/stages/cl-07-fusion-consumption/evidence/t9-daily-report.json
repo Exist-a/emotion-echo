@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-16",
+  "summary": "2026-10-16，你共有 16 段对话，18 条消息。主要情绪是 平静（25 次），整体心境 平稳。今天继续和 Echo 聊聊吧。",
+  "emotionDistribution": [
+    {
+      "name": "neutral",
+      "value": 25
+    },
+    {
+      "name": "anxious",
+      "value": 1
+    },
+    {
+      "name": "happy",
+      "value": 1
+    }
+  ],
+  "conversationCount": 16,
+  "messageCount": 18,
+  "intentDistribution": [
+    {
+      "intent": "emotional_support",
+      "count": 1
+    },
+    {
+      "intent": "tech_help",
+      "count": 10
+    },
+    {
+      "intent": "other",
+      "count": 5
+    }
+  ],
+  "fusedEmotion": {
+    "emotionDistribution": [
+      {
+        "name": "neutral",
+        "value": 25
+      },
+      {
+        "name": "anxious",
+        "value": 1
+      },
+      {
+        "name": "happy",
+        "value": 1
+      }
+    ],
+    "methodBreakdown": [
+      {
+        "method": "late_fusion_weighted",
+        "count": 27
+      }
+    ],
+    "faceRatio": 0,
+    "voiceRatio": 0,
+    "total": 27
+  }
+}

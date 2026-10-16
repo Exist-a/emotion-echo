@@ -112,6 +112,12 @@ func main() {
 		reportRepo = repository.NewPostgresReportRepo(db)
 	}
 
+	// CL-07：FusedReportRepo（融合产物消费 —— 读 daily_emotion_fused_v，ai-svc migration i010）
+	var fusedRepo repository.FusedReportRepo
+	if db != nil {
+		fusedRepo = repository.NewPostgresFusedReportRepo(db)
+	}
+
 	// v1 启动时刷新 mv_daily_emotion（migration 003；pg_cron 调度留 Stage-2）。
 	// 非致命：MV 失败不影响实时 VIEW 查询（reports 端点走 daily_emotion_v）。
 	// P2-22 (Round 1): 失败 / 成功都打 metric，便于 Grafana 监控 REFRESH 健康。
@@ -191,6 +197,7 @@ func main() {
 	svcCtx.ReportRepo = reportRepo
 	svcCtx.MentalHealthRepo = mhRepo
 	svcCtx.TriggerQueue = tq
+	svcCtx.FusedReportRepo = fusedRepo // CL-07：融合产物消费接线
 
 	// 3.5 Kafka consumer（chat-events → user_behavior_events）
 	// 依赖 evtRepo（Postgres 可达）才启动；Enabled 显式开启（opt-in）。

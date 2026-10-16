@@ -63,6 +63,11 @@ type DailyReport struct {
 	// Stage 82 PR-3b：6 类消息意图分布（intent='' 历史行不计入）。
 	// 数据源 msg_summary_v.intent（chat.messages.intent 经视图暴露）。
 	IntentCounts map[string]int64 `json:"intentCounts,omitempty"`
+	// CL-07：融合产物消费（收敛后综合情绪 + 融合方法占比 + 多模态占比）。
+	// 数据源 emotion_echo_ai.daily_emotion_fused_v（ai-svc migration i010）。
+	// 与 EmotionDistributionByModality **并列但不重叠**（fused = 收敛结果，不与单模态并列）。
+	// nil = 无融合数据 / 未接线（omitempty，前端按字段缺失隐藏）。
+	FusedEmotionDistribution *FusedEmotionDistribution `json:"fusedEmotionDistribution,omitempty"`
 }
 
 // TrendPoint 趋势上一个数据点

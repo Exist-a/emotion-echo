@@ -41,6 +41,18 @@ type DailyReport struct {
 	AvgConfidence       float64          `json:"avgConfidence"`
 	// Stage 82 PR-3b：6 类消息意图分布
 	IntentCounts map[string]int64 `json:"intentCounts,omitempty"`
+	// CL-07：融合产物消费（收敛后综合情绪 + 融合方法占比 + 多模态占比）。
+	// 来源 proto ReportsDailyResponse.fused_* / HTTP report.fusedEmotionDistribution。
+	FusedEmotionDistribution *FusedEmotionDistribution `json:"fusedEmotionDistribution,omitempty"`
+}
+
+// FusedEmotionDistribution 融合产物分布（CL-07）—— 对应 analytics-svc repository.FusedEmotionDistribution。
+type FusedEmotionDistribution struct {
+	ByEmotion  map[string]int64 `json:"byEmotion"`
+	ByMethod   map[string]int64 `json:"byMethod"`
+	FaceRatio  float64          `json:"faceRatio"`
+	VoiceRatio float64          `json:"voiceRatio"`
+	Total      int64            `json:"total"`
 }
 
 // TrendPoint 对应 analytics-svc repository.TrendPoint

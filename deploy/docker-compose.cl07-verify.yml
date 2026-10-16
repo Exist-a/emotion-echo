@@ -1,0 +1,24 @@
+# CL-07 后端切片 起栈验证用 override（AGENTS §8.1 条款 10 / H5：**带轨后缀 tag，不覆盖公共 tag**）
+#
+# 覆盖范围 = 本阶段改过代码的服务：
+#   analytics-svc  （Go：FusedReportRepo + svcCtx 接线 + reports_daily 装配 + gRPC 映射）
+#   web-bff        （Go：downstream DailyReport DTO + gRPC 客户端映射 + analytics_view 透传）
+#   ai-svc         **无需重建**（本轨只加迁移 i010，不改 Go 代码）—— 但其 migrations 目录
+#                  必须被 db-migrate 挂载（worktree 内起栈即自动指向本 worktree 的 migrations）
+#
+# 用法（H6：「worktree 构建镜像 + up 容器」）：
+#   cd <worktree>
+#   docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
+#     -f deploy/compose.dev.yml -f deploy/docker-compose.cl07-verify.yml \
+#     --env-file <共享目录>/deploy/.env.local \
+#     build emotion-echo-analytics-svc emotion-echo-web-bff
+#   # 再整栈 up（从 worktree 起，使 db-migrate 挂到本 worktree 的 migrations）：
+#   docker compose ... --profile dev up -d
+#
+# 前置：本 worktree 需 `deploy/tls/`（ai-svc Dockerfile COPY deploy/tls/*）—— 已从共享目录 cp 来。
+# 引用：docs/closure-roadmap/stages/cl-07-fusion-consumption/report.md。
+services:
+  emotion-echo-analytics-svc:
+    image: emotion-echo/analytics-svc:cl07
+  emotion-echo-web-bff:
+    image: emotion-echo/web-bff:cl07

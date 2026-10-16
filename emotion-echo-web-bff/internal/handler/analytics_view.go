@@ -37,6 +37,27 @@ type FrontendDailyReport struct {
 	// Stage 82 PR-3b：6 类消息意图分布（intentCount{intent,count}）；
 	// omitempty = 旧报表/无数据时不输出，前端按字段缺失隐藏饼图
 	IntentDistribution []IntentCountItem `json:"intentDistribution,omitempty"`
+	// CL-07：融合产物（收敛后综合情绪 + 融合方法占比 + 多模态占比）；
+	// omitempty = 无融合数据时不输出，前端按字段缺失隐藏
+	FusedEmotion *FrontendFusedEmotion `json:"fusedEmotion,omitempty"`
+}
+
+// FrontendFusedEmotion 前端融合产物契约（CL-07）
+type FrontendFusedEmotion struct {
+	// EmotionDistribution 融合后综合情绪分布（按 value 倒序）
+	EmotionDistribution []EmotionDistributionItem `json:"emotionDistribution"`
+	// MethodBreakdown 融合方法占比（llm vs late_fusion_weighted）
+	MethodBreakdown []FusionMethodItem `json:"methodBreakdown"`
+	// FaceRatio / VoiceRatio 含 face / voice 模态的融合消息占比 [0,1]
+	FaceRatio  float64 `json:"faceRatio"`
+	VoiceRatio float64 `json:"voiceRatio"`
+	Total      int64   `json:"total"`
+}
+
+// FusionMethodItem 融合方法占比数组元素
+type FusionMethodItem struct {
+	Method string `json:"method"`
+	Count  int64  `json:"count"`
 }
 
 // IntentCountItem 前端意图分布数组元素
@@ -96,6 +117,33 @@ func toFrontendDailyReport(r *downstream.DailyReport) *FrontendDailyReport {
 		ConversationCount:   r.ConversationCount,
 		MessageCount:        r.MessageCount,
 		IntentDistribution:  intents,
+		FusedEmotion:        toFrontendFusedEmotion(r.FusedEmotionDistribution), // CL-07
+	}
+}
+
+// toFrontendFusedEmotion 把下游融合分布转成前端契约；nil 入参返回 nil
+// （omitempty ⇒ JSON 不输出该字段，前端隐藏融合图）。
+func toFrontendFusedEmotion(f *downstream.FusedEmotionDistribution) *FrontendFusedEmotion {
+	if f == nil {
+		return nil
+	}
+	methods := make([]FusionMethodItem, 0, len(f.ByMethod))
+	for method, cnt := range f.ByMethod {
+		methods = append(methods, FusionMethodItem{Method: method, Count: cnt})
+	}
+	// 方法占比按 count 倒序（llm 通常在前），保证前端渲染顺序稳定
+	sort.Slice(methods, func(i, j int) bool {
+		if methods[i].Count != methods[j].Count {
+			return methods[i].Count > methods[j].Count
+		}
+		return methods[i].Method < methods[j].Method
+	})
+	return &FrontendFusedEmotion{
+		EmotionDistribution: emotionCountsToSlice(f.ByEmotion),
+		MethodBreakdown:     methods,
+		FaceRatio:           f.FaceRatio,
+		VoiceRatio:          f.VoiceRatio,
+		Total:               f.Total,
 	}
 }
 

@@ -96,6 +96,19 @@ func (l *ReportsDailyLogic) GetDailyReport(req *types.GetDailyReportReq) (*types
 		}
 	}
 
+	// CL-07: 融合产物消费（收敛后综合情绪 + 融合方法占比 + 多模态占比）。
+	// FusedReportRepo 可选（nil 时跳过，前端通过 omitempty 隐藏字段）。
+	// 与 ModalityReportRepo 并列不同源：modality = 单模态拆解；fused = 收敛结果。
+	if l.svcCtx.FusedReportRepo != nil {
+		fused, err := l.svcCtx.FusedReportRepo.GetDailyFusedEmotion(l.ctx, req.UserID, parsedDate)
+		if err != nil {
+			return nil, err
+		}
+		if fused != nil {
+			report.FusedEmotionDistribution = fused
+		}
+	}
+
 	return &types.GetDailyReportResp{Report: report}, nil
 }
 
