@@ -157,9 +157,9 @@ ledger: CL-F-15（outbox 静默改投内存，归本阶段）
 | # | 结果 | 证据（2026-10-16） |
 |---|---|---|
 | T-01 | ✅ **PASS** | Phase 1：`migrations/c010_add_trace_sw8_to_outbox.sql` + `TestC010_TraceSw8Migration_*` 4 项绿；`go test ./migrations/` ok |
-| T-02 | ⏸ **PENDING**（等 M1 裁定） | 写侧捕获 sw8 需先定原语落点（plan §7 M1）；未动代码 |
-| T-03 | ⏸ **PENDING**（等 M1 裁定） | relay 恢复父 ctx 同上 |
-| T-05 | 🟡 **PARTIAL** | 已验：InMemory repo 空值合法（`TestOutboxEvent_TraceSw8_EmptyIsAllowed` 绿）；**未验**：relay 侧空列时行为逐字不变（需 Phase 3 落地后才有对象可测） |
+| T-02 | ✅ **PASS** | Phase 2：`outbox.EncodeTraceSW8` + 4 处 CreateInTx 调用点接线；`TestEncodeTraceSW8_*` 4 例绿 + 源契约断言（`internal/logic/outbox_trace_sw8_wiring_test.go`，4 处）绿 |
+| T-03 | ✅ **PASS** | Phase 3：`relay.resumeTraceCtx` + `publishOne` 改用恢复后的 ctx；`TestRelay_FlushOnce_RestoresParentCtxFromTraceSW8Column` 等 5 例绿。**进程内链路往返**由 shared 侧 `TestSW8RoundTrip_EncodeThenRestore_SameTraceID` 钉死（含反向对照） |
+| T-05 | ✅ **PASS** | 空列路径：`TestRelay_FlushOnce_EmptyTraceSW8_DoesNotCreateSpan`（不建 span、publisher 拿到原 ctx）+ `TestRelay_FlushOnce_NoInjectedTracer_FallsBackToGlobalAndPublishes` + `TestOutboxEvent_TraceSw8_EmptyIsAllowed` 全绿；接口侧降级 `TestGo2SkyTracer_EncodeSW8_NoTracerOrNoSpan_DegradesEmpty` 绿 |
 | T-08 | ✅ **PASS** | Phase 4a：`node deploy/obs_monitoring.test.js` group ⑦ 6/6 绿（含 k8s 内联同步 + 面板标签）+ `bash scripts/test_helm_prometheus_render.sh` **PASS=8 FAIL=0**（两侧 14 条告警一致） |
 | T-14 | ✅ **PASS** | Phase 6：`kafka-pipeline-pending-decisions.md` D8 行/两处摘要更正为"已收敛"，附 `shared/pkg/messaging/sw8_header.go:23` 等行号证据 |
 | T-15 | ✅ **PASS** | Phase 6：新增「CL-03 处置」表 —— D1 并入 CL-F-15 / D2·D4 ✅ / D3·D5·D6 登记触发条件 / D7 等产品语义拍板 / D8 ✅ 全部落地（无"待定"残留） |

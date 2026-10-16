@@ -152,10 +152,44 @@ $ python yaml/json 可解析性 → kafka-dlq.yml: [AIDLQPublishFailure, Analyti
 
 **证据**：`git diff` 三处 hunk；`D8` 行新状态引用的行号均来自本次实读（`sw8_header.go:23` / `consumer_failure.go:125-127` / `consumer.go:368-370`）。
 
+### Phase 2 / Phase 3 · trace 贯通（🟢 不需栈）—— 2026-10-16
+
+**做了什么（按 `CL-D-15` = A）**
+
+| 环节 | 改动 | 文件 |
+|---|---|---|
+| 原语 | shared `Tracer` 新增 `EncodeSW8(ctx, opName)`（**只加这一个方法**：恢复侧用既有 `CreateEntrySpan` 即可，无需第二个） | `emotion-echo-shared/pkg/grpcinterceptor/{tracing.go,tracing_go2sky.go}` + 6 处 mock 同步 |
+| 写侧 | `outbox.EncodeTraceSW8(ctx, op)`（读 `GlobalTracer()`，CL-F-14 语义）+ 4 处 `CreateInTx` 调用点接线 | `chat-svc/internal/outbox/sw8.go`、`internal/logic/{send,create,delete}*logic.go` |
+| 读侧 | `relay.resumeTraceCtx(ctx, sw8)` + `publishOne` 在恢复后的 ctx 上发布、err 透传 `EndSpan` | `chat-svc/internal/outbox/relay.go` |
+| 架构 | **ADR 决策 42**：`docs/architecture/adr/adr-2026-10-outbox-trace-context.md`（含被否备选 5 条、代价与已知限制） | + `docs/architecture/decisions.md` 索引/变更记录 |
+
+**关键证据**
+
+```
+# 进程内"存 → 恢复 → 仍同一条 trace"（本阶段核心判据，含反向对照）
+$ go test ./pkg/grpcinterceptor/ -run "EncodeSW8|SW8RoundTrip" -count=1
+ok  	github.com/emotion-echo/shared/pkg/grpcinterceptor
+
+# relay 侧
+$ go test ./internal/outbox/ -count=1        → ok（含 RestoresParentCtx / EmptyTraceSW8 /
+                                               PublishErrorPassedToSpanEndSpan / NoInjectedTracer / NilSpan 5 例）
+# 写侧接线 + helper
+$ go test ./internal/outbox/ ./internal/logic/ -run "TraceSW8|EncodeTraceSW8" -count=1 → ok
+
+# 全仓回归（7 个 Go 模块）
+shared ok=23 / ai 15 / chat 11 / analytics 11 / user 7 / assessment 8 / bff 10，FAIL=0
+```
+
+**过程中实测到的两条 go2sky 事实（都写进了代码注释，避免后人重踩）**
+1. **无 reporter 的 tracer 永远编码不出 sw8**：`initFlag==0` ⇒ `createNoop` 提前返回、**injector 根本不被调用**（`trace.go:159`）⇒ 测试必须带 reporter（复用同包既有 `fakeReporter`）。
+2. **exit span 的 `peer` 必须非空**（`trace.go:156`，空串 ⇒ `errParameter "parameter are nil"`）⇒ 编码哨兵 peer 取 `"trace-context"`。
+
+**如实说明证据边界**：写侧调用点用的是**源契约断言**（无法在单测里造真实 gorm 事务，仓内同型先例见 `createconversationlogic_test.go:141`）；**"SkyWalking UI 里连成一条"的端到端证据归 Phase 7（🔴 需栈）**，本档不声称已取得。
+
 ## §3 待办（下一步）
 
-- ✅ **§7 [M] 四项裁定已落定（2026-10-16 用户，全部采纳推荐项）** → 登记为 `CL-D-15`~`CL-D-18`（见 `decisions.md`）。
-  ⇒ **Phase 2/3（trace 贯通核心）/ 4b / 4c / 5 解除阻塞**，可按裁定开工：
+- ✅ **§7 [M] 四项裁定已落定（2026-10-16 用户，全部采纳推荐项）** → 登记为 `CL-D-15`~`CL-D-18`（见 `decisions.md`）
+  ⇒ **Phase 2/3 已完成**（见上）；**4b / 4c / 5 解除阻塞**，可按裁定开工：
   - **Phase 2/3**：给 shared `Tracer` 接口加 `EncodeSW8` / `ContextWithSW8`（`CL-D-15` = A）→ 写侧捕获 + relay 恢复父 ctx；**须配 ADR**（动 7 svc 共享接口）
   - **Phase 4b**：DLQ 投递失败不 `MarkMessage`（`CL-D-16` = A）—— 落地前**逐 handler 核实幂等**，非幂等者单独处置
   - **Phase 4c**：一键回放全部积压 + 回放计数（`CL-D-17` = B）；不做定时自动回放

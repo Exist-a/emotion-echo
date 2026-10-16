@@ -895,6 +895,7 @@ Stage 33 P0 修复+BFF净化 █████████████████
 | 2026-09-22 | SenseVoice 模型服务的运行时约束与镜像分发 | 语音链路五个独立缺陷叠加（torch/funasr 漂移、VAD 请求期下载、无预热、healthcheck 假绿、runtime 缺 ffmpeg）+ 内存限额按旧 torch 估 → **torch/funasr 成对锁定 + 模型与 VAD 全烘焙 + 启动预热 + healthcheck 校验 model_loaded + runtime 含 ffmpeg + 限额按峰值 3072M + ACR 双层同 tag** | [adr-2026-09-sensevoice-runtime-constraints.md](adr/adr-2026-09-sensevoice-runtime-constraints.md)；账本 E2E-F-106/111/112；实测 /analyze 0.84s + 端到端 200 + IAB 语音气泡；**只有浏览器实测（真实 webm）才同时暴露五条** |
 | 2026-09-22 | 客户端对象 URL 的下发方式 | 存储 `PublicBaseURL` 绝对地址（`http://localhost:9000/...`）→ **网关相对路径 + BFF 反代 MinIO 流式输出** | [adr-2026-09-client-object-url-bff-proxy.md](adr/adr-2026-09-client-object-url-bff-proxy.md)；账本 E2E-F-113（非宿主视角 `<audio>` 永不可达）；存量 avatar/uploads 同型债 E2E-F-116 归 E2E-27 —— **2026-10-03 回填：E2E-27/D-40 已迁移 avatar+uploads（GET/HEAD 反代 + 前端解析 + 存量惰性兼容），E2E-F-116 ✅ 关闭** |
 | 2026-09-23 | APISIX upstream timeout（web-bff）+ BFF XTTS timeout | APISIX upstream 6 默认 60s 撞底 + BFF yaml `TimeoutMs: 30000` 与 config.go SetDefaults 90000 漂移（E2E-F-127 真 bug，yaml 不为 0 时 SetDefaults 不覆盖）→ **APISIX upstream 6 (web-bff) timeout 180s 持久化 seed.sh + BFF yaml 改 90000 + config_test.go 钉守卫** | [adr-2026-09-apisix-upstream-timeout-web-bff.md](adr/adr-2026-09-apisix-upstream-timeout-web-bff.md)；账本 E2E-F-127；Playwright 双 project 6/6 PASS；bind-mount + docker restart 是 build 撞 daemon 时的分钟级快路径 |
+| 2026-10-16 | outbox 承载 trace 上下文（异步链路 trace 断点） | relay 跑在后台根 ctx ⇒ exit span 无父、trace 断在 **outbox→relay** → **`outbox_events` 加 `trace_sw8` 列 + shared `Tracer` 加 `EncodeSW8` 原语（写入侧存）+ relay 用既有 `CreateEntrySpan` 恢复父 ctx（发布侧接回）** | [adr-2026-10-outbox-trace-context.md](adr/adr-2026-10-outbox-trace-context.md)；`CL-D-15`（原语落点=A）；走**决策 22** 的字段变更 9 步 checklist；账本 `CL-F-22`（outbox DDL 两份事实源未合并） |
 
 ---
 
@@ -1024,3 +1025,10 @@ Stage 33 P0 修复+BFF净化 █████████████████
 > 状态机与指数退避重试、Playwright 人可见钉 `e2e/message-pipeline.spec.ts`（4/5 绿，1 项因数据前置跳过）。
 > **未做**：`CL-F-11`（刷新后双对话）在 `/new` 表单路径上**未复现** ⇒ 根因仍未定位，**不宣称修复**；
 > 缓存按用户隔离（`CL-F-20`）顺延。
+### 决策 42：outbox 承载 trace 上下文 = **`trace_sw8` 列 + `EncodeSW8` 原语 + relay 恢复父 ctx**（2026-10-16 CL-03 · CL-D-15=A）
+
+> 🟢 **accepted**（`CL-D-15` 用户经 AskUserQuestion 拍板「给 shared `Tracer` 接口加方法」；完整 ADR 见 [`docs/architecture/adr/adr-2026-10-outbox-trace-context.md`](adr/adr-2026-10-outbox-trace-context.md)）。
+> **背景（CL-03 建档实读）**：relay 跑在 `main.go:245` 的后台根 ctx 上 ⇒ `kafka_publisher.go:133` 的 `CreateExitSpan` 建的是**根** span，一条消息的 trace 断在 outbox→relay（消费端从 Kafka header 往后是连的）。
+> **决策**：① `outbox_events` 新增 `trace_sw8 VARCHAR(512) NULL`（迁移 `c010`，幂等，走决策 22 的 9 步）；② shared `Tracer` 新增 `EncodeSW8(ctx, opName)`，写入侧统一走 `chat-svc/internal/outbox.EncodeTraceSW8`（读 **`GlobalTracer()`** —— 采纳 CL-F-14「请求期现读全局」语义）；③ relay 用**既有** `CreateEntrySpan` + extractor 恢复父 ctx（不加第二个方法），空列/无 tracer 时行为与改前**逐字一致**。
+> **实现约束（go2sky v1.5.0 实测）**：`Span` 接口不暴露 `SpanContext`，`ReportedSpan.Context()` 给的是 `*SegmentContext`，自拼 `SpanContext` 需 `tracer` 私有字段 `service`/`instance` ⇒ 只能借一次 exit span 编码（哨兵 peer `"trace-context"`，因 go2sky 校验 peer 非空）。代价 = 每条 trace 多两个短 span + 拓扑图上指向哨兵的边，**已知并接受**。
+> **被否**：`CL-D-15` 的 B 方案（调用点用 injector 旁路捕获，语义散落三处 business logic）；只存 trace_id（无法恢复父子关系）；复制 go2sky 编码（私有字段不可达）；relay 造 local 假父（违 AGENTS §四「不硬造根 span」）。
