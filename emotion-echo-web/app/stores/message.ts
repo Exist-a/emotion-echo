@@ -11,6 +11,7 @@ import {
   deleteMessage,
 } from '~/utils/messageCache'
 import { useConversationStore } from './conversation'
+import { useUserStore } from './user'
 
 // 消息状态类型已收敛到单一来源（CL-05 Phase 1 · T-13）；
 // 此处仅作转出，保留既有导入路径不破。
@@ -21,6 +22,22 @@ const SNAPSHOT_LIMIT = 50
 
 /** 只存在于本地、**不允许被服务端快照抹掉**的状态（发失败待重发 / 在途） */
 const LOCAL_ONLY_STATUSES: readonly MessageStatus[] = ['failed', 'sending']
+
+/**
+ * 当前登录用户 id（CL-F-20）。
+ *
+ * 本地缓存是按**浏览器**存的（Dexie 库名固定 `EmotionEcho`），不是按账号 ——
+ * 写入时打上归属、查询/补发时据此过滤，才能保证换账号后"看不见也补不了"别人的消息。
+ * 未登录返回空串。
+ */
+function currentUserId(): string {
+  try {
+    return useUserStore().getId || ''
+  } catch {
+    // store 尚未初始化（极早期调用）—— 视为未登录，宁可不写归属
+    return ''
+  }
+}
 
 /**
  * 合并策略 A —— 服务端**快照替换**（`switchSession` 用）：服务端行覆盖同 id；
@@ -202,6 +219,7 @@ export const useMessageStore = defineStore('message', () => {
           await saveMessages(
             currentSessionId.value,
             newMessages.map(toCacheRow) as Parameters<typeof saveMessages>[1],
+            currentUserId(),
           )
         } catch (e) {
           console.warn('[MESSAGE_STORE] 缓存写入失败（不影响加载）:', e)
@@ -221,7 +239,7 @@ export const useMessageStore = defineStore('message', () => {
   /** 写穿（T-11）：发送成功的消息落缓存；缓存失败不得影响发送结果与返回体 */
   const writeThrough = async (m: MessageWithStatus) => {
     try {
-      await saveMessage(currentSessionId.value as string, toCacheRow(m))
+      await saveMessage(currentSessionId.value as string, toCacheRow(m), currentUserId())
     } catch (e) {
       console.warn('[MESSAGE_STORE] 缓存写入失败（不影响发送）:', e)
     }
@@ -273,7 +291,7 @@ export const useMessageStore = defineStore('message', () => {
         console.warn('[MESSAGE_STORE] 清理乐观占位缓存失败（不影响发送）:', e)
       }
     }
-    await saveMessage(sessionId, toCacheRow(landed))
+    await saveMessage(sessionId, toCacheRow(landed), currentUserId())
     return message
   }
 
@@ -366,11 +384,22 @@ export const useMessageStore = defineStore('message', () => {
    * ② **复用原行 id 作 `clientMsgId`** ⇒ 命中后端 `client_msg_id` 唯一索引，
    *    重复补发不会重复入库（幂等复用，不重造）；
    * ③ 达 `MAX_RETRY` 的行直接跳过（转手动重发），不退化成"无限重试"。
+   *
+   * **④ CL-F-20（按用户隔离）**：只扫**当前登录用户自己**的失败行；未登录一律不补发。
+   * 同一浏览器换账号后，上一账号留在库里的 `failed` 行必须**看不见**——否则会拿新账号
+   * 的令牌去补旧账号的消息（后端唯一索引只保证不重复入库，不保证归属正确）。
    */
   const retryFailedMessages = async (): Promise<{ retried: number; succeeded: number }> => {
+    const userId = currentUserId()
+    if (!userId) {
+      // 没有可信归属 ⇒ 宁可一条都不发，等用户登录后 online 事件/手动触发再补
+      console.warn('[MESSAGE_STORE] 未登录，跳过离线补发（无法判定消息归属）')
+      return { retried: 0, succeeded: 0 }
+    }
+
     let pending: StoreMessage[] = []
     try {
-      pending = (await getAllFailedMessages()) as unknown as StoreMessage[]
+      pending = (await getAllFailedMessages(userId)) as unknown as StoreMessage[]
     } catch (e) {
       console.warn('[MESSAGE_STORE] 读取待重发队列失败（不影响后续）:', e)
       return { retried: 0, succeeded: 0 }
@@ -409,7 +438,10 @@ export const useMessageStore = defineStore('message', () => {
           retryCount: attempts,
         } as unknown as StoreMessage
         try {
-          await saveMessage(rowSessionId, toCacheRow(bumped))
+          // 保留原归属（CL-F-20）：补发失败后写回时不能让 userId 丢失，
+          // 否则这条行下次就"无主"、永远不会被本用户补发。
+          const owner = (row as { userId?: string }).userId ?? userId
+          await saveMessage(rowSessionId, toCacheRow(bumped), owner)
         } catch (e) {
           console.warn('[MESSAGE_STORE] 重试失败后写缓存失败:', e)
         }
@@ -422,7 +454,10 @@ export const useMessageStore = defineStore('message', () => {
             `[MESSAGE_STORE] 已达重试上限（${MAX_RETRY}），停止自动重试（留手动重发）：${tempId}`,
           )
         } else {
-          console.warn(`[MESSAGE_STORE] 补发失败（第 ${attempts} 次），留待下次联网：${tempId}`, error)
+          console.warn(
+            `[MESSAGE_STORE] 补发失败（第 ${attempts} 次），留待下次联网：${tempId}`,
+            error,
+          )
         }
       }
     }

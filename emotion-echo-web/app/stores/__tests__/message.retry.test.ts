@@ -8,6 +8,7 @@ import {
   MAX_RETRY,
 } from '~/stores/message'
 import { saveMessage, getAllFailedMessages, getLatestMessages } from '~/utils/messageCache'
+import { useUserStore } from '~/stores/user'
 import { getDb } from '~/utils/db'
 import type { MessageStatus } from '~/types/conversation/conversationMessagesType'
 
@@ -25,6 +26,10 @@ import type { MessageStatus } from '~/types/conversation/conversationMessagesTyp
 // 「永不睡眠」）：默认真 `Date.now()`/`setTimeout`，测试注入立即返回的实现，避免单测真睡 2/4/8 秒。
 //
 // 依据：plan §2 T-16·T-17·T-18 / §3 Phase 4；来源计划 D-E（MAX=3 / 指数退避 / 复用 clientMsgId）。
+//
+// ⚠️ 2026-10-16 契约演进（CL-F-20）：补发**必须已登录**且只补**当前用户自己**的行
+//   ⇒ 本文件的用例统一先 `loginAs('u1')`、并在 `saveMessage` 时带上 'u1'。
+//   用户隔离本身的专项断言见 message.user-isolation.test.ts。
 
 const getMock = vi.fn()
 const postMock = vi.fn()
@@ -38,6 +43,14 @@ vi.mock('~/composables/useApi', () => ({
 }))
 
 const S = 'c1'
+const UID = 'u1'
+
+/** CL-F-20：补发按用户门控 —— 用例需要"已登录"状态 */
+function loginAs(userId: string) {
+  const user = useUserStore()
+  user.userInfo = { id: userId, nickname: userId } as any
+  user.accessToken = 'fake-token'
+}
 
 function serverMsg(id: string, sendTime: number, content: string) {
   return {
@@ -68,6 +81,7 @@ let sleepCalls: number[] = []
 describe('重试 + 断网重扫（CL-05 Phase 4 · T-16 / T-17 / T-18）', () => {
   beforeEach(async () => {
     setActivePinia(createPinia())
+    loginAs(UID)
     getMock.mockReset()
     postMock.mockReset()
     sleepCalls = []
@@ -109,7 +123,7 @@ describe('重试 + 断网重扫（CL-05 Phase 4 · T-16 / T-17 / T-18）', () =>
 
       await store.sendMessage('发不出去', undefined, 'cid-1')
 
-      const failed = await getAllFailedMessages()
+      const failed = await getAllFailedMessages(UID)
       expect(failed).toHaveLength(1)
       expect((failed[0] as any).retryCount, '首次失败后应为 1').toBe(1)
     })
@@ -120,7 +134,7 @@ describe('重试 + 断网重扫（CL-05 Phase 4 · T-16 / T-17 / T-18）', () =>
     })
 
     it('retryFailedMessages 跳过已达上限的行（不发请求）', async () => {
-      await saveMessage(S, failedRow('cid-max', MAX_RETRY))
+      await saveMessage(S, failedRow('cid-max', MAX_RETRY), UID)
       const store = useMessageStore()
       store.currentSessionId = S
 
@@ -136,8 +150,8 @@ describe('重试 + 断网重扫（CL-05 Phase 4 · T-16 / T-17 / T-18）', () =>
       // 模拟"刷新后仍在"的离线队列：直接落缓存（不经过内存列表）。
       // 故意给不同的 retryCount（0 / 1）⇒ 下一次尝试是第 1 / 2 次，退避应分别是 2s / 4s，
       // 这样能证明退避是**逐行按各自已失败次数**算的，而不是一个全局常数。
-      await saveMessage(S, failedRow('cid-9', 0, '断网时发的'))
-      await saveMessage('c2', failedRow('cid-other', 1, '另一会话断网时发的'))
+      await saveMessage(S, failedRow('cid-9', 0, '断网时发的'), UID)
+      await saveMessage('c2', failedRow('cid-other', 1, '另一会话断网时发的'), UID)
 
       postMock.mockImplementation(async (_url: string, body: any) =>
         serverMsg(`srv-${body.clientMsgId}`, 2000, body.content),
@@ -158,17 +172,20 @@ describe('重试 + 断网重扫（CL-05 Phase 4 · T-16 / T-17 / T-18）', () =>
       expect(sleepCalls.sort((a, b) => a - b)).toEqual([retryDelayMs(1), retryDelayMs(2)])
 
       // 失败集清空；当前会话的内存里出现真身行
-      expect(await getAllFailedMessages()).toEqual([])
+      expect(await getAllFailedMessages(UID)).toEqual([])
       const cached = await getLatestMessages(S, 10)
       expect(cached.map((m) => String(m.id))).toEqual(['srv-cid-9'])
       expect(cached[0]!.status).toBe('sent')
 
       // 幽灵行不得残留（同 Phase 3 的教训）
-      expect(cached.some((m) => String(m.id) === 'cid-9'), '临时 id 行必须被清掉').toBe(false)
+      expect(
+        cached.some((m) => String(m.id) === 'cid-9'),
+        '临时 id 行必须被清掉',
+      ).toBe(false)
     })
 
     it('补发再次失败：retryCount 再 +1 且仍留在失败集（等待下次联网）', async () => {
-      await saveMessage(S, failedRow('cid-fail', 1))
+      await saveMessage(S, failedRow('cid-fail', 1), UID)
       postMock.mockRejectedValue(new Error('still down'))
 
       const store = useMessageStore()
@@ -176,7 +193,7 @@ describe('重试 + 断网重扫（CL-05 Phase 4 · T-16 / T-17 / T-18）', () =>
       const res = await store.retryFailedMessages()
 
       expect(res.succeeded).toBe(0)
-      const still = await getAllFailedMessages()
+      const still = await getAllFailedMessages(UID)
       expect(still).toHaveLength(1)
       expect((still[0] as any).retryCount, '再次失败应再 +1').toBe(2)
     })

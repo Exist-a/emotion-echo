@@ -40,6 +40,28 @@ def check(label: str, ok: bool, detail: str = "") -> bool:
     return ok
 
 
+def is_git_initialized(root: Path) -> bool:
+    """该目录是否已初始化 git 工作区。
+
+    两种合法形态（CL-F-06）：
+      · `.git/` 是**目录** —— 普通 clone；
+      · `.git` 是**文件**且内容以 `gitdir:` 开头 —— `git worktree add` 检出的工作区，
+        该文件是指向主仓 `.git/worktrees/<name>` 的指针。
+
+    旧实现只判 `is_dir()` ⇒ worktree 下恒红（而主工作区 exit 0），
+    让守卫在并行 worktree 方案下失去意义。
+    """
+    git = root / ".git"
+    if git.is_dir():
+        return True
+    if git.is_file():
+        try:
+            return git.read_text(encoding="utf-8", errors="replace").lstrip().startswith("gitdir:")
+        except OSError:
+            return False
+    return False
+
+
 def main() -> int:
     print("=" * 60)
     print("Emotion-Echo monorepo · 仓库布局自检（单仓版本）")
@@ -52,7 +74,11 @@ def main() -> int:
     # 1. .git 存在
     print("[1/7] 主仓 git 初始化")
     git_dir = ROOT / ".git"
-    all_ok &= check(".git/ 存在", git_dir.is_dir(), str(git_dir))
+    all_ok &= check(
+        ".git 存在（目录或 worktree 的 gitdir 指针文件）",
+        is_git_initialized(ROOT),
+        f"{git_dir} ({'dir' if git_dir.is_dir() else 'file' if git_dir.is_file() else 'missing'})",
+    )
 
     # 2. .gitignore 存在且包含必要条目
     print("\n[2/7] .gitignore 完整性")

@@ -152,6 +152,11 @@ let renderer: THREE.WebGLRenderer | null = null
 let animationFrameId: number | null = null
 let vrmModel: any = null
 
+// CL-F-17：组件是否已卸载。模型是 26.7MB 的 VRM，`loadVRM` 的 await 有秒级窗口；
+// 期间被卸载时 `disposeThreeJS()` 会把 scene 置 null ⇒ await 恢复后再 `scene.add` 会抛
+// TypeError: Cannot read properties of null (reading 'add')。此标记让 await 后有据可判。
+let disposed = false
+
 let animationTime = 0
 let lastBlinkTime = 0
 const BLINK_INTERVAL = 5
@@ -382,6 +387,13 @@ const loadVRM = async () => {
     loadAttempts++
     const model = await loader.loadAsync(props.modelPath)
 
+    // CL-F-17：await 期间组件可能已被卸载（disposeThreeJS 已把 scene 置 null）。
+    // 入口那次 `if (!scene)` 发生在 await **之前**，挡不住这条路径 ⇒ 这里必须再判一次，
+    // 否则下面 `scene.add(...)` 直接抛 TypeError、3D 形象不显示。
+    if (disposed || !scene) {
+      return
+    }
+
     vrmModel = model.userData.vrm
 
     if (vrmModel && vrmModel.scene) {
@@ -524,6 +536,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  // CL-F-17：先置位再拆场景 —— 顺序反了就存在"已经置 null、标记还没置"的窗口。
+  disposed = true
   disposeThreeJS()
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
