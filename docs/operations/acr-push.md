@@ -142,10 +142,12 @@ emotion-echo-fer:
   image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/fer-tflite:v0.1.0
 
 emotion-echo-xtts:
-  image: crpi-rnawo8jx69bslvbx.cn-hongkong.personal.cr.aliyuncs.com/emotion-echo/xtts:v0.1.0
-  command: ["fastapi", "run", "app.py", "--host=0.0.0.0", "--port=8003"]
-  volumes:
-    - ${XTTS_MODEL_PATH:-/c/Users/LENVOV/AppData/Local/Temp/coqui_model}:/model
+  # ⚠️ 已不在 ACR：XTTS 改为仓内自建镜像 `emotion-echo/xtts:v2.0.1`
+  #    （vendor `ai4all/coqui` 缺 `/tts_stream` 端点，见 ADR-2026-09-xtts-v3）。
+  #    模型改为**构建期蒸煮进镜像**（构建上下文 emotion-echo-models/XTTS/AI-ModelScope/，在 D 盘），
+  #    运行时不再挂载 /model —— 旧 `- ${XTTS_MODEL_PATH:-/c/Users/.../coqui_model}:/model`
+  #    已改默认到 D 盘（`/d/DockerData/coqui_model`）且对当前实现无效（server.py 不读 /model）。
+  image: emotion-echo/xtts:v2.0.1
 ```
 
 `docker compose --profile ai up -d` 会自动 pull。

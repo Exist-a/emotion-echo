@@ -2,7 +2,7 @@
 
 > **本文档是 3 个 AI 容器（FER / SenseVoice / XTTS）的**实现 +构建 +运行 +排错**主指南**。
 > 其他文档（`docs/ai-models/build-guide.md`、`docs/ai-models/vendor-candidates.md`、`docs/ai-models/xtts-decision.md`）都从这里跳转。
-> 上一次重大更新：2026-09-10（PR-TTS-VENDOR Phase 5+6）。
+> 上一次重大更新：2026-10-17（XTTS 章节按 ADR-2026-09-xtts-v3 校正为"仓内镜像 + 构建期蒸煮模型"；模型位置统一到 D 盘）。
 
 ## 一、3 个 AI 容器总览
 
@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | **emotion-echo-fer** | 人脸情绪识别（tflite + Haar cascade） | `POST /analyze` | `emotion-echo-models/FER-tflite/` | `emotion-echo/fer-tflite:v0.1.0` |
 | **emotion-echo-sensevoice** | 语音转写 + 7 类情绪识别（funasr + SenseVoiceSmall） | `POST /analyze` | `emotion-echo-models/SV-fastbuild/` | `emotion-echo/sensevoice-fastbuild:v0.1.0` |
-| **emotion-echo-xtts** | 语音克隆 TTS（vendor Coqui） | `POST /voice/{upload,generate,result}` | vendor `ai4all/coqui:latest` | `ai4all/coqui:latest` |
+| **emotion-echo-xtts** | 语音克隆 TTS（仓内 Coqui TTS server） | `GET /health` · `POST /tts` · `/tts_stream` · `/tts_with_phonemes` | `emotion-echo-models/XTTS/` | `emotion-echo/xtts:v2.0.1` |
 
 **全部位于 `deploy/docker-compose.apps.yml` 的 `profiles: ["ai"]` 之下**，dev 默认不起，需要时显式启用：
 
@@ -164,41 +164,52 @@ docker run --rm --network container:sv-test \
 
 ---
 
-## 四、XTTS（语音克隆 TTS · vendor ai4all/coqui）
+## 四、XTTS（语音克隆 TTS · 仓内镜像）
 
 ### 4.1 设计
 
 | 项 | 值 |
 |---|---|
-| 后端 | vendor `ai4all/coqui:latest`（Coqui TTS server） |
-| XTTS v2 模型 | 本地预下（`C:\Users\LENVOV\AppData\Local\Temp\coqui_model`），volume 挂载到容器 `/model` |
-| 启动命令覆盖 | `fastapi run app.py --host=0.0.0.0 --port=8003`（vendor 默认 8000，改为 8003 与 ai-svc XTTS_BASE_URL 对齐）|
-| API | `POST /voice/upload`（上传参考音）+ `POST /voice/generate`（生成）+ `GET /voice/result`（拉取）|
+| 后端 | 仓内 `emotion-echo-models/XTTS/server.py`（FastAPI + Coqui-TTS `Xtts`）。vendor `ai4all/coqui` 已弃用——它**没有** `/tts_stream` 端点（见 ADR-2026-09-xtts-v3） |
+| XTTS v2 模型 | **构建期蒸煮进镜像**：`Dockerfile` 里 `COPY XTTS/AI-ModelScope/ ./AI-ModelScope/`；运行时 `server.py` 从 `/app/AI-ModelScope/XTTS-v2`（`CACHE_DIR`）加载 —— **不是**运行时挂载 |
+| 模型源码位置 | 仓库 `emotion-echo-models/XTTS/AI-ModelScope/XTTS-v2/`（**在 D 盘**；`model.pth` 1.86GB + `dvae.pth` 201MB，已被 `.gitignore` 忽略） |
+| 构建上下文 | `emotion-echo-models/`（`docker build -f emotion-echo-models/XTTS/Dockerfile -t emotion-echo/xtts:v2.0.1 emotion-echo-models/`） |
+| API | `GET /health` · `POST /tts`（非流式）· `POST /tts_stream`（流式 WAV）· `POST /tts_with_phonemes`（带字符级时间戳，数字人口型用） |
 
 ### 4.2 镜像
 
-**vendor 镜像，无需自建**。Docker Hub 拉 `ai4all/coqui:latest`，本地有 daemon.json 配 aliyun 加速镜像，下载通常 <5 分钟。
-
-### 4.3 模型挂载（关键）
-
-XTTS v2 模型 **2GB** 必须预下并挂载到 `/model`，否则容器启动后从 HuggingFace 下载会失败（dev 网络下 `ssl.SSLEOFError`）。
+**仓内镜像，非 vendor**。`emotion-echo-models/XTTS/Dockerfile` 双阶段构建（builder 装 torch / Coqui-TTS / modelscope，runtime 只带 site-packages + vendored TTS 源码 + 模型）。首次 cold build 约 10 分钟，镜像约 11GB。
 
 ```bash
-# 下载 XTTS v2 模型（9 个文件 ~2GB，stage-59 §十.3.1 验证过的路径）
-mkdir -p /c/Users/LENVOV/AppData/Local/Temp/coqui_model
-cd /c/Users/LENVOV/AppData/Local/Temp/coqui_model
-# 单独下每个文件（分文件下载绕开长连接断链）
-for f in config.json vocab.json hash.md5 LICENSE.txt README.md mel_stats.pth speakers_xtts.pth dvae.pth model.pth; do
+docker build -f emotion-echo-models/XTTS/Dockerfile -t emotion-echo/xtts:v2.0.1 emotion-echo-models/
+```
+
+### 4.3 模型从哪来（关键 · **不要落到 C 盘**）
+
+XTTS v2 模型 **约 2GB**（`model.pth` 1.86GB + `dvae.pth` 201MB + `mel_stats.pth` + 配置）由 **构建期** 从构建上下文 `emotion-echo-models/XTTS/AI-ModelScope/XTTS-v2/` 蒸煮进镜像；容器启动时**不再下载**。
+
+> 🔴 **模型必须落在 D 盘**（仓库所在盘）。2026-10-17 排查发现宿主 `~/.cache/modelscope/`（C 盘）留了 **2.9GB 的 XTTS-v2 + SenseVoiceSmall 重复副本** —— 仓库里已有同尺寸、同 `hash.md5` 的正本，且**项目任何代码 / compose / 脚本都不读**该宿主缓存，故已删除。**不要在 C 盘（系统盘）留模型缓存。**
+>
+> 需要让宿主级工具把缓存写到 D 盘时，用环境变量（两个都已被本仓 Dockerfile 使用，名字可对照 `emotion-echo-models/XTTS/Dockerfile` 与 `sensevoice-small/Dockerfile`）：
+>
+> ```bash
+> export MODELSCOPE_CACHE=/d/DockerData/modelscope-cache   # ModelScope
+> export HF_HOME=/d/DockerData/hf-cache                    # HuggingFace
+> ```
+>
+> Windows 可用 `setx MODELSCOPE_CACHE "D:\DockerData\modelscope-cache"` 持久化。
+
+把模型补/重下到构建上下文（**历史实测做法**，逐文件下载绕开长连接断链；文件清单与当前目录一致）：
+
+```bash
+cd emotion-echo-models/XTTS/AI-ModelScope/XTTS-v2
+for f in config.json vocab.json hash.md5 LICENSE.txt README.md mel_stats.pth dvae.pth model.pth; do
   curl -L -C - --retry 20 -s -o "$f" \
     "https://hf-mirror.com/coqui/XTTS-v2/resolve/main/$f"
 done
-
-# samples 是 vendor 启动时校验用的英文样例
 mkdir -p samples
-for f in en_sample.wav __samples_; do
-  curl -L -C - --retry 20 -s -o "samples/$f" \
-    "https://hf-mirror.com/coqui/XTTS-v2/resolve/main/samples/$f"
-done
+curl -L -C - --retry 20 -s -o "samples/en_sample.wav" \
+  "https://hf-mirror.com/coqui/XTTS-v2/resolve/main/samples/en_sample.wav"
 ```
 
 ### 4.4 启动
@@ -214,35 +225,28 @@ docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.
   --profile ai up -d --no-deps emotion-echo-xtts
 
 # 3. 等模型加载 + warmup（约 2-3 分钟，看 logs）
-docker logs -f emotion-echo-xtts   # 等到 "Uvicorn running on http://0.0.0.0:8003"
+docker logs -f emotion-echo-xtts   # 等到 "XTTS model loaded"
 
-# 4. 测试 TTS（容器内）
-docker run --rm --network emotion-echo_app-network \
-  -v "/c/Users/LENVOV/AppData/Local/Temp/coqui_model/snapshots/master/samples:/samples:ro" \
-  python:3.10-slim sh -c "
-  pip install requests
-  python -c \"
-import requests
-with open('/samples/en_sample.wav','rb') as f:
-    r = requests.post('http://emotion-echo-xtts:8003/voice/upload',
-                      files={'audio':('en_sample.wav',f,'audio/wav')},
-                      data={'name':'demo'}, timeout=60)
-print('upload:', r.status_code, r.text[:100])
-r = requests.post('http://emotion-echo-xtts:8003/voice/generate',
-                  json={'voice':'demo','text':'Hello from compose TTS.','language':'en'}, timeout=120)
-print('generate:', r.status_code)
-r = requests.get('http://emotion-echo-xtts:8003/voice/result', timeout=30)
-print('result:', r.status_code, 'size:', len(r.content), 'header:', r.content[:16])
-\"
+# 4. 健康检查（模型已烘焙进镜像 /app/AI-ModelScope/XTTS-v2，无需挂载 /model）
+docker exec emotion-echo-xtts python -c "
+import urllib.request
+print(urllib.request.urlopen('http://localhost:8003/health', timeout=5).read().decode())
 "
-# 预期：upload 200, generate 200, result 200 (~133KB WAV)
+# 预期：{"status":"ok","model_loaded":true,"model_type":"XTTS-v2"}
+
+# 5. 合成：带字符级时间戳（宿主直连需临时映射 8003；经 BFF→XTTS 无需映射）
+curl -sS -m 120 -X POST http://localhost:8003/tts_with_phonemes \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"你好世界","language":"zh-cn"}'
+# 预期：200 + audio(base64) / sample_rate 24000 / phonemes[{char,start,duration}]
 ```
 
 ### 4.5 已知限制
 
-- **vendor 镜像 `ai4all/coqui` 没有 `/health` 端点**——compose 的 healthcheck 用 socket probe 而不是 HTTP。
-- **模型挂载路径跨平台**：默认 `${XTTS_MODEL_PATH:-/c/Users/LENVOV/AppData/Local/Temp/coqui_model}` 是 Git Bash 风格路径。Mac/Linux 用户需要 `export XTTS_MODEL_PATH=/Users/.../coqui_model`。
-- **XTTS 端点无 `/health` 返回 404**——不影响业务，ai-svc 不检查 vendor 健康，只用 `/voice/*`。
+- **compose 的 `${XTTS_MODEL_PATH:-/d/DockerData/coqui_model}:/model` 卷是 vendor 时代残留**：仓内 `server.py` 只读镜像内 `/app/AI-ModelScope/XTTS-v2`（`CACHE_DIR`），**从不读 `/model`** ⇒ 该挂载对当前实现无效（仍指向 D 盘、不占 C 盘空间，待清理；见 §4.3 与 ADR-2026-09-xtts-v3）。
+- **模型挂载路径跨平台**：默认 `/d/DockerData/coqui_model` 是 Git Bash 风格路径，Mac/Linux 用户需 `export XTTS_MODEL_PATH=/Users/...`。注意该变量对新镜像**无实际作用**（见上一条）。
+- **`/health` 由仓内 `server.py` 提供**（返 `model_loaded` / `model_type`）；compose 的 healthcheck 仍用 TCP socket probe 做启动探活。
+- **推理并发与 CPU**：`XTTS_SYNTH_WORKERS`（默认 2）经 `synth_pool` 线程池卸载阻塞推理；`cpus: "8.0"` —— 早期 2 核限额是"TTS 很慢"的根因（E2E-F-132：40 字 188s → 19.9s）。
 
 ---
 
@@ -343,36 +347,30 @@ curl -sS -m 120 -X POST http://localhost:8002/analyze \
 # 实际结果：{"text":"开放时间早上9点至下午5点。","emotion":"neutral","confidence":0.6,...}
 ```
 
-### 7.3 XTTS（vendor `ai4all/coqui:latest`，端口 8003 override）
+### 7.3 XTTS（仓内 `emotion-echo/xtts:v2.0.1`，端口 8003）
 
 ```bash
-# XTTS 模型本地预下到 C:/Users/LENVOV/AppData/Local/Temp/coqui_model
-# （首次约 50 分钟，hf-mirror.com 分文件下载；详见 §4.3）
+# 模型已蒸煮进镜像（构建上下文 emotion-echo-models/XTTS/AI-ModelScope/，在 D 盘）
+# 无需任何模型挂载；详见 §4.2 / §4.3
 
-# 启动（端口覆盖 8000→8003，root + 模型挂载）
-docker run -d --name xtts-hc -p 8013:8003 -u root \
-  -v "C:/Users/LENVOV/AppData/Local/Temp/coqui_model:/model" \
-  ai4all/coqui:latest \
-  fastapi run app.py --host=0.0.0.0 --port=8003
+# 启动（compose 已指定 image 与 CMD，这里单跑等价形态）
+docker run -d --name xtts-hc -p 8013:8003 \
+  emotion-echo/xtts:v2.0.1
 
-# 等模型加载（XTTS v2 torch warmup + VAD 模型 ≈ 2 分半）
+# 等模型加载（XTTS v2 torch warmup ≈ 2-3 分钟）
 sleep 150
-docker exec xtts-hc bash -c "awk '{print \$2}' /proc/net/tcp | sort -u"
-# 实际结果：1F43 (8003 hex) → 端口监听
+docker exec xtts-hc python -c "
+import urllib.request
+print(urllib.request.urlopen('http://localhost:8003/health', timeout=5).read().decode())
+"
+# 实际结果：{"status":"ok","model_loaded":true,"model_type":"XTTS-v2"}
 
-# /voice/upload + /voice/generate + /voice/result 端到端
-curl -X POST http://localhost:8013/voice/upload \
-  -F "name=demo" \
-  -F "audio=@/samples/en_sample.wav;type=audio/wav"
-# 实际结果：200 {"name":"demo","audio":"/model/voices/5a003a5b-...wav"}
-
-curl -X POST http://localhost:8013/voice/generate \
+# 合成端到端（带字符级时间戳）
+curl -sS -m 120 -X POST http://localhost:8013/tts_with_phonemes \
   -H "Content-Type: application/json" \
-  -d '{"voice":"demo","text":"Hello from health check.","language":"en"}'
-# 实际结果：200 {}
-
-curl http://localhost:8013/voice/result -o out.wav
-# 实际结果：200 80KB RIFF/WAV audio
+  -d '{"text":"你好世界","language":"zh-cn"}'
+# 实际结果：200 + audio(base64) / sample_rate 24000 / phonemes[{char,start,duration}] / duration
+#   （per-char 等分近似：last.start + last.duration == duration）
 ```
 
 ### 7.4 完整 profile 启动 + 验证（一键脚本）

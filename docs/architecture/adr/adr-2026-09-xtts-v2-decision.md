@@ -121,6 +121,7 @@
 - **云 API 多 provider 实现层**：v1 写过的代码骨架（`xtts-cloud-api-integration.md`）保留作参考，未来 §C 触发条件成熟时按 TDD 重启
 - **dev 默认启用 AI profile**：Stage 60 §五.1 建议保留显式 `--profile ai`，决策待 owner 确认（与 PR-TTS-VENDOR 同步）
 - **XTTS 模型挂载路径跨平台**：当前 `${XTTS_MODEL_PATH:-/c/Users/LENVOV/AppData/Local/Temp/coqui_model}` 是 Git Bash 风格；Mac/Linux 用户需 export（cf. QUICKSTART.md 跨平台说明）
+  - ⚠️ **已被 [ADR-2026-09-xtts-v3-repo-image.md](adr-2026-09-xtts-v3-repo-image.md) 取代（2026-09-23）**：XTTS 改用仓内镜像、模型**构建期蒸煮**（仓库 `emotion-echo-models/XTTS/AI-ModelScope/`，在 D 盘），运行时不再需要挂载模型；compose 里 `${XTTS_MODEL_PATH:-/d/DockerData/coqui_model}:/model` 是 vendor 时代残留、对仓内 `server.py` 无效。**模型请勿放在 C 盘**（2026-10-17 已清掉宿主 `~/.cache/modelscope/` 下 2.9GB 重复副本）。
 
 ---
 
