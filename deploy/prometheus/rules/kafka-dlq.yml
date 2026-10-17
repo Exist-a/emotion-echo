@@ -58,9 +58,18 @@ groups:
       #     （这正是 E2E-F-150「面板永远 No data」的根因，别重犯）
       #   - 不用 offset 绝对值：current_offset 是"累计写入"而非"当前深度"
       #
-      # ⚠️ 语义边界：本告警表达"**有新消息进入** DLQ"（入口速率），**不等于**当前深度。
-      #    "当前还剩多少条未处理"由同文件的 **DLQDepthHigh**（CL-F-23，2026-10-16 落地）表达
-      #    —— 起栈实测确认 `kafka_topic_partition_oldest_offset` 可采后补齐，原"可采性未验证"限制已闭合。
+      # ⚠️ 语义边界（CL-F-23，2026-10-16 实测后**再次确认**）：本告警表达"**有新消息进入** DLQ"
+      #    （入口速率），**不代表**"当前还剩多少条未处理"。
+      #
+      #    CL-F-02 的触发问题（"`kafka_topic_partition_oldest_offset` 到底可不可采"）已有答案：
+      #    **可采**（kafka-exporter /metrics 59 条 series；实测 chat-events-dlq current=7/oldest=0）。
+      #    但它 **不能**表达未处理深度 —— 因为 `oldest_offset` = 分区 LogStartOffset，
+      #    **只有 retention 删段才前进**；DLQ 无常驻 consumer，且回放工具
+      #    （`scripts/replay_dlq/main.go`）**只读不删**（死信按设计保留为历史）
+      #    ⇒ `current − oldest` = **留存总量**（随写入单调增长），**回放成功后也不会下降**。
+      #
+      #    ⇒ 本轮**没有**据此新增"深度"告警：那样会得到一条"触发后永不解除"的告警（回放无用），
+      #      只会训练人忽略。真正的"未处理深度"需要**回放水位线**（见账本 `CL-F-27`）。
       - alert: DLQMessagesAccumulating
         expr: sum(increase(kafka_topic_partition_current_offset{topic="chat-events-dlq"}[10m])) > 0
         for: 0m
@@ -79,30 +88,3 @@ groups:
                  （幂等靠消费端 ON CONFLICT(event_id, occurred_at) DO NOTHING）
 
 
-      # CL-F-23（2026-10-16，Lane-CL-P 起栈实测后落地）：**真实堆积深度**告警。
-      #
-      # CL-03 Phase 4a 的 DLQMessagesAccumulating 表达的是"**近 10 分钟有新消息进入**"
-      # （= 入口速率），当时如实登记了限制："不等于当前还有多少条未处理；真正深度需要
-      # kafka_topic_partition_oldest_offset，但本栈未用过 ⇒ 可采性未验证"。
-      #
-      # 本轮**起栈实测：该指标可采**（kafka-exporter /metrics 有 59 条 series；
-      # 实测 chat-events-dlq `current_offset=7` / `oldest_offset=0` ⇒ 深度 7）。
-      # 于是限制闭合：深度 = Σ 各分区 (current − oldest) —— DLQ 无常驻 consumer
-      # ⇒ oldest 不前进，差值即"还剩多少条没处理"。
-      - alert: DLQDepthHigh
-        expr: sum(kafka_topic_partition_current_offset{topic="chat-events-dlq"} - kafka_topic_partition_oldest_offset{topic="chat-events-dlq"}) > 50
-        for: 30m
-        labels:
-          severity: warning
-          component: kafka
-        annotations:
-          summary: "chat-events-dlq 真实堆积深度 > 50 条（持续 30m）"
-          description: |
-            当前未处理深度 = {{ $value | printf "%.0f" }} 条（= Σ current − oldest）。
-            DLQ 无常驻 consumer（人工回放设计）⇒ 深度不降 = **没人回放**。
-            阈值 50 是"明显堆积"的经验值（个位数残留属正常，看板可见，不告警）。
-            处置：
-              1. 看板 kafka-consumer-lag → "DLQ" 面板（同源于本 expr）
-              2. 找失败原因：ai-svc / analytics-svc 日志 grep "DLQ publish failed"
-              3. 回放：go run ./scripts/replay_dlq -brokers <addr> -limit 0
-                 （幂等靠消费端 ON CONFLICT(event_id, occurred_at) DO NOTHING）

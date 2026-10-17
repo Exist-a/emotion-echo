@@ -29,7 +29,54 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var indexNameRe = regexp.MustCompile(`(?i)CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z0-9_]+)`)
+// indexDefRe 解析 `CREATE [UNIQUE] INDEX [IF NOT EXISTS] [schema.]name ON [schema.]table (cols)`。
+//
+// ⚠️ 修订记录（2026-10-16，**第二方核对抓出两个假绿反例**）：首版只捕 `([a-z0-9_]+)` 一个
+// 标识符，于是 (A)「同名但换表/换定义」捕不到差异；(B)「两侧都写 `schema.` 前缀」时正则
+// 只捕到 `schema` 名，**真实索引名被坍缩**、两边反而相等。现改为捕获
+// 唯一性 / 索引名 / 表名 / 列清单，并按 (name, table, unique, cols) 元组比对。
+// 仍**不**比对 WHERE 谓词 —— 该限制已如实写在下方注释与账本里（不夸大守卫能力）。
+var indexDefRe = regexp.MustCompile(
+	`(?is)CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:\w+\.)?(\w+)\s+ON\s+(?:\w+\.)?(\w+)\s*\(([^)]*)\)`)
+
+// indexDef 是一条索引的**可比对摘要**（比裸名字强：含表与列，能抓"同名换表/换列"）。
+type indexDef struct {
+	Name   string
+	Table  string
+	Unique bool
+	Cols   string
+}
+
+func (d indexDef) String() string {
+	u := ""
+	if d.Unique {
+		u = "UNIQUE "
+	}
+	return u + d.Name + " ON " + d.Table + "(" + d.Cols + ")"
+}
+
+func parseIndexDefs(sql string) []indexDef {
+	var out []indexDef
+	for _, m := range indexDefRe.FindAllStringSubmatch(sql, -1) {
+		cols := strings.Join(strings.Fields(strings.ToLower(m[4])), "")
+		out = append(out, indexDef{
+			Name:   strings.ToLower(m[2]),
+			Table:  strings.ToLower(m[3]),
+			Unique: strings.TrimSpace(m[1]) != "",
+			Cols:   cols,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
+	return out
+}
+
+func indexDefStrings(defs []indexDef) []string {
+	out := make([]string, 0, len(defs))
+	for _, d := range defs {
+		out = append(out, d.String())
+	}
+	return out
+}
 
 // readInlineOutboxDDL 取 main.go 里 runOutboxMigration 函数体内的内联 DDL 文本。
 func readInlineOutboxDDL(t *testing.T) string {
@@ -52,13 +99,14 @@ func readInlineOutboxDDL(t *testing.T) string {
 //
 // 扫 `migrations/c*.sql` 而不是硬编码 c001 —— 后续新增迁移（如给 outbox 补索引）
 // 会自动纳入比对，避免"守卫只认某一份文件"的假绿。
-func outboxMigrationIndexNames(t *testing.T) []string {
+func outboxMigrationIndexDefs(t *testing.T) []indexDef {
 	t.Helper()
 	dir := filepath.Join(repoRoot(t), "emotion-echo-chat-svc", "migrations")
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err, "读不到 migrations 目录")
 
-	found := map[string]bool{}
+	seen := map[string]bool{}
+	out := []indexDef{}
 	scanned := 0
 	for _, e := range entries {
 		name := e.Name()
@@ -72,41 +120,32 @@ func outboxMigrationIndexNames(t *testing.T) []string {
 			continue
 		}
 		scanned++
-		for _, m := range indexNameRe.FindAllStringSubmatch(text, -1) {
-			found[strings.ToLower(m[1])] = true
+		for _, d := range parseIndexDefs(text) {
+			if seen[d.String()] {
+				continue
+			}
+			seen[d.String()] = true
+			out = append(out, d)
 		}
 	}
 	require.Greaterf(t, scanned, 0, "没有任何迁移文件提到 outbox_events —— 目录/命名变了？请同步本钉")
-
-	out := make([]string, 0, len(found))
-	for k := range found {
-		out = append(out, k)
-	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
 	return out
 }
 
-// TestOutbox_InlineDDL_IndexParity 索引集合双向相等（CL-F-22）。
+// TestOutbox_InlineDDL_IndexParity 索引定义集合双向相等（CL-F-22）。
 //
+// 比对的是 **(名, 表, 列, 唯一性)** 四元组，不只是名字 —— 这样"同名换表/换定义"也会红。
 // 回退实现（把内联 DDL 里的 idx_outbox_attempts 删掉）会让本钉如期变红。
+// **已知边界（不夸大）**：不比对 `WHERE` 谓词与列顺序；schema 前缀被规范化掉（同名同表同列即视为一致）。
 func TestOutbox_InlineDDL_IndexParity(t *testing.T) {
 	inline := readInlineOutboxDDL(t)
-
-	found := map[string]bool{}
-	for _, m := range indexNameRe.FindAllStringSubmatch(inline, -1) {
-		found[strings.ToLower(m[1])] = true
-	}
-	inlineIdx := make([]string, 0, len(found))
-	for k := range found {
-		inlineIdx = append(inlineIdx, k)
-	}
-	sort.Strings(inlineIdx)
-
-	migIdx := outboxMigrationIndexNames(t)
+	inlineIdx := indexDefStrings(parseIndexDefs(inline))
+	migIdx := indexDefStrings(outboxMigrationIndexDefs(t))
 
 	assert.Equalf(t, migIdx, inlineIdx,
-		"双事实源索引漂移：migrations=%v 内联=%v —— 两侧必须逐项一致"+
-			"（缺索引 ⇒ 自建表路径的查询计划与迁移路径不同；多索引 ⇒ 反向漂移）",
+		"双事实源索引漂移：migrations=%v 内联=%v —— 两侧的 (名,表,列,唯一性) 必须逐项一致"+
+			"（缺索引 ⇒ 自建表路径与迁移路径结构不同；同名换表/换列 ⇒ 反向漂移）",
 		migIdx, inlineIdx)
 }
 
