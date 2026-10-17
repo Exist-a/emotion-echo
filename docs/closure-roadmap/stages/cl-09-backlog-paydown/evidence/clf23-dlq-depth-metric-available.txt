@@ -1,25 +1,26 @@
-CL-F-23 可采性实测（2026-10-16，Lane-CL-P · dev 栈）
-====================================================
-CL-03 Phase 4a 当时如实登记的限制：「真实深度需要 kafka_topic_partition_oldest_offset，
+CL-F-23 可采性实测 + 语义结论（2026-10-16，Lane-CL-P · dev 栈）
+===============================================================
+CL-03 Phase 4a 当时登记的限制：「真实深度需要 kafka_topic_partition_oldest_offset，
 但本栈此前未在任何规则/面板中使用 ⇒ 可采性未验证，需起栈实测后再定」。
 
-本轮实测（只起 kafka-exporter 单容器，未起整套 obs，避免内存红线）：
+实测（只起 kafka-exporter 单容器，未起整套 obs，避内存红线）：
+  1) 指标存在：`curl http://localhost:9308/metrics` 中
+     `kafka_topic_partition_oldest_offset` series 数 = 59  ⇒ **可采**
+  2) chat-events-dlq 实测：`current_offset=7` / `oldest_offset=0`
 
-1) 指标是否存在：`curl http://localhost:9308/metrics` 中
-   `kafka_topic_partition_oldest_offset` series 数 = 59  ⇒ **可采**
-2) kafka_topic 族全部指标名：
-   kafka_topic_partition_current_offset / in_sync_replica / leader /
-   leader_is_preferred / **oldest_offset** / replicas / under_replicated_partition / partitions
-3) DLQ topic 实取值（现算深度）：
-   kafka_topic_partition_current_offset{partition="0",topic="chat-events-dlq"} 7
-   kafka_topic_partition_oldest_offset{partition="0",topic="chat-events-dlq"} 0
+⚠️ 结论修正（2026-10-16，**第二方核对抓出我方误判**）：
+  执行者一度据此新增 `DLQDepthHigh = Σ(current − oldest) > 50`，并声称"差值即还剩多少条没处理"。
+  **该语义是错的**：`oldest_offset` = 分区 LogStartOffset，**只有 retention 删段才前进**；
+  DLQ 无常驻 consumer，且回放工具 `scripts/replay_dlq/main.go:160` 自述
+  「死信在 DLQ topic 中保留为历史（offset 累计）」——**只读不删**。
+  ⇒ `current − oldest` = **留存总量**（随写入单调增长），**回放成功后也不会下降**。
+  ⇒ 若按"深度"告警，会得到一条**触发后永不解除**的告警（回放无用），只会训练人忽略。
 
-4) → 深度 = Σ(current − oldest) = 7 − 0 = **7 条**（真实未处理深度，非"累计写入"）
+最终处置（本轮）：
+  · **撤掉 `DLQDepthHigh`**（不发布语义错误且永不解除的告警）；
+  · 规则注释改写为**实测语义边界**（留存总量 ≠ 未处理深度，并写明成因）；
+  · Grafana 面板改标签为「DLQ 留存总量（**非**未处理深度）」，expr 保留（其值确实=留存总量）；
+  · 「未处理深度」单列**新账 `CL-F-27`**（需要回放水位线，见该行）；
+  · 校验：`promtool check rules` → SUCCESS: 3 rules；`node deploy/obs_monitoring.test.js` 全通过。
 
-落地（本轮）：
-  · 新增告警 `DLQDepthHigh`（`deploy/prometheus/rules/kafka-dlq.yml`）：
-    `sum(current{topic="chat-events-dlq"} - oldest{topic="chat-events-dlq"}) > 50 for 30m`
-  · 同步 k8s 内联副本 `charts/.../prometheus/templates/configmap-rules.yaml`（守卫组⑤/⑦要求）
-  · Grafana 面板 "DLQ Depth" 的 expr 由"累计写入"改为**真实深度**
-  · 原「可采性未验证」限制注释已改写为语义边界说明（不当已闭合处理）
-  · 校验：`promtool check rules` → SUCCESS: 4 rules；`node deploy/obs_monitoring.test.js` 全通过
+原「可采性未验证」的限制**已闭合**（答案=可采），但**深度诉求未达成** —— 两者必须分开说，别混为一谈。

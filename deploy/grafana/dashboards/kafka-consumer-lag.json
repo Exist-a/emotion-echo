@@ -121,7 +121,7 @@
     },
     {
       "type": "stat",
-      "title": "DLQ Depth (chat-events-dlq messages) — alerting: DLQDepthHigh / DLQMessagesAccumulating",
+      "title": "DLQ 留存总量 (chat-events-dlq, **非**未处理深度) — alerting: DLQMessagesAccumulating",
       "id": 3,
       "gridPos": {
         "h": 8,

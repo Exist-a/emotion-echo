@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func readMainSrc(t *testing.T) string {
@@ -54,12 +55,15 @@ func TestMain_PostgresFailFastWiring(t *testing.T) {
 }
 
 // IsRequired 的语义边界：postgres 必须在默认必需清单里（否则 strict 模式也不会退出）。
+//
+// ⚠️ 修订记录（2026-10-16，**第二方核对抓出**）：本钉原写 `../../emotion-echo-shared/...`
+// —— 从包目录上溯两级会落到 `D:/源码/emotion-echo-shared`（不存在）⇒ 文件读不到、
+// 走 `t.Skipf` **恒跳过**，而 `go test` 的 "ok" 把 SKIP 当成了 PASS。
+// 现改为：正确相对路径 `../emotion-echo-shared/...` + **读不到即 Fatal**（缺文件是缺陷，不是环境差异）。
 func TestStartupStrictDeps_IncludesPostgres(t *testing.T) {
 	// 默认清单（未设 STARTUP_STRICT_DEPS 时）由 shared bootstrap 决定
-	bs, err := os.ReadFile("../../emotion-echo-shared/pkg/bootstrap/deps.go")
-	if err != nil {
-		t.Skipf("shared bootstrap 源码不可达（构建环境差异）：%v", err)
-	}
+	bs, err := os.ReadFile("../emotion-echo-shared/pkg/bootstrap/deps.go")
+	require.NoError(t, err, "读不到 shared bootstrap 源码 —— 路径写错就是本钉从未生效（别用 Skip 掩盖）")
 	src := string(bs)
 	i := strings.Index(src, `list = "postgres`)
 	assert.GreaterOrEqual(t, i, 0,

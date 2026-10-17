@@ -1,0 +1,41 @@
+CL-F-17 浏览器实测（IAB）A/B —— 数字人 VRM 在"加载中被卸载"下的行为
+=====================================================================
+时间：2026-10-16（Lane-CL-P 整改轮）· 工具：ZCode 内置浏览器（IAB）· 站点：容器 web
+
+【为什么要做这个】第一轮我只给了**源码级结构不变量**测试就标了 ✅，**没有任何浏览器实测**；
+且该钉首版是假绿（被第二方核对抓出：断言命中注释里的 `scene.add(...)`）。
+本轮补齐：把"加载中被卸载"做成**可复现**场景，并做**新旧镜像 A/B**。
+
+【场景构造（可复现）】
+  1) 注入 fetch 钩子：把 `*.vrm` 响应的**到达时间延迟 6000ms**（26.7MB 模型，真实网络下同样有秒级窗口）；
+  2) 进入 chat 页 ⇒ DigitalHuman 全新挂载，`loadVRM()` 的 `await loader.loadAsync` 悬空；
+  3) 在 1s 时**离开 chat 页**（点侧栏「设置」）⇒ 路由名变化 ⇒ `[id].vue` 与其内 DigitalHuman **真正卸载**
+     （⚠️ 注意：切**会话**不会卸载 —— `definePageMeta({ key: route.name })` 固定了页面 key，见 [id].vue:266 与本轮实测；
+        第一版场景因此**没有触发卸载**，属空证，已作废重做）；
+  4) 等 10s（> 6s 延迟）⇒ 采集 console 与 unhandled 错误。
+
+【A（旧镜像 emotion-echo/web:v0.1.9，修复前）】:3001
+  delayed=1，进会话后离开 chat 页，10s 后捕获到：
+    error: [DigitalHuman] Failed to load VRM model (Attempt 1): TypeError: Cannot read properties of null (reading 'add')
+           at ve (http://localhost:3001/_nuxt/cjvdGAAv.js:5037:56832)
+    error: [DigitalHuman] Scene is not initialized!
+  ⇒ **与账本 CL-F-17 记录的用户原症状完全一致**（说明场景真的能触发该 bug，非空证）。
+
+【B（新镜像 emotion-echo/web:clp4，含 #245 修复）】:3000
+  同样构造（delayed=2，确认发生了**全新挂载**；随后在加载窗口内离开 chat 页），10s 后：
+    logs 仅 [DigitalHumanTTS] Stopping TTS + 我自己的 probe 行
+    **无 `Failed to load VRM model`、无 `Scene is not initialized!`、无 unhandled 错误**
+  ⇒ 修复在真实浏览器里生效。
+
+【顺带取得的正常路径证据】
+  正常进入会话（不打断）：从 `canvas.digital-human-canvas` 区域截图，**肉眼可见 3D 形象已渲染**
+  （见同目录 `clf17-iab-normal-render.png`）；无失败遮罩（`.error-icon` 不存在）、无 loading 遮罩残留。
+
+【一条被否掉的探针（记录以免重犯）】
+  起初想用「把 WebGL canvas `drawImage` 到 2D canvas 再采样像素」判断是否渲染 —— 实测 `nonTransparent=0`。
+  **这是无效探针**：WebGL 的 drawing buffer 在合成后被清空，`drawImage` 读不到内容（除非 `preserveDrawingBuffer`）。
+  改走**截图 + 目视**（正确分支）。教训同 memory `invalid-probe-evidence-pattern`。
+
+【本证据能证明 / 不能证明】
+  能：在真实浏览器中，"加载期间离开页面"这一真实路径下，旧代码抛 TypeError、新代码不抛；正常路径 3D 形象可见。
+  不能：不能证明**所有**竞态路径（如 HMR、webview 崩溃恢复）都覆盖；也未覆盖移动端视口。
