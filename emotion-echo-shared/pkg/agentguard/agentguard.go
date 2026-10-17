@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // 违规类别
@@ -174,19 +175,18 @@ func CheckText(field, text string) Violations {
 	if strings.TrimSpace(text) == "" {
 		return nil
 	}
-	// 归一：小写（ASCII）+ 折叠空白（"IGNORE  PREVIOUS" 也要拦）
-	lower := strings.ToLower(text)
-	flat := collapseSpaces(lower)
+	normalized := normalizeForMatch(text)
 
 	var out []Violation
 	for _, r := range allRules() {
 		if r.Pattern != nil {
-			if r.Pattern.MatchString(lower) {
+			if r.Pattern.MatchString(normalized) {
 				out = append(out, Violation{Category: r.Category, Field: field, Term: r.Term})
 			}
 			continue
 		}
-		if strings.Contains(lower, strings.ToLower(r.Term)) || strings.Contains(flat, strings.ToLower(r.Term)) {
+		// 词表项与文本**同口径归一**（否则 "ignore previous" 这类自带空格的项永远匹配不上）
+		if term := normalizeForMatch(r.Term); term != "" && strings.Contains(normalized, term) {
 			out = append(out, Violation{Category: r.Category, Field: field, Term: r.Term})
 		}
 	}
@@ -209,20 +209,32 @@ func CheckProfile(name, persona, tone string, boundaries []string) Violations {
 	return out
 }
 
-// collapseSpaces 把连续空白折成一个空格（ASCII 越狱变体 "IGNORE   PREVIOUS" 的防线）。
-func collapseSpaces(s string) string {
+// normalizeForMatch 把文本归一到"可直接与词表做子串比较"的形式：
+//
+//	① 全角 ASCII（U+FF01–U+FF5E）折半角（"Ｉｇｎｏｒｅ" ⇒ "Ignore"）
+//	② ASCII 大写折小写
+//	③ **删除**所有空白与零宽字符（含全角空格 U+3000、U+200B/200C/200D/FEFF）
+//
+// ⚠️ ③ 必须是"删除"而不是"折叠成一个空格"：词表项是连续文本（"忽略以上"），
+// **插入任意一个空格/全角空格/零宽字符即可绕过** —— 本阶段第二方核对用
+// `忽略 以上所有指令`（一个普通空格）实测穿过，属"声明与行为不符"，此为修正。
+// 删除空白后做子串比较 ⇒ "忽 略 以 上"、"IGNORE   PREVIOUS" 均能命中。
+func normalizeForMatch(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
-	prevSpace := false
 	for _, r := range s {
-		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
-			if !prevSpace {
-				b.WriteByte(' ')
-			}
-			prevSpace = true
+		// ① 全角 ASCII ⇒ 半角
+		if r >= 0xFF01 && r <= 0xFF5E {
+			r -= 0xFEE0
+		}
+		// ③ 空白与零宽字符一律删除
+		if unicode.IsSpace(r) || r == '\u200B' || r == '\u200C' || r == '\u200D' || r == '\uFEFF' {
 			continue
 		}
-		prevSpace = false
+		// ② ASCII 大写 ⇒ 小写
+		if r >= 'A' && r <= 'Z' {
+			r += 'a' - 'A'
+		}
 		b.WriteRune(r)
 	}
 	return b.String()

@@ -3,10 +3,11 @@
 // Stage 30 / stage-30-web-bff.md T4.38-41: chat handler（BFF → chat-svc）
 //
 // 端点：
-//   POST   /api/v1/conversations              → {conversation}
-//   POST   /api/v1/conversations/:id/messages → {message}
-//   GET    /api/v1/conversations/:id/messages?limit= → {messages}
-//   DELETE /api/v1/conversations/:id          → {success, id}
+//
+//	POST   /api/v1/conversations              → {conversation}
+//	POST   /api/v1/conversations/:id/messages → {message}
+//	GET    /api/v1/conversations/:id/messages?limit= → {messages}
+//	DELETE /api/v1/conversations/:id          → {success, id}
 //
 // 注：PinConversation 下游未实现，不暴露路由（接口保留在 ChatClient）。
 package handler
@@ -207,6 +208,14 @@ func (h *ChatHandler) sendMessage(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
 		return
 	}
+	// CL-06：**用户消息不承载角色** ⇒ 忽略客户端传来的 agentId。
+	//
+	// 为什么必须显式清掉（而不是"反正前端不传"）：
+	//   · 角色快照的语义是"这条 AI 回复由谁产生"，只应出现在 assistant 消息上；
+	//   · 该字段由客户端直传、此处**没有归属校验**（切角色那条路径有），
+	//     留着等于开了一条"把任意 agent_id 写进消息"的旁路（第二方核对 2026-10-17 指出）；
+	//   · AI 回复的角色戳走的是 ai/stream → saveAIMessage（那里经 resolveAgentProfile 校验）。
+	req.AgentID = 0
 	// Stage 82 PR-3b：发送前经 llm-service 标注意图（规则式 6 类；
 	// 失败/未装配 → intent 空 = 未分类，不阻断发送）
 	if h.intentClassifier != nil && req.Content != "" {

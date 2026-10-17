@@ -9,6 +9,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -35,7 +36,23 @@ type UserAgentProfileRepo interface {
 	// CountAll 统计**含软删除**的角色数 —— 用于区分"从未建过角色"（首次读要物化默认「小E」）
 	// 与"用户把角色删光了"（**不得**再物化，否则删除形同虚设）。
 	CountAll(ctx context.Context, userID int64) (int, error)
+
+	// ── 下面两个方法是**原子**版本，服务层应当用它们而不是 "Count 之后 Create" ──
+	//
+	// 为什么：`CountActive()` + `Create()` 是**两次独立往返**，两个并发请求可以都读到
+	// `active=4` 然后双双插入 ⇒ 第 6 个角色被写进库（TOCTOU）。本阶段第二方独立核对
+	// 读码确认了该竞态（无事务、无行锁、DDL 无 CHECK/UNIQUE）。
+	// 下面的实现把"复核 + 插入"放进**同一事务**，并先取**每用户咨询锁**串行化。
+
+	// CreateWithActiveLimit 在活跃角色数 < maxActive 时插入；否则返回 ErrActiveLimitReached。
+	CreateWithActiveLimit(ctx context.Context, p *model.UserAgentProfile, maxActive int) error
+	// CreateIfNoHistory 仅当该用户**从未有过任何角色**（含已软删除）时插入默认角色；
+	// 返回是否真的创建（false = 已有历史，无需物化）。
+	CreateIfNoHistory(ctx context.Context, p *model.UserAgentProfile) (bool, error)
 }
+
+// ErrActiveLimitReached 活跃角色数已达上限（仓储层原子复核的结果，由服务层翻译为业务错误）。
+var ErrActiveLimitReached = errors.New("agent profile active limit reached")
 
 // =====================================================
 // InMemoryUserAgentProfileRepo（测试替身）
@@ -176,6 +193,50 @@ func NewPostgresUserAgentProfileRepo(db *gorm.DB) *PostgresUserAgentProfileRepo 
 	return &PostgresUserAgentProfileRepo{db: db}
 }
 
+// CreateWithActiveLimit InMemory：单锁内"复核 + 插入"（与 Postgres 的咨询锁语义等价）。
+func (r *InMemoryUserAgentProfileRepo) CreateWithActiveLimit(ctx context.Context, p *model.UserAgentProfile, maxActive int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	active := 0
+	for _, it := range r.items {
+		if it.UserID == p.UserID && it.DeletedAt == nil {
+			active++
+		}
+	}
+	if active >= maxActive {
+		return ErrActiveLimitReached
+	}
+	r.nextID++
+	created := clone(p)
+	created.ID = r.nextID
+	now := time.Now()
+	created.CreatedAt, created.UpdatedAt, created.DeletedAt = now, now, nil
+	r.items[created.ID] = created
+	*p = *clone(created) // 回填（含自增 ID），与 Create 的契约一致
+	return nil
+}
+
+// CreateIfNoHistory InMemory：单锁内"复核（含软删除）+ 插入"。
+func (r *InMemoryUserAgentProfileRepo) CreateIfNoHistory(ctx context.Context, p *model.UserAgentProfile) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, it := range r.items {
+		if it.UserID == p.UserID {
+			return false, nil // 有过任何角色（哪怕已删）⇒ 不再物化
+		}
+	}
+	r.nextID++
+	created := clone(p)
+	created.ID = r.nextID
+	now := time.Now()
+	created.CreatedAt, created.UpdatedAt, created.DeletedAt = now, now, nil
+	r.items[created.ID] = created
+	*p = *clone(created)
+	return true, nil
+}
+
 func (r *PostgresUserAgentProfileRepo) ListByUserID(ctx context.Context, userID int64) ([]*model.UserAgentProfile, error) {
 	var out []*model.UserAgentProfile
 	err := r.db.WithContext(ctx).
@@ -251,4 +312,61 @@ func (r *PostgresUserAgentProfileRepo) CountAll(ctx context.Context, userID int6
 		Where("user_id = ?", userID).
 		Count(&n).Error
 	return int(n), err
+}
+
+// =====================================================
+// Postgres：原子路径（事务 + 每用户咨询锁）
+// =====================================================
+
+// agentProfileLockClass 咨询锁的"类"标识（与 userID 组成锁键）。
+//
+// 为什么用咨询锁而不是 `SELECT ... FOR UPDATE`：要防的是**插入**竞态，
+// 而"还没有行"时行锁无从谈起（首次并发会双双读到 0 行）。咨询锁与行是否存在无关，
+// 且 `pg_advisory_xact_lock` 随事务结束自动释放（不会因 panic 泄漏）。
+const agentProfileLockClass = 0x1CE06_0001 // 任意稳定常量，仅需本库内唯一
+
+func lockUserAgentProfiles(tx *gorm.DB, userID int64) error {
+	return tx.Exec("SELECT pg_advisory_xact_lock(?, ?)", agentProfileLockClass, userID).Error
+}
+
+// CreateWithActiveLimit Postgres：事务 + 咨询锁 ⇒ 复核与插入之间不会被并发插入插队。
+func (r *PostgresUserAgentProfileRepo) CreateWithActiveLimit(ctx context.Context, p *model.UserAgentProfile, maxActive int) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUserAgentProfiles(tx, p.UserID); err != nil {
+			return err
+		}
+		var n int64
+		if err := tx.Model(&model.UserAgentProfile{}).
+			Where("user_id = ? AND deleted_at IS NULL", p.UserID).Count(&n).Error; err != nil {
+			return err
+		}
+		if int(n) >= maxActive {
+			return ErrActiveLimitReached
+		}
+		return tx.Create(p).Error
+	})
+}
+
+// CreateIfNoHistory Postgres：同一把锁下复核"含软删除的历史数"，为 0 才物化。
+func (r *PostgresUserAgentProfileRepo) CreateIfNoHistory(ctx context.Context, p *model.UserAgentProfile) (bool, error) {
+	created := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUserAgentProfiles(tx, p.UserID); err != nil {
+			return err
+		}
+		var n int64
+		if err := tx.Model(&model.UserAgentProfile{}).
+			Where("user_id = ?", p.UserID).Count(&n).Error; err != nil {
+			return err
+		}
+		if n > 0 {
+			return nil
+		}
+		if err := tx.Create(p).Error; err != nil {
+			return err
+		}
+		created = true
+		return nil
+	})
+	return created, err
 }

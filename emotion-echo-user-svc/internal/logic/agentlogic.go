@@ -51,6 +51,14 @@ const (
 	DefaultAgentTone    = "温柔、口语化"
 )
 
+// allowedAgentGenders gender 白名单（展示用字段；空串 = 未指定，等价于"不指定"）
+var allowedAgentGenders = map[string]bool{
+	"":    true,
+	"女":   true,
+	"男":   true,
+	"不指定": true,
+}
+
 // AllowedAgentVoiceList 8 个 CosyVoice2 预置音色（男声 4 / 女声 4）。
 // 顺序即前端下拉的展示顺序。
 var AllowedAgentVoiceList = []string{
@@ -109,6 +117,13 @@ func validateAgentProfile(req *types.UpsertAgentProfileReq) error {
 	req.TemplateID = strings.TrimSpace(req.TemplateID)
 
 	if req.Name == "" || utf8.RuneCountInString(req.Name) > AgentNameMaxRunes {
+		return ErrValidation
+	}
+	// gender 白名单（源计划 §4：枚举 女/男/不指定，非法值拒绝）。
+	// 为什么不是"只 TrimSpace 就落库"：列是 VARCHAR(8)，不校验等于让任意 8 字节进库；
+	// 且本仓有过"SQL DDL 定义正确、写入端用错值"的先例（§契约 5 类缺陷）。
+	// 第二方核对（2026-10-17）即抓到此处缺失与 agentguard 注释的声明不符。
+	if !allowedAgentGenders[req.Gender] {
 		return ErrValidation
 	}
 	if utf8.RuneCountInString(req.Persona) > AgentPersonaMaxRunes {
@@ -194,24 +209,23 @@ func (l *ListAgentProfilesLogic) ListAgentProfiles(_ *types.ListAgentProfilesReq
 	}
 
 	// get-or-create 的判定口径：**含软删除**的总数为 0 才算"从未有过"。
-	// （用户主动删光 ⇒ CountAll > 0 ⇒ 不再物化，尊重用户的删除。）
-	all, err := l.svcCtx.AgentRepo.CountAll(l.ctx, uid)
-	if err != nil {
+	// （用户主动删光 ⇒ 不再物化，尊重用户的删除。）
+	//
+	// ⚠️ 必须用 `CreateIfNoHistory`（**原子**）而不是 "CountAll 之后再 Create"：
+	// 后者是两次独立往返，两个并发的"首次读列表"会双双看到 0 ⇒ **物化出两条默认角色**。
+	// 该竞态由本阶段第二方独立核对读码确认（无事务/无行锁）；修法是仓储层
+	// "事务 + 每用户咨询锁"内复核（见 user_agent_profile_repository.go 实现注释）。
+	if _, err := l.svcCtx.AgentRepo.CreateIfNoHistory(l.ctx, &model.UserAgentProfile{
+		UserID:     uid,
+		Name:       DefaultAgentName,
+		Gender:     "女",
+		Persona:    DefaultAgentPersona,
+		Tone:       DefaultAgentTone,
+		Voice:      DefaultAgentVoice,
+		IsDefault:  true,
+		Boundaries: []string{},
+	}); err != nil {
 		return nil, err
-	}
-	if all == 0 {
-		if _, err := l.svcCtx.AgentRepo.Create(l.ctx, &model.UserAgentProfile{
-			UserID:     uid,
-			Name:       DefaultAgentName,
-			Gender:     "女",
-			Persona:    DefaultAgentPersona,
-			Tone:       DefaultAgentTone,
-			Voice:      DefaultAgentVoice,
-			IsDefault:  true,
-			Boundaries: []string{},
-		}); err != nil {
-			return nil, err
-		}
 	}
 
 	items, err := l.svcCtx.AgentRepo.ListByUserID(l.ctx, uid)
@@ -255,14 +269,10 @@ func (l *UpsertAgentProfileLogic) UpsertAgentProfile(req *types.UpsertAgentProfi
 	}
 
 	if req.ID == 0 {
-		active, err := l.svcCtx.AgentRepo.CountActive(l.ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		if active >= MaxAgentProfilesPerUser {
-			return nil, ErrAgentLimitReached
-		}
-		created, err := l.svcCtx.AgentRepo.Create(l.ctx, &model.UserAgentProfile{
+		// ⚠️ 上限必须用**原子**方法强制：`CountActive()` + `Create()` 两次独立往返，
+		// 并发下两个请求可双双读到 active=4 而各插一条 ⇒ 第 6 个角色进库（TOCTOU）。
+		// 第二方独立核对读码确认该竞态真实存在（DDL 无 CHECK/UNIQUE、无事务/行锁）。
+		created := &model.UserAgentProfile{
 			UserID:     uid,
 			Name:       req.Name,
 			Gender:     req.Gender,
@@ -272,8 +282,11 @@ func (l *UpsertAgentProfileLogic) UpsertAgentProfile(req *types.UpsertAgentProfi
 			Voice:      req.Voice,
 			IsDefault:  req.IsDefault,
 			TemplateID: req.TemplateID,
-		})
-		if err != nil {
+		}
+		if err := l.svcCtx.AgentRepo.CreateWithActiveLimit(l.ctx, created, MaxAgentProfilesPerUser); err != nil {
+			if errors.Is(err, repository.ErrActiveLimitReached) {
+				return nil, ErrAgentLimitReached
+			}
 			return nil, err
 		}
 		view := toAgentProfileView(created)

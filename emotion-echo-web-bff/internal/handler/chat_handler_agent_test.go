@@ -173,3 +173,21 @@ func TestListMessages_VM_CarriesAgentID(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"agentId":9`, "AI 消息必须带 agentId（历史标注'这条是谁回的'）")
 }
+
+// CL-06 · 第二方核对（2026-10-17）指出：非流式发消息路径把客户端的 agentId **原样透传**，
+// 且此处**没有归属校验**（切角色那条路径才有）⇒ 等于一条"把任意 agent_id 写进消息"的旁路。
+// 语义上用户消息本就不该带角色（快照是"这条 AI 回复由谁产生"）⇒ 显式清零。
+func TestSendMessage_IgnoresClientSuppliedAgentID(t *testing.T) {
+	fc := &fakeChatClient{msg: &downstream.MessageView{ID: 10, ConversationID: 5, Content: "hi"}}
+	r := newChatRouterWithAgents(fc, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/5/messages",
+		bytes.NewReader([]byte(`{"content":"你好","agentId":999999}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, int64(0), fc.gotSendReq.AgentID,
+		"用户消息不得带角色戳（既无归属校验、语义上也不该有）")
+}
