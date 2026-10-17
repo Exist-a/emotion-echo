@@ -96,6 +96,17 @@ related:
 
 | **CL-09** | backlog 清销（常驻） | 常驻 | `known-issues-backlog-2026-09-16`、`…runtime-bugs-2026-09-17`、`todo-pile-2026-09-04`、`three-vrm-usage-reference` | — | pending（插空） |
 | **CL-10** | 端侧（Lane O） | deferred | `on-device-hybrid-inference`(+`…implementation-roadmap`) | 端侧决策门 | **deferred** |
+| **CL-11** | **前端体验 / 交互修正** | 待定 | `camera-preview-floating-window`（设计已定稿）、`known-issues-backlog-2026-09-16`（字号防抖残留）、`mental-health-history-trend-entry` | — | **pending**（2026-10-17 用户裁定单开；**插入位置待用户"看整体后再定"**） |
+| **CL-12** | **后端可靠性补账** | 待定 | `kafka-pipeline-pending-decisions`（D2/D3/D4）、`redis-two-layer-cache`、（BFF 登录限流补单测：无独立计划文件） | — | **pending**（2026-10-17 用户裁定单开；**插入位置待用户"看整体后再定"**） |
+
+---
+
+> **CL-11 / CL-12 由来（2026-10-17 用户裁定）**：本阶段账本清销完成后做了一次"**孤儿计划**"清点 ——
+> 发现若干**有定稿/建档、却没有任何宿主阶段**的待办（典型 = `camera-preview-floating-window`：设计 2026-10-15 已定稿、
+> 契约 §四 也占了位，但 roadmap 里**没有任何阶段挂它** ⇒ 永远不会被任何阶段的验收检查到，也在"按账本清销"时被漏掉）。
+> 用户裁定：**单开两个阶段**收容 —— **CL-11** 收前端体验族、**CL-12** 收后端可靠性族；
+> 其余零散项仍归 **CL-09（常驻 backlog）**。**执行顺序/插入位置由用户"到时候看整体再决定"**，本文件不预设。
+> ⚠️ 教训（写进流程）：**新增计划必须同时指定宿主阶段 + 登账本**，否则就是孤儿。
 
 ---
 
@@ -119,6 +130,8 @@ T3 对话价值闭环（依赖 CL-04）
   CL-08e 记忆·风险信号（安全，横切）
 常驻   CL-09 backlog 清销（插空）
 延期   CL-10 端侧（再次延期，先不做）
+待定   CL-11 前端体验 / 交互修正（插入位置待用户定）
+待定   CL-12 后端可靠性补账（插入位置待用户定）
 ```
 
 ---
@@ -243,6 +256,37 @@ T3 对话价值闭环（依赖 CL-04）
 | CL-08e | 记忆·**风险信号**（安全，横切） |
 | CL-09 | backlog 清销（常驻）：known-issues 残留 + todo-pile 核销 |
 | CL-10 | 端侧（deferred，先不做） |
+
+### CL-11 · 前端体验 / 交互修正 —— 已定范围（2026-10-17）
+
+> **核心口径**：收容"**用户摸到就觉得别扭、但没有宿主阶段**"的前端项。**执行顺序待用户定**。
+
+**做什么**（三条，均已有记录来源）：
+1. **摄像头预览 → 悬浮可拖可折叠**（`docs/plans/camera-preview-floating-window.md`，**设计已定稿**：
+   D2=屏幕上方中间【用户拍板】/ D3=折叠成 pill 条 / D1 持久化到 `localStorage` / D5 窄视口默认折叠；
+   现仍是 `[id].vue` 内联 `<video class="camera-preview">`：`margin:12px auto 0`、不能拖、不能折）。
+2. **字号调整防抖**（`known-issues-backlog-2026-09-16.md` 残留）：现在连点 3 次会发 3 次 `PATCH /users/me`。
+3. **「我的空间」评估历史 / 趋势 / 立即评估入口**（`docs/plans/mental-health-history-trend-entry.md`，low）。
+
+**前置（建议纳入本阶段第一件事）**：**`CL-F-28`** —— `docker compose build emotion-echo-web` 当前 **ERESOLVE 失败**，
+**谁都构建不出 web 镜像** ⇒ 本阶段任何改动都**没法做 UI 验收**（只能拿旧镜像"验错对象"，E2E-F-70 同型）。
+不先修它，本阶段的验收会从一开始就失真。
+> ⚠️ 该前置是我（执行侧）按依赖关系提议的，**用户未单独拍板**；若不同意可移出本阶段。
+
+**做到什么程度（DoD，进入本阶段时再细化）**：三条都能在**本轨重建的 web 镜像**上做 IAB 验收 + 回归钉。
+
+### CL-12 · 后端可靠性补账 —— 已定范围（2026-10-17）
+
+> **核心口径**：收容"**已定位、但既不属于已收口阶段、也没有宿主**"的后端技术债。**执行顺序待用户定**。
+
+**做什么**（来源均为已建档/已定位项）：
+1. **Kafka 管线待决策三项**（`kafka-pipeline-pending-decisions.md`）：**D2** outbox `sent/dead` 行无清理归档 ⇒ 表无限增长；
+   **D3** consumer `attempts` 不跨 rebalance/进程重启；**D4** analytics-svc consumer `maxRetries` 硬编码 3、无配置通道。
+   （D1 已由 CL-03 落地；D5 等待多副本触发，不在此列。）
+2. **Redis 双层读缓存**（`redis-two-layer-cache.md`）—— 实测当前**未落地**（业务 repository 无缓存读）。
+3. **BFF 登录限流补单测**：`isLocked` / `recordFailure` 写了但无测试（todo-pile D4）。
+
+**做到什么程度（DoD，进入本阶段时再细化）**：每项先定"是缺陷还是优化"；缺测试的补齐；**不得只改文档**。
 
 ---
 

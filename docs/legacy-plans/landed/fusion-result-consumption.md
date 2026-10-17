@@ -1,5 +1,5 @@
 ---
-status: planned
+status: landed
 priority: medium
 owner: TBD
 created: 2026-10-11
@@ -8,6 +8,8 @@ source: 2026-10-11 会话（用户："融合结果消费这一块，调用方可
 depends-on: []
 related-plans:
   - redis-two-layer-cache.md（融合统计的读缓存候选）
+landed: 2026-10-16（阶段 CL-07 · PR #234（后端切片）；产物见 `docs/closure-roadmap/stages/`）
+last-updated: 2026-10-16（**落地归档**：自 `docs/plans/` 迁入 `docs/legacy-plans/landed/`；引用旧路径的文档请改指本文件）
 ---
 
 # Plan — 融合产物消费：让 `fused_emotions` 真正被统计 / 图表 / 消息用起来

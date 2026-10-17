@@ -1,6 +1,6 @@
 ---
 status: partial
-partial: "2026-10-13 核查（按真实代码）：R-09/10/11/12 ✅ FIXED；R-15（报表页无法滚动）✅ 已修（nav.vue:266-273 改 overflow-y:auto，注释标 E2E-F-36）；R-16（BFF_APISIX_CIDRS）✅ FIXED（commit bc61896）；R-01/R-02/R-03/R-04/R-05/R-06/R-14 属运维/开发流程类（已缓解，非代码债）；残留：R-13（chat-svc 会话标题异步生成）——核查发现 chat-svc/BFF 当前无 GenerateTitle 实现，条目前提疑似失效，待定性"
+partial: "2026-10-13 核查（按真实代码）：R-09/10/11/12 ✅ FIXED；R-15（报表页无法滚动）✅ 已修（nav.vue:266-273 改 overflow-y:auto，注释标 E2E-F-36）；R-16（BFF_APISIX_CIDRS）✅ FIXED（commit bc61896）；R-01/R-02/R-03/R-04/R-05/R-06/R-14 属运维/开发流程类（已缓解，非代码债）；残留：**无**（R-13 已于 2026-10-17 销账，见下）"
 priority: high
 owner: TBD
 created: 2026-09-17
@@ -238,7 +238,15 @@ label: c.title?.trim()
 
 ---
 
-## R-13 · chat-svc title 异步生成时机问题 (后端，建议 Sprint 112)
+## R-13 · chat-svc title 异步生成时机问题 —— ✅ **已解决（2026-10-17 销账）**
+
+> **销账依据（2026-10-17 实读代码）**：本条前提是"**当前无 GenerateTitle 实现**" —— **该前提已失效**。
+> BFF 已落地标题生成：`emotion-echo-web-bff/internal/handler/conversation_title.go:35` `maybeGenerateTitle`，
+> 触发条件 = 前端显式 `shouldGenerateTitle` 或"落库后该会话消息数 ≤ 2"（第一轮对话），LLM + 规则兜底。
+> 它由 **CL-04 收口后追加的 T-18** 落地，账本 **CL-F-12** 已标 ✅。
+> ⇒ 本条的"标题不可见"症状已消除；后续若要调优（如改在 chat-svc 侧、或加 cache invalidate），属**新需求**，另立条目。
+
+### （原记录，保留备查）
 
 **现象**：R-12 修复前端 fallback 后能显示 "对话 #125"，但用户期望的 "今天聊了xxx" / 自动 AI 摘要 仍然不可见。Sprint 109b 提到 chat-svc 在 SSE 完后调 AI 生成 title，但 list API 读不到。
 

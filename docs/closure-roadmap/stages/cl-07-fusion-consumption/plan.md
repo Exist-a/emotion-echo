@@ -5,11 +5,11 @@ slug: cl-07-fusion-consumption
 scope: 后端切片（fusion 消费）—— 前端半（[id].vue 回显）不在本轮
 owner: Lane-CL-G（接手原 C 会话位）
 created: 2026-10-16
-source-plan: docs/plans/fusion-result-consumption.md（Phase 1~3）
+source-plan: docs/legacy-plans/landed/fusion-result-consumption.md（Phase 1~3）
 related:
   - ../roadmap.md（§2 末 G 轨注）
   - ../parallel-contract.md（§三 占位 / §四 握手）
-  - ../../plans/chat-emotion-realtime-display.md（前端回显，另轮）
+  - ../../../legacy-plans/landed/chat-emotion-realtime-display.md（前端回显，另轮）
 ---
 
 # CL-07 · 情绪回显 + 融合消费（**后端切片**）— 执行计划
@@ -40,7 +40,7 @@ related:
 ### A.2 相关 ADR / 决策
 
 - 已查：`docs/closure-roadmap/decisions.md`（CL-D-07：融合情绪写侧=CL-07 / 读侧=CL-04；PG+Redis 双存）
-- 已查：`docs/plans/fusion-result-consumption.md`（§2.2 链路设计 + §5 风险表）、`docs/plans/chat-emotion-realtime-display.md`
+- 已查：`docs/legacy-plans/landed/fusion-result-consumption.md`（§2.2 链路设计 + §5 风险表）、`docs/legacy-plans/landed/chat-emotion-realtime-display.md`
 - 已查：`deploy/db/migrate.sh`（checksum 校验：改已应用迁移 ⇒ `die`）、`emotion-echo-analytics-svc/migrations/a004_create_analytics_reader_role.sql`（新视图授权范式）
 
 ### A.3 架构假设清单（本文假设 vs 现状）
@@ -119,6 +119,6 @@ related:
 ## §7 调研依据（本次实读）
 
 - 文件：`emotion_echo_ai` 的 `fused_emotion.go` / `i004` / `i005` / `i007`；analytics-svc 的 `modality_report_repository.go` / `reports_daily_logic.go` / `metric_server.go` / `main.go`；BFF 的 `downstream/analytics{,_grpc}.go` / `handler/analytics_view.go`；`proto/metric.proto` / `proto/gen.sh`；`deploy/db/migrate.sh`；`emotion-echo-analytics-svc/migrations/a004_*.sql`
-- 计划：`docs/plans/fusion-result-consumption.md`、`docs/plans/chat-emotion-realtime-display.md`
+- 计划：`docs/legacy-plans/landed/fusion-result-consumption.md`、`docs/legacy-plans/landed/chat-emotion-realtime-display.md`
 - 决策：`docs/closure-roadmap/decisions.md`（CL-D-07）
 - 命令：`go test ./...`（3 模块）/ `bash proto/gen.sh metric.proto` / `python scripts/check_proto_layout.py`

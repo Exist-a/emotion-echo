@@ -75,7 +75,7 @@ related-plans:
 
 - `adr-2026-09-personality-prompt-injection.md`：**注入落点选在 BFF 侧**（本计划延续该落点，不迁到 llm-service）；已要求"两条上游路径收敛为同一组装函数"——**已部分落地**，但仍有两处调用点（缺陷 11）。
 - `adr-2026-09-personality-prompt-semantics.md`：措辞纪律（相处说明书 ≠ AI 性格）。
-- `docs/plans/fusion-result-consumption.md` §2.4：融合情绪注入 prompt 的既有计划（本计划情绪槽位的来源之一）。
+- `docs/legacy-plans/landed/fusion-result-consumption.md` §2.4：融合情绪注入 prompt 的既有计划（本计划情绪槽位的来源之一）。
 
 ### 0.4 架构假设清单（本文假设 vs 现状）
 
