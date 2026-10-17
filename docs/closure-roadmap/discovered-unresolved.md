@@ -75,6 +75,8 @@ type: phase-ledger
 
 | CL-F-47 | **CL-06 Phase 8 起栈实测（2026-10-17）** | **长跑容器的 DB 连接池失效后 `/health` 恒 degraded 且不自愈**：analytics-svc 连续运行 8 小时后 `/health` 报 `dbOk:false`（`/health/ready` = degraded），而 Postgres 一直健康；`docker restart` 后即刻 `dbOk:true`。**连带后果**：BFF 的 readiness 把它标为 unhealthy ⇒ `deploy/apisix/seed.sh` 的前置检查（要求 web-bff readiness 健康）**拒绝执行**，整个网关 seed 卡住（实测 `FATAL: upstream emotion-echo-web-bff:8894/health/ready not healthy`、`SEED_EXIT=2`） | 健康探针只读连接池状态、**不做重连或驱逐**：池里的坏连接（对端重启/空闲超时）会一直留着。属「探针如实报、但没有任何自愈」的形态（与 CL-01 的 tracer 后置补挂同类） | **CL-12**（后端可靠性补账；与 CL-F-44/45 同批）。修法建议：① DB ping 失败时主动重建/驱逐连接池；② 或把 `/health` 的 db 检查改成带超时的重连尝试，而不是直接读缓存状态；③ seed.sh 的前置可考虑只要求 BFF 自身活性（readiness 的依赖面比 seed 需要的信息更宽） | 🟡 **未解决（已定位；环境级影响：会阻断共享栈上的网关 seed）** |
 
+| CL-F-48 | **CL-06 第二方核对（2026-10-17）** | **BFF HTTP 传输层与 chat-svc 的字段名不一致 ⇒ 静默丢角色戳**：BFF `downstream.SendMessageReq` 用 `json:"agentId,omitempty"`（`downstream/chat.go:238`），而 chat-svc 的 HTTP 绑定是 `json:"agent_id,optional"`（`emotion-echo-chat-svc/internal/types/types.go:75`）⇒ 当 `CHAT_TRANSPORT=http`（gRPC 的回滚开关）时，**agentId 会被静默丢弃**、消息落 NULL；生产/dev 默认都是 gRPC（`chat.go:171` + compose 给了 GRPC_ADDR），故当前无用户可见影响 | 两套传输各自定义结构体、字段命名风格不同（BFF 侧 camelCase 面向前端，chat-svc HTTP 面向历史契约），**没有任何测试覆盖 `CHAT_TRANSPORT=http` 下的消息发送** | **CL-12**（后端可靠性补账；与 CL-F-44/45/47 同批）。修法建议：给 `CHAT_TRANSPORT=http` 加一条集成/契约测试（现有 CL-05 的「会话游标两条路径各 17/17」曾这么做过），或统一两端的 JSON tag | 🟡 **未解决（已定位；仅影响回滚开关路径）** |
+
 ## 使用约定
 
 - 6 列硬契约：`编号 | 来源 | 现象 | 根因 | 归属 | 状态`（缺列会被审计漏读）。

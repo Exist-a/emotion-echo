@@ -1,8 +1,0 @@
-=== CL-06 Phase 8 API 级验收（经网关 :19080，token 长度 217）===
---- T-2a 新建角色（阿哲：人设+边界+音色 alex）---
-HTTP=200
-{"code":0,"data":{"id":2,"name":"����","gender":"��","persona":"һ��ֱ�ʡ�˵�������������ѣ���ָ���һرܵ����⡣","tone":"ֱ�ӡ�����","boundaries":["��������ò","�����Ҷ�˵"],"voice":"FunAudioLLM/CosyVoice2-0.5B:alex","isDefault":false,"createdAt":1792231535,"updatedAt":1792231535},"message":"
---- T-2b 回读列表（应含 2 个）---
-total= 2
-  1 小E FunAudioLLM/CosyVoice2-0.5B:anna None
-  2 ���� FunAudioLLM/CosyVoice2-0.5B:alex ['��������ò', '�����Ҷ�˵']
