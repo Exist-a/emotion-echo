@@ -24,12 +24,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      # CL-06 收口（2026-10-17，用户拍板）：**pnpm 版本以 `package.json` 的 `packageManager` 为唯一来源**
+      # （此前这里另写 `version: 9`，而该字段当时是非法 semver `pnpm@9`；"两处都写"的行为官方文档未定义
+      #  ⇒ 改为只靠 `packageManager`，消除歧义。`packageManager` 已修为完整版本 `pnpm@9.15.1`）。
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # CL-06 收口：Node 由 20 升到 22 —— 权威锁解析出的 nuxt@4.5.2 / nitropack@2.13.4 构建期调用
+          # `Set.prototype.difference`（Node 22+）；Node 20 上 `pnpm build` 必失败（CL-F-28 第二段真因）。
+          node-version: '22'
           cache: 'pnpm'
           cache-dependency-path: 'emotion-echo-web/pnpm-lock.yaml'
       - name: Install deps
@@ -40,3 +43,8 @@ jobs:
       # 此处接入使其成真。
       - name: Typecheck
         run: pnpm typecheck
+      # CL-06 收口（2026-10-17，用户拍板；收口 CL-F-43）：**生产构建真跑一遍**。
+      # 此前 CI 只跑 vitest + typecheck ⇒ "构建坏了没人知道"（CL-F-28 潜伏多日的原因之二）。
+      # 成本约 3 分钟；本 job timeout 15 分钟，留有余量。
+      - name: Production build（真跑 nuxt build）
+        run: pnpm build

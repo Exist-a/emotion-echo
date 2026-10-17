@@ -11,6 +11,7 @@
 #      旧的 npm 路径之所以"看着能构建"（`:clp4` 镜像 2026-10-17 建成功），是因为它用的是
 #      **停更在 2026-09-24 的 package-lock.json**（nuxt@4.2.2 / nitropack@2.12.9）—— 能在 Node 20 上跑。
 #      ⇒ 两条工具链解析出**不同的依赖版本**，拓扑也就不同；与权威锁对齐就必须同时升 Node。
+#      （该 npm 锁已于 2026-10-17 经用户拍板**删除**：双锁并存是 CL-F-28 的成因之一 ⇒ 账本 CL-F-42。）
 ARG NODE_22_ALPINE_IMAGE
 ARG NODE_22_ALPINE_DIGEST
 FROM ${NODE_22_ALPINE_IMAGE:-node:22-alpine}${NODE_22_ALPINE_DIGEST:+@${NODE_22_ALPINE_DIGEST}} AS builder
@@ -19,10 +20,10 @@ WORKDIR /app
 
 # 清单 + 权威锁 + registry/hoist 配置
 # CL-06 Phase 0（账本 CL-F-28，2026-10-17）：本文件此前走 npm（`npm install`），
-#   而仓库的权威工具链是 **pnpm** —— `package.json` 声明 `packageManager: pnpm@9`、
+#   而仓库的权威工具链是 **pnpm** —— `package.json` 的 `packageManager`（现为 `pnpm@9.15.1`）、
 #   `.github/workflows/web-test.yml` 用 `pnpm install --frozen-lockfile`、
-#   实时锁是 `pnpm-lock.yaml`（`package-lock.json` 停在 2026-09-24）。
-#   两条工具链的解析结果不一致 ⇒ `npm install` 直接 `ERESOLVE` 退出
+#   权威锁只有 `pnpm-lock.yaml`（npm 锁已删，见账本 CL-F-42）。
+#   两条工具链的解析结果曾不一致 ⇒ `npm install` 直接 `ERESOLVE` 退出
 #   （根项目要 vue-router@^5.4.0，nuxt@^4.2.1 要 ^4.6.3）⇒ **谁都构建不出 web 镜像**。
 #   现与 CI 同源：pnpm + `--frozen-lockfile`（可复现），并复制 `.npmrc`
 #   （`shamefully-hoist=true` / `node-linker=hoisted`）保证容器内 node_modules 布局与 CI 一致。
