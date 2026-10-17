@@ -11,8 +11,8 @@ gate: []            # 无开工前阻塞决策门；[M] 决策点见 §2 T-16
 source: docs/legacy-plans/landed/prompt-pipeline-redesign.md（已落地）
 related-plans:
   - docs/plans/user-custom-agent-persona.md（CL-06，注入槽位落在本阶段组装层）
-  - docs/plans/chat-emotion-realtime-display.md（CL-07，情绪槽位生产/消费两侧）
-  - docs/plans/fusion-result-consumption.md（§2.4 融合情绪注入 = 情绪槽位来源之一）
+  - docs/legacy-plans/landed/chat-emotion-realtime-display.md（CL-07，情绪槽位生产/消费两侧）
+  - docs/legacy-plans/landed/fusion-result-consumption.md（§2.4 融合情绪注入 = 情绪槽位来源之一）
 ---
 
 # CL-04 · Prompt 组装层 — 执行计划

@@ -5,7 +5,7 @@ slug: cl-07-emotion-display
 scope: 情绪实时回显（顶部状态条 / 消息融合角标 / 数字人情绪）
 owner: Lane-CL-G（接手原 C 会话位）
 created: 2026-10-16
-source-plan: docs/plans/chat-emotion-realtime-display.md（G1~G5）
+source-plan: docs/legacy-plans/landed/chat-emotion-realtime-display.md（G1~G5）
 related:
   - ../roadmap.md（§2 G 轨续做注）
   - ../parallel-contract.md（§1.1 H 行 / §三 占位 / §四 握手）
@@ -36,7 +36,7 @@ related:
 
 ### A.2 相关 ADR / 决策
 
-- 已查：`docs/plans/chat-emotion-realtime-display.md`（§3 设计 + §4 Phase + §6 风险 + §8 D1~D4）
+- 已查：`docs/legacy-plans/landed/chat-emotion-realtime-display.md`（§3 设计 + §4 Phase + §6 风险 + §8 D1~D4）
 - 已查：`docs/closure-roadmap/decisions.md`（CL-D-07：融合情绪 PG+Redis；写侧 CL-07）
 - 已查：D-14 情绪护栏三句（不点破来源 / 不贴标签 / 不过火）—— 本半**必须沿用**
 - 已查：`cl-07-fusion-consumption/report.md`（后端切片收口；`fusedEmotion` 已能端到端取到）
@@ -121,5 +121,5 @@ related:
 
 - 后端：`emotion_query_handler.go`、`downstream/emotion_query.go`、`proto/emotion_query.proto`、`pkg/emotionquery/emotion_query.pb.go`
 - 前端：`pages/chat/conversation/[id].vue`、`composables/{useAIStreamHandler,useConversationSender,useApi,useFaceEmotion}.ts`、`utils/emotion.ts`、`types/api.ts`、`lib/apiRoutes.ts`、`vitest.config.ts`、`tests-setup.ts`、`tests-app-mock.ts`
-- 计划/决策：`docs/plans/chat-emotion-realtime-display.md`、`docs/closure-roadmap/{decisions,parallel-contract,roadmap}.md`、`cl-07-fusion-consumption/report.md`
+- 计划/决策：`docs/legacy-plans/landed/chat-emotion-realtime-display.md`、`docs/closure-roadmap/{decisions,parallel-contract,roadmap}.md`、`cl-07-fusion-consumption/report.md`
 - 命令：`pnpm install --frozen-lockfile`、`npx vitest run`

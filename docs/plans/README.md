@@ -12,58 +12,59 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 > **已落地的计划**在 [`legacy-plans/landed/`](../legacy-plans/landed/)（只作回顾，不在本表）。
 > **核对口径**：本表状态以**真实代码 / 产物**为准（非文档自述）。2026-10-13 清查轮发现的历史"`status: planned` 但其实做完"的项已归档。
 
-## 当前待排期条目（20）
+## 当前待排期条目（**2026-10-17 重排：每条必须标宿主阶段**）
 
-### A. 对话 / Prompt / 前端体验（"闭环"主线）
+> 🔴 **新增硬规则（2026-10-17 教训）**：计划若**没有宿主阶段**，就永远不会被任何阶段的验收检查到，
+> 也会在"按账本清销"时被漏掉 —— `camera-preview-floating-window` 就是这样漂了 2 天（设计已定稿、契约已占位，但 roadmap 无阶段）。
+> **今后新增计划必须同时：① 指定宿主 CL 阶段；② 登进 `docs/closure-roadmap/discovered-unresolved.md`（CL-F-xx）。**
 
-| 文件 | 主题 | 优先级 |
-|---|---|---|
-| `user-custom-agent-persona.md` | **用户自定义 Agent（背景/人格 → 提示词约束）**：现状人设由测评五维自动推断、用户不可填。目标 = 用户可设名字/背景/语气/边界 + 注入 prompt（含越狱护栏） | high |
-| `chat-emotion-realtime-display.md` | **对话页「用户当前情绪」实时回显**：融合产物 `fused_emotions` 算了但前端零消费；顶部状态条 + 消息融合标签 + 打通数字人情绪 | high |
-| `../legacy-plans/landed/frontend-message-cache-offline-resilience.md`（**已落地**） | 前端消息链路：游标分页 + 本地缓存（IndexedDB）+ 状态机 + 断网重试。现 `messageCache.ts` 全仓零调用 | high |
-| `fusion-result-consumption.md` | 融合产物 `fused_emotions` 被**统计/图表/报表**消费（`daily_emotion_fused_v` + 日报融合分布 + 注入 prompt） | medium |
-| `conversation-memory-pending-decision-2026-09-24.md` | 会话记忆系统缺失（同会话历史 / 跨会话记忆形态，**待决策**） | high |
+### A. 对话 / Prompt / 前端体验
 
-### B. 可靠性 / 异步管线
+| 文件 | 主题 | 宿主阶段 | 优先级 |
+|---|---|---|---|
+| `user-custom-agent-persona.md` | **用户自定义 Agent**（多角色 + 会话级切换 + 音色 + 安全信封） | **CL-06** | high |
+| `../legacy-plans/landed/chat-emotion-realtime-display.md`（**已落地**） | 对话页「用户当前情绪」实时回显 | CL-07 ✅ | — |
+| `../legacy-plans/landed/fusion-result-consumption.md`（**已落地**） | 融合产物被统计/图表/报表消费 | CL-07 ✅ | — |
+| `conversation-memory-pending-decision-2026-09-24.md` | 会话记忆系统（跨会话 RAG + 用户事实/情绪模式/情节/管理页/风险信号） | **CL-08a~e** | high |
 
-| 文件 | 主题 | 优先级 |
-|---|---|---|
-| `dlq-hardening-and-replay.md` | DLQ 硬化（兜底表）+ 半自动回放。现只有基础 DLQ publisher + `scripts/replay_dlq` | medium |
-| `outbox-trace-continuity.md` | outbox→relay→Kafka 的 trace 断点修复（outbox 无 trace 列 + relay 用 `context.Background()`） | medium |
-| `kafka-pipeline-pending-decisions.md` | Kafka 管线待决策清单 | medium |
-| `known-issues-backlog-runtime-bugs-2026-09-17.md` | **partial**（2026-10-13 核查）：R-09~R-16 / R-01~06 / R-14 已解决或属运维类；**残留 = R-13**（chat-svc 标题异步生成，核查发现当前无 GenerateTitle 实现，条目前提疑似失效） | low |
+### B. 前端体验（**CL-11**，2026-10-17 用户裁定单开）
 
-### C. 可观测性
+| 文件 | 主题 | 宿主阶段 | 优先级 |
+|---|---|---|---|
+| `camera-preview-floating-window.md` | **摄像头预览：悬浮可拖可折叠**（设计已定稿；**当前是内联块、零改动**） | **CL-11** | medium |
+| `mental-health-history-trend-entry.md` | 「我的空间」评估历史 / 趋势 / 立即评估入口 | **CL-11** | low |
+| `known-issues-backlog-2026-09-16.md` | **partial**：残留 = 字号调整防抖（实测确认未做） | **CL-11** | low |
+| ——（无独立计划文件） | `CL-F-28`：web 镜像构建 ERESOLVE（**CL-11 的前置**：不修则本阶段无法做 UI 验收） | **CL-11 前置** | high |
 
-| 文件 | 主题 | 优先级 |
-|---|---|---|
-| ~~`observability-business-metrics-wiring.md`~~ | ✅ **已落地**（阶段 CL-01，2026-10-14）→ [legacy-plans/landed/](../legacy-plans/landed/observability-business-metrics-wiring.md) | — |
-| ~~`observability-instrumentation-and-dashboards.md`~~ | ✅ **已落地**（阶段 CL-01，2026-10-14）→ [legacy-plans/landed/](../legacy-plans/landed/observability-instrumentation-and-dashboards.md)（一处豁免：BFF `downstream/chat.go` 属 C 轨，随 CL-02） | — |
-| `grafana-dashboard-gaps-2026-09-30.md` | Grafana 面板覆盖度缺口分析（B1~B9） | medium |
-| `redis-two-layer-cache.md` | Redis 双层读缓存 | medium |
+### C. 后端可靠性（**CL-12**，2026-10-17 用户裁定单开）
 
-### D. 架构 / 契约
+| 文件 | 主题 | 宿主阶段 | 优先级 |
+|---|---|---|---|
+| `kafka-pipeline-pending-decisions.md` | Kafka 管线未决：**D2**（outbox 行无清理归档）/ **D3**（attempts 不跨重启）/ **D4**（maxRetries 硬编码）；D1 已由 CL-03 落地 | **CL-12** | medium |
+| `redis-two-layer-cache.md` | Redis 双层读缓存（实测**未落地**；属优化项非缺陷） | **CL-12** | medium |
+| ——（无独立计划文件） | BFF 登录限流 `isLocked`/`recordFailure` 补单测 | **CL-12** | low |
 
-| 文件 | 主题 | 优先级 |
-|---|---|---|
-| `grpc-deadlink-actualization.md` | **CL-02 落地**（PR #214，2026-10-15）：7 条死 RPC 逐条终态（**清除 3**：Logout/VerifySecurityAnswer/AnalyzeBatch；**归档 4**：StreamMessages + 三条 mental-health）+ 守卫升级（`check_rpc_status.sh`）+ 决策 4 口径更正；证据见 `docs/closure-roadmap/stages/cl-02-grpc-contract/report.md` | medium |
-| `camera-preview-floating-window.md` | **用户手动测试（2026-10-15）新登**：摄像头预览改悬浮层（固定定位 + 可拖动 + 顶部把手点击折叠）；**设计已定稿**（D2=屏幕上方中间【用户拍板】/ D3=折叠成 pill 条 / D1 持久化 / D5 窄视口默认折叠）；§四 已登记握手预占 | medium |
-| `mental-health-history-trend-entry.md` | **CL-02 归档项的重启路径**（2026-10-14 用户裁定 D1 时另登）：在「我的空间」提供评估历史 / 趋势 / 立即评估入口，数据经 BFF → analytics-svc（gRPC）；三条 RPC 现为归档态（proto 标 deprecated），重启时先去标记 | low |
-| `known-issues-backlog-2026-09-16.md` | **partial**（2026-10-13 核查）：A2/A3/A4/A5/A6 已解决；**残留 = 顺手1 字号防抖**（代码无 debounce） | low |
+### D. 可观测性
 
-### E. 端侧化（Lane O）
+| 文件 | 主题 | 宿主阶段 | 优先级 |
+|---|---|---|---|
+| `grafana-dashboard-gaps-2026-09-30.md` | Grafana 面板覆盖度缺口（`type: gap-analysis`，B1~B9 **残余未逐条判定**） | **CL-09**（触发：下次动观测面板） | medium |
 
-| 文件 | 主题 | 优先级 |
-|---|---|---|
-| `on-device-hybrid-inference-2026-09-23.md` | 端侧混合推理方案 v0.2（可行性评估） | medium |
-| `on-device-hybrid-inference-implementation-roadmap-2026-09-23.md` | 端侧实施长期路线图 v0.3 | medium |
+### E. backlog / 杂项
 
-### F. backlog / 杂项
+| 文件 | 主题 | 宿主阶段 | 优先级 |
+|---|---|---|---|
+| `known-issues-backlog-runtime-bugs-2026-09-17.md` | **残留已清**（R-13 于 2026-10-17 销账：BFF 已实现 `maybeGenerateTitle`，前提失效） | 可迁 landed（**未逐条独立复核**） | low |
+| `todo-pile-2026-09-04.md` | 待办堆栈（**2026-10-17 逐条核对中**，多数已过期） | **CL-09**（核对后并账） | low |
+| `test-coverage-tracker-2026-09-16.md` | 业务路径级测试覆盖率**追踪表**（治理工具，非功能任务） | 不排期 | — |
+| `three-vrm-usage-reference.md` | Three-VRM API 参考手册（持续维护型） | 不排期 | low |
 
-| 文件 | 主题 | 优先级 |
-|---|---|---|
-| `todo-pile-2026-09-04.md` | 待办堆栈（dev 未可用 / 未关闭项汇总，**2026-10-13 未逐一核对**） | low |
-| `three-vrm-usage-reference.md` | Three-VRM API 参考手册（持续维护型，非任务） | low |
+### F. 端侧化（Lane O，**CL-10 deferred**）
+
+| 文件 | 主题 | 宿主阶段 | 优先级 |
+|---|---|---|---|
+| `on-device-hybrid-inference-2026-09-23.md` + `…implementation-roadmap-2026-09-23.md` | 端侧混合推理方案与实施路线图 | **CL-10**（deferred） | medium |
+| `hardware-companion-pet-feasibility-2026-10-16.md` | 硬件桌宠可行性探讨（`status: exploratory`，**未立项**） | 不排期 | low |
 
 ## 状态为 superseded（4，保留原位）
 
@@ -72,6 +73,10 @@ last-refresh: 2026-10-13（计划清查轮：按真实代码逐个核对"疑似�
 ## 非计划文档（端侧化报告 / 决策材料）
 
 `on-device-STATUS.md`、`on-device-*.md`（baseline-report / cdn-probe-report / compile-cdn / decision-pack / golden-n13-report / mindchat-survey / model-selection-decision-material / t3-iab-report / t3-lessons-learned）、`on-device-findings.md`（active）。这些是 Lane O 的过程产物，非"待排期计划"。
+
+## 非计划文档（探索 / 可行性讨论）
+
+`hardware-companion-pet-feasibility-2026-10-16.md` —— **硬件桌宠（端云协同）可行性探讨**（front-matter `status: exploratory`）。**未立项、未排期、不承诺落地**；记录"设备 = 采集/输出层、处理全在后端"这一定位的现状核对（含代码 `file:line` 证据）与四个待拍板分叉（输入模态 / 平台档次 / 表情形态 / 配置页归属；价格对比按要求未入档）。**不计入上方待排期条目。**
 
 ## 2026-10-13 计划清查轮 · 已归档到 `legacy-plans/landed/`（13 份）
 

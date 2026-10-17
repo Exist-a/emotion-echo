@@ -1,5 +1,5 @@
 ---
-status: planned
+status: landed
 priority: high
 owner: TBD
 created: 2026-10-13
@@ -9,6 +9,8 @@ depends-on: []
 related-plans:
   - fusion-result-consumption.md（融合产物的统计/图表/报表消费；本计划是它的**前端实时回显**补充，见 §7）
   - legacy-plans/landed/prompt-pipeline-redesign.md（已落地）（"实时情绪"也是 prompt 的情绪槽位来源，见 §7）
+landed: 2026-10-16（阶段 CL-07 · PR #243（前端半）+ #234（后端切片）；产物见 `docs/closure-roadmap/stages/`）
+last-updated: 2026-10-16（**落地归档**：自 `docs/plans/` 迁入 `docs/legacy-plans/landed/`；引用旧路径的文档请改指本文件）
 ---
 
 # Plan — 对话页「用户当前情绪」实时回显 + 消息级融合标签
@@ -195,6 +197,6 @@ related-plans:
 - `emotion-echo-web-bff/internal/handler/emotion_query_handler.go`、`internal/downstream/emotion_query.go`
 - `emotion-echo-web/app/pages/chat/conversation/{new.vue,[id].vue}`、`composables/{useFaceEmotion.ts,useAIStreamHandler.ts,useVoiceRecorder.ts}`、`utils/emotion.ts`、`types/api.ts`、`stores/message.ts`、`components/digital-human/DigitalHuman.client.vue`
 - `docs/architecture/adr/adr-2026-09-personality-prompt-injection.md`、`docs/e2e-roadmap/discovered-unresolved.md`（E2E-F-122）
-- 与 `docs/plans/fusion-result-consumption.md` 对账（避免重复）
+- 与 `docs/legacy-plans/landed/fusion-result-consumption.md` 对账（避免重复）
 
 **未能确认**（需实机）：dev 库 `fused_emotions` 现有行数与 `fusion_method` 分布；顶部状态条与现有页头布局的视觉冲突（需 IAB 实看）；`EMOTION_LABEL_MAP` 是否覆盖 fused 的 `primary_emotion` 全部取值。

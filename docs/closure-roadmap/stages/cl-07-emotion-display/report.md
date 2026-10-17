@@ -16,7 +16,7 @@ updated: 2026-10-16（第二方核对 PASS + 按裁定移除 G2 + 文档纠偏�
 ## 起点
 
 - 承接 `stages/cl-07-fusion-consumption/`（后端切片：融合产物 → 视图 → 报表 → proto/BFF 透传，**已 done 并合并 `bf401350`**）。
-- 来源计划 `docs/plans/chat-emotion-realtime-display.md`（G1~G5）；开工前提：D 轨（CL-05）已 done 并释放 `pages/chat/conversation/[id].vue`。
+- 来源计划 `docs/legacy-plans/landed/chat-emotion-realtime-display.md`（G1~G5）；开工前提：D 轨（CL-05）已 done 并释放 `pages/chat/conversation/[id].vue`。
 - 登记：PR [#242](https://github.com/Exist-a/emotion-echo/pull/242)（H 轨占位 + 握手，**已合并**）；阶段 PR [#243](https://github.com/Exist-a/emotion-echo/pull/243)。
 - worktree `../Emotion-Echo-cl07`（`pnpm install --frozen-lockfile` + `nuxt prepare`）。
 
@@ -99,7 +99,7 @@ updated: 2026-10-16（第二方核对 PASS + 按裁定移除 G2 + 文档纠偏�
 - 交付物：对话页顶部「此刻的状态」+ 数字人情绪接线；**G2 角标按用户裁定不做**。
 - 顺带修复 **BFF `/emotion/*` 整族 502**（阻塞本功能的高危缺陷，E2E-F-125 同型）。
 - **未做**：T-10（待 CL-F-17）；`new.vue` 未挂状态条（**有意偏离**：新会话无消息 ⇒ 无锚点）。
-- 落地计划仍在 `docs/plans/chat-emotion-realtime-display.md`（G2 已裁定不做，收口时同步状态）。
+- 落地计划仍在 `docs/legacy-plans/landed/chat-emotion-realtime-display.md`（G2 已裁定不做，收口时同步状态）。
 
 ## 经验
 
