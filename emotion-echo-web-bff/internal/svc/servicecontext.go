@@ -24,6 +24,9 @@ type ServiceContext struct {
 	AI         downstream.AIClient
 	XTTS       downstream.XTTSClient
 	EmotionQ   downstream.EmotionQueryClient
+	// UserAgent CL-06：角色档案（用户自定义 Agent）。**仅 gRPC**（user-svc 无对应 HTTP 端点）
+	// ⇒ user-svc 连接拨不上时为 nil，相关端点 503（fail-closed）。
+	UserAgent downstream.AgentProfileClient
 
 	// 自有鉴权（签发 JWT）
 	Auth *auth.Manager
@@ -55,6 +58,12 @@ func (s *ServiceContext) SetXTTS(x downstream.XTTSClient) *ServiceContext {
 }
 func (s *ServiceContext) SetEmotionQ(e downstream.EmotionQueryClient) *ServiceContext {
 	s.EmotionQ = e
+	return s
+}
+
+// SetUserAgent 注入角色档案 client（CL-06）
+func (s *ServiceContext) SetUserAgent(a downstream.AgentProfileClient) *ServiceContext {
+	s.UserAgent = a
 	return s
 }
 func (s *ServiceContext) SetAuth(a *auth.Manager) *ServiceContext { s.Auth = a; return s }

@@ -55,6 +55,6 @@ Logout	proto/user.proto:74	deleted	-	-	0	用户裁定 D3：清除（ADR jwt-key-
 VerifySecurityAnswer	proto/user.proto:79	deleted	-	-	0	用户裁定 D4：清除（族内冗余，在用者=VerifySecurityAnswerByUsername）
 VerifySecurityAnswerByUsername	proto/user.proto:100	live	emotion-echo-web-bff/internal/handler/auth_handler.go	VerifySecurityAnswerByUsername	0	在用者（兄弟 RPC）
 GetSecurityQuestionsByUsername	proto/user.proto:108	live	emotion-echo-web-bff/internal/handler/auth_handler.go	GetSecurityQuestionsByUsername	0	-
-ListAgentProfiles	proto/user.proto:117	undecided	-	-	0	CL-06 新增（角色档案）；调用方=BFF，随本阶段 Phase 4 落地后改 live
-UpsertAgentProfile	proto/user.proto:126	undecided	-	-	0	CL-06 新增（角色档案）；调用方=BFF，随本阶段 Phase 4 落地后改 live
-DeleteAgentProfile	proto/user.proto:131	undecided	-	-	0	CL-06 新增（角色档案）；调用方=BFF，随本阶段 Phase 4 落地后改 live
+ListAgentProfiles	proto/user.proto:117	live	emotion-echo-web-bff/internal/handler/agent_handler.go	ListAgentProfiles	0	CL-06 角色档案；BFF 角色端点 + ai/stream 角色解析两处调用
+UpsertAgentProfile	proto/user.proto:126	live	emotion-echo-web-bff/internal/handler/agent_handler.go	UpsertAgentProfile	0	CL-06 角色档案；BFF 角色端点透传
+DeleteAgentProfile	proto/user.proto:131	live	emotion-echo-web-bff/internal/handler/agent_handler.go	DeleteAgentProfile	0	CL-06 角色档案；BFF 角色端点透传

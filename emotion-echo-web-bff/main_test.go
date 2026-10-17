@@ -63,6 +63,12 @@ var wantRoutes = gin.RoutesInfo{
 	{Method: "GET", Path: "/api/v1/voice/audio/:filekey"}, // E2E-F-113：音频反代
 	{Method: "HEAD", Path: "/api/v1/voice/audio/:filekey"}, // E2E-F-187：gin 不自动转发 HEAD
 
+	// ----- agent_handler.go (3 条, CL-06 用户自定义 Agent·多角色) -----
+	// 网关侧由既有 catch-all `/api/v1/*` (route 100) 覆盖，未新增 APISIX 路由。
+	{Method: "GET", Path: "/api/v1/agents"},
+	{Method: "POST", Path: "/api/v1/agents"},
+	{Method: "DELETE", Path: "/api/v1/agents/:id"},
+
 	// ----- user_handler.go (4 条) -----
 	{Method: "GET", Path: "/api/v1/user/profile"},
 	{Method: "GET", Path: "/api/v1/users/me"},
@@ -331,6 +337,7 @@ var knownPathPrefixes = []string{
 	"/api/v1/ai/health", // Sprint F2（2026-09-11）
 	"/api/v1/user/profile",
 	"/api/v1/users/",
+	"/api/v1/agents", // CL-06: 角色档案（用户自定义 Agent）
 	"/api/v1/conversations",
 	"/api/v1/conversations/:id",
 	"/api/v1/surveys",
