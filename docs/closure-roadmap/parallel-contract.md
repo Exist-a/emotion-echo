@@ -120,6 +120,7 @@ related:
 | H | CL-07 情绪回显（**前端半**） | `feat/cl-07-emotion-display`（worktree `../Emotion-Echo-cl07`） | Lane-CL-G（**接手原 C 会话位**） | 2026-10-16 | ✅ **done 并已合并**（squash → `349c9615`，PR [#243](https://github.com/Exist-a/emotion-echo/pull/243)，**源分支已删**）；9/10 PASS（T-10 待 CL-F-17）+ 第二方核对 PASS；**不再占用** `[id].vue` / dev 栈 / `proto` |
 
 | P2 | **CL 遗留清销 Wave 2**（CL-F-16/22/23/24/26） | `feat/cl-paydown-wave2`（**已合并**） | Lane-CL-P | 2026-10-16 | ✅ **done 并已合并**（squash → `e6444d77`，PR [#249](https://github.com/Exist-a/emotion-echo/pull/249)，源分支已删）：**CL-F-16/22/23/24 关闭**（均含运行时证据）；**CL-F-26 未取**（跨 proto 三层，单独做，理由见 `docs/plans/cl-legacy-paydown-2026-10-16.md` §2 Wave 2）。**dev 栈锁已释放**（`deploy/.devmode-session` 已删）。⚠️ **订正（2026-10-16，第二方核对指出）**：本行原写"栈仍开着、三服务都跑 `:clp2`"**与事实不符** —— 实况是 ① 栈此后已**整体停止**（容器均 `Exited(0)`）；② 本轨**只重建并 up 过 `user-svc`:clp2**，`chat-svc` 跑的是 `v0.1.16`、`analytics-svc` 跑的是 `cl07`（`:clp2` 标签只建未用）。⇒ 下一位取锁者按 §1.3 R1 **用自己的后缀 tag 重建需要的服务**，不要假设栈里跑的是谁的代码 |
+| P3 | **CL 清销整改轮**（独立核对 4 项必改 + CL-F-17 IAB A/B） | `fix/cl-paydown-remediation`（**已合并**） | Lane-CL-P | 2026-10-17 | ✅ **done 并已合并**（squash → `a0e3d3ba`，PR [#252](https://github.com/Exist-a/emotion-echo/pull/252)，源分支已删）：撤掉误标的 `DLQDepthHigh`、CL-F-17 假绿钉整改（**负向验证**）、CL-F-16 恒 SKIP 钉修正、CL-F-22 守卫升级为 (名,表,列,唯一性)、补 **CL-F-17 新旧镜像 IAB A/B**（旧镜像复现原 TypeError / 新镜像无）；新登 `CL-F-28`（web 镜像构建 ERESOLVE）/`CL-F-29`（迁移 checksum 漂移）。**未取锁**（本轮用栈时未登记，属流程疏漏，如实记录） |
 > **登记真实性（2026-10-14 C 轨补记）**：本表在 main 上此前只剩 A 一行 `open` —— CL-00 收口（#210）清过占位后，A/B 各自把登记写在**自己的分支**上、尚未合并。
 > C 轨按 §五 第 1 步"读本文件确认无人占用"时，照 main 读会得到**错误的占用状态**，故此处按**事实**回填 A/B 两行
 > （依据：`feat/cl-04-prompt-assembly` / `feat/cl-01-observability` 分支上的登记 + 各自 draft PR）。**合并时请保留三行**（§四 已约定"冲突时保留双方行"）。
@@ -142,6 +143,8 @@ related:
 | 6 | G（CL-07 **后端切片**） | D → F 之后（数据契约实拍） | ✅ **已用毕释放（2026-10-16）** —— 取锁 → worktree 构建 `:cl07` 镜像（analytics-svc/web-bff）→ 20 容器 healthy + `db-migrate` 应用 `i010`/`a011` OK + Nacos `count:7` → **T-9 端到端实拍 PASS**（登录 → 建会话 705 → 发消息 951 → `emotion_analysis`/`fused_emotions` 各 +1 → 报表 `fusedEmotion.total=27`；空态日期字段缺省）→ **已删 `deploy/.devmode-session`**。栈仍开着（跑本轨 `:cl07` 镜像）。**结论=9/9 测试点 PASS → **第二方核对 PASS** ⇒ 后端切片 done 并已合并（`bf401350`，PR #234）** |
 
 | 7 | ~~P2（CL 遗留清销 Wave 2）~~ | ✅ **已用毕释放（2026-10-16）** —— 本轨在运行中的 dev 栈上完成 CL-F-16/22/23/24 的运行时验证（含 3 次 A/B 实验），**已删 `deploy/.devmode-session`**；阶段 PR [#249](https://github.com/Exist-a/emotion-echo/pull/249) 已合并（`e6444d77`）。**队列为空**。⚠️ 栈仍开着（跑本轨 `:clp2` 镜像 + obs profile 的 grafana）| ✅ **已释放** |
+
+| — | **栈现状交代（2026-10-17，P3 整改轮用毕）** | 本轮为 IAB 起过整栈；**未持锁**（`deploy/.devmode-session` 不存在）。镜像实况（`docker ps` 实测）：`web` = **`:clp4`**（含 Wave 1 前端修复，供 IAB）、`web-bff` = `v0.1.37`、`chat-svc` = `v0.1.16`、`analytics-svc` = `v0.1.11`、`user-svc` = **`v0.1.5`（公共 tag，**不含** CL-F-16 修复）** —— 全栈 `up` 时只有 `web` 走了 `:clp4` override，其余回到公共 tag。⇒ **下一位用栈者务必按 §1.3 R1 用自己后缀 tag 重建所需服务**，不要假设栈里跑的是含修复的代码 | ✅ |
 
 > **新轨准入规则（2026-10-14 用户口径）**：想加第 4 条轨，先回答"**你的 🟢（不需栈）部分有多大**"。
 > 三条"待验证"轨 ≈ 极限；若新轨全程需栈 ⇒ **等**，不要加。**纯 🟢 轨（文档/静态守卫）不受此限**。
