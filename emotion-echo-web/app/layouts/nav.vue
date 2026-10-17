@@ -88,6 +88,9 @@ const secondaryLinks = [
   { to: '/chat/dashboard/weeklyReport', label: '周报', icon: '◒' },
   { to: '/chat/dashboard/monthlyReport', label: '月报', icon: '◒' },
   { to: '/chat/dashboard/annualReport', label: '年报', icon: '◒' },
+  // CL-06：角色管理（用户自定义 Agent）。放在「我的空间」之前 —— 它属于"个性化"一组，
+  // 与设置同行，但不进设置页（角色是**多个对象**的管理，不是单个开关）。
+  { to: '/chat/agents', label: '角色', icon: '❋' },
   { to: '/chat/user', label: '我的空间', icon: '⌂' },
   { to: '/chat/setting', label: '设置', icon: '⌘' },
 ]
