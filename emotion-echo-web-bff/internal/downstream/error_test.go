@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,4 +46,16 @@ func TestMapGRPCError_WrappedStatus(t *testing.T) {
 	wrapped := fmt.Errorf("register failed: %w", orig)
 	st, _, _ := MapGRPCError(wrapped)
 	assert.Equal(t, 409, st, "fmt.Errorf %%w 应让 status.FromError 命中原始 code")
+}
+
+// CL-06：配额/上限类 gRPC 错误必须有映射 —— 否则落到 default ⇒ 用户看到 500"内部错误"。
+// 运行态实测（Phase 9 并发验证）：`UpsertAgentProfile` 返回 ResourceExhausted 时
+// BFF 回 **500**，而事实是"已达上限"（应由客户端读懂的 4xx）。
+func TestMapGRPCError_ResourceExhausted_IsConflict(t *testing.T) {
+	t.Parallel()
+	status, code, msg := MapGRPCError(status.Error(codes.ResourceExhausted, "agent profile limit reached (max 5)"))
+	assert.Equal(t, http.StatusConflict, status,
+		"配额类必须映射为 4xx（刻意用 409 而非 429：429 会触发前端自动重试，而 quota 类重试无用）")
+	assert.NotZero(t, code)
+	assert.Contains(t, msg, "limit reached")
 }

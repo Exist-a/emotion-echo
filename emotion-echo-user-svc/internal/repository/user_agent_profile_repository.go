@@ -318,15 +318,23 @@ func (r *PostgresUserAgentProfileRepo) CountAll(ctx context.Context, userID int6
 // Postgres：原子路径（事务 + 每用户咨询锁）
 // =====================================================
 
-// agentProfileLockClass 咨询锁的"类"标识（与 userID 组成锁键）。
+// agentProfileLockClass 咨询锁的"类"标识（与 userID 组成 64 位锁键）。
 //
 // 为什么用咨询锁而不是 `SELECT ... FOR UPDATE`：要防的是**插入**竞态，
 // 而"还没有行"时行锁无从谈起（首次并发会双双读到 0 行）。咨询锁与行是否存在无关，
 // 且 `pg_advisory_xact_lock` 随事务结束自动释放（不会因 panic 泄漏）。
-const agentProfileLockClass = 0x1CE06_0001 // 任意稳定常量，仅需本库内唯一
+//
+// ⚠️ 用**单参 bigint** 形式而不是双参 `(int4, int4)`：双参版本的两个参数都必须落在
+// int4 范围内，而"类 + 用户 id"拼进一个参数更简单且不受此限。
+// （实测教训：第一版用 `pg_advisory_xact_lock(7751467009, 1)` 直接报
+//
+//	`unable to encode ... into binary format for int4` —— 该错误**只在真 Postgres 上出现**，
+//	单测用的 InMemory 替身根本没有锁，永远测不到 ⇒ 这类"替身与实现的语义差"必须靠运行态验证。）
+const agentProfileLockClass int64 = 0x1CE0_6001
 
 func lockUserAgentProfiles(tx *gorm.DB, userID int64) error {
-	return tx.Exec("SELECT pg_advisory_xact_lock(?, ?)", agentProfileLockClass, userID).Error
+	key := agentProfileLockClass<<32 | (userID & 0xFFFF_FFFF)
+	return tx.Exec("SELECT pg_advisory_xact_lock(?)", key).Error
 }
 
 // CreateWithActiveLimit Postgres：事务 + 咨询锁 ⇒ 复核与插入之间不会被并发插入插队。

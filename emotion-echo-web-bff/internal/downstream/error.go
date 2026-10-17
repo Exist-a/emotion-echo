@@ -77,6 +77,13 @@ func MapGRPCError(err error) (httpStatus int, code int, message string) {
 			return http.StatusBadRequest, 1, "invalid argument: " + st.Message()
 		case codes.AlreadyExists:
 			return http.StatusConflict, 1, "conflict: " + st.Message()
+		case codes.ResourceExhausted:
+			// 配额/上限类（CL-06「每户角色 ≤5」即走这里）。
+			// 刻意用 **409 Conflict** 而不是 429：429 在前端 useApi 里会触发**自动重试**
+			// （MAX_RETRY_COUNT=2），而"已达上限"是**确定性**结果 —— 重试两次仍会失败，
+			// 只是让用户多等 4 秒。409 语义上正是"与当前状态冲突"。
+			// （运行态实测：未映射时它落到 default ⇒ 用户看到 500"内部错误"，与事实不符。）
+			return http.StatusConflict, 1, "resource exhausted: " + st.Message()
 		case codes.DeadlineExceeded:
 			return http.StatusGatewayTimeout, 1, "timeout: " + st.Message()
 		default:
