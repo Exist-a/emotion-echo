@@ -90,6 +90,9 @@ message Conversation {
   int64 created_at = 6;         // unix seconds
   int64 updated_at = 7;
   bool is_pinned = 8;           // 置顶状态（Stage 72 PinConversation 落地）
+  // CL-06（用户自定义 Agent·多角色）：本会话**当前角色**。
+  // 0 = 未显式选择 ⇒ 用该用户的默认角色（默认「小E」）；可随时切换、只影响本会话。
+  int64 agent_id = 9;
 }
 
 // SendMessageRequest 发送消息请求
@@ -107,6 +110,9 @@ message SendMessageRequest {
   // Stage 89 PR-1：文件消息的原始文件名（可选；content=MinIO URL，原始名此前只存在
   // 于上传瞬间的浏览器内存中，对象 key 仅 uid+hash+ext）。供 LLM prompt 与前端展示
   string file_name = 9;
+  // CL-06：本条消息由哪个角色产生（**快照**语义 —— 写入时取该会话当时的角色）。
+  // 仅 assistant 消息有值；0 = 未记录（历史消息 / 角色功能上线前）。
+  int64 agent_id = 10;
 }
 
 // Message 消息视图
@@ -125,6 +131,9 @@ message Message {
   string intent = 9;
   // Stage 89 PR-1：文件消息原始文件名（与 content_type='file' 配套；空 = 非文件或未提供）
   string file_name = 10;
+  // CL-06：该条 AI 消息由哪个角色产生（快照：角色改名/删除不影响历史可读）。
+  // 0 = 未记录（历史消息 / 角色功能上线前）。
+  int64 agent_id = 11;
 }
 
 // ListMessagesRequest 列消息请求
@@ -192,7 +201,10 @@ message PinConversationResponse {
 // UpdateConversationRequest 更新会话请求
 message UpdateConversationRequest {
   int64 conversation_id = 1;
-  string title = 2;             // 当前仅支持改标题
+  string title = 2;             // 改标题（CL-06 起：与 agent_id **同一个 RPC 的两个可选动作**）
+  // CL-06：把本会话的当前角色改为该 id（0 = 本次不改角色）。
+  // 语义：只影响本会话；切换后**后续**消息用新角色（历史保留原 agent_id 快照）。
+  int64 agent_id = 3;
 }
 
 // UpdateConversationResponse 更新会话响应
