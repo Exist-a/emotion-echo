@@ -73,6 +73,8 @@ type: phase-ledger
 
 | CL-F-46 | **CL-06 Phase 8 生产构建实测（2026-10-17）** | **`app/router.options.ts` 的手写路由表覆盖了 Nuxt 自动路由 ⇒ 新增页面文件静默 404**：该文件用 `routes: (_routes) => [...]` **忽略**自动生成的路由，于是本仓"文件系统即路由"**不成立**。实测：新建 `app/pages/chat/agents.vue` ⇒ 页面被编进 chunk、typecheck/单测全绿、但访问 `/chat/agents` 返回 Nuxt 404（生产镜像与本地 `pnpm build` 均可复现；SSR 与 CSR 双失）。**连带证据**：同表里 `pages/demo/local-llm.vue`（Lane O 的演示页）也从未注册 ⇒ 该页当前不可达 | 手写路由表与文件树**无任何一致性校验**：typecheck 不看、vitest 不看、CI 的 `pnpm build` 只要页面不被访问就不会暴露 | **CL-11**（前端工程债/孤儿产出物；`demo/local-llm.vue` 的归属需与 Lane O 对齐）。**本次已止损**：CL-06 的 `/chat/agents` 已注册，并新增 `app/router.options.contract.test.ts`（扫 `pages/**/*.vue` 与 router.options 比对，反向自检过：摘掉注册即红）⇒ **该陷阱今后会被门禁拦下** | 🟡 **已缓解未根治**：门禁已立（新增页面漏注册会红），但**架构取舍未裁** —— 是否改为"以 `_routes` 为基线的增量扩展"（放弃全手写）属架构决策，超出本阶段 |
 
+| CL-F-47 | **CL-06 Phase 8 起栈实测（2026-10-17）** | **长跑容器的 DB 连接池失效后 `/health` 恒 degraded 且不自愈**：analytics-svc 连续运行 8 小时后 `/health` 报 `dbOk:false`（`/health/ready` = degraded），而 Postgres 一直健康；`docker restart` 后即刻 `dbOk:true`。**连带后果**：BFF 的 readiness 把它标为 unhealthy ⇒ `deploy/apisix/seed.sh` 的前置检查（要求 web-bff readiness 健康）**拒绝执行**，整个网关 seed 卡住（实测 `FATAL: upstream emotion-echo-web-bff:8894/health/ready not healthy`、`SEED_EXIT=2`） | 健康探针只读连接池状态、**不做重连或驱逐**：池里的坏连接（对端重启/空闲超时）会一直留着。属「探针如实报、但没有任何自愈」的形态（与 CL-01 的 tracer 后置补挂同类） | **CL-12**（后端可靠性补账；与 CL-F-44/45 同批）。修法建议：① DB ping 失败时主动重建/驱逐连接池；② 或把 `/health` 的 db 检查改成带超时的重连尝试，而不是直接读缓存状态；③ seed.sh 的前置可考虑只要求 BFF 自身活性（readiness 的依赖面比 seed 需要的信息更宽） | 🟡 **未解决（已定位；环境级影响：会阻断共享栈上的网关 seed）** |
+
 ## 使用约定
 
 - 6 列硬契约：`编号 | 来源 | 现象 | 根因 | 归属 | 状态`（缺列会被审计漏读）。
