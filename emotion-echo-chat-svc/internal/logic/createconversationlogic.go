@@ -77,6 +77,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 			IsPinned:  conv.Pinned,
 			CreatedAt: conv.CreatedAt.UnixMilli(),
 			UpdatedAt: conv.UpdatedAt.UnixMilli(),
+			AgentId:   derefAgentID(conv.AgentID), // CL-06：同一个投影纪律（漏了 ⇒ 接口恒回 0）
 		},
 	}, nil
 }

@@ -90,3 +90,40 @@ func TestListMessages_ReturnsAgentSnapshot(t *testing.T) {
 	assert.Equal(t, int64(7), out.Messages[0].AgentId, "历史消息必须带回当时的角色（快照语义）")
 	assert.Equal(t, int64(8), out.Messages[1].AgentId)
 }
+
+// CL-06 · Phase 8 运行态验收发现的**第二处投影缺项**：幂等重发路径
+// （同 client_msg_id 二次提交 ⇒ 直接返回既有消息）构造的 MessageView
+// 漏了 agent_id（连同既有的 contentType / intent / fileName 一起漏）。
+//
+// 注意：intent 用**白名单内**的值（"study_help"）—— 本测试第一版写成 "consult"，
+// 被 §契约 5 的白名单**按设计**丢弃（非法/未知意图落 ''），那是测试写错、不是缺陷。
+//
+// 为什么必须修：前端重试（断网重发）走的就是这条路径 —— 返回的视图缺字段会让
+// "角色标注/文件渲染/意图标记"在重试后**静默消失**，而库里数据是全的。
+func ptrStr(s string) *string { return &s }
+
+func TestSendMessage_IdempotentPath_ViewCarriesAllFields(t *testing.T) {
+	t.Parallel()
+	svcCtx, repo, _ := newTestCtx(t)
+	const uid = int64(101)
+	id := newConv(t, repo, uid, "会话")
+	ctx := ctxWithUserID(context.Background(), uid)
+
+	first, err := NewSendMessageLogic(ctx, svcCtx).SendMessage(&types.SendMessageReq{
+		Id: id, Role: "assistant", Content: "我在", AgentId: 42,
+		ClientMsgID: ptrStr("dup-1"), ContentType: "file", Intent: "study_help", FileName: "报告.pdf",
+	})
+	require.NoError(t, err)
+
+	dup, err := NewSendMessageLogic(ctx, svcCtx).SendMessage(&types.SendMessageReq{
+		Id: id, Role: "assistant", Content: "我在", AgentId: 42,
+		ClientMsgID: ptrStr("dup-1"), ContentType: "file", Intent: "study_help", FileName: "报告.pdf",
+	})
+	require.NoError(t, err)
+	require.Equal(t, first.Message.Id, dup.Message.Id, "幂等：返回同一条消息")
+
+	assert.Equal(t, int64(42), dup.Message.AgentId, "幂等路径必须回带角色快照")
+	assert.Equal(t, "file", dup.Message.ContentType, "幂等路径必须回带 contentType")
+	assert.Equal(t, "study_help", dup.Message.Intent, "幂等路径必须回带 intent")
+	assert.Equal(t, "报告.pdf", dup.Message.FileName, "幂等路径必须回带 fileName")
+}

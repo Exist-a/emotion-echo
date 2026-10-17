@@ -102,6 +102,10 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 		}
 		if existing != nil {
 			return &types.SendMessageResp{
+				// CL-06（Phase 8 实测）：本投影原先只带 7 个字段 —— 前端**重试**
+				// （断网重发同 client_msg_id）走的正是这条路径，返回的视图缺
+				// contentType/intent/fileName 会让"文件渲染/意图标记"在重试后静默消失，
+				// 且新加的 agent_id 也会丢（角色标注消失）。库里数据是全的 ⇒ 补齐即可。
 				Message: types.MessageView{
 					Id:             existing.ID,
 					ConversationId: existing.ConversationID,
@@ -110,6 +114,10 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 					Content:        existing.Content,
 					TokensUsed:     existing.TokensUsed,
 					CreatedAt:      existing.CreatedAt.UnixMilli(),
+					ContentType:    existing.ContentType,
+					Intent:         existing.Intent,
+					FileName:       existing.FileName,
+					AgentId:        derefAgentID(existing.AgentID),
 				},
 			}, nil
 		}
