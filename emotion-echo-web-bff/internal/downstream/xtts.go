@@ -44,6 +44,13 @@ type TTSPhonemesReq struct {
 	Language string  `json:"language,omitempty"`
 	Speed    float64 `json:"speed,omitempty"`
 	Volume   float64 `json:"volume,omitempty"`
+	// Voice CL-06：**可选**音色，形如 `<厂商/模型>:<音色名>`（具体取值由配置/角色档案给，
+	// 不在此处写死 —— ADR-2026-10 §Decision.1 要求业务代码零硬编码，守卫
+	// `scripts/test_tts_provider_isolation.sh` 会扫描本目录，**连注释里的模型字面量也会命中**）。
+	// 空 = 用配置默认值（零回归：不带该字段的请求体与现状逐字相同 ⇒ 故 omitempty）。
+	// 语义见 tts_provider.go：cloud provider 用它覆盖构造期绑定的默认音色；
+	// local（XTTS 回退）无此概念，字段被上游忽略 ⇒ 降级窗口内音色回落（已知边界）。
+	Voice string `json:"voice,omitempty"`
 }
 
 // XTTSPhoneme 单字符时间戳（仓 server.py:319-326 per-char 等分近似）

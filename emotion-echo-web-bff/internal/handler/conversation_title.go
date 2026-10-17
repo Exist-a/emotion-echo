@@ -21,8 +21,12 @@ import (
 )
 
 // titleConvUpdater 只依赖"改会话标题"这一能力（窄接口 ⇒ 测试替身不必实现整个 ChatClient）。
+//
+// CL-06：下游 `UpdateConversation` 变成"改标题 / 切角色"两动作共用，故入参多了 agentID。
+// 本接口的**调用方一律传 0**（= 不动角色）—— 自动命名标题不该有副作用去改角色；
+// 签名与 ChatClient 保一致，`deps.Chat.(titleConvUpdater)` 的推断才不会断。
 type titleConvUpdater interface {
-	UpdateConversation(ctx context.Context, conversationID int64, title string) (*downstream.UpdateConversationResp, error)
+	UpdateConversation(ctx context.Context, conversationID int64, title string, agentID int64) (*downstream.UpdateConversationResp, error)
 }
 
 // firstExchangeMessageLimit 判定"是否第一轮对话"的取数上限：落库后 ≤ 2 条
@@ -48,7 +52,8 @@ func (h *AIStreamHandler) maybeGenerateTitle(ctx context.Context, conversationID
 		return
 	}
 
-	if _, err := h.titleUpdater.UpdateConversation(ctx, conversationID, title); err != nil {
+	// agentID=0：自动命名标题**不动角色**（CL-06）
+	if _, err := h.titleUpdater.UpdateConversation(ctx, conversationID, title, 0); err != nil {
 		slog.ErrorContext(ctx, "ai-stream update conversation title failed",
 			"conversation_id", conversationID, "err", err)
 	}

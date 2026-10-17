@@ -31,14 +31,21 @@ export function useDigitalHumanTTS(options: DigitalHumanTTSOptions = {}) {
     options.speed ??
     TTS_SPEED_TO_VALUE[userStore.getUserConfig().ttsSpeed ?? 'normal']
 
-  const playText = async (text: string, customSpeed?: number, customVolume?: number) => {
+  // CL-06：voice 可选（本会话当前角色的音色）。每次现读传入 —— 对话中途切角色后
+  // 下一句即换音色（与语速"现读配置"同款语义）。
+  const playText = async (
+    text: string,
+    customSpeed?: number,
+    customVolume?: number,
+    voice?: string,
+  ) => {
     if (!digitalHumanStore.voiceEnabled) {
       console.log('[DigitalHumanTTS] Voice is disabled, skipping playText')
       return
     }
     const currentSpeed = resolveSpeed(customSpeed)
     const currentVolume = customVolume ?? digitalHumanStore.volume
-    await ttsPlayer.playStream(text, handleLipSync, currentSpeed, currentVolume)
+    await ttsPlayer.playStream(text, handleLipSync, currentSpeed, currentVolume, voice)
   }
 
   const flushRemaining = async () => {

@@ -54,7 +54,7 @@ describe('useTTSPlayer · DOM 音量 clamp（E2E-F-140）', () => {
   it('服务端 volume 语义不受影响（仍以 2.0 传给 /tts/phonemes 的请求体）', () => {
     // clamp 只应作用于 DOM 赋值，不应改动发起请求时传给 XTTS 的 volume
     expect(
-      /body:\s*JSON\.stringify\(\{\s*text,\s*language:\s*'zh-cn',\s*speed,\s*volume\s*\}\)/.test(src),
+      /body:\s*JSON\.stringify\(\{[\s\S]{0,300}?\bvolume\b[\s\S]{0,300}?\}\)/.test(src),
       'fetchPhonemes 的请求体必须继续透传原始 volume（服务端 PCM 增益语义）',
     ).toBe(true)
   })

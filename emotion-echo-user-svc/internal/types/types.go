@@ -117,3 +117,53 @@ type ResetPasswordResp struct {
 type AuthErrorResp struct {
 	Error string `json:"error"`
 }
+
+// ===================== CL-06 角色档案（用户自定义 Agent·多角色）=====================
+
+// AgentProfileView 角色档案视图（HTTP/gRPC 共用）
+type AgentProfileView struct {
+	ID         int64    `json:"id"`
+	UserID     int64    `json:"userId"`
+	Name       string   `json:"name"`
+	Gender     string   `json:"gender"`
+	Persona    string   `json:"persona"`
+	Tone       string   `json:"tone"`
+	Boundaries []string `json:"boundaries"`
+	Voice      string   `json:"voice"`
+	IsDefault  bool     `json:"isDefault"`
+	TemplateID string   `json:"templateId"`
+	CreatedAt  int64    `json:"createdAt"`
+	UpdatedAt  int64    `json:"updatedAt"`
+}
+
+// ListAgentProfilesReq 列角色请求（鉴权走 ctx，无参数）
+type ListAgentProfilesReq struct{}
+
+// ListAgentProfilesResp 列角色响应
+type ListAgentProfilesResp struct {
+	Items []AgentProfileView `json:"items"`
+	Total int                `json:"total"`
+}
+
+// UpsertAgentProfileReq 新建 / 更新角色请求（ID=0 为新建）
+type UpsertAgentProfileReq struct {
+	ID         int64
+	Name       string
+	Gender     string
+	Persona    string
+	Tone       string
+	Boundaries []string
+	Voice      string
+	IsDefault  bool
+	TemplateID string
+}
+
+// DeleteAgentProfileReq 删除角色请求
+type DeleteAgentProfileReq struct {
+	ID int64 `path:"id"`
+}
+
+// DeleteAgentProfileResp 删除角色响应
+type DeleteAgentProfileResp struct {
+	Deleted bool `json:"deleted"`
+}

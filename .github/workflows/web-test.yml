@@ -24,12 +24,21 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      # CL-06 收口（2026-10-17）：**pnpm 版本必须在这里显式给**。
+      # 实测（本阶段 CI run 39008309072，`web-test-frontend` step 3）：**去掉 `version` 会直接失败** ——
+      # `pnpm/action-setup@v4` 默认只读**仓库根**的 `package.json`，而本仓前端 `package.json`
+      # 在 `emotion-echo-web/` 子目录里 ⇒ 它读不到 `packageManager`（此前这里写着 `version: 9`
+      # 所以一直是绿的；"两处都写"的冲突**从未发生过**，因为那份 `packageManager` 它根本没看到）。
+      # ⇒ 此处钉**与 `emotion-echo-web/package.json` 的 `packageManager` 相同**的精确版本；
+      #    两处必须同版本（`packageManager` 供 corepack / 本地用，这里供 CI action 用）。
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.1
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # CL-06 收口：Node 由 20 升到 22 —— 权威锁解析出的 nuxt@4.5.2 / nitropack@2.13.4 构建期调用
+          # `Set.prototype.difference`（Node 22+）；Node 20 上 `pnpm build` 必失败（CL-F-28 第二段真因）。
+          node-version: '22'
           cache: 'pnpm'
           cache-dependency-path: 'emotion-echo-web/pnpm-lock.yaml'
       - name: Install deps
@@ -40,3 +49,8 @@ jobs:
       # 此处接入使其成真。
       - name: Typecheck
         run: pnpm typecheck
+      # CL-06 收口（2026-10-17，用户拍板；收口 CL-F-43）：**生产构建真跑一遍**。
+      # 此前 CI 只跑 vitest + typecheck ⇒ "构建坏了没人知道"（CL-F-28 潜伏多日的原因之二）。
+      # 成本约 3 分钟；本 job timeout 15 分钟，留有余量。
+      - name: Production build（真跑 nuxt build）
+        run: pnpm build

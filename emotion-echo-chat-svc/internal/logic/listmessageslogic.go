@@ -62,9 +62,10 @@ func (l *ListMessagesLogic) ListMessages(req *types.ListMessagesReq) (resp *type
 			UserId:         m.UserID,
 			Role:           m.Role,
 			Content:        m.Content,
-			ContentType:    m.ContentType, // Stage 79：列表响应同样回带
-			Intent:         m.Intent,      // Stage 82 PR-3b
-			FileName:       m.FileName,    // Stage 89 PR-2：文件名回带
+			ContentType:    m.ContentType,           // Stage 79：列表响应同样回带
+			Intent:         m.Intent,                // Stage 82 PR-3b
+			FileName:       m.FileName,              // Stage 89 PR-2：文件名回带
+			AgentId:        derefAgentID(m.AgentID), // CL-06：角色快照（历史消息可标注"谁回的"）
 			TokensUsed:     m.TokensUsed,
 			CreatedAt:      m.CreatedAt.UnixMilli(),
 		})

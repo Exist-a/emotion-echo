@@ -1,0 +1,30 @@
+=== CL-06 Phase 8 API 验收（网关 http://127.0.0.1:19080）===
+  cleanup: 删除残留角色 id=3 name='06计阿哲'
+  PASS  T-5 首次读列表物化默认「小E」
+       默认角色：id=1 name='小E' voice=FunAudioLLM/CosyVoice2-0.5B:anna
+  PASS  T-2a 新建角色 200
+  PASS  T-2b 人设**逐字回读一致**（中文无损坏）
+  PASS  T-2c boundaries 逐条回读一致
+  PASS  T-2d 音色落库一致
+  PASS  T-2e 角色名超 20 字被拒（非静默截断）
+  PASS  T-2f 空角色名被拒
+  PASS  T-2g 人设超 500 字被拒
+  PASS  T-11 越狱 被拒（400 且注明类别）
+  PASS  T-11 宣称资质 被拒（400 且注明类别）
+  PASS  T-11 冒充真人 被拒（400 且注明类别）
+  PASS  T-11 正例：'像心理咨询师那样'放行（不误拦）
+       当前角色数 = 5（含默认）
+  PASS  T-3 第 6 个被拒
+       清理：删除 3 个占位角色
+  PASS  前置：建会话成功
+  PASS  T-6a 切到自己的角色 200 且回显
+  PASS  T-6b 切到不存在的角色被拒（400）且不下达下游
+  PASS  T-6c 会话列表回读 agentId 一致
+  PASS  T-7 前置：ai/stream 收到 [DONE]
+       （AI 回复片段）'data: {"choices":[{"delta":{"content":"你好"}}]}\n\ndata: {"choices":[{"delta":{"content":"，"}}]}\n\ndata: {"choices":[{"delta'
+  PASS  T-12/13 /tts/phonemes 带 voice（alex） 返回 phonemes+duration
+       phonemes=10 duration=2.20s audio_bytes=141032
+  PASS  T-12/13 /tts/phonemes 不带 voice（回落配置默认） 返回 phonemes+duration
+       phonemes=10 duration=2.40s audio_bytes=153832
+
+=== 结果：全部 PASS（FAIL 0）===

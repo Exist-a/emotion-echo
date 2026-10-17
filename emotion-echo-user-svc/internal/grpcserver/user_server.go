@@ -292,3 +292,115 @@ func mapAuthError(err error) error {
 	}
 	return grpcerr.MapToError(err, "auth")
 }
+
+// =====================================================
+// CL-06（用户自定义 Agent·多角色）：角色档案 3 个 RPC
+// =====================================================
+
+// ensureAgentRepo 与 ensureRepo 同款守卫：装配缺失 / 降级启动时返 Unavailable 而非 panic。
+func (s *userServer) ensureAgentRepo() error {
+	if s.svcCtx == nil {
+		return status.Error(codes.Unavailable, "user-svc service context not initialized")
+	}
+	if s.svcCtx.AgentRepo == nil {
+		return status.Error(codes.Unavailable, "user-svc agent repository not initialized (degraded start)")
+	}
+	return nil
+}
+
+func toProtoAgentProfile(v types.AgentProfileView) *emotionuser.AgentProfile {
+	return &emotionuser.AgentProfile{
+		Id:         v.ID,
+		UserId:     v.UserID,
+		Name:       v.Name,
+		Gender:     v.Gender,
+		Persona:    v.Persona,
+		Tone:       v.Tone,
+		Boundaries: v.Boundaries,
+		Voice:      v.Voice,
+		IsDefault:  v.IsDefault,
+		TemplateId: v.TemplateID,
+		CreatedAt:  v.CreatedAt,
+		UpdatedAt:  v.UpdatedAt,
+	}
+}
+
+// agentErrToStatus 把服务层 sentinel 映射为 gRPC code。
+//
+// 与 GetMe 那处 `status.Errorf(codes.Unauthenticated, ...)` 的差别：角色面用
+// **精确映射**（NotFound / InvalidArgument / ResourceExhausted），让 BFF 能按 code
+// 给出正确 HTTP 状态（否则"角色不存在"会变成 500）。
+func agentErrToStatus(op string, err error) error {
+	switch {
+	case errors.Is(err, logic.ErrUnauthorized):
+		return status.Error(codes.Unauthenticated, op+": unauthorized")
+	case errors.Is(err, logic.ErrAgentNotFound):
+		return status.Error(codes.NotFound, op+": agent profile not found")
+	case errors.Is(err, logic.ErrAgentLimitReached):
+		return status.Error(codes.ResourceExhausted, op+": agent profile limit reached (max 5)")
+	case errors.Is(err, logic.ErrValidation):
+		return status.Error(codes.InvalidArgument, op+": validation failed")
+	case errors.Is(err, logic.ErrAgentContentRejected):
+		// 内容拒绝：把细节（字段 + 类别 + 命中词）原样带出去 —— 用户要据此改人设。
+		// 与 ErrValidation 的差别：后者对用户"只说格式不对"就够，前者必须可指导。
+		return status.Error(codes.InvalidArgument, op+": "+err.Error())
+	default:
+		return status.Errorf(codes.Internal, "%s: %v", op, err)
+	}
+}
+
+// ListAgentProfiles 实现 ListAgentProfiles RPC（含 get-or-create 默认「小E」）
+func (s *userServer) ListAgentProfiles(ctx context.Context, _ *emotionuser.ListAgentProfilesRequest) (*emotionuser.ListAgentProfilesResponse, error) {
+	if err := s.ensureAgentRepo(); err != nil {
+		return nil, err
+	}
+	resp, err := logic.NewListAgentProfilesLogic(ctx, s.svcCtx).ListAgentProfiles(&types.ListAgentProfilesReq{})
+	if err != nil {
+		return nil, agentErrToStatus("listAgentProfiles", err)
+	}
+	items := make([]*emotionuser.AgentProfile, 0, len(resp.Items))
+	for _, v := range resp.Items {
+		items = append(items, toProtoAgentProfile(v))
+	}
+	return &emotionuser.ListAgentProfilesResponse{Items: items, Total: int32(resp.Total)}, nil
+}
+
+// UpsertAgentProfile 实现 UpsertAgentProfile RPC（id=0 新建 / >0 更新）
+func (s *userServer) UpsertAgentProfile(ctx context.Context, req *emotionuser.UpsertAgentProfileRequest) (*emotionuser.AgentProfile, error) {
+	if err := s.ensureAgentRepo(); err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "upsertAgentProfile: empty request")
+	}
+	view, err := logic.NewUpsertAgentProfileLogic(ctx, s.svcCtx).UpsertAgentProfile(&types.UpsertAgentProfileReq{
+		ID:         req.Id,
+		Name:       req.Name,
+		Gender:     req.Gender,
+		Persona:    req.Persona,
+		Tone:       req.Tone,
+		Boundaries: req.Boundaries,
+		Voice:      req.Voice,
+		IsDefault:  req.IsDefault,
+		TemplateID: req.TemplateId,
+	})
+	if err != nil {
+		return nil, agentErrToStatus("upsertAgentProfile", err)
+	}
+	return toProtoAgentProfile(*view), nil
+}
+
+// DeleteAgentProfile 实现 DeleteAgentProfile RPC（软删除）
+func (s *userServer) DeleteAgentProfile(ctx context.Context, req *emotionuser.DeleteAgentProfileRequest) (*emotionuser.DeleteAgentProfileResponse, error) {
+	if err := s.ensureAgentRepo(); err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "deleteAgentProfile: empty request")
+	}
+	resp, err := logic.NewDeleteAgentProfileLogic(ctx, s.svcCtx).DeleteAgentProfile(&types.DeleteAgentProfileReq{ID: req.Id})
+	if err != nil {
+		return nil, agentErrToStatus("deleteAgentProfile", err)
+	}
+	return &emotionuser.DeleteAgentProfileResponse{Deleted: resp.Deleted}, nil
+}

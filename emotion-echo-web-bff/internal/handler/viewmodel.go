@@ -22,6 +22,8 @@ type ConversationItemVM struct {
 	LastMessageTime *int64  `json:"lastMessageTime"`
 	CreatedAt       string  `json:"createdAt"`
 	UpdatedAt       string  `json:"updatedAt"`
+	// CL-06：本会话当前角色（0 = 未显式选择 ⇒ 前端展示用户默认角色）
+	AgentID int64 `json:"agentId"`
 }
 
 // MessageItemVM 对齐前端 types/api.ts MessageItem（sender: user|ai）
@@ -36,6 +38,8 @@ type MessageItemVM struct {
 	FileName       string  `json:"fileName,omitempty"` // Stage 89 PR-3：文件原始名（ChatFile 展示 + 历史引用）
 	SendTime       int64   `json:"sendTime"`
 	CreatedAt      int64   `json:"createdAt"`
+	// CL-06：该 AI 消息由哪个角色产生（0 = 角色功能上线前的历史消息 ⇒ 前端不标注）
+	AgentID int64 `json:"agentId"`
 }
 
 // ProfileVM 对齐前端 types/api.ts UserInfo（profile 端点直接返回）
@@ -67,6 +71,7 @@ func toConversationItemVM(c *downstream.ConversationView) ConversationItemVM {
 		IsTop:     c.IsPinned, // Stage 72：chat-svc pinned 状态透传（此前固定 false）
 		CreatedAt: createdAt.Format(time.RFC3339),
 		UpdatedAt: updatedAt.Format(time.RFC3339),
+		AgentID:   c.AgentID, // CL-06
 	}
 }
 
@@ -88,6 +93,7 @@ func toMessageItemVM(m *downstream.MessageView) MessageItemVM {
 		FileName:    m.FileName, // Stage 89 PR-3
 		SendTime:       m.CreatedAt,
 		CreatedAt:      m.CreatedAt,
+		AgentID:        m.AgentID, // CL-06
 	}
 }
 

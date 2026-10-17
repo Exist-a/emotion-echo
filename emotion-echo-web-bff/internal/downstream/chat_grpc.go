@@ -72,6 +72,7 @@ func (c *chatGRPCClient) SendMessage(ctx context.Context, conversationID int64, 
 		EmotionTag:    req.EmotionTag,
 		Intent:        req.Intent, // Stage 82 PR-3b
 		FileName:      req.FileName, // Stage 89 PR-3
+		AgentId:       req.AgentID, // CL-06：AI 回复记当时的角色（proto agent_id=10）
 	})
 	if err != nil {
 		return nil, wrapGRPCError(err, "chat send msg")
@@ -140,12 +141,13 @@ func (c *chatGRPCClient) PinConversation(ctx context.Context, conversationID int
 	return nil
 }
 
-// UpdateConversation RPC（Stage 72：chat-svc 已实现，当前仅支持 title）
-func (c *chatGRPCClient) UpdateConversation(ctx context.Context, conversationID int64, title string) (*UpdateConversationResp, error) {
+// UpdateConversation RPC（Stage 72 落 title；CL-06 起同 RPC 兼切角色 —— 两字段各自可选）
+func (c *chatGRPCClient) UpdateConversation(ctx context.Context, conversationID int64, title string, agentID int64) (*UpdateConversationResp, error) {
 	cli := emotionchat.NewChatServiceClient(c.conn)
 	resp, err := cli.UpdateConversation(withUserID(ctx), &emotionchat.UpdateConversationRequest{
 		ConversationId: conversationID,
 		Title:          title,
+		AgentId:        agentID, // CL-06：0 = 本次不改角色（proto agent_id=3）
 	})
 	if err != nil {
 		return nil, wrapGRPCError(err, "chat update conversation")
@@ -154,6 +156,7 @@ func (c *chatGRPCClient) UpdateConversation(ctx context.Context, conversationID 
 		Success: resp.GetSuccess(),
 		Id:      resp.GetId(),
 		Title:   resp.GetTitle(),
+		AgentID: resp.GetAgentId(), // CL-06：回显生效后的角色（proto agent_id=4）
 	}, nil
 }
 
@@ -177,6 +180,7 @@ func fromProtoConversation(c *emotionchat.Conversation) *ConversationView {
 		IsPinned:  c.IsPinned,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
+		AgentID:   c.AgentId, // CL-06：本会话当前角色
 	}
 }
 
@@ -195,6 +199,7 @@ func fromProtoMessage(m *emotionchat.Message) *MessageView {
 		FileName:       m.FileName,    // Stage 89 PR-3
 		TokensUsed:     int(m.TokensUsed),
 		CreatedAt:      m.CreatedAt,
+		AgentID:        m.AgentId, // CL-06：该消息由哪个角色产生（快照）
 	}
 }
 

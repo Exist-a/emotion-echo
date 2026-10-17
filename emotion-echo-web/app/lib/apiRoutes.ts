@@ -88,6 +88,14 @@ export const API_ROUTES = {
   // 与会话级 `/emotion/conversation/:id`（未融合，走 emotion_analysis）不同。
   emotionFusedByMessage: { method: 'GET', path: '/emotion/message/:messageId/fused' } as ApiRoute,
 
+  // ============ CL-06 用户自定义角色（Agent）============
+  // BFF: agent_handler.go（GET/POST /agents + DELETE /agents/:id）；
+  // 网关侧由既有 catch-all `/api/v1/*`（route 100，挂 jwt-auth）覆盖，未新增 APISIX 路由。
+  // 列表端点**含 get-or-create**：首次读会物化默认「小E」（服务端行为）。
+  agents: { method: 'GET', path: '/agents' } as ApiRoute,
+  agentUpsert: { method: 'POST', path: '/agents' } as ApiRoute,
+  agentById: { method: 'DELETE', path: '/agents/:id' } as ApiRoute,
+
   // ============ Uploads（Stage 58 PR-UP-1/2：通用上传）============
   // BFF: POST /api/v1/uploads/:kind（kind ∈ image|video|file）
   // Sprint 1 PR-2 时本路径是 orphan（前端 /upload/* 单数 + BFF /uploads/* 复数错位），

@@ -19,6 +19,7 @@ package downstream
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -27,8 +28,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -45,6 +48,9 @@ type mockChatServer struct {
 
 	// 记录收到的 metadata + req
 	gotUserID string
+	// CL-06：UpdateConversation 收到的请求（断言 title 与 agent_id **两字段都透传**）
+	gotUpdateReq *emotionchat.UpdateConversationRequest
+	updateErr    error
 }
 
 func (m *mockChatServer) CreateConversation(ctx context.Context, req *emotionchat.CreateConversationRequest) (*emotionchat.Conversation, error) {
@@ -74,6 +80,20 @@ func (m *mockChatServer) DeleteConversation(ctx context.Context, req *emotioncha
 
 func (m *mockChatServer) PinConversation(ctx context.Context, req *emotionchat.PinConversationRequest) (*emotionchat.PinConversationResponse, error) {
 	return &emotionchat.PinConversationResponse{Success: true, Id: req.ConversationId}, nil
+}
+
+// UpdateConversation CL-06：记录请求体，并回显 title / agent_id
+func (m *mockChatServer) UpdateConversation(ctx context.Context, req *emotionchat.UpdateConversationRequest) (*emotionchat.UpdateConversationResponse, error) {
+	m.gotUpdateReq = req
+	if m.updateErr != nil {
+		return nil, m.updateErr
+	}
+	return &emotionchat.UpdateConversationResponse{
+		Success: true,
+		Id:      req.GetConversationId(),
+		Title:   req.GetTitle(),
+		AgentId: req.GetAgentId(),
+	}, nil
 }
 
 // startMockBufConn 启动 bufconn 上的 mock gRPC server，返回 client conn
@@ -257,6 +277,76 @@ func TestChatGRPCClient_NoUserID_NoMetadata(t *testing.T) {
 	_, err := client.CreateConversation(context.Background(), CreateConversationReq{Title: "t"})
 	require.NoError(t, err)
 	assert.Empty(t, mock.gotUserID, "ctx 无 user_id 时不应注入 metadata（让拦截器判 Unauthenticated）")
+}
+
+// ============ CL-06：角色字段透传 ============
+
+// 会话视图必须带 agent_id —— 前端切换器要靠它显示"本会话当前角色"。
+func TestChatGRPCClient_Conversation_CarriesAgentID(t *testing.T) {
+	mock := &mockChatServer{
+		convResp: &emotionchat.Conversation{Id: 42, UserId: 7, Title: "t", AgentId: 9},
+	}
+	conn, cleanup := startMockBufConn(t, mock)
+	defer cleanup()
+
+	conv, err := NewChatGRPCClient(conn).CreateConversation(context.Background(), CreateConversationReq{Title: "t"})
+	require.NoError(t, err)
+	assert.Equal(t, int64(9), conv.AgentID, "proto Conversation.agent_id=9 必须映到 ConversationView.AgentID")
+}
+
+// 消息视图必须带 agent_id —— 前端历史消息"这条是谁回的"靠它。
+func TestChatGRPCClient_Message_CarriesAgentID(t *testing.T) {
+	mock := &mockChatServer{
+		msgResp: &emotionchat.Message{Id: 100, ConversationId: 42, Role: "assistant", Content: "hi", AgentId: 9},
+	}
+	conn, cleanup := startMockBufConn(t, mock)
+	defer cleanup()
+
+	msg, err := NewChatGRPCClient(conn).SendMessage(context.Background(), 42, SendMessageReq{Role: "assistant", Content: "hi"})
+	require.NoError(t, err)
+	assert.Equal(t, int64(9), msg.AgentID, "proto Message.agent_id=11 必须映到 MessageView.AgentID")
+}
+
+// 更新会话：title 与 agent_id 是**同一个 RPC 的两个可选动作**，两字段都必须透传。
+func TestChatGRPCClient_UpdateConversation_PassesTitleAndAgentID(t *testing.T) {
+	mock := &mockChatServer{}
+	conn, cleanup := startMockBufConn(t, mock)
+	defer cleanup()
+
+	resp, err := NewChatGRPCClient(conn).UpdateConversation(context.Background(), 42, "新标题", 9)
+	require.NoError(t, err)
+	require.NotNil(t, mock.gotUpdateReq)
+	assert.Equal(t, int64(42), mock.gotUpdateReq.GetConversationId())
+	assert.Equal(t, "新标题", mock.gotUpdateReq.GetTitle())
+	assert.Equal(t, int64(9), mock.gotUpdateReq.GetAgentId())
+	assert.True(t, resp.Success)
+	assert.Equal(t, "新标题", resp.Title)
+	assert.Equal(t, int64(9), resp.AgentID, "响应要回显生效后的角色（前端据此直接更新本地态）")
+}
+
+// 只切角色（不改标题）：title 必须留空 —— 否则会把标题清成 ""。
+func TestChatGRPCClient_UpdateConversation_AgentOnly_LeavesTitleEmpty(t *testing.T) {
+	mock := &mockChatServer{}
+	conn, cleanup := startMockBufConn(t, mock)
+	defer cleanup()
+
+	_, err := NewChatGRPCClient(conn).UpdateConversation(context.Background(), 42, "", 9)
+	require.NoError(t, err)
+	require.NotNil(t, mock.gotUpdateReq)
+	assert.Empty(t, mock.gotUpdateReq.GetTitle(), "空 title = 不改标题（chat-svc 侧按空串跳过）")
+	assert.Equal(t, int64(9), mock.gotUpdateReq.GetAgentId())
+}
+
+func TestChatGRPCClient_UpdateConversation_UpstreamError_Wrapped(t *testing.T) {
+	mock := &mockChatServer{updateErr: status.Error(codes.NotFound, "no such conversation")}
+	conn, cleanup := startMockBufConn(t, mock)
+	defer cleanup()
+
+	_, err := NewChatGRPCClient(conn).UpdateConversation(context.Background(), 42, "t", 9)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "update conversation")
+	var apiErr *APIError
+	assert.True(t, errors.As(err, &apiErr))
 }
 
 // ============ 类型断言 ============

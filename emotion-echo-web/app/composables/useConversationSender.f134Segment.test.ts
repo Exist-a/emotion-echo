@@ -47,7 +47,7 @@ describe('useConversationSender · F-134 流中标点即发（第二层 debounce
       '判出可切段后必须立即 playText（不得等 debounce）',
     ).toBe(true)
     expect(
-      /playText\(accumulatedDeltaText\.value\)\s*\n\s*accumulatedDeltaText\.value = ''/.test(block),
+      /playText\(accumulatedDeltaText\.value[^\n]*\)\s*\n\s*accumulatedDeltaText\.value = ''/.test(block),
       '立即发出后必须清空 accumulatedDeltaText（否则 manager 收到重复累积文本）',
     ).toBe(true)
   })
@@ -71,7 +71,7 @@ describe('useConversationSender · F-134 流中标点即发（第二层 debounce
       'onFinish 必须调用 flushTTS（残留 accumulated + flushRemaining 兜底）',
     ).toBe(true)
     expect(
-      /playText\(accumulatedDeltaText\.value\)/.test(senderSrc.slice(0, senderSrc.indexOf('onDelta:'))),
+      /playText\(accumulatedDeltaText\.value[^\n]*\)/.test(senderSrc.slice(0, senderSrc.indexOf('onDelta:'))),
       'flushTTS 定义内必须保留 playText 调用',
     ).toBe(true)
   })

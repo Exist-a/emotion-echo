@@ -127,6 +127,50 @@ export interface ConversationItem {
   lastMessageTime: number | null
   createdAt: string
   updatedAt: string
+  /**
+   * CL-06：本会话当前角色（用户自定义 Agent）的 id。
+   * `0` = 未显式选择 ⇒ 前端按用户默认角色展示与发送（BFF 侧同样如此回落）。
+   */
+  agentId?: number
+}
+
+// ==================== CL-06 用户自定义角色（Agent） ====================
+
+/**
+ * 角色档案（BFF `GET /api/v1/agents` 的 data.agents 元素）
+ *
+ * 字段上限由服务端强制（name≤20 / persona≤500 / tone≤100 / boundaries≤5×50），
+ * 前端校验只是"早提示"，不作为安全边界（见 agentguard 词表与 user-svc 校验）。
+ */
+export interface AgentProfile {
+  id: number
+  name: string
+  gender: string
+  persona: string
+  tone: string
+  boundaries: string[]
+  /** CosyVoice2 预置音色（带模型名前缀，如 `FunAudioLLM/CosyVoice2-0.5B:anna`） */
+  voice: string
+  /** 默认「小E」（首次读列表时由服务端物化） */
+  isDefault: boolean
+  templateId?: string
+  createdAt?: number
+  updatedAt?: number
+}
+
+/**
+ * 新建 / 更新角色的请求体（`id` 缺省或 0 = 新建）
+ */
+export interface AgentProfilePayload {
+  id?: number
+  name: string
+  gender?: string
+  persona?: string
+  tone?: string
+  boundaries?: string[]
+  voice?: string
+  isDefault?: boolean
+  templateId?: string
 }
 
 /**

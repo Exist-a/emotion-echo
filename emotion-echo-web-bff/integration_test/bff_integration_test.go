@@ -267,8 +267,11 @@ func (f *fakeIntegrationChat) DeleteConversation(_ context.Context, _ int64) err
 func (f *fakeIntegrationChat) PinConversation(_ context.Context, _ int64, _ bool) error {
 	return nil
 }
-func (f *fakeIntegrationChat) UpdateConversation(_ context.Context, conversationID int64, title string) (*downstream.UpdateConversationResp, error) {
-	return &downstream.UpdateConversationResp{Success: true, Id: conversationID, Title: title}, nil
+// CL-06：下游 UpdateConversation 变成"改标题 / 切角色"两动作共用 ⇒ 入参增 agentID。
+// ⚠️ 本文件带 `//go:build integration` ⇒ `go test ./...` / `go vet ./...` **都不编译它**，
+// 接口签名演进时极易漏改（E2E-F-167 同型；本次即由 `scripts/test_integration_tag_compiles.sh` 抓出）。
+func (f *fakeIntegrationChat) UpdateConversation(_ context.Context, conversationID int64, title string, agentID int64) (*downstream.UpdateConversationResp, error) {
+	return &downstream.UpdateConversationResp{Success: true, Id: conversationID, Title: title, AgentID: agentID}, nil
 }
 
 var _ = time.Second // 保留 time import（部分平台编译）

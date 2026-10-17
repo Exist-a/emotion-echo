@@ -89,6 +89,10 @@ func (l *ListConversationsLogic) ListConversations(req *types.ListConversationsR
 			IsPinned:  c.Pinned,
 			CreatedAt: c.CreatedAt.UnixMilli(),
 			UpdatedAt: c.UpdatedAt.UnixMilli(),
+			// CL-06：本会话当前角色。**投影点必须显式赋值** —— 漏了就会出现
+			// "库里写对、接口恒回 0"（CL-06 Phase 8 经网关实测抓到过，见
+			// listconversationslogic_agent_test.go 的回归钉）
+			AgentId: derefAgentID(c.AgentID),
 		})
 	}
 	// 下一页游标 = 本页**最后一条**的复合键（序为 updated_at DESC ⇒ 末行即本页最旧）。

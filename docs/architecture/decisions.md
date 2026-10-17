@@ -1031,4 +1031,11 @@ Stage 33 P0 修复+BFF净化 █████████████████
 > **背景（CL-03 建档实读）**：relay 跑在 `main.go:245` 的后台根 ctx 上 ⇒ `kafka_publisher.go:133` 的 `CreateExitSpan` 建的是**根** span，一条消息的 trace 断在 outbox→relay（消费端从 Kafka header 往后是连的）。
 > **决策**：① `outbox_events` 新增 `trace_sw8 VARCHAR(512) NULL`（迁移 `c010`，幂等，走决策 22 的 9 步）；② shared `Tracer` 新增 `EncodeSW8(ctx, opName)`，写入侧统一走 `chat-svc/internal/outbox.EncodeTraceSW8`（读 **`GlobalTracer()`** —— 采纳 CL-F-14「请求期现读全局」语义）；③ relay 用**既有** `CreateEntrySpan` + extractor 恢复父 ctx（不加第二个方法），空列/无 tracer 时行为与改前**逐字一致**。
 > **实现约束（go2sky v1.5.0 实测）**：`Span` 接口不暴露 `SpanContext`，`ReportedSpan.Context()` 给的是 `*SegmentContext`，自拼 `SpanContext` 需 `tracer` 私有字段 `service`/`instance` ⇒ 只能借一次 exit span 编码（哨兵 peer `"trace-context"`，因 go2sky 校验 peer 非空）。代价 = 每条 trace 多两个短 span + 拓扑图上指向哨兵的边，**已知并接受**。
+
+### 决策 44：用户自定义角色（Agent）= **身份叠加层（不改基底人设）+ 段序钉死 + 安全信封不可覆盖**（2026-10-17 CL-06 · `CL-D-21`~`CL-D-24`）
+
+> 🟢 **accepted**（用户 2026-10-13 拍"多角色"，2026-10-17 补定 UI/存储/隐私；完整 ADR 见 [`docs/architecture/adr/adr-2026-10-user-agent-identity-layer.md`](adr/adr-2026-10-user-agent-identity-layer.md)）。
+> **背景（CL-06 建档实读）**：`adr-2026-09-personality-prompt-semantics.md` **决策 1** 明令"只给相处说明书、**不做 AI 性格**、基底人设**一字不改**"；而本阶段要支持用户给 AI **起名/给背景/选语气/选音色**（可建多个、会话内随时切）⇒ **与该决策直接冲突**，故立本 ADR 修订其边界（不废除原 ADR）。
+> **决策**：① 基底人设 `baseSystemPrompt`（`prompt_templates.go:37`）**一字不改**，用户角色是**叠加层**；② 段序钉死 `base → agent → personality → emotion → **guard（永远最后）**`（正是 `prompt_assembly.go:63-66` 注释预留的形态）；③ 优先级：`boundaries` 恒最高 → 用户显式设定覆盖测评同类措辞 → 测评仍给"联系方式"；④ **安全信封不可覆盖**：受限槽位 / 长度上限 / 越狱·资质·冒充真人黑名单 / 护栏后置 / 危机通道独立（`CL-08e`）；⑤ **零回归硬约束**：无角色设定 ⇒ prompt 逐字等于现状；⑥ 只覆盖"用户角色"链路，**不改**测评画像与情绪回显语义；⑦ 每条 AI 消息记 `agent_id`（快照）。
+> **被否**：只写实施计划不修 ADR（违 AP-08）；用"相处偏好"措辞绕开（掩盖真实语义，验收失焦）；允许写裸 system prompt（越狱面敞开）；删基底人设由角色全替代（未设定用户体验退化）。
 > **被否**：`CL-D-16` 的 B 方案（调用点用 injector 旁路捕获，语义散落三处 business logic）；只存 trace_id（无法恢复父子关系）；复制 go2sky 编码（私有字段不可达）；relay 造 local 假父（违 AGENTS §四「不硬造根 span」）。

@@ -148,6 +148,9 @@
             </svg>
           </button>
           <div class="spacer" />
+          <!-- CL-06：角色切换器 —— 紧邻语音按钮**左侧**，向上展开，本会话内可随时切
+               （用户 2026-10-17 两次澄清的位置与形态要求；位置由 cl06-agent-wiring.test.ts 钉住） -->
+          <AgentSwitcher :conversation-id="conversationIdRef" />
           <button
             type="button"
             class="voice-btn"
@@ -245,6 +248,7 @@
 <script setup lang="ts">
 import VoiceMessage from '~/components/voice/VoiceMessage.vue'
 import CurrentEmotionBar from '~/components/emotion/CurrentEmotionBar.vue'
+import AgentSwitcher from '~/components/AgentSwitcher.vue'
 import { useCurrentEmotion } from '~/composables/useCurrentEmotion'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { useVoiceRecorder } from '~/composables/useVoiceRecorder'
@@ -284,6 +288,8 @@ watch(
 
 const route = useRoute()
 const conversationStore = useConversationStore()
+// CL-06：角色 —— 列表用于切换器；"本会话生效角色"由 resolveActiveAgent 从会话 agentId 解析
+const agentStore = useAgentStore()
 const message = ref('')
 const conversationIdRef = computed(() => route.params.id as string)
 const cameraVideoRef = ref<HTMLVideoElement | null>(null)
@@ -291,9 +297,24 @@ const faceEmotion = useFaceEmotion({
   sessionId: conversationIdRef,
 })
 
+/**
+ * CL-06：本会话当前生效的角色。
+ *
+ * 事实源 = **会话的 agentId**（服务端为准），会话没有该值/值已失效 ⇒ 回落默认角色
+ * —— 与 BFF `resolveAgentProfile` 同款回落链（前端只决定"显示谁/带哪个 id"）。
+ * 依赖 `agentStore.agents` 与 `conversationStore.conversationList` 的响应式依赖收集：
+ * 切换器改任一处，这里的 computed 即更新（音色/发送随之变化）。
+ */
+const activeAgent = computed(() => {
+  const conv = conversationStore.conversationList.find((c) => c.id === conversationIdRef.value)
+  return agentStore.resolveActiveAgent(Number(conv?.agentId ?? 0))
+})
+
 const conversationSender = useConversationSender({
   onLipShapeChange: (shape) => digitalHumanRef.value?.setLipShape(shape),
   onEmotionChange: (emotion) => digitalHumanRef.value?.setEmotion(emotion),
+  // 音色**现读**（切角色后下一句即换音色）
+  getAgentVoice: () => activeAgent.value?.voice || undefined,
 })
 
 // ===== CL-07 前端半（情绪回显 G1/G3/G4）=====
@@ -413,6 +434,8 @@ const handleVoiceStreamResponse = async (
       // 但把服务端真实 id 带给 ai/stream 绑定（face/融合按 message_id 取行）。
       skipUserMessage: true,
       userMessageId,
+      // CL-06：本会话当前角色（BFF 据此注入人设段 + 给这条 AI 回复盖角色快照）
+      agentId: activeAgent.value?.id,
     },
   )
 }
@@ -427,9 +450,12 @@ const handleSubmit = async () => {
   // D-14：取最近一次 face emotion（3 秒有效窗口），拼到 AIStreamParams；
   // 摄像头未开/超时则字段 undefined，BFF 不污染 prompt
   const recentFace = faceEmotion.getRecentEmotion()
+  // CL-06：同一个 extraParams 对象承载"本轮会话上下文"（情绪 + 当前角色）。
+  // agentId 让 BFF 用**本会话当前角色**生成回复并给消息盖角色快照（T-7）。
   const faceEmotionCtx = {
     faceEmotion: recentFace?.emotion,
     faceConfidence: recentFace?.confidence,
+    agentId: activeAgent.value?.id,
   }
   // Stage 89 PR-5：文件+提问一起发——附件无文字时用默认 prompt 触发 AI 读文件
   if (pendingAttachment.value && !value) {
@@ -631,6 +657,8 @@ const loadConversation = async (id?: string) => {
 }
 
 onMounted(() => {
+  // CL-06：拉角色列表（切换器需要；失败静默降级为"无角色"，不阻塞对话）
+  void agentStore.fetchAgents()
   void loadConversation(route.params.id as string)
 })
 
