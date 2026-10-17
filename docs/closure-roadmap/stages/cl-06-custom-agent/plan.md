@@ -75,7 +75,7 @@ related:
 | 会话可绑定角色 | ❌ `conversations` 无该列；`UpdateConversationRequest` 只支持改标题 |
 | AI 回复可记角色 | ❌ `saveAIMessage` 不带该字段 |
 | `proto/agent.proto` 是用户 Agent 契约 | ❌ 是 **assessment-svc**（历史命名，见 A.1 行） |
-| 能构建 web 镜像做 UI 验收 | ❌ **当前直接失败**（`CL-F-28`：npm ERESOLVE）⇒ Phase 0 必做 |
+| 能构建 web 镜像做 UI 验收 | ❌ **当前直接失败**（`CL-F-28`）⇒ Phase 0 必做。**实测真因两段**（2026-10-17）：① npm 侧解析 `ERESOLVE`；② 改用权威 pnpm 锁后依赖升到 `nuxt@4.5.2`，构建期需要 **Node 22**（`Set.prototype.difference`）⇒ 还要升基础镜像（详见后面 §A.6 与 Phase 0 行） |
 | 云端 TTS 是实际使用路径 | ✅ **实测 2026-10-17**：`.env.local` 的 `TTS_API_KEY`（51 字符）/`TTS_API_BASE_URL`/`TTS_MODEL` 均非空、`TTS_PROVIDER` 未覆盖 ⇒ `auto` = **cloud 生效**；前端 XTTS 直连端点零调用 ⇒ **音色 [V] 验收可行** |
 
 ### A.5 XTTS 的现状（2026-10-17 修正，覆盖本文先前版本的错误结论）
@@ -88,6 +88,20 @@ related:
 | XTTS 的地位 | **仅 `ADR-2026-10` 写明的离线回退**（"XTTS 容器保留作离线回退（不删）"），当前**不触发**、**前端零调用**其直连端点 | `ADR-2026-10` 决策 + 回退链（决策 4）；`apiRoutes.ts:74` `ttsStream` 无调用方 |
 | 用户口径（2026-10-17） | 用户明确"**XTTS 都不用了，主要用云端 API**" | 本会话用户陈述 |
 | ⚠️ 措辞张力（**未裁**） | ADR 写"保留作兜底"，用户说"不用了"——两者**不冲突但需对齐**：是否**正式退役** XTTS（删 compose 服务 / BFF 兜底 provider / `/tts/stream` 端点 / ai-svc 客户端）属**另立范围**，非本阶段 | 见 §8 `N6` |
+
+### A.6 `CL-F-28` 的真实根因（2026-10-17 Phase 0 实测，**两段**，比账本原记的更深）
+
+账本原记只写了"`npm install` ERESOLVE"。Phase 0 实际构建暴露**第二段**：
+
+| 段 | 现象 | 真因 | 证据 |
+|---|---|---|---|
+| ① | `npm install` 直接退出 `ERESOLVE` | `package.json` 要 `vue-router@^5.4.0`，而 npm 侧解析出的 `nuxt@4.2.2` 要 `^4.6.3` | 命令 + 退出码（Phase 0 RED） |
+| ② | 改用权威 pnpm 锁后，`pnpm run build` 报 **`TypeError: trustedFunctions.difference is not a function`** | pnpm 锁（2026-10-16）解析出 **`nuxt@4.5.2` / `nitropack@2.13.4` / `vite@8.3.0`**，构建期调用 **`Set.prototype.difference`（Node 22+ 才有）**，而基础镜像是 `node:20-alpine` | Phase 0 第 3 次构建日志（`build3.log`） |
+| 附 | 为什么"旧做法看着能构建" | **npm 锁停更在 2026-09-24**（`nuxt@4.2.2`/`nitropack@2.12.9`）⇒ 两条工具链解析出**不同依赖拓扑**，旧的恰好能在 Node 20 上跑（`:clp4` 镜像 2026-10-17 就是这样建成的） | 两份锁的版本对照；已登账 **`CL-F-42`** |
+
+**为什么此前没人发现**：① web Dockerfile 守卫脚本**从未接进 CI**（无任何 workflow 引用），且它自身**命中注释**假绿（断言 `npm ci`，命中的是第 13 行注释里的 "npm ci"，真实命令是 `npm install`）⇒ 既不会红也不会拦；② **生产构建 `nuxt build` 从未进 CI**（`web-test.yml` 只跑 `vitest` + `typecheck`）⇒ 构建期问题在 CI 里完全不可见（已登账 **`CL-F-43`**）。
+
+⇒ Phase 0 的三件事（见 §3 Phase 0）：Dockerfile 改 pnpm + 基础镜像升 Node 22 + 守卫**去假绿并接进 CI**（含负向自检）。
 
 ### A.4 起栈与实测声明（诚实边界）
 
@@ -150,7 +164,7 @@ related:
 
 | Phase | 内容 | RED 断言 | 备注 |
 |---|---|---|---|
-| **0** | **修 `CL-F-28`**：`emotion-echo-web/Dockerfile` 改用 **pnpm**（与仓库权威锁 `pnpm-lock.yaml` 一致），并验证整栈能构建 web 镜像 | 现在 `docker compose build emotion-echo-web` 直接 `npm error ERESOLVE`（命令 + 退出码为证）；改后构建成功 | **独立小 PR**（纯工程修复，**不含**本阶段功能）；不修则后面所有 UI 验收都是失真证据 |
+| **0** | **修 `CL-F-28`（真因是**两段**，不止一段）**：① `emotion-echo-web/Dockerfile` 改用 **pnpm + `--frozen-lockfile`**（与仓库权威锁一致，替换 npm 路径）；② **基础镜像 `node:20-alpine` → `node:22-alpine`** —— 对齐权威锁后依赖变为 `nuxt@4.5.2`/`nitropack@2.13.4`，构建期调用 `Set.prototype.difference`（**Node 22+**），Node 20 上 `pnpm run build` 报 `TypeError: trustedFunctions.difference is not a function`；③ 把**已存在但从未接线的** web Dockerfile 守卫接进 CI（并修掉它"命中注释"的假绿 + 加负向自检） | 现在 `docker build` 直接失败（两段各有一条命令 + 退出码为证）；改后构建成功 + 守卫由红转绿 | **Phase 0 独立小 PR**（纯工程修复，**不含**本阶段功能）；不修则后面所有 UI 验收都是失真证据。⚠️ 实测补充：`node:22-alpine` 首次拉取曾因 registry 瞬时 `insufficient_scope` 失败，重试即成功（守卫/构建结论不受影响，但**这也说明该修复在 CI/新机器上依赖一次成功的拉取**） |
 | **1** | **文档/架构**：新增修订 ADR（源计划 §5）+ 源计划重写已就位（本文件同批） | —（`adr-gate` CI 守卫要求新 ADR 有索引登记） | 防"架构改动无 ADR" |
 | **2** | **user-svc**：`u0NN_create_user_agent_profile.sql` + model + repo + RPC（List/Upsert/Delete）+ ≤5 上限 + 软删除 + 「小E」get-or-create | 引用不存在的类型/表 ⇒ 编译失败；契约测试全红 | 对应 T-1/T-2/T-3/T-4/T-5 |
 | **3** | **proto + chat-svc**：`user.proto` 扩角色 RPC；`chat.proto` 扩 `Conversation.agent_id` / `SendMessageRequest.agent_id` / `Message.agent_id` / `UpdateConversationRequest.agent_id`；chat-svc 迁移 `c012_*` + 透传 | 同上（字段不存在） | 对应 T-1/T-6；**改 proto 必须按仓库既有方式重生成**（`.pb.go` 生成物同批提交） |

@@ -57,6 +57,14 @@ PYTHON_3_12_SLIM_DIGEST=sha256:0000000000000000000000000000000000000000000000000
 # Node 20 alpine (官方 Docker Hub library/node:20-alpine)
 NODE_20_ALPINE_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED]
 
+# Node 22 alpine (官方 Docker Hub library/node:22-alpine)
+# CL-06 Phase 0（2026-10-17，账本 CL-F-28）：`emotion-echo-web/Dockerfile`（prod）改用 node:22-alpine ——
+# 权威锁 pnpm-lock.yaml 解析出 nuxt@4.5.2 / nitropack@2.13.4，构建期调用 `Set.prototype.difference`
+# （Node 22+）⇒ node:20 上 `pnpm run build` 报 `TypeError: trustedFunctions.difference is not a function`。
+# 注意：`emotion-echo-web/Dockerfile.dev` **仍用 NODE_20_\*（不动）** —— 它被 `deploy/compose_dev.test.js`
+# 的 REGRARD-GUARD 钉住（dev 模式不得改用它，alpine musl 会崩 oxc-parser），故 NODE_20 条目保留。
+NODE_22_ALPINE_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED]
+
 # Alpine latest (官方 Docker Hub library/alpine:latest) - 注意：latest 不应被 pin，
 # 但生产仍可能用；建议改具体版本
 ALPINE_LATEST_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000  # [UPDATE REQUIRED - avoid latest, pin to 3.19]
