@@ -21,6 +21,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/emotion-echo/shared/pkg/agentguard"
+
 	"emotion-echo-web-bff/internal/downstream"
 	"emotion-echo-web-bff/internal/session"
 
@@ -70,6 +72,13 @@ func (h *AgentHandler) upsert(c *gin.Context) {
 	var req downstream.AgentProfileUpsertReq
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		Fail(c, http.StatusBadRequest, 1, "validation: invalid body")
+		return
+	}
+	// 内容二次校验（CL-06 Phase 5，源计划 §3.5 行②"双保险"）。
+	// 权威校验在 user-svc；这里用**同一份** shared 词表在入口拦一道：
+	// 少一次下游往返，且错误信息（字段 + 类别 + 命中词）能直接指导用户修改。
+	if v := agentguard.CheckProfile(req.Name, req.Persona, req.Tone, req.Boundaries); len(v) > 0 {
+		Fail(c, http.StatusBadRequest, 1, v.Error())
 		return
 	}
 	saved, err := h.agents.UpsertAgentProfile(session.WithRequestAuth(c), req)

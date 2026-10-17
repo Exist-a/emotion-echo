@@ -15,8 +15,11 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/emotion-echo/shared/pkg/agentguard"
 
 	"emotion-echo-user-svc/internal/middleware"
 	"emotion-echo-user-svc/internal/model"
@@ -77,6 +80,12 @@ var (
 	ErrAgentNotFound = errors.New("agent profile not found")
 	// ErrAgentLimitReached 已达每户上限
 	ErrAgentLimitReached = errors.New("agent profile limit reached")
+	// ErrAgentContentRejected 内容被安全黑名单拒绝（越狱 / 宣称资质 / 冒充真人）
+	//
+	// 与 ErrValidation 分开的理由：两者对用户的含义不同（一个是"格式不对"，
+	// 一个是"这类内容不允许"），且**内容拒绝的错误信息要带字段与命中词**才能指导修改。
+	// 词表在 shared/pkg/agentguard（BFF 二次校验同一份）。
+	ErrAgentContentRejected = errors.New("agent profile content rejected")
 )
 
 // currentUserID 从 ctx 取当前用户（与 GetMeLogic 同款约定：middleware 注入）。
@@ -130,6 +139,13 @@ func validateAgentProfile(req *types.UpsertAgentProfileReq) error {
 	}
 	if _, ok := allowedAgentVoices[req.Voice]; !ok {
 		return ErrValidation
+	}
+
+	// 内容安全（CL-06 Phase 5）：规则式黑名单，跑在**规范化之后**（先 trim 再去空项，
+	// 避免"空白包裹的越狱句"从空项过滤里漏过去）。
+	// 命中即整条拒绝（不静默改写 —— 用户要知道自己写了什么）。
+	if v := agentguard.CheckProfile(req.Name, req.Persona, req.Tone, req.Boundaries); len(v) > 0 {
+		return fmt.Errorf("%w: %s", ErrAgentContentRejected, v.Error())
 	}
 	return nil
 }

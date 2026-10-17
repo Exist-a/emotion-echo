@@ -340,6 +340,10 @@ func agentErrToStatus(op string, err error) error {
 		return status.Error(codes.ResourceExhausted, op+": agent profile limit reached (max 5)")
 	case errors.Is(err, logic.ErrValidation):
 		return status.Error(codes.InvalidArgument, op+": validation failed")
+	case errors.Is(err, logic.ErrAgentContentRejected):
+		// 内容拒绝：把细节（字段 + 类别 + 命中词）原样带出去 —— 用户要据此改人设。
+		// 与 ErrValidation 的差别：后者对用户"只说格式不对"就够，前者必须可指导。
+		return status.Error(codes.InvalidArgument, op+": "+err.Error())
 	default:
 		return status.Errorf(codes.Internal, "%s: %v", op, err)
 	}
