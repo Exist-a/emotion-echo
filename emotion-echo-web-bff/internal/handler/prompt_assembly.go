@@ -28,8 +28,10 @@ import (
 // 段类型。**顺序即 canonical 顺序**（base 恒首；护栏类段必须排在用户可控段之后）。
 const (
 	segmentKindBase        = "base"
+	segmentKindAgent       = "agent"
 	segmentKindPersonality = "personality"
 	segmentKindEmotion     = "emotion"
+	segmentKindGuard       = "guard"
 )
 
 // segmentSeparator 段间分隔符 —— 与旧实现的 `base + "\n\n" + seg` 保持一致（T-1 逐字回归的前提）。
@@ -58,21 +60,44 @@ type assembleInput struct {
 	textEmotion string
 	// userContent 当前轮用户输入（Phase 2 后历史会排在它之前）
 	userContent string
+	// agent（CL-06）当前会话生效的用户自定义角色；nil / 全空字段 ⇒ 不产生角色段与护栏段
+	// （⇒ 输出逐字回落现状，T-8）。取数失败同样传 nil —— 角色注入是增强不是依赖。
+	agent *downstream.AgentProfile
 }
 
 // systemSegments 产出 system 段的**有序**列表（空段不出现）。
 //
-// 顺序不变量（T-2）：base → personality → emotion；新增段一律追加在 canonical 次序之内，
-// 用户可控内容（CL-06 的 Agent 人设）之后必须有护栏段兜底。
+// 顺序不变量（T-2 / CL-06 T-9）：base → agent → personality → emotion → guard。
+//
+//	· base 恒在首；
+//	· **guard 段永远在用户可控段（agent）之后**，且**仅当 agent 段产生时才存在**
+//	  —— 恒在会破坏"无角色设定时逐字等于现状"（T-8）；护栏要防的是用户文本，没有它就没有护栏对象。
 func (h *AIStreamHandler) systemSegments(in assembleInput) []promptSegment {
 	segs := []promptSegment{{Kind: segmentKindBase, Text: baseSystemPrompt}}
+	if agentSeg := buildAgentSegment(in.agent); agentSeg != "" {
+		segs = append(segs, promptSegment{Kind: segmentKindAgent, Text: agentSeg})
+	}
 	if guide := h.personalitySegment(in.ctx); guide != "" {
 		segs = append(segs, promptSegment{Kind: segmentKindPersonality, Text: guide})
 	}
 	if emotionSeg := h.emotionSegment(in); emotionSeg != "" {
 		segs = append(segs, promptSegment{Kind: segmentKindEmotion, Text: emotionSeg})
 	}
+	// 护栏段：与角色段**同生共死**（见函数注释）
+	if hasSegment(segs, segmentKindAgent) {
+		segs = append(segs, promptSegment{Kind: segmentKindGuard, Text: safetyGuardSegmentText})
+	}
 	return segs
+}
+
+// hasSegment 判断某类段是否已在列表中（供"护栏随角色段同生共死"的判定用）。
+func hasSegment(segs []promptSegment, kind string) bool {
+	for _, s := range segs {
+		if s.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // personalitySegment 产出人格「相处方式适配」段。
