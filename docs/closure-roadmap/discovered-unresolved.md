@@ -71,6 +71,8 @@ type: phase-ledger
 
 | CL-F-45 | **CL-06 Phase 6 读码实测（2026-10-17）** | **`/api/v1/tts/phonemes` 的 `voice` 未做白名单**：本阶段给该端点加了可选 `voice`（覆盖配置默认音色，音色随角色变），值是**客户端直传**；BFF 只做"空则回落"，**不校验是否属于那 8 个预置音色** ⇒ 客户端可传任意 `model:voice` 组合（该字段最终进上游 `/audio/speech` 请求体，用的是**我们的 API key**） | 音色白名单（`AllowedAgentVoiceList`）当前只在 **user-svc** 角色档案侧（保存时校验）；TTS 端点与它不同进程、不同模块，且本阶段计划（Phase 6）只授权"请求值覆盖 + 回落口径"，未授权把词表搬到 shared | **CL-12**（后端可靠性/安全补账；与 `CL-F-44` XTTS 退役同批考虑）。**修法建议**：把 8 音色表挪进 `shared`（一处定义），TTS 端点在"非空"时按白名单校验（非法 ⇒ 400）；判据与角色档案侧同源 | 🟡 **未解决（已定位，残余风险：资源/模型替换面；无鉴权绕过 —— 仍需登录态）** |
 
+| CL-F-46 | **CL-06 Phase 8 生产构建实测（2026-10-17）** | **`app/router.options.ts` 的手写路由表覆盖了 Nuxt 自动路由 ⇒ 新增页面文件静默 404**：该文件用 `routes: (_routes) => [...]` **忽略**自动生成的路由，于是本仓"文件系统即路由"**不成立**。实测：新建 `app/pages/chat/agents.vue` ⇒ 页面被编进 chunk、typecheck/单测全绿、但访问 `/chat/agents` 返回 Nuxt 404（生产镜像与本地 `pnpm build` 均可复现；SSR 与 CSR 双失）。**连带证据**：同表里 `pages/demo/local-llm.vue`（Lane O 的演示页）也从未注册 ⇒ 该页当前不可达 | 手写路由表与文件树**无任何一致性校验**：typecheck 不看、vitest 不看、CI 的 `pnpm build` 只要页面不被访问就不会暴露 | **CL-11**（前端工程债/孤儿产出物；`demo/local-llm.vue` 的归属需与 Lane O 对齐）。**本次已止损**：CL-06 的 `/chat/agents` 已注册，并新增 `app/router.options.contract.test.ts`（扫 `pages/**/*.vue` 与 router.options 比对，反向自检过：摘掉注册即红）⇒ **该陷阱今后会被门禁拦下** | 🟡 **已缓解未根治**：门禁已立（新增页面漏注册会红），但**架构取舍未裁** —— 是否改为"以 `_routes` 为基线的增量扩展"（放弃全手写）属架构决策，超出本阶段 |
+
 ## 使用约定
 
 - 6 列硬契约：`编号 | 来源 | 现象 | 根因 | 归属 | 状态`（缺列会被审计漏读）。
