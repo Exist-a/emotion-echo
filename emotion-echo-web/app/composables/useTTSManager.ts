@@ -18,7 +18,8 @@ export interface UseTTSManagerOptions {
 export interface UseTTSManagerReturn {
   isPlaying: Ref<boolean>
   isEnabled: Ref<boolean>
-  playText: (text: string) => void
+  // CL-06：voice 可选 —— 本会话当前角色的音色（不传 = 服务端配置默认）
+  playText: (text: string, voice?: string) => void
   flushRemaining: () => void
   stop: () => void
   setEnabled: (enabled: boolean) => void
@@ -42,14 +43,14 @@ export function useTTSManager(options: UseTTSManagerOptions = {}): UseTTSManager
     onEmotionChange: options.onEmotionChange,
   })
 
-  const playText = (text: string) => {
+  const playText = (text: string, voice?: string) => {
     accumulatedText.value += text
 
     // F-134：攒到标点立即切段发出（while —— 一次 token 可能补完多段）。
     // 段进入 playText 的下游队列（F-129 队列化 + 预取）自然衔接。
     let seg: SegmentTake | null
     while ((seg = takeSentenceSegment(accumulatedText.value)) !== null) {
-      originalPlayText(seg.flush)
+      originalPlayText(seg.flush, undefined, undefined, voice)
       accumulatedText.value = seg.rest
       isPlaying.value = true
     }
@@ -61,21 +62,21 @@ export function useTTSManager(options: UseTTSManagerOptions = {}): UseTTSManager
     // 尾冲：无标点余量（流末尾/短语）仍按 500ms 静默发出
     debounceTimer = setTimeout(() => {
       if (accumulatedText.value.trim().length > 0) {
-        originalPlayText(accumulatedText.value)
+        originalPlayText(accumulatedText.value, undefined, undefined, voice)
         accumulatedText.value = ''
         isPlaying.value = true
       }
     }, 500)
   }
 
-  const flushRemainingText = () => {
+  const flushRemainingText = (voice?: string) => {
     if (debounceTimer) {
       clearTimeout(debounceTimer)
       debounceTimer = null
     }
 
     if (accumulatedText.value.trim().length > 0) {
-      originalPlayText(accumulatedText.value)
+      originalPlayText(accumulatedText.value, undefined, undefined, voice)
       accumulatedText.value = ''
       isPlaying.value = true
     }

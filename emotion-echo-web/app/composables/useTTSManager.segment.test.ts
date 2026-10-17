@@ -48,7 +48,9 @@ describe('useTTSManager 首句切段（F-134）', () => {
     m.playText('第一句说完了。')
     // RED：现状要等 500ms debounce（且被后续 token 重置）→ 未调用即红
     expect(playTextSpy).toHaveBeenCalledTimes(1)
-    expect(playTextSpy).toHaveBeenCalledWith('第一句说完了。')
+    // CL-06：manager 转发时形参固定为 (text, customSpeed, customVolume, voice)
+    // —— 未传 voice 时为 undefined（不是"少传一个参数"）
+    expect(playTextSpy).toHaveBeenCalledWith('第一句说完了。', undefined, undefined, undefined)
     vi.advanceTimersByTime(600)
     // 尾部无残留 → 不应二次触发
     expect(playTextSpy).toHaveBeenCalledTimes(1)
@@ -58,11 +60,11 @@ describe('useTTSManager 首句切段（F-134）', () => {
     const m = useTTSManager()
     m.playText('第一句。第二句还')
     expect(playTextSpy).toHaveBeenCalledTimes(1)
-    expect(playTextSpy).toHaveBeenCalledWith('第一句。')
+    expect(playTextSpy).toHaveBeenCalledWith('第一句。', undefined, undefined, undefined)
     // 余量"第二句还"在 debounce 到期后尾冲
     vi.advanceTimersByTime(600)
     expect(playTextSpy).toHaveBeenCalledTimes(2)
-    expect(playTextSpy).toHaveBeenLastCalledWith('第二句还')
+    expect(playTextSpy).toHaveBeenLastCalledWith('第二句还', undefined, undefined, undefined)
   })
 
   it('无标点的整段走 debounce（旧行为保持）', () => {
@@ -71,7 +73,7 @@ describe('useTTSManager 首句切段（F-134）', () => {
     expect(playTextSpy).not.toHaveBeenCalled()
     vi.advanceTimersByTime(600)
     expect(playTextSpy).toHaveBeenCalledTimes(1)
-    expect(playTextSpy).toHaveBeenCalledWith('没有标点的文本')
+    expect(playTextSpy).toHaveBeenCalledWith('没有标点的文本', undefined, undefined, undefined)
   })
 
   it('stop 清空累积，不留脏段', () => {
@@ -86,10 +88,10 @@ describe('useTTSManager 首句切段（F-134）', () => {
     const m = useTTSManager()
     m.playText('第一句。第二句。第三句还')
     expect(playTextSpy).toHaveBeenCalledTimes(2)
-    expect(playTextSpy).toHaveBeenNthCalledWith(1, '第一句。')
-    expect(playTextSpy).toHaveBeenNthCalledWith(2, '第二句。')
+    expect(playTextSpy).toHaveBeenNthCalledWith(1, '第一句。', undefined, undefined, undefined)
+    expect(playTextSpy).toHaveBeenNthCalledWith(2, '第二句。', undefined, undefined, undefined)
     vi.advanceTimersByTime(600)
     expect(playTextSpy).toHaveBeenCalledTimes(3)
-    expect(playTextSpy).toHaveBeenLastCalledWith('第三句还')
+    expect(playTextSpy).toHaveBeenLastCalledWith('第三句还', undefined, undefined, undefined)
   })
 })
