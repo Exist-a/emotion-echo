@@ -995,10 +995,13 @@ func (x *UpdateConversationRequest) GetAgentId() int64 {
 
 // UpdateConversationResponse 更新会话响应
 type UpdateConversationResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Id            int64                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"` // 更新后的标题
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Success bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Id      int64                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	Title   string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"` // 更新后的标题（未传 title 时回原值）
+	// CL-06：生效后的角色 id（0 = 本次未改；未改时回原绑定）。
+	// 回显的目的：前端切换器可以**直接用返回值更新本地态**，不必再拉一次会话列表。
+	AgentId       int64 `protobuf:"varint,4,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1052,6 +1055,13 @@ func (x *UpdateConversationResponse) GetTitle() string {
 		return x.Title
 	}
 	return ""
+}
+
+func (x *UpdateConversationResponse) GetAgentId() int64 {
+	if x != nil {
+		return x.AgentId
+	}
+	return 0
 }
 
 // StreamMessagesRequest 流式消息请求
@@ -1450,11 +1460,12 @@ const file_chat_proto_rawDesc = "" +
 	"\x19UpdateConversationRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x19\n" +
-	"\bagent_id\x18\x03 \x01(\x03R\aagentId\"\\\n" +
+	"\bagent_id\x18\x03 \x01(\x03R\aagentId\"w\n" +
 	"\x1aUpdateConversationResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x03R\x02id\x12\x14\n" +
-	"\x05title\x18\x03 \x01(\tR\x05title\"\x81\x01\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x19\n" +
+	"\bagent_id\x18\x04 \x01(\x03R\aagentId\"\x81\x01\n" +
 	"\x15StreamMessagesRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12&\n" +

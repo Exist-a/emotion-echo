@@ -157,6 +157,12 @@ func (f *failingDeleteRepo) UpdateTitle(ctx context.Context, id int64, title str
 	return f.inner.UpdateTitle(ctx, id, title)
 }
 
+// CL-06 Phase 3b：补 UpdateAgentID 透传（接口新增方法 ⇒ 手写 stub 必须跟上，
+// 否则本文件所在整包编译失败 —— 编译器已用 `missing method UpdateAgentID` 点过名）。
+func (f *failingDeleteRepo) UpdateAgentID(ctx context.Context, id int64, agentID int64) error {
+	return f.inner.UpdateAgentID(ctx, id, agentID)
+}
+
 // Stage 30-C A3: Tx 占位（InMemory 退化路径不真用 tx，但接口要求实现）
 func (f *failingDeleteRepo) CreateConversationTx(_ *gorm.DB, ctx context.Context, c *model.Conversation) error {
 	return f.CreateConversation(ctx, c)

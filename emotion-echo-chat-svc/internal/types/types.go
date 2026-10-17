@@ -10,6 +10,8 @@ type ConversationView struct {
 	IsPinned  bool   `json:"isPinned"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
+	// CL-06：本会话当前角色（0 = 未显式选择 ⇒ 用用户默认角色）
+	AgentId int64 `json:"agentId"`
 }
 
 type CreateConversationReq struct {
@@ -56,6 +58,8 @@ type MessageView struct {
 	FileName    string `json:"fileName,omitempty"`
 	TokensUsed  int    `json:"tokensUsed"`
 	CreatedAt   int64  `json:"createdAt"`
+	// CL-06：该 AI 消息由哪个角色产生（快照；0 = 未记录）
+	AgentId int64 `json:"agentId,omitempty"`
 }
 
 type SendMessageReq struct {
@@ -67,6 +71,8 @@ type SendMessageReq struct {
 	EmotionTag   string  `json:"emotion_tag,optional"`
 	Intent       string  `json:"intent,optional"` // Stage 82 PR-3b：6 类消息意图
 	FileName     string  `json:"file_name,optional"` // Stage 89 PR-2：文件原始名（contentType=file 时）
+	// CL-06：本条消息由哪个角色产生（**快照**；仅 assistant 消息由 BFF 传入，0 = 不记录）
+	AgentId int64 `json:"agent_id,optional"`
 }
 
 type SendMessageResp struct {
@@ -118,6 +124,8 @@ type PinConversationResp struct {
 type UpdateConversationReq struct {
 	Id    int64  `path:"id"`
 	Title string `json:"title"`
+	// CL-06：把本会话当前角色改为该 id（0 = 本次不改角色）。
+	AgentId int64 `json:"agentId,optional"`
 }
 
 // UpdateConversationResp 更新响应
@@ -125,4 +133,6 @@ type UpdateConversationResp struct {
 	Success bool   `json:"success"`
 	Id      int64  `json:"id"`
 	Title   string `json:"title"`
+	// CL-06：生效后的角色 id（0 = 本次未改）
+	AgentId int64 `json:"agentId"`
 }

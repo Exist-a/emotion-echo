@@ -211,7 +211,10 @@ message UpdateConversationRequest {
 message UpdateConversationResponse {
   bool success = 1;
   int64 id = 2;
-  string title = 3;             // 更新后的标题
+  string title = 3;             // 更新后的标题（未传 title 时回原值）
+  // CL-06：生效后的角色 id（0 = 本次未改；未改时回原绑定）。
+  // 回显的目的：前端切换器可以**直接用返回值更新本地态**，不必再拉一次会话列表。
+  int64 agent_id = 4;
 }
 
 // StreamMessagesRequest 流式消息请求

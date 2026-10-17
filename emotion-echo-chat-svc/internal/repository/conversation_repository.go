@@ -66,6 +66,9 @@ type ConversationRepo interface {
 	SetPinned(ctx context.Context, id int64, pinned bool) error
 	// Stage 72：更新会话标题（UpdateConversation RPC）；同时刷新 updated_at
 	UpdateTitle(ctx context.Context, id int64, title string) error
+	// UpdateAgentID CL-06：把会话的当前角色改为 agentID（agentID<=0 视为不合法，调用方已校验）。
+	// 仅对未删除的会话生效（与 UpdateTitle 同款语义）。
+	UpdateAgentID(ctx context.Context, id int64, agentID int64) error
 
 	// Stage 30-C A3: 事务版本（接受可选 tx，nil = 非事务）
 	CreateConversationTx(tx *gorm.DB, ctx context.Context, c *model.Conversation) error
@@ -195,6 +198,18 @@ func (r *InMemoryConversationRepo) UpdateTitle(ctx context.Context, id int64, ti
 	defer r.mu.Unlock()
 	if c, ok := r.conversations[id]; ok && c.DeletedAt == nil {
 		c.Title = title
+		c.UpdatedAt = time.Now()
+	}
+	return nil
+}
+
+// UpdateAgentID CL-06：内存版切角色（不存在/已删除的 id 为 no-op，与 UpdateTitle 同款）
+func (r *InMemoryConversationRepo) UpdateAgentID(ctx context.Context, id int64, agentID int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c, ok := r.conversations[id]; ok && c.DeletedAt == nil {
+		v := agentID
+		c.AgentID = &v
 		c.UpdatedAt = time.Now()
 	}
 	return nil
@@ -498,6 +513,16 @@ func (r *PostgresConversationRepo) UpdateTitle(ctx context.Context, id int64, ti
 		Exec(`UPDATE emotion_echo_chat.conversations
 		      SET title = ?, updated_at = NOW()
 		      WHERE id = ? AND deleted_at IS NULL`, title, id).Error
+}
+
+// UpdateAgentID CL-06：Postgres 版切角色（同时刷新 updated_at；仅未删除会话生效）。
+// ⚠️ 只存引用：agent_id 指向 user-svc 的角色行，本服务**不校验属主**（跨服务不耦合）——
+// 属主校验由 BFF 在调用前完成（它会读角色档案）；非法引用由 BFF 读取时回落默认角色。
+func (r *PostgresConversationRepo) UpdateAgentID(ctx context.Context, id int64, agentID int64) error {
+	return r.db.WithContext(ctx).
+		Exec(`UPDATE emotion_echo_chat.conversations
+		      SET agent_id = ?, updated_at = NOW()
+		      WHERE id = ? AND deleted_at IS NULL`, agentID, id).Error
 }
 
 // Stage 30-C A3: 事务版本（tx == nil 退化为 r.db；非事务路径）

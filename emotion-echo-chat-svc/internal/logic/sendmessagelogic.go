@@ -130,6 +130,13 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 	if len(fileName) > 255 {
 		fileName = fileName[:255]
 	}
+	// CL-06：角色快照 —— 只接受正数；0/负数 ⇒ nil（NULL，"未记录"），不写 0 以免
+	// 与"角色 id 就是 0"混淆（id 从 1 起，0 在本仓语义里恒为"无"）。
+	var agentID *int64
+	if req.AgentId > 0 {
+		v := req.AgentId
+		agentID = &v
+	}
 	msg := &model.Message{
 		ConversationID: req.Id,
 		UserID:         uid,
@@ -138,6 +145,7 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 		ContentType:    contentType,
 		Intent:         intent,
 		FileName:       fileName,
+		AgentID:        agentID, // CL-06：角色快照（0 ⇒ nil/NULL）
 		TokensUsed:     0,
 		ClientMsgID:    req.ClientMsgID,
 		CreatedAt:      now,
@@ -155,9 +163,10 @@ func (l *SendMessageLogic) SendMessage(req *types.SendMessageReq) (resp *types.S
 			UserId:         msg.UserID,
 			Role:           msg.Role,
 			Content:        msg.Content,
-			ContentType:    msg.ContentType, // Stage 79：响应回带（第 4 处缺口）
-			Intent:         msg.Intent,      // Stage 82 PR-3b：意图回带
-			FileName:       msg.FileName,    // Stage 89 PR-2：文件名回带
+			ContentType:    msg.ContentType,           // Stage 79：响应回带（第 4 处缺口）
+			Intent:         msg.Intent,                // Stage 82 PR-3b：意图回带
+			FileName:       msg.FileName,              // Stage 89 PR-2：文件名回带
+			AgentId:        derefAgentID(msg.AgentID), // CL-06：角色快照回带（nil ⇒ 0）
 			TokensUsed:     msg.TokensUsed,
 			CreatedAt:      msg.CreatedAt.UnixMilli(),
 		},
@@ -278,4 +287,12 @@ func (l *SendMessageLogic) maybeUpsertNeutralEmotion(uid, convID, messageID int6
 		slog.ErrorContext(l.ctx, "dev fallback UpsertNeutralEmotion failed",
 			"msg_id", messageID, "event_id", eventID, "err", err)
 	}
+}
+
+// derefAgentID 把可空的角色 id 转为对外视图值（nil ⇒ 0 = "未记录"）。
+func derefAgentID(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
