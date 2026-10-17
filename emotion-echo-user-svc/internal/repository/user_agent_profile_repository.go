@@ -32,6 +32,9 @@ type UserAgentProfileRepo interface {
 	SoftDelete(ctx context.Context, userID, id int64) error
 	// CountActive 统计未删除角色数（服务层据此强制「每户 ≤５」）
 	CountActive(ctx context.Context, userID int64) (int, error)
+	// CountAll 统计**含软删除**的角色数 —— 用于区分"从未建过角色"（首次读要物化默认「小E」）
+	// 与"用户把角色删光了"（**不得**再物化，否则删除形同虚设）。
+	CountAll(ctx context.Context, userID int64) (int, error)
 }
 
 // =====================================================
@@ -148,6 +151,19 @@ func (r *InMemoryUserAgentProfileRepo) CountActive(ctx context.Context, userID i
 	return n, nil
 }
 
+func (r *InMemoryUserAgentProfileRepo) CountAll(ctx context.Context, userID int64) (int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	n := 0
+	for _, it := range r.items {
+		if it.UserID == userID {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // =====================================================
 // PostgresUserAgentProfileRepo（生产实现）
 // =====================================================
@@ -223,6 +239,16 @@ func (r *PostgresUserAgentProfileRepo) CountActive(ctx context.Context, userID i
 	err := r.db.WithContext(ctx).
 		Model(&model.UserAgentProfile{}).
 		Where("user_id = ? AND deleted_at IS NULL", userID).
+		Count(&n).Error
+	return int(n), err
+}
+
+// CountAll 含软删除（不加 deleted_at 过滤）。
+func (r *PostgresUserAgentProfileRepo) CountAll(ctx context.Context, userID int64) (int, error) {
+	var n int64
+	err := r.db.WithContext(ctx).
+		Model(&model.UserAgentProfile{}).
+		Where("user_id = ?", userID).
 		Count(&n).Error
 	return int(n), err
 }

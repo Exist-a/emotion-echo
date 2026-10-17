@@ -178,3 +178,30 @@ func TestUserAgentProfileRepo_Update_OnlyOwnerAndPersistsFields(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, "小暖", got.Name, "跨用户 Update 不得改动所有者数据")
 }
+
+// CL-06 Phase 2b：`CountAll` 含**软删除**行 —— 用于区分"从未建过角色"（首次读要物化默认「小E」）
+// 与"用户把角色删光了"（**不得**再物化，否则删除形同虚设）。
+func TestUserAgentProfileRepo_CountAll_IncludesSoftDeleted(t *testing.T) {
+	t.Parallel()
+	repo := NewInMemoryUserAgentProfileRepo()
+	ctx := context.Background()
+
+	n, err := repo.CountAll(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n, "从未建过 ⇒ 0（首次读据此物化默认角色）")
+
+	created, err := repo.Create(ctx, newProfile(1, "小E"))
+	require.NoError(t, err)
+	n, err = repo.CountAll(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	require.NoError(t, repo.SoftDelete(ctx, 1, created.ID))
+	n, err = repo.CountAll(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "软删除后 CountAll 仍计 1（区别于 CountActive，防删除后被重新物化）")
+
+	active, err := repo.CountActive(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 0, active, "CountActive 仍为 0（≤５ 判定用）")
+}
