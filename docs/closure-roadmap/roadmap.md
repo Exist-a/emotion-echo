@@ -81,7 +81,7 @@ related:
 | **CL-03** | Kafka/可靠性闭环（合并一次执行） | T1 | `outbox-trace-continuity`、`dlq-hardening-and-replay`（**均已落地** → `legacy-plans/landed/`）、`kafka-pipeline-pending-decisions`（条目逐条终态） | 与 CL-01/02 共享追踪面 | ✅ **done**（2026-10-16 F 轨收口；**落地载体 = 阶段 PR [#229](https://github.com/Exist-a/emotion-echo/pull/229)（**已 squash 合并 → `c88653b`**，源分支随合并删除）**；**16/16 测试点 PASS**（含运行时：trace 端到端 13 span 一条链 / 告警真 firing+送达 / Kafka 停机→自愈重发 / Noop 未配置计数 0→1）；账本 `CL-F-15` 销账；`CL-F-22`·`CL-F-23` 改挂 CL-09；第二方核对见 `stages/cl-03-kafka-reliability/report.md §6`） |
 | **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
 | **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | ✅ **done（2026-10-16 收口）** —— 22 个测试点全部落四值（T-1~T-21 PASS；**T-22 PASS 但注明「这不是已修复」**）；Playwright 人可见钉 4 passed/1 skipped（跳过项由 IAB 补齐）+ ADR + 决策 42；`E2E-F-205/206` 已置 ✅；来源计划已迁 `legacy-plans/landed/`。**依据**：用户 2026-10-16 裁定 `CL-D-15`（`CL-F-11` 两次未复现 ⇒ 关闭不再阻塞，并判 done）。⚠️ 残留见 `stages/cl-05-message-pipeline/report.md §6.3`（`CL-F-11` **未修复**、`CL-F-20` 缓存未按用户隔离、Postgres keyset SQL 无测试直接执行 等） |
-| **CL-06** | 用户自定义 Agent | T3 | `user-custom-agent-persona` | CL-04 | pending |
+| **CL-06** | 用户自定义 Agent（多角色） | T3 | `user-custom-agent-persona`（**2026-10-17 由单角色重写为多角色**） | CL-04 | 🟡 **in-progress（2026-10-17 开工）** —— Lane-CL-06，分支 `feat/cl-06-custom-agent`，**阶段 PR（draft）= [#255](https://github.com/Exist-a/emotion-echo/pull/255)**；计划 = `stages/cl-06-custom-agent/plan.md`（21 测试点 / 9 Phase）。**Phase 0 = 修 `CL-F-28`**（web 镜像构建 `npm error ERESOLVE`）——未修不得进入前端 Phase。裁定 `CL-D-21`~`CL-D-25` |
 | **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`（**已落地**）、`fusion-result-consumption`（**已落地**） | CL-04 | ✅ **done（2026-10-16 收口）** —— **G 轨后端切片**（`bf401350` / PR #234）+ **H 轨前端半**（`349c9615` / PR #243，含 G2 角标按用户裁定移除）；**[A] 7/7 + 浏览器 [V] T-8/T-9 PASS**（生产构建 IAB 实测 + 第二方核对**独立复现**）；**T-10（数字人情绪）BLOCKED** —— 被既有账 **CL-F-17**（VRM 加载失败，他项）阻塞，接线与架构钉已在码内；顺带修复 **BFF `/api/v1/emotion/*` 整族 502**（未透传 X-User-Id，E2E-F-125 同型）；见 `stages/cl-07-{fusion-consumption,emotion-display}/report.md` |
 | **CL-08a** | 记忆 · 用户事实 | 最后 | `conversation-memory-pending-decision` | CL-04 | pending |
 | **CL-08b** | 记忆 · 情绪模式 | 最后 | 同上 | CL-08a | pending |
@@ -93,6 +93,15 @@ related:
 > 余 9 条按 **Wave 2（需栈：CL-F-16/22/23/24/26）/ Wave 3（流程硬化：CL-F-07/08/09/19）** 排入计划。
 > 落地载体 = 阶段 PR [#245](https://github.com/Exist-a/emotion-echo/pull/245)；计划见 `docs/plans/cl-legacy-paydown-2026-10-16.md`。
 > ⚠️ 本注只追加，未改 A~H 已写的行（H3 append-only）。
+
+> **CL-06 轨开工（2026-10-17，Lane-CL-06）**：**用户自定义 Agent（多角色）** → `in-progress`，为 **T3 剩下的那块**
+> （`depends-on: CL-04` **已 done**（#213）⇒ 依赖满足；T0/T1/T2 全收口、**无在飞轨** ⇒ 文件面无并发持有者）。
+> 选取理由：① 唯一还没做、且**用户看得见**的产品功能；② `proto/**` 与 `pages/chat/conversation/[id].vue`
+> 均无持锁方；③ 零实现足迹（全仓无 `user_agent_profile` / agent 字段）⇒ 干净从零开工；
+> ④ 设计大头用户已拍板（多角色 / ≤5 / 默认小E / 会话级切换 / 音色随角色 / 安全信封分层）。
+> 按「新轨准入规则」自答 🟢 占比：**Phase 0~6 全为 Go/契约/迁移级（不需栈）**，仅 Phase 8 需栈 ⇒ 准入成立，
+> 本轨**未取 dev 栈锁**。串行资源：`proto/**`（本轨独占，无并发者）。
+> ⚠️ 本注只追加，未改他人已写的行（H3 append-only）；登记见 `parallel-contract.md §三`。
 
 | **CL-09** | backlog 清销（常驻） | 常驻 | `known-issues-backlog-2026-09-16`、`…runtime-bugs-2026-09-17`、`todo-pile-2026-09-04`、`three-vrm-usage-reference` | — | pending（插空） |
 | **CL-10** | 端侧（Lane O） | deferred | `on-device-hybrid-inference`(+`…implementation-roadmap`) | 端侧决策门 | **deferred** |
