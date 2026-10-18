@@ -28,7 +28,8 @@ func mkFact(id, userID, msgID int64, subject, predicate, object string, validFro
 		ID:              id,
 		UserID:          userID,
 		ConversationID:  7,
-		SourceMessageID: msgID,
+		SourceKind:      model.MemorySourceKindMessage,
+		SourceID:        msgID,
 		Subject:         subject,
 		Predicate:       predicate,
 		Object:          object,
@@ -150,9 +151,9 @@ func TestPlanFactUpsert_ClampsInvertedInterval(t *testing.T) {
 func TestPlanFactUpsert_SkipsEmptyTriple(t *testing.T) {
 	t.Parallel()
 	in := []model.MemoryFact{
-		{UserID: 1, SourceMessageID: 100, Subject: "", Predicate: "职业", Object: "工程师", ValidFrom: tPlanBase},
-		{UserID: 1, SourceMessageID: 100, Subject: "用户", Predicate: "", Object: "工程师", ValidFrom: tPlanBase},
-		{UserID: 1, SourceMessageID: 100, Subject: "用户", Predicate: "职业", Object: "", ValidFrom: tPlanBase},
+		{UserID: 1, SourceKind: model.MemorySourceKindMessage, SourceID: 100, Subject: "", Predicate: "职业", Object: "工程师", ValidFrom: tPlanBase},
+		{UserID: 1, SourceKind: model.MemorySourceKindMessage, SourceID: 100, Subject: "用户", Predicate: "", Object: "工程师", ValidFrom: tPlanBase},
+		{UserID: 1, SourceKind: model.MemorySourceKindMessage, SourceID: 100, Subject: "用户", Predicate: "职业", Object: "", ValidFrom: tPlanBase},
 	}
 
 	plan := PlanFactUpsert(nil, in)

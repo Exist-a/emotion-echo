@@ -38,6 +38,7 @@ import (
 	"emotion-echo-ai-svc/internal/handler"
 	logging "emotion-echo-ai-svc/internal/logging" // Stage 41 PR-5: re-export shared/pkg/logging,实际定义在 _re_export.go
 	"emotion-echo-ai-svc/internal/logic"
+	"emotion-echo-ai-svc/internal/memory"
 	"emotion-echo-ai-svc/internal/ops"
 	"emotion-echo-ai-svc/internal/repository"
 	"emotion-echo-ai-svc/internal/svc"
@@ -142,6 +143,22 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("KAFKA_DLQ_TOPIC"); v != "" {
 		c.Kafka.DLQTopic = v
 	}
+	// CL-08a：记忆抽取的独立消费组与开关（默认开；MEMORY_ENABLED=false 可整体关断）。
+	if v := os.Getenv("KAFKA_MEMORY_GROUP"); v != "" {
+		c.Memory.GroupID = v
+	}
+	if v := os.Getenv("MEMORY_ENABLED"); v != "" {
+		c.Memory.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("MEMORY_MODEL"); v != "" {
+		c.Memory.Model = v
+	}
+	if v := os.Getenv("MEMORY_TIMEOUT"); v != "" {
+		var n int
+		if _, err := fmt.Sscan(v, &n); err == nil && n > 0 {
+			c.Memory.TimeoutSec = n
+		}
+	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
 	}
@@ -150,6 +167,10 @@ func applyEnvOverrides(c *config.Config) {
 	}
 	if v := os.Getenv("LLM_BASE_URL"); v != "" {
 		c.LLM.BaseURL = v
+	}
+	// CL-08a：上游 OpenAI 兼容端点的 key（抽取直连 LLM 用；与 InternalAPIKey 分开）
+	if v := os.Getenv("LLM_API_KEY"); v != "" {
+		c.LLM.APIKey = v
 	}
 	if v := os.Getenv("LLM_GRPC_ADDR"); v != "" {
 		c.LLM.GRPCAddr = v
@@ -417,6 +438,59 @@ func main() {
 				}
 			}()
 			defer func() { _ = kc.Close() }()
+		}
+	}
+
+	// 3b. CL-08a：记忆抽取 consumer —— **独立 group**（不与情绪分析 "ai-svc" 共用位点）。
+	//
+	// 只订阅 message.created + conversation.closed（TopicFilter 传空 = 不过滤，
+	// 由 handler 自己按事件类型分派）。抽取失败不影响发消息链路。
+	if c.Memory.Enabled && c.Kafka.Enabled && len(kafkaBrokersList) > 0 && db != nil {
+		mc, err := consumer.NewKafkaConsumer(kafkaBrokersList, c.Memory.GroupID)
+		if err != nil {
+			slog.Error("memory kafka consumer init failed", "err", err)
+		} else {
+			memRepo := repository.NewPostgresMemoryFactRepo(db)
+			memModel := c.Memory.Model
+			if memModel == "" {
+				memModel = c.LLM.Model
+			}
+			memExtractor := memory.NewLLMExtractor(memory.LLMConfig{
+				BaseURL: c.LLM.BaseURL,
+				APIKey:  c.LLM.APIKey,
+				Model:   memModel,
+				Timeout: time.Duration(c.Memory.TimeoutSec) * time.Second,
+			})
+			memHandler := logic.NewMemoryExtractHandler(memRepo, memExtractor)
+
+			// DLQ 独立构造（与情绪分析的 DLQ 同 topic；失败消息仍可被 replay 工具处理）
+			var memDLQ consumer.DLQPublisher = consumer.NoopDLQPublisher{}
+			if dlqTopic := c.Kafka.DLQTopic; dlqTopic != "" {
+				if kp, err := consumer.NewKafkaDLQPublisher(kafkaBrokersList, dlqTopic); err != nil {
+					slog.Error("memory DLQ producer init failed, fallback to noop", "err", err)
+				} else {
+					memDLQ = kp
+					defer func() { _ = kp.Close() }()
+				}
+			}
+			memMaxRetries := c.Kafka.MaxRetries
+			if memMaxRetries <= 0 {
+				memMaxRetries = 3
+			}
+
+			go func() {
+				logging.Printf("[kafka] memory consumer started: brokers=%v topics=%v groupID=%s dlq=%s maxRetries=%d",
+					kafkaBrokersList, c.Kafka.Topics, c.Memory.GroupID, consumer.DLQKind(memDLQ), memMaxRetries)
+				if err := mc.Consume(context.Background(), c.Kafka.Topics,
+					func(ctx context.Context, evt *events.Event) error {
+						return memHandler.Handle(ctx, evt)
+					},
+					"", // 不过滤事件类型：handler 同时处理 message.created / conversation.closed
+					sharedgrpc.NewGo2SkyTracer(tracer), memDLQ, memMaxRetries, nil); err != nil {
+					slog.Error("memory kafka consume err", "err", err)
+				}
+			}()
+			defer func() { _ = mc.Close() }()
 		}
 	}
 

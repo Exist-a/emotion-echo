@@ -23,16 +23,34 @@ func TestMemoryFactRepo_InMemory_TryMarkExtractRun(t *testing.T) {
 	ctx := context.Background()
 
 	first, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{
-		MessageID: 100, UserID: 1, ConversationID: 7,
+		SourceKind: model.MemorySourceKindMessage, SourceID: 100, UserID: 1, ConversationID: 7,
 	})
 	require.NoError(t, err)
 	assert.True(t, first, "首次登记应为 true（允许继续抽取）")
 
 	second, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{
-		MessageID: 100, UserID: 1, ConversationID: 7,
+		SourceKind: model.MemorySourceKindMessage, SourceID: 100, UserID: 1, ConversationID: 7,
 	})
 	require.NoError(t, err)
-	assert.False(t, second, "同一 message_id 第二次登记必须为 false（幂等，避免重复调用 LLM）")
+	assert.False(t, second, "同一来源第二次登记必须为 false（幂等，避免重复调用 LLM）")
+}
+
+func TestMemoryFactRepo_InMemory_TryMarkExtractRun_RetriesFailed(t *testing.T) {
+	t.Parallel()
+	repo := NewInMemoryMemoryFactRepo()
+	ctx := context.Background()
+
+	_, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{
+		SourceKind: model.MemorySourceKindNote, SourceID: 9, UserID: 1,
+	})
+	require.NoError(t, err)
+	require.NoError(t, repo.FinishExtractRun(ctx, model.MemorySourceKindNote, 9, model.MemoryExtractStatusFailed, 0, "boom"))
+
+	again, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{
+		SourceKind: model.MemorySourceKindNote, SourceID: 9, UserID: 1,
+	})
+	require.NoError(t, err)
+	assert.True(t, again, "failed 的来源必须允许重试（消费框架重投 / 自述条重试）")
 }
 
 func TestMemoryFactRepo_InMemory_FinishExtractRun(t *testing.T) {
@@ -40,11 +58,11 @@ func TestMemoryFactRepo_InMemory_FinishExtractRun(t *testing.T) {
 	repo := NewInMemoryMemoryFactRepo()
 	ctx := context.Background()
 
-	_, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{MessageID: 100, UserID: 1})
+	_, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{SourceKind: model.MemorySourceKindMessage, SourceID: 100, UserID: 1})
 	require.NoError(t, err)
-	require.NoError(t, repo.FinishExtractRun(ctx, 100, model.MemoryExtractStatusDone, 2, ""))
+	require.NoError(t, repo.FinishExtractRun(ctx, model.MemorySourceKindMessage, 100, model.MemoryExtractStatusDone, 2, ""))
 
-	run, err := repo.GetExtractRun(ctx, 100)
+	run, err := repo.GetExtractRun(ctx, model.MemorySourceKindMessage, 100)
 	require.NoError(t, err)
 	require.NotNil(t, run)
 	assert.Equal(t, model.MemoryExtractStatusDone, run.Status)

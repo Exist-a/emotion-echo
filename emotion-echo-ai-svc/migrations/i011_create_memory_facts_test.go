@@ -36,6 +36,7 @@ func TestI011_MemoryFacts_Contract(t *testing.T) {
 	// 1) 可重跑（compose up 每次都会跑迁移；migrate.sh 另有 checksum 追踪）
 	for _, marker := range []string{
 		"CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_fact",
+		"CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_note",
 		"CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_extract_run",
 	} {
 		if !strings.Contains(src, marker) {
@@ -45,7 +46,7 @@ func TestI011_MemoryFacts_Contract(t *testing.T) {
 
 	// 2) memory_fact 必需列（双时间轴 / 来源 / 软删 / 状态）
 	for _, col := range []string{
-		"user_id", "conversation_id", "source_message_id",
+		"user_id", "conversation_id", "source_kind", "source_id",
 		"subject", "predicate", "object", "fact_text", "confidence",
 		"valid_from", "valid_to", "status", "deleted_at",
 		"created_at", "updated_at",
@@ -65,13 +66,13 @@ func TestI011_MemoryFacts_Contract(t *testing.T) {
 		t.Errorf("memory_fact 必须有 valid_to（NULL = 仍然有效；被取代时关区间而非删除）")
 	}
 
-	// 4) 幂等索引：同一条消息重复消费不得重复落库
+	// 4) 幂等索引：同一条来源重复消费不得重复落库
 	if !strings.Contains(src, "CREATE UNIQUE INDEX IF NOT EXISTS") {
 		t.Errorf("i011 必须有 CREATE UNIQUE INDEX IF NOT EXISTS（抽取幂等）")
 	}
-	for _, col := range []string{"source_message_id", "subject", "predicate", "object"} {
+	for _, col := range []string{"source_kind", "source_id", "subject", "predicate", "object"} {
 		if !strings.Contains(src, col) {
-			t.Errorf("唯一索引/事实列缺 %q（幂等键 = message_id + 三元组）", col)
+			t.Errorf("唯一索引/事实列缺 %q（幂等键 = 来源 + 三元组）", col)
 		}
 	}
 
@@ -82,14 +83,28 @@ func TestI011_MemoryFacts_Contract(t *testing.T) {
 		}
 	}
 
-	// 6) 抽取审计表：message_id 作幂等主键 + 失败可观测
-	for _, col := range []string{"message_id", "status", "facts_count", "error"} {
+	// 6) 抽取审计表：来源复合键作幂等主键 + 失败可观测
+	for _, col := range []string{"source_kind", "source_id", "status", "facts_count", "error"} {
 		if !strings.Contains(src, col) {
 			t.Errorf("memory_extract_run 缺列 %q（幂等登记 + 失败可观测）", col)
 		}
 	}
 	if !strings.Contains(src, "PRIMARY KEY") {
-		t.Errorf("memory_extract_run 需要主键（message_id 作幂等键）")
+		t.Errorf("memory_extract_run 需要主键（(source_kind, source_id) 作幂等键）")
+	}
+
+	// 6b) memory_note（「我的记忆」自述条）：原文 + 抽取状态
+	for _, col := range []string{"content", "extract_status"} {
+		if !strings.Contains(src, col) {
+			t.Errorf("memory_note 缺列 %q（自述原文 + 抽取状态）", col)
+		}
+	}
+
+	// 6c) 来源类型必须被 CHECK 约束住（message / note；抓"DDL 对了但写入用错值"）
+	for _, v := range []string{"'message'", "'note'"} {
+		if !strings.Contains(src, v) {
+			t.Errorf("source_kind 的 CHECK 必须包含 %s", v)
+		}
 	}
 
 	// 7) 用户隔离的查询路径必须走索引（注入/摘要按 user 取）

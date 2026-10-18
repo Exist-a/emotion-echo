@@ -6,9 +6,10 @@
 --   - PG 为**系统记录**，图（CL-08c）是可重建索引 ⇒ 事实先落这里。
 --   - 双时间轴：valid_from / valid_to；旧值**不删除**，只关区间（T-3 / T-15）。
 --   - 软删除：status='deleted' + deleted_at（用户裁定 D3「PG 软删 + 图物理删」）。
---   - 幂等：UNIQUE(source_message_id, subject, predicate, object) 防同消息重复落库；
+--   - 两个来源（用户裁定 D6）：正常会话消息（message）/「我的记忆」自述条（note）。
+--   - 幂等：UNIQUE(source_kind, source_id, subject, predicate, object) 防同一来源重复落库；
 --           partial UNIQUE(user_id, subject, predicate) WHERE status='active'
---           防同一键出现两条 active（双写/并发兜底；planner 已保证顺序）。
+--           防同一键出现两条 active（并发兜底；planner 已保证顺序）。
 --
 -- 归属：emotion_echo_ai（ai-svc 拥有；迁移守卫禁止跨 schema）。
 -- 可重跑：全部 IF NOT EXISTS（migrate.sh 另有 schema_migrations checksum 追踪）。
@@ -19,7 +20,8 @@ CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_fact (
     id                 BIGSERIAL PRIMARY KEY,
     user_id            BIGINT       NOT NULL,
     conversation_id    BIGINT       NOT NULL,
-    source_message_id  BIGINT       NOT NULL,
+    source_kind        VARCHAR(16)  NOT NULL,
+    source_id          BIGINT       NOT NULL,
     subject            TEXT         NOT NULL,
     predicate          TEXT         NOT NULL,
     object             TEXT         NOT NULL,
@@ -32,14 +34,16 @@ CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_fact (
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     CONSTRAINT chk_memory_fact_status
-        CHECK (status IN ('active', 'superseded', 'deleted'))
+        CHECK (status IN ('active', 'superseded', 'deleted')),
+    CONSTRAINT chk_memory_fact_source_kind
+        CHECK (source_kind IN ('message', 'note'))
 );
 
--- 幂等：同一条消息重复消费不得重复落库（同一事实也许由同一消息多次抽取）
-CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_fact_msg_triple
-    ON emotion_echo_ai.memory_fact (source_message_id, subject, predicate, object);
+-- 幂等：同一条来源重复消费不得重复落库
+CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_fact_source_triple
+    ON emotion_echo_ai.memory_fact (source_kind, source_id, subject, predicate, object);
 
--- 双写/并发兜底：同一 (user, subject, predicate) 至多一条 active
+-- 并发兜底：同一 (user, subject, predicate) 至多一条 active
 CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_fact_active_key
     ON emotion_echo_ai.memory_fact (user_id, subject, predicate)
     WHERE status = 'active' AND deleted_at IS NULL;
@@ -52,8 +56,26 @@ CREATE INDEX IF NOT EXISTS idx_memory_fact_user_active
 CREATE INDEX IF NOT EXISTS idx_memory_fact_user_key
     ON emotion_echo_ai.memory_fact (user_id, subject, predicate, valid_to);
 
+-- 「我的记忆」自述条（独立于 conversations/messages）
+CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_note (
+    id             BIGSERIAL PRIMARY KEY,
+    user_id        BIGINT       NOT NULL,
+    content        TEXT         NOT NULL,
+    extract_status VARCHAR(16)  NOT NULL DEFAULT 'pending',
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at     TIMESTAMPTZ,
+    CONSTRAINT chk_memory_note_extract_status
+        CHECK (extract_status IN ('pending', 'done', 'failed'))
+);
+
+-- 页面列表：按用户取最新
+CREATE INDEX IF NOT EXISTS idx_memory_note_user_created
+    ON emotion_echo_ai.memory_note (user_id, created_at DESC);
+
+-- 抽取审计 + 幂等登记（复合主键 = 来源身份）
 CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_extract_run (
-    message_id      BIGINT       PRIMARY KEY,
+    source_kind     VARCHAR(16)  NOT NULL,
+    source_id       BIGINT       NOT NULL,
     user_id         BIGINT       NOT NULL,
     conversation_id BIGINT       NOT NULL,
     status          VARCHAR(16)  NOT NULL DEFAULT 'pending',
@@ -61,6 +83,7 @@ CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_extract_run (
     error           TEXT         NOT NULL DEFAULT '',
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source_kind, source_id),
     CONSTRAINT chk_memory_extract_status
         CHECK (status IN ('pending', 'done', 'failed'))
 );
@@ -68,5 +91,9 @@ CREATE TABLE IF NOT EXISTS emotion_echo_ai.memory_extract_run (
 -- 会话收尾合并：按会话取已抽取的运行记录
 CREATE INDEX IF NOT EXISTS idx_memory_extract_run_conversation
     ON emotion_echo_ai.memory_extract_run (conversation_id);
+
+-- 启动补抽：按状态扫未完成/失败的自述条
+CREATE INDEX IF NOT EXISTS idx_memory_extract_run_status
+    ON emotion_echo_ai.memory_extract_run (status);
 
 COMMIT;

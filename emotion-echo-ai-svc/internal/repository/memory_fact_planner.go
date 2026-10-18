@@ -72,6 +72,58 @@ func PlanFactUpsert(existing []model.MemoryFact, incoming []model.MemoryFact) Pl
 	return plan
 }
 
+// PlanConversationConsolidation 会话收尾的**确定性合并**（不调 LLM）。
+//
+// 混合粒度的第二跳（用户裁定 D2）：同一会话内若因并发/重放出现
+// 同一 (user, subject, predicate) 的多条 active，只保留 valid_from 最新的一条
+// （并列时保留 id 更大者），其余关区间。**不删除**任何行。
+//
+// 说明：这是"一致性兜底"而不是语义合并（语义去重需要二次 LLM，成本更高，
+// 本阶段不做 —— 见 cl-08a-execution-plan §10）。
+func PlanConversationConsolidation(facts []model.MemoryFact) PlanResult {
+	type key struct {
+		userID    int64
+		subject   string
+		predicate string
+	}
+	best := make(map[key]model.MemoryFact, len(facts))
+	plan := PlanResult{}
+
+	for _, f := range facts {
+		if !isActive(f) {
+			continue
+		}
+		k := key{f.UserID, f.Subject, f.Predicate}
+		cur, ok := best[k]
+		if !ok {
+			best[k] = f
+			continue
+		}
+		if factNewer(f, cur) {
+			plan.Supersede = append(plan.Supersede, FactToSupersede{ID: cur.ID, ValidTo: maxTime(f.ValidFrom, cur.ValidFrom)})
+			best[k] = f
+			continue
+		}
+		plan.Supersede = append(plan.Supersede, FactToSupersede{ID: f.ID, ValidTo: maxTime(cur.ValidFrom, f.ValidFrom)})
+	}
+	return plan
+}
+
+// factNewer 判定 f 是否比 cur 更新（valid_from 更晚；并列时 id 更大）。
+func factNewer(f, cur model.MemoryFact) bool {
+	if f.ValidFrom.Equal(cur.ValidFrom) {
+		return f.ID > cur.ID
+	}
+	return f.ValidFrom.After(cur.ValidFrom)
+}
+
+func maxTime(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
+}
+
 // normalizeIncoming 过滤空三元组、归一化状态与时间、按 (subject,predicate) 去重（后者胜出）。
 func normalizeIncoming(in []model.MemoryFact) []model.MemoryFact {
 	type key struct{ subject, predicate string }
