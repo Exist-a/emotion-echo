@@ -217,6 +217,36 @@ func TestMemoryExtractHandler_HandleNote(t *testing.T) {
 	assert.Equal(t, model.MemoryExtractStatusDone, stored.ExtractStatus)
 }
 
+func TestMemoryExtractHandler_RefreshesSummary(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryMemoryFactRepo()
+	ex := &fakeExtractor{facts: []model.MemoryFact{factOf("职业", "后端工程师")}}
+	store := memory.NewInMemorySummaryStore()
+	h := NewMemoryExtractHandler(repo, ex, WithSummaryStore(store, 600))
+
+	require.NoError(t, h.Handle(context.Background(), msgEvent(100, 7, 1, "user", "我是后端工程师")))
+
+	got, ok := store.Get(1)
+	require.True(t, ok, "抽取成功后必须重建用户级摘要")
+	assert.Contains(t, got, "后端工程师")
+}
+
+func TestMemoryExtractHandler_SummaryFailureDoesNotFailExtraction(t *testing.T) {
+	t.Parallel()
+	repo := repository.NewInMemoryMemoryFactRepo()
+	ex := &fakeExtractor{facts: []model.MemoryFact{factOf("职业", "后端工程师")}}
+	store := memory.NewInMemorySummaryStore()
+	store.Err = errors.New("redis down")
+	h := NewMemoryExtractHandler(repo, ex, WithSummaryStore(store, 600))
+
+	require.NoError(t, h.Handle(context.Background(), msgEvent(100, 7, 1, "user", "我是后端工程师")),
+		"摘要写失败不得让抽取失败（增强不是依赖）")
+
+	active, err := repo.ListActiveByUser(context.Background(), 1, 0)
+	require.NoError(t, err)
+	assert.Len(t, active, 1, "事实仍须落库")
+}
+
 func TestMemoryExtractHandler_HandleNote_FailureMarksNote(t *testing.T) {
 	t.Parallel()
 	repo := repository.NewInMemoryMemoryFactRepo()

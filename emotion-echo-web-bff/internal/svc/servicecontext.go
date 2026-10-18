@@ -27,6 +27,8 @@ type ServiceContext struct {
 	// UserAgent CL-06：角色档案（用户自定义 Agent）。**仅 gRPC**（user-svc 无对应 HTTP 端点）
 	// ⇒ user-svc 连接拨不上时为 nil，相关端点 503（fail-closed）。
 	UserAgent downstream.AgentProfileClient
+	// MemorySummary CL-08a：用户级记忆摘要（只读 Redis）。nil = 不注入记忆段。
+	MemorySummary downstream.MemorySummarySource
 
 	// 自有鉴权（签发 JWT）
 	Auth *auth.Manager
@@ -64,6 +66,12 @@ func (s *ServiceContext) SetEmotionQ(e downstream.EmotionQueryClient) *ServiceCo
 // SetUserAgent 注入角色档案 client（CL-06）
 func (s *ServiceContext) SetUserAgent(a downstream.AgentProfileClient) *ServiceContext {
 	s.UserAgent = a
+	return s
+}
+
+// SetMemorySummary 注入记忆摘要来源（CL-08a）
+func (s *ServiceContext) SetMemorySummary(m downstream.MemorySummarySource) *ServiceContext {
+	s.MemorySummary = m
 	return s
 }
 func (s *ServiceContext) SetAuth(a *auth.Manager) *ServiceContext { s.Auth = a; return s }

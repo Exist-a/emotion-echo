@@ -30,8 +30,11 @@ const (
 	segmentKindBase        = "base"
 	segmentKindAgent       = "agent"
 	segmentKindPersonality = "personality"
-	segmentKindEmotion     = "emotion"
-	segmentKindGuard       = "guard"
+	// segmentKindMemory CL-08a：跨会话记忆段（只读 Redis 用户级摘要）。
+	// 位置在 personality 之后、emotion 之前：事实靠近前部、风格约束靠后，guard 恒末位。
+	segmentKindMemory  = "memory"
+	segmentKindEmotion = "emotion"
+	segmentKindGuard   = "guard"
 )
 
 // segmentSeparator 段间分隔符 —— 与旧实现的 `base + "\n\n" + seg` 保持一致（T-1 逐字回归的前提）。
@@ -63,6 +66,9 @@ type assembleInput struct {
 	// agent（CL-06）当前会话生效的用户自定义角色；nil / 全空字段 ⇒ 不产生角色段与护栏段
 	// （⇒ 输出逐字回落现状，T-8）。取数失败同样传 nil —— 角色注入是增强不是依赖。
 	agent *downstream.AgentProfile
+	// memory（CL-08a）用户级记忆摘要（ai-svc 写入的 Redis 纯文本）；
+	// 空 = 不产生记忆段（⇒ 无记忆时输出逐字等于现状 golden）。
+	memory string
 }
 
 // systemSegments 产出 system 段的**有序**列表（空段不出现）。
@@ -79,6 +85,10 @@ func (h *AIStreamHandler) systemSegments(in assembleInput) []promptSegment {
 	}
 	if guide := h.personalitySegment(in.ctx); guide != "" {
 		segs = append(segs, promptSegment{Kind: segmentKindPersonality, Text: guide})
+	}
+	// 记忆段（CL-08a）：空 ⇒ 不产生（无记忆时逐字等于现状）
+	if memSeg := buildMemorySegment(in.memory); memSeg != "" {
+		segs = append(segs, promptSegment{Kind: segmentKindMemory, Text: memSeg})
 	}
 	if emotionSeg := h.emotionSegment(in); emotionSeg != "" {
 		segs = append(segs, promptSegment{Kind: segmentKindEmotion, Text: emotionSeg})
@@ -151,6 +161,39 @@ func buildTextEmotionContext(emotion string) string {
 		return ""
 	}
 	return emotionSegmentPrefix + emotionTextPhrase + emotionChineseLabel(e) + emotionNowSuffix
+}
+
+// 记忆段（CL-08a）注入边界。
+const (
+	memorySegmentPrefix = "以下是关于用户的长期记忆（供你自然地参考；不要逐条复述）："
+	// maxMemorySegmentRunes 摘要正文上限（≈600 token；中文 1 rune ≈ 1 token 的粗估）。
+	maxMemorySegmentRunes = 1200
+)
+
+// buildMemorySegment 拼记忆段；空 / 纯空白 ⇒ 返回 ""（不产生该段，保证零回归）。
+func buildMemorySegment(summary string) string {
+	s := strings.TrimSpace(summary)
+	if s == "" {
+		return ""
+	}
+	s = clampMemorySegment(s)
+	if s == "" {
+		return ""
+	}
+	return memorySegmentPrefix + "\n" + s
+}
+
+// clampMemorySegment 超预算时按最后一个换行截断（尽量不切断一行事实）。
+func clampMemorySegment(s string) string {
+	r := []rune(s)
+	if len(r) <= maxMemorySegmentRunes {
+		return s
+	}
+	cut := string(r[:maxMemorySegmentRunes])
+	if idx := strings.LastIndex(cut, "\n"); idx > 0 {
+		cut = cut[:idx]
+	}
+	return cut + "\n…"
 }
 
 // assembleSystemPrompt 把有序段拼成完整 system 串（空段已在上游丢弃）。

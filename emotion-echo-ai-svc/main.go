@@ -48,12 +48,14 @@ import (
 	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	sharedmemorykeys "github.com/emotion-echo/shared/pkg/memorykeys"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	sharedskywalking "github.com/emotion-echo/shared/pkg/skywalking"
 	"github.com/gin-gonic/gin"
 
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -157,6 +159,25 @@ func applyEnvOverrides(c *config.Config) {
 		var n int
 		if _, err := fmt.Sscan(v, &n); err == nil && n > 0 {
 			c.Memory.TimeoutSec = n
+		}
+	}
+	if v := os.Getenv("MEMORY_BUDGET_TOKENS"); v != "" {
+		var n int
+		if _, err := fmt.Sscan(v, &n); err == nil && n > 0 {
+			c.Memory.BudgetTokens = n
+		}
+	}
+	// CL-08a：摘要热点存储（best-effort；Redis 不可用不影响抽取落库）
+	if v := os.Getenv("REDIS_ADDR"); v != "" {
+		c.Redis.Addr = v
+	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		c.Redis.Password = v
+	}
+	if v := os.Getenv("REDIS_DB"); v != "" {
+		var n int
+		if _, err := fmt.Sscan(v, &n); err == nil {
+			c.Redis.DB = n
 		}
 	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
@@ -461,7 +482,24 @@ func main() {
 				Model:   memModel,
 				Timeout: time.Duration(c.Memory.TimeoutSec) * time.Second,
 			})
-			memHandler := logic.NewMemoryExtractHandler(memRepo, memExtractor)
+
+			// A3：摘要写侧（best-effort）。Redis 连不上就让 store 为 nil —— 抽取照常落库。
+			var summaryStore memory.SummaryStore
+			redisClient := redis.NewClient(&redis.Options{
+				Addr:     c.Redis.Addr,
+				Password: c.Redis.Password,
+				DB:       c.Redis.DB,
+			})
+			if perr := redisClient.Ping(context.Background()).Err(); perr != nil {
+				slog.Warn("memory summary redis unavailable (injection will degrade to empty)", "addr", c.Redis.Addr, "err", perr)
+			} else {
+				summaryStore = memory.NewRedisSummaryStore(redisClient)
+				logging.Printf("[memory] summary store ready: redis=%s ttl=%s", c.Redis.Addr, sharedmemorykeys.SummaryTTL)
+			}
+			defer func() { _ = redisClient.Close() }()
+
+			memHandler := logic.NewMemoryExtractHandler(memRepo, memExtractor,
+				logic.WithSummaryStore(summaryStore, c.Memory.BudgetTokens))
 
 			// DLQ 独立构造（与情绪分析的 DLQ 同 topic；失败消息仍可被 replay 工具处理）
 			var memDLQ consumer.DLQPublisher = consumer.NoopDLQPublisher{}

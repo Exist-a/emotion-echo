@@ -30,10 +30,30 @@ import (
 type MemoryExtractHandler struct {
 	repo      repository.MemoryFactRepo
 	extractor memory.Extractor
+	// summaryStore 可选：写侧摘要（nil = 不写，单测/未配 Redis 时）。
+	summaryStore  memory.SummaryStore
+	summaryBudget int
 }
 
-func NewMemoryExtractHandler(repo repository.MemoryFactRepo, ex memory.Extractor) *MemoryExtractHandler {
-	return &MemoryExtractHandler{repo: repo, extractor: ex}
+// HandlerOption 可选依赖。
+type HandlerOption func(*MemoryExtractHandler)
+
+// WithSummaryStore 注入摘要写侧（best-effort）。
+func WithSummaryStore(store memory.SummaryStore, budgetTokens int) HandlerOption {
+	return func(h *MemoryExtractHandler) {
+		h.summaryStore = store
+		if budgetTokens > 0 {
+			h.summaryBudget = budgetTokens
+		}
+	}
+}
+
+func NewMemoryExtractHandler(repo repository.MemoryFactRepo, ex memory.Extractor, opts ...HandlerOption) *MemoryExtractHandler {
+	h := &MemoryExtractHandler{repo: repo, extractor: ex, summaryBudget: memory.DefaultSummaryBudgetTokens}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // extractSource 一个抽取来源的统一描述。
@@ -183,7 +203,29 @@ func (h *MemoryExtractHandler) extractSource(ctx context.Context, src extractSou
 		"extracted", len(facts),
 		"written", written,
 		"superseded", len(plan.Supersede))
+
+	// A3：重建用户级摘要（best-effort —— 失败不影响已提交的事实）。
+	h.refreshSummary(ctx, src.UserID)
 	return nil
+}
+
+// refreshSummary 重建 Redis 用户级摘要。任何失败只记日志，不向上返回
+// （记忆注入是增强不是依赖；下一次抽取会重试重建）。
+func (h *MemoryExtractHandler) refreshSummary(ctx context.Context, userID int64) {
+	if h.summaryStore == nil {
+		return
+	}
+	facts, err := h.repo.ListActiveByUser(ctx, userID, 200)
+	if err != nil {
+		slog.WarnContext(ctx, "memory: load facts for summary", "user_id", userID, "err", err)
+		return
+	}
+	summary := memory.BuildSummary(facts, h.summaryBudget)
+	if err := h.summaryStore.Set(ctx, userID, summary); err != nil {
+		slog.WarnContext(ctx, "memory: write summary", "user_id", userID, "err", err)
+		return
+	}
+	slog.DebugContext(ctx, "memory: summary refreshed", "user_id", userID, "facts", len(facts), "chars", len(summary))
 }
 
 // finishFailed 回填失败状态（best-effort：回填失败不掩盖原始错误）。

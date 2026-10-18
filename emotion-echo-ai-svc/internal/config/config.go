@@ -46,7 +46,6 @@ type LLM struct {
 }
 
 // Memory CL-08a：跨会话记忆的事实抽取配置。
-//
 // 独立 consumer group（不与情绪分析的 "ai-svc" 共用位点），
 // 抽取走 OpenAI 兼容端点（沿用 LLM.* 的 base/key；Model 空则回落 LLM.Model）。
 type Memory struct {
@@ -58,6 +57,15 @@ type Memory struct {
 	Model string
 	// TimeoutSec 单次抽取 LLM 调用超时（秒），默认 15（抽取比情绪分类慢）。
 	TimeoutSec int
+	// BudgetTokens 摘要预算（注入侧读取的那份纯文本），默认 600。
+	BudgetTokens int
+}
+
+// Redis CL-08a：记忆摘要的用户级热点存储（best-effort，不是依赖）。
+type Redis struct {
+	Addr     string
+	Password string
+	DB       int
 }
 
 // GRPCServer ai-svc 暴露的 gRPC server 配置（Stage 19）
@@ -99,6 +107,7 @@ type Config struct {
 	Kafka      Kafka
 	LLM        LLM
 	Memory     Memory
+	Redis      Redis
 	GRPC       GRPCServer
 	FER        FER
 	SenseVoice SenseVoice
@@ -170,6 +179,12 @@ func SetDefaults(c *Config) {
 	}
 	if c.Memory.TimeoutSec == 0 {
 		c.Memory.TimeoutSec = 15
+	}
+	if c.Memory.BudgetTokens == 0 {
+		c.Memory.BudgetTokens = 600
+	}
+	if c.Redis.Addr == "" {
+		c.Redis.Addr = "emotion-echo-redis:6379"
 	}
 	if c.LLM.BaseURL == "" {
 		c.LLM.BaseURL = "http://localhost:8000"
