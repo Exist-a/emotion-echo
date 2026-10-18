@@ -64,9 +64,14 @@ type: phase-ledger
 
 > 上表为建档期预探查的**种子账**（对应各待排期计划的核心缺口）；用户实测中新增的发现续号追加。
 
+| CL-F-56 | **CL-08 提前规划轮读码实测（2026-10-18）** | **BFF 不往 llm-service 传调用者身份**：`emotion-echo-web-bff/internal/downstream/llm_grpc.go` 构造 `ChatCompletionRequest` 时**不填** `user_id`（proto `emotion_llm.proto` **有这个字段**，但全仓无写入点）⇒ llm-service 侧**不知道自己正在服务谁** | 该字段自 proto 定义起就没接（BFF 的 `LLMStreamRequest` 结构 `:38-48` 亦无该字段）；身份只在 BFF 自己的 ctx 里（`session.WithRequestAuth` → `downstream.UserIDFromContext`）⇒ 没有跨进程传出去 | **CL-08**（Phase 4 的前置：记忆检索必须知道"这是谁"）；同时是**独立缺口**（任何要在 llm-service 侧做用户级行为的改动都会撞上） | 🟡 **未解决（已定位）。触发 = CL-08 Phase 4 开工前必须补**：加字段 + 生成物重生成 + `rpc_status.tsv` 与调用面一致 |
+| CL-F-57 | **CL-08 提前规划轮实测（2026-10-18）** | **仓库对 embedding 是零基础设施，且"复用 TTS key"这一假设未实测**：`.env.local` 与 `deploy/env/.env.local.example` 里**只有 `LLM_*` / `TTS_*`**，无任何 embedding key；全仓无向量库、无 `pgvector`、无 embedding 模型（`emotion-echo-models/` 只有 FER / SenseVoice / XTTS） | 记忆功能从未落地 ⇒ 从未需要过 embedding。本轮用户拍板"**复用硅基流动**"（`CL-D-36`）：官方文档证实有 `POST /v1/embeddings` 与 `BAAI/bge-m3`（1024 维），**但该 key 的调用权限、配额是否与 TTS 共用、限流、单次批量上限均未实测** —— 而 TTS 是**在线主链路**（决策 40），共用配额被记忆抽取挤占会是用户可见事故 | **CL-08**（Phase 0 实测项 ①，ADR §待实测项） | 🟡 **未解决（假设未验证）。触发 = CL-08 Phase 0 真打一次端点**：拿到可用性/维度/延迟/批量上限/配额归属的**命令与输出**后才算证 |
+| CL-F-58 | **CL-08 提前规划轮实测（2026-10-18）** | **嵌入式图库（Kuzu）的数据文件"放哪、谁备份"未定**：选定形态把图放进 Python 进程内的本地文件（换来"新增容器 0"），但该文件在容器内的路径、是否挂卷、重建容器是否丢失、与 `deploy/backups/`（pg_dump 产物，见 `scripts/backup_*`）的关系**全部未定** | 嵌入式库的运维面就是"那个文件"：不挂卷 ⇒ 容器重建即丢；挂了卷 ⇒ 备份/恢复要纳入既有演练。此前项目没有嵌入式存储，没有现成纪律可套 | **CL-08**（Phase 0 实测项 ③） | 🟡 **未解决（已定位，未决策）。触发 = CL-08 Phase 0 定卷方案**；⚠️ 与 ADR 决策③"**图是可重建索引**"配套：若能从 PG 重建，则丢失可接受 —— 但"能不能重建"本身也需实测 |
+
 ## 使用约定
 
 - 6 列硬契约：`编号 | 来源 | 现象 | 根因 | 归属 | 状态`（缺列会被审计漏读）。
 - 编号续 **CL-F-xx**（**不占用** E2E 的 `E2E-F-xx`）。
+- ⚠️ **编号占位须知（2026-10-18 CL-08 规划轮补记）**：**CL-06 轨已在其分支（`feat/cl-06-custom-agent`，PR #255 未合）上占用 `CL-F-40~55`** ⇒ main 上看得见的最大号是 `CL-F-39`，但**直接续 40 会撞号**。本轮因此从 **`CL-F-56` 起**编号。**开号前先 `grep -r "CL-F-" docs/` 并核对在飞 PR**（`decisions.md` 使用约定有同型两例）。
 - 确认是运行时 bug 且修复落地后 → 标 ✅ 并回填到对应 landed 计划或 `docs/plans/known-issues-*`。
 - 归属方未确定时写"待定 + 触发条件"，**不挂已 done 阶段**（防归属误判）。

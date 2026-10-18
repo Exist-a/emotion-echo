@@ -1032,3 +1032,13 @@ Stage 33 P0 修复+BFF净化 █████████████████
 > **决策**：① `outbox_events` 新增 `trace_sw8 VARCHAR(512) NULL`（迁移 `c010`，幂等，走决策 22 的 9 步）；② shared `Tracer` 新增 `EncodeSW8(ctx, opName)`，写入侧统一走 `chat-svc/internal/outbox.EncodeTraceSW8`（读 **`GlobalTracer()`** —— 采纳 CL-F-14「请求期现读全局」语义）；③ relay 用**既有** `CreateEntrySpan` + extractor 恢复父 ctx（不加第二个方法），空列/无 tracer 时行为与改前**逐字一致**。
 > **实现约束（go2sky v1.5.0 实测）**：`Span` 接口不暴露 `SpanContext`，`ReportedSpan.Context()` 给的是 `*SegmentContext`，自拼 `SpanContext` 需 `tracer` 私有字段 `service`/`instance` ⇒ 只能借一次 exit span 编码（哨兵 peer `"trace-context"`，因 go2sky 校验 peer 非空）。代价 = 每条 trace 多两个短 span + 拓扑图上指向哨兵的边，**已知并接受**。
 > **被否**：`CL-D-16` 的 B 方案（调用点用 injector 旁路捕获，语义散落三处 business logic）；只存 trace_id（无法恢复父子关系）；复制 go2sky 编码（私有字段不可达）；relay 造 local 假父（违 AGENTS §四「不硬造根 span」）。
+
+### 决策 45：跨会话记忆 = **时序知识图谱（Graphiti + 嵌入式 Kuzu / 硅基流动嵌入），Postgres 为系统记录**（2026-10-18 用户拍板形态 · `CL-D-35`/`CL-D-36`）
+
+> 🟡 **proposed**（形态已由用户拍板；**三项待实测项未证** ⇒ 回填实测结论后才转 accepted）。完整 ADR 见 [`docs/architecture/adr/adr-2026-10-agent-memory-graph.md`](adr/adr-2026-10-agent-memory-graph.md)。
+> ⚠️ **编号占位**：`决策 44` 已被 **CL-06 分支**占用（`adr-2026-10-user-agent-identity-layer`，PR #255 未合入 main）⇒ 本文从 **45** 起编号；与 closure 侧 `CL-D-35`（因 26~34 被同分支占用而续号）是同一处置。
+> **背景（CL-08 提前规划轮实读，2026-10-18）**：记忆是**零实现** —— 全仓无记忆/向量/图设施（`grep` 命中 0；`msg_summary_v` 只是按天统计消息条数的报表视图），`.env.local` 只有 `LLM_*`/`TTS_*`、无 embedding key；而"陪伴类要记住用户"从 `CL-D-01` 起只定到"跨会话 = RAG（形态未定）"。向量 RAG 答不了三个语义：**事实会变要失效**（"我住北京" → "我上个月搬到上海了"）、**来源可溯可删**（`CL-D-24`：明文 + 软删 + 管理页可删）、**关系可跳**（`用户 → 母亲 → 住院`）。
+> **决策**：① 图后端 = **Kuzu 嵌入式**（Graphiti 四个驱动之一，实读 `graphiti_core/driver/kuzu_driver.py` 存在）⇒ **新增容器 0**，避开决策 39 记的"8GB WSL + 19 容器 ~6G 击穿前科"；② embedding = **硅基流动 `POST /v1/embeddings`（`BAAI/bge-m3`，1024 维）**，与现有 TTS **同账户同域名**（`deploy/env/.env.local.example:39`）⇒ 不新增 key、不新增容器；③ **PG = 系统记录，图 = 可重建索引** ⇒ 删除以 PG 为准、图随删（`CL-08d` 因此有解）；④ **关键路径不查图** —— 注入段读预计算的"用户级记忆摘要"（PG/Redis），取不到降级为空（沿用 `CL-D-07` 先例）；⑤ 抽取**异步**（复用 outbox → Kafka 消费形态 + **独立 consumer group**），禁在发消息关键路径做 LLM 抽取（`CL-D-33` 实测首字 +45%）。
+> **被否**：Microsoft GraphRAG（批量语料 + 社区摘要，与"每天新增对话流"方向相反）；LightRAG（成本/增量友好但仍是检索中心，不解决事实时效）；"先 PG 三表自建、以后再引图"（事件源/审计/删除那套反正要做，等于做两遍；且无评测无法判断图是否必要）；Graphiti + Neo4j 容器（撞内存红线）；embedding 自建容器（+约 1GB，与 `sensevoice`/`xtts` 抢同一份预算）。
+> **待实测项（未证，Phase 0 回填）**：① 该 key 调 `/v1/embeddings` 的可用性、配额是否与 TTS 共用、限流、单次批量上限；② `graphiti-core` + `kuzu` 与 llm-service 现有依赖（`grpcio`/`openai`/`pydantic`/`pypdf`/`python-docx`，Python 3.12）是否冲突、镜像涨多少；③ Kuzu 数据文件的持久化与备份（容器重建不丢）。
+> **同轮核出的遗留缺口**：BFF **不往 llm-service 传 `user_id`**（`internal/downstream/llm_grpc.go` 的 pb 构造无该字段）⇒ 记忆检索拿不到身份，须先补（已登账本 `CL-F-56`）。
