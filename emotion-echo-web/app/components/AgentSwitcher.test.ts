@@ -69,6 +69,46 @@ describe('AgentSwitcher · 静态契约（位置与形态）', () => {
     expect(src).toMatch(/aria-expanded/)
     expect(src).toMatch(/aria-haspopup/)
   })
+
+  // UI 轮（用户 2026-10-18 反馈"切换角色的容器被压在下面了，应该在最上面"）：
+  // composer 贴近页面底部、菜单又向上展开 ⇒ 它必然叠在消息区上方，必须显式声明层级。
+  // 两处都要：**容器**自身建层叠上下文（整块控件压在消息区之上），
+  // **菜单**再给更高的值（压住自己的兄弟节点）。只写菜单一处是不够的 —— 若外层
+  // 参与了别的层叠上下文，菜单的 z-index 只在那一层里比较，仍会被整体压住。
+  it('容器与菜单都必须显式抬高层级（否则会被消息区压住）', () => {
+    const switcherRule = src.match(/\.agent-switcher\s*\{[\s\S]*?\n\}/)
+    expect(switcherRule, '应能找到 .agent-switcher 规则').not.toBeNull()
+    expect(
+      Number((switcherRule![0].match(/z-index:\s*(\d+)/) ?? [])[1]),
+      '.agent-switcher 需要 z-index 建立层叠上下文（"容器被压在下面"就是缺了这一步）',
+    ).toBeGreaterThanOrEqual(100)
+
+    const menuRule = src.match(/\.agent-menu\s*\{[\s\S]*?\n\}/)
+    expect(menuRule, '应能找到 .agent-menu 规则').not.toBeNull()
+    expect(
+      Number((menuRule![0].match(/z-index:\s*(\d+)/) ?? [])[1]),
+      '.agent-menu 的 z-index 必须高于其容器',
+    ).toBeGreaterThanOrEqual(1000)
+  })
+
+  // 用户 2026-10-18 **第二次**指出同一处（并附了元素选择）："管理角色这个选择框在另一个元素下面"。
+  //
+  // 实测纠正（逐点命中测试，不是看样式猜）：菜单**本身在最上层**，并没有被任何元素盖住
+  // —— 之前我按"下一层是谁"读出了错误的"遮挡者"清单。真正的问题是它被**祖先裁掉**：
+  // `conversation-page` 有 `overflow: hidden`（盒子右边缘 x=1229），而菜单以 `left: 0`
+  // 从触发器**左**边缘向右展开（触发器 x 1064..1119，菜单 190px 宽 ⇒ 到 1254）
+  // ⇒ **右侧 25px 被裁**，被裁处露出来的正是 `div.page-content`
+  // （x=1232 起命中 page-content，正是用户选中的第二个元素）。
+  //
+  // 修法：改贴触发器**右**边缘向左展开（`right: 0`）—— 菜单整体落进祖先盒子内，
+  // 不再越界，也就不可能被裁。行为钉在 `e2e/cl-06-custom-agent.spec.ts`（按坐标命中断言）。
+  it('菜单贴触发器**右边缘**向左展开（左对齐会顶出祖先 overflow 被裁掉右侧）', () => {
+    const menuRule = src.match(/\.agent-menu\s*\{[\s\S]*?\n\}/)
+    expect(menuRule, '应能找到 .agent-menu 规则').not.toBeNull()
+    expect(menuRule![0], '必须以右边缘为锚（right: 0）').toMatch(/right:\s*0/)
+    expect(menuRule![0], '不得再以左边缘为锚（left: 0 会向右顶出容器右边缘）').not.toMatch(/\bleft:\s*0/)
+    expect(menuRule![0], '仍须向上展开').toMatch(/bottom:\s*100%/)
+  })
 })
 
 describe('AgentSwitcher · 行为', () => {

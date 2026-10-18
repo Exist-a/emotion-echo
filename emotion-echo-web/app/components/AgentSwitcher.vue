@@ -31,12 +31,12 @@
         <span class="agent-avatar" aria-hidden="true">{{ a.name.slice(0, 1) }}</span>
         <span class="agent-option-text">
           <span class="agent-option-name">{{ a.name }}</span>
-          <span v-if="a.isDefault" class="agent-badge">默认</span>
+          <span v-if="a.isDefault" class="agent-seal">默认</span>
         </span>
       </button>
       <p v-if="agents.length === 0" class="agent-empty">还没有角色</p>
 
-      <p v-if="error" class="agent-error">{{ error }}</p>
+      <p v-if="error" class="agent-error" role="alert">{{ error }}</p>
 
       <NuxtLink to="/chat/agents" class="agent-manage" @click="open = false">管理角色</NuxtLink>
     </div>
@@ -53,6 +53,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useAgentStore } from '~/stores/agent'
 import { useConversationStore } from '~/stores/conversation'
+import { agentInitial } from '~/utils/agentIdentity'
 import type { AgentProfile } from '~/types/api'
 
 const props = defineProps<{
@@ -80,7 +81,8 @@ const conversationAgentId = computed(() => {
 const activeAgent = computed<AgentProfile | null>(() =>
   agentStore.resolveActiveAgent(conversationAgentId.value),
 )
-const initial = computed(() => (activeAgent.value?.name ?? '角').slice(0, 1))
+/** 与角色卡同款首字（emoji 名字不会被劈成半个字符） */
+const initial = computed(() => agentInitial(activeAgent.value?.name))
 
 onMounted(async () => {
   if (agents.value.length === 0) {
@@ -109,45 +111,56 @@ const select = async (a: AgentProfile) => {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+/* 全部走 --ee-* 令牌。此前这里写的是 `var(--primary-color, #6366f1)` 一类**从未定义**
+   的变量名 ⇒ 每次都被兜底值接管（靛蓝 + Tailwind 灰），既不随主题也不随深色模式。
+   机器守卫：app/assets/scss/no-undefined-tokens.test.ts */
 .agent-switcher {
   position: relative;
   display: inline-flex;
   align-items: center;
+  /* composer 在页面底部、菜单向上展开 ⇒ 必然叠在消息区上方。
+     这一层是给**整块控件**建层叠上下文：只给 .agent-menu 写高 z-index 是不够的，
+     若外层参与别的层叠上下文，菜单的值只在那一层内部比较，整块仍会被压住。 */
+  z-index: 100;
 }
 
 .agent-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px 4px 6px;
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 999px;
+  max-width: 130px;
+  padding: 4px 10px 4px 5px;
+  color: var(--ee-text-muted);
   background: transparent;
-  color: inherit;
+  border: 1px solid var(--ee-border);
+  border-radius: 999px;
   font-size: 12px;
   line-height: 1.4;
-  cursor: pointer;
-  max-width: 120px;
+  transition:
+    color var(--ee-transition),
+    border-color var(--ee-transition);
 }
 
 .agent-trigger:hover,
 .agent-trigger.active {
-  border-color: var(--primary-color, #6366f1);
-  color: var(--primary-color, #6366f1);
+  color: var(--ee-primary);
+  border-color: color-mix(in srgb, var(--ee-primary) 55%, var(--ee-border));
 }
 
 .agent-avatar {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   width: 18px;
   height: 18px;
+  color: var(--ee-primary);
+  background: var(--ee-primary-soft);
   border-radius: 50%;
-  background: var(--primary-color, #6366f1);
-  color: #fff;
   font-size: 10px;
-  flex: 0 0 auto;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .agent-name {
@@ -156,27 +169,37 @@ const select = async (a: AgentProfile) => {
   white-space: nowrap;
 }
 
-/* 向上展开：菜单贴住触发器的上边缘（bottom: 100%） */
+/* 向上展开：菜单贴住触发器的上边缘（bottom: 100%）。
+   锚点取**右**边缘（right: 0）而不是左边缘 —— 触发器贴着 composer 右侧，
+   若从它的左边缘向右展开（190px 宽），菜单会顶出祖先 `conversation-page` 的
+   右边缘（该祖先 overflow: hidden），**右侧被裁掉约 25px**，被裁处露出的是
+   `div.page-content`（用户 2026-10-18 实测指出"选择框在另一个元素下面"）。
+   贴右边缘向左展开 ⇒ 菜单整体落在祖先盒子内，不会越界也裁不到。 */
 .agent-menu {
   position: absolute;
   bottom: 100%;
-  left: 0;
-  margin-bottom: 8px;
-  min-width: 180px;
+  right: 0;
+  /* 必须压过页面上其余内容（用户实测"被压在下面"）。这一层比 .agent-switcher 更高，
+     所以菜单还压得住同一行里的其他控件。 */
+  z-index: 1000;
+  min-width: 190px;
   max-height: 260px;
   overflow-y: auto;
   padding: 6px;
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 10px;
-  background: var(--surface-color, #fff);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
-  z-index: 30;
+  margin-bottom: 8px;
+  background: var(--ee-surface);
+  border: 1px solid var(--ee-border);
+  border-radius: var(--ee-radius-lg);
+  box-shadow: var(--ee-shadow-soft);
 }
 
 .agent-menu-title {
   margin: 2px 6px 6px;
-  font-size: 11px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--ee-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .agent-option {
@@ -185,21 +208,22 @@ const select = async (a: AgentProfile) => {
   gap: 8px;
   width: 100%;
   padding: 6px 8px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
   color: inherit;
-  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--ee-radius-sm);
   font-size: 13px;
-  cursor: pointer;
+  text-align: left;
+  transition: background var(--ee-transition);
 }
 
 .agent-option:hover {
-  background: var(--hover-bg, #f3f4f6);
+  background: var(--ee-surface-muted);
 }
 
 .agent-option.current {
-  color: var(--primary-color, #6366f1);
+  color: var(--ee-primary);
+  background: var(--ee-primary-soft);
 }
 
 .agent-option-text {
@@ -215,12 +239,14 @@ const select = async (a: AgentProfile) => {
   white-space: nowrap;
 }
 
-.agent-badge {
+.agent-seal {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  color: var(--ee-primary);
+  border: 1px solid color-mix(in srgb, var(--ee-primary) 38%, transparent);
+  border-radius: 999px;
   font-size: 10px;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: var(--hover-bg, #f3f4f6);
-  color: var(--text-muted, #9ca3af);
+  font-weight: 600;
 }
 
 .agent-empty,
@@ -229,21 +255,24 @@ const select = async (a: AgentProfile) => {
   font-size: 12px;
 }
 
+.agent-empty {
+  color: var(--ee-text-muted);
+}
+
 .agent-error {
-  color: var(--danger-color, #ef4444);
+  color: var(--ee-danger);
 }
 
 .agent-manage {
   display: block;
+  padding: 7px 8px;
   margin-top: 6px;
-  padding: 6px 8px;
-  border-top: 1px solid var(--border-color, #e5e7eb);
+  color: var(--ee-text-muted);
+  border-top: 1px solid var(--ee-border);
   font-size: 12px;
-  color: var(--text-muted, #6b7280);
-  text-decoration: none;
 }
 
 .agent-manage:hover {
-  color: var(--primary-color, #6366f1);
+  color: var(--ee-primary);
 }
 </style>

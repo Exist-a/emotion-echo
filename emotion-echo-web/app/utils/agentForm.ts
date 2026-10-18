@@ -43,6 +43,17 @@ export const VOICE_OPTIONS: VoiceOption[] = [
 
 export type AgentGender = '女' | '男' | '不指定'
 
+/**
+ * 音色值的**用户可读名**（如 `anna（温柔女声）`）。
+ *
+ * 兜底刻意写「默认音色」而不是把原值回显：`voice` 存的是
+ * `FunAudioLLM/CosyVoice2-0.5B:anna` 这类模型串，直接显示是把实现细节端到用户面前。
+ * 认不出（旧数据 / 音色下线）时给一个人话，用户至少知道"它会用默认嗓音"。
+ */
+export function voiceLabelOf(value?: string | null): string {
+  return VOICE_OPTIONS.find((v) => v.value === value)?.label ?? '默认音色'
+}
+
 export interface AgentForm {
   id?: number
   name: string

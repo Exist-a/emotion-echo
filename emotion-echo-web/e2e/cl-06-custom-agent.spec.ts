@@ -34,9 +34,13 @@ test.describe('CL-06 · 用户自定义 Agent（多角色）', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // ① 不是 404 页（本阶段实测过 404，故这条是定点回归钉）
-    // ⚠️ 不能用 getByRole('heading', {name:'角色'}) —— 布局的 h1 与本页 h2 都叫「角色」，
-    //    exact 匹配会 strict-mode 二义（首次跑就踩了）。改为按页面容器限定。
-    await expect(page.locator('.agent-page h2')).toHaveText('角色', { timeout: 30_000 })
+    // ⚠️ UI 轮（2026-10-17）起**本页不再有自己的一级标题**：布局的 <h1> 已经叫「角色」，
+    //    页面再写一遍 h2「角色」会在屏幕上出现两个同名标题（用户反馈的"渲染逻辑"之一，
+    //    旧注释里"布局 h1 与本页 h2 都叫角色"正是同一个问题的另一种写法）。
+    //    断言随之改为"页面主体真的渲染出来了"：说明句 + 卡片列表都只可能来自本页 ——
+    //    404 页两者皆无，所以这条对"路由是否真的接上了"的证明力与原先等同。
+    await expect(page.locator('.agent-page')).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.agent-page .agent-lede')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('Page not found')).toHaveCount(0)
 
     // ② 列表至少含默认角色 + 「新建角色」入口
@@ -85,6 +89,31 @@ test.describe('CL-06 · 用户自定义 Agent（多角色）', () => {
     })
     expect(upward).not.toBeNull()
     expect(upward!.menuBottom).toBeLessThanOrEqual(upward!.triggerTop + 1)
+
+    // ④b 菜单**不得被祖先裁切**（2026-10-18 用户实测指出"选择框在另一个元素下面"）。
+    //
+    // 为什么必须用**坐标命中测试**而不是几何断言：`getBoundingClientRect()` 给出的永远是
+    // "未被裁剪的盒子"，祖先 `overflow: hidden` 把菜单右侧切掉 25px 时它照样报出完整的
+    // rect（本阶段先踩过一次：3 点探针全落在未裁剪区，误判为"没被遮"）。
+    // 真凶：`conversation-page`（overflow: hidden，右边缘 x=1229）裁掉了菜单右侧，
+    // 被裁处露出 `div.page-content`。判据 = 菜单自身靠右的位置必须能被自己命中。
+    const clip = await page.evaluate(() => {
+      const m = document.querySelector('.agent-menu') as HTMLElement | null
+      if (!m) return null
+      const b = m.getBoundingClientRect()
+      const y = Math.round(b.top + b.height / 2)
+      return [0.5, 0.9, 0.98].map((r) => {
+        const el = document.elementFromPoint(Math.round(b.left + b.width * r), y)
+        return { at: r, inMenu: !!el?.closest?.('.agent-menu') }
+      })
+    })
+    expect(clip, '菜单应已展开（否则本断言无意义）').not.toBeNull()
+    for (const p of clip!) {
+      expect(
+        p.inMenu,
+        `菜单在自身宽度 ${Math.round(p.at * 100)}% 处必须能被自己命中 —— false 表示被祖先 overflow 裁掉`,
+      ).toBe(true)
+    }
 
     // ⑤ 「管理角色」入口在位
     await expect(page.getByRole('link', { name: '管理角色' })).toBeVisible()

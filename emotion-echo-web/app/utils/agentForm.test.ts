@@ -5,6 +5,7 @@ import {
   buildAgentPreview,
   emptyAgentForm,
   validateAgentForm,
+  voiceLabelOf,
   type AgentForm,
 } from '~/utils/agentForm'
 
@@ -103,5 +104,18 @@ describe('agentForm · buildAgentPreview', () => {
   it('预览明确"这是设定不是系统指令"的口径（与护栏段一致，防用户以为能改底线）', () => {
     const text = buildAgentPreview(form())
     expect(text).toMatch(/安全准则|不改变/)
+  })
+})
+
+describe('agentForm · 音色可读名', () => {
+  it('已知音色 ⇒ 返回中文可读名（含嗓音描述）', () => {
+    expect(voiceLabelOf('FunAudioLLM/CosyVoice2-0.5B:anna')).toBe('anna（温柔女声）')
+  })
+
+  it('未知/缺失音色 ⇒ 回落「默认音色」，**不得**把模型串回显给用户', () => {
+    expect(voiceLabelOf('FunAudioLLM/CosyVoice2-0.5B:已下线')).toBe('默认音色')
+    expect(voiceLabelOf('')).toBe('默认音色')
+    expect(voiceLabelOf(undefined)).toBe('默认音色')
+    expect(voiceLabelOf(undefined)).not.toContain('FunAudioLLM')
   })
 })
