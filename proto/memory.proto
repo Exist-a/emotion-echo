@@ -1,0 +1,72 @@
+// proto/memory.proto
+//
+// CL-08a：跨会话记忆（用户事实）的内部 gRPC 契约。
+//
+// 拓扑（执行计划 §0.1）：
+//   正常会话消息 → chat-svc outbox → Kafka → ai-svc（独立 group "ai-svc-memory"）→ 事实
+//   「我的记忆」自述 → BFF --gRPC--> ai-svc CreateNote → 事实（同一套抽取器）
+//
+// 为什么单独一个 proto（不塞进 emotion_llm.proto）：遵循 CL-D-35 的 T4 决议
+// 「新增跨进程契约独立成文件」，且本服务由 ai-svc 实现、与 LLM 服务无关。
+//
+// 端点 1:1 对齐（BFF internal/downstream/memory_grpc.go）：
+//   POST /api/v1/memory/notes   → CreateNote
+//   GET  /api/v1/memory/graph   → GetGraph
+//
+// 本阶段只读 PG 事实渲染图（用户裁定 D7）；CL-08c 引入图后端后**只换数据源**，
+// 本契约的 GetGraph 形状保持不变。
+
+syntax = "proto3";
+
+package emotion_memory.v1;
+
+option go_package = "github.com/emotion-echo/shared/pkg/emotionmemory";
+
+// MemoryService 记忆服务（ai-svc 暴露给 BFF）。
+service MemoryService {
+  // CreateNote 写入一条「我的记忆」自述，并异步抽取为事实。
+  //
+  // 语义：**不调大模型做回答**（该页只回执"记忆已更新"）；抽取在本进程内异步执行。
+  // user_id 由 BFF 从鉴权上下文填入（客户端不可传）。
+  rpc CreateNote (CreateNoteRequest) returns (CreateNoteResponse);
+
+  // GetGraph 取用户的记忆图（当前由 PG 事实渲染）。
+  rpc GetGraph (GetGraphRequest) returns (GetGraphResponse);
+}
+
+message CreateNoteRequest {
+  int64 user_id = 1;
+  string content = 2;
+}
+
+message CreateNoteResponse {
+  int64 note_id = 1;
+  // ack_text 固定回执（前端直接展示，不含抽取结果 —— 抽取是异步的）
+  string ack_text = 2;
+}
+
+message GetGraphRequest {
+  int64 user_id = 1;
+}
+
+message GetGraphResponse {
+  repeated MemoryNode nodes = 1;
+  repeated MemoryEdge edges = 2;
+}
+
+message MemoryNode {
+  // id 形如 "user:1"（用户本人）/ "entity:我妈"（实体）；同一实体会被多条事实复用
+  string id = 1;
+  string label = 2;
+  // kind: "user" | "subject" | "object"
+  string kind = 3;
+  // weight 关联事实数（前端用来调节点大小）
+  int32 weight = 4;
+}
+
+message MemoryEdge {
+  string source = 1;
+  string target = 2;
+  // label = predicate（关系名，如"职业""居住地"）
+  string label = 3;
+}

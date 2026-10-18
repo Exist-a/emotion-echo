@@ -81,6 +81,7 @@ gen_go() {
         user.proto)         pkg_name="emotionuser" ;;
         agent.proto)        pkg_name="emotionassessment" ;;
         metric.proto)       pkg_name="emotionanalytics" ;;
+        memory.proto)       pkg_name="emotionmemory" ;;
         *)
             log_warn "未知 proto: $proto_name，跳过 Go 生成"
             return

@@ -29,6 +29,8 @@ type ServiceContext struct {
 	UserAgent downstream.AgentProfileClient
 	// MemorySummary CL-08a：用户级记忆摘要（只读 Redis）。nil = 不注入记忆段。
 	MemorySummary downstream.MemorySummarySource
+	// Memory CL-08a：「我的记忆」客户端（ai-svc MemoryService，仅 gRPC）。nil = 端点 503。
+	Memory downstream.MemoryClient
 
 	// 自有鉴权（签发 JWT）
 	Auth *auth.Manager
@@ -72,6 +74,12 @@ func (s *ServiceContext) SetUserAgent(a downstream.AgentProfileClient) *ServiceC
 // SetMemorySummary 注入记忆摘要来源（CL-08a）
 func (s *ServiceContext) SetMemorySummary(m downstream.MemorySummarySource) *ServiceContext {
 	s.MemorySummary = m
+	return s
+}
+
+// SetMemory 注入「我的记忆」客户端（CL-08a）
+func (s *ServiceContext) SetMemory(m downstream.MemoryClient) *ServiceContext {
+	s.Memory = m
 	return s
 }
 func (s *ServiceContext) SetAuth(a *auth.Manager) *ServiceContext { s.Auth = a; return s }

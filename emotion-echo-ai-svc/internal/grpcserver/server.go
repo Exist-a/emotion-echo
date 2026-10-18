@@ -27,6 +27,7 @@ import (
 	"emotion-echo-ai-svc/internal/repository"
 	"emotion-echo-ai-svc/internal/svc"
 
+	emotionmemory "github.com/emotion-echo/shared/pkg/emotionmemory"
 	emotionquery "github.com/emotion-echo/shared/pkg/emotionquery"
 	grpcerr "github.com/emotion-echo/shared/pkg/grpcerr"
 	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
@@ -46,6 +47,25 @@ const healthServiceFullName = "/grpc.health.v1.Health"
 // emotionQueryServiceName 是本服务在 gRPC health 中注册的业务 service 名。
 // 抽成常量：注册与停机翻转两处必须用同一个值，否则翻转漏掉业务 service。
 const emotionQueryServiceName = "emotion_ai.v1.EmotionQueryService"
+
+// memoryServiceName 是 CL-08a MemoryService 在 gRPC health 中注册的名字。
+const memoryServiceName = "emotion_memory.v1.MemoryService"
+
+// Option 可选装配项（不改变既有 New 调用方）。
+type Option func(*serverOptions)
+
+type serverOptions struct {
+	memRepo    repository.MemoryFactRepo
+	memExtract MemoryNoteExtractor
+}
+
+// WithMemory 装配 MemoryService（CL-08a）。repo 为 nil 时不注册该服务。
+func WithMemory(repo repository.MemoryFactRepo, extract MemoryNoteExtractor) Option {
+	return func(o *serverOptions) {
+		o.memRepo = repo
+		o.memExtract = extract
+	}
+}
 
 // ⚠️ 这里的值必须是 **proto 生成的 ServiceDesc.ServiceName 原样**
 //    （可在 emotion-echo-shared 的 *_grpc.pb.go 里 grep 'ServiceName: "emotion_ai.v1.EmotionQueryService"' 复核）。
@@ -99,7 +119,7 @@ func (s *Server) MarkShuttingDown() {
 	if hs == nil {
 		return
 	}
-	for _, svcName := range []string{"", emotionQueryServiceName} {
+	for _, svcName := range []string{"", emotionQueryServiceName, memoryServiceName} {
 		hs.SetServingStatus(svcName, healthpb.HealthCheckResponse_NOT_SERVING)
 	}
 }
@@ -112,7 +132,11 @@ func (s *Server) MarkShuttingDown() {
 // Sprint F2（2026-09-11）：加 svcCtx 参数，MultiModalAnalyze/SynthesizeSpeech/AIHealth
 // 3 RPC 需要 svcCtx（构造 logic + aiclient）。现有 4 RPC（Get*/Upsert*）不依赖 svcCtx。
 // 单测仍可传 nil（向前兼容）。
-func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRepo, svcCtx *svc.ServiceContext, port int) *Server {
+func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRepo, svcCtx *svc.ServiceContext, port int, serverOpts ...Option) *Server {
+	var so serverOptions
+	for _, opt := range serverOpts {
+		opt(&so)
+	}
 	// Interceptor 链
 	tracer := skywalking.Tracer()
 	opts := []grpc.ServerOption{
@@ -135,10 +159,18 @@ func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRe
 		svcCtx:           svcCtx,
 	})
 
+	// CL-08a：MemoryService（自述条写入 + 记忆图）
+	if so.memRepo != nil {
+		emotionmemory.RegisterMemoryServiceServer(gs, newMemoryServer(so.memRepo, so.memExtract))
+	}
+
 	// 注册 health check（不带 user id 要求）
 	healthSrv := health.NewServer()
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthSrv.SetServingStatus(emotionQueryServiceName, healthpb.HealthCheckResponse_SERVING)
+	if so.memRepo != nil {
+		healthSrv.SetServingStatus(memoryServiceName, healthpb.HealthCheckResponse_SERVING)
+	}
 	healthpb.RegisterHealthServer(gs, healthSrv)
 
 	return &Server{

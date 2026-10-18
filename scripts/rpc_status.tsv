@@ -1,4 +1,4 @@
-# CL-02 · RPC 状态清单（43 条 = proto 全量）
+# CL-02 · RPC 状态清单（45 条 = proto 全量；2026-10-19 CL-08a 新增 memory.proto 2 条）
 # 列：rpc <TAB> proto:line <TAB> status <TAB> evidence_path <TAB> evidence_symbol <TAB> marker_sites <TAB> note
 #
 # status ∈ {live, archived, deleted, undecided}
@@ -58,3 +58,5 @@ GetSecurityQuestionsByUsername	proto/user.proto:108	live	emotion-echo-web-bff/in
 ListAgentProfiles	proto/user.proto:117	live	emotion-echo-web-bff/internal/handler/agent_handler.go	ListAgentProfiles	0	CL-06 角色档案；BFF 角色端点 + ai/stream 角色解析两处调用
 UpsertAgentProfile	proto/user.proto:126	live	emotion-echo-web-bff/internal/handler/agent_handler.go	UpsertAgentProfile	0	CL-06 角色档案；BFF 角色端点透传
 DeleteAgentProfile	proto/user.proto:131	live	emotion-echo-web-bff/internal/handler/agent_handler.go	DeleteAgentProfile	0	CL-06 角色档案；BFF 角色端点透传
+CreateNote	proto/memory.proto:31	live	emotion-echo-web-bff/internal/handler/memory_handler.go	CreateNote	0	CL-08a「我的记忆」自述入口；BFF POST /api/v1/memory/notes 透传
+GetGraph	proto/memory.proto:34	live	emotion-echo-web-bff/internal/handler/memory_handler.go	GetGraph	0	CL-08a 记忆图（PG 事实渲染）；BFF GET /api/v1/memory/graph 透传

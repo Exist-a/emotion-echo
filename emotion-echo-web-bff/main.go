@@ -443,6 +443,8 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	grpcAddr := resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI)
 	if conn := dialGRPC(grpcAddr, "ai-svc-emotion-q", dialOpts...); conn != nil {
 		svcCtx.SetEmotionQ(downstream.NewEmotionQueryClient(conn))
+		// CL-08a：同一个 ai-svc gRPC 连接复用给 MemoryService（一条连接多个 stub）
+		svcCtx.SetMemory(downstream.NewMemoryClient(conn))
 	}
 
 	// Sprint 1 PR-4b: MinIO 对象存储装配
@@ -581,6 +583,10 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	emotionSrc := downstream.NewEmotionHistorySource(s.EmotionQ)
 	// CL-06：AgentProfiles = 用户自定义角色来源（组装层 agent 段 + 写库角色快照）
 	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, handler.AIStreamDeps{LLM: llmStreamer, Files: s.Chat, Chat: s.Chat, Personality: personalitySrc, Emotion: emotionSrc, AgentProfiles: s.UserAgent, Memory: s.MemorySummary}))
+	// CL-08a：「我的记忆」自述入口（写入即回执，不触发 AI 回答 / 情绪分析 / 数字人）+ 记忆图
+	memoryHandler := handler.NewMemoryHandler(s.Memory)
+	r.POST("/api/v1/memory/notes", memoryHandler.CreateNote)
+	r.GET("/api/v1/memory/graph", memoryHandler.GetGraph)
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})

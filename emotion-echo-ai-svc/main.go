@@ -462,45 +462,53 @@ func main() {
 		}
 	}
 
+	// 3a. CL-08a：记忆仓储 + 抽取器 + 摘要写侧（consumer 与 gRPC MemoryService 共用）。
+	//
+	// 构造条件只看「启用 + 有 DB」——Kafka 是否启用不影响「我的记忆」自述入口。
+	var memRepo repository.MemoryFactRepo
+	var memHandler *logic.MemoryExtractHandler
+	if c.Memory.Enabled && db != nil {
+		memRepo = repository.NewPostgresMemoryFactRepo(db)
+		memModel := c.Memory.Model
+		if memModel == "" {
+			memModel = c.LLM.Model
+		}
+		memExtractor := memory.NewLLMExtractor(memory.LLMConfig{
+			BaseURL: c.LLM.BaseURL,
+			APIKey:  c.LLM.APIKey,
+			Model:   memModel,
+			Timeout: time.Duration(c.Memory.TimeoutSec) * time.Second,
+		})
+
+		// A3：摘要写侧（best-effort）。Redis 连不上就让 store 为 nil —— 抽取照常落库。
+		var summaryStore memory.SummaryStore
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     c.Redis.Addr,
+			Password: c.Redis.Password,
+			DB:       c.Redis.DB,
+		})
+		if perr := redisClient.Ping(context.Background()).Err(); perr != nil {
+			slog.Warn("memory summary redis unavailable (injection will degrade to empty)", "addr", c.Redis.Addr, "err", perr)
+		} else {
+			summaryStore = memory.NewRedisSummaryStore(redisClient)
+			logging.Printf("[memory] summary store ready: redis=%s ttl=%s", c.Redis.Addr, sharedmemorykeys.SummaryTTL)
+		}
+		defer func() { _ = redisClient.Close() }()
+
+		memHandler = logic.NewMemoryExtractHandler(memRepo, memExtractor,
+			logic.WithSummaryStore(summaryStore, c.Memory.BudgetTokens))
+		logging.Printf("[memory] facts store ready (group=%s, model=%s)", c.Memory.GroupID, memModel)
+	}
+
 	// 3b. CL-08a：记忆抽取 consumer —— **独立 group**（不与情绪分析 "ai-svc" 共用位点）。
 	//
 	// 只订阅 message.created + conversation.closed（TopicFilter 传空 = 不过滤，
 	// 由 handler 自己按事件类型分派）。抽取失败不影响发消息链路。
-	if c.Memory.Enabled && c.Kafka.Enabled && len(kafkaBrokersList) > 0 && db != nil {
+	if memRepo != nil && memHandler != nil && c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
 		mc, err := consumer.NewKafkaConsumer(kafkaBrokersList, c.Memory.GroupID)
 		if err != nil {
 			slog.Error("memory kafka consumer init failed", "err", err)
 		} else {
-			memRepo := repository.NewPostgresMemoryFactRepo(db)
-			memModel := c.Memory.Model
-			if memModel == "" {
-				memModel = c.LLM.Model
-			}
-			memExtractor := memory.NewLLMExtractor(memory.LLMConfig{
-				BaseURL: c.LLM.BaseURL,
-				APIKey:  c.LLM.APIKey,
-				Model:   memModel,
-				Timeout: time.Duration(c.Memory.TimeoutSec) * time.Second,
-			})
-
-			// A3：摘要写侧（best-effort）。Redis 连不上就让 store 为 nil —— 抽取照常落库。
-			var summaryStore memory.SummaryStore
-			redisClient := redis.NewClient(&redis.Options{
-				Addr:     c.Redis.Addr,
-				Password: c.Redis.Password,
-				DB:       c.Redis.DB,
-			})
-			if perr := redisClient.Ping(context.Background()).Err(); perr != nil {
-				slog.Warn("memory summary redis unavailable (injection will degrade to empty)", "addr", c.Redis.Addr, "err", perr)
-			} else {
-				summaryStore = memory.NewRedisSummaryStore(redisClient)
-				logging.Printf("[memory] summary store ready: redis=%s ttl=%s", c.Redis.Addr, sharedmemorykeys.SummaryTTL)
-			}
-			defer func() { _ = redisClient.Close() }()
-
-			memHandler := logic.NewMemoryExtractHandler(memRepo, memExtractor,
-				logic.WithSummaryStore(summaryStore, c.Memory.BudgetTokens))
-
 			// DLQ 独立构造（与情绪分析的 DLQ 同 topic；失败消息仍可被 replay 工具处理）
 			var memDLQ consumer.DLQPublisher = consumer.NoopDLQPublisher{}
 			if dlqTopic := c.Kafka.DLQTopic; dlqTopic != "" {
@@ -627,7 +635,12 @@ func main() {
 		if db != nil {
 			fusedRepo = repository.NewPostgresFusedEmotionRepo(db)
 		}
-		gs := grpcserver.New(emoRepo, fusedRepo, svcCtx, c.GRPC.Port)
+		// CL-08a：MemoryService 只在记忆仓储就绪时注册（否则保持既有 4+1 服务面）
+		var grpcOpts []grpcserver.Option
+		if memRepo != nil && memHandler != nil {
+			grpcOpts = append(grpcOpts, grpcserver.WithMemory(memRepo, memHandler.HandleNote))
+		}
+		gs := grpcserver.New(emoRepo, fusedRepo, svcCtx, c.GRPC.Port, grpcOpts...)
 		go func() {
 			if err := gs.Start(rootCtx); err != nil {
 				slog.Error("grpc server failed", "err", err)
