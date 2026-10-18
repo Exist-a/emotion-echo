@@ -7,10 +7,15 @@
         <article
           v-for="item in data"
           :key="item.id"
-          v-memo="[item.id, item.content, item.status, item.contentType]"
+          v-memo="[item.id, item.content, item.status, item.contentType, item.agentTagName]"
           class="dialog"
           :class="item.sender === 'user' ? 'dialog-user' : 'dialog-ai'"
         >
+          <!-- CL-06 · T-19：角色标注（"这条是谁回的"）。形态由用户 2026-10-18 裁定 ——
+               **同一角色连续消息只标首条**（连续性按 AI 消息之间比，用户消息不打断）。
+               判定在 utils/agentAnnotation.ts（带单测），名字在 data 里算好（见该 computed 注释）。
+               角色已被删除时列表里查不到名字 ⇒ 不标（快照只存了 id、没存名字）。 -->
+          <span v-if="item.agentTagName" class="agent-tag">{{ item.agentTagName }}</span>
           <div
             v-if="item.sender === 'user' && item.contentType === 'audio'"
             class="bubble bubble-user voice-content"
@@ -257,6 +262,7 @@ import { useFileUpload } from '~/composables/useFileUpload'
 import { useDigitalHumanStore } from '~/stores/digitalHuman'
 import { useUserStore } from '~/stores/user'
 import { shouldFollowToBottom, chatScrollSnapshot, type ChatScrollItem } from '~/utils/chatScroll'
+import { resolveAgentLabels } from '~/utils/agentAnnotation'
 import { marked } from 'marked'
 
 // DigitalHuman uses Three.js (WebGL) — client-only, wrapped in <ClientOnly> in template
@@ -597,7 +603,27 @@ const getHtmlContent = (content: string) => {
   }
 }
 
-const data = computed(() => messageStore.sortedMessages)
+const data = computed(() => {
+  const messages = messageStore.sortedMessages
+  const labels = resolveAgentLabels(messages)
+  return messages.map((m, i) => ({
+    ...m,
+    // CL-06 · T-19：该条要显示的角色名（null = 不标）。
+    // **算进 item 再渲染**（而不是在模板里读 `agentLabels[i]`）有两个理由：
+    //   ① 下标会随分页/新消息位移，而"读邻居"与 `v-memo` 天然冲突 —— 邻居一变、
+    //      被记忆化的那一条不会重渲染 ⇒ 标注会卡在旧值；算进 item 后依赖是**基本类型**
+    //      （agentTagName 变则记忆失效），语义上正确；
+    //   ② 模板只读 item 自己的字段，不必关心数组下标。
+    agentTagName: labels[i] ? agentNameOf(m.agentId) : null,
+  }))
+})
+
+/** 角色 id → 名字；列表里查不到（角色已删）⇒ null ⇒ 该条不标 */
+const agentNameOf = (agentId?: number): string | null => {
+  const id = Number(agentId ?? 0)
+  if (id <= 0) return null
+  return agentStore.agents.find((a) => a.id === id)?.name ?? null
+}
 const mainRef = ref<HTMLElement>()
 
 const scrollToBottom = () => {
@@ -715,8 +741,31 @@ onUnmounted(() => {
 .dialog-user {
   justify-content: flex-end;
 }
+/* CL-06 · T-19：AI 侧改成**纵向**排列 —— 角色标注要压在气泡**上方**
+   （原来是 flex 行向，标注会跑到气泡左边）。AI 侧本来只有一个气泡子元素，
+   改列向对既有排布无影响。 */
 .dialog-ai {
-  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* CL-06 · T-19：角色标注。安静地说明"这段是谁回的"，不抢气泡的注意力。 */
+.agent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 4px 3px;
+  color: var(--ee-text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.agent-tag::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--ee-primary);
+  border-radius: 50%;
 }
 
 .bubble {

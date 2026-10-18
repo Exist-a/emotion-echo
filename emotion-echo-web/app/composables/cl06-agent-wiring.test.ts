@@ -12,7 +12,7 @@
 //   ③ 音色：会话当前角色的 voice → TTS 每请求 voice（不带则与现状同形）；
 //   ④ 角色列表加载：进入对话页会拉角色（否则切换器永远只有默认项）。
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const read = (p: string) => readFileSync(resolve(__dirname, '..', p), 'utf8')
@@ -110,5 +110,46 @@ describe('④ 角色列表加载与发送', () => {
 
   it('对话页发送时把当前角色 id 交给 sender', () => {
     expect(pageSrc).toMatch(/agentId/)
+  })
+})
+
+describe('⑤ T-19：消息「这条是谁回的」标注接线（用户 2026-10-18 裁定形态 = 同角色连续只标首条）', () => {
+  it('对话页用纯函数判定标注，并把结果显示为 .agent-tag', () => {
+    expect(pageSrc).toMatch(/resolveAgentLabels/)
+    expect(pageSrc).toMatch(/agent-tag/)
+  })
+
+  it('标注名算进 item（不读数组下标）—— 下标+读邻居与 v-memo 冲突，会把标注卡在旧值', () => {
+    expect(pageSrc, '应在 data computed 里算好 agentTagName').toMatch(/agentTagName:/)
+    expect(pageSrc).toMatch(/agentNameOf\(/)
+    // 断言前**剥注释**：本仓反复踩"源码钉命中注释"（我自己解释这条设计的注释里
+    // 就写了 `agentLabels[i]` 这个反例），不剥就会把说明文字当成缺陷。
+    const codeOnly = pageSrc.replace(/<!--[\s\S]*?-->/g, '').replace(/(?<!:)\/\/[^\n]*/g, '')
+    expect(codeOnly, '实现里不得再用下标取标注位').not.toMatch(/agentLabels\[/)
+  })
+
+  it('v-memo 依赖含 agentTagName（基本类型：标注变则记忆失效）', () => {
+    const memo = pageSrc.match(/v-memo="\[[^\]]*\]"/)
+    expect(memo, '应能找到 v-memo').not.toBeNull()
+    expect(memo![0]).toMatch(/item\.agentTagName/)
+  })
+
+  it('渲染条件是"有标注名"—— 角色已删时名字解析不出 ⇒ 不标', () => {
+    expect(pageSrc).toMatch(/v-if="item\.agentTagName"/)
+  })
+
+  // 跨层契约钉（本仓已有 CL-F-48「两端字段名不一致 ⇒ 静默丢字段」先例）：
+  // 前端读的键名必须与 BFF 实际下发的 json tag 逐字一致。
+  it('前端 MessageItem.agentId ⇄ BFF MessageItemVM 的 json tag 一致（字段名不得漂移）', () => {
+    const vmPath = resolve(__dirname, '../../../emotion-echo-web-bff/internal/handler/viewmodel.go')
+    if (!existsSync(vmPath)) {
+      throw new Error(`读不到 BFF 视图模型（路径变了？）：${vmPath} —— 本钉不得静默跳过`)
+    }
+    const vmSrc = readFileSync(vmPath, 'utf8')
+    expect(vmSrc, 'BFF 必须以 json:"agentId" 回带该字段').toMatch(/AgentID\s+int64\s+`json:"agentId"`/)
+
+    const typesSrc = readFileSync(resolve(__dirname, '../types/api.ts'), 'utf8')
+    const item = typesSrc.slice(typesSrc.indexOf('export interface MessageItem'))
+    expect(item.slice(0, 1200), '前端 MessageItem 必须声明同名可选字段').toMatch(/agentId\?: number/)
   })
 })

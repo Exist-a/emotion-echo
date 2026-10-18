@@ -232,6 +232,14 @@ export interface MessageItem {
   createdAt: number
   audioUrl?: string
   audioDuration?: number
+  /**
+   * CL-06 · T-19：该 **AI** 消息由哪个角色产生（写库时的角色快照，BFF 已回带
+   * `viewmodel.go` 的 `json:"agentId"`）。
+   *
+   * `0` / 缺省 = 角色功能上线前的历史消息 ⇒ 前端**不标注**（判定见 `utils/agentAnnotation.ts`）。
+   * 用户消息不带此字段。
+   */
+  agentId?: number
 }
 
 /**
