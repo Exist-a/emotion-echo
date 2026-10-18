@@ -48,10 +48,12 @@ related:
 | `deploy/docker-compose.apps.yml`（内存限额） | 除 `sensevoice`/`xtts` 各 **6144M** 外全为 **1024M** ⇒ 新增容器是**真代价** |
 | `docs/architecture/decisions.md:999`（决策 39） | `.wslconfig` **8GB** + **19 容器**稳态 **~6G** ⇒ **击穿前科**（2026-09-22 三连冻结） |
 | `emotion-echo-web/e2e/cl-04-prompt-memory.spec.ts` | 已有"**同日多轮**记得上文"的人可见钉（埋姓名+岗位 → 第二轮只问"还记得吗"）⇒ 本阶段要的是它的**跨会话**版本 |
+| `emotion-echo-chat-svc/internal/events/kafka_publisher.go:88-96` | **分区键 = `ConversationID`**（消息/会话事件皆然）+ `sarama.NewHashPartitioner`（`:38`）⇒ **同会话事件天然落同一分区、天然有序** ⇒ **时效判定最需要的顺序已有，不必改 topic 键**（改它会牵动 analytics/ai-svc 两个既有消费者） |
+| `getzep/graphiti`：`graphiti_core/llm_client/`、`graphiti_core/embedder/`、`graphiti_core/driver/`（**API 实读**） | `llm_client/client.py` 与 `embedder/client.py` 是**可继承接口**（另有 `openai_generic_client.py` / `openai.py` 适配 OpenAI 兼容端点）⇒ **单测可注入确定性假实现、不打真 LLM**；驱动实存 `neo4j`/`falkordb`/**`kuzu`**/`neptune`；另内建 `cache.py` 与 `token_tracker.py`（成本/缓存抓手，喂 T-18） |
 
 ### A.2 相关 ADR / 决策（已查）
 
-- **本阶段权威**：`adr-2026-10-agent-memory-graph.md`（决策 45，含 3 项待实测项）。
+- **本阶段权威**：`adr-2026-10-agent-memory-graph.md`（决策 45，含 4 项待实测项 T-a~T-d）。
 - `CL-D-01`（跨会话 = RAG，**形态未定** → 本轮由 `CL-D-35` 收敛）、`CL-D-35/36/37`（本轮三项）。
 - `CL-D-24`（角色人设隐私口径：**明文 + 软删除 + 管理页可删**，不做应用层加密/字段脱敏）⇒ 记忆沿用同一口径。
 - `CL-D-07`（融合情绪：PG=历史/真相，Redis=用户级热点最新，TTL 24h，**取不到优雅降级**）⇒ 记忆注入的读路径沿用此先例。
@@ -129,12 +131,12 @@ related:
 
 | Phase | 内容 | RED 断言 | 备注 |
 |---|---|---|---|
-| **0** | **前置实测 spike（不写生产代码）**：① 真打一次 `POST /v1/embeddings`（`BAAI/bge-m3`）——**可用性 / 维度 / 延迟 / 批量上限 / 是否与 TTS 共享配额**；② 试装 `graphiti-core` + `kuzu`（与 llm-service 现有依赖是否冲突、镜像涨多少）；③ 定 **Kuzu 数据文件的持久化与备份**方案 | 三项各出一条命令 + 输出（**不是"文档说支持"**） | **ADR 三项待实测项的回填点**；任一不成立 ⇒ 回 ADR 改选型（不许"硬上"） |
-| **1** | **PG 数据模型（系统记录）**：`memory_episode` / `memory_entity` / `memory_fact`（含 `valid_from`/`valid_to`/`source_message_id`/`user_id`/`status`）/ `memory_extract_run` + 迁移（幂等 + checksum + 若也有内联 DDL 则补 parity 守卫） | 引用不存在的表 ⇒ 编译/查询失败；契约测试全红 | 对应 T-1/T-2/**T-3**；**schema 落点按"谁写入"推导**（§7 N2，`test_migrations_no_service_order.sh` 会拦跨 schema） |
-| **2** | **抽取 worker（异步）**：照 `consumehandler.go:45` 形态；**独立 consumer group**（不与情绪分析共用）；`message_id` 唯一索引做幂等；失败 `return error` 交给既有重试/DLQ | 消费两次 ⇒ 事实重复（T-4 红）；LLM 挂 ⇒ 消息失败（T-5 红） | 对应 T-4/T-5；**禁在发消息关键路径做 LLM**（`CL-D-33`） |
-| **3** | **注入段（BFF）**：新增 `segmentKindMemory` + `assembleInput.memory` + `memorySegment()`；**关键路径只读预计算的"用户级记忆摘要"**（PG/Redis），取不到降级为空；两处调用点都传 | 无记忆时输出与 golden **不逐字相等**（T-7 红）；段序位置断言红（T-8） | 对应 T-7/T-8/T-9/**T-10**/T-11/T-12；沿用 `CL-D-07` 的降级先例 |
-| **4** | **图（Graphiti + Kuzu）**：graphiti-core 落 llm-service；新增 gRPC 服务（proto + 生成物 + `rpc_status.tsv` 终态 + **必须有调用方**）；**顺带补 BFF → llm-service 的 `user_id`** | 图查询返回空 / 身份缺失导致取不到记忆（T-13/T-17 红） | 对应 T-13/T-14/T-17；改 proto 必须按仓库既有方式重生成（RUNBOOK §2） |
-| **5** | **删除与管理（`CL-08d`）**：PG 删 + 图删 + 缓存失效；管理页列表/详情/删除 | 删除后仍被检索到 / 仍出现在注入里（T-16 红） | 对应 T-16/T-21；口径沿用 `CL-D-24`（明文 + 软删 + 可删） |
+| **0** | **前置实测 spike（不写生产代码）**：① 真打一次 `POST /v1/embeddings`（`BAAI/bge-m3`）——**可用性 / 维度 / 延迟 / 批量上限 / 是否与 TTS 共享配额**；② 试装 `graphiti-core` + `kuzu`（与 llm-service 现有依赖是否冲突、镜像涨多少）；③ 定 **Kuzu 数据文件的持久化与备份**方案；④ **Kuzu 并发形态**（多 worker 打开同一目录）+「从 PG 重建图」的实际耗时 | 四项各出一条命令 + 输出（**不是"文档说支持"**） | **ADR 四项待实测项（T-a~T-d）的回填点**；任一不成立 ⇒ 回 ADR 改选型（不许"硬上"） |
+| **1** | **PG 数据模型（系统记录）**：`memory_episode` / `memory_entity` / `memory_fact`（含 `valid_from`/`valid_to`/`source_message_id`/`user_id`/`status`）/ `memory_extract_run` + 迁移（幂等 + checksum + 若也有内联 DDL 则补 parity 守卫） | 引用不存在的表 ⇒ 编译/查询失败；契约测试全红 | 对应 T-1/T-2/**T-3**；**schema 落点按"谁写入"推导**：写入方 = ai-svc（Phase 2）⇒ 落 **`emotion_echo_ai`**（`test_migrations_no_service_order.sh` 会拦跨 schema） |
+| **2** | **抽取 worker（异步，拓扑已定）**：**ai-svc** 内新增**独立 consumer group**（不与情绪分析共用），照 `consumehandler.go:45` 形态；消费到 `message.created` ⇒ 调 llm-service 的 `MemoryService.UpsertEpisode`；`message_id` 唯一索引做幂等；失败 `return error` 交给既有重试/DLQ | 消费两次 ⇒ 事实重复（T-4 红）；LLM 挂 ⇒ 消息失败（T-5 红） | 对应 T-4/T-5；**禁在发消息关键路径做 LLM**（`CL-D-33`）；**顺序**：同会话已天然有序（key=`ConversationID`），**不改 topic 键**；跨会话用事件 `send_time` 兜底 |
+| **3** | **注入段（BFF）**：新增 `segmentKindMemory` + `assembleInput.memory` + `memorySegment()`；**关键路径只读 Redis 用户级摘要**（`CL-D-07` 同构：用户级键 + TTL + 取不到降级），两处调用点都传；段序 `base → agent → personality → memory → emotion → guard`、记忆段空则不产生 | 无记忆时输出与 golden **不逐字相等**（T-7 红）；段序位置断言红（T-8） | 对应 T-7/T-8/T-9/**T-10**/T-11/T-12；预算 **≤600**（与 history 的 2000 分开记账） |
+| **4** | **图（Graphiti + Kuzu）+ 契约**：`graphiti-core` 落 llm-service（`openai_generic_client` 吃现有 `LLM_*`；embedder 用 `openai.py` 指硅基流动 base_url）；**新增 `proto/memory.proto`**（`MemoryService`）+ 生成物 + `rpc_status.tsv` 终态 + **必须有调用方**；**顺带补 BFF → llm-service 的 `user_id`**（`CL-F-56`） | 图查询返回空 / 身份缺失导致取不到记忆（T-13/T-17 红） | 对应 T-13/T-14/T-17；改 proto 必须按仓库既有方式重生成（RUNBOOK §2）；**单测注入假 LLM/embedder**（接口可继承），不打真 LLM |
+| **5** | **删除与管理（`CL-08d`）**：PG 删 + 图删 + **Redis 摘要失效**；管理页列表/详情/删除；补**从 PG 重建图**的工具（ADR 决策 8 的配套） | 删除后仍被检索到 / 仍出现在注入里（T-16 红） | 对应 T-16/T-21；口径沿用 `CL-D-24`（明文 + 软删 + 可删） |
 | **6** | **评测（价值证明，贯穿）**：评测集 + 开/关记忆 A/B；把 `cl-04-prompt-memory.spec.ts` 扩成**跨会话**版 | 关记忆也"答得出" ⇒ 评测设计无效；开记忆精确率不达标 | 对应 T-19/T-20；**评测不通过不得宣布功能成立** |
 | **7** | **运行态验收 + 收口**：生产构建 IAB + Playwright 回归钉 + 指标/面板（T-18）+ 第二方核对 | — | 对应 T-15/T-18/T-20；证据按 RUNBOOK §4.1 有效性要求归档 |
 
@@ -177,21 +179,43 @@ related:
 | R5 | **内存红线** | Kuzu 是嵌入式（无容器），但 Python 进程会变胖；**禁止顺手加容器**（CL-01 范围 Out 的口径） |
 | R6 | **依赖面扩大** | 新增 `graphiti-core`/`kuzu` ⇒ Dockerfile 体积、CI `llm-test.yml`、依赖锁定都要动；Phase 0 先量体积 |
 | R7 | **"埋了没人看"** | 记忆指标若不上面板，等于 CL-01 抓过的老病重演（T-18 兜住） |
-| R8 | **图不是事实源** | 图必须可重建：任何"只能从图里查到、PG 里没有"的数据都是设计错误（ADR 决策③） |
+| R8 | **图不是事实源** | 图必须可重建：任何"只能从图里查到、PG 里没有"的数据都是设计错误（ADR 决策 ③）。⇒ Phase 5 要交付**重建工具**，且 Phase 0 实测重建耗时（不成立则这条前提要改） |
+| R9 | **双写不一致**（ADR 决策 8 的代价） | PG 写成功而图写失败（或反之）⇒ "管理页看得见、AI 却答不出"这类半状态。对策：以 PG 为准、图失败**不阻塞**（进重试，图侧幂等 upsert）；并给"PG 有图无"的**对账/重建**兜底 |
+| R10 | **Kuzu 并发**（待实测） | 嵌入式库典型单写者 ⇒ 若 llm-service 多 worker 会锁冲突。对策：Phase 0 实测（T-d）；暂定单 worker + 内部串行 |
 
 ---
 
-## §7 待拍板（just-in-time；已拍板项见 `decisions.md`）
+## §7 决议与仍开放项
 
-| # | 事项 | 建议 | 归属 |
+### 7.1 技术实现决议（2026-10-18）
+
+> **来源标注**：「**用户**」= 用户当日经 AskUserQuestion 逐条拍板；「执行侧」= 执行侧按实读给出的口径，
+> **若不同意可在进入阶段时推翻**（这些不是用户背书的决定，别当既定事实读）。
+> 详细展开见 ADR [`adr-2026-10-agent-memory-graph.md`](../../../architecture/adr/adr-2026-10-agent-memory-graph.md) §技术细节决议。
+
+| # | 事项 | 决议 | 来源 |
 |---|---|---|---|
-| N1 | **记忆段在 system 中的位置** | `base → agent → personality → **memory** → emotion → guard`（事实靠近前部、风格约束靠后；guard 恒末位不变） | 进阶段时提 |
-| N2 | **记忆表的 schema 落点**（`emotion_echo_user` / `emotion_echo_ai` / 新 schema） | 由**写入方**决定（每服务只碰自己 schema）；若写入方是 ai-svc ⇒ 落 `emotion_echo_ai` | 进阶段时提 |
-| N3 | **抽取粒度**（每条 user 消息 vs 会话收尾汇总 vs 混合） | 混合：**每条 user 消息抽取 + 会话收尾做一次合并/失效判定**（成本与完整性折中） | 进阶段时提（直接决定成本） |
-| N4 | **记忆 token 预算**（与同会话 history 的 2000 预算如何共处） | 记忆段独立上限（建议 ≤600），总额不超上限；超限按"最近 + 最相关"截断 | 进阶段时提 |
-| N5 | **用户能否关闭记忆 / 关闭的语义**（不抽取 vs 抽取但不注入 vs 全清） | 给开关，默认开；关闭 = 停止抽取 + 停止注入 + 保留已有（可单删） | 进阶段时提（T-21） |
-| N6 | **删除语义**（软删 vs 硬删；图上的物理删除时机） | PG 软删（沿用 `c008/c009` 纪律）+ 图**物理删除**（它是索引不是记录） | 进阶段时提 |
-| N7 | **抽取用哪个模型 / 成本上限** | 沿用现有 `LLM_*`（deepseek 兼容端点）先跑；成本上限拿到实测数字后再定 | Phase 0 后提 |
+| T1 | **进程拓扑** | **ai-svc 消费 Kafka（独立 consumer group）+ llm-service 持图**，两者走新增 gRPC `MemoryService`；不新增容器 | **用户** |
+| T2 | **PG 与图** | **PG 为系统记录 + 图可重建**（⇒ 双写 + 需重建工具） | **用户** |
+| T3 | **注入读路径** | **Redis 用户级摘要**（`CL-D-07` 同构，TTL + 取不到降级）；不做 Redis+PG 双读 | **用户** |
+| T4 | **跨进程契约** | **新增 `proto/memory.proto`**（不塞进 `emotion_llm.proto`） | **用户** |
+| T5 | 记忆段位置 | `base → agent → personality → **memory** → emotion → guard`（guard 恒末位；**记忆为空则不产生该段** ⇒ 既有逐字 golden 不动） | 执行侧 |
+| T6 | 记忆表 schema | **`emotion_echo_ai`**（写入方 = ai-svc；守卫禁止跨 schema） | 执行侧（由 T1 推导） |
+| T7 | 记忆 token 预算 | 记忆段独立 **≤600**（与 history 的 2000 分开记账）；超限按"最近 + 最相关"截断 | 执行侧 |
+| T8 | 抽取模型 | 沿用现有 `LLM_*`（OpenAI 兼容端点；Graphiti `openai_generic_client` 适配）；**成本上限等 Phase 0 实测数再定** | 执行侧 |
+| T9 | 顺序与幂等 | **不改 topic 分区键**（同会话已天然有序）；跨会话用 `send_time` 兜底；幂等键 = `message_id` | 执行侧（实读依据） |
+| T10 | 测试替身 | 单测注入**假 LLM / 假 embedder**（接口可继承），不打真 LLM | 执行侧（实读依据） |
+| T11 | Kuzu 并发 | 暂定 llm-service **单 worker + 内部串行**；Phase 0 实测后定（可能改按用户分片文件） | 执行侧（待实测） |
+
+### 7.2 仍未定（属**产品口径**，不是技术实现；执行侧不自拟）
+
+| # | 事项 | 为什么仍需用户定 | 影响 |
+|---|---|---|---|
+| N1 | **阶段范围切分**：CL-08 一次做完 a~e，还是先内核（a 用户事实 + c 情节/图检索 + d 管理页）把 b（情绪模式）与 e（风险信号）留后？ | 详档的 21 个测试点实际只覆盖 a/c/d（b、e 只有标题、**没有测试点**）⇒ 这个范围差是事实，得用户定；且 e 是安全项（失败代价最高） | 决定本阶段周期与 PR 切分 |
+| N2 | **抽取粒度**：每条 user 消息 / 会话收尾汇总 / 混合 | 直接决定 LLM 成本与"当轮能否用上"（时效） | 决定 Phase 2 的触发设计与成本 |
+| N3 | **删除语义**：PG 软删 + 图硬删 / 两边硬删 / 两边软删 | 是**对用户的隐私承诺**（"删了就是删了"到哪一步） | 决定 Phase 5 实现与文案 |
+| N4 | **管理页形态**：新侧边栏标签 + 列表 + 关系图 / 只列表 / 并入「我的空间」 | 用户可见 + 演示价值（T-21 `[M]`） | 决定 Phase 5 的前端工作量 |
+| N5 | **用户能否关闭记忆**（默认建议给开关、默认开；关闭 = 停抽取 + 停注入 + 保留已有） | 隐私开关属产品口径 | 影响 `users.config` 与设置页 |
 
 ---
 
