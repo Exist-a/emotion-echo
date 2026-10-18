@@ -108,6 +108,12 @@ var wantRoutes = gin.RoutesInfo{
 	// 双重放行，使"未登录就白屏"这类错误也能被记录。
 	{Method: "POST", Path: "/api/v1/client-error"},
 
+	// ----- memory_handler.go (2 条, CL-08a) -----
+	// 「我的记忆」：自述写入（固定回执，不触发 AI 回答）+ 记忆图（PG 事实渲染）。
+	// 网关由既有 catch-all /api/v1/*（route 100）覆盖，无需新增 APISIX 路由。
+	{Method: "POST", Path: "/api/v1/memory/notes"},
+	{Method: "GET", Path: "/api/v1/memory/graph"},
+
 	// ----- tts_handler.go (3 条) -----
 	{Method: "POST", Path: "/api/v1/tts/synthesize"},
 	{Method: "POST", Path: "/api/v1/tts/stream"},
@@ -347,6 +353,7 @@ var knownPathPrefixes = []string{
 	"/api/v1/user-behavior/",
 	"/api/v1/mental-health/assessment",
 	"/api/v1/client-error", // E2E-F-148：浏览器未捕获异常上报（未登录也要能报）
+	"/api/v1/memory/",      // CL-08a：「我的记忆」自述 + 记忆图
 	"/api/v1/multimodal/",
 	"/api/v1/tts/",
 	"/api/v1/uploads/:kind",
