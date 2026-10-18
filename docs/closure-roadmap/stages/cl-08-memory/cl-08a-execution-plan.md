@@ -90,7 +90,8 @@ related:
 | `emotion-echo-web-bff/internal/handler/prompt_assembly.go:29-91` | 段常量 + `systemSegments` 段序；空段不产生 ⇒ **新加 `memory` 段不破坏无记忆时的逐字 golden** |
 | `.../prompt_assembly.go:50-66` | `assembleInput` 是加字段的位置 |
 | `.../prompt_assembly.go:175-182` | `assembleMessages` 是唯一组装点；**两个调用点在 `ai_stream_handler.go:425-436` / `:497-507`**，都要传 |
-| `emotion-echo-web-bff/main.go:294-298,625-634` | BFF 的 Redis client **只在 `LOGIN_LOCK_BACKEND=redis` 时才构建** ⇒ 记忆注入要独立于该开关（见 §6 R-A5） |
+| `emotion-echo-web-bff/main.go:294-298,625-634` | BFF 的 Redis client **只在 `LOGIN_LOCK_BACKEND=redis` 时才构建**（compose 默认给 `redis`；`REDIS_ADDR` 为空则回落 `emotion-echo-redis:6379`）⇒ 记忆注入不能绑死在该开关上（见 §6 R-A5） |
+| `deploy/docker-compose.infra.yml:48-66` | Redis 服务 `emotion-echo-redis:6379`（无口令、无宿主端口）⇒ ai-svc 直接复用同一容器，**不新增服务** |
 | `emotion-echo-ai-svc/internal/events/events.go`（`MessageCreatedData`） | 载荷含 `messageId`/`conversationId`/`userId`/`role`/`content`/`createdAt` ⇒ 抽取所需字段齐备 |
 | `deploy/docker-compose.apps.yml`（ai-svc 段） | ai-svc 现有 `KAFKA_*` / `LLM_*` / `LLM_GRPC_ADDR`；**无 Redis env** ⇒ 本阶段要加 |
 
