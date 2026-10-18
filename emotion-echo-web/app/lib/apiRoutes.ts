@@ -96,6 +96,13 @@ export const API_ROUTES = {
   agentUpsert: { method: 'POST', path: '/agents' } as ApiRoute,
   agentById: { method: 'DELETE', path: '/agents/:id' } as ApiRoute,
 
+  // ============ CL-08a 我的记忆 ============
+  // BFF: memory_handler.go（POST /memory/notes 写入自述并回执；GET /memory/graph 取记忆图）。
+  // 网关侧由 catch-all `/api/v1/*`（route 100，挂 jwt-auth）覆盖，无需新增 APISIX 路由。
+  // 该页**不触发** AI 回复 / 情绪分析 / 数字人（自述条独立于 conversations/messages）。
+  memoryNotes: { method: 'POST', path: '/memory/notes' } as ApiRoute,
+  memoryGraph: { method: 'GET', path: '/memory/graph' } as ApiRoute,
+
   // ============ Uploads（Stage 58 PR-UP-1/2：通用上传）============
   // BFF: POST /api/v1/uploads/:kind（kind ∈ image|video|file）
   // Sprint 1 PR-2 时本路径是 orphan（前端 /upload/* 单数 + BFF /uploads/* 复数错位），

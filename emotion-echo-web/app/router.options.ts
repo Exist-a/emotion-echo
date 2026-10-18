@@ -70,6 +70,12 @@ export default {
           path: 'agents',
           component: () => import('~/pages/chat/agents.vue'),
         },
+        // CL-08a：「我的记忆」自述入口 + 记忆图（同样必须在此登记，否则 404）
+        {
+          name: 'chat-memory',
+          path: 'memory',
+          component: () => import('~/pages/chat/memory.vue'),
+        },
         {
           name: 'chat-dashboard',
           path: 'dashboard',
