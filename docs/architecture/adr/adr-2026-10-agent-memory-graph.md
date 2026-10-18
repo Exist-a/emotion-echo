@@ -2,7 +2,7 @@
 
 ## Status
 
-🟡 **Proposed（形态由用户 2026-10-18 拍板；三项待实测项未证 ⇒ 转 Accepted 前必须先回填实测结论）**
+🟡 **Proposed（形态由用户 2026-10-18 拍板；四项待实测项未证 ⇒ 转 Accepted 前必须先回填实测结论）**
 
 - 范围 = **形态与选型**（本文）。**实施未开始**：CL-08 的执行计划见
   [`docs/closure-roadmap/stages/cl-08-memory/plan.md`](../../closure-roadmap/stages/cl-08-memory/plan.md)。
@@ -10,6 +10,9 @@
   「**先落文档**」⇒ 本轮只落文档、不动代码。
 - 相关决策：`CL-D-35`（记忆形态）/ `CL-D-36`（embedding 供给）/ `CL-D-37`（本轮只提前改规划）
   见 [`docs/closure-roadmap/decisions.md`](../../closure-roadmap/decisions.md)。
+- **技术实现细节已定（2026-10-18，用户经 AskUserQuestion 逐条拍板 4 项 + 执行侧 7 项口径）**：
+  见 §Decision 第 3~6 条与 §技术细节决议第 7~14 条；仍未定的属**产品口径**（阶段范围切分 / 抽取粒度 / 删除语义 / 管理页形态 / 关闭开关），
+  记在 `plan.md §7.2`，**不在本文假装已定**。
 
 ## Context
 
@@ -65,12 +68,28 @@
    - **PG = 系统记录（system of record）**：episode 对消息的引用、抽取审计、**删除与合规**、管理页读取。
    - **图 = 检索索引（可重建）**：丢了能从 PG 重建，因此**不把图当唯一事实源**。
    - ⇒ **删除以 PG 为准，图随删**（`CL-08d` 的硬要求因此有解）。
-4. **关键路径不查图**：注入段读的是"**用户级记忆摘要**"（预计算，落 PG/Redis），**取不到就降级为空**——
+4. **关键路径不查图**：注入段读的是"**用户级记忆摘要**"（预计算），**取不到就降级为空**——
    沿用 `CL-D-07`（融合情绪：Redis 用户级最新、取不到降级）的既有先例。图查询发生在**异步侧**（抽取 worker）。
+   落点 = **Redis 用户级键**（`CL-D-07` 同构：用户级一份 + TTL + 取不到降级），由抽取 worker 写完后刷新；
+   **不做 Redis+PG 双读**（多一层"Redis 没有但 PG 有"的命中口径，得不偿失）。
 5. **抽取必须异步**：复用 outbox → Kafka 消费形态，**独立 consumer group**（不与情绪分析共用，避免一个失败阻塞另一个）；
-   幂等键 = `message_id` 唯一索引；失败走既有重试 / DLQ（约束②）。
+   幂等键 = `message_id` 唯一索引 + `ON CONFLICT DO NOTHING`；失败走既有重试 / DLQ（约束②）。
 6. **禁止在业务代码里直写供应商域名/模型名**（经配置注入）——沿用决策 40 对 SiliconFlow TTS 的同一条纪律；
    `grep -rn "siliconflow" --include=*.go` 只允许命中 config 默认值与测试。
+
+### 技术细节决议（2026-10-18）
+
+| # | 项 | 决议 | 来源 |
+|---|---|---|---|
+| 7 | **进程拓扑** | **ai-svc（Go）消费**（新增**独立 consumer group**，复用既有重试/DLQ/热重载）→ 调 **llm-service 新增的 gRPC `MemoryService`** 写图；**Graphiti + Kuzu 都在 llm-service 进程内**。不新增容器。备选"llm-service 自己消费 Kafka"被否：Kafka 侧的重试/DLQ/幂等要在 Python 侧重造一遍，与 CL-03 的成果脱钩 | **用户拍板** |
+| 8 | **PG 与图** | **PG 为系统记录 + 图可重建**（沿用第 3 条）⇒ 抽取后**双写**，并需要一个**从 PG 重建图的工具**（图丢/换后端时可重建）。备选"只写图"被否：合规与删除全靠图自身，且图丢了就真丢了 | **用户拍板** |
+| 9 | **跨进程契约** | **新增 `proto/memory.proto`**（`MemoryService`：写 episode / 检索 / 管理页的列表与删除），不放 `emotion_llm.proto`（记忆不是"LLM 调用"语义）。⇒ 须同步 `scripts/rpc_status.tsv` 终态 + **调用方证据**（`check_rpc_status.sh` 会拦） | **用户拍板** |
+| 10 | **顺序与幂等** | **不改 topic 分区键** —— 已核实 `kafka_publisher.go:88-92` 的 `partitionKey` = `ConversationID` + `HashPartitioner` ⇒ **同会话事件天然落同一分区、天然有序**（时效判定最需要的正是同会话先后）。跨会话用事件里的 `send_time` 兜底；幂等键 = `message_id` | 执行侧（依据实读） |
+| 11 | **可注入点（决定能不能 TDD）** | `graphiti_core/llm_client/client.py` 与 `embedder/client.py` 均为可继承接口 ⇒ **单测注入确定性假实现、不打真 LLM**（符合"测试不依赖网络"）；embedder 用 `openai.py` 指到硅基流动 `base_url`；其内建 `cache.py`/`token_tracker.py` 供成本与缓存指标（喂 T-18） | 执行侧（依据实读） |
+| 12 | **注入段位置与预算** | 段序 `base → agent → personality → **memory** → emotion → guard`（事实靠前、风格约束靠后；**guard 恒末位**不变）；**记忆为空则不产生该段** ⇒ 既有逐字 golden 不动。记忆段独立预算 **≤600**（现用的是**估算** token 而非真分词器，与 history 的 2000 分开记账） | 执行侧建议（**若不同意可在进入阶段时推翻**） |
+| 13 | **抽取用哪个模型** | 沿用现有 `LLM_*`（OpenAI 兼容端点，Graphiti 的 `openai_generic_client` 正好适配）；**成本上限等 Phase 0 拿到"一条消息几次调用/多少 token"的实测数再定**（不预设无依据的数字） | 执行侧建议 |
+| 14 | **Kuzu 并发形态** | 嵌入式库典型是**单写者** ⇒ 暂定 **llm-service 单 worker 持有 + 内部串行**；若必须多 worker 则按用户分片文件。**先实测再定**（见 §待实测项 T-d） | 执行侧（待实测） |
+
 
 ### 被否备选（记录理由，防"下次再来一遍"）
 
@@ -89,6 +108,7 @@
 | T-a | 现有 `TTS_API_KEY` 在该账户下**能否调 `/v1/embeddings`**、配额是否与 TTS 共用、限流、单次批量上限、`bge-m3` 实际维度 | 官方文档证实"有服务、有这些模型"，但**账户权限与配额是另一回事**；共用 key 可能互相挤占（TTS 是主链路） | 本表 + `plan.md` T-0x |
 | T-b | `graphiti-core` + `kuzu` 与 llm-service **现有依赖**（`grpcio>=1.60` / `openai>=1.40` / `pydantic>=2` / `pypdf` / `python-docx`，Python 3.12）是否冲突；镜像体积增多少 | 装不上=方案不成立；装得上但体积暴涨要重估 | 本表 + `plan.md` |
 | T-c | Kuzu 数据文件的**持久化与备份**（容器重建不丢）；与 `deploy/backups/`（pg_dump 产物）的关系 | 嵌入式库的"文件在哪、谁备份"是它唯一的运维面；不实测就会出现"重建容器记忆全丢" | 本表 + `plan.md` |
+| T-d | **Kuzu 的并发形态**：llm-service 若跑多 worker，多个进程打开同一 Kuzu 目录会怎样（嵌入式库通常单写者）；以及"**从 PG 重建图**"这条路径的实际耗时 | 决定第 14 条（单 worker 串行 vs 按用户分片）；同时验证第 8 条的"可重建"是否真的成立 —— 不成立则"图=索引"这条前提也要改 | 本表 + `plan.md` |
 
 > ⚠️ **本 ADR 的 Accepted 转换条件** = 上述三项均有实测结论（含命令与输出），而非"文档说支持"。
 
