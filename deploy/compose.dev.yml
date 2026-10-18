@@ -27,7 +27,7 @@ services:
   # BFF 覆盖：dev 调试便利（验证码回显 + 信任 APISIX 注入的身份）
   emotion-echo-web-bff:
     environment:
-      # dev 起栈自愈（CL-D-35，2026-10-18 用户裁定）：依赖未就绪 ⇒ **退出启动**，
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
       # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
       # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
       # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
@@ -60,7 +60,7 @@ services:
   # 业务 svc CORS（dev 默认允许 Nuxt 本地端口；prod 用域名白名单）
   emotion-echo-chat-svc:
     environment:
-      # dev 起栈自愈（CL-D-35，2026-10-18 用户裁定）：依赖未就绪 ⇒ **退出启动**，
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
       # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
       # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
       # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
@@ -73,7 +73,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   emotion-echo-user-svc:
     environment:
-      # dev 起栈自愈（CL-D-35，2026-10-18 用户裁定）：依赖未就绪 ⇒ **退出启动**，
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
       # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
       # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
       # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
@@ -85,7 +85,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   emotion-echo-ai-svc:
     environment:
-      # dev 起栈自愈（CL-D-35，2026-10-18 用户裁定）：依赖未就绪 ⇒ **退出启动**，
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
       # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
       # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
       # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
@@ -97,7 +97,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   emotion-echo-analytics-svc:
     environment:
-      # dev 起栈自愈（CL-D-35，2026-10-18 用户裁定）：依赖未就绪 ⇒ **退出启动**，
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
       # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
       # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
       # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
@@ -109,7 +109,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   emotion-echo-assessment-svc:
     environment:
-      # dev 起栈自愈（CL-D-35，2026-10-18 用户裁定）：依赖未就绪 ⇒ **退出启动**，
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
       # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
       # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
       # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。

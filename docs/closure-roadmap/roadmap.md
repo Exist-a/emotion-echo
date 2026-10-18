@@ -83,11 +83,11 @@ related:
 | **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | ✅ **done（2026-10-16 收口）** —— 22 个测试点全部落四值（T-1~T-21 PASS；**T-22 PASS 但注明「这不是已修复」**）；Playwright 人可见钉 4 passed/1 skipped（跳过项由 IAB 补齐）+ ADR + 决策 42；`E2E-F-205/206` 已置 ✅；来源计划已迁 `legacy-plans/landed/`。**依据**：用户 2026-10-16 裁定 `CL-D-15`（`CL-F-11` 两次未复现 ⇒ 关闭不再阻塞，并判 done）。⚠️ 残留见 `stages/cl-05-message-pipeline/report.md §6.3`（`CL-F-11` **未修复**、`CL-F-20` 缓存未按用户隔离、Postgres keyset SQL 无测试直接执行 等） |
 | **CL-06** | 用户自定义 Agent（多角色） | T3 | `user-custom-agent-persona`（**2026-10-17 由单角色重写为多角色**） | CL-04 | 🟡 **partial（2026-10-17 执行完成，未收口）** —— Lane-CL-06，分支 `feat/cl-06-custom-agent`，**阶段 PR（draft）= [#255](https://github.com/Exist-a/emotion-echo/pull/255)**；计划 = `stages/cl-06-custom-agent/plan.md`，报告 = `stages/cl-06-custom-agent/report.md`。Phase 0~8 完成：**21 个测试点全部有结论** —— 三条原挂起项由用户 **2026-10-18 裁定**：T-18（音色听觉）= **PASS**、T-21（「小E」文案）= **按现文案定稿 PASS**、T-19（消息角色标注）形态 = **同一角色连续只标首条**并**当场落地 + 浏览器实测**（见 `stages/cl-06-custom-agent/report.md §4.4`）。运行态验收**抓出并修复 2 个真缺陷**（会话列表回读 `agentId` 恒 0 的投影漏字段 / 角色页 404 的手写路由表未注册，后者已加门禁 + 登账 CL-F-46）。新登账本：CL-F-40~43（Phase 0）、CL-F-45（TTS voice 无白名单）、CL-F-46（路由表陷阱）、CL-F-47（长跑容器健康不自愈阻断 seed）。**三条挂起项已于 2026-10-18 清零 ⇒ 可按纪律转 ready → 串行合并**（阶段 `done` 的判定仍由审计/第二方做；合并前须补 `CL-F-50` 的决策记录）。**第二方独立核对已完成**（A~K 十一项，回执见 report §6.3）：抓出 4 处［我声称做到、实际未做到/未做全］的问题（黑名单可被**一个空格**绕过 / `gender` 未校验 / `≤5` 的 TOCTOU / 未校验的 `agentId` 旁路），**全部已修并取得运行态证据**（并发 10 ⇒ `200=5, 其余=[409]`）；整改进程中又在真栈上抓出 2 个单测测不到的缺陷（咨询锁 int4 溢出致接口全 500 / 配额类错误落 500），亦已修。新登账本：CL-F-40~43（Phase 0）、CL-F-45（TTS voice 无白名单）、CL-F-46（手写路由表陷阱）、CL-F-47（长跑容器健康不自愈）、CL-F-48（HTTP 传输层字段名不一致）。裁定 `CL-D-21`~`CL-D-29` |
 | **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`（**已落地**）、`fusion-result-consumption`（**已落地**） | CL-04 | ✅ **done（2026-10-16 收口）** —— **G 轨后端切片**（`bf401350` / PR #234）+ **H 轨前端半**（`349c9615` / PR #243，含 G2 角标按用户裁定移除）；**[A] 7/7 + 浏览器 [V] T-8/T-9 PASS**（生产构建 IAB 实测 + 第二方核对**独立复现**）；**T-10（数字人情绪）BLOCKED** —— 被既有账 **CL-F-17**（VRM 加载失败，他项）阻塞，接线与架构钉已在码内；顺带修复 **BFF `/api/v1/emotion/*` 整族 502**（未透传 X-User-Id，E2E-F-125 同型）；见 `stages/cl-07-{fusion-consumption,emotion-display}/report.md` |
-| **CL-08a** | 记忆 · 用户事实 | 最后 | `conversation-memory-pending-decision` | CL-04 | pending |
-| **CL-08b** | 记忆 · 情绪模式 | 最后 | 同上 | CL-08a | pending |
-| **CL-08c** | 记忆 · 情节 + RAG | 最后 | 同上 | CL-08a | pending |
-| **CL-08d** | 记忆 · 管理页（查看/删除） | 最后 | 同上 | CL-08a~c | pending |
-| **CL-08e** | 记忆 · 风险信号（安全） | 最后 | 同上 | — | pending |
+| **CL-08a** | 记忆 · **用户事实**（抽取 → 存 → 常带注入） | 最后 | `conversation-memory-pending-decision`（**2026-10-18 收敛为图记忆形态**） | CL-04 | pending（**2026-10-18 已提前规划**，详档 `stages/cl-08-memory/plan.md`；形态 = `CL-D-35` 图记忆 / `CL-D-36` embedding；**未开工**） |
+| **CL-08b** | 记忆 · **情绪模式**（趋势 / 触发 / 缓解因素 —— **天然是图上的关系 + 时序查询**） | 最后 | 同上 | CL-08a | pending（同上） |
+| **CL-08c** | 记忆 · **情节 + 图记忆检索**（事件抽取 + 图遍历 / 向量 / 全文三层召回；原写"RAG"⇒ 形态已由 `CL-D-35` 收敛） | 最后 | 同上 | CL-08a | pending（同上） |
+| **CL-08d** | 记忆 · **管理页（查看 / 删除 —— 图上删除必须闭环：PG 为准、图随删）** | 最后 | 同上 | CL-08a~c | pending（同上） |
+| **CL-08e** | 记忆 · **风险信号**（安全，横切） | 最后 | 同上 | — | pending（同上） |
 > **P 轨开工（2026-10-16，Lane-CL-P · CL 遗留清销第 1 批）**：清 **CL 账本（CL-F-xx）** 的未解决项（**不含** E2E-F，用户明示）。
 > 本轮修 4 条（CL-F-06/17/18/20）+ 文档收口 1 条（CL-F-21）+ 对账翻正 2 条（CL-F-01/03）；**纯 🟢 轨**（不需 dev 栈）。
 > 余 9 条按 **Wave 2（需栈：CL-F-16/22/23/24/26）/ Wave 3（流程硬化：CL-F-07/08/09/19）** 排入计划。
@@ -102,6 +102,19 @@ related:
 > 按「新轨准入规则」自答 🟢 占比：**Phase 0~6 全为 Go/契约/迁移级（不需栈）**，仅 Phase 8 需栈 ⇒ 准入成立，
 > 本轨**未取 dev 栈锁**。串行资源：`proto/**`（本轨独占，无并发者）。
 > ⚠️ 本注只追加，未改他人已写的行（H3 append-only）；登记见 `parallel-contract.md §三`。
+
+> **CL-08 提前规划轮（2026-10-18，用户授权：「只提前改规划」「先落文档」）**：把"跨会话记忆"从
+> `CL-D-01` 的模糊表述（"= RAG"，**形态未定**）**收敛为具体形态** —— **时序知识图谱**（Graphiti +
+> **嵌入式 Kuzu** ⇒ 新增容器 0；embedding 复用硅基流动 `/v1/embeddings` 的 `BAAI/bge-m3`，与现有 TTS 同账户同域名）。
+> 产出：`CL-D-35/36/37`（decisions.md）+ `architecture/decisions.md` **决策 45** + ADR
+> [`docs/architecture/adr/adr-2026-10-agent-memory-graph.md`](../../architecture/adr/adr-2026-10-agent-memory-graph.md)
+> + 阶段详档 [`stages/cl-08-memory/plan.md`](stages/cl-08-memory/plan.md)。**本轮零代码改动**，`CL-08` 排期位置不变。
+> ⚠️ **与 §4「未到阶段不预设细节」的关系**：提前细化是**用户当场授权的例外**（`CL-D-37`），不是执行侧自作主张；
+> §1 档表「最后」行仍写"情节+RAG"——该行正被 **CL-06 分支**按 `CL-D-31` 修订，**为避免同点冲突本轨不动它** ⇒
+> **措辞以本表 CL-08 行与阶段详档为准**。
+> ⚠️ ADR 带 **3 项待实测项**（embedding 端点可用性/配额 · `graphiti-core`+`kuzu` 依赖兼容性 · Kuzu 持久化卷），
+> **未回填实测结论前不得当作"已成立"**（详档 Phase 0）。
+> ⚠️ 本注只追加，未改他人已写的行（H3 append-only）。
 
 | **CL-09** | backlog 清销（常驻） | 常驻 | `known-issues-backlog-2026-09-16`、`…runtime-bugs-2026-09-17`、`todo-pile-2026-09-04`、`three-vrm-usage-reference` | — | pending（插空） |
 | **CL-10** | 端侧（Lane O） | deferred | `on-device-hybrid-inference`(+`…implementation-roadmap`) | 端侧决策门 | **deferred** |
@@ -135,7 +148,7 @@ T3 对话价值闭环（依赖 CL-04）
   CL-06 自定义 Agent
   CL-07 情绪回显 + 融合消费
 最后
-  CL-08a 记忆·用户事实 → CL-08b 记忆·情绪模式 → CL-08c 记忆·情节+RAG → CL-08d 记忆·管理页
+  CL-08a 记忆·用户事实 → CL-08b 记忆·情绪模式 → CL-08c 记忆·情节+图记忆检索 → CL-08d 记忆·管理页
   CL-08e 记忆·风险信号（安全，横切）
 常驻   CL-09 backlog 清销（插空）
 延期   CL-10 端侧（再次延期，先不做）
@@ -256,12 +269,15 @@ T3 对话价值闭环（依赖 CL-04）
 
 ### CL-08a ~ CL-10 —— 未到阶段（只留目标，detail 进阶段时定）
 
+> ⚠️ **例外**：**CL-08 已于 2026-10-18 提前细化**（用户授权 `CL-D-37`，详见 §2 末注）⇒ 其 detail 见
+> [`stages/cl-08-memory/plan.md`](stages/cl-08-memory/plan.md)；下表 CL-08 行同步收敛为图记忆口径。
+
 | CL | 目标（一句） |
 |---|---|
 | CL-08a | 记忆·**用户事实**（抽取 → 存 → 常带注入） |
-| CL-08b | 记忆·**情绪模式**（趋势 / 触发 / 缓解因素） |
-| CL-08c | 记忆·**情节 + RAG**（事件抽取 + 向量召回） |
-| CL-08d | 记忆·**管理页**（用户查看/删除） |
+| CL-08b | 记忆·**情绪模式**（趋势 / 触发 / 缓解因素 —— 图上的关系 + 时序查询） |
+| CL-08c | 记忆·**情节 + 图记忆检索**（事件抽取 + 图遍历 / 向量 / 全文三层召回） |
+| CL-08d | 记忆·**管理页**（用户查看 / 删除；**图上删除必须闭环**） |
 | CL-08e | 记忆·**风险信号**（安全，横切） |
 | CL-09 | backlog 清销（常驻）：known-issues 残留 + todo-pile 核销 |
 | CL-10 | 端侧（deferred，先不做） |

@@ -11,12 +11,22 @@ related-plans:
 related-stages:
   - e2e-10-chat-core（收发链路，不含历史注入）
   - e2e-14-personality-ai-prompt（画像注入 system prompt，不是对话记忆）
-related-adrs: []   # 全仓 ADR 无「会话记忆/对话历史」决策记录（2026-09-24 grep 核实）
+  - CL-08（宿主阶段：`docs/closure-roadmap/stages/cl-08-memory/plan.md`）
+related-adrs:
+  - adr-2026-10-agent-memory-graph.md（2026-10-18：跨会话记忆形态 = 时序知识图谱，含 embedding 供给）
 ---
 
 # 待决策 — 会话记忆系统缺失（conversation memory）
 
 > **✅ 决策落定（2026-10-13，用户）**：拆两部分 —— **① 同会话历史**（滑动窗口，近 N 轮）并入 **CL-04**（Prompt 组装层）；**② 跨会话记忆 = RAG 检索既往对话**，单列 **CL-08** 并**放最后**。本档 §D 的 D-a（要不要）/D-b（同会话形态=滑动窗口）/D-c（跨会话形态=RAG）由此关闭；D-d 排期归属 = `docs/closure-roadmap/roadmap.md` 的 CL-04 / CL-08。
+>
+> **✅ 形态收敛（2026-10-18，用户）**：`CL-D-01` 当时只定到"**跨会话 = RAG**"这个**大类**，没定是向量 RAG / 图 RAG / 事实表。
+> 本轮由用户拍板收敛为 **① 图记忆**（时序知识图谱：Graphiti + **嵌入式 Kuzu**，新增容器 0）与
+> **② embedding 供给**（复用硅基流动 `POST /v1/embeddings` 的 `BAAI/bge-m3`，与现有 TTS 同账户）。
+> ⇒ 权威文档：[`CL-D-35`/`CL-D-36`](../closure-roadmap/decisions.md) + `architecture/decisions.md` **决策 45** +
+> ADR [`adr-2026-10-agent-memory-graph.md`](../architecture/adr/adr-2026-10-agent-memory-graph.md)（**含 3 项待实测项**）+
+> 执行计划 [`stages/cl-08-memory/plan.md`](../closure-roadmap/stages/cl-08-memory/plan.md)。
+> 本轮**只落文档**（`CL-D-37`），**未写代码**；`related-adrs: []` 的原注（"全仓 ADR 无会话记忆决策记录"）**自此作废**。
 
 ## §A 上下文与假设
 
