@@ -28,7 +28,7 @@ related:
 | **T1 基础设施闭环**（先做） | 可观测 · gRPC 契约 · Kafka/可靠性 | 跨切面地基 → 先固化平台 |
 | **T2 对话地基** | Prompt 组装层（**含同会话历史·滑动窗口**）· 消息链路 | 对话类功能公共底座 |
 | **T3 对话价值闭环** | 自定义 Agent · 情绪回显+融合 | 用户最可见（面试/演示卖点） |
-| **最后** | **记忆系统（CL-08a~e）**：用户事实 → 情绪模式 → 情节+RAG → 管理页 → 风险信号 | 用户裁定"放最后"（会话摘要并入 CL-04） |
+| **最后** | **记忆系统（CL-08a~e）**：用户事实 → 情绪模式 → 情节+RAG → 管理页 → 风险信号 | 用户裁定"放最后"（**会话摘要归 CL-08** —— 2026-10-18 纠偏，见 `CL-D-31`：曾误记为"并入 CL-04"，而 CL-04 的计划/代码/账本三处皆无它） |
 | **常驻** | backlog 清销 | 插空核销 |
 | **deferred** | 端侧（Lane O） | 再次延期，不进执行路径 |
 
@@ -79,9 +79,9 @@ related:
 | **CL-01** | **可观测闭环** | T1 | `observability-instrumentation-and-dashboards` → `observability-business-metrics-wiring` → `grafana-dashboard-gaps`；`redis-two-layer-cache` | — | ✅ **done 并已合并**（B 轨 · PR #211 于 2026-10-14 **squash 合并 → `b1f13dc`**，源分支已删；19 测试点全部落在合法四值、起栈运行时证据齐（含 CL-F-14 的 A/B 负向对照）、账本三条已销、落地计划已迁、D-05/D-07 已裁定、**收口契约 7 条全满足**（第 7 条由用户指示的独立子代理两轮核对：首轮 FAIL → 整改 → 第二轮 PASS），见 `stages/cl-01-observability/report.md`） |
 | **CL-02** | gRPC 契约闭环 | T1 | `grpc-deadlink-actualization` | — | ✅ **done**（2026-10-15 收口：**清除 3 + 归档 4** + 守卫升级 A1~A6 + 运行时验证 7/7 healthy / Nacos `count:6` / smoke 24/24；**第二方核对三轮 PASS**；PR #214） |
 | **CL-03** | Kafka/可靠性闭环（合并一次执行） | T1 | `outbox-trace-continuity`、`dlq-hardening-and-replay`（**均已落地** → `legacy-plans/landed/`）、`kafka-pipeline-pending-decisions`（条目逐条终态） | 与 CL-01/02 共享追踪面 | ✅ **done**（2026-10-16 F 轨收口；**落地载体 = 阶段 PR [#229](https://github.com/Exist-a/emotion-echo/pull/229)（**已 squash 合并 → `c88653b`**，源分支随合并删除）**；**16/16 测试点 PASS**（含运行时：trace 端到端 13 span 一条链 / 告警真 firing+送达 / Kafka 停机→自愈重发 / Noop 未配置计数 0→1）；账本 `CL-F-15` 销账；`CL-F-22`·`CL-F-23` 改挂 CL-09；第二方核对见 `stages/cl-03-kafka-reliability/report.md §6`） |
-| **CL-04** | Prompt 组装层（含同会话历史·滑动窗口 + 会话摘要） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`） |
+| **CL-04** | Prompt 组装层（含同会话历史·滑动窗口） | T2 | `prompt-pipeline-redesign`（**已落地** → `legacy-plans/landed/`） | — | ✅ **done**（2026-10-14，A 轨 · PR #213；16 测试点 15 PASS + 2 已裁定，逐点证据见 `stages/cl-04-prompt-assembly/report.md`）。⚠️ **2026-10-18 纠偏（`CL-D-31`）**：本行原写"含同会话历史·滑动窗口 **+ 会话摘要**"，但**会话摘要既不在 CL-04 的 18 个测试点里、也不在其源计划里、代码与账本同样没有** ⇒ 该表述已删，摘要改归 **CL-08**（`segments/` 与 `msg_summary_v` 都与会话摘要无关）。**同轮另发现**其 Phase 6 的"待握手项"（文本情绪前端半场从未接线）此前**只存在于阶段报告、不在账本** ⇒ 已补登 `CL-F-49` |
 | **CL-05** | 消息链路闭环 | T2 | `frontend-message-cache-offline-resilience` | — | ✅ **done（2026-10-16 收口）** —— 22 个测试点全部落四值（T-1~T-21 PASS；**T-22 PASS 但注明「这不是已修复」**）；Playwright 人可见钉 4 passed/1 skipped（跳过项由 IAB 补齐）+ ADR + 决策 42；`E2E-F-205/206` 已置 ✅；来源计划已迁 `legacy-plans/landed/`。**依据**：用户 2026-10-16 裁定 `CL-D-15`（`CL-F-11` 两次未复现 ⇒ 关闭不再阻塞，并判 done）。⚠️ 残留见 `stages/cl-05-message-pipeline/report.md §6.3`（`CL-F-11` **未修复**、`CL-F-20` 缓存未按用户隔离、Postgres keyset SQL 无测试直接执行 等） |
-| **CL-06** | 用户自定义 Agent（多角色） | T3 | `user-custom-agent-persona`（**2026-10-17 由单角色重写为多角色**） | CL-04 | 🟡 **in-progress（2026-10-17 开工）** —— Lane-CL-06，分支 `feat/cl-06-custom-agent`，**阶段 PR（draft）= [#255](https://github.com/Exist-a/emotion-echo/pull/255)**；计划 = `stages/cl-06-custom-agent/plan.md`（21 测试点 / 9 Phase）。**Phase 0 = 修 `CL-F-28`**（web 镜像构建 `npm error ERESOLVE`）——未修不得进入前端 Phase。裁定 `CL-D-21`~`CL-D-25` |
+| **CL-06** | 用户自定义 Agent（多角色） | T3 | `user-custom-agent-persona`（**2026-10-17 由单角色重写为多角色**） | CL-04 | ✅ **done（2026-10-18 收口）** —— Lane-CL-06，分支 `feat/cl-06-custom-agent`，**阶段 PR（draft）= [#255](https://github.com/Exist-a/emotion-echo/pull/255)**；计划 = `stages/cl-06-custom-agent/plan.md`，报告 = `stages/cl-06-custom-agent/report.md`。Phase 0~8 完成：**21 个测试点全部有结论** —— 三条原挂起项由用户 **2026-10-18 裁定**：T-18（音色听觉）= **PASS**、T-21（「小E」文案）= **按现文案定稿 PASS**、T-19（消息角色标注）形态 = **同一角色连续只标首条**并**当场落地 + 浏览器实测**（见 `stages/cl-06-custom-agent/report.md §4.4`）。运行态验收**抓出并修复 2 个真缺陷**（会话列表回读 `agentId` 恒 0 的投影漏字段 / 角色页 404 的手写路由表未注册，后者已加门禁 + 登账 CL-F-46）。新登账本：CL-F-40~43（Phase 0）、CL-F-45（TTS voice 无白名单）、CL-F-46（路由表陷阱）、CL-F-47（长跑容器健康不自愈阻断 seed）。**三条挂起项已于 2026-10-18 清零、`CL-F-50` 已销账 ⇒ **转 ready → 串行合并**。**收口依据**：用户 2026-10-18 裁定「本阶段先这样，没问题就合并」；此前第二方独立核对（A~K 十一项）已完成并整改 （见 report §6.3）；同日另完成界面重做（`CL-F-51`~`CL-F-54` 登账）、`CL-D-30` 补记、`CL-D-38`（dev 下发 STARTUP_STRICT）。⚠️ 本轮合并还**修掉了一处真实撞号**：本轨的 `CL-D-35` 与 main 上 CL-08 规划的 `CL-D-35/36/37` 撞号 ⇒ 本轨让号到 `CL-D-38`**）。**第二方独立核对已完成**（A~K 十一项，回执见 report §6.3）：抓出 4 处［我声称做到、实际未做到/未做全］的问题（黑名单可被**一个空格**绕过 / `gender` 未校验 / `≤5` 的 TOCTOU / 未校验的 `agentId` 旁路），**全部已修并取得运行态证据**（并发 10 ⇒ `200=5, 其余=[409]`）；整改进程中又在真栈上抓出 2 个单测测不到的缺陷（咨询锁 int4 溢出致接口全 500 / 配额类错误落 500），亦已修。新登账本：CL-F-40~43（Phase 0）、CL-F-45（TTS voice 无白名单）、CL-F-46（手写路由表陷阱）、CL-F-47（长跑容器健康不自愈）、CL-F-48（HTTP 传输层字段名不一致）。裁定 `CL-D-21`~`CL-D-29` |
 | **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`（**已落地**）、`fusion-result-consumption`（**已落地**） | CL-04 | ✅ **done（2026-10-16 收口）** —— **G 轨后端切片**（`bf401350` / PR #234）+ **H 轨前端半**（`349c9615` / PR #243，含 G2 角标按用户裁定移除）；**[A] 7/7 + 浏览器 [V] T-8/T-9 PASS**（生产构建 IAB 实测 + 第二方核对**独立复现**）；**T-10（数字人情绪）BLOCKED** —— 被既有账 **CL-F-17**（VRM 加载失败，他项）阻塞，接线与架构钉已在码内；顺带修复 **BFF `/api/v1/emotion/*` 整族 502**（未透传 X-User-Id，E2E-F-125 同型）；见 `stages/cl-07-{fusion-consumption,emotion-display}/report.md` |
 | **CL-08a** | 记忆 · **用户事实**（抽取 → 存 → 常带注入） | 最后 | `conversation-memory-pending-decision`（**2026-10-18 收敛为图记忆形态**） | CL-04 | pending（**2026-10-18 已提前规划**，详档 `stages/cl-08-memory/plan.md`；形态 = `CL-D-35` 图记忆 / `CL-D-36` embedding；**未开工**） |
 | **CL-08b** | 记忆 · **情绪模式**（趋势 / 触发 / 缓解因素 —— **天然是图上的关系 + 时序查询**） | 最后 | 同上 | CL-08a | pending（同上） |
@@ -293,12 +293,29 @@ T3 对话价值闭环（依赖 CL-04）
 2. **字号调整防抖**（`known-issues-backlog-2026-09-16.md` 残留）：现在连点 3 次会发 3 次 `PATCH /users/me`。
 3. **「我的空间」评估历史 / 趋势 / 立即评估入口**（`docs/plans/mental-health-history-trend-entry.md`，low）。
 
+**追加四项（2026-10-18 CL-06 UI 轮发现并排期；用户当日授权执行侧排期）**：
+4. **`CL-F-51`｜设计令牌的深色模式对比度**：`global.scss` 的 `.ee-btn-primary { color: #fff }` 在深色模式下
+   压在**浅**鼠尾草绿（`--ee-primary` = `#8ebaa8`）上，实测对比度约 **1.9:1**（AA 需 4.5:1）。修法已有现成令牌
+   **`--ee-on-primary`**（本轮为角色页补上的，浅 `#ffffff` / 深 `#171c1a`）。⚠️ 改它**必须同时改**
+   `global-buttons.test.ts`（它当前**钉着坏值** `color: #fff`），并复验 login / question 两页。
+5. **`CL-F-52`｜重复标题**：`pages/chat/setting.vue` 与 `pages/question/index.vue` 各有一组
+   「eyebrow + h2」，而布局 `layouts/nav.vue` 已渲染 h1 ⇒ 屏幕上一上一下两个同名标题（与角色页同型，已在角色页修掉）。
+6. **`CL-F-53`｜未定义的 CSS 变量**：全仓仍有 **12** 个"用了但没人定义"的变量
+   （`--color-ink` / `--ee-radius-xl` / `--ease-quiet` / `--motion-base` 等），散在 `ChatFile.vue`、
+   `conversation/[id].vue`、`login/*` 等；已被 `assets/scss/no-undefined-tokens.test.ts` 的**基线棘轮**冻结为
+   "只许减不许增"。逐条清理后须同步从该文件的 BASELINE 删除（否则守卫报"名单过期"）。
+7. **`CL-F-54`｜切换器点外面不关闭**：`AgentSwitcher.vue` 无 outside-click 处理（自绘下拉 `EeSelect.vue` 有）
+   ⇒ 同一页两个浮层行为不一致。
+
 **前置（建议纳入本阶段第一件事）**：**`CL-F-28`** —— `docker compose build emotion-echo-web` 当前 **ERESOLVE 失败**，
 **谁都构建不出 web 镜像** ⇒ 本阶段任何改动都**没法做 UI 验收**（只能拿旧镜像"验错对象"，E2E-F-70 同型）。
 不先修它，本阶段的验收会从一开始就失真。
 > ⚠️ 该前置是我（执行侧）按依赖关系提议的，**用户未单独拍板**；若不同意可移出本阶段。
+> ✅ **2026-10-18 更新**：`CL-F-28` 已由 **CL-06 Phase 0** 解决（`pnpm install --frozen-lockfile` + Node 22 基础镜像），
+> 本轮重建 web 镜像实测 `BUILD_EXIT=0`，该前置**事实上已不阻塞**。
 
-**做到什么程度（DoD，进入本阶段时再细化）**：三条都能在**本轨重建的 web 镜像**上做 IAB 验收 + 回归钉。
+**做到什么程度（DoD，进入本阶段时再细化）**：各项都能在**本轨重建的 web 镜像**上做 IAB 验收 + 回归钉；
+`CL-F-51` 须给出**改动前后的对比度实测数字**（不是"看起来好了"）。
 
 ### CL-12 · 后端可靠性补账 —— 已定范围（2026-10-17）
 
@@ -310,8 +327,27 @@ T3 对话价值闭环（依赖 CL-04）
    （D1 已由 CL-03 落地；D5 等待多副本触发，不在此列。）
 2. **Redis 双层读缓存**（`redis-two-layer-cache.md`）—— 实测当前**未落地**（业务 repository 无缓存读）。
 3. **BFF 登录限流补单测**：`isLocked` / `recordFailure` 写了但无测试（todo-pile D4）。
+4. **XTTS 退役**（**2026-10-17 用户拍板「另开一项做」**，`CL-D-26` / 账本 `CL-F-44`）—— 用户口径"XTTS 都不用了、主链路是云端"
+   （`CL-D-25` 已确认），而 `ADR-2026-10` 写的是"容器保留作离线回退（不删）"；实测其直连端点前端**零调用**。
+   退役动作 = 删 compose `emotion-echo-xtts` / BFF 兜底 provider / `/tts/stream` / ai-svc XTTS 客户端 / 前端死路由，
+   **落地时必须同时修订 `ADR-2026-10`**。⚠️ 本项**与 CL-06 解耦**（不混进角色功能），且**未裁前不动手删代码**。
 
 **做到什么程度（DoD，进入本阶段时再细化）**：每项先定"是缺陷还是优化"；缺测试的补齐；**不得只改文档**。
+
+**追加两项（2026-10-18 Prompt 组装链路复核后排期；用户当日授权执行侧排期）**：
+5. **Prompt 组装链路加固**（决策 **`CL-D-32` / `CL-D-33` / `CL-D-34`**，均已在 `decisions.md` 落定口径，**代码未动**）：
+   - `CL-D-32` **三条风格来源的优先级裁决**：用户设的角色语气/「不要」 vs 按意图注入的系统风格指令
+     （`intent.py` 的 `STYLE_INSTRUCTIONS`）冲突时**以角色设定为准**（与 `guard` 段既有口径一致）。
+     落地要点：该指令是 llm-service 在 BFF 组装之后**追加到同一条 system 消息尾部**的，排在 `guard` 段之后
+     ⇒ 裁决文案必须放在它**之后**或显式点名它。
+   - `CL-D-33` **意图分类的短 TTL 缓存**（首字延迟实测 +45%：940→1362ms，因规则式拿不准时在首字前多打一次 LLM）。
+     落地点：llm-service 内部，**不改 prompt 行为、不改 proto**；宣称收益前先用日志量出命中率。
+   - `CL-D-34①` **篇幅约束的跨语言横向一致性守卫**：Go `baseSystemPrompt` 与 Python `STYLE_LENGTH_CONSTRAINT`
+     各写一份"300 字"、各有自己的钉，但**只断言各自侧出现该字面量**，无横向比对 ⇒ 两侧措辞可各自漂移而双绿。
+     照**人格契约三方守卫**（`personality_contract_test.go`）的先例升级。
+6. **`CL-F-49`｜文本情绪前端半场**：`emotion` 字段的三个发送点写死 `'neutral'`（`[id].vue:415/463/483`）
+   ⇒ BFF 的"文本情绪"段线上恒不生效。**先要定"谁来分类当前轮文本情绪"**（前端本地分类 / BFF 复用 ai-svc 的 `/analyze`），
+   再谈接线。
 
 ---
 

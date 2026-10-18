@@ -38,7 +38,7 @@ type fakeTitleUpdater struct {
 	err     error
 }
 
-func (f *fakeTitleUpdater) UpdateConversation(_ context.Context, conversationID int64, title string) (*downstream.UpdateConversationResp, error) {
+func (f *fakeTitleUpdater) UpdateConversation(_ context.Context, conversationID int64, title string, _ int64) (*downstream.UpdateConversationResp, error) {
 	f.calls++
 	f.gotID = conversationID
 	f.gotName = title

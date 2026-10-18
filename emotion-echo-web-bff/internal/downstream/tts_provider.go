@@ -102,6 +102,20 @@ func NewCloudTTSProvider(opts CloudTTSOptions) TTSProvider {
 
 func (p *cloudTTSProvider) Name() string { return "cloud" }
 
+// resolveVoice 决定本次请求实际使用的音色：**请求携带的优先**，空/纯空白回落配置默认。
+//
+// CL-06：音色由"构造期全局单值"变成"可随角色逐请求变化"。链路上游（SiliconFlow）
+// 以 `model:voice` 形式接受音色，具体可用值由 user-svc 的角色档案白名单保证
+// （见 user_svc/internal/logic/agentlogic.go 的 AllowedAgentVoiceList）——
+// 本函数只负责"取哪个值"，不重复做白名单校验（避免两处校验漂移；
+// 另见 CL-F-45：TTS 端点侧仍未对 voice 做白名单，属残余风险，已登账）。
+func resolveVoice(configured, requested string) string {
+	if v := strings.TrimSpace(requested); v != "" {
+		return v
+	}
+	return configured
+}
+
 func (p *cloudTTSProvider) Synthesize(ctx context.Context, req TTSPhonemesReq) (*XTTSPhonemesResp, error) {
 	if p.opts.APIKey == "" {
 		return nil, fmt.Errorf("downstream: tts cloud: api key not configured")
@@ -113,7 +127,7 @@ func (p *cloudTTSProvider) Synthesize(ctx context.Context, req TTSPhonemesReq) (
 	payload, err := json.Marshal(cloudSpeechReq{
 		Model:          p.opts.Model,
 		Input:          req.Text,
-		Voice:          p.opts.Voice,
+		Voice:          resolveVoice(p.opts.Voice, req.Voice),
 		ResponseFormat: "wav", // plan §B.3：前端 base64ToWavBlob 不构造 WAV 头
 		SampleRate:     p.opts.SampleRate,
 		Speed:          clampSpeed(req.Speed),

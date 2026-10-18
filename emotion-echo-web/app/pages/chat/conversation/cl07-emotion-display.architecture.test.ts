@@ -42,9 +42,15 @@ describe('CL-07 情绪回显：对话页接线契约', () => {
     expect(src).not.toContain('byMessage')
   })
 
-  it('v-memo 依赖列表仍为原有 4 项（角标引入的依赖已回退）', () => {
+  // ⚠️ 本条 2026-10-18 由 CL-06 T-19 修订（当日裁定标注形态 = "同角色连续只标首条"）：
+  //    原断言是"依赖列表**恰好**这 4 项"，等于把"G2 角标依赖已回退"表达成全等。
+  //    T-19 的标注需要多一项 `item.agentTagName`（**另一个特性**的依赖）⇒ 改为
+  //    "4 项原依赖 + 本项白名单"的全等，**严格性不变**（任何其他多出的依赖仍会红）。
+  //    上面两条（`emotion-chip` / `byMessage` 不得出现）继续承载"角标不许回来"的原意。
+  it('v-memo 依赖列表 = 原有 4 项 + CL-06 T-19 的 agentTagName（不得再出现角标依赖）', () => {
     const m = src.match(/v-memo="(\[[^"]*\])"/)
     expect(m, '未找到 v-memo 依赖列表').not.toBeNull()
-    expect(m![1]).toBe('[item.id, item.content, item.status, item.contentType]')
+    expect(m![1]).toBe('[item.id, item.content, item.status, item.contentType, item.agentTagName]')
+    expect(m![1], '不得包含情绪角标（G2）相关依赖').not.toMatch(/emotion/i)
   })
 })

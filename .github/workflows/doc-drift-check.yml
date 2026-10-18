@@ -96,6 +96,14 @@ jobs:
         run: bash scripts/check_orphan_outputs.sh
       - name: 18 观测面配置契约
         run: node deploy/obs_monitoring.test.js
+      # CL-06 Phase 0（账本 CL-F-28）：web Dockerfile 契约此前**存在但没接线** ——
+      # 没有任何 workflow 引用它，所以它既不会红也不会拦。而它自身还有"命中注释"的假绿
+      # （断言 `npm ci` 命中的是注释，真实命令是 `npm install`）。两步都放在这里：
+      # 契约 + 负向自检（注释不得充当证据）。
+      - name: 19 web Dockerfile 契约（pnpm 权威锁 + 注释不得充当证据）
+        run: |
+          python scripts/test_web_dockerfile_p0r28_r29.py
+          python scripts/test_web_dockerfile_p0r28_r29.py --selftest
 
   # 汇总门禁（名「文档守卫总闸」= 分支保护的 required check，**名字不能改**）。
   doc-drift-gate:

@@ -1,0 +1,31 @@
+# CL-06 起栈验证用 override（AGENTS §8.1 条款 10 / H5：**带轨后缀 tag，不覆盖公共 tag**）
+#
+# 用途：把本轨改过代码的服务指向 `:cl06` 镜像，其余服务不动。
+# 为什么：compose 里 `image:` 是**写死的公共 tag**（无变量插值）⇒ 两条轨同时构建会互相覆盖
+#   （账本 CL-F-09：后者赢 ⇒ 可能"验了别人的代码"）。
+#
+# 用法（H6；本阶段在主工作区做，故"共享目录"就是本目录）：
+#   docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
+#     -f deploy/compose.dev.yml -f deploy/docker-compose.cl06-verify.yml \
+#     --env-file deploy/.env.local build <服务...>
+#   docker compose ... -f deploy/docker-compose.cl06-verify.yml \
+#     --env-file deploy/.env.local up -d --force-recreate --no-deps <服务...>
+#
+# 覆盖范围 = 本阶段改过代码的 4 个服务：
+#   user-svc   新表 user_agent_profile + 角色逻辑 + agentguard 内容黑名单
+#   chat-svc   conversations/messages 的 agent_id（c012/c013 迁移 + 透传）
+#   web-bff    角色端点 + 组装层 agent/guard 段 + 发消息角色快照 + /tts/phonemes 每请求 voice
+#   web        前端生产构建（角色管理页 + composer 切换器 + 音色接线）
+#     —— 前端**必须用镜像**而非 `pnpm dev`：CL-07 §A.4 实证 dev 模式不 hydration，
+#        而本阶段的关键验收（切换器交互）正是水合后行为。
+#
+# 前置：本目录无需额外拷贝（`deploy/tls` 与 `.env.local` 均在本目录 = 共享目录本身）。
+services:
+  emotion-echo-user-svc:
+    image: emotion-echo/user-svc:cl06
+  emotion-echo-chat-svc:
+    image: emotion-echo/chat-svc:cl06
+  emotion-echo-web-bff:
+    image: emotion-echo/web-bff:cl06
+  emotion-echo-web:
+    image: emotion-echo/web:cl06

@@ -38,6 +38,8 @@ type ConversationView struct {
 	IsPinned  bool   `json:"isPinned"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
+	// CL-06：本会话当前角色（0 = 未显式选择 ⇒ 前端按默认角色展示/发送）
+	AgentID int64 `json:"agentId"`
 }
 
 // UpdateConversationResp 对应 chat-svc types.UpdateConversationResp（Stage 72）
@@ -45,6 +47,8 @@ type UpdateConversationResp struct {
 	Success bool   `json:"success"`
 	Id      int64  `json:"id"`
 	Title   string `json:"title"`
+	// CL-06：生效后的角色 id（0 = 本次未改角色）
+	AgentID int64 `json:"agentId"`
 }
 
 // MessageView 对应 chat-svc types.MessageView
@@ -62,6 +66,8 @@ type MessageView struct {
 	FileName    string `json:"fileName,omitempty"`
 	TokensUsed  int    `json:"tokensUsed"`
 	CreatedAt   int64  `json:"createdAt"`
+	// CL-06：该 AI 消息由哪个角色产生（**写库时快照**；0 = 无角色边界的历史消息）
+	AgentID int64 `json:"agentId"`
 }
 
 // CreateConversationReq 对应 chat-svc types.CreateConversationReq
@@ -84,6 +90,8 @@ type SendMessageReq struct {
 	EmotionTag   string  `json:"emotionTag,omitempty"`
 	Intent       string  `json:"intent,omitempty"` // Stage 82 PR-3b：6 类消息意图
 	FileName     string  `json:"fileName,omitempty"` // Stage 89 PR-3：文件原始名（contentType=file 时）
+	// CL-06：本条消息的角色归属（0 = 不带 ⇒ 落 NULL；用户消息恒不带，只有 AI 回复带）
+	AgentID int64 `json:"agentId,omitempty"`
 }
 
 // ConversationPage 会话列表一页（CL-05 Phase 5 · keyset 分页）。
@@ -115,8 +123,9 @@ type ChatClient interface {
 	DeleteConversation(ctx context.Context, conversationID int64) error
 	// PinConversation 置顶/取消置顶会话（Stage 72 chat-svc RPC 已落地）
 	PinConversation(ctx context.Context, conversationID int64, isPinned bool) error
-	// UpdateConversation 更新会话（当前仅支持 title；Stage 72）
-	UpdateConversation(ctx context.Context, conversationID int64, title string) (*UpdateConversationResp, error)
+	// UpdateConversation 更新会话（Stage 72；CL-06 起为**两个可选动作共用一个 RPC**：
+	// title 改名 / agentID 切角色。各自传空值 = 不动该项）。
+	UpdateConversation(ctx context.Context, conversationID int64, title string, agentID int64) (*UpdateConversationResp, error)
 }
 
 // ChatClientOptions 构造选项
@@ -392,8 +401,8 @@ func (c *chatHTTPClient) PinConversation(ctx context.Context, conversationID int
 
 // UpdateConversation HTTP fallback：PATCH chat-svc /api/v1/conversations/:id。
 // chat-svc HTTP 端点未实现（Stage 72 走 gRPC only）→ 404 readError；未来补 HTTP 端点后自动工作。
-func (c *chatHTTPClient) UpdateConversation(ctx context.Context, conversationID int64, title string) (*UpdateConversationResp, error) {
-	body, err := json.Marshal(map[string]string{"title": title})
+func (c *chatHTTPClient) UpdateConversation(ctx context.Context, conversationID int64, title string, agentID int64) (*UpdateConversationResp, error) {
+	body, err := json.Marshal(map[string]any{"title": title, "agentId": agentID})
 	if err != nil {
 		return nil, err
 	}

@@ -14,6 +14,12 @@
 //   POST   /api/v1/auth/login     → Login       (Sprint E 新增)
 //   POST   /api/v1/auth/register  → Register    (Sprint E 新增)
 //
+// CL-06（2026-10-17，用户自定义 Agent·多角色）增补: 角色档案 3 个 RPC
+//   （BFF 侧端点随 CL-06 Phase 4 落地）
+//   GET    /api/v1/agents         → ListAgentProfiles（**含 get-or-create**：首次读会物化默认「小E」）
+//   POST   /api/v1/agents         → UpsertAgentProfile（id=0 新建 / >0 更新）
+//   DELETE /api/v1/agents/:id     → DeleteAgentProfile（软删除，幂等）
+//
 // 与 chat.proto 区别：
 //   - package: emotion_user.v1（user-svc）
 //   - go_package: emotionuser
@@ -53,6 +59,9 @@ const (
 	UserService_ResetPassword_FullMethodName                  = "/emotion_user.v1.UserService/ResetPassword"
 	UserService_VerifySecurityAnswerByUsername_FullMethodName = "/emotion_user.v1.UserService/VerifySecurityAnswerByUsername"
 	UserService_GetSecurityQuestionsByUsername_FullMethodName = "/emotion_user.v1.UserService/GetSecurityQuestionsByUsername"
+	UserService_ListAgentProfiles_FullMethodName              = "/emotion_user.v1.UserService/ListAgentProfiles"
+	UserService_UpsertAgentProfile_FullMethodName             = "/emotion_user.v1.UserService/UpsertAgentProfile"
+	UserService_DeleteAgentProfile_FullMethodName             = "/emotion_user.v1.UserService/DeleteAgentProfile"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -109,6 +118,25 @@ type UserServiceClient interface {
 	//
 	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
 	GetSecurityQuestionsByUsername(ctx context.Context, in *GetSecurityQuestionsByUsernameRequest, opts ...grpc.CallOption) (*GetSecurityQuestionsByUsernameResponse, error)
+	// ListAgentProfiles 列出当前用户的角色档案（每户 ≤5，不含已软删除）
+	//
+	// 鉴权：user_id 通过 metadata "x-user-id" 传（与 GetMe 一致）。
+	// **副作用（有意）**：用户**从未建过角色**时，按需物化一条默认「小E」再返回
+	//
+	//	（get-or-create；默认角色可改可删 —— 见 docs/closure-roadmap/decisions.md CL-D-21）。
+	ListAgentProfiles(ctx context.Context, in *ListAgentProfilesRequest, opts ...grpc.CallOption) (*ListAgentProfilesResponse, error)
+	// UpsertAgentProfile 新建（id=0）或更新（id>0）角色档案
+	//
+	// 服务端强制（客户端不可绕过）：
+	//   - 每户活跃角色 ≤5（超出 ⇒ InvalidArgument）；
+	//   - 字段上限 name≤20 / persona≤500 / tone≤100 / boundaries≤5 条且每条≤50；
+	//   - voice 必须在 8 个预置音色白名单内；
+	//   - 更新时角色必须属于当前用户（否则 NotFound，防越权改他人角色）。
+	UpsertAgentProfile(ctx context.Context, in *UpsertAgentProfileRequest, opts ...grpc.CallOption) (*AgentProfile, error)
+	// DeleteAgentProfile 软删除角色档案（幂等；重复删除不报错）
+	//
+	// 删除后该角色不再出现在列表；已被历史消息引用的 agent_id 不受影响（消息侧是快照语义）。
+	DeleteAgentProfile(ctx context.Context, in *DeleteAgentProfileRequest, opts ...grpc.CallOption) (*DeleteAgentProfileResponse, error)
 }
 
 type userServiceClient struct {
@@ -199,6 +227,36 @@ func (c *userServiceClient) GetSecurityQuestionsByUsername(ctx context.Context, 
 	return out, nil
 }
 
+func (c *userServiceClient) ListAgentProfiles(ctx context.Context, in *ListAgentProfilesRequest, opts ...grpc.CallOption) (*ListAgentProfilesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentProfilesResponse)
+	err := c.cc.Invoke(ctx, UserService_ListAgentProfiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) UpsertAgentProfile(ctx context.Context, in *UpsertAgentProfileRequest, opts ...grpc.CallOption) (*AgentProfile, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AgentProfile)
+	err := c.cc.Invoke(ctx, UserService_UpsertAgentProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) DeleteAgentProfile(ctx context.Context, in *DeleteAgentProfileRequest, opts ...grpc.CallOption) (*DeleteAgentProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteAgentProfileResponse)
+	err := c.cc.Invoke(ctx, UserService_DeleteAgentProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
@@ -253,6 +311,25 @@ type UserServiceServer interface {
 	//
 	// 鉴权：匿名调用（同 Login/Register）。userid 拦截器跳过。
 	GetSecurityQuestionsByUsername(context.Context, *GetSecurityQuestionsByUsernameRequest) (*GetSecurityQuestionsByUsernameResponse, error)
+	// ListAgentProfiles 列出当前用户的角色档案（每户 ≤5，不含已软删除）
+	//
+	// 鉴权：user_id 通过 metadata "x-user-id" 传（与 GetMe 一致）。
+	// **副作用（有意）**：用户**从未建过角色**时，按需物化一条默认「小E」再返回
+	//
+	//	（get-or-create；默认角色可改可删 —— 见 docs/closure-roadmap/decisions.md CL-D-21）。
+	ListAgentProfiles(context.Context, *ListAgentProfilesRequest) (*ListAgentProfilesResponse, error)
+	// UpsertAgentProfile 新建（id=0）或更新（id>0）角色档案
+	//
+	// 服务端强制（客户端不可绕过）：
+	//   - 每户活跃角色 ≤5（超出 ⇒ InvalidArgument）；
+	//   - 字段上限 name≤20 / persona≤500 / tone≤100 / boundaries≤5 条且每条≤50；
+	//   - voice 必须在 8 个预置音色白名单内；
+	//   - 更新时角色必须属于当前用户（否则 NotFound，防越权改他人角色）。
+	UpsertAgentProfile(context.Context, *UpsertAgentProfileRequest) (*AgentProfile, error)
+	// DeleteAgentProfile 软删除角色档案（幂等；重复删除不报错）
+	//
+	// 删除后该角色不再出现在列表；已被历史消息引用的 agent_id 不受影响（消息侧是快照语义）。
+	DeleteAgentProfile(context.Context, *DeleteAgentProfileRequest) (*DeleteAgentProfileResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -286,6 +363,15 @@ func (UnimplementedUserServiceServer) VerifySecurityAnswerByUsername(context.Con
 }
 func (UnimplementedUserServiceServer) GetSecurityQuestionsByUsername(context.Context, *GetSecurityQuestionsByUsernameRequest) (*GetSecurityQuestionsByUsernameResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSecurityQuestionsByUsername not implemented")
+}
+func (UnimplementedUserServiceServer) ListAgentProfiles(context.Context, *ListAgentProfilesRequest) (*ListAgentProfilesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAgentProfiles not implemented")
+}
+func (UnimplementedUserServiceServer) UpsertAgentProfile(context.Context, *UpsertAgentProfileRequest) (*AgentProfile, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertAgentProfile not implemented")
+}
+func (UnimplementedUserServiceServer) DeleteAgentProfile(context.Context, *DeleteAgentProfileRequest) (*DeleteAgentProfileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteAgentProfile not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -452,6 +538,60 @@ func _UserService_GetSecurityQuestionsByUsername_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_ListAgentProfiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentProfilesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).ListAgentProfiles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_ListAgentProfiles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).ListAgentProfiles(ctx, req.(*ListAgentProfilesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_UpsertAgentProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertAgentProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).UpsertAgentProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_UpsertAgentProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).UpsertAgentProfile(ctx, req.(*UpsertAgentProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_DeleteAgentProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteAgentProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).DeleteAgentProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_DeleteAgentProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).DeleteAgentProfile(ctx, req.(*DeleteAgentProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -490,6 +630,18 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSecurityQuestionsByUsername",
 			Handler:    _UserService_GetSecurityQuestionsByUsername_Handler,
+		},
+		{
+			MethodName: "ListAgentProfiles",
+			Handler:    _UserService_ListAgentProfiles_Handler,
+		},
+		{
+			MethodName: "UpsertAgentProfile",
+			Handler:    _UserService_UpsertAgentProfile_Handler,
+		},
+		{
+			MethodName: "DeleteAgentProfile",
+			Handler:    _UserService_DeleteAgentProfile_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

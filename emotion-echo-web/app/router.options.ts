@@ -59,6 +59,17 @@ export default {
           path: 'setting',
           component: () => import('~/pages/chat/setting.vue'),
         },
+        // CL-06：角色管理（用户自定义 Agent）。
+        // ⚠️ **必须在这里登记** —— 本文件是**手写路由表**（`routes: (_routes) => [...]`
+        // 忽略了自动生成的路由），所以"文件系统即路由"在本仓**不成立**：
+        // 只建 `app/pages/chat/agents.vue` 不会产生任何路由，访问会 404。
+        // 这条陷阱由 CL-06 Phase 8 生产构建实测抓出（本地 build 同样可复现），
+        // 回归钉见 `app/router.options.contract.test.ts`（会扫 pages/ 全量比对）。
+        {
+          name: 'chat-agents',
+          path: 'agents',
+          component: () => import('~/pages/chat/agents.vue'),
+        },
         {
           name: 'chat-dashboard',
           path: 'dashboard',

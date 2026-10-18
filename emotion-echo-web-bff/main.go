@@ -399,6 +399,8 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 		Transport: downstream.UserTransport(c.UserService.Transport),
 		GRPCConn:  userGRPCConn,
 	}))
+	// CL-06：角色档案客户端（user-svc gRPC；无 HTTP 端点 ⇒ 不提供 fallback）
+	svcCtx.SetUserAgent(downstream.NewAgentProfileGRPCClient(userGRPCConn))
 	svcCtx.SetChat(downstream.NewChatClient(downstream.ChatClientOptions{
 		BaseURL: c.ChatService.BaseURL, TimeoutMs: c.ChatService.TimeoutMs,
 		Resolver:  resolver,
@@ -514,7 +516,9 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 
 	// 业务 handler（各自 Register）
 	handler.NewUserHandler(s.User).Register(r)
-	handler.NewChatHandlerWithIntent(s.Chat, llmIntent).Register(r)
+	handler.NewChatHandlerWithIntent(s.Chat, llmIntent).WithAgentProfiles(s.UserAgent).Register(r)
+	// CL-06：角色档案端点（增改删 + 列表；含默认「小E」按需物化）
+	handler.NewAgentHandler(s.UserAgent).Register(r)
 	// E2E-31（2026-10-08）：survey handler 不再注入 assessment HTTP base——
 	// 5 处 `assessmentBase != ""` 恒真旁路已删除，统一走 s.Assessment（gRPC）。
 	handler.NewSurveyHandler(s.Assessment).Register(r)
@@ -568,7 +572,8 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	// E2E-F-122：会话情绪历史来源（face/voice payload 空时回落注入"最近情绪模式"；
 	// s.EmotionQ nil 时 NewEmotionHistorySource 内部 no-op，行为等同 D-14 最小模式）
 	emotionSrc := downstream.NewEmotionHistorySource(s.EmotionQ)
-	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, handler.AIStreamDeps{LLM: llmStreamer, Files: s.Chat, Chat: s.Chat, Personality: personalitySrc, Emotion: emotionSrc}))
+	// CL-06：AgentProfiles = 用户自定义角色来源（组装层 agent 段 + 写库角色快照）
+	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, handler.AIStreamDeps{LLM: llmStreamer, Files: s.Chat, Chat: s.Chat, Personality: personalitySrc, Emotion: emotionSrc, AgentProfiles: s.UserAgent}))
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})

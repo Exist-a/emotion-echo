@@ -27,6 +27,14 @@ services:
   # BFF 覆盖：dev 调试便利（验证码回显 + 信任 APISIX 注入的身份）
   emotion-echo-web-bff:
     environment:
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
+      # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
+      # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
+      # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
+      # 机制在 shared/pkg/bootstrap 早已存在，但此前**从未下发给任何容器**。
+      # 先例 = docker-compose.clp2-strict.yml（CL-02 实验配置，只覆盖 user-svc）。
+      STARTUP_STRICT: "true"
+      STARTUP_STRICT_DEPS: "postgres"
       # prod 必须 0，dev 默认 1（验证码回显方便 forget-pwd e2e）
       BFF_DEV_RETURN_CODE: ${BFF_DEV_RETURN_CODE:-1}
       # dev 默认 true：BFF 只认 APISIX 注入的 X-User-Id（dev 也走 :19080 网关链路）
@@ -52,23 +60,63 @@ services:
   # 业务 svc CORS（dev 默认允许 Nuxt 本地端口；prod 用域名白名单）
   emotion-echo-chat-svc:
     environment:
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
+      # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
+      # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
+      # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
+      # 机制在 shared/pkg/bootstrap 早已存在，但此前**从未下发给任何容器**。
+      # 先例 = docker-compose.clp2-strict.yml（CL-02 实验配置，只覆盖 user-svc）。
+      STARTUP_STRICT: "true"
+      STARTUP_STRICT_DEPS: "postgres"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
       # dev 默认 DEBUG（看调试日志）；prod 设 INFO（apps.yml 默认值）
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   emotion-echo-user-svc:
     environment:
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
+      # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
+      # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
+      # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
+      # 机制在 shared/pkg/bootstrap 早已存在，但此前**从未下发给任何容器**。
+      # 先例 = docker-compose.clp2-strict.yml（CL-02 实验配置，只覆盖 user-svc）。
+      STARTUP_STRICT: "true"
+      STARTUP_STRICT_DEPS: "postgres"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   emotion-echo-ai-svc:
     environment:
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
+      # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
+      # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
+      # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
+      # 机制在 shared/pkg/bootstrap 早已存在，但此前**从未下发给任何容器**。
+      # 先例 = docker-compose.clp2-strict.yml（CL-02 实验配置，只覆盖 user-svc）。
+      STARTUP_STRICT: "true"
+      STARTUP_STRICT_DEPS: "postgres"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   emotion-echo-analytics-svc:
     environment:
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
+      # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
+      # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
+      # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
+      # 机制在 shared/pkg/bootstrap 早已存在，但此前**从未下发给任何容器**。
+      # 先例 = docker-compose.clp2-strict.yml（CL-02 实验配置，只覆盖 user-svc）。
+      STARTUP_STRICT: "true"
+      STARTUP_STRICT_DEPS: "postgres"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   emotion-echo-assessment-svc:
     environment:
+      # dev 起栈自愈（CL-D-38，2026-10-18 用户裁定；原编 CL-D-35，与 CL-08 规划撞号故让号）：依赖未就绪 ⇒ **退出启动**，
+      # 交给本服务既有的 `restart: on-failure` 重试到就绪。取代"重试耗尽后降级继续跑、
+      # 且永不恢复"（CL-F-16 的 daemon 重启路径：Docker Desktop 整栈重启实测会犯 ——
+      # 服务先于 Postgres 就绪启动 ⇒ /health/ready 恒 dbOk:false，须人工 restart）。
+      # 机制在 shared/pkg/bootstrap 早已存在，但此前**从未下发给任何容器**。
+      # 先例 = docker-compose.clp2-strict.yml（CL-02 实验配置，只覆盖 user-svc）。
+      STARTUP_STRICT: "true"
+      STARTUP_STRICT_DEPS: "postgres"
       CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:3000}"
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
   # emotion-llm-service 也覆盖（Python 端调试日志同样需要 DEBUG 才能看 trace）

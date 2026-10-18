@@ -39,6 +39,7 @@ type fakeChatClient struct {
 	gotCursor    string // CL-05 Phase 5：捕获透传给下游的游标
 	nextCursor   string // CL-05 Phase 5：下游回的下一页游标
 	gotTitle     string
+	gotAgentID   int64 // CL-06：切角色透传值
 	gotIsPinned  bool
 }
 
@@ -79,13 +80,13 @@ func (f *fakeChatClient) PinConversation(_ context.Context, conversationID int64
 	return f.pinErr
 }
 
-func (f *fakeChatClient) UpdateConversation(_ context.Context, conversationID int64, title string) (*downstream.UpdateConversationResp, error) {
-	f.gotConvID, f.gotTitle = conversationID, title
+func (f *fakeChatClient) UpdateConversation(_ context.Context, conversationID int64, title string, agentID int64) (*downstream.UpdateConversationResp, error) {
+	f.gotConvID, f.gotTitle, f.gotAgentID = conversationID, title, agentID
 	if f.updateErr != nil {
 		return nil, f.updateErr
 	}
 	if f.updateResp == nil {
-		f.updateResp = &downstream.UpdateConversationResp{Success: true, Id: conversationID, Title: title}
+		f.updateResp = &downstream.UpdateConversationResp{Success: true, Id: conversationID, Title: title, AgentID: agentID}
 	}
 	return f.updateResp, nil
 }

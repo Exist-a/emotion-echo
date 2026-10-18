@@ -205,6 +205,8 @@ interface QueuedSegment {
   onLipSync: LipSyncCallback
   speed: number
   volume: number
+  /** CL-06：该段使用的音色（入队时快照 —— 中途切角色不影响已入队的段） */
+  voice?: string
 }
 
 let segmentQueue: QueuedSegment[] = []
@@ -221,6 +223,8 @@ async function fetchPhonemes(
   text: string,
   speed: number,
   volume: number,
+  // CL-06：可选音色（会话当前角色的音色）。空 = 不带该字段 ⇒ 服务端用配置默认（零回归）。
+  voice?: string,
 ): Promise<TTSResponse> {
   const base = getApiBaseUrl(useRuntimeConfig())
   const token = getClientAccessToken()
@@ -232,7 +236,14 @@ async function fetchPhonemes(
   const resp = await fetch(`${base}${API_ROUTES.ttsPhonemes.path}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ text, language: 'zh-cn', speed, volume }),
+    // CL-06：voice 为空时**不出现该键**（保持与现状逐字同形的请求体）
+    body: JSON.stringify({
+      text,
+      language: 'zh-cn',
+      speed,
+      volume,
+      ...(voice ? { voice } : {}),
+    }),
   })
 
   if (!resp.ok) {
@@ -467,6 +478,8 @@ const playStream = async (
   // 真实调用方（useDigitalHumanTTS）显式传入 userConfig.ttsSpeed 解析值。
   speed: number = 1,
   volume: number = 2.0,
+  // CL-06：本会话当前角色的音色（不传 = 服务端配置默认，与现状逐字同形）
+  voice?: string,
 ): Promise<void> => {
   const cleanText = stripMarkdown(text).trim()
   if (!cleanText) return
@@ -476,8 +489,8 @@ const playStream = async (
 
   const gen = currentGen
   // 入队即预取：与当前段播放并行（消除衔接时的全量推理等待）
-  const fetchPromise = fetchPhonemes(readableText, speed, volume)
-  segmentQueue.push({ gen, fetchPromise, onLipSync, speed, volume })
+  const fetchPromise = fetchPhonemes(readableText, speed, volume, voice)
+  segmentQueue.push({ gen, fetchPromise, onLipSync, speed, volume, voice })
   void pumpQueue()
 }
 

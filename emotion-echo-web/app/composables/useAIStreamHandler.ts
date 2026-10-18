@@ -24,6 +24,14 @@ export interface AIStreamParams {
   faceEmotion?: string
   faceConfidence?: number
   voiceConfidence?: number
+  /**
+   * CL-06：本会话当前角色（用户自定义 Agent）的 id。
+   *
+   * 语义：客户端只表达"想要哪一个"——BFF 侧会用**调用者自己的角色列表**解析它
+   * （不存在/别人的 ⇒ 回落默认角色），故这里传值不构成越权（见 BFF resolveAgentProfile）。
+   * 不传/0 = 用默认角色。
+   */
+  agentId?: number
 }
 
 export interface AIStreamCallbacks {

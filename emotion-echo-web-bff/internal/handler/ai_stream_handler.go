@@ -54,6 +54,14 @@ type emotionSource interface {
 	RecentEmotionPattern(ctx context.Context, conversationID int64) (string, error)
 }
 
+// agentProfileSource 当前用户的角色档案来源（CL-06）。
+//
+// 取数失败 / 无档案 ⇒ 调用方**不注入角色段也不盖角色戳**（增强不是依赖，同 personalitySource 纪律）。
+// 只要 List 一个方法 ⇒ 测试替身极小；downstream.AgentProfileClient 天然满足它。
+type agentProfileSource interface {
+	ListAgentProfiles(ctx context.Context) ([]downstream.AgentProfile, error)
+}
+
 // maxFileAttachments 每次 ai/stream 注入的最新文件消息上限（控制拉取/抽取开销）
 const maxFileAttachments = 2
 
@@ -125,6 +133,8 @@ type AIStreamHandler struct {
 	emotion emotionSource
 	// titleUpdater 是会话标题更新能力（T-18）；nil = 不生成标题（默认由 Chat 推断，见构造函数）
 	titleUpdater titleConvUpdater
+	// agents 是当前用户的角色档案来源（CL-06 用户自定义 Agent）；nil = 不注入角色段、不盖角色戳
+	agents agentProfileSource
 }
 
 // AIStreamDeps 是 AIStreamHandler 的依赖集合。
@@ -147,6 +157,8 @@ type AIStreamDeps struct {
 	// TitleUpdater 是会话标题更新能力（T-18）。通常**不必显式传**：
 	// 构造函数会从 Chat 推断（Chat 已满足该窄接口）；显式传只为测试替身。
 	TitleUpdater titleConvUpdater
+	// AgentProfiles 是角色档案来源（CL-06）；nil = 无角色段（= 现状行为，零回归）
+	AgentProfiles agentProfileSource
 }
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
@@ -165,6 +177,7 @@ func NewAIStreamHandlerWithDeps(cfg config.Config, deps AIStreamDeps) gin.Handle
 		personality:  deps.Personality,
 		emotion:      deps.Emotion,
 		titleUpdater: deps.TitleUpdater,
+		agents:       deps.AgentProfiles,
 	}
 	// T-18：未显式传标题更新器时，从 Chat 推断（生产侧 Chat 已满足该窄接口 ⇒ main.go 无需改动装配）
 	if h.titleUpdater == nil {
@@ -175,10 +188,68 @@ func NewAIStreamHandlerWithDeps(cfg config.Config, deps AIStreamDeps) gin.Handle
 	return h.ServeHTTP
 }
 
+// resolveAgentProfile 解析本轮**生效**的用户自定义角色（CL-06 · 决议 CL-D-30）。
+//
+// 输入是请求携带的 `agentId`；输出一律是"本轮提示词用谁、写库就记谁"的那一份档案。
+// 解析规则（顺序即优先级）：
+//  1. 无角色来源 / 取数失败 / 用户一份角色都没有 ⇒ nil（**无角色段、不盖戳**；增强不是依赖）；
+//  2. 请求指定的 id ∈ 自己的角色列表 ⇒ 用它（客户端传的 id 必须落在**自己的**列表里 ⇒
+//     传别人的角色 id 取不到任何东西，等价于未指定，不构成越权）；
+//  3. 请求指定的 id 找不到（已删 / 非本人）⇒ **回落默认角色**（T-4：不报错、不给空 prompt）；
+//  4. 未指定（0）⇒ 默认角色（`isDefault`），无该标记时取列表首项兜底。
+//
+// 为什么不让 BFF 反过来读会话的 agent_id：那需要给 chat-svc 新增"单会话查询"RPC，
+// 且仍要去 user-svc 取档案内容（两次调用）；"请求携带 + 本地列表校验"一次调用即可，
+// 语义还与"这条回复实际由谁产生"天然一致（快照与人设同源，不会 A 答 B 标）。
+func (h *AIStreamHandler) resolveAgentProfile(ctx context.Context, requestedID int64) *downstream.AgentProfile {
+	if h.agents == nil {
+		return nil
+	}
+	profiles, err := h.agents.ListAgentProfiles(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "ai-stream list agent profiles failed, skipping agent persona", "err", err)
+		return nil
+	}
+	if len(profiles) == 0 {
+		return nil
+	}
+	if requestedID > 0 {
+		for i := range profiles {
+			if profiles[i].ID == requestedID {
+				return &profiles[i]
+			}
+		}
+	}
+	return defaultAgentProfile(profiles)
+}
+
+// defaultAgentProfile 取默认角色（`isDefault`）；无该标记时取首项兜底。
+//
+// 兜底取首项而非返回 nil：列表非空却无 `isDefault` 属上游数据异常，
+// 此时"用列表第一个"比"整轮没有人设"更接近用户预期（user-svc 侧正常恒有默认「小E」）。
+func defaultAgentProfile(profiles []downstream.AgentProfile) *downstream.AgentProfile {
+	for i := range profiles {
+		if profiles[i].IsDefault {
+			return &profiles[i]
+		}
+	}
+	return &profiles[0]
+}
+
+// agentIDOf 取档案 id（nil ⇒ 0 = 不盖角色戳）
+func agentIDOf(p *downstream.AgentProfile) int64 {
+	if p == nil {
+		return 0
+	}
+	return p.ID
+}
+
 // saveAIMessage 在 SSE 流完成后保存 AI 回复到 chat-svc（Stage 109b 修复）。
 // 同步写（用 request ctx + session.WithRequestAuth 保留 x-user-id 注入 gRPC metadata），
 // 失败仅记日志不阻断 SSE 已发出的响应。
-func (h *AIStreamHandler) saveAIMessage(c *gin.Context, conversationID, content string) {
+//
+// CL-06：额外记 `agentID` —— 写库时该会话的角色快照（0 = 无角色 ⇒ 落 NULL）。
+func (h *AIStreamHandler) saveAIMessage(c *gin.Context, conversationID, content string, agentID int64) {
 	if h.chat == nil || conversationID == "" || strings.TrimSpace(content) == "" {
 		return
 	}
@@ -191,10 +262,11 @@ func (h *AIStreamHandler) saveAIMessage(c *gin.Context, conversationID, content 
 	_, err = h.chat.SendMessage(session.WithRequestAuth(c), convID, downstream.SendMessageReq{
 		Role:    "assistant",
 		Content: content,
+		AgentID: agentID, // CL-06：这条回复由哪个角色产生
 	})
 	if err != nil {
 		slog.ErrorContext(c.Request.Context(), "ai-stream save AI message failed",
-			"conversation_id", convID, "err", err)
+			"conversation_id", convID, "agent_id", agentID, "err", err)
 	}
 }
 
@@ -284,6 +356,10 @@ type aiStreamReq struct {
 	FaceConfidence float64 `json:"faceConfidence"`
 	VoiceEmotion   string  `json:"voiceEmotion"`
 	VoiceConfidence float64 `json:"voiceConfidence"`
+	// AgentID CL-06：本会话当前角色（前端切换器带上来；0 = 未指定 ⇒ 用用户默认角色）。
+	// ⚠️ 客户端传值**不可信** —— 只当"想要哪一个"，实际生效值一律经 resolveAgentProfile
+	// 在**自己的**角色列表里解析（不存在 ⇒ 回落默认）。
+	AgentID int64 `json:"agentId"`
 	// ShouldGenerateTitle T-18：前端显式要求"生成/重命名会话标题"。
 	// 此前该字段**不在结构里** ⇒ 静默丢弃（Phase 0 缺陷 8 的一项）；现接住并参与触发条件。
 	ShouldGenerateTitle bool `json:"shouldGenerateTitle"`
@@ -316,6 +392,10 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "validation: messages is required", "data": nil})
 		return
 	}
+
+	// CL-06：解析本轮生效角色（llm-gRPC / HTTP 直连 / mock 三条路径共用同一份）。
+	// 取数失败/无档案 ⇒ nil ⇒ 不注入角色段也不盖戳（与 personality/emotion 同纪律）。
+	agent := h.resolveAgentProfile(session.WithRequestAuth(c), req.AgentID)
 
 	// mock 回复（按情绪关键词给出共情话术）
 	reply := mockEmpathyReply(userContent)
@@ -352,6 +432,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			voiceConfidence: req.VoiceConfidence,
 			textEmotion:     strings.TrimSpace(req.Emotion), // CL-04 Phase 6：文本情绪（neutral=无信号）
 			userContent:     userContent,
+			agent:            agent, // CL-06：用户自定义角色（两处必须都传）
 		})
 		ctx, cancel := context.WithCancel(c.Request.Context())
 		defer cancel()
@@ -380,7 +461,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			if flusher0 != nil {
 				flusher0.Flush()
 			}
-			h.saveAIMessage(c, req.ConversationID, llmAccumulated.String())
+			h.saveAIMessage(c, req.ConversationID, llmAccumulated.String(), agentIDOf(agent))
 			// T-18：第一轮对话后按对话内容生成会话标题（best-effort，不影响已发出的 SSE）
 			h.maybeGenerateTitle(session.WithRequestAuth(c),
 				parseConversationID(req.ConversationID), userContent, req.ShouldGenerateTitle)
@@ -422,6 +503,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			voiceConfidence: req.VoiceConfidence,
 			textEmotion:     strings.TrimSpace(req.Emotion), // CL-04 Phase 6：文本情绪（neutral=无信号）
 			userContent:     userContent,
+			agent:            agent, // CL-06：用户自定义角色（两处必须都传）
 		})
 		llmReq := downstream.LLMChatReq{
 			Model:       h.cfg.LLM.Model,
@@ -453,7 +535,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		if flusher != nil {
 			flusher.Flush()
 		}
-		h.saveAIMessage(c, req.ConversationID, llmAccumulated.String())
+		h.saveAIMessage(c, req.ConversationID, llmAccumulated.String(), agentIDOf(agent))
 		h.maybeGenerateTitle(session.WithRequestAuth(c),
 			parseConversationID(req.ConversationID), userContent, req.ShouldGenerateTitle)
 		return
@@ -483,7 +565,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 		flusher.Flush()
 	}
 	// Sprint 109b: 异步保存 AI 回复到 chat-svc (防止刷新后丢失)
-	h.saveAIMessage(c, req.ConversationID, reply)
+	h.saveAIMessage(c, req.ConversationID, reply, agentIDOf(agent))
 	h.maybeGenerateTitle(session.WithRequestAuth(c),
 		parseConversationID(req.ConversationID), userContent, req.ShouldGenerateTitle)
 }

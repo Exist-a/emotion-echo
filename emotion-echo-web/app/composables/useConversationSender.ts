@@ -12,6 +12,11 @@ import type { MessageWithStatus } from '~/types/api'
 export interface UseConversationSenderOptions {
   onLipShapeChange?: (shape: string) => void
   onEmotionChange?: (emotion: string) => void
+  /**
+   * CL-06：本会话当前角色的音色提供者（**函数而非值** —— 用户可在对话中途切角色，
+   * 传值会锁死在 setup 那一刻的音色上）。
+   */
+  getAgentVoice?: () => string | undefined
 }
 
 export const useConversationSender = (options: UseConversationSenderOptions = {}) => {
@@ -42,7 +47,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
     }
 
     if (accumulatedDeltaText.value.trim().length > 0) {
-      playText(accumulatedDeltaText.value)
+      playText(accumulatedDeltaText.value, options.getAgentVoice?.())
       accumulatedDeltaText.value = ''
     }
     flushRemaining()
@@ -95,6 +100,8 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
       // 这里携带服务端真实消息 id —— ai/stream 的 messageId 用它绑定
       // （face_emotion_results.message_id / 融合按 message_id 取行）。
       userMessageId?: string
+      // CL-06：本会话当前角色 id（BFF 据此注入角色段 + 给 AI 消息盖角色快照）
+      agentId?: number
     },
   ) => {
     if (messageStore.currentSessionId !== conversationId) {
@@ -149,6 +156,8 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
         // D-14：face 情绪上下文透传（摄像头未开/超时时字段 undefined，BFF 不污染 prompt）
         faceEmotion: extraParams?.faceEmotion,
         faceConfidence: extraParams?.faceConfidence,
+        // CL-06：角色（BFF 侧校验归属 + 组装 agent/guard 段 + 写库快照）
+        agentId: extraParams?.agentId,
       },
       {
         onDelta: (delta) => {
@@ -165,7 +174,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
               clearTimeout(ttsDebounceTimer)
               ttsDebounceTimer = null
             }
-            playText(accumulatedDeltaText.value)
+            playText(accumulatedDeltaText.value, options.getAgentVoice?.())
             accumulatedDeltaText.value = ''
           } else {
             if (ttsDebounceTimer) {
@@ -173,7 +182,7 @@ export const useConversationSender = (options: UseConversationSenderOptions = {}
             }
             ttsDebounceTimer = setTimeout(() => {
               if (accumulatedDeltaText.value.trim().length > 0) {
-                playText(accumulatedDeltaText.value)
+                playText(accumulatedDeltaText.value, options.getAgentVoice?.())
                 accumulatedDeltaText.value = ''
               }
             }, 500)

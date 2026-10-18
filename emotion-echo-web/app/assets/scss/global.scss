@@ -15,7 +15,12 @@
   --ee-primary: #5f8f7b;
   --ee-primary-hover: #4f7e6a;
   --ee-primary-soft: #e6f0eb;
+  /* 压在 --ee-primary 上的文字色。深色模式下 primary 是**浅**绿，所以它必须变深 —— 
+     任何写死的 #fff 都会在深色模式下白字压浅底（实测对比度 ~1.9:1，AA 要 4.5:1）。 */
+  --ee-on-primary: #ffffff;
   --ee-accent: #d98773;
+  --ee-danger: #b4544a;
+  --ee-danger-soft: #f6e7e4;
   --ee-border: #e0e8e3;
   --ee-focus: rgba(95, 143, 123, 0.28);
   --ee-radius-sm: 6px;
@@ -37,7 +42,10 @@ html.dark {
   --ee-primary: #8ebaa8;
   --ee-primary-hover: #a8cbbd;
   --ee-primary-soft: #2b4036;
+  --ee-on-primary: #171c1a;
   --ee-accent: #e0a091;
+  --ee-danger: #e8a49b;
+  --ee-danger-soft: #3a2724;
   --ee-border: #39483f;
   --ee-focus: rgba(142, 186, 168, 0.3);
   --radius-composer: 20px;

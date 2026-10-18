@@ -101,15 +101,18 @@ func (x *CreateConversationRequest) GetUserId() int64 {
 
 // Conversation 会话视图
 type Conversation struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	MsgCount      int32                  `protobuf:"varint,4,opt,name=msg_count,json=msgCount,proto3" json:"msg_count,omitempty"`
-	Status        int32                  `protobuf:"varint,5,opt,name=status,proto3" json:"status,omitempty"`                        // 0=open 1=closed
-	CreatedAt     int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix seconds
-	UpdatedAt     int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	IsPinned      bool                   `protobuf:"varint,8,opt,name=is_pinned,json=isPinned,proto3" json:"is_pinned,omitempty"` // 置顶状态（Stage 72 PinConversation 落地）
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId    int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Title     string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	MsgCount  int32                  `protobuf:"varint,4,opt,name=msg_count,json=msgCount,proto3" json:"msg_count,omitempty"`
+	Status    int32                  `protobuf:"varint,5,opt,name=status,proto3" json:"status,omitempty"`                        // 0=open 1=closed
+	CreatedAt int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix seconds
+	UpdatedAt int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	IsPinned  bool                   `protobuf:"varint,8,opt,name=is_pinned,json=isPinned,proto3" json:"is_pinned,omitempty"` // 置顶状态（Stage 72 PinConversation 落地）
+	// CL-06（用户自定义 Agent·多角色）：本会话**当前角色**。
+	// 0 = 未显式选择 ⇒ 用该用户的默认角色（默认「小E」）；可随时切换、只影响本会话。
+	AgentId       int64 `protobuf:"varint,9,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -200,6 +203,13 @@ func (x *Conversation) GetIsPinned() bool {
 	return false
 }
 
+func (x *Conversation) GetAgentId() int64 {
+	if x != nil {
+		return x.AgentId
+	}
+	return 0
+}
+
 // SendMessageRequest 发送消息请求
 type SendMessageRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -215,7 +225,10 @@ type SendMessageRequest struct {
 	Intent string `protobuf:"bytes,8,opt,name=intent,proto3" json:"intent,omitempty"`
 	// Stage 89 PR-1：文件消息的原始文件名（可选；content=MinIO URL，原始名此前只存在
 	// 于上传瞬间的浏览器内存中，对象 key 仅 uid+hash+ext）。供 LLM prompt 与前端展示
-	FileName      string `protobuf:"bytes,9,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	FileName string `protobuf:"bytes,9,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	// CL-06：本条消息由哪个角色产生（**快照**语义 —— 写入时取该会话当时的角色）。
+	// 仅 assistant 消息有值；0 = 未记录（历史消息 / 角色功能上线前）。
+	AgentId       int64 `protobuf:"varint,10,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -313,6 +326,13 @@ func (x *SendMessageRequest) GetFileName() string {
 	return ""
 }
 
+func (x *SendMessageRequest) GetAgentId() int64 {
+	if x != nil {
+		return x.AgentId
+	}
+	return 0
+}
+
 // Message 消息视图
 type Message struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -329,7 +349,10 @@ type Message struct {
 	// Stage 82 PR-3b：消息意图（6 类；” = 未分类）
 	Intent string `protobuf:"bytes,9,opt,name=intent,proto3" json:"intent,omitempty"`
 	// Stage 89 PR-1：文件消息原始文件名（与 content_type='file' 配套；空 = 非文件或未提供）
-	FileName      string `protobuf:"bytes,10,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	FileName string `protobuf:"bytes,10,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	// CL-06：该条 AI 消息由哪个角色产生（快照：角色改名/删除不影响历史可读）。
+	// 0 = 未记录（历史消息 / 角色功能上线前）。
+	AgentId       int64 `protobuf:"varint,11,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -432,6 +455,13 @@ func (x *Message) GetFileName() string {
 		return x.FileName
 	}
 	return ""
+}
+
+func (x *Message) GetAgentId() int64 {
+	if x != nil {
+		return x.AgentId
+	}
+	return 0
 }
 
 // ListMessagesRequest 列消息请求
@@ -904,9 +934,12 @@ func (x *PinConversationResponse) GetIsPinned() bool {
 type UpdateConversationRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ConversationId int64                  `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
-	Title          string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"` // 当前仅支持改标题
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	Title          string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"` // 改标题（CL-06 起：与 agent_id **同一个 RPC 的两个可选动作**）
+	// CL-06：把本会话的当前角色改为该 id（0 = 本次不改角色）。
+	// 语义：只影响本会话；切换后**后续**消息用新角色（历史保留原 agent_id 快照）。
+	AgentId       int64 `protobuf:"varint,3,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateConversationRequest) Reset() {
@@ -953,12 +986,22 @@ func (x *UpdateConversationRequest) GetTitle() string {
 	return ""
 }
 
+func (x *UpdateConversationRequest) GetAgentId() int64 {
+	if x != nil {
+		return x.AgentId
+	}
+	return 0
+}
+
 // UpdateConversationResponse 更新会话响应
 type UpdateConversationResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Id            int64                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"` // 更新后的标题
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Success bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Id      int64                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	Title   string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"` // 更新后的标题（未传 title 时回原值）
+	// CL-06：生效后的角色 id（0 = 本次未改；未改时回原绑定）。
+	// 回显的目的：前端切换器可以**直接用返回值更新本地态**，不必再拉一次会话列表。
+	AgentId       int64 `protobuf:"varint,4,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1012,6 +1055,13 @@ func (x *UpdateConversationResponse) GetTitle() string {
 		return x.Title
 	}
 	return ""
+}
+
+func (x *UpdateConversationResponse) GetAgentId() int64 {
+	if x != nil {
+		return x.AgentId
+	}
+	return 0
 }
 
 // StreamMessagesRequest 流式消息请求
@@ -1337,7 +1387,7 @@ const file_chat_proto_rawDesc = "" +
 	"chat.proto\x12\x0femotion_chat.v1\"J\n" +
 	"\x19CreateConversationRequest\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\"\xdd\x01\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\"\xf8\x01\n" +
 	"\fConversation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x14\n" +
@@ -1348,7 +1398,8 @@ const file_chat_proto_rawDesc = "" +
 	"created_at\x18\x06 \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\a \x01(\x03R\tupdatedAt\x12\x1b\n" +
-	"\tis_pinned\x18\b \x01(\bR\bisPinned\"\xa1\x02\n" +
+	"\tis_pinned\x18\b \x01(\bR\bisPinned\x12\x19\n" +
+	"\bagent_id\x18\t \x01(\x03R\aagentId\"\xbc\x02\n" +
 	"\x12SendMessageRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x12\n" +
@@ -1359,7 +1410,9 @@ const file_chat_proto_rawDesc = "" +
 	"\vemotion_tag\x18\a \x01(\tR\n" +
 	"emotionTag\x12\x16\n" +
 	"\x06intent\x18\b \x01(\tR\x06intent\x12\x1b\n" +
-	"\tfile_name\x18\t \x01(\tR\bfileName\"\xa1\x02\n" +
+	"\tfile_name\x18\t \x01(\tR\bfileName\x12\x19\n" +
+	"\bagent_id\x18\n" +
+	" \x01(\x03R\aagentId\"\xbc\x02\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
 	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\x12\x17\n" +
@@ -1373,7 +1426,8 @@ const file_chat_proto_rawDesc = "" +
 	"\fcontent_type\x18\b \x01(\tR\vcontentType\x12\x16\n" +
 	"\x06intent\x18\t \x01(\tR\x06intent\x12\x1b\n" +
 	"\tfile_name\x18\n" +
-	" \x01(\tR\bfileName\"\x84\x01\n" +
+	" \x01(\tR\bfileName\x12\x19\n" +
+	"\bagent_id\x18\v \x01(\x03R\aagentId\"\x84\x01\n" +
 	"\x13ListMessagesRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
@@ -1402,14 +1456,16 @@ const file_chat_proto_rawDesc = "" +
 	"\x17PinConversationResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x03R\x02id\x12\x1b\n" +
-	"\tis_pinned\x18\x03 \x01(\bR\bisPinned\"Z\n" +
+	"\tis_pinned\x18\x03 \x01(\bR\bisPinned\"u\n" +
 	"\x19UpdateConversationRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x14\n" +
-	"\x05title\x18\x02 \x01(\tR\x05title\"\\\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x19\n" +
+	"\bagent_id\x18\x03 \x01(\x03R\aagentId\"w\n" +
 	"\x1aUpdateConversationResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x03R\x02id\x12\x14\n" +
-	"\x05title\x18\x03 \x01(\tR\x05title\"\x81\x01\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x19\n" +
+	"\bagent_id\x18\x04 \x01(\x03R\aagentId\"\x81\x01\n" +
 	"\x15StreamMessagesRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12&\n" +

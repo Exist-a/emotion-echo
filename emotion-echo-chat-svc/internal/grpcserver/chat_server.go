@@ -29,8 +29,8 @@ import (
 	"emotion-echo-chat-svc/internal/types"
 
 	emotionchat "github.com/emotion-echo/shared/pkg/emotionchat"
-	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 	grpcerr "github.com/emotion-echo/shared/pkg/grpcerr"
+	grpcinterceptor "github.com/emotion-echo/shared/pkg/grpcinterceptor"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -53,6 +53,7 @@ func toProtoConversation(c types.ConversationView) *emotionchat.Conversation {
 		IsPinned:  c.IsPinned,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
+		AgentId:   c.AgentId, // CL-06：本会话当前角色
 	}
 }
 
@@ -69,6 +70,7 @@ func toProtoMessage(m types.MessageView) *emotionchat.Message {
 		FileName:       m.FileName,    // Stage 89 PR-2（proto file_name=10）
 		TokensUsed:     int32(m.TokensUsed),
 		CreatedAt:      m.CreatedAt,
+		AgentId:        m.AgentId, // CL-06：该 AI 消息由哪个角色产生（快照）
 	}
 }
 
@@ -125,8 +127,9 @@ func (s *chatServer) SendMessage(ctx context.Context, req *emotionchat.SendMessa
 		Content:     req.GetContent(),
 		ClientMsgID: clientMsgID,
 		ContentType: req.GetContentType(),
-		Intent:      req.GetIntent(), // Stage 82 PR-3b
+		Intent:      req.GetIntent(),   // Stage 82 PR-3b
 		FileName:    req.GetFileName(), // Stage 89 PR-2（proto file_name=9）
+		AgentId:     req.GetAgentId(),  // CL-06（proto agent_id=10）
 		EmotionTag:  req.GetEmotionTag(),
 	})
 	if err != nil {
@@ -264,9 +267,11 @@ func (s *chatServer) UpdateConversation(ctx context.Context, req *emotionchat.Up
 		return nil, status.Error(codes.Unauthenticated, "missing x-user-id metadata")
 	}
 
+	// CL-06：`title` 与 `agent_id` 可单传可同传（0 = 本次不改角色）；两者都空由 logic 层拒。
 	resp, err := logic.NewUpdateConversationLogic(ctx, s.svcCtx).UpdateConversation(&types.UpdateConversationReq{
-		Id:    req.GetConversationId(),
-		Title: req.GetTitle(),
+		Id:      req.GetConversationId(),
+		Title:   req.GetTitle(),
+		AgentId: req.GetAgentId(),
 	})
 	if err != nil {
 		return nil, mapLogicError(err, "update conversation")
@@ -275,15 +280,17 @@ func (s *chatServer) UpdateConversation(ctx context.Context, req *emotionchat.Up
 		Success: resp.Success,
 		Id:      resp.Id,
 		Title:   resp.Title,
+		AgentId: resp.AgentId, // CL-06：回显生效后的角色（前端据此直接更新本地态）
 	}, nil
 }
 
 // StreamMessages gRPC server stream（PR-GRPC-5 阶段架构判断：暂不实现）
 //
 // 架构判断（2026-09-09）：
-//   chat-svc 当前没有"订阅消息流"业务语义——SendMessage 是同步 RPC，
-//   写库 + outbox 即返回。前端聊天走 POST /api/v1/ai/stream（直连 LLM），
-//   不经 chat-svc 中转。
+//
+//	chat-svc 当前没有"订阅消息流"业务语义——SendMessage 是同步 RPC，
+//	写库 + outbox 即返回。前端聊天走 POST /api/v1/ai/stream（直连 LLM），
+//	不经 chat-svc 中转。
 //
 // 因此 StreamMessages 是 proto 预留接口（proto/chat.proto §StreamMessagesRequest），
 // 当前业务无触发场景。保留 chat.go grpc interface 定义供未来扩展（多客户端

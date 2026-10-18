@@ -45,13 +45,16 @@ MentalHealthAssessment	proto/metric.proto:56	live	emotion-echo-web-bff/internal/
 MentalHealthHistory	proto/metric.proto:64	archived	-	-	0	用户裁定 D1：归档（ADR chart-contract-alignment §E「5 无消费端点本轮不接，需 UX 设计」）
 MentalHealthTrigger	proto/metric.proto:72	archived	-	-	0	用户裁定 D1：归档（同上；server 真实现，重启时可直接接）
 MentalHealthTrend	proto/metric.proto:80	archived	-	-	0	用户裁定 D1：归档（同上；server 真实现）
-GetMe	proto/user.proto:41	live	emotion-echo-web-bff/internal/handler/user_handler.go	GetMe	0	另 avatar_handler.go:131
-UpdateProfile	proto/user.proto:46	live	emotion-echo-web-bff/internal/handler/user_handler.go	UpdateMe	0	RPC 名≠客户端方法名
-GetUserById	proto/user.proto:49	live	emotion-echo-web-bff/internal/handler/user_handler.go	GetByID	0	RPC 名≠客户端方法名
-Login	proto/user.proto:57	live	emotion-echo-web-bff/internal/handler/auth_handler.go	Login	0	-
-Register	proto/user.proto:62	live	emotion-echo-web-bff/internal/handler/auth_handler.go	Register	0	易与 Nacos reg.Register 撞名
-ResetPassword	proto/user.proto:69	live	emotion-echo-web-bff/internal/handler/auth_handler.go	ResetPassword	0	-
+GetMe	proto/user.proto:47	live	emotion-echo-web-bff/internal/handler/user_handler.go	GetMe	0	另 avatar_handler.go:131
+UpdateProfile	proto/user.proto:52	live	emotion-echo-web-bff/internal/handler/user_handler.go	UpdateMe	0	RPC 名≠客户端方法名
+GetUserById	proto/user.proto:55	live	emotion-echo-web-bff/internal/handler/user_handler.go	GetByID	0	RPC 名≠客户端方法名
+Login	proto/user.proto:63	live	emotion-echo-web-bff/internal/handler/auth_handler.go	Login	0	-
+Register	proto/user.proto:68	live	emotion-echo-web-bff/internal/handler/auth_handler.go	Register	0	易与 Nacos reg.Register 撞名
+ResetPassword	proto/user.proto:75	live	emotion-echo-web-bff/internal/handler/auth_handler.go	ResetPassword	0	-
 Logout	proto/user.proto:74	deleted	-	-	0	用户裁定 D3：清除（ADR jwt-key-rotation「不做 token 黑名单/主动吊销」⇒ 不接真）
 VerifySecurityAnswer	proto/user.proto:79	deleted	-	-	0	用户裁定 D4：清除（族内冗余，在用者=VerifySecurityAnswerByUsername）
-VerifySecurityAnswerByUsername	proto/user.proto:94	live	emotion-echo-web-bff/internal/handler/auth_handler.go	VerifySecurityAnswerByUsername	0	在用者（兄弟 RPC）
-GetSecurityQuestionsByUsername	proto/user.proto:102	live	emotion-echo-web-bff/internal/handler/auth_handler.go	GetSecurityQuestionsByUsername	0	-
+VerifySecurityAnswerByUsername	proto/user.proto:100	live	emotion-echo-web-bff/internal/handler/auth_handler.go	VerifySecurityAnswerByUsername	0	在用者（兄弟 RPC）
+GetSecurityQuestionsByUsername	proto/user.proto:108	live	emotion-echo-web-bff/internal/handler/auth_handler.go	GetSecurityQuestionsByUsername	0	-
+ListAgentProfiles	proto/user.proto:117	live	emotion-echo-web-bff/internal/handler/agent_handler.go	ListAgentProfiles	0	CL-06 角色档案；BFF 角色端点 + ai/stream 角色解析两处调用
+UpsertAgentProfile	proto/user.proto:126	live	emotion-echo-web-bff/internal/handler/agent_handler.go	UpsertAgentProfile	0	CL-06 角色档案；BFF 角色端点透传
+DeleteAgentProfile	proto/user.proto:131	live	emotion-echo-web-bff/internal/handler/agent_handler.go	DeleteAgentProfile	0	CL-06 角色档案；BFF 角色端点透传

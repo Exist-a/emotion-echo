@@ -97,6 +97,8 @@ func main() {
 	//      但**不自愈** ⇒ 需运维在依赖就绪后重启本服务（见 RUNBOOK §2.2）。
 	var userRepo repository.UserRepo
 	var securityAnswerRepo repository.SecurityAnswerRepo
+	// CL-06：角色档案仓储（用户自定义 Agent·多角色）
+	var agentRepo repository.UserAgentProfileRepo
 	db, err := dbconnect.ConnectWithRetry(func() (*gorm.DB, error) {
 		return openPostgresDB(c.Postgres.DSN, c.Postgres.MaxOpenConns, c.Postgres.MaxIdleConns)
 	}, dbconnect.DefaultAttempts, dbconnect.DefaultBackoff, time.Sleep)
@@ -108,6 +110,7 @@ func main() {
 	} else {
 		userRepo = repository.NewPostgresUserRepo(db)
 		securityAnswerRepo = repository.NewPostgresSecurityAnswerRepo(db)
+		agentRepo = repository.NewPostgresUserAgentProfileRepo(db)
 		log.Printf("[postgres] connected, dsn=%s", maskDSN(c.Postgres.DSN))
 	}
 
@@ -140,7 +143,7 @@ func main() {
 	}
 
 	// === 3. ServiceContext（依赖注入容器） ===
-	svcCtx := svc.NewServiceContext(c, userRepo, securityAnswerRepo)
+	svcCtx := svc.NewServiceContext(c, userRepo, securityAnswerRepo, agentRepo)
 
 	// === 3.5 Nacos 注册中心 + 配置中心（Stage 31 PR-07） ===
 	bootCtx, bootCancel := context.WithCancel(context.Background())

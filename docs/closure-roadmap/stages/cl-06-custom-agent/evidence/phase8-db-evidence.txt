@@ -1,0 +1,32 @@
+=== CL-06 Phase 8 DB 证据（T-7 角色快照 / T-1 迁移落地）===
+--- 会话的 agent_id（切换后）---
+ id  | title | agent_id 
+-----+-------+----------
+ 709 | 你好  |        8
+ 708 | 你好  |        3
+(2 rows)
+
+--- AI 消息的 agent_id（快照）---
+ id  | conversation_id |   role    | agent_id |                    content                     
+-----+-----------------+-----------+----------+------------------------------------------------
+ 956 |             709 | assistant |        8 | 你好，我在。想说什么就说，不用先想好怎么开口。
+ 955 |             708 | assistant |        3 | 你好，我在。想说什么就说，我听着。
+(2 rows)
+
+--- 用户角色表（软删除列 + 默认标记）---
+ id |   name   | is_default |              voice               |          deleted_at           
+----+----------+------------+----------------------------------+-------------------------------
+  1 | 小E      | t          | FunAudioLLM/CosyVoice2-0.5B:anna | 
+  2 | ����     | f          | FunAudioLLM/CosyVoice2-0.5B:alex | 2026-10-17 10:06:58.431526+00
+  3 | 06计阿哲 | f          | FunAudioLLM/CosyVoice2-0.5B:alex | 2026-10-17 10:36:30.642894+00
+  4 | 06计正常 | f          | FunAudioLLM/CosyVoice2-0.5B:anna | 2026-10-17 10:06:58.682714+00
+  5 | 06计补1  | f          | FunAudioLLM/CosyVoice2-0.5B:anna | 2026-10-17 10:06:58.903412+00
+  6 | 06计补2  | f          | FunAudioLLM/CosyVoice2-0.5B:anna | 2026-10-17 10:06:58.927715+00
+  7 | 06计补3  | f          | FunAudioLLM/CosyVoice2-0.5B:anna | 2026-10-17 10:06:58.941952+00
+  8 | 06计阿哲 | f          | FunAudioLLM/CosyVoice2-0.5B:alex | 
+  9 | 06计正常 | f          | FunAudioLLM/CosyVoice2-0.5B:anna | 2026-10-17 10:36:30.916597+00
+ 10 | 06计补1  | f          | FunAudioLLM/CosyVoice2-0.5B:anna | 2026-10-17 10:36:31.147103+00
+ 11 | 06计补2  | f          | FunAudioLLM/CosyVoice2-0.5B:anna | 2026-10-17 10:36:31.174715+00
+ 12 | 06计补3  | f          | FunAudioLLM/CosyVoice2-0.5B:anna | 2026-10-17 10:36:31.193591+00
+(12 rows)
+

@@ -7,10 +7,15 @@
         <article
           v-for="item in data"
           :key="item.id"
-          v-memo="[item.id, item.content, item.status, item.contentType]"
+          v-memo="[item.id, item.content, item.status, item.contentType, item.agentTagName]"
           class="dialog"
           :class="item.sender === 'user' ? 'dialog-user' : 'dialog-ai'"
         >
+          <!-- CL-06 · T-19：角色标注（"这条是谁回的"）。形态由用户 2026-10-18 裁定 ——
+               **同一角色连续消息只标首条**（连续性按 AI 消息之间比，用户消息不打断）。
+               判定在 utils/agentAnnotation.ts（带单测），名字在 data 里算好（见该 computed 注释）。
+               角色已被删除时列表里查不到名字 ⇒ 不标（快照只存了 id、没存名字）。 -->
+          <span v-if="item.agentTagName" class="agent-tag">{{ item.agentTagName }}</span>
           <div
             v-if="item.sender === 'user' && item.contentType === 'audio'"
             class="bubble bubble-user voice-content"
@@ -148,6 +153,9 @@
             </svg>
           </button>
           <div class="spacer" />
+          <!-- CL-06：角色切换器 —— 紧邻语音按钮**左侧**，向上展开，本会话内可随时切
+               （用户 2026-10-17 两次澄清的位置与形态要求；位置由 cl06-agent-wiring.test.ts 钉住） -->
+          <AgentSwitcher :conversation-id="conversationIdRef" />
           <button
             type="button"
             class="voice-btn"
@@ -245,6 +253,7 @@
 <script setup lang="ts">
 import VoiceMessage from '~/components/voice/VoiceMessage.vue'
 import CurrentEmotionBar from '~/components/emotion/CurrentEmotionBar.vue'
+import AgentSwitcher from '~/components/AgentSwitcher.vue'
 import { useCurrentEmotion } from '~/composables/useCurrentEmotion'
 import { useConversationSender } from '~/composables/useConversationSender'
 import { useVoiceRecorder } from '~/composables/useVoiceRecorder'
@@ -253,6 +262,7 @@ import { useFileUpload } from '~/composables/useFileUpload'
 import { useDigitalHumanStore } from '~/stores/digitalHuman'
 import { useUserStore } from '~/stores/user'
 import { shouldFollowToBottom, chatScrollSnapshot, type ChatScrollItem } from '~/utils/chatScroll'
+import { resolveAgentLabels } from '~/utils/agentAnnotation'
 import { marked } from 'marked'
 
 // DigitalHuman uses Three.js (WebGL) — client-only, wrapped in <ClientOnly> in template
@@ -284,6 +294,8 @@ watch(
 
 const route = useRoute()
 const conversationStore = useConversationStore()
+// CL-06：角色 —— 列表用于切换器；"本会话生效角色"由 resolveActiveAgent 从会话 agentId 解析
+const agentStore = useAgentStore()
 const message = ref('')
 const conversationIdRef = computed(() => route.params.id as string)
 const cameraVideoRef = ref<HTMLVideoElement | null>(null)
@@ -291,9 +303,24 @@ const faceEmotion = useFaceEmotion({
   sessionId: conversationIdRef,
 })
 
+/**
+ * CL-06：本会话当前生效的角色。
+ *
+ * 事实源 = **会话的 agentId**（服务端为准），会话没有该值/值已失效 ⇒ 回落默认角色
+ * —— 与 BFF `resolveAgentProfile` 同款回落链（前端只决定"显示谁/带哪个 id"）。
+ * 依赖 `agentStore.agents` 与 `conversationStore.conversationList` 的响应式依赖收集：
+ * 切换器改任一处，这里的 computed 即更新（音色/发送随之变化）。
+ */
+const activeAgent = computed(() => {
+  const conv = conversationStore.conversationList.find((c) => c.id === conversationIdRef.value)
+  return agentStore.resolveActiveAgent(Number(conv?.agentId ?? 0))
+})
+
 const conversationSender = useConversationSender({
   onLipShapeChange: (shape) => digitalHumanRef.value?.setLipShape(shape),
   onEmotionChange: (emotion) => digitalHumanRef.value?.setEmotion(emotion),
+  // 音色**现读**（切角色后下一句即换音色）
+  getAgentVoice: () => activeAgent.value?.voice || undefined,
 })
 
 // ===== CL-07 前端半（情绪回显 G1/G3/G4）=====
@@ -413,6 +440,8 @@ const handleVoiceStreamResponse = async (
       // 但把服务端真实 id 带给 ai/stream 绑定（face/融合按 message_id 取行）。
       skipUserMessage: true,
       userMessageId,
+      // CL-06：本会话当前角色（BFF 据此注入人设段 + 给这条 AI 回复盖角色快照）
+      agentId: activeAgent.value?.id,
     },
   )
 }
@@ -427,9 +456,12 @@ const handleSubmit = async () => {
   // D-14：取最近一次 face emotion（3 秒有效窗口），拼到 AIStreamParams；
   // 摄像头未开/超时则字段 undefined，BFF 不污染 prompt
   const recentFace = faceEmotion.getRecentEmotion()
+  // CL-06：同一个 extraParams 对象承载"本轮会话上下文"（情绪 + 当前角色）。
+  // agentId 让 BFF 用**本会话当前角色**生成回复并给消息盖角色快照（T-7）。
   const faceEmotionCtx = {
     faceEmotion: recentFace?.emotion,
     faceConfidence: recentFace?.confidence,
+    agentId: activeAgent.value?.id,
   }
   // Stage 89 PR-5：文件+提问一起发——附件无文字时用默认 prompt 触发 AI 读文件
   if (pendingAttachment.value && !value) {
@@ -571,7 +603,27 @@ const getHtmlContent = (content: string) => {
   }
 }
 
-const data = computed(() => messageStore.sortedMessages)
+const data = computed(() => {
+  const messages = messageStore.sortedMessages
+  const labels = resolveAgentLabels(messages)
+  return messages.map((m, i) => ({
+    ...m,
+    // CL-06 · T-19：该条要显示的角色名（null = 不标）。
+    // **算进 item 再渲染**（而不是在模板里读 `agentLabels[i]`）有两个理由：
+    //   ① 下标会随分页/新消息位移，而"读邻居"与 `v-memo` 天然冲突 —— 邻居一变、
+    //      被记忆化的那一条不会重渲染 ⇒ 标注会卡在旧值；算进 item 后依赖是**基本类型**
+    //      （agentTagName 变则记忆失效），语义上正确；
+    //   ② 模板只读 item 自己的字段，不必关心数组下标。
+    agentTagName: labels[i] ? agentNameOf(m.agentId) : null,
+  }))
+})
+
+/** 角色 id → 名字；列表里查不到（角色已删）⇒ null ⇒ 该条不标 */
+const agentNameOf = (agentId?: number): string | null => {
+  const id = Number(agentId ?? 0)
+  if (id <= 0) return null
+  return agentStore.agents.find((a) => a.id === id)?.name ?? null
+}
 const mainRef = ref<HTMLElement>()
 
 const scrollToBottom = () => {
@@ -631,6 +683,8 @@ const loadConversation = async (id?: string) => {
 }
 
 onMounted(() => {
+  // CL-06：拉角色列表（切换器需要；失败静默降级为"无角色"，不阻塞对话）
+  void agentStore.fetchAgents()
   void loadConversation(route.params.id as string)
 })
 
@@ -687,8 +741,31 @@ onUnmounted(() => {
 .dialog-user {
   justify-content: flex-end;
 }
+/* CL-06 · T-19：AI 侧改成**纵向**排列 —— 角色标注要压在气泡**上方**
+   （原来是 flex 行向，标注会跑到气泡左边）。AI 侧本来只有一个气泡子元素，
+   改列向对既有排布无影响。 */
 .dialog-ai {
-  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* CL-06 · T-19：角色标注。安静地说明"这段是谁回的"，不抢气泡的注意力。 */
+.agent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 4px 3px;
+  color: var(--ee-text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.agent-tag::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--ee-primary);
+  border-radius: 50%;
 }
 
 .bubble {

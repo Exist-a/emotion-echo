@@ -14,6 +14,12 @@
 //   POST   /api/v1/auth/login     → Login       (Sprint E 新增)
 //   POST   /api/v1/auth/register  → Register    (Sprint E 新增)
 //
+// CL-06（2026-10-17，用户自定义 Agent·多角色）增补: 角色档案 3 个 RPC
+//   （BFF 侧端点随 CL-06 Phase 4 落地）
+//   GET    /api/v1/agents         → ListAgentProfiles（**含 get-or-create**：首次读会物化默认「小E」）
+//   POST   /api/v1/agents         → UpsertAgentProfile（id=0 新建 / >0 更新）
+//   DELETE /api/v1/agents/:id     → DeleteAgentProfile（软删除，幂等）
+//
 // 与 chat.proto 区别：
 //   - package: emotion_user.v1（user-svc）
 //   - go_package: emotionuser
@@ -938,6 +944,432 @@ func (x *UserInfo) GetConfig() string {
 	return ""
 }
 
+// AgentProfile 角色档案视图
+//
+// 上限口径见 UpsertAgentProfile：name≤20 / persona≤500 / tone≤100 /
+// boundaries≤5 条且每条≤50 / voice ∈ 8 个预置音色。
+type AgentProfile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Gender        string                 `protobuf:"bytes,4,opt,name=gender,proto3" json:"gender,omitempty"`                            // 展示用；不参与安全判定
+	Persona       string                 `protobuf:"bytes,5,opt,name=persona,proto3" json:"persona,omitempty"`                          // 背景人设（核心字段）
+	Tone          string                 `protobuf:"bytes,6,opt,name=tone,proto3" json:"tone,omitempty"`                                // 语气风格
+	Boundaries    []string               `protobuf:"bytes,7,rep,name=boundaries,proto3" json:"boundaries,omitempty"`                    // 负向约束（"不要…"）
+	Voice         string                 `protobuf:"bytes,8,opt,name=voice,proto3" json:"voice,omitempty"`                              // CosyVoice2 预置音色（带模型名前缀）
+	IsDefault     bool                   `protobuf:"varint,9,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`    // 默认「小E」
+	TemplateId    string                 `protobuf:"bytes,10,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"` // 预设模板来源（可空）
+	CreatedAt     int64                  `protobuf:"varint,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`   // unix seconds
+	UpdatedAt     int64                  `protobuf:"varint,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentProfile) Reset() {
+	*x = AgentProfile{}
+	mi := &file_user_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentProfile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentProfile) ProtoMessage() {}
+
+func (x *AgentProfile) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentProfile.ProtoReflect.Descriptor instead.
+func (*AgentProfile) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *AgentProfile) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *AgentProfile) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *AgentProfile) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetGender() string {
+	if x != nil {
+		return x.Gender
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetPersona() string {
+	if x != nil {
+		return x.Persona
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetTone() string {
+	if x != nil {
+		return x.Tone
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetBoundaries() []string {
+	if x != nil {
+		return x.Boundaries
+	}
+	return nil
+}
+
+func (x *AgentProfile) GetVoice() string {
+	if x != nil {
+		return x.Voice
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetIsDefault() bool {
+	if x != nil {
+		return x.IsDefault
+	}
+	return false
+}
+
+func (x *AgentProfile) GetTemplateId() string {
+	if x != nil {
+		return x.TemplateId
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *AgentProfile) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+// ListAgentProfilesRequest 列角色请求（鉴权走 metadata，无参数）
+type ListAgentProfilesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentProfilesRequest) Reset() {
+	*x = ListAgentProfilesRequest{}
+	mi := &file_user_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentProfilesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentProfilesRequest) ProtoMessage() {}
+
+func (x *ListAgentProfilesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentProfilesRequest.ProtoReflect.Descriptor instead.
+func (*ListAgentProfilesRequest) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{17}
+}
+
+// ListAgentProfilesResponse 列角色响应
+type ListAgentProfilesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*AgentProfile        `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentProfilesResponse) Reset() {
+	*x = ListAgentProfilesResponse{}
+	mi := &file_user_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentProfilesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentProfilesResponse) ProtoMessage() {}
+
+func (x *ListAgentProfilesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentProfilesResponse.ProtoReflect.Descriptor instead.
+func (*ListAgentProfilesResponse) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListAgentProfilesResponse) GetItems() []*AgentProfile {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *ListAgentProfilesResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+// UpsertAgentProfileRequest 新建 / 更新角色请求
+type UpsertAgentProfileRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id = 0 ⇒ 新建；>0 ⇒ 更新（必须属于当前用户）
+	Id            int64    `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Gender        string   `protobuf:"bytes,3,opt,name=gender,proto3" json:"gender,omitempty"`
+	Persona       string   `protobuf:"bytes,4,opt,name=persona,proto3" json:"persona,omitempty"`
+	Tone          string   `protobuf:"bytes,5,opt,name=tone,proto3" json:"tone,omitempty"`
+	Boundaries    []string `protobuf:"bytes,6,rep,name=boundaries,proto3" json:"boundaries,omitempty"`
+	Voice         string   `protobuf:"bytes,7,opt,name=voice,proto3" json:"voice,omitempty"`
+	IsDefault     bool     `protobuf:"varint,8,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	TemplateId    string   `protobuf:"bytes,9,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpsertAgentProfileRequest) Reset() {
+	*x = UpsertAgentProfileRequest{}
+	mi := &file_user_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpsertAgentProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpsertAgentProfileRequest) ProtoMessage() {}
+
+func (x *UpsertAgentProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpsertAgentProfileRequest.ProtoReflect.Descriptor instead.
+func (*UpsertAgentProfileRequest) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *UpsertAgentProfileRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpsertAgentProfileRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpsertAgentProfileRequest) GetGender() string {
+	if x != nil {
+		return x.Gender
+	}
+	return ""
+}
+
+func (x *UpsertAgentProfileRequest) GetPersona() string {
+	if x != nil {
+		return x.Persona
+	}
+	return ""
+}
+
+func (x *UpsertAgentProfileRequest) GetTone() string {
+	if x != nil {
+		return x.Tone
+	}
+	return ""
+}
+
+func (x *UpsertAgentProfileRequest) GetBoundaries() []string {
+	if x != nil {
+		return x.Boundaries
+	}
+	return nil
+}
+
+func (x *UpsertAgentProfileRequest) GetVoice() string {
+	if x != nil {
+		return x.Voice
+	}
+	return ""
+}
+
+func (x *UpsertAgentProfileRequest) GetIsDefault() bool {
+	if x != nil {
+		return x.IsDefault
+	}
+	return false
+}
+
+func (x *UpsertAgentProfileRequest) GetTemplateId() string {
+	if x != nil {
+		return x.TemplateId
+	}
+	return ""
+}
+
+// DeleteAgentProfileRequest 删除角色请求
+type DeleteAgentProfileRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAgentProfileRequest) Reset() {
+	*x = DeleteAgentProfileRequest{}
+	mi := &file_user_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAgentProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAgentProfileRequest) ProtoMessage() {}
+
+func (x *DeleteAgentProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAgentProfileRequest.ProtoReflect.Descriptor instead.
+func (*DeleteAgentProfileRequest) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *DeleteAgentProfileRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+// DeleteAgentProfileResponse 删除角色响应
+type DeleteAgentProfileResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Deleted       bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAgentProfileResponse) Reset() {
+	*x = DeleteAgentProfileResponse{}
+	mi := &file_user_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAgentProfileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAgentProfileResponse) ProtoMessage() {}
+
+func (x *DeleteAgentProfileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_user_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAgentProfileResponse.ProtoReflect.Descriptor instead.
+func (*DeleteAgentProfileResponse) Descriptor() ([]byte, []int) {
+	return file_user_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *DeleteAgentProfileResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
 var File_user_proto protoreflect.FileDescriptor
 
 const file_user_proto_rawDesc = "" +
@@ -1007,7 +1439,49 @@ const file_user_proto_rawDesc = "" +
 	"updated_at\x18\t \x01(\x03R\tupdatedAt\x12\x1b\n" +
 	"\x06config\x18\n" +
 	" \x01(\tH\x00R\x06config\x88\x01\x01B\t\n" +
-	"\a_configJ\x04\b\x06\x10\aJ\x04\b\a\x10\b2\x93\x06\n" +
+	"\a_configJ\x04\b\x06\x10\aJ\x04\b\a\x10\b\"\xc5\x02\n" +
+	"\fAgentProfile\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x16\n" +
+	"\x06gender\x18\x04 \x01(\tR\x06gender\x12\x18\n" +
+	"\apersona\x18\x05 \x01(\tR\apersona\x12\x12\n" +
+	"\x04tone\x18\x06 \x01(\tR\x04tone\x12\x1e\n" +
+	"\n" +
+	"boundaries\x18\a \x03(\tR\n" +
+	"boundaries\x12\x14\n" +
+	"\x05voice\x18\b \x01(\tR\x05voice\x12\x1d\n" +
+	"\n" +
+	"is_default\x18\t \x01(\bR\tisDefault\x12\x1f\n" +
+	"\vtemplate_id\x18\n" +
+	" \x01(\tR\n" +
+	"templateId\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\v \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\f \x01(\x03R\tupdatedAt\"\x1a\n" +
+	"\x18ListAgentProfilesRequest\"f\n" +
+	"\x19ListAgentProfilesResponse\x123\n" +
+	"\x05items\x18\x01 \x03(\v2\x1d.emotion_user.v1.AgentProfileR\x05items\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"\xfb\x01\n" +
+	"\x19UpsertAgentProfileRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
+	"\x06gender\x18\x03 \x01(\tR\x06gender\x12\x18\n" +
+	"\apersona\x18\x04 \x01(\tR\apersona\x12\x12\n" +
+	"\x04tone\x18\x05 \x01(\tR\x04tone\x12\x1e\n" +
+	"\n" +
+	"boundaries\x18\x06 \x03(\tR\n" +
+	"boundaries\x12\x14\n" +
+	"\x05voice\x18\a \x01(\tR\x05voice\x12\x1d\n" +
+	"\n" +
+	"is_default\x18\b \x01(\bR\tisDefault\x12\x1f\n" +
+	"\vtemplate_id\x18\t \x01(\tR\n" +
+	"templateId\"+\n" +
+	"\x19DeleteAgentProfileRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"6\n" +
+	"\x1aDeleteAgentProfileResponse\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted2\xcf\b\n" +
 	"\vUserService\x12A\n" +
 	"\x05GetMe\x12\x1d.emotion_user.v1.GetMeRequest\x1a\x19.emotion_user.v1.UserInfo\x12Q\n" +
 	"\rUpdateProfile\x12%.emotion_user.v1.UpdateProfileRequest\x1a\x19.emotion_user.v1.UserInfo\x12M\n" +
@@ -1016,7 +1490,10 @@ const file_user_proto_rawDesc = "" +
 	"\bRegister\x12 .emotion_user.v1.RegisterRequest\x1a!.emotion_user.v1.RegisterResponse\x12^\n" +
 	"\rResetPassword\x12%.emotion_user.v1.ResetPasswordRequest\x1a&.emotion_user.v1.ResetPasswordResponse\x12\x91\x01\n" +
 	"\x1eVerifySecurityAnswerByUsername\x126.emotion_user.v1.VerifySecurityAnswerByUsernameRequest\x1a7.emotion_user.v1.VerifySecurityAnswerByUsernameResponse\x12\x91\x01\n" +
-	"\x1eGetSecurityQuestionsByUsername\x126.emotion_user.v1.GetSecurityQuestionsByUsernameRequest\x1a7.emotion_user.v1.GetSecurityQuestionsByUsernameResponseB0Z.github.com/emotion-echo/shared/pkg/emotionuserb\x06proto3"
+	"\x1eGetSecurityQuestionsByUsername\x126.emotion_user.v1.GetSecurityQuestionsByUsernameRequest\x1a7.emotion_user.v1.GetSecurityQuestionsByUsernameResponse\x12j\n" +
+	"\x11ListAgentProfiles\x12).emotion_user.v1.ListAgentProfilesRequest\x1a*.emotion_user.v1.ListAgentProfilesResponse\x12_\n" +
+	"\x12UpsertAgentProfile\x12*.emotion_user.v1.UpsertAgentProfileRequest\x1a\x1d.emotion_user.v1.AgentProfile\x12m\n" +
+	"\x12DeleteAgentProfile\x12*.emotion_user.v1.DeleteAgentProfileRequest\x1a+.emotion_user.v1.DeleteAgentProfileResponseB0Z.github.com/emotion-echo/shared/pkg/emotionuserb\x06proto3"
 
 var (
 	file_user_proto_rawDescOnce sync.Once
@@ -1030,7 +1507,7 @@ func file_user_proto_rawDescGZIP() []byte {
 	return file_user_proto_rawDescData
 }
 
-var file_user_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_user_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_user_proto_goTypes = []any{
 	(*GetMeRequest)(nil),                           // 0: emotion_user.v1.GetMeRequest
 	(*UpdateProfileRequest)(nil),                   // 1: emotion_user.v1.UpdateProfileRequest
@@ -1048,6 +1525,12 @@ var file_user_proto_goTypes = []any{
 	(*GetSecurityQuestionsByUsernameRequest)(nil),  // 13: emotion_user.v1.GetSecurityQuestionsByUsernameRequest
 	(*GetSecurityQuestionsByUsernameResponse)(nil), // 14: emotion_user.v1.GetSecurityQuestionsByUsernameResponse
 	(*UserInfo)(nil),                               // 15: emotion_user.v1.UserInfo
+	(*AgentProfile)(nil),                           // 16: emotion_user.v1.AgentProfile
+	(*ListAgentProfilesRequest)(nil),               // 17: emotion_user.v1.ListAgentProfilesRequest
+	(*ListAgentProfilesResponse)(nil),              // 18: emotion_user.v1.ListAgentProfilesResponse
+	(*UpsertAgentProfileRequest)(nil),              // 19: emotion_user.v1.UpsertAgentProfileRequest
+	(*DeleteAgentProfileRequest)(nil),              // 20: emotion_user.v1.DeleteAgentProfileRequest
+	(*DeleteAgentProfileResponse)(nil),             // 21: emotion_user.v1.DeleteAgentProfileResponse
 }
 var file_user_proto_depIdxs = []int32{
 	15, // 0: emotion_user.v1.LoginResponse.user:type_name -> emotion_user.v1.UserInfo
@@ -1055,27 +1538,34 @@ var file_user_proto_depIdxs = []int32{
 	15, // 2: emotion_user.v1.RegisterResponse.user:type_name -> emotion_user.v1.UserInfo
 	15, // 3: emotion_user.v1.ResetPasswordResponse.user:type_name -> emotion_user.v1.UserInfo
 	12, // 4: emotion_user.v1.GetSecurityQuestionsByUsernameResponse.questions:type_name -> emotion_user.v1.SecurityQuestionInfo
-	0,  // 5: emotion_user.v1.UserService.GetMe:input_type -> emotion_user.v1.GetMeRequest
-	1,  // 6: emotion_user.v1.UserService.UpdateProfile:input_type -> emotion_user.v1.UpdateProfileRequest
-	2,  // 7: emotion_user.v1.UserService.GetUserById:input_type -> emotion_user.v1.GetUserByIdRequest
-	3,  // 8: emotion_user.v1.UserService.Login:input_type -> emotion_user.v1.LoginRequest
-	6,  // 9: emotion_user.v1.UserService.Register:input_type -> emotion_user.v1.RegisterRequest
-	8,  // 10: emotion_user.v1.UserService.ResetPassword:input_type -> emotion_user.v1.ResetPasswordRequest
-	10, // 11: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:input_type -> emotion_user.v1.VerifySecurityAnswerByUsernameRequest
-	13, // 12: emotion_user.v1.UserService.GetSecurityQuestionsByUsername:input_type -> emotion_user.v1.GetSecurityQuestionsByUsernameRequest
-	15, // 13: emotion_user.v1.UserService.GetMe:output_type -> emotion_user.v1.UserInfo
-	15, // 14: emotion_user.v1.UserService.UpdateProfile:output_type -> emotion_user.v1.UserInfo
-	15, // 15: emotion_user.v1.UserService.GetUserById:output_type -> emotion_user.v1.UserInfo
-	4,  // 16: emotion_user.v1.UserService.Login:output_type -> emotion_user.v1.LoginResponse
-	7,  // 17: emotion_user.v1.UserService.Register:output_type -> emotion_user.v1.RegisterResponse
-	9,  // 18: emotion_user.v1.UserService.ResetPassword:output_type -> emotion_user.v1.ResetPasswordResponse
-	11, // 19: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:output_type -> emotion_user.v1.VerifySecurityAnswerByUsernameResponse
-	14, // 20: emotion_user.v1.UserService.GetSecurityQuestionsByUsername:output_type -> emotion_user.v1.GetSecurityQuestionsByUsernameResponse
-	13, // [13:21] is the sub-list for method output_type
-	5,  // [5:13] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	16, // 5: emotion_user.v1.ListAgentProfilesResponse.items:type_name -> emotion_user.v1.AgentProfile
+	0,  // 6: emotion_user.v1.UserService.GetMe:input_type -> emotion_user.v1.GetMeRequest
+	1,  // 7: emotion_user.v1.UserService.UpdateProfile:input_type -> emotion_user.v1.UpdateProfileRequest
+	2,  // 8: emotion_user.v1.UserService.GetUserById:input_type -> emotion_user.v1.GetUserByIdRequest
+	3,  // 9: emotion_user.v1.UserService.Login:input_type -> emotion_user.v1.LoginRequest
+	6,  // 10: emotion_user.v1.UserService.Register:input_type -> emotion_user.v1.RegisterRequest
+	8,  // 11: emotion_user.v1.UserService.ResetPassword:input_type -> emotion_user.v1.ResetPasswordRequest
+	10, // 12: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:input_type -> emotion_user.v1.VerifySecurityAnswerByUsernameRequest
+	13, // 13: emotion_user.v1.UserService.GetSecurityQuestionsByUsername:input_type -> emotion_user.v1.GetSecurityQuestionsByUsernameRequest
+	17, // 14: emotion_user.v1.UserService.ListAgentProfiles:input_type -> emotion_user.v1.ListAgentProfilesRequest
+	19, // 15: emotion_user.v1.UserService.UpsertAgentProfile:input_type -> emotion_user.v1.UpsertAgentProfileRequest
+	20, // 16: emotion_user.v1.UserService.DeleteAgentProfile:input_type -> emotion_user.v1.DeleteAgentProfileRequest
+	15, // 17: emotion_user.v1.UserService.GetMe:output_type -> emotion_user.v1.UserInfo
+	15, // 18: emotion_user.v1.UserService.UpdateProfile:output_type -> emotion_user.v1.UserInfo
+	15, // 19: emotion_user.v1.UserService.GetUserById:output_type -> emotion_user.v1.UserInfo
+	4,  // 20: emotion_user.v1.UserService.Login:output_type -> emotion_user.v1.LoginResponse
+	7,  // 21: emotion_user.v1.UserService.Register:output_type -> emotion_user.v1.RegisterResponse
+	9,  // 22: emotion_user.v1.UserService.ResetPassword:output_type -> emotion_user.v1.ResetPasswordResponse
+	11, // 23: emotion_user.v1.UserService.VerifySecurityAnswerByUsername:output_type -> emotion_user.v1.VerifySecurityAnswerByUsernameResponse
+	14, // 24: emotion_user.v1.UserService.GetSecurityQuestionsByUsername:output_type -> emotion_user.v1.GetSecurityQuestionsByUsernameResponse
+	18, // 25: emotion_user.v1.UserService.ListAgentProfiles:output_type -> emotion_user.v1.ListAgentProfilesResponse
+	16, // 26: emotion_user.v1.UserService.UpsertAgentProfile:output_type -> emotion_user.v1.AgentProfile
+	21, // 27: emotion_user.v1.UserService.DeleteAgentProfile:output_type -> emotion_user.v1.DeleteAgentProfileResponse
+	17, // [17:28] is the sub-list for method output_type
+	6,  // [6:17] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_user_proto_init() }
@@ -1092,7 +1582,7 @@ func file_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_proto_rawDesc), len(file_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

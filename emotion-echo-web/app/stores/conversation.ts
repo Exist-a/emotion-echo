@@ -187,6 +187,27 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   /**
+   * CL-06：把**本会话**的角色切到 agentId（PATCH /conversations/:id { agentId }）。
+   *
+   * 语义（用户 2026-10-17 口径）：不是"建会话时选一次就锁死" —— 对话中随时可切；
+   * **切换后只影响后续消息**（历史消息保留各自当时的角色快照，故不回溯改写）。
+   * 失败时**不改本地态**（否则界面显示的与库里的不一致）。
+   */
+  const updateConversationAgent = async (id: string, agentId: number): Promise<returnMsgType> => {
+    try {
+      await patch(API_ROUTES.conversationById.path.replace(':id', id), { agentId })
+      const conversation = conversationList.value.find((c) => c.id === id)
+      if (conversation) {
+        conversation.agentId = agentId
+        conversation.updatedAt = new Date().toISOString()
+      }
+      return { isOk: true, msg: '角色已切换' }
+    } catch (error: any) {
+      return { isOk: false, msg: error.message || '切换角色失败' }
+    }
+  }
+
+  /**
    * 置顶/取消置顶会话
    */
   const togglePinConversation = async (id: string, isTop?: boolean): Promise<returnMsgType> => {
@@ -278,6 +299,7 @@ export const useConversationStore = defineStore('conversation', () => {
     loadMore,
     createConversation,
     updateConversationTitle,
+    updateConversationAgent,
     togglePinConversation,
     deleteConversation,
     setCurrentConversation,
