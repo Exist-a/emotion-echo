@@ -81,6 +81,8 @@ const isSidebarOpen = ref(false)
 const primaryLinks = [
   { to: '/chat/conversation', label: '对话', icon: '○' },
   { to: '/question', label: '心理测验', icon: '✦' },
+  // CL-08a：用户自述经历 → 落成记忆（该页不触发 AI 回答 / 情绪分析 / 数字人）
+  { to: '/chat/memory', label: '我的记忆', icon: '◎' },
 ]
 
 const secondaryLinks = [
@@ -111,7 +113,9 @@ const pageEyebrow = computed(() =>
     ? 'CONVERSATION'
     : route.path.startsWith('/chat/dashboard')
       ? 'REFLECTION'
-      : 'EMOTION ECHO',
+      : route.path.startsWith('/chat/memory')
+        ? 'MEMORY'
+        : 'EMOTION ECHO',
 )
 
 const closeSidebar = () => {

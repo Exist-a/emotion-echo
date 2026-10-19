@@ -14,6 +14,9 @@ const (
 // EventType 是 ai-svc 关心的事件类型
 const (
 	EventTypeMessageCreated = "message.created"
+	// EventTypeConversationClosed CL-08a：会话收尾（混合粒度的合并/失效判定触发）。
+	// 载荷与 chat-svc 的 ConversationClosedData 同构。
+	EventTypeConversationClosed = "conversation.closed"
 )
 
 // Event 是 chat-svc 产生的事件结构（与 chat-svc 的 events.Event 同构）
@@ -35,4 +38,13 @@ type MessageCreatedData struct {
 	Role           string `json:"role"`
 	Content        string `json:"content"`
 	CreatedAt      int64  `json:"createdAt"`
+}
+
+// ConversationClosedData 来自 chat-svc 的 conversation.closed 事件载荷。
+//
+// CL-08a 混合粒度的第二跳：对该会话已抽事实做一次确定性合并/失效判定。
+type ConversationClosedData struct {
+	ConversationID int64 `json:"conversationId"`
+	UserID         int64 `json:"userId"`
+	ClosedAt       int64 `json:"closedAt"`
 }

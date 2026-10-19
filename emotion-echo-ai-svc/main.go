@@ -38,6 +38,7 @@ import (
 	"emotion-echo-ai-svc/internal/handler"
 	logging "emotion-echo-ai-svc/internal/logging" // Stage 41 PR-5: re-export shared/pkg/logging,实际定义在 _re_export.go
 	"emotion-echo-ai-svc/internal/logic"
+	"emotion-echo-ai-svc/internal/memory"
 	"emotion-echo-ai-svc/internal/ops"
 	"emotion-echo-ai-svc/internal/repository"
 	"emotion-echo-ai-svc/internal/svc"
@@ -47,12 +48,14 @@ import (
 	dbconnect "github.com/emotion-echo/shared/pkg/dbconnect"
 	shareddiscovery "github.com/emotion-echo/shared/pkg/discovery"
 	sharedgrpc "github.com/emotion-echo/shared/pkg/grpcinterceptor"
+	sharedmemorykeys "github.com/emotion-echo/shared/pkg/memorykeys"
 	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	sharedmw "github.com/emotion-echo/shared/pkg/middleware"
 	sharedskywalking "github.com/emotion-echo/shared/pkg/skywalking"
 	"github.com/gin-gonic/gin"
 
 	sharedbootstrap "github.com/emotion-echo/shared/pkg/bootstrap"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -142,6 +145,41 @@ func applyEnvOverrides(c *config.Config) {
 	if v := os.Getenv("KAFKA_DLQ_TOPIC"); v != "" {
 		c.Kafka.DLQTopic = v
 	}
+	// CL-08a：记忆抽取的独立消费组与开关（默认开；MEMORY_ENABLED=false 可整体关断）。
+	if v := os.Getenv("KAFKA_MEMORY_GROUP"); v != "" {
+		c.Memory.GroupID = v
+	}
+	if v := os.Getenv("MEMORY_ENABLED"); v != "" {
+		c.Memory.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("MEMORY_MODEL"); v != "" {
+		c.Memory.Model = v
+	}
+	if v := os.Getenv("MEMORY_TIMEOUT"); v != "" {
+		var n int
+		if _, err := fmt.Sscan(v, &n); err == nil && n > 0 {
+			c.Memory.TimeoutSec = n
+		}
+	}
+	if v := os.Getenv("MEMORY_BUDGET_TOKENS"); v != "" {
+		var n int
+		if _, err := fmt.Sscan(v, &n); err == nil && n > 0 {
+			c.Memory.BudgetTokens = n
+		}
+	}
+	// CL-08a：摘要热点存储（best-effort；Redis 不可用不影响抽取落库）
+	if v := os.Getenv("REDIS_ADDR"); v != "" {
+		c.Redis.Addr = v
+	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		c.Redis.Password = v
+	}
+	if v := os.Getenv("REDIS_DB"); v != "" {
+		var n int
+		if _, err := fmt.Sscan(v, &n); err == nil {
+			c.Redis.DB = n
+		}
+	}
 	if v := os.Getenv("SKYWALKING_OAP_ADDR"); v != "" {
 		c.SkyWalking.OAPAddr = v
 	}
@@ -150,6 +188,10 @@ func applyEnvOverrides(c *config.Config) {
 	}
 	if v := os.Getenv("LLM_BASE_URL"); v != "" {
 		c.LLM.BaseURL = v
+	}
+	// CL-08a：上游 OpenAI 兼容端点的 key（抽取直连 LLM 用；与 InternalAPIKey 分开）
+	if v := os.Getenv("LLM_API_KEY"); v != "" {
+		c.LLM.APIKey = v
 	}
 	if v := os.Getenv("LLM_GRPC_ADDR"); v != "" {
 		c.LLM.GRPCAddr = v
@@ -420,6 +462,84 @@ func main() {
 		}
 	}
 
+	// 3a. CL-08a：记忆仓储 + 抽取器 + 摘要写侧（consumer 与 gRPC MemoryService 共用）。
+	//
+	// 构造条件只看「启用 + 有 DB」——Kafka 是否启用不影响「我的记忆」自述入口。
+	var memRepo repository.MemoryFactRepo
+	var memHandler *logic.MemoryExtractHandler
+	if c.Memory.Enabled && db != nil {
+		memRepo = repository.NewPostgresMemoryFactRepo(db)
+		memModel := c.Memory.Model
+		if memModel == "" {
+			memModel = c.LLM.Model
+		}
+		memExtractor := memory.NewLLMExtractor(memory.LLMConfig{
+			BaseURL: c.LLM.BaseURL,
+			APIKey:  c.LLM.APIKey,
+			Model:   memModel,
+			Timeout: time.Duration(c.Memory.TimeoutSec) * time.Second,
+		})
+
+		// A3：摘要写侧（best-effort）。Redis 连不上就让 store 为 nil —— 抽取照常落库。
+		var summaryStore memory.SummaryStore
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     c.Redis.Addr,
+			Password: c.Redis.Password,
+			DB:       c.Redis.DB,
+		})
+		if perr := redisClient.Ping(context.Background()).Err(); perr != nil {
+			slog.Warn("memory summary redis unavailable (injection will degrade to empty)", "addr", c.Redis.Addr, "err", perr)
+		} else {
+			summaryStore = memory.NewRedisSummaryStore(redisClient)
+			logging.Printf("[memory] summary store ready: redis=%s ttl=%s", c.Redis.Addr, sharedmemorykeys.SummaryTTL)
+		}
+		defer func() { _ = redisClient.Close() }()
+
+		memHandler = logic.NewMemoryExtractHandler(memRepo, memExtractor,
+			logic.WithSummaryStore(summaryStore, c.Memory.BudgetTokens))
+		logging.Printf("[memory] facts store ready (group=%s, model=%s)", c.Memory.GroupID, memModel)
+	}
+
+	// 3b. CL-08a：记忆抽取 consumer —— **独立 group**（不与情绪分析 "ai-svc" 共用位点）。
+	//
+	// 只订阅 message.created + conversation.closed（TopicFilter 传空 = 不过滤，
+	// 由 handler 自己按事件类型分派）。抽取失败不影响发消息链路。
+	if memRepo != nil && memHandler != nil && c.Kafka.Enabled && len(kafkaBrokersList) > 0 {
+		mc, err := consumer.NewKafkaConsumer(kafkaBrokersList, c.Memory.GroupID)
+		if err != nil {
+			slog.Error("memory kafka consumer init failed", "err", err)
+		} else {
+			// DLQ 独立构造（与情绪分析的 DLQ 同 topic；失败消息仍可被 replay 工具处理）
+			var memDLQ consumer.DLQPublisher = consumer.NoopDLQPublisher{}
+			if dlqTopic := c.Kafka.DLQTopic; dlqTopic != "" {
+				if kp, err := consumer.NewKafkaDLQPublisher(kafkaBrokersList, dlqTopic); err != nil {
+					slog.Error("memory DLQ producer init failed, fallback to noop", "err", err)
+				} else {
+					memDLQ = kp
+					defer func() { _ = kp.Close() }()
+				}
+			}
+			memMaxRetries := c.Kafka.MaxRetries
+			if memMaxRetries <= 0 {
+				memMaxRetries = 3
+			}
+
+			go func() {
+				logging.Printf("[kafka] memory consumer started: brokers=%v topics=%v groupID=%s dlq=%s maxRetries=%d",
+					kafkaBrokersList, c.Kafka.Topics, c.Memory.GroupID, consumer.DLQKind(memDLQ), memMaxRetries)
+				if err := mc.Consume(context.Background(), c.Kafka.Topics,
+					func(ctx context.Context, evt *events.Event) error {
+						return memHandler.Handle(ctx, evt)
+					},
+					"", // 不过滤事件类型：handler 同时处理 message.created / conversation.closed
+					sharedgrpc.NewGo2SkyTracer(tracer), memDLQ, memMaxRetries, nil); err != nil {
+					slog.Error("memory kafka consume err", "err", err)
+				}
+			}()
+			defer func() { _ = mc.Close() }()
+		}
+	}
+
 	// 4. ServiceContext
 	// Stage 34: 构造 multimodal persist 所需的 3 个 repo（共享 db 连接）
 	var faceRepo repository.FaceEmotionRepo
@@ -515,7 +635,12 @@ func main() {
 		if db != nil {
 			fusedRepo = repository.NewPostgresFusedEmotionRepo(db)
 		}
-		gs := grpcserver.New(emoRepo, fusedRepo, svcCtx, c.GRPC.Port)
+		// CL-08a：MemoryService 只在记忆仓储就绪时注册（否则保持既有 4+1 服务面）
+		var grpcOpts []grpcserver.Option
+		if memRepo != nil && memHandler != nil {
+			grpcOpts = append(grpcOpts, grpcserver.WithMemory(memRepo, memHandler.HandleNote))
+		}
+		gs := grpcserver.New(emoRepo, fusedRepo, svcCtx, c.GRPC.Port, grpcOpts...)
 		go func() {
 			if err := gs.Start(rootCtx); err != nil {
 				slog.Error("grpc server failed", "err", err)

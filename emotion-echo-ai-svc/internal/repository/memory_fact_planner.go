@@ -1,0 +1,206 @@
+// Package repository — memory_fact_planner.go
+//
+// CL-08a · A1：事实落库计划（纯函数）。
+//
+// 抽成纯函数的理由：双时间轴失效（T-3）与事实更新（T-15）是本阶段最容易写错的语义，
+// 但它们不需要 DB 就能完整覆盖边界。仓储层只负责"照计划执行"。
+package repository
+
+import (
+	"strings"
+	"time"
+
+	"emotion-echo-ai-svc/internal/model"
+)
+
+// FactToSupersede 一条需要关区间的既有事实。
+type FactToSupersede struct {
+	ID      int64
+	ValidTo time.Time
+}
+
+// PlanResult 一次抽取产物的落库计划。
+type PlanResult struct {
+	// Supersede 需要置 valid_to + status='superseded' 的既有行（不删除）
+	Supersede []FactToSupersede
+	// Insert 需要新增的事实（Status 已归一化为 active）
+	Insert []model.MemoryFact
+}
+
+// PlanFactUpsert 计算一次抽取的落库计划（纯函数，无 DB、无时间副作用）。
+//
+// existing 应只包含**该用户**的事实（调用方负责按 user_id 过滤）；函数本身仍会
+// 跳过非 active / 已软删的行（防御调用方传全量）。
+//
+// 规则（顺序即优先级）：
+//  1. 空三元组（subject/predicate/object 任一为空）⇒ 丢弃（LLM 解析残缺宁缺毋滥）；
+//  2. 同一批内同 (subject,predicate) ⇒ **后出现者胜出**（同一句话里"北京→上海"取后者）；
+//  3. 与既有 active 行 (subject,predicate,object) 相同 ⇒ 不重复插入
+//     （跨消息重复说同一件事不产生第二行 active）；
+//  4. 与既有 active 行同 (subject,predicate) 但 object 不同 ⇒ 旧行关区间
+//     （valid_to = 新行 valid_from；若乱序导致负区间则夹到旧行 valid_from）；
+//  5. 其余 ⇒ 插入。
+func PlanFactUpsert(existing []model.MemoryFact, incoming []model.MemoryFact) PlanResult {
+	plan := PlanResult{}
+	kept := normalizeIncoming(incoming)
+
+	superseded := make(map[int64]struct{}, len(existing))
+	for _, in := range kept {
+		if hasSameActiveObject(existing, in) {
+			continue
+		}
+
+		// 乱序保护（第二方核对抓出）：如果某个 active 事实的 valid_from **晚于** 这条
+		// 迟到事实，说明它是"更旧的说法"（如延迟到达的 10-01 消息 vs 已在库的 10-15 说法）。
+		// 此时**不改**现有 active —— 把迟到事实作为**已关区间的历史行**插入，
+		// 否则会让旧值复活、并写出零长度区间。
+		if newer := newerActiveFor(existing, in); newer != nil {
+			validTo := newer.ValidFrom
+			in.Status = model.MemoryFactStatusSuperseded
+			in.ValidTo = &validTo
+			plan.Insert = append(plan.Insert, in)
+			continue
+		}
+
+		for _, ex := range existing {
+			if !isActive(ex) {
+				continue
+			}
+			if ex.Subject != in.Subject || ex.Predicate != in.Predicate || ex.Object == in.Object {
+				continue
+			}
+			if _, done := superseded[ex.ID]; done {
+				continue
+			}
+			superseded[ex.ID] = struct{}{}
+			validTo := in.ValidFrom
+			if validTo.Before(ex.ValidFrom) {
+				// 防御：不写出 valid_to < valid_from 的负区间
+				validTo = ex.ValidFrom
+			}
+			plan.Supersede = append(plan.Supersede, FactToSupersede{ID: ex.ID, ValidTo: validTo})
+		}
+		plan.Insert = append(plan.Insert, in)
+	}
+	return plan
+}
+
+// newerActiveFor 找到与 in 同键、但 valid_from 更晚的 active 行（in 是迟到的旧事实）。
+func newerActiveFor(existing []model.MemoryFact, in model.MemoryFact) *model.MemoryFact {
+	for i := range existing {
+		ex := existing[i]
+		if !isActive(ex) {
+			continue
+		}
+		if ex.Subject != in.Subject || ex.Predicate != in.Predicate || ex.Object == in.Object {
+			continue
+		}
+		if in.ValidFrom.Before(ex.ValidFrom) {
+			return &existing[i]
+		}
+	}
+	return nil
+}
+
+// PlanConversationConsolidation 会话收尾的**确定性合并**（不调 LLM）。
+//
+// 混合粒度的第二跳（用户裁定 D2）：同一会话内若因并发/重放出现
+// 同一 (user, subject, predicate) 的多条 active，只保留 valid_from 最新的一条
+// （并列时保留 id 更大者），其余关区间。**不删除**任何行。
+//
+// 说明：这是"一致性兜底"而不是语义合并（语义去重需要二次 LLM，成本更高，
+// 本阶段不做 —— 见 cl-08a-execution-plan §10）。
+func PlanConversationConsolidation(facts []model.MemoryFact) PlanResult {
+	type key struct {
+		userID    int64
+		subject   string
+		predicate string
+	}
+	best := make(map[key]model.MemoryFact, len(facts))
+	plan := PlanResult{}
+
+	for _, f := range facts {
+		if !isActive(f) {
+			continue
+		}
+		k := key{f.UserID, f.Subject, f.Predicate}
+		cur, ok := best[k]
+		if !ok {
+			best[k] = f
+			continue
+		}
+		if factNewer(f, cur) {
+			plan.Supersede = append(plan.Supersede, FactToSupersede{ID: cur.ID, ValidTo: maxTime(f.ValidFrom, cur.ValidFrom)})
+			best[k] = f
+			continue
+		}
+		plan.Supersede = append(plan.Supersede, FactToSupersede{ID: f.ID, ValidTo: maxTime(cur.ValidFrom, f.ValidFrom)})
+	}
+	return plan
+}
+
+// factNewer 判定 f 是否比 cur 更新（valid_from 更晚；并列时 id 更大）。
+func factNewer(f, cur model.MemoryFact) bool {
+	if f.ValidFrom.Equal(cur.ValidFrom) {
+		return f.ID > cur.ID
+	}
+	return f.ValidFrom.After(cur.ValidFrom)
+}
+
+func maxTime(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
+}
+
+// normalizeIncoming 过滤空三元组、归一化状态与时间、按 (subject,predicate) 去重（后者胜出）。
+func normalizeIncoming(in []model.MemoryFact) []model.MemoryFact {
+	type key struct{ subject, predicate string }
+	idx := make(map[key]int, len(in))
+	kept := make([]model.MemoryFact, 0, len(in))
+
+	for _, f := range in {
+		f.Subject = strings.TrimSpace(f.Subject)
+		f.Predicate = strings.TrimSpace(f.Predicate)
+		f.Object = strings.TrimSpace(f.Object)
+		if f.Subject == "" || f.Predicate == "" || f.Object == "" {
+			continue
+		}
+		if f.Status == "" {
+			f.Status = model.MemoryFactStatusActive
+		}
+		if f.ValidFrom.IsZero() {
+			f.ValidFrom = time.Now().UTC()
+		}
+		k := key{f.Subject, f.Predicate}
+		if i, ok := idx[k]; ok {
+			kept[i] = f
+			continue
+		}
+		idx[k] = len(kept)
+		kept = append(kept, f)
+	}
+	return kept
+}
+
+// hasSameActiveObject 判断既有 active 行里是否已有完全相同的三元组。
+func hasSameActiveObject(existing []model.MemoryFact, in model.MemoryFact) bool {
+	for _, ex := range existing {
+		if !isActive(ex) {
+			continue
+		}
+		if ex.Subject == in.Subject && ex.Predicate == in.Predicate && ex.Object == in.Object {
+			return true
+		}
+	}
+	return false
+}
+
+// isActive 一行是否"当前有效"（active 且未被软删）。
+func isActive(f model.MemoryFact) bool {
+	if f.DeletedAt != nil {
+		return false
+	}
+	return f.Status == "" || f.Status == model.MemoryFactStatusActive
+}

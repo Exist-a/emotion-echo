@@ -61,9 +61,17 @@ func decodeProtoChatEvent(raw []byte) (*events.Event, error) {
 			Content:        d.MessageCreated.GetContent(),
 			CreatedAt:      d.MessageCreated.GetCreatedAt(),
 		}
+	case *chatevents.ChatEventEnvelope_ConversationClosed:
+		// CL-08a：记忆抽取消费组需要 conversation.closed 触发"会话收尾合并"。
+		// 此前这里走 default ⇒ Data=nil ⇒ 处理器拿到零值直接 return（生产路径断路，
+		// 单测因手工构造 Data 而假绿）。与 chat-svc 的 JSON 载荷字段一一对应。
+		ev.Data = events.ConversationClosedData{
+			ConversationID: d.ConversationClosed.GetConversationId(),
+			UserID:         d.ConversationClosed.GetUserId(),
+			ClosedAt:       d.ConversationClosed.GetClosedAt(),
+		}
 	default:
-		// conversation.created / conversation.closed：ai-svc 不消费，
-		// 解码不报错，Data=nil，交由 TopicFilter 过滤（保持跳过语义）
+		// conversation.created：ai-svc 不消费，解码不报错，Data=nil，交由 TopicFilter 过滤
 	}
 	return ev, nil
 }

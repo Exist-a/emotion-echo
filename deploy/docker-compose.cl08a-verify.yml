@@ -1,0 +1,22 @@
+# CL-08a 起栈验证用 override（AGENTS §8.1 条款 10 / 并行契约 §1.3 R1：
+# **带轨后缀 tag，不覆盖公共 tag**）
+#
+# 覆盖范围 = 本阶段改过代码的 3 个服务：
+#   ai-svc   记忆仓储/抽取 worker（独立 consumer group）+ MemoryService gRPC + Redis 摘要写侧
+#   web-bff  记忆段注入 + /api/v1/memory/* 端点
+#   web      前端「我的记忆」tab（生产构建 —— 本阶段验收的是页面与关系图渲染，
+#            dev 模式不 hydration 的前科见 CL-07 §A.4）
+#
+# 用法（在主工作区）：
+#   docker compose -f deploy/docker-compose.infra.yml -f deploy/docker-compose.apps.yml \
+#     -f deploy/compose.dev.yml -f deploy/docker-compose.cl08a-verify.yml \
+#     --env-file deploy/.env.local build emotion-echo-ai-svc emotion-echo-web-bff emotion-echo-web
+#   docker compose ... -f deploy/docker-compose.cl08a-verify.yml \
+#     --env-file deploy/.env.local up -d --no-build
+services:
+  emotion-echo-ai-svc:
+    image: emotion-echo/ai-svc:cl08a
+  emotion-echo-web-bff:
+    image: emotion-echo/web-bff:cl08a
+  emotion-echo-web:
+    image: emotion-echo/web:cl08a

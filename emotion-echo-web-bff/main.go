@@ -296,6 +296,13 @@ func main() {
 	// nil client（未启用 LOGIN_LOCK_BACKEND=redis）安全返回 false。
 	sharedredistrace.InitRedis(redisClient)
 	authLockStore := buildAuthLockStoreWithClient(redisClient)
+	// CL-08a：记忆摘要读取（只读 Redis）。开关关闭 / Redis 未启用 ⇒ nil（不注入记忆段）。
+	// 注意：**不能**只随 LOGIN_LOCK_BACKEND 决定 —— 记忆注入与登录锁是两个独立能力。
+	if os.Getenv("MEMORY_INJECTION_ENABLED") == "false" || os.Getenv("MEMORY_INJECTION_ENABLED") == "0" {
+		svcCtx.SetMemorySummary(nil)
+	} else {
+		svcCtx.SetMemorySummary(downstream.NewRedisMemorySummary(redisClient))
+	}
 	if closer, ok := authLockStore.(interface{ Close() error }); ok {
 		defer closer.Close() // main 退出时释放（RedisStore Close）
 	}
@@ -436,6 +443,8 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	grpcAddr := resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI)
 	if conn := dialGRPC(grpcAddr, "ai-svc-emotion-q", dialOpts...); conn != nil {
 		svcCtx.SetEmotionQ(downstream.NewEmotionQueryClient(conn))
+		// CL-08a：同一个 ai-svc gRPC 连接复用给 MemoryService（一条连接多个 stub）
+		svcCtx.SetMemory(downstream.NewMemoryClient(conn))
 	}
 
 	// Sprint 1 PR-4b: MinIO 对象存储装配
@@ -573,7 +582,11 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	// s.EmotionQ nil 时 NewEmotionHistorySource 内部 no-op，行为等同 D-14 最小模式）
 	emotionSrc := downstream.NewEmotionHistorySource(s.EmotionQ)
 	// CL-06：AgentProfiles = 用户自定义角色来源（组装层 agent 段 + 写库角色快照）
-	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, handler.AIStreamDeps{LLM: llmStreamer, Files: s.Chat, Chat: s.Chat, Personality: personalitySrc, Emotion: emotionSrc, AgentProfiles: s.UserAgent}))
+	r.POST("/api/v1/ai/stream", handler.NewAIStreamHandlerWithDeps(*c, handler.AIStreamDeps{LLM: llmStreamer, Files: s.Chat, Chat: s.Chat, Personality: personalitySrc, Emotion: emotionSrc, AgentProfiles: s.UserAgent, Memory: s.MemorySummary}))
+	// CL-08a：「我的记忆」自述入口（写入即回执，不触发 AI 回答 / 情绪分析 / 数字人）+ 记忆图
+	memoryHandler := handler.NewMemoryHandler(s.Memory)
+	r.POST("/api/v1/memory/notes", memoryHandler.CreateNote)
+	r.GET("/api/v1/memory/graph", memoryHandler.GetGraph)
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
@@ -623,21 +636,27 @@ func (p *redisHealthProbe) Ping(ctx context.Context) error {
 // 藏在 buildAuthLockStore 内部，**结构上无法**被健康检查看到 ——
 // 不是"忘了写"，是"没有注入位"。
 func buildRedisClient() *redis.Client {
-	if os.Getenv("LOGIN_LOCK_BACKEND") != "redis" {
+	// CL-08a：记忆注入也需要 Redis（与登录锁无关）—— 任一能力启用就建连，
+	// 但 authlock 是否用 Redis 仍只由 LOGIN_LOCK_BACKEND 决定（见 buildAuthLockStoreWithClient）。
+	needAuthLock := os.Getenv("LOGIN_LOCK_BACKEND") == "redis"
+	needMemory := !(os.Getenv("MEMORY_INJECTION_ENABLED") == "false" || os.Getenv("MEMORY_INJECTION_ENABLED") == "0")
+	if !needAuthLock && !needMemory {
 		return nil
 	}
 	addr := os.Getenv("REDIS_ADDR")
 	if addr == "" {
 		addr = "emotion-echo-redis:6379" // dev 默认
 	}
-	log.Printf("[authlock] using RedisStore addr=%s", addr)
+	log.Printf("[redis] client init addr=%s (authlock=%v memory=%v)", addr, needAuthLock, needMemory)
 	return redis.NewClient(&redis.Options{Addr: addr})
 }
 
 // buildAuthLockStoreWithClient 用给定的 Redis client 构造登录锁存储；
 // client 为 nil 时退回 in-memory（未启用 Redis 后端）。
 func buildAuthLockStoreWithClient(client *redis.Client) authlock.LoginLockStore {
-	if client != nil {
+	// CL-08a：client 现在也可能仅为记忆注入而建 ⇒ 这里必须显式再判一次开关，
+	// 否则登录锁会在未启用时误用 Redis。
+	if client != nil && os.Getenv("LOGIN_LOCK_BACKEND") == "redis" {
 		return authlock.NewRedisStore(authlock.RedisConfig{
 			Client: client,
 			Prefix: "web-bff-auth",

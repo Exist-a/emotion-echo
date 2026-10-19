@@ -135,6 +135,8 @@ type AIStreamHandler struct {
 	titleUpdater titleConvUpdater
 	// agents 是当前用户的角色档案来源（CL-06 用户自定义 Agent）；nil = 不注入角色段、不盖角色戳
 	agents agentProfileSource
+	// memory 是用户级记忆摘要来源（CL-08a）；nil = 不注入记忆段（= 现状行为）
+	memory downstream.MemorySummarySource
 }
 
 // AIStreamDeps 是 AIStreamHandler 的依赖集合。
@@ -159,6 +161,8 @@ type AIStreamDeps struct {
 	TitleUpdater titleConvUpdater
 	// AgentProfiles 是角色档案来源（CL-06）；nil = 无角色段（= 现状行为，零回归）
 	AgentProfiles agentProfileSource
+	// Memory 是用户级记忆摘要来源（CL-08a）；nil = 无记忆段（= 现状行为，零回归）
+	Memory downstream.MemorySummarySource
 }
 
 // NewAIStreamHandler 构造 handler（返回 gin.HandlerFunc）
@@ -178,6 +182,7 @@ func NewAIStreamHandlerWithDeps(cfg config.Config, deps AIStreamDeps) gin.Handle
 		emotion:      deps.Emotion,
 		titleUpdater: deps.TitleUpdater,
 		agents:       deps.AgentProfiles,
+		memory:       deps.Memory,
 	}
 	// T-18：未显式传标题更新器时，从 Chat 推断（生产侧 Chat 已满足该窄接口 ⇒ main.go 无需改动装配）
 	if h.titleUpdater == nil {
@@ -433,6 +438,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			textEmotion:     strings.TrimSpace(req.Emotion), // CL-04 Phase 6：文本情绪（neutral=无信号）
 			userContent:     userContent,
 			agent:            agent, // CL-06：用户自定义角色（两处必须都传）
+			memory:           h.loadMemorySummary(session.WithRequestAuth(c)), // CL-08a：记忆摘要（两处必须都传）
 		})
 		ctx, cancel := context.WithCancel(c.Request.Context())
 		defer cancel()
@@ -504,6 +510,7 @@ func (h *AIStreamHandler) ServeHTTP(c *gin.Context) {
 			textEmotion:     strings.TrimSpace(req.Emotion), // CL-04 Phase 6：文本情绪（neutral=无信号）
 			userContent:     userContent,
 			agent:            agent, // CL-06：用户自定义角色（两处必须都传）
+			memory:           h.loadMemorySummary(session.WithRequestAuth(c)), // CL-08a：记忆摘要（两处必须都传）
 		})
 		llmReq := downstream.LLMChatReq{
 			Model:       h.cfg.LLM.Model,
