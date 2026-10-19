@@ -1,0 +1,8 @@
+
+Running 2 tests using 1 worker
+
+  ok 1 [chromium] › e2e\cl-08a-memory.spec.ts:51:3 › CL-08a · 我的记忆 › 自述 → 固定回执 → 关系图渲染 (1.5s)
+  ok 2 [chromium] › e2e\cl-08a-memory.spec.ts:73:3 › CL-08a · 我的记忆 › 跨会话：自述里的姓名与职业能在新会话被复述 (26.9s)
+
+  2 passed (30.4s)
+PW=0
