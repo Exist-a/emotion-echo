@@ -519,6 +519,232 @@
     }
    },
    "description": ">0 = 报表数据可能陈旧。"
+  },
+  {
+   "type": "stat",
+   "title": "记忆抽取（5m）",
+   "id": 12,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 29
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(emotion_echo_memory_extract_total[5m])) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "CL-08a：5 分钟内的事实抽取次数（message + note 两源）。为 0 = 抽取链路没跑或消费组没起。"
+  },
+  {
+   "type": "stat",
+   "title": "记忆事实写入（5m）",
+   "id": 13,
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 6,
+    "y": 29
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(emotion_echo_memory_facts_written_total[5m])) or vector(0)",
+     "refId": "A",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "description": "CL-08a：5 分钟内新写入的事实行数（幂等跳过不计）。长期为 0 但抽取>0 ⇒ 抽取器没产出事实。"
+  },
+  {
+   "type": "timeseries",
+   "title": "记忆抽取（按结果）",
+   "id": 14,
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 12,
+    "y": 29
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (result) (rate(emotion_echo_memory_extract_total[5m]))",
+     "refId": "A",
+     "legendFormat": "{{result}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": "CL-08a：抽取结果分布（ok / error / skipped）。error 持续 >0 ⇒ LLM 或 DB 有问题。"
+  },
+  {
+   "type": "timeseries",
+   "title": "记忆摘要构建（按结果）",
+   "id": 15,
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 0,
+    "y": 34
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "sum by (result) (rate(emotion_echo_memory_summary_build_total[5m]))",
+     "refId": "A",
+     "legendFormat": "{{result}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": "CL-08a：用户级摘要重建结果。error >0 ⇒ Redis 写失败（注入侧会降级为空）。"
+  },
+  {
+   "type": "timeseries",
+   "title": "记忆抽取 p95 耗时",
+   "id": 16,
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 12,
+    "y": 34
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "expr": "histogram_quantile(0.95, sum by (le, result) (rate(emotion_echo_memory_extract_duration_seconds_bucket[5m])))",
+     "refId": "A",
+     "legendFormat": "{{result}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "description": "CL-08a：抽取耗时 p95（含 LLM 调用）。显著上升 ⇒ 抽取变慢会拉长 DLQ 风险窗口。"
   }
  ],
  "annotations": {

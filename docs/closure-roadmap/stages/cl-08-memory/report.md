@@ -51,7 +51,7 @@ plan: cl-08a-execution-plan.md
 | T-12 | 预算 | **PASS** | 写侧 `BuildSummary` 600 token 预算（超限丢最旧）+ 读侧 `clampMemorySegment` 1200 rune 兜底 |
 | T-15 | 事实更新端到端 | **PASS** | 运行时：上海→北京；摘要同步为北京（证据 §3/§4） |
 | T-17 | 用户隔离 | **部分 PASS** | 单测：`ListActiveByUser` / 图 / 摘要均按 user_id；**未做**双账号运行时交叉验证 |
-| T-18 | 指标被消费 | **BLOCKED** | **未实现**：抽取/摘要无指标，也无面板。见 §3 未完成项 |
+| T-18 | 指标被消费 | **PASS** | 4 个 collector（extract/facts_written/summary_build/duration）已在 ai-svc `/metrics` 暴露、被 Prometheus 抓取；business dashboard 新增 5 个面板；`obs_monitoring.test.js` 组 ⑨ 双向钉住。证据 [`evidence/t18-metrics-2026-10-19.txt`](evidence/t18-metrics-2026-10-19.txt) |
 | T-19 | 评测集（价值证明） | **BLOCKED** | **未做**：只有 2 条手工样例，不构成召回率/精确率数字 |
 | T-20 | 跨会话人可见钉 | **部分 PASS** | API 级已实拍（SSE 回复复述事实）；**未做** Playwright 钉子 |
 | T-21 | 记忆可见性口径 | **部分 PASS** | 用户已裁：只放关系图（中心辐射）；页面/路由已落地；用户级开关归 d |
@@ -93,8 +93,8 @@ plan: cl-08a-execution-plan.md
 
 | # | 项 | 归属 | 说明 |
 |---|---|---|---|
-| 1 | **T-18 指标 + 面板** | 本阶段未做 | 抽取次数/失败数/token、摘要构建结果均无指标；Grafana 无对应面板。**这违反 CL-01 的「埋了必须有人看」纪律** ⇒ 落地时指标与面板必须同批 |
-| 2 | **T-19 评测集** | 本阶段未做 | 需要一组跨会话题目（召回/精确/开-关 A/B）。当前只有 2 条手工样例 |
+| 1 | ~~T-18 指标 + 面板~~ | ✅ **已完成（2026-10-19）** | 4 个 collector + 5 个面板 + 契约组 ⑨；Prometheus 实测 p95≈0.975s、rate>0 |
+| 2 | **T-19 评测集** | 本阶段未做 | 需要一组跨会话题目（召回/精确/开-关 A/B）。当前只有 4 条手工样例 |
 | 3 | **T-20 Playwright 钉** | 本阶段未做 | API 级已实拍；浏览器回归钉待补 |
 | 4 | **浏览器视觉验收** | 本阶段未做 | `/chat/memory` 未登录返回 302→/login（路由与鉴权正常），但**未做登录态截图**；关系图渲染未人眼确认 |
 | 5 | **第二方核对** | 未做 | 按 RUNBOOK 收口契约需独立核对 |

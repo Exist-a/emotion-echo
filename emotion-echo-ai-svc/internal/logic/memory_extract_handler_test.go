@@ -15,6 +15,7 @@ import (
 	"emotion-echo-ai-svc/internal/model"
 	"emotion-echo-ai-svc/internal/repository"
 
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -245,6 +246,21 @@ func TestMemoryExtractHandler_SummaryFailureDoesNotFailExtraction(t *testing.T) 
 	active, err := repo.ListActiveByUser(context.Background(), 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 1, "事实仍须落库")
+}
+
+func TestMemoryExtractHandler_MetricsEmitted(t *testing.T) {
+	t.Parallel()
+	before, err := sharedmetrics.RegistryGatherCounter("emotion_echo_memory_extract_total", map[string]string{"result": sharedmetrics.MemoryResultOK})
+	require.NoError(t, err)
+
+	repo := repository.NewInMemoryMemoryFactRepo()
+	ex := &fakeExtractor{facts: []model.MemoryFact{factOf("职业", "后端工程师")}}
+	h := NewMemoryExtractHandler(repo, ex)
+	require.NoError(t, h.Handle(context.Background(), msgEvent(100, 7, 1, "user", "我是后端工程师")))
+
+	after, err := sharedmetrics.RegistryGatherCounter("emotion_echo_memory_extract_total", map[string]string{"result": sharedmetrics.MemoryResultOK})
+	require.NoError(t, err)
+	assert.Greater(t, after, before, "T-18：抽取成功必须留下指标（否则面板永远为空）")
 }
 
 func TestMemoryExtractHandler_HandleNote_FailureMarksNote(t *testing.T) {

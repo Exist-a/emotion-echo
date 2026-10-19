@@ -325,6 +325,34 @@ group('⑧ Grafana PG 凭据无字面量 (CL-F-24)', () => {
 });
 
 // -----------------------------------------------------------------------------
+// CL-08a · T-18：记忆指标必须**被面板消费**（CL-01 的「埋了必须有人看」）
+// 双向断言：代码里定义的 4 个指标都要有面板引用；面板里出现的 memory_* 也必须在代码中有定义。
+group('⑨ 记忆指标被面板消费 (CL-08a)', () => {
+  const dash = read('deploy/grafana/dashboards/emotion-echo-business.json');
+  const src = read('emotion-echo-shared/pkg/metrics/memory_metrics.go');
+  if (!dash || !src) return fail('缺少 business dashboard 或 memory_metrics.go');
+
+  const defined = [
+    'emotion_echo_memory_extract_total',
+    'emotion_echo_memory_extract_duration_seconds',
+    'emotion_echo_memory_facts_written_total',
+    'emotion_echo_memory_summary_build_total',
+  ];
+  for (const m of defined) {
+    src.includes(`"${m}"`) ? pass(`${m} 已在代码中定义`) : fail(`${m} 未在 memory_metrics.go 定义`);
+    dash.includes(m) ? pass(`${m} 已被面板引用`) : fail(`${m} 没有任何面板引用（埋了没人看）`);
+  }
+
+  // 反向：面板里出现的每个 memory_* 指标都必须在代码里有定义
+  // （防手写错名字 = 面板恒空且零报错）
+  const used = new Set(dash.match(/emotion_echo_memory_[a-z_]+/g) || []);
+  for (const u of used) {
+    if (u.endsWith('_bucket')) continue; // histogram 的 _bucket 是派生名
+    src.includes(`"${u}"`) ? pass(`面板引用的 ${u} 有代码定义`) : fail(`面板引用了未定义的指标 ${u}`);
+  }
+});
+
+// -----------------------------------------------------------------------------
 let failed = 0;
 for (const [name, fn] of groups) {
   console.log('\n' + name);

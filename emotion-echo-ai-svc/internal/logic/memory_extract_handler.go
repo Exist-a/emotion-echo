@@ -24,6 +24,8 @@ import (
 	"emotion-echo-ai-svc/internal/memory"
 	"emotion-echo-ai-svc/internal/model"
 	"emotion-echo-ai-svc/internal/repository"
+
+	sharedmetrics "github.com/emotion-echo/shared/pkg/metrics"
 )
 
 // MemoryExtractHandler 处理记忆抽取相关事件与自述条。
@@ -152,6 +154,7 @@ func (h *MemoryExtractHandler) handleConversationClosed(ctx context.Context, evt
 
 // extractSource 幂等抽取 + 落库（message / note 共用）。
 func (h *MemoryExtractHandler) extractSource(ctx context.Context, src extractSource) error {
+	started := time.Now()
 	first, err := h.repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{
 		SourceKind:     src.Kind,
 		SourceID:       src.ID,
@@ -159,9 +162,11 @@ func (h *MemoryExtractHandler) extractSource(ctx context.Context, src extractSou
 		ConversationID: src.ConversationID,
 	})
 	if err != nil {
+		sharedmetrics.MemoryExtractTotal.WithLabelValues(sharedmetrics.MemoryResultError).Inc()
 		return fmt.Errorf("memory: mark extract run: %w", err)
 	}
 	if !first {
+		sharedmetrics.MemoryExtractTotal.WithLabelValues(sharedmetrics.MemoryResultSkipped).Inc()
 		slog.DebugContext(ctx, "memory: source already extracted",
 			"source_kind", src.Kind, "source_id", src.ID)
 		return nil
@@ -178,22 +183,38 @@ func (h *MemoryExtractHandler) extractSource(ctx context.Context, src extractSou
 	})
 	if err != nil {
 		h.finishFailed(ctx, src, err)
+		sharedmetrics.MemoryExtractTotal.WithLabelValues(sharedmetrics.MemoryResultError).Inc()
+		sharedmetrics.MemoryExtractDurationSeconds.WithLabelValues(sharedmetrics.MemoryResultError).
+			Observe(time.Since(started).Seconds())
 		return fmt.Errorf("memory: extract: %w", err)
 	}
 
 	existing, err := h.repo.ListActiveByUser(ctx, src.UserID, 0)
 	if err != nil {
 		h.finishFailed(ctx, src, err)
+		sharedmetrics.MemoryExtractTotal.WithLabelValues(sharedmetrics.MemoryResultError).Inc()
+		sharedmetrics.MemoryExtractDurationSeconds.WithLabelValues(sharedmetrics.MemoryResultError).
+			Observe(time.Since(started).Seconds())
 		return fmt.Errorf("memory: list active facts: %w", err)
 	}
 	plan := repository.PlanFactUpsert(existing, facts)
 	written, err := h.repo.ApplyFacts(ctx, plan)
 	if err != nil {
 		h.finishFailed(ctx, src, err)
+		sharedmetrics.MemoryExtractTotal.WithLabelValues(sharedmetrics.MemoryResultError).Inc()
+		sharedmetrics.MemoryExtractDurationSeconds.WithLabelValues(sharedmetrics.MemoryResultError).
+			Observe(time.Since(started).Seconds())
 		return fmt.Errorf("memory: apply facts: %w", err)
 	}
 	if err := h.repo.FinishExtractRun(ctx, src.Kind, src.ID, model.MemoryExtractStatusDone, written, ""); err != nil {
 		return fmt.Errorf("memory: finish extract run: %w", err)
+	}
+
+	sharedmetrics.MemoryExtractTotal.WithLabelValues(sharedmetrics.MemoryResultOK).Inc()
+	sharedmetrics.MemoryExtractDurationSeconds.WithLabelValues(sharedmetrics.MemoryResultOK).
+		Observe(time.Since(started).Seconds())
+	if written > 0 {
+		sharedmetrics.MemoryFactsWrittenTotal.Add(float64(written))
 	}
 
 	slog.InfoContext(ctx, "memory: facts upserted",
@@ -217,14 +238,17 @@ func (h *MemoryExtractHandler) refreshSummary(ctx context.Context, userID int64)
 	}
 	facts, err := h.repo.ListActiveByUser(ctx, userID, 200)
 	if err != nil {
+		sharedmetrics.MemorySummaryBuildTotal.WithLabelValues(sharedmetrics.MemoryResultError).Inc()
 		slog.WarnContext(ctx, "memory: load facts for summary", "user_id", userID, "err", err)
 		return
 	}
 	summary := memory.BuildSummary(facts, h.summaryBudget)
 	if err := h.summaryStore.Set(ctx, userID, summary); err != nil {
+		sharedmetrics.MemorySummaryBuildTotal.WithLabelValues(sharedmetrics.MemoryResultError).Inc()
 		slog.WarnContext(ctx, "memory: write summary", "user_id", userID, "err", err)
 		return
 	}
+	sharedmetrics.MemorySummaryBuildTotal.WithLabelValues(sharedmetrics.MemoryResultOK).Inc()
 	slog.DebugContext(ctx, "memory: summary refreshed", "user_id", userID, "facts", len(facts), "chars", len(summary))
 }
 
