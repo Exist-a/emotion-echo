@@ -3,6 +3,8 @@
 // CL-08a · A6：记忆图 → ECharts 选项（纯函数契约）。
 
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { buildMemoryGraphOption, hasMemoryGraph, nodeSize } from './memoryGraph'
 import type { MemoryGraph } from '~/types/memory'
 
@@ -74,5 +76,15 @@ describe('hasMemoryGraph', () => {
     expect(hasMemoryGraph(null)).toBe(false)
     expect(hasMemoryGraph({ nodes: [], edges: [] })).toBe(false)
     expect(hasMemoryGraph(sample)).toBe(true)
+  })
+})
+
+describe('echarts 注册契约（nuxt-echarts 树摇）', () => {
+  // CL-08a 生产构建实测抓出的**静默失败**：nuxt.config.ts 的 echarts.charts 只注册了
+  // Bar/Line/Pie/Radar ⇒ graph 系列**不画任何东西**（容器在、canvas 无、控制台无报错）。
+  // 这条门禁把"注册 GraphChart"从口头约定变成可红可绿的断言。
+  it('nuxt.config.ts 必须注册 GraphChart', () => {
+    const cfg = readFileSync(resolve(process.cwd(), 'nuxt.config.ts'), 'utf8')
+    expect(cfg).toMatch(/charts:\s*\[[\s\S]*?"GraphChart"/)
   })
 })

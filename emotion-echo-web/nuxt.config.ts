@@ -84,7 +84,8 @@ export default defineNuxtConfig({
   },
   echarts: {
     renderer: ["canvas", "svg"],
-    charts: ["BarChart", "LineChart", "PieChart", "RadarChart"],
+    // CL-08a：「我的记忆」关系图用 graph 系列（树摇注册：不注册则**静默空图**）
+    charts: ["BarChart", "LineChart", "PieChart", "RadarChart", "GraphChart"],
     components: [
       "DatasetComponent",
       "GridComponent",
