@@ -200,7 +200,7 @@ chat-events ──┬─ group "ai-svc"        → 既有情绪分析（不动�
 ```sql
 UPDATE memory_fact SET valid_to = $new_valid_from, status='superseded'
  WHERE user_id=$u AND subject=$s AND predicate=$p AND valid_to IS NULL AND object <> $o;
-INSERT ... (新行) ON CONFLICT (source_message_id, subject, predicate, object) DO NOTHING;
+INSERT ... (新行) ON CONFLICT (source_kind, source_id, subject, predicate, object) DO NOTHING;
 ```
 
 **幂等**：先把 `(source_kind, source_id)` 插入 `memory_extract_run`，冲突即跳过（避免 LLM 重复调用）；`failed` 行允许重试。
@@ -217,7 +217,9 @@ INSERT ... (新行) ON CONFLICT (source_message_id, subject, predicate, object) 
 - 键：`memory:summary:user:{user_id}` · TTL **24h**（`CL-D-07` 同构）。
 - 内容：按 `valid_from DESC` 取 active 事实，逐行 `- [时间] fact_text`，**≤600 token**（超限截断最旧的）。
 - 写入时机：每次抽取事务提交后 **best-effort 重建**；Redis 挂 ⇒ 记 metric + warn，**不回滚 PG**。
-- 需要给 ai-svc **新增 Redis 客户端**（env：`REDIS_ADDR` / `REDIS_PASSWORD` / `REDIS_DB`），并纳入 `/health/ready` 的 Redis 探测（与 BFF 一致）。
+- 需要给 ai-svc **新增 Redis 客户端**（env：`REDIS_ADDR` / `REDIS_PASSWORD` / `REDIS_DB`）。
+  **不纳入 `/health/ready`**：摘要是 best-effort（Redis 挂只降级为空），把它计入 readiness 会把
+  "记忆不可用"误判成"服务不可用"（与 BFF 对 nil 探针的处理同口径）。
 
 ### 5.2 注入侧（BFF）
 
@@ -226,7 +228,9 @@ INSERT ... (新行) ON CONFLICT (source_message_id, subject, predicate, object) 
 - 取数：`MemorySummaryProvider`（接口）→ Redis `GET`；**err / 空 / 超时 ⇒ ""**（增强不是依赖）。
 - **两处 `assembleMessages` 调用点都要传**（`ai_stream_handler.go:425-436` / `:497-507`），沿用"字面量计数钉"。
 - 预算：记忆段 ≤600 token；截断策略 = 保留最近的条目（c 阶段再引入"最相关"）。
-- 运维开关：`MEMORY_ENABLED`（BFF 与 ai-svc 各读一份，**默认 true**）——只做运维级 kill switch，**用户级开关归 d**。
+- 运维开关（两个服务各读各的，避免一个变量两种语义）：
+  ai-svc 抽取用 `MEMORY_ENABLED`；BFF 注入用 `MEMORY_INJECTION_ENABLED`（**均默认 true**）。
+  ——只做运维级 kill switch，**用户级开关归 d**。
 
 ---
 
@@ -254,7 +258,7 @@ INSERT ... (新行) ON CONFLICT (source_message_id, subject, predicate, object) 
 | **A2** | **抽取 worker**：事件常量 + 配置 + 独立 group + `Extractor`（LLM/假） + handler（message / note 两源） | ⑤ 同源重复 ⇒ 事实数 1 ⑥ 矛盾 ⇒ 旧行 superseded ⑦ 失败 ⇒ 返回 error（failed 可重试）⑧ LLM 输出解析容忍度 | `go test ./internal/memory/... ./internal/logic/...` |
 | **A3** | **摘要写侧**：summary builder（纯函数）+ Redis 写 | ⑨ builder 排序/截断/转义 ⑩ Redis 挂 ⇒ 不 panic、PG 已提交 | `go test ./internal/memory/...`（miniredis） |
 | **A4** | **注入侧（BFF）**：`segmentKindMemory` + provider + 两处调用点 | ⑪ 无记忆 ⇒ **逐字等于 golden** ⑫ 有记忆 ⇒ guard 仍末位 ⑬ provider 报错 ⇒ 段为空 ⑭ 超预算 ⇒ 截断 | `go test ./internal/handler/...`（golden + 段序 + 字面量计数钉） |
-| **A5** | **契约与入口**：`proto/memory.proto`（CreateNote / ListNotes / GetGraph）+ 生成物 + `rpc_status.tsv` + ai-svc gRPC 实现 + BFF downstream/handlers | ⑮ create 返回回执且不触发 AI ⑯ list 按用户隔离 ⑰ graph 只含该用户 ⑱ 未鉴权/越权被拒 | `go test ./...`（ai-svc / BFF）+ 契约钉 |
+| **A5** | **契约与入口**：`proto/memory.proto`（**CreateNote / GetGraph**）+ 生成物 + `rpc_status.tsv` + ai-svc gRPC 实现 + BFF downstream/handlers（`ListNotes` **未做**：用户裁定页面"只放关系图"，自述列表无消费方） | ⑮ create 返回回执且不触发 AI ⑯ list 按用户隔离 ⑰ graph 只含该用户 ⑱ 未鉴权/越权被拒 | `go test ./...`（ai-svc / BFF）+ 契约钉 |
 | **A6** | **前端「我的记忆」tab**：侧边栏入口 + 自述 composer + 回执 + 列表 + PG 关系图 | ⑲ 组件渲染与提交回执 ⑳ 关系图数据映射 ㉑ 空态/报错态 | `pnpm test`（vitest）+ 生产构建 |
 | **A7** | **端到端 + 收口**（**唯一跑完整验收的地方**） | ㉒ 跨会话人可见钉 ㉓ 自述条端到端（无 AI 回复） | 起栈（本轨 tag）→ 迁移 → 两条链路实拍 → 指标上板 → `go test ./...` + `pnpm test` → 报告 + 第二方核对 |
 

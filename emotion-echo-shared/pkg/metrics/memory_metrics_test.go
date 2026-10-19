@@ -44,19 +44,31 @@ func TestMemorySummaryBuildTotal_Registered(t *testing.T) {
 }
 
 func TestMemoryExtractDuration_Observed(t *testing.T) {
+	labels := map[string]string{"result": MemoryResultOK}
+	before := histogramCount(t, "emotion_echo_memory_extract_duration_seconds", labels)
 	MemoryExtractDurationSeconds.WithLabelValues(MemoryResultOK).Observe(0.42)
-	// histogram 不通过 GetCounter 读取；这里只断言 Observe 不 panic 且指标名可收集。
+	after := histogramCount(t, "emotion_echo_memory_extract_duration_seconds", labels)
+	if after != before+1 {
+		t.Fatalf("sample_count 应从 %d 增到 %d，实际 %d（只断言注册成功会漏掉 Observe 坏掉）", before, before+1, after)
+	}
+}
+
+// histogramCount 读指定 histogram 的 sample_count（用于证明 Observe 真的记了数）。
+func histogramCount(t *testing.T, name string, labels map[string]string) uint64 {
+	t.Helper()
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		t.Fatalf("gather: %v", err)
 	}
-	found := false
 	for _, mf := range mfs {
-		if mf.GetName() == "emotion_echo_memory_extract_duration_seconds" {
-			found = true
+		if mf.GetName() != name {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			if labelsMatch(m.GetLabel(), labels) && m.GetHistogram() != nil {
+				return m.GetHistogram().GetSampleCount()
+			}
 		}
 	}
-	if !found {
-		t.Fatal("emotion_echo_memory_extract_duration_seconds 未注册")
-	}
+	return 0
 }

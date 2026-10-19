@@ -49,6 +49,19 @@ func PlanFactUpsert(existing []model.MemoryFact, incoming []model.MemoryFact) Pl
 		if hasSameActiveObject(existing, in) {
 			continue
 		}
+
+		// 乱序保护（第二方核对抓出）：如果某个 active 事实的 valid_from **晚于** 这条
+		// 迟到事实，说明它是"更旧的说法"（如延迟到达的 10-01 消息 vs 已在库的 10-15 说法）。
+		// 此时**不改**现有 active —— 把迟到事实作为**已关区间的历史行**插入，
+		// 否则会让旧值复活、并写出零长度区间。
+		if newer := newerActiveFor(existing, in); newer != nil {
+			validTo := newer.ValidFrom
+			in.Status = model.MemoryFactStatusSuperseded
+			in.ValidTo = &validTo
+			plan.Insert = append(plan.Insert, in)
+			continue
+		}
+
 		for _, ex := range existing {
 			if !isActive(ex) {
 				continue
@@ -62,7 +75,7 @@ func PlanFactUpsert(existing []model.MemoryFact, incoming []model.MemoryFact) Pl
 			superseded[ex.ID] = struct{}{}
 			validTo := in.ValidFrom
 			if validTo.Before(ex.ValidFrom) {
-				// 乱序到达：不得写出 valid_to < valid_from 的负区间
+				// 防御：不写出 valid_to < valid_from 的负区间
 				validTo = ex.ValidFrom
 			}
 			plan.Supersede = append(plan.Supersede, FactToSupersede{ID: ex.ID, ValidTo: validTo})
@@ -70,6 +83,23 @@ func PlanFactUpsert(existing []model.MemoryFact, incoming []model.MemoryFact) Pl
 		plan.Insert = append(plan.Insert, in)
 	}
 	return plan
+}
+
+// newerActiveFor 找到与 in 同键、但 valid_from 更晚的 active 行（in 是迟到的旧事实）。
+func newerActiveFor(existing []model.MemoryFact, in model.MemoryFact) *model.MemoryFact {
+	for i := range existing {
+		ex := existing[i]
+		if !isActive(ex) {
+			continue
+		}
+		if ex.Subject != in.Subject || ex.Predicate != in.Predicate || ex.Object == in.Object {
+			continue
+		}
+		if in.ValidFrom.Before(ex.ValidFrom) {
+			return &existing[i]
+		}
+	}
+	return nil
 }
 
 // PlanConversationConsolidation 会话收尾的**确定性合并**（不调 LLM）。

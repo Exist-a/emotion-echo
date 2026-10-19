@@ -87,6 +87,9 @@ async function submit() {
     // 抽取是异步的：延迟刷新两次图（不做无限轮询；用户也可重新进入页面）
     window.setTimeout(loadGraph, 1200)
     window.setTimeout(loadGraph, 3500)
+  } catch {
+    // useApi 已统一处理 401；这里补一条用户可见的失败回执（否则按钮恢复但页面毫无反馈）
+    acks.value.push('这次没记录成功，请稍后再试。')
   } finally {
     submitting.value = false
   }

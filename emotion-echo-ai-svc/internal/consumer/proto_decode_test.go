@@ -70,8 +70,9 @@ func TestDecodeChatEvent_LegacyJSONFallback(t *testing.T) {
 	assert.Equal(t, "evt-ai3", ev.ID)
 }
 
-func TestDecodeChatEvent_NonMessageTypesSkippable(t *testing.T) {
-	// conversation.* 事件 ai-svc 不关心：解码不报错，Type 供 TopicFilter 过滤
+func TestDecodeChatEvent_ConversationClosedData(t *testing.T) {
+	// CL-08a：conversation.closed 的 Data 必须被解出来（此前走 default ⇒ nil ⇒
+	// 记忆抽取的"会话收尾合并"在生产永远不执行，而单测手工构造 Data 造成假绿）。
 	env := &chatevents.ChatEventEnvelope{
 		Id:   "evt-ai4",
 		Type: "conversation.closed",
@@ -85,4 +86,9 @@ func TestDecodeChatEvent_NonMessageTypesSkippable(t *testing.T) {
 	ev, err := DecodeChatEvent(raw, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "conversation.closed", ev.Type)
+	data, ok := ev.Data.(events.ConversationClosedData)
+	require.True(t, ok, "Data 必须是 events.ConversationClosedData（实际 %T）", ev.Data)
+	assert.Equal(t, int64(8), data.ConversationID)
+	assert.Equal(t, int64(1), data.UserID)
+	assert.Equal(t, int64(1), data.ClosedAt)
 }

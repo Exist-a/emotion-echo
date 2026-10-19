@@ -9,10 +9,17 @@ package downstream
 import (
 	"context"
 	"errors"
+	"time"
 
 	sharedmemorykeys "github.com/emotion-echo/shared/pkg/memorykeys"
 	"github.com/redis/go-redis/v9"
 )
+
+// memorySummaryReadTimeout 摘要读取的硬超时。
+//
+// 记忆是**增强不是依赖**：Redis 不可达时不能把首字延迟拖到 go-redis 的默认
+// DialTimeout（5s）—— 那会让每次对话白等 5 秒。300ms 内取不到就当没有记忆。
+const memorySummaryReadTimeout = 300 * time.Millisecond
 
 // MemorySummarySource 用户级记忆摘要来源。
 type MemorySummarySource interface {
@@ -30,7 +37,9 @@ func NewRedisMemorySummary(client *redis.Client) MemorySummarySource {
 }
 
 func (s *redisMemorySummary) LatestMemorySummary(ctx context.Context, userID int64) (string, error) {
-	v, err := s.client.Get(ctx, sharedmemorykeys.SummaryKey(userID)).Result()
+	readCtx, cancel := context.WithTimeout(ctx, memorySummaryReadTimeout)
+	defer cancel()
+	v, err := s.client.Get(readCtx, sharedmemorykeys.SummaryKey(userID)).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			// 没有记忆是正常状态，不是错误。

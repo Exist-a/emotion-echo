@@ -131,9 +131,10 @@ func TestPlanFactUpsert_LastWinsWithinBatch(t *testing.T) {
 	assert.Equal(t, "上海", plan.Insert[0].Object, "同一批内后出现者胜出")
 }
 
-func TestPlanFactUpsert_ClampsInvertedInterval(t *testing.T) {
+func TestPlanFactUpsert_LateOlderFactDoesNotOverrideNewer(t *testing.T) {
 	t.Parallel()
-	// 乱序到达：既有行 10-15 生效，新事件却声称 10-01 生效
+	// 乱序到达：既有行 10-15 生效，迟到的消息却声称 10-01 生效。
+	// 期望：现有 active **不动**；迟到事实作为"已关区间的历史行"插入。
 	existing := []model.MemoryFact{
 		mkFact(11, 1, 100, "用户", "居住地", "北京", tPlanNext, model.MemoryFactStatusActive),
 	}
@@ -143,9 +144,11 @@ func TestPlanFactUpsert_ClampsInvertedInterval(t *testing.T) {
 
 	plan := PlanFactUpsert(existing, in)
 
-	require.Len(t, plan.Supersede, 1)
-	assert.False(t, plan.Supersede[0].ValidTo.Before(tPlanNext),
-		"valid_to 不得早于旧行 valid_from（否则出现负区间）；应夹到旧行 valid_from")
+	assert.Empty(t, plan.Supersede, "更旧的说法不得让现有 active 下线（否则旧值复活 + 零长度区间）")
+	require.Len(t, plan.Insert, 1)
+	assert.Equal(t, model.MemoryFactStatusSuperseded, plan.Insert[0].Status, "迟到旧事实应落为历史行")
+	require.NotNil(t, plan.Insert[0].ValidTo)
+	assert.True(t, plan.Insert[0].ValidTo.Equal(tPlanNext), "历史行 valid_to 应等于较新事实的 valid_from")
 }
 
 func TestPlanFactUpsert_SkipsEmptyTriple(t *testing.T) {
