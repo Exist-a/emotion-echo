@@ -120,9 +120,9 @@ err="dial emotion-echo-postgres:5432: ... no such host"  → exit code=1 → res
 | D.0 | 环境收口（锁 / 崩溃容器 / 未跟踪物 / 分支核对） | ✅ 已执行（未跟踪物与分支**未动**，待裁） |
 | D.1 | 修「抽取卡 pending ⇒ 来源永久不再抽取」 | ✅ 已修（TDD：先红后绿，2 个包单测全绿） |
 | D.2 | 补 PG 仓储 integration test | ✅ 4/4 PASS（需 `TESTCONTAINERS_RYUK_DISABLED=true`） |
-| D.3 | 运行时 A/B（T-5 / T-17） | ⏸ **未做**（需起栈） |
-| D.4 | E2E 去固定 20s | 🟡 代码已改，**未在真栈复跑** |
-| D.5 | 收口（report 翻终态 + 第二方核对） | ⏸ 阻塞于 D.3 |
+| D.3 | 运行时 A/B（T-5 / T-17） | ✅ 已做（T-5 5/5、T-17 5/5） |
+| D.4 | E2E 去固定 20s | ✅ 已改 + 真栈 **2 passed（20.9s）** |
+| D.5 | 收口（report 翻终态 + 第二方核对） | ⏸ 未做（证据已齐，第二方核对未做） |
 
 **分支**：`fix/cl-08a-extract-retry`（4 个 commit：test → fix → test → test）。
 
@@ -224,22 +224,65 @@ TESTCONTAINERS_RYUK_DISABLED=true go test -tags integration ./integration_test/ 
 （消费框架重投后重算计划即收敛）；**内存替身目前静默放过**（会短暂出现两条 active）。
 本轮只把 PG 的行为钉死，**未改内存替身**（改它属语义变更，需单独一轮）。
 
-### D.3 运行时 A/B（🔴 需起栈，2 条，**未做**）
+### D.3 运行时 A/B（✅ 2026-10-20 已做，🔴 需起栈）
 
 | 点 | 做法 | 断言 |
 |---|---|---|
 | T-5 | 停 llm-service → 发一条消息 → 恢复 | 消息链路 **HTTP 200 / 流式正常**；抽取走重试补齐；`memory_extract_run` 最终终态 |
 | T-17 | 两个账号各写事实 → 交叉提问 | A 的事实**绝不出现在** B 的注入；摘要 Redis 键按 user 隔离 |
 
-> 现状：dev 栈仍为**全停**（只有 4 个模型容器在跑）。这两条**必须等起栈**才能做，
-> 不做就不能宣布 CL-08a `done`。
+**实测（真栈，ai-svc 跑本轨 `:cl08ares`）**
 
-### D.4 E2E 去固定等待（🟡 代码已改，**待栈上复跑**）
+⚠️ **第一版做法是错的，如实记下**：按上表"停 `llm-service`"跑，得到 `done|0` —— 因为
+**记忆抽取走的是云端 `LLM_BASE_URL`（`main.go:476-477` 的 `c.LLM.BaseURL`），与本地 `llm-service` 容器无关**；
+而测试句"我今天心情还不错…"本身没有可抽事实 ⇒ 0 条是正确结果，不是失败。
+**正确做法**：把 **ai-svc 的 `LLM_BASE_URL` 指向不可达地址**（`http://127.0.0.1:1/v1`）后重建该容器。
 
-`cl-08a-memory.spec.ts:86` 的 `waitForTimeout(20_000)` ⇒ 改为 `waitForGraphFact(page, NAME)`：
-每次 `reload` 抓 `/memory/graph` 的响应体，命中「云舟」即返回；超时错误带最后一次节点数
-（区分"没抽出来"与"接口返回空"）。已用 `playwright test --list` 验证规格可编译/被发现（4 条）。
-**尚未在真栈上跑过**（栈不在）⇒ 复跑前不得声称"E2E 已绿"。
+| # | 观测 | 结果 |
+|---|---|---|
+| T-5.1 | LLM 不可达时发消息 | ✅ `msg_id=1020` 正常返回 |
+| T-5.2 | 消息落库 | ✅ `emotion_echo_chat.messages` 1 行 |
+| T-5.3 | 抽取运行终态 | ✅ `failed\|0\|memory: call llm: Post "http://127.0.0.1:1/v1/chat/completio…"` —— **不是 pending** |
+| T-5.4 | 恢复 `LLM_BASE_URL` 后新消息 | ✅ `msg_id=1021` → `done\|2`，事实（顾远/建筑师）落库 |
+| T-5.5 | 停机窗口那条会不会自动补齐 | ❌ **不会**：`msg 1020` 至今仍是 `failed` |
+
+**⇒ 由此暴露的真限制（本轮新发现）**：`failed` 的 run **没有任何自动重试路径** ——
+消费框架已提交 offset，Kafka 不会重投；仓内也没有 sweeper 扫 `failed`/超租约 `pending`。
+**租约只解决"当重投真的发生时"的幂等放行，不解决"没人来重投"**。
+⇒ 新登记 **`CL-F-62`**（抽取缺失的补齐 sweeper），归 **CL-09**；本轮不做。
+
+| # | 观测（T-17） | 结果 |
+|---|---|---|
+| T-17.1/2 | A(echo,uid=1) 与 B(smoke_user,uid=2) 各写一条自述式事实 | ✅ 两条 run 均 `done`（各 2 条事实） |
+| T-17.3/4 | PG 事实交叉检查 | ✅ A 有青禾/木工、**无**白露；B 有白露/兽医、**无**青禾 |
+| T-17.5 | 注入源（Redis `memory:summary:user:<id>`）交叉检查 | ✅ A 摘要含青禾不含白露；B 摘要含白露不含青禾 |
+
+> 注：T-17 用"事实 + 摘要"两层验隔离，**没有**走"交叉提问看模型怎么答"（那需要完整 SSE 链路且答案受模型措辞影响）；
+> 注入源是摘要 ⇒ 验摘要即验注入内容，这是更强、更稳定的判据。
+
+
+### D.4 E2E 去固定等待（✅ 已改并在真栈复跑通过）
+
+`cl-08a-memory.spec.ts:86` 的 `waitForTimeout(20_000)` ⇒ 改为 `waitForGraphFact()`：拿 `access_token` cookie
+直连网关轮询 `/api/v1/memory/graph`，命中「云舟」即返回；超时错误带最后一次的节点数/HTTP 码。
+
+**两次失败的尝试（如实记录，都是真栈才暴露的）**
+
+| 尝试 | 结果 | 原因 |
+|---|---|---|
+| `page.reload()` + `waitForResponse` | ❌ 30s 超时 | 真栈上重载 `/chat/memory` 会让页面卡在「正在读取记忆…」（SSR 侧取数不返回），既没有响应也没有报错 |
+| 客户端导航（对话 ⇄ 我的记忆）+ `waitForResponse` | ❌ 30s 超时 | 组件被复用，`onMounted` 不再触发 ⇒ 根本没有第二次 `/memory/graph` 请求 |
+| **读 cookie + 直连网关轮询** | ✅ | 不依赖页面渲染时机，判据是**数据本身** |
+
+**真栈复跑**：`BASE_URL=http://127.0.0.1:3000 pnpm exec playwright test e2e/cl-08a-memory.spec.ts --project=chromium`
+→ **2 passed (20.9s)**（原来光固定等待就要 20s）。
+
+⚠️ **复跑抓到 `CL-F-63`**：第一次跑时"云舟"始终不进图 —— 根因不是 E2E，而是 LLM 返回了
+`58771-09-12` 这种幻觉 `valid_from`，把该用户的事实永久钉在"未来"（详见账本 `CL-F-63`）。
+已加 `sanitizeValidFrom` 护栏（`[1970-01-01, now+24h]`，越界回落来源时间）+ 就地修正 dev 库污染行，之后 2/2 通过。
+
+⚠️ **前置**：公共镜像 tag 全部滞后（`web:v0.1.9` 无该页面、`web-bff:v0.1.37` 无 `/memory/*`、`user-svc:v0.1.5` 无角色 RPC）
+⇒ 本轮用 `:cl08ares` 重建了 ai-svc / web-bff / web 三个镜像才能验收（见 `CL-F-60` 补记）。
 
 ### D.5 收口（未做，阻塞于 D.3）
 

@@ -127,8 +127,14 @@ for commit in $(git rev-list "$COMMIT_RANGE" 2>/dev/null); do
         [ -z "$file" ] && continue
         # 检查文件改动行数（小改动不算违反 TDD）
         added=$(git diff-tree --no-commit-id --numstat --diff-filter=AM -r "$commit" -- "$file" 2>/dev/null | awk '{print $1}')
+        # 二进制文件的 numstat 是 "-" ⇒ 不能直接拿去做整数比较（2026-10-20 实测：
+        # 提交一张证据截图 PNG 会让整个门禁挂在 "integer expected"，把"脚本坏了"伪装成"违反 TDD"）。
+        # 二进制不算生产代码，直接跳过。
+        case "$added" in
+            ''|*[!0-9]*) continue ;;
+        esac
         # 少于 5 行的改动不算生产代码改动（可能是注释修正）
-        if [ "${added:-0}" -lt 5 ]; then
+        if [ "$added" -lt 5 ]; then
             continue
         fi
         if is_prod_file "$file"; then

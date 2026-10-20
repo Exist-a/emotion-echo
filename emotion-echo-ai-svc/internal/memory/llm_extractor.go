@@ -202,7 +202,7 @@ func toMemoryFacts(dtos []factDTO, in ExtractInput) []model.MemoryFact {
 		validFrom := in.OccurredAt
 		if v := strings.TrimSpace(d.ValidFrom); v != "" {
 			if t, err := time.Parse(time.RFC3339, v); err == nil {
-				validFrom = t.UTC()
+				validFrom = sanitizeValidFrom(t.UTC(), validFrom)
 			}
 		}
 		if validFrom.IsZero() {
@@ -258,4 +258,31 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// ── valid_from 合理性护栏（2026-10-20 运行时抓到的真缺陷）────────────────────
+//
+// 问题：LLM 偶尔会吐出离谱的 valid_from（实测 `58771-09-12T00:00:00Z`）。
+// 该值一旦落库就会成为"永远更新"的 active 事实 —— planner 的乱序保护
+// （`newerActiveFor`）会把之后**所有**真实日期的新事实判为"迟到旧值"，
+// 降级为 superseded 历史行 ⇒ 用户改口后图谱/注入永远停在旧值，且不会自愈。
+//
+// 护栏口径：只接受「不早于 1970-01-01」且「不晚于当前 + 24h（容忍时区/时钟偏差）」；
+// 越界一律回落到来源时间（`in.OccurredAt`），绝不因为模型幻觉而污染双时间轴。
+const validFromFutureSkew = 24 * time.Hour
+
+var validFromFloor = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// sanitizeValidFrom 校验 LLM 给出的 valid_from，越界则回落到 fallback。
+func sanitizeValidFrom(candidate, fallback time.Time) time.Time {
+	if fallback.IsZero() {
+		fallback = time.Now().UTC()
+	}
+	if candidate.IsZero() {
+		return fallback
+	}
+	if candidate.Before(validFromFloor) || candidate.After(time.Now().UTC().Add(validFromFutureSkew)) {
+		return fallback
+	}
+	return candidate
 }
