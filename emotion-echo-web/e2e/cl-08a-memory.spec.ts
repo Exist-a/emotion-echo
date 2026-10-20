@@ -17,6 +17,10 @@ import { test, expect } from '@playwright/test'
 const NAME = '云舟'
 const JOB = '插画师'
 
+// 业务 API 基址（决策 11/12：APISIX 是唯一业务入口）。
+// 前端自己走 runtimeConfig；本 spec 只在"轮询图数据"时直连网关，故单列一个可覆盖的常量。
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:19080'
+
 async function loginAsDemo(page: import('@playwright/test').Page) {
   await page.goto('/login')
   await page.waitForLoadState('domcontentloaded')
@@ -58,20 +62,27 @@ async function submitNote(page: import('@playwright/test').Page, text: string) {
  * 命中即返回；超时才失败（失败信息里带上最后一次的节点数，便于判断是"没抽出来"还是"接口空"）。
  */
 async function waitForGraphFact(page: import('@playwright/test').Page, needle: string, timeoutMs = 90_000) {
+  // 取登录态：BFF 下发 HttpOnly `access_token` cookie（`auth_cookie_attrs_test` 钉住）
+  const token = (await page.context().cookies()).find((c) => c.name === 'access_token')?.value
+  if (!token) throw new Error('没有 access_token cookie —— 登录态没建立，无法轮询记忆图')
+
   const deadline = Date.now() + timeoutMs
-  let lastCount = -1
+  let last = '<未取到>'
   while (Date.now() < deadline) {
-    const [resp] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes('/memory/graph') && r.status() === 200, { timeout: 30_000 }),
-      page.reload({ waitUntil: 'domcontentloaded' }),
-    ])
-    const body = await resp.json().catch(() => null)
-    const nodes = body?.data?.nodes ?? body?.nodes ?? []
-    lastCount = Array.isArray(nodes) ? nodes.length : -1
-    if (JSON.stringify(nodes).includes(needle)) return
-    await page.waitForTimeout(1000)
+    const res = await page.request.get(`${API_BASE}/api/v1/memory/graph`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok()) {
+      const body = await res.json().catch(() => null)
+      const nodes = body?.data?.nodes ?? []
+      last = `nodes=${Array.isArray(nodes) ? nodes.length : '?'}`
+      if (JSON.stringify(nodes).includes(needle)) return
+    } else {
+      last = `HTTP ${res.status()}`
+    }
+    await page.waitForTimeout(1500)
   }
-  throw new Error(`等 ${timeoutMs}ms 仍未在图里看到「${needle}」（最后一次节点数=${lastCount}）`)
+  throw new Error(`等 ${timeoutMs}ms 仍未在图里看到「${needle}」（最后一次 ${last}）`)
 }
 
 test.describe('CL-08a · 我的记忆', () => {
