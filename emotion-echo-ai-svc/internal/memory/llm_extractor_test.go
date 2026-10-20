@@ -157,3 +157,42 @@ func TestChatCompletionsURL(t *testing.T) {
 		assert.Equal(t, c.want, chatCompletionsURL(c.in), "base=%q", c.in)
 	}
 }
+
+// 运行时抓到的真缺陷（2026-10-20）：LLM 返回的 valid_from 未被校验，
+// 实测出现过 `58771-09-12T00:00:00Z` ⇒ 该事实成为"永远更新"的 active，
+// 之后所有真实日期的新事实都被 planner 判为"迟到旧值"而降级为历史行
+// ⇒ 用户改口后，图谱/注入里仍是旧值，且再也不会更新。
+func TestLLMExtractor_AbsurdFutureValidFromFallsBackToSourceTime(t *testing.T) {
+	t.Parallel()
+	srv := newChatServer(t, 200, `{"facts":[
+	 {"subject":"用户","predicate":"姓名","object":"顾远","text":"用户叫顾远","valid_from":"58771-09-12T00:00:00Z","confidence":0.9}
+	]}`, nil)
+	defer srv.Close()
+
+	occurred := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	ex := NewLLMExtractor(LLMConfig{BaseURL: srv.URL, APIKey: "k-test", Model: "m", Timeout: 5 * time.Second})
+	facts, err := ex.Extract(context.Background(), ExtractInput{
+		UserID: 1, ConversationID: 7, MessageID: 100, Content: "我叫顾远", OccurredAt: occurred,
+	})
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.True(t, facts[0].ValidFrom.Equal(occurred),
+		"离谱的未来日期（58771 年）必须被拒，回落到来源时间；实得 %s", facts[0].ValidFrom)
+}
+
+func TestLLMExtractor_TooOldValidFromFallsBackToSourceTime(t *testing.T) {
+	t.Parallel()
+	srv := newChatServer(t, 200, `{"facts":[
+	 {"subject":"用户","predicate":"姓名","object":"顾远","text":"用户叫顾远","valid_from":"0001-01-02T00:00:00Z"}
+	]}`, nil)
+	defer srv.Close()
+
+	occurred := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	ex := NewLLMExtractor(LLMConfig{BaseURL: srv.URL, APIKey: "k-test", Model: "m"})
+	facts, err := ex.Extract(context.Background(), ExtractInput{
+		UserID: 1, ConversationID: 7, MessageID: 100, Content: "我叫顾远", OccurredAt: occurred,
+	})
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.True(t, facts[0].ValidFrom.Equal(occurred), "早于 1970 的日期同样回落，实得 %s", facts[0].ValidFrom)
+}
