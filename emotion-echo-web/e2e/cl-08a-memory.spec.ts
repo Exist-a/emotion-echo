@@ -47,6 +47,33 @@ async function submitNote(page: import('@playwright/test').Page, text: string) {
   }
 }
 
+/**
+ * 等"自述里的事实"真正进图。
+ *
+ * 为什么不能只用固定等待：抽取是异步的（LLM + 落库 + 摘要重建），耗时随模型与负载波动；
+ * 固定等 20s 既可能在慢的时候假红，也可能在快的时候白等。
+ *
+ * 为什么不用 DOM 断言：关系图由 ECharts 画在 canvas 上，节点文字进不了 DOM。
+ * ⇒ 改为**轮询图接口的响应体**（`/memory/graph` 会带出 PG 事实渲染的节点），
+ * 命中即返回；超时才失败（失败信息里带上最后一次的节点数，便于判断是"没抽出来"还是"接口空"）。
+ */
+async function waitForGraphFact(page: import('@playwright/test').Page, needle: string, timeoutMs = 90_000) {
+  const deadline = Date.now() + timeoutMs
+  let lastCount = -1
+  while (Date.now() < deadline) {
+    const [resp] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/memory/graph') && r.status() === 200, { timeout: 30_000 }),
+      page.reload({ waitUntil: 'domcontentloaded' }),
+    ])
+    const body = await resp.json().catch(() => null)
+    const nodes = body?.data?.nodes ?? body?.nodes ?? []
+    lastCount = Array.isArray(nodes) ? nodes.length : -1
+    if (JSON.stringify(nodes).includes(needle)) return
+    await page.waitForTimeout(1000)
+  }
+  throw new Error(`等 ${timeoutMs}ms 仍未在图里看到「${needle}」（最后一次节点数=${lastCount}）`)
+}
+
 test.describe('CL-08a · 我的记忆', () => {
   test('自述 → 固定回执 → 关系图渲染', async ({ page }) => {
     test.setTimeout(180_000)
@@ -78,12 +105,13 @@ test.describe('CL-08a · 我的记忆', () => {
     await page.getByRole('link', { name: '我的记忆' }).click()
     await submitNote(page, `我叫${NAME}，是一名${JOB}。`)
 
-    // 2) 抽取是异步的：固定等 20s。
-    //    注意：关系图画在 canvas 上，无法用 DOM 文本断言"实体已出现"，因此这里只能用
-    //    时间窗（经验值：LLM 抽取 + 摘要重建 ≈ 5~10s）。若未来换成 SVG 渲染，应改为轮询。
+    // 2) 抽取是异步的：轮询图数据直到「云舟」这个事实进图（不再固定等 20s）。
+    //    关系图渲染在 canvas 上，DOM 里看不到节点文字 ⇒ 只能看接口响应体。
+    await waitForGraphFact(page, NAME)
+
+    // 3) 新会话提问（不提供任何信息）
     await page.getByRole('link', { name: '对话' }).click()
     await expect(page.getByRole('heading', { name: '对话', exact: true })).toBeVisible({ timeout: 30_000 })
-    await page.waitForTimeout(20_000)
 
     // 3) 新会话提问（不提供任何信息）
     const box = page.getByPlaceholder(/请输入想倾诉的内容/)
