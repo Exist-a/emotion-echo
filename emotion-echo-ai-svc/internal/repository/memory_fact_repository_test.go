@@ -10,6 +10,7 @@ package repository
 import (
 	"context"
 	"testing"
+	"time"
 
 	"emotion-echo-ai-svc/internal/model"
 
@@ -51,6 +52,44 @@ func TestMemoryFactRepo_InMemory_TryMarkExtractRun_RetriesFailed(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.True(t, again, "failed 的来源必须允许重试（消费框架重投 / 自述条重试）")
+}
+
+// CL-08a 残留修复：进程在抽取途中被杀 / FinishExtractRun(done) 未落库，
+// 运行行会停在 pending 且**没有任何调用方会再试**（TryMark 见 pending 就跳过）。
+// 语义：pending 仍在租约内 = 有人在跑（跳过，防并发双抽）；超过租约 = 孤儿，允许重投。
+func TestMemoryFactRepo_InMemory_TryMarkExtractRun_StalePendingIsRetryable(t *testing.T) {
+	t.Parallel()
+	repo := NewInMemoryMemoryFactRepo()
+	ctx := context.Background()
+	key := extractRunKey{kind: model.MemorySourceKindMessage, id: 300}
+
+	_, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{
+		SourceKind: model.MemorySourceKindMessage, SourceID: 300, UserID: 1,
+	})
+	require.NoError(t, err)
+
+	again, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{
+		SourceKind: model.MemorySourceKindMessage, SourceID: 300, UserID: 1,
+	})
+	require.NoError(t, err)
+	assert.False(t, again, "租约内的 pending 必须跳过（有 worker 在跑，防并发双抽）")
+
+	// 把运行行做旧，模拟 worker 已死 / 收尾回填失败后无人再试
+	repo.mu.Lock()
+	repo.runs[key].UpdatedAt = time.Now().UTC().Add(-ExtractRunLease - time.Minute)
+	repo.mu.Unlock()
+
+	retried, err := repo.TryMarkExtractRun(ctx, &model.MemoryExtractRun{
+		SourceKind: model.MemorySourceKindMessage, SourceID: 300, UserID: 1,
+	})
+	require.NoError(t, err)
+	assert.True(t, retried, "超过租约的 pending 必须允许重抽（否则该来源永久不再抽取）")
+
+	run, err := repo.GetExtractRun(ctx, model.MemorySourceKindMessage, 300)
+	require.NoError(t, err)
+	require.NotNil(t, run)
+	assert.Equal(t, model.MemoryExtractStatusPending, run.Status)
+	assert.False(t, run.UpdatedAt.Before(time.Now().UTC().Add(-time.Minute)), "重抽时必须续租（updated_at 刷新）")
 }
 
 func TestMemoryFactRepo_InMemory_FinishExtractRun(t *testing.T) {

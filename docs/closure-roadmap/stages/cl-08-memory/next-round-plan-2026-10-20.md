@@ -113,6 +113,25 @@ err="dial emotion-echo-postgres:5432: ... no such host"  → exit code=1 → res
 
 ## §D 路径 A 的行动单
 
+**执行状态（2026-10-20）**
+
+| 步 | 内容 | 状态 |
+|---|---|---|
+| D.0 | 环境收口（锁 / 崩溃容器 / 未跟踪物 / 分支核对） | ✅ 已执行（未跟踪物与分支**未动**，待裁） |
+| D.1 | 修「抽取卡 pending ⇒ 来源永久不再抽取」 | ✅ 已修（TDD：先红后绿，2 个包单测全绿） |
+| D.2 | 补 PG 仓储 integration test | ✅ 4/4 PASS（需 `TESTCONTAINERS_RYUK_DISABLED=true`） |
+| D.3 | 运行时 A/B（T-5 / T-17） | ⏸ **未做**（需起栈） |
+| D.4 | E2E 去固定 20s | 🟡 代码已改，**未在真栈复跑** |
+| D.5 | 收口（report 翻终态 + 第二方核对） | ⏸ 阻塞于 D.3 |
+
+**分支**：`fix/cl-08a-extract-retry`（4 个 commit：test → fix → test → test）。
+
+> **本机全量 `go test ./...` 里 `internal/grpcserver` 4 个子用例红（全为 `Unavailable`）**：
+> 在**干净的 `origin/main` worktree 上同样红**（已实测），故**不是本轮引入**。
+> 读 `startTestServer`（`server_test.go:58-91`）可见其"起了没"的守卫只断言 `addr` 非空、
+> 没有断言 TCP 探测真的成功 ⇒ 服务没监听时测试仍会往下跑，最终以 `Unavailable` 报错（掩盖真实原因）。
+> 属**既有测试脆弱性 + 本机环境差异**，未定位，**本轮不改**；需要时另立条目。
+
 ### D.0 环境收口（🟢，已执行 2026-10-20 08:45）
 
 | 项 | 动作 | 结果 |
@@ -152,7 +171,7 @@ feat/e2e-28-f135-dual-endpoint-tts         [无 upstream]  diff vs main: 11 file
 
 > 新增登记建议：`restart: on-failure` + 依赖缺失 ⇒ **无限重启空转**（无退避上限、无"依赖不可达就退出"的区分）——归 CL-12 或 CL-09，属运维债，非本阶段引入。
 
-### D.1 修「抽取运行卡 pending，来源永久不再抽取」（🟢 纯 Go 单测）
+### D.1 修「抽取运行卡 pending，来源永久不再抽取」（✅ 已修复 2026-10-20，🟢 纯 Go 单测）
 
 **缺陷机制（已读码确证）**
 
@@ -163,30 +182,66 @@ feat/e2e-28-f135-dual-endpoint-tts         [无 upstream]  diff vs main: 11 file
 5. 仓内**没有** sweeper 扫描 `pending` 行。
    ⇒ 结果：该 `source_id` 的事实**永久不再更新**（不报错、不告警，只有一行 pending）。
 
-**TDD 顺序**
+**TDD 顺序（已按此执行）**
 - 🔴 RED：`TestMemoryExtract_RetryAfterFinishFailure_ReExtracts` —— 造一个 `pending` 且 `updated_at` 超过租约的 run，断言 `TryMarkExtractRun` 返回 `true`；
 - 🟢 GREEN：给 `TryMarkExtractRun` 加**租约判据**（`status IN ('failed') OR (status='pending' AND updated_at < now()-lease)`），或引入 `attempts` 列 —— **二选一，需在实现前定**；
 - ♻️ 补一条反例：`pending` 且**未超租约** ⇒ 仍跳过（防并发双抽）。
 
-### D.2 补 PG 仓储 integration test（🟢，复用现成 harness）
+**实际落地（2026-10-20，分支 `fix/cl-08a-extract-retry`）**
+
+| 步 | 内容 | 证据 |
+|---|---|---|
+| 🔴 RED（1） | `TestMemoryFactRepo_InMemory_TryMarkExtractRun_StalePendingIsRetryable`（租约内跳过 / 超租约重抽 + 续租） | 编译红：`undefined: ExtractRunLease` |
+| 🔴 RED（2） | `TestMemoryExtractHandler_FinishDoneFailure_LeavesRetryableState`（回填失败后运行行必须为 failed，且重投要真再抽一次） | 断言红：`expected: "done" actual: "pending"` |
+| 🟢 GREEN（1） | 选**租约**方案（不引 `attempts` 列，避免改表）：`repository.ExtractRunLease = 10m`；内存与 PG 两侧同判据 | `go test ./internal/repository/` ok |
+| 🟢 GREEN（2） | handler 在 `FinishExtractRun(done)` 失败时 **best-effort 落 failed** 再返回错误（事实已提交 + `ApplyFacts` 幂等 ⇒ 重抽最坏多一次 LLM 调用） | `go test ./internal/logic/` ok |
+| ♻️ 反例 | 上述 RED（1）已含"租约内仍跳过"的断言 | 同左 |
+
+> 两处互补的原因：handler 修的是"**能感知**的失败"（回填报错），租约修的是"**不能感知**的失败"（进程被杀，连错误都没有）。
+> 只做其中一半，仍会留下"当天永久不抽取"的窗口。
+
+### D.2 补 PG 仓储 integration test（✅ 已完成 2026-10-20，🟢，复用现成 harness）
 
 用 `integration_test/testdb_test.go`，至少覆盖：
 1. `ApplyFacts` 的 supersede 语义（新事实生效 + 旧行 `valid_to` 置位，**不删行**）；
 2. `TryMarkExtractRun` 幂等（同源二次 ⇒ `first=false`）；
 3. **并发两写**同一 `(subject, predicate)` ⇒ PG 报错 vs 内存静默跳过 的语义差异（report §2.2 明确点名的未验证项）。
 
-### D.3 运行时 A/B（🔴 需起栈，2 条）
+**实际落地**：`integration_test/memory_fact_repo_integration_test.go`，4 条 —— 三条对应上表 + 一条 `TryMark` 的**孤儿 pending 超租约可重抽**（D.1 的库侧对偶）。
+
+```
+TESTCONTAINERS_RYUK_DISABLED=true go test -tags integration ./integration_test/ \
+  -run TestPostgresMemoryFactRepo -count=1
+→ 4/4 PASS（2.5~2.9s/条）
+```
+
+⚠️ **本机必须加 `TESTCONTAINERS_RYUK_DISABLED=true`**：Docker Desktop(Windows, npipe) 下
+`testcontainers/ryuk:0.14.0` 起不来（`wait until ready: "Started" matched 0 times`），
+容器创建直接超时 ⇒ 所有 integration test 在 `newAIDB` 处就失败（与测试内容无关）。
+**这一点要写进本地跑 integration 的说明**，否则会误判成"数据库代码坏了"。
+
+⚠️ **第 4 条钉住的差异**：陈旧快照下 PG 由 `uq_memory_fact_active_key` 拦下并**返回错误**
+（消费框架重投后重算计划即收敛）；**内存替身目前静默放过**（会短暂出现两条 active）。
+本轮只把 PG 的行为钉死，**未改内存替身**（改它属语义变更，需单独一轮）。
+
+### D.3 运行时 A/B（🔴 需起栈，2 条，**未做**）
 
 | 点 | 做法 | 断言 |
 |---|---|---|
 | T-5 | 停 llm-service → 发一条消息 → 恢复 | 消息链路 **HTTP 200 / 流式正常**；抽取走重试补齐；`memory_extract_run` 最终终态 |
 | T-17 | 两个账号各写事实 → 交叉提问 | A 的事实**绝不出现在** B 的注入；摘要 Redis 键按 user 隔离 |
 
-### D.4 E2E 去固定等待（🟢 前端测试）
+> 现状：dev 栈仍为**全停**（只有 4 个模型容器在跑）。这两条**必须等起栈**才能做，
+> 不做就不能宣布 CL-08a `done`。
 
-`cl-08a-memory.spec.ts:86` 的 `waitForTimeout(20_000)` ⇒ 改为等**可判定的信号**（接口返回 / canvas 出现非空像素 / `_echarts_instance_` 后首帧）。避免固定等待既慢又假绿。
+### D.4 E2E 去固定等待（🟡 代码已改，**待栈上复跑**）
 
-### D.5 收口
+`cl-08a-memory.spec.ts:86` 的 `waitForTimeout(20_000)` ⇒ 改为 `waitForGraphFact(page, NAME)`：
+每次 `reload` 抓 `/memory/graph` 的响应体，命中「云舟」即返回；超时错误带最后一次节点数
+（区分"没抽出来"与"接口返回空"）。已用 `playwright test --list` 验证规格可编译/被发现（4 条）。
+**尚未在真栈上跑过**（栈不在）⇒ 复跑前不得声称"E2E 已绿"。
+
+### D.5 收口（未做，阻塞于 D.3）
 
 按 RUNBOOK：更新 report（残留逐条翻终态）→ 第二方核对 → 由**审计判定**是否 `done`（执行者不自行宣布）。同时把 D.2 的并发语义结论回填 report §2.2。
 
