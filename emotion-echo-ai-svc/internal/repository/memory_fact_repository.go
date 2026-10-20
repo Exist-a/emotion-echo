@@ -20,11 +20,24 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// ExtractRunLease 抽取运行的租约。
+//
+// 语义：`status=pending` 且 `updated_at` 在租约内 ⇒ 有 worker 正在抽（跳过，防并发双抽）；
+// 超过租约 ⇒ 视为**孤儿**（进程被杀 / 收尾回填失败后无人再试），允许重投重抽。
+//
+// 取值依据：单条消息抽取 = 一次 LLM 调用 + 一次落库，运行态实测 p95 ≈ 1s（T-18 面板）；
+// 10 分钟足以覆盖慢模型与框架重试，同时保证孤儿行当天内自愈。
+//
+// 为什么必须有它：`pending` 是"没有终态"的状态，若只看 `failed` 放行重试，
+// 一次崩溃就会让该来源（message / note）**永久不再抽取**，且不报错、不告警。
+const ExtractRunLease = 10 * time.Minute
+
 // MemoryFactRepo 记忆仓储。
 type MemoryFactRepo interface {
 	// TryMarkExtractRun 幂等登记一个来源的抽取。
 	// 返回 first=true 表示首次（调用方可以抽取）；false 表示已处理过。
-	// 已存在且 status=failed 的行允许重试（重置为 pending 后返回 true）。
+	// 已存在且 status=failed 的行允许重试（重置为 pending 后返回 true）；
+	// status=pending 且超过 ExtractRunLease 的孤儿行同样允许重试（并续租）。
 	TryMarkExtractRun(ctx context.Context, run *model.MemoryExtractRun) (first bool, err error)
 	// FinishExtractRun 回填抽取结果（done/failed + 事实数 + 错误）。
 	FinishExtractRun(ctx context.Context, sourceKind string, sourceID int64, status string, factsCount int, errMsg string) error
@@ -91,8 +104,12 @@ func (r *InMemoryMemoryFactRepo) TryMarkExtractRun(ctx context.Context, run *mod
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, ok := r.runs[k]; ok {
-		// 失败过 ⇒ 允许重试（消费框架会重投）；已 done ⇒ 幂等跳过。
-		if existing.Status == model.MemoryExtractStatusFailed {
+		// 失败过 ⇒ 允许重试（消费框架会重投）；
+		// pending 且超过租约 ⇒ 孤儿行（worker 已死 / 收尾未回填），同样允许重抽；
+		// 其余（done / 租约内的 pending）⇒ 幂等跳过。
+		if existing.Status == model.MemoryExtractStatusFailed ||
+			(existing.Status == model.MemoryExtractStatusPending &&
+				time.Since(existing.UpdatedAt) > ExtractRunLease) {
 			existing.Status = model.MemoryExtractStatusPending
 			existing.Error = ""
 			existing.FactsCount = 0
@@ -324,8 +341,11 @@ func NewPostgresMemoryFactRepo(db *gorm.DB) *PostgresMemoryFactRepo {
 // TryMarkExtractRun 依赖 (source_kind, source_id) 复合主键做 ON CONFLICT DO NOTHING：
 // RowsAffected==1 ⇒ 首次登记；0 ⇒ 已存在。
 //
-// 已存在的行若是 **failed**，允许重试（消费框架重投时再抽一次）：
-// 重置为 pending 后返回 true。已 done 的行仍然幂等跳过。
+// 已存在的行允许重试的两种情形（重置为 pending 后返回 true）：
+//   - `status='failed'`：消费框架重投时再抽一次；
+//   - `status='pending'` 且 `updated_at` 早于租约：孤儿行（进程被杀 / 收尾回填失败）。
+//
+// 已 done 的行、以及租约内仍在跑的 pending 行仍然幂等跳过。
 func (r *PostgresMemoryFactRepo) TryMarkExtractRun(ctx context.Context, run *model.MemoryExtractRun) (bool, error) {
 	if run.SourceKind == "" {
 		run.SourceKind = model.MemorySourceKindMessage
@@ -343,10 +363,12 @@ func (r *PostgresMemoryFactRepo) TryMarkExtractRun(ctx context.Context, run *mod
 		return true, nil
 	}
 
+	cutoff := time.Now().UTC().Add(-ExtractRunLease)
 	upd := r.db.WithContext(ctx).
 		Model(&model.MemoryExtractRun{}).
-		Where("source_kind = ? AND source_id = ? AND status = ?",
-			run.SourceKind, run.SourceID, model.MemoryExtractStatusFailed).
+		Where("source_kind = ? AND source_id = ? AND (status = ? OR (status = ? AND updated_at < ?))",
+			run.SourceKind, run.SourceID,
+			model.MemoryExtractStatusFailed, model.MemoryExtractStatusPending, cutoff).
 		Updates(map[string]any{
 			"status":      model.MemoryExtractStatusPending,
 			"error":       "",

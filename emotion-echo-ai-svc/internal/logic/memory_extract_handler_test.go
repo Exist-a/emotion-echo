@@ -279,3 +279,44 @@ func TestMemoryExtractHandler_HandleNote_FailureMarksNote(t *testing.T) {
 	require.NotNil(t, stored)
 	assert.Equal(t, model.MemoryExtractStatusFailed, stored.ExtractStatus)
 }
+
+// flakyFinishRepo：落 done 时回填失败（模拟审计表/DB 抖动），其余透传内存实现。
+type flakyFinishRepo struct {
+	*repository.InMemoryMemoryFactRepo
+	failDone bool
+}
+
+func (f *flakyFinishRepo) FinishExtractRun(ctx context.Context, sourceKind string, sourceID int64, status string, factsCount int, errMsg string) error {
+	if f.failDone && status == model.MemoryExtractStatusDone {
+		return errors.New("audit table unavailable")
+	}
+	return f.InMemoryMemoryFactRepo.FinishExtractRun(ctx, sourceKind, sourceID, status, factsCount, errMsg)
+}
+
+// CL-08a 残留修复：收尾回填 done 失败时，运行行若留在 pending，
+// 重投会被 TryMarkExtractRun 的幂等判据永久跳过 ⇒ 该来源的事实再也不会更新。
+func TestMemoryExtractHandler_FinishDoneFailure_LeavesRetryableState(t *testing.T) {
+	t.Parallel()
+	base := repository.NewInMemoryMemoryFactRepo()
+	repo := &flakyFinishRepo{InMemoryMemoryFactRepo: base, failDone: true}
+	ex := &fakeExtractor{facts: []model.MemoryFact{factOf("职业", "后端工程师")}}
+	h := NewMemoryExtractHandler(repo, ex)
+	ctx := context.Background()
+	evt := msgEvent(100, 7, 1, "user", "我是后端工程师")
+
+	require.Error(t, h.Handle(ctx, evt), "收尾回填失败必须向上返回错误（触发消费框架重投）")
+
+	run, err := base.GetExtractRun(ctx, model.MemorySourceKindMessage, 100)
+	require.NoError(t, err)
+	require.NotNil(t, run)
+	assert.Equal(t, model.MemoryExtractStatusFailed, run.Status,
+		"不得把运行行留在 pending（pending 会被幂等判据当成「已处理」，该来源永久不再抽取）")
+
+	// 回填恢复后重投：必须真的再抽一次（而不是被 first=false 跳过）
+	repo.failDone = false
+	require.NoError(t, h.Handle(ctx, evt))
+	assert.Equal(t, 2, ex.calls, "恢复后重投必须重新抽取")
+	run, err = base.GetExtractRun(ctx, model.MemorySourceKindMessage, 100)
+	require.NoError(t, err)
+	assert.Equal(t, model.MemoryExtractStatusDone, run.Status)
+}

@@ -207,6 +207,14 @@ func (h *MemoryExtractHandler) extractSource(ctx context.Context, src extractSou
 		return fmt.Errorf("memory: apply facts: %w", err)
 	}
 	if err := h.repo.FinishExtractRun(ctx, src.Kind, src.ID, model.MemoryExtractStatusDone, written, ""); err != nil {
+		// 收尾回填失败时**不能**把运行行留在 pending：
+		// pending 会被 TryMarkExtractRun 的幂等判据当成「已处理」而永久跳过（该来源再也不抽取）。
+		// 这里 best-effort 落 failed（failed 允许重投重抽），再向上返回错误让消费框架重试。
+		// 事实已提交且 ApplyFacts 幂等 ⇒ 重抽不会产生重复行，最坏只多一次 LLM 调用。
+		h.finishFailed(ctx, src, err)
+		sharedmetrics.MemoryExtractTotal.WithLabelValues(sharedmetrics.MemoryResultError).Inc()
+		sharedmetrics.MemoryExtractDurationSeconds.WithLabelValues(sharedmetrics.MemoryResultError).
+			Observe(time.Since(started).Seconds())
 		return fmt.Errorf("memory: finish extract run: %w", err)
 	}
 
