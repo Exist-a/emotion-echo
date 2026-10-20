@@ -280,9 +280,24 @@ func decodeEventData(evt *events.Event, dst any) error {
 }
 
 // occurredAt 事件时间（秒级时间戳）；0/负值回落 now（避免 1970 污染双时间轴）。
+// occurredAt 把事件里的 createdAt 还原成时间。
+//
+// ⚠️ 单位不统一是**跨服务契约的历史事实**（2026-10-21 收口轮实测出来的）：
+// chat-svc 发的是 **UnixMilli**（`sendmessagelogic.go:116`、`proto_marshal.go:31`），
+// 而这里历史上按**秒**解析 ⇒ 事实 valid_from 落到 58773 年，
+// 双时间轴排序全错，摘要直接把「58773-03 用户是一名木工」写进 prompt。
+//
+// 判据：秒级时间戳在 2286 年才达到 1e10，毫秒级现在就是 1.7e12 ⇒
+// 用 1e11 做分界（≈ 5138 年的秒数），两种单位都能正确还原，且对未来几个世纪安全。
 func occurredAt(createdAt int64) time.Time {
 	if createdAt <= 0 {
 		return time.Now().UTC()
 	}
+	if createdAt >= epochMillisThreshold {
+		return time.UnixMilli(createdAt).UTC()
+	}
 	return time.Unix(createdAt, 0).UTC()
 }
+
+// epochMillisThreshold 秒 / 毫秒时间戳的分界（1e11 秒 ≈ 5138 年；毫秒级现在已是 1e12 量级）。
+const epochMillisThreshold = int64(100_000_000_000)
