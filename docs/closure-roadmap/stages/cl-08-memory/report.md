@@ -1,17 +1,20 @@
 ---
-status: partial
+status: done
 stage: CL-08a
 slug: cl-08-memory
 created: 2026-10-19
+updated: 2026-10-21
 plan: cl-08a-execution-plan.md
+closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代理"）；第二方核对由独立子代理完成，见 §6
 ---
 
 # CL-08a · 记忆（用户事实 + 「我的记忆」自述入口）— 阶段报告
 
-> **结论：`partial`（接近收口）** —— 两条主链路（正常会话事实 / 自述条 → PG → Redis 摘要 → prompt 注入）
-> 已在真栈上端到端跑通；**T-18 / T-19 / T-20 / T-21 与第二方核对均已完成**（核对抓出的 2 个真缺陷已修）。
-> 仍未完成的只有：**T-5 / T-17 的运行时 A/B**、以及第二方核对列出的 3 项非阻塞遗留（见 §2.2）。
-> 按 RUNBOOK 纪律，执行者不自行宣布 `done`。
+> **结论：`done`（2026-10-21 收口）**
+> 两条主链路（正常会话事实 / 自述条 → PG → Redis 摘要 → prompt 注入）在真栈端到端跑通；
+> **21 个测试点全部有结论**（PASS 17 · N/A 4，其中 3 项明确移交 c、1 项移交 d）；
+> 收口前补完了 2026-10-19 遗留的运行态 A/B，并在补测过程中**又抓到 5 条问题**（§2.3：产品缺陷 3 + 工具/测试 2）。
+> 第二方核对 = 独立子代理只读审查，**首轮判 FAIL（4 处收口声明不成立）**，整改记录见 §6。
 
 ---
 
@@ -19,17 +22,17 @@ plan: cl-08a-execution-plan.md
 
 | 项 | 状态 |
 |---|---|
-| 阶段 PR | [#261](https://github.com/Exist-a/emotion-echo/pull/261)（draft） |
-| 登记 PR | [#260](https://github.com/Exist-a/emotion-echo/pull/260)（已合并 `9920eb13`） |
-| 范围修正 PR | [#262](https://github.com/Exist-a/emotion-echo/pull/262)（已合并 `6a7ddaf4`） |
-| 运行镜像 | `emotion-echo/{ai-svc,web-bff,web}:cl08a`（本轨后缀 tag，未覆盖公共 tag） |
-| 迁移 | `i011_create_memory_facts.sql` 已应用（db-migrate `OK`，1000ms） |
-| 运行时证据 | [`evidence/runtime-e2e-2026-10-19.txt`](evidence/runtime-e2e-2026-10-19.txt) |
+| 阶段 PR | [#261](https://github.com/Exist-a/emotion-echo/pull/261)（squash → `505e9134`，2026-10-19） |
+| 残留清销 PR | [#267](https://github.com/Exist-a/emotion-echo/pull/267)（squash → `749be05e`）：抽取卡 pending 修复 + PG 集成测试 + E2E 去固定等待 |
+| 幻觉日期护栏 PR | [#268](https://github.com/Exist-a/emotion-echo/pull/268)（squash → `5731e857`）：`valid_from` 校验 + 运行态证据 + 账本 |
+| 收口文档 PR | 本 PR（report 翻终态 + roadmap/契约回填） |
+| 运行镜像 | `emotion-echo/{ai-svc,web-bff,web}:cl08ares`（轨道后缀 tag，未覆盖公共 tag），经 `deploy/compose.track-override.yml` 挂载 |
+| 迁移 | `i011_create_memory_facts.sql`（幂等，db-migrate `OK`） |
 
 **交付形态**（用户 2026-10-19 两次裁定的合成）：
 
-1. **正常会话**：`message.created` → ai-svc 独立消费组 `ai-svc-memory` → LLM 抽事实 → PG（双时间轴）→ Redis 摘要 → BFF `memory` 段注入。
-2. **「我的记忆」页**：侧边栏新 tab → `POST /memory/notes` → 独立 `memory_note`（**不进 conversations/messages**）→ 异步抽取 → 固定回执「记忆已更新」→ 中心辐射关系图（PG 事实渲染）。
+1. **正常会话**：`message.created` → ai-svc 独立消费组 `ai-svc-memory` → LLM 抽事实 → PG（双时间轴）→ Redis 用户级摘要 → BFF `memory` 段注入。
+2. **「我的记忆」页**：侧边栏 tab → `POST /memory/notes` → 独立 `memory_note`（**不进 conversations/messages**）→ 异步抽取 → 固定回执「记忆已更新」→ 中心辐射关系图（由 PG 事实渲染）。
 
 ---
 
@@ -39,26 +42,29 @@ plan: cl-08a-execution-plan.md
 
 | # | 测试点 | 判定 | 依据 |
 |---|--------|------|------|
-| T-1 | 迁移幂等 | **PASS** | db-migrate 日志 `OK emotion-echo-ai-svc/i011_create_memory_facts.sql（1000ms）`；文件全部 `IF NOT EXISTS`，契约测试钉住 |
-| T-2 | 事实行写读一致 | **PASS** | 仓储契约测试（内存实现）+ PG 实查（字段齐全；证据 §3 列出居住地 2 行）。⚠️ PG 实现本身**无 integration test**（见 §2.2 建议项） |
-| T-3 | 双时间轴 | **PASS** | 运行时：上海行 `status=superseded`、`valid_to=2026-10-18 23:38:34+00`；北京行 active（见证据 §3） |
-| T-4 | 抽取幂等 | **PASS** | 单测：同源重复消费 ⇒ LLM 只调 1 次、事实数 1；`(source_kind, source_id, subject, predicate, object)` 唯一索引 |
-| T-5 | 抽取失败不阻塞主链路 | **部分 PASS** | 单测证明异步 + 失败可重试；**未做**"停 LLM → 发消息仍成功"的运行时 A/B |
+| T-1 | 迁移幂等 | **PASS** | db-migrate 日志 `OK emotion-echo-ai-svc/i011_create_memory_facts.sql`；文件全 `IF NOT EXISTS` + 契约测试钉住 |
+| T-2 | 事实行写读一致 | **PASS** | 内存契约测试 + **PG integration test**（`TestPostgresMemoryFactRepo_ApplyFacts_SupersedeKeepsHistory`，2026-10-20 新增） |
+| T-3 | 双时间轴 | **PASS** | 运行时：上海行 `status=superseded`、`valid_to` 置位；北京行 active（`runtime-e2e-2026-10-19.txt` §3）+ PG 集成测试强断言 `valid_to == 新行 valid_from`。⚠️ 收口轮发现「消息来源事实的 `valid_from` 单位错」（§2.3-5）已修；修后摘要行显示 `2026-10`（见 `t5-t17-runtime-2026-10-21.txt`） |
+| T-4 | 抽取幂等 | **PASS** | 单测：同源重复消费 ⇒ LLM 只调 1 次；唯一索引 `(source_kind,source_id,subject,predicate,object)` |
+| T-5 | 抽取失败不阻塞主链路 | **PASS**（2026-10-21 补运行时） | 把 ai-svc 的 `LLM_BASE_URL` 指到不可达：消息照发、落库 1 行；run 落 `failed`（错误原文 `memory: call llm: Post …`）；恢复后新消息 `done\|2` 且事实进库（`t5-t17-runtime-2026-10-21.txt`） |
+| T-6 | 实体消解（中文指代） | **N/A → c** | 需图/实体层，本阶段不做 |
 | T-7 | 无记忆时逐字零回归 | **PASS** | `TestPromptAssembly_NoMemory_ByteIdenticalToGolden`（等于 `goldenBase`） |
 | T-8 | 段序不变量 | **PASS** | `TestPromptAssembly_MemorySegmentOrder`：base→agent→memory→emotion→guard；两处 `assembleMessages` 都传 memory |
-| T-9 | 记忆段内容正确 | **PASS** | 运行时：新会话问"还记得我是做什么的、住在哪" ⇒ 回复「记得的，阿哲。你在北京，做后端工程师。」 |
-| T-10 | 关键路径不查图 | **PASS**（架构级） | 注入路径只读 Redis（`downstream.MemorySummarySource`），没有任何图/DB 调用 |
-| T-11 | 降级 | **PASS** | 单测：未装配 / 来源报错 / 无身份 / redis.Nil 均返回空串，对话不失败 |
-| T-12 | 预算 | **PASS** | 写侧 `BuildSummary` 600 token 预算（超限丢最旧）+ 读侧 `clampMemorySegment` 1200 rune 兜底 |
-| T-15 | 事实更新端到端 | **PASS** | 运行时：上海→北京；摘要同步为北京（证据 §3/§4） |
-| T-17 | 用户隔离 | **部分 PASS** | 单测：`ListActiveByUser` / 图 / 摘要均按 user_id；**未做**双账号运行时交叉验证 |
-| T-18 | 指标被消费 | **PASS** | 4 个 collector（extract/facts_written/summary_build/duration）已在 ai-svc `/metrics` 暴露、被 Prometheus 抓取；business dashboard 新增 5 个面板；`obs_monitoring.test.js` 组 ⑨ 双向钉住。证据 [`evidence/t18-metrics-2026-10-19.txt`](evidence/t18-metrics-2026-10-19.txt) |
-| T-19 | 评测集（价值证明） | **PASS**（精确率子项 N/A → c） | `scripts/eval_memory_recall.py` 实跑 **PASS=10 / FAIL=0 / N/A=1**：4/4 跨会话召回、事实更新（图上成都上线且杭州下线 + 回复只用新值）、开/关记忆 A/B 均成立。证据 [`evidence/t19-eval-2026-10-19.txt`](evidence/t19-eval-2026-10-19.txt)。⚠️ **"不相关不注入"记为 N/A**：本阶段设计是**全量摘要常带注入**（≤600 token），问天气时模型会顺带提到已存事实；**按需相关性检索归 CL-08c**（图/向量召回），不以假绿掩盖 |
-| T-20 | 跨会话人可见钉 | **PASS** | `e2e/cl-08a-memory.spec.ts` 第 2 例：UI 里在「我的记忆」写「我叫云舟，是一名插画师」→ 新会话问「你还记得我叫什么名字、做什么工作吗」→ 最新回复复述 **云舟 / 插画**（Playwright 2/2 通过） |
-| T-21 | 记忆可见性口径 | **PASS** | 用户 2026-10-19 裁定：只放关系图（中心辐射）；页面 + 截图见 [`evidence/t20-memory-page.png`](evidence/t20-memory-page.png)。用户级开关与删除仍归 d |
-| T-6 | 实体消解 | **N/A → c** | 需要图/实体层；本阶段不做 |
+| T-9 | 记忆段内容正确 | **PASS** | 运行时：新会话问"还记得我做什么的、住哪" ⇒ 复述职业+城市 |
+| T-10 | 关键路径不查图 | **PASS**（架构级） | 注入路径只读 Redis（`downstream.MemorySummarySource`），无图/DB 调用 |
+| T-11 | 降级 | **PASS（证据强度不足）** | handler 层四种降级有单测；但 **BFF 真实 Redis 读取路径**（`redisMemorySummary` 的 `redis.Nil` / 300ms 超时分支）**无测试**，只有 fake source ⇒ 已登账 `CL-F-70` |
+| T-12 | 预算 | **PASS** | 写侧 600 token（超限丢最旧）+ 读侧 1200 rune 兜底 |
 | T-13 / T-14 | 图后端 / 三层召回 | **N/A → c** | Graphiti+Kuzu 顺延 |
+| T-15 | 事实更新端到端 | **PASS** | 上海→北京；摘要同步为北京（`runtime-e2e-2026-10-19.txt` §3/§4） |
 | T-16 | 删除闭环 | **N/A → d** | 用户裁定：删除全归 CL-08d |
+| T-17 | 用户隔离 | **PASS**（2026-10-21 补运行时） | 双账号（echo uid=1 / smoke_user uid=2）：PG 事实双向不交叉；Redis `memory:summary:user:<id>` 双向不交叉（`t5-t17-runtime-2026-10-21.txt`） |
+| T-18 | 指标被消费 | **PASS** | 4 个 collector 在 `/metrics` 暴露、被 Prometheus 抓取；business dashboard 5 个面板；`obs_monitoring.test.js` 组 ⑨ 双向钉住（`t18-metrics-2026-10-19.txt`） |
+| T-19 | 评测集（价值证明） | **PASS**（精确率子项 N/A → c） | `scripts/eval_memory_recall.py`：PASS=10 / FAIL=0 / N/A=1；4/4 跨会话召回 + 事实更新 + 开/关 A/B（`t19-eval-2026-10-19.txt`） |
+| T-20 | 跨会话人可见钉 | **PASS** | `e2e/cl-08a-memory.spec.ts` **2 passed**（2026-10-21 复跑 30.3s）；UI 写自述 → 新会话复述「云舟 / 插画师」 |
+| T-21 | 记忆可见性口径 | **PASS**（用户裁定） | 只放关系图（中心辐射）；页面见 `evidence/iab-*.png` |
+
+**数量**：21 点 = PASS 17 · N/A 4（T-6/13/14 → c，T-16 → d）· FAIL 0 · BLOCKED 0。
+> 注：2026-10-21 第二方核对**抓出这里原写「PASS 15」是错的**（逐行数应为 17），已改正；同错还出现在 roadmap / parallel-contract 两处，一并修正。
 
 ---
 
@@ -68,12 +74,13 @@ plan: cl-08a-execution-plan.md
 
 - `emotion-echo-ai-svc/internal/model/memory_fact.go`：`MemoryFact` / `MemoryNote` / `MemoryExtractRun`
 - `.../repository/memory_fact_planner.go`：双时间轴计划（纯函数）+ 会话收尾确定性合并
-- `.../repository/memory_fact_repository.go`：接口 + 内存替身 + Postgres 实现（先失效后插入）
-- `.../memory/`：LLM 抽取器（OpenAI 兼容）、摘要构建、Redis 摘要写侧
+- `.../repository/memory_fact_repository.go`：接口 + 内存替身 + Postgres 实现；**2026-10-20 新增 `ExtractRunLease`**
+- `.../memory/llm_extractor.go`：LLM 抽取器；**2026-10-20 新增 `sanitizeValidFrom` 护栏**
+- `.../memory/summary_store.go`：Redis 用户级摘要（`memory:summary:user:<id>`，TTL 24h）
 - `.../logic/memory_extract_handler.go`：message / note 两源共用 `extractSource`
 - `.../grpcserver/memory_{server,graph}.go`：`MemoryService`（CreateNote / GetGraph）
 - `proto/memory.proto` + 生成物 `shared/pkg/emotionmemory`
-- `emotion-echo-web-bff/internal/{downstream,handler}/memory_*`：客户端 + 端点
+- `emotion-echo-web-bff/internal/{downstream,handler}/memory_*`
 - `emotion-echo-web/app/pages/chat/memory.vue` + `utils/memoryGraph.ts` + `types/memory.ts`
 - `emotion-echo-web/app/{layouts/nav.vue, router.options.ts, lib/apiRoutes.ts}`
 
@@ -81,62 +88,140 @@ plan: cl-08a-execution-plan.md
 
 | 套件 | 结果 |
 |---|---|
-| `go test ./...`（ai-svc） | 全绿（20 包） |
+| `go test ./...`（ai-svc，除 `internal/grpcserver` 见 §7） | 全绿 |
+| `go test -tags integration ./integration_test/ -run TestPostgresMemoryFactRepo` | **4/4 PASS**（2026-10-20 新增） |
 | `go test ./...`（web-bff） | 全绿（含路由契约 50 条） |
-| `pnpm test`（web） | **879 passed / 103 files** |
-| `pnpm exec nuxt typecheck` | 无 TS 错误 |
-| `scripts/check_rpc_status.sh` | PASS（proto 45 条全登记；新增 2 条 live） |
-| `scripts/check_proto_layout.py` | PASS |
+| `pnpm test`（web） | 879 passed / 103 files |
+| `pnpm exec playwright test e2e/cl-08a-memory.spec.ts` | **2 passed**（2026-10-21 复跑） |
+| `scripts/check_rpc_status.sh` / `check_proto_layout.py` | PASS |
 
----
-
-## §2.1 运行态抓出的真缺陷（已修）
+### §2.1 运行态抓到的真缺陷（2026-10-19，已修）
 
 | 缺陷 | 现象 | 根因 | 修复 |
 |---|---|---|---|
-| **GraphChart 未注册** | 生产构建下「我的记忆」图表区**完全空白**：容器在、`_echarts_instance_` 已挂、**canvas 数为 0**、控制台**无任何报错** | `nuxt.config.ts` 的 `nuxt-echarts` 树摇只注册了 `BarChart/LineChart/PieChart/RadarChart`，`graph` 系列没有注册 ⇒ 静默不画 | `charts` 增加 `GraphChart`；新增 vitest 契约钉（config 必须含 `GraphChart`），并重建 `web:cl08a` 后 Playwright 复测通过 |
+| **GraphChart 未注册** | 生产构建下图表区完全空白：容器在、`_echarts_instance_` 已挂、**canvas 数为 0**、控制台无报错 | `nuxt.config.ts` 的 `nuxt-echarts` 树摇只注册 Bar/Line/Pie/Radar，`graph` 未注册 ⇒ 静默不画 | 注册 `GraphChart` + vitest 契约钉；重建后才通过 |
 
-> 这条只有**真浏览器**能抓到：类型检查、vitest、`pnpm build` 全绿。
+> 只有真浏览器能抓到：typecheck / vitest / `pnpm build` 全绿。
 
-## §2.2 第二方核对抓出的问题（已修）
+### §2.2 第二方核对抓出的问题（2026-10-19，已修）
 
 | # | 问题 | 影响 | 修复 |
 |---|---|---|---|
-| 1 | **MemoryService 信任请求体 `user_id`**（`memory_server.go`） | 本机进程可用 `x-user-id:1` + body `user_id:2` 越权读写他人记忆（8892 发布到宿主、gRPC 无 TLS） | 新增 `memoryCallerID`：身份只取 metadata；无身份 ⇒ `Unauthenticated`；body 与 metadata 不一致 ⇒ `PermissionDenied`；补 2 个负向测试 |
-| 2 | **`conversation.closed` protobuf 解码断路**（`consumer/proto_decode.go`） | `Data` 恒 nil ⇒ "会话收尾合并"在生产**永远不执行**；单测因手工构造 Data 而假绿 | 补 `ConversationClosed` 解码；把只断言 `Type` 的旧测试改为断言 `Data` 三个字段 |
-| 3 | **双时间轴乱序反转**（`PlanFactUpsert`） | 迟到的旧事实会让较新的 active 下线（旧值复活 + 零长度区间）；旧测试只断言"不出现负区间"，把反转固化成了正确 | 新增 `newerActiveFor`：迟到旧事实落为**已关区间的历史行**，现有 active 不动；测试改为强断言 |
-| 4 | **BFF 读摘要无独立超时** | Redis 不可达时每次对话可能先阻塞 ~5s（go-redis DialTimeout）才调 LLM | 读取加 300ms 硬超时，超时按"无记忆"降级 |
-| 5 | 计划文档与代码不一致（health/ready、开关名、ListNotes、SQL 伪代码） | 误导后续实现 | 已逐条更正（见 `cl-08a-execution-plan.md`） |
+| 1 | `MemoryService` 信任请求体 `user_id` | 本机进程可用 `x-user-id:1` + body `user_id:2` 越权读写他人记忆 | 身份只取 metadata；不一致 ⇒ `PermissionDenied`；补 2 个负向测试。⚠️ **2026-10-21 核对指出：只修了「两值不一致」这一形态** —— ai-svc gRPC 未挂 internal auth 拦截器且 `8892` 发布到宿主，本机进程把 metadata/body 都写成同一 victim id 仍可越权 ⇒ 已登账 **`CL-F-66`（高）**，本阶段**不宣称越权面已关闭** |
+| 2 | `conversation.closed` protobuf 解码断路 | `Data` 恒 nil ⇒ 会话收尾合并在生产**从不执行**；单测因手工构造 Data 而假绿 | 补解码 + 改测试断言 `Data` 三字段 |
+| 3 | 双时间轴乱序反转 | 迟到的旧事实让较新 active 下线（旧值复活 + 零长度区间） | `newerActiveFor`：迟到旧事实落为已关区间历史行；测试改强断言 |
+| 4 | BFF 读摘要无独立超时 | Redis 不可达时每次对话先阻塞 ~5s | 300ms 硬超时，超时按"无记忆"降级 |
+| 5 | 计划文档与代码不一致 | 误导后续实现 | 逐条更正 |
 
-**仍未处理（已记录）**：Postgres 仓储无 integration test（并发冲突时 PG 报错 vs 内存静默跳过的语义差异）；`FinishExtractRun` 失败会让运行记录停在 pending；E2E 用固定 20s 等待（canvas 无法用 DOM 断言）。这三项归 **CL-08c/d 或 CL-09**。
+### §2.3 残留清销轮补测抓出的真缺陷（2026-10-20/21，已修）
+
+| # | 缺陷 | 机制（读码确证） | 修复 | 证据 |
+|---|---|---|---|---|
+| 1 | **抽取运行卡 `pending` ⇒ 该来源永久不再抽取** | `FinishExtractRun(done)` 失败只 `return error`，行仍 pending → 重投时 `TryMarkExtractRun` **只对 `failed` 放行** → `first=false` → 跳过；仓内无 sweeper | ① handler 回填失败时 best-effort 落 `failed` 再返回错误；② `ExtractRunLease=10m`：pending 超租约视为孤儿，允许重抽并续租（内存/PG 同判据） | PR #267；`TestMemoryExtractHandler_FinishDoneFailure_LeavesRetryableState`、`TestMemoryFactRepo_InMemory_TryMarkExtractRun_StalePendingIsRetryable` |
+| 2 | **LLM 幻觉 `valid_from` 锁死事实** | 抽取器把 `58771-09-12T00:00:00Z` 直接落库 ⇒ 该 active 的 `valid_from` 在遥远未来 ⇒ planner 乱序保护把之后**所有**真实日期的新说法降级为 `superseded` ⇒ 用户改口后图谱/注入永远停在旧值，且不自愈 | `sanitizeValidFrom`：只接受 `[1970-01-01, now+24h]`，越界回落来源时间 | PR #268；2 条新单测先红后绿；dev 库污染行就地修正 |
+| 3 | E2E 固定 `waitForTimeout(20_000)` | 慢则假红、快则白等 | 读 `access_token` cookie 直连网关轮询 `/api/v1/memory/graph`（`page.reload` 与客户端导航两条路都实测失败，原因写入注释） | E2E 30.3s 通过（原光等待就 20s） |
+| 4 | TDD 门禁遇二进制改动崩溃 | `git numstat` 对 PNG 返回 `-`，脚本拿去做整数比较 ⇒ `integer expected` ⇒ 把"脚本坏了"伪装成"违反 TDD" | 非纯数字跳过 | PR #268 |
+| 5 | **事件时间戳单位不一致 ⇒ 所有消息来源事实的 `valid_from` 落在 58773 年** | chat-svc 发布 `createdAt` 用 **UnixMilli**（`sendmessagelogic.go:116` / `proto_marshal.go:31`），ai-svc `occurredAt()` 按**秒**解析 ⇒ 事实时间 ≈ 5.8 万年后；双时间轴排序全错，**摘要直接写出「58773-03 用户是一名木工」注入 prompt**。上一个护栏（`sanitizeValidFrom`）只挡 LLM 给的日期，挡不住这条回落路径 —— 说明"打补丁"必须先找对根因 | `occurredAt()` 加单位判据：`>= 1e11` 按毫秒解析，否则按秒（1e11 秒 ≈ 5138 年，两种单位都安全） | 收口轮（本 PR）；`TestOccurredAt_AcceptsMillisecondsFromEvent` 先红（实得 `58774-02-05`）后绿；dev 库 **11 行 `valid_from` + 17 行 `valid_to`** 均已就地修正（首轮只修了 `valid_from`，被第二方核对抓出，见 §6） |
+
+> **教训（写进流程候选）**：本阶段 3 个真缺陷（GraphChart / 解码断路 / valid_from 幻觉）**全部只在真栈上暴露**，
+> 单测、类型检查、生产构建全绿。⇒ "能编译 + 单测绿"不能当收口依据。
+
+---
 
 ## §3 未完成 / 后移（如实记录）
 
 | # | 项 | 归属 | 说明 |
 |---|---|---|---|
-| 1 | ~~T-18 指标 + 面板~~ | ✅ **已完成（2026-10-19）** | 4 个 collector + 5 个面板 + 契约组 ⑨；Prometheus 实测 p95≈0.975s、rate>0 |
-| 2 | ~~T-19 评测集~~ | ✅ **已完成（2026-10-19）** | `scripts/eval_memory_recall.py` 可复跑；PASS=10 / FAIL=0 / N/A=1；"不相关不注入"按设计差异记为 N/A 并移交 c |
-| 3 | ~~T-20 Playwright 钉~~ | ✅ **已完成（2026-10-19）** | 2/2 通过；跨会话 UI 复述 + 关系图渲染截图 |
-| 4 | ~~浏览器视觉验收~~ | ✅ **已完成（2026-10-19）** | 生产构建 IAB/Playwright 截图；**并抓出真缺陷**（见下） |
-| 5 | ~~第二方核对~~ | ✅ **已完成（2026-10-19）** | 独立代理只读审查 7 项；抓出 **2 个真缺陷 + 1 个语义缺陷**，均已修（见 §2.2） |
-| 6 | **T-5 / T-17 运行时 A/B** | 未做 | 单测已覆盖；"停 LLM 发消息仍成功"与"双账号交叉"未在真栈跑 |
-| 6 | **用户级「关闭记忆」开关** | CL-08d | 当前只有运维级 `MEMORY_ENABLED` / `MEMORY_INJECTION_ENABLED` |
-| 7 | **删除闭环** | CL-08d | 用户裁定 |
-| 8 | **图后端 / 三层召回 / 实体消解** | CL-08c | 当前图由 PG 事实渲染，切数据源即可 |
-
-**已知边界（不夸大）**
-
-- `conversation.closed` 的合并是**确定性去重**（同键保留最新），**不是语义合并**（那需要二次 LLM，成本更高）。
-- 自述条的异步抽取是**进程内 goroutine**：进程在抽取完成前退出会留下 `pending` 条（状态可观测，但**没有启动补抽 sweeper**）。
-- 摘要 token 是**粗估**（中文 1 rune ≈ 1 token），不是精确 tokenizer。
+| 1 | **抽取失败的补偿（sweeper）** | **CL-09 / `CL-F-62`** | 实测：LLM 不可达窗口内失败的那条**永远不会被重抽**（Kafka offset 已提交，无 sweeper）⇒ 事实永久缺失。本阶段的租约只解决"重投发生时"的放行 |
+| 2 | 用户级「关闭记忆」开关 | CL-08d | 当前只有运维级 `MEMORY_ENABLED` / `MEMORY_INJECTION_ENABLED` |
+| 3 | 删除闭环 | CL-08d | 用户裁定 |
+| 4 | 图后端 / 三层召回 / 实体消解 | CL-08c | 当前图由 PG 事实渲染，切数据源即可（另见 `CL-F-56/57/58`） |
+| 5 | 内存替身的「陈旧计划」语义 | CL-09 | PG 由 `uq_memory_fact_active_key` 拦下并报错（可重投收敛）；内存替身静默放过（会短暂两条 active）。只把 PG 行为钉死，未改替身 |
+| 6 | 关系图标签重叠 | **CL-11 / `CL-F-64`** | 节点多时标签互相压字（见 `evidence/iab-2-memory-after-note-2026-10-21.png`），可读性差 |
+| 6b | **其它消费者是否有同款时间单位问题** | CL-09 | 本轮只修了记忆链路的 `occurredAt`；`emotion` 消费链路（`consumehandler.go`）未逐一核对是否也存在秒/毫秒混用（`CL-F-65` 的遗留半场） |
+| 7 | 「不相关不注入」（精确率） | CL-08c | T-19 记 N/A：本阶段是**全量摘要常带注入**（≤600 token），按需相关性检索归 c |
+| 8 | **`conversation.closed` 的触发语义与计划不符** | CL-09 / `CL-F-67` 同批 | 全仓唯一生产者是 `DeleteConversation`（`deleteconversationlogic.go:81-90`）⇒ **正常结束会话不会触发**；且它要合并的「同键两条 active」在 PG 里被 `uq_memory_fact_active_key` 禁止（集成测试反向证明）⇒ 该触发在生产形态下近乎死代码。"解码通了"≠"功能可用" |
+| 9 | **`ListActiveByConversation` 不带 `user_id`** | CL-09 / `CL-F-67` | 仓储文件头声称「所有查询强制带 user_id」，实际该方法与 `handleConversationClosed` 都只用 `conversation_id`、忽略事件里的 `data.UserID` |
+| 10 | **租约(10m) 远长于消费重试窗口(~14s)** | CL-09 / `CL-F-68` | DB 在 `TryMark` 之后失联时，3 次原地重试都会因「租约内 pending」被判 `first=false` 并当成功返回 ⇒ offset 前进、事实丢失 |
+| 11 | 等时时间戳仍产生零长度区间 | CL-09 / `CL-F-69` | `planner` 只夹住「负区间」，`valid_from == valid_to` 的情况仍在 |
+| 12 | 测试强度不足项 | CL-09 / `CL-F-70` | ① T-11 的真实 Redis 路径无测试；② 迁移幂等只有字符串断言、没真跑两遍；③ 指标测试读全局计数器且并行；④ 会话收尾合并测试手工造 PG 不允许的状态 |
 
 ---
 
 ## §4 环境与镜像（R4 交代）
 
-- 栈：19 容器 healthy；`ai-svc` / `web-bff` / `web` 跑 **`:cl08a`**，其余为公共 tag。
-- `deploy/.devmode-session`：owner `lane-cl-08`，until 2026-10-19 23:59（接替 CL-06 的过期锁）。
-- ⚠️ **环境漂移**：`user-svc` 公共 tag `v0.1.5` **不含 CL-06 的 `ListAgentProfiles`** ⇒ BFF 日志报
-  `Unimplemented: unknown method ListAgentProfiles`，角色人设段被跳过（**不影响记忆链路**）。
-  已登账 `CL-F-59`（公共镜像 tag 未随 CL-06 合并更新）。
-- 首次 `CreateConversation` 仍会撞 5s 截止（重试即成功，E2E-F-115 既有账，非本阶段引入）。
+- 2026-10-21 收口轮：19 容器 healthy；`ai-svc` / `web-bff` / `web` 跑 **`:cl08ares`**（经 `deploy/compose.track-override.yml` 挂载），其余公共 tag。
+- `deploy/.devmode-session`：owner `lane-cl-08a-residual`，until 2026-10-21 23:59。
+- ⚠️ **公共 tag 全面滞后**（`CL-F-60` 补记）：`user-svc:v0.1.5`（无 `ListAgentProfiles`）、`web-bff:v0.1.37`（`/api/v1/memory/*` 404）、`web:v0.1.9`（`.output` 里没有「我的记忆」）⇒ **按文档起栈得到的界面里没有本功能**，必须用轨道 tag 重建。
+- 已知环境噪声：首次 `CreateConversation` 仍可能撞 5s 截止（`E2E-F-115` 既有账，非本阶段引入）。
+
+---
+
+## §5 证据清单
+
+| 文件 | 内容 |
+|---|---|
+| `evidence/runtime-e2e-2026-10-19.txt` | 2026-10-19 运行时端到端（DB 快照 / 摘要 / 回复原文） |
+| `evidence/t18-metrics-2026-10-19.txt` | T-18 指标被采集（Prometheus 实查） |
+| `evidence/t19-eval-2026-10-19.txt` | T-19 评测集逐题结论 |
+| `evidence/t20-playwright-2026-10-19.txt` | T-20 Playwright 首次通过记录 |
+| `evidence/t20-memory-page.png` | 关系图渲染截图（E2E 产出） |
+| `evidence/t20-playwright-2026-10-21.txt` | **收口轮 E2E runner 原始日志**（`2 passed (43.9s)`，逐条耗时） |
+| `evidence/iab-1-memory-page-2026-10-21.png` | **收口轮浏览器实测**：「我的记忆」页 + 侧边栏入口 + 关系图 |
+| `evidence/iab-2-memory-after-note-2026-10-21.png` | **收口轮浏览器实测**：写自述 → 回执「记忆已更新」→ 图新增节点 |
+| `evidence/t5-t17-runtime-2026-10-21.txt` | T-5 / T-17 运行时 A/B 输出（2026-10-21 重跑） |
+
+---
+
+## §6 第二方核对（独立子代理，2026-10-21）
+
+> 用户 2026-10-21 指定「三方核对用子代理」。本代理为**独立只读审查**（不共享本轮执行者的上下文），
+> 任务被明确要求为「证伪」而非背书，覆盖 A~H 八项：测试点可核查性 / 五条修复真实性 / TDD 真伪 / 安全 /
+> 假绿测试 / 文档一致性 / 自主发现的缺陷 / 实跑单测。
+
+### 6.1 首轮结论：**FAIL** ——「功能没做」不成立，但「收口声明」有 4 处不成立
+
+| # | 抓出的问题 | 严重度 | 处置 |
+|---|---|---|---|
+| 1 | **PASS 数写错**：报告/roadmap/契约三处都写「PASS 15」，逐行实数应为 **17** | 文档准确性 | ✅ 三处已改 |
+| 2 | **契约行自相矛盾**：先写「done」，同一单元格末尾仍留着旧的「状态是 partial 不是 done，残留 T-5/T-17…」 | 文档准确性 | ✅ 已删除过期尾巴 |
+| 3 | **§6 是空的却被三处引用为「已完成」** | 流程诚实性 | ✅ 本节即补 |
+| 4 | **数据修复只做一半**：`valid_from` 修了，**17 行 `valid_to` 仍是 58771/58773** | 数据正确性 | ✅ 已修（`valid_to = valid_from + 1s`），复验 0 行 |
+| 5 | **grpcserver 失败数低报**：报告写「4 个子用例」，实测 **13 个顶层用例** | 数字准确性 | ✅ 已改 |
+| 6 | **「再修 2 个真缺陷」与 §2.3 的 5 行对不上** | 表述 | ✅ 改为「5 条（产品 3 + 工具/测试 2）」 |
+| 7 | **安全：越权面只关了半扇门**（见下） | **高** | ⚠️ **未修**，登账 `CL-F-66` |
+| 8 | **会话维度查询不带 user_id**、`conversation.closed` 语义与计划不符 | 中 | ⚠️ 未修，登账 `CL-F-67` + §3-8/9 |
+| 9 | **租约 10m 远长于重试窗口 ~14s** ⇒ pending 被当成功吞掉 | 中 | ⚠️ 未修，登账 `CL-F-68` |
+| 10 | **等时时间戳仍写出零长度区间**（§2.2-3 只修了负区间） | 低 | ⚠️ 未修，登账 `CL-F-69` |
+| 11 | **四处测试强度不足**（T-11 真实 Redis 路径无测试、迁移幂等只断言字符串、指标读全局计数、会话收尾测试造 PG 不允许的状态） | 中 | ⚠️ 未修，登账 `CL-F-70`；T-11 行已改为「PASS（证据强度不足）」 |
+
+### 6.2 首轮指出的「不能算 done」的两条硬伤（已按此调整收口口径）
+
+**① 安全（`CL-F-66`，高）**：`ai-svc` gRPC 只挂了 userid 提取拦截器、**没有 internal auth**，而 `8892` 发布到宿主。
+`memoryCallerID` 只拦「body 与 metadata 不一致」，攻击者把两者写成同一个 victim id 即可。
+⇒ 本报告**不再声称越权面已关闭**，§2.2-1 已加限定。
+
+**② `conversation.closed` 近乎死代码（`CL-F-67`）**：唯一生产者在 `DeleteConversation`，
+正常结束会话不会触发；且它要合并的「同键两条 active」被 PG 唯一索引禁止。
+⇒ 已在 §3 登记为已知边界，**不把「解码通了」当成「会话收尾功能可用」**。
+
+### 6.3 本轮未按子代理建议做的事（及理由）
+
+| 建议 | 为什么不现在做 |
+|---|---|
+| 立刻给 MemoryService 加 internal auth | 跨 BFF/ai-svc/shared 三处、牵动 5 个服务的拦截器链，属 CL-12 一轮独立的活；本阶段强行塞进来会破坏"单 PR 一个 TDD 循环"的约定 |
+| 给 `ListActiveByConversation` 加 user_id 并改接口 | 接口变更会波及 handler + 内存替身 + PG 实现 + 4 个测试文件，且与 CL-08c 的图重建/删除闭环同一文件面，合并做更划算（已写进 `CL-F-67` 的修法） |
+| 把 `valid_from` 下界从 1970 放宽 | 属产品口径（多早算"合法早年事实"），执行侧不自拟；已记录在 §7 |
+
+<!-- REVIEW_ROUND2 -->
+
+
+---
+
+## §7 已知边界（不夸大）
+
+- `conversation.closed` 的合并是**确定性去重**（同键保留最新），**不是语义合并**（需二次 LLM，成本更高）。
+- 自述条的异步抽取是**进程内 goroutine**：进程在抽取完成前退出会留下 `pending`（状态可观测），恢复路径依赖 `ExtractRunLease`，且**没有自动补抽 sweeper**（`CL-F-62`）。
+- 摘要 token 是**粗估**（中文 1 rune ≈ 1 token），不是精确 tokenizer。
+- `valid_from` 护栏只能挡住"越界日期"，挡不住"合理但错误"的日期（例如把上周说成上个月）—— 那属抽取质量，归 T-19 评测集看。
+- 本机全量 `go test ./...` 里 `internal/grpcserver` **13 个顶层用例**返回 `Unavailable`（原本写「4 个子用例」，被第二方核对实测纠正）：**在干净 `origin/main` worktree 上同样**，非本阶段引入；疑似 `startTestServer` 守卫只断言 addr 非空、未验真连上（待另立条目）。
