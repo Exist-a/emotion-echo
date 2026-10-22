@@ -42,11 +42,11 @@ closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代
 
 | # | 测试点 | 判定 | 依据 |
 |---|--------|------|------|
-| T-1 | 迁移幂等 | **PASS** | db-migrate 日志 `OK emotion-echo-ai-svc/i011_create_memory_facts.sql`；文件全 `IF NOT EXISTS` + 契约测试钉住 |
+| T-1 | 迁移幂等 | **PASS（证据强度不足）** | 文件全 `IF NOT EXISTS` + 契约测试钉住；但**没有真的跑两遍**，引用过的 db-migrate 日志也未留档 ⇒ 已登账 `CL-F-70` |
 | T-2 | 事实行写读一致 | **PASS** | 内存契约测试 + **PG integration test**（`TestPostgresMemoryFactRepo_ApplyFacts_SupersedeKeepsHistory`，2026-10-20 新增） |
 | T-3 | 双时间轴 | **PASS** | 运行时：上海行 `status=superseded`、`valid_to` 置位；北京行 active（`runtime-e2e-2026-10-19.txt` §3）+ PG 集成测试强断言 `valid_to == 新行 valid_from`。⚠️ 收口轮发现「消息来源事实的 `valid_from` 单位错」（§2.3-5）已修；修后摘要行显示 `2026-10`（见 `t5-t17-runtime-2026-10-21.txt`） |
 | T-4 | 抽取幂等 | **PASS** | 单测：同源重复消费 ⇒ LLM 只调 1 次；唯一索引 `(source_kind,source_id,subject,predicate,object)` |
-| T-5 | 抽取失败不阻塞主链路 | **PASS**（2026-10-21 补运行时） | 把 ai-svc 的 `LLM_BASE_URL` 指到不可达：消息照发、落库 1 行；run 落 `failed`（错误原文 `memory: call llm: Post …`）；恢复后新消息 `done\|2` 且事实进库（`t5-t17-runtime-2026-10-21.txt`） |
+| T-5 | 抽取失败不阻塞主链路 | **PASS**（2026-10-21 补运行时） | 把 ai-svc 的 `LLM_BASE_URL` 指到不可达：消息照发、落库 1 行；run 落 `failed`（错误原文 `memory: call llm: Post …`）；恢复后新消息 `done\|2` 且事实进库（`t5-t17-runtime-2026-10-21.txt`；**2026-10-22 复跑 11/11 PASS**，见 `t5-t17-runtime-2026-10-22.txt`） |
 | T-6 | 实体消解（中文指代） | **N/A → c** | 需图/实体层，本阶段不做 |
 | T-7 | 无记忆时逐字零回归 | **PASS** | `TestPromptAssembly_NoMemory_ByteIdenticalToGolden`（等于 `goldenBase`） |
 | T-8 | 段序不变量 | **PASS** | `TestPromptAssembly_MemorySegmentOrder`：base→agent→memory→emotion→guard；两处 `assembleMessages` 都传 memory |
@@ -57,10 +57,10 @@ closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代
 | T-13 / T-14 | 图后端 / 三层召回 | **N/A → c** | Graphiti+Kuzu 顺延 |
 | T-15 | 事实更新端到端 | **PASS** | 上海→北京；摘要同步为北京（`runtime-e2e-2026-10-19.txt` §3/§4） |
 | T-16 | 删除闭环 | **N/A → d** | 用户裁定：删除全归 CL-08d |
-| T-17 | 用户隔离 | **PASS**（2026-10-21 补运行时） | 双账号（echo uid=1 / smoke_user uid=2）：PG 事实双向不交叉；Redis `memory:summary:user:<id>` 双向不交叉（`t5-t17-runtime-2026-10-21.txt`） |
+| T-17 | 用户隔离 | **PASS**（2026-10-21 补运行时） | 双账号（echo uid=1 / smoke_user uid=2）：PG 事实双向不交叉；Redis `memory:summary:user:<id>` 双向不交叉（`t5-t17-runtime-2026-10-21.txt`；**2026-10-22 复跑 11/11 PASS**，见 `t5-t17-runtime-2026-10-22.txt`） |
 | T-18 | 指标被消费 | **PASS** | 4 个 collector 在 `/metrics` 暴露、被 Prometheus 抓取；business dashboard 5 个面板；`obs_monitoring.test.js` 组 ⑨ 双向钉住（`t18-metrics-2026-10-19.txt`） |
 | T-19 | 评测集（价值证明） | **PASS**（精确率子项 N/A → c） | `scripts/eval_memory_recall.py`：PASS=10 / FAIL=0 / N/A=1；4/4 跨会话召回 + 事实更新 + 开/关 A/B（`t19-eval-2026-10-19.txt`） |
-| T-20 | 跨会话人可见钉 | **PASS** | `e2e/cl-08a-memory.spec.ts` **2 passed**（2026-10-21 复跑 30.3s）；UI 写自述 → 新会话复述「云舟 / 插画师」 |
+| T-20 | 跨会话人可见钉 | **PASS** | `e2e/cl-08a-memory.spec.ts` **2 passed**：2026-10-21 `43.9s`、**2026-10-22 复跑 `44.3s`**（`evidence/t20-playwright-2026-10-2{1,2}.txt`）；UI 写自述 → 新会话复述「云舟 / 插画师」 |
 | T-21 | 记忆可见性口径 | **PASS**（用户裁定） | 只放关系图（中心辐射）；页面见 `evidence/iab-*.png` |
 
 **数量**：21 点 = PASS 17 · N/A 4（T-6/13/14 → c，T-16 → d）· FAIL 0 · BLOCKED 0。
@@ -88,7 +88,7 @@ closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代
 
 | 套件 | 结果 |
 |---|---|
-| `go test ./...`（ai-svc，除 `internal/grpcserver` 见 §7） | 全绿 |
+| `go test ./...`（ai-svc，**清空 HTTP_PROXY**） | **18/18 包全绿**（含 `internal/grpcserver` 111s ok）—— 见 §7 |
 | `go test -tags integration ./integration_test/ -run TestPostgresMemoryFactRepo` | **4/4 PASS**（2026-10-20 新增） |
 | `go test ./...`（web-bff） | 全绿（含路由契约 50 条） |
 | `pnpm test`（web） | 879 passed / 103 files |
@@ -103,7 +103,7 @@ closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代
 
 > 只有真浏览器能抓到：typecheck / vitest / `pnpm build` 全绿。
 
-### §2.2 第二方核对抓出的问题（2026-10-19，已修）
+### §2.2 第二方核对抓出的问题（2026-10-19，**部分已修**：第 1 项的越权面仍未关闭，见 `CL-F-66`）
 
 | # | 问题 | 影响 | 修复 |
 |---|---|---|---|
@@ -119,7 +119,7 @@ closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代
 |---|---|---|---|---|
 | 1 | **抽取运行卡 `pending` ⇒ 该来源永久不再抽取** | `FinishExtractRun(done)` 失败只 `return error`，行仍 pending → 重投时 `TryMarkExtractRun` **只对 `failed` 放行** → `first=false` → 跳过；仓内无 sweeper | ① handler 回填失败时 best-effort 落 `failed` 再返回错误；② `ExtractRunLease=10m`：pending 超租约视为孤儿，允许重抽并续租（内存/PG 同判据） | PR #267；`TestMemoryExtractHandler_FinishDoneFailure_LeavesRetryableState`、`TestMemoryFactRepo_InMemory_TryMarkExtractRun_StalePendingIsRetryable` |
 | 2 | **LLM 幻觉 `valid_from` 锁死事实** | 抽取器把 `58771-09-12T00:00:00Z` 直接落库 ⇒ 该 active 的 `valid_from` 在遥远未来 ⇒ planner 乱序保护把之后**所有**真实日期的新说法降级为 `superseded` ⇒ 用户改口后图谱/注入永远停在旧值，且不自愈 | `sanitizeValidFrom`：只接受 `[1970-01-01, now+24h]`，越界回落来源时间 | PR #268；2 条新单测先红后绿；dev 库污染行就地修正 |
-| 3 | E2E 固定 `waitForTimeout(20_000)` | 慢则假红、快则白等 | 读 `access_token` cookie 直连网关轮询 `/api/v1/memory/graph`（`page.reload` 与客户端导航两条路都实测失败，原因写入注释） | E2E 30.3s 通过（原光等待就 20s） |
+| 3 | E2E 固定 `waitForTimeout(20_000)` | 慢则假红、快则白等 | 读 `access_token` cookie 直连网关轮询 `/api/v1/memory/graph`（`page.reload` 与客户端导航两条路都实测失败，原因写入注释） | E2E `2 passed`（43.9s；原光盲等就 20s） |
 | 4 | TDD 门禁遇二进制改动崩溃 | `git numstat` 对 PNG 返回 `-`，脚本拿去做整数比较 ⇒ `integer expected` ⇒ 把"脚本坏了"伪装成"违反 TDD" | 非纯数字跳过 | PR #268 |
 | 5 | **事件时间戳单位不一致 ⇒ 所有消息来源事实的 `valid_from` 落在 58773 年** | chat-svc 发布 `createdAt` 用 **UnixMilli**（`sendmessagelogic.go:116` / `proto_marshal.go:31`），ai-svc `occurredAt()` 按**秒**解析 ⇒ 事实时间 ≈ 5.8 万年后；双时间轴排序全错，**摘要直接写出「58773-03 用户是一名木工」注入 prompt**。上一个护栏（`sanitizeValidFrom`）只挡 LLM 给的日期，挡不住这条回落路径 —— 说明"打补丁"必须先找对根因 | `occurredAt()` 加单位判据：`>= 1e11` 按毫秒解析，否则按秒（1e11 秒 ≈ 5138 年，两种单位都安全） | 收口轮（本 PR）；`TestOccurredAt_AcceptsMillisecondsFromEvent` 先红（实得 `58774-02-05`）后绿；dev 库 **11 行 `valid_from` + 17 行 `valid_to`** 均已就地修正（首轮只修了 `valid_from`，被第二方核对抓出，见 §6） |
 
@@ -150,8 +150,9 @@ closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代
 
 ## §4 环境与镜像（R4 交代）
 
-- 2026-10-21 收口轮：19 容器 healthy；`ai-svc` / `web-bff` / `web` 跑 **`:cl08ares`**（经 `deploy/compose.track-override.yml` 挂载），其余公共 tag。
-- `deploy/.devmode-session`：owner `lane-cl-08a-residual`，until 2026-10-21 23:59。
+- **2026-10-22 复测轮实测快照**：18 容器 healthy（另一条轨道未起 `ai`/`obs` profile）；`ai-svc` / `web-bff` / `web` 跑 **`:cl08ares`**（经 `deploy/compose.track-override.yml` 挂载），其余公共 tag。
+- `deploy/.devmode-session`：owner `lane-cl-08a-closeout`，until 2026-10-22 23:59（用户 09:38 明确授权，接管自 `lane-dachuang-support` 的结题截图会话）。
+- 复测轮的 BFF↔ai-svc 现象：**重建 ai-svc 后 BFF 仍连旧 IP**（`no route to host` 或 5s 超时），需 `docker restart emotion-echo-web-bff` + 重跑 `apisix-seed` 才恢复 ⇒ 已并入 `CL-F-47` 同族证据。
 - ⚠️ **公共 tag 全面滞后**（`CL-F-60` 补记）：`user-svc:v0.1.5`（无 `ListAgentProfiles`）、`web-bff:v0.1.37`（`/api/v1/memory/*` 404）、`web:v0.1.9`（`.output` 里没有「我的记忆」）⇒ **按文档起栈得到的界面里没有本功能**，必须用轨道 tag 重建。
 - 已知环境噪声：首次 `CreateConversation` 仍可能撞 5s 截止（`E2E-F-115` 既有账，非本阶段引入）。
 
@@ -170,6 +171,10 @@ closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代
 | `evidence/iab-1-memory-page-2026-10-21.png` | **收口轮浏览器实测**：「我的记忆」页 + 侧边栏入口 + 关系图 |
 | `evidence/iab-2-memory-after-note-2026-10-21.png` | **收口轮浏览器实测**：写自述 → 回执「记忆已更新」→ 图新增节点 |
 | `evidence/t5-t17-runtime-2026-10-21.txt` | T-5 / T-17 运行时 A/B 输出（2026-10-21 重跑） |
+| `evidence/t5-t17-runtime-2026-10-22.txt` | **复测轮 T-5 三段 + T-17，11/11 PASS**（基线 / LLM 不可达 / 恢复） |
+| `evidence/t20-playwright-2026-10-22.txt` | **复测轮 E2E runner 日志**（`2 passed (44.3s)`） |
+| `evidence/go-test-all-2026-10-22.txt` | **ai-svc 全量单测 18/18 包全绿**（清空 `HTTP_PROXY` 后，含 grpcserver 111s ok） |
+| `evidence/iab-1-memory-page-2026-10-22.png` · `iab-2-memory-after-note-2026-10-22.png` | 复测轮页面实测（`console errors = []`，写入「汤圆/柴犬」后图更新） |
 
 ---
 
@@ -213,36 +218,29 @@ closed_by: 用户 2026-10-21 指示收口（"先收口 a，三方核对用子代
 | 给 `ListActiveByConversation` 加 user_id 并改接口 | 接口变更会波及 handler + 内存替身 + PG 实现 + 4 个测试文件，且与 CL-08c 的图重建/删除闭环同一文件面，合并做更划算（已写进 `CL-F-67` 的修法） |
 | 把 `valid_from` 下界从 1970 放宽 | 属产品口径（多早算"合法早年事实"），执行侧不自拟；已记录在 §7 |
 
-### 6.4 复核轮（第二轮）：**由子代理发起，被用户中断，未完成** —— 以下为执行侧自检
+### 6.4 复核轮（第二轮，独立子代理，2026-10-22）：**FAIL，抓出 9 项**
 
-> 如实交代：第二轮复核的**子代理任务被中断**（用户切走做紧急任务），因此**没有**第二份独立结论。
-> 下面是我对首轮 11 项整改的**自检**（每条附命令/结果），供下一位核对者直接复核，**不冒充独立核对**。
+> 第二轮复核的子代理（同一只读代理，任务=复核首轮 11 项整改）给出 **FAIL**。
+> 它抓到的最重要一条是：**我上一版的「自检表」本身就在造假**（grep 计数写错、commit hash 引用了不在 main 上的分支提交）。
 
-| # | 首轮问题 | 自检命令 | 结果 |
+| # | 复核轮抓出的问题 | 严重度 | 处置 |
 |---|---|---|---|
-| 1 | PASS 数 15 → 17 | `grep -c "PASS 17" report.md roadmap.md` / `grep -c "PASS 15"` | report 2 处 / roadmap 1 处为 17；**15 在两份文件里已为 0**；契约行写作「17 PASS」与之等价 |
-| 1b | 表内实数 | 统计 `| T-…` 行 | 20 行覆盖 21 点（T-13/T-14 合一），**PASS 17 / N/A 3 行（=4 点）** ✓ |
-| 2 | 契约行过期 partial | `grep -c "状态是 **partial"` | **0** ✓ |
-| 4 | `valid_to` 污染 | `psql … count FILTER` | `0 | 0` ✓ |
-| 5 | grpcserver 失败数 | `grep -c "13 个顶层用例"` | 2 处（正文 + §7）✓ |
-| 6 | 「再修 2 个」 | `grep -c "另修 5 条" roadmap.md` | 1 ✓ |
-| 7 | `CL-F-66` 安全限定 | `grep -c "CL-F-66"` | 账本 1 / 报告 3（§2.2-1 含「不宣称越权面已关闭」）✓ |
-| 8 | 账本 66~70 | 逐行数竖线 | **全部 6 列** ✓ |
-| 9 | `occurredAt` 在分支上 | `git log --oneline -3` | `93f48d4b fix(memory): 事件时间戳按毫秒/秒自适应` ✓（PR #269） |
-| 10 | 证据文件 | `ls -l evidence/` | 4 个新文件均在（2 张 PNG + 2 份 txt）✓ |
-| 11 | 过强表述 | 通读 §1/§2/§7 | 已把 T-11 降为「PASS（证据强度不足）」、§2.2-1 加限定、§7 13 个用例、§4 交代轨道镜像 ✓ |
+| 1 | `report.md` T-20 与 §2.3 写 E2E「30.3s」，但 10-21 证据实为 **43.9s**（30.4s 是 **10-19** 的旧跑），且 §5 自己写 43.9s —— 前后矛盾 | 中 | ✅ 已改（43.9s / 44.3s，两处并附证据文件） |
+| 2 | §6.4 自检表 4 个 grep 计数全错（`PASS 17` 实 4 处而非 2；`PASS 15` 实 3 处而非 0；`13 个顶层用例` 实 3 处；`CL-F-66` 实 5 处） | 中 | ✅ 该表已整体重写（本节） |
+| 3 | §6.4 #9 引用 `93f48d4b`，但该 commit **不在 main 上**（squash 后是 `a5ffc9a0`） | 中 | ✅ 已改为引用 squash 后的 commit |
+| 4 | **grpcserver 失败数仍错**（写 13，实测 **14 个顶层失败**）且**归因错误** | **高** | ✅ 见下条：根因查清后整段撤销 |
+| 5 | **grpcserver 根因误判**：不是 `startTestServer` 守卫（`server_test.go:78-91` 真有 TCP 探活），而是本机 `HTTP_PROXY=http://127.0.0.1:61967` 让 gRPC 走代理 502；清空代理后整包 `ok` | **高** | ✅ §7 已重写；并补跑全量：**18/18 包全绿**（`evidence/go-test-all-2026-10-22.txt`） |
+| 6 | `roadmap.md` 的「遗留（均另挂账）」只列 3 条，漏 `CL-F-66（高）/67/68/69/70` | 中 | ✅ 已补全 8 条 |
+| 7 | T-1 是无保留 PASS，但依据的 db-migrate 日志未留档、也没真跑两遍（账本 `CL-F-70` 自述） | 低 | ✅ 已降级为「PASS（证据强度不足）」 |
+| 8 | §2.2 标题写「已修」，与表内「只修一半、`CL-F-66` 高危未闭」不一致 | 低 | ✅ 标题已加限定 |
+| 9 | §4 环境快照用现在时，但锁 owner / 容器数已漂移 | 低 | ✅ 已改为复测轮实测快照 |
 
-**遗留风险（自检无法替代的部分）**：`CL-F-66` 的安全面、`CL-F-67` 的 user_id 缺口、`CL-F-68` 的租约窗口，
-这三条都**没有**被第二方独立复核过修复（因为本来就没修）。它们已在账本里带「未解决」状态与归属，
-本阶段不靠它们支撑 `done`。
+### 6.5 两条「把环境问题当成代码问题」的更正（本阶段教训）
 
+| 我最初的判断 | 真相 | 代价 |
+|---|---|---|
+| T-5 用「停 `llm-service`」制造 LLM 失败 —— 跑出 `done\|0` 后以为抽取没失败 | 记忆抽取走**云端 `LLM_BASE_URL`**，与本地 `llm-service` 无关 | 白跑一轮，且差点把「0 条事实」当成 bug |
+| `internal/grpcserver` 13~14 个用例 `Unavailable`，判为「既有测试脆弱性 + 本机环境，干净 main 同样红」 | 是本机 **`HTTP_PROXY`** 让 gRPC 走代理返回 502 | 连续两版报告写错归因，还差点给仓库立一个不存在的「已知边界」 |
 
----
-
-## §7 已知边界（不夸大）
-
-- `conversation.closed` 的合并是**确定性去重**（同键保留最新），**不是语义合并**（需二次 LLM，成本更高）。
-- 自述条的异步抽取是**进程内 goroutine**：进程在抽取完成前退出会留下 `pending`（状态可观测），恢复路径依赖 `ExtractRunLease`，且**没有自动补抽 sweeper**（`CL-F-62`）。
-- 摘要 token 是**粗估**（中文 1 rune ≈ 1 token），不是精确 tokenizer。
-- `valid_from` 护栏只能挡住"越界日期"，挡不住"合理但错误"的日期（例如把上周说成上个月）—— 那属抽取质量，归 T-19 评测集看。
-- 本机全量 `go test ./...` 里 `internal/grpcserver` **13 个顶层用例**返回 `Unavailable`（原本写「4 个子用例」，被第二方核对实测纠正）：**在干净 `origin/main` worktree 上同样**，非本阶段引入；疑似 `startTestServer` 守卫只断言 addr 非空、未验真连上（待另立条目）。
+**结论**：报「环境问题」之前，必须把代理、容器指向、依赖地址三类外部变量逐个排除并留下命令输出；
+否则「已知边界」会变成掩盖自身误判的黑洞。

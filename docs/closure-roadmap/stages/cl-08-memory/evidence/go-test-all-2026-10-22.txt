@@ -1,0 +1,22 @@
+# ai-svc 全量单测（清空 HTTP_PROXY 后）
+时间：2026-10-22 10:04:16 +0800
+命令：HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= NO_PROXY='*' go test ./... -count=1
+
+ok  	emotion-echo-ai-svc	34.179s
+ok  	emotion-echo-ai-svc/internal/aiclient	38.050s
+ok  	emotion-echo-ai-svc/internal/analyzer	42.592s
+ok  	emotion-echo-ai-svc/internal/config	33.754s
+ok  	emotion-echo-ai-svc/internal/consumer	36.640s
+ok  	emotion-echo-ai-svc/internal/events	37.978s
+ok  	emotion-echo-ai-svc/internal/fusion	38.072s
+ok  	emotion-echo-ai-svc/internal/grpcserver	111.080s
+ok  	emotion-echo-ai-svc/internal/handler	37.995s
+?   	emotion-echo-ai-svc/internal/logging	[no test files]
+ok  	emotion-echo-ai-svc/internal/logic	28.139s
+ok  	emotion-echo-ai-svc/internal/memory	21.863s
+ok  	emotion-echo-ai-svc/internal/model	37.242s
+ok  	emotion-echo-ai-svc/internal/ops	32.028s
+ok  	emotion-echo-ai-svc/internal/repository	30.318s
+ok  	emotion-echo-ai-svc/internal/svc	30.513s
+ok  	emotion-echo-ai-svc/internal/types	30.383s
+ok  	emotion-echo-ai-svc/migrations	15.735s
