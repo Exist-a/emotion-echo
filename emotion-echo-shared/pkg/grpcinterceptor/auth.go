@@ -88,3 +88,21 @@ func WithInternalAPIKey(ctx context.Context, apiKey string) context.Context {
 		InternalAPIKeyMetadataKey, apiKey,
 	)
 }
+
+// NewClientAuthInterceptor creates a client-side interceptor that attaches
+// the internal API key to every outgoing unary call (CL-F-66).
+//
+// 与 NewServerAuthInterceptor 对称：服务端强制 internal key 后，调用方必须带。
+// key 为空时不注入（dev/测试环境保持旧行为，与 server 侧"空=关闭"一致）。
+func NewClientAuthInterceptor(apiKey string) grpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply interface{},
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
+		return invoker(WithInternalAPIKey(ctx, apiKey), method, req, reply, cc, opts...)
+	}
+}

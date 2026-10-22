@@ -46,8 +46,10 @@ type aigrpcClient struct {
 // NewAIgRPCClient dial ai-svc gRPC server 并返回 AIClient。
 //
 // aiSvcAddr 形如 "ai-svc:8892"（容器内 DNS）或 "localhost:8892"（本地）。
+// internalAPIKey 非空时每个调用带 x-internal-api-key（CL-F-66：ai-svc 8892 已强制内部鉴权）；
+// 为空则不注入（与 server 侧"空=关闭"对称）。
 // dial 超时 5s，足够慢启动的 ai-svc。
-func NewAIgRPCClient(aiSvcAddr string) (AIClient, error) {
+func NewAIgRPCClient(aiSvcAddr, internalAPIKey string) (AIClient, error) {
 	if aiSvcAddr == "" {
 		return nil, fmt.Errorf("ai-svc grpc addr is empty")
 	}
@@ -60,6 +62,10 @@ func NewAIgRPCClient(aiSvcAddr string) (AIClient, error) {
 		grpcinterceptor.NewGo2SkyTracer(traceTracer()),
 		5*time.Second,
 	)
+	// CL-F-66：内部鉴权（WithChainUnaryInterceptor 是追加语义，不覆盖上面的链）
+	dialOpts = append(dialOpts, grpc.WithChainUnaryInterceptor(
+		grpcinterceptor.NewClientAuthInterceptor(internalAPIKey),
+	))
 	conn, err := grpc.DialContext(ctx, aiSvcAddr,
 		append([]grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),

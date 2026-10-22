@@ -189,3 +189,64 @@ func containsStr(s, sub string) bool {
 
 // ensure errors pkg imported for future use
 var _ = errors.New
+// =====================================================
+// NewClientAuthInterceptor 测试（CL-F-66）
+// =====================================================
+
+func TestClientAuth_AddsMetadata(t *testing.T) {
+	t.Parallel()
+	interceptor := NewClientAuthInterceptor("secret-key")
+
+	var got metadata.MD
+	invoker := func(ctx context.Context, _ string, _, _ interface{}, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+		got, _ = metadata.FromOutgoingContext(ctx)
+		return nil
+	}
+
+	err := interceptor(context.Background(), "/Test/Method", nil, nil, nil, invoker)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	keys := got.Get(InternalAPIKeyMetadataKey)
+	if len(keys) != 1 || keys[0] != "secret-key" {
+		t.Fatalf("expected api key metadata, got %v", keys)
+	}
+}
+
+func TestClientAuth_EmptyKey_NoMetadata(t *testing.T) {
+	t.Parallel()
+	interceptor := NewClientAuthInterceptor("")
+
+	var got metadata.MD
+	invoker := func(ctx context.Context, _ string, _, _ interface{}, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+		got, _ = metadata.FromOutgoingContext(ctx)
+		return nil
+	}
+	if err := interceptor(context.Background(), "/Test/Method", nil, nil, nil, invoker); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if keys := got.Get(InternalAPIKeyMetadataKey); len(keys) != 0 {
+		t.Fatalf("expected no api key metadata, got %v", keys)
+	}
+}
+
+func TestClientAuth_PreservesExistingMetadata(t *testing.T) {
+	t.Parallel()
+	interceptor := NewClientAuthInterceptor("k")
+
+	var got metadata.MD
+	invoker := func(ctx context.Context, _ string, _, _ interface{}, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+		got, _ = metadata.FromOutgoingContext(ctx)
+		return nil
+	}
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-trace-id", "t-1")
+	if err := interceptor(ctx, "/Test/Method", nil, nil, nil, invoker); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v := got.Get("x-trace-id"); len(v) != 1 || v[0] != "t-1" {
+		t.Fatalf("existing metadata lost: %v", got)
+	}
+	if v := got.Get(InternalAPIKeyMetadataKey); len(v) != 1 || v[0] != "k" {
+		t.Fatalf("api key metadata missing: %v", got)
+	}
+}

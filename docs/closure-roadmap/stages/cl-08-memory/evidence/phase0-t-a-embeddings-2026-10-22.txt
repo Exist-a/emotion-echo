@@ -1,0 +1,31 @@
+[env] base=https://api.siliconflow.cn/v1
+[env] key_len=51 (值不打印)
+[env] HTTP_PROXY=http://127.0.0.1:61186
+[env] HTTPS_PROXY=http://127.0.0.1:61186
+[req] POST https://api.siliconflow.cn/v1/embeddings model=BAAI/bge-m3
+[T-a.1 single] HTTP 200  latency=417ms  dim=1024  usage={'prompt_tokens': 14, 'completion_tokens': 0, 'total_tokens': 14}  model=BAAI/bge-m3
+[T-a.1 single] 向量前 3 维=[-0.04365498200058937, 0.037076834589242935, -0.01614636369049549]
+[T-a.2 bilingual] HTTP 200  latency=394ms  vectors=2  dim=1024
+[T-a.3 batch= 8] HTTP 200  latency=459ms  vectors=8  usage={'prompt_tokens': 152, 'completion_tokens': 0, 'total_tokens': 152}  per_item=57.4ms
+[T-a.3 batch=32] HTTP 200  latency=691ms  vectors=32  usage={'prompt_tokens': 608, 'completion_tokens': 0, 'total_tokens': 608}  per_item=21.6ms
+[T-a.3 batch=64] HTTP 200  latency=972ms  vectors=64  usage={'prompt_tokens': 1216, 'completion_tokens': 0, 'total_tokens': 1216}  per_item=15.2ms
+[T-a.4 long~840chars] HTTP 200  latency=343ms  dim=1024  usage={'prompt_tokens': 483, 'completion_tokens': 0, 'total_tokens': 483}
+
+=====================================================================
+CL-08c Phase 0 · T-a · 硅基流动 /v1/embeddings 实测（2026-10-22）
+=====================================================================
+探针：tmp/spike_cl08c/embeddings_probe.py（stdlib，仅读 .env.local 的 TTS_API_BASE_URL/TTS_API_KEY，密钥不落日志）
+命令：python tmp/spike_cl08c/embeddings_probe.py
+
+结论（回填 ADR T-a）
+- 可用性：✅ 现有 `TTS_API_KEY` **可以**调 `/v1/embeddings`（HTTP 200），base=`https://api.siliconflow.cn/v1`
+- 模型/维度：`BAAI/bge-m3`，**1024 维**（与 ADR 假设一致）
+- 延迟：单条 417ms / 2 条 394ms / 批量 8=459ms / 32=691ms / 64=972ms（per_item 57.4→15.2ms）
+- 批量上限：**64 条已验证通过**（更高未测；抽取侧单次只需几条 ⇒ 不是瓶颈）
+- 长文本：≈840 字（483 tokens）正常返回 1024 维
+- 成本口径：usage.prompt_tokens 可用 ⇒ 可按 token 记账（T-18 指标）
+- 代理：本机 HTTP(S)_PROXY=127.0.0.1:61186，**出站正常**（与 gRPC 走代理失败的问题不同域）
+
+⚠️ 未证项（如实声明）：**配额是否与 TTS 共用**、QPS 限流阈值 —— 单次测试无法证明；
+   需要观察 TTS 高峰期的 429/延迟，或在账号控制台看配额。Phase 2 上线抽取后按指标观察。
+

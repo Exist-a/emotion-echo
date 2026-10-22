@@ -157,6 +157,9 @@ services:
       KAFKA_ENABLED:      "${KAFKA_ENABLED:-true}"
       SKYWALKING_OAP_ADDR: emotion-echo-sw-oap:11800
       SKYWALKING_ENABLED: "${SKYWALKING_ENABLED:-true}"
+      # CL-F-66: chat-svc → ai-svc gRPC 必须带内部 key（ai-svc 8892 已强制鉴权）
+      CHAT_AI_SVC_INTERNAL_API_KEY: "${CHAT_AI_SVC_INTERNAL_API_KEY:-}"
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}"
     # Stage 58 PR-GRPC-3：gRPC server 暴露 :8892（BFF gRPC 客户端连这个端口）
     expose:
       - "8890"
@@ -412,6 +415,8 @@ services:
       AI_LLM_INTERNAL_API_KEY: ${AI_LLM_INTERNAL_API_KEY:-}
       # P0-R2-5: 统一 env 名 INTERNAL_API_KEY（与 llm-service / web-bff 一致）
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
+      # CL-F-66: 本服务 gRPC 8892 的**服务端**鉴权 key（空 ⇒ 回落 INTERNAL_API_KEY；两者都空 ⇒ 关闭）
+      AI_SVC_INTERNAL_API_KEY: ${AI_SVC_INTERNAL_API_KEY:-}
 
       # 2026-10-13 修复：llm-service gRPC 端要求 mTLS（TLS_ENABLED=1 +
       # TLS_REQUIRE_CLIENT_AUTH=1）。ai-svc 此前**只挂了证书却没设这几个 env**
@@ -429,8 +434,10 @@ services:
       XTTS_BASE_URL:       ${XTTS_BASE_URL:-http://emotion-echo-xtts:8003}
 
     # Stage 33 PR-20: HTTP :8891 收紧；gRPC :8892 保留（dev 调试 gRPC client）
+    # CL-F-66: 8892 必须只绑回环 —— 原先 0.0.0.0 暴露给宿主任意进程（可冒 user_id 读写记忆）。
+    # 鉴权在服务端已强制（x-internal-api-key），端口收口是第二道防线。
     ports:
-      - "8892:8892"
+      - "127.0.0.1:8892:8892"
     expose:
       - "8891"
     volumes:
@@ -707,6 +714,8 @@ services:
       # 让 web-bff 与 ai-svc 用不同 key（跨 svc 隔离，prod 推荐姿势）
       BFF_LLM_INTERNAL_API_KEY: ${BFF_LLM_INTERNAL_API_KEY:-}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
+      # CL-F-66: BFF → ai-svc gRPC 的内部鉴权 key（空 ⇒ 回落 INTERNAL_API_KEY）
+      BFF_AI_SVC_INTERNAL_API_KEY: ${BFF_AI_SVC_INTERNAL_API_KEY:-}
       # Stage 94 PR-5 §P0-10 修复后 web-bff 必须从 env 拿 JWT secret (config.go:290
       # os.Getenv("BFF_JWT_SECRET")), 空字符串会 log.Fatal fail-fast。
       # dev 默认与 apisix-seed 一致 (dev-bff-secret) 让 dev 模式能跑; prod 由

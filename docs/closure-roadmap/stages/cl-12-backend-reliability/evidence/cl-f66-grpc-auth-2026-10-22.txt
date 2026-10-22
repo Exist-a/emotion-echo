@@ -1,0 +1,79 @@
+CL-F-66 · ai-svc gRPC 8892 越权面 —— 修复与证据（2026-10-22）
+=====================================================================
+来源：CL-08a 收口轮第二方核对（2026-10-21），等级「高」。
+用户 2026-10-22 10:39 裁决 C4=A：**提前单做**（不等 CL-12 整体开阶段）。
+
+问题（修复前）
+- `grpcserver/server.go` 拦截器链只有 userid / tracing / logging / recovery，**无 internal auth**；
+- compose `8892:8892` 发布到宿主所有网卡 ⇒ 任意本机进程可连；
+- `memory_server.go` 只校验 metadata 里 user_id 是正整数 ⇒ 冒写 victim 的 user_id 即可越权读写。
+
+修法（三道，全部复用仓内既有范式）
+1. **服务端强制内部 key**：新增 `grpcserver.WithInternalAPIKey`，链首挂
+   `shared/grpcinterceptor.NewServerAuthInterceptor`（与 llm-service 同款语义：
+   `x-internal-api-key`，缺失/错误 → `UNAUTHENTICATED`，空 key → 关闭）。
+   health 探测免鉴权（`newServiceAwareAuthInterceptor` 跳过 `/grpc.health.v1.Health`）。
+   env：`AI_SVC_INTERNAL_API_KEY` → fallback `INTERNAL_API_KEY`（都空则关闭，本地/单测不变）。
+2. **调用方带 key**（否则上线必 401）：
+   - 新增 `grpcinterceptor.NewClientAuthInterceptor`（共享，客户端侧对称实现）；
+   - BFF：`aiDialOpts` **只给 ai-svc 两条连接**挂（AIClient / EmotionQ+Memory），
+     env `BFF_AI_SVC_INTERNAL_API_KEY` → fallback `INTERNAL_API_KEY`；其他下游不受影响；
+   - chat-svc：`NewAIgRPCClient(addr, key)` 增加 key 参数，env `CHAT_AI_SVC_INTERNAL_API_KEY` → fallback。
+3. **端口收口**：compose `"8892:8892"` → `"127.0.0.1:8892:8892"`（第二道防线）。
+
+---------------------------------------------------------------------
+测试与执行输出（TDD：先红后绿）
+---------------------------------------------------------------------
+TDD 红（修复前）：
+  $ go test ./pkg/grpcinterceptor/ -run TestClientAuth
+  pkg\grpcinterceptor\auth_test.go:198:17: undefined: NewClientAuthInterceptor  → build failed
+  $ go test ./internal/grpcserver/ -run TestServerAuth
+  internal\grpcserver\auth_test.go:27:58: undefined: WithInternalAPIKey          → build failed
+  $ go test ./internal/grpcclient/ -run TestNewAIgRPCClient_SendsInternalAPIKey
+  ai_client_grpc_auth_test.go:46:51: too many arguments in call to NewAIgRPCClient → build failed
+
+TDD 绿（修复后）：
+  $ (emotion-echo-shared) go test ./pkg/grpcinterceptor/ -run TestClientAuth -count=1
+  ok  github.com/emotion-echo/shared/pkg/grpcinterceptor  15.841s
+
+  $ (emotion-echo-ai-svc) go test ./internal/grpcserver/ -run TestServerAuth -count=1 -v
+  --- PASS: TestServerAuth_MissingKey_Rejected (5.01s)      # 带 user-id 但不带 key ⇒ 必拒，且错误来自 api-key 拦截器
+  --- PASS: TestServerAuth_WithKey_Allowed (5.02s)
+  --- PASS: TestServerAuth_HealthWithoutKey_Allowed (5.02s) # health 免鉴权
+  --- PASS: TestServerAuth_DisabledWhenKeyEmpty (5.01s)     # 空 key = 旧行为
+  ok  emotion-echo-ai-svc/internal/grpcserver  31.951s
+
+  $ (emotion-echo-ai-svc) go test ./internal/grpcserver/ -count=1          # 全包回归
+  ok  emotion-echo-ai-svc/internal/grpcserver  108.929s
+
+  $ (emotion-echo-chat-svc) go test ./internal/grpcclient/ -count=1
+  ok  emotion-echo-chat-svc/internal/grpcclient  7.936s
+  （含 TestNewAIgRPCClient_SendsInternalAPIKey：真实 gRPC server 捕获到 x-internal-api-key=secret-key）
+
+  $ (emotion-echo-web-bff) go test . -run TestMain_AISvcInternalAPIKeyWiring -count=1
+  ok  emotion-echo-web-bff  9.896s
+
+go vet（AGENTS §2.2）：
+  shared ./pkg/grpcinterceptor      → 无输出（rc=0）
+  ai-svc ./internal/grpcserver/ + . → 无输出（rc=0）
+  chat-svc ./internal/grpcclient/ + . → 无输出（rc=0）
+  web-bff .                          → vet_exit=0
+
+compose 渲染（未动在跑容器，仅 config）：
+  $ docker compose -f docker-compose.infra.yml -f docker-compose.apps.yml -f compose.dev.yml \
+      --env-file .env.local config
+    ai-svc  ports: host_ip=127.0.0.1 · target=8892 · published=8892
+    ai-svc  env:   AI_SVC_INTERNAL_API_KEY="" · INTERNAL_API_KEY=dev-key-change-me-please-32chars-min
+    bff     env:   BFF_AI_SVC_INTERNAL_API_KEY=""（代码 fallback 到 INTERNAL_API_KEY）
+    chat    env:   CHAT_AI_SVC_INTERNAL_API_KEY=""（同上）
+
+---------------------------------------------------------------------
+未做 / 残留（如实声明）
+---------------------------------------------------------------------
+- **未在重建镜像上做端到端**（BFF/chat-svc → ai-svc 全链路）：需要重新 build 三个 Go 服务镜像并重启栈，
+  会改动当前在跑的环境。单元级证据已用**真实 TCP gRPC server**（非 mock）覆盖到：
+  无 key 必拒 / 有 key 放行 / health 放行 / 客户端真的发 key。
+  ⇒ 若要做，建议单独一轮"重建 + 重启 + 一次负向探测（宿主无 key 直连 8892 应 UNAUTHENTICATED）"。
+- **身份信任链的另一半仍在**：BFF 仍以裸 `x-user-id` 向下游传身份，只是现在**只有持 key 的内部调用方**能设它。
+  更强的方案（短时签名 token / mTLS）仍属 CL-12，未做。
+- k8s charts 未动（冻结）；其 env 没有 INTERNAL_API_KEY ⇒ 服务端 auth 关闭，行为不变（不会被打断，但也没受保护）。

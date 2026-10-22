@@ -1,0 +1,57 @@
+CL-08c Phase 0 · T-c · Kuzu 数据文件的持久化与备份（2026-10-22）
+=====================================================================
+目的：容器重建不丢；确认"文件在哪、谁备份"，与 deploy/backups/（pg_dump 产物）的关系。
+
+探针镜像：cl08c-kuzu:probe（python:3.12-slim + kuzu==0.11.3，见 tmp/spike_cl08c/Dockerfile.kuzu）
+探针脚本：tmp/spike_cl08c/kuzu_probe.py（write/read/hold/readro/bulk）
+
+---------------------------------------------------------------------
+实测 1：命名卷（与 PG/Redis/Kafka 同构，compose `volumes:` 惯例）
+---------------------------------------------------------------------
+$ docker volume create cl08c-kuzu-vol
+$ docker run --rm -v cl08c-kuzu-vol:/data -v "<repo>/tmp/spike_cl08c:/work:ro" cl08c-kuzu:probe \
+    python /work/kuzu_probe.py write /data/graph.kuzu
+=== T-c step1: container A writes ===
+[write] db=/data/graph.kuzu persons=3
+
+$ docker volume inspect cl08c-kuzu-vol -f '{{.Mountpoint}}'
+/var/lib/docker/volumes/cl08c-kuzu-vol/_data
+
+$ docker run --rm -v cl08c-kuzu-vol:/data alpine sh -c 'ls -la /data && du -sh /data'
+total 1104
+drwxr-xr-x    2 root     root          4096 Oct 22 02:48 .
+drwxr-xr-x    1 root     root          4096 Oct 22 02:48 ..
+-rw-r--r--    1 root     root       1122304 Oct 22 02:48 graph.kuzu
+1.1M	/data
+
+$ docker run --rm -v cl08c-kuzu-vol:/data ... cl08c-kuzu:probe python /work/kuzu_probe.py read /data/graph.kuzu
+=== T-c step3: container B (new) reads same volume ===
+[read] db=/data/graph.kuzu persons=3 rows=[['云舟', '建筑师'], ['白露', '兽医'], ['青禾', '木工']]
+
+结论：命名卷跨容器删除/重建**不丢**；DB 是**单文件** `graph.kuzu`（1.1MB / 3 节点），
+      落盘位置 = `/var/lib/docker/volumes/<name>/_data`（Linux 宿主视角；Windows 在 Docker Desktop VM 内）。
+      ⇒ 备份可直接 `docker run --rm -v vol:/data -v <backup>:/backup alpine tar czf /backup/kuzu.tgz -C /data .`，
+      与 `scripts/backup_db.sh`（pg_dump → deploy/backups/）可并列，无需额外服务。
+
+---------------------------------------------------------------------
+实测 2：bind mount 到宿主机目录（备选，便于开发期直接看文件）
+---------------------------------------------------------------------
+$ mkdir -p tmp/spike_cl08c/kuzu-data
+$ docker run --rm -v "<repo>/tmp/spike_cl08c/kuzu-data:/data" ... write /data/graph.kuzu
+[write] db=/data/graph.kuzu persons=3
+$ docker run --rm -v "<repo>/tmp/spike_cl08c/kuzu-data:/data" ... read /data/graph.kuzu
+[read] db=/data/graph.kuzu persons=3 rows=[['云舟', '建筑师'], ['白露', '兽医'], ['青禾', '木工']]
+$ ls -la tmp/spike_cl08c/kuzu-data
+-rw-r--r-- 1 LENVOV 197121 1122304 Oct 22 10:48 graph.kuzu
+
+结论：Windows + Docker Desktop（virtiofs）下 bind mount **也可用**，读写一致。
+      ⚠️ 但生产/CI 建议命名卷（与 postgres_data 等同构；bind mount 在 Windows 上有 file-lock 语义差异风险，
+      本轮只测了单进程，不代表并发下安全）。
+
+---------------------------------------------------------------------
+结论（回填 ADR T-c）
+---------------------------------------------------------------------
+1. 持久化：**命名卷可行**（推荐 `kuzu_data:`，与 PG 同构）；bind mount 在 dev 亦可用。
+2. 容器重建不丢：✅（实测：删容器 → 新容器读到 3 行）。
+3. 备份归属：单文件 ⇒ 可直接归档到 `deploy/backups/`，与 pg_dump 并列；
+   **但图的权威源仍是 PG**（ADR 决策 ②）⇒ 备份只是"避免重建"，不是数据真相。

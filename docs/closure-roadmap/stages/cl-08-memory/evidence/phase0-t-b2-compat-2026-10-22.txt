@@ -1,0 +1,59 @@
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)'))': /simple/pytest/
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+=== versions ===
+graphiti-core==0.31.2
+kuzu==0.11.3
+openai==3.36.0
+pydantic==2.14.1
+grpcio==1.84.0
+numpy==2.5.4
+nacos-sdk-python==3.2.0
+fastapi==0.159.1
+=== pip check ===
+No broken requirements found.
+=== app imports ===
+imports ok
+=== pytest tests/unit ===
+................................................----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 33320)
+........................ [ 33%]
+........................................................................ [ 66%]
+.......................................................................  [100%]
+215 passed in 15.80s
+=== graphiti KuzuDriver probe ===
+/usr/local/lib/python3.12/site-packages/graphiti_core/driver/search_interface/search_interface.py:22: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.14/migration/
+  class SearchInterface(BaseModel):
+[warn] DeprecationWarning: The Kuzu backend is deprecated and will be removed in a future release — the upstream Kuzu project is no longer maintained. Migrate to Neo4j or FalkorDB.
+[driver] instantiated db=/data/graphiti-probe.kuzu provider=GraphProvider.KUZU
+[driver] Entity count before = [{'c': 0}]
+[driver] Entity count after = [{'c': 1}], Episodic count after = [{'c': 1}]
+[driver] rows = [{'name': '云舟', 'summary': '建筑师'}]
+[driver] OK
+
+=====================================================================
+CL-08c Phase 0 · T-b（第二段）· llm-service 真实依赖树 + 单测 + KuzuDriver（2026-10-22）
+=====================================================================
+镜像：python:3.12-slim（一次性容器，未动在跑的 llm-service）
+安装：`pip install -r emotion-llm-service/requirements.txt "graphiti-core[kuzu]" pytest pytest-asyncio`
+挂载：repo 只读 + 命名卷 cl08c-graphiti-vol:/data
+
+结论
+- ✅ 依赖可行：`pip check` → **No broken requirements found**
+  graphiti-core 0.31.2 · kuzu 0.11.3 · openai 3.36.0 · pydantic 2.14.1 · grpcio 1.84.0 · numpy 2.5.4 · nacos-sdk-python 3.2.0 · fastapi 0.159.1
+- ✅ 模块导入：`chat_completion / intent_llm / grpc_server / main` **imports ok**
+- ✅ **llm-service 单测 215 passed in 15.80s**（openai 1.x→3.36.0 无回归；`pip check` 无冲突）
+- ✅ **KuzuDriver 真可用**：实例化 → 自动建 schema（Episodic/Entity/Community/RelatesToNode_/Saga + REL 表）
+  → 写 1 Entity + 1 Episodic → 读回 `{'name': '云舟', 'summary': '建筑师'}`，count 0→1
+- ⚠️ **PydanticDeprecatedSince20**（graphiti 内部 `SearchInterface` class-based config）——噪声，不阻塞
+
+🔴 **决定性发现（新证据，不是"装不上"而是"选型前提动摇"）**
+```
+[warn] DeprecationWarning: The Kuzu backend is deprecated and will be removed in a future release
+       — the upstream Kuzu project is no longer maintained. Migrate to Neo4j or FalkorDB.
+```
+来源：`graphiti_core/driver/kuzu_driver.py::KuzuDriver.__init__` 内 `warnings.warn(..., DeprecationWarning)`（0.31.2 源码实读）。
+含义：ADR 决策 45 用 Kuzu 的核心论据是"嵌入式 ⇒ 新增容器 0"，但**官方已宣布该 backend 将移除**，
+⇒ 继续用 Kuzu = **锁死 graphiti-core 版本（≤0.31.x）**，升级即破坏；不锁 = 未来某次升级直接不可用。
+⇒ 这不是执行侧可自行决定的事（ADR「不许硬上」+ 选型属用户拍板）：**需在进入 Phase 4 前裁决**。
+   候选：① 继续 Kuzu 并锁版本；② `graphiti-core[falkordblite]`（嵌入式 FalkorDB，仍 0 容器，待 spike）；
+        ③ FalkorDB/Neo4j 容器（撞内存红线，需重估）；④ 放弃 graphiti，自研 PG 图存储。

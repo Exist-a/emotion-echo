@@ -2,12 +2,15 @@
 
 ## Status
 
-🟡 **Proposed（形态由用户 2026-10-18 拍板；四项待实测项未证 ⇒ 转 Accepted 前必须先回填实测结论）**
+🟡 **Proposed（形态由用户 2026-10-18 拍板；**Phase 0 四项实测已于 2026-10-22 回填**，但 T-b 抓出「Kuzu backend 已被 graphiti 标记 deprecated」⇒ 选型前提需重新裁决，见 §Phase 0 实测回填 T-e）**
 
 - 范围 = **形态与选型**（本文）。**实施未开始**：CL-08 的执行计划见
   [`docs/closure-roadmap/stages/cl-08-memory/plan.md`](../../closure-roadmap/stages/cl-08-memory/plan.md)。
 - 用户 2026-10-18 口径：「**我个人是想引入的**」「**硅基流动有向量化模型服务吗？有就直接复用**」
   「**先落文档**」⇒ 本轮只落文档、不动代码。
+- **2026-10-22 Phase 0 spike 已完成**：四项实测均有一条命令 + 输出（证据见
+  `stages/cl-08-memory/evidence/phase0-t-{a,b,b2,c,d}-*.txt`）。**技术可行性成立**（装得上、单测 215 全绿、driver 可读写），
+  但**T-e 新证据**（Kuzu 上游停止维护、graphiti 宣布将移除该 backend）使「继续用 Kuzu」变成需要用户重新拍板的选型问题。
 - 相关决策：`CL-D-35`（记忆形态）/ `CL-D-36`（embedding 供给）/ `CL-D-37`（本轮只提前改规划）
   见 [`docs/closure-roadmap/decisions.md`](../../closure-roadmap/decisions.md)。
 - **技术实现细节已定（2026-10-18，用户经 AskUserQuestion 逐条拍板 4 项 + 执行侧 7 项口径）**：
@@ -60,6 +63,8 @@
    Kuzu 是 MIT 许可的**嵌入式属性图库**（自述 *"Embedded property graph database built for speed. Vector search and full-text search built in. Implements Cypher."*），
    随 Python 进程加载、数据落本地目录 ⇒ **新增容器数 = 0**，满足 §4 约束①。
    Graphiti 支持的后端实测清单（仓库目录实读）：`neo4j` / `falkordb` / **`kuzu`** / `neptune`。
+   ⚠️ **2026-10-22 Phase 0 新证据（T-e）**：graphiti-core 0.31.2 已把 Kuzu 标为 **deprecated**（上游停更），
+   ⇒ 本条**不再是最终结论**，待 T-e 四选一裁决后修订。
 2. **embedding = 硅基流动 `POST https://api.siliconflow.cn/v1/embeddings`，模型 `BAAI/bge-m3`（1024 维）**。
    与现有 TTS **同账户同域名**（`deploy/env/.env.local.example:39` 已有 `TTS_API_BASE_URL=https://api.siliconflow.cn/v1`）
    ⇒ **不新增 key、不新增容器**（满足约束①）。
@@ -88,7 +93,7 @@
 | 11 | **可注入点（决定能不能 TDD）** | `graphiti_core/llm_client/client.py` 与 `embedder/client.py` 均为可继承接口 ⇒ **单测注入确定性假实现、不打真 LLM**（符合"测试不依赖网络"）；embedder 用 `openai.py` 指到硅基流动 `base_url`；其内建 `cache.py`/`token_tracker.py` 供成本与缓存指标（喂 T-18） | 执行侧（依据实读） |
 | 12 | **注入段位置与预算** | 段序 `base → agent → personality → **memory** → emotion → guard`（事实靠前、风格约束靠后；**guard 恒末位**不变）；**记忆为空则不产生该段** ⇒ 既有逐字 golden 不动。记忆段独立预算 **≤600**（现用的是**估算** token 而非真分词器，与 history 的 2000 分开记账） | 执行侧建议（**若不同意可在进入阶段时推翻**） |
 | 13 | **抽取用哪个模型** | 沿用现有 `LLM_*`（OpenAI 兼容端点，Graphiti 的 `openai_generic_client` 正好适配）；**成本上限等 Phase 0 拿到"一条消息几次调用/多少 token"的实测数再定**（不预设无依据的数字） | 执行侧建议 |
-| 14 | **Kuzu 并发形态** | 嵌入式库典型是**单写者** ⇒ 暂定 **llm-service 单 worker 持有 + 内部串行**；若必须多 worker 则按用户分片文件。**先实测再定**（见 §待实测项 T-d） | 执行侧（待实测） |
+| 14 | **Kuzu 并发形态** | **已实测（2026-10-22）**：嵌入式库**严格单写者** —— 第二个写进程（跨容器 / 同容器多进程）均 `RuntimeError: Could not set lock on file`，**fail fast**；只读可并发但无隔离保证。⇒ **llm-service 单 worker 持有 + 内部串行**（不分片）；多 worker 会在启动期直接失败 | **已实测**（`phase0-t-d-*.txt`） |
 
 
 ### 被否备选（记录理由，防"下次再来一遍"）
@@ -101,16 +106,29 @@
 | **Graphiti + Neo4j 容器** | 图查询能力最完整，但要新增一个 JVM 容器（通常 1~2GB）⇒ 直接撞约束①与决策 39 的击穿前科 |
 | **把 embedding 做成自建容器**（bge-m3 本地推理） | 数据不出境是优点，但 +约 1GB 内存，与 `sensevoice`/`xtts`（各 6144M 限额）抢同一份预算 |
 
-## 待实测项（**未证 —— 不得当作已成立**；Phase 0 逐条回填）
+## 待实测项（Phase 0 已回填 · 2026-10-22）
 
-| # | 待实测 | 为什么必须先实测 | 回填位置 |
+> 证据目录：`docs/closure-roadmap/stages/cl-08-memory/evidence/phase0-*.txt`（每条含命令 + 输出）。
+> 状态：**T-a/T-b/T-c/T-d 均已实测**；**T-e 为本轮回填时新发现，尚未裁决**。
+
+| # | 待实测 | **实测结论（2026-10-22）** | 证据 |
 |---|---|---|---|
-| T-a | 现有 `TTS_API_KEY` 在该账户下**能否调 `/v1/embeddings`**、配额是否与 TTS 共用、限流、单次批量上限、`bge-m3` 实际维度 | 官方文档证实"有服务、有这些模型"，但**账户权限与配额是另一回事**；共用 key 可能互相挤占（TTS 是主链路） | 本表 + `plan.md` T-0x |
-| T-b | `graphiti-core` + `kuzu` 与 llm-service **现有依赖**（`grpcio>=1.60` / `openai>=1.40` / `pydantic>=2` / `pypdf` / `python-docx`，Python 3.12）是否冲突；镜像体积增多少 | 装不上=方案不成立；装得上但体积暴涨要重估 | 本表 + `plan.md` |
-| T-c | Kuzu 数据文件的**持久化与备份**（容器重建不丢）；与 `deploy/backups/`（pg_dump 产物）的关系 | 嵌入式库的"文件在哪、谁备份"是它唯一的运维面；不实测就会出现"重建容器记忆全丢" | 本表 + `plan.md` |
-| T-d | **Kuzu 的并发形态**：llm-service 若跑多 worker，多个进程打开同一 Kuzu 目录会怎样（嵌入式库通常单写者）；以及"**从 PG 重建图**"这条路径的实际耗时 | 决定第 14 条（单 worker 串行 vs 按用户分片）；同时验证第 8 条的"可重建"是否真的成立 —— 不成立则"图=索引"这条前提也要改 | 本表 + `plan.md` |
+| T-a | `TTS_API_KEY` 能否调 `/v1/embeddings`、维度、延迟、批量上限、配额是否与 TTS 共用 | ✅ **可调**（HTTP 200）；`bge-m3` = **1024 维**；单条 417ms / 批量 64 条 972ms（15.2ms/条）；840 字长文本正常。⚠️ **配额是否与 TTS 共用仍未证**（单次测试无法证明，需上线后看 429/延迟） | `phase0-t-a-embeddings-2026-10-22.txt` |
+| T-b | `graphiti-core` + `kuzu` 与 llm-service 依赖是否冲突、镜像涨多少 | ✅ **装得上、不冲突**：graphiti-core 0.31.2 + kuzu 0.11.3 + 真实 requirements ⇒ `pip check` 无冲突；**llm-service 单测 215 passed**（openai 被解析到 3.36.0，无回归）；site-packages **+161 MB**（对照现镜像 394 MiB）；`kuzu` 是 extra（须写 `graphiti-core[kuzu]`）。🔴 **但见 T-e** | `phase0-t-b-deps-*.txt` / `phase0-t-b2-compat-*.txt` |
+| T-c | Kuzu 数据文件持久化与备份；与 `deploy/backups/` 的关系 | ✅ **命名卷跨容器删除/重建不丢**（新容器读回 3 行）；**单文件** `graph.kuzu`（1.1MB/3 节点）；bind mount 在 Windows/Docker Desktop 下亦可用。备份可直接 tar 进 `deploy/backups/`，但**图仍以 PG 为权威源** | `phase0-t-c-kuzu-persistence-*.txt` |
+| T-d | Kuzu 并发形态 + 从 PG 重建的实际耗时 | ✅ **严格单写者**：第二个写进程（跨容器 / 同容器多进程）均 `RuntimeError: Could not set lock on file`（fail fast）；只读可并发但不保证隔离（读到未提交行）⇒ **T11「单 worker + 内部串行」成立，不需分片**。重建：逐条 **5.03ms/行**（线性），**COPY 20k 行 0.31s ≈ 65k 行/s** ⇒ **重建工具必须走 COPY** | `phase0-t-d-kuzu-concurrency-timing-*.txt` |
+| **T-e** | **Kuzu backend 的维护状态**（本轮新发现） | 🔴 **graphiti-core 0.31.2 在 `KuzuDriver.__init__` 内显式 `DeprecationWarning`**：「The Kuzu backend is deprecated and will be removed in a future release — the upstream Kuzu project is no longer maintained. Migrate to Neo4j or FalkorDB.」⇒ 继续用 Kuzu = **锁死 graphiti-core ≤0.31.x**；不锁 = 未来升级直接不可用。**技术可用 ≠ 选型可持续**，需用户裁决（见下） | `phase0-t-b2-compat-*.txt` |
 
-> ⚠️ **本 ADR 的 Accepted 转换条件** = 上述三项均有实测结论（含命令与输出），而非"文档说支持"。
+### T-e 裁决选项（未裁前不进 Phase 4）
+
+| 选项 | 代价 | 备注 |
+|---|---|---|
+| ① **继续 Kuzu，锁 graphiti-core==0.31.2** | 0 容器、0 迁移；但吃下"永不升级"与"上游停更"的风险 | 最短路径；适合"先跑通、后换后端" |
+| ② **`graphiti-core[falkordblite]`（嵌入式 FalkorDB）** | 仍 0 容器（pip 自带 redis-server 子进程）；但 **Beta（0.11.0，2026-10-19）**、内存足迹未测 | 需再跑一次 spike（30~60min）：装得上？driver 可用？内存多少？ |
+| ③ **FalkorDB / Neo4j 容器** | 新增容器 ⇒ 撞**内存红线**（决策 39 有击穿前科），需重估 `.wslconfig` 与 19 容器预算 | Neo4j 是官方推荐路径，最稳但最重 |
+| ④ **放弃 graphiti，自研 PG 图存储** | 0 新依赖；但要自己做实体消解 / 双时间轴 / 三层召回，工作量最大 | 也失去 graphiti 的演进红利 |
+
+> ⚠️ **本 ADR 的 Accepted 转换条件**（更新）：四项实测已回填 ✅；**新增条件 = T-e 已裁决**（①②③④ 之一）。
 
 ## Consequences
 
