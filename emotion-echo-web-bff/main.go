@@ -395,11 +395,16 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	// tracing + timeout + logging 链。timeout=5s 是 BFF 跨下游统一兜底
 	// (handler 层仍可 ctx.WithTimeout 收紧具体业务超时)。
 	dialOpts := sharedgrpc.ClientDialOptions(sharedgrpc.NewGo2SkyTracer(packageTracer), 5*time.Second)
+	// CL-F-66：ai-svc 8892 已强制 x-internal-api-key。**只给 ai-svc 连接**挂，
+	// 不污染 user/chat/assessment/analytics 的下游调用（最小权限）。
+	aiInternalKey := envOr("BFF_AI_SVC_INTERNAL_API_KEY", os.Getenv("INTERNAL_API_KEY"))
+	aiDialOpts := append(append([]grpc.DialOption{}, dialOpts...),
+		grpc.WithChainUnaryInterceptor(sharedgrpc.NewClientAuthInterceptor(aiInternalKey)))
 	userGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.UserService.GRPCAddr, shareddiscovery.ServiceUser), "user-svc", dialOpts...)
 	chatGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.ChatService.GRPCAddr, shareddiscovery.ServiceChat), "chat-svc", dialOpts...)
 	assessmentGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AssessmentService.GRPCAddr, shareddiscovery.ServiceAssessment), "assessment-svc", dialOpts...)
 	analyticsGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AnalyticsService.GRPCAddr, shareddiscovery.ServiceAnalytics), "analytics-svc", dialOpts...)
-	aiGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI), "ai-svc", dialOpts...)
+	aiGRPCConn := dialGRPC(resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI), "ai-svc", aiDialOpts...)
 
 	svcCtx.SetUser(downstream.NewUserClient(downstream.UserClientOptions{
 		BaseURL: c.UserService.BaseURL, TimeoutMs: c.UserService.TimeoutMs,
@@ -441,7 +446,7 @@ func buildServiceContext(c *config.Config, resolver, grpcResolver bffdiscovery.R
 	//
 	// Stage 94 PR-4 §P0-1b：第 6 处盲点改走 dialGRPC（与其他 5 处统一 fallback / interceptor 链）
 	grpcAddr := resolveGRPCAddr(grpcResolver, c.AIService.GRPCAddr, shareddiscovery.ServiceAI)
-	if conn := dialGRPC(grpcAddr, "ai-svc-emotion-q", dialOpts...); conn != nil {
+	if conn := dialGRPC(grpcAddr, "ai-svc-emotion-q", aiDialOpts...); conn != nil {
 		svcCtx.SetEmotionQ(downstream.NewEmotionQueryClient(conn))
 		// CL-08a：同一个 ai-svc gRPC 连接复用给 MemoryService（一条连接多个 stub）
 		svcCtx.SetMemory(downstream.NewMemoryClient(conn))

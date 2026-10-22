@@ -1,0 +1,81 @@
+CL-08c Phase 0 · T-d · Kuzu 并发形态 + 重建耗时（2026-10-22）
+=====================================================================
+目的：① llm-service 多 worker 打开同一 Kuzu 目录会怎样；② "从 PG 重建图"路径的吞吐量级。
+
+探针镜像：cl08c-kuzu:probe（python:3.12-slim + kuzu==0.11.3）
+探针脚本：tmp/spike_cl08c/kuzu_probe.py（hold = BEGIN + MERGE + sleep + COMMIT）
+
+---------------------------------------------------------------------
+实测 1：跨容器并发（A 持写事务 8s，B 第 3s 以写模式打开）
+---------------------------------------------------------------------
+$ docker run -d --name cl08c-hold -v cl08c-kuzu-vol:/data ... python /work/kuzu_probe.py hold /data/graph.kuzu 8
+$ sleep 3
+$ docker run --rm -v cl08c-kuzu-vol:/data ... python /work/kuzu_probe.py write /data/graph.kuzu
+write_exit=1
+Traceback (most recent call last):
+  File "/work/kuzu_probe.py", line 21, in open_db
+    db = kuzu.Database(path, read_only=read_only)
+RuntimeError: IO exception: Could not set lock on file : /data/graph.kuzu
+See the docs: https://docs.kuzudb.com/concurrency for more information.
+
+$ docker run --rm -v cl08c-kuzu-vol:/data ... python /work/kuzu_probe.py readro /data/graph.kuzu
+[read-ro] db=/data/graph.kuzu persons=4 rows=[['云舟', '建筑师'], ['持锁者', 'hold'], ['白露', '兽医'], ['青禾', '木工']]
+readro_exit=0
+
+$ docker logs cl08c-hold
+[hold] pid=1 holding write txn for 8s
+[hold] committed
+
+结论：
+- **写模式第二个进程直接失败**（`Could not set lock on file`），**fail fast、不是挂起**；
+- **只读模式（read_only=True）可以并发打开并读到数据**；
+  ⚠️ 但本例读到了持锁进程写入的未提交行（"持锁者"）⇒ **不可依赖它做事务隔离读**；
+  且按 T3 决议，注入读路径走 Redis 摘要、**关键路径不查图**，故不构成本阶段阻塞。
+- ⇒ 支持 T11「单 worker + 内部串行」，且**多 worker 会在启动期就炸**（不是运行期偶发）。
+
+---------------------------------------------------------------------
+实测 2：同容器两进程（更接近 llm-service 跑多 worker 的形态）
+---------------------------------------------------------------------
+$ docker run --rm -v cl08c-kuzu-vol:/data ... sh -c \
+    'python /work/kuzu_probe.py hold /data/graph.kuzu 6 & sleep 2; python /work/kuzu_probe.py write /data/graph.kuzu; echo worker_exit=$?; wait'
+RuntimeError: IO exception: Could not set lock on file : /data/graph.kuzu
+worker_exit=1
+[hold] committed
+
+结论：与跨容器一致 —— **锁是文件级、进程级**，同容器多进程同样拒绝。
+
+---------------------------------------------------------------------
+实测 3：批量写入吞吐（重建耗时的主导项）
+---------------------------------------------------------------------
+规模 n=2000（新库）：
+[bulk-loop] n=2000 total=10.08s per_row=5.04ms
+[bulk-copy] n=2000 total=0.24s
+[bulk] total_rows=4000
+
+规模 n=20000（新库）：
+[bulk-loop] n=20000 total=100.65s per_row=5.03ms
+[bulk-copy] n=20000 total=0.31s
+[bulk] total_rows=40000
+
+落盘体积：
+-rw-r--r-- 1 root root 3.3M Oct 22 02:50 bulk.kuzu        # 4000 行（2000 loop + 2000 copy）
+-rw-r--r-- 1 root root 9.5M Oct 22 02:52 bulk20k.kuzu     # 40000 行
+14.2M	/data
+
+结论：
+- 逐条 `execute` 稳定 **5.03 ms/行**（2000 与 20000 完全线性）⇒ 10 万条约 **8.4 分钟**、100 万条 **≈84 分钟**；
+- `COPY FROM CSV` **20k 行 0.31s ≈ 65k 行/s**（比逐条快 **~325 倍**）；
+- ⇒ **重建工具必须走 COPY（先导出 CSV）**；逐条插入只可用于在线增量（每消息几条事实，5ms/条可接受）。
+- 体积 ≈ 0.24 KB/行（节点，含属性）；边未单独测，量级同阶。
+
+⚠️ 局限（如实声明）：本轮没有"从 PG 导出 → 建图"的现成工具（Phase 5 才交付），
+   故只测了 **Kuzu 侧 ingest 吞吐**（主导项）；PG 侧导出为顺序扫描，量级远小于 ingest。
+   真正端到端的重建耗时要在 Phase 5 用真实数据复测。
+
+---------------------------------------------------------------------
+结论（回填 ADR T-d）
+---------------------------------------------------------------------
+1. 并发：**严格单写者**（第二个写进程启动即 RuntimeError）⇒ T11「单 worker + 内部串行」成立，
+   不需要按用户分片文件（分片是为吞吐，不是为绕锁；若将来要并行，再考虑分片）。
+2. 重建：**可行且快**，前提是 COPY 路径（65k 行/s）；逐条路径不可用于全量重建。
+3. 运维含义：llm-service 必须以**单进程**持图；任何"起两个 worker"的部署改动都会在启动期失败（好的一面：不会静默写坏）。

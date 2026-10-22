@@ -57,6 +57,9 @@ type Option func(*serverOptions)
 type serverOptions struct {
 	memRepo    repository.MemoryFactRepo
 	memExtract MemoryNoteExtractor
+	// internalAPIKey 非空 ⇒ 所有非 health RPC 必须带 x-internal-api-key（CL-F-66）。
+	// 空 ⇒ 关闭（本地单测 / 未下发 env 的环境保持旧行为）。
+	internalAPIKey string
 }
 
 // WithMemory 装配 MemoryService（CL-08a）。repo 为 nil 时不注册该服务。
@@ -64,6 +67,17 @@ func WithMemory(repo repository.MemoryFactRepo, extract MemoryNoteExtractor) Opt
 	return func(o *serverOptions) {
 		o.memRepo = repo
 		o.memExtract = extract
+	}
+}
+
+// WithInternalAPIKey 开启 gRPC 内部鉴权（CL-F-66）。
+//
+// 背景：compose 把 8892 发布到宿主，且拦截器链原本无鉴权 ⇒ 任意本机进程可冒
+// 他人 user_id 读写情绪/记忆。复用 shared/pkg/grpcinterceptor 的同一套语义
+// （llm-service 侧已用 x-internal-api-key）。health 探测白名单跳过（见 New）。
+func WithInternalAPIKey(key string) Option {
+	return func(o *serverOptions) {
+		o.internalAPIKey = key
 	}
 }
 
@@ -84,6 +98,18 @@ func newServiceAwareUserIDInterceptor(skipServiceFullName string) grpc.UnaryServ
 			if strings.HasPrefix(info.FullMethod, skipServiceFullName) {
 				return handler(ctx, req)
 			}
+		}
+		return inner(ctx, req, info, handler)
+	}
+}
+
+// newServiceAwareAuthInterceptor 包装 shared 的内部 key 拦截器：
+// health 探测（docker/k8s healthcheck）不带 key，必须放行，否则服务被判定不健康。
+func newServiceAwareAuthInterceptor(expectedKey, skipServiceFullName string) grpc.UnaryServerInterceptor {
+	inner := grpcinterceptor.NewServerAuthInterceptor(expectedKey)
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if info != nil && info.FullMethod != "" && strings.HasPrefix(info.FullMethod, skipServiceFullName) {
+			return handler(ctx, req)
 		}
 		return inner(ctx, req, info, handler)
 	}
@@ -141,6 +167,9 @@ func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRe
 	tracer := skywalking.Tracer()
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
+			// CL-F-66: 内部鉴权必须最外层 —— 未授权的调用不应进入后续埋点/日志逻辑。
+			// key 为空时 shared 拦截器自身放行（dev / 单测保持旧行为）。
+			newServiceAwareAuthInterceptor(so.internalAPIKey, healthServiceFullName),
 			// Stage 32 PR-16: user ID metadata 拦截器（APISIX 注入 x-user-id）。
 			// 业务 handler 用 grpcinterceptor.UserIDFromGRPCContext(ctx) 取 end user id。
 			// 跳过 health check 服务（k8s probe 不带 x-user-id）。

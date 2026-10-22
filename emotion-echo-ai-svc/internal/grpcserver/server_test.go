@@ -57,6 +57,12 @@ func userIDOutgoingCtx(uid int64) context.Context {
 }
 func startTestServer(t *testing.T, repo repository.EmotionRepo) (*Server, *grpc.ClientConn, func()) {
 	t.Helper()
+	return startTestServerWithOptions(t, repo)
+}
+
+// startTestServerWithOptions 同 startTestServer，但允许传 Option（CL-F-66 鉴权测试用）。
+func startTestServerWithOptions(t *testing.T, repo repository.EmotionRepo, opts ...Option) (*Server, *grpc.ClientConn, func()) {
+	t.Helper()
 
 	// Listen on an ephemeral port first so we know the address for
 	// dialing. The production constructor binds via New(repo, port);
@@ -66,7 +72,7 @@ func startTestServer(t *testing.T, repo repository.EmotionRepo) (*Server, *grpc.
 	port := lis.Addr().(*net.TCPAddr).Port
 	lis.Close() // release; production will re-listen
 
-	srv := New(repo, nil, nil, port) // Sprint F2：svcCtx 传 nil（仅 4 RPC 不依赖 svcCtx；3 业务 RPC 单元测试本批不覆盖）
+	srv := New(repo, nil, nil, port, opts...) // Sprint F2：svcCtx 传 nil（仅 4 RPC 不依赖 svcCtx；3 业务 RPC 单元测试本批不覆盖）
 
 	ctx, cancel := context.WithCancel(context.Background())
 	serveErr := make(chan error, 1)

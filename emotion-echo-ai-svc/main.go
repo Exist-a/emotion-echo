@@ -640,6 +640,18 @@ func main() {
 		if memRepo != nil && memHandler != nil {
 			grpcOpts = append(grpcOpts, grpcserver.WithMemory(memRepo, memHandler.HandleNote))
 		}
+		// CL-F-66：gRPC 8892 内部鉴权。per-svc env 优先（最小权限），fallback 共享 INTERNAL_API_KEY；
+		// 都为空 ⇒ 关闭（本地/测试环境保持旧行为）。
+		internalKey := os.Getenv("AI_SVC_INTERNAL_API_KEY")
+		if internalKey == "" {
+			internalKey = os.Getenv("INTERNAL_API_KEY")
+		}
+		if internalKey != "" {
+			grpcOpts = append(grpcOpts, grpcserver.WithInternalAPIKey(internalKey))
+			slog.Info("[grpc] internal api key auth enabled")
+		} else {
+			slog.Warn("[grpc] internal api key auth DISABLED (no AI_SVC_INTERNAL_API_KEY / INTERNAL_API_KEY)")
+		}
 		gs := grpcserver.New(emoRepo, fusedRepo, svcCtx, c.GRPC.Port, grpcOpts...)
 		go func() {
 			if err := gs.Start(rootCtx); err != nil {

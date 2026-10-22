@@ -1,5 +1,5 @@
 ---
-status: pending
+status: in-progress
 stage: CL-08
 slug: cl-08-memory
 scope: 跨会话长期记忆 —— 用户事实抽取 → 时序知识图谱（Graphiti + 嵌入式 Kuzu）→ 注入 prompt → 管理页可查看/删除 → 情绪模式与情节检索；含向量/全文/图三层召回
@@ -131,7 +131,7 @@ related:
 
 | Phase | 内容 | RED 断言 | 备注 |
 |---|---|---|---|
-| **0** | **前置实测 spike（不写生产代码）**：① 真打一次 `POST /v1/embeddings`（`BAAI/bge-m3`）——**可用性 / 维度 / 延迟 / 批量上限 / 是否与 TTS 共享配额**；② 试装 `graphiti-core` + `kuzu`（与 llm-service 现有依赖是否冲突、镜像涨多少）；③ 定 **Kuzu 数据文件的持久化与备份**方案；④ **Kuzu 并发形态**（多 worker 打开同一目录）+「从 PG 重建图」的实际耗时 | 四项各出一条命令 + 输出（**不是"文档说支持"**） | **ADR 四项待实测项（T-a~T-d）的回填点**；任一不成立 ⇒ 回 ADR 改选型（不许"硬上"） |
+| **0** | **前置实测 spike（不写生产代码）**：① 真打一次 `POST /v1/embeddings`（`BAAI/bge-m3`）——**可用性 / 维度 / 延迟 / 批量上限 / 是否与 TTS 共享配额**；② 试装 `graphiti-core` + `kuzu`（与 llm-service 现有依赖是否冲突、镜像涨多少）；③ 定 **Kuzu 数据文件的持久化与备份**方案；④ **Kuzu 并发形态**（多 worker 打开同一目录）+「从 PG 重建图」的实际耗时 | 四项各出一条命令 + 输出（**不是"文档说支持"**） | ✅ **已完成（2026-10-22）**：T-a 1024 维可调（417ms/单条）；T-b 装得上 + **llm-service 215 单测全绿**（+161MB）；T-c 命名卷跨重建不丢；T-d **严格单写者** + COPY 65k 行/s。证据 `evidence/phase0-*`。🔴 **新发现 T-e**：graphiti 已把 Kuzu 标 deprecated（上游停更）⇒ **Phase 4 前需用户重裁选型**（ADR §待实测项 T-e），Phase 1~3 不受影响 |
 | **1** | **PG 数据模型（系统记录）**：`memory_episode` / `memory_entity` / `memory_fact`（含 `valid_from`/`valid_to`/`source_message_id`/`user_id`/`status`）/ `memory_extract_run` + 迁移（幂等 + checksum + 若也有内联 DDL 则补 parity 守卫） | 引用不存在的表 ⇒ 编译/查询失败；契约测试全红 | 对应 T-1/T-2/**T-3**；**schema 落点按"谁写入"推导**：写入方 = ai-svc（Phase 2）⇒ 落 **`emotion_echo_ai`**（`test_migrations_no_service_order.sh` 会拦跨 schema） |
 | **2** | **抽取 worker（异步，拓扑已定）**：**ai-svc** 内新增**独立 consumer group**（不与情绪分析共用），照 `consumehandler.go:45` 形态；消费到 `message.created` ⇒ 调 llm-service 的 `MemoryService.UpsertEpisode`；`message_id` 唯一索引做幂等；失败 `return error` 交给既有重试/DLQ | 消费两次 ⇒ 事实重复（T-4 红）；LLM 挂 ⇒ 消息失败（T-5 红） | 对应 T-4/T-5；**禁在发消息关键路径做 LLM**（`CL-D-33`）；**顺序**：同会话已天然有序（key=`ConversationID`），**不改 topic 键**；跨会话用事件 `send_time` 兜底 |
 | **3** | **注入段（BFF）**：新增 `segmentKindMemory` + `assembleInput.memory` + `memorySegment()`；**关键路径只读 Redis 用户级摘要**（`CL-D-07` 同构：用户级键 + TTL + 取不到降级），两处调用点都传；段序 `base → agent → personality → memory → emotion → guard`、记忆段空则不产生 | 无记忆时输出与 golden **不逐字相等**（T-7 红）；段序位置断言红（T-8） | 对应 T-7/T-8/T-9/**T-10**/T-11/T-12；预算 **≤600**（与 history 的 2000 分开记账） |

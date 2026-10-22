@@ -245,7 +245,12 @@ func main() {
 	// dev fallback 是 best-effort，dial 失败就回退 NoopAIClient（SendMessageLogic 仍然
 	// 工作，只是不调 ai-svc）。这样 compose dev 环境没起 ai-svc 也能启动 chat-svc。
 	if c.AIService.GRPCAddr != "" {
-		ai, err := grpcclient.NewAIgRPCClient(c.AIService.GRPCAddr)
+		// CL-F-66：ai-svc 8892 强制内部鉴权 ⇒ chat-svc 必须带 key（per-svc env 优先）
+		aiKey := os.Getenv("CHAT_AI_SVC_INTERNAL_API_KEY")
+		if aiKey == "" {
+			aiKey = os.Getenv("INTERNAL_API_KEY")
+		}
+		ai, err := grpcclient.NewAIgRPCClient(c.AIService.GRPCAddr, aiKey)
 		if err != nil {
 			log.Printf("[ai-grpc] dial %s failed: %v (fallback to noop)", c.AIService.GRPCAddr, err)
 		} else {
