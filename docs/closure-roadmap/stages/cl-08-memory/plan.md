@@ -1,5 +1,5 @@
 ---
-status: pending
+status: in-progress
 stage: CL-08
 slug: cl-08-memory
 scope: 跨会话长期记忆 —— 用户事实抽取 → 时序知识图谱（Graphiti + 嵌入式 Kuzu）→ 注入 prompt → 管理页可查看/删除 → 情绪模式与情节检索；含向量/全文/图三层召回
