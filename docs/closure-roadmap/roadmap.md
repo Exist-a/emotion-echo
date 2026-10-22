@@ -85,7 +85,7 @@ related:
 | **CL-07** | 情绪回显 + 融合消费 | T3 | `chat-emotion-realtime-display`（**已落地**）、`fusion-result-consumption`（**已落地**） | CL-04 | ✅ **done（2026-10-16 收口）** —— **G 轨后端切片**（`bf401350` / PR #234）+ **H 轨前端半**（`349c9615` / PR #243，含 G2 角标按用户裁定移除）；**[A] 7/7 + 浏览器 [V] T-8/T-9 PASS**（生产构建 IAB 实测 + 第二方核对**独立复现**）；**T-10（数字人情绪）BLOCKED** —— 被既有账 **CL-F-17**（VRM 加载失败，他项）阻塞，接线与架构钉已在码内；顺带修复 **BFF `/api/v1/emotion/*` 整族 502**（未透传 X-User-Id，E2E-F-125 同型）；见 `stages/cl-07-{fusion-consumption,emotion-display}/report.md` |
 | **CL-08a** | 记忆 · **用户事实**（抽取 → 存 → 常带注入） | 最后 | `conversation-memory-pending-decision`（**2026-10-18 收敛为图记忆形态**） | CL-04 | ✅ **done（2026-10-21 收口）** —— **21 个测试点全部有结论**（PASS 17 / N/A 4：T-6·T-13·T-14 → c，T-16 → d；FAIL 0 / BLOCKED 0）。落地 PR：[#261](https://github.com/Exist-a/emotion-echo/pull/261)（阶段主体 → `505e9134`）· [#267](https://github.com/Exist-a/emotion-echo/pull/267)（抽取卡 pending 修复 + PG 集成测试 4/4 + E2E 去固定等待 → `749be05e`）· [#268](https://github.com/Exist-a/emotion-echo/pull/268)（`valid_from` 幻觉护栏 → `5731e857`）；**收口轮另修 5 条**（见 `report.md §2.3`：产品缺陷 3 —— 抽取卡 pending / `valid_from` 幻觉护栏 / **事件时间戳 ms-s 混用**，后者曾让事实时间落到 58773 年并把幻觉年份写进 prompt；工具与测试缺陷 2）。**运行时证据**：T-5（LLM 不可达 → 消息照发 + run 落 failed + 恢复自愈）· T-17（双账号 PG 事实与 Redis 摘要双向隔离）· E2E `2 passed`（2026-10-21 43.9s / **2026-10-22 复跑 44.3s**）· ai-svc 单测 **18/18 包全绿**（清 `HTTP_PROXY` 后）· 浏览器实测截图 2 张。**第二方核对** = 独立子代理只读审查 **两轮**：首轮 FAIL（4 处收口声明不成立）→ 整改 → 复核轮 FAIL（9 项，含一处把环境问题误判为代码问题）→ 再整改；全过程见 report §6。⚠️ 遗留（均另挂账）：`CL-F-62` 无补抽（CL-09）· `CL-F-64` 图标签重叠（CL-11）· `CL-F-65` emotion 链路半场（CL-09）· **`CL-F-66` gRPC 8892 越权面（高，CL-12）** · `CL-F-67` 会话维度缺 user_id（CL-09/c）· `CL-F-68` 租约 vs 重试窗口（CL-09）· `CL-F-69` 零长度区间（CL-09）· `CL-F-70` 测试强度（CL-09） |
 | **CL-08b** | 记忆 · **情绪模式**（趋势 / 触发 / 缓解因素 —— **天然是图上的关系 + 时序查询**） | 最后 | 同上 | CL-08a | pending（同上） |
-| **CL-08c** | 记忆 · **情节 + 图记忆检索**（事件抽取 + 图遍历 / 向量 / 全文三层召回；原写"RAG"⇒ 形态已由 `CL-D-35` 收敛） | 最后 | 同上 | CL-08a | 🟡 **in-progress（2026-10-22 开工 · Phase 0 spike 已完成）** —— 详见下方开工注；Phase 1 起待续，**Phase 4 前需裁决 T-e（图后端）** |
+| **CL-08c** | 记忆 · **情节 + 图记忆检索**（事件抽取 + 图遍历 / 向量 / 全文三层召回；原写"RAG"⇒ 形态已由 `CL-D-35` 收敛） | 最后 | 同上 | CL-08a | 🟡 **in-progress（2026-10-22 开工 · Phase 0 spike 已完成）** —— 详见下方开工注；**图后端已裁为 `falkordblite`（T-e=②）**，Phase 1 起待续 |
 | **CL-08d** | 记忆 · **管理页（查看 / 删除 —— 图上删除必须闭环：PG 为准、图随删）** | 最后 | 同上 | CL-08a~c | pending（同上） |
 | **CL-08e** | 记忆 · **风险信号**（安全，横切） | 最后 | 同上 | — | pending（同上） |
 > **P 轨开工（2026-10-16，Lane-CL-P · CL 遗留清销第 1 批）**：清 **CL 账本（CL-F-xx）** 的未解决项（**不含** E2E-F，用户明示）。
@@ -126,8 +126,10 @@ related:
 > 本轮**零生产代码**：T-a~T-d 全部在一次性容器内实测（不取栈锁、不动在跑服务），
 > 报告 = `stages/cl-08-memory/phase0-spike-report-2026-10-22.md`，证据 = `evidence/phase0-*`。
 > **结果**：四项技术面全部 PASS（embedding 1024 维可调 · 依赖装得上且 **llm-service 215 单测全绿** · 命名卷持久化 · 严格单写者 + COPY 65k 行/s）；
-> 🔴 **但抓出新证据 T-e**：graphiti 0.31.2 已把 **Kuzu backend 标 deprecated（上游停更）** ⇒ **Phase 4 前需用户重裁选型**
-> （ADR §待实测项 T-e 四选一），Phase 1~3 与图后端无关、可先行。账本：`CL-F-57`/`CL-F-58` 已销，新增 `CL-F-71`。
+> 🔴 **但抓出新证据 T-e**：graphiti 0.31.2 已把 **Kuzu backend 标 deprecated（上游停更）** ⇒ 用户当日裁决 **T-e=② `graphiti-core[falkordblite]`**；
+> 追加实测通过（装得上、`FalkorDriver(host,port)` 可建索引/读写、**多进程共享同一 server**、**跨容器重建数据仍在**、内存 ~145MB），
+> ADR 决策 45 已改后端并转 **Accepted**。Phase 1~3 与图后端无关、可先行。
+> 账本：`CL-F-57`（embedding）/`CL-F-58`（持久化）/`CL-F-71`（Kuzu deprecated）均已销账。
 > ⚠️ 本注只追加，未改他人已写的行（H3 append-only）。
 
 ---

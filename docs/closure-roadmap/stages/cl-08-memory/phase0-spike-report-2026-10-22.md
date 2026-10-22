@@ -28,7 +28,7 @@ related:
 | T-b | 依赖兼容 | ✅ **PASS** | graphiti 0.31.2 + kuzu 0.11.3 装得上；**llm-service 215 单测全绿**；+161MB |
 | T-c | 持久化/备份 | ✅ **PASS** | 命名卷跨容器重建不丢；单文件 1.1MB/3 节点；bind mount 亦可 |
 | T-d | 并发 + 重建 | ✅ **PASS** | **严格单写者**（第二个写进程 fail fast）；COPY 20k 行 0.31s |
-| **T-e** | **选型可持续性** | 🔴 **需裁决** | **graphiti 已把 Kuzu 标 deprecated（上游停更）** |
+| **T-e** | **选型可持续性** | ✅ **已裁决（② falkordblite）** | Kuzu 被 graphiti 标 deprecated ⇒ 换嵌入式 FalkorDB，仍 0 容器；追加实测通过 |
 
 ## §2 关键数据（可直接用于 Phase 1~4 的设计）
 
@@ -61,29 +61,37 @@ related:
 
 ## §3 对后续 Phase 的直接影响
 
-1. **T11 定稿**：llm-service **单 worker + 内部串行**持图；不分片。任何"多 worker"部署改动都会启动失败（好的一面：不会静默写坏）。
-2. **重建工具必须走 COPY**：Phase 5 的"从 PG 重建图"要先导出 CSV 再 `COPY`，禁止逐条 `execute`。
-3. **Dockerfile 写法**：`pip install "graphiti-core[kuzu]"`（少了 `[kuzu]` 运行期才炸）；`openai` 建议显式钉一个下界 `>=1.91,<2` 或直接跟随解析结果并加回归测试。
-4. **注入路径不动**：读走 Redis 摘要（T3 决议），**关键路径不查图** ⇒ T-d 的只读并发缺陷不构成风险。
+1. **T11 修订（falkordblite 后）**：不再要求"单 worker" —— falkordblite 多进程共享同一 server（实测 0.01s 接入）。
+   但 llm-service 仍要**自己管理嵌入式 server 的生命周期**（无 `shutdown()`；靠 SIGTERM 落盘），且端口固定。
+2. **重建工具**：Kuzu 时代的结论（COPY 65k 行/s）**仅作历史记录**；falkordblite 的重建路径（Cypher/批量导入）在 Phase 5 重新测。
+3. **Dockerfile 写法（已按 T-e 更新）**：`pip install "graphiti-core[falkordblite]"`（少了 `[falkordblite]` 运行期才炸）；
+   `openai` 建议钉 `>=1.91,<2`（graphiti 下界）或跟随解析结果并加回归测试。
+4. **注入路径不动**：读走 Redis 摘要（T3 决议），**关键路径不查图**。
 
-## §4 未决（阻塞 Phase 4，不阻塞 Phase 1~3）
+## §4 T-e：Kuzu 已弃用 → 用户裁决改用 falkordblite（2026-10-22 已闭环）
 
-**T-e：图后端选型需用户重裁。** 四项技术实测都过了，但 graphiti 0.31.2 明确警告 Kuzu backend 将移除、上游停更。
-四选一见 ADR §待实测项 T-e：
+**发现**：graphiti 0.31.2 在 `KuzuDriver.__init__` 明确 `DeprecationWarning` —— Kuzu backend 将移除、**上游停更**。
+用户当日裁决 **T-e = ② `graphiti-core[falkordblite]`**（嵌入式 FalkorDB，仍 0 容器），并追加实测：
 
-| 选项 | 代价 |
+| 项 | 结果 |
 |---|---|
-| ① 锁 `graphiti-core==0.31.2` 继续 Kuzu | 0 迁移、0 容器；但永不升级 + 上游停更 |
-| ② `graphiti-core[falkordblite]` | 仍 0 容器；Beta 0.11.0、内存未测 ⇒ 需再 spike |
-| ③ FalkorDB / Neo4j 容器 | 官方推荐但**撞内存红线** |
-| ④ 自研 PG 图存储 | 0 新依赖；工作量最大 |
+| 安装 | ✅ `pip check` 干净（graphiti-core 0.31.2 / falkordblite 0.11.0 / redis 8.1.0 / falkordb client 1.8.0） |
+| 起服务 | ✅ 0.1~0.4s（`LiteFalkorDB(path, serverconfig={'port':'8002'})`） |
+| graphiti 驱动 | ✅ `FalkorDriver(host, port, database)` 建索引 + 写 Entity + 读回；**不能**传同步实例（`await` 报错） |
+| 并发 | ✅ 多进程**共享同一个 redis-server**（第二个进程 0.01s 接入，无锁）——比 Kuzu 的单写者宽松 |
+| 持久化 | ✅ 容器 A 写 → 容器 B（全新）读回 `persist-check`；RDB 落 `falkordblite.db`（退出时写） |
+| 内存 | ✅ ≈145MB（redis-server 26MB + Python 侧 120MB），llm-service 限额 1024M |
 
-> Phase 1（PG 数据模型）/ Phase 2（抽取 worker）/ Phase 3（BFF 注入段）**与图后端无关**，可先行。
+**已知边界（Phase 4 处理）**：falkordblite 仍 **Beta（0.11.0）**；客户端无 `shutdown()`（落盘依赖 SIGTERM，
+`kill -9` 有丢最后窗口风险）；未验真实 `add_episode` 全链路与写入吞吐。
+
+> ADR 决策 45 已把图后端改为 falkordblite 并转 **Accepted**；`T-d` 的 Kuzu 数据仅作历史记录（不再作为实施依据）。
 
 ## §5 未做 / 局限（如实声明）
 
 - 未测「从 PG 全量导出 → 建图」的端到端耗时（重建工具 Phase 5 才交付）；只测了 Kuzu 侧 ingest（主导项）。
 - 未测 edges / 全文索引 / 向量索引的构建耗时（只测了节点插入）。
+- falkordblite：**未跑真实 `add_episode` 全链路**（需真 LLM + embedder，属 Phase 4）；未测写入吞吐 / `kill -9` 丢窗口。
 - 未测 embedding 配额归属与 QPS 阈值。
-- 未验证 falkordblite 的可行性（若 T-e 选 ②，需另跑一次 spike）。
+- ~~未验证 falkordblite 的可行性~~ → ✅ **已验**（T-e②，见 §4）。
 - 未在真实 llm-service 镜像里构建（只在一次性容器里验证依赖树）——避免动共享镜像。

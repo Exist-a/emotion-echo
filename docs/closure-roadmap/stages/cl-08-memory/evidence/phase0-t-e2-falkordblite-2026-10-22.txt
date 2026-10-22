@@ -1,0 +1,89 @@
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+=== pip check ===
+No broken requirements found.
+=== probe write ===
+Error executing FalkorDB query: object QueryResult can't be used in 'await' expression
+MATCH (n) RETURN count(*) AS c
+{}
+[ver] graphiti-core==0.31.2
+[ver] falkordblite==0.11.0
+[ver] redis==8.1.0
+[ver] kuzu: MISSING
+[boot] FalkorDB(/data/falkordblite.db) in 0.41s
+[boot] server pid=n/a
+[cypher] wrote 1 Person
+[cypher] rows=[['云舟', '建筑师']]
+[cypher] graphs=['spike']
+Traceback (most recent call last):
+  File "/work/falkordblite_probe.py", line 89, in <module>
+    main()
+  File "/work/falkordblite_probe.py", line 83, in main
+    asyncio.run(run())
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/work/falkordblite_probe.py", line 72, in run
+    rows, _, _ = await drv.execute_query("MATCH (n) RETURN count(*) AS c")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/graphiti_core/driver/falkordb_driver.py", line 246, in execute_query
+    result = await graph.query(cypher_query_, params)  # type: ignore[reportUnknownArgumentType]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: object QueryResult can't be used in 'await' expression
+write_exit=1
+=== probe read (new process == persistence) ===
+Error executing FalkorDB query: object QueryResult can't be used in 'await' expression
+MATCH (n) RETURN count(*) AS c
+{}
+[ver] graphiti-core==0.31.2
+[ver] falkordblite==0.11.0
+[ver] redis==8.1.0
+[ver] kuzu: MISSING
+[boot] FalkorDB(/data/falkordblite.db) in 0.33s
+[boot] server pid=n/a
+[cypher] rows=[['云舟', '建筑师']]
+[cypher] graphs=['spike']
+Traceback (most recent call last):
+  File "/work/falkordblite_probe.py", line 89, in <module>
+    main()
+  File "/work/falkordblite_probe.py", line 83, in main
+    asyncio.run(run())
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/work/falkordblite_probe.py", line 72, in run
+    rows, _, _ = await drv.execute_query("MATCH (n) RETURN count(*) AS c")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/graphiti_core/driver/falkordb_driver.py", line 246, in execute_query
+    result = await graph.query(cypher_query_, params)  # type: ignore[reportUnknownArgumentType]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: object QueryResult can't be used in 'await' expression
+read_exit=1
+=== data dir ===
+total 12
+drwxr-xr-x 2 root root 4096 Oct 22 06:37 .
+drwxr-xr-x 1 root root 4096 Oct 22 06:31 ..
+-rw-r--r-- 1 root root 1405 Oct 22 06:37 falkordblite.db
+8.0K	/data
+
+=====================================================================
+说明（本轮记录的是"第一条路"，它失败了 —— 如实保留）
+=====================================================================
+做法：`FalkorDriver(falkor_db=<falkordblite 同步实例>)`，指望直接复用客户端。
+结果：`TypeError: object QueryResult can't be used in 'await' expression`
+原因：graphiti 的 FalkorDriver 走**异步**客户端（`falkordb.asyncio.FalkorDB`），
+      falkordblite 暴露的 `redis.falkordb_client.FalkorDB` 是**同步**的。
+⇒ 结论：**不能传实例，必须走 host/port**（见 phase0-t-e2b）。
+附：falkordblite 自身完全可用（0.41s 起服务、Cypher 写入 + 读回 `[['云舟','建筑师']]`、list_graphs=['spike']）；
+    安装 `pip check` 干净（graphiti-core 0.31.2 / falkordblite 0.11.0 / redis 8.1.0 / falkordb client 1.8.0）。
