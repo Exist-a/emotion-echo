@@ -1,0 +1,14 @@
+[verify] markers=[['persist-check']]
+[files] ['falkordblite.db', 'falkordblite.db.settings']
+[file] /data/falkordblite.db size=862
+[file] /data/falkordblite.db.settings size=139
+
+=====================================================================
+结论（跨容器持久化 —— 这是 T-c 对 falkordblite 的等价验证）
+=====================================================================
+- 容器 A：写 1 条 Marker → 容器退出（server 收到终止）→ `/data` 出现 `falkordblite.db`（862B）+ settings。
+- 容器 B（**全新容器**、同一命名卷）：`MATCH (m:Marker) RETURN m.name` → **`[['persist-check']]`** ✅
+⇒ **容器重建不丢**成立；备份对象 = 命名卷里的 `falkordblite.db`（RDB），可 tar 进 `deploy/backups/`，
+  与 PG 的 pg_dump 并列；但**图的权威源仍是 PG**（可重建）。
+⚠️ 客户端无 `shutdown()`（`AttributeError`），落盘依赖进程退出时 redis 收到 SIGTERM；
+   ⇒ llm-service 必须以"容器优雅停止"方式退出（compose stop / SIGTERM），`kill -9` 有丢最后一个窗口的风险。

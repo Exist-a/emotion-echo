@@ -1,0 +1,36 @@
+=== 双进程并发：A 持有 10s，B 第 3s 连同一端口 ===
+[boot] connect up in 0.01s
+[cypher] rows=[]
+[proc] pid=13 name=redis-server rss=25.7MB cmd=/usr/local/lib/python3.12/site-packages/redislite/bin/redis-server *:8002                                               
+[proc] count=1 total_rss=25.7MB
+[file] /data/falkordblite.db.settings size=139
+[settings] {"pidfile": "/tmp/tmpbcup76l5/redis.pid", "unixsocket": "/tmp/tmpbcup76l5/redis.socket", "dbdir": "/data", "dbfilename": "falkordblite.db"}
+[find] /work/falkordblite_probe.py
+/work/falkordblite_probe2.py
+/work/falkordblite_probe3.py
+/data/falkordblite.db.settings
+[done] connect
+b_exit=0
+=== A 日志 ===
+[boot] hold up in 0.23s
+[cypher] rows=[]
+[proc] pid=13 name=redis-server rss=25.5MB cmd=/usr/local/lib/python3.12/site-packages/redislite/bin/redis-server *:8002                                               
+[proc] count=1 total_rss=25.5MB
+[file] /data/falkordblite.db.settings size=139
+[settings] {"pidfile": "/tmp/tmpbcup76l5/redis.pid", "unixsocket": "/tmp/tmpbcup76l5/redis.socket", "dbdir": "/data", "dbfilename": "falkordblite.db"}
+[find] /work/falkordblite_probe.py
+/work/falkordblite_probe2.py
+/work/falkordblite_probe3.py
+/data/falkordblite.db.settings
+[hold] holding 10s
+[done] hold
+
+=====================================================================
+结论（并发形态 / 进程与内存 / 文件落点）
+=====================================================================
+- **并发**：A 进程起服务并持有，B 进程第 3s 接入 → **0.01s 连上，无锁冲突**；
+  两者看到的是**同一个 redis-server（pid 13）** ⇒ 与 Kuzu 的"单写者 fail fast"不同，**多进程可共享**。
+- **内存**：redis-server **25.5~25.7MB**；Python 侧峰值 120MB ⇒ 合计 **≈145MB**（llm-service 限额 1024M，余量充足）。
+- **文件**：运行时 `/data` 只有 `falkordblite.db.settings`（139B，含 pidfile/unixsocket/dbdir/dbfilename）；
+  RDB 文件 `falkordblite.db` **在服务退出时才写**（见 e2d）。settings 里的 socket 在 `/tmp`（容器内临时），重启会重建。
+⚠️ 未测：并发写压力下的吞吐 / 冲突；崩溃（kill -9）未落盘的窗口。

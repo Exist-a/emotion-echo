@@ -1,16 +1,18 @@
-# ADR-2026-10: 跨会话记忆 = 时序知识图谱（Graphiti + 嵌入式 Kuzu / 硅基流动嵌入），Postgres 为系统记录
+# ADR-2026-10: 跨会话记忆 = 时序知识图谱（Graphiti + 嵌入式 FalkorDB / 硅基流动嵌入），Postgres 为系统记录
 
 ## Status
 
-🟡 **Proposed（形态由用户 2026-10-18 拍板；**Phase 0 四项实测已于 2026-10-22 回填**，但 T-b 抓出「Kuzu backend 已被 graphiti 标记 deprecated」⇒ 选型前提需重新裁决，见 §Phase 0 实测回填 T-e）**
+🟢 **Accepted（2026-10-22）** —— 形态由用户 2026-10-18 拍板；Phase 0 四项实测已回填；
+T-e（Kuzu 上游停更）由用户 2026-10-22 裁决为 **② `graphiti-core[falkordblite]`（嵌入式 FalkorDB）**。
+**实施未开始**（Phase 1 起）。
 
 - 范围 = **形态与选型**（本文）。**实施未开始**：CL-08 的执行计划见
   [`docs/closure-roadmap/stages/cl-08-memory/plan.md`](../../closure-roadmap/stages/cl-08-memory/plan.md)。
 - 用户 2026-10-18 口径：「**我个人是想引入的**」「**硅基流动有向量化模型服务吗？有就直接复用**」
   「**先落文档**」⇒ 本轮只落文档、不动代码。
-- **2026-10-22 Phase 0 spike 已完成**：四项实测均有一条命令 + 输出（证据见
-  `stages/cl-08-memory/evidence/phase0-t-{a,b,b2,c,d}-*.txt`）。**技术可行性成立**（装得上、单测 215 全绿、driver 可读写），
-  但**T-e 新证据**（Kuzu 上游停止维护、graphiti 宣布将移除该 backend）使「继续用 Kuzu」变成需要用户重新拍板的选型问题。
+- **2026-10-22 Phase 0 spike 已完成**：T-a~T-d 均有一条命令 + 输出（`stages/cl-08-memory/evidence/phase0-*`）；
+  T-e 发现 Kuzu backend 被 graphiti 标 deprecated，用户当日裁决改用 **falkordblite**，
+  追加实测（`phase0-t-e2*`）证明：装得上、graphiti 驱动可用、多进程共享、跨容器持久化。
 - 相关决策：`CL-D-35`（记忆形态）/ `CL-D-36`（embedding 供给）/ `CL-D-37`（本轮只提前改规划）
   见 [`docs/closure-roadmap/decisions.md`](../../closure-roadmap/decisions.md)。
 - **技术实现细节已定（2026-10-18，用户经 AskUserQuestion 逐条拍板 4 项 + 执行侧 7 项口径）**：
@@ -59,12 +61,14 @@
 
 **跨会话记忆 = 时序知识图谱**：实体 / 关系 / 事实 + **双时间轴**（`t_valid`/`t_invalid` = 事实何时为真；`t'_created`/`t'_expired` = 我们何时知道），检索 = 语义向量 + 全文 + 图遍历三层，注入 = system 段。
 
-1. **图后端 = Kuzu 嵌入式**（`graphiti_core/driver/kuzu_driver.py` 实存）。
-   Kuzu 是 MIT 许可的**嵌入式属性图库**（自述 *"Embedded property graph database built for speed. Vector search and full-text search built in. Implements Cypher."*），
-   随 Python 进程加载、数据落本地目录 ⇒ **新增容器数 = 0**，满足 §4 约束①。
-   Graphiti 支持的后端实测清单（仓库目录实读）：`neo4j` / `falkordb` / **`kuzu`** / `neptune`。
-   ⚠️ **2026-10-22 Phase 0 新证据（T-e）**：graphiti-core 0.31.2 已把 Kuzu 标为 **deprecated**（上游停更），
-   ⇒ 本条**不再是最终结论**，待 T-e 四选一裁决后修订。
+1. **图后端 = 嵌入式 FalkorDB（`graphiti-core[falkordblite]`）**
+   （**2026-10-22 用户裁决 T-e=②**；原选 Kuzu，因 graphiti 已标 deprecated 而换）。
+   `falkordblite` 是 pip 包自带 `redis-server` + FalkorDB 模块的**嵌入式图库**：
+   数据落本地文件、**新增容器数仍 = 0**，满足 §4 约束①；Graphiti 的 `FalkorDriver` 官方支持（实读 + 实测）。
+   实测：装得上（`pip check` 干净）、起服务 0.1~0.4s、graphiti 驱动可建索引/读写、**多进程共享同一 server**（无单写者锁）、
+   **跨容器重启数据不丢**；内存 ≈ **26MB（redis-server）+ 120MB（Python 侧含驱动）= ~145MB**。
+   ⚠️ 仍是 **Beta（0.11.0）**，且客户端无 `shutdown()` ⇒ 生命周期管理由 llm-service 自己负责（见 §技术细节 14）。
+   Graphiti 支持的后端（仓库目录实读）：`neo4j` / **`falkordb`** / `kuzu`（deprecated）/ `neptune`。
 2. **embedding = 硅基流动 `POST https://api.siliconflow.cn/v1/embeddings`，模型 `BAAI/bge-m3`（1024 维）**。
    与现有 TTS **同账户同域名**（`deploy/env/.env.local.example:39` 已有 `TTS_API_BASE_URL=https://api.siliconflow.cn/v1`）
    ⇒ **不新增 key、不新增容器**（满足约束①）。
@@ -86,14 +90,14 @@
 
 | # | 项 | 决议 | 来源 |
 |---|---|---|---|
-| 7 | **进程拓扑** | **ai-svc（Go）消费**（新增**独立 consumer group**，复用既有重试/DLQ/热重载）→ 调 **llm-service 新增的 gRPC `MemoryService`** 写图；**Graphiti + Kuzu 都在 llm-service 进程内**。不新增容器。备选"llm-service 自己消费 Kafka"被否：Kafka 侧的重试/DLQ/幂等要在 Python 侧重造一遍，与 CL-03 的成果脱钩 | **用户拍板** |
+| 7 | **进程拓扑** | **ai-svc（Go）消费**（新增**独立 consumer group**，复用既有重试/DLQ/热重载）→ 调 **llm-service 新增的 gRPC `MemoryService`** 写图；**Graphiti + 嵌入式 FalkorDB（falkordblite）都在 llm-service 进程内**（redis-server 由 falkordblite 拉起为子进程）。不新增容器。备选"llm-service 自己消费 Kafka"被否：Kafka 侧的重试/DLQ/幂等要在 Python 侧重造一遍，与 CL-03 的成果脱钩 | **用户拍板**（T-e 后后端改为 falkordblite） |
 | 8 | **PG 与图** | **PG 为系统记录 + 图可重建**（沿用第 3 条）⇒ 抽取后**双写**，并需要一个**从 PG 重建图的工具**（图丢/换后端时可重建）。备选"只写图"被否：合规与删除全靠图自身，且图丢了就真丢了 | **用户拍板** |
 | 9 | **跨进程契约** | **新增 `proto/memory.proto`**（`MemoryService`：写 episode / 检索 / 管理页的列表与删除），不放 `emotion_llm.proto`（记忆不是"LLM 调用"语义）。⇒ 须同步 `scripts/rpc_status.tsv` 终态 + **调用方证据**（`check_rpc_status.sh` 会拦） | **用户拍板** |
 | 10 | **顺序与幂等** | **不改 topic 分区键** —— 已核实 `kafka_publisher.go:88-92` 的 `partitionKey` = `ConversationID` + `HashPartitioner` ⇒ **同会话事件天然落同一分区、天然有序**（时效判定最需要的正是同会话先后）。跨会话用事件里的 `send_time` 兜底；幂等键 = `message_id` | 执行侧（依据实读） |
 | 11 | **可注入点（决定能不能 TDD）** | `graphiti_core/llm_client/client.py` 与 `embedder/client.py` 均为可继承接口 ⇒ **单测注入确定性假实现、不打真 LLM**（符合"测试不依赖网络"）；embedder 用 `openai.py` 指到硅基流动 `base_url`；其内建 `cache.py`/`token_tracker.py` 供成本与缓存指标（喂 T-18） | 执行侧（依据实读） |
 | 12 | **注入段位置与预算** | 段序 `base → agent → personality → **memory** → emotion → guard`（事实靠前、风格约束靠后；**guard 恒末位**不变）；**记忆为空则不产生该段** ⇒ 既有逐字 golden 不动。记忆段独立预算 **≤600**（现用的是**估算** token 而非真分词器，与 history 的 2000 分开记账） | 执行侧建议（**若不同意可在进入阶段时推翻**） |
 | 13 | **抽取用哪个模型** | 沿用现有 `LLM_*`（OpenAI 兼容端点，Graphiti 的 `openai_generic_client` 正好适配）；**成本上限等 Phase 0 拿到"一条消息几次调用/多少 token"的实测数再定**（不预设无依据的数字） | 执行侧建议 |
-| 14 | **Kuzu 并发形态** | **已实测（2026-10-22）**：嵌入式库**严格单写者** —— 第二个写进程（跨容器 / 同容器多进程）均 `RuntimeError: Could not set lock on file`，**fail fast**；只读可并发但无隔离保证。⇒ **llm-service 单 worker 持有 + 内部串行**（不分片）；多 worker 会在启动期直接失败 | **已实测**（`phase0-t-d-*.txt`） |
+| 14 | **图库并发形态** | **已实测（2026-10-22，falkordblite）**：**多进程共享同一个 redis-server**（第二个进程 0.01s 接入，无单写者锁）⇒ 不再要求"单 worker"；但 llm-service 仍需**自己管理 server 生命周期**（falkordblite 客户端无 `shutdown()`；进程退出时 redis 收到 SIGTERM 落 RDB）。端口固定（如 8002）并在同容器内共享；跨容器重建不丢（实测） | **已实测**（`phase0-t-e2c*` / `phase0-t-e2d*`） |
 
 
 ### 被否备选（记录理由，防"下次再来一遍"）
@@ -117,18 +121,24 @@
 | T-b | `graphiti-core` + `kuzu` 与 llm-service 依赖是否冲突、镜像涨多少 | ✅ **装得上、不冲突**：graphiti-core 0.31.2 + kuzu 0.11.3 + 真实 requirements ⇒ `pip check` 无冲突；**llm-service 单测 215 passed**（openai 被解析到 3.36.0，无回归）；site-packages **+161 MB**（对照现镜像 394 MiB）；`kuzu` 是 extra（须写 `graphiti-core[kuzu]`）。🔴 **但见 T-e** | `phase0-t-b-deps-*.txt` / `phase0-t-b2-compat-*.txt` |
 | T-c | Kuzu 数据文件持久化与备份；与 `deploy/backups/` 的关系 | ✅ **命名卷跨容器删除/重建不丢**（新容器读回 3 行）；**单文件** `graph.kuzu`（1.1MB/3 节点）；bind mount 在 Windows/Docker Desktop 下亦可用。备份可直接 tar 进 `deploy/backups/`，但**图仍以 PG 为权威源** | `phase0-t-c-kuzu-persistence-*.txt` |
 | T-d | Kuzu 并发形态 + 从 PG 重建的实际耗时 | ✅ **严格单写者**：第二个写进程（跨容器 / 同容器多进程）均 `RuntimeError: Could not set lock on file`（fail fast）；只读可并发但不保证隔离（读到未提交行）⇒ **T11「单 worker + 内部串行」成立，不需分片**。重建：逐条 **5.03ms/行**（线性），**COPY 20k 行 0.31s ≈ 65k 行/s** ⇒ **重建工具必须走 COPY** | `phase0-t-d-kuzu-concurrency-timing-*.txt` |
-| **T-e** | **Kuzu backend 的维护状态**（本轮新发现） | 🔴 **graphiti-core 0.31.2 在 `KuzuDriver.__init__` 内显式 `DeprecationWarning`**：「The Kuzu backend is deprecated and will be removed in a future release — the upstream Kuzu project is no longer maintained. Migrate to Neo4j or FalkorDB.」⇒ 继续用 Kuzu = **锁死 graphiti-core ≤0.31.x**；不锁 = 未来升级直接不可用。**技术可用 ≠ 选型可持续**，需用户裁决（见下） | `phase0-t-b2-compat-*.txt` |
+| **T-e** | **Kuzu backend 的维护状态**（本轮新发现） | ✅ **已裁决（2026-10-22 用户）= 选项② falkordblite**。原因：graphiti 0.31.2 在 `KuzuDriver.__init__` 显式 `DeprecationWarning`（上游停更、backend 将移除）。**追加实测（falkordblite）**：`pip check` 干净；起服务 0.1~0.4s；`FalkorDriver(host,port)` 可建索引+读写；**多进程共享同一 server**；**跨容器重建数据仍在**（容器 A 写 → 容器 B 读回）；内存 ≈ 145MB（redis 26MB + Python 120MB） | `phase0-t-b2-compat-*.txt` / `phase0-t-e2*` |
 
-### T-e 裁决选项（未裁前不进 Phase 4）
+### T-e 裁决结果（2026-10-22）
 
-| 选项 | 代价 | 备注 |
-|---|---|---|
-| ① **继续 Kuzu，锁 graphiti-core==0.31.2** | 0 容器、0 迁移；但吃下"永不升级"与"上游停更"的风险 | 最短路径；适合"先跑通、后换后端" |
-| ② **`graphiti-core[falkordblite]`（嵌入式 FalkorDB）** | 仍 0 容器（pip 自带 redis-server 子进程）；但 **Beta（0.11.0，2026-10-19）**、内存足迹未测 | 需再跑一次 spike（30~60min）：装得上？driver 可用？内存多少？ |
-| ③ **FalkorDB / Neo4j 容器** | 新增容器 ⇒ 撞**内存红线**（决策 39 有击穿前科），需重估 `.wslconfig` 与 19 容器预算 | Neo4j 是官方推荐路径，最稳但最重 |
-| ④ **放弃 graphiti，自研 PG 图存储** | 0 新依赖；但要自己做实体消解 / 双时间轴 / 三层召回，工作量最大 | 也失去 graphiti 的演进红利 |
+| 选项 | 结论 |
+|---|---|
+| ① 继续 Kuzu，锁 graphiti-core==0.31.2 | ❌ 未选（上游停更，锁死不可升级） |
+| **② `graphiti-core[falkordblite]`（嵌入式 FalkorDB）** | ✅ **已选**：仍 0 容器；实测可用；代价 = Beta 0.11.0 + 生命周期自管 |
+| ③ FalkorDB / Neo4j 容器 | ❌ 未选（新增容器撞内存红线） |
+| ④ 放弃 graphiti，自研 PG 图存储 | ❌ 未选（工作量最大） |
 
-> ⚠️ **本 ADR 的 Accepted 转换条件**（更新）：四项实测已回填 ✅；**新增条件 = T-e 已裁决**（①②③④ 之一）。
+⚠️ **falkordblite 的已知边界（Phase 4 要处理）**：
+- **Beta（0.11.0）**，API 面薄：客户端无 `shutdown()`，进程退出依赖 redis 收到 SIGTERM 落盘；
+- 需固定 TCP 端口（同容器内 `127.0.0.1:8002`），**不能**把同步客户端实例直接传给 `FalkorDriver`
+  （实测 `TypeError: QueryResult can't be used in 'await' expression`，必须走 host/port）；
+- 未验：真实 `add_episode` 全链路（要真 LLM + embedder，属 Phase 4）、崩溃恢复（kill -9 未落盘窗口）、写入吞吐。
+
+> **Accepted 条件（已满足）**：四项实测 + T-e 已裁决（2026-10-22）。
 
 ## Consequences
 

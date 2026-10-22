@@ -1,0 +1,55 @@
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+No broken requirements found.
+=== v2 write (fixed TCP port) ===
+[ver] graphiti-core==0.31.2
+[ver] falkordblite==0.11.0
+[ver] redis==8.1.0
+[ver] falkordb==1.8.0
+[api] LiteFalkorDB.__init__(self, dbfilename=None, serverconfig=None, **kwargs)
+[boot] LiteFalkorDB up in 0.11s
+[boot] cannot read connection kwargs: 'FalkorDB' object has no attribute 'connection_pool'
+[cypher] rows=[['云舟', '建筑师']] (port=8002)
+[mem] self pid=54 rss=34.4MB
+[mem] TOTAL rss=34.4MB
+[graphiti] driver module uses client class: <class 'falkordb.asyncio.falkordb.FalkorDB'>
+[graphiti] MATCH count = [{'c': 1}]
+[graphiti] Entity count after write = [{'c': 1}]
+[graphiti] OK
+[mem] self pid=54 rss=120.3MB
+[mem] TOTAL rss=120.3MB
+[done] mode=write
+write_exit=0
+=== v2 read (new process == persistence) ===
+[ver] graphiti-core==0.31.2
+[ver] falkordblite==0.11.0
+[ver] redis==8.1.0
+[ver] falkordb==1.8.0
+[api] LiteFalkorDB.__init__(self, dbfilename=None, serverconfig=None, **kwargs)
+[boot] LiteFalkorDB up in 0.01s
+[boot] cannot read connection kwargs: 'FalkorDB' object has no attribute 'connection_pool'
+[cypher] rows=[['云舟', '建筑师']] (port=8002)
+[mem] self pid=95 rss=34.4MB
+[mem] TOTAL rss=34.4MB
+[graphiti] driver module uses client class: <class 'falkordb.asyncio.falkordb.FalkorDB'>
+[graphiti] MATCH count = [{'c': 2}]
+[graphiti] OK
+[mem] self pid=95 rss=119.3MB
+[mem] TOTAL rss=119.3MB
+[done] mode=read
+read_exit=0
+total 12
+drwxr-xr-x 2 root root 4096 Oct 22 06:40 .
+drwxr-xr-x 1 root root 4096 Oct 22 06:37 ..
+-rw------- 1 root root  139 Oct 22 06:40 falkordblite.db.settings
+8.0K	/data
+
+=====================================================================
+结论（T-e 选项② · 主路径）
+=====================================================================
+- 安装：`pip check` → **No broken requirements found**
+  （graphiti-core 0.31.2 / falkordblite 0.11.0 / redis 8.1.0 / falkordb(client) 1.8.0）
+- 起服务：`LiteFalkorDB(path, serverconfig={'port':'8002'})` **0.11s**（二次 0.01s）
+- graphiti：`FalkorDriver(host='127.0.0.1', port=8002, database='spike')` → `build_indices_and_constraints()` ok
+  → 写 Entity → `MATCH count = 1` ✅（驱动真的能用）
+- 内存：Python 进程 34.4MB（空闲）→ **120.3MB**（加载驱动 + 建索引后）
+- ⚠️ 本轮的 read 与 write 在**同一容器**（server 一直活着）⇒ 只证明"多进程共享"，**不证明跨容器持久化**（见 e2d）
