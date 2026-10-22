@@ -3,7 +3,7 @@
 // Stage 36-A3.2: ai-svc gRPC client 真实现（走 google.golang.org/grpc）。
 //
 // 设计：
-//   - NewAIgRPCClient(aiSvcAddr) 构造并 dial ai-svc gRPC server
+//   - NewAIgRPCClient(aiSvcAddr, internalAPIKey) 构造并 dial ai-svc gRPC server
 //   - UpsertNeutralEmotion 调 EmotionQueryService.UpsertNeutralEmotion
 //   - dial 失败不 panic（NewAIgRPCClient 返回 error，main.go 决定降级为 NoopAIClient 还是 hard fail）
 //   - 不带 client-side user-id metadata（chat-svc 是 producer 不是 consumer；ai-svc 那边的
