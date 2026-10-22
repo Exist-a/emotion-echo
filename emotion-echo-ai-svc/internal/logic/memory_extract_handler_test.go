@@ -320,3 +320,18 @@ func TestMemoryExtractHandler_FinishDoneFailure_LeavesRetryableState(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, model.MemoryExtractStatusDone, run.Status)
 }
+
+// 2026-10-21 收口轮实测：chat-svc 发的事件 createdAt 是**毫秒**
+// （`sendmessagelogic.go:116` / `proto_marshal.go:31` 均为 `UnixMilli()`），
+// 而 ai-svc 的 occurredAt 按**秒**解析 ⇒ 事实 valid_from 落到 58773 年，
+// 双时间轴排序全错、摘要里直接写出「58773-03 用户是一名木工」喂给模型。
+func TestOccurredAt_AcceptsMillisecondsFromEvent(t *testing.T) {
+	t.Parallel()
+	want := time.Date(2026, 10, 21, 6, 30, 0, 0, time.UTC)
+
+	gotMs := occurredAt(want.UnixMilli())
+	assert.True(t, gotMs.Equal(want), "毫秒时间戳必须被正确解析，实得 %s（want %s）", gotMs, want)
+
+	gotS := occurredAt(want.Unix())
+	assert.True(t, gotS.Equal(want), "秒级时间戳仍需兼容，实得 %s", gotS)
+}

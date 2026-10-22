@@ -1,0 +1,38 @@
+CL-08a 收口轮 · T-5 / T-17 运行时证据（真栈，ai-svc/web-bff/web 跑 :cl08ares）
+采集时间：2026-10-21 07:02:12 +0800
+
+### phase=base @ 2026-10-21 07:02:14
+[OK  ] T-5.0 [基线] LLM 正常时抽取进终态: msg_id=1029 run=done|2| waited=5.4s
+[info] uid_a(echo)=1 uid_b(smoke_user)=2
+[OK  ] T-17.1 A 抽取完成: run=done|2| waited=0.7s
+[OK  ] T-17.2 B 抽取完成: run=done|0| waited=3.1s
+[info] A active 事实 = 独自去西藏 / 男 / 橘猫团子 / 跑步 / 学着接受自己慢一点 / 有对象（伴侣） / 多模态情绪识别 / 杭州 / 青禾 / 木工
+[info] B active 事实 = 白露 / 兽医
+[OK  ] T-17.3 A 只含自己的事实: A=独自去西藏 / 男 / 橘猫团子 / 跑步 / 学着接受自己慢一点 / 有对象（伴侣） / 多模态情绪识别 / 杭州 / 青禾 / 木工
+[OK  ] T-17.4 B 只含自己的事实: B=白露 / 兽医
+[info] A 摘要(前 120 字) = - 2026-10 用户是一名木工
+- 2026-10 用户的名字是青禾
+- 2026-10 用户正在准备毕业设计，题目是多模态情绪识别
+- 2026-10 用户住在杭州
+- 2026-10 用户有一个对象（伴侣）
+- 2026-10 用户
+[info] B 摘要(前 120 字) = - 2026-10 用户是一名兽医
+- 2026-10 用户的名字是白露
+[OK  ] T-17.5 注入源（Redis 摘要）按用户隔离: len(A)=248 len(B)=36
+=== base: PASS=6 FAIL=0 ===
+
+### 阶段 B：ai-svc 的 LLM_BASE_URL 指向不可达（http://127.0.0.1:1/v1）
+### phase=down @ 2026-10-21 07:03:02
+[OK  ] T-5.1 LLM 不可达时发消息仍成功: msg_id=1032
+[OK  ] T-5.2 消息已落库（主链路未被抽取失败阻塞）: rows=1
+[OK  ] T-5.3 失败后 run 落 failed（不是 pending）: run=failed|0|memory: call llm: Post "http://127.0.0.1:1/v1/chat/completions": dial waited=0.4s
+=== down: PASS=3 FAIL=0 ===
+
+### 阶段 C：恢复 LLM_BASE_URL 后
+### phase=up @ 2026-10-21 07:03:59
+[OK  ] T-5.4 LLM 恢复后新消息正常抽取: msg_id=1033 run=done|2| waited=2.9s
+[OK  ] T-5.5 对应事实已落库: active rows=1
+=== up: PASS=2 FAIL=0 ===
+
+### 判读：阶段 B 那条（LLM 不可达期间）的终态 —— 无 sweeper ⇒ 仍是 failed（CL-F-62）
+msg 1032 -> failed
