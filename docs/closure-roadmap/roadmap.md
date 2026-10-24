@@ -132,6 +132,14 @@ related:
 > 账本：`CL-F-57`（embedding）/`CL-F-58`（持久化）/`CL-F-71`（Kuzu deprecated）均已销账。
 > ⚠️ 本注只追加，未改他人已写的行（H3 append-only）。
 
+> **CL-08c Phase 1 开工（2026-10-24，Lane-CL-08c 续）**：主线进入 **Phase 1 = PG 数据模型**。
+> **范围校正（实读 `i011_create_memory_facts.sql` 后）**：plan.md §3 Phase 1 所列四表中的
+> `memory_fact` / `memory_extract_run`（以及额外的 `memory_note`）**已由 CL-08a 以 i011 落地**
+> ⇒ 本轮只补 **`memory_episode`（情节：对来源的引用 + 可重建原料）** 与 **`memory_entity`（实体注册表：图节点镜像）**
+> 两表（i012），不重复建表；测试点 T-2/T-3 的事实表部分沿用 CL-08a 既有证据，本轮只对新增两表取证。
+> 落地载体 = 阶段 PR [#273](https://github.com/Exist-a/emotion-echo/pull/273)（draft）；登记见 `parallel-contract.md §三`。
+> ⚠️ 本注只追加，未改他人已写的行（H3 append-only）。
+
 ---
 
 > **CL-11 / CL-12 由来（2026-10-17 用户裁定）**：本阶段账本清销完成后做了一次"**孤儿计划**"清点 ——
