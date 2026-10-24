@@ -16,9 +16,11 @@ package logic
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
+	"emotion-echo-ai-svc/internal/memory"
 	"emotion-echo-ai-svc/internal/model"
 	"emotion-echo-ai-svc/internal/repository"
 
@@ -222,4 +224,79 @@ func TestMemoryExtractHandler_EmptyContentSkipsEpisode(t *testing.T) {
 	active, err := repo.ListActiveByUser(context.Background(), 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 1, "facts 照常落库")
+}
+
+// ---------------------------------------------------------------------------
+// CL-08c · Phase 4：图写入端接线 —— 抽取成功后异步投递到 llm-service 图摄取，
+// 失败只记日志（PG 是系统记录，图可重建；R9）。
+// ---------------------------------------------------------------------------
+
+// fakeEpisodeGraphWriter 记录投递（memory 包接口的确定性替身）。
+type fakeEpisodeGraphWriter struct {
+	calls []memory.Episode
+	err   error
+	mu    sync.Mutex
+}
+
+func (f *fakeEpisodeGraphWriter) UpsertEpisode(ctx context.Context, ep memory.Episode) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, ep)
+	return f.err
+}
+
+func (f *fakeEpisodeGraphWriter) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
+func (f *fakeEpisodeGraphWriter) first() memory.Episode {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls[0]
+}
+
+func TestMemoryExtractHandler_EpisodeForwardedToGraphWriter(t *testing.T) {
+	repo := repository.NewInMemoryMemoryFactRepo()
+	graph := repository.NewInMemoryMemoryGraphRepo()
+	gw := &fakeEpisodeGraphWriter{}
+	ex := &fakeExtractor{facts: []model.MemoryFact{factOf("职业", "后端工程师")}}
+	h := NewMemoryExtractHandler(repo, ex, WithGraphRepo(graph), WithGraphWriter(gw))
+
+	require.NoError(t, h.Handle(context.Background(), msgEvent(600, 7, 1, "user", "我是后端工程师")))
+
+	// 异步投递：轮询至多 2s
+	deadline := time.Now().Add(2 * time.Second)
+	for gw.count() == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	require.Equal(t, 1, gw.count(), "抽取成功后必须投递一条 episode 给图写入端")
+	ep := gw.first()
+	assert.Equal(t, int64(1), ep.UserID)
+	assert.Equal(t, "我是后端工程师", ep.Content)
+	assert.Equal(t, model.MemorySourceKindMessage, ep.SourceKind)
+	assert.EqualValues(t, 600, ep.SourceID)
+	assert.EqualValues(t, 1790000000000, ep.ValidAtUnixMs, "valid_at 毫秒（事件时间轴）")
+}
+
+// 图写失败绝不影响抽取结果（Handle 必须仍为 nil、facts 照常落库）。
+func TestMemoryExtractHandler_GraphWriterFailureDoesNotFailExtraction(t *testing.T) {
+	repo := repository.NewInMemoryMemoryFactRepo()
+	gw := &fakeEpisodeGraphWriter{err: errors.New("llm-service graph down")}
+	ex := &fakeExtractor{facts: []model.MemoryFact{factOf("职业", "后端工程师")}}
+	h := NewMemoryExtractHandler(repo, ex, WithGraphWriter(gw))
+
+	require.NoError(t, h.Handle(context.Background(), msgEvent(601, 7, 1, "user", "内容")))
+	active, err := repo.ListActiveByUser(context.Background(), 1, 0)
+	require.NoError(t, err)
+	require.Len(t, active, 1, "图写失败不影响事实落库（best-effort）")
+}
+
+// nil（未装配）零回归。
+func TestMemoryExtractHandler_NilGraphWriter_NoPanic(t *testing.T) {
+	repo := repository.NewInMemoryMemoryFactRepo()
+	ex := &fakeExtractor{facts: []model.MemoryFact{factOf("职业", "后端工程师")}}
+	h := NewMemoryExtractHandler(repo, ex, WithGraphWriter(nil))
+	require.NoError(t, h.Handle(context.Background(), msgEvent(602, 7, 1, "user", "内容")))
 }

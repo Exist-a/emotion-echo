@@ -404,6 +404,32 @@ def serve(port: int = 50051):
     emotion_llm_pb2_grpc.add_EmotionLLMServiceServicer_to_server(
         EmotionLLMServiceServicer(), server
     )
+
+    # CL-08c Phase 4：图记忆写入面（MemoryGraphService）。依赖/配置不齐 ⇒ 降级
+    # 注册（调用返回 ok=false），进程不崩 —— 记忆是增强不是依赖。
+    try:
+        from memory_graph import AsyncBridge, build_memory_graph_from_env
+        from memory_graph_servicer import _make_memory_graph_servicer
+        import memory_graph_pb2_grpc
+
+        graph = build_memory_graph_from_env()
+        if graph is not None:
+            bridge = AsyncBridge()
+            bridge.start()
+            memory_graph_pb2_grpc.add_MemoryGraphServiceServicer_to_server(
+                _make_memory_graph_servicer(graph, bridge), server
+            )
+            logger.info("[grpc-server] MemoryGraphService registered (graph ready)")
+        else:
+            memory_graph_pb2_grpc.add_MemoryGraphServiceServicer_to_server(
+                _make_memory_graph_servicer(None, None), server
+            )
+            logger.warning(
+                "[grpc-server] MemoryGraphService registered in DEGRADED mode (graph unavailable)"
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[grpc-server] MemoryGraphService wiring failed: %s", exc)
+
     # 注册 health service（注意：必须用 add_HealthServicer_to_server）
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer_impl, server)
 

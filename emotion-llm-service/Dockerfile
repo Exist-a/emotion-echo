@@ -35,6 +35,11 @@ RUN pip install --no-cache-dir --default-timeout=120 --retries 5 --prefix=/insta
 # 复制 proto 生成代码（grpc_server.py 强依赖）
 COPY emotion-llm-service/emotion_llm_pb2.py      ./emotion_llm_pb2.py
 COPY emotion-llm-service/emotion_llm_pb2_grpc.py ./emotion_llm_pb2_grpc.py
+# CL-08c Phase 4：图记忆（MemoryGraphService：Graphiti + 嵌入式 FalkorDB）
+COPY emotion-llm-service/memory_graph.py          ./memory_graph.py
+COPY emotion-llm-service/memory_graph_servicer.py ./memory_graph_servicer.py
+COPY emotion-llm-service/memory_graph_pb2.py      ./memory_graph_pb2.py
+COPY emotion-llm-service/memory_graph_pb2_grpc.py ./memory_graph_pb2_grpc.py
 
 # 复制业务代码（含 logging_setup + metrics_setup）
 COPY emotion-llm-service/main.py           ./main.py
@@ -95,6 +100,11 @@ COPY --from=builder /build/metrics_setup.py        ./metrics_setup.py
 COPY --from=builder /build/nacos_client.py         ./nacos_client.py
 COPY --from=builder /build/emotion_llm_pb2.py      ./emotion_llm_pb2.py
 COPY --from=builder /build/emotion_llm_pb2_grpc.py ./emotion_llm_pb2_grpc.py
+# CL-08c Phase 4：图记忆
+COPY --from=builder /build/memory_graph.py          ./memory_graph.py
+COPY --from=builder /build/memory_graph_servicer.py ./memory_graph_servicer.py
+COPY --from=builder /build/memory_graph_pb2.py      ./memory_graph_pb2.py
+COPY --from=builder /build/memory_graph_pb2_grpc.py ./memory_graph_pb2_grpc.py
 # 复制 entrypoint
 COPY --from=builder /build/entrypoint.sh           ./entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

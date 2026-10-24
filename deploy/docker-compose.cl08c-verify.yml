@@ -6,6 +6,9 @@
 # 与 docker-compose.cl02/cl05/cl07-verify.yml 同款先例。
 # 原因：公共 tag 落后于 main（CL-F-60）——按公共 tag 起栈验不出新代码。
 services:
+  # CL-08c Phase 4：llm-service 也要本轨镜像（图记忆新增）
+  emotion-llm-service:
+    image: emotion-echo/llm-service:cl08c
   emotion-echo-ai-svc:
     image: emotion-echo/ai-svc:cl08c
   emotion-echo-web-bff:

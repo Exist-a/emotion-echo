@@ -11,3 +11,7 @@ openai>=1.40.0
 # Stage 89 PR-4: 附件文本抽取（file_context.py；均为纯 Python 包）
 pypdf>=4.0.0
 python-docx>=1.1.0
+# CL-08c Phase 4：图记忆（Graphiti 摄取管线 + 嵌入式 FalkorDB）。
+# ⚠️ extra 必须写全：`graphiti-core[falkordblite]`（少了 [falkordblite] 运行期才炸 —— Phase 0 spike）。
+# falkordblite 0.11.0 是 Beta；Python 模块名为 redislite（自带 redis-server + FalkorDB 模块）。
+graphiti-core[falkordblite]==0.31.2
