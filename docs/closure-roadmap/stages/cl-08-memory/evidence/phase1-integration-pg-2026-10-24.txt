@@ -1,0 +1,17 @@
+# CL-08c Phase 1 · PG 集成测试证据（2026-10-24）
+# 前置发现：Docker Desktop 29.x containerized engine 下 testcontainers-go v0.44 ryuk reaper 起不来
+#   ⇒ 需 TESTCONTAINERS_RYUK_DISABLED=true（已登账 CL-F-72）；fixture 自带显式 Terminate 清理
+# 命令: TESTCONTAINERS_RYUK_DISABLED=true go test -tags integration ./integration_test/ -run TestPostgresMemoryGraphRepo -count=1 -timeout 300s -v
+
+=== RUN   TestPostgresMemoryGraphRepo_UpsertEpisode_RoundTripAndIdempotent
+--- PASS: TestPostgresMemoryGraphRepo_UpsertEpisode_RoundTripAndIdempotent (3.03s)
+=== RUN   TestPostgresMemoryGraphRepo_CheckConstraints_RejectBadEnumValues
+--- PASS: TestPostgresMemoryGraphRepo_CheckConstraints_RejectBadEnumValues (2.83s)
+=== RUN   TestPostgresMemoryGraphRepo_UpsertEntity_UniqueAnchorAndRevive
+--- PASS: TestPostgresMemoryGraphRepo_UpsertEntity_UniqueAnchorAndRevive (2.66s)
+=== RUN   TestPostgresMemoryGraphRepo_UpsertEpisode_RejectsInvalidInput
+--- PASS: TestPostgresMemoryGraphRepo_UpsertEpisode_RejectsInvalidInput (2.67s)
+PASS
+ok  	emotion-echo-ai-svc/integration_test	17.088s
+
+EXIT=0

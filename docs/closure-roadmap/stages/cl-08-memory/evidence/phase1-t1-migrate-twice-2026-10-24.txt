@@ -1,0 +1,128 @@
+# CL-08c Phase 1 · T-1 运行时证据（2026-10-24）
+# 一次性 postgres:15-alpine 容器 t1-migrate-check-pg（dev 栈 postgres 已不在，不碰共享栈）
+# 前置: 01-create-schemas.sql + 02-create-tables-in-schemas.sql 已应用
+
+## 第 1 次 migrate.sh（期望全部 APPLY，含 i012）
+# 命令: PG_CONTAINER=t1-migrate-check-pg bash deploy/db/migrate.sh
+[migrate] 宿主机模式：迁移根=/d/源码/Emotion-Echo-cl08c，经 docker exec t1-migrate-check-pg 执行
+[migrate]   OK  emotion-echo-chat-svc/c001_create_outbox_events.sql（1000ms）
+[migrate]   OK  emotion-echo-chat-svc/c002_add_client_msg_id.sql（1000ms）
+[migrate]   OK  emotion-echo-chat-svc/c003_add_pinned_to_conversations.sql（2000ms）
+[migrate]   OK  emotion-echo-chat-svc/c004_add_intent_to_messages.sql（1000ms）
+[migrate]   ERR emotion-echo-chat-svc/c005_refresh_msg_summary_view.sql
+NOTICE:  view "msg_summary_v" does not exist, skipping
+ERROR:  role "analytics_reader" does not exist
+[migrate] FATAL: 迁移失败：emotion-echo-chat-svc/c005_refresh_msg_summary_view.sql（该文件可能非幂等，或依赖了尚未创建的对象）
+EXIT1=1
+
+## 已知既有现象（与本轮无关）: 全新库首跑会在 chat/c005 撞 analytics_reader 未建
+#   （该角色由 analytics/a004 在其后才建；真栈靠数据卷内已有角色。验证时预建角色绕过。）
+#   docker exec t1-migrate-check-pg psql -tAc "CREATE ROLE analytics_reader NOLOGIN"
+
+## 第 1 次 migrate.sh（预建角色后，期望全部 APPLY，含 i012）
+[migrate] 宿主机模式：迁移根=/d/源码/Emotion-Echo-cl08c，经 docker exec t1-migrate-check-pg 执行
+[migrate]   SKIP emotion-echo-chat-svc/c001_create_outbox_events.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c002_add_client_msg_id.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c003_add_pinned_to_conversations.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c004_add_intent_to_messages.sql（已应用，checksum 一致）
+[migrate]   OK  emotion-echo-chat-svc/c005_refresh_msg_summary_view.sql（1000ms）
+[migrate]   OK  emotion-echo-chat-svc/c006_add_file_name_to_messages.sql（1000ms）
+[migrate]   OK  emotion-echo-chat-svc/c007_widen_intent_to_32.sql（1000ms）
+[migrate]   OK  emotion-echo-chat-svc/c008_soft_delete_conversations.sql（1000ms）
+[migrate]   OK  emotion-echo-chat-svc/c009_soft_delete_messages.sql（2000ms）
+[migrate]   OK  emotion-echo-chat-svc/c010_add_trace_sw8_to_outbox.sql（3000ms）
+[migrate]   OK  emotion-echo-chat-svc/c012_add_agent_id_to_conversations.sql（2000ms）
+[migrate]   OK  emotion-echo-chat-svc/c013_add_agent_id_to_messages.sql（2000ms）
+[migrate]   OK  emotion-echo-ai-svc/i001_add_event_id_to_emotion_analysis.sql（2000ms）
+[migrate]   OK  emotion-echo-ai-svc/i002_create_face_emotion_results.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i003_create_voice_emotion_results.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i004_create_fused_emotions.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i005_create_daily_emotion_by_modality_v.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i006_upload_id_not_null_unique.sql（2000ms）
+[migrate]   OK  emotion-echo-ai-svc/i007_soft_delete_columns.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i008_voice_transcripts_soft_delete.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i008_voice_upload_id_not_null_unique.sql（2000ms）
+[migrate]   OK  emotion-echo-ai-svc/i009_emotion_analysis_event_id_complete_unique.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i010_create_daily_emotion_fused_v.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i011_create_memory_facts.sql（1000ms）
+[migrate]   OK  emotion-echo-ai-svc/i012_create_memory_episode_entity.sql（2000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a001_create_views.sql（1000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a002_create_user_behavior_events.sql（2000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a003_create_mv_daily_emotion.sql（2000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a004_create_analytics_reader_role.sql（1000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a005_create_assessment_jobs.sql（1000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a006_add_event_id_to_user_behavior_events.sql（1000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a007_assessment_v_user_id_index.sql（1000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a008_partition_user_behavior_events.sql（1000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a009_cursor_pagination_indexes.sql（1000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a010_fix_partition_id_sequence.sql（2000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a011_dlq_replay_runs.sql（2000ms）
+[migrate]   OK  emotion-echo-analytics-svc/a012_grant_daily_emotion_fused_v.sql（1000ms）
+[migrate]   OK  emotion-echo-user-svc/u001_drop_dead_fields.sql（1000ms）
+[migrate]   OK  emotion-echo-user-svc/u002_create_security_answers.sql（1000ms）
+[migrate]   OK  emotion-echo-user-svc/u003_add_user_config.sql（2000ms）
+[migrate]   OK  emotion-echo-user-svc/u004_create_user_agent_profile.sql（1000ms）
+[migrate]   OK  emotion-echo-user-svc/u005_unique_default_agent_profile.sql（1000ms）
+[migrate] 全部迁移应用完成，共 42 个文件（版本追踪已启用，幂等可重复执行）
+EXIT1=0
+
+## 第 2 次 migrate.sh（期望全部 SKIP，checksum 一致）
+[migrate] 宿主机模式：迁移根=/d/源码/Emotion-Echo-cl08c，经 docker exec t1-migrate-check-pg 执行
+[migrate]   SKIP emotion-echo-chat-svc/c001_create_outbox_events.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c002_add_client_msg_id.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c003_add_pinned_to_conversations.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c004_add_intent_to_messages.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c005_refresh_msg_summary_view.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c006_add_file_name_to_messages.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c007_widen_intent_to_32.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c008_soft_delete_conversations.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c009_soft_delete_messages.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c010_add_trace_sw8_to_outbox.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c012_add_agent_id_to_conversations.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-chat-svc/c013_add_agent_id_to_messages.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i001_add_event_id_to_emotion_analysis.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i002_create_face_emotion_results.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i003_create_voice_emotion_results.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i004_create_fused_emotions.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i005_create_daily_emotion_by_modality_v.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i006_upload_id_not_null_unique.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i007_soft_delete_columns.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i008_voice_transcripts_soft_delete.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i008_voice_upload_id_not_null_unique.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i009_emotion_analysis_event_id_complete_unique.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i010_create_daily_emotion_fused_v.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i011_create_memory_facts.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-ai-svc/i012_create_memory_episode_entity.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a001_create_views.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a002_create_user_behavior_events.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a003_create_mv_daily_emotion.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a004_create_analytics_reader_role.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a005_create_assessment_jobs.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a006_add_event_id_to_user_behavior_events.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a007_assessment_v_user_id_index.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a008_partition_user_behavior_events.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a009_cursor_pagination_indexes.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a010_fix_partition_id_sequence.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a011_dlq_replay_runs.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-analytics-svc/a012_grant_daily_emotion_fused_v.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-user-svc/u001_drop_dead_fields.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-user-svc/u002_create_security_answers.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-user-svc/u003_add_user_config.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-user-svc/u004_create_user_agent_profile.sql（已应用，checksum 一致）
+[migrate]   SKIP emotion-echo-user-svc/u005_unique_default_agent_profile.sql（已应用，checksum 一致）
+[migrate] 全部迁移应用完成，共 42 个文件（版本追踪已启用，幂等可重复执行）
+EXIT2=0
+
+## schema_migrations 里的 i012 记录（checksum 追踪）
+i012_create_memory_episode_entity.sql|a468c874f8392f3e47a8ce1740c8e94073b14ea2c373fbfaa3561cd998f8b87b|2000
+
+## i012 产物实查（两张表 + 5 个索引）
+memory_entity
+memory_episode
+idx_memory_entity_user_status
+idx_memory_episode_conversation
+idx_memory_episode_user_status
+memory_entity_pkey
+memory_episode_pkey
+uq_memory_entity_user_name
+uq_memory_episode_source

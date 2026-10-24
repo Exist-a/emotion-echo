@@ -1,0 +1,22 @@
+# CL-08c Phase 1 · 全量 Go 测试证据（2026-10-24）
+# 命令: go test ./... -count=1（ai-svc 全包，-count=1 禁缓存）
+ok  	emotion-echo-ai-svc	46.222s
+ok  	emotion-echo-ai-svc/internal/aiclient	47.232s
+ok  	emotion-echo-ai-svc/internal/analyzer	51.090s
+ok  	emotion-echo-ai-svc/internal/config	43.778s
+ok  	emotion-echo-ai-svc/internal/consumer	49.225s
+ok  	emotion-echo-ai-svc/internal/events	42.910s
+ok  	emotion-echo-ai-svc/internal/fusion	47.056s
+ok  	emotion-echo-ai-svc/internal/grpcserver	147.015s
+ok  	emotion-echo-ai-svc/internal/handler	47.066s
+ok  	emotion-echo-ai-svc/internal/logic	52.399s
+ok  	emotion-echo-ai-svc/internal/memory	45.043s
+ok  	emotion-echo-ai-svc/internal/model	43.303s
+ok  	emotion-echo-ai-svc/internal/ops	43.696s
+ok  	emotion-echo-ai-svc/internal/repository	43.939s
+ok  	emotion-echo-ai-svc/internal/svc	46.498s
+ok  	emotion-echo-ai-svc/internal/types	42.604s
+ok  	emotion-echo-ai-svc/migrations	4.121s
+EXIT=0
+
+# go vet ./... → 无输出（干净）

@@ -1,0 +1,11 @@
+# CL-08c Phase 1 · T-1 RED 证据（2026-10-24）
+# 命令: go test ./migrations/ -run TestI012 -count=1
+# 期望: FAIL（i012_create_memory_episode_entity.sql 尚不存在）
+# 退出码: 0
+--- FAIL: TestI012_MemoryEpisodeEntity_Contract (0.00s)
+    i012_create_memory_episode_entity_test.go:36: cannot read i012_create_memory_episode_entity.sql: open i012_create_memory_episode_entity.sql: The system cannot find the file specified.
+        —— CL-08c Phase 1 要求新增情节与实体表（PG 系统记录的最后两块）
+FAIL
+FAIL	emotion-echo-ai-svc/migrations	2.452s
+FAIL
+EXIT=1
