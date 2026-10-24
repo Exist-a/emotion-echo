@@ -328,6 +328,10 @@ services:
       # gRPC auth (Stage 17)：生产必开 required + 强 key
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
       INTERNAL_API_KEY_REQUIRED: ${INTERNAL_API_KEY_REQUIRED:-0}
+      # CL-08c Phase 4：图记忆（Graphiti + 嵌入式 FalkorDB）。
+      # embedding 复用硅基流动（CL-D-36：回落 TTS_*，不新增 key）；LLM 摄取用 LLM_*。
+      MEMORY_GRAPH_DATA_DIR: /data/graph
+      MEMORY_GRAPH_PORT: "8002"
       # Stage 80 PR-1: 真实 LLM 对话上游（OpenAI 兼容；无 key 时 ChatCompletion 走 mock 降级）
       # LLM_API_KEY 从 env_file (.env.local) 读取，不从 HOST 环境变量覆盖
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
@@ -346,6 +350,9 @@ services:
       - ../deploy/tls/llm-server.crt:/app/etc/tls/llm-server.crt:ro
       - ../deploy/tls/llm-server.key:/app/etc/tls/llm-server.key:ro
       - ../deploy/tls/ca.crt:/app/etc/tls/ca.crt:ro
+      # CL-08c Phase 4：图记忆（falkordblite）数据卷 —— RDB 在 server 退出时落盘
+      #（Phase 0 T-e 实测跨容器重建不丢；图以 PG 为准、可重建）
+      - llm-graph-data:/data/graph
     networks:
       - app-network
     deploy:
@@ -413,6 +420,8 @@ services:
       # Round 3.5 (Stage 101 ed39e9e): ai-svc 优先读 AI_LLM_INTERNAL_API_KEY → fallback INTERNAL_API_KEY
       # 让 ai-svc 与 web-bff 用不同 key（跨 svc 隔离，prod 推荐姿势）
       AI_LLM_INTERNAL_API_KEY: ${AI_LLM_INTERNAL_API_KEY:-}
+      # CL-08c Phase 4：图写入面（llm-service MemoryGraphService）；空 = Noop 不投递
+      MEMORY_GRAPH_ADDR: ${MEMORY_GRAPH_ADDR:-emotion-llm-service:50051}
       # P0-R2-5: 统一 env 名 INTERNAL_API_KEY（与 llm-service / web-bff 一致）
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
       # CL-F-66: 本服务 gRPC 8892 的**服务端**鉴权 key（空 ⇒ 回落 INTERNAL_API_KEY；两者都空 ⇒ 关闭）
@@ -889,5 +898,8 @@ networks:
     name: emotion-echo_app-network
 
 volumes:
+  # CL-08c Phase 4：llm-service 图记忆（falkordblite）数据卷
+  llm-graph-data:
+    name: emotion-echo-llm-graph-data
   sensevoice-cache:
     name: emotion-echo-sensevoice-cache

@@ -82,6 +82,7 @@ gen_go() {
         agent.proto)        pkg_name="emotionassessment" ;;
         metric.proto)       pkg_name="emotionanalytics" ;;
         memory.proto)       pkg_name="emotionmemory" ;;
+        memory_graph.proto) pkg_name="emotionmemorygraph" ;;
         *)
             log_warn "未知 proto: $proto_name，跳过 Go 生成"
             return
@@ -110,10 +111,11 @@ gen_go() {
 # ============================================
 gen_python() {
     local proto_name="$1"
-    # 仅 emotion_llm.proto 被 emotion-llm-service（Python LLM）消费；其他 proto 是 Go-only
-    # （chat / emotion_query / user / agent / metric 端点只在 BFF ↔ Go svc 之间）。
-    # 避免污染 emotion-llm-service 目录。
-    if [[ "$proto_name" != "emotion_llm.proto" ]]; then
+    # 仅 emotion_llm.proto 与 memory_graph.proto 被 emotion-llm-service（Python）消费；
+    # 其他 proto 是 Go-only（chat / emotion_query / user / agent / metric / memory 端点
+    # 只在 BFF ↔ Go svc 之间）。避免污染 emotion-llm-service 目录。
+    # memory_graph（CL-08c Phase 4）：llm-service 是服务端（Graphiti 图写入）。
+    if [[ "$proto_name" != "emotion_llm.proto" && "$proto_name" != "memory_graph.proto" ]]; then
         return
     fi
     log_info "生成 Python pb: $proto_name → $PYTHON_OUT"

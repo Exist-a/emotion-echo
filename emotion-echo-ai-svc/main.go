@@ -498,7 +498,10 @@ func main() {
 		memHandler = logic.NewMemoryExtractHandler(memRepo, memExtractor,
 			logic.WithSummaryStore(summaryStore, c.Memory.BudgetTokens),
 			// CL-08c Phase 2：情节/实体持久化（图重建原料；写失败走既有重试/DLQ）
-			logic.WithGraphRepo(repository.NewPostgresMemoryGraphRepo(db)))
+			logic.WithGraphRepo(repository.NewPostgresMemoryGraphRepo(db)),
+			// CL-08c Phase 4：把 episode 投给 llm-service 图摄取（异步 best-effort；
+			// MEMORY_GRAPH_ADDR 未配 ⇒ Noop，行为与 CL-08a 一致）
+			logic.WithGraphWriter(memory.NewGraphWriterFromEnv()))
 		logging.Printf("[memory] facts store ready (group=%s, model=%s)", c.Memory.GroupID, memModel)
 	}
 
