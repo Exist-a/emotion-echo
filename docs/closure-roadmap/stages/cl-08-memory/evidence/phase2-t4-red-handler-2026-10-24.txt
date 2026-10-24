@@ -1,0 +1,14 @@
+# CL-08c Phase 2 · RED 证据（2026-10-24）
+# 命令: go test ./internal/logic/ -run 'TestMemoryExtractHandler_{Episode,Graph,NilGraph,NoteAlso,EmptyContent}' -count=1
+# 期望: FAIL（WithGraphRepo 未定义 —— 实现不存在）
+
+# emotion-echo-ai-svc/internal/logic [emotion-echo-ai-svc/internal/logic.test]
+internal\logic\memory_extract_handler_graph_test.go:55:41: undefined: WithGraphRepo
+internal\logic\memory_extract_handler_graph_test.go:88:41: undefined: WithGraphRepo
+internal\logic\memory_extract_handler_graph_test.go:114:41: undefined: WithGraphRepo
+internal\logic\memory_extract_handler_graph_test.go:142:42: undefined: WithGraphRepo
+internal\logic\memory_extract_handler_graph_test.go:154:42: undefined: WithGraphRepo
+internal\logic\memory_extract_handler_graph_test.go:161:42: undefined: WithGraphRepo
+internal\logic\memory_extract_handler_graph_test.go:192:41: undefined: WithGraphRepo
+
+EXIT=1
