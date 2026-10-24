@@ -1,0 +1,12 @@
+# CL-08c Phase 2 · T-4 真库证据（2026-10-24）
+# 命令: TESTCONTAINERS_RYUK_DISABLED=true go test -tags integration ./integration_test/ -run TestMemoryExtractHandler_GraphPersist -count=1 -v
+# 场景: 同一条消息消费 3 次 ⇒ episode/entity/fact 各 1 行 + 运行行 done
+
+=== RUN   TestMemoryExtractHandler_GraphPersist_RealPG_Idempotent
+--- PASS: TestMemoryExtractHandler_GraphPersist_RealPG_Idempotent (3.24s)
+PASS
+ok  	emotion-echo-ai-svc/integration_test	9.518s
+EXIT=0
+
+# 全量: go test ./... -count=1 → 17/17 ok, EXIT=0（见 phase1-go-test-all 同机制，本次 /tmp/gotest2.log 17 ok 0 FAIL）
+# go vet ./... → 干净
