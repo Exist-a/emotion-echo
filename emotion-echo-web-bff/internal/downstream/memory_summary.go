@@ -39,13 +39,32 @@ func NewRedisMemorySummary(client *redis.Client) MemorySummarySource {
 func (s *redisMemorySummary) LatestMemorySummary(ctx context.Context, userID int64) (string, error) {
 	readCtx, cancel := context.WithTimeout(ctx, memorySummaryReadTimeout)
 	defer cancel()
-	v, err := s.client.Get(readCtx, sharedmemorykeys.SummaryKey(userID)).Result()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			// 没有记忆是正常状态，不是错误。
-			return "", nil
-		}
-		return "", err
+
+	// 不能只依赖 ctx 传播中止读：黑洞场景（连接通、永不回包）实测 ctx deadline
+	// 拦不住 go-redis 在**池化连接初始化**上的阻塞，会拖到默认 ReadTimeout 3s
+	//（CL-08c Phase 3 实测抓到；300ms 契约见上方常量注释）。故用 select 兜底：
+	// 到点必返；慢查询留给后台 goroutine 自行超时回收（有界、仅病态路径发生）。
+	type result struct {
+		val string
+		err error
 	}
-	return v, nil
+	done := make(chan result, 1)
+	go func() {
+		v, err := s.client.Get(readCtx, sharedmemorykeys.SummaryKey(userID)).Result()
+		done <- result{val: v, err: err}
+	}()
+
+	select {
+	case r := <-done:
+		if r.err != nil {
+			if errors.Is(r.err, redis.Nil) {
+				// 没有记忆是正常状态，不是错误。
+				return "", nil
+			}
+			return "", r.err
+		}
+		return r.val, nil
+	case <-readCtx.Done():
+		return "", readCtx.Err()
+	}
 }

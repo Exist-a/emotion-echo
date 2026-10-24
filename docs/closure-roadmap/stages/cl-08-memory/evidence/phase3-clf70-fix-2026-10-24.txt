@@ -1,0 +1,19 @@
+# CL-08c Phase 3 · CL-F-70① 修复证据（2026-10-24）
+# 真缺陷：黑洞 Redis（连接通、永不回包）下 LatestMemorySummary 实测 3.00s 才返回
+#   （go-redis 默认 ReadTimeout 3s；代码自注释承诺 300ms ⇒ 违约）
+# 修复前（RED）：
+        	Error Trace:	D:/源码/Emotion-Echo-cl08c3/emotion-echo-web-bff/internal/downstream/memory_summary_test.go:81
+--- FAIL: TestRedisMemorySummary_BlackholeTimesOutFast (3.00s)
+--- PASS: TestNewRedisMemorySummary_NilClientReturnsNil (0.00s)
+#   FAIL: TestRedisMemorySummary_BlackholeTimesOutFast (3.00s)
+
+# 修复（goroutine + select 兜底）后（GREEN）：
+--- PASS: TestRedisMemorySummary_HitReturnsValue_SharedKeyContract (0.01s)
+--- PASS: TestRedisMemorySummary_MissIsNotError (0.01s)
+--- PASS: TestRedisMemorySummary_BlackholeTimesOutFast (0.30s)
+--- PASS: TestNewRedisMemorySummary_NilClientReturnsNil (0.00s)
+ok  	emotion-echo-web-bff/internal/downstream	9.954s
+
+# 修复后耗时：0.30s（契约 300ms 达成）
+
+# BFF 全量: go test ./... -count=1 → 10/10 包 ok, RC=0；go vet 干净
