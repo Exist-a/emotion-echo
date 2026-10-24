@@ -83,6 +83,7 @@ func TestMemoryExtractHandler_EpisodeEntity_MultiSubjectAndLatestSummary(t *test
 	newer.ValidFrom = time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
 	mother := factOf("健康状况", "住院")
 	mother.Subject = "母亲"
+	mother.FactText = "母亲健康状况住院"
 
 	ex := &fakeExtractor{facts: []model.MemoryFact{old, newer, mother}}
 	h := NewMemoryExtractHandler(repo, ex, WithGraphRepo(graph))

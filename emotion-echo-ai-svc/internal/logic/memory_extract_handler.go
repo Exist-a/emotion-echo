@@ -13,6 +13,7 @@
 package logic
 
 import (
+	"sort"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -35,6 +36,8 @@ type MemoryExtractHandler struct {
 	// summaryStore 可选：写侧摘要（nil = 不写，单测/未配 Redis 时）。
 	summaryStore  memory.SummaryStore
 	summaryBudget int
+	// graphRepo 可选（CL-08c Phase 2）：情节/实体持久化（nil = CL-08a 行为，零回归）。
+	graphRepo repository.MemoryGraphRepo
 }
 
 // HandlerOption 可选依赖。
@@ -48,6 +51,12 @@ func WithSummaryStore(store memory.SummaryStore, budgetTokens int) HandlerOption
 			h.summaryBudget = budgetTokens
 		}
 	}
+}
+
+// WithGraphRepo 注入情节/实体仓储（CL-08c Phase 2）。
+// 写失败向上传播（交消费框架重试/DLQ）；nil = 不落 episode/entity。
+func WithGraphRepo(repo repository.MemoryGraphRepo) HandlerOption {
+	return func(h *MemoryExtractHandler) { h.graphRepo = repo }
 }
 
 func NewMemoryExtractHandler(repo repository.MemoryFactRepo, ex memory.Extractor, opts ...HandlerOption) *MemoryExtractHandler {
@@ -206,6 +215,18 @@ func (h *MemoryExtractHandler) extractSource(ctx context.Context, src extractSou
 			Observe(time.Since(started).Seconds())
 		return fmt.Errorf("memory: apply facts: %w", err)
 	}
+
+	// CL-08c Phase 2：情节/实体持久化。必须在 FinishExtractRun(done) **之前**——
+	// 一旦标 done，该来源永久跳过，episode 就再也补不上了；放前面则失败 ⇒ failed ⇒ 重投重抽，
+	// facts 侧 ApplyFacts 幂等、episode/entity 侧唯一索引幂等 ⇒ 重试收敛、不重复。
+	if err := h.persistGraphArtifacts(ctx, src, facts); err != nil {
+		h.finishFailed(ctx, src, err)
+		sharedmetrics.MemoryExtractTotal.WithLabelValues(sharedmetrics.MemoryResultError).Inc()
+		sharedmetrics.MemoryExtractDurationSeconds.WithLabelValues(sharedmetrics.MemoryResultError).
+			Observe(time.Since(started).Seconds())
+		return fmt.Errorf("memory: persist episode/entities: %w", err)
+	}
+
 	if err := h.repo.FinishExtractRun(ctx, src.Kind, src.ID, model.MemoryExtractStatusDone, written, ""); err != nil {
 		// 收尾回填失败时**不能**把运行行留在 pending：
 		// pending 会被 TryMarkExtractRun 的幂等判据当成「已处理」而永久跳过（该来源再也不抽取）。
@@ -236,6 +257,76 @@ func (h *MemoryExtractHandler) extractSource(ctx context.Context, src extractSou
 	// A3：重建用户级摘要（best-effort —— 失败不影响已提交的事实）。
 	h.refreshSummary(ctx, src.UserID)
 	return nil
+}
+
+// persistGraphArtifacts 落情节与实体（CL-08c Phase 2）。
+//
+//   - episode：content = 来源原文（「从 PG 重建图」的原料，ADR 决策 8）；
+//     valid_at = 事件发生时间；name = 原文短标签。空内容跳过（无可存档）。
+//   - entity：facts 按 Subject 去重，一个主体一行；summary 取该主体 ValidFrom
+//     最新的 fact_text（"我妈"/"母亲"的合并由 LLM 消解负责，这里只保证不重复落行）。
+//
+// 任一写失败向上传播（⇒ failed ⇒ 重投重抽；两侧唯一索引保证重试收敛）。
+func (h *MemoryExtractHandler) persistGraphArtifacts(ctx context.Context, src extractSource, facts []model.MemoryFact) error {
+	if h.graphRepo == nil {
+		return nil
+	}
+	if content := strings.TrimSpace(src.Content); content != "" {
+		if _, err := h.graphRepo.UpsertEpisode(ctx, &model.MemoryEpisode{
+			UserID:         src.UserID,
+			ConversationID: src.ConversationID,
+			SourceKind:     src.Kind,
+			SourceID:       src.ID,
+			Name:           episodeShortLabel(src.Kind, src.ID, content),
+			Content:        content,
+			ValidAt:        src.OccurredAt,
+		}); err != nil {
+			return err
+		}
+	}
+	for _, ent := range entitiesFromFacts(src.UserID, facts) {
+		if _, err := h.graphRepo.UpsertEntity(ctx, ent); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// episodeShortLabel 情节短标签：原文前 24 个字符；不足以 kind-id 兜底。
+func episodeShortLabel(kind string, id int64, content string) string {
+	runes := []rune(content)
+	if len(runes) > 24 {
+		runes = runes[:24]
+	}
+	if label := strings.TrimSpace(string(runes)); label != "" {
+		return label
+	}
+	return fmt.Sprintf("%s-%d", kind, id)
+}
+
+// entitiesFromFacts 把本批 facts 折成实体行（每主体一行，摘要 = 最新事实）。
+func entitiesFromFacts(userID int64, facts []model.MemoryFact) []*model.MemoryEntity {
+	latest := make(map[string]model.MemoryFact, len(facts))
+	for _, f := range facts {
+		name := strings.TrimSpace(f.Subject)
+		if name == "" {
+			continue
+		}
+		if cur, ok := latest[name]; !ok || f.ValidFrom.After(cur.ValidFrom) {
+			latest[name] = f
+		}
+	}
+	// map 迭代无序 ⇒ 排序保证实体写入顺序确定（同批重放结果一致）
+	names := make([]string, 0, len(latest))
+	for n := range latest {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	out := make([]*model.MemoryEntity, 0, len(names))
+	for _, n := range names {
+		out = append(out, &model.MemoryEntity{UserID: userID, Name: n, Summary: latest[n].FactText})
+	}
+	return out
 }
 
 // refreshSummary 重建 Redis 用户级摘要。任何失败只记日志，不向上返回
