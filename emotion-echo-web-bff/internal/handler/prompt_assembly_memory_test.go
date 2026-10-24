@@ -15,10 +15,15 @@ package handler
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	"emotion-echo-web-bff/internal/downstream"
+
+	sharedmemorykeys "github.com/emotion-echo/shared/pkg/memorykeys"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -114,4 +119,36 @@ func TestLoadMemorySummary_Degrades(t *testing.T) {
 		h := &AIStreamHandler{memory: fakeMemorySource{summary: "- 2026-10 用户是后端工程师"}}
 		assert.Equal(t, "- 2026-10 用户是后端工程师", h.loadMemorySummary(ctx))
 	})
+}
+
+// ---------------------------------------------------------------------------
+// CL-08c · Phase 3：真实 Redis 源穿透 handler 的降级（收口 CL-F-70 ① 的
+// handler 侧对偶——此前只有 fake source 验过；这里把真 redisMemorySummary
+// 接进 AIStreamHandler 走 loadMemorySummary 的完整路径）。
+// ---------------------------------------------------------------------------
+
+func TestLoadMemorySummary_RealRedisSource_DegradesAndHits(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer func() { _ = client.Close() }()
+
+	ctx := downstream.WithUserID(context.Background(), 7)
+	require.NoError(t, client.Set(ctx, sharedmemorykeys.SummaryKey(7), "- 2026-10 用户养了一只猫", 0).Err())
+
+	hit := &AIStreamHandler{memory: downstream.NewRedisMemorySummary(client)}
+	assert.Equal(t, "- 2026-10 用户养了一只猫", hit.loadMemorySummary(ctx),
+		"命中 ⇒ 原文（真实源经 handler 全路径）")
+
+	miss := &AIStreamHandler{memory: downstream.NewRedisMemorySummary(client)}
+	assert.Equal(t, "", miss.loadMemorySummary(downstream.WithUserID(context.Background(), 8)),
+		"未命中（真实 redis.Nil）⇒ 空串、不报错")
+}
+
+// T-8 钉：两条上游路径（llm-gRPC / HTTP 直连）都必须取记忆摘要 ——
+// 只接一条路径时另一条静默无记忆（与 agent 段的同型钉）。
+func TestAIStreamHandler_BothAssembleSites_LoadMemorySummary(t *testing.T) {
+	src, err := os.ReadFile("ai_stream_handler.go")
+	require.NoError(t, err)
+	assert.Equal(t, 2, strings.Count(string(src), "loadMemorySummary("),
+		"两处 assembleInput 都要取记忆摘要（T-8：防单路径漂移）")
 }

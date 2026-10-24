@@ -1,0 +1,14 @@
+# CL-08c 轨起栈验证用 override（契约 §1.3 R1：带轨后缀 tag，不覆盖公共 tag）。
+# 用法（仓库根）：
+#   docker compose -f deploy/docker-compose.apps.yml -f deploy/docker-compose.infra.yml \
+#     -f deploy/docker-compose.cl08c-verify.yml --env-file deploy/.env.local --profile dev up -d
+#
+# 与 docker-compose.cl02/cl05/cl07-verify.yml 同款先例。
+# 原因：公共 tag 落后于 main（CL-F-60）——按公共 tag 起栈验不出新代码。
+services:
+  emotion-echo-ai-svc:
+    image: emotion-echo/ai-svc:cl08c
+  emotion-echo-web-bff:
+    image: emotion-echo/web-bff:cl08c
+  emotion-echo-web:
+    image: emotion-echo/web:cl08c
