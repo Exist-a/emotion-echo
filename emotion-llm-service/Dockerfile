@@ -110,6 +110,9 @@ COPY --from=builder /build/entrypoint.sh           ./entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # 切到非 root
+# CL-08c Phase 4：图数据目录（falkordblite 落盘）。命名卷首次挂载会继承
+# 镜像内该路径的属主 ⇒ 这里必须预建 + chown，否则容器内 app 用户写不了卷。
+RUN mkdir -p /data/graph && chown app:app /data/graph /data
 USER app:app
 
 EXPOSE 8000 50051

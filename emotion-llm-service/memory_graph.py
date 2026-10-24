@@ -118,18 +118,23 @@ class MemoryGraph:
 # ---------------------------------------------------------------------------
 
 
-def build_memory_graph_from_env() -> MemoryGraph | None:
+def build_memory_graph_from_env(bridge: "AsyncBridge | None" = None) -> MemoryGraph | None:
+    """装配真实图后端。bridge 必须已 start：初始化（建索引）与后续所有图操作
+    必须跑在**同一个**事件循环上 —— 用 asyncio.run 做初始化会创建并关闭一个
+    临时循环，graphiti/falkordb 的 asyncio 原语会绑死那个死循环，之后一切
+    操作报 "Event loop is closed"（真栈实测）。
+    """
     if not _env_bool("MEMORY_GRAPH_ENABLED", True):
         logger.info("memory-graph disabled by env")
         return None
     try:
-        return _build()
+        return _build(bridge)
     except Exception as exc:  # noqa: BLE001
         logger.warning("memory-graph unavailable (degraded): %s", exc)
         return None
 
 
-def _build() -> MemoryGraph:
+def _build(bridge: "AsyncBridge | None") -> MemoryGraph:
     # 延迟 import：graphiti/falkordblite 未装（如单元环境）时本函数不可调用而非 import 失败
     from graphiti_core.driver.falkordb_driver import FalkorDriver
     from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
@@ -169,15 +174,23 @@ def _build() -> MemoryGraph:
         )
     )
 
+    # structured_output_mode：deepseek 不支持 json_schema response_format
+    #（实测 400 "This response_format type is unavailable now"，直测 json_object 可用）
+    # ⇒ 用 json_object + prompt 注入 schema（generic client 内建行为）。
     graphiti = Graphiti(
         graph_driver=driver,
-        llm_client=OpenAIGenericClient(config=llm_cfg),
+        llm_client=OpenAIGenericClient(config=llm_cfg, structured_output_mode="json_object"),
         embedder=embedder,
         cross_encoder=OpenAIRerankerClient(config=llm_cfg),
     )
 
-    # 建索引/约束（幂等；spike 实测 falkordb 驱动支持）
-    asyncio.run(graphiti.build_indices_and_constraints())
+    # 建索引/约束（幂等；spike 实测 falkordb 驱动支持）。
+    # 必须与后续操作同循环：bridge 已启动 ⇒ 在它的循环上跑；未提供 bridge
+    # （单测/探针）⇒ 退回 asyncio.run（此时进程内不会有后续图操作）。
+    if bridge is not None:
+        bridge.call(graphiti.build_indices_and_constraints(), timeout=30.0)
+    else:
+        asyncio.run(graphiti.build_indices_and_constraints())
     logger.info(
         "memory-graph ready: db=%s port=%d embed_model=%s", db_file, port,
         os.environ.get("MEMORY_EMBED_MODEL", DEFAULT_EMBED_MODEL),

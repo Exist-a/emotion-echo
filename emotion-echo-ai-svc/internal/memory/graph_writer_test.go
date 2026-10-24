@@ -55,6 +55,7 @@ func TestNewGraphWriterFromEnv_Degrades(t *testing.T) {
 
 // grpc.NewClient 是惰性连接：构造必成功，不可达在**首次调用**暴露为 error。
 func TestGraphWriter_UnreachableFailsOnCallNotConstruct(t *testing.T) {
+	t.Setenv("MEMORY_GRAPH_TLS", "0") // 明文路径：mTLS 证书在容器外不存在
 	w, err := NewGraphWriterWithAddr("127.0.0.1:1", "test-key", 300*time.Millisecond)
 	require.NoError(t, err, "惰性连接：构造不得失败")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

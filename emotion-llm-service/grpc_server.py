@@ -412,10 +412,11 @@ def serve(port: int = 50051):
         from memory_graph_servicer import _make_memory_graph_servicer
         import memory_graph_pb2_grpc
 
-        graph = build_memory_graph_from_env()
+        # 先起事件循环线程，再在其上装配图（初始化与后续操作必须同循环）
+        bridge = AsyncBridge()
+        bridge.start()
+        graph = build_memory_graph_from_env(bridge)
         if graph is not None:
-            bridge = AsyncBridge()
-            bridge.start()
             memory_graph_pb2_grpc.add_MemoryGraphServiceServicer_to_server(
                 _make_memory_graph_servicer(graph, bridge), server
             )

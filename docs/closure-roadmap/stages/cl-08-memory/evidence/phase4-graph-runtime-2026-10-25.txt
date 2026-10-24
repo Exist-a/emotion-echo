@@ -1,0 +1,33 @@
+# CL-08c Phase 4 · 运行时证据（2026-10-25，dev 栈 18 容器，:cl08c × 4）
+# 链路：web 发消息 → chat-svc → Kafka → ai-svc 抽取(PG facts/episode/entity) → 异步 gRPC(mTLS+internal-key) → llm-service MemoryGraphService → Graphiti 摄取(DeepSeek LLM + 硅基流动 bge-m3) → falkordblite
+
+## T-13 图后端可用（msg 1055，用户 1）
+# llm-service 日志：UpsertEpisode user=1 source=message/1055 ok=True took=2.7s
+# 图实查（group 图 '1'）：
+#   Episode: name=『我最近迷上了养多肉植物，在阳台上摆了十盆，最贵的…』 content=原文全量
+#   Entity: 『用户』(summary=用户在阳台上养了十盆多肉植物，其中最贵的一盆是橙梦露) + 『橙梦露』
+#   边: RELATES_TO×1 + MENTIONS×2
+#   时间字段: created_at=2026-10-24T23:25:04Z(摄取) valid_at=…23:25:03.71Z(事件时间=消息 send_time) ⇒ 双时间轴成立
+#   ⚠️ graphiti 把每个 group_id 存为独立 graph key（'memory' 图为空、数据在 '1'/'2'）——物理分图
+
+## T-17 用户隔离（group 图）
+# 以 user_id=2 直投（鹦鹉小绿）→ GRAPHS=['memory','1','2']
+#   G1 entities=[用户,橙梦露]  G2 entities=[小绿]  ISOLATED: PASS（零交集）
+
+## T-14 三层召回（组合混合检索，中文查询）
+# MemoryGraph.search('多肉 最贵的品种叫什么', user_id=1) → 命中 OWLS/OWNS 边（用户-橙梦露 拥有关系）
+# embedding 真调硅基流动 bge-m3（1024 维）；单层分解（向量/全文/图遍历各自单独命中）未拆开验证——combined hybrid 的子层归 CL-08d/评测轮细化
+
+## T-19 评测（scripts/eval_memory_recall.py，当前栈实跑）
+  PASS  召回：你还记得我的猫叫什么吗？
+  PASS  召回：你还记得我现在住在哪座城市吗？
+  PASS  召回：你还记得我的运动习惯吗？
+  N/A   不相关不注入（观察）
+  PASS  事实更新：图上新值生效且旧值下线
+  PASS  事实更新：新值生效
+  PASS  事实更新：旧值不再引用
+  PASS  A/B：开记忆能说出具体事实
+  PASS  A/B：关记忆后不复述
+
+## T-20 Playwright（chromium 2/2；mobile 2 failed 为环境项如实记录）
+# npx playwright test e2e/cl-08a-memory.spec.ts → 2 passed (8.4m) [chromium: 自述→回执→关系图 + 跨会话复述]
