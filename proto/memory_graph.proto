@@ -1,0 +1,48 @@
+// proto/memory_graph.proto
+//
+// CL-08c Phase 4：图记忆写入面的内部 gRPC 契约（llm-service 实现，ai-svc 调用）。
+//
+// 为什么是独立文件而不放进 memory.proto：
+//   memory.proto（CL-08a）是 ai-svc 暴露给 BFF 的面（CreateNote/GetGraph，由
+//   ai-svc 实现）；本文件是 ai-svc → llm-service 的图写入面（Graphiti +
+//   falkordblite 落在 llm-service 进程内，ADR 决策 45 · 技术细节 7/9）。
+//   两个契约的实现方、调用方、部署位置都不同 —— 遵循 CL-D-35 T4「跨进程契约独立成文件」。
+//
+// 失败语义（ADR 决策 8 / 风险 R9）：PG 是系统记录，图是可重建索引。
+//   图写失败不阻塞抽取主流程 —— 调用方 best-effort + 指标可观测，
+//   缺口由「从 PG 重建图」的工具兜底（CL-08d 交付）。
+
+syntax = "proto3";
+
+package emotion_memory_graph.v1;
+
+option go_package = "github.com/emotion-echo/shared/pkg/emotionmemorygraph";
+
+// MemoryGraphService 图记忆服务（llm-service 进程内：Graphiti + 嵌入式 FalkorDB）。
+service MemoryGraphService {
+  // UpsertEpisode 把一条已落 PG 的情节摄取进时序知识图谱。
+  //
+  // - user_id 即图的 group_id：用户隔离边界（T-17），绝不跨用户共享节点；
+  // - valid_at_unix_ms 作为 Graphiti 的 reference_time（双时间轴的事件时间轴）；
+  // - 实体抽取/消解/失效判定由 Graphiti 摄取管线完成（LLM + embedder 配置注入）。
+  rpc UpsertEpisode (UpsertEpisodeRequest) returns (UpsertEpisodeResponse);
+}
+
+message UpsertEpisodeRequest {
+  int64 user_id = 1;
+  // name 短标签（与 PG memory_episode.name 同源）
+  string name = 2;
+  // content 原文（图摄取的正文 = PG memory_episode.content）
+  string content = 3;
+  // valid_at_unix_ms 事件发生时间（毫秒）
+  int64 valid_at_unix_ms = 4;
+  // source_kind / source_id 与 PG 对齐（message / note），仅审计与排障用
+  string source_kind = 5;
+  int64 source_id = 6;
+}
+
+message UpsertEpisodeResponse {
+  bool ok = 1;
+  // message：ok=false 时的失败原因（排障用）；ok=true 时空
+  string message = 2;
+}
