@@ -26,7 +26,7 @@ describe('MemoryList', () => {
 
     await w.find('[data-testid="confirm-item"]').trigger('click')
     expect(w.emitted('delete')).toEqual([['fact', 1]])
-    expect(w.find('[data-testid="confirm-item"]').exists()).toBe(false, '删除后预备态必须复位')
+    expect(w.find('[data-testid="confirm-item"]').exists()).toBe(false)
     w.unmount()
   })
 

@@ -60,16 +60,34 @@ func (f *fakeGraphDeps) rebuildCalls() int {
 	return len(f.rebuildFor)
 }
 
-func newDeleteTestServer(t *testing.T) (*memoryServer, *repository.InMemoryMemoryFactRepo, *fakeGraphDeps, *[]int64) {
+// refreshedCounter 摘要刷新计数（异步 goroutine 写 ⇒ 必须持锁，CI -race）。
+type refreshedCounter struct {
+	mu sync.Mutex
+	n  int
+}
+
+func (c *refreshedCounter) add(userID int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.n++
+}
+
+func (c *refreshedCounter) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.n
+}
+
+func newDeleteTestServer(t *testing.T) (*memoryServer, *repository.InMemoryMemoryFactRepo, *fakeGraphDeps, *refreshedCounter) {
 	t.Helper()
 	repo := repository.NewInMemoryMemoryFactRepo()
 	graph := &fakeGraphDeps{}
-	refreshed := &[]int64{}
+	refreshed := &refreshedCounter{}
 	s := newMemoryServer(repo, func(ctx context.Context, note *model.MemoryNote) error { return nil })
 	s.SetGraphDeps(&memoryGraphDeps{
 		graph: graph,
 		refresh: func(ctx context.Context, userID int64) error {
-			*refreshed = append(*refreshed, userID)
+			refreshed.add(userID)
 			return nil
 		},
 		rebuild: func(ctx context.Context, userID int64) (int, int, error) {
@@ -113,7 +131,7 @@ func TestDeleteMemory_Fact_RemovesPGAndGraph(t *testing.T) {
 	}, 3*time.Second, 20*time.Millisecond, "图侧必须异步按 uuid 摘除")
 	removed, _, _ := graph.snapshot()
 	assert.Equal(t, []string{"ep-uuid-1"}, removed)
-	require.Eventually(t, func() bool { return len(*refreshed) == 1 }, 3*time.Second, 20*time.Millisecond,
+	require.Eventually(t, func() bool { return refreshed.count() == 1 }, 3*time.Second, 20*time.Millisecond,
 		"摘要必须异步刷新")
 }
 
@@ -189,7 +207,7 @@ func TestDeleteMemory_All_UsesFastPath(t *testing.T) {
 	}, 3*time.Second, 20*time.Millisecond, "删全部必须走物理分图快删")
 	removed, _, _ := graph.snapshot()
 	assert.Empty(t, removed)
-	require.Eventually(t, func() bool { return len(*refreshed) == 1 }, 3*time.Second, 20*time.Millisecond)
+	require.Eventually(t, func() bool { return refreshed.count() == 1 }, 3*time.Second, 20*time.Millisecond)
 	active, err := repo.ListActiveByUser(ctx, 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 0)
