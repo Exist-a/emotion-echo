@@ -149,3 +149,29 @@ func TestLLMGRPCClient_UpstreamError_ReturnsError(t *testing.T) {
 var _ LLMChatStreamer = (*LLMGRPCClient)(nil)
 
 var _ = time.Second // keep time import if unused later
+
+// CL-F-56（CL-08c Phase 4 前置）：BFF 必须把调用者身份传给 llm-service。
+// proto 的 user_id 字段自定义起就没接线 ⇒ llm-service 不知道自己在服务谁。
+func TestLLMGRPCClient_StreamChat_SendsUserID(t *testing.T) {
+	servicer := &fakeLLMServiceServicer{deltas: []string{"好"}}
+	c := startFakeLLMServer(t, servicer)
+
+	ctx := WithUserID(context.Background(), 42)
+	err := c.StreamChat(ctx, LLMStreamRequest{
+		Model:    "deepseek-chat",
+		Messages: []Message{{Role: "user", Content: "hi"}},
+	}, func(delta, model string) {})
+	require.NoError(t, err)
+
+	require.NotNil(t, servicer.gotReq)
+	assert.Equal(t, "42", servicer.gotReq.UserId,
+		"ctx 里的用户身份必须填进 ChatCompletionRequest.user_id（CL-F-56；proto 字段为 string）")
+
+	// 无身份（如系统任务）⇒ 0，不得瞎填
+	servicer2 := &fakeLLMServiceServicer{deltas: []string{"好"}}
+	c2 := startFakeLLMServer(t, servicer2)
+	require.NoError(t, c2.StreamChat(context.Background(), LLMStreamRequest{
+		Model: "m", Messages: []Message{{Role: "user", Content: "x"}},
+	}, func(delta, model string) {}))
+	assert.Equal(t, "", servicer2.gotReq.UserId, "无身份时保持空串（不编造）")
+}

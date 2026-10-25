@@ -13,6 +13,7 @@
 package downstream
 
 import (
+	"strconv"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -155,6 +156,7 @@ func (c *LLMGRPCClient) StreamChat(ctx context.Context, req LLMStreamRequest, on
 		MaxTokens:   req.MaxTokens,
 		WithIntent:  req.WithIntent, // CL-04 Phase 5：接回意图风格注入
 		Files:       pbFiles,        // Stage 89 PR-3
+		UserId:      userIDString(ctx), // CL-F-56：把调用者身份带给 llm-service（proto 为 string）
 	})
 	if err != nil {
 		return fmt.Errorf("llm chat completion rpc: %w", err)
@@ -206,4 +208,12 @@ func tlsLoadKeyPair(certPath, keyPath string) (certPEM, keyPEM []byte, err error
 		return nil, nil, err
 	}
 	return certPEM, keyPEM, nil
+}
+
+// userIDString 从 ctx 提取调用者身份（CL-F-56）。无身份返回空串（不编造）。
+func userIDString(ctx context.Context) string {
+	if id, ok := UserIDFromContext(ctx); ok && id > 0 {
+		return strconv.FormatInt(id, 10)
+	}
+	return ""
 }

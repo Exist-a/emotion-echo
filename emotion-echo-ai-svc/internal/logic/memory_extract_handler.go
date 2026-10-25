@@ -38,6 +38,9 @@ type MemoryExtractHandler struct {
 	summaryBudget int
 	// graphRepo 可选（CL-08c Phase 2）：情节/实体持久化（nil = CL-08a 行为，零回归）。
 	graphRepo repository.MemoryGraphRepo
+	// graphWriter 可选（CL-08c Phase 4）：把 episode 投给 llm-service 的图摄取
+	//（异步 best-effort；nil = 不投，零回归）。
+	graphWriter memory.EpisodeGraphWriter
 }
 
 // HandlerOption 可选依赖。
@@ -57,6 +60,12 @@ func WithSummaryStore(store memory.SummaryStore, budgetTokens int) HandlerOption
 // 写失败向上传播（交消费框架重试/DLQ）；nil = 不落 episode/entity。
 func WithGraphRepo(repo repository.MemoryGraphRepo) HandlerOption {
 	return func(h *MemoryExtractHandler) { h.graphRepo = repo }
+}
+
+// WithGraphWriter 注入图写入端（CL-08c Phase 4，llm-service MemoryGraphService）。
+// 投递是异步 best-effort：失败只记日志，不影响抽取结果（R9：PG 为准、图可重建）。
+func WithGraphWriter(w memory.EpisodeGraphWriter) HandlerOption {
+	return func(h *MemoryExtractHandler) { h.graphWriter = w }
 }
 
 func NewMemoryExtractHandler(repo repository.MemoryFactRepo, ex memory.Extractor, opts ...HandlerOption) *MemoryExtractHandler {
@@ -246,6 +255,10 @@ func (h *MemoryExtractHandler) extractSource(ctx context.Context, src extractSou
 		sharedmetrics.MemoryFactsWrittenTotal.Add(float64(written))
 	}
 
+	// CL-08c Phase 4：异步投递给图摄取（llm-service）。放 done 之后 —— PG 才是
+	// 系统记录；图写慢（LLM 摄取管线秒级）不能拖住消费位点的推进。
+	h.forwardEpisodeToGraph(src)
+
 	slog.InfoContext(ctx, "memory: facts upserted",
 		"source_kind", src.Kind,
 		"source_id", src.ID,
@@ -327,6 +340,35 @@ func entitiesFromFacts(userID int64, facts []model.MemoryFact) []*model.MemoryEn
 		out = append(out, &model.MemoryEntity{UserID: userID, Name: n, Summary: latest[n].FactText})
 	}
 	return out
+}
+
+// forwardEpisodeToGraph 异步投递一条 episode 给 llm-service 图摄取（best-effort）。
+// 空 content 跳过（与 persistGraphArtifacts 同判）；nil writer 直接返回。
+// 失败只记日志 —— 图写不进重试（缺口由 CL-08d 的重建工具从 PG 兜底）。
+func (h *MemoryExtractHandler) forwardEpisodeToGraph(src extractSource) {
+	if h.graphWriter == nil {
+		return
+	}
+	content := strings.TrimSpace(src.Content)
+	if content == "" {
+		return
+	}
+	ep := memory.Episode{
+		UserID:        src.UserID,
+		Name:          episodeShortLabel(src.Kind, src.ID, content),
+		Content:       content,
+		ValidAtUnixMs: src.OccurredAt.UnixMilli(),
+		SourceKind:    src.Kind,
+		SourceID:      src.ID,
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
+		defer cancel()
+		if err := h.graphWriter.UpsertEpisode(ctx, ep); err != nil {
+			slog.WarnContext(ctx, "memory: forward episode to graph failed (best-effort)",
+				"source_kind", ep.SourceKind, "source_id", ep.SourceID, "err", err)
+		}
+	}()
 }
 
 // refreshSummary 重建 Redis 用户级摘要。任何失败只记日志，不向上返回
