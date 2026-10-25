@@ -10,6 +10,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"emotion-echo-ai-svc/internal/model"
@@ -196,36 +197,62 @@ func (s *memoryServer) DeleteMemory(ctx context.Context, req *emotionmemory.Dele
 	}
 }
 
-// removeSourceFromGraph 删一条来源情节的图上内容（uuid 已知 ⇒ 精准摘除；
-// 未知 ⇒ 全图重建兜底）。图侧失败只记日志（不阻塞删除结果）。
-func (s *memoryServer) removeSourceFromGraph(ctx context.Context, uid int64, kind string, id int64) string {
+// removeSourceFromGraphAsync 异步收敛图侧（CL-08d 运行时实测：图摘除/重建是
+// LLM 级慢操作 —— 单条秒级、全图重建几十秒，同步做必撞 BFF 下游 5s 截止 ⇒
+// 用户看到 502 但 PG 已删，且请求 ctx 取消会打断图操作与摘要刷新）。
+//
+// 语义与 forwardEpisodeToGraph 同范式：**PG 即刻生效（响应不等图）**，图侧
+// best-effort 异步收敛；失败只记日志，缺口由 cmd/memory-rebuild 兜底。
+// 摘要刷新同样用独立 ctx（旧实现挂在请求 ctx 上，取消后摘要不刷新 —— 实测抓到）。
+func (s *memoryServer) removeSourceFromGraphAsync(uid int64, kind string, id int64) {
 	if s.graphDeps == nil || s.graphDeps.graph == nil {
-		return "graph writer not configured (PG deleted; graph left for rebuild)"
+		slog.Warn("memory delete: graph writer not configured (PG deleted; graph left for rebuild)")
+		return
 	}
-	uuid, err := s.repo.GetEpisodeGraphUUID(ctx, kind, id)
-	if err != nil {
-		slog.WarnContext(ctx, "memory delete: lookup graph uuid", "err", err)
-	}
-	if uuid != "" {
-		if gerr := s.graphDeps.graph.RemoveEpisode(ctx, uid, uuid); gerr != nil {
-			slog.WarnContext(ctx, "memory delete: remove episode from graph",
-				"uuid", uuid, "err", gerr)
-			return "graph removal failed (rebuild pending)"
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("memory delete: graph op panicked (recovered)", "panic", r)
+			}
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		uuid, err := s.repo.GetEpisodeGraphUUID(ctx, kind, id)
+		if err != nil {
+			slog.Warn("memory delete: lookup graph uuid", "err", err)
 		}
-		return ""
+		if uuid != "" {
+			if gerr := s.graphDeps.graph.RemoveEpisode(ctx, uid, uuid); gerr != nil {
+				slog.Warn("memory delete: remove episode from graph", "uuid", uuid, "err", gerr)
+			}
+			return
+		}
+		// uuid 缺失（Phase 4 之前的旧行 / 上次回填失败）⇒ 整图重建兜底
+		if s.graphDeps.rebuild == nil {
+			slog.Warn("memory delete: graph uuid unknown and rebuild unavailable")
+			return
+		}
+		okN, failedN, rerr := s.graphDeps.rebuild(ctx, uid)
+		if rerr != nil {
+			slog.Warn("memory delete: graph rebuild fallback failed", "err", rerr)
+			return
+		}
+		slog.Info("memory delete: graph rebuilt as fallback", "user_id", uid, "ok", okN, "failed", failedN)
+	}()
+}
+
+// refreshSummaryAsync 异步刷新摘要（独立 ctx；请求 ctx 已知会被 BFF 截止取消）。
+func (s *memoryServer) refreshSummaryAsync(uid int64) {
+	if s.graphDeps == nil || s.graphDeps.refresh == nil {
+		return
 	}
-	// uuid 缺失（Phase 4 之前的旧行 / 上次回填失败）⇒ 整图重建兜底
-	if s.graphDeps.rebuild == nil {
-		return "graph uuid unknown and rebuild unavailable"
-	}
-	okN, failedN, rerr := s.graphDeps.rebuild(ctx, uid)
-	if rerr != nil {
-		slog.WarnContext(ctx, "memory delete: graph rebuild fallback failed", "err", rerr)
-		return "graph rebuild failed (retry via memory-rebuild tool)"
-	}
-	slog.InfoContext(ctx, "memory delete: graph rebuilt as fallback",
-		"user_id", uid, "ok", okN, "failed", failedN)
-	return ""
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := s.graphDeps.refresh(ctx, uid); err != nil {
+			slog.Warn("memory delete: refresh summary", "user_id", uid, "err", err)
+		}
+	}()
 }
 
 func (s *memoryServer) deleteByFact(ctx context.Context, uid, factID int64) (*emotionmemory.DeleteMemoryResponse, error) {
@@ -244,9 +271,10 @@ func (s *memoryServer) deleteByFact(ctx context.Context, uid, factID int64) (*em
 	if err := s.repo.SoftDeleteEpisode(ctx, f.SourceKind, f.SourceID); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete episode: %v", err)
 	}
-	note := s.removeSourceFromGraph(ctx, uid, f.SourceKind, f.SourceID)
-	s.refreshSummaryQuiet(ctx, uid)
-	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: note}, nil
+	// PG 即刻生效；图侧/摘要异步收敛（响应不等慢操作 —— 实测 5s 截止）
+	s.removeSourceFromGraphAsync(uid, f.SourceKind, f.SourceID)
+	s.refreshSummaryAsync(uid)
+	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: "deleted"}, nil
 }
 
 func (s *memoryServer) deleteByNote(ctx context.Context, uid, noteID int64) (*emotionmemory.DeleteMemoryResponse, error) {
@@ -266,9 +294,9 @@ func (s *memoryServer) deleteByNote(ctx context.Context, uid, noteID int64) (*em
 	if err := s.repo.SoftDeleteEpisode(ctx, model.MemorySourceKindNote, noteID); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete episode: %v", err)
 	}
-	note := s.removeSourceFromGraph(ctx, uid, model.MemorySourceKindNote, noteID)
-	s.refreshSummaryQuiet(ctx, uid)
-	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: note}, nil
+	s.removeSourceFromGraphAsync(uid, model.MemorySourceKindNote, noteID)
+	s.refreshSummaryAsync(uid)
+	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: "deleted"}, nil
 }
 
 func (s *memoryServer) deleteAll(ctx context.Context, uid int64) (*emotionmemory.DeleteMemoryResponse, error) {
@@ -276,27 +304,20 @@ func (s *memoryServer) deleteAll(ctx context.Context, uid int64) (*emotionmemory
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "delete all: %v", err)
 	}
-	graphNote := ""
 	if s.graphDeps != nil && s.graphDeps.graph != nil {
-		if gerr := s.graphDeps.graph.DeleteUserData(ctx, uid); gerr != nil {
-			slog.WarnContext(ctx, "memory delete-all: drop user graph", "user_id", uid, "err", gerr)
-			graphNote = "graph drop failed (rebuild pending)"
-		}
-	} else {
-		graphNote = "graph writer not configured"
+		// 删全部 = drop 物理分图，O(1) 快路径；仍走异步（万一图库抖动也不拖响应）
+		go func() {
+			gctx, gcancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer gcancel()
+			if gerr := s.graphDeps.graph.DeleteUserData(gctx, uid); gerr != nil {
+				slog.Warn("memory delete-all: drop user graph", "user_id", uid, "err", gerr)
+			}
+		}()
 	}
-	s.refreshSummaryQuiet(ctx, uid)
+	s.refreshSummaryAsync(uid)
 	slog.InfoContext(ctx, "memory delete-all done",
 		"user_id", uid, "facts", facts, "notes", notes, "episodes", episodes, "entities", entities)
-	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: graphNote}, nil
+	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: "deleted"}, nil
 }
 
-// refreshSummaryQuiet 摘要刷新（best-effort：失败只记日志，不影响删除结果）。
-func (s *memoryServer) refreshSummaryQuiet(ctx context.Context, uid int64) {
-	if s.graphDeps == nil || s.graphDeps.refresh == nil {
-		return
-	}
-	if err := s.graphDeps.refresh(ctx, uid); err != nil {
-		slog.WarnContext(ctx, "memory delete: refresh summary", "user_id", uid, "err", err)
-	}
-}
+

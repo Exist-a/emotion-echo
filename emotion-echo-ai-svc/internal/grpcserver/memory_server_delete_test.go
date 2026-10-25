@@ -86,8 +86,11 @@ func TestDeleteMemory_Fact_RemovesPGAndGraph(t *testing.T) {
 	active, err := repo.ListActiveByUser(ctx, 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 0, "PG 侧必须已软删")
-	assert.Equal(t, []string{"ep-uuid-1"}, graph.removed, "图侧必须按 uuid 摘除")
-	assert.Equal(t, []int64{1}, *refreshed, "摘要必须刷新")
+	require.Eventually(t, func() bool { return len(graph.removed) == 1 }, 3*time.Second, 20*time.Millisecond,
+		"图侧必须异步按 uuid 摘除")
+	assert.Equal(t, []string{"ep-uuid-1"}, graph.removed)
+	require.Eventually(t, func() bool { return len(*refreshed) == 1 }, 3*time.Second, 20*time.Millisecond,
+		"摘要必须异步刷新")
 }
 
 func TestDeleteMemory_Fact_UUIDMissing_FallsBackToRebuild(t *testing.T) {
@@ -103,7 +106,8 @@ func TestDeleteMemory_Fact_UUIDMissing_FallsBackToRebuild(t *testing.T) {
 	resp, err := s.DeleteMemory(ctx, &emotionmemory.DeleteMemoryRequest{UserId: 1, Scope: "fact", Id: 1})
 	require.NoError(t, err)
 	require.True(t, resp.Ok)
-	assert.Equal(t, []int64{1}, graph.rebuildFor, "uuid 缺失必须回落全图重建")
+	require.Eventually(t, func() bool { return len(graph.rebuildFor) == 1 }, 3*time.Second, 20*time.Millisecond,
+		"uuid 缺失必须异步回落全图重建")
 	assert.Empty(t, graph.removed)
 }
 
@@ -132,6 +136,7 @@ func TestDeleteMemory_Note_Cascades(t *testing.T) {
 	active, err := repo.ListActiveByUser(ctx, 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 0, "自述来源的事实必须级联软删")
+	require.Eventually(t, func() bool { return len(graph.removed) == 1 }, 3*time.Second, 20*time.Millisecond)
 	assert.Equal(t, []string{"ep-note-1"}, graph.removed)
 }
 
@@ -147,9 +152,10 @@ func TestDeleteMemory_All_UsesFastPath(t *testing.T) {
 	resp, err := s.DeleteMemory(ctx, &emotionmemory.DeleteMemoryRequest{UserId: 1, Scope: "all"})
 	require.NoError(t, err)
 	require.True(t, resp.Ok)
-	assert.Equal(t, []int64{1}, graph.droppedFor, "删全部必须走物理分图快删")
+	require.Eventually(t, func() bool { return len(graph.droppedFor) == 1 }, 3*time.Second, 20*time.Millisecond,
+		"删全部必须走物理分图快删")
 	assert.Empty(t, graph.removed)
-	assert.Equal(t, []int64{1}, *refreshed)
+	require.Eventually(t, func() bool { return len(*refreshed) == 1 }, 3*time.Second, 20*time.Millisecond)
 	active, err := repo.ListActiveByUser(ctx, 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 0)
@@ -172,10 +178,10 @@ func TestDeleteMemory_GraphFailure_StillDeletes(t *testing.T) {
 	resp, err := s.DeleteMemory(ctx, &emotionmemory.DeleteMemoryRequest{UserId: 1, Scope: "fact", Id: 1})
 	require.NoError(t, err, "图失败不得让删除失败（PG 为事实源；缺口由重建工具兜底）")
 	require.True(t, resp.Ok)
-	assert.Contains(t, resp.Message, "rebuild pending", "必须如实标注图侧未完成")
 	active, err := repo.ListActiveByUser(ctx, 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 0, "PG 侧照常删掉")
+	// 图摘除失败只记日志（异步收敛；不再在响应里同步标注 —— 运行时实测 5s 截止）
 }
 
 func TestDeleteMemory_InvalidScope(t *testing.T) {

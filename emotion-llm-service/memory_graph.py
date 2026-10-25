@@ -68,12 +68,18 @@ class MemoryGraph:
     """图记忆的进程内门面：LLM/embedder 均为可注入接口（T10 决议：单测不打真 LLM）。"""
 
     def __init__(self, graphiti: GraphitiLike, episode_source: str = "message",
-                 dropper=None):
+                 dropper=None, base_driver=None):
         self.g = graphiti
         self._episode_source = episode_source
         # dropper(group_id)：物理删掉一个 group 图（CL-08d 删全部快路径）；
         # graphiti 不暴露该能力 ⇒ 由装配层注入（redislite 客户端 GRAPH.DELETE）。
         self._dropper = dropper
+        # base_driver：FalkorDriver 原始实例（CL-08d 删除路由用）。
+        # ⚠️ 分图路由：graphiti 按 group_id 把每个用户的图存成**独立 graph key**
+        #（Phase 4 T-17 实测），而 remove_episode 等节点级操作走 driver 的
+        # 默认 database（'memory'，恒为空）⇒ 必须先 with_database(str(user_id))
+        # 再执行，否则报 "node not found"（真栈实测踩过）。
+        self._base_driver = base_driver
 
     async def upsert_episode(
         self,
@@ -108,11 +114,32 @@ class MemoryGraph:
             return False, f"graphiti add_episode: {exc}"
 
     async def remove_episode(self, user_id: int, episode_uuid: str) -> tuple[bool, str]:
-        """按 uuid 摘掉一条情节（CL-08d 删除闭环；ADR 决策 3：图随删）。"""
+        """按 uuid 摘掉一条情节（CL-08d 删除闭环；ADR 决策 3：图随删）。
+
+        分图路由：remove 只做图查询/删除（无 LLM），用一个绑到该用户 group 图的
+        临时 Graphiti 执行（复用上游 remove_episode 的边/孤儿节点清理逻辑）。
+        base_driver 未注入（单测假实现）⇒ 直接走 self.g（假实现自行处理路由）。
+        """
         if user_id <= 0 or not episode_uuid:
             return False, "user_id and episode_uuid are required"
         try:
-            await self.g.remove_episode(episode_uuid)
+            target = self.g
+            if self._base_driver is not None:
+                from graphiti_core.graphiti import Graphiti
+
+                target = Graphiti(
+                    graph_driver=self._base_driver.with_database(str(user_id)),
+                    llm_client=getattr(self.g, "llm_client", None),
+                    embedder=getattr(self.g, "embedder", None),
+                    cross_encoder=getattr(self.g, "cross_encoder", None),
+                )
+            await target.remove_episode(episode_uuid)
+            # 上游 remove_episode 会留下孤儿实体（边清了、节点残留 —— falkordblite
+            # 0.11.0 实测）：0 条 MENTIONS 入边的实体 = 无任何情节支持 ⇒ 清除，
+            # 保证"图上不可再检索"的闭环（T-16）。
+            await self._base_driver.with_database(str(user_id)).execute_query(
+                "MATCH (n:Entity) WHERE NOT ( ()-[:MENTIONS]->(n) ) DELETE n"
+            )
             return True, ""
         except Exception as exc:  # noqa: BLE001
             logger.warning("memory-graph remove failed: %s", exc)
@@ -226,7 +253,7 @@ def _build(bridge: "AsyncBridge | None") -> MemoryGraph:
         embedder=embedder,
         cross_encoder=OpenAIRerankerClient(config=llm_cfg),
     )
-    graph = MemoryGraph(graphiti, dropper=_drop_group)
+    graph = MemoryGraph(graphiti, dropper=_drop_group, base_driver=driver)
 
     # 建索引/约束（幂等；spike 实测 falkordb 驱动支持）。
     # 必须与后续操作同循环：bridge 已启动 ⇒ 在它的循环上跑；未提供 bridge

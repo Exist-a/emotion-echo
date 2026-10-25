@@ -1,0 +1,33 @@
+# CL-F-70② 同型整改：Phase 3 T-5 A/B 原始输出补档（2026-10-25 重放）
+# 背景：原 A/B 于 2026-10-24 实跑成功但产物落错目录未进库（第二方核对 P1）；本文件为当前栈（:cl08d×4）上的完整重放原始输出
+# 方法与原轮一致：ai-svc LLM_BASE_URL → http://127.0.0.1:1/v1（down 段 recreate）
+
+## phase=base
+### phase=base @ 11:44:15
+[info] conv_id=798
+[OK  ] 发消息 HTTP 200 msg_id=1074
+[info] run=done|1| waited<=25s
+[OK  ] T-5.0 [基线] 抽取进终态: run=done|1|
+[OK  ] Phase2-R1 episode 落库: '我最近开始学萨克斯风，每周三晚上上课，老师说我进步很快'
+[info] memory_entity rows(user=1) = 1
+[info] active facts = 1
+[info] redis summary head: '- 2026-10 用户最近开始学萨克斯风，每周三晚上上课'
+
+## phase=down（LLM 不可达）
+### phase=down @ 11:45:06
+[info] conv_id=799
+[OK  ] 发消息 HTTP 200 msg_id=1075
+[info] run=failed|0|memory: call llm: Post "http://127.0.0.1:1/v1/chat/completions": dial tcp 127.0.0.1:1: connect: connection refused waited<=25s
+[OK  ] T-5.1 LLM 不可达时发消息仍成功: msg_id=1075
+[OK  ] T-5.2 消息已落库: rows=1
+[OK  ] T-5.3 run 落 failed（非 pending）: 'failed|0|memory: call llm: Post "http://127.0.0.1:1/v1/chat/completions": dial tcp 127.0.0.1:1: connect: connection refused'
+[info] 失败期 episode rows = 0（应为 0，恢复后补齐）
+
+## phase=up（恢复）
+### phase=up @ 11:45:42
+[info] conv_id=800
+[OK  ] 发消息 HTTP 200 msg_id=1076
+[info] run=done|1| waited<=25s
+[OK  ] T-5.4 恢复后自愈: run=done|1|
+[OK  ] T-5.5 本条消息 episode 已补齐: rows=1
+[info] 全部 episode rows = 3

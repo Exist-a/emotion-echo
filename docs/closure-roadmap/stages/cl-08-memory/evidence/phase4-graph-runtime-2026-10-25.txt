@@ -1,3 +1,4 @@
+# ⚠️ 第二方核对 P2：本文件 T-13/T-14/T-17/T-19 段为手写转写；原始输出补档见 cl08c-phase4-raw-2026-10-25.txt（T-19 评测原文 / 受控二分 / graph list）与 cl08d-t16-runtime-2026-10-25.txt（同栈重跑的逐步原始输出）。
 # CL-08c Phase 4 · 运行时证据（2026-10-25，dev 栈 18 容器，:cl08c × 4）
 # 链路：web 发消息 → chat-svc → Kafka → ai-svc 抽取(PG facts/episode/entity) → 异步 gRPC(mTLS+internal-key) → llm-service MemoryGraphService → Graphiti 摄取(DeepSeek LLM + 硅基流动 bge-m3) → falkordblite
 

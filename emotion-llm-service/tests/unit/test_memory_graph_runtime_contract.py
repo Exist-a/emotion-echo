@@ -62,3 +62,19 @@ def test_memory_graph_runs_on_dedicated_server():
     assert graph_idx > main_idx > 0
     segment = src[graph_idx - 400:graph_idx]
     assert "graph_server" in segment, "MemoryGraphService 必须注册到 graph_server"
+
+
+def test_remove_episode_routes_to_group_graph():
+    """CL-08d 运行时钉：remove_episode 必须按 user 路由到 group 图
+    （graphiti 按 group_id 物理分图；默认 database 'memory' 恒为空 ⇒
+    不路由 = 恒 "node not found"，删除闭环静默失效）。"""
+    src = (ROOT / "memory_graph.py").read_text(encoding="utf-8")
+    assert "with_database(str(user_id))" in src, "remove 必须走 with_database 分图路由"
+    assert "base_driver=driver" in src, "装配必须传 base_driver"
+
+
+def test_remove_episode_sweeps_orphan_entities():
+    """CL-08d 运行时钉：上游 remove 留孤儿实体（falkordblite 0.11.0 实测）⇒
+    remove 后必须清扫 0 MENTIONS 入边的实体，否则"图上不可再检索"失效。"""
+    src = (ROOT / "memory_graph.py").read_text(encoding="utf-8")
+    assert "MENTIONS" in src and "DELETE n" in src, "必须做孤儿实体清扫"
