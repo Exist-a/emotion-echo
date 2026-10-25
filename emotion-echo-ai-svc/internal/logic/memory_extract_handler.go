@@ -362,11 +362,29 @@ func (h *MemoryExtractHandler) forwardEpisodeToGraph(src extractSource) {
 		SourceID:      src.ID,
 	}
 	go func() {
+		// 图投递是旁路 goroutine：writer 实现内若 panic 不得击穿 ai-svc 进程
+		//（第二方核对 P2）。
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("memory: forward episode to graph panicked (recovered)",
+					"source_kind", ep.SourceKind, "source_id", ep.SourceID, "panic", r)
+			}
+		}()
 		ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
 		defer cancel()
-		if err := h.graphWriter.UpsertEpisode(ctx, ep); err != nil {
+		uuid, err := h.graphWriter.UpsertEpisode(ctx, ep)
+		if err != nil {
 			slog.WarnContext(ctx, "memory: forward episode to graph failed (best-effort)",
 				"source_kind", ep.SourceKind, "source_id", ep.SourceID, "err", err)
+			return
+		}
+		// CL-08d：把 graphiti 的 episode uuid 落 PG（删除闭环 remove_episode 定位键）。
+		// 失败只记日志：uuid 缺失时删除回落"该用户全图重建"，闭环不破。
+		if uuid != "" {
+			if uerr := h.repo.SetEpisodeGraphUUID(ctx, ep.SourceKind, ep.SourceID, uuid); uerr != nil {
+				slog.WarnContext(ctx, "memory: persist graph uuid failed",
+					"source_kind", ep.SourceKind, "source_id", ep.SourceID, "err", uerr)
+			}
 		}
 	}()
 }
@@ -391,6 +409,24 @@ func (h *MemoryExtractHandler) refreshSummary(ctx context.Context, userID int64)
 	}
 	sharedmetrics.MemorySummaryBuildTotal.WithLabelValues(sharedmetrics.MemoryResultOK).Inc()
 	slog.DebugContext(ctx, "memory: summary refreshed", "user_id", userID, "facts", len(facts), "chars", len(summary))
+}
+
+// RefreshUserSummary 立即重建用户级摘要（CL-08d 删除后调用：让被删记忆立刻
+// 退出注入）。全部事实被删 ⇒ 摘要为空串（注入侧空段不产生）。
+// 错误向上返回（删除编排决定是否影响响应）。
+func (h *MemoryExtractHandler) RefreshUserSummary(ctx context.Context, userID int64) error {
+	if h.summaryStore == nil {
+		return nil
+	}
+	facts, err := h.repo.ListActiveByUser(ctx, userID, 200)
+	if err != nil {
+		return fmt.Errorf("load facts: %w", err)
+	}
+	summary := memory.BuildSummary(facts, h.summaryBudget)
+	if err := h.summaryStore.Set(ctx, userID, summary); err != nil {
+		return fmt.Errorf("write summary: %w", err)
+	}
+	return nil
 }
 
 // finishFailed 回填失败状态（best-effort：回填失败不掩盖原始错误）。

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12memory_graph.proto\x12\x17\x65motion_memory_graph.v1\"\x88\x01\n\x14UpsertEpisodeRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12\x18\n\x10valid_at_unix_ms\x18\x04 \x01(\x03\x12\x13\n\x0bsource_kind\x18\x05 \x01(\t\x12\x11\n\tsource_id\x18\x06 \x01(\x03\"4\n\x15UpsertEpisodeResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\x84\x01\n\x12MemoryGraphService\x12n\n\rUpsertEpisode\x12-.emotion_memory_graph.v1.UpsertEpisodeRequest\x1a..emotion_memory_graph.v1.UpsertEpisodeResponseB7Z5github.com/emotion-echo/shared/pkg/emotionmemorygraphb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12memory_graph.proto\x12\x17\x65motion_memory_graph.v1\"=\n\x14RemoveEpisodeRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x14\n\x0c\x65pisode_uuid\x18\x02 \x01(\t\"4\n\x15RemoveEpisodeResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"\x88\x01\n\x14UpsertEpisodeRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12\x18\n\x10valid_at_unix_ms\x18\x04 \x01(\x03\x12\x13\n\x0bsource_kind\x18\x05 \x01(\t\x12\x11\n\tsource_id\x18\x06 \x01(\x03\"J\n\x15UpsertEpisodeResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x14\n\x0c\x65pisode_uuid\x18\x03 \x01(\t\"(\n\x15\x44\x65leteUserDataRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\"5\n\x16\x44\x65leteUserDataResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xe7\x02\n\x12MemoryGraphService\x12n\n\rUpsertEpisode\x12-.emotion_memory_graph.v1.UpsertEpisodeRequest\x1a..emotion_memory_graph.v1.UpsertEpisodeResponse\x12q\n\x0e\x44\x65leteUserData\x12..emotion_memory_graph.v1.DeleteUserDataRequest\x1a/.emotion_memory_graph.v1.DeleteUserDataResponse\x12n\n\rRemoveEpisode\x12-.emotion_memory_graph.v1.RemoveEpisodeRequest\x1a..emotion_memory_graph.v1.RemoveEpisodeResponseB7Z5github.com/emotion-echo/shared/pkg/emotionmemorygraphb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,10 +32,18 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'memory_graph_pb2', _globals
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z5github.com/emotion-echo/shared/pkg/emotionmemorygraph'
-  _globals['_UPSERTEPISODEREQUEST']._serialized_start=48
-  _globals['_UPSERTEPISODEREQUEST']._serialized_end=184
-  _globals['_UPSERTEPISODERESPONSE']._serialized_start=186
-  _globals['_UPSERTEPISODERESPONSE']._serialized_end=238
-  _globals['_MEMORYGRAPHSERVICE']._serialized_start=241
-  _globals['_MEMORYGRAPHSERVICE']._serialized_end=373
+  _globals['_REMOVEEPISODEREQUEST']._serialized_start=47
+  _globals['_REMOVEEPISODEREQUEST']._serialized_end=108
+  _globals['_REMOVEEPISODERESPONSE']._serialized_start=110
+  _globals['_REMOVEEPISODERESPONSE']._serialized_end=162
+  _globals['_UPSERTEPISODEREQUEST']._serialized_start=165
+  _globals['_UPSERTEPISODEREQUEST']._serialized_end=301
+  _globals['_UPSERTEPISODERESPONSE']._serialized_start=303
+  _globals['_UPSERTEPISODERESPONSE']._serialized_end=377
+  _globals['_DELETEUSERDATAREQUEST']._serialized_start=379
+  _globals['_DELETEUSERDATAREQUEST']._serialized_end=419
+  _globals['_DELETEUSERDATARESPONSE']._serialized_start=421
+  _globals['_DELETEUSERDATARESPONSE']._serialized_end=474
+  _globals['_MEMORYGRAPHSERVICE']._serialized_start=477
+  _globals['_MEMORYGRAPHSERVICE']._serialized_end=836
 # @@protoc_insertion_point(module_scope)

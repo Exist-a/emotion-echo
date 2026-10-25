@@ -113,6 +113,11 @@ var wantRoutes = gin.RoutesInfo{
 	// 网关由既有 catch-all /api/v1/*（route 100）覆盖，无需新增 APISIX 路由。
 	{Method: "POST", Path: "/api/v1/memory/notes"},
 	{Method: "GET", Path: "/api/v1/memory/graph"},
+	// CL-08d：管理页删除（删除闭环）
+	{Method: "GET", Path: "/api/v1/memory/items"},
+	{Method: "DELETE", Path: "/api/v1/memory/facts/:id"},
+	{Method: "DELETE", Path: "/api/v1/memory/notes/:id"},
+	{Method: "DELETE", Path: "/api/v1/memory"},
 
 	// ----- tts_handler.go (3 条) -----
 	{Method: "POST", Path: "/api/v1/tts/synthesize"},
@@ -354,6 +359,7 @@ var knownPathPrefixes = []string{
 	"/api/v1/mental-health/assessment",
 	"/api/v1/client-error", // E2E-F-148：浏览器未捕获异常上报（未登录也要能报）
 	"/api/v1/memory/",      // CL-08a：「我的记忆」自述 + 记忆图
+	"/api/v1/memory",       // CL-08d：删除全部（精确路径，无尾斜杠）
 	"/api/v1/multimodal/",
 	"/api/v1/tts/",
 	"/api/v1/uploads/:kind",

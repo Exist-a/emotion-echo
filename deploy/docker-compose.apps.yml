@@ -421,7 +421,8 @@ services:
       # 让 ai-svc 与 web-bff 用不同 key（跨 svc 隔离，prod 推荐姿势）
       AI_LLM_INTERNAL_API_KEY: ${AI_LLM_INTERNAL_API_KEY:-}
       # CL-08c Phase 4：图写入面（llm-service MemoryGraphService）；空 = Noop 不投递
-      MEMORY_GRAPH_ADDR: ${MEMORY_GRAPH_ADDR:-emotion-llm-service:50051}
+      # CL-08d 整改：图 gRPC 独立端口（50052，独立线程池——不与 chat 抢 worker）
+      MEMORY_GRAPH_ADDR: ${MEMORY_GRAPH_ADDR:-emotion-llm-service:50052}
       # P0-R2-5: 统一 env 名 INTERNAL_API_KEY（与 llm-service / web-bff 一致）
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-key-change-me-please-32chars-min}
       # CL-F-66: 本服务 gRPC 8892 的**服务端**鉴权 key（空 ⇒ 回落 INTERNAL_API_KEY；两者都空 ⇒ 关闭）

@@ -644,6 +644,29 @@ func main() {
 		var grpcOpts []grpcserver.Option
 		if memRepo != nil && memHandler != nil {
 			grpcOpts = append(grpcOpts, grpcserver.WithMemory(memRepo, memHandler.HandleNote))
+
+			// CL-08d：删除闭环的图侧依赖（graph writer 未配 = Noop ⇒ 图侧跳过）
+			memGraphWriter := memory.NewGraphWriterFromEnv()
+			grpcOpts = append(grpcOpts, grpcserver.WithMemoryGraphDeps(
+				memGraphWriter,
+				func(ctx context.Context, userID int64) error {
+					return memHandler.RefreshUserSummary(ctx, userID)
+				},
+				func(ctx context.Context, userID int64) (int, int, error) {
+					eps, err := memRepo.ListEpisodesByUserAll(ctx, userID)
+					if err != nil {
+						return 0, 0, err
+					}
+					srcs := make([]memory.EpisodeSource, 0, len(eps))
+					for _, e := range eps {
+						srcs = append(srcs, memory.EpisodeSource{
+							SourceKind: e.SourceKind, SourceID: e.SourceID, UserID: e.UserID,
+							Name: e.Name, Content: e.Content, ValidAtUnixMs: e.ValidAt.UnixMilli(),
+						})
+					}
+					return memory.RebuildUserGraph(ctx, memGraphWriter, memRepo, srcs, userID)
+				},
+			))
 		}
 		// CL-F-66：gRPC 8892 内部鉴权。per-svc env 优先（最小权限），fallback 共享 INTERNAL_API_KEY；
 		// 都为空 ⇒ 关闭（本地/测试环境保持旧行为）。

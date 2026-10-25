@@ -238,11 +238,19 @@ type fakeEpisodeGraphWriter struct {
 	mu    sync.Mutex
 }
 
-func (f *fakeEpisodeGraphWriter) UpsertEpisode(ctx context.Context, ep memory.Episode) error {
+func (f *fakeEpisodeGraphWriter) UpsertEpisode(ctx context.Context, ep memory.Episode) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, ep)
-	return f.err
+	return "graph-ep-uuid", f.err
+}
+
+func (f *fakeEpisodeGraphWriter) DeleteUserData(ctx context.Context, userID int64) error {
+	return nil
+}
+
+func (f *fakeEpisodeGraphWriter) RemoveEpisode(ctx context.Context, userID int64, uuid string) error {
+	return nil
 }
 
 func (f *fakeEpisodeGraphWriter) count() int {

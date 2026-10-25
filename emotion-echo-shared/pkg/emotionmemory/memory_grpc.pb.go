@@ -37,8 +37,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MemoryService_CreateNote_FullMethodName = "/emotion_memory.v1.MemoryService/CreateNote"
-	MemoryService_GetGraph_FullMethodName   = "/emotion_memory.v1.MemoryService/GetGraph"
+	MemoryService_CreateNote_FullMethodName   = "/emotion_memory.v1.MemoryService/CreateNote"
+	MemoryService_GetGraph_FullMethodName     = "/emotion_memory.v1.MemoryService/GetGraph"
+	MemoryService_ListMemory_FullMethodName   = "/emotion_memory.v1.MemoryService/ListMemory"
+	MemoryService_DeleteMemory_FullMethodName = "/emotion_memory.v1.MemoryService/DeleteMemory"
 )
 
 // MemoryServiceClient is the client API for MemoryService service.
@@ -54,6 +56,18 @@ type MemoryServiceClient interface {
 	CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error)
 	// GetGraph 取用户的记忆图（当前由 PG 事实渲染）。
 	GetGraph(ctx context.Context, in *GetGraphRequest, opts ...grpc.CallOption) (*GetGraphResponse, error)
+	// ListMemory 取用户的记忆列表（CL-08d：管理页删除的列举面）。
+	ListMemory(ctx context.Context, in *ListMemoryRequest, opts ...grpc.CallOption) (*ListMemoryResponse, error)
+	// DeleteMemory 删除记忆（CL-08d 删除闭环：PG 软删 → 图随删 → 摘要失效）。
+	//
+	// scope 语义：
+	//
+	//	fact  = 按 fact_id 删单条记忆（连同其来源情节的图上内容）
+	//	note  = 按 note_id 删一条自述（连同其来源情节）
+	//	all   = 删除该用户全部记忆（PG 全软删 + 图快删 + 摘要键删）
+	//
+	// user_id 由 BFF 从鉴权上下文填入（客户端不可传）。
+	DeleteMemory(ctx context.Context, in *DeleteMemoryRequest, opts ...grpc.CallOption) (*DeleteMemoryResponse, error)
 }
 
 type memoryServiceClient struct {
@@ -84,6 +98,26 @@ func (c *memoryServiceClient) GetGraph(ctx context.Context, in *GetGraphRequest,
 	return out, nil
 }
 
+func (c *memoryServiceClient) ListMemory(ctx context.Context, in *ListMemoryRequest, opts ...grpc.CallOption) (*ListMemoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMemoryResponse)
+	err := c.cc.Invoke(ctx, MemoryService_ListMemory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *memoryServiceClient) DeleteMemory(ctx context.Context, in *DeleteMemoryRequest, opts ...grpc.CallOption) (*DeleteMemoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteMemoryResponse)
+	err := c.cc.Invoke(ctx, MemoryService_DeleteMemory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MemoryServiceServer is the server API for MemoryService service.
 // All implementations must embed UnimplementedMemoryServiceServer
 // for forward compatibility.
@@ -97,6 +131,18 @@ type MemoryServiceServer interface {
 	CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error)
 	// GetGraph 取用户的记忆图（当前由 PG 事实渲染）。
 	GetGraph(context.Context, *GetGraphRequest) (*GetGraphResponse, error)
+	// ListMemory 取用户的记忆列表（CL-08d：管理页删除的列举面）。
+	ListMemory(context.Context, *ListMemoryRequest) (*ListMemoryResponse, error)
+	// DeleteMemory 删除记忆（CL-08d 删除闭环：PG 软删 → 图随删 → 摘要失效）。
+	//
+	// scope 语义：
+	//
+	//	fact  = 按 fact_id 删单条记忆（连同其来源情节的图上内容）
+	//	note  = 按 note_id 删一条自述（连同其来源情节）
+	//	all   = 删除该用户全部记忆（PG 全软删 + 图快删 + 摘要键删）
+	//
+	// user_id 由 BFF 从鉴权上下文填入（客户端不可传）。
+	DeleteMemory(context.Context, *DeleteMemoryRequest) (*DeleteMemoryResponse, error)
 	mustEmbedUnimplementedMemoryServiceServer()
 }
 
@@ -112,6 +158,12 @@ func (UnimplementedMemoryServiceServer) CreateNote(context.Context, *CreateNoteR
 }
 func (UnimplementedMemoryServiceServer) GetGraph(context.Context, *GetGraphRequest) (*GetGraphResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetGraph not implemented")
+}
+func (UnimplementedMemoryServiceServer) ListMemory(context.Context, *ListMemoryRequest) (*ListMemoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMemory not implemented")
+}
+func (UnimplementedMemoryServiceServer) DeleteMemory(context.Context, *DeleteMemoryRequest) (*DeleteMemoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteMemory not implemented")
 }
 func (UnimplementedMemoryServiceServer) mustEmbedUnimplementedMemoryServiceServer() {}
 func (UnimplementedMemoryServiceServer) testEmbeddedByValue()                       {}
@@ -170,6 +222,42 @@ func _MemoryService_GetGraph_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MemoryService_ListMemory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMemoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MemoryServiceServer).ListMemory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MemoryService_ListMemory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MemoryServiceServer).ListMemory(ctx, req.(*ListMemoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MemoryService_DeleteMemory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteMemoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MemoryServiceServer).DeleteMemory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MemoryService_DeleteMemory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MemoryServiceServer).DeleteMemory(ctx, req.(*DeleteMemoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MemoryService_ServiceDesc is the grpc.ServiceDesc for MemoryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -184,6 +272,14 @@ var MemoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGraph",
 			Handler:    _MemoryService_GetGraph_Handler,
+		},
+		{
+			MethodName: "ListMemory",
+			Handler:    _MemoryService_ListMemory_Handler,
+		},
+		{
+			MethodName: "DeleteMemory",
+			Handler:    _MemoryService_DeleteMemory_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

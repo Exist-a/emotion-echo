@@ -37,7 +37,7 @@ class MemoryGraphServicer(memory_graph_pb2_grpc.MemoryGraphServiceServicer):
                 ok=False, message="memory graph unavailable (degraded)"
             )
         try:
-            ok, message = self._bridge.call(
+            ok, detail = self._bridge.call(
                 self._graph.upsert_episode(
                     user_id=request.user_id,
                     name=request.name,
@@ -47,9 +47,12 @@ class MemoryGraphServicer(memory_graph_pb2_grpc.MemoryGraphServiceServicer):
                 timeout=MEMORY_GRAPH_RPC_TIMEOUT_SEC,
             )
         except TimeoutError as exc:
-            ok, message = False, str(exc)
+            ok, detail = False, str(exc)
         except Exception as exc:  # noqa: BLE001 —— 图失败折算 ok=false，不崩服务
-            ok, message = False, f"memory graph rpc: {exc}"
+            ok, detail = False, f"memory graph rpc: {exc}"
+        # detail 语义（memory_graph.upsert_episode）：成功 = episode uuid；失败 = 错误消息
+        message = "" if ok else detail
+        episode_uuid = detail if ok else ""
         if not ok:
             logger.warning(
                 "[grpc-server] UpsertEpisode failed user=%s source=%s/%s: %s",
@@ -60,7 +63,52 @@ class MemoryGraphServicer(memory_graph_pb2_grpc.MemoryGraphServiceServicer):
             request.user_id, request.source_kind, request.source_id, ok,
             time.time() - started,
         )
-        return memory_graph_pb2.UpsertEpisodeResponse(ok=ok, message=message or "")
+        return memory_graph_pb2.UpsertEpisodeResponse(
+            ok=ok, message=message or "", episode_uuid=episode_uuid,
+        )
+
+    def DeleteUserData(self, request, context):
+        if self._graph is None or self._bridge is None:
+            return memory_graph_pb2.DeleteUserDataResponse(
+                ok=False, message="memory graph unavailable (degraded)"
+            )
+        try:
+            ok, detail = self._bridge.call(
+                self._graph.delete_user_data(user_id=request.user_id),
+                timeout=MEMORY_GRAPH_RPC_TIMEOUT_SEC,
+            )
+        except TimeoutError as exc:
+            ok, detail = False, str(exc)
+        except Exception as exc:  # noqa: BLE001
+            ok, detail = False, f"memory graph rpc: {exc}"
+        logger.info(
+            "[grpc-server] DeleteUserData user=%s ok=%s %s",
+            request.user_id, ok, "" if ok else detail,
+        )
+        return memory_graph_pb2.DeleteUserDataResponse(ok=ok, message=detail if not ok else "")
+
+    def RemoveEpisode(self, request, context):
+        if self._graph is None or self._bridge is None:
+            return memory_graph_pb2.RemoveEpisodeResponse(
+                ok=False, message="memory graph unavailable (degraded)"
+            )
+        try:
+            ok, detail = self._bridge.call(
+                self._graph.remove_episode(
+                    user_id=request.user_id,
+                    episode_uuid=request.episode_uuid,
+                ),
+                timeout=MEMORY_GRAPH_RPC_TIMEOUT_SEC,
+            )
+        except TimeoutError as exc:
+            ok, detail = False, str(exc)
+        except Exception as exc:  # noqa: BLE001
+            ok, detail = False, f"memory graph rpc: {exc}"
+        logger.info(
+            "[grpc-server] RemoveEpisode user=%s ok=%s %s",
+            request.user_id, ok, "" if ok else detail,
+        )
+        return memory_graph_pb2.RemoveEpisodeResponse(ok=ok, message=detail if not ok else "")
 
 
 def _make_memory_graph_servicer(graph, bridge):

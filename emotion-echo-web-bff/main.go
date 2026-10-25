@@ -592,6 +592,11 @@ func registerRoutes(r *gin.Engine, s *svc.ServiceContext, c *config.Config, llmS
 	memoryHandler := handler.NewMemoryHandler(s.Memory)
 	r.POST("/api/v1/memory/notes", memoryHandler.CreateNote)
 	r.GET("/api/v1/memory/graph", memoryHandler.GetGraph)
+	// CL-08d：管理页删除（删除闭环：PG→图→摘要）
+	r.GET("/api/v1/memory/items", memoryHandler.ListMemory)
+	r.DELETE("/api/v1/memory/facts/:id", func(c *gin.Context) { memoryHandler.DeleteMemory(c, "fact") })
+	r.DELETE("/api/v1/memory/notes/:id", func(c *gin.Context) { memoryHandler.DeleteMemory(c, "note") })
+	r.DELETE("/api/v1/memory", func(c *gin.Context) { memoryHandler.DeleteMemory(c, "all") })
 	// 未匹配 → 404（不误伤基础设施 probe）
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})

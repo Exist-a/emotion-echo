@@ -78,8 +78,8 @@ func TestRedisMemorySummary_BlackholeTimesOutFast(t *testing.T) {
 
 	require.Error(t, err, "黑洞连接必须报错（由调用方降级为空）")
 	assert.Equal(t, "", got)
-	assert.Less(t, elapsed, 2*time.Second,
-		"必须在 300ms 硬超时内返回（实测 %v）——记忆是增强不是依赖", elapsed)
+	assert.Less(t, elapsed, 900*time.Millisecond,
+		"必须在 300ms 硬超时附近返回（实测 %v；>300ms×3 = 契约失效）——记忆是增强不是依赖", elapsed)
 }
 
 // nil client ⇒ 返回 nil source（未装配 ⇒ 注入侧自然降级为空段）。
