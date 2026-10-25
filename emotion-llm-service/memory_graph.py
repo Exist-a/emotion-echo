@@ -134,12 +134,14 @@ class MemoryGraph:
                     cross_encoder=getattr(self.g, "cross_encoder", None),
                 )
             await target.remove_episode(episode_uuid)
-            # 上游 remove_episode 会留下孤儿实体（边清了、节点残留 —— falkordblite
-            # 0.11.0 实测）：0 条 MENTIONS 入边的实体 = 无任何情节支持 ⇒ 清除，
-            # 保证"图上不可再检索"的闭环（T-16）。
-            await self._base_driver.with_database(str(user_id)).execute_query(
-                "MATCH (n:Entity) WHERE NOT ( ()-[:MENTIONS]->(n) ) DELETE n"
-            )
+            if self._base_driver is not None:
+                # 上游 remove_episode 会留下孤儿实体（边清了、节点残留 —— falkordblite
+                # 0.11.0 实测）：0 条 MENTIONS 入边的实体 = 无任何情节支持 ⇒ 清除，
+                # 保证"图上不可再检索"的闭环（T-16）。仅真实装配路径执行（base_driver
+                # 注入）；单测假实现走 fallback，无图可扫。
+                await self._base_driver.with_database(str(user_id)).execute_query(
+                    "MATCH (n:Entity) WHERE NOT ( ()-[:MENTIONS]->(n) ) DELETE n"
+                )
             return True, ""
         except Exception as exc:  # noqa: BLE001
             logger.warning("memory-graph remove failed: %s", exc)

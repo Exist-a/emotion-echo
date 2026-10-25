@@ -4,6 +4,7 @@ package grpcserver
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,17 +16,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// fakeGraphDeps 记录图侧调用。⚠️ 删除编排是异步 goroutine ⇒ 所有字段必须
+// 持锁读写（CI 以 -race 跑，无锁 = DATA RACE）。
 type fakeGraphDeps struct {
-	removeErr   error
-	dropErr     error
-	removed     []string
-	droppedFor  []int64
-	rebuildErr  error
-	rebuildFor  []int64
-	rebuildStat string
+	mu         sync.Mutex
+	removeErr  error
+	dropErr    error
+	removed    []string
+	droppedFor []int64
+	rebuildErr error
+	rebuildFor []int64
 }
 
 func (f *fakeGraphDeps) DeleteUserData(ctx context.Context, userID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.dropErr != nil {
 		return f.dropErr
 	}
@@ -34,11 +39,25 @@ func (f *fakeGraphDeps) DeleteUserData(ctx context.Context, userID int64) error 
 }
 
 func (f *fakeGraphDeps) RemoveEpisode(ctx context.Context, userID int64, uuid string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.removeErr != nil {
 		return f.removeErr
 	}
 	f.removed = append(f.removed, uuid)
 	return nil
+}
+
+func (f *fakeGraphDeps) snapshot() (removed []string, droppedFor []int64, rebuildFor []int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string{}, f.removed...), append([]int64{}, f.droppedFor...), append([]int64{}, f.rebuildFor...)
+}
+
+func (f *fakeGraphDeps) rebuildCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.rebuildFor)
 }
 
 func newDeleteTestServer(t *testing.T) (*memoryServer, *repository.InMemoryMemoryFactRepo, *fakeGraphDeps, *[]int64) {
@@ -54,6 +73,8 @@ func newDeleteTestServer(t *testing.T) (*memoryServer, *repository.InMemoryMemor
 			return nil
 		},
 		rebuild: func(ctx context.Context, userID int64) (int, int, error) {
+			graph.mu.Lock()
+			defer graph.mu.Unlock()
 			if graph.rebuildErr != nil {
 				return 0, 0, graph.rebuildErr
 			}
@@ -86,9 +107,12 @@ func TestDeleteMemory_Fact_RemovesPGAndGraph(t *testing.T) {
 	active, err := repo.ListActiveByUser(ctx, 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 0, "PG 侧必须已软删")
-	require.Eventually(t, func() bool { return len(graph.removed) == 1 }, 3*time.Second, 20*time.Millisecond,
-		"图侧必须异步按 uuid 摘除")
-	assert.Equal(t, []string{"ep-uuid-1"}, graph.removed)
+	require.Eventually(t, func() bool {
+		removed, _, _ := graph.snapshot()
+		return len(removed) == 1
+	}, 3*time.Second, 20*time.Millisecond, "图侧必须异步按 uuid 摘除")
+	removed, _, _ := graph.snapshot()
+	assert.Equal(t, []string{"ep-uuid-1"}, removed)
 	require.Eventually(t, func() bool { return len(*refreshed) == 1 }, 3*time.Second, 20*time.Millisecond,
 		"摘要必须异步刷新")
 }
@@ -106,9 +130,12 @@ func TestDeleteMemory_Fact_UUIDMissing_FallsBackToRebuild(t *testing.T) {
 	resp, err := s.DeleteMemory(ctx, &emotionmemory.DeleteMemoryRequest{UserId: 1, Scope: "fact", Id: 1})
 	require.NoError(t, err)
 	require.True(t, resp.Ok)
-	require.Eventually(t, func() bool { return len(graph.rebuildFor) == 1 }, 3*time.Second, 20*time.Millisecond,
-		"uuid 缺失必须异步回落全图重建")
-	assert.Empty(t, graph.removed)
+	require.Eventually(t, func() bool {
+		_, _, rb := graph.snapshot()
+		return len(rb) == 1
+	}, 3*time.Second, 20*time.Millisecond, "uuid 缺失必须异步回落全图重建")
+	removed, _, _ := graph.snapshot()
+	assert.Empty(t, removed)
 }
 
 func TestDeleteMemory_Note_Cascades(t *testing.T) {
@@ -136,8 +163,12 @@ func TestDeleteMemory_Note_Cascades(t *testing.T) {
 	active, err := repo.ListActiveByUser(ctx, 1, 0)
 	require.NoError(t, err)
 	assert.Len(t, active, 0, "自述来源的事实必须级联软删")
-	require.Eventually(t, func() bool { return len(graph.removed) == 1 }, 3*time.Second, 20*time.Millisecond)
-	assert.Equal(t, []string{"ep-note-1"}, graph.removed)
+	require.Eventually(t, func() bool {
+		removed, _, _ := graph.snapshot()
+		return len(removed) == 1
+	}, 3*time.Second, 20*time.Millisecond)
+	removed, _, _ := graph.snapshot()
+	assert.Equal(t, []string{"ep-note-1"}, removed)
 }
 
 func TestDeleteMemory_All_UsesFastPath(t *testing.T) {
@@ -152,9 +183,12 @@ func TestDeleteMemory_All_UsesFastPath(t *testing.T) {
 	resp, err := s.DeleteMemory(ctx, &emotionmemory.DeleteMemoryRequest{UserId: 1, Scope: "all"})
 	require.NoError(t, err)
 	require.True(t, resp.Ok)
-	require.Eventually(t, func() bool { return len(graph.droppedFor) == 1 }, 3*time.Second, 20*time.Millisecond,
-		"删全部必须走物理分图快删")
-	assert.Empty(t, graph.removed)
+	require.Eventually(t, func() bool {
+		_, dropped, _ := graph.snapshot()
+		return len(dropped) == 1
+	}, 3*time.Second, 20*time.Millisecond, "删全部必须走物理分图快删")
+	removed, _, _ := graph.snapshot()
+	assert.Empty(t, removed)
 	require.Eventually(t, func() bool { return len(*refreshed) == 1 }, 3*time.Second, 20*time.Millisecond)
 	active, err := repo.ListActiveByUser(ctx, 1, 0)
 	require.NoError(t, err)
