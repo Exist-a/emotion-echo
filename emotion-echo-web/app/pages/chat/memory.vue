@@ -17,6 +17,12 @@
       </div>
 
       <div class="memory-side">
+        <MemoryList
+          :items="items"
+          :busy="deleting"
+          @delete="onDelete"
+        />
+
         <div class="memory-stream" aria-live="polite">
           <p v-for="(ack, i) in acks" :key="i" class="memory-ack">{{ ack }}</p>
         </div>
@@ -48,18 +54,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import BaseChart from '~/components/charts/BaseChart.vue'
-import { get, post } from '~/composables/useApi'
+import MemoryList from '~/components/memory/MemoryList.vue'
+import { del, get, post } from '~/composables/useApi'
 import { API_ROUTES } from '~/lib/apiRoutes'
 import { buildMemoryGraphOption, hasMemoryGraph } from '~/utils/memoryGraph'
-import type { MemoryGraph, MemoryNoteResult } from '~/types/memory'
+import type { MemoryGraph, MemoryItem, MemoryNoteResult } from '~/types/memory'
 
 const graphHeight = 460
 
 const graph = ref<MemoryGraph>({ nodes: [], edges: [] })
+const items = ref<MemoryItem[]>([])
 const draft = ref('')
 const acks = ref<string[]>([])
 const submitting = ref(false)
 const loading = ref(true)
+const deleting = ref(false)
 
 const count = computed(() => draft.value.length)
 const canSubmit = computed(() => !submitting.value && draft.value.trim().length > 0)
@@ -73,6 +82,42 @@ async function loadGraph() {
     // useApi 已统一提示（401 会跳登录）；这里保持空图，不让页头崩
   } finally {
     loading.value = false
+  }
+}
+
+// CL-08d：管理页列举（与图分开取 —— 列表带 id 供删除，图只管可视化）
+async function loadItems() {
+  try {
+    const res = await get<{ items: MemoryItem[] }>(API_ROUTES.memoryItems.path)
+    items.value = res?.items ?? []
+  } catch {
+    items.value = []
+  }
+}
+
+async function reloadAll() {
+  window.setTimeout(() => {
+    void loadGraph()
+    void loadItems()
+  }, 400)
+}
+
+// 删除（闭环在服务端：PG 软删 → 图随删 → 摘要刷新）；成功后刷新两块视图
+async function onDelete(kind: 'fact' | 'note' | 'all', id: number) {
+  if (deleting.value) return
+  deleting.value = true
+  try {
+    const url =
+      kind === 'all'
+        ? API_ROUTES.memoryAllDelete.path
+        : `${API_ROUTES.memoryAllDelete.path.replace(/\/$/, '')}/${kind}s/${id}`
+    await del(url)
+    acks.value.push(kind === 'all' ? '已删除全部记忆。' : '这条记忆已删除。')
+    await reloadAll()
+  } catch {
+    acks.value.push('这次没删掉，请稍后再试。')
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -95,7 +140,10 @@ async function submit() {
   }
 }
 
-onMounted(loadGraph)
+onMounted(() => {
+  void loadGraph()
+  void loadItems()
+})
 </script>
 
 <style scoped lang="scss">

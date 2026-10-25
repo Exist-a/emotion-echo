@@ -102,6 +102,9 @@ export const API_ROUTES = {
   // 该页**不触发** AI 回复 / 情绪分析 / 数字人（自述条独立于 conversations/messages）。
   memoryNotes: { method: 'POST', path: '/memory/notes' } as ApiRoute,
   memoryGraph: { method: 'GET', path: '/memory/graph' } as ApiRoute,
+  // CL-08d：管理页删除（删除闭环：PG → 图 → 摘要）。
+  memoryItems: { method: 'GET', path: '/memory/items' } as ApiRoute,
+  memoryAllDelete: { method: 'DELETE', path: '/memory' } as ApiRoute,
 
   // ============ Uploads（Stage 58 PR-UP-1/2：通用上传）============
   // BFF: POST /api/v1/uploads/:kind（kind ∈ image|video|file）
