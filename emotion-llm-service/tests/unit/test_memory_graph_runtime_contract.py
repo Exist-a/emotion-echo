@@ -48,3 +48,17 @@ def test_dockerfile_precreates_graph_dir_with_owner():
         "非 root 容器写命名卷：必须预建目录并 chown（卷首挂继承属主），"
         "否则 Permission denied ⇒ MemoryGraph 永久降级"
     )
+
+
+def test_memory_graph_runs_on_dedicated_server():
+    """第二方核对 P2 整改钉：图 servicer 必须独立 gRPC server（独立线程池/端口），
+    不得与 chat 主链路共用 ThreadPoolExecutor（≥10 并发图写会饿死对话）。"""
+    src = (ROOT / "grpc_server.py").read_text(encoding="utf-8")
+    assert "graph_server = grpc.server(" in src, "图服务必须独立 gRPC server"
+    assert "MEMORY_GRAPH_GRPC_PORT" in src, "图端口必须可配（默认 50052）"
+    # 主链路装配处不得再注册 MemoryGraphService（只允许 graph_server 分支注册）
+    main_idx = src.find("add_EmotionLLMServiceServicer_to_server")
+    graph_idx = src.find("add_MemoryGraphServiceServicer_to_server")
+    assert graph_idx > main_idx > 0
+    segment = src[graph_idx - 400:graph_idx]
+    assert "graph_server" in segment, "MemoryGraphService 必须注册到 graph_server"

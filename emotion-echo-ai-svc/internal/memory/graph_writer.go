@@ -35,13 +35,26 @@ type Episode struct {
 
 // EpisodeGraphWriter 图写入接口（单测注入 Fake；生产 = gRPC）。
 type EpisodeGraphWriter interface {
-	UpsertEpisode(ctx context.Context, ep Episode) error
+	// UpsertEpisode 写一条情节；成功返回 graphiti episode uuid（删除定位键）。
+	UpsertEpisode(ctx context.Context, ep Episode) (string, error)
+	// DeleteUserData 删掉一个用户的全部图数据（CL-08d 删全部快路径）。
+	DeleteUserData(ctx context.Context, userID int64) error
+	// RemoveEpisode 按 uuid 摘掉一条情节（CL-08d 删单条图侧闭环）。
+	RemoveEpisode(ctx context.Context, userID int64, episodeUUID string) error
 }
 
 // NoopGraphWriter 未装配 / 禁用时的空实现。
 type NoopGraphWriter struct{}
 
-func (NoopGraphWriter) UpsertEpisode(ctx context.Context, ep Episode) error { return nil }
+func (NoopGraphWriter) UpsertEpisode(ctx context.Context, ep Episode) (string, error) {
+	return "", nil
+}
+
+func (NoopGraphWriter) DeleteUserData(ctx context.Context, userID int64) error { return nil }
+
+func (NoopGraphWriter) RemoveEpisode(ctx context.Context, userID int64, uuid string) error {
+	return nil
+}
 
 // EpisodeToPB 载荷 → proto 请求（契约钉见 graph_writer_test.go）。
 func EpisodeToPB(ep Episode) *emotionmemorygraph.UpsertEpisodeRequest {
@@ -120,9 +133,37 @@ func loadCert(envPath, defaultPath string) ([]byte, error) {
 	return b, nil
 }
 
-// UpsertEpisode 写一条情节；服务端降级（ok=false）或 RPC 错误都折算为 error。
-func (w *GraphWriter) UpsertEpisode(ctx context.Context, ep Episode) error {
+// UpsertEpisode 写一条情节；成功返回 graphiti 分配的 episode uuid（CL-08d：
+// 落 PG memory_episode.graph_uuid，删除闭环的定位键）。
+// 服务端降级（ok=false）或 RPC 错误都折算为 error。
+func (w *GraphWriter) UpsertEpisode(ctx context.Context, ep Episode) (string, error) {
 	resp, err := w.client.UpsertEpisode(ctx, EpisodeToPB(ep))
+	if err != nil {
+		return "", err
+	}
+	if !resp.GetOk() {
+		return "", &GraphWriteRefusedError{Message: resp.GetMessage()}
+	}
+	return resp.GetEpisodeUuid(), nil
+}
+
+// RemoveEpisode 按 uuid 摘一条情节。
+func (w *GraphWriter) RemoveEpisode(ctx context.Context, userID int64, episodeUUID string) error {
+	resp, err := w.client.RemoveEpisode(ctx, &emotionmemorygraph.RemoveEpisodeRequest{
+		UserId: userID, EpisodeUuid: episodeUUID,
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.GetOk() {
+		return &GraphWriteRefusedError{Message: resp.GetMessage()}
+	}
+	return nil
+}
+
+// DeleteUserData 删用户全部图数据（物理分图快路径）。
+func (w *GraphWriter) DeleteUserData(ctx context.Context, userID int64) error {
+	resp, err := w.client.DeleteUserData(ctx, &emotionmemorygraph.DeleteUserDataRequest{UserId: userID})
 	if err != nil {
 		return err
 	}

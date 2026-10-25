@@ -35,6 +35,110 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type RemoveEpisodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // 审计维度
+	EpisodeUuid   string                 `protobuf:"bytes,2,opt,name=episode_uuid,json=episodeUuid,proto3" json:"episode_uuid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveEpisodeRequest) Reset() {
+	*x = RemoveEpisodeRequest{}
+	mi := &file_memory_graph_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveEpisodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveEpisodeRequest) ProtoMessage() {}
+
+func (x *RemoveEpisodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_graph_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveEpisodeRequest.ProtoReflect.Descriptor instead.
+func (*RemoveEpisodeRequest) Descriptor() ([]byte, []int) {
+	return file_memory_graph_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *RemoveEpisodeRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *RemoveEpisodeRequest) GetEpisodeUuid() string {
+	if x != nil {
+		return x.EpisodeUuid
+	}
+	return ""
+}
+
+type RemoveEpisodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveEpisodeResponse) Reset() {
+	*x = RemoveEpisodeResponse{}
+	mi := &file_memory_graph_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveEpisodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveEpisodeResponse) ProtoMessage() {}
+
+func (x *RemoveEpisodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_graph_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveEpisodeResponse.ProtoReflect.Descriptor instead.
+func (*RemoveEpisodeResponse) Descriptor() ([]byte, []int) {
+	return file_memory_graph_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RemoveEpisodeResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *RemoveEpisodeResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 type UpsertEpisodeRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	UserId int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -53,7 +157,7 @@ type UpsertEpisodeRequest struct {
 
 func (x *UpsertEpisodeRequest) Reset() {
 	*x = UpsertEpisodeRequest{}
-	mi := &file_memory_graph_proto_msgTypes[0]
+	mi := &file_memory_graph_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -65,7 +169,7 @@ func (x *UpsertEpisodeRequest) String() string {
 func (*UpsertEpisodeRequest) ProtoMessage() {}
 
 func (x *UpsertEpisodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_memory_graph_proto_msgTypes[0]
+	mi := &file_memory_graph_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -78,7 +182,7 @@ func (x *UpsertEpisodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertEpisodeRequest.ProtoReflect.Descriptor instead.
 func (*UpsertEpisodeRequest) Descriptor() ([]byte, []int) {
-	return file_memory_graph_proto_rawDescGZIP(), []int{0}
+	return file_memory_graph_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *UpsertEpisodeRequest) GetUserId() int64 {
@@ -127,14 +231,17 @@ type UpsertEpisodeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Ok    bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
 	// message：ok=false 时的失败原因（排障用）；ok=true 时空
-	Message       string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Message string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	// episode_uuid：graphiti 分配的情节 uuid（CL-08d 起回传；删除闭环的定位键，
+	// 调用方落 PG memory_episode.graph_uuid）
+	EpisodeUuid   string `protobuf:"bytes,3,opt,name=episode_uuid,json=episodeUuid,proto3" json:"episode_uuid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpsertEpisodeResponse) Reset() {
 	*x = UpsertEpisodeResponse{}
-	mi := &file_memory_graph_proto_msgTypes[1]
+	mi := &file_memory_graph_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -146,7 +253,7 @@ func (x *UpsertEpisodeResponse) String() string {
 func (*UpsertEpisodeResponse) ProtoMessage() {}
 
 func (x *UpsertEpisodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_memory_graph_proto_msgTypes[1]
+	mi := &file_memory_graph_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -159,7 +266,7 @@ func (x *UpsertEpisodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertEpisodeResponse.ProtoReflect.Descriptor instead.
 func (*UpsertEpisodeResponse) Descriptor() ([]byte, []int) {
-	return file_memory_graph_proto_rawDescGZIP(), []int{1}
+	return file_memory_graph_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *UpsertEpisodeResponse) GetOk() bool {
@@ -176,11 +283,120 @@ func (x *UpsertEpisodeResponse) GetMessage() string {
 	return ""
 }
 
+func (x *UpsertEpisodeResponse) GetEpisodeUuid() string {
+	if x != nil {
+		return x.EpisodeUuid
+	}
+	return ""
+}
+
+type DeleteUserDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserDataRequest) Reset() {
+	*x = DeleteUserDataRequest{}
+	mi := &file_memory_graph_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserDataRequest) ProtoMessage() {}
+
+func (x *DeleteUserDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_graph_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserDataRequest.ProtoReflect.Descriptor instead.
+func (*DeleteUserDataRequest) Descriptor() ([]byte, []int) {
+	return file_memory_graph_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DeleteUserDataRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+type DeleteUserDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserDataResponse) Reset() {
+	*x = DeleteUserDataResponse{}
+	mi := &file_memory_graph_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserDataResponse) ProtoMessage() {}
+
+func (x *DeleteUserDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_graph_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserDataResponse.ProtoReflect.Descriptor instead.
+func (*DeleteUserDataResponse) Descriptor() ([]byte, []int) {
+	return file_memory_graph_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *DeleteUserDataResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *DeleteUserDataResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_memory_graph_proto protoreflect.FileDescriptor
 
 const file_memory_graph_proto_rawDesc = "" +
 	"\n" +
-	"\x12memory_graph.proto\x12\x17emotion_memory_graph.v1\"\xc4\x01\n" +
+	"\x12memory_graph.proto\x12\x17emotion_memory_graph.v1\"R\n" +
+	"\x14RemoveEpisodeRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12!\n" +
+	"\fepisode_uuid\x18\x02 \x01(\tR\vepisodeUuid\"A\n" +
+	"\x15RemoveEpisodeResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xc4\x01\n" +
 	"\x14UpsertEpisodeRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -188,12 +404,20 @@ const file_memory_graph_proto_rawDesc = "" +
 	"\x10valid_at_unix_ms\x18\x04 \x01(\x03R\rvalidAtUnixMs\x12\x1f\n" +
 	"\vsource_kind\x18\x05 \x01(\tR\n" +
 	"sourceKind\x12\x1b\n" +
-	"\tsource_id\x18\x06 \x01(\x03R\bsourceId\"A\n" +
+	"\tsource_id\x18\x06 \x01(\x03R\bsourceId\"d\n" +
 	"\x15UpsertEpisodeResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\x84\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12!\n" +
+	"\fepisode_uuid\x18\x03 \x01(\tR\vepisodeUuid\"0\n" +
+	"\x15DeleteUserDataRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\"B\n" +
+	"\x16DeleteUserDataResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage2\xe7\x02\n" +
 	"\x12MemoryGraphService\x12n\n" +
-	"\rUpsertEpisode\x12-.emotion_memory_graph.v1.UpsertEpisodeRequest\x1a..emotion_memory_graph.v1.UpsertEpisodeResponseB7Z5github.com/emotion-echo/shared/pkg/emotionmemorygraphb\x06proto3"
+	"\rUpsertEpisode\x12-.emotion_memory_graph.v1.UpsertEpisodeRequest\x1a..emotion_memory_graph.v1.UpsertEpisodeResponse\x12q\n" +
+	"\x0eDeleteUserData\x12..emotion_memory_graph.v1.DeleteUserDataRequest\x1a/.emotion_memory_graph.v1.DeleteUserDataResponse\x12n\n" +
+	"\rRemoveEpisode\x12-.emotion_memory_graph.v1.RemoveEpisodeRequest\x1a..emotion_memory_graph.v1.RemoveEpisodeResponseB7Z5github.com/emotion-echo/shared/pkg/emotionmemorygraphb\x06proto3"
 
 var (
 	file_memory_graph_proto_rawDescOnce sync.Once
@@ -207,16 +431,24 @@ func file_memory_graph_proto_rawDescGZIP() []byte {
 	return file_memory_graph_proto_rawDescData
 }
 
-var file_memory_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_memory_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_memory_graph_proto_goTypes = []any{
-	(*UpsertEpisodeRequest)(nil),  // 0: emotion_memory_graph.v1.UpsertEpisodeRequest
-	(*UpsertEpisodeResponse)(nil), // 1: emotion_memory_graph.v1.UpsertEpisodeResponse
+	(*RemoveEpisodeRequest)(nil),   // 0: emotion_memory_graph.v1.RemoveEpisodeRequest
+	(*RemoveEpisodeResponse)(nil),  // 1: emotion_memory_graph.v1.RemoveEpisodeResponse
+	(*UpsertEpisodeRequest)(nil),   // 2: emotion_memory_graph.v1.UpsertEpisodeRequest
+	(*UpsertEpisodeResponse)(nil),  // 3: emotion_memory_graph.v1.UpsertEpisodeResponse
+	(*DeleteUserDataRequest)(nil),  // 4: emotion_memory_graph.v1.DeleteUserDataRequest
+	(*DeleteUserDataResponse)(nil), // 5: emotion_memory_graph.v1.DeleteUserDataResponse
 }
 var file_memory_graph_proto_depIdxs = []int32{
-	0, // 0: emotion_memory_graph.v1.MemoryGraphService.UpsertEpisode:input_type -> emotion_memory_graph.v1.UpsertEpisodeRequest
-	1, // 1: emotion_memory_graph.v1.MemoryGraphService.UpsertEpisode:output_type -> emotion_memory_graph.v1.UpsertEpisodeResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 0: emotion_memory_graph.v1.MemoryGraphService.UpsertEpisode:input_type -> emotion_memory_graph.v1.UpsertEpisodeRequest
+	4, // 1: emotion_memory_graph.v1.MemoryGraphService.DeleteUserData:input_type -> emotion_memory_graph.v1.DeleteUserDataRequest
+	0, // 2: emotion_memory_graph.v1.MemoryGraphService.RemoveEpisode:input_type -> emotion_memory_graph.v1.RemoveEpisodeRequest
+	3, // 3: emotion_memory_graph.v1.MemoryGraphService.UpsertEpisode:output_type -> emotion_memory_graph.v1.UpsertEpisodeResponse
+	5, // 4: emotion_memory_graph.v1.MemoryGraphService.DeleteUserData:output_type -> emotion_memory_graph.v1.DeleteUserDataResponse
+	1, // 5: emotion_memory_graph.v1.MemoryGraphService.RemoveEpisode:output_type -> emotion_memory_graph.v1.RemoveEpisodeResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -233,7 +465,7 @@ func file_memory_graph_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_memory_graph_proto_rawDesc), len(file_memory_graph_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

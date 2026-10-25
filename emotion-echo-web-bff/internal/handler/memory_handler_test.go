@@ -138,3 +138,12 @@ func TestMemoryHandler_GetGraph_NilClient(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
+
+// CL-08d：接口扩展后的空实现（既有 fake 不动）。
+func (f *fakeMemoryClient) ListMemory(ctx context.Context, userID int64) ([]downstream.MemoryItem, error) {
+	return nil, nil
+}
+
+func (f *fakeMemoryClient) DeleteMemory(ctx context.Context, userID int64, scope string, id int64) (string, error) {
+	return "", nil
+}

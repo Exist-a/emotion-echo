@@ -42,12 +42,26 @@ type MemoryGraph struct {
 	Edges []MemoryGraphEdge `json:"edges"`
 }
 
+// MemoryItem 管理页列举条目（CL-08d）。
+type MemoryItem struct {
+	Kind       string `json:"kind"` // "fact" | "note"
+	ID         int64  `json:"id"`
+	Text       string `json:"text"`
+	SourceKind string `json:"sourceKind,omitempty"`
+	SourceID   int64  `json:"sourceId,omitempty"`
+	CreatedAt  string `json:"createdAt,omitempty"`
+}
+
 // MemoryClient BFF → ai-svc 记忆客户端。
 type MemoryClient interface {
 	// CreateNote 写入一条自述并触发异步抽取；返回固定回执。
 	CreateNote(ctx context.Context, userID int64, content string) (*MemoryNoteResult, error)
 	// GetGraph 取用户记忆图（当前由 PG 事实渲染）。
 	GetGraph(ctx context.Context, userID int64) (*MemoryGraph, error)
+	// ListMemory 管理页列举（CL-08d）。
+	ListMemory(ctx context.Context, userID int64) ([]MemoryItem, error)
+	// DeleteMemory 删除记忆（CL-08d 闭环；scope = fact|note|all）。
+	DeleteMemory(ctx context.Context, userID int64, scope string, id int64) (string, error)
 }
 
 type memoryGRPCClient struct{ conn *grpc.ClientConn }
@@ -87,4 +101,31 @@ func (c *memoryGRPCClient) GetGraph(ctx context.Context, userID int64) (*MemoryG
 		edges = append(edges, MemoryGraphEdge{Source: e.GetSource(), Target: e.GetTarget(), Label: e.GetLabel()})
 	}
 	return &MemoryGraph{Nodes: nodes, Edges: edges}, nil
+}
+
+func (c *memoryGRPCClient) ListMemory(ctx context.Context, userID int64) ([]MemoryItem, error) {
+	cli := emotionmemory.NewMemoryServiceClient(c.conn)
+	resp, err := cli.ListMemory(withUserID(ctx), &emotionmemory.ListMemoryRequest{UserId: userID})
+	if err != nil {
+		return nil, wrapGRPCError(err, "list memory")
+	}
+	items := make([]MemoryItem, 0, len(resp.GetItems()))
+	for _, it := range resp.GetItems() {
+		items = append(items, MemoryItem{
+			Kind: it.GetKind(), ID: it.GetId(), Text: it.GetText(),
+			SourceKind: it.GetSourceKind(), SourceID: it.GetSourceId(), CreatedAt: it.GetCreatedAt(),
+		})
+	}
+	return items, nil
+}
+
+func (c *memoryGRPCClient) DeleteMemory(ctx context.Context, userID int64, scope string, id int64) (string, error) {
+	cli := emotionmemory.NewMemoryServiceClient(c.conn)
+	resp, err := cli.DeleteMemory(withUserID(ctx), &emotionmemory.DeleteMemoryRequest{
+		UserId: userID, Scope: scope, Id: id,
+	})
+	if err != nil {
+		return "", wrapGRPCError(err, "delete memory")
+	}
+	return resp.GetMessage(), nil
 }

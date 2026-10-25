@@ -33,7 +33,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MemoryGraphService_UpsertEpisode_FullMethodName = "/emotion_memory_graph.v1.MemoryGraphService/UpsertEpisode"
+	MemoryGraphService_UpsertEpisode_FullMethodName  = "/emotion_memory_graph.v1.MemoryGraphService/UpsertEpisode"
+	MemoryGraphService_DeleteUserData_FullMethodName = "/emotion_memory_graph.v1.MemoryGraphService/DeleteUserData"
+	MemoryGraphService_RemoveEpisode_FullMethodName  = "/emotion_memory_graph.v1.MemoryGraphService/RemoveEpisode"
 )
 
 // MemoryGraphServiceClient is the client API for MemoryGraphService service.
@@ -48,6 +50,18 @@ type MemoryGraphServiceClient interface {
 	// - valid_at_unix_ms 作为 Graphiti 的 reference_time（双时间轴的事件时间轴）；
 	// - 实体抽取/消解/失效判定由 Graphiti 摄取管线完成（LLM + embedder 配置注入）。
 	UpsertEpisode(ctx context.Context, in *UpsertEpisodeRequest, opts ...grpc.CallOption) (*UpsertEpisodeResponse, error)
+	// DeleteUserData 删除一个用户的**全部**图数据（CL-08d 删除闭环的快路径）。
+	//
+	// graphiti 按 group_id 物理分图（Phase 4 T-17 实测）⇒ 删全部 = drop 该用户的
+	// graph key，O(1) 且天然闭环。单条删除走 UpsertEpisode 的反向 —— 由调用方
+	// 持 episode_uuid 另行处理（见 memory_graph.py 的 remove 能力）。
+	DeleteUserData(ctx context.Context, in *DeleteUserDataRequest, opts ...grpc.CallOption) (*DeleteUserDataResponse, error)
+	// RemoveEpisode 按 uuid 摘掉一条情节（CL-08d 删单条的图侧闭环）。
+	//
+	// 安全：调用方 = ai-svc（internal auth 拦截器后面）；uuid 由 ai-svc 从 PG
+	// memory_episode.graph_uuid 取得（该行已按 user 隔离查询）——本 RPC 不再重复
+	// 校验 user 归属（graphiti 的 remove_episode 只认 uuid）。
+	RemoveEpisode(ctx context.Context, in *RemoveEpisodeRequest, opts ...grpc.CallOption) (*RemoveEpisodeResponse, error)
 }
 
 type memoryGraphServiceClient struct {
@@ -68,6 +82,26 @@ func (c *memoryGraphServiceClient) UpsertEpisode(ctx context.Context, in *Upsert
 	return out, nil
 }
 
+func (c *memoryGraphServiceClient) DeleteUserData(ctx context.Context, in *DeleteUserDataRequest, opts ...grpc.CallOption) (*DeleteUserDataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteUserDataResponse)
+	err := c.cc.Invoke(ctx, MemoryGraphService_DeleteUserData_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *memoryGraphServiceClient) RemoveEpisode(ctx context.Context, in *RemoveEpisodeRequest, opts ...grpc.CallOption) (*RemoveEpisodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveEpisodeResponse)
+	err := c.cc.Invoke(ctx, MemoryGraphService_RemoveEpisode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MemoryGraphServiceServer is the server API for MemoryGraphService service.
 // All implementations must embed UnimplementedMemoryGraphServiceServer
 // for forward compatibility.
@@ -80,6 +114,18 @@ type MemoryGraphServiceServer interface {
 	// - valid_at_unix_ms 作为 Graphiti 的 reference_time（双时间轴的事件时间轴）；
 	// - 实体抽取/消解/失效判定由 Graphiti 摄取管线完成（LLM + embedder 配置注入）。
 	UpsertEpisode(context.Context, *UpsertEpisodeRequest) (*UpsertEpisodeResponse, error)
+	// DeleteUserData 删除一个用户的**全部**图数据（CL-08d 删除闭环的快路径）。
+	//
+	// graphiti 按 group_id 物理分图（Phase 4 T-17 实测）⇒ 删全部 = drop 该用户的
+	// graph key，O(1) 且天然闭环。单条删除走 UpsertEpisode 的反向 —— 由调用方
+	// 持 episode_uuid 另行处理（见 memory_graph.py 的 remove 能力）。
+	DeleteUserData(context.Context, *DeleteUserDataRequest) (*DeleteUserDataResponse, error)
+	// RemoveEpisode 按 uuid 摘掉一条情节（CL-08d 删单条的图侧闭环）。
+	//
+	// 安全：调用方 = ai-svc（internal auth 拦截器后面）；uuid 由 ai-svc 从 PG
+	// memory_episode.graph_uuid 取得（该行已按 user 隔离查询）——本 RPC 不再重复
+	// 校验 user 归属（graphiti 的 remove_episode 只认 uuid）。
+	RemoveEpisode(context.Context, *RemoveEpisodeRequest) (*RemoveEpisodeResponse, error)
 	mustEmbedUnimplementedMemoryGraphServiceServer()
 }
 
@@ -92,6 +138,12 @@ type UnimplementedMemoryGraphServiceServer struct{}
 
 func (UnimplementedMemoryGraphServiceServer) UpsertEpisode(context.Context, *UpsertEpisodeRequest) (*UpsertEpisodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpsertEpisode not implemented")
+}
+func (UnimplementedMemoryGraphServiceServer) DeleteUserData(context.Context, *DeleteUserDataRequest) (*DeleteUserDataResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteUserData not implemented")
+}
+func (UnimplementedMemoryGraphServiceServer) RemoveEpisode(context.Context, *RemoveEpisodeRequest) (*RemoveEpisodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveEpisode not implemented")
 }
 func (UnimplementedMemoryGraphServiceServer) mustEmbedUnimplementedMemoryGraphServiceServer() {}
 func (UnimplementedMemoryGraphServiceServer) testEmbeddedByValue()                            {}
@@ -132,6 +184,42 @@ func _MemoryGraphService_UpsertEpisode_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MemoryGraphService_DeleteUserData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteUserDataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MemoryGraphServiceServer).DeleteUserData(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MemoryGraphService_DeleteUserData_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MemoryGraphServiceServer).DeleteUserData(ctx, req.(*DeleteUserDataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MemoryGraphService_RemoveEpisode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveEpisodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MemoryGraphServiceServer).RemoveEpisode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MemoryGraphService_RemoveEpisode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MemoryGraphServiceServer).RemoveEpisode(ctx, req.(*RemoveEpisodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MemoryGraphService_ServiceDesc is the grpc.ServiceDesc for MemoryGraphService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -142,6 +230,14 @@ var MemoryGraphService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpsertEpisode",
 			Handler:    _MemoryGraphService_UpsertEpisode_Handler,
+		},
+		{
+			MethodName: "DeleteUserData",
+			Handler:    _MemoryGraphService_DeleteUserData_Handler,
+		},
+		{
+			MethodName: "RemoveEpisode",
+			Handler:    _MemoryGraphService_RemoveEpisode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

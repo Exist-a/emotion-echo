@@ -29,7 +29,11 @@ func (f *FakeGraphWriter) UpsertEpisode(ctx context.Context, ep Episode) error {
 func TestEpisodeGraphWriterContract(t *testing.T) {
 	// 契约 1：Noop 永不报错（未装配 = 行为零变化）
 	var w EpisodeGraphWriter = NoopGraphWriter{}
-	assert.NoError(t, w.UpsertEpisode(context.Background(), Episode{UserID: 1}))
+	uuid, err := w.UpsertEpisode(context.Background(), Episode{UserID: 1})
+	assert.NoError(t, err)
+	assert.Equal(t, "", uuid, "Noop 无 uuid")
+	assert.NoError(t, w.DeleteUserData(context.Background(), 1))
+	assert.NoError(t, w.RemoveEpisode(context.Background(), 1, "u"))
 
 	// 契约 2：gRPC 请求映射（字段一一对齐 proto）
 	ep := Episode{
@@ -60,7 +64,7 @@ func TestGraphWriter_UnreachableFailsOnCallNotConstruct(t *testing.T) {
 	require.NoError(t, err, "惰性连接：构造不得失败")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	err = w.UpsertEpisode(ctx, Episode{UserID: 1, Name: "n", Content: "c"})
+	_, err = w.UpsertEpisode(ctx, Episode{UserID: 1, Name: "n", Content: "c"})
 	assert.Error(t, err, "不可达地址必须在调用时报错（best-effort 由 handler 吞掉记日志）")
 	_ = errors.New
 }

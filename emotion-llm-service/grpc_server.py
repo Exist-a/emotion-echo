@@ -351,6 +351,32 @@ class EmotionLLMServiceServicer(emotion_llm_pb2_grpc.EmotionLLMServiceServicer):
 # Server bootstrap
 # =====================================================
 
+def _bind_graph_tls(server, port: int):
+    """图 gRPC server 的 TLS 绑定（与主 server 同一套证书/env）。"""
+    ca = os.environ.get("TLS_CA_CERT", "")
+    cert = os.environ.get("TLS_SERVER_CERT", "")
+    key = os.environ.get("TLS_SERVER_KEY", "")
+    if not (cert and key):
+        logger.warning("[grpc-server] TLS_ENABLED but certs missing for graph server; insecure")
+        server.add_insecure_port(f"[::]:{port}")
+        return
+    with open(cert, "rb") as f:
+        certPEM = f.read()
+    with open(key, "rb") as f:
+        keyPEM = f.read()
+    creds = None
+    if ca:
+        with open(ca, "rb") as f:
+            caPEM = f.read()
+        import grpc as _grpc
+        creds = _grpc.ssl_server_credentials(
+            [(keyPEM, certPEM)], root_certificates=caPEM, require_client_auth=True)
+    else:
+        import grpc as _grpc
+        creds = _grpc.ssl_server_credentials([(keyPEM, certPEM)])
+    server.add_secure_port(f"[::]:{port}", creds)
+
+
 def serve(port: int = 50051):
     api_key = os.environ.get("INTERNAL_API_KEY", "")
     required = os.environ.get("INTERNAL_API_KEY_REQUIRED", "").lower() in ("1", "true", "yes")
@@ -405,8 +431,11 @@ def serve(port: int = 50051):
         EmotionLLMServiceServicer(), server
     )
 
-    # CL-08c Phase 4：图记忆写入面（MemoryGraphService）。依赖/配置不齐 ⇒ 降级
-    # 注册（调用返回 ok=false），进程不崩 —— 记忆是增强不是依赖。
+    # CL-08c Phase 4 / CL-08d 整改（第二方核对 P2）：MemoryGraphService 跑在
+    # **独立的 gRPC server**（自带线程池、独立端口）——图摄取单次可占线程 60s，
+    # 与 chat 主链路共用池会让 ≥10 并发图写饿死对话（第二方核对实测发现的
+    # 可用性耦合）。图依赖/配置不齐 ⇒ 仍启动该 server 但注册降级 servicer
+    #（返回 ok=false），进程不崩 —— 记忆是增强不是依赖。
     try:
         from memory_graph import AsyncBridge, build_memory_graph_from_env
         from memory_graph_servicer import _make_memory_graph_servicer
@@ -416,18 +445,36 @@ def serve(port: int = 50051):
         bridge = AsyncBridge()
         bridge.start()
         graph = build_memory_graph_from_env(bridge)
+        graph_workers = int(os.environ.get("MEMORY_GRAPH_GRPC_WORKERS", "4"))
+        graph_server = grpc.server(
+            futures.ThreadPoolExecutor(max_workers=graph_workers),
+            interceptors=(
+                LoggingInterceptor(),
+                RecoveryInterceptor(),
+                AuthInterceptor(expected_api_key=api_key),
+            ),
+        )
         if graph is not None:
             memory_graph_pb2_grpc.add_MemoryGraphServiceServicer_to_server(
-                _make_memory_graph_servicer(graph, bridge), server
+                _make_memory_graph_servicer(graph, bridge), graph_server
             )
-            logger.info("[grpc-server] MemoryGraphService registered (graph ready)")
+            logger.info("[grpc-server] MemoryGraphService on dedicated server (graph ready)")
         else:
             memory_graph_pb2_grpc.add_MemoryGraphServiceServicer_to_server(
-                _make_memory_graph_servicer(None, None), server
+                _make_memory_graph_servicer(None, None), graph_server
             )
             logger.warning(
-                "[grpc-server] MemoryGraphService registered in DEGRADED mode (graph unavailable)"
+                "[grpc-server] MemoryGraphService dedicated server in DEGRADED mode (graph unavailable)"
             )
+        graph_port = int(os.environ.get("MEMORY_GRAPH_GRPC_PORT", "50052"))
+        tls_enabled_graph = os.environ.get("TLS_ENABLED", "").lower() in ("1", "true", "yes")
+        if tls_enabled_graph:
+            _bind_graph_tls(graph_server, graph_port)
+        else:
+            graph_server.add_insecure_port(f"[::]:{graph_port}")
+        graph_server.start()
+        logger.info("[grpc-server] MemoryGraph gRPC listening on :%d (tls=%s)",
+                    graph_port, tls_enabled_graph)
     except Exception as exc:  # noqa: BLE001
         logger.warning("[grpc-server] MemoryGraphService wiring failed: %s", exc)
 

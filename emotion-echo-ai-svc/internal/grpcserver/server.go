@@ -57,6 +57,7 @@ type Option func(*serverOptions)
 type serverOptions struct {
 	memRepo    repository.MemoryFactRepo
 	memExtract MemoryNoteExtractor
+	memGraph   *memoryGraphDeps
 	// internalAPIKey 非空 ⇒ 所有非 health RPC 必须带 x-internal-api-key（CL-F-66）。
 	// 空 ⇒ 关闭（本地单测 / 未下发 env 的环境保持旧行为）。
 	internalAPIKey string
@@ -67,6 +68,13 @@ func WithMemory(repo repository.MemoryFactRepo, extract MemoryNoteExtractor) Opt
 	return func(o *serverOptions) {
 		o.memRepo = repo
 		o.memExtract = extract
+	}
+}
+
+// WithMemoryGraphDeps 装配删除闭环的图侧依赖（CL-08d；nil 面各回退见 memory_server.go）。
+func WithMemoryGraphDeps(graph GraphDeleter, refresh SummaryRefresher, rebuild RebuildFunc) Option {
+	return func(o *serverOptions) {
+		o.memGraph = &memoryGraphDeps{graph: graph, refresh: refresh, rebuild: rebuild}
 	}
 }
 
@@ -190,7 +198,9 @@ func New(repo repository.EmotionRepo, fusedEmotionRepo repository.FusedEmotionRe
 
 	// CL-08a：MemoryService（自述条写入 + 记忆图）
 	if so.memRepo != nil {
-		emotionmemory.RegisterMemoryServiceServer(gs, newMemoryServer(so.memRepo, so.memExtract))
+		memSrv := newMemoryServer(so.memRepo, so.memExtract)
+		memSrv.SetGraphDeps(so.memGraph)
+		emotionmemory.RegisterMemoryServiceServer(gs, memSrv)
 	}
 
 	// 注册 health check（不带 user id 要求）

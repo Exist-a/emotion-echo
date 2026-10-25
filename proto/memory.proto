@@ -32,6 +32,50 @@ service MemoryService {
 
   // GetGraph 取用户的记忆图（当前由 PG 事实渲染）。
   rpc GetGraph (GetGraphRequest) returns (GetGraphResponse);
+
+  // ListMemory 取用户的记忆列表（CL-08d：管理页删除的列举面）。
+  rpc ListMemory (ListMemoryRequest) returns (ListMemoryResponse);
+
+  // DeleteMemory 删除记忆（CL-08d 删除闭环：PG 软删 → 图随删 → 摘要失效）。
+  //
+  // scope 语义：
+  //   fact  = 按 fact_id 删单条记忆（连同其来源情节的图上内容）
+  //   note  = 按 note_id 删一条自述（连同其来源情节）
+  //   all   = 删除该用户全部记忆（PG 全软删 + 图快删 + 摘要键删）
+  // user_id 由 BFF 从鉴权上下文填入（客户端不可传）。
+  rpc DeleteMemory (DeleteMemoryRequest) returns (DeleteMemoryResponse);
+}
+
+message ListMemoryRequest {
+  int64 user_id = 1;
+}
+
+message MemoryItem {
+  // kind: "fact" | "note"
+  string kind = 1;
+  int64 id = 2;
+  // fact: fact_text；note: content
+  string text = 3;
+  // 来源（fact: message/note + source_id；note: 空）
+  string source_kind = 4;
+  int64 source_id = 5;
+  string created_at = 6;
+}
+
+message ListMemoryResponse {
+  repeated MemoryItem items = 1;
+}
+
+message DeleteMemoryRequest {
+  int64 user_id = 1;
+  // scope: "fact" | "note" | "all"
+  string scope = 2;
+  int64 id = 3;
+}
+
+message DeleteMemoryResponse {
+  bool ok = 1;
+  string message = 2;
 }
 
 message CreateNoteRequest {

@@ -54,6 +54,8 @@ class GraphitiLike(Protocol):
 
     async def search(self, query: str, group_ids: list[str] | None = None, **kwargs: Any) -> list[Any]: ...
 
+    async def remove_episode(self, episode_uuid: str) -> None: ...
+
 
 def _env_bool(name: str, default: bool) -> bool:
     v = os.environ.get(name)
@@ -65,9 +67,13 @@ def _env_bool(name: str, default: bool) -> bool:
 class MemoryGraph:
     """图记忆的进程内门面：LLM/embedder 均为可注入接口（T10 决议：单测不打真 LLM）。"""
 
-    def __init__(self, graphiti: GraphitiLike, episode_source: str = "message"):
+    def __init__(self, graphiti: GraphitiLike, episode_source: str = "message",
+                 dropper=None):
         self.g = graphiti
         self._episode_source = episode_source
+        # dropper(group_id)：物理删掉一个 group 图（CL-08d 删全部快路径）；
+        # graphiti 不暴露该能力 ⇒ 由装配层注入（redislite 客户端 GRAPH.DELETE）。
+        self._dropper = dropper
 
     async def upsert_episode(
         self,
@@ -86,17 +92,50 @@ class MemoryGraph:
             else datetime.now(tz=timezone.utc)
         )
         try:
-            await self.g.add_episode(
+            result = await self.g.add_episode(
                 name=name or content[:24],
                 episode_body=content,
                 source_description=self._episode_source,
                 reference_time=ref_time,
                 group_id=str(user_id),  # 用户隔离边界（T-17）
             )
-            return True, ""
+            # CL-08d：回传 episode uuid（删除闭环 remove_episode 的定位键）。
+            uuid = getattr(result, "episode", None)
+            uuid = getattr(uuid, "uuid", "") if uuid is not None else ""
+            return True, str(uuid or "")
         except Exception as exc:  # noqa: BLE001 —— 图失败必须被服务端折算成 ok=false
             logger.warning("memory-graph upsert failed: %s", exc)
             return False, f"graphiti add_episode: {exc}"
+
+    async def remove_episode(self, user_id: int, episode_uuid: str) -> tuple[bool, str]:
+        """按 uuid 摘掉一条情节（CL-08d 删除闭环；ADR 决策 3：图随删）。"""
+        if user_id <= 0 or not episode_uuid:
+            return False, "user_id and episode_uuid are required"
+        try:
+            await self.g.remove_episode(episode_uuid)
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("memory-graph remove failed: %s", exc)
+            return False, f"graphiti remove_episode: {exc}"
+
+    async def delete_user_data(self, user_id: int) -> tuple[bool, str]:
+        """删除用户全部图数据（快路径：graphiti 按 group_id 物理分图 ⇒ drop 该图）。
+
+        图不存在 = 本来就没有 ⇒ 视为成功（幂等闭环）。
+        """
+        if user_id <= 0:
+            return False, "user_id must be positive"
+        if self._dropper is None:
+            return False, "dropper not configured"
+        try:
+            await asyncio.to_thread(self._dropper, str(user_id))
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            if "not exist" in msg.lower() or "no such" in msg.lower():
+                return True, ""
+            logger.warning("memory-graph delete_group failed: %s", exc)
+            return False, f"drop graph: {exc}"
 
     async def search(self, query: str, user_id: int, limit: int = 8) -> list[Any]:
         """三层召回（向量 + 全文 + 图遍历，Graphiti 的 combined hybrid）。
@@ -152,7 +191,11 @@ def _build(bridge: "AsyncBridge | None") -> MemoryGraph:
     db_file = os.path.join(data_dir, "graph.db")
 
     # 拉起嵌入式 FalkorDB（redis-server 子进程，宿主端口固定 —— spike 实测多进程共享同一 server）
-    LiteFalkorDB(dbfilename=db_file, serverconfig={"port": str(port)})
+    lite = LiteFalkorDB(dbfilename=db_file, serverconfig={"port": str(port)})
+
+    def _drop_group(group_id: str) -> None:
+        # CL-08d：GRAPH.DELETE 物理删一个 group 图（不存在时由上层幂等化）
+        lite.execute_command("GRAPH.DELETE", group_id)
 
     driver = FalkorDriver(host="127.0.0.1", port=port, database=database)
 
@@ -183,6 +226,7 @@ def _build(bridge: "AsyncBridge | None") -> MemoryGraph:
         embedder=embedder,
         cross_encoder=OpenAIRerankerClient(config=llm_cfg),
     )
+    graph = MemoryGraph(graphiti, dropper=_drop_group)
 
     # 建索引/约束（幂等；spike 实测 falkordb 驱动支持）。
     # 必须与后续操作同循环：bridge 已启动 ⇒ 在它的循环上跑；未提供 bridge
@@ -195,7 +239,7 @@ def _build(bridge: "AsyncBridge | None") -> MemoryGraph:
         "memory-graph ready: db=%s port=%d embed_model=%s", db_file, port,
         os.environ.get("MEMORY_EMBED_MODEL", DEFAULT_EMBED_MODEL),
     )
-    return MemoryGraph(graphiti)
+    return graph
 
 
 # ---------------------------------------------------------------------------

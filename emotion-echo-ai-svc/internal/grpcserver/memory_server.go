@@ -37,11 +37,16 @@ type memoryServer struct {
 	emotionmemory.UnimplementedMemoryServiceServer
 	repo    repository.MemoryFactRepo
 	extract MemoryNoteExtractor
+	// graphDeps CL-08d：删除闭环的图侧依赖（nil = 图侧跳过，记 warn）
+	graphDeps *memoryGraphDeps
 }
 
 func newMemoryServer(repo repository.MemoryFactRepo, extract MemoryNoteExtractor) *memoryServer {
 	return &memoryServer{repo: repo, extract: extract}
 }
+
+// SetGraphDeps 注入删除闭环的图侧依赖（CL-08d；main.go 装配）。
+func (s *memoryServer) SetGraphDeps(deps *memoryGraphDeps) { s.graphDeps = deps }
 
 func (s *memoryServer) CreateNote(ctx context.Context, req *emotionmemory.CreateNoteRequest) (*emotionmemory.CreateNoteResponse, error) {
 	uid, err := memoryCallerID(ctx, req.GetUserId())
@@ -112,4 +117,186 @@ func memoryCallerID(ctx context.Context, bodyUserID int64) (int64, error) {
 		return 0, status.Error(codes.PermissionDenied, "user_id mismatch")
 	}
 	return uid, nil
+}
+
+// ---------------------------------------------------------------------------
+// CL-08d：管理页列举 + 删除闭环编排。
+// ---------------------------------------------------------------------------
+
+// GraphDeleter 删除闭环的图侧能力（窄接口；生产 = internal/memory 的 gRPC writer）。
+type GraphDeleter interface {
+	DeleteUserData(ctx context.Context, userID int64) error
+	RemoveEpisode(ctx context.Context, userID int64, episodeUUID string) error
+}
+
+// SummaryRefresher 摘要失效/刷新能力（删除后立即生效，注入才不会再带出）。
+type SummaryRefresher func(ctx context.Context, userID int64) error
+
+// RebuildFunc 全图重建（uuid 缺失的回落路径；cmd/memory-rebuild 共用编排）。
+type RebuildFunc func(ctx context.Context, userID int64) (ok, failed int, err error)
+
+// memoryGraphDeps 图侧依赖（main.go 注入；graph 为 nil ⇒ 图侧跳过并记 warn ——
+// PG 仍是事实源，缺口由重建工具兜底）。
+type memoryGraphDeps struct {
+	graph   GraphDeleter
+	refresh SummaryRefresher
+	rebuild RebuildFunc
+}
+
+// ListMemory 管理页列举：active 事实 + 自述条（前端分节渲染）。
+func (s *memoryServer) ListMemory(ctx context.Context, req *emotionmemory.ListMemoryRequest) (*emotionmemory.ListMemoryResponse, error) {
+	uid, err := memoryCallerID(ctx, req.GetUserId())
+	if err != nil {
+		return nil, err
+	}
+	resp := &emotionmemory.ListMemoryResponse{}
+	facts, err := s.repo.ListActiveByUser(ctx, uid, memoryGraphFactLimit)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list facts: %v", err)
+	}
+	for _, f := range facts {
+		resp.Items = append(resp.Items, &emotionmemory.MemoryItem{
+			Kind: "fact", Id: f.ID, Text: f.FactText,
+			SourceKind: f.SourceKind, SourceId: f.SourceID,
+			CreatedAt: f.ValidFrom.Format("2006-01-02"),
+		})
+	}
+	notes, err := s.repo.ListNotes(ctx, uid, 0)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list notes: %v", err)
+	}
+	for _, n := range notes {
+		resp.Items = append(resp.Items, &emotionmemory.MemoryItem{
+			Kind: "note", Id: n.ID, Text: n.Content,
+			CreatedAt: n.CreatedAt.Format("2006-01-02"),
+		})
+	}
+	return resp, nil
+}
+
+// DeleteMemory 删除闭环编排：PG 软删（事实源）→ 图随删 → 摘要刷新。
+//
+// 图侧失败**不让删除失败**（图是可重建索引；缺口由 cmd/memory-rebuild 兜底），
+// 但会在 message 里如实标注（前端可提示"部分完成"）。
+func (s *memoryServer) DeleteMemory(ctx context.Context, req *emotionmemory.DeleteMemoryRequest) (*emotionmemory.DeleteMemoryResponse, error) {
+	uid, err := memoryCallerID(ctx, req.GetUserId())
+	if err != nil {
+		return nil, err
+	}
+	scope := req.GetScope()
+	switch scope {
+	case "fact":
+		return s.deleteByFact(ctx, uid, req.GetId())
+	case "note":
+		return s.deleteByNote(ctx, uid, req.GetId())
+	case "all":
+		return s.deleteAll(ctx, uid)
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "scope must be fact|note|all, got %q", scope)
+	}
+}
+
+// removeSourceFromGraph 删一条来源情节的图上内容（uuid 已知 ⇒ 精准摘除；
+// 未知 ⇒ 全图重建兜底）。图侧失败只记日志（不阻塞删除结果）。
+func (s *memoryServer) removeSourceFromGraph(ctx context.Context, uid int64, kind string, id int64) string {
+	if s.graphDeps == nil || s.graphDeps.graph == nil {
+		return "graph writer not configured (PG deleted; graph left for rebuild)"
+	}
+	uuid, err := s.repo.GetEpisodeGraphUUID(ctx, kind, id)
+	if err != nil {
+		slog.WarnContext(ctx, "memory delete: lookup graph uuid", "err", err)
+	}
+	if uuid != "" {
+		if gerr := s.graphDeps.graph.RemoveEpisode(ctx, uid, uuid); gerr != nil {
+			slog.WarnContext(ctx, "memory delete: remove episode from graph",
+				"uuid", uuid, "err", gerr)
+			return "graph removal failed (rebuild pending)"
+		}
+		return ""
+	}
+	// uuid 缺失（Phase 4 之前的旧行 / 上次回填失败）⇒ 整图重建兜底
+	if s.graphDeps.rebuild == nil {
+		return "graph uuid unknown and rebuild unavailable"
+	}
+	okN, failedN, rerr := s.graphDeps.rebuild(ctx, uid)
+	if rerr != nil {
+		slog.WarnContext(ctx, "memory delete: graph rebuild fallback failed", "err", rerr)
+		return "graph rebuild failed (retry via memory-rebuild tool)"
+	}
+	slog.InfoContext(ctx, "memory delete: graph rebuilt as fallback",
+		"user_id", uid, "ok", okN, "failed", failedN)
+	return ""
+}
+
+func (s *memoryServer) deleteByFact(ctx context.Context, uid, factID int64) (*emotionmemory.DeleteMemoryResponse, error) {
+	f, err := s.repo.GetFactByID(ctx, uid, factID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get fact: %v", err)
+	}
+	if f == nil {
+		return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: "already gone"}, nil
+	}
+	if _, err := s.repo.SoftDeleteFact(ctx, uid, factID); err != nil {
+		return nil, status.Errorf(codes.Internal, "delete fact: %v", err)
+	}
+	// 删记忆 = 忘掉这件事 ⇒ 来源情节一并软删（重建不会复活；同源其他 fact 保留，
+	// 其图上内容由 remove_episode 一并摘除 —— 已知边界，见 CL-08d 报告）
+	if err := s.repo.SoftDeleteEpisode(ctx, f.SourceKind, f.SourceID); err != nil {
+		return nil, status.Errorf(codes.Internal, "delete episode: %v", err)
+	}
+	note := s.removeSourceFromGraph(ctx, uid, f.SourceKind, f.SourceID)
+	s.refreshSummaryQuiet(ctx, uid)
+	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: note}, nil
+}
+
+func (s *memoryServer) deleteByNote(ctx context.Context, uid, noteID int64) (*emotionmemory.DeleteMemoryResponse, error) {
+	n, err := s.repo.GetNoteByID(ctx, uid, noteID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get note: %v", err)
+	}
+	if n == nil || n.DeletedAt != nil {
+		return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: "already gone"}, nil
+	}
+	if _, err := s.repo.SoftDeleteNote(ctx, uid, noteID); err != nil {
+		return nil, status.Errorf(codes.Internal, "delete note: %v", err)
+	}
+	if _, err := s.repo.SoftDeleteFactsBySource(ctx, uid, model.MemorySourceKindNote, noteID); err != nil {
+		return nil, status.Errorf(codes.Internal, "delete note facts: %v", err)
+	}
+	if err := s.repo.SoftDeleteEpisode(ctx, model.MemorySourceKindNote, noteID); err != nil {
+		return nil, status.Errorf(codes.Internal, "delete episode: %v", err)
+	}
+	note := s.removeSourceFromGraph(ctx, uid, model.MemorySourceKindNote, noteID)
+	s.refreshSummaryQuiet(ctx, uid)
+	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: note}, nil
+}
+
+func (s *memoryServer) deleteAll(ctx context.Context, uid int64) (*emotionmemory.DeleteMemoryResponse, error) {
+	facts, notes, episodes, entities, err := s.repo.SoftDeleteAllForUser(ctx, uid)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "delete all: %v", err)
+	}
+	graphNote := ""
+	if s.graphDeps != nil && s.graphDeps.graph != nil {
+		if gerr := s.graphDeps.graph.DeleteUserData(ctx, uid); gerr != nil {
+			slog.WarnContext(ctx, "memory delete-all: drop user graph", "user_id", uid, "err", gerr)
+			graphNote = "graph drop failed (rebuild pending)"
+		}
+	} else {
+		graphNote = "graph writer not configured"
+	}
+	s.refreshSummaryQuiet(ctx, uid)
+	slog.InfoContext(ctx, "memory delete-all done",
+		"user_id", uid, "facts", facts, "notes", notes, "episodes", episodes, "entities", entities)
+	return &emotionmemory.DeleteMemoryResponse{Ok: true, Message: graphNote}, nil
+}
+
+// refreshSummaryQuiet 摘要刷新（best-effort：失败只记日志，不影响删除结果）。
+func (s *memoryServer) refreshSummaryQuiet(ctx context.Context, uid int64) {
+	if s.graphDeps == nil || s.graphDeps.refresh == nil {
+		return
+	}
+	if err := s.graphDeps.refresh(ctx, uid); err != nil {
+		slog.WarnContext(ctx, "memory delete: refresh summary", "user_id", uid, "err", err)
+	}
 }
