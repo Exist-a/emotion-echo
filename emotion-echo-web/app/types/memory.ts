@@ -28,3 +28,13 @@ export interface MemoryNoteResult {
   noteId: number
   ackText: string
 }
+
+// CL-08d：管理页列举条目（GET /memory/items）。
+export interface MemoryItem {
+  kind: 'fact' | 'note'
+  id: number
+  text: string
+  sourceKind?: string
+  sourceId?: number
+  createdAt?: string
+}

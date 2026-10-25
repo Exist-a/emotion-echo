@@ -26,6 +26,30 @@ service MemoryGraphService {
   // - valid_at_unix_ms 作为 Graphiti 的 reference_time（双时间轴的事件时间轴）；
   // - 实体抽取/消解/失效判定由 Graphiti 摄取管线完成（LLM + embedder 配置注入）。
   rpc UpsertEpisode (UpsertEpisodeRequest) returns (UpsertEpisodeResponse);
+
+  // DeleteUserData 删除一个用户的**全部**图数据（CL-08d 删除闭环的快路径）。
+  //
+  // graphiti 按 group_id 物理分图（Phase 4 T-17 实测）⇒ 删全部 = drop 该用户的
+  // graph key，O(1) 且天然闭环。单条删除走 UpsertEpisode 的反向 —— 由调用方
+  // 持 episode_uuid 另行处理（见 memory_graph.py 的 remove 能力）。
+  rpc DeleteUserData (DeleteUserDataRequest) returns (DeleteUserDataResponse);
+
+  // RemoveEpisode 按 uuid 摘掉一条情节（CL-08d 删单条的图侧闭环）。
+  //
+  // 安全：调用方 = ai-svc（internal auth 拦截器后面）；uuid 由 ai-svc 从 PG
+  // memory_episode.graph_uuid 取得（该行已按 user 隔离查询）——本 RPC 不再重复
+  // 校验 user 归属（graphiti 的 remove_episode 只认 uuid）。
+  rpc RemoveEpisode (RemoveEpisodeRequest) returns (RemoveEpisodeResponse);
+}
+
+message RemoveEpisodeRequest {
+  int64 user_id = 1;  // 审计维度
+  string episode_uuid = 2;
+}
+
+message RemoveEpisodeResponse {
+  bool ok = 1;
+  string message = 2;
 }
 
 message UpsertEpisodeRequest {
@@ -44,5 +68,17 @@ message UpsertEpisodeRequest {
 message UpsertEpisodeResponse {
   bool ok = 1;
   // message：ok=false 时的失败原因（排障用）；ok=true 时空
+  string message = 2;
+  // episode_uuid：graphiti 分配的情节 uuid（CL-08d 起回传；删除闭环的定位键，
+  // 调用方落 PG memory_episode.graph_uuid）
+  string episode_uuid = 3;
+}
+
+message DeleteUserDataRequest {
+  int64 user_id = 1;
+}
+
+message DeleteUserDataResponse {
+  bool ok = 1;
   string message = 2;
 }

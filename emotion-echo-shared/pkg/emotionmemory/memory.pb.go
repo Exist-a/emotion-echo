@@ -39,6 +39,294 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ListMemoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMemoryRequest) Reset() {
+	*x = ListMemoryRequest{}
+	mi := &file_memory_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMemoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMemoryRequest) ProtoMessage() {}
+
+func (x *ListMemoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMemoryRequest.ProtoReflect.Descriptor instead.
+func (*ListMemoryRequest) Descriptor() ([]byte, []int) {
+	return file_memory_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ListMemoryRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+type MemoryItem struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind: "fact" | "note"
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	Id   int64  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	// fact: fact_text；note: content
+	Text string `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	// 来源（fact: message/note + source_id；note: 空）
+	SourceKind    string `protobuf:"bytes,4,opt,name=source_kind,json=sourceKind,proto3" json:"source_kind,omitempty"`
+	SourceId      int64  `protobuf:"varint,5,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
+	CreatedAt     string `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MemoryItem) Reset() {
+	*x = MemoryItem{}
+	mi := &file_memory_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MemoryItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MemoryItem) ProtoMessage() {}
+
+func (x *MemoryItem) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MemoryItem.ProtoReflect.Descriptor instead.
+func (*MemoryItem) Descriptor() ([]byte, []int) {
+	return file_memory_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *MemoryItem) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *MemoryItem) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *MemoryItem) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *MemoryItem) GetSourceKind() string {
+	if x != nil {
+		return x.SourceKind
+	}
+	return ""
+}
+
+func (x *MemoryItem) GetSourceId() int64 {
+	if x != nil {
+		return x.SourceId
+	}
+	return 0
+}
+
+func (x *MemoryItem) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type ListMemoryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*MemoryItem          `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMemoryResponse) Reset() {
+	*x = ListMemoryResponse{}
+	mi := &file_memory_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMemoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMemoryResponse) ProtoMessage() {}
+
+func (x *ListMemoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMemoryResponse.ProtoReflect.Descriptor instead.
+func (*ListMemoryResponse) Descriptor() ([]byte, []int) {
+	return file_memory_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListMemoryResponse) GetItems() []*MemoryItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+type DeleteMemoryRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// scope: "fact" | "note" | "all"
+	Scope         string `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	Id            int64  `protobuf:"varint,3,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteMemoryRequest) Reset() {
+	*x = DeleteMemoryRequest{}
+	mi := &file_memory_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteMemoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteMemoryRequest) ProtoMessage() {}
+
+func (x *DeleteMemoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteMemoryRequest.ProtoReflect.Descriptor instead.
+func (*DeleteMemoryRequest) Descriptor() ([]byte, []int) {
+	return file_memory_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DeleteMemoryRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *DeleteMemoryRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *DeleteMemoryRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type DeleteMemoryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteMemoryResponse) Reset() {
+	*x = DeleteMemoryResponse{}
+	mi := &file_memory_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteMemoryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteMemoryResponse) ProtoMessage() {}
+
+func (x *DeleteMemoryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_memory_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteMemoryResponse.ProtoReflect.Descriptor instead.
+func (*DeleteMemoryResponse) Descriptor() ([]byte, []int) {
+	return file_memory_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DeleteMemoryResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *DeleteMemoryResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 type CreateNoteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -49,7 +337,7 @@ type CreateNoteRequest struct {
 
 func (x *CreateNoteRequest) Reset() {
 	*x = CreateNoteRequest{}
-	mi := &file_memory_proto_msgTypes[0]
+	mi := &file_memory_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61,7 +349,7 @@ func (x *CreateNoteRequest) String() string {
 func (*CreateNoteRequest) ProtoMessage() {}
 
 func (x *CreateNoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_memory_proto_msgTypes[0]
+	mi := &file_memory_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74,7 +362,7 @@ func (x *CreateNoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNoteRequest.ProtoReflect.Descriptor instead.
 func (*CreateNoteRequest) Descriptor() ([]byte, []int) {
-	return file_memory_proto_rawDescGZIP(), []int{0}
+	return file_memory_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CreateNoteRequest) GetUserId() int64 {
@@ -102,7 +390,7 @@ type CreateNoteResponse struct {
 
 func (x *CreateNoteResponse) Reset() {
 	*x = CreateNoteResponse{}
-	mi := &file_memory_proto_msgTypes[1]
+	mi := &file_memory_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -114,7 +402,7 @@ func (x *CreateNoteResponse) String() string {
 func (*CreateNoteResponse) ProtoMessage() {}
 
 func (x *CreateNoteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_memory_proto_msgTypes[1]
+	mi := &file_memory_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -127,7 +415,7 @@ func (x *CreateNoteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNoteResponse.ProtoReflect.Descriptor instead.
 func (*CreateNoteResponse) Descriptor() ([]byte, []int) {
-	return file_memory_proto_rawDescGZIP(), []int{1}
+	return file_memory_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateNoteResponse) GetNoteId() int64 {
@@ -153,7 +441,7 @@ type GetGraphRequest struct {
 
 func (x *GetGraphRequest) Reset() {
 	*x = GetGraphRequest{}
-	mi := &file_memory_proto_msgTypes[2]
+	mi := &file_memory_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -165,7 +453,7 @@ func (x *GetGraphRequest) String() string {
 func (*GetGraphRequest) ProtoMessage() {}
 
 func (x *GetGraphRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_memory_proto_msgTypes[2]
+	mi := &file_memory_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -178,7 +466,7 @@ func (x *GetGraphRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGraphRequest.ProtoReflect.Descriptor instead.
 func (*GetGraphRequest) Descriptor() ([]byte, []int) {
-	return file_memory_proto_rawDescGZIP(), []int{2}
+	return file_memory_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetGraphRequest) GetUserId() int64 {
@@ -198,7 +486,7 @@ type GetGraphResponse struct {
 
 func (x *GetGraphResponse) Reset() {
 	*x = GetGraphResponse{}
-	mi := &file_memory_proto_msgTypes[3]
+	mi := &file_memory_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -210,7 +498,7 @@ func (x *GetGraphResponse) String() string {
 func (*GetGraphResponse) ProtoMessage() {}
 
 func (x *GetGraphResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_memory_proto_msgTypes[3]
+	mi := &file_memory_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -223,7 +511,7 @@ func (x *GetGraphResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGraphResponse.ProtoReflect.Descriptor instead.
 func (*GetGraphResponse) Descriptor() ([]byte, []int) {
-	return file_memory_proto_rawDescGZIP(), []int{3}
+	return file_memory_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetGraphResponse) GetNodes() []*MemoryNode {
@@ -255,7 +543,7 @@ type MemoryNode struct {
 
 func (x *MemoryNode) Reset() {
 	*x = MemoryNode{}
-	mi := &file_memory_proto_msgTypes[4]
+	mi := &file_memory_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -267,7 +555,7 @@ func (x *MemoryNode) String() string {
 func (*MemoryNode) ProtoMessage() {}
 
 func (x *MemoryNode) ProtoReflect() protoreflect.Message {
-	mi := &file_memory_proto_msgTypes[4]
+	mi := &file_memory_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -280,7 +568,7 @@ func (x *MemoryNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryNode.ProtoReflect.Descriptor instead.
 func (*MemoryNode) Descriptor() ([]byte, []int) {
-	return file_memory_proto_rawDescGZIP(), []int{4}
+	return file_memory_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *MemoryNode) GetId() string {
@@ -323,7 +611,7 @@ type MemoryEdge struct {
 
 func (x *MemoryEdge) Reset() {
 	*x = MemoryEdge{}
-	mi := &file_memory_proto_msgTypes[5]
+	mi := &file_memory_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -335,7 +623,7 @@ func (x *MemoryEdge) String() string {
 func (*MemoryEdge) ProtoMessage() {}
 
 func (x *MemoryEdge) ProtoReflect() protoreflect.Message {
-	mi := &file_memory_proto_msgTypes[5]
+	mi := &file_memory_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -348,7 +636,7 @@ func (x *MemoryEdge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryEdge.ProtoReflect.Descriptor instead.
 func (*MemoryEdge) Descriptor() ([]byte, []int) {
-	return file_memory_proto_rawDescGZIP(), []int{5}
+	return file_memory_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *MemoryEdge) GetSource() string {
@@ -376,7 +664,28 @@ var File_memory_proto protoreflect.FileDescriptor
 
 const file_memory_proto_rawDesc = "" +
 	"\n" +
-	"\fmemory.proto\x12\x11emotion_memory.v1\"F\n" +
+	"\fmemory.proto\x12\x11emotion_memory.v1\",\n" +
+	"\x11ListMemoryRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\"\xa1\x01\n" +
+	"\n" +
+	"MemoryItem\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\x12\x1f\n" +
+	"\vsource_kind\x18\x04 \x01(\tR\n" +
+	"sourceKind\x12\x1b\n" +
+	"\tsource_id\x18\x05 \x01(\x03R\bsourceId\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\"I\n" +
+	"\x12ListMemoryResponse\x123\n" +
+	"\x05items\x18\x01 \x03(\v2\x1d.emotion_memory.v1.MemoryItemR\x05items\"T\n" +
+	"\x13DeleteMemoryRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\x12\x0e\n" +
+	"\x02id\x18\x03 \x01(\x03R\x02id\"@\n" +
+	"\x14DeleteMemoryResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"F\n" +
 	"\x11CreateNoteRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\"H\n" +
@@ -398,11 +707,14 @@ const file_memory_proto_rawDesc = "" +
 	"MemoryEdge\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x14\n" +
-	"\x05label\x18\x03 \x01(\tR\x05label2\xbf\x01\n" +
+	"\x05label\x18\x03 \x01(\tR\x05label2\xfb\x02\n" +
 	"\rMemoryService\x12Y\n" +
 	"\n" +
 	"CreateNote\x12$.emotion_memory.v1.CreateNoteRequest\x1a%.emotion_memory.v1.CreateNoteResponse\x12S\n" +
-	"\bGetGraph\x12\".emotion_memory.v1.GetGraphRequest\x1a#.emotion_memory.v1.GetGraphResponseB2Z0github.com/emotion-echo/shared/pkg/emotionmemoryb\x06proto3"
+	"\bGetGraph\x12\".emotion_memory.v1.GetGraphRequest\x1a#.emotion_memory.v1.GetGraphResponse\x12Y\n" +
+	"\n" +
+	"ListMemory\x12$.emotion_memory.v1.ListMemoryRequest\x1a%.emotion_memory.v1.ListMemoryResponse\x12_\n" +
+	"\fDeleteMemory\x12&.emotion_memory.v1.DeleteMemoryRequest\x1a'.emotion_memory.v1.DeleteMemoryResponseB2Z0github.com/emotion-echo/shared/pkg/emotionmemoryb\x06proto3"
 
 var (
 	file_memory_proto_rawDescOnce sync.Once
@@ -416,27 +728,37 @@ func file_memory_proto_rawDescGZIP() []byte {
 	return file_memory_proto_rawDescData
 }
 
-var file_memory_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_memory_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_memory_proto_goTypes = []any{
-	(*CreateNoteRequest)(nil),  // 0: emotion_memory.v1.CreateNoteRequest
-	(*CreateNoteResponse)(nil), // 1: emotion_memory.v1.CreateNoteResponse
-	(*GetGraphRequest)(nil),    // 2: emotion_memory.v1.GetGraphRequest
-	(*GetGraphResponse)(nil),   // 3: emotion_memory.v1.GetGraphResponse
-	(*MemoryNode)(nil),         // 4: emotion_memory.v1.MemoryNode
-	(*MemoryEdge)(nil),         // 5: emotion_memory.v1.MemoryEdge
+	(*ListMemoryRequest)(nil),    // 0: emotion_memory.v1.ListMemoryRequest
+	(*MemoryItem)(nil),           // 1: emotion_memory.v1.MemoryItem
+	(*ListMemoryResponse)(nil),   // 2: emotion_memory.v1.ListMemoryResponse
+	(*DeleteMemoryRequest)(nil),  // 3: emotion_memory.v1.DeleteMemoryRequest
+	(*DeleteMemoryResponse)(nil), // 4: emotion_memory.v1.DeleteMemoryResponse
+	(*CreateNoteRequest)(nil),    // 5: emotion_memory.v1.CreateNoteRequest
+	(*CreateNoteResponse)(nil),   // 6: emotion_memory.v1.CreateNoteResponse
+	(*GetGraphRequest)(nil),      // 7: emotion_memory.v1.GetGraphRequest
+	(*GetGraphResponse)(nil),     // 8: emotion_memory.v1.GetGraphResponse
+	(*MemoryNode)(nil),           // 9: emotion_memory.v1.MemoryNode
+	(*MemoryEdge)(nil),           // 10: emotion_memory.v1.MemoryEdge
 }
 var file_memory_proto_depIdxs = []int32{
-	4, // 0: emotion_memory.v1.GetGraphResponse.nodes:type_name -> emotion_memory.v1.MemoryNode
-	5, // 1: emotion_memory.v1.GetGraphResponse.edges:type_name -> emotion_memory.v1.MemoryEdge
-	0, // 2: emotion_memory.v1.MemoryService.CreateNote:input_type -> emotion_memory.v1.CreateNoteRequest
-	2, // 3: emotion_memory.v1.MemoryService.GetGraph:input_type -> emotion_memory.v1.GetGraphRequest
-	1, // 4: emotion_memory.v1.MemoryService.CreateNote:output_type -> emotion_memory.v1.CreateNoteResponse
-	3, // 5: emotion_memory.v1.MemoryService.GetGraph:output_type -> emotion_memory.v1.GetGraphResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1,  // 0: emotion_memory.v1.ListMemoryResponse.items:type_name -> emotion_memory.v1.MemoryItem
+	9,  // 1: emotion_memory.v1.GetGraphResponse.nodes:type_name -> emotion_memory.v1.MemoryNode
+	10, // 2: emotion_memory.v1.GetGraphResponse.edges:type_name -> emotion_memory.v1.MemoryEdge
+	5,  // 3: emotion_memory.v1.MemoryService.CreateNote:input_type -> emotion_memory.v1.CreateNoteRequest
+	7,  // 4: emotion_memory.v1.MemoryService.GetGraph:input_type -> emotion_memory.v1.GetGraphRequest
+	0,  // 5: emotion_memory.v1.MemoryService.ListMemory:input_type -> emotion_memory.v1.ListMemoryRequest
+	3,  // 6: emotion_memory.v1.MemoryService.DeleteMemory:input_type -> emotion_memory.v1.DeleteMemoryRequest
+	6,  // 7: emotion_memory.v1.MemoryService.CreateNote:output_type -> emotion_memory.v1.CreateNoteResponse
+	8,  // 8: emotion_memory.v1.MemoryService.GetGraph:output_type -> emotion_memory.v1.GetGraphResponse
+	2,  // 9: emotion_memory.v1.MemoryService.ListMemory:output_type -> emotion_memory.v1.ListMemoryResponse
+	4,  // 10: emotion_memory.v1.MemoryService.DeleteMemory:output_type -> emotion_memory.v1.DeleteMemoryResponse
+	7,  // [7:11] is the sub-list for method output_type
+	3,  // [3:7] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_memory_proto_init() }
@@ -450,7 +772,7 @@ func file_memory_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_memory_proto_rawDesc), len(file_memory_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

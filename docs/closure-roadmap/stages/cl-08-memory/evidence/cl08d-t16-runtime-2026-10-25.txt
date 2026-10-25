@@ -1,0 +1,145 @@
+# CL-08d T-16 删除闭环运行时证据（2026-10-25，:cl08d×4 已核对 image-id 一致；图服务独立 :50052）
+# 前置插曲（如实记录）：① apisix 挂载指向已删 worktree ⇒ 共享目录 infra compose 重建 + 重跑 seed + 重启 web-bff；② 首次 recreate 有服务未换到 :cl08d（compose up 输出被 tail 截断未察觉）⇒ 教训：换镜像必须核对 image-id（已加进记忆）
+
+## step1 plant（种自述 + 等抽取/摄取）
+[plant] note_id=68 ack=记忆已更新
+[plant] pg run=failed
+[plant] graph entities(user 1) = [["云舟"], ["插画师"], ["橙梦露"], ["用户"]]
+# 前置修复：i013 未随服务重建落库（db-migrate 独立跑）⇒ 手动执行 migrate.sh：OK i013；note 68 因此 failed（LLM 抽取成功、落列失败）
+
+## step1 plant（重试）
+[plant] note_id=69 ack=记忆已更新
+[plant] pg run=done
+[plant] graph entities(user 1) = [["云舟"], ["插画师"], ["橙梦露"], ["用户"]]
+# 修正：共享目录 compose 的 MEMORY_GRAPH_ADDR 仍是 50051 旧默认（新默认待 #284）⇒ override 注入 50052 并重建 ai-svc（printenv 实证）
+
+## step1b plant（含 uuid 回填验证）
+[plant] note_id=70 ack=记忆已更新
+[plant] pg run=done
+[plant] graph entities(user 1) = [["云舟"], ["插画师"], ["橙梦露"], ["用户"]]
+
+note/70 uuid=
+note/69 uuid=
+
+## step2 delete-one（note/70：uuid 已知路径）
+[pre ] note 70 in list: True
+Traceback (most recent call last):
+  File "C:\Users\LENVOV\AppData\Local\Temp\cl08d_t16_runtime.py", line 69, in <module>
+    st, resp = http("DELETE", f"/api/v1/memory/notes/{nid}", None, tok)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENVOV\AppData\Local\Temp\cl08d_t16_runtime.py", line 15, in http
+    with urllib.request.urlopen(req, data=data, timeout=30) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENVOV\AppData\Local\Programs\Python\Python312\Lib\urllib\request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENVOV\AppData\Local\Programs\Python\Python312\Lib\urllib\request.py", line 521, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENVOV\AppData\Local\Programs\Python\Python312\Lib\urllib\request.py", line 630, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENVOV\AppData\Local\Programs\Python\Python312\Lib\urllib\request.py", line 559, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENVOV\AppData\Local\Programs\Python\Python312\Lib\urllib\request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "C:\Users\LENVOV\AppData\Local\Programs\Python\Python312\Lib\urllib\request.py", line 639, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 502: Bad Gateway
+
+## step3 verify-one（note/70）
+[PASS True] T-16.1 列举面不再出现: present=False
+[info] pg note status= (deleted)
+[PASS True] T-16.2 来源事实已软删: active_facts=0
+[PASS False] T-16.3 图上不再可检索: entities=[["云舟"], ["插画师"], ["橙梦露"], ["用户"], ["阳台上的薄荷"]]
+
+## step3b 图实查（阳台上的薄荷 应消失）
+ENTS: [["云舟"], ["插画师"], ["橙梦露"], ["用户"], ["阳台上的薄荷"]]
+LATEST-EP: [["我在阳台养了一盆薄荷，做菜的时候随手掐两片"], ["你还记得我叫什么名字、做什么工作吗？"]]
+
+## ===== 以下为编排改异步后的完整重跑（2026-10-25 09:4x）=====
+# 修正记录：同步图操作撞 BFF 5s 截止（502 + ctx 取消打断图/摘要）⇒ 改异步收敛（与 forward 同范式），单测改 Eventually
+
+## step1b' plant（note/71 + uuid 回填验证）
+[plant] note_id=71 ack=记忆已更新
+[plant] pg run=done
+[plant] graph entities(user 1) = [["我"], ["萨克斯风"]]
+uuid=
+ENTS: [["我"], ["萨克斯风"], ["阳台上的薄荷"]]
+LATEST-EP: [["我在阳台养了一盆薄荷，做菜的时候随手掐两片"], ["我给老师发了练习录音，老师夸我吹得越来越好了"]]
+
+## step2' delete-one（note/71，uuid 已知；响应应 <1s，图侧异步收敛）
+[pre ] note 71 in list: True
+[del ] HTTP 200 resp={"code": 0, "data": {"note": "deleted", "ok": true}, "message": "ok"}
+（删除请求即返；等 15s 让图侧收敛）
+
+## step3' verify-one（note/71）
+[PASS True] T-16.1 列举面不再出现: present=False
+[info] pg note status= (deleted)
+[PASS True] T-16.2 来源事实已软删: active_facts=0
+[PASS False] T-16.3 图上不再可检索: entities=[["我"], ["萨克斯风"], ["阳台上的薄荷"]]
+
+## step3b' 图实查
+ENTS: [["我"], ["萨克斯风"], ["阳台上的薄荷"]]
+LATEST-EP: [["我在阳台养了一盆薄荷，做菜的时候随手掐两片"], ["我给老师发了练习录音，老师夸我吹得越来越好了"]]
+
+## ===== 最终干净重跑（编排=异步 + 分图路由 + 孤儿清扫；llm 无中途 recreate）=====
+# 受控二分先行：group42 upsert→remove→0ep/0ent PASS（含孤儿清扫）
+
+## T16-step1 plant note/72（龟背竹）
+[plant] note_id=72 ack=记忆已更新
+[plant] pg run=done
+[plant] graph entities(user 1) = [["萨克斯风"], ["阳台上的薄荷"]]
+note/72 uuid=7297b2cc-5069-4e63-9d42-f7d231c262aa
+[["我最近开始学萨克斯风，每周三晚上上课，老师说我进", "ff82c196"], ["我在阳台养了一盆薄荷，做菜的时候随手掐两片", "7297b2cc"]]
+RELS: [['RELATES_TO', 1], ['MENTIONS', 2]]
+
+## T16-step2 delete note/72（uuid 路径，应即返）
+[pre ] note 72 in list: True
+[del ] HTTP 200 resp={"code": 0, "data": {"note": "deleted", "ok": true}, "message": "ok"}
+## T16-step3 等 15s 图侧收敛后 verify
+[PASS True] T-16.1 列举面不再出现: present=False
+[info] pg note status= (deleted)
+[PASS True] T-16.2 来源事实已软删: active_facts=0
+[PASS True] T-16.3 图上不再可检索: entities=[["萨克斯风"]]
+## T16-step3b 图实查（episode 7297b2cc 与实体 阳台上的薄荷 应均消失）
+[["我最近开始学萨克斯风，每周三晚上上课，老师说我进", "ff82c196"]]
+RELS: [['MENTIONS', 1]]
+
+## T16-step4 delete note/69（uuid 缺失 ⇒ 异步全图重建回落）
+[pre ] note 69 in list: False
+[del ] HTTP 200 resp={"code": 0, "data": {"note": "already gone", "ok": true}, "message": "ok"}
+## 等 100s 重建收敛
+## 重建日志与图实查
+[["我最近开始学萨克斯风，每周三晚上上课，老师说我进", "ff82c196"]]
+RELS: [['MENTIONS', 1]]
+
+## 重建工具演示（cmd/memory-rebuild -user 1，容器内执行；先弄乱图再重建证明以 PG 为准）
+WROTE: True 51432c7f-66f1-4922-ad93-4eb57ff3a336
+--- 故意在图上种垃圾（group 777 隶属演示；再对 user=1 全量重建）---
+time=2026-10-25T11:35:32.958+08:00 level=ERROR msg="load episodes" err="failed to connect to `user=postgres database=emotion_echo`:\n\t127.0.0.1:5432 (localhost): dial error: dial tcp 127.0.0.1:5432: connect: connection refused\n\t[::1]:5432 (localhost): dial error: dial tcp [::1]:5432: connect: connection refused"
+--- 重建后图实查（应恰好 = PG active episodes）---
+[["我最近开始学萨克斯风，每周三晚上上课，老师说我进", "ff82c196"]]
+RELS: [['MENTIONS', 1]]
+PG active episodes(user1)=12
+# 重试：DSN 指向 emotion-echo-postgres（容器网络）
+time=2026-10-25T11:37:08.102+08:00 level=INFO msg="user rebuilt" user_id=1 episodes=12 ok=12 failed=0
+time=2026-10-25T11:37:08.102+08:00 level=INFO msg="rebuild finished" users=1 ok=12 failed=0
+--- 重建后图实查（应 = PG 的 12 条 active episodes，垃圾被清）---
+[["我最近开始学萨克斯风，每周三晚上上课，老师说我进", "dd8ed7b9"], ["我给老师发了练习录音，老师夸我吹得越来越好了", "376d294e"], ["嗨，好久不见！还记得我最近在学什么乐器吗？", "e53108d7"], ["我最近迷上了养多肉植物，在阳台上摆了十盆，最贵的", "fa133dcf"], ["我最近迷上了养多肉植物，在阳台上摆了十盆，最贵的", "cdb347b3"], ["我最近迷上了养多肉植物，在阳台上摆了十盆，最贵的", "013bb888"], ["我最近迷上了养多肉植物，在阳台上摆了十盆，最贵的", "37397e71"], ["我最近迷上了养多肉植物，在阳台上摆了十盆，最贵的", "029f5a49"], ["我最近迷上了养多肉植物，在阳台上摆了十盆，最贵的", "84bea8ec"], ["今天想记一件事：我最近开始学着接受自己慢一点。", "6c020814"], ["我叫云舟，是一名插画师。", "9a44223b"], ["你还记得我叫什么名字、做什么工作吗？", "3a4490ce"]]
+RELS: [['RELATES_TO', 6], ['MENTIONS', 16]]
+graphs: ["memory", "70", "777", "998", "42", "1"]
+eps: [[12]] ents: [[8]]
+
+## T16-step5 IAB 两段式删除（生产 web:cl08d + 真人链路）
+- 记忆列表渲染 15 项（记忆/自述分节 + 每项删除 + 删除全部）
+- 点『删除：用户住在杭州』→ 按钮『确认？』（预备）→ 再点 → ack『这条记忆已删除。』列表 52→51
+- 截图：iab-cl08d-memory-list-delete-2026-10-25.png（关系图 + 记忆列表同框）
+
+## T16-step6 delete-all（快路径：drop 物理分图 + PG 全软删 + 摘要键失效）
+[del ] HTTP 200 resp={"code": 0, "data": {"note": "deleted", "ok": true}, "message": "ok"}
+[PASS True] T-16.4 PG 全软删: active_facts=0 active_episodes=0
+[info] graph list = []
+[PASS True] T-16.5 摘要已失效（空注入）: summary=''

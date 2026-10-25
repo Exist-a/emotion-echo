@@ -61,6 +61,31 @@ type MemoryFactRepo interface {
 	// UpdateNoteStatus 回填自述的抽取状态。
 	UpdateNoteStatus(ctx context.Context, noteID int64, status string) error
 
+	// ---- CL-08d：删除闭环面（PG 软删 + graph_uuid + 列举；语义见 memory_episode_repo_delete.go）----
+
+	// SetEpisodeGraphUUID 回填 graphiti episode uuid（best-effort）。
+	SetEpisodeGraphUUID(ctx context.Context, sourceKind string, sourceID int64, uuid string) error
+	// GetEpisodeGraphUUID 取情节 uuid（含已软删行；删除流程软删前取）。
+	GetEpisodeGraphUUID(ctx context.Context, sourceKind string, sourceID int64) (string, error)
+	// SoftDeleteFact 软删一条事实（user 隔离；返回是否真的删了）。
+	SoftDeleteFact(ctx context.Context, userID, factID int64) (bool, error)
+	// SoftDeleteFactsBySource 软删某来源的全部事实。
+	SoftDeleteFactsBySource(ctx context.Context, userID int64, sourceKind string, sourceID int64) (int64, error)
+	// SoftDeleteEpisode 软删一条来源情节。
+	SoftDeleteEpisode(ctx context.Context, sourceKind string, sourceID int64) error
+	// SoftDeleteNote 软删一条自述。
+	SoftDeleteNote(ctx context.Context, userID, noteID int64) (bool, error)
+	// SoftDeleteAllForUser 软删用户全部记忆。
+	SoftDeleteAllForUser(ctx context.Context, userID int64) (facts, notes, episodes, entities int64, err error)
+	// GetFactByID 取事实（user 隔离，未软删）。
+	GetFactByID(ctx context.Context, userID, factID int64) (*model.MemoryFact, error)
+	// GetNoteByID 取自述（user 隔离，含已软删——幂等读）。
+	GetNoteByID(ctx context.Context, userID, noteID int64) (*model.MemoryNote, error)
+	// ListEpisodesByUserAll 列全部未软删情节（重建工具）。
+	ListEpisodesByUserAll(ctx context.Context, userID int64) ([]model.MemoryEpisode, error)
+	// ListDistinctEpisodeUsers 有未软删情节的用户（重建工具 -all）。
+	ListDistinctEpisodeUsers(ctx context.Context) ([]int64, error)
+
 	// Ping 健康检查。
 	Ping(ctx context.Context) error
 }
@@ -77,22 +102,44 @@ type extractRunKey struct {
 // InMemoryMemoryFactRepo 内存实现：与 Postgres 实现共享同一组语义，
 // 供抽取 worker 与摘要构建的单测使用（不连 DB）。
 type InMemoryMemoryFactRepo struct {
-	mu         sync.RWMutex
-	facts      map[int64]*model.MemoryFact
-	runs       map[extractRunKey]*model.MemoryExtractRun
-	notes      map[int64]*model.MemoryNote
-	nextID     int64
-	nextNoteID int64
+	mu          sync.RWMutex
+	facts       map[int64]*model.MemoryFact
+	runs        map[extractRunKey]*model.MemoryExtractRun
+	notes       map[int64]*model.MemoryNote
+	episodes    map[int64]*model.MemoryEpisode
+	nextID      int64
+	nextNoteID  int64
+	nextEpisode int64
 }
 
 func NewInMemoryMemoryFactRepo() *InMemoryMemoryFactRepo {
 	return &InMemoryMemoryFactRepo{
-		facts:      make(map[int64]*model.MemoryFact),
-		runs:       make(map[extractRunKey]*model.MemoryExtractRun),
-		notes:      make(map[int64]*model.MemoryNote),
-		nextID:     1,
-		nextNoteID: 1,
+		facts:       make(map[int64]*model.MemoryFact),
+		runs:        make(map[extractRunKey]*model.MemoryExtractRun),
+		notes:       make(map[int64]*model.MemoryNote),
+		episodes:    make(map[int64]*model.MemoryEpisode),
+		nextID:      1,
+		nextNoteID:  1,
+		nextEpisode: 1,
 	}
+}
+
+// UpsertEpisodeForTest 测试注入情节（真实仓库里情节由抽取 worker 写入）。
+func (r *InMemoryMemoryFactRepo) UpsertEpisodeForTest(ctx context.Context, ep *model.MemoryEpisode) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c := *ep
+	if c.ID == 0 {
+		c.ID = r.nextEpisode
+		r.nextEpisode++
+	}
+	now := time.Now().UTC()
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = now
+	}
+	r.episodes[c.ID] = &c
+	ep.ID = c.ID
+	return nil
 }
 
 func (r *InMemoryMemoryFactRepo) TryMarkExtractRun(ctx context.Context, run *model.MemoryExtractRun) (bool, error) {

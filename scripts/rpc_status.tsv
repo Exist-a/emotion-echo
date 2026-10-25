@@ -1,4 +1,4 @@
-# CL-02 · RPC 状态清单（46 条 = proto 全量；2026-10-19 CL-08a 新增 memory.proto 2 条；2026-10-24 CL-08c 新增 memory_graph.proto 1 条）
+# CL-02 · RPC 状态清单（49 条 = proto 全量；2026-10-25 CL-08d 新增 ListMemory/DeleteMemory/DeleteUserData）
 # 列：rpc <TAB> proto:line <TAB> status <TAB> evidence_path <TAB> evidence_symbol <TAB> marker_sites <TAB> note
 #
 # status ∈ {live, archived, deleted, undecided}
@@ -61,3 +61,7 @@ DeleteAgentProfile	proto/user.proto:131	live	emotion-echo-web-bff/internal/handl
 CreateNote	proto/memory.proto:31	live	emotion-echo-web-bff/internal/handler/memory_handler.go	CreateNote	0	CL-08a「我的记忆」自述入口；BFF POST /api/v1/memory/notes 透传
 GetGraph	proto/memory.proto:34	live	emotion-echo-web-bff/internal/handler/memory_handler.go	GetGraph	0	CL-08a 记忆图（PG 事实渲染）；BFF GET /api/v1/memory/graph 透传
 UpsertEpisode	proto/memory_graph.proto:28	live	emotion-echo-ai-svc/internal/memory/graph_writer.go	UpsertEpisode	0	CL-08c Phase 4 图记忆写入面：ai-svc 抽取 worker → llm-service（Graphiti+falkordblite）；失败 best-effort 不重试（图以 PG 为准可重建）
+ListMemory	proto/memory.proto:37	live	emotion-echo-web-bff/internal/downstream/memory_grpc.go	ListMemory	0	CL-08d 管理页列举面：BFF GET /api/v1/memory/items 透传
+DeleteMemory	proto/memory.proto:46	live	emotion-echo-web-bff/internal/handler/memory_handler.go	DeleteMemory	0	CL-08d 删除闭环编排：BFF DELETE /api/v1/memory/* 透传；PG 软删→图随删→摘要失效
+DeleteUserData	proto/memory_graph.proto:35	live	emotion-echo-ai-svc/internal/memory/rebuild.go	DeleteUserData	0	CL-08d 删全部快路径：drop 用户 group graph（graphiti 物理分图，Phase 4 T-17 实测）
+RemoveEpisode	proto/memory_graph.proto:42	live	emotion-echo-ai-svc/internal/memory/graph_writer.go	RemoveEpisode	0	CL-08d 删单条图侧闭环：uuid 由 ai-svc 从 PG memory_episode.graph_uuid 取（user 隔离查询在前）

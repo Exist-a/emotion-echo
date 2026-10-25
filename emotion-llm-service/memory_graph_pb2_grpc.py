@@ -40,6 +40,16 @@ class MemoryGraphServiceStub:
                 request_serializer=memory__graph__pb2.UpsertEpisodeRequest.SerializeToString,
                 response_deserializer=memory__graph__pb2.UpsertEpisodeResponse.FromString,
                 _registered_method=True)
+        self.DeleteUserData = channel.unary_unary(
+                '/emotion_memory_graph.v1.MemoryGraphService/DeleteUserData',
+                request_serializer=memory__graph__pb2.DeleteUserDataRequest.SerializeToString,
+                response_deserializer=memory__graph__pb2.DeleteUserDataResponse.FromString,
+                _registered_method=True)
+        self.RemoveEpisode = channel.unary_unary(
+                '/emotion_memory_graph.v1.MemoryGraphService/RemoveEpisode',
+                request_serializer=memory__graph__pb2.RemoveEpisodeRequest.SerializeToString,
+                response_deserializer=memory__graph__pb2.RemoveEpisodeResponse.FromString,
+                _registered_method=True)
 
 
 class MemoryGraphServiceServicer:
@@ -57,6 +67,28 @@ class MemoryGraphServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def DeleteUserData(self, request, context):
+        """DeleteUserData 删除一个用户的**全部**图数据（CL-08d 删除闭环的快路径）。
+
+        graphiti 按 group_id 物理分图（Phase 4 T-17 实测）⇒ 删全部 = drop 该用户的
+        graph key，O(1) 且天然闭环。单条删除走 UpsertEpisode 的反向 —— 由调用方
+        持 episode_uuid 另行处理（见 memory_graph.py 的 remove 能力）。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RemoveEpisode(self, request, context):
+        """RemoveEpisode 按 uuid 摘掉一条情节（CL-08d 删单条的图侧闭环）。
+
+        安全：调用方 = ai-svc（internal auth 拦截器后面）；uuid 由 ai-svc 从 PG
+        memory_episode.graph_uuid 取得（该行已按 user 隔离查询）——本 RPC 不再重复
+        校验 user 归属（graphiti 的 remove_episode 只认 uuid）。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MemoryGraphServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -64,6 +96,16 @@ def add_MemoryGraphServiceServicer_to_server(servicer, server):
                     servicer.UpsertEpisode,
                     request_deserializer=memory__graph__pb2.UpsertEpisodeRequest.FromString,
                     response_serializer=memory__graph__pb2.UpsertEpisodeResponse.SerializeToString,
+            ),
+            'DeleteUserData': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteUserData,
+                    request_deserializer=memory__graph__pb2.DeleteUserDataRequest.FromString,
+                    response_serializer=memory__graph__pb2.DeleteUserDataResponse.SerializeToString,
+            ),
+            'RemoveEpisode': grpc.unary_unary_rpc_method_handler(
+                    servicer.RemoveEpisode,
+                    request_deserializer=memory__graph__pb2.RemoveEpisodeRequest.FromString,
+                    response_serializer=memory__graph__pb2.RemoveEpisodeResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -94,6 +136,60 @@ class MemoryGraphService:
             '/emotion_memory_graph.v1.MemoryGraphService/UpsertEpisode',
             memory__graph__pb2.UpsertEpisodeRequest.SerializeToString,
             memory__graph__pb2.UpsertEpisodeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteUserData(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/emotion_memory_graph.v1.MemoryGraphService/DeleteUserData',
+            memory__graph__pb2.DeleteUserDataRequest.SerializeToString,
+            memory__graph__pb2.DeleteUserDataResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RemoveEpisode(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/emotion_memory_graph.v1.MemoryGraphService/RemoveEpisode',
+            memory__graph__pb2.RemoveEpisodeRequest.SerializeToString,
+            memory__graph__pb2.RemoveEpisodeResponse.FromString,
             options,
             channel_credentials,
             insecure,

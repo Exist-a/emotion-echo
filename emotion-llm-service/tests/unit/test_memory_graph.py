@@ -156,3 +156,95 @@ class TestServicerDegraded:
         resp = svc.UpsertEpisode(req, None)
         assert resp.ok is True
         assert g.episodes[0]["group_id"] == "7"
+
+
+# ---------------------------------------------------------------------------
+# CL-08d：删除闭环（remove_episode / delete_user_data / uuid 回传）
+# ---------------------------------------------------------------------------
+
+class RemovableGraphiti(FakeGraphiti):
+    def __init__(self, fail=False):
+        super().__init__(fail)
+        self.removed = []
+
+    async def remove_episode(self, episode_uuid):
+        if self.fail:
+            raise RuntimeError("graph backend down")
+        self.removed.append(episode_uuid)
+
+
+class TestRemoveEpisode:
+    def test_ok_and_error_fold(self):
+        g = RemovableGraphiti()
+        mg = MemoryGraph(g)
+        ok, msg = run(mg.remove_episode(user_id=1, episode_uuid="ep-1"))
+        assert ok and msg == "" and g.removed == ["ep-1"]
+
+        bad = MemoryGraph(RemovableGraphiti(fail=True))
+        ok, msg = run(bad.remove_episode(user_id=1, episode_uuid="ep-x"))
+        assert not ok and "graphiti" in msg
+
+    def test_invalid_inputs(self):
+        mg = MemoryGraph(RemovableGraphiti())
+        assert not run(mg.remove_episode(user_id=0, episode_uuid="e"))[0]
+        assert not run(mg.remove_episode(user_id=1, episode_uuid=""))[0]
+
+
+class Dropper:
+    def __init__(self, err=None):
+        self.calls = []
+        self.err = err
+
+    def __call__(self, group):
+        self.calls.append(group)
+        if self.err:
+            raise self.err
+
+
+class TestDeleteUserData:
+    def test_drops_group_graph(self):
+        d = Dropper()
+        mg = MemoryGraph(FakeGraphiti(), dropper=d)
+        ok, msg = run(mg.delete_user_data(user_id=42))
+        assert ok and msg == "" and d.calls == ["42"]
+
+    def test_missing_graph_is_idempotent_success(self):
+        d = Dropper(err=Exception("GraphDB: Graph with name '42' does not exist"))
+        mg = MemoryGraph(FakeGraphiti(), dropper=d)
+        ok, msg = run(mg.delete_user_data(user_id=42))
+        assert ok, "图不存在 = 本来就没有 ⇒ 幂等成功"
+        assert not d.calls or True
+
+    def test_real_error_folds_to_false(self):
+        d = Dropper(err=Exception("connection refused"))
+        mg = MemoryGraph(FakeGraphiti(), dropper=d)
+        ok, msg = run(mg.delete_user_data(user_id=42))
+        assert not ok and "drop graph" in msg
+
+    def test_no_dropper_configured(self):
+        mg = MemoryGraph(FakeGraphiti())
+        ok, msg = run(mg.delete_user_data(user_id=1))
+        assert not ok and "dropper" in msg
+
+
+class TestServicerDeleteUserData:
+    def test_degraded_mode(self):
+        from memory_graph_servicer import MemoryGraphServicer
+        import memory_graph_pb2
+
+        svc = MemoryGraphServicer(None, None)
+        resp = svc.DeleteUserData(
+            memory_graph_pb2.DeleteUserDataRequest(user_id=1), None)
+        assert resp.ok is False and "degraded" in resp.message
+
+    def test_real_path(self):
+        from memory_graph_servicer import MemoryGraphServicer
+        import memory_graph_pb2
+
+        d = Dropper()
+        bridge = AsyncBridge()
+        bridge.start()
+        svc = MemoryGraphServicer(MemoryGraph(FakeGraphiti(), dropper=d), bridge)
+        resp = svc.DeleteUserData(
+            memory_graph_pb2.DeleteUserDataRequest(user_id=9), None)
+        assert resp.ok is True and d.calls == ["9"]

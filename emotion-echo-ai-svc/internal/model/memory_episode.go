@@ -38,7 +38,9 @@ type MemoryEpisode struct {
 	Name           string     `gorm:"column:name;not null"`
 	Content        string     `gorm:"column:content;not null"`
 	ValidAt        time.Time  `gorm:"column:valid_at;not null"`
-	Status         string     `gorm:"column:status;not null;default:active"`
+	// GraphUUID graphiti 分配的情节 uuid（CL-08d 删除闭环定位键；NULL/空 = 未摄取或旧行）
+	GraphUUID     string     `gorm:"column:graph_uuid;size:64"`
+	Status        string     `gorm:"column:status;not null;default:active"`
 	DeletedAt      *time.Time `gorm:"column:deleted_at"`
 	CreatedAt      time.Time  `gorm:"column:created_at;autoCreateTime"`
 }

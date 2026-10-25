@@ -54,7 +54,7 @@ handler 全路径真实源（miniredis）/ **T-8 两处调用点钉**（字面�
 
 ## §4 运行时证据（2026-10-24，dev 栈）
 
-**T-5 三段 A/B**（`phase3-t5-episode-runtime-2026-10-24.txt`）：
+**T-5 三段 A/B**（⚠️ 原引 `phase3-t5-episode-runtime-2026-10-24.txt` 有误——该文件当时只含 IAB 段，A/B 输出因产物落盘位置错误未随 #277 进库，第二方核对 P1 抓出；**重放原始输出见 `cl08c-t5-rerun-2026-10-25.txt`**，base/down/up 全 PASS）：
 - **base**：发消息（msg 1045）→ run=`done|1` + **episode 原文完整落库** + entity 1 行 + Redis 摘要含新事实；
 - **down**（ai-svc `LLM_BASE_URL` → `http://127.0.0.1:1/v1`）：消息照发（msg 1046，HTTP 200）+ 落库 rows=1
   + run=`failed`（错误原文 `dial tcp 127.0.0.1:1: connect: connection refused`）+ 该消息 episode=0（待恢复）；
